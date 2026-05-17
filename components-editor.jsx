@@ -1,0 +1,595 @@
+// components-editor.jsx — Editor modal for adding/editing items
+
+const { useState: useS, useEffect: useE } = React;
+
+const TYPE_OPTIONS = [
+  { id: "quizlet",  label: "Quizlet",  hint: "Embed link from Quizlet" },
+  { id: "wordwall", label: "Wordwall", hint: "Embed link from Wordwall" },
+  { id: "youtube",  label: "YouTube",  hint: "Paste any YouTube URL" },
+  { id: "form",     label: "Google Form", hint: "Embed link from Google Form" },
+  { id: "pdf",      label: "PDF",      hint: "URL or path to PDF file" },
+  { id: "note",     label: "Notes",    hint: "Write your own notes" },
+  { id: "quiz",     label: "Quiz",     hint: "Build a multiple-choice quiz with explanations" },
+];
+
+function EditorModal({ open, draft, onClose, onSave, onDelete }) {
+  const [form, setForm] = useS(draft);
+
+  useE(() => { setForm(draft); }, [draft]);
+
+  if (!open || !form) return null;
+
+  const isNew = !form.id || form.id.startsWith("new-");
+  const meta = TYPE_OPTIONS.find(t => t.id === form.type) || TYPE_OPTIONS[0];
+
+  const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  // Smart paste: if user pastes an entire <iframe ...> tag, extract src="..."
+  const extractSrc = (raw) => {
+    if (!raw) return raw;
+    const m = raw.match(/src\s*=\s*["']([^"']+)["']/i);
+    return m ? m[1] : raw;
+  };
+  const updateEmbed = (v) => update("embed", extractSrc(v.trim()));
+
+  const handleSave = () => {
+    if (!form.title?.trim()) { alert("Please enter a title"); return; }
+    onSave(form);
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className={"modal " + (form.type === "quiz" ? "wide" : "")} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+
+        <div className="modal-body">
+          <div className="field">
+            <label className="field-label">Resource Type · 類型</label>
+            <div className="type-picker">
+              {TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  className={form.type === opt.id ? "active" : ""}
+                  onClick={() => update("type", opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="field-help">{meta.hint}</div>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Title · 英文標題</label>
+            <input
+              value={form.title || ""}
+              onChange={e => update("title", e.target.value)}
+              placeholder="e.g. Animals & Habitats — Set A"
+            />
+          </div>
+
+          <div className="field">
+            <label className="field-label">中文說明</label>
+            <input
+              value={form.zh || ""}
+              onChange={e => update("zh", e.target.value)}
+              placeholder="例：20 個本週核心單字"
+            />
+          </div>
+
+          <div className="field">
+            <label className="field-label">Duration · 預估時長</label>
+            <input
+              value={form.duration || ""}
+              onChange={e => update("duration", e.target.value)}
+              placeholder="e.g. 15 min"
+            />
+          </div>
+
+          {form.type === "note" ? (
+            <div className="field">
+              <label className="field-label">Notes Body · 筆記內容</label>
+              <textarea
+                value={form.body || ""}
+                onChange={e => update("body", e.target.value)}
+                placeholder="Write your notes here..."
+                rows={6}
+              />
+            </div>
+          ) : form.type === "quiz" ? (
+            <>
+              <div className="field">
+                <label className="field-label">Options · 設定</label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={form.shuffle !== false}
+                    onChange={e => update("shuffle", e.target.checked)}
+                  />
+                  <span>
+                    <b>Shuffle options each time · 每次作答随機打亂選項</b>
+                    <span style={{display: "block", color: "var(--ink-muted)", fontSize: 12, marginTop: 2}}>
+                      學生沒辦法背 「A 是答案」。關闭則保持原始順序。
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div className="field">
+                <label className="field-label">Questions · 題目</label>
+                <window.QuizEditor
+                  questions={form.questions || []}
+                  onChange={(qs) => update("questions", qs)}
+                />
+              </div>
+            </>
+          ) : form.type === "pdf" ? (
+            <PdfUpload
+              file={form.fileData ? { name: form.fileName, dataUrl: form.fileData, size: form.fileSize } : null}
+              url={form.url || ""}
+              onUrl={(v) => update("url", v)}
+              onFile={(f) => setForm(prev => ({
+                ...prev,
+                fileName: f?.name || "",
+                fileSize: f?.size || 0,
+                fileData: f?.dataUrl || "",
+                url: f ? "" : prev.url,
+              }))}
+            />
+          ) : (
+            <>
+              <div className="field">
+                <label className="field-label">Link · 連結網址</label>
+                <input
+                  value={form.url || ""}
+                  onChange={e => update("url", e.target.value)}
+                  placeholder={
+                    form.type === "youtube" ? "https://www.youtube.com/watch?v=..." :
+                    "Public URL to the resource"
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label className="field-label">Embed URL · 嵌入連結 (optional)</label>
+                <input
+                  value={form.embed || ""}
+                  onChange={e => updateEmbed(e.target.value)}
+                  placeholder={
+                    form.type === "quizlet" ? "https://quizlet.com/XXX/match/embed" :
+                    form.type === "wordwall" ? "https://wordwall.net/embed/XXX" :
+                    form.type === "form" ? "https://docs.google.com/forms/.../viewform?embedded=true" :
+                    "Leave blank for YouTube — auto-detected"
+                  }
+                />
+                <div className="field-help">
+                  {form.type === "youtube" ? "Auto-generated from YouTube URL — leave blank." :
+                   "Paste the full <iframe…> embed code OR just the src URL — we'll auto-extract it."}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="modal-foot">
+          {!isNew ? (
+            <button className="btn danger" onClick={() => { if (confirm("Delete this item?")) onDelete(form.id); }}>
+              Delete
+            </button>
+          ) : <span/>}
+          <div style={{display: "flex", gap: 10}}>
+            <button className="btn ghost" onClick={onClose}>Cancel</button>
+            <button className="btn primary" onClick={handleSave}>
+              {isNew ? "Add Item" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───── PDF upload (drag + drop / file picker) ───── */
+function PdfUpload({ file, url, onUrl, onFile }) {
+  const [drag, setDrag] = useS(false);
+  const [reading, setReading] = useS(false);
+  const [err, setErr] = useS("");
+  const inputRef = React.useRef(null);
+
+  const MAX_BYTES = 4 * 1024 * 1024; // 4 MB — stays under localStorage quota
+
+  const handleFile = (f) => {
+    setErr("");
+    if (!f) return;
+    if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) {
+      setErr("請上傳 PDF 檔 · Please upload a PDF file.");
+      return;
+    }
+    if (f.size > MAX_BYTES) {
+      setErr(`檔案太大 (${formatBytes(f.size)}) · 上限 ${formatBytes(MAX_BYTES)}。請壓縮 PDF 或貼連結。`);
+      return;
+    }
+    setReading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setReading(false);
+      onFile({ name: f.name, size: f.size, dataUrl: reader.result });
+    };
+    reader.onerror = () => {
+      setReading(false);
+      setErr("讀取失敗 · Failed to read file.");
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDrag(false);
+    if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
+  };
+
+  return (
+    <div className="field">
+      <label className="field-label">PDF File · 練習卷</label>
+
+      {file?.dataUrl ? (
+        <div className="pdf-uploaded">
+          <div className="pdf-uploaded-icon">PDF</div>
+          <div className="pdf-uploaded-info">
+            <div className="pdf-uploaded-name">{file.name || "document.pdf"}</div>
+            <div className="pdf-uploaded-meta mono">{formatBytes(file.size)} · saved locally</div>
+          </div>
+          <div className="pdf-uploaded-tools">
+            <a className="item-action ghost" href={file.dataUrl} target="_blank" rel="noopener">Preview</a>
+            <button className="item-action ghost" onClick={() => onFile(null)}>Remove</button>
+          </div>
+        </div>
+      ) : (
+        <div
+          className={"pdf-drop " + (drag ? "drag" : "") + (reading ? " reading" : "")}
+          onDragOver={e => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            style={{display: "none"}}
+            onChange={e => handleFile(e.target.files?.[0])}
+          />
+          {reading ? (
+            <div className="pdf-drop-status">Reading file…</div>
+          ) : (
+            <>
+              <div className="pdf-drop-icon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>
+                </svg>
+              </div>
+              <div className="pdf-drop-title serif">
+                {drag ? "Drop your PDF here" : "Drag a PDF here, or click to choose"}
+              </div>
+              <div className="pdf-drop-sub mono">
+                拖曳檔案到這裡，或點選檔 · PDF · max 4 MB
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {err && <div className="pdf-err mono">⚠ {err}</div>}
+
+      <div className="pdf-or">
+        <span/><span className="mono">OR · 或</span><span/>
+      </div>
+      <label className="field-label">Link to PDF · 貼上外部連結 (optional)</label>
+      <input
+        value={url}
+        onChange={e => onUrl(e.target.value)}
+        placeholder="https://drive.google.com/… or any public PDF URL"
+      />
+      <div className="field-help">If you have a Google Drive / Dropbox link, paste it here — no upload needed.</div>
+    </div>
+  );
+}
+
+function formatBytes(b) {
+  if (!b) return "0 B";
+  if (b < 1024) return b + " B";
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB";
+  return (b / 1024 / 1024).toFixed(2) + " MB";
+}
+
+/* Footer */
+function Footer() {
+  return (
+    <footer className="footer">
+      <div className="shell">
+        <div className="footer-grid">
+          <div>
+            <div className="footer-mark">Alan<em>'s</em></div>
+            <p className="footer-tagline">
+              A weekly English programme for young learners — built around four foundations: vocabulary, grammar, word study, and reading.
+            </p>
+          </div>
+          <div className="footer-col">
+            <h4>Class</h4>
+            <ul>
+              <li><a href="#">This Week</a></li>
+              <li><a href="#">Past Weeks</a></li>
+              <li><a href="#">Resources</a></li>
+            </ul>
+          </div>
+          <div className="footer-col">
+            <h4>Contact</h4>
+            <ul>
+              <li><a href="#">Email Alan</a></li>
+              <li><a href="#">Subscribe</a></li>
+              <li><a href="#">LINE</a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="footer-baseline">
+          <span>© 2025 Alan's English Class</span>
+          <span>Made with care · 用心製作</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ───── Week Modal — Add a new week ───── */
+function WeekModal({ open, existingIds, onClose, onSave }) {
+  const [form, setForm] = useS(null);
+
+  useE(() => {
+    if (open) {
+      setForm({
+        id: window.suggestNextWeekId(existingIds || []),
+        label: "",
+        dateRange: "",
+        theme: "",
+        themeZh: "",
+      });
+    }
+  }, [open]);
+
+  if (!open || !form) return null;
+
+  const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const autoLabel = () => {
+    const m = form.id.match(/W(\d{1,2})/i);
+    return m ? `Week ${parseInt(m[1], 10)}` : form.id;
+  };
+
+  const handleSave = () => {
+    const payload = { ...form, label: form.label?.trim() || autoLabel() };
+    onSave(payload);
+  };
+
+  const conflict = existingIds?.includes(form.id);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Add <em>new week</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+
+        <div className="modal-body">
+          <div className="field">
+            <label className="field-label">Week ID · 週次代碼</label>
+            <input
+              value={form.id}
+              onChange={e => update("id", e.target.value.trim())}
+              placeholder="e.g. 2025-W16"
+              style={{fontFamily: "var(--font-mono, monospace)"}}
+            />
+            <div className="field-help">
+              格式：<code>YYYY-WNN</code>（例 <code>2025-W16</code>）。用來排序與識別。
+              {conflict && <span style={{color: "#c0392b", display: "block", marginTop: 4}}>⚠ 這個 ID 已經存在</span>}
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Label · 顯示名稱</label>
+            <input
+              value={form.label}
+              onChange={e => update("label", e.target.value)}
+              placeholder={autoLabel()}
+            />
+            <div className="field-help">留空會自動用「{autoLabel()}」</div>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Date Range · 日期區間</label>
+            <input
+              value={form.dateRange}
+              onChange={e => update("dateRange", e.target.value)}
+              placeholder="e.g. Apr 14 – Apr 20"
+            />
+          </div>
+
+          <div className="field">
+            <label className="field-label">Theme · 本週主題 (English)</label>
+            <input
+              value={form.theme}
+              onChange={e => update("theme", e.target.value)}
+              placeholder="e.g. Food & Cooking"
+            />
+          </div>
+
+          <div className="field">
+            <label className="field-label">中文主題</label>
+            <input
+              value={form.themeZh}
+              onChange={e => update("themeZh", e.target.value)}
+              placeholder="例：食物與料理"
+            />
+          </div>
+        </div>
+
+        <div className="modal-foot">
+          <span/>
+          <div style={{display: "flex", gap: 10}}>
+            <button className="btn ghost" onClick={onClose}>Cancel</button>
+            <button className="btn primary" onClick={handleSave} disabled={conflict || !form.id}>
+              Add Week
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───── Export Modal — Download data for committing to GitHub ───── */
+function ExportModal({ open, weeks, weekOrder, onClose, showToast }) {
+  const [mode, setMode] = useS("dataJs"); // "dataJs" | "json"
+  const [copied, setCopied] = useS(false);
+
+  useE(() => { if (open) { setMode("dataJs"); setCopied(false); } }, [open]);
+
+  if (!open) return null;
+
+  // Build the ready-to-paste content
+  const jsonPayload = { weekOrder, weeks };
+  const jsonStr = JSON.stringify(jsonPayload, null, 2);
+
+  const seedJs = JSON.stringify(weeks, null, 2);
+  const orderJs = JSON.stringify(weekOrder);
+  const dataJsSnippet =
+`// ─────────────────────────────────────────────────────────
+// Generated from Teacher Export — paste into data.js
+// Replaces the existing SEED_WEEKS object and DEFAULT_WEEK_ORDER array.
+// Exported: ${new Date().toISOString().slice(0, 19).replace("T", " ")}
+// ─────────────────────────────────────────────────────────
+
+const SEED_WEEKS = ${seedJs};
+
+const DEFAULT_WEEK_ORDER = ${orderJs};
+`;
+
+  const content = mode === "dataJs" ? dataJsSnippet : jsonStr;
+  const filename = mode === "dataJs" ? "seed-weeks.js" : "weeks.json";
+
+  const handleDownload = () => {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast && showToast("Downloaded " + filename);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = content;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+      catch (e2) { showToast && showToast("Copy failed"); }
+      document.body.removeChild(ta);
+    }
+  };
+
+  // Stats
+  const weekCount = weekOrder.length;
+  let itemCount = 0;
+  Object.values(weeks).forEach(w => {
+    if (!w?.items) return;
+    Object.values(w.items).forEach(arr => { itemCount += arr?.length || 0; });
+  });
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Export <em>data</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+
+        <div className="modal-body">
+          <div style={{
+            padding: "12px 14px", background: "var(--bg-cream, #f7f3eb)",
+            border: "1px solid var(--rule, #e6e0d2)", borderRadius: 3,
+            fontSize: 13, lineHeight: 1.55, marginBottom: 18
+          }}>
+            <strong>{weekCount} weeks</strong> · <strong>{itemCount} items</strong> 目前儲存在這台裝置。<br/>
+            <span style={{color: "var(--ink-muted)"}}>
+              要讓家長端看到你的更新，下載 <code>seed-weeks.js</code> → 把內容貼到 <code>data.js</code> 取代舊的
+              <code> SEED_WEEKS</code> 跟 <code>DEFAULT_WEEK_ORDER</code> → push 到 GitHub。
+            </span>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Format · 格式</label>
+            <div className="type-picker">
+              <button className={mode === "dataJs" ? "active" : ""} onClick={() => setMode("dataJs")}>
+                data.js snippet
+              </button>
+              <button className={mode === "json" ? "active" : ""} onClick={() => setMode("json")}>
+                Raw JSON
+              </button>
+            </div>
+            <div className="field-help">
+              {mode === "dataJs"
+                ? "可直接貼進 data.js，取代既有的 SEED_WEEKS 與 DEFAULT_WEEK_ORDER。"
+                : "純資料 JSON — 備份用、或之後做匯入功能用。"}
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field-label">Preview · 預覽</label>
+            <textarea
+              readOnly
+              value={content}
+              rows={12}
+              style={{
+                fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                fontSize: 11.5, lineHeight: 1.5,
+                background: "#1a1a1a", color: "#e8e4d8",
+                border: "1px solid #2a2a2a", borderRadius: 3,
+                padding: 12, whiteSpace: "pre", width: "100%",
+                resize: "vertical",
+              }}
+              onClick={e => e.target.select()}
+            />
+          </div>
+        </div>
+
+        <div className="modal-foot">
+          <span style={{fontSize: 11, color: "var(--ink-muted)", fontFamily: "var(--mono, monospace)"}}>
+            {filename}
+          </span>
+          <div style={{display: "flex", gap: 10}}>
+            <button className="btn ghost" onClick={handleCopy}>
+              {copied ? "✓ Copied" : "Copy"}
+            </button>
+            <button className="btn primary" onClick={handleDownload}>
+              Download
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal });
