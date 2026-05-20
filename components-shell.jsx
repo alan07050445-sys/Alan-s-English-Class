@@ -130,7 +130,12 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
         <div className="hero-eyebrow">
           <span className="dot" />
           <span className="mono">This Week · 本週進度</span>
-          <span className="mono" style={{ color: "var(--ink-muted)" }}>{week.dateRange}</span>
+          <EditableText
+            value={week.dateRange || ""}
+            placeholder="May 17 – May 23"
+            editMode={editMode}
+            className="mono"
+            onChange={(v) => onUpdateWeek({ dateRange: v })} />
         </div>
         <h1 className="hero-title">
           <EditableText

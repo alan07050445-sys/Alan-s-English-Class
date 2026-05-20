@@ -4,16 +4,60 @@ const { useState: useAppState, useEffect: useAppEffect, useMemo: useAppMemo } = 
 
 const IS_TEACHER = true;
 
+// Parse "May 17 – May 23" → { start: Date, end: Date } using the given year.
+function parseDateRange(str, year) {
+  const MONTHS = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
+  if (!str) return null;
+  const parts = str.split(/\s*[–—-]\s*/);
+  if (parts.length < 2) return null;
+  function parse(s, fallbackMonth) {
+    const m = s.trim().match(/([A-Za-z]+)\s+(\d+)/);
+    if (m && MONTHS[m[1]] !== undefined) return new Date(year, MONTHS[m[1]], +m[2]);
+    const n = s.trim().match(/(\d+)/);
+    if (n && fallbackMonth !== undefined) return new Date(year, fallbackMonth, +n[1]);
+    return null;
+  }
+  const start = parse(parts[0]);
+  if (!start) return null;
+  const end = parse(parts[1], start.getMonth());
+  if (!end) return null;
+  return { start, end };
+}
+
+// Find the best weekIdx: today within dateRange → latest past week → last week.
+function bestWeekIdx(order, weeks) {
+  if (!order || order.length === 0) return 0;
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+
+  for (let i = 0; i < order.length; i++) {
+    const w = weeks[order[i]];
+    if (!w || !w.dateRange) continue;
+    const year = parseInt(order[i]) || today.getFullYear();
+    const range = parseDateRange(w.dateRange, year);
+    if (!range) continue;
+    range.end.setHours(23, 59, 59, 999);
+    if (today >= range.start && today <= range.end) return i;
+  }
+
+  // No exact match — latest week whose start is on or before today
+  let best = -1;
+  for (let i = 0; i < order.length; i++) {
+    const w = weeks[order[i]];
+    if (!w || !w.dateRange) continue;
+    const year = parseInt(order[i]) || today.getFullYear();
+    const range = parseDateRange(w.dateRange, year);
+    if (range && range.start <= today) best = i;
+  }
+  return best >= 0 ? best : Math.max(0, order.length - 1);
+}
+
 function App() {
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => window.loadWeeks());
   const [weekOrder, setWeekOrder] = useAppState(() => window.loadWeekOrder());
   const [progress, setProgress] = useAppState(() => window.loadProgress());
-  const [weekIdx, setWeekIdx] = useAppState(() => {
-    const initial = window.loadWeekOrder();
-    const idx = initial.indexOf("2025-W14");
-    return idx >= 0 ? idx : Math.max(0, initial.length - 1);
-  });
+  const [weekIdx, setWeekIdx] = useAppState(() => bestWeekIdx(window.loadWeekOrder(), window.loadWeeks()));
   const [openCat, setOpenCat] = useAppState("vocab");
   const [editMode, setEditMode] = useAppState(false);
   const [editorOpen, setEditorOpen] = useAppState(false);
@@ -30,6 +74,12 @@ function App() {
     const unsub = window.subscribeToClassData((newWeeks, newOrder) => {
       setWeeks(newWeeks);
       setWeekOrder(newOrder);
+      setWeekIdx(bestWeekIdx(newOrder, newWeeks));
+      // Keep localStorage cache in sync so next page load shows the right week immediately.
+      try {
+        localStorage.setItem("alans-english-data-v3", JSON.stringify(newWeeks));
+        localStorage.setItem("alans-english-week-order-v1", JSON.stringify(newOrder));
+      } catch (e) {}
     });
     return unsub;
   }, []);
