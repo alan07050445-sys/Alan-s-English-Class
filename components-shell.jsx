@@ -162,7 +162,7 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
         <div className="stat-row">
           <div className="stat">
             <span className="stat-label">Week</span>
-            <span className="stat-value serif">{week.label.replace("Week ", "")}<span className="unit">/ 2025</span></span>
+            <span className="stat-value serif">{(week.label || "—").replace("Week ", "")}<span className="unit">/ 2025</span></span>
           </div>
           <div className="stat">
             <span className="stat-label">Items</span>

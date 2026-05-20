@@ -197,10 +197,11 @@ function subscribeToClassData(callback) {
   return _classDoc.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
-      callback(
-        cleanWeeks(d.weeks || SEED_WEEKS),
-        d.weekOrder || DEFAULT_WEEK_ORDER.slice()
-      );
+      const savedWeeks = d.weeks || SEED_WEEKS;
+      const order = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
+        ? d.weekOrder
+        : (Object.keys(savedWeeks).length > 0 ? Object.keys(savedWeeks).sort() : DEFAULT_WEEK_ORDER.slice());
+      callback(cleanWeeks(savedWeeks), order);
     } else {
       callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice());
     }

@@ -37,14 +37,16 @@ function App() {
   // Progress is per-device — keep in localStorage only.
   useAppEffect(() => { window.saveProgress(progress); }, [progress]);
 
-  // Clamp weekIdx if the order shrinks
+  // Clamp weekIdx if the order shrinks (also handles empty weekOrder gracefully)
   useAppEffect(() => {
-    if (weekIdx >= weekOrder.length) setWeekIdx(Math.max(0, weekOrder.length - 1));
+    if (weekOrder.length === 0 || weekIdx >= weekOrder.length) {
+      setWeekIdx(Math.max(0, weekOrder.length - 1));
+    }
   }, [weekOrder, weekIdx]);
 
-  const weekId = weekOrder[weekIdx];
+  const weekId = weekOrder[weekIdx] || weekOrder[0] || "";
   const week = weeks[weekId] || {
-    id: weekId, label: weekId, dateRange: "—", theme: "—", themeZh: "", items: {vocab:[], grammar:[], word:[], reading:[]}
+    id: weekId, label: weekId || "—", dateRange: "—", theme: "—", themeZh: "", items: {vocab:[], grammar:[], word:[], reading:[]}
   };
 
   const allItems = useAppMemo(() => {
