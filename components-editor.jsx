@@ -7,24 +7,23 @@ const TYPE_OPTIONS = [
   { id: "wordwall", label: "Wordwall", hint: "Embed link from Wordwall" },
   { id: "youtube",  label: "YouTube",  hint: "Paste any YouTube URL" },
   { id: "form",     label: "Google Form", hint: "Embed link from Google Form" },
-  { id: "pdf",      label: "PDF",      hint: "URL or path to PDF file" },
+  { id: "pdf",      label: "PDF",      hint: "Upload a PDF or paste a link" },
   { id: "note",     label: "Notes",    hint: "Write your own notes" },
   { id: "quiz",     label: "Quiz",     hint: "Build a multiple-choice quiz with explanations" },
 ];
 
-function EditorModal({ open, draft, onClose, onSave, onDelete }) {
+function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
 
   useE(() => { setForm(draft); }, [draft]);
 
   if (!open || !form) return null;
 
-  const isNew = !form.id || form.id.startsWith("new-");
+  const isNew = !!form._isNew;
   const meta = TYPE_OPTIONS.find(t => t.id === form.type) || TYPE_OPTIONS[0];
 
   const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  // Smart paste: if user pastes an entire <iframe ...> tag, extract src="..."
   const extractSrc = (raw) => {
     if (!raw) return raw;
     const m = raw.match(/src\s*=\s*["']([^"']+)["']/i);
@@ -129,6 +128,8 @@ function EditorModal({ open, draft, onClose, onSave, onDelete }) {
             <PdfUpload
               file={form.fileData ? { name: form.fileName, dataUrl: form.fileData, size: form.fileSize } : null}
               url={form.url || ""}
+              weekId={weekId}
+              itemId={form.id}
               onUrl={(v) => update("url", v)}
               onFile={(f) => setForm(prev => ({
                 ...prev,
@@ -191,16 +192,16 @@ function EditorModal({ open, draft, onClose, onSave, onDelete }) {
   );
 }
 
-/* ───── PDF upload (drag + drop / file picker) ───── */
-function PdfUpload({ file, url, onUrl, onFile }) {
+/* ───── PDF upload — uploads to Firebase Storage ───── */
+function PdfUpload({ file, url, weekId, itemId, onUrl, onFile }) {
   const [drag, setDrag] = useS(false);
-  const [reading, setReading] = useS(false);
+  const [uploading, setUploading] = useS(false);
   const [err, setErr] = useS("");
   const inputRef = React.useRef(null);
 
-  const MAX_BYTES = 4 * 1024 * 1024; // 4 MB — stays under localStorage quota
+  const MAX_BYTES = 10 * 1024 * 1024; // 10 MB (Firebase Storage, no localStorage limit)
 
-  const handleFile = (f) => {
+  const handleFile = async (f) => {
     setErr("");
     if (!f) return;
     if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) {
@@ -208,20 +209,18 @@ function PdfUpload({ file, url, onUrl, onFile }) {
       return;
     }
     if (f.size > MAX_BYTES) {
-      setErr(`檔案太大 (${formatBytes(f.size)}) · 上限 ${formatBytes(MAX_BYTES)}。請壓縮 PDF 或貼連結。`);
+      setErr(`檔案太大 (${formatBytes(f.size)}) · 上限 ${formatBytes(MAX_BYTES)}。請壓縮 PDF。`);
       return;
     }
-    setReading(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setReading(false);
-      onFile({ name: f.name, size: f.size, dataUrl: reader.result });
-    };
-    reader.onerror = () => {
-      setReading(false);
-      setErr("讀取失敗 · Failed to read file.");
-    };
-    reader.readAsDataURL(f);
+    setUploading(true);
+    try {
+      const downloadUrl = await window.uploadPdfToStorage(weekId, itemId, f);
+      onFile({ name: f.name, size: f.size, dataUrl: downloadUrl });
+    } catch (e) {
+      setErr("上傳失敗 · Upload failed. 請再試一次。");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const onDrop = (e) => {
@@ -239,7 +238,7 @@ function PdfUpload({ file, url, onUrl, onFile }) {
           <div className="pdf-uploaded-icon">PDF</div>
           <div className="pdf-uploaded-info">
             <div className="pdf-uploaded-name">{file.name || "document.pdf"}</div>
-            <div className="pdf-uploaded-meta mono">{formatBytes(file.size)} · saved locally</div>
+            <div className="pdf-uploaded-meta mono">{formatBytes(file.size)} · stored in cloud ☁</div>
           </div>
           <div className="pdf-uploaded-tools">
             <a className="item-action ghost" href={file.dataUrl} target="_blank" rel="noopener">Preview</a>
@@ -248,11 +247,11 @@ function PdfUpload({ file, url, onUrl, onFile }) {
         </div>
       ) : (
         <div
-          className={"pdf-drop " + (drag ? "drag" : "") + (reading ? " reading" : "")}
+          className={"pdf-drop " + (drag ? "drag" : "") + (uploading ? " reading" : "")}
           onDragOver={e => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
           onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => !uploading && inputRef.current?.click()}
         >
           <input
             ref={inputRef}
@@ -261,8 +260,8 @@ function PdfUpload({ file, url, onUrl, onFile }) {
             style={{display: "none"}}
             onChange={e => handleFile(e.target.files?.[0])}
           />
-          {reading ? (
-            <div className="pdf-drop-status">Reading file…</div>
+          {uploading ? (
+            <div className="pdf-drop-status">Uploading to cloud… ☁</div>
           ) : (
             <>
               <div className="pdf-drop-icon">
@@ -274,7 +273,7 @@ function PdfUpload({ file, url, onUrl, onFile }) {
                 {drag ? "Drop your PDF here" : "Drag a PDF here, or click to choose"}
               </div>
               <div className="pdf-drop-sub mono">
-                拖曳檔案到這裡，或點選檔 · PDF · max 4 MB
+                拖曳檔案到這裡，或點選檔 · PDF · max 10 MB
               </div>
             </>
           )}
@@ -342,7 +341,7 @@ function Footer() {
   );
 }
 
-/* ───── Week Modal — Add a new week ───── */
+/* ───── Week Modal ───── */
 function WeekModal({ open, existingIds, onClose, onSave }) {
   const [form, setForm] = useS(null);
 
@@ -449,25 +448,21 @@ function WeekModal({ open, existingIds, onClose, onSave }) {
   );
 }
 
-/* ───── Export Modal — Download data for committing to GitHub ───── */
+/* ───── Export Modal ───── */
 function ExportModal({ open, weeks, weekOrder, onClose, showToast }) {
-  const [mode, setMode] = useS("dataJs"); // "dataJs" | "json"
+  const [mode, setMode] = useS("dataJs");
   const [copied, setCopied] = useS(false);
 
   useE(() => { if (open) { setMode("dataJs"); setCopied(false); } }, [open]);
 
   if (!open) return null;
 
-  // Build the ready-to-paste content
   const jsonPayload = { weekOrder, weeks };
   const jsonStr = JSON.stringify(jsonPayload, null, 2);
 
   const seedJs = JSON.stringify(weeks, null, 2);
   const orderJs = JSON.stringify(weekOrder);
 
-  // Full data.js — drop in to replace the entire file. The boilerplate
-  // (CATEGORIES, TYPE_META, storage helpers) is invariant; only SEED_WEEKS
-  // and DEFAULT_WEEK_ORDER reflect the teacher's edits.
   const dataJsSnippet =
 `// data.js — Seed content + storage helpers
 // Generated by Teacher Export on ${new Date().toISOString().slice(0, 19).replace("T", " ")}
@@ -547,7 +542,6 @@ function suggestNextWeekId(existingIds) {
   return \`\${nextYear}-W\${String(nextWeek).padStart(2, "0")}\`;
 }
 
-// Resource type metadata
 const TYPE_META = {
   quizlet:  { label: "Quizlet",  zh: "字卡",   embed: true,  cta: "Close ×" },
   wordwall: { label: "Wordwall", zh: "遊戲",   embed: true,  cta: "Play →" },
@@ -559,7 +553,6 @@ const TYPE_META = {
   quiz:     { label: "Quiz",     zh: "測驗",   embed: false, cta: "Start →" },
 };
 
-// ───── Storage ─────
 const STORAGE_KEY = "alans-english-data-v3";
 const PROGRESS_KEY = "alans-english-progress-v1";
 
@@ -602,7 +595,6 @@ function saveProgress(prog) {
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog)); } catch (e) {}
 }
 
-// YouTube URL → embed URL
 function toYouTubeEmbed(url) {
   if (!url) return "";
   try {
@@ -643,7 +635,6 @@ Object.assign(window, {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (e) {
-      // Fallback
       const ta = document.createElement("textarea");
       ta.value = content;
       document.body.appendChild(ta);
@@ -654,7 +645,6 @@ Object.assign(window, {
     }
   };
 
-  // Stats
   const weekCount = weekOrder.length;
   let itemCount = 0;
   Object.values(weeks).forEach(w => {
@@ -676,9 +666,9 @@ Object.assign(window, {
             border: "1px solid var(--rule, #e6e0d2)", borderRadius: 3,
             fontSize: 13, lineHeight: 1.55, marginBottom: 18
           }}>
-            <strong>{weekCount} weeks</strong> · <strong>{itemCount} items</strong> 目前儲存在這台裝置。<br/>
+            <strong>{weekCount} weeks</strong> · <strong>{itemCount} items</strong> 目前儲存在雲端。<br/>
             <span style={{color: "var(--ink-muted)"}}>
-              要讓家長端看到你的更新：下載 <code>data.js</code> → 上傳到 GitHub 直接<strong>覆蓋</strong>原本的 <code>data.js</code> → 等 1-2 分鐘家長重新整理即可。
+              這份 JSON 備份可用來還原資料，或在新的 Firebase 專案重新匯入。
             </span>
           </div>
 
@@ -686,7 +676,7 @@ Object.assign(window, {
             <label className="field-label">Format · 格式</label>
             <div className="type-picker">
               <button className={mode === "dataJs" ? "active" : ""} onClick={() => setMode("dataJs")}>
-                data.js snippet
+                data.js (legacy)
               </button>
               <button className={mode === "json" ? "active" : ""} onClick={() => setMode("json")}>
                 Raw JSON
@@ -694,8 +684,8 @@ Object.assign(window, {
             </div>
             <div className="field-help">
               {mode === "dataJs"
-                ? "完整的 data.js — 下載後直接覆蓋 GitHub 上原本的 data.js 即可。"
-                : "純資料 JSON — 備份用、或之後做匯入功能用。"}
+                ? "舊版靜態 data.js 格式（不含 Firebase sync）— 純備份用。"
+                : "純資料 JSON — 備份或之後匯入用。"}
             </div>
           </div>
 

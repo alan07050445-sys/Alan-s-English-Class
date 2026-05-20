@@ -1,6 +1,21 @@
 // data.js — Seed content + storage helpers
 // Plain JS (not JSX). Exports to window so other scripts can use it.
 
+// ── Firebase config ────────────────────────────────────
+// 請到 Firebase Console > Project Settings > Your apps 複製設定貼在這裡
+const firebaseConfig = {
+  apiKey:            'AIzaSyD1fQDneiwkGhbMOUxpOzVxZi8EIkourAs',
+  authDomain:        'alan-s-english-class.firebaseapp.com',
+  projectId:         'alan-s-english-class',
+  storageBucket:     'alan-s-english-class.firebasestorage.app',
+  messagingSenderId: '113180818799',
+  appId:             '1:113180818799:web:fff201f706d5c90b5f3c9a',
+};
+firebase.initializeApp(firebaseConfig);
+const _db      = firebase.firestore();
+const _storage = firebase.storage();
+const _classDoc = _db.collection('class').doc('data');
+
 const CATEGORIES = [
   {
     id: "vocab",
@@ -173,6 +188,42 @@ const SEED_WEEKS = {
 const DEFAULT_WEEK_ORDER = ["2025-W13", "2025-W14", "2025-W15"];
 const WEEK_ORDER_KEY = "alans-english-week-order-v1";
 
+// ── Firestore sync ─────────────────────────────────────
+
+// Subscribe to live class data. Returns an unsubscribe function.
+// callback(weeks, weekOrder) fires immediately and on every change.
+// progress is intentionally excluded — it stays per-device in localStorage.
+function subscribeToClassData(callback) {
+  return _classDoc.onSnapshot(snap => {
+    if (snap.exists) {
+      const d = snap.data();
+      callback(
+        cleanWeeks(d.weeks || SEED_WEEKS),
+        d.weekOrder || DEFAULT_WEEK_ORDER.slice()
+      );
+    } else {
+      callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice());
+    }
+  });
+}
+
+async function saveWeeks(weeks) {
+  await _classDoc.set({ weeks }, { merge: true });
+}
+
+async function saveWeekOrder(order) {
+  await _classDoc.set({ weekOrder: order }, { merge: true });
+}
+
+// Upload a PDF File to Firebase Storage; returns the public download URL.
+async function uploadPdfToStorage(weekId, itemId, file) {
+  const storageRef = _storage.ref(`pdfs/${weekId}/${itemId}`);
+  await storageRef.put(file);
+  return storageRef.getDownloadURL();
+}
+
+// ── localStorage (initial cache + per-device progress) ─
+
 function loadWeekOrder() {
   try {
     const raw = localStorage.getItem(WEEK_ORDER_KEY);
@@ -183,13 +234,33 @@ function loadWeekOrder() {
   } catch (e) {}
   return DEFAULT_WEEK_ORDER.slice();
 }
-function saveWeekOrder(order) {
-  try { localStorage.setItem(WEEK_ORDER_KEY, JSON.stringify(order)); } catch (e) {}
+
+const STORAGE_KEY = "alans-english-data-v3";
+
+function loadWeeks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return cleanWeeks(JSON.parse(raw));
+  } catch (e) {}
+  return SEED_WEEKS;
 }
 
-// Given existing week IDs, suggest a sensible next one (auto-increment week number).
+const PROGRESS_KEY = "alans-english-progress-v1";
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {};
+}
+function saveProgress(prog) {
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog)); } catch (e) {}
+}
+
+// ── Utilities ──────────────────────────────────────────
+
 function suggestNextWeekId(existingIds) {
-  // Pattern: YYYY-WNN
   const parsed = existingIds
     .map(id => {
       const m = String(id).match(/^(\d{4})-W(\d{1,2})$/i);
@@ -207,7 +278,6 @@ function suggestNextWeekId(existingIds) {
   return `${nextYear}-W${String(nextWeek).padStart(2, "0")}`;
 }
 
-// Resource type metadata
 const TYPE_META = {
   quizlet:  { label: "Quizlet",  zh: "字卡",   embed: true,  cta: "Close ×" },
   wordwall: { label: "Wordwall", zh: "遊戲",   embed: true,  cta: "Play →" },
@@ -219,12 +289,6 @@ const TYPE_META = {
   quiz:     { label: "Quiz",     zh: "測驗",   embed: false, cta: "Start →" },
 };
 
-// ───── Storage ─────
-const STORAGE_KEY = "alans-english-data-v3";
-const PROGRESS_KEY = "alans-english-progress-v1";
-
-// One-time fix: clean up any stored values that got accidentally doubled
-// from the previous contentEditable bug (e.g. "Aesop's FablesAesop's Fables").
 function dedupeDoubled(s) {
   if (typeof s !== "string" || s.length < 4) return s;
   const half = s.length / 2;
@@ -235,7 +299,7 @@ function cleanWeeks(weeks) {
   try {
     const out = JSON.parse(JSON.stringify(weeks));
     Object.values(out).forEach(w => {
-      ;["theme", "themeZh", "subtitle", "subtitleZh", "label", "dateRange"].forEach(k => {
+      ["theme", "themeZh", "subtitle", "subtitleZh", "label", "dateRange"].forEach(k => {
         if (w && typeof w[k] === "string") w[k] = dedupeDoubled(w[k]);
       });
     });
@@ -243,28 +307,6 @@ function cleanWeeks(weeks) {
   } catch (e) { return weeks; }
 }
 
-function loadWeeks() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return cleanWeeks(JSON.parse(raw));
-  } catch (e) {}
-  return SEED_WEEKS;
-}
-function saveWeeks(weeks) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(weeks)); } catch (e) {}
-}
-function loadProgress() {
-  try {
-    const raw = localStorage.getItem(PROGRESS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return {};
-}
-function saveProgress(prog) {
-  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog)); } catch (e) {}
-}
-
-// YouTube URL → embed URL
 function toYouTubeEmbed(url) {
   if (!url) return "";
   try {
@@ -280,4 +322,5 @@ Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
+  subscribeToClassData, uploadPdfToStorage,
 });

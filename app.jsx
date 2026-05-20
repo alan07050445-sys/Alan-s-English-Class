@@ -2,12 +2,10 @@
 
 const { useState: useAppState, useEffect: useAppEffect, useMemo: useAppMemo } = React;
 
-// Edit button is always visible — each device's edits stay in its own
-// localStorage and never affect other viewers, so there's no risk in
-// exposing the toggle. Teacher publishes by exporting + committing to GitHub.
 const IS_TEACHER = true;
 
 function App() {
+  // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => window.loadWeeks());
   const [weekOrder, setWeekOrder] = useAppState(() => window.loadWeekOrder());
   const [progress, setProgress] = useAppState(() => window.loadProgress());
@@ -25,9 +23,19 @@ function App() {
   const [exportOpen, setExportOpen] = useAppState(false);
   const [toast, setToast] = useAppState(null);
 
-  useAppEffect(() => { window.saveWeeks(weeks); }, [weeks]);
+  // ── Firestore real-time subscription ──────────────────
+  // Replaces localStorage save-on-change for weeks & weekOrder.
+  // progress stays in localStorage (per-device).
+  useAppEffect(() => {
+    const unsub = window.subscribeToClassData((newWeeks, newOrder) => {
+      setWeeks(newWeeks);
+      setWeekOrder(newOrder);
+    });
+    return unsub;
+  }, []);
+
+  // Progress is per-device — keep in localStorage only.
   useAppEffect(() => { window.saveProgress(progress); }, [progress]);
-  useAppEffect(() => { window.saveWeekOrder(weekOrder); }, [weekOrder]);
 
   // Clamp weekIdx if the order shrinks
   useAppEffect(() => {
@@ -51,14 +59,10 @@ function App() {
     setTimeout(() => setToast(null), 1800);
   };
 
-  const goPrevWeek = () => {
-    setWeekIdx(i => Math.max(0, i - 1));
-    setOpenCat(null);
-  };
-  const goNextWeek = () => {
-    setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1));
-    setOpenCat(null);
-  };
+  const goPrevWeek = () => { setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); };
+  const goNextWeek = () => { setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); };
+
+  // ── Week CRUD ──────────────────────────────────────────
 
   const handleAddWeek = (form) => {
     const id = (form.id || "").trim();
@@ -74,10 +78,12 @@ function App() {
       subtitleZh: "",
       items: { vocab: [], grammar: [], word: [], reading: [] },
     };
-    // Insert in chronological order by ID
     const nextOrder = [...weekOrder, id].sort();
-    setWeeks(prev => ({ ...prev, [id]: newWeek }));
+    const nextWeeks = { ...weeks, [id]: newWeek };
+    setWeeks(nextWeeks);
     setWeekOrder(nextOrder);
+    window.saveWeeks(nextWeeks);
+    window.saveWeekOrder(nextOrder);
     setWeekIdx(nextOrder.indexOf(id));
     setOpenCat(null);
     setWeekModalOpen(false);
@@ -87,12 +93,13 @@ function App() {
   const handleDeleteWeek = () => {
     if (weekOrder.length <= 1) { showToast("Can't delete the last week"); return; }
     if (!confirm(`Delete ${week.label} (${week.theme})? This can't be undone.`)) return;
-    setWeeks(prev => {
-      const next = { ...prev };
-      delete next[weekId];
-      return next;
-    });
-    setWeekOrder(prev => prev.filter(id => id !== weekId));
+    const nextWeeks = { ...weeks };
+    delete nextWeeks[weekId];
+    const nextOrder = weekOrder.filter(id => id !== weekId);
+    setWeeks(nextWeeks);
+    setWeekOrder(nextOrder);
+    window.saveWeeks(nextWeeks);
+    window.saveWeekOrder(nextOrder);
     setWeekIdx(i => Math.max(0, i - 1));
     setOpenCat(null);
     showToast("Week deleted");
@@ -107,10 +114,15 @@ function App() {
     });
   };
 
+  // ── Item CRUD ──────────────────────────────────────────
+
   const handleAddItem = (catId) => {
+    // Pre-generate final ID so the PDF storage path is stable before save.
+    const newId = catId[0] + Date.now();
     setEditorCat(catId);
     setEditorDraft({
-      id: "new-" + Date.now(),
+      id: newId,
+      _isNew: true,
       type: "quizlet",
       title: "",
       zh: "",
@@ -130,52 +142,47 @@ function App() {
   };
 
   const handleSaveItem = (form) => {
-    setWeeks(prev => {
-      const w = JSON.parse(JSON.stringify(prev));
-      if (!w[weekId]) {
-        w[weekId] = {...week, items: {vocab:[], grammar:[], word:[], reading:[]}};
-      }
-      const list = w[weekId].items[editorCat] || [];
-      const isNew = !list.find(it => it.id === form.id);
-      const cleanId = isNew ? (editorCat[0] + Date.now()) : form.id;
-      const cleanForm = {...form, id: cleanId};
-      if (isNew) {
-        w[weekId].items[editorCat] = [...list, cleanForm];
-      } else {
-        w[weekId].items[editorCat] = list.map(it => it.id === form.id ? cleanForm : it);
-      }
-      return w;
-    });
+    const { _isNew, ...cleanForm } = form;
+    const isNew = !!_isNew;
+    const w = JSON.parse(JSON.stringify(weeks));
+    if (!w[weekId]) {
+      w[weekId] = {...week, items: {vocab:[], grammar:[], word:[], reading:[]}};
+    }
+    const list = w[weekId].items[editorCat] || [];
+    w[weekId].items[editorCat] = isNew
+      ? [...list, cleanForm]
+      : list.map(it => it.id === cleanForm.id ? cleanForm : it);
+    setWeeks(w);
+    window.saveWeeks(w);
     setEditorOpen(false);
-    showToast(form.id?.startsWith("new-") ? "Item added" : "Item saved");
+    showToast(isNew ? "Item added" : "Item saved");
   };
 
   const handleMoveItem = (catId, itemId, dir) => {
-    setWeeks(prev => {
-      const w = JSON.parse(JSON.stringify(prev));
-      const list = w[weekId]?.items?.[catId];
-      if (!list) return prev;
-      const i = list.findIndex(it => it.id === itemId);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= list.length) return prev;
-      [list[i], list[j]] = [list[j], list[i]];
-      return w;
-    });
+    const w = JSON.parse(JSON.stringify(weeks));
+    const list = w[weekId]?.items?.[catId];
+    if (!list) return;
+    const i = list.findIndex(it => it.id === itemId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    setWeeks(w);
+    window.saveWeeks(w);
   };
 
   const handleDeleteItem = (itemId) => {
-    setWeeks(prev => {
-      const w = JSON.parse(JSON.stringify(prev));
-      Object.keys(w[weekId].items).forEach(k => {
-        w[weekId].items[k] = w[weekId].items[k].filter(it => it.id !== itemId);
-      });
-      return w;
+    const w = JSON.parse(JSON.stringify(weeks));
+    Object.keys(w[weekId].items).forEach(k => {
+      w[weekId].items[k] = w[weekId].items[k].filter(it => it.id !== itemId);
     });
+    setWeeks(w);
+    window.saveWeeks(w);
     setEditorOpen(false);
     showToast("Item deleted");
   };
 
-  // Render category grid with detail row inserted after the open one
+  // ── Grid renderer ──────────────────────────────────────
+
   const renderGrid = () => {
     const cards = [];
     const openIdx = window.CATEGORIES.findIndex(c => c.id === openCat);
@@ -196,8 +203,6 @@ function App() {
         />
       );
 
-      // Insert detail row at end of the row containing the open card.
-      // 2-column grid → rows are pairs (0,1), (2,3)
       const isEndOfRow = (i % 2 === 1) || (i === window.CATEGORIES.length - 1);
       const openIsInThisRow = openIdx >= 0 && Math.floor(openIdx / 2) === Math.floor(i / 2);
       if (isEndOfRow && openIsInThisRow && openCat) {
@@ -244,12 +249,11 @@ function App() {
         totalDone={totalDone}
         editMode={editMode}
         onUpdateWeek={(patch) => {
-          setWeeks(prev => {
-            const w = JSON.parse(JSON.stringify(prev));
-            if (!w[weekId]) return prev;
-            w[weekId] = { ...w[weekId], ...patch };
-            return w;
-          });
+          const w = JSON.parse(JSON.stringify(weeks));
+          if (!w[weekId]) return;
+          w[weekId] = { ...w[weekId], ...patch };
+          setWeeks(w);
+          window.saveWeeks(w);
         }}
       />
 
@@ -270,6 +274,7 @@ function App() {
       <window.EditorModal
         open={editorOpen}
         draft={editorDraft}
+        weekId={weekId}
         onClose={() => setEditorOpen(false)}
         onSave={handleSaveItem}
         onDelete={handleDeleteItem}
