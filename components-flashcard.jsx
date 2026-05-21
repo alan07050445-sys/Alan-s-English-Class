@@ -136,6 +136,7 @@ function FlashcardPlayer({ item, onComplete }) {
   const [testSetup, setTestSetup] = useFC(true);
   const [testType, setTestType] = useFC("choice"); // "choice" | "written" | "both"
   const [testChoices, setTestChoices] = useFC({});
+  const [questionTypes, setQuestionTypes] = useFC({}); // cardId → "choice" | "written"
   const [testAnswers, setTestAnswers] = useFC({}); // cardId → chosen card id
   const [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
   const [testDone, setTestDone] = useFC(false);
@@ -162,8 +163,19 @@ function FlashcardPlayer({ item, onComplete }) {
 
   const startTest = () => {
     const tc = {};
-    cards.forEach(card => { tc[card.id] = makeChoices(card, cards); });
+    const qt = {};
+    if (testType === "both") {
+      // Shuffle cards and alternate: first half → choice, second half → written
+      const shuffled = shuffle([...cards]);
+      const half = Math.ceil(shuffled.length / 2);
+      shuffled.forEach((card, i) => { qt[card.id] = i < half ? "choice" : "written"; });
+    }
+    cards.forEach(card => {
+      tc[card.id] = makeChoices(card, cards);
+      if (testType !== "both") qt[card.id] = testType;
+    });
     setTestChoices(tc);
+    setQuestionTypes(qt);
     setTestSetup(false);
   };
 
@@ -370,21 +382,18 @@ function FlashcardPlayer({ item, onComplete }) {
 
     /* Results screen */
     if (testDone) {
-      const hasChoice  = testType === "choice" || testType === "both";
-      const hasWritten = testType === "written" || testType === "both";
-
       const results = cards.map(card => {
+        const qType = questionTypes[card.id] || "choice";
         let correct = true;
         let userAnswer = "";
-        if (hasChoice) {
+        if (qType === "choice") {
           const ok = testAnswers[card.id] === card.id;
           if (!ok) {
             correct = false;
             const chosen = testChoices[card.id]?.find(c => c.id === testAnswers[card.id]);
             userAnswer = chosen?.term || "—";
           }
-        }
-        if (hasWritten) {
+        } else {
           const typed = (typedAnswers[card.id] || "").trim();
           const ok = typed.toLowerCase() === card.term.toLowerCase();
           if (!ok) { correct = false; userAnswer = typed || "—"; }
@@ -419,7 +428,7 @@ function FlashcardPlayer({ item, onComplete }) {
                 ))}
               </div>
               <div style={{display: "flex", gap: 12, marginTop: 20}}>
-                <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setTestDone(false); }}>Try Again</button>
+                <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setQuestionTypes({}); setTestDone(false); }}>Try Again</button>
                 <button className="btn primary" onClick={enterLearn}>Study More →</button>
               </div>
             </div>
@@ -429,14 +438,11 @@ function FlashcardPlayer({ item, onComplete }) {
     }
 
     /* Test questions */
-    const hasChoice  = testType === "choice" || testType === "both";
-    const hasWritten = testType === "written" || testType === "both";
-
     const answeredCards = new Set(
       cards.filter(card => {
-        const okChoice  = !hasChoice  || testAnswers[card.id];
-        const okWritten = !hasWritten || (typedAnswers[card.id] || "").trim();
-        return okChoice && okWritten;
+        const qType = questionTypes[card.id] || "choice";
+        if (qType === "choice") return !!testAnswers[card.id];
+        return !!(typedAnswers[card.id] || "").trim();
       }).map(c => c.id)
     );
 
@@ -453,6 +459,7 @@ function FlashcardPlayer({ item, onComplete }) {
 
           <div className="fc-test-list">
             {cards.map((card, qi) => {
+              const qType     = questionTypes[card.id] || "choice";
               const choices   = testChoices[card.id] || [];
               const selectedId = testAnswers[card.id];
               const typedVal  = typedAnswers[card.id] || "";
@@ -465,8 +472,11 @@ function FlashcardPlayer({ item, onComplete }) {
                       {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-test-img"/>}
                       <span style={{fontSize: 18, fontFamily: "var(--sans)"}}>{card.zh}</span>
                     </div>
+                    <span className="mono" style={{fontSize: 9, color: "var(--ink-faint)", marginLeft: 6}}>
+                      {qType === "choice" ? "選擇" : "手寫"}
+                    </span>
                   </div>
-                  {hasChoice && (
+                  {qType === "choice" && (
                     <div className="fc-test-choices">
                       {choices.map((ch, ci) => (
                         <button key={ci}
@@ -476,7 +486,7 @@ function FlashcardPlayer({ item, onComplete }) {
                       ))}
                     </div>
                   )}
-                  {hasWritten && (
+                  {qType === "written" && (
                     <div className="fc-test-written">
                       <input
                         className="fc-written-input"
