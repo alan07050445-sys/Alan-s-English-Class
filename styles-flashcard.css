@@ -28,23 +28,25 @@
 
 /* ── Dual progress bar (Quizlet-style) ── */
 .fc-dual-bar {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 20px;
+  display: flex !important; flex-direction: row !important;
+  align-items: center; gap: 10px;
+  margin-bottom: 20px; width: 100%;
 }
 .fc-dual-circle {
   width: 32px; height: 32px; border-radius: 50%;
   display: grid; place-items: center;
   font-family: var(--mono); font-size: 12px; font-weight: 700;
-  border: 2px solid var(--border); color: var(--ink-muted);
-  flex-shrink: 0;
+  border: 2px solid #ccc; color: #888;
+  flex-shrink: 0; background: transparent;
 }
 .fc-dual-circle.green { border-color: #4caf50; color: #2e7d32; background: #f1f8f2; }
 .fc-dual-track {
   flex: 1; height: 10px; border-radius: 999px;
-  overflow: hidden; display: flex; background: var(--border);
+  overflow: hidden; display: flex; background: #ddd;
+  min-width: 0;
 }
-.fc-dual-seg-green { background: #4caf50; transition: flex 0.4s; }
-.fc-dual-seg-gray  { background: #ccc;    transition: flex 0.4s; }
+.fc-dual-seg-green { background: #4caf50; transition: flex 0.4s; min-width: 0; }
+.fc-dual-seg-gray  { background: #ccc;    transition: flex 0.4s; min-width: 0; }
 
 /* ── Speaker button ── */
 .fc-speaker-btn {
@@ -80,17 +82,19 @@
   padding: 24px;
   text-align: center;
   gap: 0;
+  overflow: hidden;
 }
 .fc-back { transform: rotateY(180deg); background: var(--ink); color: var(--bg-paper); }
 
 /* Image on the BACK of card */
 .fc-back-img-wrap {
-  max-height: 90px; margin-bottom: 10px;
+  width: 100%; max-height: 100px;
+  display: flex; justify-content: center;
+  margin-bottom: 10px; flex-shrink: 0; overflow: hidden;
 }
 .fc-back-img-wrap img {
-  max-height: 90px; max-width: 200px;
-  object-fit: contain; border-radius: 3px;
-  opacity: 0.9;
+  max-height: 100px; max-width: 100%;
+  object-fit: contain; border-radius: 3px; opacity: 0.9;
 }
 
 /* (legacy — kept in case old data uses it) */
@@ -119,11 +123,11 @@
   display: flex; flex-direction: column; align-items: center;
   text-align: center; padding: 16px 0 24px;
 }
-.fc-learn-img { max-height: 110px; max-width: 220px; object-fit: contain; margin-bottom: 16px; border-radius: 3px; }
+.fc-learn-img { max-height: 160px; max-width: 280px; object-fit: contain; margin-bottom: 18px; border-radius: 4px; }
 
 /* Chinese shown as the question in learn mode */
 .fc-learn-zh {
-  font-size: 38px; font-weight: 700; line-height: 1.2;
+  font-size: 46px; font-weight: 700; line-height: 1.2;
   letter-spacing: 0.02em; margin-bottom: 6px;
 }
 .fc-learn-example {

@@ -292,7 +292,6 @@ function FlashcardPlayer({ item, onComplete }) {
             {isRetry && <div className="fc-retry-badge mono">再試一次吧 · Try again</div>}
             {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-learn-img"/>}
             <div className="fc-learn-zh">{card.zh}</div>
-            {card.example && <div className="fc-learn-example serif-i">"{card.example}"</div>}
             <div className="mono" style={{fontSize: 10, color: "var(--ink-muted)", marginTop: 10}}>
               Choose the English word · 選出正確英文單字
             </div>
