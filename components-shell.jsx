@@ -68,9 +68,6 @@ function Header({ week, weekOrder, weekIdx, onPrevWeek, onNextWeek, canEdit, edi
               <button className="banner-btn danger" onClick={onDeleteWeek}>
                 <Icon name="trash" size={12}/> Delete this Week
               </button>
-              <button className="banner-btn" onClick={onExport}>
-                <Icon name="download" size={12}/> Export
-              </button>
               <button className="banner-btn" onClick={onToggleEdit}>Done editing →</button>
             </div>
           </div>

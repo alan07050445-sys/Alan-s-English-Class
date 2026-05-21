@@ -1,6 +1,6 @@
 // app.jsx — Top-level state + composition
 
-const { useState: useAppState, useEffect: useAppEffect, useMemo: useAppMemo } = React;
+const { useState: useAppState, useEffect: useAppEffect, useMemo: useAppMemo, useRef: useAppRef } = React;
 
 const IS_TEACHER = true;
 
@@ -64,8 +64,11 @@ function App() {
   const [editorDraft, setEditorDraft] = useAppState(null);
   const [editorCat, setEditorCat] = useAppState(null);
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
-  const [exportOpen, setExportOpen] = useAppState(false);
   const [toast, setToast] = useAppState(null);
+
+  // Always-fresh ref to weeks — prevents stale-closure bugs in CRUD handlers.
+  const weeksRef = useAppRef(weeks);
+  useAppEffect(() => { weeksRef.current = weeks; }, [weeks]);
 
   // ── Firestore real-time subscription ──────────────────
   // Replaces localStorage save-on-change for weeks & weekOrder.
@@ -131,7 +134,7 @@ function App() {
       items: { vocab: [], grammar: [], word: [], reading: [] },
     };
     const nextOrder = [...weekOrder, id].sort();
-    const nextWeeks = { ...weeks, [id]: newWeek };
+    const nextWeeks = { ...weeksRef.current, [id]: newWeek };
     setWeeks(nextWeeks);
     setWeekOrder(nextOrder);
     window.saveWeeks(nextWeeks);
@@ -145,7 +148,7 @@ function App() {
   const handleDeleteWeek = () => {
     if (weekOrder.length <= 1) { showToast("Can't delete the last week"); return; }
     if (!confirm(`Delete ${week.label} (${week.theme})? This can't be undone.`)) return;
-    const nextWeeks = { ...weeks };
+    const nextWeeks = { ...weeksRef.current };
     delete nextWeeks[weekId];
     const nextOrder = weekOrder.filter(id => id !== weekId);
     setWeeks(nextWeeks);
@@ -170,7 +173,8 @@ function App() {
 
   const handleAddItem = (catId) => {
     // Pre-generate final ID so the PDF storage path is stable before save.
-    const newId = catId[0] + Date.now();
+    // Include random suffix to avoid collisions if called rapidly.
+    const newId = catId[0] + Date.now() + Math.random().toString(36).slice(2, 6);
     setEditorCat(catId);
     setEditorDraft({
       id: newId,
@@ -196,7 +200,7 @@ function App() {
   const handleSaveItem = (form) => {
     const { _isNew, ...cleanForm } = form;
     const isNew = !!_isNew;
-    const w = JSON.parse(JSON.stringify(weeks));
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
     if (!w[weekId]) {
       w[weekId] = {...week, items: {vocab:[], grammar:[], word:[], reading:[]}};
     }
@@ -211,7 +215,7 @@ function App() {
   };
 
   const handleMoveItem = (catId, itemId, dir) => {
-    const w = JSON.parse(JSON.stringify(weeks));
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
     const list = w[weekId]?.items?.[catId];
     if (!list) return;
     const i = list.findIndex(it => it.id === itemId);
@@ -223,7 +227,7 @@ function App() {
   };
 
   const handleDeleteItem = (itemId) => {
-    const w = JSON.parse(JSON.stringify(weeks));
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
     Object.keys(w[weekId].items).forEach(k => {
       w[weekId].items[k] = w[weekId].items[k].filter(it => it.id !== itemId);
     });
@@ -291,7 +295,6 @@ function App() {
         onToggleEdit={() => setEditMode(e => !e)}
         onAddWeek={() => setWeekModalOpen(true)}
         onDeleteWeek={handleDeleteWeek}
-        onExport={() => setExportOpen(true)}
         progress={{done: totalDone, total: totalItems}}
       />
 
@@ -301,7 +304,7 @@ function App() {
         totalDone={totalDone}
         editMode={editMode}
         onUpdateWeek={(patch) => {
-          const w = JSON.parse(JSON.stringify(weeks));
+          const w = JSON.parse(JSON.stringify(weeksRef.current));
           if (!w[weekId]) return;
           w[weekId] = { ...w[weekId], ...patch };
           setWeeks(w);
@@ -337,14 +340,6 @@ function App() {
         existingIds={weekOrder}
         onClose={() => setWeekModalOpen(false)}
         onSave={handleAddWeek}
-      />
-
-      <window.ExportModal
-        open={exportOpen}
-        weeks={weeks}
-        weekOrder={weekOrder}
-        onClose={() => setExportOpen(false)}
-        showToast={showToast}
       />
 
       {toast && <div className="toast">{toast}</div>}
