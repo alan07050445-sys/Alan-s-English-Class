@@ -280,14 +280,15 @@ function suggestNextWeekId(existingIds) {
 }
 
 const TYPE_META = {
-  quizlet:  { label: "Quizlet",  zh: "字卡",   embed: true,  cta: "Play →" },
-  wordwall: { label: "Wordwall", zh: "遊戲",   embed: true,  cta: "Play →" },
-  youtube:  { label: "Video",    zh: "影片",   embed: true,  cta: "Watch →" },
-  form:     { label: "Quiz",     zh: "小考",   embed: true,  cta: "Take →" },
-  pdf:      { label: "PDF",      zh: "練習卷", embed: false, cta: "Download ↓" },
-  note:     { label: "Notes",    zh: "筆記",   embed: false, cta: "Read →" },
-  image:    { label: "Image",    zh: "圖片",   embed: false, cta: "View →" },
-  quiz:     { label: "Quiz",     zh: "測驗",   embed: false, cta: "Start →" },
+  quizlet:   { label: "Quizlet",   zh: "字卡",   embed: true,  cta: "Play →" },
+  wordwall:  { label: "Wordwall",  zh: "遊戲",   embed: true,  cta: "Play →" },
+  youtube:   { label: "Video",     zh: "影片",   embed: true,  cta: "Watch →" },
+  form:      { label: "Quiz",      zh: "小考",   embed: true,  cta: "Take →" },
+  pdf:       { label: "PDF",       zh: "練習卷", embed: false, cta: "Download ↓" },
+  note:      { label: "Notes",     zh: "筆記",   embed: false, cta: "Read →" },
+  image:     { label: "Image",     zh: "圖片",   embed: false, cta: "View →" },
+  quiz:      { label: "Quiz",      zh: "測驗",   embed: false, cta: "Start →" },
+  flashcard: { label: "Flashcard", zh: "單字卡", embed: false, cta: "Study →" },
 };
 
 function dedupeDoubled(s) {

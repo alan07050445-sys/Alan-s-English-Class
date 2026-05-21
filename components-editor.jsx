@@ -3,13 +3,14 @@
 const { useState: useS, useEffect: useE } = React;
 
 const TYPE_OPTIONS = [
-  { id: "quizlet",  label: "Quizlet",  hint: "Embed link from Quizlet" },
-  { id: "wordwall", label: "Wordwall", hint: "Embed link from Wordwall" },
-  { id: "youtube",  label: "YouTube",  hint: "Paste any YouTube URL" },
-  { id: "form",     label: "Google Form", hint: "Embed link from Google Form" },
-  { id: "pdf",      label: "PDF",      hint: "Upload a PDF or paste a link" },
-  { id: "note",     label: "Notes",    hint: "Write your own notes" },
-  { id: "quiz",     label: "Quiz",     hint: "Build a multiple-choice quiz with explanations" },
+  { id: "quizlet",   label: "Quizlet",    hint: "Embed link from Quizlet" },
+  { id: "wordwall",  label: "Wordwall",   hint: "Embed link from Wordwall" },
+  { id: "youtube",   label: "YouTube",    hint: "Paste any YouTube URL" },
+  { id: "form",      label: "Google Form",hint: "Embed link from Google Form" },
+  { id: "pdf",       label: "PDF",        hint: "Upload a PDF or paste a link" },
+  { id: "note",      label: "Notes",      hint: "Write your own notes" },
+  { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },
+  { id: "flashcard", label: "Flashcard",  hint: "自製單字卡組 — 支援圖片搜尋、匯入、三種練習模式" },
 ];
 
 function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
@@ -38,7 +39,7 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={"modal " + (form.type === "quiz" ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -88,7 +89,12 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
             />
           </div>
 
-          {form.type === "note" ? (
+          {form.type === "flashcard" ? (
+            <window.FlashcardEditor
+              cards={form.cards || []}
+              onChange={cards => update("cards", cards)}
+            />
+          ) : form.type === "note" ? (
             <div className="field">
               <label className="field-label">Notes Body · 筆記內容</label>
               <textarea
