@@ -226,6 +226,23 @@ function App() {
     window.saveWeeks(w);
   };
 
+  const handleMoveTypeGroup = (catId, type, dir) => {
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    const list = w[weekId]?.items?.[catId];
+    if (!list) return;
+    const seenTypes = [];
+    list.forEach(it => { if (!seenTypes.includes(it.type)) seenTypes.push(it.type); });
+    const ti = seenTypes.indexOf(type);
+    const si = ti + dir;
+    if (ti < 0 || si < 0 || si >= seenTypes.length) return;
+    [seenTypes[ti], seenTypes[si]] = [seenTypes[si], seenTypes[ti]];
+    const byType = {};
+    list.forEach(it => { (byType[it.type] = byType[it.type] || []).push(it); });
+    w[weekId].items[catId] = seenTypes.flatMap(t => byType[t] || []);
+    setWeeks(w);
+    window.saveWeeks(w);
+  };
+
   const handleDeleteItem = (itemId) => {
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     Object.keys(w[weekId].items).forEach(k => {
@@ -275,6 +292,7 @@ function App() {
             onEditItem={handleEditItem}
             onDeleteItem={handleDeleteItem}
             onMoveItem={handleMoveItem}
+            onMoveTypeGroup={handleMoveTypeGroup}
           />
         );
       }

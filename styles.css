@@ -16,8 +16,8 @@
   --moss: #4A5A3E;
   --shadow-card: 0 1px 0 rgba(21, 19, 14, 0.04), 0 12px 32px -16px rgba(21, 19, 14, 0.12);
 
-  --serif: "Instrument Serif", "Times New Roman", serif;
-  --sans: "Manrope", -apple-system, "Helvetica Neue", sans-serif;
+  --serif: "Lora", Georgia, serif;
+  --sans: "Nunito", -apple-system, "Helvetica Neue", sans-serif;
   --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
 }
 

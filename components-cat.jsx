@@ -7,11 +7,10 @@ const TYPE_ORDER = ["quizlet", "wordwall", "youtube", "form", "pdf", "note", "qu
 function groupByType(items) {
   const map = {};
   items.forEach(item => { (map[item.type] = map[item.type] || []).push(item); });
-  const types = [
-    ...TYPE_ORDER.filter(t => map[t]),
-    ...Object.keys(map).filter(t => !TYPE_ORDER.includes(t)),
-  ];
-  return types.map(type => ({ type, items: map[type] }));
+  // Order groups by first occurrence in flat array (so moving items changes group order)
+  const seenTypes = [];
+  items.forEach(item => { if (!seenTypes.includes(item.type)) seenTypes.push(item.type); });
+  return seenTypes.map(type => ({ type, items: map[type] }));
 }
 
 /* Type icon glyph used on chips */
@@ -224,7 +223,7 @@ function ItemRow({ item, checked, onToggleCheck, isExpanded, onToggleExpand, edi
 }
 
 /* ── CATEGORY DETAIL ── */
-function CategoryDetail({ cat, items, progress, onToggleCheck, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem }) {
+function CategoryDetail({ cat, items, progress, onToggleCheck, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onMoveTypeGroup }) {
   const [expandedId, setExpandedId] = useStateCat(null);
 
   const toggleExpand = (id) => setExpandedId(prev => prev === id ? null : id);
@@ -246,11 +245,25 @@ function CategoryDetail({ cat, items, progress, onToggleCheck, editMode, onAddIt
           </div>
         )}
 
-        {groupByType(items).map(({ type, items: groupItems }, groupIdx) => {
+        {groupByType(items).map(({ type, items: groupItems }, groupIdx, allGroups) => {
           const meta = window.TYPE_META[type] || { label: type, zh: "" };
           return (
             <div key={type}>
-              <div style={{display: "flex", alignItems: "center", gap: 12, padding: groupIdx === 0 ? "8px 0 10px" : "20px 0 10px"}}>
+              <div style={{display: "flex", alignItems: "center", gap: 8, padding: groupIdx === 0 ? "8px 0 10px" : "20px 0 10px"}}>
+                {editMode && (
+                  <div style={{display: "flex", flexDirection: "column", gap: 1, flexShrink: 0}}>
+                    <button
+                      onClick={() => onMoveTypeGroup(cat.id, type, -1)}
+                      disabled={groupIdx === 0}
+                      style={{fontSize: 9, lineHeight: 1, padding: "1px 3px", opacity: groupIdx === 0 ? 0.2 : 0.6, color: "var(--ink-muted)"}}
+                    >▲</button>
+                    <button
+                      onClick={() => onMoveTypeGroup(cat.id, type, 1)}
+                      disabled={groupIdx === allGroups.length - 1}
+                      style={{fontSize: 9, lineHeight: 1, padding: "1px 3px", opacity: groupIdx === allGroups.length - 1 ? 0.2 : 0.6, color: "var(--ink-muted)"}}
+                    >▼</button>
+                  </div>
+                )}
                 <span className="mono" style={{fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink-muted)", whiteSpace: "nowrap"}}>
                   {meta.label}{meta.zh ? ` · ${meta.zh}` : ""}
                 </span>
