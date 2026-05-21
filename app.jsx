@@ -65,6 +65,13 @@ function App() {
   const [editorCat, setEditorCat] = useAppState(null);
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [toast, setToast] = useAppState(null);
+  const [gridCols, setGridCols] = useAppState(() => window.innerWidth <= 900 ? 1 : 2);
+
+  useAppEffect(() => {
+    const handler = () => setGridCols(window.innerWidth <= 900 ? 1 : 2);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   // Always-fresh ref to weeks — prevents stale-closure bugs in CRUD handlers.
   const weeksRef = useAppRef(weeks);
@@ -276,8 +283,8 @@ function App() {
         />
       );
 
-      const isEndOfRow = (i % 2 === 1) || (i === window.CATEGORIES.length - 1);
-      const openIsInThisRow = openIdx >= 0 && Math.floor(openIdx / 2) === Math.floor(i / 2);
+      const isEndOfRow = (i % gridCols === gridCols - 1) || (i === window.CATEGORIES.length - 1);
+      const openIsInThisRow = openIdx >= 0 && Math.floor(openIdx / gridCols) === Math.floor(i / gridCols);
       if (isEndOfRow && openIsInThisRow && openCat) {
         const openCatObj = window.CATEGORIES[openIdx];
         cards.push(

@@ -613,7 +613,7 @@
   .stat-row { grid-template-columns: repeat(2, 1fr); }
   .footer-grid { grid-template-columns: 1fr; }
   .item { grid-template-columns: 24px 1fr; }
-  .item-type, .item-meta { grid-column: 2; }
+  .item-type, .item-body, .item-meta, .item-edit-tools { grid-column: 2; }
   .item-action { grid-column: 1 / -1; justify-self: stretch; justify-content: center; }
   .shell { padding: 0 20px; }
   .hero-title { font-size: 56px; }
