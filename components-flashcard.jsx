@@ -225,8 +225,10 @@ function FlashcardPlayer({ item, onComplete }) {
     let best = null;
     try { best = parseInt(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
     setMatchBest(best);
+    // Pick 6 random pairs each round (shuffle for variety)
+    const picked = shuffle([...cards]).slice(0, Math.min(6, cards.length));
     const tiles = [];
-    cards.forEach(card => {
+    picked.forEach(card => {
       tiles.push({ id: 'en-' + card.id, text: card.term, pairId: card.id });
       tiles.push({ id: 'zh-' + card.id, text: card.zh,  pairId: card.id });
     });
@@ -254,7 +256,7 @@ function FlashcardPlayer({ item, onComplete }) {
       const newMatched = new Set([...matchMatched, tile.pairId]);
       setMatchMatched(newMatched);
       setMatchSelected(null);
-      if (newMatched.size === cards.length) {
+      if (newMatched.size === matchTiles.length / 2) {
         stopMatchTimer();
         const elapsed = Math.floor((Date.now() - matchStartRef.current) / 1000);
         let prevBest = null;
@@ -656,7 +658,7 @@ function FlashcardPlayer({ item, onComplete }) {
                 </div>
               )}
               <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 24, marginTop: 8}}>
-                All {cards.length} pairs matched!
+                All {matchTiles.length / 2} pairs matched!
               </div>
               <div style={{display: "flex", gap: 12}}>
                 <button className="btn ghost" onClick={enterMatch}>Play Again</button>
@@ -743,7 +745,6 @@ function FlashcardPlayer({ item, onComplete }) {
             <span className="mono" style={{fontSize: 11, color: "var(--ink-muted)"}}>✓ {fillScore}</span>
           </div>
           <div className="fc-fill-sentence">
-            {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-fill-img"/>}
             {parts ? (
               <div className="fc-fill-text">
                 {parts[0]}<span className="fc-fill-blank">{"_".repeat(blankLen)}</span>{parts[1]}
