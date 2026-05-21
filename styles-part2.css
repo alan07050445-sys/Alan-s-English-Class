@@ -1,5 +1,9 @@
 /* Categories, items, editor, footer */
 
+/* JS reads this to know actual column count — must match .cat-grid breakpoints */
+:root { --grid-cols: 2; }
+@media (max-width: 900px) { :root { --grid-cols: 1; } }
+
 /* ───── Section header ───── */
 /* ─── Editable text (input/textarea) ─── */
 .editable-input {

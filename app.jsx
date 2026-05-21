@@ -65,10 +65,11 @@ function App() {
   const [editorCat, setEditorCat] = useAppState(null);
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [toast, setToast] = useAppState(null);
-  const [gridCols, setGridCols] = useAppState(() => window.innerWidth <= 900 ? 1 : 2);
+  const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
+  const [gridCols, setGridCols] = useAppState(getGridCols);
 
   useAppEffect(() => {
-    const handler = () => setGridCols(window.innerWidth <= 900 ? 1 : 2);
+    const handler = () => setGridCols(getGridCols());
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
