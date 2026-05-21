@@ -264,7 +264,7 @@ function CategoryDetail({ cat, items, progress, onToggleCheck, editMode, onAddIt
                     >▼</button>
                   </div>
                 )}
-                <span className="mono" style={{fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink-muted)", whiteSpace: "nowrap"}}>
+                <span className="mono" style={{fontSize: 13, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-muted)", whiteSpace: "nowrap"}}>
                   {meta.label}{meta.zh ? ` · ${meta.zh}` : ""}
                 </span>
                 <span style={{flex: 1, height: 1, background: "var(--rule, #e6e0d2)"}}/>
