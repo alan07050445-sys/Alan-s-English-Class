@@ -280,7 +280,7 @@ function suggestNextWeekId(existingIds) {
 }
 
 const TYPE_META = {
-  quizlet:  { label: "Quizlet",  zh: "字卡",   embed: true,  cta: "Close ×" },
+  quizlet:  { label: "Quizlet",  zh: "字卡",   embed: true,  cta: "Play →" },
   wordwall: { label: "Wordwall", zh: "遊戲",   embed: true,  cta: "Play →" },
   youtube:  { label: "Video",    zh: "影片",   embed: true,  cta: "Watch →" },
   form:     { label: "Quiz",     zh: "小考",   embed: true,  cta: "Take →" },

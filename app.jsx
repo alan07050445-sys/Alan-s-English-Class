@@ -214,13 +214,13 @@ function App() {
     showToast(isNew ? "Item added" : "Item saved");
   };
 
-  const handleMoveItem = (catId, itemId, dir) => {
+  const handleMoveItem = (catId, id1, id2) => {
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     const list = w[weekId]?.items?.[catId];
     if (!list) return;
-    const i = list.findIndex(it => it.id === itemId);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= list.length) return;
+    const i = list.findIndex(it => it.id === id1);
+    const j = list.findIndex(it => it.id === id2);
+    if (i < 0 || j < 0) return;
     [list[i], list[j]] = [list[j], list[i]];
     setWeeks(w);
     window.saveWeeks(w);

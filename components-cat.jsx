@@ -2,6 +2,18 @@
 
 const { useState: useStateCat } = React;
 
+const TYPE_ORDER = ["quizlet", "wordwall", "youtube", "form", "pdf", "note", "quiz", "image"];
+
+function groupByType(items) {
+  const map = {};
+  items.forEach(item => { (map[item.type] = map[item.type] || []).push(item); });
+  const types = [
+    ...TYPE_ORDER.filter(t => map[t]),
+    ...Object.keys(map).filter(t => !TYPE_ORDER.includes(t)),
+  ];
+  return types.map(type => ({ type, items: map[type] }));
+}
+
 /* Type icon glyph used on chips */
 function EmbedFrame({ src, fallbackUrl, label }) {
   const [loaded, setLoaded] = useStateCat(false);
@@ -233,22 +245,39 @@ function CategoryDetail({ cat, items, progress, onToggleCheck, editMode, onAddIt
             No items yet this week
           </div>
         )}
-        {items.map((item, idx) => (
-          <ItemRow
-            key={item.id}
-            item={item}
-            checked={!!progress[item.id]}
-            onToggleCheck={onToggleCheck}
-            isExpanded={expandedId === item.id}
-            onToggleExpand={toggleExpand}
-            editMode={editMode}
-            onEdit={onEditItem}
-            onDelete={onDeleteItem}
-            onMove={(id, dir) => onMoveItem(cat.id, id, dir)}
-            canMoveUp={idx > 0}
-            canMoveDown={idx < items.length - 1}
-          />
-        ))}
+
+        {groupByType(items).map(({ type, items: groupItems }, groupIdx) => {
+          const meta = window.TYPE_META[type] || { label: type, zh: "" };
+          return (
+            <div key={type}>
+              <div style={{display: "flex", alignItems: "center", gap: 12, padding: groupIdx === 0 ? "8px 0 10px" : "20px 0 10px"}}>
+                <span className="mono" style={{fontSize: 10, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink-muted)", whiteSpace: "nowrap"}}>
+                  {meta.label}{meta.zh ? ` · ${meta.zh}` : ""}
+                </span>
+                <span style={{flex: 1, height: 1, background: "var(--rule, #e6e0d2)"}}/>
+              </div>
+              {groupItems.map((item, idx) => (
+                <ItemRow
+                  key={item.id}
+                  item={item}
+                  checked={!!progress[item.id]}
+                  onToggleCheck={onToggleCheck}
+                  isExpanded={expandedId === item.id}
+                  onToggleExpand={toggleExpand}
+                  editMode={editMode}
+                  onEdit={onEditItem}
+                  onDelete={onDeleteItem}
+                  onMove={(_, dir) => {
+                    const neighbor = groupItems[idx + dir];
+                    if (neighbor) onMoveItem(cat.id, item.id, neighbor.id);
+                  }}
+                  canMoveUp={idx > 0}
+                  canMoveDown={idx < groupItems.length - 1}
+                />
+              ))}
+            </div>
+          );
+        })}
 
         {editMode && (
           <button className="add-row" onClick={() => onAddItem(cat.id)}>
