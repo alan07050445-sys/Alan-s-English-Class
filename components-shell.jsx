@@ -33,7 +33,7 @@ function Header({ week, weekOrder, weekIdx, onPrevWeek, onNextWeek, canEdit, edi
       <div className="shell">
         <div className="header-inner">
           <div className="brand">
-            <span className="brand-mono">EST · 2025</span>
+            <span className="brand-mono">EST · 2026</span>
             <span className="brand-name">Alan<em>'s</em> English Class</span>
           </div>
           <div className="week-nav">
@@ -164,7 +164,7 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
         <div className="stat-row">
           <div className="stat">
             <span className="stat-label">Week</span>
-            <span className="stat-value serif">{(week.label || "—").replace("Week ", "")}<span className="unit">/ 2025</span></span>
+            <span className="stat-value serif">{(week.label || "—").replace("Week ", "")}<span className="unit">/ 2026</span></span>
           </div>
           <div className="stat">
             <span className="stat-label">Items</span>

@@ -333,7 +333,7 @@ function Footer() {
           </div>
         </div>
         <div className="footer-baseline">
-          <span>© 2025 Alan's English Class</span>
+          <span>© 2026 Alan's English Class</span>
           <span>Made with care · 用心製作</span>
         </div>
       </div>

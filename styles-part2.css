@@ -607,6 +607,7 @@
 .banner-btn.danger:hover { background: rgba(255,80,60,0.18); border-color: #ffb4a8; }
 .week-nav button:disabled { opacity: 0.35; cursor: not-allowed; }
 
+/* ── Tablet (≤ 900px) ── */
 @media (max-width: 900px) {
   .cat-grid { grid-template-columns: 1fr; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
@@ -617,4 +618,70 @@
   .shell { padding: 0 20px; }
   .hero-title { font-size: 56px; }
   .cat-detail { padding: 32px 24px; }
+  .modal { width: min(560px, calc(100vw - 32px)); }
+}
+
+/* ── Mobile (≤ 640px) ── */
+@media (max-width: 640px) {
+  .shell { padding: 0 14px; }
+
+  /* Header */
+  .header-inner {
+    grid-template-columns: 1fr auto;
+    height: auto;
+    padding: 10px 0;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .brand-mono { display: none; }
+  .brand-name { font-size: 17px; }
+  .week-nav {
+    grid-column: 1 / -1;
+    justify-content: center;
+    gap: 10px;
+    order: 3;
+  }
+  .week-nav .label { font-size: 10px; min-width: 60px; }
+  .header-right { gap: 10px; }
+  .progress-pill span:first-child { display: none; }
+
+  /* Hero */
+  .hero { padding: 36px 0 24px; }
+  .hero-eyebrow { margin-bottom: 16px; gap: 10px; font-size: 10px; }
+  .hero-title { font-size: clamp(40px, 11vw, 56px); margin-bottom: 14px; }
+  .hero-sub { font-size: 14px; margin-bottom: 24px; }
+  .stat-row { gap: 14px; padding-top: 14px; }
+  .stat-value { font-size: 26px; }
+
+  /* Section */
+  .section-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+
+  /* Category cards */
+  .cat-card { padding: 20px 18px; }
+  .cat-detail { padding: 20px 14px; }
+
+  /* Items */
+  .item { padding: 14px 0; gap: 8px; }
+  .item-title { font-size: 17px; }
+  .item-zh { font-size: 12px; }
+  .item-action { padding: 8px 12px; font-size: 9px; }
+  .item-edit-tools { gap: 4px; }
+
+  /* Edit banner */
+  .edit-banner-inner { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .edit-banner-tools { flex-wrap: wrap; gap: 6px; }
+
+  /* Modal */
+  .modal {
+    width: calc(100vw - 16px);
+    max-height: 92vh;
+    border-radius: 4px;
+    margin: 0;
+  }
+  .modal-body { padding: 16px; }
+  .modal-head, .modal-foot { padding: 14px 16px; }
+
+  /* Footer */
+  .footer { padding: 40px 0 24px; }
+  .footer-col { display: none; }
 }

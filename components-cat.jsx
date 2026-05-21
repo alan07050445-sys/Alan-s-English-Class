@@ -256,25 +256,25 @@ function CategoryDetail({ cat, items, progress, onToggleCheck, editMode, onAddIt
                 </span>
                 <span style={{flex: 1, height: 1, background: "var(--rule, #e6e0d2)"}}/>
               </div>
-              {groupItems.map((item, idx) => (
-                <ItemRow
-                  key={item.id}
-                  item={item}
-                  checked={!!progress[item.id]}
-                  onToggleCheck={onToggleCheck}
-                  isExpanded={expandedId === item.id}
-                  onToggleExpand={toggleExpand}
-                  editMode={editMode}
-                  onEdit={onEditItem}
-                  onDelete={onDeleteItem}
-                  onMove={(_, dir) => {
-                    const neighbor = groupItems[idx + dir];
-                    if (neighbor) onMoveItem(cat.id, item.id, neighbor.id);
-                  }}
-                  canMoveUp={idx > 0}
-                  canMoveDown={idx < groupItems.length - 1}
-                />
-              ))}
+              {groupItems.map((item) => {
+                const flatIdx = items.findIndex(it => it.id === item.id);
+                return (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    checked={!!progress[item.id]}
+                    onToggleCheck={onToggleCheck}
+                    isExpanded={expandedId === item.id}
+                    onToggleExpand={toggleExpand}
+                    editMode={editMode}
+                    onEdit={onEditItem}
+                    onDelete={onDeleteItem}
+                    onMove={(id, dir) => onMoveItem(cat.id, id, dir)}
+                    canMoveUp={flatIdx > 0}
+                    canMoveDown={flatIdx < items.length - 1}
+                  />
+                );
+              })}
             </div>
           );
         })}
