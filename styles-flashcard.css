@@ -26,6 +26,45 @@
 .fc-progress-bar { flex: 1; height: 2px; background: var(--border); border-radius: 1px; position: relative; }
 .fc-progress-fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--ink); border-radius: 1px; transition: width 0.4s; }
 
+/* ── Dual progress bar (Quizlet-style) ── */
+.fc-dual-bar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 20px;
+}
+.fc-dual-circle {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  border: 2px solid var(--border); color: var(--ink-muted);
+  flex-shrink: 0;
+}
+.fc-dual-circle.green { border-color: #4caf50; color: #2e7d32; background: #f1f8f2; }
+.fc-dual-track {
+  flex: 1; height: 10px; border-radius: 999px;
+  overflow: hidden; display: flex; background: var(--border);
+}
+.fc-dual-seg-green { background: #4caf50; transition: flex 0.4s; }
+.fc-dual-seg-gray  { background: #ccc;    transition: flex 0.4s; }
+
+/* ── Speaker button ── */
+.fc-speaker-btn {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 50%;
+  color: var(--ink-muted); border: 1px solid var(--border);
+  background: var(--bg-paper); transition: all 0.15s;
+  flex-shrink: 0;
+}
+.fc-speaker-btn:hover { color: var(--ink); border-color: var(--ink); background: var(--bg-card); }
+
+/* Speaker on card faces */
+.fc-face-speaker {
+  position: absolute; top: 12px; right: 12px;
+}
+.fc-face-speaker-dark {
+  color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.3); background: transparent;
+}
+.fc-face-speaker-dark:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,0.1); }
+
 /* ── Flip card ── */
 .fc-flip-card { perspective: 1000px; width: 100%; height: 280px; margin-bottom: 24px; cursor: pointer; }
 .fc-flip-inner { width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; position: relative; }
@@ -43,8 +82,21 @@
   gap: 0;
 }
 .fc-back { transform: rotateY(180deg); background: var(--ink); color: var(--bg-paper); }
+
+/* Image on the BACK of card */
+.fc-back-img-wrap {
+  max-height: 90px; margin-bottom: 10px;
+}
+.fc-back-img-wrap img {
+  max-height: 90px; max-width: 200px;
+  object-fit: contain; border-radius: 3px;
+  opacity: 0.9;
+}
+
+/* (legacy — kept in case old data uses it) */
 .fc-card-img-wrap { max-height: 100px; margin-bottom: 12px; }
 .fc-card-img-wrap img { max-height: 100px; max-width: 200px; object-fit: contain; border-radius: 3px; }
+
 .fc-term { font-size: 36px; line-height: 1.1; letter-spacing: -0.01em; margin-bottom: 8px; }
 .fc-flip-hint { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
 .fc-zh { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
@@ -63,9 +115,34 @@
 .fc-dot.active { background: var(--ink); }
 
 /* ── Learn mode ── */
-.fc-learn-q { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 16px 0 24px; }
+.fc-learn-q {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 16px 0 24px;
+}
 .fc-learn-img { max-height: 110px; max-width: 220px; object-fit: contain; margin-bottom: 16px; border-radius: 3px; }
+
+/* Chinese shown as the question in learn mode */
+.fc-learn-zh {
+  font-size: 38px; font-weight: 700; line-height: 1.2;
+  letter-spacing: 0.02em; margin-bottom: 6px;
+}
+.fc-learn-example {
+  font-size: 13px; color: var(--ink-muted); max-width: 360px;
+  line-height: 1.55; margin-bottom: 4px;
+}
+
+/* (kept for any remnant references) */
 .fc-learn-term { font-size: 40px; line-height: 1.1; letter-spacing: -0.015em; }
+
+/* "再試一次吧" retry badge */
+.fc-retry-badge {
+  display: inline-block;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  background: #fff3e0; color: #e65100;
+  border: 1px solid #ffb74d; border-radius: 999px;
+  padding: 4px 14px; margin-bottom: 14px;
+}
+
 .fc-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fc-choice {
   padding: 18px 12px; border: 1.5px solid var(--border);
@@ -98,6 +175,48 @@
 .fc-review-wrong { color: #c62828; text-decoration: line-through; font-size: 12px; }
 .fc-review-correct { color: #2e7d32; font-size: 13px; font-weight: 700; }
 
+/* ── Test setup screen ── */
+.fc-test-setup {
+  display: flex; flex-direction: column;
+  max-width: 480px; margin: 0 auto; width: 100%;
+  padding: 12px 0 8px;
+}
+.fc-setup-options {
+  display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--border); border-radius: 4px;
+  overflow: hidden; margin-bottom: 24px;
+}
+.fc-setup-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 16px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-paper); cursor: default;
+}
+.fc-setup-row:last-child { border-bottom: none; }
+.fc-setup-label {
+  font-size: 14px; font-weight: 600; color: var(--ink);
+  margin-bottom: 3px;
+}
+.fc-setup-desc {
+  font-size: 12px; color: var(--ink-muted); line-height: 1.4;
+}
+
+/* iOS-style toggle */
+.fc-toggle {
+  width: 48px; height: 28px; border-radius: 999px;
+  background: #ccc; position: relative; flex-shrink: 0;
+  transition: background 0.2s; cursor: pointer;
+}
+.fc-toggle::after {
+  content: ""; position: absolute;
+  top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 0.2s;
+}
+.fc-toggle.on { background: #4caf50; }
+.fc-toggle.on::after { transform: translateX(20px); }
+
 /* ── Test mode ── */
 .fc-test-list { display: flex; flex-direction: column; gap: 28px; margin-bottom: 20px; }
 .fc-test-qrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -113,6 +232,20 @@
 }
 .fc-test-choice:hover { border-color: var(--ink); }
 .fc-test-choice.selected { background: var(--ink); color: var(--bg-paper); border-color: var(--ink); }
+
+/* Written answer input */
+.fc-test-written {
+  margin-left: 32px; margin-top: 8px;
+}
+.fc-written-input {
+  width: 100%; border: 1.5px solid var(--border);
+  background: var(--bg-paper); color: var(--ink);
+  padding: 11px 14px; font-size: 15px; font-family: var(--sans);
+  border-radius: 3px; outline: none; transition: border-color 0.15s;
+}
+.fc-written-input:focus { border-color: var(--ink); }
+.fc-written-input::placeholder { color: var(--ink-faint); }
+
 .fc-test-foot { display: flex; justify-content: center; padding-top: 16px; border-top: 1px solid var(--border); }
 
 /* ══════════════════════════════════════════════════════
@@ -214,6 +347,7 @@
 @media (max-width: 900px) {
   .fc-choices { grid-template-columns: 1fr; }
   .fc-test-choices { grid-template-columns: 1fr; margin-left: 0; }
+  .fc-test-written { margin-left: 0; }
 }
 @media (max-width: 640px) {
   .fc-card-row-body { grid-template-columns: 1fr; }
@@ -223,6 +357,7 @@
   .fc-player { padding: 14px; }
   .fc-flip-card { height: 220px; }
   .fc-term { font-size: 28px; }
+  .fc-learn-zh { font-size: 28px; }
   .fc-learn-term { font-size: 30px; }
   .fc-mode-tabs { overflow-x: auto; }
   .fc-tab { font-size: 9px; padding: 12px 6px; white-space: nowrap; }
