@@ -347,6 +347,109 @@
   padding: 12px 28px; border-top: 1px solid var(--border-soft); flex-shrink: 0;
 }
 
+/* ══════════════════════════════════════════════════════
+   MATCH MODE
+══════════════════════════════════════════════════════ */
+.fc-match-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; gap: 12px;
+}
+.fc-match-timer {
+  font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em;
+}
+.fc-match-best-badge {
+  display: inline-block; font-size: 12px; letter-spacing: 0.1em;
+  background: #fff8e1; color: #f57f17; border: 1px solid #ffe082;
+  border-radius: 999px; padding: 4px 16px; margin-bottom: 8px;
+}
+.fc-match-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.fc-match-tile {
+  padding: 16px 10px; border: 2px solid var(--border);
+  border-radius: 6px; background: var(--bg-card);
+  font-size: 15px; font-weight: 600; font-family: var(--sans);
+  text-align: center; line-height: 1.3; cursor: pointer;
+  transition: all 0.15s; min-height: 64px;
+  display: flex; align-items: center; justify-content: center;
+}
+.fc-match-tile:hover:not(.matched):not(.selected):not(.wrong) {
+  border-color: var(--ink); background: var(--bg-paper);
+}
+.fc-match-tile.selected {
+  border-color: #3b82f6; background: #eff6ff; color: #1d4ed8;
+}
+.fc-match-tile.matched {
+  border-color: #4caf50; background: #f1f8f2; color: #2e7d32;
+  opacity: 0.55; cursor: default;
+}
+.fc-match-tile.wrong {
+  border-color: #ef4444; background: #fff1f1; color: #c62828;
+  animation: fc-shake 0.4s ease;
+}
+@keyframes fc-shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  60%      { transform: translateX(6px); }
+}
+
+/* ══════════════════════════════════════════════════════
+   FILL-IN-BLANK MODE (Wordwall-style)
+══════════════════════════════════════════════════════ */
+.fc-fill-player {
+  display: flex; flex-direction: column;
+  min-height: 420px; padding: 20px 28px 28px;
+}
+.fc-fill-topbar {
+  display: flex; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.fc-fill-sentence {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 16px 0 28px;
+}
+.fc-fill-img {
+  max-height: 100px; max-width: 200px; object-fit: contain;
+  border-radius: 4px; margin-bottom: 16px;
+}
+.fc-fill-text {
+  font-size: 32px; font-weight: 700; line-height: 1.4;
+  color: var(--ink); font-family: var(--sans);
+  max-width: 680px;
+}
+.fc-fill-zh {
+  font-size: 44px; letter-spacing: 0.03em;
+}
+.fc-fill-blank {
+  display: inline-block;
+  border-bottom: 3px solid var(--ink);
+  min-width: 80px; margin: 0 6px;
+  color: transparent; vertical-align: bottom;
+  letter-spacing: 3px;
+}
+.fc-fill-choices {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px; margin-top: 8px;
+}
+.fc-fill-btn {
+  padding: 22px 16px; border-radius: 8px; border: none;
+  font-size: 22px; font-weight: 700; font-family: var(--sans);
+  color: #fff; text-align: center; cursor: pointer;
+  transition: all 0.15s; box-shadow: 0 4px 0 rgba(0,0,0,0.18);
+}
+.fc-fill-btn:hover:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0,0,0,0.18);
+}
+.fc-fill-btn:active:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+.fc-fill-btn.correct { background: #22c55e !important; box-shadow: 0 4px 0 #16a34a; }
+.fc-fill-btn.wrong   { background: #ef4444 !important; box-shadow: 0 4px 0 #dc2626; }
+.fc-fill-btn.dimmed  { opacity: 0.38; cursor: default; }
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .fc-choices { grid-template-columns: 1fr; }
@@ -365,4 +468,10 @@
   .fc-learn-term { font-size: 30px; }
   .fc-mode-tabs { overflow-x: auto; }
   .fc-tab { font-size: 9px; padding: 12px 6px; white-space: nowrap; }
+  .fc-match-grid { grid-template-columns: repeat(2, 1fr); }
+  .fc-match-tile { font-size: 13px; padding: 12px 8px; min-height: 52px; }
+  .fc-fill-player { padding: 14px 14px 20px; }
+  .fc-fill-text { font-size: 22px; }
+  .fc-fill-zh { font-size: 32px; }
+  .fc-fill-btn { font-size: 17px; padding: 16px 10px; }
 }

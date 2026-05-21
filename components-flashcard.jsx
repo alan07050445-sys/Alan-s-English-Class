@@ -55,6 +55,21 @@ function makeChoices(card, allCards) {
   return shuffle([...shuffle(others).slice(0, Math.min(3, others.length)), card]);
 }
 
+// Split sentence around the term for fill-in-blank display
+function splitSentence(sentence, term) {
+  if (!sentence || !term) return null;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = sentence.match(new RegExp(escaped, 'i'));
+  if (!m) return null;
+  return [sentence.slice(0, m.index), sentence.slice(m.index + m[0].length)];
+}
+
+function fmtTime(s) {
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+const FILL_COLORS = ["#3b82f6", "#ef4444", "#f97316", "#22c55e"];
+
 /* ══════════════════════════════════════════════════════
    IMAGE SEARCH  (Pixabay)
 ══════════════════════════════════════════════════════ */
@@ -141,9 +156,34 @@ function FlashcardPlayer({ item, onComplete }) {
   const [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
   const [testDone, setTestDone] = useFC(false);
 
-  const enterCard = () => { setMode("card"); setCardIdx(0); setFlipped(false); };
+  // Match mode
+  const [matchTiles, setMatchTiles] = useFC([]);
+  const [matchSelected, setMatchSelected] = useFC(null);
+  const [matchMatched, setMatchMatched] = useFC(new Set());
+  const [matchWrong, setMatchWrong] = useFC([]);
+  const [matchElapsed, setMatchElapsed] = useFC(0);
+  const [matchBest, setMatchBest] = useFC(null);
+  const [matchDone, setMatchDone] = useFC(false);
+  const [isNewBest, setIsNewBest] = useFC(false);
+  const matchStartRef = React.useRef(null);
+  const matchTimerRef = React.useRef(null);
 
-  const enterLearn = () => {
+  // Fill-in-blank mode
+  const [fillCards, setFillCards] = useFC([]);
+  const [fillIdx, setFillIdx] = useFC(0);
+  const [fillChoices, setFillChoices] = useFC([]);
+  const [fillSelected, setFillSelected] = useFC(null);
+  const [fillScore, setFillScore] = useFC(0);
+  const [fillDone, setFillDone] = useFC(false);
+
+  // Cleanup timer on unmount
+  useFC_E(() => () => { if (matchTimerRef.current) clearInterval(matchTimerRef.current); }, []);
+
+  const stopMatchTimer = () => { if (matchTimerRef.current) { clearInterval(matchTimerRef.current); matchTimerRef.current = null; } };
+
+  const enterCard = () => { stopMatchTimer(); setMode("card"); setCardIdx(0); setFlipped(false); };
+
+  const enterLearn = () => { stopMatchTimer();
     const order = shuffle([...cards]);
     const queue = order.map(card => ({ card, isRetry: false }));
     setLearnQueue(queue);
@@ -154,6 +194,7 @@ function FlashcardPlayer({ item, onComplete }) {
   };
 
   const enterTest = () => {
+    stopMatchTimer();
     setTestSetup(true);
     setTestAnswers({});
     setTypedAnswers({});
@@ -179,11 +220,92 @@ function FlashcardPlayer({ item, onComplete }) {
     setTestSetup(false);
   };
 
+  const enterMatch = () => {
+    stopMatchTimer();
+    let best = null;
+    try { best = parseInt(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
+    setMatchBest(best);
+    const tiles = [];
+    cards.forEach(card => {
+      tiles.push({ id: 'en-' + card.id, text: card.term, pairId: card.id });
+      tiles.push({ id: 'zh-' + card.id, text: card.zh,  pairId: card.id });
+    });
+    setMatchTiles(shuffle(tiles));
+    setMatchSelected(null);
+    setMatchMatched(new Set());
+    setMatchWrong([]);
+    setMatchElapsed(0);
+    setMatchDone(false);
+    setIsNewBest(false);
+    matchStartRef.current = Date.now();
+    matchTimerRef.current = setInterval(() => {
+      setMatchElapsed(Math.floor((Date.now() - matchStartRef.current) / 1000));
+    }, 500);
+    setMode("match");
+  };
+
+  const handleMatchClick = (tile) => {
+    if (matchWrong.length > 0) return;
+    if (matchMatched.has(tile.pairId)) return;
+    if (matchSelected === tile.id) { setMatchSelected(null); return; }
+    if (!matchSelected) { setMatchSelected(tile.id); return; }
+    const selTile = matchTiles.find(t => t.id === matchSelected);
+    if (selTile && selTile.pairId === tile.pairId) {
+      const newMatched = new Set([...matchMatched, tile.pairId]);
+      setMatchMatched(newMatched);
+      setMatchSelected(null);
+      if (newMatched.size === cards.length) {
+        stopMatchTimer();
+        const elapsed = Math.floor((Date.now() - matchStartRef.current) / 1000);
+        let prevBest = null;
+        try { prevBest = parseInt(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
+        const nb = !prevBest || elapsed < prevBest;
+        if (nb) { try { localStorage.setItem('fc-match-' + item.id, elapsed); } catch {} }
+        setMatchElapsed(elapsed);
+        setMatchBest(nb ? elapsed : prevBest);
+        setIsNewBest(nb);
+        setMatchDone(true);
+      }
+    } else {
+      setMatchWrong([matchSelected, tile.id]);
+      setTimeout(() => { setMatchWrong([]); setMatchSelected(null); }, 800);
+    }
+  };
+
+  const enterFill = () => {
+    stopMatchTimer();
+    const eligible = cards.filter(c => c.example && c.example.trim());
+    const pool = eligible.length >= 2 ? eligible : cards;
+    const shuffled = shuffle([...pool]);
+    setFillCards(shuffled);
+    setFillIdx(0);
+    setFillScore(0);
+    setFillSelected(null);
+    setFillDone(false);
+    setFillChoices(makeChoices(shuffled[0], cards));
+    setMode("fill");
+  };
+
+  const handleFillChoice = (chosen) => {
+    if (fillSelected) return;
+    const card = fillCards[fillIdx];
+    const correct = chosen.id === card.id;
+    setFillSelected(chosen.id);
+    if (correct) setFillScore(s => s + 1);
+    setTimeout(() => {
+      const next = fillIdx + 1;
+      if (next >= fillCards.length) { setFillDone(true); }
+      else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
+    }, correct ? 800 : 1400);
+  };
+
   const ModeTabs = ({ active }) => (
     <div className="fc-mode-tabs">
-      <button className={"fc-tab" + (active === "card"  ? " active" : "")} onClick={enterCard}>🃏 Flashcards · 單字卡</button>
-      <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={enterLearn}>📖 Learn · 學習</button>
-      <button className={"fc-tab" + (active === "test"  ? " active" : "")} onClick={enterTest}>📝 Test · 測驗</button>
+      <button className={"fc-tab" + (active === "card"  ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
+      <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={enterLearn}>📖 學習</button>
+      <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={enterMatch}>⚡ 配對</button>
+      <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={enterFill}>✏️ 填空</button>
+      <button className={"fc-tab" + (active === "test"  ? " active" : "")} onClick={enterTest}>📝 測驗</button>
     </div>
   );
 
@@ -509,6 +631,143 @@ function FlashcardPlayer({ item, onComplete }) {
             >
               Submit · 交卷 ({answeredCards.size}/{cards.length})
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ────────────────── MATCH MODE ────────────────── */
+  if (mode === "match") {
+    if (matchDone) {
+      return (
+        <div className="fc-wrap">
+          <ModeTabs active="match"/>
+          <div className="fc-player">
+            <div className="fc-complete">
+              <div className="fc-complete-icon">⚡</div>
+              <div className="serif" style={{fontSize: 52, lineHeight: 1, marginBottom: 6}}>{fmtTime(matchElapsed)}</div>
+              {isNewBest && (
+                <div className="fc-match-best-badge mono">🏆 New Best!</div>
+              )}
+              {matchBest && !isNewBest && (
+                <div className="mono" style={{color: "var(--ink-muted)", fontSize: 12, marginBottom: 4}}>
+                  Best: {fmtTime(matchBest)}
+                </div>
+              )}
+              <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 24, marginTop: 8}}>
+                All {cards.length} pairs matched!
+              </div>
+              <div style={{display: "flex", gap: 12}}>
+                <button className="btn ghost" onClick={enterMatch}>Play Again</button>
+                <button className="btn primary" onClick={enterLearn}>Study More →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="fc-wrap">
+        <ModeTabs active="match"/>
+        <div className="fc-player">
+          <div className="fc-match-topbar">
+            <span className="fc-match-timer mono">{fmtTime(matchElapsed)}</span>
+            <span className="mono" style={{fontSize: 11, color: "var(--ink-muted)"}}>
+              {matchMatched.size} / {cards.length} matched
+            </span>
+            {matchBest && (
+              <span className="mono" style={{fontSize: 10, color: "var(--ink-faint)"}}>
+                Best {fmtTime(matchBest)}
+              </span>
+            )}
+          </div>
+          <div className="fc-match-grid">
+            {matchTiles.map(tile => {
+              const isMatched  = matchMatched.has(tile.pairId);
+              const isSelected = matchSelected === tile.id;
+              const isWrong    = matchWrong.includes(tile.id);
+              let cls = "fc-match-tile";
+              if (isMatched)   cls += " matched";
+              else if (isSelected) cls += " selected";
+              else if (isWrong)    cls += " wrong";
+              return (
+                <button key={tile.id} className={cls}
+                  onClick={() => !isMatched && handleMatchClick(tile)}>
+                  {tile.text}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ────────────────── FILL-IN-BLANK MODE ────────────────── */
+  if (mode === "fill") {
+    if (fillDone) {
+      const pct = Math.round((fillScore / fillCards.length) * 100);
+      return (
+        <div className="fc-wrap">
+          <ModeTabs active="fill"/>
+          <div className="fc-player">
+            <div className="fc-complete">
+              <div className="fc-complete-icon">{pct >= 80 ? "🎉" : pct >= 60 ? "👍" : "💪"}</div>
+              <div className="serif" style={{fontSize: 48, lineHeight: 1, marginBottom: 4}}>
+                {pct}<span style={{fontSize: 24}}>%</span>
+              </div>
+              <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 24}}>
+                {fillScore} / {fillCards.length} correct · 答對
+              </div>
+              <div style={{display: "flex", gap: 12}}>
+                <button className="btn ghost" onClick={enterFill}>Try Again</button>
+                <button className="btn primary" onClick={enterLearn}>Study More →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    const card = fillCards[fillIdx];
+    const parts = splitSentence(card.example, card.term);
+    const blankLen = Math.max(6, (card.term || "").length);
+    return (
+      <div className="fc-wrap">
+        <ModeTabs active="fill"/>
+        <div className="fc-fill-player">
+          <div className="fc-fill-topbar">
+            <span className="mono" style={{fontSize: 11, color: "var(--ink-muted)"}}>
+              {fillIdx + 1} / {fillCards.length}
+            </span>
+            <span className="mono" style={{fontSize: 11, color: "var(--ink-muted)"}}>✓ {fillScore}</span>
+          </div>
+          <div className="fc-fill-sentence">
+            {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-fill-img"/>}
+            {parts ? (
+              <div className="fc-fill-text">
+                {parts[0]}<span className="fc-fill-blank">{"_".repeat(blankLen)}</span>{parts[1]}
+              </div>
+            ) : (
+              <div className="fc-fill-text fc-fill-zh">{card.zh}</div>
+            )}
+          </div>
+          <div className="fc-fill-choices">
+            {fillChoices.map((ch, i) => {
+              let cls = "fc-fill-btn";
+              if (fillSelected) {
+                if (ch.id === card.id)       cls += " correct";
+                else if (ch.id === fillSelected) cls += " wrong";
+                else                         cls += " dimmed";
+              }
+              return (
+                <button key={ch.id} className={cls}
+                  style={!fillSelected ? {background: FILL_COLORS[i % 4]} : undefined}
+                  onClick={() => handleFillChoice(ch)}>
+                  {ch.term}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
