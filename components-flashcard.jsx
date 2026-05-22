@@ -71,11 +71,11 @@ function fmtTime(s) {
 const FILL_COLORS = ["#3b82f6", "#ef4444", "#f97316", "#22c55e"];
 
 const THEMES = {
-  classic: { name: "🎮 Classic",  colors: ["#3b82f6","#ef4444","#f97316","#22c55e"] },
-  spring:  { name: "🌸 Spring",   colors: ["#ec4899","#a855f7","#f43f5e","#10b981"] },
-  ocean:   { name: "🌊 Ocean",    colors: ["#0284c7","#0891b2","#6366f1","#0d9488"] },
-  night:   { name: "🌙 Night",    colors: ["#7c3aed","#dc2626","#b45309","#15803d"] },
-  pastel:  { name: "🍬 Pastel",   colors: ["#60a5fa","#f87171","#fb923c","#4ade80"] },
+  classic:   { name: "🎨 Classic",    colors: ["#3b82f6","#ef4444","#f97316","#22c55e"] },
+  classroom: { name: "📚 Classroom",  colors: ["#f59e0b","#eab308","#10b981","#38bdf8"] },
+  game:      { name: "🎮 Video Game", colors: ["#92400e","#92400e","#92400e","#92400e"] },
+  ocean:     { name: "🌊 Ocean",      colors: ["#0369a1","#0891b2","#0284c7","#1d4ed8"] },
+  night:     { name: "🌙 Night",      colors: ["#7c3aed","#dc2626","#b45309","#15803d"] },
 };
 
 /* ══════════════════════════════════════════════════════
@@ -996,7 +996,7 @@ function FillBlankPlayer({ item, onComplete }) {
   const blankLen = Math.max(6, (q.answer || "").length);
 
   return (
-    <div className="fc-wrap">
+    <div className={"fc-wrap fc-theme-" + theme}>
       <div className="fc-fill-player">
         <div className="fc-fill-topbar">
           <span className="mono">{idx + 1} / {questions.length}</span>
@@ -1066,9 +1066,26 @@ function FillBlankEditor({ questions, onChange }) {
   };
   const handleImport = () => {
     const parsed = importText.split('\n').filter(l => l.trim()).map(line => {
-      const p = line.split(/\s*\|\s*/);
-      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence:(p[0]||"").trim(), answer:(p[1]||"").trim() };
-    }).filter(q => q.sentence && q.answer);
+      let word = "", sentence = "";
+      if (line.includes('\t')) {
+        // Tab-separated: Word [TAB] Sentence (copy from spreadsheet/table)
+        const [w, ...rest] = line.split('\t');
+        word = w.trim();
+        sentence = rest.join(' ').trim();
+      } else if (line.includes('|')) {
+        const p = line.split(/\s*\|\s*/);
+        word = p[0].trim(); sentence = p[1]?.trim() || "";
+      }
+      if (!word || !sentence) return null;
+      // Normalize multiple underscores (e.g. __________) to ___
+      sentence = sentence.replace(/_+/g, '___');
+      // If sentence has no blank but contains the word, auto-blank it
+      if (!sentence.includes('___')) {
+        const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        sentence = sentence.replace(new RegExp('\\b' + esc + '\\b', 'i'), '___');
+      }
+      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence, answer: word };
+    }).filter(Boolean).filter(q => q.sentence && q.answer);
     if (!parsed.length) return;
     onChange([...questions, ...parsed]);
     setImportText(""); setImporting(false);
@@ -1078,7 +1095,7 @@ function FillBlankEditor({ questions, onChange }) {
     <div className="fc-editor">
       <div className="fc-editor-bar">
         <span className="mono" style={{fontSize:10, color:"var(--ink-muted)"}}>
-          {questions.length} 題 · 句中用 <code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>___</code> 代表空格，答案不重複可自動當干擾選項
+          {questions.length} 題 · 句中用 <code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>___</code> 代表空格
         </span>
         <div style={{display:"flex",gap:8}}>
           <button className={"btn ghost"+(importing?" active":"")} style={{padding:"6px 12px",fontSize:11}} onClick={() => setImporting(v=>!v)}>⬇ Import</button>
@@ -1088,10 +1105,11 @@ function FillBlankEditor({ questions, onChange }) {
       {importing && (
         <div className="fc-import-box">
           <div className="mono" style={{fontSize:10,color:"var(--ink-muted)",marginBottom:8}}>
-            每行一題：<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>句子（___ 代表空格） | 答案</code>
+            從試算表複製貼上（兩欄）：<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>單字 [Tab] 句子</code>
+            <span style={{color:"var(--ink-faint)",marginLeft:8}}>· 句子裡的 _________ 會自動變成空格</span>
           </div>
-          <textarea className="fc-import-ta" value={importText} onChange={e=>setImportText(e.target.value)} rows={6}
-            placeholder={"The flood was a terrible ___. | disaster\nShe ___ new words every day. | memorizes\nThis jacket is ___ so it keeps you dry. | waterproof"}/>
+          <textarea className="fc-import-ta" value={importText} onChange={e=>setImportText(e.target.value)} rows={7}
+            placeholder={"prepared\tBefore the typhoon came, our family was __________ with water, food, and flashlights.\nemergency\tWhen the kitchen started to fill with smoke, Dad knew it was an __________ and called for help.\nmemorize\tI had to __________ my home address so I could tell an adult if I got lost."}/>
           <div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}>
             <button className="btn ghost" onClick={()=>{setImporting(false);setImportText("");}}>Cancel</button>
             <button className="btn primary" onClick={handleImport} disabled={!importText.trim()}>Import</button>

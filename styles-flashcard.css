@@ -456,6 +456,114 @@
 .fc-fill-btn.wrong   { background: #ef4444 !important; box-shadow: 0 4px 0 #dc2626; }
 .fc-fill-btn.dimmed  { opacity: 0.38; cursor: default; }
 
+/* ══════════════════════════════════════════════════════
+   FILL-IN-BLANK VISUAL THEMES
+══════════════════════════════════════════════════════ */
+
+/* ── Classroom theme ── */
+.fc-theme-classroom .fc-fill-player {
+  background: linear-gradient(160deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 4px;
+}
+.fc-theme-classroom .fc-fill-topbar { color: #78350f; }
+.fc-theme-classroom .fc-fill-topbar .mono { color: #92400e; }
+.fc-theme-classroom .fc-fill-text {
+  font-family: 'Nunito', sans-serif;
+  font-size: 30px; color: #1c1917;
+}
+.fc-theme-classroom .fc-fill-blank {
+  border-bottom-color: #1c1917;
+}
+.fc-theme-classroom .fc-fill-btn {
+  border-radius: 18px !important;
+  border: 3px solid rgba(0,0,0,0.22) !important;
+  box-shadow: 0 7px 0 rgba(0,0,0,0.20) !important;
+  font-family: 'Nunito', sans-serif !important;
+  font-size: 20px !important;
+  color: #fff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.35) !important;
+}
+.fc-theme-classroom .fc-fill-btn:hover:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 0 rgba(0,0,0,0.20) !important;
+}
+.fc-theme-classroom .fc-fill-btn.correct { background: #16a34a !important; box-shadow: 0 4px 0 #15803d !important; }
+.fc-theme-classroom .fc-fill-btn.wrong   { background: #dc2626 !important; box-shadow: 0 4px 0 #b91c1c !important; }
+
+/* ── Video Game theme ── */
+.fc-theme-game .fc-fill-player {
+  background: linear-gradient(180deg, #7dd3fc 0%, #7dd3fc 52%, #4ade80 52%, #16a34a 100%);
+  min-height: 460px;
+}
+.fc-theme-game .fc-fill-topbar .mono { color: #1c1917; font-weight: 700; }
+.fc-theme-game .fc-fill-text {
+  font-family: 'Nunito', sans-serif;
+  font-size: 32px; color: #1c1917; font-weight: 900;
+  text-shadow: 3px 3px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+}
+.fc-theme-game .fc-fill-blank {
+  border-bottom: 4px solid #1c1917;
+  color: transparent;
+}
+.fc-theme-game .fc-fill-btn {
+  background: linear-gradient(to bottom, #4ade80 0%, #4ade80 22%, #92400e 22%) !important;
+  border: 4px solid #1c1917 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 7px 0 #1c1917 !important;
+  font-family: 'Nunito', sans-serif !important;
+  font-size: 22px !important; font-weight: 900 !important;
+  color: #fff !important;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.6) !important;
+  padding-top: 20px !important;
+}
+.fc-theme-game .fc-fill-btn:hover:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 0 #1c1917 !important;
+}
+.fc-theme-game .fc-fill-btn:active:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(4px);
+  box-shadow: 0 3px 0 #1c1917 !important;
+}
+.fc-theme-game .fc-fill-btn.correct { background: linear-gradient(to bottom, #86efac 0%, #86efac 22%, #16a34a 22%) !important; }
+.fc-theme-game .fc-fill-btn.wrong   { background: linear-gradient(to bottom, #fca5a5 0%, #fca5a5 22%, #dc2626 22%) !important; }
+
+/* ── Ocean theme ── */
+.fc-theme-ocean .fc-fill-player {
+  background: linear-gradient(160deg, #0c4a6e 0%, #0369a1 60%, #0ea5e9 100%);
+}
+.fc-theme-ocean .fc-fill-topbar .mono { color: #e0f2fe; }
+.fc-theme-ocean .fc-fill-text { color: #f0f9ff; font-size: 30px; }
+.fc-theme-ocean .fc-fill-blank { border-bottom-color: #7dd3fc; }
+.fc-theme-ocean .fc-fill-btn {
+  border-radius: 12px !important;
+  border: 2px solid rgba(255,255,255,0.35) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3), 0 6px 0 rgba(0,0,0,0.25) !important;
+  backdrop-filter: blur(4px);
+  font-size: 20px !important;
+  color: #fff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
+}
+.fc-theme-ocean .fc-fill-btn.correct { background: #16a34a !important; }
+.fc-theme-ocean .fc-fill-btn.wrong   { background: #dc2626 !important; }
+
+/* ── Night theme ── */
+.fc-theme-night .fc-fill-player {
+  background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 60%, #312e81 100%);
+}
+.fc-theme-night .fc-fill-topbar .mono { color: #c4b5fd; }
+.fc-theme-night .fc-fill-text { color: #e2e8f0; font-size: 30px; }
+.fc-theme-night .fc-fill-blank { border-bottom-color: #a78bfa; }
+.fc-theme-night .fc-fill-btn {
+  border-radius: 10px !important;
+  border: 2px solid rgba(255,255,255,0.15) !important;
+  box-shadow: 0 0 20px rgba(139,92,246,0.4), 0 6px 0 rgba(0,0,0,0.5) !important;
+  font-size: 20px !important;
+  color: #fff !important;
+  text-shadow: 0 0 8px rgba(255,255,255,0.5) !important;
+}
+.fc-theme-night .fc-fill-btn.correct { background: #16a34a !important; box-shadow: 0 0 20px rgba(22,163,74,0.6) !important; }
+.fc-theme-night .fc-fill-btn.wrong   { background: #dc2626 !important; box-shadow: 0 0 20px rgba(220,38,38,0.6) !important; }
+
 /* ── Theme picker ── */
 .fc-theme-btn {
   font-size: 18px; background: none; border: none; cursor: pointer;
