@@ -2,7 +2,8 @@
 
 const { useState: useFC, useEffect: useFC_E } = React;
 
-const PIXABAY_KEY = "55964296-48988fd7e26a6999ecaff6b95";
+const GOOGLE_SEARCH_KEY = "AIzaSyA5xatslmMcd0dqCAp0IrOCo8RcAtQ_WgQ";
+const GOOGLE_SEARCH_CX  = "b104169655422429e";
 const RETRY_GAP = 4; // wrong cards reappear after this many cards
 
 /* ── Text-to-speech ── */
@@ -85,21 +86,39 @@ function ImageSearch({ term: initialTerm, onSelect, onClose }) {
   const [q, setQ] = useFC(initialTerm || "");
   const [results, setResults] = useFC([]);
   const [loading, setLoading] = useFC(false);
-  const [page, setPage] = useFC(1);
+  const [start, setStart] = useFC(1);   // Google uses 1-based start index
   const [total, setTotal] = useFC(0);
   const [searched, setSearched] = useFC(false);
+  const [error, setError] = useFC("");
 
-  const search = async (searchQ, pg = 1) => {
+  const search = async (searchQ, startIdx = 1) => {
     if (!searchQ.trim()) return;
-    setLoading(true); setSearched(true);
+    setLoading(true); setSearched(true); setError("");
     try {
-      const url = `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(searchQ)}&image_type=all&safesearch=true&per_page=12&page=${pg}`;
-      const data = await fetch(url).then(r => r.json());
-      setResults(data.hits || []); setTotal(data.totalHits || 0); setPage(pg);
-    } catch (e) { setResults([]); } finally { setLoading(false); }
+      const url = `https://www.googleapis.com/customsearch/v1` +
+        `?key=${GOOGLE_SEARCH_KEY}&cx=${GOOGLE_SEARCH_CX}` +
+        `&q=${encodeURIComponent(searchQ)}` +
+        `&searchType=image&num=10&start=${startIdx}&safe=active`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error.message || "Search failed"); setResults([]); setTotal(0);
+      } else {
+        setResults(data.items || []);
+        // Google caps at 100 total results (start 1–91)
+        setTotal(Math.min(Number(data.searchInformation?.totalResults || 0), 100));
+        setStart(startIdx);
+      }
+    } catch (e) {
+      setError("Network error — please try again."); setResults([]);
+    } finally { setLoading(false); }
   };
 
   useFC_E(() => { if (initialTerm) search(initialTerm); }, []);
+
+  const PER_PAGE = 10;
+  const canPrev = start > 1;
+  const canNext = start + PER_PAGE <= Math.min(total, 91);
 
   return (
     <div className="img-search-overlay" onClick={onClose}>
@@ -107,30 +126,39 @@ function ImageSearch({ term: initialTerm, onSelect, onClose }) {
         <div className="img-search-head">
           <div>
             <div className="serif" style={{fontSize: 22}}>Search <em>Images</em></div>
-            <div className="mono" style={{fontSize: 9, color: "var(--ink-muted)", marginTop: 2}}>Powered by Pixabay · 安全搜尋已開啟</div>
+            <div className="mono" style={{fontSize: 9, color: "var(--ink-muted)", marginTop: 2}}>
+              Powered by Google · 安全搜尋已開啟
+            </div>
           </div>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
         <div className="img-search-bar">
           <input className="img-search-input" value={q} onChange={e => setQ(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && search(q)}
-            placeholder="Search in English (e.g. queen, lion, ancient Rome)…" autoFocus/>
+            placeholder="Search in English (e.g. escape, ancient Rome, bicycle)…" autoFocus/>
           <button className="btn primary" onClick={() => search(q)} style={{flexShrink: 0}}>Search</button>
         </div>
         {loading && <div className="img-search-status mono">Searching…</div>}
-        {!loading && searched && results.length === 0 && <div className="img-search-status mono">No results — try another keyword.</div>}
+        {error && <div className="img-search-status mono" style={{color:"var(--accent)"}}>{error}</div>}
+        {!loading && !error && searched && results.length === 0 && (
+          <div className="img-search-status mono">No results — try another keyword.</div>
+        )}
         <div className="img-search-grid">
-          {results.map(img => (
-            <button key={img.id} className="img-search-item" onClick={() => { onSelect(img.webformatURL); onClose(); }} title={img.tags}>
-              <img src={img.previewURL} alt={img.tags} loading="lazy"/>
+          {results.map((img, i) => (
+            <button key={img.link + i} className="img-search-item"
+              onClick={() => { onSelect(img.link); onClose(); }}
+              title={img.title}>
+              <img src={img.image.thumbnailLink} alt={img.title} loading="lazy"/>
             </button>
           ))}
         </div>
-        {total > 12 && (
+        {total > PER_PAGE && (
           <div className="img-search-pages">
-            <button className="btn ghost" onClick={() => search(q, page - 1)} disabled={page <= 1}>← Prev</button>
-            <span className="mono" style={{fontSize: 10, color: "var(--ink-muted)"}}>Page {page} · {total} results</span>
-            <button className="btn ghost" onClick={() => search(q, page + 1)} disabled={page * 12 >= total}>Next →</button>
+            <button className="btn ghost" onClick={() => search(q, start - PER_PAGE)} disabled={!canPrev}>← Prev</button>
+            <span className="mono" style={{fontSize: 10, color: "var(--ink-muted)"}}>
+              {start}–{Math.min(start + PER_PAGE - 1, total)} of {total}
+            </span>
+            <button className="btn ghost" onClick={() => search(q, start + PER_PAGE)} disabled={!canNext}>Next →</button>
           </div>
         )}
       </div>
