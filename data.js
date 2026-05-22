@@ -321,9 +321,39 @@ function toYouTubeEmbed(url) {
   return url;
 }
 
+// ── Leaderboard (stored in Firestore under class/data as leaderboard.{itemId}) ──
+
+// Add a new entry, keep top 20 sorted by score desc then time asc
+async function addLeaderboardEntry(itemId, entry) {
+  const snap = await _classDoc.get();
+  const existing = (snap.exists && snap.data().leaderboard && snap.data().leaderboard[itemId]) || [];
+  const merged = [...existing, entry];
+  merged.sort((a, b) => b.score - a.score || a.time - b.time);
+  const trimmed = merged.slice(0, 20);
+  await _classDoc.set({ leaderboard: { [itemId]: trimmed } }, { merge: true });
+}
+
+// Delete entry by index in the stored array
+async function deleteLeaderboardEntry(itemId, entryIndex) {
+  const snap = await _classDoc.get();
+  const existing = [...((snap.exists && snap.data().leaderboard && snap.data().leaderboard[itemId]) || [])];
+  if (entryIndex < 0 || entryIndex >= existing.length) return;
+  existing.splice(entryIndex, 1);
+  await _classDoc.set({ leaderboard: { [itemId]: existing } }, { merge: true });
+}
+
+// Live-subscribe to leaderboard for one item. Returns unsubscribe fn.
+function subscribeLeaderboard(itemId, callback) {
+  return _classDoc.onSnapshot(snap => {
+    const entries = (snap.exists && snap.data().leaderboard && snap.data().leaderboard[itemId]) || [];
+    callback(entries);
+  });
+}
+
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage,
+  addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
 });
