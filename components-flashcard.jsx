@@ -948,6 +948,7 @@ function FillBlankPlayer({ item, onComplete }) {
   const [playerName, setPlayerName] = useFC('');
   const [leaderboard, setLeaderboard] = useFC([]);
   const [submitting, setSubmitting] = useFC(false);
+  const [submitted, setSubmitted] = useFC(false); // Bug fix: track if already submitted this round
 
   const startTimeRef = React.useRef(null);
   const lbUnsubRef = React.useRef(null);
@@ -997,13 +998,14 @@ function FillBlankPlayer({ item, onComplete }) {
 
   const handleSubmitName = async () => {
     const name = playerName.trim().slice(0, 16);
-    if (!name) return;
+    if (!name || submitting) return;
     setSubmitting(true);
     try {
       await window.addLeaderboardEntry(item.id, {
         name, score, total: questions.length, time: elapsed, ts: Date.now(),
       });
-    } catch(e) { console.error(e); }
+      setSubmitted(true);
+    } catch(e) { console.error('Leaderboard error:', e); }
     setSubmitting(false);
     setScreen('leaderboard');
   };
@@ -1015,6 +1017,7 @@ function FillBlankPlayer({ item, onComplete }) {
   const restart = () => {
     setIdx(0); setFBSelected(null); setFBScore(0);
     setUserAnswers([]); setElapsed(0); setPlayerName('');
+    setSubmitted(false); setSubmitting(false);
     setScreen('play');
     setFBChoices(makeFBChoices(0));
     startTimeRef.current = Date.now();
@@ -1031,28 +1034,34 @@ function FillBlankPlayer({ item, onComplete }) {
   if (screen === 'complete') {
     const elInt = Math.floor(elapsed);
     const elDec = Math.round((elapsed - elInt) * 10);
+    const pct = Math.round((score / questions.length) * 100);
+    const emoji = pct >= 80 ? "🎉" : pct >= 60 ? "👍" : "💪";
     return (
       <div className={wrapCls}>
         <div className="fc-fill-player fc-gc-bg">
           <div className="fc-gc-card">
-            <div className="fc-gc-title mono">GAME COMPLETE</div>
-            <div className="fc-gc-divider"/>
+            <div className="fc-gc-emoji">{emoji}</div>
+            <div className="fc-gc-heading serif-i">Game Complete</div>
+            <div className="fc-gc-rule"/>
             <div className="fc-gc-stats">
               <div className="fc-gc-stat">
-                <div className="fc-gc-label">Score</div>
-                <div className="fc-gc-value">{score}<span className="fc-gc-sub">/{questions.length}</span></div>
+                <div className="fc-gc-label mono">Score</div>
+                <div className="fc-gc-value serif">{score}<span className="fc-gc-sub">/{questions.length}</span></div>
               </div>
               <div className="fc-gc-stat-sep"/>
               <div className="fc-gc-stat">
-                <div className="fc-gc-label">Time</div>
-                <div className="fc-gc-value">{elInt}<span className="fc-gc-sub">.{elDec}s</span></div>
+                <div className="fc-gc-label mono">Time</div>
+                <div className="fc-gc-value serif">{elInt}<span className="fc-gc-sub">.{elDec}s</span></div>
               </div>
             </div>
-            <div className="fc-gc-divider"/>
+            <div className="fc-gc-rule"/>
             <div className="fc-gc-actions">
-              <button className="fc-gc-btn" onClick={() => setScreen('name-entry')}>Leaderboard</button>
+              <button className="fc-gc-btn accent"
+                onClick={() => submitted ? setScreen('leaderboard') : setScreen('name-entry')}>
+                Leaderboard
+              </button>
               <button className="fc-gc-btn" onClick={() => setScreen('show-answers')}>Show answers</button>
-              <button className="fc-gc-btn" onClick={restart}>Start again</button>
+              <button className="fc-gc-btn muted" onClick={restart}>Start again</button>
             </div>
           </div>
         </div>
@@ -1066,8 +1075,9 @@ function FillBlankPlayer({ item, onComplete }) {
       <div className={wrapCls}>
         <div className="fc-fill-player fc-gc-bg">
           <div className="fc-gc-card">
-            <div className="fc-gc-title mono">ENTER YOUR NAME</div>
-            <div className="fc-gc-divider"/>
+            <div className="fc-gc-heading serif-i">Enter your name</div>
+            <div className="fc-gc-sub-heading mono">排行榜名稱 · max 16 chars</div>
+            <div className="fc-gc-rule"/>
             <input
               className="fc-name-input"
               maxLength={16}
@@ -1077,15 +1087,15 @@ function FillBlankPlayer({ item, onComplete }) {
               onKeyDown={e => e.key === 'Enter' && handleSubmitName()}
               autoFocus
             />
-            <div className="fc-name-count">{playerName.length} / 16</div>
-            <div className="fc-gc-divider"/>
+            <div className="fc-name-count mono">{playerName.length} / 16</div>
+            <div className="fc-gc-rule"/>
             <div className="fc-gc-actions">
-              <button className="fc-gc-btn primary" onClick={handleSubmitName}
+              <button className="fc-gc-btn accent" onClick={handleSubmitName}
                 disabled={!playerName.trim() || submitting}>
                 {submitting ? 'Saving…' : 'Submit →'}
               </button>
-              <button className="fc-gc-btn" onClick={() => setScreen('leaderboard')}>Skip</button>
-              <button className="fc-gc-btn" onClick={() => setScreen('complete')}>← Back</button>
+              <button className="fc-gc-btn muted" onClick={() => setScreen('leaderboard')}>Skip</button>
+              <button className="fc-gc-btn ghost" onClick={() => setScreen('complete')}>← Back</button>
             </div>
           </div>
         </div>
@@ -1095,54 +1105,49 @@ function FillBlankPlayer({ item, onComplete }) {
 
   // ── LEADERBOARD ────────────────────────────────────────
   if (screen === 'leaderboard') {
-    // Sort and keep top 10 for display; remember original index for deletion
     const indexed = leaderboard.map((e, i) => ({ ...e, _rawIdx: i }));
     indexed.sort((a, b) => b.score - a.score || a.time - b.time);
     const top10 = indexed.slice(0, 10);
-    const rankLabel = i => ['1st','2nd','3rd'][i] || `${i+1}th`;
+    const rankLabel = i => i === 0 ? '1st' : i === 1 ? '2nd' : i === 2 ? '3rd' : `${i+1}th`;
 
     return (
       <div className={wrapCls}>
         <div className="fc-fill-player fc-lb-bg">
           <div className="fc-lb-head">
-            <span className="fc-lb-title">Leaderboard</span>
-            <button className="fc-gc-btn small" onClick={() => setScreen('complete')}>← Back</button>
+            <div>
+              <div className="fc-lb-title serif-i">Leaderboard</div>
+              <div className="mono" style={{color:"var(--ink-muted)", marginTop:2}}>排行榜 · Top 10</div>
+            </div>
+            <button className="fc-lb-back" onClick={() => setScreen('complete')}>← Back</button>
           </div>
-          <table className="fc-lb-table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Name</th>
-                <th>Score</th>
-                <th>Time</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({length: 10}).map((_, i) => {
-                const e = top10[i];
-                return (
-                  <tr key={i} className={i % 2 === 0 ? 'fc-lb-even' : ''}>
-                    <td className="fc-lb-rank">{rankLabel(i)}</td>
-                    <td className="fc-lb-name">{e ? e.name : '–'}</td>
-                    <td className="fc-lb-num">{e ? `${e.score}/${e.total}` : '–'}</td>
-                    <td className="fc-lb-num">{e ? `${e.time}s` : '–'}</td>
-                    <td className="fc-lb-del">
-                      {e && (
-                        <button className="fc-lb-trash" onClick={() => handleDelete(e._rawIdx)} title="Delete">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                          </svg>
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="fc-lb-rule"/>
+          <div className="fc-lb-cols mono">
+            <span>Rank</span><span>Name</span><span>Score</span><span>Time</span><span></span>
+          </div>
+          <div className="fc-lb-rule"/>
+          {Array.from({length: 10}).map((_, i) => {
+            const e = top10[i];
+            return (
+              <div key={i} className={"fc-lb-row" + (i === 0 && e ? " gold" : i === 1 && e ? " silver" : i === 2 && e ? " bronze" : "")}>
+                <span className="fc-lb-rank mono">{rankLabel(i)}</span>
+                <span className="fc-lb-name">{e ? e.name : <span className="fc-lb-empty">—</span>}</span>
+                <span className="fc-lb-num mono">{e ? `${e.score}/${e.total}` : <span className="fc-lb-empty">—</span>}</span>
+                <span className="fc-lb-num mono">{e ? `${e.time}s` : <span className="fc-lb-empty">—</span>}</span>
+                <span className="fc-lb-del">
+                  {e && (
+                    <button className="fc-lb-trash" onClick={() => handleDelete(e._rawIdx)} title="Delete">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                      </svg>
+                    </button>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+          <div className="fc-lb-rule"/>
           <div className="fc-lb-footer">
-            <button className="fc-gc-btn small" onClick={restart}>Start again</button>
+            <button className="fc-lb-back" onClick={restart}>Start again</button>
           </div>
         </div>
       </div>
@@ -1155,13 +1160,17 @@ function FillBlankPlayer({ item, onComplete }) {
       <div className={wrapCls}>
         <div className="fc-fill-player fc-lb-bg">
           <div className="fc-lb-head">
-            <span className="fc-lb-title">Answers · 解答</span>
-            <button className="fc-gc-btn small" onClick={() => setScreen('complete')}>← Back</button>
+            <div>
+              <div className="fc-lb-title serif-i">Answers</div>
+              <div className="mono" style={{color:"var(--ink-muted)", marginTop:2}}>解答 · {userAnswers.filter(a=>a.correct).length}/{userAnswers.length} correct</div>
+            </div>
+            <button className="fc-lb-back" onClick={() => setScreen('complete')}>← Back</button>
           </div>
+          <div className="fc-lb-rule"/>
           <div className="fc-answers-list">
             {userAnswers.map((ua, i) => (
               <div key={i} className={"fc-answer-row " + (ua.correct ? 'correct' : 'wrong')}>
-                <span className="fc-answer-icon">{ua.correct ? '✓' : '✗'}</span>
+                <span className="fc-answer-icon mono">{ua.correct ? '✓' : '✗'}</span>
                 <div className="fc-answer-body">
                   <div className="fc-answer-sentence">
                     {ua.sentence.split('___').map((part, pi) =>
@@ -1171,7 +1180,7 @@ function FillBlankPlayer({ item, onComplete }) {
                     )}
                   </div>
                   {!ua.correct && (
-                    <div className="fc-answer-yours">你的答案 · Your answer: <em>{ua.userAnswer}</em></div>
+                    <div className="fc-answer-yours mono">你的答案 · <em>{ua.userAnswer}</em></div>
                   )}
                 </div>
               </div>
