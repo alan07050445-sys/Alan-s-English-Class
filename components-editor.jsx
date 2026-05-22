@@ -11,6 +11,7 @@ const TYPE_OPTIONS = [
   { id: "note",      label: "Notes",      hint: "Write your own notes" },
   { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },
   { id: "flashcard", label: "Flashcard",  hint: "自製單字卡組 — 支援圖片搜尋、匯入、三種練習模式" },
+  { id: "fillblank", label: "Fill Blank", hint: "填空題 — 自訂句子填空，支援主題換色" },
 ];
 
 function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
@@ -39,7 +40,7 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -93,6 +94,11 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
             <window.FlashcardEditor
               cards={form.cards || []}
               onChange={cards => update("cards", cards)}
+            />
+          ) : form.type === "fillblank" ? (
+            <window.FillBlankEditor
+              questions={form.questions || []}
+              onChange={questions => update("questions", questions)}
             />
           ) : form.type === "note" ? (
             <div className="field">

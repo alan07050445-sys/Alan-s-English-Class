@@ -289,6 +289,7 @@ const TYPE_META = {
   image:     { label: "Image",     zh: "圖片",   embed: false, cta: "View →" },
   quiz:      { label: "Quiz",      zh: "測驗",   embed: false, cta: "Start →" },
   flashcard: { label: "Flashcard", zh: "單字卡", embed: false, cta: "Study →" },
+  fillblank: { label: "Fill Blank", zh: "填空",  embed: false, cta: "Play →" },
 };
 
 function dedupeDoubled(s) {

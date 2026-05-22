@@ -70,6 +70,14 @@ function fmtTime(s) {
 
 const FILL_COLORS = ["#3b82f6", "#ef4444", "#f97316", "#22c55e"];
 
+const THEMES = {
+  classic: { name: "🎮 Classic",  colors: ["#3b82f6","#ef4444","#f97316","#22c55e"] },
+  spring:  { name: "🌸 Spring",   colors: ["#ec4899","#a855f7","#f43f5e","#10b981"] },
+  ocean:   { name: "🌊 Ocean",    colors: ["#0284c7","#0891b2","#6366f1","#0d9488"] },
+  night:   { name: "🌙 Night",    colors: ["#7c3aed","#dc2626","#b45309","#15803d"] },
+  pastel:  { name: "🍬 Pastel",   colors: ["#60a5fa","#f87171","#fb923c","#4ade80"] },
+};
+
 /* ══════════════════════════════════════════════════════
    IMAGE SEARCH  (Pixabay)
 ══════════════════════════════════════════════════════ */
@@ -164,6 +172,7 @@ function FlashcardPlayer({ item, onComplete }) {
   const [matchElapsed, setMatchElapsed] = useFC(0);
   const [matchBest, setMatchBest] = useFC(null);
   const [matchDone, setMatchDone] = useFC(false);
+  const [matchStarted, setMatchStarted] = useFC(false);
   const [isNewBest, setIsNewBest] = useFC(false);
   const matchStartRef = React.useRef(null);
   const matchTimerRef = React.useRef(null);
@@ -238,12 +247,17 @@ function FlashcardPlayer({ item, onComplete }) {
     setMatchWrong([]);
     setMatchElapsed(0);
     setMatchDone(false);
+    setMatchStarted(false);
     setIsNewBest(false);
+    setMode("match");
+  };
+
+  const startMatch = () => {
+    setMatchStarted(true);
     matchStartRef.current = Date.now();
     matchTimerRef.current = setInterval(() => {
       setMatchElapsed(Math.floor((Date.now() - matchStartRef.current) / 1000));
     }, 500);
-    setMode("match");
   };
 
   const handleMatchClick = (tile) => {
@@ -641,6 +655,34 @@ function FlashcardPlayer({ item, onComplete }) {
 
   /* ────────────────── MATCH MODE ────────────────── */
   if (mode === "match") {
+
+    /* ── Ready screen ── */
+    if (!matchStarted) {
+      return (
+        <div className="fc-wrap">
+          <ModeTabs active="match"/>
+          <div className="fc-player">
+            <div className="fc-match-ready">
+              <div style={{fontSize: 52, marginBottom: 12}}>⚡</div>
+              <div className="serif" style={{fontSize: 32, marginBottom: 8}}>Ready to <em>Match?</em></div>
+              <div className="mono" style={{fontSize: 11, color: "var(--ink-muted)", marginBottom: 4}}>
+                {matchTiles.length / 2} 對配對 · {matchTiles.length} 張卡片
+              </div>
+              {matchBest && (
+                <div className="mono" style={{fontSize: 11, color: "var(--ink-faint)", marginBottom: 24}}>
+                  Best: {fmtTime(matchBest)}
+                </div>
+              )}
+              {!matchBest && <div style={{marginBottom: 24}}/>}
+              <button className="btn primary" style={{padding: "14px 48px", fontSize: 15, letterSpacing: "0.06em"}} onClick={startMatch}>
+                開始 · Start
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (matchDone) {
       return (
         <div className="fc-wrap">
@@ -887,4 +929,206 @@ function FlashcardEditor({ cards, onChange }) {
   );
 }
 
-Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch });
+/* ══════════════════════════════════════════════════════
+   STANDALONE FILL-IN-BLANK PLAYER
+══════════════════════════════════════════════════════ */
+function FillBlankPlayer({ item, onComplete }) {
+  const questions = item.questions || [];
+  const [theme, setTheme] = useFC(item.theme || "classic");
+  const [idx, setIdx] = useFC(0);
+  const [choices, setFBChoices] = useFC([]);
+  const [selected, setFBSelected] = useFC(null);
+  const [score, setFBScore] = useFC(0);
+  const [done, setFBDone] = useFC(false);
+  const [showTheme, setShowTheme] = useFC(false);
+
+  const makeFBChoices = (qi) => {
+    const q = questions[qi];
+    const others = questions.filter((_, i) => i !== qi).map(o => o.answer).filter(Boolean);
+    return shuffle([...shuffle(others).slice(0, Math.min(3, others.length)), q.answer]);
+  };
+
+  useFC_E(() => { if (questions.length > 0) setFBChoices(makeFBChoices(0)); }, []);
+
+  const handleFBChoice = (ch) => {
+    if (selected) return;
+    const q = questions[idx];
+    const correct = ch === q.answer;
+    setFBSelected(ch);
+    if (correct) setFBScore(s => s + 1);
+    setTimeout(() => {
+      const next = idx + 1;
+      if (next >= questions.length) { setFBDone(true); if (onComplete) onComplete(); }
+      else { setIdx(next); setFBChoices(makeFBChoices(next)); setFBSelected(null); }
+    }, correct ? 800 : 1400);
+  };
+
+  const restart = () => { setIdx(0); setFBSelected(null); setFBScore(0); setFBDone(false); setFBChoices(makeFBChoices(0)); };
+
+  if (questions.length === 0) {
+    return <div className="fc-empty mono">No questions yet · 尚未新增題目</div>;
+  }
+
+  const themeColors = (THEMES[theme] || THEMES.classic).colors;
+
+  if (done) {
+    const pct = Math.round((score / questions.length) * 100);
+    return (
+      <div className="fc-wrap">
+        <div className="fc-player">
+          <div className="fc-complete">
+            <div className="fc-complete-icon">{pct >= 80 ? "🎉" : pct >= 60 ? "👍" : "💪"}</div>
+            <div className="serif" style={{fontSize: 48, lineHeight: 1, marginBottom: 4}}>
+              {pct}<span style={{fontSize: 24}}>%</span>
+            </div>
+            <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 24}}>
+              {score} / {questions.length} correct · 答對
+            </div>
+            <button className="btn ghost" onClick={restart}>Try Again</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const q = questions[idx];
+  const parts = q.sentence.split('___');
+  const blankLen = Math.max(6, (q.answer || "").length);
+
+  return (
+    <div className="fc-wrap">
+      <div className="fc-fill-player">
+        <div className="fc-fill-topbar">
+          <span className="mono">{idx + 1} / {questions.length}</span>
+          <div style={{display:"flex", alignItems:"center", gap:8, position:"relative"}}>
+            <span className="mono">✓ {score}</span>
+            <button className="fc-theme-btn" onClick={() => setShowTheme(v => !v)} title="更換主題 · Change theme">🎨</button>
+            {showTheme && (
+              <div className="fc-theme-picker">
+                {Object.entries(THEMES).map(([key, t]) => (
+                  <button key={key} className={"fc-theme-opt" + (theme === key ? " active" : "")}
+                    onClick={() => { setTheme(key); setShowTheme(false); }}>
+                    <div className="fc-theme-dots">
+                      {t.colors.map((c, i) => <span key={i} style={{background: c}}/>)}
+                    </div>
+                    <span>{t.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="fc-fill-sentence">
+          <div className="fc-fill-text">
+            {parts[0]}<span className="fc-fill-blank">{"_".repeat(blankLen)}</span>{parts.slice(1).join('___')}
+          </div>
+        </div>
+        <div className="fc-fill-choices">
+          {choices.map((ch, i) => {
+            let cls = "fc-fill-btn";
+            if (selected) {
+              if (ch === q.answer) cls += " correct";
+              else if (ch === selected) cls += " wrong";
+              else cls += " dimmed";
+            }
+            return (
+              <button key={i} className={cls}
+                style={!selected ? {background: themeColors[i % 4]} : undefined}
+                onClick={() => handleFBChoice(ch)}>
+                {ch}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   STANDALONE FILL-IN-BLANK EDITOR
+══════════════════════════════════════════════════════ */
+function FillBlankEditor({ questions, onChange }) {
+  const [importing, setImporting] = useFC(false);
+  const [importText, setImportText] = useFC("");
+
+  const addQ = () => {
+    const id = "q" + Date.now() + Math.random().toString(36).slice(2,5);
+    onChange([...questions, { id, sentence: "", answer: "" }]);
+  };
+  const updateQ = (id, patch) => onChange(questions.map(q => q.id === id ? {...q, ...patch} : q));
+  const deleteQ = (id) => onChange(questions.filter(q => q.id !== id));
+  const moveQ = (id, dir) => {
+    const arr = [...questions];
+    const i = arr.findIndex(q => q.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]]; onChange(arr);
+  };
+  const handleImport = () => {
+    const parsed = importText.split('\n').filter(l => l.trim()).map(line => {
+      const p = line.split(/\s*\|\s*/);
+      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence:(p[0]||"").trim(), answer:(p[1]||"").trim() };
+    }).filter(q => q.sentence && q.answer);
+    if (!parsed.length) return;
+    onChange([...questions, ...parsed]);
+    setImportText(""); setImporting(false);
+  };
+
+  return (
+    <div className="fc-editor">
+      <div className="fc-editor-bar">
+        <span className="mono" style={{fontSize:10, color:"var(--ink-muted)"}}>
+          {questions.length} 題 · 句中用 <code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>___</code> 代表空格，答案不重複可自動當干擾選項
+        </span>
+        <div style={{display:"flex",gap:8}}>
+          <button className={"btn ghost"+(importing?" active":"")} style={{padding:"6px 12px",fontSize:11}} onClick={() => setImporting(v=>!v)}>⬇ Import</button>
+          <button className="btn primary" style={{padding:"6px 12px",fontSize:11}} onClick={addQ}>+ Add</button>
+        </div>
+      </div>
+      {importing && (
+        <div className="fc-import-box">
+          <div className="mono" style={{fontSize:10,color:"var(--ink-muted)",marginBottom:8}}>
+            每行一題：<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>句子（___ 代表空格） | 答案</code>
+          </div>
+          <textarea className="fc-import-ta" value={importText} onChange={e=>setImportText(e.target.value)} rows={6}
+            placeholder={"The flood was a terrible ___. | disaster\nShe ___ new words every day. | memorizes\nThis jacket is ___ so it keeps you dry. | waterproof"}/>
+          <div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}>
+            <button className="btn ghost" onClick={()=>{setImporting(false);setImportText("");}}>Cancel</button>
+            <button className="btn primary" onClick={handleImport} disabled={!importText.trim()}>Import</button>
+          </div>
+        </div>
+      )}
+      <div className="fc-card-list">
+        {questions.length === 0 && !importing && <div className="fc-card-empty mono">尚未新增題目 — 點選上方 Add</div>}
+        {questions.map((q, i) => (
+          <div key={q.id} className="fc-card-row open">
+            <div className="fc-card-row-head" style={{cursor:"default"}}>
+              <span className="mono" style={{color:"var(--ink-faint)",fontSize:10,minWidth:18,flexShrink:0}}>{i+1}</span>
+              <span className="fc-row-term" style={{fontSize:13}}>{q.sentence||<em style={{color:"var(--ink-faint)"}}>未填寫</em>}</span>
+              <span style={{fontWeight:700,fontSize:13,flexShrink:0,marginRight:8,color:"var(--ink)"}}>{q.answer}</span>
+              <div className="fc-row-tools" onClick={e=>e.stopPropagation()}>
+                <button onClick={()=>moveQ(q.id,-1)} disabled={i===0} style={{opacity:i===0?0.3:1}}>↑</button>
+                <button onClick={()=>moveQ(q.id,1)} disabled={i===questions.length-1} style={{opacity:i===questions.length-1?0.3:1}}>↓</button>
+                <button onClick={()=>{if(confirm("Delete?"))deleteQ(q.id);}} style={{color:"var(--accent)"}}>✕</button>
+              </div>
+            </div>
+            <div className="fc-card-row-body" style={{gridTemplateColumns:"1fr"}}>
+              <div className="fc-card-fields">
+                <div className="field">
+                  <label className="field-label">句子 Sentence <span style={{fontWeight:400,textTransform:"none"}}>(空格處輸入 ___)</span></label>
+                  <input value={q.sentence} onChange={e=>updateQ(q.id,{sentence:e.target.value})} placeholder="The flood was a terrible ___."/>
+                </div>
+                <div className="field">
+                  <label className="field-label">答案 Answer</label>
+                  <input value={q.answer} onChange={e=>updateQ(q.id,{answer:e.target.value})} placeholder="disaster"/>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, FillBlankPlayer, FillBlankEditor });

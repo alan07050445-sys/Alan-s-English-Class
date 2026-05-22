@@ -357,6 +357,12 @@
 .fc-match-timer {
   font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em;
 }
+/* Match ready screen */
+.fc-match-ready {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 40px 0;
+}
+
 .fc-match-best-badge {
   display: inline-block; font-size: 12px; letter-spacing: 0.1em;
   background: #fff8e1; color: #f57f17; border: 1px solid #ffe082;
@@ -449,6 +455,36 @@
 .fc-fill-btn.correct { background: #22c55e !important; box-shadow: 0 4px 0 #16a34a; }
 .fc-fill-btn.wrong   { background: #ef4444 !important; box-shadow: 0 4px 0 #dc2626; }
 .fc-fill-btn.dimmed  { opacity: 0.38; cursor: default; }
+
+/* ── Theme picker ── */
+.fc-theme-btn {
+  font-size: 18px; background: none; border: none; cursor: pointer;
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: 6px; transition: background 0.15s;
+}
+.fc-theme-btn:hover { background: var(--border-soft); }
+
+.fc-theme-picker {
+  position: absolute; right: 0; top: 38px; z-index: 100;
+  background: var(--bg-paper); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  display: flex; flex-direction: column; gap: 2px; min-width: 160px;
+}
+.fc-theme-opt {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 4px; text-align: left;
+  font-size: 13px; font-family: var(--sans); color: var(--ink);
+  background: none; border: none; cursor: pointer; transition: background 0.12s;
+}
+.fc-theme-opt:hover { background: var(--bg-card); }
+.fc-theme-opt.active { background: var(--border-soft); font-weight: 700; }
+.fc-theme-dots {
+  display: flex; gap: 3px; flex-shrink: 0;
+}
+.fc-theme-dots span {
+  width: 12px; height: 12px; border-radius: 50%; display: block;
+}
 
 /* ── Responsive ── */
 @media (max-width: 900px) {

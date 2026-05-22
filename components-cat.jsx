@@ -154,7 +154,7 @@ function ItemRow({ item, checked, onToggleCheck, isExpanded, onToggleExpand, edi
   const handleEdit = (e) => { e.stopPropagation(); onEdit(item); };
   const handleAction = (e) => {
     e.stopPropagation();
-    if (canEmbed || item.type === "note" || item.type === "pdf" || item.type === "quiz" || item.type === "flashcard") {
+    if (canEmbed || item.type === "note" || item.type === "pdf" || item.type === "quiz" || item.type === "flashcard" || item.type === "fillblank") {
       onToggleExpand(item.id);
     } else if (item.url) {
       window.open(item.url, "_blank");
@@ -198,6 +198,8 @@ function ItemRow({ item, checked, onToggleCheck, isExpanded, onToggleExpand, edi
           <div className="item-embed">
             {item.type === "note" ? (
               <div className="item-note-body">{item.body || "No notes yet."}</div>
+            ) : item.type === "fillblank" ? (
+              <window.FillBlankPlayer item={item} onComplete={() => onToggleCheck(item.id)}/>
             ) : item.type === "flashcard" ? (
               <window.FlashcardPlayer item={item} onComplete={() => onToggleCheck(item.id)}/>
             ) : item.type === "quiz" ? (
