@@ -379,15 +379,18 @@ async function saveProgressItem(uid, displayName, email, itemId, data) {
   //        null to remove (item unchecked)
   try {
     const ref = _db.collection('progress').doc(uid);
-    const update = {
+    // Step 1: ensure the document exists with profile fields (merge won't touch existing items)
+    await ref.set({
       name: displayName || '',
       email: email || '',
       updatedAt: Date.now(),
-    };
-    update[`items.${itemId}`] = data === null
+    }, { merge: true });
+    // Step 2: update() correctly treats "items.itemId" as a nested field path
+    const fieldUpdate = {};
+    fieldUpdate[`items.${itemId}`] = data === null
       ? firebase.firestore.FieldValue.delete()
       : data;
-    await ref.set(update, { merge: true });
+    await ref.update(fieldUpdate);
   } catch (e) { console.warn('saveProgressItem:', e); }
 }
 
