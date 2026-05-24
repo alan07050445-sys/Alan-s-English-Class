@@ -1065,6 +1065,14 @@ function FillBlankPlayer({ item, onComplete }) {
         name, score, total: questions.length, time: elapsed, ts: Date.now(),
       });
       setSubmitted(true);
+      // Save score to Firestore if user is logged in
+      const _u = window._currentUser;
+      if (_u && window.saveProgressItem) {
+        const pct = questions.length > 0 ? Math.round(score / questions.length * 100) : 0;
+        window.saveProgressItem(_u.uid, _u.displayName || '', _u.email || '', item.id, {
+          done: Date.now(), score: pct, time: elapsed,
+        });
+      }
     } catch(e) { console.error('Leaderboard error:', e); }
     setSubmitting(false);
     setScreen('leaderboard');

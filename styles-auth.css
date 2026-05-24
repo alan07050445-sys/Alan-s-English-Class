@@ -1,0 +1,496 @@
+/* styles-auth.css — Login screen, user chip, teacher dashboard */
+
+/* ── User chip (header) ───────────────────────────────── */
+
+.header-auth {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  transition: border-color 0.15s, background 0.15s;
+  max-width: 160px;
+}
+.user-chip:hover {
+  border-color: var(--ink-3);
+  background: var(--bg);
+}
+.user-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.user-initials {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-family: var(--sans);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.user-name {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 12px;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.signin-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--sans);
+  font-weight: 600;
+  color: var(--ink);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.signin-btn:hover {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.dashboard-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--ink-2);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dashboard-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+/* ── Login screen (full-page) ─────────────────────────── */
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg, #f6f1e6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--bg-card, #faf7f0);
+  border: 1px solid var(--border, #e5dfc8);
+  border-radius: 4px;
+  padding: 52px 56px 44px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(21,19,14,0.06), 0 24px 48px -12px rgba(21,19,14,0.14);
+}
+
+.login-logo {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 72px;
+  line-height: 1;
+  font-style: italic;
+  color: var(--ink, #15130e);
+  position: relative;
+  display: inline-block;
+  margin-bottom: 20px;
+}
+.login-logo-dot {
+  position: absolute;
+  bottom: 12px;
+  right: -8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #8B3120;
+}
+
+.login-title {
+  font-family: var(--sans, 'Nunito', sans-serif);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink, #15130e);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+.login-sub {
+  font-size: 13px;
+  color: var(--ink-3, #8a8270);
+  margin: 0 0 36px;
+  line-height: 1.5;
+}
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 20px;
+  border-radius: 4px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+  font-weight: 700;
+  color: #3c4043;
+  transition: box-shadow 0.15s, background 0.1s;
+  letter-spacing: 0.01em;
+}
+.google-btn:hover {
+  background: #f8f9fa;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.google-btn:active { background: #f1f3f4; }
+
+.google-icon { width: 18px; height: 18px; flex-shrink: 0; }
+
+.login-skip {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--ink-3, #8a8270);
+}
+.login-skip button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-3, #8a8270);
+  text-decoration: underline;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0;
+}
+.login-skip button:hover { color: var(--ink, #15130e); }
+
+.login-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+  color: var(--ink-3, #8a8270);
+}
+
+/* ── Teacher Dashboard (right-side panel) ─────────────── */
+
+.dash-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(21, 19, 14, 0.45);
+  z-index: 200;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  animation: dash-fade-in 0.2s ease;
+}
+@keyframes dash-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.dash-panel {
+  width: min(780px, 100vw);
+  background: var(--bg, #f6f1e6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: -8px 0 40px rgba(21,19,14,0.18);
+  animation: dash-slide-in 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes dash-slide-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.dash-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 28px 32px 20px;
+  border-bottom: 1px solid var(--border, #e5dfc8);
+  flex-shrink: 0;
+  background: var(--bg-card, #faf7f0);
+}
+.dash-title {
+  font-family: var(--serif, 'Lora', serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink, #15130e);
+  margin: 0 0 4px;
+}
+.dash-meta {
+  font-size: 11px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.dash-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px 40px;
+}
+
+/* ── Student list table ───────────────────────────────── */
+
+.dash-table {
+  border: 1px solid var(--border, #e5dfc8);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-card, #faf7f0);
+}
+
+.dt-head {
+  display: grid;
+  grid-template-columns: 1fr 140px 80px 90px;
+  padding: 10px 16px;
+  background: var(--bg, #f6f1e6);
+  border-bottom: 1px solid var(--border, #e5dfc8);
+  font-size: 10px;
+  font-family: var(--mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3, #8a8270);
+  gap: 12px;
+}
+
+.dt-row {
+  display: grid;
+  grid-template-columns: 1fr 140px 80px 90px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-soft, #ede8d8);
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 12px;
+}
+.dt-row:last-child { border-bottom: none; }
+.dt-row:hover { background: var(--bg, #f6f1e6); }
+
+.dt-student-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dt-sname {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #15130e);
+  font-family: var(--sans, 'Nunito', sans-serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dt-semail {
+  font-size: 11px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-progress { display: flex; flex-direction: column; gap: 5px; }
+.dt-count {
+  font-size: 13px;
+  color: var(--ink, #15130e);
+  font-family: var(--sans, 'Nunito', sans-serif);
+  font-weight: 600;
+}
+.dt-bar {
+  height: 4px;
+  background: var(--border, #e5dfc8);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.dt-bar-fill {
+  height: 100%;
+  background: var(--ink, #15130e);
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dt-score {
+  font-size: 14px;
+  color: var(--ink, #15130e);
+  font-family: var(--serif, 'Lora', serif);
+  font-weight: 600;
+}
+.dt-last {
+  font-size: 11px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+}
+
+.dt-empty {
+  padding: 48px 24px;
+  text-align: center;
+}
+.dt-empty p { color: var(--ink-2, #5c5648); font-size: 14px; margin: 0 0 8px; }
+.dt-empty-hint {
+  font-size: 12px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+  margin: 0;
+}
+
+/* ── Student detail view ─────────────────────────────── */
+
+.dash-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--sans, 'Nunito', sans-serif);
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 20px;
+  transition: color 0.1s;
+}
+.dash-back:hover { color: var(--ink, #15130e); }
+
+.sdetail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border, #e5dfc8);
+}
+.sdetail-name {
+  font-family: var(--serif, 'Lora', serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink, #15130e);
+  margin: 0 0 4px;
+}
+.sdetail-email {
+  font-size: 12px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+  margin: 0;
+}
+.sdetail-stat {
+  text-align: right;
+  flex-shrink: 0;
+}
+.sdetail-count {
+  font-family: var(--serif, 'Lora', serif);
+  font-size: 22px;
+  color: var(--ink, #15130e);
+  display: block;
+}
+.sdetail-count-label {
+  font-size: 11px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+}
+
+.sdetail-week { margin-bottom: 20px; }
+.sdetail-wlabel {
+  font-family: var(--mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3, #8a8270);
+  margin: 0 0 8px;
+}
+.sdetail-items { display: flex; flex-direction: column; gap: 4px; }
+
+.sdetail-item {
+  display: grid;
+  grid-template-columns: 20px 1fr 80px 60px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-soft, #ede8d8);
+  background: var(--bg-card, #faf7f0);
+  font-size: 13px;
+  opacity: 0.55;
+  transition: opacity 0.1s;
+}
+.sdetail-item.done { opacity: 1; border-color: var(--border, #e5dfc8); }
+
+.sdetail-check {
+  font-size: 13px;
+  color: var(--ink-3, #8a8270);
+  font-weight: 700;
+  text-align: center;
+}
+.sdetail-check.done { color: #15803d; }
+
+.sdetail-iname {
+  color: var(--ink, #15130e);
+  font-family: var(--sans, 'Nunito', sans-serif);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sdetail-cat {
+  font-size: 11px;
+  color: var(--ink-3, #8a8270);
+  font-family: var(--mono, monospace);
+  text-align: right;
+}
+.sdetail-score {
+  font-size: 13px;
+  font-family: var(--serif, 'Lora', serif);
+  color: var(--ink-2, #5c5648);
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ── Mobile tweaks ────────────────────────────────────── */
+@media (max-width: 600px) {
+  .login-card { padding: 40px 28px 32px; }
+  .dash-head { padding: 20px; }
+  .dash-body { padding: 16px 20px 32px; }
+  .dt-head, .dt-row { grid-template-columns: 1fr 100px 70px; }
+  .dt-head > :last-child, .dt-row > :last-child { display: none; }
+  .sdetail-item { grid-template-columns: 20px 1fr 60px; }
+  .sdetail-item > :last-child { display: none; }
+  .user-name { display: none; }
+}

@@ -14,7 +14,12 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const _db      = firebase.firestore();
 const _storage = firebase.storage();
+const _auth    = firebase.auth();
 const _classDoc = _db.collection('class').doc('data');
+
+// ── 🔑 Teacher email — fill in YOUR Google account email here ──────────
+// Only this account will see the Edit button and Class Report dashboard.
+const ADMIN_EMAILS = ['alan07050445@gmail.com'];
 
 const CATEGORIES = [
   {
@@ -350,10 +355,75 @@ function subscribeLeaderboard(itemId, callback) {
   });
 }
 
+// ── Firebase Auth ──────────────────────────────────────────────────────
+
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  return _auth.signInWithPopup(provider);
+}
+
+function signOutUser() { return _auth.signOut(); }
+
+function subscribeAuth(callback) { return _auth.onAuthStateChanged(callback); }
+
+function isAdminUser(user) {
+  return !!(user && ADMIN_EMAILS.includes(user.email));
+}
+
+// ── Per-user Progress in Firestore ────────────────────────────────────
+// Stored at: progress/{uid}  →  { name, email, updatedAt, items: { itemId: { done, score?, time? } } }
+
+async function saveProgressItem(uid, displayName, email, itemId, data) {
+  // data = { done: timestamp, score?: 0-100, time?: seconds } to mark done,
+  //        null to remove (item unchecked)
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    const update = {
+      name: displayName || '',
+      email: email || '',
+      updatedAt: Date.now(),
+    };
+    update[`items.${itemId}`] = data === null
+      ? firebase.firestore.FieldValue.delete()
+      : data;
+    await ref.set(update, { merge: true });
+  } catch (e) { console.warn('saveProgressItem:', e); }
+}
+
+// Subscribe to this user's own Firestore progress
+function subscribeMyProgress(uid, callback) {
+  return _db.collection('progress').doc(uid).onSnapshot(snap => {
+    callback(snap.exists ? (snap.data()?.items || {}) : {});
+  });
+}
+
+// Subscribe to ALL students' progress (teacher dashboard only)
+function subscribeAllStudents(callback) {
+  return _db.collection('progress').onSnapshot(snap => {
+    const all = [];
+    snap.forEach(doc => {
+      const d = doc.data();
+      all.push({
+        uid: doc.id,
+        name: d.name || doc.id,
+        email: d.email || '',
+        items: d.items || {},
+        updatedAt: d.updatedAt || 0,
+      });
+    });
+    all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    callback(all);
+  });
+}
+
 Object.assign(window, {
-  CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META,
+  CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage,
   addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
+  // Auth
+  signInWithGoogle, signOutUser, subscribeAuth, isAdminUser,
+  // Per-user progress
+  saveProgressItem, subscribeMyProgress, subscribeAllStudents,
 });

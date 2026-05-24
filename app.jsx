@@ -2,8 +2,6 @@
 
 const { useState: useAppState, useEffect: useAppEffect, useMemo: useAppMemo, useRef: useAppRef } = React;
 
-const IS_TEACHER = true;
-
 // Parse "May 17 – May 23" → { start: Date, end: Date } using the given year.
 function parseDateRange(str, year) {
   const MONTHS = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
@@ -53,6 +51,15 @@ function bestWeekIdx(order, weeks) {
 }
 
 function App() {
+  // ── Auth state ──────────────────────────────────────────
+  const [user, setUser]           = useAppState(null);
+  const [authReady, setAuthReady] = useAppState(false); // show loading until Firebase resolves
+  const [skippedLogin, setSkippedLogin] = useAppState(() => {
+    try { return !!sessionStorage.getItem('alan-guest'); } catch(e) { return false; }
+  });
+  const [dashOpen, setDashOpen]   = useAppState(false);
+
+  // ── Content state ───────────────────────────────────────
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => window.loadWeeks());
   const [weekOrder, setWeekOrder] = useAppState(() => window.loadWeekOrder());
@@ -68,11 +75,38 @@ function App() {
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
   const [gridCols, setGridCols] = useAppState(getGridCols);
 
+  const isTeacher = window.isAdminUser(user);
+
   useAppEffect(() => {
     const handler = () => setGridCols(getGridCols());
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
+  // ── Firebase Auth subscription ──────────────────────────
+  useAppEffect(() => {
+    const unsub = window.subscribeAuth(u => {
+      setUser(u);
+      setAuthReady(true);
+      window._currentUser = u; // global access for quiz/fillblank score saving
+      if (!u) setEditMode(false); // clear edit mode on sign-out
+    });
+    return unsub;
+  }, []);
+
+  // ── Sync Firestore progress when user is logged in ──────
+  useAppEffect(() => {
+    if (!user) return;
+    const unsub = window.subscribeMyProgress(user.uid, (firestoreItems) => {
+      // Convert Firestore format { itemId: {done, score?, time?} } → app format { itemId: timestamp }
+      const appProgress = {};
+      Object.entries(firestoreItems).forEach(([id, val]) => {
+        if (val?.done) appProgress[id] = val.done;
+      });
+      setProgress(appProgress);
+    });
+    return unsub;
+  }, [user?.uid]);
 
   // Always-fresh ref to weeks — prevents stale-closure bugs in CRUD handlers.
   const weeksRef = useAppRef(weeks);
@@ -95,7 +129,8 @@ function App() {
     return unsub;
   }, []);
 
-  // Progress is per-device — keep in localStorage only.
+  // Progress — keep in localStorage as offline cache.
+  // When logged in, Firestore is the source of truth (see subscribeMyProgress above).
   useAppEffect(() => { window.saveProgress(progress); }, [progress]);
 
   // Clamp weekIdx if the order shrinks (also handles empty weekOrder gracefully)
@@ -171,8 +206,16 @@ function App() {
   const toggleCheck = (itemId) => {
     setProgress(prev => {
       const next = { ...prev };
-      if (next[itemId]) delete next[itemId];
-      else next[itemId] = Date.now();
+      const wasChecked = !!next[itemId];
+      if (wasChecked) {
+        delete next[itemId];
+        // Remove from Firestore if logged in
+        if (user) window.saveProgressItem(user.uid, user.displayName || '', user.email || '', itemId, null);
+      } else {
+        next[itemId] = Date.now();
+        // Save to Firestore if logged in
+        if (user) window.saveProgressItem(user.uid, user.displayName || '', user.email || '', itemId, { done: next[itemId] });
+      }
       return next;
     });
   };
@@ -308,6 +351,24 @@ function App() {
     return cards;
   };
 
+  // Show loading spinner until Firebase Auth resolves (avoids flash of login screen)
+  if (!authReady) {
+    return <div className="login-loading">Loading…</div>;
+  }
+
+  // Show login screen if not logged in and hasn't chosen guest
+  if (!user && !skippedLogin) {
+    return (
+      <window.LoginScreen
+        onLogin={() => window.signInWithGoogle()}
+        onSkip={() => {
+          try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
+          setSkippedLogin(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="page">
       <window.Header
@@ -316,12 +377,22 @@ function App() {
         weekIdx={weekIdx}
         onPrevWeek={goPrevWeek}
         onNextWeek={goNextWeek}
-        canEdit={IS_TEACHER}
+        canEdit={isTeacher}
         editMode={editMode}
         onToggleEdit={() => setEditMode(e => !e)}
         onAddWeek={() => setWeekModalOpen(true)}
         onDeleteWeek={handleDeleteWeek}
         progress={{done: totalDone, total: totalItems}}
+        user={user}
+        onLogin={() => window.signInWithGoogle()}
+        onLogout={() => {
+          if (confirm('Sign out?')) {
+            window.signOutUser();
+            try { sessionStorage.removeItem('alan-guest'); } catch(e) {}
+            setSkippedLogin(false);
+          }
+        }}
+        onShowDashboard={() => setDashOpen(true)}
       />
 
       <window.Hero
@@ -369,6 +440,14 @@ function App() {
       />
 
       {toast && <div className="toast">{toast}</div>}
+
+      {dashOpen && isTeacher && (
+        <window.TeacherDashboard
+          onClose={() => setDashOpen(false)}
+          weeks={weeks}
+          weekOrder={weekOrder}
+        />
+      )}
     </div>
   );
 }

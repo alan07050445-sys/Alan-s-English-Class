@@ -122,6 +122,13 @@ function QuizPlayer({ item, onComplete }) {
     saveAttempts(attempts);
     setSubmitted(true);
     if (onComplete) onComplete(item.id);
+    // Save score to Firestore if user is logged in
+    const _u = window._currentUser;
+    if (_u && window.saveProgressItem) {
+      window.saveProgressItem(_u.uid, _u.displayName || '', _u.email || '', item.id, {
+        done: Date.now(), score: score.pct, time: null,
+      });
+    }
   };
 
   const reset = () => {
