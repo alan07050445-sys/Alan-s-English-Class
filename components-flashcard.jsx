@@ -1,9 +1,9 @@
-// components-flashcard.jsx — Flashcard system: Card / Learn / Test + Pixabay image search
+// components-flashcard.jsx — Flashcard system: Card / Learn / Test + image search
 
 const { useState: useFC, useEffect: useFC_E } = React;
 
-const GOOGLE_SEARCH_KEY = "AIzaSyA5xatslmMcd0dqCAp0IrOCo8RcAtQ_WgQ";
-const GOOGLE_SEARCH_CX  = "b104169655422429e";
+const PIXABAY_KEY = "55964296-48988fd7e26a6999ecaff6b95";
+const PEXELS_KEY  = "ddCplPdhHd2AvScvkob1rxUHoz7UEoLk0yETCc6tdBZ3rlhR5Zwsjs4P";
 const RETRY_GAP = 4; // wrong cards reappear after this many cards
 
 /* ── Text-to-speech ── */
@@ -84,81 +84,113 @@ const THEMES = {
 ══════════════════════════════════════════════════════ */
 function ImageSearch({ term: initialTerm, onSelect, onClose }) {
   const [q, setQ] = useFC(initialTerm || "");
+  const [source, setSource] = useFC("pexels"); // 'pexels' | 'pixabay'
   const [results, setResults] = useFC([]);
   const [loading, setLoading] = useFC(false);
-  const [start, setStart] = useFC(1);   // Google uses 1-based start index
+  const [page, setPage] = useFC(1);
   const [total, setTotal] = useFC(0);
   const [searched, setSearched] = useFC(false);
   const [error, setError] = useFC("");
 
-  const search = async (searchQ, startIdx = 1) => {
+  const PER_PAGE = 12;
+
+  const searchPexels = async (searchQ, pg) => {
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQ)}&per_page=${PER_PAGE}&page=${pg}&locale=en-US`;
+    const res = await fetch(url, { headers: { Authorization: PEXELS_KEY } });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    // normalise to {id, thumb, full, title}
+    return {
+      items: (data.photos || []).map(p => ({ id: p.id, thumb: p.src.medium, full: p.src.large, title: p.alt || searchQ })),
+      total: Math.min(data.total_results || 0, 500),
+    };
+  };
+
+  const searchPixabay = async (searchQ, pg) => {
+    const url = `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(searchQ)}&image_type=all&safesearch=true&per_page=${PER_PAGE}&page=${pg}`;
+    const data = await fetch(url).then(r => r.json());
+    return {
+      items: (data.hits || []).map(p => ({ id: p.id, thumb: p.previewURL, full: p.webformatURL, title: p.tags })),
+      total: data.totalHits || 0,
+    };
+  };
+
+  const search = async (searchQ, pg = 1, src = source) => {
     if (!searchQ.trim()) return;
     setLoading(true); setSearched(true); setError("");
     try {
-      const url = `https://www.googleapis.com/customsearch/v1` +
-        `?key=${GOOGLE_SEARCH_KEY}&cx=${GOOGLE_SEARCH_CX}` +
-        `&q=${encodeURIComponent(searchQ)}` +
-        `&searchType=image&num=10&start=${startIdx}&safe=active`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error.message || "Search failed"); setResults([]); setTotal(0);
-      } else {
-        setResults(data.items || []);
-        // Google caps at 100 total results (start 1–91)
-        setTotal(Math.min(Number(data.searchInformation?.totalResults || 0), 100));
-        setStart(startIdx);
-      }
+      const { items, total: tot } = src === "pexels"
+        ? await searchPexels(searchQ, pg)
+        : await searchPixabay(searchQ, pg);
+      setResults(items); setTotal(tot); setPage(pg);
     } catch (e) {
-      setError("Network error — please try again."); setResults([]);
+      setError("Search failed — try again."); setResults([]);
     } finally { setLoading(false); }
   };
 
-  useFC_E(() => { if (initialTerm) search(initialTerm); }, []);
+  const switchSource = (src) => {
+    setSource(src); setResults([]); setSearched(false); setError(""); setPage(1);
+    if (q.trim()) search(q, 1, src);
+  };
 
-  const PER_PAGE = 10;
-  const canPrev = start > 1;
-  const canNext = start + PER_PAGE <= Math.min(total, 91);
+  useFC_E(() => { if (initialTerm) search(initialTerm, 1, "pexels"); }, []);
+
+  const canPrev = page > 1;
+  const canNext = page * PER_PAGE < total;
+
+  const SOURCES = [
+    { id: "pexels",   label: "Pexels",   sub: "高品質照片" },
+    { id: "pixabay",  label: "Pixabay",  sub: "插圖 · 向量圖" },
+  ];
 
   return (
     <div className="img-search-overlay" onClick={onClose}>
       <div className="img-search-panel" onClick={e => e.stopPropagation()}>
         <div className="img-search-head">
-          <div>
-            <div className="serif" style={{fontSize: 22}}>Search <em>Images</em></div>
-            <div className="mono" style={{fontSize: 9, color: "var(--ink-muted)", marginTop: 2}}>
-              Powered by Google · 安全搜尋已開啟
-            </div>
-          </div>
+          <div className="serif" style={{fontSize: 22}}>Search <em>Images</em></div>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
+
+        {/* Source tabs */}
+        <div className="img-source-tabs">
+          {SOURCES.map(s => (
+            <button key={s.id}
+              className={"img-source-tab" + (source === s.id ? " active" : "")}
+              onClick={() => switchSource(s.id)}>
+              <span>{s.label}</span>
+              <span className="img-source-sub">{s.sub}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="img-search-bar">
           <input className="img-search-input" value={q} onChange={e => setQ(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search(q)}
+            onKeyDown={e => e.key === 'Enter' && search(q, 1)}
             placeholder="Search in English (e.g. escape, ancient Rome, bicycle)…" autoFocus/>
-          <button className="btn primary" onClick={() => search(q)} style={{flexShrink: 0}}>Search</button>
+          <button className="btn primary" onClick={() => search(q, 1)} style={{flexShrink: 0}}>Search</button>
         </div>
+
         {loading && <div className="img-search-status mono">Searching…</div>}
         {error && <div className="img-search-status mono" style={{color:"var(--accent)"}}>{error}</div>}
         {!loading && !error && searched && results.length === 0 && (
           <div className="img-search-status mono">No results — try another keyword.</div>
         )}
         <div className="img-search-grid">
-          {results.map((img, i) => (
-            <button key={img.link + i} className="img-search-item"
-              onClick={() => { onSelect(img.link); onClose(); }}
+          {results.map(img => (
+            <button key={img.id} className="img-search-item"
+              onClick={() => { onSelect(img.full); onClose(); }}
               title={img.title}>
-              <img src={img.image.thumbnailLink} alt={img.title} loading="lazy"/>
+              <img src={img.thumb} alt={img.title} loading="lazy"/>
             </button>
           ))}
         </div>
         {total > PER_PAGE && (
           <div className="img-search-pages">
-            <button className="btn ghost" onClick={() => search(q, start - PER_PAGE)} disabled={!canPrev}>← Prev</button>
+            <button className="btn ghost" onClick={() => search(q, page - 1)} disabled={!canPrev}>← Prev</button>
             <span className="mono" style={{fontSize: 10, color: "var(--ink-muted)"}}>
-              {start}–{Math.min(start + PER_PAGE - 1, total)} of {total}
+              Page {page} · {total} results
             </span>
-            <button className="btn ghost" onClick={() => search(q, start + PER_PAGE)} disabled={!canNext}>Next →</button>
+            <button className="btn ghost" onClick={() => search(q, page + 1)} disabled={!canNext}>Next →</button>
           </div>
         )}
       </div>
