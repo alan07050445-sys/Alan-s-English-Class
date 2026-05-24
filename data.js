@@ -359,6 +359,7 @@ function subscribeLeaderboard(itemId, callback) {
 
 function signInWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' }); // always show account picker
   return _auth.signInWithPopup(provider);
 }
 
