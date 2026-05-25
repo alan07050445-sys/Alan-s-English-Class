@@ -483,6 +483,32 @@
   text-align: right;
 }
 
+/* ── Mode toggle bar (teacher only) ──────────────────── */
+.mode-toggle-bar {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.mode-toggle-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.mode-toggle-btn.active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.mode-toggle-btn:not(.active):hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
 /* ── Mobile tweaks ────────────────────────────────────── */
 @media (max-width: 600px) {
   .login-card { padding: 40px 28px 32px; }

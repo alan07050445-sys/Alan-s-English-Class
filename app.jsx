@@ -77,6 +77,10 @@ function App() {
 
   const isTeacher = window.isAdminUser(user);
 
+  // ── Quiz mode state ─────────────────────────────────
+  const [quizMode, setQuizMode]   = useAppState(true); // default: new quiz mode
+  const [quizSession, setQuizSession] = useAppState(null); // { cat, questions, progressKey }
+
   useAppEffect(() => {
     const handler = () => setGridCols(getGridCols());
     window.addEventListener('resize', handler);
@@ -157,8 +161,8 @@ function App() {
     setTimeout(() => setToast(null), 1800);
   };
 
-  const goPrevWeek = () => { setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); };
-  const goNextWeek = () => { setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); };
+  const goPrevWeek = () => { setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setQuizSession(null); };
+  const goNextWeek = () => { setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setQuizSession(null); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -393,33 +397,59 @@ function App() {
           }
         }}
         onShowDashboard={() => setDashOpen(true)}
+        onQuizMode={quizMode}
+        onSwitchMode={() => { setQuizMode(m => !m); setQuizSession(null); }}
       />
 
-      <window.Hero
-        week={week}
-        totalItems={totalItems}
-        totalDone={totalDone}
-        editMode={editMode}
-        onUpdateWeek={(patch) => {
-          const w = JSON.parse(JSON.stringify(weeksRef.current));
-          if (!w[weekId]) return;
-          w[weekId] = { ...w[weekId], ...patch };
-          setWeeks(w);
-          window.saveWeeks(w);
-        }}
-      />
-
-      <section>
+      {/* ── QUIZ MODE ── */}
+      {quizMode && !editMode ? (
         <div className="shell">
-          <div className="section-head">
-            <h2>The Four <em>Foundations</em></h2>
-            <span className="meta">04 Categories · 四個學習面向</span>
-          </div>
+          {quizSession ? (
+            <window.QuizModePlayer
+              cat={quizSession.cat}
+              questions={quizSession.questions}
+              progressKey={quizSession.progressKey}
+              onBack={() => setQuizSession(null)}
+            />
+          ) : (
+            <window.QuizModeBlocks
+              week={week}
+              weekId={weekId}
+              onStartQuiz={(cat, questions, progressKey) =>
+                setQuizSession({ cat, questions, progressKey })
+              }
+            />
+          )}
         </div>
-        <div className="shell">
-          <div className="cat-grid">{renderGrid()}</div>
-        </div>
-      </section>
+      ) : (
+        /* ── RESOURCE MODE (original) ── */
+        <>
+          <window.Hero
+            week={week}
+            totalItems={totalItems}
+            totalDone={totalDone}
+            editMode={editMode}
+            onUpdateWeek={(patch) => {
+              const w = JSON.parse(JSON.stringify(weeksRef.current));
+              if (!w[weekId]) return;
+              w[weekId] = { ...w[weekId], ...patch };
+              setWeeks(w);
+              window.saveWeeks(w);
+            }}
+          />
+          <section>
+            <div className="shell">
+              <div className="section-head">
+                <h2>The Four <em>Foundations</em></h2>
+                <span className="meta">04 Categories · 四個學習面向</span>
+              </div>
+            </div>
+            <div className="shell">
+              <div className="cat-grid">{renderGrid()}</div>
+            </div>
+          </section>
+        </>
+      )}
 
       <window.Footer/>
 

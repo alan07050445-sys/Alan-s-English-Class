@@ -31,6 +31,8 @@ function Header({
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard,
+  // Mode props
+  onQuizMode, onSwitchMode,
 }) {
   const pct = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0;
   const atStart = weekIdx <= 0;
@@ -99,6 +101,22 @@ function Header({
           </div>
         </div>
       }
+      {/* Mode toggle bar (teacher only, always visible) */}
+      {canEdit && (
+        <div className="mode-toggle-bar">
+          <div className="shell" style={{display:'flex',alignItems:'center',gap:'8px',padding:'6px 0'}}>
+            <span style={{fontSize:'11px',fontFamily:'var(--mono)',color:'var(--ink-3)',letterSpacing:'0.04em'}}>VIEW:</span>
+            <button
+              className={'mode-toggle-btn' + (onQuizMode ? ' active' : '')}
+              onClick={() => { if(!onQuizMode) onSwitchMode(); }}
+            >Quiz Mode</button>
+            <button
+              className={'mode-toggle-btn' + (!onQuizMode ? ' active' : '')}
+              onClick={() => { if(onQuizMode) onSwitchMode(); }}
+            >Resource Mode</button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
