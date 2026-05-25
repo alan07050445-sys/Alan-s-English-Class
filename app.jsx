@@ -398,33 +398,23 @@ function App() {
         onShowDashboard={() => setDashOpen(true)}
       />
 
-      {/* ── QUIZ MODE (always shown to students) ── */}
-      {!editMode ? (
-        catView ? (
-          /* Inside a category: sidebar + quiz */
-          <window.QuizModeCategoryView
-            cat={catView}
-            items={(week.items || {})[catView.id] || []}
-            weekId={weekId}
-            onBack={() => setCatView(null)}
-          />
-        ) : (
-          /* Main 4-block screen */
-          <div className="shell">
-            <window.QuizModeBlocks
-              week={week}
-              weekId={weekId}
-              onEnterCat={(cat) => setCatView(cat)}
-            />
-          </div>
-        )
+      {/* ── QUIZ MODE (always shown; edit controls appear when editMode=true) ── */}
+      {catView ? (
+        <window.QuizModeCategoryView
+          cat={catView}
+          items={(week.items || {})[catView.id] || []}
+          weekId={weekId}
+          onBack={() => setCatView(null)}
+          editMode={editMode}
+          onAddItem={handleAddItem}
+          onEditItem={handleEditItem}
+        />
       ) : (
-        /* ── RESOURCE MODE: teacher edit only ── */
-        <>
-          <window.Hero
+        <div className="shell">
+          <window.QuizModeBlocks
             week={week}
-            totalItems={totalItems}
-            totalDone={totalDone}
+            weekId={weekId}
+            onEnterCat={(cat) => setCatView(cat)}
             editMode={editMode}
             onUpdateWeek={(patch) => {
               const w = JSON.parse(JSON.stringify(weeksRef.current));
@@ -433,19 +423,9 @@ function App() {
               setWeeks(w);
               window.saveWeeks(w);
             }}
+            onAddItem={handleAddItem}
           />
-          <section>
-            <div className="shell">
-              <div className="section-head">
-                <h2>The Four <em>Foundations</em></h2>
-                <span className="meta">04 Categories · 四個學習面向</span>
-              </div>
-            </div>
-            <div className="shell">
-              <div className="cat-grid">{renderGrid()}</div>
-            </div>
-          </section>
-        </>
+        </div>
       )}
 
       <window.Footer/>

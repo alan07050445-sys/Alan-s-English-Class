@@ -1,4 +1,4 @@
-// components-quiz-mode.jsx — Quiz mode (main UI for students)
+// components-quiz-mode.jsx — Quiz mode (main UI for students + teacher edit)
 
 const { useState: useQM, useMemo: useQMM } = React;
 
@@ -66,35 +66,63 @@ const CAT_BG    = {
 
 /* ══════════════════════════════════════════════════════
    MAIN SCREEN — 4 blocks
+   editMode=true → show edit controls + week metadata editing
 ══════════════════════════════════════════════════════ */
-function QuizModeBlocks({ week, weekId, onEnterCat }) {
+function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem }) {
   const qmProg = loadQMProg();
+  const ET = window.EditableText;
 
   return (
     <>
       <div className="qm-week-banner">
         <div className="qm-week-eyebrow">
-          <span className="dot"/><span>{weekId} · {week.dateRange || ''}</span>
+          <span className="dot"/>
+          <span>{weekId}{week.dateRange ? ' · ' : ''}</span>
+          <ET
+            value={week.dateRange || ''}
+            placeholder="May 17 – May 23"
+            editMode={editMode}
+            className="mono"
+            onChange={v => onUpdateWeek({ dateRange: v })}
+          />
         </div>
-        <h1 className="qm-week-title">{week.theme || week.label}</h1>
-        {week.subtitle && <p className="qm-week-sub">{week.subtitle}</p>}
+        <h1 className="qm-week-title">
+          <ET
+            value={week.theme || week.label || ''}
+            placeholder="Week theme…"
+            editMode={editMode}
+            onChange={v => onUpdateWeek({ theme: v })}
+          />
+        </h1>
+        {(week.subtitle || editMode) && (
+          <p className="qm-week-sub">
+            <ET
+              value={week.subtitle || ''}
+              placeholder="English subtitle…"
+              editMode={editMode}
+              onChange={v => onUpdateWeek({ subtitle: v })}
+            />
+          </p>
+        )}
       </div>
 
       <div className="qm-blocks">
         {window.CATEGORIES.map(cat => {
-          const quizItems = getQuizItems((week.items || {})[cat.id]);
+          const allCatItems = (week.items || {})[cat.id] || [];
+          const quizItems = getQuizItems(allCatItems);
           const total  = quizItems.reduce((s, it) => s + getItemQuestions(it).length, 0);
           const done   = quizItems.reduce((s, it) => {
             const p = qmProg[`${weekId}_${it.id}`];
             return s + (p ? Math.min(p.done, getItemQuestions(it).length) : 0);
           }, 0);
           const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+          const clickable = total > 0 || editMode;
 
           return (
             <div
               key={cat.id}
-              className={`qm-block${total === 0 ? ' empty' : ''}`}
-              onClick={() => total > 0 && onEnterCat(cat)}
+              className={`qm-block${!clickable ? ' empty' : ''}`}
+              onClick={() => clickable && onEnterCat(cat)}
             >
               <div className="qm-block-icon" style={{ background: CAT_BG[cat.id] }}>
                 {CAT_ICONS[cat.id]}
@@ -112,11 +140,21 @@ function QuizModeBlocks({ week, weekId, onEnterCat }) {
                       <span className="qm-pct">{pct}%</span>
                     </div>
                   </>
+                ) : editMode ? (
+                  <div className="qm-block-count">{allCatItems.length} items · no quiz yet</div>
                 ) : (
                   <div className="qm-block-empty">No quiz yet</div>
                 )}
               </div>
-              {total > 0 && <div className="qm-block-arrow">›</div>}
+              {editMode ? (
+                <button
+                  className="qm-edit-add-btn"
+                  onClick={(e) => { e.stopPropagation(); onAddItem(cat.id); }}
+                  title={`Add item to ${cat.title}`}
+                >＋</button>
+              ) : total > 0 ? (
+                <div className="qm-block-arrow">›</div>
+              ) : null}
             </div>
           );
         })}
@@ -127,12 +165,15 @@ function QuizModeBlocks({ week, weekId, onEnterCat }) {
 
 /* ══════════════════════════════════════════════════════
    CATEGORY VIEW — left sidebar + right quiz
+   editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem }) {
   const [selectedItem, setSelectedItem] = useQM(null);
-  const [playerKey,    setPlayerKey]    = useQM(0);  // remount player on new selection
+  const [playerKey,    setPlayerKey]    = useQM(0);
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
+  // Edit mode: show ALL items so teacher can see & edit non-quiz types too
+  const sidebarItems = editMode ? (items || []) : quizItems;
 
   const selectItem = (item) => {
     setSelectedItem(item);
@@ -162,33 +203,59 @@ function QuizModeCategoryView({ cat, items, weekId, onBack }) {
         </div>
 
         <div className="qm-unit-list">
-          {quizItems.length === 0 && (
-            <div className="qm-unit-empty">No quiz items yet.<br/>Ask your teacher to add some!</div>
+          {editMode && (
+            <button className="qm-unit-add-btn" onClick={() => onAddItem(cat.id)}>
+              <window.Icon name="plus" size={12}/> Add item
+            </button>
           )}
-          {quizItems.map(item => {
+          {sidebarItems.length === 0 && (
+            <div className="qm-unit-empty">
+              {editMode
+                ? 'No items yet. Click "+ Add item" above!'
+                : 'No quiz items yet.\nAsk your teacher to add some!'}
+            </div>
+          )}
+          {sidebarItems.map(item => {
             const progKey  = `${weekId}_${item.id}`;
             const prog     = qmProg[progKey];
             const totalQ   = getItemQuestions(item).length;
             const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
+            const hasQuiz  = totalQ > 0;
 
             return (
               <div
                 key={item.id}
-                className={`qm-unit-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}`}
-                onClick={() => selectItem(item)}
+                className={`qm-unit-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}${!hasQuiz && !editMode ? ' disabled' : ''}`}
+                onClick={() => (hasQuiz || editMode) && selectItem(item)}
               >
                 <div className="qm-unit-row-info">
                   <div className="qm-unit-row-title">{item.title}</div>
                   <div className="qm-unit-row-meta">
-                    {totalQ} questions
-                    {scorePct !== null && <span className="qm-unit-score-badge">{scorePct}%</span>}
+                    {editMode ? (
+                      <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
+                    ) : (
+                      <>
+                        {totalQ} questions
+                        {scorePct !== null && <span className="qm-unit-score-badge">{scorePct}%</span>}
+                      </>
+                    )}
                   </div>
                 </div>
-                <span className={`qm-unit-row-status${isDone ? ' done' : ''}`}>
-                  {isDone ? '✓' : '›'}
-                </span>
+                <div style={{display:'flex',gap:'4px',alignItems:'center',flexShrink:0}}>
+                  {editMode ? (
+                    <button
+                      className="qm-unit-edit-btn"
+                      onClick={(e) => { e.stopPropagation(); onEditItem(item); }}
+                      title="Edit item"
+                    ><window.Icon name="edit" size={12}/></button>
+                  ) : (
+                    <span className={`qm-unit-row-status${isDone ? ' done' : ''}`}>
+                      {isDone ? '✓' : hasQuiz ? '›' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -197,7 +264,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack }) {
 
       {/* ── Right: quiz player or placeholder ── */}
       <div className="qm-quiz-area">
-        {selectedItem ? (
+        {selectedItem && getItemQuestions(selectedItem).length > 0 ? (
           <QuizModePlayer
             key={playerKey}
             cat={cat}
@@ -206,6 +273,22 @@ function QuizModeCategoryView({ cat, items, weekId, onBack }) {
             progressKey={`${weekId}_${selectedItem.id}`}
             onBack={() => setSelectedItem(null)}
           />
+        ) : selectedItem && editMode ? (
+          <div className="qm-placeholder">
+            <div className="qm-placeholder-icon">📝</div>
+            <div className="qm-placeholder-msg">{selectedItem.title}</div>
+            <div className="qm-placeholder-sub">
+              Type: {selectedItem.type}
+              {getItemQuestions(selectedItem).length === 0 && ' · No quiz questions yet'}
+            </div>
+            <button
+              className="qm-btn secondary"
+              style={{marginTop:'16px'}}
+              onClick={() => onEditItem(selectedItem)}
+            >
+              ✎ Edit this item
+            </button>
+          </div>
         ) : (
           <div className="qm-placeholder">
             <div className="qm-placeholder-icon">👈</div>

@@ -245,4 +245,4 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen });
+Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText });

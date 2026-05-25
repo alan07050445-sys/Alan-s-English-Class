@@ -234,6 +234,59 @@
 .qm-wrong-q { color: var(--ink-2); font-family: var(--sans); }
 .qm-wrong-a { color: #15803d; font-family: var(--sans); font-weight: 700; flex-shrink: 0; }
 
+/* ── Edit mode controls ──────────────────────────────── */
+
+/* Inline editable inputs inside quiz banner */
+.qm-week-title .editable-input,
+.qm-week-sub .editable-input,
+.qm-week-eyebrow .editable-input {
+  background: none; border: none;
+  border-bottom: 1.5px dashed var(--border);
+  outline: none; width: 100%; color: inherit; font: inherit;
+  padding: 2px 0; cursor: text; display: inline-block;
+}
+.qm-week-title .editable-input:focus,
+.qm-week-sub .editable-input:focus,
+.qm-week-eyebrow .editable-input:focus { border-bottom-color: var(--ink); }
+
+/* "＋" button on each block in edit mode */
+.qm-edit-add-btn {
+  width: 32px; height: 32px; border-radius: 6px;
+  border: 1.5px dashed var(--border); background: none;
+  cursor: pointer; color: var(--ink-3); font-size: 20px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.15s;
+}
+.qm-edit-add-btn:hover { border-color: var(--ink); color: var(--ink); background: var(--bg); }
+
+/* "+ Add item" button at top of sidebar in edit mode */
+.qm-unit-add-btn {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 10px 20px;
+  background: none; border: none; border-bottom: 1px dashed var(--border);
+  cursor: pointer; font-size: 11px; font-family: var(--sans);
+  font-weight: 700; color: var(--ink-3); text-align: left;
+  transition: color 0.1s, background 0.1s;
+}
+.qm-unit-add-btn:hover { color: var(--ink); background: var(--bg); }
+
+/* "✎" edit button on each sidebar unit row */
+.qm-unit-edit-btn {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  cursor: pointer; color: var(--ink-3);
+  padding: 3px 6px; transition: all 0.1s; display: flex; align-items: center;
+}
+.qm-unit-edit-btn:hover { color: var(--ink); border-color: var(--ink); background: var(--bg); }
+
+/* Type badge in edit mode */
+.qm-type-badge {
+  font-size: 10px; color: var(--ink-3);
+  font-family: var(--mono); letter-spacing: 0.03em;
+}
+
+/* Disabled unit row (non-quiz items in student mode) */
+.qm-unit-row.disabled { opacity: 0.4; cursor: default; }
+
 /* ── Mobile ──────────────────────────────────────────── */
 @media (max-width: 768px) {
   .qm-cat-view { flex-direction: column; margin: 0 -16px; }
