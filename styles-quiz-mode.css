@@ -246,6 +246,17 @@
 }
 .qm-intro-btns { display: flex; flex-direction: column; gap: 12px; }
 
+/* ── Flashcard player wrapper (inside quiz mode) ─────── */
+.qm-fc-player-wrap { display: flex; flex-direction: column; height: 100%; }
+.qm-fc-player-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 0 16px; border-bottom: 1px solid var(--border); margin-bottom: 0;
+  flex-shrink: 0;
+}
+.qm-fc-player-title {
+  font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink-2);
+}
+
 /* ── Quick flashcard review ──────────────────────────── */
 .qm-fc-wrap { max-width: 860px; width: 100%; margin: 0 auto; }
 .qm-fc-header {

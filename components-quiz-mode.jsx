@@ -218,6 +218,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
 function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
+  const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
   const [playerKey,    setPlayerKey]    = useQM(0);
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
@@ -227,6 +228,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const selectItem = (item) => {
     setSelectedItem(item);
     setPhase('intro');
+    setFlashItem(null);
     setPlayerKey(k => k + 1);
   };
 
@@ -340,14 +342,23 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <QuizIntroScreen
             item={selectedItem}
             questions={getItemQuestions(selectedItem)}
-            onFlashcards={() => setPhase('flashcards')}
+            catItems={items || []}
+            onFlashcards={(fi) => { setFlashItem(fi); setPhase('flashcards'); }}
             onStartQuiz={() => setPhase('quiz')}
           />
-        ) : phase === 'flashcards' ? (
-          <QuickFlashcardReview
-            item={selectedItem}
-            onDone={() => setPhase('quiz')}
-          />
+        ) : phase === 'flashcards' && flashItem ? (
+          <div className="qm-fc-player-wrap">
+            <div className="qm-fc-player-bar">
+              <span className="qm-fc-player-title">{flashItem.title}</span>
+              <button className="qm-btn primary" style={{padding:'7px 18px',fontSize:13}} onClick={() => setPhase('quiz')}>
+                開始測驗 →
+              </button>
+            </div>
+            <window.FlashcardPlayer
+              item={flashItem}
+              onComplete={() => setPhase('quiz')}
+            />
+          </div>
         ) : (
           <QuizModePlayer
             key={playerKey}
@@ -366,9 +377,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 /* ══════════════════════════════════════════════════════
    PRE-QUIZ INTRO SCREEN
 ══════════════════════════════════════════════════════ */
-function QuizIntroScreen({ item, questions, onFlashcards, onStartQuiz }) {
-  const flashcards = getFlashcardData(item);
-  const hasFlashcards = flashcards.length > 0;
+function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz }) {
+  // Find flashcard items in the same category (prefer same title match)
+  const fcItems = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
+  const matchedFc = fcItems.find(fc => fc.title === item.title) || fcItems[0] || null;
 
   return (
     <div className="qm-intro">
@@ -378,8 +390,8 @@ function QuizIntroScreen({ item, questions, onFlashcards, onStartQuiz }) {
       <div className="qm-intro-title">{item.title}</div>
       <div className="qm-intro-meta">{questions.length} questions</div>
       <div className="qm-intro-btns">
-        {hasFlashcards && (
-          <button className="qm-btn secondary" onClick={onFlashcards}>
+        {matchedFc && (
+          <button className="qm-btn secondary" onClick={() => onFlashcards(matchedFc)}>
             📖 先複習單字卡 · Review Flashcards
           </button>
         )}
