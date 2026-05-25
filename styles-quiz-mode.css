@@ -269,12 +269,13 @@
 .qm-unit-add-btn:hover { color: var(--ink); background: var(--bg); }
 
 /* "✎" edit button on each sidebar unit row */
-.qm-unit-edit-btn {
+.qm-unit-edit-btn, .qm-unit-del-btn {
   background: none; border: 1px solid var(--border); border-radius: 4px;
   cursor: pointer; color: var(--ink-3);
   padding: 3px 6px; transition: all 0.1s; display: flex; align-items: center;
 }
 .qm-unit-edit-btn:hover { color: var(--ink); border-color: var(--ink); background: var(--bg); }
+.qm-unit-del-btn:hover { color: #dc2626; border-color: #dc2626; background: #fef2f2; }
 
 /* Type badge in edit mode */
 .qm-type-badge {

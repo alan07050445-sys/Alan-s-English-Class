@@ -44,7 +44,9 @@ function getItemQuestions(item) {
         const correctText = q.options[savedCorrect];          // remember the right answer text
         const shuffled = shuffleArr([...q.options]);           // shuffle options
         const newCorrect = shuffled.indexOf(correctText);      // find new index
-        return { q: q.q, hint: '', options: shuffled, correct: newCorrect, explain: q.explain || '' };
+        // Strip leading question numbers like "1. " / "1) " / "（1）"
+        const qText = (q.q || '').replace(/^[\(（]?\d+[\)）\.\s、：:]+\s*/, '');
+        return { q: qText, hint: '', options: shuffled, correct: newCorrect, explain: q.explain || '' };
       });
     return shuffleArr(mapped); // also shuffle question order
   }
@@ -176,7 +178,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [playerKey,    setPlayerKey]    = useQM(0);
 
@@ -254,11 +256,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 </div>
                 <div style={{display:'flex',gap:'4px',alignItems:'center',flexShrink:0}}>
                   {editMode ? (
-                    <button
-                      className="qm-unit-edit-btn"
-                      onClick={(e) => { e.stopPropagation(); onEditItem(item); }}
-                      title="Edit item"
-                    ><window.Icon name="edit" size={12}/></button>
+                    <>
+                      <button
+                        className="qm-unit-edit-btn"
+                        onClick={(e) => { e.stopPropagation(); onEditItem(item); }}
+                        title="Edit item"
+                      ><window.Icon name="edit" size={12}/></button>
+                      <button
+                        className="qm-unit-del-btn"
+                        onClick={(e) => { e.stopPropagation(); if(confirm(`Delete "${item.title}"?`)) onDeleteItem(item.id); }}
+                        title="Delete item"
+                      ><window.Icon name="trash" size={12}/></button>
+                    </>
                   ) : (
                     <span className={`qm-unit-row-status${isDone ? ' done' : ''}`}>
                       {isDone ? '✓' : hasQuiz ? '›' : ''}

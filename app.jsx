@@ -408,6 +408,7 @@ function App() {
           editMode={editMode}
           onAddItem={handleAddItem}
           onEditItem={handleEditItem}
+          onDeleteItem={handleDeleteItem}
         />
       ) : (
         <div className="shell">
