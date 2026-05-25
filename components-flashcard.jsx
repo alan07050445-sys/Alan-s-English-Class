@@ -327,6 +327,7 @@ function FlashcardPlayer({ item, onComplete }) {
     if (!matchSelected) { setMatchSelected(tile.id); return; }
     const selTile = matchTiles.find(t => t.id === matchSelected);
     if (selTile && selTile.pairId === tile.pairId) {
+      if (window.playSound) window.playSound('match');
       const newMatched = new Set([...matchMatched, tile.pairId]);
       setMatchMatched(newMatched);
       setMatchSelected(null);
@@ -341,8 +342,15 @@ function FlashcardPlayer({ item, onComplete }) {
         setMatchBest(nb ? elapsed : prevBest);
         setIsNewBest(nb);
         setMatchDone(true);
+        if (window.playSound) window.playSound('complete');
+        // Speed match badge: finish under 20 seconds
+        if (elapsed < 20) {
+          const u = window._currentUser;
+          if (u?.uid) window.unlockBadge && window.unlockBadge(u.uid, 'speed_match');
+        }
       }
     } else {
+      if (window.playSound) window.playSound('wrong');
       setMatchWrong([matchSelected, tile.id]);
       setTimeout(() => { setMatchWrong([]); setMatchSelected(null); }, 800);
     }
@@ -474,6 +482,7 @@ function FlashcardPlayer({ item, onComplete }) {
       if (learnChoice) return;
       setLearnChoice(chosen.id);
       const correct = chosen.id === card.id;
+      if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
 
       setTimeout(() => {
         const rest = learnQueue.slice(1);
