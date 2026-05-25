@@ -14,7 +14,7 @@ const TYPE_OPTIONS = [
   { id: "fillblank", label: "Fill Blank", hint: "填空題 — 自訂句子填空，支援主題換色" },
 ];
 
-function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
+function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
 
   useE(() => { setForm(draft); }, [draft]);
@@ -96,10 +96,28 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
               onChange={cards => update("cards", cards)}
             />
           ) : form.type === "fillblank" ? (
-            <window.FillBlankEditor
-              questions={form.questions || []}
-              onChange={questions => update("questions", questions)}
-            />
+            <>
+              {((catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0)).length > 0 && (
+                <div className="field">
+                  <label className="field-label">Linked Flashcard · 綁定單字卡</label>
+                  <select
+                    value={form.linkedFlashcardId || ""}
+                    onChange={e => update("linkedFlashcardId", e.target.value || undefined)}
+                    style={{width:"100%",padding:"9px 12px",border:"1px solid var(--border)",background:"var(--bg)",color:"var(--ink)",borderRadius:2,fontSize:14}}
+                  >
+                    <option value="">— 不綁定 (None) —</option>
+                    {(catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0).map(fc => (
+                      <option key={fc.id} value={fc.id}>{fc.title} ({(fc.cards||[]).length} 張)</option>
+                    ))}
+                  </select>
+                  <div className="field-help">學生進入測驗前會直接看到這組單字卡，不用自己選。</div>
+                </div>
+              )}
+              <window.FillBlankEditor
+                questions={form.questions || []}
+                onChange={questions => update("questions", questions)}
+              />
+            </>
           ) : form.type === "note" ? (
             <div className="field">
               <label className="field-label">Notes Body · 筆記內容</label>
@@ -128,6 +146,22 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
                   </span>
                 </label>
               </div>
+              {((catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0)).length > 0 && (
+                <div className="field">
+                  <label className="field-label">Linked Flashcard · 綁定單字卡</label>
+                  <select
+                    value={form.linkedFlashcardId || ""}
+                    onChange={e => update("linkedFlashcardId", e.target.value || undefined)}
+                    style={{width:"100%",padding:"9px 12px",border:"1px solid var(--border)",background:"var(--bg)",color:"var(--ink)",borderRadius:2,fontSize:14}}
+                  >
+                    <option value="">— 不綁定 (None) —</option>
+                    {(catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0).map(fc => (
+                      <option key={fc.id} value={fc.id}>{fc.title} ({(fc.cards||[]).length} 張)</option>
+                    ))}
+                  </select>
+                  <div className="field-help">學生進入測驗前會直接看到這組單字卡，不用自己選。</div>
+                </div>
+              )}
               <div className="field">
                 <label className="field-label">Questions · 題目</label>
                 <window.QuizEditor
@@ -188,7 +222,7 @@ function EditorModal({ open, draft, weekId, onClose, onSave, onDelete }) {
 
         <div className="modal-foot">
           {!isNew ? (
-            <button className="btn danger" onClick={() => { if (confirm("Delete this item?")) onDelete(form.id); }}>
+            <button className="btn danger" onClick={() => onDelete(form.id)}>
               Delete
             </button>
           ) : <span/>}

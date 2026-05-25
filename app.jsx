@@ -193,7 +193,6 @@ function App() {
 
   const handleDeleteWeek = () => {
     if (weekOrder.length <= 1) { showToast("Can't delete the last week"); return; }
-    if (!confirm(`Delete ${week.label} (${week.theme})? This can't be undone.`)) return;
     const nextWeeks = { ...weeksRef.current };
     delete nextWeeks[weekId];
     const nextOrder = weekOrder.filter(id => id !== weekId);
@@ -435,6 +434,7 @@ function App() {
         open={editorOpen}
         draft={editorDraft}
         weekId={weekId}
+        catItems={editorCat ? (week.items[editorCat] || []) : []}
         onClose={() => setEditorOpen(false)}
         onSave={handleSaveItem}
         onDelete={handleDeleteItem}

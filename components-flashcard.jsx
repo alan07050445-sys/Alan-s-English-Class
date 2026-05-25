@@ -298,8 +298,8 @@ function FlashcardPlayer({ item, onComplete }) {
     const picked = shuffle([...cards]).slice(0, Math.min(6, cards.length));
     const tiles = [];
     picked.forEach(card => {
-      tiles.push({ id: 'en-' + card.id, text: card.term, pairId: card.id });
-      tiles.push({ id: 'zh-' + card.id, text: card.zh,  pairId: card.id });
+      tiles.push({ id: 'en-' + card.id, text: card.term, pairId: card.id, isZh: false, imageUrl: '' });
+      tiles.push({ id: 'zh-' + card.id, text: card.zh,  pairId: card.id, isZh: true,  imageUrl: card.imageUrl || '' });
     });
     setMatchTiles(shuffle(tiles));
     setMatchSelected(null);
@@ -792,13 +792,21 @@ function FlashcardPlayer({ item, onComplete }) {
               const isSelected = matchSelected === tile.id;
               const isWrong    = matchWrong.includes(tile.id);
               let cls = "fc-match-tile";
-              if (isMatched)   cls += " matched";
+              if (isMatched)       cls += " matched";
               else if (isSelected) cls += " selected";
               else if (isWrong)    cls += " wrong";
+              else if (tile.isZh)  cls += " zh-tile";
               return (
                 <button key={tile.id} className={cls}
                   onClick={() => !isMatched && handleMatchClick(tile)}>
-                  {tile.text}
+                  {tile.imageUrl && (
+                    <img
+                      src={tile.imageUrl}
+                      alt=""
+                      className="fc-match-tile-bg"
+                    />
+                  )}
+                  <span className="fc-match-tile-text">{tile.text}</span>
                 </button>
               );
             })}

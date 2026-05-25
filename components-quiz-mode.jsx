@@ -378,8 +378,14 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
    PRE-QUIZ INTRO SCREEN
 ══════════════════════════════════════════════════════ */
 function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz }) {
-  // All flashcard items in this category
-  const fcItems = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
+  // If this quiz/fillblank has a linked flashcard, show only that one.
+  // Otherwise show all available flashcard items.
+  const linkedFcItem = item.linkedFlashcardId
+    ? (catItems || []).find(it => it.id === item.linkedFlashcardId && it.type === 'flashcard')
+    : null;
+  const fcItems = linkedFcItem
+    ? [linkedFcItem]
+    : (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
 
   return (
     <div className="qm-intro">
