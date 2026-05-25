@@ -77,9 +77,8 @@ function App() {
 
   const isTeacher = window.isAdminUser(user);
 
-  // ── Quiz mode state ─────────────────────────────────
-  const [quizMode, setQuizMode]   = useAppState(true); // default: new quiz mode
-  const [quizSession, setQuizSession] = useAppState(null); // { cat, questions, progressKey }
+  // ── Category view state (quiz mode navigation) ──────
+  const [catView, setCatView] = useAppState(null); // null = main blocks, { cat } = inside a category
 
   useAppEffect(() => {
     const handler = () => setGridCols(getGridCols());
@@ -161,8 +160,8 @@ function App() {
     setTimeout(() => setToast(null), 1800);
   };
 
-  const goPrevWeek = () => { setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setQuizSession(null); };
-  const goNextWeek = () => { setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setQuizSession(null); };
+  const goPrevWeek = () => { setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); };
+  const goNextWeek = () => { setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -397,32 +396,30 @@ function App() {
           }
         }}
         onShowDashboard={() => setDashOpen(true)}
-        onQuizMode={quizMode}
-        onSwitchMode={() => { setQuizMode(m => !m); setQuizSession(null); }}
       />
 
-      {/* ── QUIZ MODE ── */}
-      {quizMode && !editMode ? (
-        <div className="shell">
-          {quizSession ? (
-            <window.QuizModePlayer
-              cat={quizSession.cat}
-              questions={quizSession.questions}
-              progressKey={quizSession.progressKey}
-              onBack={() => setQuizSession(null)}
-            />
-          ) : (
+      {/* ── QUIZ MODE (always shown to students) ── */}
+      {!editMode ? (
+        catView ? (
+          /* Inside a category: sidebar + quiz */
+          <window.QuizModeCategoryView
+            cat={catView}
+            items={(week.items || {})[catView.id] || []}
+            weekId={weekId}
+            onBack={() => setCatView(null)}
+          />
+        ) : (
+          /* Main 4-block screen */
+          <div className="shell">
             <window.QuizModeBlocks
               week={week}
               weekId={weekId}
-              onStartQuiz={(cat, questions, progressKey) =>
-                setQuizSession({ cat, questions, progressKey })
-              }
+              onEnterCat={(cat) => setCatView(cat)}
             />
-          )}
-        </div>
+          </div>
+        )
       ) : (
-        /* ── RESOURCE MODE (original) ── */
+        /* ── RESOURCE MODE: teacher edit only ── */
         <>
           <window.Hero
             week={week}

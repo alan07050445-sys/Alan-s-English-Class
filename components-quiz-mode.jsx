@@ -1,6 +1,6 @@
-// components-quiz-mode.jsx — Duolingo-style quiz mode
+// components-quiz-mode.jsx — Quiz mode (main UI for students)
 
-const { useState: useQM, useEffect: useQME, useMemo: useQMM } = React;
+const { useState: useQM, useMemo: useQMM } = React;
 
 /* ── Helpers ─────────────────────────────────────────── */
 function shuffleArr(arr) {
@@ -12,17 +12,15 @@ function shuffleArr(arr) {
   return a;
 }
 
-// Auto-generate MC questions from a word list (both directions)
+// Auto-generate MC questions from word pairs (both directions, mixed)
 function generateVocabQuestions(words) {
   if (!words || words.length < 2) return [];
   const qs = [];
   words.forEach(word => {
-    // English → Chinese
     const wrongZh = shuffleArr(words.filter(w => w.en !== word.en).map(w => w.zh)).slice(0, 3);
     const zhOpts  = shuffleArr([word.zh, ...wrongZh]);
     qs.push({ q: word.en, hint: 'Choose the correct meaning · 選出正確意思', options: zhOpts, correct: zhOpts.indexOf(word.zh) });
 
-    // Chinese → English
     const wrongEn = shuffleArr(words.filter(w => w.en !== word.en).map(w => w.en)).slice(0, 3);
     const enOpts  = shuffleArr([word.en, ...wrongEn]);
     qs.push({ q: word.zh, hint: 'Choose the English word · 選出英文單字', options: enOpts, correct: enOpts.indexOf(word.en) });
@@ -30,31 +28,36 @@ function generateVocabQuestions(words) {
   return shuffleArr(qs);
 }
 
-// Aggregate all MC questions from items in a category
-function getCategoryQuestions(items) {
-  const qs = [];
-  (items || []).forEach(item => {
-    if (item.type === 'vocab-quiz' && (item.words || []).length >= 2) {
-      qs.push(...generateVocabQuestions(item.words));
-    } else if (item.type === 'quiz' && (item.questions || []).length > 0) {
-      item.questions.forEach(q => {
-        if ((q.options || []).length >= 2) {
-          qs.push({ q: q.q, hint: '', options: q.options, correct: q.answer || 0, explain: q.explain || '' });
-        }
-      });
-    }
-  });
-  return qs;
+// Get MC questions for a single item
+function getItemQuestions(item) {
+  if (!item) return [];
+  if (item.type === 'vocab-quiz' && (item.words || []).length >= 2) {
+    return generateVocabQuestions(item.words);
+  }
+  if (item.type === 'quiz' && (item.questions || []).length > 0) {
+    return item.questions
+      .filter(q => (q.options || []).length >= 2)
+      .map(q => ({ q: q.q, hint: '', options: q.options, correct: q.answer || 0, explain: q.explain || '' }));
+  }
+  return [];
 }
 
-// Local progress for quiz mode (separate from main progress)
+// All quiz-able items in a category
+function getQuizItems(items) {
+  return (items || []).filter(item =>
+    (item.type === 'vocab-quiz' && (item.words || []).length >= 2) ||
+    (item.type === 'quiz'       && (item.questions || []).length > 0)
+  );
+}
+
+// Progress persistence (localStorage)
 const QM_KEY = 'alans-qm-v1';
 function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY) || '{}'); } catch(e) { return {}; } }
 function saveQMProg(p) { try { localStorage.setItem(QM_KEY, JSON.stringify(p)); } catch(e) {} }
 
-/* ── Category icons & colours ────────────────────────── */
+/* ── Visual config ───────────────────────────────────── */
 const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
-const CAT_BG = {
+const CAT_BG    = {
   vocab:   'linear-gradient(135deg,#667eea,#764ba2)',
   grammar: 'linear-gradient(135deg,#f093fb,#f5576c)',
   word:    'linear-gradient(135deg,#4facfe,#00f2fe)',
@@ -62,38 +65,36 @@ const CAT_BG = {
 };
 
 /* ══════════════════════════════════════════════════════
-   4-BLOCK MAIN SCREEN
+   MAIN SCREEN — 4 blocks
 ══════════════════════════════════════════════════════ */
-function QuizModeBlocks({ week, weekId, onStartQuiz }) {
+function QuizModeBlocks({ week, weekId, onEnterCat }) {
   const qmProg = loadQMProg();
 
   return (
     <>
-      {/* Week banner */}
       <div className="qm-week-banner">
         <div className="qm-week-eyebrow">
-          <span className="dot"/>
-          <span>{weekId} · {week.dateRange || ''}</span>
+          <span className="dot"/><span>{weekId} · {week.dateRange || ''}</span>
         </div>
         <h1 className="qm-week-title">{week.theme || week.label}</h1>
         {week.subtitle && <p className="qm-week-sub">{week.subtitle}</p>}
       </div>
 
-      {/* 4 blocks */}
       <div className="qm-blocks">
         {window.CATEGORIES.map(cat => {
-          const items = (week.items || {})[cat.id] || [];
-          const questions = getCategoryQuestions(items);
-          const total = questions.length;
-          const key   = `${weekId}_${cat.id}`;
-          const prog  = qmProg[key] || { done: 0 };
-          const pct   = total > 0 ? Math.min(100, Math.round(prog.done / total * 100)) : 0;
+          const quizItems = getQuizItems((week.items || {})[cat.id]);
+          const total  = quizItems.reduce((s, it) => s + getItemQuestions(it).length, 0);
+          const done   = quizItems.reduce((s, it) => {
+            const p = qmProg[`${weekId}_${it.id}`];
+            return s + (p ? Math.min(p.done, getItemQuestions(it).length) : 0);
+          }, 0);
+          const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
 
           return (
             <div
               key={cat.id}
               className={`qm-block${total === 0 ? ' empty' : ''}`}
-              onClick={() => total > 0 && onStartQuiz(cat, questions, key)}
+              onClick={() => total > 0 && onEnterCat(cat)}
             >
               <div className="qm-block-icon" style={{ background: CAT_BG[cat.id] }}>
                 {CAT_ICONS[cat.id]}
@@ -103,7 +104,7 @@ function QuizModeBlocks({ week, weekId, onStartQuiz }) {
                 <div className="qm-block-title-zh">{cat.titleZh}</div>
                 {total > 0 ? (
                   <>
-                    <div className="qm-block-count">{total} questions</div>
+                    <div className="qm-block-count">{quizItems.length} units · {total} questions</div>
                     <div className="qm-block-progress">
                       <div className="qm-progress-bar">
                         <div className="qm-progress-fill" style={{ width: pct + '%' }}/>
@@ -125,41 +126,134 @@ function QuizModeBlocks({ week, weekId, onStartQuiz }) {
 }
 
 /* ══════════════════════════════════════════════════════
+   CATEGORY VIEW — left sidebar + right quiz
+══════════════════════════════════════════════════════ */
+function QuizModeCategoryView({ cat, items, weekId, onBack }) {
+  const [selectedItem, setSelectedItem] = useQM(null);
+  const [playerKey,    setPlayerKey]    = useQM(0);  // remount player on new selection
+
+  const quizItems = useQMM(() => getQuizItems(items), [items]);
+
+  const selectItem = (item) => {
+    setSelectedItem(item);
+    setPlayerKey(k => k + 1);
+  };
+
+  const qmProg = loadQMProg();
+  const hasSelection = !!selectedItem;
+
+  return (
+    <div className={`qm-cat-view${hasSelection ? ' has-selection' : ''}`}>
+
+      {/* ── Left sidebar ── */}
+      <div className="qm-sidebar">
+        <button className="qm-sidebar-back" onClick={onBack}>
+          <window.Icon name="arrow-left" size={14}/> All categories
+        </button>
+
+        <div className="qm-sidebar-cat">
+          <span className="qm-sidebar-cat-icon" style={{ background: CAT_BG[cat.id] }}>
+            {CAT_ICONS[cat.id]}
+          </span>
+          <div>
+            <div className="qm-sidebar-cat-name">{cat.title}</div>
+            <div className="qm-sidebar-cat-zh">{cat.titleZh}</div>
+          </div>
+        </div>
+
+        <div className="qm-unit-list">
+          {quizItems.length === 0 && (
+            <div className="qm-unit-empty">No quiz items yet.<br/>Ask your teacher to add some!</div>
+          )}
+          {quizItems.map(item => {
+            const progKey  = `${weekId}_${item.id}`;
+            const prog     = qmProg[progKey];
+            const totalQ   = getItemQuestions(item).length;
+            const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
+            const isDone   = !!prog;
+            const isActive = selectedItem?.id === item.id;
+
+            return (
+              <div
+                key={item.id}
+                className={`qm-unit-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}`}
+                onClick={() => selectItem(item)}
+              >
+                <div className="qm-unit-row-info">
+                  <div className="qm-unit-row-title">{item.title}</div>
+                  <div className="qm-unit-row-meta">
+                    {totalQ} questions
+                    {scorePct !== null && <span className="qm-unit-score-badge">{scorePct}%</span>}
+                  </div>
+                </div>
+                <span className={`qm-unit-row-status${isDone ? ' done' : ''}`}>
+                  {isDone ? '✓' : '›'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Right: quiz player or placeholder ── */}
+      <div className="qm-quiz-area">
+        {selectedItem ? (
+          <QuizModePlayer
+            key={playerKey}
+            cat={cat}
+            item={selectedItem}
+            questions={getItemQuestions(selectedItem)}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setSelectedItem(null)}
+          />
+        ) : (
+          <div className="qm-placeholder">
+            <div className="qm-placeholder-icon">👈</div>
+            <div className="qm-placeholder-msg">Select a unit to start</div>
+            <div className="qm-placeholder-sub">選擇一個單元開始練習</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
    QUIZ PLAYER
 ══════════════════════════════════════════════════════ */
-function QuizModePlayer({ cat, questions, progressKey, onBack }) {
+function QuizModePlayer({ cat, item, questions, progressKey, onBack }) {
   const [idx,       setIdx]      = useQM(0);
-  const [selected,  setSelected] = useQM(null); // index of chosen option or null
+  const [selected,  setSelected] = useQM(null);
   const [score,     setScore]    = useQM(0);
-  const [screen,    setScreen]   = useQM('quiz'); // 'quiz' | 'result'
+  const [screen,    setScreen]   = useQM('quiz');
   const [wrongList, setWrongList]= useQM([]);
 
   const q     = questions[idx];
   const total = questions.length;
-  const isLast= idx === total - 1;
   const pct   = Math.round(idx / total * 100);
+  const isLast= idx === total - 1;
+
+  if (!q) return null;
 
   const handleSelect = (optIdx) => {
     if (selected !== null) return;
     setSelected(optIdx);
-    const correct = optIdx === q.correct;
-    if (correct) setScore(s => s + 1);
-    else         setWrongList(prev => [...prev, q]);
+    if (optIdx === q.correct) setScore(s => s + 1);
+    else setWrongList(prev => [...prev, q]);
   };
 
   const handleNext = () => {
     if (isLast) {
       const finalScore = score + (selected === q.correct ? 1 : 0);
-      // Save to localStorage
+      // Save progress
       const prev = loadQMProg();
       prev[progressKey] = { done: total, score: finalScore, total, ts: Date.now() };
       saveQMProg(prev);
-      // Save to Firestore if logged in
+      // Firestore sync
       const u = window._currentUser;
       if (u && window.saveProgressItem) {
-        const scorePct = Math.round(finalScore / total * 100);
         window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
-          done: Date.now(), score: scorePct,
+          done: Date.now(), score: Math.round(finalScore / total * 100),
         });
       }
       setScreen('result');
@@ -170,11 +264,10 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
   };
 
   const restart = () => {
-    setIdx(0); setSelected(null); setScore(0);
-    setScreen('quiz'); setWrongList([]);
+    setIdx(0); setSelected(null); setScore(0); setScreen('quiz'); setWrongList([]);
   };
 
-  /* ── Result screen ── */
+  /* ── Result ── */
   if (screen === 'result') {
     const finalScore = score;
     const finalPct   = Math.round(finalScore / total * 100);
@@ -186,7 +279,7 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
     return (
       <div className="qm-result">
         <div className="qm-result-emoji">{emoji}</div>
-        <div className="qm-result-cat-title">{cat.title} · {cat.titleZh}</div>
+        <div className="qm-result-cat-title">{item?.title || cat.title}</div>
         <div className="qm-result-score">
           <span className="qm-result-num">{finalScore}</span>
           <span className="qm-result-denom"> / {total}</span>
@@ -195,11 +288,11 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
         <div className="qm-result-msg">{msg}</div>
         <div className="qm-result-btns">
           <button className="qm-btn secondary" onClick={restart}>再試一次</button>
-          <button className="qm-btn primary"   onClick={onBack}>回主畫面</button>
+          <button className="qm-btn primary"   onClick={onBack}>← Back</button>
         </div>
         {wrongList.length > 0 && (
           <div className="qm-wrong-list">
-            <div className="qm-wrong-title">需要複習 · Review these ({wrongList.length})</div>
+            <div className="qm-wrong-title">需要複習 · Review ({wrongList.length})</div>
             {wrongList.map((wq, i) => (
               <div key={i} className="qm-wrong-item">
                 <span className="qm-wrong-q">{wq.q}</span>
@@ -212,13 +305,12 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
     );
   }
 
-  /* ── Quiz screen ── */
+  /* ── Quiz ── */
   return (
     <div className="qm-player-shell">
-      {/* Header: back + progress */}
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack} title="Back">
-          <window.Icon name="close" size={18}/>
+        <button className="qm-back-btn" onClick={onBack} title="Back to units">
+          <window.Icon name="close" size={16}/>
         </button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
@@ -228,13 +320,11 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
         <span className="qm-player-counter">{idx + 1} / {total}</span>
       </div>
 
-      {/* Question */}
       <div className="qm-question-area">
         {q.hint && <div className="qm-question-hint">{q.hint}</div>}
         <div className="qm-question-text">{q.q}</div>
       </div>
 
-      {/* Options */}
       <div className="qm-options">
         {q.options.map((opt, i) => {
           let cls = 'qm-option';
@@ -244,7 +334,7 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
             else cls += ' dim';
           }
           return (
-            <button key={i} className={cls} onClick={() => handleSelect(i)} disabled={selected !== null && i !== q.correct && i !== selected}>
+            <button key={i} className={cls} onClick={() => handleSelect(i)}>
               <span className="qm-opt-letter">{['A','B','C','D'][i]}</span>
               <span className="qm-opt-text">{opt}</span>
             </button>
@@ -252,13 +342,10 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
         })}
       </div>
 
-      {/* Feedback + next */}
       {selected !== null && (
         <div className="qm-feedback">
           <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
-            {selected === q.correct
-              ? '✓ Correct! 答對了！'
-              : `✗ The answer is: ${q.options[q.correct]}`}
+            {selected === q.correct ? '✓ Correct! 答對了！' : `✗ The answer is: ${q.options[q.correct]}`}
           </div>
           {q.explain && <div className="qm-explain">{q.explain}</div>}
           <button className="qm-btn primary" onClick={handleNext}>
@@ -270,4 +357,4 @@ function QuizModePlayer({ cat, questions, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModePlayer, getCategoryQuestions });
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems });
