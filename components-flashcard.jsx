@@ -800,13 +800,11 @@ function FlashcardPlayer({ item, onComplete }) {
                 <button key={tile.id} className={cls}
                   onClick={() => !isMatched && handleMatchClick(tile)}>
                   {tile.imageUrl && (
-                    <img
-                      src={tile.imageUrl}
-                      alt=""
-                      className="fc-match-tile-bg"
-                    />
+                    <img src={tile.imageUrl} alt="" className="fc-match-tile-bg"/>
                   )}
-                  <span className="fc-match-tile-text">{tile.text}</span>
+                  <span className={`fc-match-tile-text${tile.imageUrl ? ' has-img' : ''}`}>
+                    {tile.text}
+                  </span>
                 </button>
               );
             })}
