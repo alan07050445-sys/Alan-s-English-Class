@@ -520,7 +520,7 @@ function subscribeUserProfile(uid, callback) {
 // the AI API key private. It should accept { word, sentence } and return
 // { feedback: "..." } or plain text.
 const AI_WRITING_ENDPOINT = 'https://alan-ai-proxy.alan07050445.workers.dev';
-const ANTHROPIC_API_KEY = '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';  // browser-only fallback; safer to use the endpoint above.
+const ANTHROPIC_API_KEY = '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';  // browser-only fallback; safer to use the endpoint above.
 
 async function checkWriting(word, sentence) {
   if (!sentence || !sentence.trim()) return '請先寫一個英文句子。';
