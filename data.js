@@ -530,10 +530,23 @@ async function checkWriting(word, sentence) {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ word, sentence }),
+        body: JSON.stringify({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 400,
+          messages: [{ role: 'user', content:
+            `You are a friendly English teacher for young learners (ages 8-14). ` +
+            `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
+            `Reply in Traditional Chinese (繁體中文). Include:\n` +
+            `1. ✅ or ❌ — is it grammatically correct?\n` +
+            `2. One brief encouraging sentence\n` +
+            `3. If wrong, show the corrected version\n` +
+            `4. Score: ⭐⭐⭐⭐⭐ (out of 5)\n` +
+            `Keep it short, warm and child-friendly.`
+          }],
+        }),
       });
       const data = await res.json().catch(() => null);
-      return data?.feedback || data?.text || data?.content?.[0]?.text || '批改完成，但回傳格式沒有 feedback。';
+      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式沒有 feedback。';
     } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
   }
   if (!ANTHROPIC_API_KEY) return localWritingFeedback(word, sentence);
