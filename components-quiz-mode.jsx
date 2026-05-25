@@ -378,9 +378,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
    PRE-QUIZ INTRO SCREEN
 ══════════════════════════════════════════════════════ */
 function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz }) {
-  // Find flashcard items in the same category (prefer same title match)
+  // All flashcard items in this category
   const fcItems = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
-  const matchedFc = fcItems.find(fc => fc.title === item.title) || fcItems[0] || null;
 
   return (
     <div className="qm-intro">
@@ -390,10 +389,15 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
       <div className="qm-intro-title">{item.title}</div>
       <div className="qm-intro-meta">{questions.length} questions</div>
       <div className="qm-intro-btns">
-        {matchedFc && (
-          <button className="qm-btn secondary" onClick={() => onFlashcards(matchedFc)}>
-            📖 先複習單字卡 · Review Flashcards
-          </button>
+        {fcItems.length > 0 && (
+          <div className="qm-intro-fc-group">
+            <div className="qm-intro-fc-label">📖 先複習單字卡 · Review first</div>
+            {fcItems.map(fc => (
+              <button key={fc.id} className="qm-btn secondary qm-intro-fc-btn" onClick={() => onFlashcards(fc)}>
+                {fc.title} <span className="qm-intro-fc-count">({(fc.cards||[]).length} 張)</span>
+              </button>
+            ))}
+          </div>
         )}
         <button className="qm-btn primary" onClick={onStartQuiz}>
           開始測驗 · Start Quiz →
