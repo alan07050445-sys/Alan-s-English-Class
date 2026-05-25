@@ -29,15 +29,24 @@ function generateVocabQuestions(words) {
 }
 
 // Get MC questions for a single item
+// For 'quiz' type: correct answer is always stored at index 0 (teacher default),
+// so we shuffle options + question order when the quiz starts.
 function getItemQuestions(item) {
   if (!item) return [];
   if (item.type === 'vocab-quiz' && (item.words || []).length >= 2) {
     return generateVocabQuestions(item.words);
   }
   if (item.type === 'quiz' && (item.questions || []).length > 0) {
-    return item.questions
+    const mapped = item.questions
       .filter(q => (q.options || []).length >= 2)
-      .map(q => ({ q: q.q, hint: '', options: q.options, correct: q.answer || 0, explain: q.explain || '' }));
+      .map(q => {
+        const savedCorrect = q.answer !== undefined ? q.answer : 0;
+        const correctText = q.options[savedCorrect];          // remember the right answer text
+        const shuffled = shuffleArr([...q.options]);           // shuffle options
+        const newCorrect = shuffled.indexOf(correctText);      // find new index
+        return { q: q.q, hint: '', options: shuffled, correct: newCorrect, explain: q.explain || '' };
+      });
+    return shuffleArr(mapped); // also shuffle question order
   }
   return [];
 }
