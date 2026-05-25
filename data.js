@@ -533,7 +533,7 @@ async function checkWriting(word, sentence) {
         body: JSON.stringify({ word, sentence }),
       });
       const data = await res.json().catch(() => null);
-      return data?.feedback || data?.text || '批改完成，但回傳格式沒有 feedback。';
+      return data?.feedback || data?.text || data?.content?.[0]?.text || '批改完成，但回傳格式沒有 feedback。';
     } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
   }
   if (!ANTHROPIC_API_KEY) return localWritingFeedback(word, sentence);
