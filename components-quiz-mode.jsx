@@ -36,6 +36,23 @@ function getItemQuestions(item) {
   if (item.type === 'vocab-quiz' && (item.words || []).length >= 2) {
     return generateVocabQuestions(item.words);
   }
+  if (item.type === 'fillblank' && (item.questions || []).length >= 2) {
+    const qs = (item.questions || []).filter(q => q.sentence && q.answer);
+    if (qs.length < 2) return [];
+    const allAnswers = qs.map(q => q.answer);
+    const mapped = qs.map(q => {
+      // Pick up to 3 wrong answers from sibling items
+      const wrongPool = shuffleArr(allAnswers.filter(a => a !== q.answer));
+      const wrongAnswers = wrongPool.slice(0, 3);
+      if (wrongAnswers.length < 1) return null;
+      const options = shuffleArr([q.answer, ...wrongAnswers]);
+      const correct = options.indexOf(q.answer);
+      // Strip leading number prefix; keep ___ visible as the blank
+      const qText = (q.sentence || '').replace(/^[\(（]?\d+[\)）\.\s、：:]+\s*/, '');
+      return { q: qText, hint: 'Fill in the blank · 選出正確答案', options, correct, explain: '' };
+    }).filter(Boolean);
+    return shuffleArr(mapped);
+  }
   if (item.type === 'quiz' && (item.questions || []).length > 0) {
     const mapped = item.questions
       .filter(q => (q.options || []).length >= 2)
@@ -57,6 +74,7 @@ function getItemQuestions(item) {
 function getQuizItems(items) {
   return (items || []).filter(item =>
     (item.type === 'vocab-quiz' && (item.words || []).length >= 2) ||
+    (item.type === 'fillblank'  && (item.questions || []).length >= 2) ||
     (item.type === 'quiz'       && (item.questions || []).length > 0)
   );
 }
