@@ -546,7 +546,8 @@ async function checkWriting(word, sentence) {
         }),
       });
       const data = await res.json().catch(() => null);
-      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式沒有 feedback。';
+      console.log('[AI] Worker response:', JSON.stringify(data));
+      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式沒有 feedback。\n\nDebug: ' + JSON.stringify(data);
     } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
   }
   if (!ANTHROPIC_API_KEY) return localWritingFeedback(word, sentence);
