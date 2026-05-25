@@ -59,6 +59,9 @@
 .qm-cat-view {
   display: flex;
   min-height: calc(100vh - 110px);
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .qm-sidebar {
@@ -137,12 +140,10 @@
   flex: 1;
   overflow-y: auto;
   padding: 32px 48px;
-  display: flex;
-  flex-direction: column;
 }
 
 .qm-placeholder {
-  flex: 1;
+  min-height: 400px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   color: var(--ink-3); text-align: center; gap: 10px;
