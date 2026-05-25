@@ -137,7 +137,7 @@
 .qm-quiz-area {
   flex: 1;
   overflow-y: auto;
-  padding: 32px 48px;
+  padding: 32px 32px;
 }
 
 .qm-placeholder {
@@ -151,7 +151,7 @@
 .qm-placeholder-sub { font-size: 12px; font-family: var(--mono); }
 
 /* ── Player shell ────────────────────────────────────── */
-.qm-player-shell { max-width: 760px; width: 100%; margin: 0 auto; }
+.qm-player-shell { max-width: 860px; width: 100%; margin: 0 auto; }
 
 .qm-player-head {
   display: flex; align-items: center; gap: 14px; margin-bottom: 40px;
@@ -231,6 +231,44 @@
 .qm-wrong-item:last-child { border-bottom: none; }
 .qm-wrong-q { color: var(--ink-2); font-family: var(--sans); }
 .qm-wrong-a { color: #15803d; font-family: var(--sans); font-weight: 700; flex-shrink: 0; }
+
+/* ── Pre-quiz intro screen ───────────────────────────── */
+.qm-intro {
+  max-width: 480px; margin: 80px auto; text-align: center; padding: 0 16px;
+}
+.qm-intro-icon { font-size: 52px; margin-bottom: 16px; }
+.qm-intro-title {
+  font-family: var(--serif); font-size: 26px; font-weight: 600;
+  color: var(--ink); margin-bottom: 6px; line-height: 1.3;
+}
+.qm-intro-meta {
+  font-size: 12px; font-family: var(--mono); color: var(--ink-3); margin-bottom: 32px;
+}
+.qm-intro-btns { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Quick flashcard review ──────────────────────────── */
+.qm-fc-wrap { max-width: 860px; width: 100%; margin: 0 auto; }
+.qm-fc-header {
+  display: flex; align-items: center; margin-bottom: 28px;
+}
+.qm-fc-card {
+  background: var(--bg-card); border: 2px solid var(--border); border-radius: 14px;
+  padding: 56px 48px; text-align: center; cursor: pointer;
+  min-height: 240px; display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.qm-fc-card:hover { border-color: var(--ink-3); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(21,19,14,0.08); }
+.qm-fc-card.flipped { border-color: var(--ink); background: var(--bg); }
+.qm-fc-side { width: 100%; }
+.qm-fc-text {
+  font-family: var(--serif); font-size: 32px; font-weight: 600;
+  color: var(--ink); line-height: 1.4;
+}
+.qm-fc-tap {
+  font-size: 11px; font-family: var(--mono); color: var(--ink-3);
+  margin-top: 16px; letter-spacing: 0.05em;
+}
 
 /* ── Edit mode controls ──────────────────────────────── */
 

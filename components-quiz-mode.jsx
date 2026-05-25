@@ -79,6 +79,25 @@ function getQuizItems(items) {
   );
 }
 
+// Generate flashcard data from any quiz-able item
+function getFlashcardData(item) {
+  if (!item) return [];
+  if (item.type === 'vocab-quiz' && item.words) {
+    return item.words.map(w => ({ front: w.en, back: w.zh }));
+  }
+  if (item.type === 'fillblank' && item.questions) {
+    return (item.questions || [])
+      .filter(q => q.sentence && q.answer)
+      .map(q => ({ front: q.sentence, back: q.answer }));
+  }
+  if (item.type === 'quiz' && item.questions) {
+    return (item.questions || [])
+      .filter(q => q.q && q.options && q.options.length > 0)
+      .map(q => ({ front: q.q, back: q.options[q.answer !== undefined ? q.answer : 0] }));
+  }
+  return [];
+}
+
 // Progress persistence (localStorage)
 const QM_KEY = 'alans-qm-v1';
 function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY) || '{}'); } catch(e) { return {}; } }
@@ -198,6 +217,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
 ══════════════════════════════════════════════════════ */
 function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem }) {
   const [selectedItem, setSelectedItem] = useQM(null);
+  const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [playerKey,    setPlayerKey]    = useQM(0);
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
@@ -206,6 +226,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 
   const selectItem = (item) => {
     setSelectedItem(item);
+    setPhase('intro');
     setPlayerKey(k => k + 1);
   };
 
@@ -298,41 +319,129 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         </div>
       </div>
 
-      {/* ── Right: quiz player or placeholder ── */}
+      {/* ── Right: intro / flashcards / quiz / placeholder ── */}
       <div className="qm-quiz-area">
-        {selectedItem && getItemQuestions(selectedItem).length > 0 ? (
+        {!selectedItem ? (
+          <div className="qm-placeholder">
+            <div className="qm-placeholder-icon">👈</div>
+            <div className="qm-placeholder-msg">Select a unit to start</div>
+            <div className="qm-placeholder-sub">選擇一個單元開始練習</div>
+          </div>
+        ) : selectedItem && editMode && getItemQuestions(selectedItem).length === 0 ? (
+          <div className="qm-placeholder">
+            <div className="qm-placeholder-icon">📝</div>
+            <div className="qm-placeholder-msg">{selectedItem.title}</div>
+            <div className="qm-placeholder-sub">Type: {selectedItem.type} · No quiz questions yet</div>
+            <button className="qm-btn secondary" style={{marginTop:'16px'}} onClick={() => onEditItem(selectedItem)}>
+              ✎ Edit this item
+            </button>
+          </div>
+        ) : phase === 'intro' ? (
+          <QuizIntroScreen
+            item={selectedItem}
+            questions={getItemQuestions(selectedItem)}
+            onFlashcards={() => setPhase('flashcards')}
+            onStartQuiz={() => setPhase('quiz')}
+          />
+        ) : phase === 'flashcards' ? (
+          <QuickFlashcardReview
+            item={selectedItem}
+            onDone={() => setPhase('quiz')}
+          />
+        ) : (
           <QuizModePlayer
             key={playerKey}
             cat={cat}
             item={selectedItem}
             questions={getItemQuestions(selectedItem)}
             progressKey={`${weekId}_${selectedItem.id}`}
-            onBack={() => setSelectedItem(null)}
+            onBack={() => setPhase('intro')}
           />
-        ) : selectedItem && editMode ? (
-          <div className="qm-placeholder">
-            <div className="qm-placeholder-icon">📝</div>
-            <div className="qm-placeholder-msg">{selectedItem.title}</div>
-            <div className="qm-placeholder-sub">
-              Type: {selectedItem.type}
-              {getItemQuestions(selectedItem).length === 0 && ' · No quiz questions yet'}
-            </div>
-            <button
-              className="qm-btn secondary"
-              style={{marginTop:'16px'}}
-              onClick={() => onEditItem(selectedItem)}
-            >
-              ✎ Edit this item
-            </button>
-          </div>
-        ) : (
-          <div className="qm-placeholder">
-            <div className="qm-placeholder-icon">👈</div>
-            <div className="qm-placeholder-msg">Select a unit to start</div>
-            <div className="qm-placeholder-sub">選擇一個單元開始練習</div>
-          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   PRE-QUIZ INTRO SCREEN
+══════════════════════════════════════════════════════ */
+function QuizIntroScreen({ item, questions, onFlashcards, onStartQuiz }) {
+  const flashcards = getFlashcardData(item);
+  const hasFlashcards = flashcards.length > 0;
+
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">
+        {item.type === 'vocab-quiz' ? '📚' : item.type === 'fillblank' ? '✏️' : '📝'}
+      </div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{questions.length} questions</div>
+      <div className="qm-intro-btns">
+        {hasFlashcards && (
+          <button className="qm-btn secondary" onClick={onFlashcards}>
+            📖 先複習單字卡 · Review Flashcards
+          </button>
+        )}
+        <button className="qm-btn primary" onClick={onStartQuiz}>
+          開始測驗 · Start Quiz →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   QUICK FLASHCARD REVIEW
+══════════════════════════════════════════════════════ */
+function QuickFlashcardReview({ item, onDone }) {
+  const cards = useQMM(() => shuffleArr(getFlashcardData(item)), [item]);
+  const [idx,     setIdx]     = useQM(0);
+  const [flipped, setFlipped] = useQM(false);
+
+  if (cards.length === 0) { onDone(); return null; }
+
+  const card   = cards[idx];
+  const isLast = idx === cards.length - 1;
+  const pct    = Math.round(idx / cards.length * 100);
+
+  const next = () => {
+    if (isLast) { onDone(); }
+    else { setIdx(i => i + 1); setFlipped(false); }
+  };
+
+  return (
+    <div className="qm-fc-wrap">
+      {/* Header */}
+      <div className="qm-fc-header">
+        <div className="qm-player-bar" style={{flex:1,marginRight:16}}>
+          <div className="qm-player-fill" style={{width: pct + '%'}}/>
+        </div>
+        <span className="qm-player-counter">{idx + 1} / {cards.length}</span>
+        <button className="qm-btn secondary" style={{marginLeft:16,padding:'6px 14px',fontSize:12}} onClick={onDone}>
+          跳過 → 開始測驗
+        </button>
+      </div>
+
+      {/* Card */}
+      <div className={`qm-fc-card${flipped ? ' flipped' : ''}`} onClick={() => setFlipped(f => !f)}>
+        <div className="qm-fc-side qm-fc-front">
+          <div className="qm-fc-text">{card.front}</div>
+          <div className="qm-fc-tap">點擊翻面 · tap to flip</div>
+        </div>
+        <div className="qm-fc-side qm-fc-back">
+          <div className="qm-fc-text">{card.back}</div>
+        </div>
+      </div>
+
+      {/* Next button — only visible after flip */}
+      {flipped && (
+        <div style={{textAlign:'center'}}>
+          <button className="qm-btn primary" style={{width:'auto',minWidth:160}} onClick={next}>
+            {isLast ? '完成！開始測驗 →' : '下一張 →'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
