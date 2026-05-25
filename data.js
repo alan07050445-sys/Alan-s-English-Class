@@ -519,7 +519,7 @@ function subscribeUserProfile(uid, callback) {
 // For production, point this at a small server/Firebase Function that keeps
 // the AI API key private. It should accept { word, sentence } and return
 // { feedback: "..." } or plain text.
-const AI_WRITING_ENDPOINT = '';
+const AI_WRITING_ENDPOINT = 'https://alan-ai-proxy.alan07050445.workers.dev';
 const ANTHROPIC_API_KEY = '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';  // browser-only fallback; safer to use the endpoint above.
 
 async function checkWriting(word, sentence) {
