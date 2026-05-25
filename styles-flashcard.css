@@ -388,10 +388,14 @@
 .fc-match-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  grid-auto-rows: 1fr;   /* rows share height equally */
+  gap: 10px;
+  /* Fill viewport: leave room for mode-tabs (~49px) + topbar (~52px) + player padding (48px) + header (~110px) */
+  height: calc(100vh - 280px);
+  min-height: 300px;
 }
 .fc-match-tile {
-  aspect-ratio: 1 / 1;
+  /* No aspect-ratio — height comes from the grid */
   border: 1.5px solid var(--border);
   border-radius: 16px;
   background: var(--bg-card);
@@ -401,7 +405,7 @@
   display: flex; align-items: center; justify-content: center;
   position: relative; overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  padding: 0;
+  padding: 0; min-height: 0;
 }
 /* Color-state overlay (sits above image, below text) */
 .fc-match-tile::after {
@@ -937,7 +941,7 @@
   .fc-learn-term { font-size: 30px; }
   .fc-mode-tabs { overflow-x: auto; }
   .fc-tab { font-size: 9px; padding: 12px 6px; white-space: nowrap; }
-  .fc-match-grid { grid-template-columns: repeat(2, 1fr); }
+  .fc-match-grid { grid-template-columns: repeat(2, 1fr); height: calc(100vh - 220px); }
   .fc-match-tile { font-size: 14px; }
   .fc-fill-player { padding: 14px 14px 20px; }
   .fc-fill-text { font-size: 22px; }
