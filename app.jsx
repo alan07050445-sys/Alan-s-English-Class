@@ -75,6 +75,12 @@ function App() {
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
   const [gridCols, setGridCols] = useAppState(getGridCols);
 
+  // ── Gamification state ──────────────────────────────
+  const [userProfile, setUserProfile] = useAppState({ streak: { count: 0 }, badges: {} });
+  const [badgesOpen,  setBadgesOpen]  = useAppState(false);
+  const [badgeToast,  setBadgeToast]  = useAppState(null); // { id, ...badgeData }
+  const prevBadgeKeys = useAppRef(null);
+
   const isTeacher = window.isAdminUser(user);
 
   // ── Category view state (quiz mode navigation) ──────
@@ -96,6 +102,33 @@ function App() {
     });
     return unsub;
   }, []);
+
+  // ── Subscribe to streak + badges ───────────────────────
+  useAppEffect(() => {
+    if (!user) { setUserProfile({ streak: { count: 0 }, badges: {} }); prevBadgeKeys.current = null; return; }
+    const unsub = window.subscribeUserProfile(user.uid, (profile) => {
+      setUserProfile(profile);
+      // Detect newly unlocked badges and show toast
+      const newKeys = Object.keys(profile.badges || {});
+      if (prevBadgeKeys.current !== null) {
+        const added = newKeys.filter(k => !prevBadgeKeys.current.includes(k));
+        if (added.length > 0 && window.BADGES[added[0]]) {
+          setBadgeToast({ id: added[0], ...window.BADGES[added[0]] });
+        }
+      }
+      prevBadgeKeys.current = newKeys;
+    });
+    return unsub;
+  }, [user?.uid]);
+
+  useAppEffect(() => {
+    if (!user) return;
+    window.updateStreak(user.uid).then(({ count, isNew }) => {
+      if (!isNew) return;
+      if (count >= 3) window.unlockBadge(user.uid, 'streak_3');
+      if (count >= 7) window.unlockBadge(user.uid, 'streak_7');
+    });
+  }, [user?.uid]);
 
   // ── Sync Firestore progress when user is logged in ──────
   useAppEffect(() => {
@@ -150,6 +183,11 @@ function App() {
 
   const allItems = useAppMemo(() => {
     return window.CATEGORIES.flatMap(c => (week.items[c.id] || []).map(it => ({...it, _cat: c.id})));
+  }, [week]);
+
+  const weekQuizItems = useAppMemo(() => {
+    if (!window.getQuizItems) return [];
+    return window.CATEGORIES.flatMap(c => window.getQuizItems((week.items || {})[c.id] || []));
   }, [week]);
 
   const totalItems = allItems.length;
@@ -217,6 +255,7 @@ function App() {
         next[itemId] = Date.now();
         // Save to Firestore if logged in
         if (user) window.saveProgressItem(user.uid, user.displayName || '', user.email || '', itemId, { done: next[itemId] });
+        if (user) window.updateStreak(user.uid);
       }
       return next;
     });
@@ -307,6 +346,38 @@ function App() {
     showToast("Item deleted");
   };
 
+  // ── Homework handler ────────────────────────────────────
+  const handleSetHomework = (itemId, hwData) => {
+    // hwData = { dueDate: 'YYYY-MM-DD' } to set, null to remove
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) return;
+    if (!w[weekId].homework) w[weekId].homework = {};
+    if (hwData) w[weekId].homework[itemId] = hwData;
+    else delete w[weekId].homework[itemId];
+    setWeeks(w);
+    window.saveWeeks(w);
+    showToast(hwData ? "設定作業 ✓" : "取消作業");
+  };
+
+  // ── Quiz complete handler (streak + badges) ─────────────
+  window._onQuizComplete = async (score, total, wrongList, meta = {}) => {
+    const u = window._currentUser;
+    if (!u) return;
+    // Update streak
+    const { count, isNew } = await window.updateStreak(u.uid);
+    if (isNew) window.playSound('streak');
+    await window.unlockBadge(u.uid, 'first_quiz');
+    // Badge: perfect score
+    if (Math.round(score / total * 100) === 100) await window.unlockBadge(u.uid, 'perfect');
+    if (meta.itemId && window.saveQuizMistakes) {
+      await window.saveQuizMistakes(u.uid, u.displayName || '', u.email || '', meta.itemId, wrongList || []);
+    }
+    if (meta.allWeekQuizDone) await window.unlockBadge(u.uid, 'scholar');
+    // Badge: streak milestones
+    if (count >= 3) await window.unlockBadge(u.uid, 'streak_3');
+    if (count >= 7) await window.unlockBadge(u.uid, 'streak_7');
+  };
+
   // ── Grid renderer ──────────────────────────────────────
 
   const renderGrid = () => {
@@ -395,6 +466,9 @@ function App() {
           }
         }}
         onShowDashboard={() => setDashOpen(true)}
+        streak={userProfile.streak}
+        badges={userProfile.badges}
+        onShowBadges={() => setBadgesOpen(true)}
       />
 
       {/* ── QUIZ MODE (always shown; edit controls appear when editMode=true) ── */}
@@ -408,6 +482,9 @@ function App() {
           onAddItem={handleAddItem}
           onEditItem={handleEditItem}
           onDeleteItem={handleDeleteItem}
+          homework={week.homework || {}}
+          onSetHomework={handleSetHomework}
+          weekQuizItems={weekQuizItems}
         />
       ) : (
         <div className="shell">
@@ -455,6 +532,14 @@ function App() {
           weeks={weeks}
           weekOrder={weekOrder}
         />
+      )}
+
+      {badgesOpen && (
+        <window.BadgesModal badges={userProfile.badges} onClose={() => setBadgesOpen(false)}/>
+      )}
+
+      {badgeToast && (
+        <window.BadgeToast badge={badgeToast} onDone={() => setBadgeToast(null)}/>
       )}
     </div>
   );

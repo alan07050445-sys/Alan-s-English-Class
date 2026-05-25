@@ -421,6 +421,163 @@ function subscribeAllStudents(callback) {
   });
 }
 
+// ── Sound Effects ──────────────────────────────────────────────────────
+let _audioCtx = null;
+function _getAudio() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return _audioCtx;
+}
+function playSound(type) {
+  try {
+    const ctx = _getAudio();
+    const tone = (freq, startT, dur, type2 = 'sine', vol = 0.26) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = type2; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, ctx.currentTime + startT);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startT + dur);
+      o.start(ctx.currentTime + startT); o.stop(ctx.currentTime + startT + dur);
+    };
+    if (type === 'correct')  { tone(523,0,.18); tone(659,.1,.18); tone(784,.2,.22); }
+    else if (type === 'wrong')   { tone(220,0,.15,'square',.16); tone(160,.1,.2,'square',.14); }
+    else if (type === 'match')   { tone(880,0,.08); tone(1200,.07,.12); }
+    else if (type === 'complete'){ tone(523,0,.2); tone(659,.1,.2); tone(784,.2,.2); tone(1047,.32,.35,'sine',.3); }
+    else if (type === 'badge')   { tone(880,0,.1); tone(1100,.08,.1); tone(1320,.18,.25); }
+    else if (type === 'streak')  { tone(440,0,.12); tone(554,.1,.12); tone(659,.22,.22); }
+  } catch(e) { /* AudioContext may be blocked on first interaction */ }
+}
+
+// ── Streak & Badges ────────────────────────────────────────────────────
+const BADGES = {
+  first_quiz:  { emoji:'🌟', name:'初學者',   nameEn:'First Step',    desc:'完成第一個測驗' },
+  perfect:     { emoji:'🏆', name:'第一次滿分', nameEn:'Perfect Score', desc:'任一測驗拿到100分' },
+  streak_3:    { emoji:'🔥', name:'三天連勝', nameEn:'3-Day Streak',  desc:'連續3天學習' },
+  streak_7:    { emoji:'🔥', name:'連續七天', nameEn:'7-Day Streak',  desc:'連續7天學習' },
+  scholar:     { emoji:'⭐', name:'全單元完成', nameEn:'Week Complete', desc:'完成當週全部測驗單元' },
+};
+
+async function updateStreak(uid) {
+  if (!uid) return { count: 0, isNew: false };
+  try {
+    const today = new Date().toDateString();
+    const ref = _db.collection('progress').doc(uid);
+    const snap = await ref.get();
+    const d = snap.exists ? (snap.data() || {}) : {};
+    const s = d.streak || { count: 0, lastDate: null };
+    if (s.lastDate === today) return { count: s.count, isNew: false };
+    const yest = new Date(); yest.setDate(yest.getDate() - 1);
+    const newCount = (s.lastDate === yest.toDateString()) ? s.count + 1 : 1;
+    await ref.set({ streak: { count: newCount, lastDate: today } }, { merge: true });
+    return { count: newCount, isNew: true };
+  } catch(e) { return { count: 0, isNew: false }; }
+}
+
+async function unlockBadge(uid, badgeId) {
+  if (!uid || !BADGES[badgeId]) return false;
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    const snap = await ref.get();
+    const existing = snap.exists ? (snap.data()?.badges || {}) : {};
+    if (existing[badgeId]) return false; // already unlocked
+    const u = {}; u[`badges.${badgeId}`] = Date.now();
+    try { await ref.update(u); } catch(e2) {
+      await ref.set({ badges: { [badgeId]: Date.now() } }, { merge: true });
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+async function saveQuizMistakes(uid, displayName, email, itemId, wrongList) {
+  if (!uid || !itemId) return;
+  const wrongQuestions = (wrongList || []).map(q => ({
+    q: String(q.q || '').slice(0, 180),
+    answer: String((q.options || [])[q.correct] || '').slice(0, 120),
+  })).filter(q => q.q);
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    await ref.set({
+      name: displayName || '',
+      email: email || '',
+      updatedAt: Date.now(),
+    }, { merge: true });
+    const update = {};
+    update[`items.${itemId}.wrongQuestions`] = wrongQuestions;
+    update[`items.${itemId}.wrongCount`] = wrongQuestions.length;
+    await ref.update(update);
+  } catch(e) { console.warn('saveQuizMistakes:', e); }
+}
+
+function subscribeUserProfile(uid, callback) {
+  if (!uid) return () => {};
+  return _db.collection('progress').doc(uid).onSnapshot(snap => {
+    const d = snap.exists ? (snap.data() || {}) : {};
+    callback({ streak: d.streak || { count: 0, lastDate: null }, badges: d.badges || {} });
+  });
+}
+
+// ── AI Writing Practice ─────────────────────────────────────────────────
+// For production, point this at a small server/Firebase Function that keeps
+// the AI API key private. It should accept { word, sentence } and return
+// { feedback: "..." } or plain text.
+const AI_WRITING_ENDPOINT = '';
+const ANTHROPIC_API_KEY = '';  // browser-only fallback; safer to use the endpoint above.
+
+async function checkWriting(word, sentence) {
+  if (!sentence || !sentence.trim()) return '請先寫一個英文句子。';
+  const endpoint = AI_WRITING_ENDPOINT || localStorage.getItem('alan-ai-writing-endpoint') || '';
+  if (endpoint) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ word, sentence }),
+      });
+      const data = await res.json().catch(() => null);
+      return data?.feedback || data?.text || '批改完成，但回傳格式沒有 feedback。';
+    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+  }
+  if (!ANTHROPIC_API_KEY) return localWritingFeedback(word, sentence);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 400,
+        messages: [{ role: 'user', content:
+          `You are a friendly English teacher for young learners (ages 8-14). ` +
+          `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
+          `Reply in Traditional Chinese (繁體中文). Include:\n` +
+          `1. ✅ or ❌ — is it grammatically correct?\n` +
+          `2. One brief encouraging sentence\n` +
+          `3. If wrong, show the corrected version\n` +
+          `4. Score: ⭐⭐⭐⭐⭐ (out of 5)\n` +
+          `Keep it short, warm and child-friendly.`
+        }],
+      }),
+    });
+    const data = await res.json();
+    return data.content?.[0]?.text || '批改失敗，請再試一次。';
+  } catch(e) { return '網路錯誤，請再試一次。'; }
+}
+
+function localWritingFeedback(word, sentence) {
+  const s = sentence.trim();
+  const lower = s.toLowerCase();
+  const checks = [];
+  if (word && !lower.includes(String(word).toLowerCase())) checks.push(`句子裡還沒有用到「${word}」。`);
+  if (!/^[A-Z]/.test(s)) checks.push('英文句子開頭通常要大寫。');
+  if (!/[.!?]$/.test(s)) checks.push('句尾記得加上句號、問號或驚嘆號。');
+  if (/\bi\b/.test(s)) checks.push('單獨的 I 要大寫。');
+  const stars = Math.max(2, 5 - checks.length);
+  if (checks.length === 0) return `✅ 很棒！這個句子看起來很完整。\nScore: ${'⭐'.repeat(5)}\n\n想要真正 AI 文法批改時，請設定 AI_WRITING_ENDPOINT。`;
+  return `📝 小提醒：\n${checks.map(x => `• ${x}`).join('\n')}\n\nScore: ${'⭐'.repeat(stars)}\n\n修好後再送一次會更漂亮！`;
+}
+
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
@@ -430,5 +587,11 @@ Object.assign(window, {
   // Auth
   signInWithGoogle, signOutUser, subscribeAuth, isAdminUser,
   // Per-user progress
-  saveProgressItem, subscribeMyProgress, subscribeAllStudents,
+  saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes,
+  // Streak & Badges
+  BADGES, updateStreak, unlockBadge, subscribeUserProfile,
+  // Sound
+  playSound,
+  // AI Writing
+  checkWriting,
 });

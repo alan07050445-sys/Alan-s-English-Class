@@ -17,6 +17,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
       return window.CATEGORIES.flatMap(c =>
         (w.items[c.id] || []).map(it => ({
           id: it.id,
+          progressId: `${wid}_${it.id}`,
           title: it.title || it.id,
           weekLabel: w.label,
           cat: c.title,
@@ -27,9 +28,23 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   const total = allItems.length;
 
+  const questionStats = useDashM(() => {
+    const map = {};
+    students.forEach(s => {
+      Object.entries(s.items || {}).forEach(([itemId, prog]) => {
+        (prog?.wrongQuestions || []).forEach(w => {
+          const key = `${itemId}::${w.q}::${w.answer}`;
+          if (!map[key]) map[key] = { itemId, q: w.q, answer: w.answer, count: 0 };
+          map[key].count += 1;
+        });
+      });
+    });
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8);
+  }, [students]);
+
   const stats = (s) => {
     const its = s.items || {};
-    const done  = Object.keys(its).filter(id => its[id]?.done).length;
+    const done  = allItems.filter(it => its[it.progressId]?.done || its[it.id]?.done).length;
     const scored = Object.keys(its).filter(id => its[id]?.score != null);
     const avg = scored.length
       ? Math.round(scored.reduce((acc, id) => acc + (its[id].score || 0), 0) / scored.length)
@@ -51,7 +66,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
           <div>
             <h2 className="dash-title">Class Report</h2>
             <p className="dash-meta">
-              {students.length} students · {total} total items
+              {students.length} students · {total} total items · {questionStats.length} hot questions
             </p>
           </div>
           <button className="icon-btn" onClick={onClose} title="Close">
@@ -63,7 +78,21 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         <div className="dash-body">
           {!selected ? (
             /* ── Overview table ── */
-            <div className="dash-table">
+              <>
+              <div className="dash-hot">
+                <div className="dash-section-title">Most Missed Questions</div>
+                {questionStats.length === 0 ? (
+                  <div className="dash-hot-empty">學生完成測驗後，這裡會顯示全班最常錯的題目。</div>
+                ) : questionStats.map((q, i) => (
+                  <div key={`${q.itemId}-${i}`} className="dash-hot-row">
+                    <span className="dash-hot-rank">{i + 1}</span>
+                    <span className="dash-hot-q">{q.q}</span>
+                    <span className="dash-hot-a">{q.answer}</span>
+                    <span className="dash-hot-count">{q.count}x</span>
+                  </div>
+                ))}
+              </div>
+              <div className="dash-table">
               <div className="dt-head">
                 <span>Student</span>
                 <span>Completed</span>
@@ -96,7 +125,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                   </div>
                 );
               })}
-            </div>
+              </div>
+              </>
           ) : (
             /* ── Individual student detail ── */
             <StudentDetail
@@ -145,7 +175,7 @@ function StudentDetail({ student, allItems, onBack }) {
           <p className="sdetail-wlabel">{weekLabel}</p>
           <div className="sdetail-items">
             {items.map(it => {
-              const prog = its[it.id];
+              const prog = its[it.progressId] || its[it.id];
               const isDone = !!prog?.done;
               const score  = prog?.score;
               return (

@@ -1,0 +1,15 @@
+{
+  "name": "Alan's English Class",
+  "short_name": "Alan's English",
+  "description": "每週英文學習平台 · Weekly English Learning",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f1e6",
+  "theme_color": "#1a1a1a",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png",         "sizes": "512x512",  "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["education"]
+}

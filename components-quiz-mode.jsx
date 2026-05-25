@@ -103,6 +103,12 @@ const QM_KEY = 'alans-qm-v1';
 function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY) || '{}'); } catch(e) { return {}; } }
 function saveQMProg(p) { try { localStorage.setItem(QM_KEY, JSON.stringify(p)); } catch(e) {} }
 
+function getTodayInputValue(offsetDays = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
 /* ── Visual config ───────────────────────────────────── */
 const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
 const CAT_BG    = {
@@ -215,7 +221,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, homework, onSetHomework, weekQuizItems }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -275,6 +281,12 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
             const hasQuiz  = totalQ > 0;
+            const hw       = (homework || {})[item.id]; // { dueDate }
+            const dueLabel = hw?.dueDate ? (() => {
+              const d = new Date(hw.dueDate + 'T00:00:00');
+              const diff = Math.ceil((d - new Date()) / 86400000);
+              return diff > 0 ? `📌 ${diff}天` : diff === 0 ? '📌 今天到期' : '📌 已過期';
+            })() : null;
 
             return (
               <div
@@ -283,7 +295,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 onClick={() => (hasQuiz || editMode) && selectItem(item)}
               >
                 <div className="qm-unit-row-info">
-                  <div className="qm-unit-row-title">{item.title}</div>
+                  <div className="qm-unit-row-title">
+                    {item.title}
+                    {dueLabel && !editMode && <span className={`qm-hw-badge${isDone ? ' done' : ''}`}>{isDone ? '✓ 作業完成' : dueLabel}</span>}
+                  </div>
                   <div className="qm-unit-row-meta">
                     {editMode ? (
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
@@ -298,6 +313,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 <div style={{display:'flex',gap:'4px',alignItems:'center',flexShrink:0}}>
                   {editMode ? (
                     <>
+                      <button
+                        className={`qm-unit-hw-btn${hw ? ' active' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (hw) {
+                            if (confirm(`取消「${item.title}」的本週作業？`)) onSetHomework(item.id, null);
+                            return;
+                          }
+                          const dueDate = prompt('作業截止日 YYYY-MM-DD', getTodayInputValue(7));
+                          if (dueDate) onSetHomework(item.id, { dueDate });
+                        }}
+                        title={hw ? `作業: ${hw.dueDate}` : '設為作業'}
+                      >📌</button>
                       <button
                         className="qm-unit-edit-btn"
                         onClick={(e) => { e.stopPropagation(); onEditItem(item); }}
@@ -366,6 +394,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             item={selectedItem}
             questions={getItemQuestions(selectedItem)}
             progressKey={`${weekId}_${selectedItem.id}`}
+            weekId={weekId}
+            allQuizItems={weekQuizItems || quizItems}
             onBack={() => setPhase('intro')}
           />
         )}
@@ -409,6 +439,56 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
           開始測驗 · Start Quiz →
         </button>
       </div>
+      <WritingPractice item={item}/>
+    </div>
+  );
+}
+
+function WritingPractice({ item }) {
+  const words = useQMM(() => {
+    if (item?.type === 'vocab-quiz') return (item.words || []).map(w => w.en).filter(Boolean);
+    if (item?.type === 'fillblank') return (item.questions || []).map(q => q.answer).filter(Boolean);
+    return [];
+  }, [item]);
+  const [word, setWord] = useQM(words[0] || item?.title || '');
+  const [sentence, setSentence] = useQM('');
+  const [feedback, setFeedback] = useQM('');
+  const [checking, setChecking] = useQM(false);
+
+  React.useEffect(() => { setWord(words[0] || item?.title || ''); setSentence(''); setFeedback(''); }, [item?.id]);
+  if (!words.length && !item?.title) return null;
+
+  const submit = async () => {
+    setChecking(true);
+    setFeedback('');
+    const result = await window.checkWriting(word, sentence);
+    setFeedback(result);
+    setChecking(false);
+  };
+
+  return (
+    <div className="qm-writing">
+      <div className="qm-writing-head">
+        <span>AI 造句批改</span>
+        <small>Use the word in one sentence</small>
+      </div>
+      {words.length > 0 && (
+        <div className="qm-word-chips">
+          {words.slice(0, 8).map(w => (
+            <button key={w} className={w === word ? 'active' : ''} onClick={() => setWord(w)}>{w}</button>
+          ))}
+        </div>
+      )}
+      <textarea
+        className="qm-writing-input"
+        value={sentence}
+        onChange={e => setSentence(e.target.value)}
+        placeholder={`Write a sentence with "${word}"...`}
+      />
+      <button className="qm-btn secondary qm-writing-btn" onClick={submit} disabled={checking || !sentence.trim()}>
+        {checking ? '批改中...' : '送出批改'}
+      </button>
+      {feedback && <pre className="qm-writing-feedback">{feedback}</pre>}
     </div>
   );
 }
@@ -471,7 +551,7 @@ function QuickFlashcardReview({ item, onDone }) {
 /* ══════════════════════════════════════════════════════
    QUIZ PLAYER
 ══════════════════════════════════════════════════════ */
-function QuizModePlayer({ cat, item, questions, progressKey, onBack }) {
+function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack }) {
   const [idx,       setIdx]      = useQM(0);
   const [selected,  setSelected] = useQM(null);
   const [score,     setScore]    = useQM(0);
@@ -488,7 +568,9 @@ function QuizModePlayer({ cat, item, questions, progressKey, onBack }) {
   const handleSelect = (optIdx) => {
     if (selected !== null) return;
     setSelected(optIdx);
-    if (optIdx === q.correct) setScore(s => s + 1);
+    const correct = optIdx === q.correct;
+    if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
+    if (correct) setScore(s => s + 1);
     else setWrongList(prev => [...prev, q]);
   };
 
@@ -499,11 +581,24 @@ function QuizModePlayer({ cat, item, questions, progressKey, onBack }) {
       const prev = loadQMProg();
       prev[progressKey] = { done: total, score: finalScore, total, ts: Date.now() };
       saveQMProg(prev);
+      if (window.playSound) window.playSound('complete');
+      const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
       // Firestore sync
       const u = window._currentUser;
       if (u && window.saveProgressItem) {
         window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
-          done: Date.now(), score: Math.round(finalScore / total * 100),
+          done: Date.now(),
+          score: Math.round(finalScore / total * 100),
+          wrongQuestions: wrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] })),
+          wrongCount: wrongList.length,
+        });
+      }
+      if (window._onQuizComplete) {
+        window._onQuizComplete(finalScore, total, wrongList, {
+          weekId,
+          itemId: progressKey,
+          itemTitle: item?.title || '',
+          allWeekQuizDone,
         });
       }
       setScreen('result');

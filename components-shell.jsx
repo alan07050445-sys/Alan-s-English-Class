@@ -31,6 +31,8 @@ function Header({
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard,
+  // Gamification
+  streak, badges, onShowBadges,
 }) {
   const pct = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0;
   const atStart = weekIdx <= 0;
@@ -56,6 +58,22 @@ function Header({
               <span>{progress.done}/{progress.total} done</span>
               <div className="progress-track"><div className="progress-fill" style={{ width: pct + "%" }}/></div>
             </div>
+
+            {/* Streak + Badges */}
+            {user && (
+              <div className="header-gamification">
+                {streak?.count > 0 && (
+                  <div className="streak-pill" title={`${streak.count} 天連續學習！`}>
+                    🔥 {streak.count}
+                  </div>
+                )}
+                {badges && Object.keys(badges).length > 0 && (
+                  <button className="badges-pill" onClick={onShowBadges} title="我的成就">
+                    ⭐ {Object.keys(badges).length}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Auth area */}
             <div className="header-auth">
@@ -245,4 +263,51 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText });
+/* ───────── Badges Modal ───────── */
+function BadgesModal({ badges, onClose }) {
+  const BADGES = window.BADGES || {};
+  const ALL_IDS = Object.keys(BADGES);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:440}}>
+        <div className="modal-head">
+          <h3>我的<em>成就</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+        <div className="modal-body" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          {ALL_IDS.map(id => {
+            const b = BADGES[id];
+            const unlocked = !!badges?.[id];
+            return (
+              <div key={id} className={`badge-card${unlocked ? ' unlocked' : ' locked'}`}>
+                <span className="badge-emoji">{unlocked ? b.emoji : '🔒'}</span>
+                <span className="badge-name">{b.name}</span>
+                <span className="badge-desc">{b.desc}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────── Badge Unlock Toast ───────── */
+function BadgeToast({ badge, onDone }) {
+  React.useEffect(() => {
+    window.playSound && window.playSound('badge');
+    const t = setTimeout(onDone, 3200);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="badge-toast" onClick={onDone}>
+      <span className="badge-toast-emoji">{badge.emoji}</span>
+      <div>
+        <div className="badge-toast-title">成就解鎖！</div>
+        <div className="badge-toast-name">{badge.name} — {badge.desc}</div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast });
