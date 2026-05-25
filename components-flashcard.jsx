@@ -292,7 +292,7 @@ function FlashcardPlayer({ item, onComplete }) {
   const enterMatch = () => {
     stopMatchTimer();
     let best = null;
-    try { best = parseInt(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
+    try { best = parseFloat(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
     setMatchBest(best);
     // Pick 6 random pairs each round (shuffle for variety)
     const picked = shuffle([...cards]).slice(0, Math.min(6, cards.length));
@@ -316,8 +316,8 @@ function FlashcardPlayer({ item, onComplete }) {
     setMatchStarted(true);
     matchStartRef.current = Date.now();
     matchTimerRef.current = setInterval(() => {
-      setMatchElapsed(Math.floor((Date.now() - matchStartRef.current) / 1000));
-    }, 500);
+      setMatchElapsed(Math.round((Date.now() - matchStartRef.current) / 100) / 10);
+    }, 100);
   };
 
   const handleMatchClick = (tile) => {
@@ -332,9 +332,9 @@ function FlashcardPlayer({ item, onComplete }) {
       setMatchSelected(null);
       if (newMatched.size === matchTiles.length / 2) {
         stopMatchTimer();
-        const elapsed = Math.floor((Date.now() - matchStartRef.current) / 1000);
+        const elapsed = Math.round((Date.now() - matchStartRef.current) / 100) / 10;
         let prevBest = null;
-        try { prevBest = parseInt(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
+        try { prevBest = parseFloat(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
         const nb = !prevBest || elapsed < prevBest;
         if (nb) { try { localStorage.setItem('fc-match-' + item.id, elapsed); } catch {} }
         setMatchElapsed(elapsed);
@@ -730,7 +730,7 @@ function FlashcardPlayer({ item, onComplete }) {
               </div>
               {matchBest && (
                 <div className="mono" style={{fontSize: 11, color: "var(--ink-faint)", marginBottom: 24}}>
-                  Best: {fmtTime(matchBest)}
+                  Best: {matchBest.toFixed(1)}s
                 </div>
               )}
               {!matchBest && <div style={{marginBottom: 24}}/>}
@@ -750,13 +750,15 @@ function FlashcardPlayer({ item, onComplete }) {
           <div className="fc-player">
             <div className="fc-complete">
               <div className="fc-complete-icon">⚡</div>
-              <div className="serif" style={{fontSize: 52, lineHeight: 1, marginBottom: 6}}>{fmtTime(matchElapsed)}</div>
+              <div className="serif" style={{fontSize: 52, lineHeight: 1, marginBottom: 6}}>
+                {matchElapsed.toFixed(1)}<span style={{fontSize: 24}}>s</span>
+              </div>
               {isNewBest && (
                 <div className="fc-match-best-badge mono">🏆 New Best!</div>
               )}
               {matchBest && !isNewBest && (
                 <div className="mono" style={{color: "var(--ink-muted)", fontSize: 12, marginBottom: 4}}>
-                  Best: {fmtTime(matchBest)}
+                  Best: {matchBest.toFixed(1)}s
                 </div>
               )}
               <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 24, marginTop: 8}}>
@@ -776,13 +778,13 @@ function FlashcardPlayer({ item, onComplete }) {
         <ModeTabs active="match"/>
         <div className="fc-player">
           <div className="fc-match-topbar">
-            <span className="fc-match-timer mono">{fmtTime(matchElapsed)}</span>
+            <span className="fc-match-timer mono">{matchElapsed.toFixed(1)}<span style={{fontSize:14}}>s</span></span>
             <span className="mono" style={{fontSize: 11, color: "var(--ink-muted)"}}>
-              {matchMatched.size} / {cards.length} matched
+              {matchMatched.size} / {matchTiles.length / 2} matched
             </span>
             {matchBest && (
               <span className="mono" style={{fontSize: 10, color: "var(--ink-faint)"}}>
-                Best {fmtTime(matchBest)}
+                Best {matchBest.toFixed(1)}s
               </span>
             )}
           </div>
