@@ -59,8 +59,6 @@
 .qm-cat-view {
   display: flex;
   min-height: calc(100vh - 110px);
-  max-width: 1280px;
-  margin: 0 auto;
   width: 100%;
 }
 
@@ -153,7 +151,7 @@
 .qm-placeholder-sub { font-size: 12px; font-family: var(--mono); }
 
 /* ── Player shell ────────────────────────────────────── */
-.qm-player-shell { max-width: 560px; width: 100%; margin: 0 auto; }
+.qm-player-shell { max-width: 760px; width: 100%; margin: 0 auto; }
 
 .qm-player-head {
   display: flex; align-items: center; gap: 14px; margin-bottom: 40px;
@@ -171,7 +169,7 @@
 /* ── Question ────────────────────────────────────────── */
 .qm-question-area { text-align: center; margin-bottom: 32px; padding: 0 4px; }
 .qm-question-hint { font-size: 11px; color: var(--ink-3); font-family: var(--mono); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 16px; }
-.qm-question-text { font-family: var(--serif); font-size: 36px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.qm-question-text { font-family: var(--serif); font-size: 40px; font-weight: 600; color: var(--ink); line-height: 1.2; }
 
 /* ── Options ─────────────────────────────────────────── */
 .qm-options { display: flex; flex-direction: column; gap: 10px; }
