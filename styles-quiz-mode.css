@@ -392,6 +392,8 @@
 .wf-val { color: var(--ink); }
 .wf-val.meaning { color: var(--ink-2); font-style: italic; }
 .wf-val.correction { color: #1e6e3e; font-weight: 500; }
+.wf-key.improve { color: #b45309; }
+.wf-val.improve-val { color: #92400e; font-weight: 500; }
 
 .wf-encourage {
   padding: 8px 16px;

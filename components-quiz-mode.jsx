@@ -482,6 +482,11 @@ function WritingFeedback({ text }) {
       elements.push(<div key={i} className="wf-row"><span className="wf-key">修正</span><span className="wf-val correction">{val}</span></div>);
       return;
     }
+    if (trimmed.startsWith('改進')) {
+      const val = trimmed.replace(/^改進\s*/, '');
+      elements.push(<div key={i} className="wf-row"><span className="wf-key improve">改進</span><span className="wf-val improve-val">{val}</span></div>);
+      return;
+    }
     if (trimmed === '範例') {
       inExamples = true;
       elements.push(<div key={i} className="wf-examples-title">範例</div>);

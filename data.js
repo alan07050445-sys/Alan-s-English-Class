@@ -532,7 +532,7 @@ async function checkWriting(word, sentence) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 400,
+          max_tokens: 500,
           messages: [{ role: 'user', content:
             `You are a friendly English teacher for young learners (ages 8-14).\n` +
             `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
@@ -540,18 +540,20 @@ async function checkWriting(word, sentence) {
             `文法   ✓ CORRECT 或 ✗ INCORRECT\n` +
             `意思   （把學生的句子翻譯成中文）\n\n` +
             `（一句溫暖鼓勵的話）\n\n` +
-            `修正   （如果文法有錯，給出正確版本；正確則省略）\n\n` +
+            `修正   （如果文法有錯，給出正確版本；正確則省略此行）\n\n` +
+            `改進   （如果評分未達5顆星，用一句話說明學生可以怎麼做才能拿到滿分；5顆星則省略此行）\n\n` +
             `範例\n` +
             `· （範例句 1）\n` +
             `· （範例句 2）\n` +
             `· （範例句 3）\n\n` +
             `評分   ★★★★☆（滿分5顆）\n\n` +
             `Important rules:\n` +
-            `1. Grammar: check if the sentence is grammatically correct.\n` +
-            `2. Usage: check if the word "${word}" is used with its real meaning, not just mentioned (e.g. "The teacher taught us the word ${word}" is NOT acceptable).\n` +
-            `3. Length: the sentence must be at least 7 words. If shorter, mark as INCORRECT.\n` +
-            `4. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different contexts.\n` +
-            `5. Score based on grammar, correct usage, and sentence length combined.`
+            `1. Grammar: check if the sentence is grammatically correct English.\n` +
+            `2. Usage: the word "${word}" must be used with its real meaning in context. Simply mentioning it (e.g. "The teacher taught us the word ${word}") is NOT acceptable → mark INCORRECT.\n` +
+            `3. Length (STRICT): count every word in the student's sentence carefully, including articles (a, an, the), prepositions, and conjunctions. The sentence MUST contain at least 7 words total. If it has 6 or fewer words, mark as INCORRECT and deduct stars.\n` +
+            `4. Score strictly: 5★ = grammar correct + real usage + 7+ words + vivid/specific sentence. Deduct 1★ for each issue: wrong grammar, superficial usage, fewer than 7 words, or very short/simple expression. Always give a minimum of 1★.\n` +
+            `5. 改進 line: if score < 5★, tell the student exactly what to fix to reach 5★ (e.g. "句子只有4個字，需要再加長到7個字以上" or "可以加上更多細節讓句子更生動").\n` +
+            `6. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different everyday contexts.`
           }],
         }),
       });
@@ -571,7 +573,7 @@ async function checkWriting(word, sentence) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 400,
+        max_tokens: 500,
         messages: [{ role: 'user', content:
           `You are a friendly English teacher for young learners (ages 8-14).\n` +
           `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
@@ -579,18 +581,20 @@ async function checkWriting(word, sentence) {
           `文法   ✓ CORRECT 或 ✗ INCORRECT\n` +
           `意思   （把學生的句子翻譯成中文）\n\n` +
           `（一句溫暖鼓勵的話）\n\n` +
-          `修正   （如果文法有錯，給出正確版本；正確則省略）\n\n` +
+          `修正   （如果文法有錯，給出正確版本；正確則省略此行）\n\n` +
+          `改進   （如果評分未達5顆星，用一句話說明學生可以怎麼做才能拿到滿分；5顆星則省略此行）\n\n` +
           `範例\n` +
           `· （範例句 1）\n` +
           `· （範例句 2）\n` +
           `· （範例句 3）\n\n` +
           `評分   ★★★★☆（滿分5顆）\n\n` +
           `Important rules:\n` +
-          `1. Grammar: check if the sentence is grammatically correct.\n` +
-          `2. Usage: check if the word "${word}" is used with its real meaning, not just mentioned (e.g. "The teacher taught us the word ${word}" is NOT acceptable).\n` +
-          `3. Length: the sentence must be at least 7 words. If shorter, mark as INCORRECT.\n` +
-          `4. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different contexts.\n` +
-          `5. Score based on grammar, correct usage, and sentence length combined.`
+          `1. Grammar: check if the sentence is grammatically correct English.\n` +
+          `2. Usage: the word "${word}" must be used with its real meaning in context. Simply mentioning it (e.g. "The teacher taught us the word ${word}") is NOT acceptable → mark INCORRECT.\n` +
+          `3. Length (STRICT): count every word in the student's sentence carefully, including articles (a, an, the), prepositions, and conjunctions. The sentence MUST contain at least 7 words total. If it has 6 or fewer words, mark as INCORRECT and deduct stars.\n` +
+          `4. Score strictly: 5★ = grammar correct + real usage + 7+ words + vivid/specific sentence. Deduct 1★ for each issue: wrong grammar, superficial usage, fewer than 7 words, or very short/simple expression. Always give a minimum of 1★.\n` +
+          `5. 改進 line: if score < 5★, tell the student exactly what to fix to reach 5★ (e.g. "句子只有4個字，需要再加長到7個字以上" or "可以加上更多細節讓句子更生動").\n` +
+          `6. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different everyday contexts.`
         }],
       }),
     });
