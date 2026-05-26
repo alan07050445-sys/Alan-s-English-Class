@@ -250,7 +250,7 @@ function QuizEditor({ questions, onChange }) {
   const [importText, setImportText] = useQS("");
   const [importMode, setImportMode] = useQS("append"); // append | replace
 
-  const importPreview = useQM(() => parseQuizTable(importText), [importText]);
+  const importPreview = useQM(() => { try { return parseQuizTable(importText); } catch(e) { return {questions:[], errors:[]}; } }, [importText]);
 
   const applyImport = () => {
     if (importPreview.questions.length === 0) {
@@ -293,7 +293,7 @@ function QuizEditor({ questions, onChange }) {
   return (
     <div className="quiz-editor">
       <div className="qe-toolbar">
-        <button className="qe-import-btn" onClick={() => setImportOpen(o => !o)}>
+        <button type="button" className="qe-import-btn" onClick={() => setImportOpen(o => !o)}>
           ☰  {importOpen ? "Hide import · 關閉匯入" : "Import from spreadsheet · 從表格匯入"}
         </button>
       </div>
@@ -343,7 +343,7 @@ function QuizEditor({ questions, onChange }) {
                 <input type="radio" checked={importMode === "replace"} onChange={() => setImportMode("replace")}/>
                 <span>Replace · 取代</span>
               </label>
-              <button className="btn primary" onClick={applyImport} disabled={importPreview.questions.length === 0}>
+              <button type="button" className="btn primary" onClick={applyImport} disabled={importPreview.questions.length === 0}>
                 Import →
               </button>
             </div>
@@ -365,9 +365,9 @@ function QuizEditor({ questions, onChange }) {
           <div className="qe-block-head">
             <span className="mono">Question {qi + 1}</span>
             <div className="qe-block-tools">
-              <button onClick={() => moveQ(qi, -1)} disabled={qi === 0} title="Move up">↑</button>
-              <button onClick={() => moveQ(qi, 1)} disabled={qi === list.length - 1} title="Move down">↓</button>
-              <button onClick={() => removeQ(qi)} title="Delete" className="danger">×</button>
+              <button type="button" onClick={() => moveQ(qi, -1)} disabled={qi === 0} title="Move up">↑</button>
+              <button type="button" onClick={() => moveQ(qi, 1)} disabled={qi === list.length - 1} title="Move down">↓</button>
+              <button type="button" onClick={() => removeQ(qi)} title="Delete" className="danger">×</button>
             </div>
           </div>
 
@@ -416,7 +416,7 @@ function QuizEditor({ questions, onChange }) {
         </div>
       ))}
 
-      <button className="qe-add" onClick={addQ}>
+      <button type="button" className="qe-add" onClick={addQ}>
         + Add Question · 新增題目
       </button>
     </div>
