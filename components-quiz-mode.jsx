@@ -775,8 +775,8 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
       : allFc[0];
     if (!fc) return [];
     return (fc.cards || []).map(c => ({
-      word: c.front || c.en || '',
-      zh: c.back || c.zh || '',
+      word: c.term || c.front || c.en || '',
+      zh: c.zh || c.back || '',
     })).filter(c => c.word.trim());
   }, [item, catItems]);
 
@@ -820,18 +820,8 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   if (!words.length) return (
     <div className="wp-empty">
       <div className="wp-empty-icon">✍</div>
-      <div>找不到單字卡</div>
-      <div style={{fontSize:11,color:'#999',marginTop:8,textAlign:'left',maxWidth:360,wordBreak:'break-all'}}>
-        linkedId: {item.linkedFlashcardId || '(none)'}<br/>
-        flashcards found: {(catItems||[]).filter(i=>i.type==='flashcard').length}<br/>
-        {(() => {
-          const fc = (catItems||[]).find(i=>i.type==='flashcard');
-          if (!fc) return 'no flashcard item';
-          const c0 = (fc.cards||[])[0];
-          if (!c0) return `fc "${fc.title}" has no cards`;
-          return `first card keys: ${Object.keys(c0).join(', ')} | front="${c0.front}" en="${c0.en}"`;
-        })()}
-      </div>
+      <div className="wp-empty-msg">找不到單字卡</div>
+      <div className="wp-empty-sub">請在編輯模式中為此練習綁定一組單字卡</div>
     </div>
   );
 
