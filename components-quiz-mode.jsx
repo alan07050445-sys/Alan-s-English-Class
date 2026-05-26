@@ -281,7 +281,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
-            const hasQuiz  = totalQ > 0;
+            const isWriting = item.type === 'writing-practice';
+            const hasQuiz  = totalQ > 0 || isWriting;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -305,8 +306,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {totalQ} questions
-                        {scorePct !== null && <span className="qm-unit-score-badge">{scorePct}%</span>}
+                        {isWriting ? '✍ Writing Practice' : `${totalQ} questions`}
+                        {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
                   </div>
