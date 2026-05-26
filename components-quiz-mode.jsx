@@ -366,6 +366,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               ✎ Edit this item
             </button>
           </div>
+        ) : selectedItem?.type === 'writing-practice' ? (
+          <WritingPracticePlayer
+            item={selectedItem}
+            catItems={items || []}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setSelectedItem(null)}
+          />
         ) : phase === 'intro' ? (
           <QuizIntroScreen
             item={selectedItem}
@@ -754,4 +761,124 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems });
+/* ══════════════════════════════════════════════════════
+   WRITING PRACTICE PLAYER
+══════════════════════════════════════════════════════ */
+function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
+  // Get words from linked flashcard
+  const words = useQMM(() => {
+    const fc = item.linkedFlashcardId
+      ? (catItems || []).find(it => it.id === item.linkedFlashcardId && it.type === 'flashcard')
+      : null;
+    if (fc && fc.cards) return fc.cards.map(c => ({ word: c.front, zh: c.back })).filter(c => c.word);
+    return [];
+  }, [item, catItems]);
+
+  const [idx, setIdx]           = useQM(0);
+  const [sentence, setSentence] = useQM('');
+  const [feedback, setFeedback] = useQM('');
+  const [checking, setChecking] = useQM(false);
+  const [scores, setScores]     = useQM([]); // array of star counts (1-5)
+  const [done, setDone]         = useQM(false);
+
+  const current = words[idx];
+  const total   = words.length;
+
+  const extractStars = (text) => {
+    const m = text.match(/[★☆]{1,5}/);
+    if (!m) return 3;
+    return (m[0].match(/★/g) || []).length;
+  };
+
+  const submit = async () => {
+    if (!sentence.trim()) return;
+    setChecking(true);
+    setFeedback('');
+    const result = await window.checkWriting(current.word, sentence);
+    setFeedback(result);
+    const stars = extractStars(result);
+    setScores(prev => [...prev, stars]);
+    setChecking(false);
+  };
+
+  const next = () => {
+    if (idx + 1 >= total) { setDone(true); return; }
+    setIdx(idx + 1);
+    setSentence('');
+    setFeedback('');
+  };
+
+  const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const avgDisplay = scores.length ? avg.toFixed(1) : '—';
+
+  if (!words.length) return (
+    <div className="wp-empty">
+      <div className="wp-empty-icon">✍</div>
+      <div>請在編輯模式綁定單字卡</div>
+    </div>
+  );
+
+  if (done) return (
+    <div className="wp-done">
+      <div className="wp-done-icon">✦</div>
+      <div className="wp-done-title">Writing Practice Complete</div>
+      <div className="wp-done-sub">已完成 {total} 個單字造句</div>
+      <div className="wp-done-score">
+        <span className="wp-done-avg">{avgDisplay}</span>
+        <span className="wp-done-maxstar"> / 5 ★</span>
+      </div>
+      <div className="wp-done-breakdown">
+        {words.map((w, i) => (
+          <div key={i} className="wp-done-row">
+            <span className="wp-done-word">{w.word}</span>
+            <span className="wp-done-stars">{'★'.repeat(scores[i] || 0)}{'☆'.repeat(5 - (scores[i] || 0))}</span>
+          </div>
+        ))}
+      </div>
+      <button className="qm-btn secondary" onClick={onBack} style={{marginTop:20}}>← 返回</button>
+    </div>
+  );
+
+  return (
+    <div className="wp-player">
+      <div className="wp-progress-bar">
+        <div className="wp-progress-fill" style={{width: `${(idx / total) * 100}%`}}/>
+      </div>
+      <div className="wp-header">
+        <button className="wp-back" onClick={onBack}>←</button>
+        <span className="wp-counter">{idx + 1} / {total}</span>
+        <span className="wp-avg">{scores.length > 0 ? `avg ${avgDisplay}★` : ''}</span>
+      </div>
+      <div className="wp-card">
+        <div className="wp-instruction">Use the word in a sentence</div>
+        <div className="wp-word">{current.word}</div>
+        {current.zh && <div className="wp-zh">{current.zh}</div>}
+        <div className="wp-rules">
+          <span>· Must clearly express the word's meaning</span>
+          <span>· At least 7 words</span>
+        </div>
+      </div>
+      <textarea
+        className="qm-writing-input wp-input"
+        value={sentence}
+        onChange={e => setSentence(e.target.value)}
+        placeholder={`Write a sentence using "${current.word}"…`}
+        disabled={!!feedback}
+      />
+      {!feedback ? (
+        <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !sentence.trim()}>
+          {checking ? '批改中…' : '送出批改 →'}
+        </button>
+      ) : (
+        <>
+          <WritingFeedback text={feedback} />
+          <button className="qm-btn primary wp-next" onClick={next}>
+            {idx + 1 >= total ? '完成 ✦' : '下一個單字 →'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer });

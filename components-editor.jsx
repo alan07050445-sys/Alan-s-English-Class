@@ -11,7 +11,8 @@ const TYPE_OPTIONS = [
   { id: "note",      label: "Notes",      hint: "Write your own notes" },
   { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },
   { id: "flashcard", label: "Flashcard",  hint: "自製單字卡組 — 支援圖片搜尋、匯入、三種練習模式" },
-  { id: "fillblank", label: "Fill Blank", hint: "填空題 — 自訂句子填空，支援主題換色" },
+  { id: "fillblank",        label: "Fill Blank",       hint: "填空題 — 自訂句子填空，支援主題換色" },
+  { id: "writing-practice", label: "Writing Practice", hint: "✍ AI 造句批改 — 學生逐題造句，AI 給星評分" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -118,6 +119,21 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
                 onChange={questions => update("questions", questions)}
               />
             </>
+          ) : form.type === "writing-practice" ? (
+            <div className="field">
+              <label className="field-label">Linked Flashcard · 綁定單字卡（必選）</label>
+              <select
+                value={form.linkedFlashcardId || ""}
+                onChange={e => update("linkedFlashcardId", e.target.value || undefined)}
+                style={{width:"100%",padding:"9px 12px",border:"1px solid var(--border)",background:"var(--bg)",color:"var(--ink)",borderRadius:2,fontSize:14}}
+              >
+                <option value="">— 請選擇一組單字卡 —</option>
+                {(catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0).map(fc => (
+                  <option key={fc.id} value={fc.id}>{fc.title} ({(fc.cards||[]).length} 張)</option>
+                ))}
+              </select>
+              <div className="field-help">學生將逐一對單字卡裡的每個單字造句，AI 自動批改並給星評分。</div>
+            </div>
           ) : form.type === "note" ? (
             <div className="field">
               <label className="field-label">Notes Body · 筆記內容</label>
