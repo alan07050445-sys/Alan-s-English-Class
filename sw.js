@@ -1,15 +1,16 @@
 // sw.js — Service Worker for Alan's English Class PWA
-const CACHE = 'alans-english-v24';
+const CACHE = 'alans-english-v25';
+const BASE = '/Alan-s-English-Class';
 const PRECACHE = [
-  '/', '/index.html', '/manifest.json',
-  '/styles.css', '/styles-part2.css', '/styles-quiz.css',
-  '/styles-flashcard.css', '/styles-auth.css', '/styles-quiz-mode.css',
-  '/data.js',
-  '/components-shell.jsx', '/components-cat.jsx', '/components-quiz.jsx',
-  '/components-flashcard.jsx', '/components-editor.jsx',
-  '/components-quiz-mode.jsx', '/components-dashboard.jsx',
-  '/tweaks-panel.jsx', '/app.jsx',
-  '/icon.svg', '/icon-512.png', '/apple-touch-icon.png',
+  BASE + '/', BASE + '/index.html', BASE + '/manifest.json',
+  BASE + '/styles.css', BASE + '/styles-part2.css', BASE + '/styles-quiz.css',
+  BASE + '/styles-flashcard.css', BASE + '/styles-auth.css', BASE + '/styles-quiz-mode.css',
+  BASE + '/data.js',
+  BASE + '/components-shell.jsx', BASE + '/components-cat.jsx', BASE + '/components-quiz.jsx',
+  BASE + '/components-flashcard.jsx', BASE + '/components-editor.jsx',
+  BASE + '/components-quiz-mode.jsx', BASE + '/components-dashboard.jsx',
+  BASE + '/tweaks-panel.jsx', BASE + '/app.jsx',
+  BASE + '/icon.svg', BASE + '/icon-512.png', BASE + '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', e => {
