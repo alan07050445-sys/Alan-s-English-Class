@@ -73,9 +73,10 @@ function getItemQuestions(item) {
 // All quiz-able items in a category
 function getQuizItems(items) {
   return (items || []).filter(item =>
-    (item.type === 'vocab-quiz' && (item.words || []).length >= 2) ||
-    (item.type === 'fillblank'  && (item.questions || []).length >= 2) ||
-    (item.type === 'quiz'       && (item.questions || []).length > 0)
+    (item.type === 'vocab-quiz'       && (item.words || []).length >= 2) ||
+    (item.type === 'fillblank'        && (item.questions || []).length >= 2) ||
+    (item.type === 'quiz'             && (item.questions || []).length > 0) ||
+    (item.type === 'writing-practice' && item.linkedFlashcardId)
   );
 }
 
@@ -446,7 +447,6 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
           開始測驗 · Start Quiz →
         </button>
       </div>
-      <WritingPractice item={item}/>
     </div>
   );
 }
