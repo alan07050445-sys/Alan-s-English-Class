@@ -537,7 +537,7 @@ async function checkWriting(word, sentence) {
             `You are a friendly English teacher for young learners (ages 8-14).\n` +
             `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
             `Reply in Traditional Chinese (繁體中文) using this exact format (no emoji, clean style):\n\n` +
-            `文法   CORRECT 或 INCORRECT\n` +
+            `文法   ✓ CORRECT 或 ✗ INCORRECT\n` +
             `意思   （把學生的句子翻譯成中文）\n\n` +
             `（一句溫暖鼓勵的話）\n\n` +
             `修正   （如果文法有錯，給出正確版本；正確則省略）\n\n` +
@@ -576,7 +576,7 @@ async function checkWriting(word, sentence) {
           `You are a friendly English teacher for young learners (ages 8-14).\n` +
           `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
           `Reply in Traditional Chinese (繁體中文) using this exact format (no emoji, clean style):\n\n` +
-          `文法   CORRECT 或 INCORRECT\n` +
+          `文法   ✓ CORRECT 或 ✗ INCORRECT\n` +
           `意思   （把學生的句子翻譯成中文）\n\n` +
           `（一句溫暖鼓勵的話）\n\n` +
           `修正   （如果文法有錯，給出正確版本；正確則省略）\n\n` +

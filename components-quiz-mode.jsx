@@ -444,6 +444,58 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
   );
 }
 
+function WritingFeedback({ text }) {
+  const lines = text.split('\n');
+  const elements = [];
+  let inExamples = false;
+
+  lines.forEach((line, i) => {
+    const trimmed = line.trim();
+    if (!trimmed) { inExamples = false; elements.push(<div key={i} className="wf-spacer"/>); return; }
+
+    if (trimmed.startsWith('文法')) {
+      const isCorrect = /CORRECT/i.test(trimmed) && !/INCORRECT/i.test(trimmed);
+      elements.push(
+        <div key={i} className={`wf-verdict ${isCorrect ? 'correct' : 'incorrect'}`}>
+          <span className="wf-verdict-icon">{isCorrect ? '✓' : '✗'}</span>
+          <span className="wf-verdict-label">文法</span>
+          <span className="wf-verdict-val">{isCorrect ? 'CORRECT' : 'INCORRECT'}</span>
+        </div>
+      );
+      return;
+    }
+    if (trimmed.startsWith('意思')) {
+      const val = trimmed.replace(/^意思\s*/, '');
+      elements.push(<div key={i} className="wf-row"><span className="wf-key">意思</span><span className="wf-val meaning">{val}</span></div>);
+      return;
+    }
+    if (trimmed.startsWith('修正')) {
+      const val = trimmed.replace(/^修正\s*/, '');
+      elements.push(<div key={i} className="wf-row"><span className="wf-key">修正</span><span className="wf-val correction">{val}</span></div>);
+      return;
+    }
+    if (trimmed === '範例') {
+      inExamples = true;
+      elements.push(<div key={i} className="wf-examples-title">範例</div>);
+      return;
+    }
+    if (trimmed.startsWith('·') || trimmed.startsWith('•')) {
+      const val = trimmed.replace(/^[·•]\s*/, '');
+      elements.push(<div key={i} className="wf-example-row"><span className="wf-bullet">·</span><span>{val}</span></div>);
+      return;
+    }
+    if (trimmed.startsWith('評分')) {
+      const stars = trimmed.replace(/^評分\s*/, '');
+      elements.push(<div key={i} className="wf-score"><span className="wf-key">評分</span><span className="wf-stars">{stars}</span></div>);
+      return;
+    }
+    // encouragement / other text
+    elements.push(<div key={i} className="wf-encourage">{trimmed}</div>);
+  });
+
+  return <div className="qm-writing-feedback wf-card">{elements}</div>;
+}
+
 function WritingPractice({ item }) {
   const words = useQMM(() => {
     if (item?.type === 'vocab-quiz') return (item.words || []).map(w => w.en).filter(Boolean);
@@ -488,7 +540,7 @@ function WritingPractice({ item }) {
       <button className="qm-btn secondary qm-writing-btn" onClick={submit} disabled={checking || !sentence.trim()}>
         {checking ? '批改中...' : '送出批改'}
       </button>
-      {feedback && <pre className="qm-writing-feedback">{feedback}</pre>}
+      {feedback && <WritingFeedback text={feedback} />}
     </div>
   );
 }
