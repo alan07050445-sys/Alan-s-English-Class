@@ -684,3 +684,31 @@
   font-size: 14px;
 }
 .wp-empty-icon { font-size: 32px; }
+.wp-empty-msg { font-weight: 500; }
+.wp-empty-sub { font-size: 12px; color: var(--ink-3); }
+
+/* ── Type-Answer Player ────────────────────────────── */
+.ta-prompt {
+  font-family: var(--serif); font-size: 42px; font-weight: 700;
+  color: var(--ink); text-align: center; margin: 8px 0 32px;
+  letter-spacing: 0.01em;
+}
+.ta-input-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.ta-input {
+  width: 100%; max-width: 420px;
+  padding: 14px 18px; font-size: 20px; text-align: center;
+  border: 2px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--ink);
+  outline: none; transition: border-color 0.15s;
+  font-family: var(--mono, monospace);
+}
+.ta-input:focus { border-color: var(--ink); }
+.ta-input.correct { border-color: #22c55e; background: #f0fdf4; color: #166534; }
+.ta-input.wrong   { border-color: #ef4444; background: #fef2f2; color: #991b1b; }
+.ta-correct-ans {
+  font-size: 16px; font-weight: 600; color: #166534;
+  font-family: var(--mono, monospace);
+}

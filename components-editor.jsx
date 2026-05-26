@@ -13,6 +13,7 @@ const TYPE_OPTIONS = [
   { id: "flashcard", label: "Flashcard",  hint: "自製單字卡組 — 支援圖片搜尋、匯入、三種練習模式" },
   { id: "fillblank",        label: "Fill Blank",       hint: "填空題 — 自訂句子填空，支援主題換色" },
   { id: "writing-practice", label: "Writing Practice", hint: "✍ AI 造句批改 — 學生逐題造句，AI 給星評分" },
+  { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -41,7 +42,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -134,6 +135,13 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               </select>
               <div className="field-help">學生將逐一對單字卡裡的每個單字造句，AI 自動批改並給星評分。</div>
             </div>
+          ) : form.type === "type-answer" ? (
+            <TypeAnswerEditor
+              pairs={form.pairs || []}
+              instruction={form.instruction || ''}
+              onChangePairs={pairs => update("pairs", pairs)}
+              onChangeInstruction={v => update("instruction", v)}
+            />
           ) : form.type === "note" ? (
             <div className="field">
               <label className="field-label">Notes Body · 筆記內容</label>
@@ -783,6 +791,61 @@ Object.assign(window, {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── TypeAnswerEditor ── */
+function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstruction }) {
+  const addPair  = () => onChangePairs([...pairs, { id: Date.now().toString(), prompt: '', answer: '' }]);
+  const delPair  = (id) => onChangePairs(pairs.filter(p => p.id !== id));
+  const updPair  = (id, field, val) => onChangePairs(pairs.map(p => p.id === id ? {...p, [field]: val} : p));
+
+  return (
+    <div>
+      <div className="field">
+        <label className="field-label">Instruction · 指示（選填）</label>
+        <input
+          value={instruction}
+          onChange={e => onChangeInstruction(e.target.value)}
+          placeholder="e.g. Type the irregular past tense"
+          style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+        />
+        <div className="field-help">學生作答時會看到這行說明（不填則只顯示題目）。</div>
+      </div>
+      <div className="field">
+        <label className="field-label">題目 · Pairs ({pairs.length})</label>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Prompt（題目）</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Answer（答案）</div>
+          <div/>
+          {pairs.map(p => (
+            <React.Fragment key={p.id}>
+              <input
+                value={p.prompt}
+                onChange={e => updPair(p.id, 'prompt', e.target.value)}
+                placeholder="go"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+              />
+              <input
+                value={p.answer}
+                onChange={e => updPair(p.id, 'answer', e.target.value)}
+                placeholder="went"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+              />
+              <button
+                onClick={() => delPair(p.id)}
+                style={{padding:'7px 10px',border:'1px solid var(--border)',borderRadius:2,background:'none',cursor:'pointer',color:'var(--ink-3)',fontSize:13}}
+                title="Delete"
+              >✕</button>
+            </React.Fragment>
+          ))}
+        </div>
+        <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}} onClick={addPair}>
+          ＋ Add pair
+        </button>
+        <div className="field-help">每行一題：左欄是學生看到的提示，右欄是正確答案（批改時不分大小寫）。</div>
       </div>
     </div>
   );

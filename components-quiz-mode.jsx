@@ -76,7 +76,8 @@ function getQuizItems(items) {
     (item.type === 'vocab-quiz'       && (item.words || []).length >= 2) ||
     (item.type === 'fillblank'        && (item.questions || []).length >= 2) ||
     (item.type === 'quiz'             && (item.questions || []).length > 0) ||
-    (item.type === 'writing-practice' && item.linkedFlashcardId)
+    (item.type === 'writing-practice' && item.linkedFlashcardId) ||
+    (item.type === 'type-answer'      && (item.pairs || []).length >= 1)
   );
 }
 
@@ -281,8 +282,9 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
-            const isWriting = item.type === 'writing-practice';
-            const hasQuiz  = totalQ > 0 || isWriting;
+            const isWriting    = item.type === 'writing-practice';
+            const isTypeAnswer = item.type === 'type-answer';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -306,7 +308,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isWriting ? '✍ Writing Practice' : `${totalQ} questions`}
+                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -382,6 +384,15 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               ✎ Edit this item
             </button>
           </div>
+        ) : selectedItem?.type === 'type-answer' && phase === 'quiz' ? (
+          <TypeAnswerPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'type-answer' && phase === 'intro' ? (
+          <TypeAnswerIntro item={selectedItem} onStart={() => setPhase('quiz')} />
         ) : selectedItem?.type === 'writing-practice' && phase === 'quiz' ? (
           <WritingPracticePlayer
             item={selectedItem}
@@ -529,51 +540,155 @@ function WritingFeedback({ text }) {
   return <div className="qm-writing-feedback wf-card">{elements}</div>;
 }
 
-function WritingPractice({ item }) {
-  const words = useQMM(() => {
-    if (item?.type === 'vocab-quiz') return (item.words || []).map(w => w.en).filter(Boolean);
-    if (item?.type === 'fillblank') return (item.questions || []).map(q => q.answer).filter(Boolean);
-    return [];
-  }, [item]);
-  const [word, setWord] = useQM(words[0] || item?.title || '');
-  const [sentence, setSentence] = useQM('');
-  const [feedback, setFeedback] = useQM('');
-  const [checking, setChecking] = useQM(false);
+/* ══════════════════════════════════════════════════════
+   TYPE-ANSWER INTRO
+══════════════════════════════════════════════════════ */
+function TypeAnswerIntro({ item, onStart }) {
+  const count = (item.pairs || []).length;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">⌨</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{count} words</div>
+      <div className="qm-intro-rules">
+        {item.instruction && (
+          <div className="qm-intro-rule-row"><span>📋</span><span>{item.instruction}</span></div>
+        )}
+        <div className="qm-intro-rule-row"><span>✏️</span><span>看到提示單字，自己打出正確答案</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫，拼對就算對</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          開始練習 · Start →
+        </button>
+      </div>
+    </div>
+  );
+}
 
-  React.useEffect(() => { setWord(words[0] || item?.title || ''); setSentence(''); setFeedback(''); }, [item?.id]);
-  if (!words.length && !item?.title) return null;
+/* ══════════════════════════════════════════════════════
+   TYPE-ANSWER PLAYER
+══════════════════════════════════════════════════════ */
+function TypeAnswerPlayer({ item, progressKey, onBack }) {
+  const pairs = useQMM(() => shuffleArr(item.pairs || []), [item.id]);
+  const [idx,      setIdx]      = useQM(0);
+  const [input,    setInput]    = useQM('');
+  const [result,   setResult]   = useQM(null); // null | 'correct' | 'wrong'
+  const [score,    setScore]    = useQM(0);
+  const [screen,   setScreen]   = useQM('play'); // 'play' | 'done'
+  const inputRef = React.useRef(null);
 
-  const submit = async () => {
-    setChecking(true);
-    setFeedback('');
-    const result = await window.checkWriting(word, sentence);
-    setFeedback(result);
-    setChecking(false);
+  const total   = pairs.length;
+  const current = pairs[idx];
+  const pct     = Math.round(idx / total * 100);
+
+  React.useEffect(() => {
+    if (result === null && inputRef.current) inputRef.current.focus();
+  }, [idx, result]);
+
+  const check = () => {
+    if (!input.trim()) return;
+    const correct = input.trim().toLowerCase() === (current.answer || '').trim().toLowerCase();
+    setResult(correct ? 'correct' : 'wrong');
+    if (correct) {
+      setScore(s => s + 1);
+      if (window.playSound) window.playSound('correct');
+    } else {
+      if (window.playSound) window.playSound('wrong');
+    }
   };
 
-  return (
-    <div className="qm-writing">
-      <div className="qm-writing-head">
-        <span>AI 造句批改</span>
-        <small>Use the word in one sentence</small>
-      </div>
-      {words.length > 0 && (
-        <div className="qm-word-chips">
-          {words.slice(0, 8).map(w => (
-            <button key={w} className={w === word ? 'active' : ''} onClick={() => setWord(w)}>{w}</button>
-          ))}
+  const next = () => {
+    if (idx + 1 >= total) {
+      const finalScore = score + (result === 'correct' ? 1 : 0);
+      const prev = loadQMProg();
+      prev[progressKey] = { done: total, score: finalScore, total, ts: Date.now() };
+      saveQMProg(prev);
+      if (window.playSound) window.playSound('complete');
+      setScreen('done');
+    } else {
+      setIdx(i => i + 1);
+      setInput('');
+      setResult(null);
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') { result === null ? check() : next(); }
+  };
+
+  /* ── Done screen ── */
+  if (screen === 'done') {
+    const finalScore = score;
+    const finalPct   = Math.round(finalScore / total * 100);
+    const emoji = finalPct === 100 ? '🏆' : finalPct >= 80 ? '🎉' : finalPct >= 60 ? '👍' : '💪';
+    return (
+      <div className="qm-result">
+        <div className="qm-result-emoji">{emoji}</div>
+        <div className="qm-result-cat-title">{item.title}</div>
+        <div className="qm-result-score">
+          <span className="qm-result-num">{finalScore}</span>
+          <span className="qm-result-denom"> / {total}</span>
         </div>
-      )}
-      <textarea
-        className="qm-writing-input"
-        value={sentence}
-        onChange={e => setSentence(e.target.value)}
-        placeholder={`Write a sentence with "${word}"...`}
-      />
-      <button className="qm-btn secondary qm-writing-btn" onClick={submit} disabled={checking || !sentence.trim()}>
-        {checking ? '批改中...' : '送出批改'}
-      </button>
-      {feedback && <WritingFeedback text={feedback} />}
+        <div className="qm-result-pct">{finalPct}% correct</div>
+        <div className="qm-result-btns">
+          <button className="qm-btn secondary" onClick={() => { setIdx(0); setInput(''); setResult(null); setScore(0); setScreen('play'); }}>再試一次</button>
+          <button className="qm-btn primary"   onClick={onBack}>← Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Play screen ── */
+  return (
+    <div className="qm-player-shell">
+      <div className="qm-player-head">
+        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="qm-player-bar-wrap">
+          <div className="qm-player-bar">
+            <div className="qm-player-fill" style={{width: pct + '%'}}/>
+          </div>
+        </div>
+        <span className="qm-player-counter">{idx + 1} / {total}</span>
+      </div>
+
+      <div className="qm-question-area">
+        {item.instruction && <div className="qm-question-hint">{item.instruction}</div>}
+        <div className="ta-prompt">{current?.prompt}</div>
+      </div>
+
+      <div className="ta-input-wrap">
+        <input
+          ref={inputRef}
+          className={`ta-input${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
+          value={input}
+          onChange={e => { if (result === null) setInput(e.target.value); }}
+          onKeyDown={handleKey}
+          placeholder="Type your answer…"
+          disabled={result !== null}
+          autoComplete="off" autoCapitalize="none" spellCheck={false}
+        />
+        {result === 'wrong' && (
+          <div className="ta-correct-ans">✓ {current.answer}</div>
+        )}
+      </div>
+
+      <div className="qm-feedback" style={{marginTop: result ? 8 : 0}}>
+        {result === null ? (
+          <button className="qm-btn primary" onClick={check} disabled={!input.trim()}>
+            確認 · Check →
+          </button>
+        ) : (
+          <>
+            <div className={`qm-feedback-banner ${result}`}>
+              {result === 'correct' ? '✓ Correct! 答對了！' : `✗ The answer is: ${current.answer}`}
+            </div>
+            <button className="qm-btn primary" onClick={next}>
+              {idx + 1 >= total ? '查看成績 →' : '下一題 →'}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -942,4 +1057,4 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer });
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer });
