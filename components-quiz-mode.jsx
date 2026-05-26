@@ -821,10 +821,16 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
     <div className="wp-empty">
       <div className="wp-empty-icon">✍</div>
       <div>找不到單字卡</div>
-      <div style={{fontSize:11,color:'#999',marginTop:8,textAlign:'left',maxWidth:300}}>
+      <div style={{fontSize:11,color:'#999',marginTop:8,textAlign:'left',maxWidth:360,wordBreak:'break-all'}}>
         linkedId: {item.linkedFlashcardId || '(none)'}<br/>
-        catItems types: {(catItems||[]).map(i=>i.type).join(', ') || '(empty)'}<br/>
-        flashcards found: {(catItems||[]).filter(i=>i.type==='flashcard').length}
+        flashcards found: {(catItems||[]).filter(i=>i.type==='flashcard').length}<br/>
+        {(() => {
+          const fc = (catItems||[]).find(i=>i.type==='flashcard');
+          if (!fc) return 'no flashcard item';
+          const c0 = (fc.cards||[])[0];
+          if (!c0) return `fc "${fc.title}" has no cards`;
+          return `first card keys: ${Object.keys(c0).join(', ')} | front="${c0.front}" en="${c0.en}"`;
+        })()}
       </div>
     </div>
   );
