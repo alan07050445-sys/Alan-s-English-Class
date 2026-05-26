@@ -768,11 +768,16 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
 function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   // Get words from linked flashcard
   const words = useQMM(() => {
+    const allFc = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
+    // Try linked flashcard first, then fall back to first available
     const fc = item.linkedFlashcardId
-      ? (catItems || []).find(it => it.id === item.linkedFlashcardId && it.type === 'flashcard')
-      : null;
-    if (fc && fc.cards) return fc.cards.map(c => ({ word: c.front, zh: c.back })).filter(c => c.word);
-    return [];
+      ? (allFc.find(it => it.id === item.linkedFlashcardId) || allFc[0])
+      : allFc[0];
+    if (!fc) return [];
+    return (fc.cards || []).map(c => ({
+      word: c.front || c.en || '',
+      zh: c.back || c.zh || '',
+    })).filter(c => c.word.trim());
   }, [item, catItems]);
 
   const [idx, setIdx]           = useQM(0);
