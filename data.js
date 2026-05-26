@@ -531,7 +531,7 @@ async function checkWriting(word, sentence) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-3-5-haiku-20241022',
+          model: 'claude-haiku-4-5',
           max_tokens: 400,
           messages: [{ role: 'user', content:
             `You are a friendly English teacher for young learners (ages 8-14). ` +
@@ -560,7 +560,7 @@ async function checkWriting(word, sentence) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-haiku-4-5',
         max_tokens: 400,
         messages: [{ role: 'user', content:
           `You are a friendly English teacher for young learners (ages 8-14). ` +
