@@ -798,9 +798,31 @@ Object.assign(window, {
 
 /* ── TypeAnswerEditor ── */
 function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstruction }) {
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr,  setImportErr]  = useS('');
+
   const addPair  = () => onChangePairs([...pairs, { id: Date.now().toString(), prompt: '', answer: '' }]);
   const delPair  = (id) => onChangePairs(pairs.filter(p => p.id !== id));
   const updPair  = (id, field, val) => onChangePairs(pairs.map(p => p.id === id ? {...p, [field]: val} : p));
+
+  const doImport = () => {
+    const lines = importText.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsed = [];
+    const bad = [];
+    lines.forEach((line, i) => {
+      // support tab (from Excel/Sheets) or comma
+      const sep = line.includes('\t') ? '\t' : ',';
+      const cols = line.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+      if (cols.length < 2 || !cols[0] || !cols[1]) { bad.push(i + 1); return; }
+      parsed.push({ id: Date.now().toString() + i, prompt: cols[0], answer: cols[1] });
+    });
+    if (parsed.length === 0) { setImportErr('沒有可匯入的資料，請確認格式（每行：題目 TAB 答案）'); return; }
+    onChangePairs([...pairs, ...parsed]);
+    setImportText('');
+    setImporting(false);
+    setImportErr('');
+  };
 
   return (
     <div>
@@ -814,8 +836,44 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
         />
         <div className="field-help">學生作答時會看到這行說明（不填則只顯示題目）。</div>
       </div>
+
       <div className="field">
-        <label className="field-label">題目 · Pairs ({pairs.length})</label>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>題目 · Pairs ({pairs.length})</label>
+          <button
+            className="btn ghost"
+            style={{fontSize:11,padding:'4px 10px'}}
+            onClick={() => { setImporting(i => !i); setImportErr(''); }}
+          >
+            {importing ? '✕ 取消' : '📋 貼上匯入'}
+          </button>
+        </div>
+
+        {importing && (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-cream,#f7f3eb)'}}>
+            <div style={{fontSize:12,fontFamily:'var(--mono)',color:'var(--ink-3)',marginBottom:8}}>
+              從 Excel / Google Sheets 複製，貼上後按「匯入」。<br/>
+              格式：<strong>第一欄 = Prompt（題目）</strong>，<strong>第二欄 = Answer（答案）</strong>，Tab 或逗號分隔皆可。
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+              placeholder={'go\twent\nrun\tran\nsee\tsaw\nbuy\tbought'}
+              rows={6}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box'}}
+            />
+            {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:4}}>{importErr}</div>}
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}} onClick={doImport} disabled={!importText.trim()}>
+                匯入 {importText.trim() ? `(${importText.split('\n').filter(l=>l.trim()).length} 行)` : ''}
+              </button>
+              <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}} onClick={() => { setImporting(false); setImportErr(''); }}>
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
           <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Prompt（題目）</div>
           <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Answer（答案）</div>
