@@ -382,12 +382,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               ✎ Edit this item
             </button>
           </div>
-        ) : selectedItem?.type === 'writing-practice' ? (
+        ) : selectedItem?.type === 'writing-practice' && phase === 'quiz' ? (
           <WritingPracticePlayer
             item={selectedItem}
             catItems={items || []}
             progressKey={`${weekId}_${selectedItem.id}`}
-            onBack={() => setSelectedItem(null)}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'writing-practice' && phase === 'intro' ? (
+          <WritingPracticeIntro
+            item={selectedItem}
+            catItems={items || []}
+            onStart={() => setPhase('quiz')}
           />
         ) : phase === 'intro' ? (
           <QuizIntroScreen
@@ -777,6 +783,36 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   WRITING PRACTICE INTRO
+══════════════════════════════════════════════════════ */
+function WritingPracticeIntro({ item, catItems, onStart }) {
+  const allFc = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
+  const fc = item.linkedFlashcardId
+    ? (allFc.find(it => it.id === item.linkedFlashcardId) || allFc[0])
+    : allFc[0];
+  const wordCount = fc ? (fc.cards || []).filter(c => (c.term || c.front || c.en || '').trim()).length : 0;
+
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">✍</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{wordCount} words · AI 造句批改</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>📝</span><span>每個單字造一個英文句子</span></div>
+        <div className="qm-intro-rule-row"><span>📏</span><span>至少 7 個字</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>必須正確表達單字的意思</span></div>
+        <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，最高 5 顆星</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          開始練習 · Start Writing →
+        </button>
+      </div>
     </div>
   );
 }
