@@ -859,7 +859,6 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
       <div className="wp-card">
         <div className="wp-instruction">Use the word in a sentence</div>
         <div className="wp-word">{current.word}</div>
-        {current.zh && <div className="wp-zh">{current.zh}</div>}
         <div className="wp-rules">
           <span>· Must clearly express the word's meaning</span>
           <span>· At least 7 words</span>
