@@ -534,14 +534,24 @@ async function checkWriting(word, sentence) {
           model: 'claude-haiku-4-5',
           max_tokens: 400,
           messages: [{ role: 'user', content:
-            `You are a friendly English teacher for young learners (ages 8-14). ` +
+            `You are a friendly English teacher for young learners (ages 8-14).\n` +
             `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
-            `Reply in Traditional Chinese (繁體中文). Include:\n` +
-            `1. ✅ or ❌ — is it grammatically correct?\n` +
-            `2. One brief encouraging sentence\n` +
-            `3. If wrong, show the corrected version\n` +
-            `4. Score: ⭐⭐⭐⭐⭐ (out of 5)\n` +
-            `Keep it short, warm and child-friendly.`
+            `Reply in Traditional Chinese (繁體中文) using this exact format (no emoji, clean style):\n\n` +
+            `文法   CORRECT 或 INCORRECT\n` +
+            `意思   （把學生的句子翻譯成中文）\n\n` +
+            `（一句溫暖鼓勵的話）\n\n` +
+            `修正   （如果文法有錯，給出正確版本；正確則省略）\n\n` +
+            `範例\n` +
+            `· （範例句 1）\n` +
+            `· （範例句 2）\n` +
+            `· （範例句 3）\n\n` +
+            `評分   ★★★★☆（滿分5顆）\n\n` +
+            `Important rules:\n` +
+            `1. Grammar: check if the sentence is grammatically correct.\n` +
+            `2. Usage: check if the word "${word}" is used with its real meaning, not just mentioned (e.g. "The teacher taught us the word ${word}" is NOT acceptable).\n` +
+            `3. Length: the sentence must be at least 7 words. If shorter, mark as INCORRECT.\n` +
+            `4. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different contexts.\n` +
+            `5. Score based on grammar, correct usage, and sentence length combined.`
           }],
         }),
       });
@@ -563,14 +573,24 @@ async function checkWriting(word, sentence) {
         model: 'claude-haiku-4-5',
         max_tokens: 400,
         messages: [{ role: 'user', content:
-          `You are a friendly English teacher for young learners (ages 8-14). ` +
+          `You are a friendly English teacher for young learners (ages 8-14).\n` +
           `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
-          `Reply in Traditional Chinese (繁體中文). Include:\n` +
-          `1. ✅ or ❌ — is it grammatically correct?\n` +
-          `2. One brief encouraging sentence\n` +
-          `3. If wrong, show the corrected version\n` +
-          `4. Score: ⭐⭐⭐⭐⭐ (out of 5)\n` +
-          `Keep it short, warm and child-friendly.`
+          `Reply in Traditional Chinese (繁體中文) using this exact format (no emoji, clean style):\n\n` +
+          `文法   CORRECT 或 INCORRECT\n` +
+          `意思   （把學生的句子翻譯成中文）\n\n` +
+          `（一句溫暖鼓勵的話）\n\n` +
+          `修正   （如果文法有錯，給出正確版本；正確則省略）\n\n` +
+          `範例\n` +
+          `· （範例句 1）\n` +
+          `· （範例句 2）\n` +
+          `· （範例句 3）\n\n` +
+          `評分   ★★★★☆（滿分5顆）\n\n` +
+          `Important rules:\n` +
+          `1. Grammar: check if the sentence is grammatically correct.\n` +
+          `2. Usage: check if the word "${word}" is used with its real meaning, not just mentioned (e.g. "The teacher taught us the word ${word}" is NOT acceptable).\n` +
+          `3. Length: the sentence must be at least 7 words. If shorter, mark as INCORRECT.\n` +
+          `4. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different contexts.\n` +
+          `5. Score based on grammar, correct usage, and sentence length combined.`
         }],
       }),
     });
