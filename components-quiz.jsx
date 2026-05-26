@@ -47,15 +47,36 @@ function parseQuizTable(text) {
     // skip obvious header rows
     if (idx === 0 && /question|題目|题目/i.test(line)) return;
     const cells = splitRow(line);
-    if (cells.length < 3) { errors.push(`Row ${idx + 1}: need at least Question + 2 options`); return; }
+    if (cells.length < 3) { errors.push(`Row ${idx + 1}: A 和 B 選項是必填，至少需要 3 欄`); return; }
     const [q, ...rest] = cells;
-    const opts = rest.slice(0, 4).filter(c => c.length > 0);
-    if (opts.length < 2) { errors.push(`Row ${idx + 1}: at least 2 options required`); return; }
-    const explain = rest.length > 4 ? rest.slice(4).join(" ").trim() : "";
+    // Column layout:
+    //   3 cols total → Q, A, B          (no C/D, no explanation)
+    //   4 cols total → Q, A, B, C       (no explanation)
+    //   5 cols total → Q, A, B, C, Expl (C optional; explanation in col 5)
+    //   6 cols total → Q, A, B, C, D, Expl
+    //   7+ cols      → Q, A, B, C, D, Expl (extra joined)
+    let opts, explain;
+    if (rest.length <= 3) {
+      // 3-4 total cols: all non-Q cells are options, no explanation
+      opts = rest.filter(c => c.length > 0);
+      explain = "";
+    } else {
+      // 5+ total cols: last cell(s) after the options are explanation
+      // max 4 options (A-D), anything beyond is explanation
+      opts = rest.slice(0, 4).filter(c => c.length > 0);
+      explain = rest.slice(4).join(" ").trim();
+      // Special case: if only 3 options provided (rest.length === 4),
+      // the 4th non-Q cell is explanation (col 5 in teacher's view)
+      if (rest.length === 4) {
+        opts = rest.slice(0, 3).filter(c => c.length > 0);
+        explain = rest[3] || "";
+      }
+    }
+    if (opts.length < 2) { errors.push(`Row ${idx + 1}: 至少需要 A 和 B 兩個選項`); return; }
     out.push({
       q,
       options: opts,
-      answer: 0, // first option is always the correct one at import time
+      answer: 0, // first option is always correct at import time
       explain,
     });
   });
@@ -301,25 +322,26 @@ function QuizEditor({ questions, onChange }) {
       {importOpen && (
         <div className="qe-import-panel">
           <div className="qe-import-help">
-            從試算表複製貼上（每列一題）：
+            從試算表複製貼上，每列一題：
             <span className="qe-import-tag">題目</span>
             <span className="qe-import-sep">[TAB]</span>
-            <span className="qe-import-tag">選項A（正解）</span>
+            <span className="qe-import-tag">A — 正解 ✦必填</span>
             <span className="qe-import-sep">[TAB]</span>
-            <span className="qe-import-tag">選項B</span>
+            <span className="qe-import-tag">B ✦必填</span>
             <span className="qe-import-sep">[TAB]</span>
-            <span className="qe-import-tag">選項C</span>
+            <span className="qe-import-tag" style={{opacity:0.6}}>C（選填）</span>
             <span className="qe-import-sep">[TAB]</span>
-            <span className="qe-import-tag">選項D</span>
-            <span className="qe-import-sep"> · </span>
-            <span style={{color:"var(--ink-3)"}}>詳解可加第六欄（可省略）· 第一個選項預設為正解</span>
+            <span className="qe-import-tag" style={{opacity:0.6}}>D（選填）</span>
+            <span className="qe-import-sep">[TAB]</span>
+            <span className="qe-import-tag" style={{opacity:0.6}}>詳解（選填）</span>
+            <span style={{color:"var(--ink-3)",display:'block',marginTop:4}}>· 第一個選項（A）預設為正解 · C/D 省略時詳解自動移到第五欄</span>
           </div>
           <textarea
             className="qe-import-textarea"
             value={importText}
             onChange={e => setImportText(e.target.value)}
             rows={7}
-            placeholder={"What does 'biology' mean?\tThe study of life\tThe study of rocks\tThe study of plants\tThe study of stars\nWhich animal is a mammal?\tDolphin\tSalmon\tEagle\tCobra"}
+            placeholder={"What does 'fable' mean?\tA short story with a moral\tA type of song\tA kind of poem\t寓言故事是有教訓意義的短篇故事。\nWhich word means 'very tired'?\tExhausted\tHungry\tExcited\nThe opposite of 'safe' is ___.\tDangerous\tHappy\tSmall\tBrave\tOpposites are words with contrasting meanings."}
           />
           <div className="qe-import-foot2">
             <button type="button" className="qe-import-cancel" onClick={() => { setImportOpen(false); setImportText(""); }}>
