@@ -482,6 +482,7 @@ function App() {
           onAddItem={handleAddItem}
           onEditItem={handleEditItem}
           onDeleteItem={handleDeleteItem}
+          onMoveItem={(itemId, dir) => handleMoveItem(catView.id, itemId, dir)}
           homework={week.homework || {}}
           onSetHomework={handleSetHomework}
           weekQuizItems={weekQuizItems}

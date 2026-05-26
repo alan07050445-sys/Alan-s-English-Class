@@ -222,7 +222,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, homework, onSetHomework, weekQuizItems }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, homework, onSetHomework, weekQuizItems }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -315,6 +315,20 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 <div style={{display:'flex',gap:'4px',alignItems:'center',flexShrink:0}}>
                   {editMode ? (
                     <>
+                      <div className="qm-unit-move-btns">
+                        <button
+                          className="qm-unit-move-btn"
+                          onClick={(e) => { e.stopPropagation(); onMoveItem && onMoveItem(item.id, -1); }}
+                          title="Move up"
+                          disabled={sidebarItems.indexOf(item) === 0}
+                        >▲</button>
+                        <button
+                          className="qm-unit-move-btn"
+                          onClick={(e) => { e.stopPropagation(); onMoveItem && onMoveItem(item.id, 1); }}
+                          title="Move down"
+                          disabled={sidebarItems.indexOf(item) === sidebarItems.length - 1}
+                        >▼</button>
+                      </div>
                       <button
                         className={`qm-unit-hw-btn${hw ? ' active' : ''}`}
                         onClick={(e) => {
