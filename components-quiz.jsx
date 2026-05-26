@@ -301,59 +301,34 @@ function QuizEditor({ questions, onChange }) {
       {importOpen && (
         <div className="qe-import-panel">
           <div className="qe-import-help">
-            <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 8}}>FORMAT · 格式</div>
-            <div style={{fontSize: 13, lineHeight: 1.6, color: "var(--ink-soft)"}}>
-              從 <b>Excel 或 Google Sheets</b> 複製貼上，每一列一題。欄位：<br/>
-              <code style={{background: "var(--bg)", padding: "2px 6px", borderRadius: 3, fontSize: 12}}>
-                題目 &nbsp;|&nbsp; 選項A（★正解） &nbsp;|&nbsp; 選項B &nbsp;|&nbsp; 選項C &nbsp;|&nbsp; 選項D &nbsp;|&nbsp; 詳解（可選）
-              </code><br/>
-              <span style={{color: "var(--ink-muted)"}}>· 第一個選項預設為正解 · 至少 2 個選項 · 學生作答時選項會自動洗牌</span>
-            </div>
+            從試算表複製貼上（每列一題）：
+            <span className="qe-import-tag">題目</span>
+            <span className="qe-import-sep">[TAB]</span>
+            <span className="qe-import-tag">選項A（正解）</span>
+            <span className="qe-import-sep">[TAB]</span>
+            <span className="qe-import-tag">選項B</span>
+            <span className="qe-import-sep">[TAB]</span>
+            <span className="qe-import-tag">選項C</span>
+            <span className="qe-import-sep">[TAB]</span>
+            <span className="qe-import-tag">選項D</span>
+            <span className="qe-import-sep"> · </span>
+            <span style={{color:"var(--ink-3)"}}>詳解可加第六欄（可省略）· 第一個選項預設為正解</span>
           </div>
           <textarea
             className="qe-import-textarea"
             value={importText}
             onChange={e => setImportText(e.target.value)}
-            rows={8}
-            placeholder={"What does 'biology' mean?\tThe study of life\tThe study of rocks\tThe study of plants\tThe study of stars\tBio = life in Greek.\n\nWhich is a fable?\tThe Tortoise and the Hare\tHarry Potter\tHamlet\tCinderella\tFables are short stories with morals."}
+            rows={7}
+            placeholder={"What does 'biology' mean?\tThe study of life\tThe study of rocks\tThe study of plants\tThe study of stars\nWhich animal is a mammal?\tDolphin\tSalmon\tEagle\tCobra"}
           />
-          <div className="qe-import-foot">
-            <div className="qe-import-stats mono">
-              {importText.trim() === "" ? (
-                <span style={{color: "var(--ink-muted)"}}>Paste your table above</span>
-              ) : (
-                <>
-                  <span style={{color: importPreview.questions.length > 0 ? "var(--moss)" : "var(--ink-muted)"}}>
-                    ✓ {importPreview.questions.length} questions parsed
-                  </span>
-                  {importPreview.errors.length > 0 && (
-                    <span style={{color: "var(--accent)", marginLeft: 12}}>
-                      ⚠ {importPreview.errors.length} skipped
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="qe-import-actions">
-              <label className="qe-mode-radio">
-                <input type="radio" checked={importMode === "append"} onChange={() => setImportMode("append")}/>
-                <span>Append · 附加</span>
-              </label>
-              <label className="qe-mode-radio">
-                <input type="radio" checked={importMode === "replace"} onChange={() => setImportMode("replace")}/>
-                <span>Replace · 取代</span>
-              </label>
-              <button type="button" className="btn primary" onClick={applyImport} disabled={importPreview.questions.length === 0}>
-                Import →
-              </button>
-            </div>
+          <div className="qe-import-foot2">
+            <button type="button" className="qe-import-cancel" onClick={() => { setImportOpen(false); setImportText(""); }}>
+              CANCEL
+            </button>
+            <button type="button" className="qe-import-confirm" onClick={applyImport} disabled={importPreview.questions.length === 0}>
+              IMPORT {importPreview.questions.length > 0 ? `${importPreview.questions.length} QUESTIONS` : ''}
+            </button>
           </div>
-          {importPreview.errors.length > 0 && (
-            <div className="qe-import-errors">
-              {importPreview.errors.slice(0, 4).map((e, i) => <div key={i}>· {e}</div>)}
-              {importPreview.errors.length > 4 && <div>· … and {importPreview.errors.length - 4} more</div>}
-            </div>
-          )}
         </div>
       )}
 
