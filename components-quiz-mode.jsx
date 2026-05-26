@@ -820,7 +820,12 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   if (!words.length) return (
     <div className="wp-empty">
       <div className="wp-empty-icon">✍</div>
-      <div>請在編輯模式綁定單字卡</div>
+      <div>找不到單字卡</div>
+      <div style={{fontSize:11,color:'#999',marginTop:8,textAlign:'left',maxWidth:300}}>
+        linkedId: {item.linkedFlashcardId || '(none)'}<br/>
+        catItems types: {(catItems||[]).map(i=>i.type).join(', ') || '(empty)'}<br/>
+        flashcards found: {(catItems||[]).filter(i=>i.type==='flashcard').length}
+      </div>
     </div>
   );
 
