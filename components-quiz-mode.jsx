@@ -231,6 +231,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
   const [playerKey,    setPlayerKey]    = useQM(0);
+  const [progVersion,  setProgVersion]  = useQM(0);      // bumped after quiz completes → refreshes sidebar scores
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
   // Edit mode: show ALL items so teacher can see & edit non-quiz types too
@@ -243,7 +244,9 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     setPlayerKey(k => k + 1);
   };
 
-  const qmProg = loadQMProg();
+  // Re-read localStorage every time a quiz finishes (progVersion bumps)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const qmProg = useQMM(() => loadQMProg(), [progVersion]);
   const hasSelection = !!selectedItem;
 
   return (
@@ -440,6 +443,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             weekId={weekId}
             allQuizItems={weekQuizItems || quizItems}
             onBack={() => setPhase('intro')}
+            onQuizDone={() => setProgVersion(v => v + 1)}
           />
         )}
       </div>
@@ -754,7 +758,7 @@ function QuickFlashcardReview({ item, onDone }) {
 /* ══════════════════════════════════════════════════════
    QUIZ PLAYER
 ══════════════════════════════════════════════════════ */
-function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack }) {
+function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone }) {
   const [idx,       setIdx]      = useQM(0);
   const [selected,  setSelected] = useQM(null);
   const [score,     setScore]    = useQM(0);
@@ -779,19 +783,23 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
 
   const handleNext = () => {
     if (isLast) {
-      const finalScore = score + (selected === q.correct ? 1 : 0);
+      // score state is already updated by handleSelect (no need to add last Q again)
+      const finalScore = score;
       // Save progress
       const prev = loadQMProg();
       prev[progressKey] = { done: total, score: finalScore, total, ts: Date.now() };
       saveQMProg(prev);
       if (window.playSound) window.playSound('complete');
+      const finalPctCalc = Math.round(finalScore / total * 100);
+      if (finalPctCalc >= 70 && window.triggerStarBurst) window.triggerStarBurst();
+      if (onQuizDone) onQuizDone(); // refreshes sidebar scores immediately
       const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
       // Firestore sync
       const u = window._currentUser;
       if (u && window.saveProgressItem) {
         window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
           done: Date.now(),
-          score: Math.round(finalScore / total * 100),
+          score: finalPctCalc,
           wrongQuestions: wrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] })),
           wrongCount: wrongList.length,
         });

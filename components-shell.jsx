@@ -79,18 +79,18 @@ function Header({
             {user && (
               <div className="header-gamification">
                 {streak?.count > 0 && (
-                  <div className="streak-pill" title={`${streak.count} 天連續學習！`}>
-                    🔥 {streak.count}
+                  <div className="streak-pill" title={`連續學習 ${streak.count} 天！`}>
+                    🔥 <span className="pill-label">{streak.count}天</span>
                   </div>
                 )}
                 {(xp || 0) > 0 && (
                   <div className="xp-pill" title={`累積 ${xp} XP · ${window.getLevel ? window.getLevel(xp).name : ''}`}>
-                    ⚡ {xp}
+                    ⚡ <span className="pill-label">{xp} XP</span>
                   </div>
                 )}
                 {badges && Object.keys(badges).length > 0 && (
                   <button className="badges-pill" onClick={onShowBadges} title="我的成就">
-                    🏆 {Object.keys(badges).length}
+                    🏆 <span className="pill-label">{Object.keys(badges).length} 徽章</span>
                   </button>
                 )}
               </div>
