@@ -352,12 +352,19 @@ function QuizEditor({ questions, onChange }) {
             placeholder={"What does 'fable' mean?\tA short story with a moral\tA type of song\tA kind of poem\t寓言故事是有教訓意義的短篇故事。\nWhich word means 'very tired'?\tExhausted\tHungry\tExcited\nThe opposite of 'safe' is ___.\tDangerous\tHappy\tSmall\tBrave\tOpposites are words with contrasting meanings."}
           />
           {importText.trim().length > 0 && (
-            <div style={{fontSize:11,padding:'6px 2px',color: previewQs && previewQs.length > 0 ? 'var(--green,#3a7d44)' : 'var(--accent)'}}>
+            <div style={{fontSize:11,padding:'6px 2px',color: previewQs && previewQs.length > 0 ? 'var(--green,#3a7d44)' : 'var(--accent)',lineHeight:1.6}}>
               {previewQs && previewQs.length > 0
                 ? `✓ 偵測到 ${previewQs.length} 題，可以匯入`
                 : importText.includes('\t')
-                  ? `✗ 有 Tab 但讀不到題目 — 請確認每列至少有：題目 [TAB] 選項A [TAB] 選項B`
-                  : `✗ 沒有偵測到 Tab 字元 — 請從 Google 試算表或 Excel 複製，不要從純文字複製`
+                  ? (() => {
+                      const errs = importPreview.errors || [];
+                      const firstErr = errs[0] || '格式有誤';
+                      const lines = importText.replace(/\r\n/g,'\n').split('\n').filter(Boolean);
+                      const firstLine = lines[0] || '';
+                      const cols = firstLine.split('\t').length;
+                      return `✗ 偵測到 ${lines.length} 列 / 第1列 ${cols} 欄。${firstErr}`;
+                    })()
+                  : `✗ 沒有偵測到 Tab 字元 — 請從 Google 試算表或 Excel 複製`
               }
             </div>
           )}
