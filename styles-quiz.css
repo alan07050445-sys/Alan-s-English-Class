@@ -394,16 +394,16 @@
 .qe-import-btn {
   font-family: var(--mono);
   font-size: 10px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 10px 16px;
-  background: var(--ink);
-  color: var(--bg-paper);
+  padding: 7px 16px;
+  background: var(--bg-card);
+  color: var(--ink-3);
   border-radius: 999px;
   transition: all 0.15s;
-  border: 1px solid var(--ink);
+  border: 1px solid var(--border);
 }
-.qe-import-btn:hover { background: var(--accent); border-color: var(--accent); }
+.qe-import-btn:hover { border-color: var(--ink-3); color: var(--ink); }
 
 .qe-import-panel {
   background: var(--bg-cream, #f7f3eb);

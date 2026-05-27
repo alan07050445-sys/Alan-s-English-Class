@@ -3,10 +3,7 @@
 const { useState: useS, useEffect: useE } = React;
 
 const TYPE_OPTIONS = [
-  { id: "quizlet",   label: "Quizlet",    hint: "Embed link from Quizlet" },
-  { id: "wordwall",  label: "Wordwall",   hint: "Embed link from Wordwall" },
   { id: "youtube",   label: "YouTube",    hint: "Paste any YouTube URL" },
-  { id: "form",      label: "Google Form",hint: "Embed link from Google Form" },
   { id: "pdf",       label: "PDF",        hint: "Upload a PDF or paste a link" },
   { id: "note",      label: "Notes",      hint: "Write your own notes" },
   { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },

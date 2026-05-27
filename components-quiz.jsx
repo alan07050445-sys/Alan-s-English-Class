@@ -315,7 +315,7 @@ function QuizEditor({ questions, onChange }) {
     <div className="quiz-editor">
       <div className="qe-toolbar">
         <button type="button" className="qe-import-btn" onClick={() => setImportOpen(o => !o)}>
-          ☰  {importOpen ? "Hide import · 關閉匯入" : "Import from spreadsheet · 從表格匯入"}
+          {importOpen ? "✕ CLOSE" : "↓ IMPORT"}
         </button>
       </div>
 
@@ -355,7 +355,7 @@ function QuizEditor({ questions, onChange }) {
       )}
 
       {list.length === 0 && !importOpen && (
-        <div className="quiz-editor-empty">No questions yet. Add manually below or import from a spreadsheet.</div>
+        <div className="quiz-editor-empty">No questions yet. Add one below or import.</div>
       )}
       {list.map((q, qi) => (
         <div key={qi} className="qe-block">
