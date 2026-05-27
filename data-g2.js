@@ -632,17 +632,25 @@ const G2_SEED_WEEKS = {
 }; // end G2_SEED_WEEKS
 
 /* ─── Firestore functions ───────────────────────────────────────────────── */
+const G2_DATA_VERSION = 2; // bump when seed data structure changes
+
 function subscribeToClassDataG2(callback) {
   return _classDocG2.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
+      // If data version is outdated, force re-seed with corrected field names
+      if (!d._version || d._version < G2_DATA_VERSION) {
+        _classDocG2.set({ _version: G2_DATA_VERSION, weeks: G2_SEED_WEEKS, weekOrder: G2_DEFAULT_WEEK_ORDER }).catch(() => {});
+        callback(G2_SEED_WEEKS, G2_DEFAULT_WEEK_ORDER.slice());
+        return;
+      }
       const w = d.weeks || G2_SEED_WEEKS;
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
         ? d.weekOrder : Object.keys(w).sort();
       callback(w, o);
     } else {
       // Auto-seed on first open
-      _classDocG2.set({ weeks: G2_SEED_WEEKS, weekOrder: G2_DEFAULT_WEEK_ORDER }).catch(() => {});
+      _classDocG2.set({ _version: G2_DATA_VERSION, weeks: G2_SEED_WEEKS, weekOrder: G2_DEFAULT_WEEK_ORDER }).catch(() => {});
       callback(G2_SEED_WEEKS, G2_DEFAULT_WEEK_ORDER.slice());
     }
   });

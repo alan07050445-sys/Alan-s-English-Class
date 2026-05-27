@@ -1,5 +1,5 @@
 // sw.js — Service Worker for Alan's English Class PWA
-const CACHE = 'alans-english-v35';
+const CACHE = 'alans-english-v36';
 const BASE = '/Alan-s-English-Class';
 const PRECACHE = [
   BASE + '/', BASE + '/index.html', BASE + '/manifest.json',
