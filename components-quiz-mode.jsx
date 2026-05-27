@@ -124,7 +124,8 @@ const CAT_BG    = {
    MAIN SCREEN — 4 blocks
    editMode=true → show edit controls + week metadata editing
 ══════════════════════════════════════════════════════ */
-function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem }) {
+function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem, categories }) {
+  const activeCats = categories || window.CATEGORIES;
   const qmProg = loadQMProg();
   const ET = window.EditableText;
 
@@ -163,7 +164,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
       </div>
 
       <div className="qm-blocks">
-        {window.CATEGORIES.map(cat => {
+        {activeCats.map(cat => {
           const allCatItems = (week.items || {})[cat.id] || [];
           const quizItems = getQuizItems(allCatItems);
           const total  = quizItems.reduce((s, it) => s + getItemQuestions(it).length, 0);

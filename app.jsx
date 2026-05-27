@@ -576,6 +576,7 @@ function App() {
             weekId={weekId}
             onEnterCat={(cat) => setCatView(cat)}
             editMode={editMode}
+            categories={activeCategories}
             onUpdateWeek={(patch) => {
               const w = JSON.parse(JSON.stringify(weeksRef.current));
               if (!w[weekId]) return;
