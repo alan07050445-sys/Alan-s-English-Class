@@ -295,13 +295,12 @@
   font-size: 16px; font-family: var(--sans); font-weight: 700; transition: opacity 0.15s;
 }
 .qm-btn.primary {
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent) 100%);
-  color: #fff; width: 100%;
-  box-shadow: 0 3px 10px rgba(139,49,32,0.25);
+  background: var(--ink); color: var(--bg); width: 100%;
+  box-shadow: 0 3px 10px rgba(21,19,14,0.22);
   transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
 }
-.qm-btn.primary:hover { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(139,49,32,0.3); }
-.qm-btn.primary:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(139,49,32,0.2); }
+.qm-btn.primary:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(21,19,14,0.28); }
+.qm-btn.primary:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(21,19,14,0.18); }
 /* Intro screen: primary CTA is centred pill, not full-width */
 .qm-intro-btns .qm-btn.primary {
   width: auto;
