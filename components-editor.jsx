@@ -445,7 +445,9 @@ function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
 
   const conflict = !isEdit && existingIds?.includes(form.id);
   const idChanged = isEdit && form.id !== editWeek.id;
-  const idConflict = idChanged && existingIds?.includes(form.id);
+  // Exclude the week's own current ID so renaming to a truly new ID never false-fires
+  const otherIds = (existingIds || []).filter(id => id !== (editWeek?.id || ''));
+  const idConflict = idChanged && otherIds.includes(form.id);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>

@@ -237,7 +237,9 @@ function App() {
     if (!newId) return;
     if (oldId && oldId !== newId) {
       // Rename: copy data to new ID, delete old
-      if (w[newId]) { showToast("ID 已存在"); return; }
+      // Use weekOrder (not data keys) as truth; exclude the old ID itself
+      const takenIds = weekOrder.filter(id => id !== oldId);
+      if (takenIds.includes(newId)) { showToast("ID 已存在"); return; }
       w[newId] = { ...w[oldId], id: newId, label: form.label || form.id, dateRange: form.dateRange || '', theme: form.theme || '', themeZh: form.themeZh || '' };
       delete w[oldId];
       const nextOrder = weekOrder.map(id => id === oldId ? newId : id);
