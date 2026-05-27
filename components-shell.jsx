@@ -27,7 +27,7 @@ function Icon({ name, size = 16 }) {
 /* ───────── Header ───────── */
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard,
@@ -50,7 +50,16 @@ function Header({
           </div>
           <div className="week-nav">
             <button onClick={onPrevWeek} aria-label="Previous week" disabled={atStart}><Icon name="arrow-left" size={14}/></button>
-            <span className="label">{week.label}</span>
+            <span className="label" style={{display:'flex',alignItems:'center',gap:6}}>
+              {week.label}
+              {editMode && canEdit && (
+                <button
+                  onClick={onEditWeek}
+                  title="Edit week ID / label / dates"
+                  style={{background:'none',border:'1px solid var(--border)',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:10,color:'var(--ink-3)',lineHeight:1.4}}
+                >✎</button>
+              )}
+            </span>
             <button onClick={onNextWeek} aria-label="Next week" disabled={atEnd}><Icon name="arrow-right" size={14}/></button>
           </div>
           <div className="header-right">

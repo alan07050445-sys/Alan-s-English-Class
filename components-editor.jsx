@@ -412,12 +412,14 @@ function Footer() {
 }
 
 /* ───── Week Modal ───── */
-function WeekModal({ open, existingIds, onClose, onSave }) {
+function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
+  // editWeek = { id, label, dateRange, theme, themeZh } for editing existing week
+  const isEdit = !!editWeek;
   const [form, setForm] = useS(null);
 
   useE(() => {
     if (open) {
-      setForm({
+      setForm(isEdit ? { ...editWeek } : {
         id: window.suggestNextWeekId(existingIds || []),
         label: "",
         dateRange: "",
@@ -438,16 +440,18 @@ function WeekModal({ open, existingIds, onClose, onSave }) {
 
   const handleSave = () => {
     const payload = { ...form, label: form.label?.trim() || autoLabel() };
-    onSave(payload);
+    onSave(payload, isEdit ? editWeek.id : null); // pass oldId when renaming
   };
 
-  const conflict = existingIds?.includes(form.id);
+  const conflict = !isEdit && existingIds?.includes(form.id);
+  const idChanged = isEdit && form.id !== editWeek.id;
+  const idConflict = idChanged && existingIds?.includes(form.id);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
-          <h3>Add <em>new week</em></h3>
+          <h3>{isEdit ? 'Edit' : 'Add'} <em>{isEdit ? 'week' : 'new week'}</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
@@ -461,8 +465,9 @@ function WeekModal({ open, existingIds, onClose, onSave }) {
               style={{fontFamily: "var(--font-mono, monospace)"}}
             />
             <div className="field-help">
-              格式：<code>YYYY-WNN</code>（例 <code>2025-W16</code>）。用來排序與識別。
-              {conflict && <span style={{color: "#c0392b", display: "block", marginTop: 4}}>⚠ 這個 ID 已經存在</span>}
+              格式：<code>YYYY-WNN</code>（例 <code>2026-W16</code>）。用來排序與識別。
+              {(conflict || idConflict) && <span style={{color: "#c0392b", display: "block", marginTop: 4}}>⚠ 這個 ID 已經存在</span>}
+              {idChanged && !idConflict && <span style={{color: "#b45309", display: "block", marginTop: 4}}>⚠ 將會把所有資料搬到新 ID「{form.id}」並刪除舊的</span>}
             </div>
           </div>
 
@@ -508,8 +513,8 @@ function WeekModal({ open, existingIds, onClose, onSave }) {
           <span/>
           <div style={{display: "flex", gap: 10}}>
             <button className="btn ghost" onClick={onClose}>Cancel</button>
-            <button className="btn primary" onClick={handleSave} disabled={conflict || !form.id}>
-              Add Week
+            <button className="btn primary" onClick={handleSave} disabled={conflict || idConflict || !form.id}>
+              {isEdit ? 'Save Changes' : 'Add Week'}
             </button>
           </div>
         </div>

@@ -71,6 +71,7 @@ function App() {
   const [editorDraft, setEditorDraft] = useAppState(null);
   const [editorCat, setEditorCat] = useAppState(null);
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
+  const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
   const [gridCols, setGridCols] = useAppState(getGridCols);
@@ -227,6 +228,30 @@ function App() {
     setOpenCat(null);
     setWeekModalOpen(false);
     showToast("Week added");
+  };
+
+  // Edit existing week (label, dateRange, theme) — or rename its ID
+  const handleEditWeekSave = (form, oldId) => {
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    const newId = form.id.trim();
+    if (!newId) return;
+    if (oldId && oldId !== newId) {
+      // Rename: copy data to new ID, delete old
+      if (w[newId]) { showToast("ID 已存在"); return; }
+      w[newId] = { ...w[oldId], id: newId, label: form.label || form.id, dateRange: form.dateRange || '', theme: form.theme || '', themeZh: form.themeZh || '' };
+      delete w[oldId];
+      const nextOrder = weekOrder.map(id => id === oldId ? newId : id);
+      setWeeks(w); setWeekOrder(nextOrder);
+      window.saveWeeks(w); window.saveWeekOrder(nextOrder);
+      setWeekIdx(nextOrder.indexOf(newId));
+    } else {
+      // Update in-place (no ID change)
+      w[newId] = { ...w[newId], label: form.label || form.id, dateRange: form.dateRange || '', theme: form.theme || '', themeZh: form.themeZh || '' };
+      setWeeks(w);
+      window.saveWeeks(w);
+    }
+    setWeekEditOpen(false);
+    showToast("已儲存 ✓");
   };
 
   const handleDeleteWeek = () => {
@@ -469,6 +494,7 @@ function App() {
         streak={userProfile.streak}
         badges={userProfile.badges}
         onShowBadges={() => setBadgesOpen(true)}
+        onEditWeek={() => setWeekEditOpen(true)}
       />
 
       {/* ── QUIZ MODE (always shown; edit controls appear when editMode=true) ── */}
@@ -523,6 +549,13 @@ function App() {
         existingIds={weekOrder}
         onClose={() => setWeekModalOpen(false)}
         onSave={handleAddWeek}
+      />
+      <window.WeekModal
+        open={weekEditOpen}
+        existingIds={weekOrder}
+        onClose={() => setWeekEditOpen(false)}
+        onSave={handleEditWeekSave}
+        editWeek={{ id: weekId, label: week.label || '', dateRange: week.dateRange || '', theme: week.theme || '', themeZh: week.themeZh || '' }}
       />
 
       {toast && <div className="toast">{toast}</div>}
