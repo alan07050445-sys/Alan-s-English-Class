@@ -33,6 +33,8 @@ function Header({
   user, onLogin, onLogout, onShowDashboard,
   // Gamification
   streak, badges, onShowBadges,
+  // Grade
+  grade, onSwitchGrade,
 }) {
   const pct = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0;
   const atStart = weekIdx <= 0;
@@ -47,6 +49,11 @@ function Header({
           <div className="brand">
             <span className="brand-mono">EST · 2026</span>
             <span className="brand-name">Alan<em>'s</em> English Class</span>
+            {grade && (
+              <button className="grade-chip" onClick={onSwitchGrade} title="Switch grade">
+                {grade.toUpperCase()}
+              </button>
+            )}
           </div>
           <div className="week-nav">
             <button onClick={onPrevWeek} aria-label="Previous week" disabled={atStart}><Icon name="arrow-left" size={14}/></button>
@@ -319,4 +326,29 @@ function BadgeToast({ badge, onDone }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast });
+/* ───────── Grade Selector ───────── */
+function GradeSelector({ onSelect }) {
+  return (
+    <div className="grade-selector">
+      <div className="grade-selector-inner">
+        <div className="grade-sel-logo">A<span className="grade-sel-dot"/></div>
+        <h1 className="grade-sel-title">Alan's English Class</h1>
+        <p className="grade-sel-sub">選擇年級 · Choose your grade</p>
+        <div className="grade-sel-cards">
+          <button className="grade-sel-card" onClick={() => onSelect('g2')}>
+            <span className="grade-sel-badge">G2</span>
+            <span className="grade-sel-card-label">Grade 2</span>
+            <span className="grade-sel-card-desc">CET + FET · 外師 + 中師</span>
+          </button>
+          <button className="grade-sel-card" onClick={() => onSelect('g3')}>
+            <span className="grade-sel-badge">G3</span>
+            <span className="grade-sel-card-label">Grade 3</span>
+            <span className="grade-sel-card-desc">FET + Word Study</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector });

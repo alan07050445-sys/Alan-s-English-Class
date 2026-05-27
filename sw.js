@@ -1,11 +1,11 @@
 // sw.js — Service Worker for Alan's English Class PWA
-const CACHE = 'alans-english-v33';
+const CACHE = 'alans-english-v34';
 const BASE = '/Alan-s-English-Class';
 const PRECACHE = [
   BASE + '/', BASE + '/index.html', BASE + '/manifest.json',
   BASE + '/styles.css', BASE + '/styles-part2.css', BASE + '/styles-quiz.css',
   BASE + '/styles-flashcard.css', BASE + '/styles-auth.css', BASE + '/styles-quiz-mode.css',
-  BASE + '/data.js',
+  BASE + '/data.js', BASE + '/data-g2.js',
   BASE + '/components-shell.jsx', BASE + '/components-cat.jsx', BASE + '/components-quiz.jsx',
   BASE + '/components-flashcard.jsx', BASE + '/components-editor.jsx',
   BASE + '/components-quiz-mode.jsx', BASE + '/components-dashboard.jsx',
