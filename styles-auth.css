@@ -104,36 +104,29 @@
 .header-gamification {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
-.streak-pill,
-.badges-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--ink);
-  font-size: 12px;
+.streak-pill {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 26px; padding: 0 10px; border-radius: 999px;
+  border: 1.5px solid #ffd6a0; background: #fff7ee;
+  color: #c05000; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.01em; white-space: nowrap;
   font-family: var(--mono);
-  font-weight: 800;
-  line-height: 1;
 }
 .badges-pill {
-  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 26px; padding: 0 10px; border-radius: 999px;
+  border: 1.5px solid #d4c8f5; background: #f5f0ff;
+  color: #6a3fc8; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.01em; white-space: nowrap;
+  font-family: var(--mono); cursor: pointer;
+  transition: filter 0.15s;
 }
-.badges-pill:hover {
-  border-color: var(--ink);
-  background: var(--bg);
-}
+.badges-pill:hover { filter: brightness(0.95); }
 .pill-label {
-  font-size: 11px;
-  font-weight: 700;
-  margin-left: 2px;
-  letter-spacing: 0;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .badge-card {
@@ -195,31 +188,27 @@
   color: var(--ink);
 }
 
-/* ── Star Burst ───────────────────────────────────────── */
-@keyframes star-burst-fly {
-  0%   { transform: translate(0,0) scale(1.2) rotate(0deg); opacity: 1; }
-  65%  { opacity: 1; }
-  100% { transform: translate(var(--tx),var(--ty)) scale(0) rotate(var(--tr)); opacity: 0; }
-}
+/* ── Star Burst (Web Animations API — no CSS var hack) ── */
 .star-burst-container {
   position: fixed; inset: 0;
-  pointer-events: none; z-index: 9990; overflow: hidden;
+  pointer-events: none; z-index: 9990;
+  overflow: visible;
 }
 .star-burst-particle {
   position: absolute;
   line-height: 1; user-select: none;
-  animation: star-burst-fly var(--dur,0.85s) cubic-bezier(.25,.46,.45,.94) forwards;
-  animation-delay: var(--delay,0s);
-  font-size: var(--sz,16px);
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
 }
 
-/* ── XP pill ─────────────────────────────────────────── */
+/* ── Gamification pills (header) ─────────────────────── */
 .xp-pill {
-  display: inline-flex; align-items: center; gap: 2px;
-  min-height: 28px; padding: 4px 9px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--bg-card);
-  color: var(--ink); font-size: 12px;
-  font-family: var(--mono); font-weight: 800; line-height: 1;
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 26px; padding: 0 10px; border-radius: 999px;
+  border: 1.5px solid #e8d5a0; background: #fffbf0;
+  color: #a07800; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.01em; white-space: nowrap;
+  font-family: var(--mono);
 }
 
 /* ── XP earned flash (shows briefly on quiz result) ──── */

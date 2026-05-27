@@ -356,43 +356,60 @@ function GradeSelector({ onSelect }) {
   );
 }
 
-/* ════ StarBurst — ⭐ celebration animation ════ */
-function StarBurst({ count = 16, onDone }) {
-  const cx = typeof window !== 'undefined' ? window.innerWidth / 2 : 200;
-  const cy = typeof window !== 'undefined' ? window.innerHeight * 0.36 : 150;
-  const EMOJIS = ['⭐','✨','🌟','💫'];
-  const stars = React.useMemo(() =>
+/* ════ StarBurst — ⭐ celebration animation (Web Animations API) ════ */
+function StarBurst({ count = 20, onDone }) {
+  const containerRef = React.useRef(null);
+  const cx = typeof window !== 'undefined' ? window.innerWidth  / 2 : 200;
+  const cy = typeof window !== 'undefined' ? window.innerHeight * 0.38 : 150;
+
+  // Generate star data once (random, no memo needed — rendered once then removed)
+  const EMOJIS = ['⭐','✨','🌟','💫','⭐','🌟'];
+  const stars = React.useRef(
     Array.from({ length: count }, (_, i) => {
       const angle = (i / count) * 360 + (Math.random() - 0.5) * (360 / count);
-      const dist  = 80 + Math.random() * 130;
+      const dist  = 90 + Math.random() * 160;
       const rad   = angle * Math.PI / 180;
       return {
         id:    i,
         tx:    Math.round(Math.cos(rad) * dist),
         ty:    Math.round(Math.sin(rad) * dist),
-        sz:    11 + Math.random() * 13,
-        delay: Math.random() * 0.18,
-        dur:   0.65 + Math.random() * 0.45,
-        tr:    Math.round((Math.random() - 0.5) * 200),
+        sz:    Math.round(14 + Math.random() * 14),
+        delay: Math.round(Math.random() * 220),
+        dur:   Math.round(700 + Math.random() * 500),
+        tr:    Math.round((Math.random() - 0.5) * 240),
         emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
       };
     })
-  , [count]);
+  ).current;
 
   React.useEffect(() => {
-    const t = setTimeout(() => onDone && onDone(), 1600);
+    // Use Web Animations API — reliable across all browsers, no CSS var hack needed
+    const els = containerRef.current?.querySelectorAll('.star-burst-particle');
+    if (els) {
+      stars.forEach((s, i) => {
+        const el = els[i];
+        if (!el) return;
+        el.animate(
+          [
+            { transform: 'translate(-50%,-50%) scale(1.3) rotate(0deg)', opacity: 1 },
+            { transform: `translate(calc(-50% + ${s.tx}px), calc(-50% + ${s.ty}px)) scale(0) rotate(${s.tr}deg)`, opacity: 0 },
+          ],
+          { duration: s.dur, delay: s.delay, easing: 'cubic-bezier(.25,.46,.45,.94)', fill: 'forwards' }
+        );
+      });
+    }
+    const t = setTimeout(() => onDone && onDone(), 1800);
     return () => clearTimeout(t);
   }, []);
 
   return (
-    <div className="star-burst-container">
+    <div ref={containerRef} className="star-burst-container">
       {stars.map(s => (
-        <div key={s.id} className="star-burst-particle" style={{
-          left: cx + 'px', top: cy + 'px',
-          '--tx': s.tx + 'px', '--ty': s.ty + 'px',
-          '--sz': s.sz + 'px', '--delay': s.delay + 's',
-          '--dur': s.dur + 's', '--tr': s.tr + 'deg',
-        }}>{s.emoji}</div>
+        <div
+          key={s.id}
+          className="star-burst-particle"
+          style={{ left: cx + 'px', top: cy + 'px', fontSize: s.sz + 'px', opacity: 1 }}
+        >{s.emoji}</div>
       ))}
     </div>
   );
