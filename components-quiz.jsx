@@ -271,14 +271,13 @@ function QuizEditor({ questions, onChange }) {
   const [importText, setImportText] = useQS("");
   const [importMode, setImportMode] = useQS("append"); // append | replace
 
-  const importPreview = useQM(() => {
-    try {
-      const r = parseQuizTable(importText);
-      return (r && Array.isArray(r.questions)) ? r : { questions: [], errors: [] };
-    } catch(e) {
-      return { questions: [], errors: [] };
-    }
-  }, [importText]);
+  let importPreview;
+  try {
+    const _r = parseQuizTable(importText);
+    importPreview = (_r && Array.isArray(_r.questions)) ? _r : { questions: [], errors: [] };
+  } catch(_e) {
+    importPreview = { questions: [], errors: [] };
+  }
   const previewQs = importPreview.questions;
 
   const applyImport = () => {
