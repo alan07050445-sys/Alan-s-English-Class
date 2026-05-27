@@ -271,16 +271,24 @@ function QuizEditor({ questions, onChange }) {
   const [importText, setImportText] = useQS("");
   const [importMode, setImportMode] = useQS("append"); // append | replace
 
-  const importPreview = useQM(() => { try { return parseQuizTable(importText); } catch(e) { return {questions:[], errors:[]}; } }, [importText]);
+  const importPreview = useQM(() => {
+    try {
+      const r = parseQuizTable(importText);
+      return (r && Array.isArray(r.questions)) ? r : { questions: [], errors: [] };
+    } catch(e) {
+      return { questions: [], errors: [] };
+    }
+  }, [importText]);
+  const previewQs = importPreview.questions;
 
   const applyImport = () => {
-    if (importPreview.questions.length === 0) {
+    if (!previewQs || previewQs.length === 0) {
       alert("No questions found. Check format. · 未讀到題目，請檢查格式。");
       return;
     }
     const next = importMode === "replace"
-      ? importPreview.questions
-      : [...list, ...importPreview.questions];
+      ? previewQs
+      : [...list, ...previewQs];
     onChange(next);
     setImportText("");
     setImportOpen(false);
@@ -347,8 +355,8 @@ function QuizEditor({ questions, onChange }) {
             <button type="button" className="qe-import-cancel" onClick={() => { setImportOpen(false); setImportText(""); }}>
               CANCEL
             </button>
-            <button type="button" className="qe-import-confirm" onClick={applyImport} disabled={importPreview.questions.length === 0}>
-              IMPORT {importPreview.questions.length > 0 ? `${importPreview.questions.length} QUESTIONS` : ''}
+            <button type="button" className="qe-import-confirm" onClick={applyImport} disabled={!previewQs || previewQs.length === 0}>
+              IMPORT {previewQs && previewQs.length > 0 ? `${previewQs.length} QUESTIONS` : ''}
             </button>
           </div>
         </div>
