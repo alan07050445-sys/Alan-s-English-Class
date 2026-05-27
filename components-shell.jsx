@@ -331,14 +331,14 @@ function GradeSelector({ onSelect }) {
   return (
     <div className="grade-selector">
       <div className="grade-selector-inner">
-        <div className="grade-sel-logo">A<span className="grade-sel-dot"/></div>
+        <img src="icon.svg" alt="Alan's English Class" className="grade-sel-logo-img"/>
         <h1 className="grade-sel-title">Alan's English Class</h1>
         <p className="grade-sel-sub">選擇年級 · Choose your grade</p>
         <div className="grade-sel-cards">
           <button className="grade-sel-card" onClick={() => onSelect('g2')}>
             <span className="grade-sel-badge">G2</span>
             <span className="grade-sel-card-label">Grade 2</span>
-            <span className="grade-sel-card-desc">CET + FET · 外師 + 中師</span>
+            <span className="grade-sel-card-desc">中師 CET · 外師 FET</span>
           </button>
           <button className="grade-sel-card" onClick={() => onSelect('g3')}>
             <span className="grade-sel-badge">G3</span>

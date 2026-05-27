@@ -662,18 +662,12 @@
   max-width: 480px;
   width: 100%;
 }
-.grade-sel-logo {
-  width: 72px; height: 72px; border-radius: 50%;
-  border: 2px solid var(--ink);
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--serif); font-size: 36px; font-style: italic;
-  font-weight: 600; color: var(--ink);
-  margin: 0 auto 20px; position: relative;
-}
-.grade-sel-dot {
-  position: absolute; bottom: 6px; right: 6px;
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--ink);
+.grade-sel-logo-img {
+  width: 96px; height: 96px;
+  border-radius: 22px;
+  display: block;
+  margin: 0 auto 20px;
+  box-shadow: 0 6px 24px rgba(21,19,14,0.14);
 }
 .grade-sel-title {
   font-family: var(--serif); font-size: 30px; font-weight: 600;
