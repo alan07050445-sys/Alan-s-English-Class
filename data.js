@@ -616,67 +616,6 @@ function localWritingFeedback(word, sentence) {
   return `📝 小提醒：\n${checks.map(x => `• ${x}`).join('\n')}\n\nScore: ${'⭐'.repeat(stars)}\n\n修好後再送一次會更漂亮！`;
 }
 
-/* ─── G3 Grammar: Past Tense WH-Questions & Irregular Verbs ────────────── */
-const G3_GRAMMAR_PAST_TENSE = {
-  id: 'g3-gr-past-wh',
-  type: 'quiz',
-  title: 'Past Tense: WH-Questions & Irregular Verbs',
-  zh: '過去式：疑問句與不規則動詞練習',
-  questions: [
-    { id:'q1',  text:'Which question is correct?',
-      options:['Where did you go yesterday?','Where did you went yesterday?','Where do you went yesterday?','Where you did go yesterday?'],
-      answer:'Where did you go yesterday?', hint:'', explain:'After "did," always use the base form of the verb (go, not went).' },
-    { id:'q2',  text:'After "did," we should use the ______.',
-      options:['base form verb','past tense verb','verb with -ing','verb with -s'],
-      answer:'base form verb', hint:'', explain:'"Did" already shows past tense, so the main verb stays in its base form.' },
-    { id:'q3',  text:'What did Lisa buy yesterday?',
-      options:['She bought a new bag.','She buy a new bag.','She buys a new bag.','She buying a new bag.'],
-      answer:'She bought a new bag.', hint:'', explain:'The answer uses the simple past tense: bought (irregular past of buy).' },
-    { id:'q4',  text:'Which question word asks about a reason?',
-      options:['Why','Where','When','How'],
-      answer:'Why', hint:'', explain:'"Why" asks for a reason or cause. "Where" = place, "When" = time, "How" = manner.' },
-    { id:'q5',  text:'Which question is correct?',
-      options:['Who did you talk to?','Who did you talked to?','Who you did talk to?','Who did talked you to?'],
-      answer:'Who did you talk to?', hint:'', explain:'After "did," use the base form: talk (not talked).' },
-    { id:'q6',  text:'I went to the library after school. What is the best question?',
-      options:['Where did you go after school?','What did you go after school?','When did you go after school?','Why did you go after school?'],
-      answer:'Where did you go after school?', hint:'', explain:'"Where" asks about a place — the library is a place.' },
-    { id:'q7',  text:'She played soccer last Sunday. What is the best question?',
-      options:['When did she play soccer?','Where did she play soccer?','Who did she play soccer?','How did she play soccer?'],
-      answer:'When did she play soccer?', hint:'', explain:'"Last Sunday" tells us the time, so "When" is the correct question word.' },
-    { id:'q8',  text:'Ben went to the zoo by car. What is the best question?',
-      options:['How did Ben go to the zoo?','Where did Ben go to the zoo?','What did Ben go to the zoo?','Why did Ben go to the zoo?'],
-      answer:'How did Ben go to the zoo?', hint:'', explain:'"By car" tells us the method/manner, so "How" is the correct question word.' },
-    { id:'q9',  text:'Amy bought a book yesterday. What is the best question?',
-      options:['What did Amy buy yesterday?','Where did Amy buy yesterday?','Who did Amy buy yesterday?','How did Amy buy yesterday?'],
-      answer:'What did Amy buy yesterday?', hint:'', explain:'"A book" is the thing (object) Amy bought, so "What" is the correct question word.' },
-    { id:'q10', text:'They went home early because it rained. What is the best question?',
-      options:['Why did they go home early?','When did they go home early?','Where did they go home early?','How did they go home early?'],
-      answer:'Why did they go home early?', hint:'', explain:'"Because it rained" is the reason, so "Why" is the correct question word.' },
-    { id:'q11', text:'Which answer is correct for "Where did Leo go?"',
-      options:['He went to the park.','He go to the park.','He goes to the park.','He going to the park.'],
-      answer:'He went to the park.', hint:'', explain:'The answer must use simple past tense: went (irregular past of go).' },
-    { id:'q12', text:'Which answer is correct for "What did Tina eat?"',
-      options:['She ate noodles.','She eat noodles.','She eats noodles.','She eating noodles.'],
-      answer:'She ate noodles.', hint:'', explain:'The answer must use simple past tense: ate (irregular past of eat).' },
-  ],
-};
-
-// One-time helper: run in browser console to inject the grammar item into a G3 week.
-// Usage: addGrammarItemToG3Week('2025-W14')
-async function addGrammarItemToG3Week(weekId) {
-  const snap = await _classDoc.get();
-  if (!snap.exists) { console.error('[G3] No data doc found.'); return; }
-  const d = snap.data();
-  const weeks = JSON.parse(JSON.stringify(d.weeks || {}));
-  if (!weeks[weekId]) { console.error('[G3] Week not found:', weekId, '\nAvailable:', Object.keys(weeks).join(', ')); return; }
-  const grammar = weeks[weekId].items?.grammar || [];
-  if (grammar.some(it => it.id === G3_GRAMMAR_PAST_TENSE.id)) { console.log('[G3] Already added — skipping.'); return; }
-  weeks[weekId].items.grammar = [...grammar, G3_GRAMMAR_PAST_TENSE];
-  await _classDoc.set({ weeks }, { merge: true });
-  console.log('[G3] ✅ Added "' + G3_GRAMMAR_PAST_TENSE.title + '" to week ' + weekId);
-}
-
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
@@ -693,6 +632,4 @@ Object.assign(window, {
   playSound,
   // AI Writing
   checkWriting,
-  // Admin helpers
-  G3_GRAMMAR_PAST_TENSE, addGrammarItemToG3Week,
 });
