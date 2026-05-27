@@ -2,21 +2,44 @@
 
 /* ── Week banner ─────────────────────────────────────── */
 .qm-week-banner {
-  padding: 28px 0 12px;
+  padding: 36px 0 24px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+/* Decorative radial glow top-right */
+.qm-week-banner::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 260px; height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139,49,32,0.07) 0%, transparent 70%);
+  pointer-events: none;
 }
 .qm-week-eyebrow {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 10px;
   font-size: 11px; font-family: var(--mono);
-  color: var(--ink-3); letter-spacing: 0.06em;
-  text-transform: uppercase; margin-bottom: 6px;
+  color: var(--ink-muted); letter-spacing: 0.10em;
+  text-transform: uppercase; margin-bottom: 12px;
+}
+.qm-week-eyebrow .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(139,49,32,0.15);
 }
 .qm-week-title {
-  font-family: var(--serif); font-size: 30px;
-  font-weight: 600; color: var(--ink); margin: 0 0 4px;
+  font-family: var(--serif); font-size: clamp(28px, 4vw, 42px);
+  font-weight: 600; color: var(--ink);
+  line-height: 1.1; letter-spacing: -0.015em;
+  margin: 0 0 6px;
 }
-.qm-week-sub { font-size: 14px; color: var(--ink-3); margin: 0; }
+.qm-week-sub {
+  font-size: 15px; color: var(--ink-soft);
+  font-family: var(--sans); margin: 0;
+  max-width: 520px; line-height: 1.5;
+}
 
 /* ── 4 blocks ────────────────────────────────────────── */
 .qm-blocks {
@@ -26,16 +49,17 @@
 }
 .qm-block {
   display: flex; align-items: center; gap: 16px;
-  padding: 20px; background: var(--bg-card);
-  border: 1px solid var(--border); border-radius: 8px;
+  padding: 22px 20px; background: var(--bg-card);
+  border: 1.5px solid var(--border); border-radius: 12px;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  box-shadow: 0 2px 0 rgba(21,19,14,0.05);
 }
 .qm-block:hover:not(.empty) {
-  border-color: var(--ink-3); transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(21,19,14,0.1);
+  border-color: var(--ink); transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(21,19,14,0.12);
 }
-.qm-block:active:not(.empty) { transform: translateY(0); }
+.qm-block:active:not(.empty) { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(21,19,14,0.08); }
 .qm-block.empty { opacity: 0.4; cursor: default; }
 
 .qm-block-icon {
@@ -109,7 +133,7 @@
 .qm-unit-row:hover { background: var(--bg); }
 .qm-unit-row.active {
   background: var(--bg);
-  border-left-color: var(--ink);
+  border-left-color: var(--accent);
 }
 .qm-unit-row.done .qm-unit-row-title { color: var(--ink-2); }
 
@@ -195,7 +219,10 @@
 .qm-back-btn:hover { color: var(--ink); }
 .qm-player-bar-wrap { flex: 1; }
 .qm-player-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.qm-player-fill { height: 100%; background: var(--ink); border-radius: 4px; transition: width 0.25s; }
+.qm-player-fill {
+  height: 100%; border-radius: 4px; transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--accent-soft) 0%, var(--accent) 100%);
+}
 .qm-player-counter { font-size: 12px; font-family: var(--mono); color: var(--ink-3); flex-shrink: 0; }
 
 /* ── Question ────────────────────────────────────────── */
@@ -204,29 +231,53 @@
 .qm-question-text { font-family: var(--serif); font-size: 48px; font-weight: 600; color: var(--ink); line-height: 1.2; }
 
 /* ── Options ─────────────────────────────────────────── */
-.qm-options { display: flex; flex-direction: column; gap: 10px; }
+.qm-options { display: flex; flex-direction: column; gap: 12px; }
 .qm-option {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 16px;
   padding: 18px 22px;
-  border: 2px solid var(--border); border-radius: 10px;
+  border: 2px solid var(--border); border-radius: 12px;
   background: var(--bg-card); cursor: pointer; text-align: left;
-  transition: border-color 0.1s, background 0.1s; width: 100%;
+  transition: border-color 0.12s, background 0.12s, transform 0.1s, box-shadow 0.12s;
+  width: 100%;
+  box-shadow: 0 2px 0 rgba(21,19,14,0.07);
 }
 .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) {
-  border-color: var(--ink-3); background: var(--bg);
+  border-color: var(--ink);
+  background: var(--bg-paper);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(21,19,14,0.10);
 }
-.qm-option.correct { border-color: #16a34a; background: #f0fdf4; }
-.qm-option.wrong   { border-color: #dc2626; background: #fef2f2; }
-.qm-option.dim     { opacity: 0.4; cursor: default; }
+.qm-option:active:not(.correct):not(.wrong):not(.dim) {
+  transform: translateY(0);
+  box-shadow: 0 1px 0 rgba(21,19,14,0.06);
+}
+.qm-option.correct {
+  border-color: #16a34a; background: #f0fdf4;
+  border-left-width: 5px;
+  box-shadow: none;
+}
+.qm-option.wrong {
+  border-color: #dc2626; background: #fef2f2;
+  border-left-width: 5px;
+  box-shadow: none;
+}
+.qm-option.dim { opacity: 0.35; cursor: default; box-shadow: none; }
 .qm-opt-letter {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--border); display: flex; align-items: center;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--border-soft); display: flex; align-items: center;
   justify-content: center; font-size: 12px; font-weight: 800;
-  font-family: var(--mono); color: var(--ink-2); flex-shrink: 0;
+  font-family: var(--mono); color: var(--ink-muted); flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.qm-option:hover:not(.correct):not(.wrong):not(.dim) .qm-opt-letter {
+  background: var(--ink); color: var(--bg-paper);
 }
 .qm-option.correct .qm-opt-letter { background: #16a34a; color: #fff; }
 .qm-option.wrong   .qm-opt-letter { background: #dc2626; color: #fff; }
-.qm-opt-text { font-size: 18px; color: var(--ink); font-family: var(--sans); font-weight: 600; line-height: 1.3; }
+.qm-opt-text {
+  font-size: 17px; color: var(--ink); font-family: var(--sans);
+  font-weight: 600; line-height: 1.35;
+}
 
 /* ── Feedback ────────────────────────────────────────── */
 .qm-feedback { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }

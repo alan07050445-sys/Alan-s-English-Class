@@ -603,6 +603,17 @@ function App() {
 
       <window.Footer/>
 
+      <window.MobileNav
+        weekIdx={weekIdx}
+        weekOrder={weekOrder}
+        onPrevWeek={goPrevWeek}
+        onNextWeek={goNextWeek}
+        catView={catView}
+        onBackFromCat={() => setCatView(null)}
+        onShowBadges={() => setBadgesOpen(true)}
+        user={user}
+      />
+
       <window.EditorModal
         open={editorOpen}
         draft={editorDraft}

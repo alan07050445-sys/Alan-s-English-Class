@@ -415,4 +415,55 @@ function StarBurst({ count = 20, onDone }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst });
+/* ════ MobileNav — fixed bottom bar (mobile only) ════ */
+function MobileNav({ weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBackFromCat, onShowBadges, user }) {
+  const atStart = weekIdx <= 0;
+  const atEnd   = weekIdx >= (weekOrder?.length || 1) - 1;
+  const inCat   = !!catView;
+
+  // When inside a category: show Back | cat name | nothing
+  // When on main screen: show ← Week | home dot | Week →
+  return (
+    <nav className="mobile-nav" aria-label="Navigation">
+      {inCat ? (
+        <>
+          <button className="mobile-nav-btn active" onClick={onBackFromCat}>
+            <span className="mobile-nav-icon">←</span>
+            <span>Back</span>
+          </button>
+          <div className="mobile-nav-divider"/>
+          <button className="mobile-nav-btn" style={{flex:2, fontSize:'10px', color:'var(--ink)', letterSpacing:'0.02em', textTransform:'none', fontFamily:'var(--sans)', fontWeight:700}} disabled>
+            <span className="mobile-nav-icon">{catView?.id === 'vocab' ? '📚' : catView?.id === 'grammar' ? '✏️' : catView?.id === 'word' ? '🔤' : '📖'}</span>
+            <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{catView?.title || ''}</span>
+          </button>
+          <div className="mobile-nav-divider"/>
+          {user ? (
+            <button className="mobile-nav-btn" onClick={onShowBadges}>
+              <span className="mobile-nav-icon">🏆</span>
+              <span>Badges</span>
+            </button>
+          ) : <div style={{flex:1}}/>}
+        </>
+      ) : (
+        <>
+          <button className="mobile-nav-btn" onClick={onPrevWeek} disabled={atStart}>
+            <span className="mobile-nav-icon">←</span>
+            <span>Prev</span>
+          </button>
+          <div className="mobile-nav-divider"/>
+          <button className="mobile-nav-btn active" disabled>
+            <span className="mobile-nav-icon">📅</span>
+            <span>Week {weekIdx + 1}</span>
+          </button>
+          <div className="mobile-nav-divider"/>
+          <button className="mobile-nav-btn" onClick={onNextWeek} disabled={atEnd}>
+            <span className="mobile-nav-icon">→</span>
+            <span>Next</span>
+          </button>
+        </>
+      )}
+    </nav>
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav });
