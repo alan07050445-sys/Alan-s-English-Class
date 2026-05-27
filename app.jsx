@@ -99,10 +99,12 @@ function App() {
   const [gridCols, setGridCols] = useAppState(getGridCols);
 
   // ── Gamification state ──────────────────────────────
-  const [userProfile, setUserProfile] = useAppState({ streak: { count: 0 }, badges: {} });
+  const [userProfile, setUserProfile] = useAppState({ streak: { count: 0 }, badges: {}, xp: 0 });
   const [badgesOpen,  setBadgesOpen]  = useAppState(false);
   const [badgeToast,  setBadgeToast]  = useAppState(null); // { id, ...badgeData }
   const prevBadgeKeys = useAppRef(null);
+  const [starBurst,   setStarBurst]   = useAppState(false);
+  window.triggerStarBurst = () => setStarBurst(true);
 
   const isTeacher = window.isAdminUser(user);
 
@@ -421,23 +423,32 @@ function App() {
     showToast(hwData ? "設定作業 ✓" : "取消作業");
   };
 
-  // ── Quiz complete handler (streak + badges) ─────────────
+  // ── Quiz complete handler (streak + XP + badges) ────────
   window._onQuizComplete = async (score, total, wrongList, meta = {}) => {
     const u = window._currentUser;
     if (!u) return;
+    const pct = total > 0 ? Math.round(score / total * 100) : 0;
+    // Award XP — perfect = 100, otherwise 50
+    const xpGain = pct === 100 ? 100 : 50;
+    const { xp: newXp } = await window.addXp(u.uid, xpGain);
+    // XP milestone badges
+    if (newXp >= 500)  await window.unlockBadge(u.uid, 'xp_500');
+    if (newXp >= 1000) await window.unlockBadge(u.uid, 'xp_1000');
+    if (newXp >= 3000) await window.unlockBadge(u.uid, 'xp_3000');
     // Update streak
     const { count, isNew } = await window.updateStreak(u.uid);
     if (isNew) window.playSound('streak');
     await window.unlockBadge(u.uid, 'first_quiz');
     // Badge: perfect score
-    if (Math.round(score / total * 100) === 100) await window.unlockBadge(u.uid, 'perfect');
+    if (pct === 100) await window.unlockBadge(u.uid, 'perfect');
     if (meta.itemId && window.saveQuizMistakes) {
       await window.saveQuizMistakes(u.uid, u.displayName || '', u.email || '', meta.itemId, wrongList || []);
     }
     if (meta.allWeekQuizDone) await window.unlockBadge(u.uid, 'scholar');
     // Badge: streak milestones
-    if (count >= 3) await window.unlockBadge(u.uid, 'streak_3');
-    if (count >= 7) await window.unlockBadge(u.uid, 'streak_7');
+    if (count >= 3)  await window.unlockBadge(u.uid, 'streak_3');
+    if (count >= 7)  await window.unlockBadge(u.uid, 'streak_7');
+    if (count >= 30) await window.unlockBadge(u.uid, 'streak_30');
   };
 
   // ── Grid renderer ──────────────────────────────────────
@@ -543,6 +554,7 @@ function App() {
         onShowDashboard={() => setDashOpen(true)}
         streak={userProfile.streak}
         badges={userProfile.badges}
+        xp={userProfile.xp || 0}
         onShowBadges={() => setBadgesOpen(true)}
         onEditWeek={() => setWeekEditOpen(true)}
         grade={grade}
@@ -631,6 +643,10 @@ function App() {
 
       {badgeToast && (
         <window.BadgeToast badge={badgeToast} onDone={() => setBadgeToast(null)}/>
+      )}
+
+      {starBurst && (
+        <window.StarBurst onDone={() => setStarBurst(false)}/>
       )}
     </div>
   );

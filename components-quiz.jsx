@@ -143,6 +143,9 @@ function QuizPlayer({ item, onComplete }) {
     saveAttempts(attempts);
     setSubmitted(true);
     if (onComplete) onComplete(item.id);
+    // Celebrate good scores with stars
+    if (score.pct >= 70 && window.triggerStarBurst) window.triggerStarBurst();
+    if (window.playSound) window.playSound(score.pct === 100 ? 'complete' : score.pct >= 60 ? 'complete' : 'wrong');
     // Save score to Firestore if user is logged in
     const _u = window._currentUser;
     if (_u && window.saveProgressItem) {
@@ -181,9 +184,12 @@ function QuizPlayer({ item, onComplete }) {
           </div>
           <div className="quiz-result-right">
             <div className="quiz-result-message serif">
-              {score.pct === 100 ? "Perfect! 滿分！" :
+              {score.pct === 100 ? "Perfect! 滿分！🏆" :
                score.pct >= 80 ? "Excellent! 非常好！" :
-               score.pct >= 60 ? "Good effort. 加油！" : "Keep practicing. 多練習一下！"}
+               score.pct >= 60 ? "Good effort. 加油！" : "Keep practicing. 多練習！"}
+            </div>
+            <div style={{marginBottom:6}}>
+              <span className="xp-earned">+{score.pct === 100 ? 100 : 50} XP ⚡</span>
             </div>
             <button className="btn" onClick={reset}>↻ Retake · 重做</button>
           </div>

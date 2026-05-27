@@ -449,12 +449,38 @@ function playSound(type) {
 
 // ── Streak & Badges ────────────────────────────────────────────────────
 const BADGES = {
-  first_quiz:  { emoji:'🌟', name:'初學者',   nameEn:'First Step',    desc:'完成第一個測驗' },
-  perfect:     { emoji:'🏆', name:'第一次滿分', nameEn:'Perfect Score', desc:'任一測驗拿到100分' },
-  streak_3:    { emoji:'🔥', name:'三天連勝', nameEn:'3-Day Streak',  desc:'連續3天學習' },
-  streak_7:    { emoji:'🔥', name:'連續七天', nameEn:'7-Day Streak',  desc:'連續7天學習' },
-  scholar:     { emoji:'⭐', name:'全單元完成', nameEn:'Week Complete', desc:'完成當週全部測驗單元' },
+  first_quiz:  { emoji:'🌟', name:'初學者',    nameEn:'First Step',     desc:'完成第一個測驗' },
+  perfect:     { emoji:'🏆', name:'第一次滿分', nameEn:'Perfect Score',  desc:'任一測驗拿到100分' },
+  streak_3:    { emoji:'🔥', name:'三天連勝',   nameEn:'3-Day Streak',   desc:'連續3天學習' },
+  streak_7:    { emoji:'🔥', name:'七天連勝',   nameEn:'7-Day Streak',   desc:'連續7天學習' },
+  streak_30:   { emoji:'💎', name:'月冠軍',     nameEn:'30-Day Streak',  desc:'連續30天學習' },
+  scholar:     { emoji:'📚', name:'週全勤',     nameEn:'Week Complete',  desc:'完成當週全部測驗' },
+  quiz_10:     { emoji:'⚡', name:'練習王',     nameEn:'Quiz Veteran',   desc:'完成10個測驗' },
+  xp_500:      { emoji:'🥈', name:'積分新星',   nameEn:'XP Rising Star', desc:'累積500 XP' },
+  xp_1000:     { emoji:'🥇', name:'積分達人',   nameEn:'XP Expert',      desc:'累積1000 XP' },
+  xp_3000:     { emoji:'👑', name:'英語之星',   nameEn:'English Star',   desc:'累積3000 XP' },
 };
+
+// ── XP helpers ─────────────────────────────────────────────────────────
+function getLevel(xp) {
+  if (xp >= 3000) return { level:5, name:'英語之星', icon:'👑', next:null,  prevXp:3000 };
+  if (xp >= 1000) return { level:4, name:'英語高手', icon:'🌟', next:3000, prevXp:1000 };
+  if (xp >= 500)  return { level:3, name:'進步王',   icon:'⚡', next:1000, prevXp:500  };
+  if (xp >= 200)  return { level:2, name:'書蟲',     icon:'📚', next:500,  prevXp:200  };
+  return           { level:1, name:'新苗',     icon:'🌱', next:200,  prevXp:0    };
+}
+
+async function addXp(uid, amount) {
+  if (!uid || !amount) return { xp: 0 };
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    const snap = await ref.get();
+    const d = snap.exists ? (snap.data() || {}) : {};
+    const newXp = (d.xp || 0) + amount;
+    await ref.set({ xp: newXp }, { merge: true });
+    return { xp: newXp };
+  } catch(e) { return { xp: 0 }; }
+}
 
 async function updateStreak(uid) {
   if (!uid) return { count: 0, isNew: false };
@@ -511,7 +537,11 @@ function subscribeUserProfile(uid, callback) {
   if (!uid) return () => {};
   return _db.collection('progress').doc(uid).onSnapshot(snap => {
     const d = snap.exists ? (snap.data() || {}) : {};
-    callback({ streak: d.streak || { count: 0, lastDate: null }, badges: d.badges || {} });
+    callback({
+      streak: d.streak || { count: 0, lastDate: null },
+      badges: d.badges || {},
+      xp:     d.xp     || 0,
+    });
   });
 }
 
@@ -626,8 +656,9 @@ Object.assign(window, {
   signInWithGoogle, signOutUser, subscribeAuth, isAdminUser,
   // Per-user progress
   saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes,
-  // Streak & Badges
+  // Streak, Badges & XP
   BADGES, updateStreak, unlockBadge, subscribeUserProfile,
+  getLevel, addXp,
   // Sound
   playSound,
   // AI Writing

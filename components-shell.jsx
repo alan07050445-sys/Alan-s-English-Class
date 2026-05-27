@@ -32,7 +32,7 @@ function Header({
   // Auth props
   user, onLogin, onLogout, onShowDashboard,
   // Gamification
-  streak, badges, onShowBadges,
+  streak, badges, onShowBadges, xp,
   // Grade
   grade, onSwitchGrade,
 }) {
@@ -75,7 +75,7 @@ function Header({
               <div className="progress-track"><div className="progress-fill" style={{ width: pct + "%" }}/></div>
             </div>
 
-            {/* Streak + Badges */}
+            {/* Streak + XP + Badges */}
             {user && (
               <div className="header-gamification">
                 {streak?.count > 0 && (
@@ -83,9 +83,14 @@ function Header({
                     🔥 {streak.count}
                   </div>
                 )}
+                {(xp || 0) > 0 && (
+                  <div className="xp-pill" title={`累積 ${xp} XP · ${window.getLevel ? window.getLevel(xp).name : ''}`}>
+                    ⚡ {xp}
+                  </div>
+                )}
                 {badges && Object.keys(badges).length > 0 && (
                   <button className="badges-pill" onClick={onShowBadges} title="我的成就">
-                    ⭐ {Object.keys(badges).length}
+                    🏆 {Object.keys(badges).length}
                   </button>
                 )}
               </div>
@@ -351,4 +356,46 @@ function GradeSelector({ onSelect }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector });
+/* ════ StarBurst — ⭐ celebration animation ════ */
+function StarBurst({ count = 16, onDone }) {
+  const cx = typeof window !== 'undefined' ? window.innerWidth / 2 : 200;
+  const cy = typeof window !== 'undefined' ? window.innerHeight * 0.36 : 150;
+  const EMOJIS = ['⭐','✨','🌟','💫'];
+  const stars = React.useMemo(() =>
+    Array.from({ length: count }, (_, i) => {
+      const angle = (i / count) * 360 + (Math.random() - 0.5) * (360 / count);
+      const dist  = 80 + Math.random() * 130;
+      const rad   = angle * Math.PI / 180;
+      return {
+        id:    i,
+        tx:    Math.round(Math.cos(rad) * dist),
+        ty:    Math.round(Math.sin(rad) * dist),
+        sz:    11 + Math.random() * 13,
+        delay: Math.random() * 0.18,
+        dur:   0.65 + Math.random() * 0.45,
+        tr:    Math.round((Math.random() - 0.5) * 200),
+        emoji: EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
+      };
+    })
+  , [count]);
+
+  React.useEffect(() => {
+    const t = setTimeout(() => onDone && onDone(), 1600);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div className="star-burst-container">
+      {stars.map(s => (
+        <div key={s.id} className="star-burst-particle" style={{
+          left: cx + 'px', top: cy + 'px',
+          '--tx': s.tx + 'px', '--ty': s.ty + 'px',
+          '--sz': s.sz + 'px', '--delay': s.delay + 's',
+          '--dur': s.dur + 's', '--tr': s.tr + 'deg',
+        }}>{s.emoji}</div>
+      ))}
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst });
