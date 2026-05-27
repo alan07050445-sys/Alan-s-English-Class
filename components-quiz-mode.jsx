@@ -58,11 +58,13 @@ function getItemQuestions(item) {
       .filter(q => (q.options || []).length >= 2)
       .map(q => {
         const savedCorrect = q.answer !== undefined ? q.answer : 0;
-        const correctText = q.options[savedCorrect];          // remember the right answer text
+        const correctText = typeof savedCorrect === 'number'
+          ? q.options[savedCorrect]
+          : savedCorrect;
         const shuffled = shuffleArr([...q.options]);           // shuffle options
         const newCorrect = shuffled.indexOf(correctText);      // find new index
         // Strip leading question numbers like "1. " / "1) " / "（1）"
-        const qText = (q.q || '').replace(/^[\(（]?\d+[\)）\.\s、：:]+\s*/, '');
+        const qText = (q.q || q.text || '').replace(/^[\(（]?\d+[\)）\.\s、：:]+\s*/, '');
         return { q: qText, hint: '', options: shuffled, correct: newCorrect, explain: q.explain || '' };
       });
     return shuffleArr(mapped); // also shuffle question order

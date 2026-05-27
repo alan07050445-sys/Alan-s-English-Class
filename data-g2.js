@@ -50,15 +50,15 @@ const GRAMMAR_ITEM_2 = {
   zh: '判斷：形容詞還是副詞？',
   questions: [
     { id:'gr2-q1',  text:'The "careful" student checked her answer twice.',                                    options:['Adjective','Adverb'], answer:'Adjective', hint:'Is the underlined word an adjective or adverb?', explain:'Careful describes the noun student — it is an adjective.' },
-    { id:'gr2-q2',  text:'She sings "beautifully" in the school choir.',                                       options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Beautifully describes how she sings — it is an adverb.' },
+    { id:'gr2-q2',  text:'She will bring her science project "tomorrow".',                                     options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Tomorrow tells us when she will bring the project — it is a time adverb.' },
     { id:'gr2-q3',  text:'He is a "brave" firefighter who saved many lives.',                                  options:['Adjective','Adverb'], answer:'Adjective', hint:'Is the underlined word an adjective or adverb?', explain:'Brave describes the noun firefighter — it is an adjective.' },
-    { id:'gr2-q4',  text:'The dog barked "loudly" at the stranger near the gate.',                             options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Loudly describes how the dog barked — it is an adverb.' },
+    { id:'gr2-q4',  text:'Please put your backpack "there" before class starts.',                              options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'There tells us where to put the backpack — it is a place adverb.' },
     { id:'gr2-q5',  text:'My grandmother told us an "ancient" story last night.',                              options:['Adjective','Adverb'], answer:'Adjective', hint:'Is the underlined word an adjective or adverb?', explain:'Ancient describes the noun story — it is an adjective.' },
-    { id:'gr2-q6',  text:'The children played "happily" in the rain.',                                        options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Happily describes how the children played — it is an adverb.' },
+    { id:'gr2-q6',  text:'The children played "outside" after the rain stopped.',                              options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Outside tells us where the children played — it is an adverb.' },
     { id:'gr2-q7',  text:'The "curious" monkey watched us from the top of the tree.',                         options:['Adjective','Adverb'], answer:'Adjective', hint:'Is the underlined word an adjective or adverb?', explain:'Curious describes the noun monkey — it is an adjective.' },
-    { id:'gr2-q8',  text:'She finished her homework "quickly" so she could go outside.',                      options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Quickly describes how she finished — it is an adverb.' },
+    { id:'gr2-q8',  text:'She finished her homework "early" so she could go outside.',                        options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Early tells us when she finished her homework — it is an adverb.' },
     { id:'gr2-q9',  text:'The "old" library has thousands of books from many countries.',                      options:['Adjective','Adverb'], answer:'Adjective', hint:'Is the underlined word an adjective or adverb?', explain:'Old describes the noun library — it is an adjective.' },
-    { id:'gr2-q10', text:'He speaks "softly" so he does not wake his sleeping baby sister.',                  options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Softly describes how he speaks — it is an adverb.' },
+    { id:'gr2-q10', text:'He looked "around" before crossing the busy street.',                               options:['Adjective','Adverb'], answer:'Adverb',    hint:'Is the underlined word an adjective or adverb?', explain:'Around tells us where he looked — it is an adverb.' },
   ],
 };
 
@@ -587,7 +587,7 @@ const G2_SEED_WEEKS = {
 }; // end G2_SEED_WEEKS
 
 /* ─── Firestore functions ───────────────────────────────────────────────── */
-const G2_DATA_VERSION = 3; // bump when seed data structure changes
+const G2_DATA_VERSION = 4; // bump when seed data structure changes
 
 function subscribeToClassDataG2(callback) {
   return _classDocG2.onSnapshot(snap => {
