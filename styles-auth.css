@@ -246,7 +246,7 @@
   z-index: 9999;
 }
 .ls-screen.ls-fading {
-  animation: ls-out 0.45s ease forwards;
+  animation: ls-out 0.65s ease forwards;
   pointer-events: none;
 }
 .ls-glow {
@@ -269,14 +269,14 @@
   font-size: 10px; letter-spacing: 0.26em;
   border: 1px solid var(--ink); padding: 5px 9px; line-height: 1;
   opacity: 0;
-  animation: ls-fade-up 0.55s cubic-bezier(.22,.68,0,1.2) 0.05s forwards;
+  animation: ls-fade-up 0.7s cubic-bezier(.22,.68,0,1.2) 0.15s forwards;
 }
 .ls-name {
   font-family: var(--serif);
   font-size: clamp(28px, 5vw, 42px);
   line-height: 1; letter-spacing: -0.015em;
   opacity: 0;
-  animation: ls-fade-up 0.65s cubic-bezier(.22,.68,0,1.15) 0.22s forwards;
+  animation: ls-fade-up 0.8s cubic-bezier(.22,.68,0,1.15) 0.45s forwards;
 }
 .ls-name em { font-style: italic; }
 .ls-bar-wrap {
@@ -284,13 +284,13 @@
   background: var(--border);
   position: relative; overflow: hidden;
   opacity: 0;
-  animation: ls-fade-up 0.4s ease 0.5s forwards;
+  animation: ls-fade-up 0.5s ease 0.95s forwards;
 }
 .ls-bar-fill {
   position: absolute; top: 0; left: 0; height: 100%;
   width: 45%;
   background: var(--ink);
-  animation: ls-shimmer 1.5s ease-in-out 0.5s infinite;
+  animation: ls-shimmer 1.6s ease-in-out 0.95s infinite;
 }
 
 /* ── Login screen (full-page) ─────────────────────────── */

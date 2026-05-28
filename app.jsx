@@ -110,11 +110,15 @@ function App() {
   // showLoader stays true until auth resolves + 480ms (fade-out animation time)
   const [showLoader,  setShowLoader]  = useAppState(true);
   const [loaderFading,setLoaderFading]= useAppState(false);
+  const loaderStartRef = useAppRef(Date.now());
   useAppEffect(() => {
     if (authReady) {
-      setLoaderFading(true);                        // trigger CSS fade-out
-      const t = setTimeout(() => setShowLoader(false), 480); // unmount after anim
-      return () => clearTimeout(t);
+      const elapsed = Date.now() - loaderStartRef.current;
+      const minShow = 1400; // minimum display time so animation always completes
+      const waitMs  = Math.max(0, minShow - elapsed);
+      const t1 = setTimeout(() => setLoaderFading(true), waitMs);          // fade-out
+      const t2 = setTimeout(() => setShowLoader(false), waitMs + 680);     // unmount
+      return () => { clearTimeout(t1); clearTimeout(t2); };
     }
   }, [authReady]);
 
