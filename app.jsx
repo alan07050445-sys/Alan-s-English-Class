@@ -110,6 +110,9 @@ function App() {
   // showLoader stays true until auth resolves + 480ms (fade-out animation time)
   const [showLoader,  setShowLoader]  = useAppState(true);
   const [loaderFading,setLoaderFading]= useAppState(false);
+  // pageKey — incremented each time we navigate INTO the main page, forcing
+  // the .page div to remount and replay its fade-in animation
+  const [pageKey, setPageKey] = useAppState(0);
   const loaderStartRef = useAppRef(Date.now());
   useAppEffect(() => {
     if (authReady) {
@@ -538,6 +541,7 @@ function App() {
     setWeekIdx(0);
     setOpenCat('vocab');
     setCatView(null);
+    setPageKey(k => k + 1); // force .page remount → replay fade-in
   };
 
   if (!grade) {
@@ -545,7 +549,7 @@ function App() {
   }
 
   return (
-    <div className={`page${showLoader ? ' page-loading' : ''}`}>
+    <div key={pageKey} className="page">
       <window.Header
         week={week}
         weekOrder={weekOrder}
