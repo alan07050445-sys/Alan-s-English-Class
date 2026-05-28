@@ -466,4 +466,21 @@ function MobileNav({ weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBack
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav });
+/* ════ LoadingScreen — brand logo fade-in overlay ════ */
+function LoadingScreen({ fading }) {
+  return (
+    <div className={`ls-screen${fading ? ' ls-fading' : ''}`} aria-label="Loading">
+      {/* Subtle decorative radial glow */}
+      <div className="ls-glow"/>
+      <div className="ls-brand">
+        <div className="ls-est">EST · 2026</div>
+        <div className="ls-name">Alan<em>'s</em> English Class</div>
+        <div className="ls-bar-wrap">
+          <div className="ls-bar-fill"/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen });

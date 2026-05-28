@@ -106,6 +106,18 @@ function App() {
   const [starBurst,   setStarBurst]   = useAppState(false);
   window.triggerStarBurst = () => setStarBurst(true);
 
+  // ── Loading screen state ────────────────────────────
+  // showLoader stays true until auth resolves + 480ms (fade-out animation time)
+  const [showLoader,  setShowLoader]  = useAppState(true);
+  const [loaderFading,setLoaderFading]= useAppState(false);
+  useAppEffect(() => {
+    if (authReady) {
+      setLoaderFading(true);                        // trigger CSS fade-out
+      const t = setTimeout(() => setShowLoader(false), 480); // unmount after anim
+      return () => clearTimeout(t);
+    }
+  }, [authReady]);
+
   const isTeacher = window.isAdminUser(user);
 
   // ── Category view state (quiz mode navigation) ──────
@@ -497,10 +509,13 @@ function App() {
     return cards;
   };
 
-  // Show loading spinner until Firebase Auth resolves (avoids flash of login screen)
-  if (!authReady) {
-    return <div className="login-loading">Loading…</div>;
+  // Brand loading overlay — shown until Firebase Auth resolves (with fade-out)
+  if (showLoader) {
+    return <window.LoadingScreen fading={loaderFading}/>;
   }
+
+  // Defensive: authReady should always be true here, but just in case
+  if (!authReady) return null;
 
   // Show login screen if not logged in and hasn't chosen guest
   if (!user && !skippedLogin) {
