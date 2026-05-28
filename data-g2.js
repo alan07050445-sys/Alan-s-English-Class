@@ -587,16 +587,54 @@ const G2_SEED_WEEKS = {
 }; // end G2_SEED_WEEKS
 
 /* ─── Firestore functions ───────────────────────────────────────────────── */
-const G2_DATA_VERSION = 5; // bump when seed data structure changes
+const G2_DATA_VERSION = 6; // bump when seed data structure changes
+
+// Smart merge: add new weeks/items/question-fields from seed into existing
+// Firestore data WITHOUT touching existing card fields (image, etc.).
+function _mergeG2WithSeed(existingWeeks, seedWeeks) {
+  const result = JSON.parse(JSON.stringify(existingWeeks));
+  Object.entries(seedWeeks).forEach(([weekId, seedWeek]) => {
+    if (!result[weekId]) { result[weekId] = seedWeek; return; } // new week
+    const ew = result[weekId];
+    if (!ew.items) ew.items = {};
+    Object.entries(seedWeek.items || {}).forEach(([catId, seedItems]) => {
+      if (!ew.items[catId]) { ew.items[catId] = seedItems; return; } // new cat
+      const existMap = new Map(ew.items[catId].map(it => [it.id, it]));
+      seedItems.forEach(si => {
+        if (!existMap.has(si.id)) { ew.items[catId].push(si); return; } // new item
+        const ei = existMap.get(si.id);
+        // Merge fillblank question explains — never touch cards (preserves images)
+        if (si.questions && ei.questions) {
+          const qMap = new Map(ei.questions.map(q => [q.id, q]));
+          si.questions.forEach(sq => {
+            if (qMap.has(sq.id) && sq.explain && !qMap.get(sq.id).explain) {
+              qMap.get(sq.id).explain = sq.explain;
+            }
+          });
+        }
+        // Top-level item scalar fields: only add if missing
+        Object.entries(si).forEach(([k, v]) => {
+          if (k === 'cards' || k === 'questions') return; // handled above / leave cards alone
+          if (ei[k] === undefined) ei[k] = v;
+        });
+      });
+    });
+  });
+  return result;
+}
 
 function subscribeToClassDataG2(callback) {
   return _classDocG2.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
-      // If data version is outdated, force re-seed with corrected field names
       if (!d._version || d._version < G2_DATA_VERSION) {
-        _classDocG2.set({ _version: G2_DATA_VERSION, weeks: G2_SEED_WEEKS, weekOrder: G2_DEFAULT_WEEK_ORDER }).catch(() => {});
-        callback(G2_SEED_WEEKS, G2_DEFAULT_WEEK_ORDER.slice());
+        // Smart merge: preserve existing data (images, teacher edits), only fill gaps
+        const existingWeeks = d.weeks || {};
+        const merged = _mergeG2WithSeed(existingWeeks, G2_SEED_WEEKS);
+        const mergedOrder = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
+          ? d.weekOrder : G2_DEFAULT_WEEK_ORDER.slice();
+        _classDocG2.set({ _version: G2_DATA_VERSION, weeks: merged, weekOrder: mergedOrder }, { merge: true }).catch(() => {});
+        callback(merged, mergedOrder);
         return;
       }
       const w = d.weeks || G2_SEED_WEEKS;
@@ -604,7 +642,7 @@ function subscribeToClassDataG2(callback) {
         ? d.weekOrder : Object.keys(w).sort();
       callback(w, o);
     } else {
-      // Auto-seed on first open
+      // First open — no existing data, safe to seed fresh
       _classDocG2.set({ _version: G2_DATA_VERSION, weeks: G2_SEED_WEEKS, weekOrder: G2_DEFAULT_WEEK_ORDER }).catch(() => {});
       callback(G2_SEED_WEEKS, G2_DEFAULT_WEEK_ORDER.slice());
     }
