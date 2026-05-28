@@ -633,6 +633,49 @@ async function checkWriting(word, sentence) {
   } catch(e) { return '網路錯誤，請再試一次。'; }
 }
 
+// ── AI Short Answer Grading ───────────────────────────────────────────────
+async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
+  if (!studentAnswer?.trim()) return '請先寫下你的答案。';
+  const endpoint = AI_WRITING_ENDPOINT || '';
+  const passageSection = passage?.trim()
+    ? `\n\n【閱讀文章】\n${passage.trim()}`
+    : '';
+  const pointsSection = keyPoints?.trim()
+    ? `\n【答案要點】${keyPoints.trim()}`
+    : '';
+  const prompt =
+    `你是一個親切的小學英語閱讀理解老師（學生年齡 8-14 歲）。${passageSection}\n\n` +
+    `【問題】${question}${pointsSection}\n` +
+    `【學生的答案】${studentAnswer.trim()}\n\n` +
+    `請判斷學生的回答是否正確地回應了問題。用繁體中文回覆，嚴格依照以下格式（不要多餘文字）：\n\n` +
+    `理解   ✓ CORRECT 或 △ PARTIAL 或 ✗ INCORRECT\n` +
+    `（一句溫暖鼓勵的話，不超過 20 字）\n` +
+    `建議   （若評分未達 3 顆星，給一句具體改善建議；3 顆星則省略此行）\n` +
+    `評分   ★★★☆（滿分 3 顆）\n\n` +
+    `評分標準：\n` +
+    `3★ = 完整正確回答，涵蓋主要要點\n` +
+    `2★ = 部分正確，有答到重點但不完整\n` +
+    `1★ = 方向正確但內容不足或有誤解\n` +
+    `0★ = 沒有回答問題或完全錯誤`;
+
+  if (endpoint) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          max_tokens: 300,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
+    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+  }
+  return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
+}
+
 function localWritingFeedback(word, sentence) {
   const s = sentence.trim();
   const lower = s.toLowerCase();
@@ -661,6 +704,6 @@ Object.assign(window, {
   getLevel, addXp,
   // Sound
   playSound,
-  // AI Writing
-  checkWriting,
+  // AI Writing & Short Answer
+  checkWriting, checkShortAnswer,
 });

@@ -79,7 +79,8 @@ function getQuizItems(items) {
     (item.type === 'fillblank'        && (item.questions || []).length >= 2) ||
     (item.type === 'quiz'             && (item.questions || []).length > 0) ||
     (item.type === 'writing-practice' && item.linkedFlashcardId) ||
-    (item.type === 'type-answer'      && (item.pairs || []).length >= 1)
+    (item.type === 'type-answer'      && (item.pairs || []).length >= 1) ||
+    (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1)
   );
 }
 
@@ -288,9 +289,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
-            const isWriting    = item.type === 'writing-practice';
-            const isTypeAnswer = item.type === 'type-answer';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer;
+            const isWriting     = item.type === 'writing-practice';
+            const isTypeAnswer  = item.type === 'type-answer';
+            const isShortAnswer = item.type === 'short-answer';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -314,7 +316,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : `${totalQ} questions`}
+                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -410,6 +412,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <WritingPracticeIntro
             item={selectedItem}
             catItems={items || []}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'short-answer' && phase === 'quiz' ? (
+          <ShortAnswerPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'short-answer' && phase === 'intro' ? (
+          <ShortAnswerIntro
+            item={selectedItem}
             onStart={() => setPhase('quiz')}
           />
         ) : phase === 'intro' ? (
@@ -1068,4 +1082,151 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer });
+/* ══════════════════════════════════════════════════════
+   SHORT ANSWER — INTRO
+══════════════════════════════════════════════════════ */
+function ShortAnswerIntro({ item, onStart }) {
+  const qCount = (item.saQuestions || []).length;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">📖</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{qCount} 題短答 · AI 閱讀理解批改</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>📄</span><span>先閱讀文章，再回答問題</span></div>
+        <div className="qm-intro-rule-row"><span>✍</span><span>用英文打字回答，盡量完整</span></div>
+        <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 3 顆星</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          開始作答 · Start →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   SHORT ANSWER — PLAYER
+══════════════════════════════════════════════════════ */
+function ShortAnswerPlayer({ item, progressKey, onBack }) {
+  const questions   = item.saQuestions || [];
+  const passage     = item.passage || '';
+
+  const [idx, setIdx]                   = useQM(0);
+  const [answer, setAnswer]             = useQM('');
+  const [feedback, setFeedback]         = useQM('');
+  const [checking, setChecking]         = useQM(false);
+  const [scores, setScores]             = useQM([]);
+  const [done, setDone]                 = useQM(false);
+  const [passageOpen, setPassageOpen]   = useQM(true);
+
+  const current = questions[idx];
+  const total   = questions.length;
+
+  const extractStars = (text) => {
+    const m = text.match(/[★☆]{1,3}/);
+    if (!m) return 2;
+    return (m[0].match(/★/g) || []).length;
+  };
+
+  const submit = async () => {
+    if (!answer.trim()) return;
+    setChecking(true);
+    setFeedback('');
+    const result = await window.checkShortAnswer(
+      current.question, current.keyPoints || '', passage, answer
+    );
+    setFeedback(result);
+    setScores(prev => [...prev, extractStars(result)]);
+    setChecking(false);
+  };
+
+  const next = () => {
+    if (idx + 1 >= total) { setDone(true); return; }
+    setIdx(idx + 1);
+    setAnswer('');
+    setFeedback('');
+  };
+
+  const avg = scores.length ? (scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
+
+  if (!questions.length) return (
+    <div className="wp-empty">
+      <div className="wp-empty-icon">📖</div>
+      <div className="wp-empty-msg">尚無問題</div>
+      <div className="wp-empty-sub">請在編輯模式中新增問題</div>
+    </div>
+  );
+
+  if (done) return (
+    <div className="wp-done">
+      <div className="wp-done-icon">✦</div>
+      <div className="wp-done-title">Reading Complete!</div>
+      <div className="wp-done-sub">已完成 {total} 題閱讀理解</div>
+      <div className="wp-done-score">
+        <span className="wp-done-avg">{avg.toFixed(1)}</span>
+        <span className="wp-done-maxstar"> / 3 ★</span>
+      </div>
+      <div className="wp-done-breakdown">
+        {questions.map((q, i) => (
+          <div key={i} className="wp-done-row">
+            <span className="wp-done-word" style={{flex:1,textAlign:'left',fontSize:12}}>{q.question}</span>
+            <span className="wp-done-stars">{'★'.repeat(scores[i]||0)}{'☆'.repeat(3-(scores[i]||0))}</span>
+          </div>
+        ))}
+      </div>
+      <button className="qm-btn secondary" onClick={onBack} style={{marginTop:20}}>← 返回</button>
+    </div>
+  );
+
+  return (
+    <div className="wp-player sa-player">
+      <div className="wp-progress-bar">
+        <div className="wp-progress-fill" style={{width:`${(idx/total)*100}%`}}/>
+      </div>
+      <div className="wp-header">
+        <button className="wp-back" onClick={onBack}>←</button>
+        <span className="wp-counter">{idx+1} / {total}</span>
+        {passage && (
+          <button className="sa-toggle" onClick={() => setPassageOpen(v=>!v)}>
+            {passageOpen ? '收起文章 ▲' : '展開文章 ▼'}
+          </button>
+        )}
+      </div>
+
+      {passage && passageOpen && (
+        <div className="sa-passage">{passage}</div>
+      )}
+
+      <div className="wp-card">
+        <div className="wp-instruction">Question {idx+1}</div>
+        <div className="sa-question">{current.question}</div>
+      </div>
+
+      <textarea
+        className="qm-writing-input wp-input sa-input"
+        value={answer}
+        onChange={e => setAnswer(e.target.value)}
+        placeholder="Write your answer here…"
+        disabled={!!feedback}
+        rows={4}
+      />
+
+      {!feedback ? (
+        <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !answer.trim()}>
+          {checking ? '批改中…' : '送出答案 →'}
+        </button>
+      ) : (
+        <>
+          <WritingFeedback text={feedback}/>
+          <button className="qm-btn primary wp-next" onClick={next}>
+            {idx+1 >= total ? '完成 ✦' : '下一題 →'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer });

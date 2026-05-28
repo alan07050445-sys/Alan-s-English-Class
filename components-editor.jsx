@@ -11,6 +11,7 @@ const TYPE_OPTIONS = [
   { id: "fillblank",        label: "Fill Blank",       hint: "填空題 — 自訂句子填空，支援主題換色" },
   { id: "writing-practice", label: "Writing Practice", hint: "✍ AI 造句批改 — 學生逐題造句，AI 給星評分" },
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
+  { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -138,6 +139,13 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               instruction={form.instruction || ''}
               onChangePairs={pairs => update("pairs", pairs)}
               onChangeInstruction={v => update("instruction", v)}
+            />
+          ) : form.type === "short-answer" ? (
+            <ShortAnswerEditor
+              passage={form.passage || ''}
+              questions={form.saQuestions || []}
+              onChangePassage={v => update("passage", v)}
+              onChangeQuestions={qs => update("saQuestions", qs)}
             />
           ) : form.type === "note" ? (
             <div className="field">
@@ -908,6 +916,84 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
           ＋ Add pair
         </button>
         <div className="field-help">每行一題：左欄是學生看到的提示，右欄是正確答案（批改時不分大小寫）。</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ShortAnswerEditor ── */
+function ShortAnswerEditor({ passage, questions, onChangePassage, onChangeQuestions }) {
+  const addQ = () => {
+    const id = 'sa' + Date.now() + Math.random().toString(36).slice(2,5);
+    onChangeQuestions([...questions, { id, question: '', keyPoints: '' }]);
+  };
+  const updateQ = (id, patch) => onChangeQuestions(questions.map(q => q.id === id ? {...q,...patch} : q));
+  const deleteQ = (id) => onChangeQuestions(questions.filter(q => q.id !== id));
+
+  return (
+    <div>
+      <div className="field">
+        <label className="field-label">閱讀文章 Passage</label>
+        <textarea
+          value={passage}
+          onChange={e => onChangePassage(e.target.value)}
+          placeholder="在這裡貼上閱讀文章的文字…"
+          rows={8}
+          style={{width:'100%',fontFamily:'var(--sans)',fontSize:14,padding:'10px 12px',
+            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
+            borderRadius:2,resize:'vertical',lineHeight:1.7,boxSizing:'border-box'}}
+        />
+        <div className="field-help">學生作答時會看到這篇文章。AI 批改時也會參考文章內容。</div>
+      </div>
+
+      <div className="field">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>問題 Questions ({questions.length})</label>
+          <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addQ}>+ Add</button>
+        </div>
+        <div className="fc-card-list">
+          {questions.length === 0 && (
+            <div className="fc-card-empty mono">尚未新增問題 — 點選右上方 Add</div>
+          )}
+          {questions.map((q, i) => (
+            <div key={q.id} className="fc-card-row open">
+              <div className="fc-card-row-head" style={{cursor:'default'}}>
+                <span className="mono" style={{color:'var(--ink-faint)',fontSize:10,minWidth:18,flexShrink:0}}>{i+1}</span>
+                <span className="fc-row-term" style={{fontSize:13}}>
+                  {q.question || <em style={{color:'var(--ink-faint)'}}>未填寫</em>}
+                </span>
+                <button
+                  onClick={() => { if(confirm('Delete?')) deleteQ(q.id); }}
+                  style={{color:'var(--accent)',background:'none',border:'none',cursor:'pointer',fontSize:13,flexShrink:0}}
+                >✕</button>
+              </div>
+              <div className="fc-card-row-body" style={{gridTemplateColumns:'1fr'}}>
+                <div className="fc-card-fields">
+                  <div className="field">
+                    <label className="field-label">問題 Question</label>
+                    <input
+                      value={q.question}
+                      onChange={e => updateQ(q.id, {question: e.target.value})}
+                      placeholder="What did the boy do when he saw the fire?"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">
+                      答案要點 Key Points
+                      <span style={{fontWeight:400,textTransform:'none',color:'var(--ink-muted)',marginLeft:6}}>(AI 評分依據，選填)</span>
+                    </label>
+                    <input
+                      value={q.keyPoints || ''}
+                      onChange={e => updateQ(q.id, {keyPoints: e.target.value})}
+                      placeholder="He called 119 / He ran to get help / He stayed calm"
+                    />
+                    <div className="field-help">用 / 分隔多個要點。AI 會參考這些要點決定給幾顆星。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
