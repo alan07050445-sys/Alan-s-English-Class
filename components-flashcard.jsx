@@ -1352,15 +1352,16 @@ function FillBlankEditor({ questions, onChange }) {
   };
   const handleImport = () => {
     const parsed = importText.split('\n').filter(l => l.trim()).map(line => {
-      let word = "", sentence = "";
+      let word = "", sentence = "", explain = "";
       if (line.includes('\t')) {
-        // Tab-separated: Word [TAB] Sentence (copy from spreadsheet/table)
-        const [w, ...rest] = line.split('\t');
-        word = w.trim();
-        sentence = rest.join(' ').trim();
+        // Tab-separated: Answer [TAB] Sentence [TAB] Explanation (optional 3rd col)
+        const parts = line.split('\t');
+        word     = parts[0]?.trim() || "";
+        sentence = parts[1]?.trim() || "";
+        explain  = parts[2]?.trim() || "";
       } else if (line.includes('|')) {
         const p = line.split(/\s*\|\s*/);
-        word = p[0].trim(); sentence = p[1]?.trim() || "";
+        word = p[0]?.trim() || ""; sentence = p[1]?.trim() || ""; explain = p[2]?.trim() || "";
       }
       if (!word || !sentence) return null;
       // Normalize multiple underscores (e.g. __________) to ___
@@ -1370,7 +1371,7 @@ function FillBlankEditor({ questions, onChange }) {
         const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         sentence = sentence.replace(new RegExp('\\b' + esc + '\\b', 'i'), '___');
       }
-      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence, answer: word, explain: "" };
+      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence, answer: word, explain };
     }).filter(Boolean).filter(q => q.sentence && q.answer);
     if (!parsed.length) return;
     onChange([...questions, ...parsed]);
@@ -1391,11 +1392,11 @@ function FillBlankEditor({ questions, onChange }) {
       {importing && (
         <div className="fc-import-box">
           <div className="mono" style={{fontSize:10,color:"var(--ink-muted)",marginBottom:8}}>
-            從試算表複製貼上（兩欄）：<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>單字 [Tab] 句子</code>
+            從試算表複製貼上：<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>答案 [Tab] 句子 [Tab] 解說（選填）</code>
             <span style={{color:"var(--ink-faint)",marginLeft:8}}>· 句子裡的 _________ 會自動變成空格</span>
           </div>
           <textarea className="fc-import-ta" value={importText} onChange={e=>setImportText(e.target.value)} rows={7}
-            placeholder={"prepared\tBefore the typhoon came, our family was __________ with water, food, and flashlights.\nemergency\tWhen the kitchen started to fill with smoke, Dad knew it was an __________ and called for help.\nmemorize\tI had to __________ my home address so I could tell an adult if I got lost."}/>
+            placeholder={"prepared\tBefore the typhoon came, our family was __________ with water.\tprepared = 準備好的💪 事先做好準備很重要！\nemergency\tWhen the kitchen started to fill with smoke, Dad knew it was an __________.\nmemorize\tI had to __________ my home address so I could tell an adult if I got lost."}/>
           <div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}>
             <button className="btn ghost" onClick={()=>{setImporting(false);setImportText("");}}>Cancel</button>
             <button className="btn primary" onClick={handleImport} disabled={!importText.trim()}>Import</button>
