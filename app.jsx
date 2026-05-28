@@ -516,176 +516,192 @@ function App() {
     return cards;
   };
 
-  // Before auth resolves: show ONLY the loader (app isn't ready to render yet)
-  if (!authReady) {
-    return <window.LoadingScreen fading={loaderFading}/>;
-  }
-
-  // Show login screen if not logged in and hasn't chosen guest
-  if (!user && !skippedLogin) {
-    return (
-      <window.LoginScreen
-        onLogin={() => window.signInWithGoogle()}
-        onSkip={() => {
-          try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
-          setSkippedLogin(true);
-        }}
-      />
-    );
-  }
-
-  // ── Grade selector (shown once after login, stored in localStorage) ──
+  // ── Grade selector handler ─────────────────────────────
+  // Defined before the final return so it can be passed as a prop.
   const handleSelectGrade = (g) => {
+    // Immediately load the correct grade's data so the page never
+    // flashes the previous grade's content while Firestore syncs.
+    const newWeeks = g === 'g2' ? window.loadWeeksG2() : window.loadWeeks();
+    const newOrder = g === 'g2' ? window.loadWeekOrderG2() : window.loadWeekOrder();
     try { localStorage.setItem('alan-grade', g); } catch(e) {}
     setGrade(g);
-    setWeekIdx(0);
+    setWeeks(newWeeks);
+    setWeekOrder(newOrder);
+    setWeekIdx(bestWeekIdx(newOrder, newWeeks));
     setOpenCat('vocab');
     setCatView(null);
     setPageKey(k => k + 1); // force .page remount → replay fade-in
   };
 
-  if (!grade) {
-    return <window.GradeSelector onSelect={handleSelectGrade} />;
+  // ── Determine what to render under the loading overlay ──────────────
+  // LoadingScreen MUST stay in one fixed tree-position (Fragment child #1)
+  // so React never unmounts/remounts it — that would reset its CSS animations.
+  // All "early return" logic is folded into appContent below.
+  let appContent = null;
+  if (authReady) {
+    if (!user && !skippedLogin) {
+      appContent = (
+        <window.LoginScreen
+          onLogin={() => window.signInWithGoogle()}
+          onSkip={() => {
+            try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
+            setSkippedLogin(true);
+          }}
+        />
+      );
+    } else if (!grade) {
+      appContent = <window.GradeSelector onSelect={handleSelectGrade} />;
+    }
   }
 
+  // If authReady + grade, fall through to render the full .page below.
+  // appContent stays null in that case.
+
+  // ── Single return — LoadingScreen always at the same Fragment position ──
+  // IMPORTANT: LoadingScreen must never change its tree position between renders.
+  // If it does, React unmounts+remounts it and the CSS animations reset.
+  // Solution: one Fragment, appContent slot first, LoadingScreen always last.
   return (
     <React.Fragment>
-    <div key={pageKey} className="page">
-      <window.Header
-        week={week}
-        weekOrder={weekOrder}
-        weekIdx={weekIdx}
-        onPrevWeek={goPrevWeek}
-        onNextWeek={goNextWeek}
-        canEdit={isTeacher}
-        editMode={editMode}
-        onToggleEdit={() => setEditMode(e => !e)}
-        onAddWeek={() => setWeekModalOpen(true)}
-        onDeleteWeek={handleDeleteWeek}
-        progress={{done: totalDone, total: totalItems}}
-        user={user}
-        onLogin={() => window.signInWithGoogle()}
-        onLogout={() => {
-          if (confirm('Sign out?')) {
-            window.signOutUser();
-            try { sessionStorage.removeItem('alan-guest'); } catch(e) {}
-            setSkippedLogin(false);
-          }
-        }}
-        onShowDashboard={() => setDashOpen(true)}
-        streak={userProfile.streak}
-        badges={userProfile.badges}
-        xp={userProfile.xp || 0}
-        onShowBadges={() => setBadgesOpen(true)}
-        onEditWeek={() => setWeekEditOpen(true)}
-        grade={grade}
-        onSwitchGrade={() => {
-          try { localStorage.removeItem('alan-grade'); } catch(e) {}
-          setGrade(null);
-          setCatView(null);
-        }}
-      />
-
-      {/* ── QUIZ MODE (always shown; edit controls appear when editMode=true) ── */}
-      {catView ? (
-        <window.QuizModeCategoryView
-          cat={catView}
-          items={(week.items || {})[catView.id] || []}
-          weekId={weekId}
-          onBack={() => setCatView(null)}
-          editMode={editMode}
-          onAddItem={handleAddItem}
-          onEditItem={handleEditItem}
-          onDeleteItem={handleDeleteItem}
-          onMoveItem={(itemId, dir) => handleMoveItem(catView.id, itemId, dir)}
-          homework={week.homework || {}}
-          onSetHomework={handleSetHomework}
-          weekQuizItems={weekQuizItems}
-        />
-      ) : (
-        <div className="shell">
-          <window.QuizModeBlocks
+      {/* App content — null while loading, then login/grade/main as auth resolves */}
+      {appContent ? appContent : (authReady && grade && (
+        <div key={pageKey} className="page">
+          <window.Header
             week={week}
-            weekId={weekId}
-            onEnterCat={(cat) => setCatView(cat)}
+            weekOrder={weekOrder}
+            weekIdx={weekIdx}
+            onPrevWeek={goPrevWeek}
+            onNextWeek={goNextWeek}
+            canEdit={isTeacher}
             editMode={editMode}
-            categories={activeCategories}
-            onUpdateWeek={(patch) => {
-              const w = JSON.parse(JSON.stringify(weeksRef.current));
-              if (!w[weekId]) return;
-              w[weekId] = { ...w[weekId], ...patch };
-              setWeeks(w);
-              window.saveWeeks(w);
+            onToggleEdit={() => setEditMode(e => !e)}
+            onAddWeek={() => setWeekModalOpen(true)}
+            onDeleteWeek={handleDeleteWeek}
+            progress={{done: totalDone, total: totalItems}}
+            user={user}
+            onLogin={() => window.signInWithGoogle()}
+            onLogout={() => {
+              if (confirm('Sign out?')) {
+                window.signOutUser();
+                try { sessionStorage.removeItem('alan-guest'); } catch(e) {}
+                setSkippedLogin(false);
+              }
             }}
-            onAddItem={handleAddItem}
+            onShowDashboard={() => setDashOpen(true)}
+            streak={userProfile.streak}
+            badges={userProfile.badges}
+            xp={userProfile.xp || 0}
+            onShowBadges={() => setBadgesOpen(true)}
+            onEditWeek={() => setWeekEditOpen(true)}
+            grade={grade}
+            onSwitchGrade={() => {
+              try { localStorage.removeItem('alan-grade'); } catch(e) {}
+              setGrade(null);
+              setCatView(null);
+            }}
           />
+
+          {/* ── QUIZ MODE ── */}
+          {catView ? (
+            <window.QuizModeCategoryView
+              cat={catView}
+              items={(week.items || {})[catView.id] || []}
+              weekId={weekId}
+              onBack={() => setCatView(null)}
+              editMode={editMode}
+              onAddItem={handleAddItem}
+              onEditItem={handleEditItem}
+              onDeleteItem={handleDeleteItem}
+              onMoveItem={(itemId, dir) => handleMoveItem(catView.id, itemId, dir)}
+              homework={week.homework || {}}
+              onSetHomework={handleSetHomework}
+              weekQuizItems={weekQuizItems}
+            />
+          ) : (
+            <div className="shell">
+              <window.QuizModeBlocks
+                week={week}
+                weekId={weekId}
+                onEnterCat={(cat) => setCatView(cat)}
+                editMode={editMode}
+                categories={activeCategories}
+                onUpdateWeek={(patch) => {
+                  const w = JSON.parse(JSON.stringify(weeksRef.current));
+                  if (!w[weekId]) return;
+                  w[weekId] = { ...w[weekId], ...patch };
+                  setWeeks(w);
+                  window.saveWeeks(w);
+                }}
+                onAddItem={handleAddItem}
+              />
+            </div>
+          )}
+
+          <window.Footer/>
+
+          <window.MobileNav
+            weekIdx={weekIdx}
+            weekOrder={weekOrder}
+            onPrevWeek={goPrevWeek}
+            onNextWeek={goNextWeek}
+            catView={catView}
+            onBackFromCat={() => setCatView(null)}
+            onShowBadges={() => setBadgesOpen(true)}
+            user={user}
+          />
+
+          <window.EditorModal
+            open={editorOpen}
+            draft={editorDraft}
+            weekId={weekId}
+            catItems={editorCat ? (week.items[editorCat] || []) : []}
+            onClose={() => setEditorOpen(false)}
+            onSave={handleSaveItem}
+            onDelete={handleDeleteItem}
+          />
+
+          <window.WeekModal
+            open={weekModalOpen}
+            existingIds={weekOrder}
+            onClose={() => setWeekModalOpen(false)}
+            onSave={handleAddWeek}
+          />
+          <window.WeekModal
+            open={weekEditOpen}
+            existingIds={weekOrder}
+            onClose={() => setWeekEditOpen(false)}
+            onSave={handleEditWeekSave}
+            editWeek={{ id: weekId, label: week.label || '', dateRange: week.dateRange || '', theme: week.theme || '', themeZh: week.themeZh || '' }}
+          />
+
+          {toast && <div className="toast">{toast}</div>}
+
+          {dashOpen && isTeacher && (
+            <window.TeacherDashboard
+              onClose={() => setDashOpen(false)}
+              weeks={weeks}
+              weekOrder={weekOrder}
+            />
+          )}
+
+          {badgesOpen && (
+            <window.BadgesModal badges={userProfile.badges} onClose={() => setBadgesOpen(false)}/>
+          )}
+
+          {badgeToast && (
+            <window.BadgeToast badge={badgeToast} onDone={() => setBadgeToast(null)}/>
+          )}
+
+          {starBurst && (
+            <window.StarBurst onDone={() => setStarBurst(false)}/>
+          )}
         </div>
-      )}
+      ))}
 
-      <window.Footer/>
-
-      <window.MobileNav
-        weekIdx={weekIdx}
-        weekOrder={weekOrder}
-        onPrevWeek={goPrevWeek}
-        onNextWeek={goNextWeek}
-        catView={catView}
-        onBackFromCat={() => setCatView(null)}
-        onShowBadges={() => setBadgesOpen(true)}
-        user={user}
-      />
-
-      <window.EditorModal
-        open={editorOpen}
-        draft={editorDraft}
-        weekId={weekId}
-        catItems={editorCat ? (week.items[editorCat] || []) : []}
-        onClose={() => setEditorOpen(false)}
-        onSave={handleSaveItem}
-        onDelete={handleDeleteItem}
-      />
-
-      <window.WeekModal
-        open={weekModalOpen}
-        existingIds={weekOrder}
-        onClose={() => setWeekModalOpen(false)}
-        onSave={handleAddWeek}
-      />
-      <window.WeekModal
-        open={weekEditOpen}
-        existingIds={weekOrder}
-        onClose={() => setWeekEditOpen(false)}
-        onSave={handleEditWeekSave}
-        editWeek={{ id: weekId, label: week.label || '', dateRange: week.dateRange || '', theme: week.theme || '', themeZh: week.themeZh || '' }}
-      />
-
-      {toast && <div className="toast">{toast}</div>}
-
-      {dashOpen && isTeacher && (
-        <window.TeacherDashboard
-          onClose={() => setDashOpen(false)}
-          weeks={weeks}
-          weekOrder={weekOrder}
-        />
-      )}
-
-      {badgesOpen && (
-        <window.BadgesModal badges={userProfile.badges} onClose={() => setBadgesOpen(false)}/>
-      )}
-
-      {badgeToast && (
-        <window.BadgeToast badge={badgeToast} onDone={() => setBadgeToast(null)}/>
-      )}
-
-      {starBurst && (
-        <window.StarBurst onDone={() => setStarBurst(false)}/>
-      )}
-    </div>
-
-    {/* Loading overlay sits OUTSIDE .page so .page's opacity animation
-        doesn't clip the fixed overlay (CSS opacity creates a stacking context
-        that affects even position:fixed children) */}
-    {showLoader && <window.LoadingScreen fading={loaderFading}/>}
+      {/* LoadingScreen is always the LAST child of this Fragment.
+          Keeping it in the same tree position prevents unmount/remount
+          and preserves the CSS brand animation across re-renders. */}
+      {showLoader && <window.LoadingScreen fading={loaderFading}/>}
     </React.Fragment>
   );
 }
