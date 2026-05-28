@@ -1340,7 +1340,7 @@ function FillBlankEditor({ questions, onChange }) {
 
   const addQ = () => {
     const id = "q" + Date.now() + Math.random().toString(36).slice(2,5);
-    onChange([...questions, { id, sentence: "", answer: "" }]);
+    onChange([...questions, { id, sentence: "", answer: "", explain: "" }]);
   };
   const updateQ = (id, patch) => onChange(questions.map(q => q.id === id ? {...q, ...patch} : q));
   const deleteQ = (id) => onChange(questions.filter(q => q.id !== id));
@@ -1370,7 +1370,7 @@ function FillBlankEditor({ questions, onChange }) {
         const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         sentence = sentence.replace(new RegExp('\\b' + esc + '\\b', 'i'), '___');
       }
-      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence, answer: word };
+      return { id:"q"+Date.now()+Math.random().toString(36).slice(2,5), sentence, answer: word, explain: "" };
     }).filter(Boolean).filter(q => q.sentence && q.answer);
     if (!parsed.length) return;
     onChange([...questions, ...parsed]);
@@ -1425,6 +1425,10 @@ function FillBlankEditor({ questions, onChange }) {
                 <div className="field">
                   <label className="field-label">答案 Answer</label>
                   <input value={q.answer} onChange={e=>updateQ(q.id,{answer:e.target.value})} placeholder="disaster"/>
+                </div>
+                <div className="field">
+                  <label className="field-label">解說 Explanation <span style={{fontWeight:400,textTransform:"none",color:"var(--ink-muted)"}}>(選填 · 答錯後顯示)</span></label>
+                  <input value={q.explain||""} onChange={e=>updateQ(q.id,{explain:e.target.value})} placeholder="disaster = 災難🌊  The flood was a terrible disaster！大洪水造成了嚴重的災難。"/>
                 </div>
               </div>
             </div>
