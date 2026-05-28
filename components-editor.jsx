@@ -923,12 +923,31 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
 
 /* ── ShortAnswerEditor ── */
 function ShortAnswerEditor({ passage, questions, onChangePassage, onChangeQuestions }) {
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr, setImportErr] = useS('');
+
   const addQ = () => {
     const id = 'sa' + Date.now() + Math.random().toString(36).slice(2,5);
     onChangeQuestions([...questions, { id, question: '', keyPoints: '' }]);
   };
   const updateQ = (id, patch) => onChangeQuestions(questions.map(q => q.id === id ? {...q,...patch} : q));
   const deleteQ = (id) => onChangeQuestions(questions.filter(q => q.id !== id));
+
+  const doImport = () => {
+    const lines = importText.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) { setImportErr('沒有內容可匯入'); return; }
+    const parsed = lines.map((line, i) => {
+      const parts = line.split('\t');
+      const question  = parts[0]?.trim() || '';
+      const keyPoints = parts[1]?.trim() || '';
+      if (!question) return null;
+      return { id: 'sa' + Date.now() + i + Math.random().toString(36).slice(2,4), question, keyPoints };
+    }).filter(Boolean);
+    if (!parsed.length) { setImportErr('請確認格式：每行至少一欄（問題）'); return; }
+    onChangeQuestions([...questions, ...parsed]);
+    setImportText(''); setImporting(false); setImportErr('');
+  };
 
   return (
     <div>
@@ -949,8 +968,49 @@ function ShortAnswerEditor({ passage, questions, onChangePassage, onChangeQuesti
       <div className="field">
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
           <label className="field-label" style={{margin:0}}>問題 Questions ({questions.length})</label>
-          <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addQ}>+ Add</button>
+          <div style={{display:'flex',gap:6}}>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
+              onClick={() => { setImporting(v=>!v); setImportErr(''); }}>
+              {importing ? '✕ 取消' : '⬇ Import'}
+            </button>
+            <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addQ}>+ Add</button>
+          </div>
         </div>
+
+        {importing && (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper)'}}>
+            <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
+              從 Excel / Google Sheets 複製貼上：
+              <code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2,marginLeft:4}}>
+                問題 [Tab] 答案要點（選填）
+              </code>
+              <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
+                · 每行一題，答案要點那欄可以留空
+              </span>
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+              placeholder={"What did the boy do when he saw the fire?\tHe called 119 / He ran for help\nWhere did the family go after the flood?\tThey went to a shelter\nWhy was the dog barking?"}
+              rows={6}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',
+                background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,
+                fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
+            />
+            {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:4}}>{importErr}</div>}
+            <div style={{display:'flex',gap:8,marginTop:8,justifyContent:'flex-end'}}>
+              <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}}
+                onClick={() => { setImporting(false); setImportText(''); setImportErr(''); }}>
+                取消
+              </button>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}}
+                onClick={doImport} disabled={!importText.trim()}>
+                匯入 {importText.trim() ? `(${importText.split('\n').filter(l=>l.trim()).length} 題)` : ''}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="fc-card-list">
           {questions.length === 0 && (
             <div className="fc-card-empty mono">尚未新增問題 — 點選右上方 Add</div>
