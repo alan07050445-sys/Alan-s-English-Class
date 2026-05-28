@@ -504,6 +504,16 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
   );
 }
 
+// Render **bold** markdown inline
+function renderMd(text) {
+  if (!text || !text.includes('**')) return text;
+  return text.split(/(\*\*.*?\*\*)/).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
 function WritingFeedback({ text }) {
   const lines = text.split('\n');
   const elements = [];
@@ -513,6 +523,7 @@ function WritingFeedback({ text }) {
     const trimmed = line.trim();
     if (!trimmed) { inExamples = false; elements.push(<div key={i} className="wf-spacer"/>); return; }
 
+    // ── Writing-practice format ──────────────────────────
     if (trimmed.startsWith('文法')) {
       const isCorrect = /CORRECT/i.test(trimmed) && !/INCORRECT/i.test(trimmed);
       elements.push(
@@ -536,7 +547,7 @@ function WritingFeedback({ text }) {
     }
     if (trimmed.startsWith('改進')) {
       const val = trimmed.replace(/^改進\s*/, '');
-      elements.push(<div key={i} className="wf-row"><span className="wf-key improve">改進</span><span className="wf-val improve-val">{val}</span></div>);
+      elements.push(<div key={i} className="wf-row"><span className="wf-key improve">改進</span><span className="wf-val improve-val">{renderMd(val)}</span></div>);
       return;
     }
     if (trimmed === '範例') {
@@ -549,13 +560,50 @@ function WritingFeedback({ text }) {
       elements.push(<div key={i} className="wf-example-row"><span className="wf-bullet">·</span><span>{val}</span></div>);
       return;
     }
-    if (trimmed.startsWith('評分')) {
-      const stars = trimmed.replace(/^評分\s*/, '');
-      elements.push(<div key={i} className="wf-score"><span className="wf-key">評分</span><span className="wf-stars">{stars}</span></div>);
+
+    // ── Short-answer format ──────────────────────────────
+    if (trimmed.startsWith('理解')) {
+      const rest = trimmed.replace(/^理解\s*/, '');
+      const isCorrect = /CORRECT/i.test(rest) && !/INCORRECT/i.test(rest) && !/PARTIAL/i.test(rest);
+      const isPartial = /PARTIAL/i.test(rest);
+      const cls = isCorrect ? 'correct' : isPartial ? 'partial' : 'incorrect';
+      const icon = isCorrect ? '✓' : isPartial ? '△' : '✗';
+      const label = isCorrect ? 'CORRECT' : isPartial ? 'PARTIAL' : 'INCORRECT';
+      elements.push(
+        <div key={i} className={`wf-verdict ${cls}`}>
+          <span className="wf-verdict-icon">{icon}</span>
+          <span className="wf-verdict-label">理解度</span>
+          <span className="wf-verdict-val">{label}</span>
+        </div>
+      );
       return;
     }
-    // encouragement / other text
-    elements.push(<div key={i} className="wf-encourage">{trimmed}</div>);
+    if (trimmed.startsWith('建議')) {
+      const val = trimmed.replace(/^建議\s*/, '');
+      elements.push(
+        <div key={i} className="wf-tip">
+          <span className="wf-tip-icon">💡</span>
+          <span className="wf-tip-text">{renderMd(val)}</span>
+        </div>
+      );
+      return;
+    }
+
+    // ── Shared ───────────────────────────────────────────
+    if (trimmed.startsWith('評分')) {
+      const stars = trimmed.replace(/^評分\s*/, '');
+      elements.push(
+        <div key={i} className="wf-score">
+          <span className="wf-key">評分</span>
+          <span className="wf-stars">{stars}</span>
+        </div>
+      );
+      return;
+    }
+
+    // Encouragement line — strip surrounding parentheses if present
+    const encourage = trimmed.replace(/^\(?(.*?)\)?$/, '$1');
+    elements.push(<div key={i} className="wf-encourage">{renderMd(encourage)}</div>);
   });
 
   return <div className="qm-writing-feedback wf-card">{elements}</div>;
