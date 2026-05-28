@@ -293,6 +293,17 @@
   animation: ls-shimmer 1.6s ease-in-out 0.95s infinite;
 }
 
+/* ── Page enter animation (cross-fade with loading screen) ─── */
+@keyframes page-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+/* When the loading screen overlay is still present, the page fades in
+   underneath it — creating a smooth cross-fade instead of an abrupt swap */
+.page.page-loading {
+  animation: page-enter 0.65s ease forwards;
+}
+
 /* ── Login screen (full-page) ─────────────────────────── */
 
 .login-screen {

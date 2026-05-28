@@ -513,13 +513,10 @@ function App() {
     return cards;
   };
 
-  // Brand loading overlay — shown until Firebase Auth resolves (with fade-out)
-  if (showLoader) {
+  // Before auth resolves: show ONLY the loader (app isn't ready to render yet)
+  if (!authReady) {
     return <window.LoadingScreen fading={loaderFading}/>;
   }
-
-  // Defensive: authReady should always be true here, but just in case
-  if (!authReady) return null;
 
   // Show login screen if not logged in and hasn't chosen guest
   if (!user && !skippedLogin) {
@@ -548,7 +545,7 @@ function App() {
   }
 
   return (
-    <div className="page">
+    <div className={`page${showLoader ? ' page-loading' : ''}`}>
       <window.Header
         week={week}
         weekOrder={weekOrder}
@@ -678,6 +675,9 @@ function App() {
       {starBurst && (
         <window.StarBurst onDone={() => setStarBurst(false)}/>
       )}
+
+      {/* Loading overlay — fades out while the page content fades in underneath */}
+      {showLoader && <window.LoadingScreen fading={loaderFading}/>}
     </div>
   );
 }
