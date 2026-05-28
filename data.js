@@ -650,7 +650,8 @@ async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
     `請判斷學生的回答是否正確地回應了問題。用繁體中文回覆，嚴格依照以下格式（不要多餘文字）：\n\n` +
     `理解   ✓ CORRECT 或 △ PARTIAL 或 ✗ INCORRECT\n` +
     `（一句溫暖鼓勵的話，不超過 20 字，去掉括號直接寫）\n` +
-    `建議   （若評分未達 3 顆星，用中英夾雜的方式給一句具體建議，把關鍵英文詞彙用 **粗體** 標示，例如：可以加上 **specific details**（具體細節）讓答案更完整；3 顆星則省略此行）\n` +
+    `建議   （若評分未達 3 顆星，用中英夾雜的方式給一句具體建議，把關鍵英文詞彙用 **粗體** 標示，然後在後面用「例如："..."」提供一個英文的標準答案範例，讓學生知道正確的英文怎麼寫；3 顆星則省略此行）\n` +
+    `        例如格式：可以加上 **specific details**（具體細節），例如："Preparing helps us stay safe and think clearly in an emergency."\n` +
     `評分   ★★★☆（滿分 3 顆，用實心★和空心☆表示）\n\n` +
     `評分標準：\n` +
     `3★ = 完整正確回答，涵蓋主要要點\n` +
