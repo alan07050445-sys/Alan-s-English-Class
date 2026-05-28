@@ -549,6 +549,7 @@ function App() {
   }
 
   return (
+    <React.Fragment>
     <div key={pageKey} className="page">
       <window.Header
         week={week}
@@ -679,10 +680,13 @@ function App() {
       {starBurst && (
         <window.StarBurst onDone={() => setStarBurst(false)}/>
       )}
-
-      {/* Loading overlay — fades out while the page content fades in underneath */}
-      {showLoader && <window.LoadingScreen fading={loaderFading}/>}
     </div>
+
+    {/* Loading overlay sits OUTSIDE .page so .page's opacity animation
+        doesn't clip the fixed overlay (CSS opacity creates a stacking context
+        that affects even position:fixed children) */}
+    {showLoader && <window.LoadingScreen fading={loaderFading}/>}
+    </React.Fragment>
   );
 }
 
