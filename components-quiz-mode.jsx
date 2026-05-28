@@ -49,7 +49,7 @@ function getItemQuestions(item) {
       const correct = options.indexOf(q.answer);
       // Strip leading number prefix; keep ___ visible as the blank
       const qText = (q.sentence || '').replace(/^[\(（]?\d+[\)）\.\s、：:]+\s*/, '');
-      return { q: qText, hint: 'Fill in the blank · 選出正確答案', options, correct, explain: '' };
+      return { q: qText, hint: 'Fill in the blank · 選出正確答案', options, correct, explain: q.explain || '' };
     }).filter(Boolean);
     return shuffleArr(mapped);
   }
