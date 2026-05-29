@@ -1171,20 +1171,50 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
    SHORT ANSWER — INTRO
 ══════════════════════════════════════════════════════ */
 function ShortAnswerIntro({ item, onStart }) {
-  const qCount = (item.saQuestions || []).length;
+  const qCount   = (item.saQuestions || []).length;
+  const ytUrl    = item.saYoutube || '';
+  const embedSrc = ytUrl ? window.toYouTubeEmbed(ytUrl) : '';
+
   return (
-    <div className="qm-intro">
-      <div className="qm-intro-icon">📖</div>
-      <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{qCount} 題短答 · AI 閱讀理解批改</div>
-      <div className="qm-intro-rules">
-        <div className="qm-intro-rule-row"><span>📄</span><span>先閱讀文章，再回答問題</span></div>
-        <div className="qm-intro-rule-row"><span>✍</span><span>用英文打字回答，盡量完整</span></div>
-        <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 3 顆星</span></div>
-      </div>
+    <div className={`qm-intro${embedSrc ? ' sa-intro-wide' : ''}`}>
+      {embedSrc ? (
+        <>
+          <div className="sa-intro-header">
+            <div className="qm-intro-icon" style={{fontSize:28}}>📺</div>
+            <div>
+              <div className="qm-intro-title" style={{marginBottom:4}}>{item.title}</div>
+              <div className="qm-intro-meta">{qCount} 題短答 · 先看影片複習再開始</div>
+            </div>
+          </div>
+          <div className="sa-intro-video">
+            <iframe
+              src={embedSrc}
+              frameBorder="0"
+              allowFullScreen
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              style={{width:'100%', height:'100%', borderRadius:8}}
+            />
+          </div>
+          <div className="qm-intro-rules" style={{marginTop:16}}>
+            <div className="qm-intro-rule-row"><span>📺</span><span>看完影片後再開始作答</span></div>
+            <div className="qm-intro-rule-row"><span>✍</span><span>用英文打字回答，盡量完整</span></div>
+            <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 3 顆星</span></div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="qm-intro-icon">📖</div>
+          <div className="qm-intro-title">{item.title}</div>
+          <div className="qm-intro-meta">{qCount} 題短答 · AI 閱讀理解批改</div>
+          <div className="qm-intro-rules">
+            <div className="qm-intro-rule-row"><span>✍</span><span>用英文打字回答，盡量完整</span></div>
+            <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 3 顆星</span></div>
+          </div>
+        </>
+      )}
       <div className="qm-intro-btns">
         <button className="qm-btn primary" onClick={onStart}>
-          開始作答 · Start →
+          {embedSrc ? '✅ 看完了，開始作答 →' : '開始作答 · Start →'}
         </button>
       </div>
     </div>
@@ -1198,13 +1228,12 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   const questions   = item.saQuestions || [];
   const passage     = item.passage || '';
 
-  const [idx, setIdx]                   = useQM(0);
-  const [answer, setAnswer]             = useQM('');
-  const [feedback, setFeedback]         = useQM('');
-  const [checking, setChecking]         = useQM(false);
-  const [scores, setScores]             = useQM([]);
-  const [done, setDone]                 = useQM(false);
-  const [passageOpen, setPassageOpen]   = useQM(true);
+  const [idx, setIdx]         = useQM(0);
+  const [answer, setAnswer]   = useQM('');
+  const [feedback, setFeedback] = useQM('');
+  const [checking, setChecking] = useQM(false);
+  const [scores, setScores]   = useQM([]);
+  const [done, setDone]       = useQM(false);
 
   const current = questions[idx];
   const total   = questions.length;
@@ -1273,30 +1302,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
       <div className="wp-header">
         <button className="wp-back" onClick={onBack}>←</button>
         <span className="wp-counter">{idx+1} / {total}</span>
-        {passage && (
-          <button className="sa-toggle" onClick={() => setPassageOpen(v=>!v)}>
-            {passageOpen ? '收起文章 ▲' : '展開文章 ▼'}
-          </button>
-        )}
-      </div>
-
-      {passage && passageOpen && (
-        <div className="sa-passage">
-          {passage.split('\n').filter(l => l.trim()).map((line, i) => {
-            const numbered = line.match(/^(\d+)\s+(.+)$/);
-            if (numbered) {
-              return (
-                <p key={i} className="sa-para">
-                  <span className="sa-para-num">{numbered[1]}</span>
-                  {numbered[2]}
-                </p>
-              );
-            }
-            // Section header: not a number-led line
-            return <h3 key={i} className="sa-heading">{line.trim()}</h3>;
-          })}
         </div>
-      )}
 
       <div className="wp-card">
         <div className="wp-instruction">Question {idx+1}</div>

@@ -146,8 +146,10 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
             <ShortAnswerEditor
               passage={form.passage || ''}
               questions={form.saQuestions || []}
+              saYoutube={form.saYoutube || ''}
               onChangePassage={v => update("passage", v)}
               onChangeQuestions={qs => update("saQuestions", qs)}
+              onChangeSaYoutube={v => update("saYoutube", v)}
             />
           ) : form.type === "syllable-div" ? (
             <SyllableDivEditor
@@ -938,7 +940,7 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
 }
 
 /* ── ShortAnswerEditor ── */
-function ShortAnswerEditor({ passage, questions, onChangePassage, onChangeQuestions }) {
+function ShortAnswerEditor({ passage, questions, saYoutube, onChangePassage, onChangeQuestions, onChangeSaYoutube }) {
   const [importing, setImporting] = useS(false);
   const [importText, setImportText] = useS('');
   const [importErr, setImportErr] = useS('');
@@ -967,18 +969,33 @@ function ShortAnswerEditor({ passage, questions, onChangePassage, onChangeQuesti
 
   return (
     <div>
+      {/* YouTube URL for intro review */}
       <div className="field">
-        <label className="field-label">閱讀文章 Passage</label>
+        <label className="field-label">▶ 複習影片 YouTube URL（選填）</label>
+        <input
+          value={saYoutube || ''}
+          onChange={e => onChangeSaYoutube(e.target.value)}
+          placeholder="https://www.youtube.com/watch?v=..."
+          style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',
+            background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14,boxSizing:'border-box'}}
+        />
+        <div className="field-help">
+          填入後，學生在開始測驗前的「準備」畫面可以先看這支影片複習。進入作答後影片不會再顯示。
+        </div>
+      </div>
+
+      <div className="field">
+        <label className="field-label">📄 AI 參考文章 Passage（學生不可見）</label>
         <textarea
           value={passage}
           onChange={e => onChangePassage(e.target.value)}
-          placeholder="在這裡貼上閱讀文章的文字…"
+          placeholder="貼上文章文字，AI 批改時會參考這段內容判斷答案是否正確…"
           rows={8}
           style={{width:'100%',fontFamily:'var(--sans)',fontSize:14,padding:'10px 12px',
             border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
             borderRadius:2,resize:'vertical',lineHeight:1.7,boxSizing:'border-box'}}
         />
-        <div className="field-help">學生作答時會看到這篇文章。AI 批改時也會參考文章內容。</div>
+        <div className="field-help">⚠ 這段文字只供 AI 批改用，學生作答時不會看到。</div>
       </div>
 
       <div className="field">
