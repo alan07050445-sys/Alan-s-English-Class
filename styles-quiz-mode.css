@@ -1011,3 +1011,199 @@
   color: #15803d;
   letter-spacing: 0.04em;
 }
+
+/* ══════════════════════════════════════════════════════
+   WORD SORT PLAYER
+══════════════════════════════════════════════════════ */
+.ws-player {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 0 24px;
+  gap: 0;
+}
+
+/* Pool area */
+.ws-pool-area {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.ws-pool-label {
+  font-size: 11px;
+  font-family: var(--mono, monospace);
+  color: var(--ink-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.ws-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 44px;
+  align-items: center;
+}
+
+.ws-pool-done {
+  font-size: 22px;
+}
+
+/* Word chips */
+.ws-word-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 15px;
+  font-family: var(--serif, Georgia, serif);
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s, background 0.12s;
+  line-height: 1;
+  background: var(--bg-card, #faf8f4);
+  color: var(--ink);
+}
+
+.ws-word-chip.pool:hover {
+  border-color: var(--ink-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+
+.ws-word-chip.pool.selected {
+  border-color: var(--accent, #8b3120);
+  background: rgba(139,49,32,0.06);
+  color: var(--accent, #8b3120);
+  box-shadow: 0 0 0 3px rgba(139,49,32,0.12);
+  transform: translateY(-2px);
+}
+
+.ws-word-chip.placed {
+  border-style: dashed;
+  font-size: 14px;
+  padding: 6px 12px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.ws-word-chip.placed:hover {
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+/* Result chips */
+.ws-word-chip.result { cursor: default; pointer-events: none; font-size: 14px; }
+.ws-word-chip.result.correct  { background: #f0fdf4; border-color: #86efac; color: #166534; }
+.ws-word-chip.result.missing  { background: #fef2f2; border-color: #fca5a5; color: #991b1b; border-style: dashed; }
+.ws-word-chip.result.wrong    { background: #fef2f2; border-color: #fca5a5; color: #991b1b; text-decoration: line-through; }
+
+/* Category columns grid */
+.ws-grid {
+  display: grid;
+  gap: 0;
+  flex: 1;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+}
+
+.ws-col {
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  transition: background 0.12s;
+  cursor: default;
+}
+
+.ws-col:last-child { border-right: none; }
+
+.ws-col.droppable {
+  cursor: pointer;
+  background: rgba(139,49,32,0.03);
+}
+
+.ws-col.droppable:hover {
+  background: rgba(139,49,32,0.07);
+}
+
+.ws-col-head {
+  padding: 12px 14px 10px;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: var(--sans, sans-serif);
+  color: var(--ink);
+  border-bottom: 2px solid var(--ink);
+  letter-spacing: -0.01em;
+  user-select: none;
+}
+
+.ws-col-body {
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 80px;
+}
+
+.ws-drop-hint {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--accent, #8b3120);
+  opacity: 0.7;
+  text-align: center;
+  padding: 8px;
+  border: 1.5px dashed var(--accent, #8b3120);
+  border-radius: 8px;
+}
+
+/* Submit area */
+.ws-submit-area {
+  padding: 16px 20px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* Result screen */
+.ws-result {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 0 24px;
+}
+
+.ws-result-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.ws-result-emoji { font-size: 28px; }
+
+.ws-result-score {
+  font: 700 28px/1 var(--serif);
+  color: var(--ink);
+}
+
+.ws-result-pct {
+  font: 13px/1 var(--mono);
+  color: var(--ink-muted);
+  margin-left: auto;
+}
+
+.ws-result-btns {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+@media (max-width: 768px) {
+  .ws-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .ws-col-head { font-size: 13px; padding: 10px 10px 8px; }
+  .ws-word-chip { font-size: 13px; padding: 6px 10px; }
+}

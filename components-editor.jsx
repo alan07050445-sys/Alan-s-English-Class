@@ -13,6 +13,7 @@ const TYPE_OPTIONS = [
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
+  { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -152,6 +153,13 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
             <SyllableDivEditor
               words={form.sdWords || []}
               onChangeWords={ws => update("sdWords", ws)}
+            />
+          ) : form.type === "word-sort" ? (
+            <WordSortEditor
+              categories={form.sortCategories || []}
+              words={form.sortWords || []}
+              onChangeCategories={cats => update("sortCategories", cats)}
+              onChangeWords={ws => update("sortWords", ws)}
             />
           ) : form.type === "note" ? (
             <div className="field">
@@ -1169,6 +1177,149 @@ function SyllableDivEditor({ words, onChangeWords }) {
         )}
         <div className="field-help">
           Answer 欄位用 / 標示切割點，例如：<code>sur/prise</code>、<code>mon/ster</code>、<code>hun/dred</code>。可有多個切割點：<code>ath/let/ic</code>。
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── WordSortEditor ── */
+function WordSortEditor({ categories, words, onChangeCategories, onChangeWords }) {
+  const [catInput, setCatInput] = useS(categories.join(', '));
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr, setImportErr]   = useS('');
+
+  // Sync catInput → categories on blur
+  const commitCats = () => {
+    const cats = catInput.split(/[,\n]+/).map(c => c.trim()).filter(Boolean);
+    onChangeCategories(cats);
+  };
+
+  const addWord  = () => onChangeWords([...words, { id: Date.now().toString(), word: '', category: categories[0] || '' }]);
+  const delWord  = (id) => onChangeWords(words.filter(w => w.id !== id));
+  const updWord  = (id, field, val) => onChangeWords(words.map(w => w.id === id ? {...w, [field]: val} : w));
+
+  const doImport = () => {
+    const lines = importText.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsed = [];
+    lines.forEach((line, i) => {
+      const parts = line.split('\t');
+      const word     = parts[0]?.trim() || '';
+      const category = parts[1]?.trim() || '';
+      if (!word) return;
+      parsed.push({ id: Date.now().toString() + i, word, category });
+    });
+    if (!parsed.length) { setImportErr('請確認格式'); return; }
+    onChangeWords([...words, ...parsed]);
+    setImportText(''); setImporting(false); setImportErr('');
+  };
+
+  return (
+    <div>
+      {/* Categories */}
+      <div className="field">
+        <label className="field-label">分類欄位 Categories</label>
+        <input
+          value={catInput}
+          onChange={e => setCatInput(e.target.value)}
+          onBlur={commitCats}
+          placeholder="-le, -ture, -ive, -ize"
+          style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+        />
+        <div className="field-help">
+          用逗號分隔每個分類名稱，例如：<code>-le, -ture, -ive, -ize</code> 或 <code>VV, VCV, VCCV</code>
+        </div>
+      </div>
+
+      {/* Words */}
+      <div className="field">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>單字 Words ({words.length})</label>
+          <div style={{display:'flex',gap:6}}>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
+              onClick={() => { setImporting(v=>!v); setImportErr(''); }}>
+              {importing ? '✕ 取消' : '⬇ Import'}
+            </button>
+            <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addWord}>+ Add</button>
+          </div>
+        </div>
+
+        {importing && (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper,#f9f7f2)'}}>
+            <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
+              從 Excel / Google Sheets 複製貼上：<br/>
+              <code style={{background:'rgba(0,0,0,0.06)',padding:'1px 5px',borderRadius:2}}>
+                單字 [Tab] 分類名稱
+              </code>
+              <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
+                分類名稱要和上方的欄位名稱完全一致，例如：<code>candle [Tab] -le</code>
+              </span>
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+              placeholder={'candle\t-le\ncreature\t-ture\nactive\t-ive\nfinalize\t-ize'}
+              rows={6}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',
+                background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,
+                fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
+            />
+            {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:4}}>{importErr}</div>}
+            <div style={{display:'flex',gap:8,marginTop:8,justifyContent:'flex-end'}}>
+              <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}}
+                onClick={() => { setImporting(false); setImportText(''); setImportErr(''); }}>取消</button>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}}
+                onClick={doImport} disabled={!importText.trim()}>
+                匯入 {importText.trim() ? `(${importText.split('\n').filter(l=>l.trim()).length} 個)` : ''}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Word（單字）</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Category（分類）</div>
+          <div/>
+          {words.map(w => (
+            <React.Fragment key={w.id}>
+              <input
+                value={w.word}
+                onChange={e => updWord(w.id, 'word', e.target.value)}
+                placeholder="candle"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+              />
+              {categories.length > 0 ? (
+                <select
+                  value={w.category}
+                  onChange={e => updWord(w.id, 'category', e.target.value)}
+                  style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+                >
+                  <option value="">— 選分類 —</option>
+                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              ) : (
+                <input
+                  value={w.category}
+                  onChange={e => updWord(w.id, 'category', e.target.value)}
+                  placeholder="先輸入上方分類欄位"
+                  style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+                />
+              )}
+              <button
+                onClick={() => delWord(w.id)}
+                style={{padding:'7px 10px',border:'1px solid var(--border)',borderRadius:2,background:'none',cursor:'pointer',color:'var(--ink-3)',fontSize:13}}
+              >✕</button>
+            </React.Fragment>
+          ))}
+        </div>
+        {words.length === 0 && (
+          <div style={{padding:'12px',textAlign:'center',color:'var(--ink-faint)',fontStyle:'italic',fontSize:13}}>
+            尚未新增單字 — 點選右上方 Add 或 Import
+          </div>
+        )}
+        <div className="field-help">
+          預覽：學生將看到所有單字打亂後，逐一點選分到正確欄位。
         </div>
       </div>
     </div>

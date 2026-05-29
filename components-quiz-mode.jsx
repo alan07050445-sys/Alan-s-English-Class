@@ -81,7 +81,8 @@ function getQuizItems(items) {
     (item.type === 'writing-practice' && item.linkedFlashcardId) ||
     (item.type === 'type-answer'      && (item.pairs || []).length >= 1) ||
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
-    (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1)
+    (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
+    (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2)
   );
 }
 
@@ -176,6 +177,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             if (item.type === 'type-answer')  return (item.pairs || []).length;
             if (item.type === 'short-answer') return (item.saQuestions || []).length;
             if (item.type === 'syllable-div') return (item.sdWords || []).length;
+            if (item.type === 'word-sort')    return (item.sortWords || []).length;
             if (item.type === 'writing-practice') return 1; // counts as 1 unit
             return getItemQuestions(item).length;
           };
@@ -302,7 +304,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isTypeAnswer   = item.type === 'type-answer';
             const isShortAnswer  = item.type === 'short-answer';
             const isSyllableDiv  = item.type === 'syllable-div';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv;
+            const isWordSort     = item.type === 'word-sort';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -326,7 +329,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : `${totalQ} questions`}
+                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -445,6 +448,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'syllable-div' && phase === 'intro' ? (
           <SyllableDivIntro
+            item={selectedItem}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'word-sort' && phase === 'quiz' ? (
+          <WordSortPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'word-sort' && phase === 'intro' ? (
+          <WordSortIntro
             item={selectedItem}
             onStart={() => setPhase('quiz')}
           />
@@ -1522,4 +1537,196 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer });
+/* ══════════════════════════════════════════════════════
+   WORD SORT — INTRO
+══════════════════════════════════════════════════════ */
+function WordSortIntro({ item, onStart }) {
+  const cats  = item.sortCategories || [];
+  const count = (item.sortWords || []).length;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">🗂</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{count} words · {cats.length} categories</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>👀</span><span>看清楚每個分類的名稱</span></div>
+        <div className="qm-intro-rule-row"><span>👆</span><span>點一個單字，再點它所屬的欄位</span></div>
+        <div className="qm-intro-rule-row"><span>🔄</span><span>點已放入的單字可以移回重選</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>全部放完才能提交</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          開始分類 · Start →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   WORD SORT — PLAYER
+══════════════════════════════════════════════════════ */
+function WordSortPlayer({ item, progressKey, onBack }) {
+  const categories = item.sortCategories || [];
+  const allWords   = useQMM(() => shuffleArr(item.sortWords || []), [item.id]);
+
+  const [placements, setPlacements] = useQM({}); // wordId → category
+  const [selected,   setSelected]   = useQM(null); // selected wordId (in pool)
+  const [submitted,  setSubmitted]  = useQM(false);
+  const [done,       setDone]       = useQM(false);
+
+  const total    = allWords.length;
+  const poolWords = allWords.filter(w => !placements[w.id]);
+  const allPlaced = poolWords.length === 0;
+
+  const wordsInCat = (cat) => allWords.filter(w => placements[w.id] === cat);
+
+  const clickPoolWord = (wordId) => {
+    if (submitted) return;
+    setSelected(prev => prev === wordId ? null : wordId);
+  };
+
+  const clickPlacedWord = (wordId) => {
+    if (submitted) return;
+    setPlacements(prev => { const p = {...prev}; delete p[wordId]; return p; });
+    setSelected(null);
+  };
+
+  const clickCategory = (cat) => {
+    if (submitted || !selected) return;
+    setPlacements(prev => ({ ...prev, [selected]: cat }));
+    setSelected(null);
+  };
+
+  const submit = () => {
+    let correct = 0;
+    allWords.forEach(w => {
+      if (placements[w.id] === w.category) correct++;
+    });
+    const prev = loadQMProg();
+    prev[progressKey] = { done: total, score: correct, total, ts: Date.now() };
+    saveQMProg(prev);
+    if (window.playSound) window.playSound(correct === total ? 'complete' : 'wrong');
+    setSubmitted(true);
+  };
+
+  /* ── After submit: check screen ── */
+  if (submitted && !done) {
+    const correct  = allWords.filter(w => placements[w.id] === w.category).length;
+    const finalPct = Math.round(correct / total * 100);
+    const allRight = correct === total;
+
+    if (allRight) {
+      if (window.playSound) window.playSound('complete');
+    }
+
+    return (
+      <div className="ws-result">
+        <div className="ws-result-head">
+          <span className="ws-result-emoji">{allRight ? '🏆' : finalPct >= 70 ? '🎉' : '💪'}</span>
+          <span className="ws-result-score">{correct} / {total}</span>
+          <span className="ws-result-pct">{finalPct}%</span>
+        </div>
+
+        {/* Show all columns with correct/wrong marking */}
+        <div className="ws-grid" style={{gridTemplateColumns: `repeat(${Math.min(categories.length, 4)}, 1fr)`}}>
+          {categories.map(cat => (
+            <div key={cat} className="ws-col">
+              <div className="ws-col-head">{cat}</div>
+              <div className="ws-col-body">
+                {allWords.filter(w => w.category === cat).map(w => {
+                  const placed = placements[w.id] === cat;
+                  const wronglyPlaced = Object.entries(placements).find(([id, c]) => id === w.id && c !== cat);
+                  return (
+                    <div key={w.id} className={`ws-word-chip result ${placed ? 'correct' : 'missing'}`}>
+                      {placed ? '✓' : '✗'} {w.word}
+                    </div>
+                  );
+                })}
+                {/* Words student put here that are wrong */}
+                {allWords.filter(w => placements[w.id] === cat && w.category !== cat).map(w => (
+                  <div key={w.id + '_wrong'} className="ws-word-chip result wrong">
+                    ✗ {w.word}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="ws-result-btns">
+          <button className="qm-btn secondary" onClick={() => { setPlacements({}); setSelected(null); setSubmitted(false); }}>
+            再試一次
+          </button>
+          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Play screen ── */
+  return (
+    <div className="ws-player">
+      {/* Word Pool */}
+      <div className="ws-pool-area">
+        <div className="ws-pool-label">
+          {allPlaced ? '✓ 全部放完了，可以提交！' : `${poolWords.length} 個單字待分類${selected ? ' · 點下方欄位放入' : ' · 點單字選取'}`}
+        </div>
+        <div className="ws-pool">
+          {poolWords.map(w => (
+            <button
+              key={w.id}
+              className={`ws-word-chip pool${selected === w.id ? ' selected' : ''}`}
+              onClick={() => clickPoolWord(w.id)}
+            >
+              {w.word}
+            </button>
+          ))}
+          {allPlaced && <span className="ws-pool-done">🎉</span>}
+        </div>
+      </div>
+
+      {/* Category Columns */}
+      <div className="ws-grid" style={{gridTemplateColumns: `repeat(${Math.min(categories.length, 4)}, 1fr)`}}>
+        {categories.map(cat => (
+          <div
+            key={cat}
+            className={`ws-col${selected ? ' droppable' : ''}`}
+            onClick={() => clickCategory(cat)}
+          >
+            <div className="ws-col-head">{cat}</div>
+            <div className="ws-col-body">
+              {wordsInCat(cat).map(w => (
+                <button
+                  key={w.id}
+                  className="ws-word-chip placed"
+                  onClick={(e) => { e.stopPropagation(); clickPlacedWord(w.id); }}
+                  title="點擊移回"
+                >
+                  {w.word}
+                </button>
+              ))}
+              {selected && wordsInCat(cat).length === 0 && (
+                <div className="ws-drop-hint">點此放入</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Submit */}
+      <div className="ws-submit-area">
+        <button
+          className="qm-btn primary"
+          onClick={submit}
+          disabled={!allPlaced}
+          style={{opacity: allPlaced ? 1 : 0.45}}
+        >
+          {allPlaced ? '提交答案 →' : `還有 ${poolWords.length} 個單字未分類`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer });
