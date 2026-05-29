@@ -2,12 +2,23 @@
 
 const { useState: useDash, useEffect: useDashE, useMemo: useDashM } = React;
 
+/* ── Detect Firebase-UID-like strings (28 chars [A-Za-z0-9]) ── */
+function isUid(str) {
+  return !str || /^[A-Za-z0-9]{20,}$/.test(str.trim());
+}
+function friendlyName(s) {
+  if (!isUid(s.name)) return s.name;
+  // Fall back to email prefix, then "未命名學生"
+  return s.email ? s.email.split('@')[0] : '未命名學生';
+}
+
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder }) {
-  const [students, setStudents] = useDash([]);
-  const [selected, setSelected]  = useDash(null);
+  const [students,   setStudents]  = useDash([]);
+  const [selected,   setSelected]  = useDash(null);
+  const [refreshKey, setRefreshKey]= useDash(0);
 
-  useDashE(() => window.subscribeAllStudents(setStudents), []);
+  useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
 
   // Flatten all items across every week (for "X / total" calculation)
   const allItems = useDashM(() => {
@@ -69,9 +80,17 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
               {students.length} students · {total} total items · {questionStats.length} hot questions
             </p>
           </div>
-          <button className="icon-btn" onClick={onClose} title="Close">
-            <window.Icon name="close" size={16}/>
-          </button>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <button
+              className="btn ghost"
+              style={{fontSize:12,padding:'5px 12px'}}
+              onClick={() => setRefreshKey(k => k + 1)}
+              title="重新載入學生資料"
+            >↻ 重新整理</button>
+            <button className="icon-btn" onClick={onClose} title="Close">
+              <window.Icon name="close" size={16}/>
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -102,8 +121,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
               {students.length === 0 ? (
                 <div className="dt-empty">
-                  <p>No students have signed in yet.</p>
-                  <p className="dt-empty-hint">Students appear here after they sign in with Google.</p>
+                  <p>還沒有學生資料</p>
+                  <p className="dt-empty-hint">學生必須用 Google 帳號登入，完成題目後才會出現在這裡。</p>
                 </div>
               ) : students.map(s => {
                 const { done, avg, last } = stats(s);
@@ -111,8 +130,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                 return (
                   <div key={s.uid} className="dt-row" onClick={() => setSelected(s)}>
                     <div className="dt-student-info">
-                      <span className="dt-sname">{s.name}</span>
-                      <span className="dt-semail">{s.email}</span>
+                      <span className="dt-sname">{friendlyName(s)}</span>
+                      <span className="dt-semail">{s.email || s.uid.slice(0, 12) + '…'}</span>
                     </div>
                     <div className="dt-progress">
                       <span className="dt-count">{done} / {total}</span>
@@ -161,7 +180,7 @@ function StudentDetail({ student, allItems, onBack }) {
 
       <div className="sdetail-header">
         <div>
-          <h3 className="sdetail-name">{student.name}</h3>
+          <h3 className="sdetail-name">{friendlyName(student)}</h3>
           <p className="sdetail-email">{student.email}</p>
         </div>
         <div className="sdetail-stat">

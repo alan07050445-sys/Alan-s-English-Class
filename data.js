@@ -380,12 +380,13 @@ async function saveProgressItem(uid, displayName, email, itemId, data) {
   //        null to remove (item unchecked)
   try {
     const ref = _db.collection('progress').doc(uid);
-    // Step 1: ensure the document exists with profile fields (merge won't touch existing items)
-    await ref.set({
-      name: displayName || '',
-      email: email || '',
-      updatedAt: Date.now(),
-    }, { merge: true });
+    // Step 1: ensure the document exists with profile fields.
+    // Only overwrite name/email if they are non-empty — prevents blank displayName
+    // from clobbering a valid name that was saved on a previous quiz completion.
+    const profileFields = { updatedAt: Date.now() };
+    if (displayName && displayName.trim()) profileFields.name  = displayName.trim();
+    if (email      && email.trim())       profileFields.email = email.trim();
+    await ref.set(profileFields, { merge: true });
     // Step 2: update() correctly treats "items.itemId" as a nested field path
     const fieldUpdate = {};
     fieldUpdate[`items.${itemId}`] = data === null
