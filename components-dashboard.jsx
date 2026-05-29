@@ -55,10 +55,24 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   const stats = (s) => {
     const its = s.items || {};
-    const done  = allItems.filter(it => its[it.progressId]?.done || its[it.id]?.done).length;
-    const scored = Object.keys(its).filter(id => its[id]?.score != null);
+
+    // Match by progressId (weekId_itemId), bare itemId, OR any key ending in _itemId
+    // — handles cases where weekId changed (week rebuilt / grade switched)
+    const isDone = (it) => {
+      if (its[it.progressId]?.done) return true;
+      if (its[it.id]?.done) return true;
+      // Fuzzy: find any stored key whose suffix matches the itemId
+      return Object.keys(its).some(
+        k => (k === it.id || k.endsWith('_' + it.id)) && its[k]?.done
+      );
+    };
+    const done = allItems.filter(isDone).length;
+
+    // Score: only count items that also have 'done' (avoids ghost scores from deleted items)
+    // and cap at 100 to prevent impossible percentages from data corruption
+    const scored = Object.keys(its).filter(id => its[id]?.score != null && its[id]?.done);
     const avg = scored.length
-      ? Math.round(scored.reduce((acc, id) => acc + (its[id].score || 0), 0) / scored.length)
+      ? Math.min(100, Math.round(scored.reduce((acc, id) => acc + Math.min(100, its[id].score || 0), 0) / scored.length))
       : null;
     const last = s.updatedAt
       ? new Date(s.updatedAt).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
@@ -163,7 +177,10 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 /* ── Per-student detail view ───────────────────────────── */
 function StudentDetail({ student, allItems, onBack }) {
   const its = student.items || {};
-  const done = Object.keys(its).filter(id => its[id]?.done).length;
+  const done = allItems.filter(it =>
+    (its[it.progressId]?.done) || (its[it.id]?.done) ||
+    Object.keys(its).some(k => k.endsWith('_' + it.id) && its[k]?.done)
+  ).length;
 
   // Group items by week
   const byWeek = {};
@@ -194,9 +211,11 @@ function StudentDetail({ student, allItems, onBack }) {
           <p className="sdetail-wlabel">{weekLabel}</p>
           <div className="sdetail-items">
             {items.map(it => {
-              const prog = its[it.progressId] || its[it.id];
+              // Fuzzy match: try progressId, bare id, or any key ending in _itemId
+              const prog = its[it.progressId] || its[it.id] ||
+                its[Object.keys(its).find(k => k.endsWith('_' + it.id)) || ''] || null;
               const isDone = !!prog?.done;
-              const score  = prog?.score;
+              const score  = prog?.score != null ? Math.min(100, prog.score) : null;
               return (
                 <div key={it.id} className={`sdetail-item${isDone ? ' done' : ''}`}>
                   <span className={`sdetail-check${isDone ? ' done' : ''}`}>
