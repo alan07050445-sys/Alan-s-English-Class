@@ -834,8 +834,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  padding: 32px 12px 24px;
+  flex-wrap: nowrap;           /* keep word on one line */
+  overflow-x: auto;
+  padding: 32px 16px 24px;
   gap: 0;
   user-select: none;
 }
@@ -844,67 +845,91 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  height: 60px;
-  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  min-width: 30px;
+  height: 64px;
+  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
   font-weight: 700;
   font-family: var(--serif, Georgia, serif);
   color: var(--ink);
   line-height: 1;
-  letter-spacing: 0;
+  flex-shrink: 0;
 }
 
+/* ── Gap button: wider hit area, vertical line as visual indicator ── */
 .sd-gap {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 60px;
+  width: 34px;
+  height: 64px;
   cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #d1c7b8;
   background: none;
   border: none;
-  border-radius: 6px;
-  transition: color 0.12s, background 0.12s, transform 0.1s;
-  line-height: 1;
   padding: 0;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: background 0.12s;
 }
 
 .sd-gap:hover:not(:disabled) {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
-  transform: scaleY(1.08);
+  background: rgba(245, 158, 11, 0.08);
 }
 
-.sd-gap.cut {
-  color: #ef4444;
-  animation: sd-snap 0.18s ease;
+/* The thin vertical line in the gap (always visible) */
+.sd-gap-line {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  bottom: 22%;
+  width: 1.5px;
+  background: #ccc3b5;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: background 0.12s, width 0.12s, top 0.12s, bottom 0.12s;
 }
 
-.sd-gap.correct {
-  color: #16a34a;
+.sd-gap:hover:not(:disabled) .sd-gap-line {
+  background: #f59e0b;
+  width: 2.5px;
+  top: 14%;
+  bottom: 14%;
 }
 
-.sd-gap.missed {
-  color: #f59e0b;
-  animation: sd-pulse 0.55s ease;
+/* The slash character that appears on cut / feedback */
+.sd-gap-slash {
+  position: relative;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 1;
 }
 
-.sd-gap.wrong-cut {
-  color: #dc2626;
-  text-decoration: line-through;
-}
+/* Student cut (not yet submitted) */
+.sd-gap.cut .sd-gap-line  { background: #ef4444; width: 2.5px; top: 10%; bottom: 10%; }
+.sd-gap.cut .sd-gap-slash { color: #ef4444; animation: sd-snap 0.16s ease; }
+
+/* After submit: correct (student cut + should cut) */
+.sd-gap.correct .sd-gap-line  { background: #16a34a; width: 2.5px; top: 10%; bottom: 10%; }
+.sd-gap.correct .sd-gap-slash { color: #16a34a; }
+
+/* After submit: missed (should cut, student didn't) */
+.sd-gap.missed .sd-gap-line  { background: #d97706; width: 2px; top: 12%; bottom: 12%; }
+.sd-gap.missed .sd-gap-slash { color: #d97706; animation: sd-pulse 0.55s ease; }
+
+/* After submit: wrong-cut (student cut, shouldn't) */
+.sd-gap.wrong-cut .sd-gap-line  { background: #ef4444; width: 2px; top: 12%; bottom: 12%; opacity: 0.4; }
+.sd-gap.wrong-cut .sd-gap-slash { color: #ef4444; text-decoration: line-through; }
 
 @keyframes sd-snap {
-  0%   { transform: scale(1.3); }
+  0%   { transform: scale(1.35) rotate(-5deg); }
+  60%  { transform: scale(0.95) rotate(2deg); }
   100% { transform: scale(1); }
 }
 
 @keyframes sd-pulse {
   0%, 100% { transform: scale(1); }
-  40%       { transform: scale(1.5); }
+  40%       { transform: scale(1.4); }
 }
 
 /* Legend */

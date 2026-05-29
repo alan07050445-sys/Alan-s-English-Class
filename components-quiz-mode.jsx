@@ -171,10 +171,18 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
         {activeCats.map(cat => {
           const allCatItems = (week.items || {})[cat.id] || [];
           const quizItems = getQuizItems(allCatItems);
-          const total  = quizItems.reduce((s, it) => s + getItemQuestions(it).length, 0);
+          // For special item types (non-MC), use their own word/question count
+          const getItemTotal = (item) => {
+            if (item.type === 'type-answer')  return (item.pairs || []).length;
+            if (item.type === 'short-answer') return (item.saQuestions || []).length;
+            if (item.type === 'syllable-div') return (item.sdWords || []).length;
+            if (item.type === 'writing-practice') return 1; // counts as 1 unit
+            return getItemQuestions(item).length;
+          };
+          const total  = quizItems.reduce((s, it) => s + getItemTotal(it), 0);
           const done   = quizItems.reduce((s, it) => {
             const p = qmProg[`${weekId}_${it.id}`];
-            return s + (p ? Math.min(p.done, getItemQuestions(it).length) : 0);
+            return s + (p ? Math.min(p.done || 0, getItemTotal(it)) : 0);
           }, 0);
           const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
           const clickable = total > 0 || editMode;
@@ -193,7 +201,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                 <div className="qm-block-title-zh">{cat.titleZh}</div>
                 {total > 0 ? (
                   <>
-                    <div className="qm-block-count">{quizItems.length} units · {total} questions</div>
+                    <div className="qm-block-count">{quizItems.length} units · {total} {quizItems.some(it => it.type === 'syllable-div' || it.type === 'type-answer') ? 'words' : 'questions'}</div>
                     <div className="qm-block-progress">
                       <div className="qm-progress-bar">
                         <div className="qm-progress-fill" style={{ width: pct + '%' }}/>
@@ -1469,9 +1477,10 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
                   className={`sd-gap${gapClass ? ' ' + gapClass : ''}`}
                   onClick={() => toggleCut(i)}
                   disabled={submitted}
-                  aria-label={`gap after ${letter}`}
+                  aria-label={`cut after ${letter}`}
                 >
-                  {showSlash ? '/' : '·'}
+                  <span className="sd-gap-line"/>
+                  {showSlash && <span className="sd-gap-slash">/</span>}
                 </button>
               )}
             </React.Fragment>
