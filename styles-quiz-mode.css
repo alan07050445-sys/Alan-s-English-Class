@@ -258,13 +258,31 @@
   border-color: #16a34a; background: #f0fdf4;
   border-left-width: 5px;
   box-shadow: none;
+  animation: opt-bounce 0.45s cubic-bezier(.36,.07,.19,.97);
 }
 .qm-option.wrong {
   border-color: #dc2626; background: #fef2f2;
   border-left-width: 5px;
   box-shadow: none;
+  animation: opt-shake 0.4s cubic-bezier(.36,.07,.19,.97);
 }
 .qm-option.dim { opacity: 0.35; cursor: default; box-shadow: none; }
+
+@keyframes opt-bounce {
+  0%   { transform: scale(1); }
+  25%  { transform: scale(1.035); }
+  55%  { transform: scale(0.975); }
+  75%  { transform: scale(1.015); }
+  100% { transform: scale(1); }
+}
+@keyframes opt-shake {
+  0%,100% { transform: translateX(0); }
+  18%     { transform: translateX(-7px); }
+  36%     { transform: translateX(7px); }
+  54%     { transform: translateX(-5px); }
+  72%     { transform: translateX(4px); }
+  88%     { transform: translateX(-2px); }
+}
 .qm-opt-letter {
   width: 34px; height: 34px; border-radius: 50%;
   background: var(--border-soft); display: flex; align-items: center;
@@ -283,8 +301,18 @@
 }
 
 /* ── Feedback ────────────────────────────────────────── */
-.qm-feedback { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
-.qm-feedback-banner { padding: 15px 20px; border-radius: 10px; font-size: 17px; font-weight: 700; font-family: var(--sans); }
+.qm-feedback {
+  margin-top: 20px; display: flex; flex-direction: column; gap: 12px;
+  animation: feedback-rise 0.28s cubic-bezier(.22,.68,0,1.2);
+}
+@keyframes feedback-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.qm-feedback-banner {
+  padding: 15px 20px; border-radius: 10px;
+  font-size: 17px; font-weight: 700; font-family: var(--sans);
+}
 .qm-feedback-banner.correct { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 .qm-feedback-banner.wrong   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .qm-explain { font-size: 15px; color: var(--ink-2); font-style: italic; line-height: 1.6; padding: 0 2px; }

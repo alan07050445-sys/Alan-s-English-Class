@@ -104,6 +104,29 @@ function App() {
   const [badgeToast,  setBadgeToast]  = useAppState(null); // { id, ...badgeData }
   const prevBadgeKeys = useAppRef(null);
   const [starBurst,   setStarBurst]   = useAppState(false);
+  const [streakToast, setStreakToast] = useAppState(null); // { count } — shown briefly
+
+  // ── Local streak helpers (works without Firebase login) ─
+  const getLocalStreak = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const yest  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const d     = JSON.parse(localStorage.getItem('alan-local-streak') || '{"count":0,"lastDate":null}');
+      return (d.lastDate === today || d.lastDate === yest) ? { count: d.count } : { count: 0 };
+    } catch { return { count: 0 }; }
+  };
+  const updateLocalStreak = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const yest  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const d     = JSON.parse(localStorage.getItem('alan-local-streak') || '{"count":0,"lastDate":null}');
+      if (d.lastDate === today) return { count: d.count, isNew: false };
+      const count = d.lastDate === yest ? d.count + 1 : 1;
+      localStorage.setItem('alan-local-streak', JSON.stringify({ count, lastDate: today }));
+      return { count, isNew: true };
+    } catch { return { count: 1, isNew: true }; }
+  };
+  const [localStreak, setLocalStreak] = useAppState(() => getLocalStreak());
   window.triggerStarBurst = () => setStarBurst(true);
 
   // ── Loading screen state ────────────────────────────
@@ -445,6 +468,16 @@ function App() {
   // ── Quiz complete handler (streak + XP + badges) ────────
   window._onQuizComplete = async (score, total, wrongList, meta = {}) => {
     const u = window._currentUser;
+
+    // ── Local streak (works without login) ──
+    const localResult = updateLocalStreak();
+    setLocalStreak({ count: localResult.count });
+    if (localResult.isNew) {
+      if (window.playSound) window.playSound('streak');
+      setStreakToast({ count: localResult.count });
+      setTimeout(() => setStreakToast(null), 3200);
+    }
+
     if (!u) return;
     const pct = total > 0 ? Math.round(score / total * 100) : 0;
     // Award XP — perfect = 100, otherwise 50
@@ -588,7 +621,7 @@ function App() {
               }
             }}
             onShowDashboard={() => setDashOpen(true)}
-            streak={userProfile.streak}
+            streak={user ? userProfile.streak : localStreak}
             badges={userProfile.badges}
             xp={userProfile.xp || 0}
             onShowBadges={() => setBadgesOpen(true)}
@@ -690,6 +723,16 @@ function App() {
 
           {badgeToast && (
             <window.BadgeToast badge={badgeToast} onDone={() => setBadgeToast(null)}/>
+          )}
+
+          {streakToast && (
+            <div className="streak-toast" key={streakToast.count}>
+              <span className="streak-toast-fire">🔥</span>
+              <div className="streak-toast-text">
+                <div className="streak-toast-main">{streakToast.count} 天連續學習！</div>
+                <div className="streak-toast-sub">Keep it up! 繼續保持！</div>
+              </div>
+            </div>
           )}
 
           {starBurst && (
