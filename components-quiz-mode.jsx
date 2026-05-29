@@ -949,15 +949,17 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
 }
 
 function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone }) {
-  const [idx,       setIdx]      = useQM(0);
-  const [selected,  setSelected] = useQM(null);
-  const [score,     setScore]    = useQM(0);
-  const [screen,    setScreen]   = useQM('quiz');
-  const [wrongList, setWrongList]= useQM([]);
+  const [idx,        setIdx]       = useQM(0);
+  const [selected,   setSelected]  = useQM(null);
+  const [score,      setScore]     = useQM(0);
+  const [screen,     setScreen]    = useQM('quiz');
+  const [wrongList,  setWrongList] = useQM([]);
+  const [plusOneKey, setPlusOneKey]= useQM(0);   // bumped on each correct → retriggers animation
+  const [lastRight,  setLastRight] = useQM(null); // true/false after answer
 
   const q     = questions[idx];
   const total = questions.length;
-  const pct   = Math.round(idx / total * 100);
+  const pct   = Math.round((idx + (selected !== null ? 1 : 0)) / total * 100);
   const isLast= idx === total - 1;
 
   if (!q) return null;
@@ -967,8 +969,9 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     setSelected(optIdx);
     const correct = optIdx === q.correct;
     if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
-    if (correct) setScore(s => s + 1);
+    if (correct) { setScore(s => s + 1); setPlusOneKey(k => k + 1); }
     else setWrongList(prev => [...prev, q]);
+    setLastRight(correct);
   };
 
   const handleNext = () => {
@@ -1006,11 +1009,12 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     } else {
       setIdx(i => i + 1);
       setSelected(null);
+      setLastRight(null);
     }
   };
 
   const restart = () => {
-    setIdx(0); setSelected(null); setScore(0); setScreen('quiz'); setWrongList([]);
+    setIdx(0); setSelected(null); setScore(0); setScreen('quiz'); setWrongList([]); setLastRight(null); setPlusOneKey(0);
   };
 
   /* ── Result ── */
@@ -1039,7 +1043,15 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
             <div className="qm-player-fill" style={{ width: pct + '%' }}/>
           </div>
         </div>
-        <span className="qm-player-counter">{idx + 1} / {total}</span>
+        {/* Live score badge with +1 float */}
+        <div className="qm-score-wrap">
+          <span className={`qm-score-badge${lastRight === false ? ' shake' : ''}`}>
+            ⭐ {score}
+          </span>
+          {lastRight === true && (
+            <span key={plusOneKey} className="qm-plus-one">+1</span>
+          )}
+        </div>
       </div>
 
       <div className="qm-question-area">

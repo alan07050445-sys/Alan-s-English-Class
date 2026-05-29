@@ -228,6 +228,43 @@
 }
 .qm-player-counter { font-size: 12px; font-family: var(--mono); color: var(--ink-3); flex-shrink: 0; }
 
+/* ── Live score badge + floating +1 ──────────────────── */
+.qm-score-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.qm-score-badge {
+  font: 700 13px/1 var(--mono);
+  color: #c05000;
+  background: #fff7ee;
+  border: 1.5px solid #ffd6a0;
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.qm-score-badge.shake {
+  animation: opt-shake 0.38s cubic-bezier(.36,.07,.19,.97);
+}
+.qm-plus-one {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 800 15px/1 var(--sans);
+  color: #16a34a;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: plus-one-rise 0.75s cubic-bezier(.22,.68,0,1.2) forwards;
+}
+@keyframes plus-one-rise {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1.1); }
+  40%  { opacity: 1; transform: translateX(-50%) translateY(-14px) scale(1.2); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.9); }
+}
+
 /* ── Question ────────────────────────────────────────── */
 .qm-question-area { text-align: center; margin-bottom: 36px; padding: 0 4px; }
 .qm-question-hint { font-size: 12px; color: var(--ink-3); font-family: var(--mono); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 20px; }
