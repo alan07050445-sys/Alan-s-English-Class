@@ -1,6 +1,30 @@
 // components-quiz-mode.jsx — Quiz mode (main UI for students + teacher edit)
 
-const { useState: useQM, useMemo: useQMM } = React;
+const { useState: useQM, useMemo: useQMM, useEffect: useQME } = React;
+
+/* ── Count-up animation hook ─────────────────────────── */
+function useCountUp(target, duration, delay) {
+  duration = duration || 900;
+  delay    = delay    || 0;
+  const [val, setVal] = useQM(0);
+  useQME(() => {
+    if (!target) { setVal(0); return; }
+    let rafId;
+    const tid = setTimeout(() => {
+      let t0 = null;
+      const tick = (now) => {
+        if (!t0) t0 = now;
+        const pct = Math.min((now - t0) / duration, 1);
+        const eased = pct === 1 ? 1 : 1 - Math.pow(2, -10 * pct); // easeOutExpo
+        setVal(Math.round(eased * target));
+        if (pct < 1) rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    }, delay);
+    return () => { clearTimeout(tid); cancelAnimationFrame(rafId); };
+  }, [target]);
+  return val;
+}
 
 /* ── Helpers ─────────────────────────────────────────── */
 function shuffleArr(arr) {
@@ -857,6 +881,73 @@ function QuickFlashcardReview({ item, onDone }) {
 /* ══════════════════════════════════════════════════════
    QUIZ PLAYER
 ══════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   QUIZ RESULT SCREEN — animated Duolingo-style
+══════════════════════════════════════════════════════ */
+function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack }) {
+  const starCount  = finalPct === 100 ? 3 : finalPct >= 70 ? 2 : finalPct >= 40 ? 1 : 0;
+  const xpGain     = finalPct === 100 ? 100 : 50;
+  const msg        = finalPct === 100 ? 'Perfect! 滿分！'
+                   : finalPct >= 80   ? 'Excellent! 非常好！'
+                   : finalPct >= 60   ? 'Good job! 繼續加油！'
+                   :                    'Keep practicing! 多練習！';
+
+  const animScore = useCountUp(finalScore, 900, 400);
+  const animPct   = useCountUp(finalPct,   900, 400);
+  const animXp    = useCountUp(xpGain,     700, 650);
+
+  return (
+    <div className="qm-result">
+      {/* Stars — fly in one by one */}
+      <div className="qm-result-stars">
+        {[0, 1, 2].map(i => (
+          <span
+            key={i}
+            className={`qm-result-star ${i < starCount ? 'earned' : 'empty'}`}
+            style={{ animationDelay: `${0.1 + i * 0.25}s` }}
+          >
+            {i < starCount ? '⭐' : '☆'}
+          </span>
+        ))}
+      </div>
+
+      <div className="qm-result-cat-title">{title}</div>
+
+      {/* Count-up score */}
+      <div className="qm-result-score">
+        <span className="qm-result-num">{animScore}</span>
+        <span className="qm-result-denom"> / {total}</span>
+      </div>
+      <div className="qm-result-pct">{animPct}% correct</div>
+
+      {/* XP gain */}
+      <div className="qm-result-xp-row">
+        <span className="qm-result-xp">+{animXp} XP</span>
+        {finalPct === 100 && <span className="qm-result-xp-badge">✨ Perfect Bonus!</span>}
+      </div>
+
+      <div className="qm-result-msg">{msg}</div>
+
+      <div className="qm-result-btns">
+        <button className="qm-btn secondary" onClick={onRestart}>再試一次</button>
+        <button className="qm-btn primary"   onClick={onBack}>← Back</button>
+      </div>
+
+      {wrongList && wrongList.length > 0 && (
+        <div className="qm-wrong-list">
+          <div className="qm-wrong-title">需要複習 · Review ({wrongList.length})</div>
+          {wrongList.map((wq, i) => (
+            <div key={i} className="qm-wrong-item">
+              <span className="qm-wrong-q">{wq.q}</span>
+              <span className="qm-wrong-a">{wq.options[wq.correct]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone }) {
   const [idx,       setIdx]      = useQM(0);
   const [selected,  setSelected] = useQM(null);
@@ -926,37 +1017,13 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   if (screen === 'result') {
     const finalScore = score;
     const finalPct   = Math.round(finalScore / total * 100);
-    const emoji = finalPct === 100 ? '🏆' : finalPct >= 80 ? '🎉' : finalPct >= 60 ? '👍' : '💪';
-    const msg   = finalPct === 100 ? 'Perfect! 滿分！'
-                : finalPct >= 80   ? 'Excellent! 非常好！'
-                : finalPct >= 60   ? 'Good job! 繼續加油！'
-                :                    'Keep practicing! 多練習！';
     return (
-      <div className="qm-result">
-        <div className="qm-result-emoji">{emoji}</div>
-        <div className="qm-result-cat-title">{item?.title || cat.title}</div>
-        <div className="qm-result-score">
-          <span className="qm-result-num">{finalScore}</span>
-          <span className="qm-result-denom"> / {total}</span>
-        </div>
-        <div className="qm-result-pct">{finalPct}% correct</div>
-        <div className="qm-result-msg">{msg}</div>
-        <div className="qm-result-btns">
-          <button className="qm-btn secondary" onClick={restart}>再試一次</button>
-          <button className="qm-btn primary"   onClick={onBack}>← Back</button>
-        </div>
-        {wrongList.length > 0 && (
-          <div className="qm-wrong-list">
-            <div className="qm-wrong-title">需要複習 · Review ({wrongList.length})</div>
-            {wrongList.map((wq, i) => (
-              <div key={i} className="qm-wrong-item">
-                <span className="qm-wrong-q">{wq.q}</span>
-                <span className="qm-wrong-a">{wq.options[wq.correct]}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <QuizResultScreen
+        finalScore={finalScore} total={total} finalPct={finalPct}
+        title={item?.title || cat.title}
+        wrongList={wrongList}
+        onRestart={restart} onBack={onBack}
+      />
     );
   }
 
