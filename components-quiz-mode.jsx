@@ -1281,7 +1281,21 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
       </div>
 
       {passage && passageOpen && (
-        <div className="sa-passage">{passage}</div>
+        <div className="sa-passage">
+          {passage.split('\n').filter(l => l.trim()).map((line, i) => {
+            const numbered = line.match(/^(\d+)\s+(.+)$/);
+            if (numbered) {
+              return (
+                <p key={i} className="sa-para">
+                  <span className="sa-para-num">{numbered[1]}</span>
+                  {numbered[2]}
+                </p>
+              );
+            }
+            // Section header: not a number-led line
+            return <h3 key={i} className="sa-heading">{line.trim()}</h3>;
+          })}
+        </div>
       )}
 
       <div className="wp-card">
