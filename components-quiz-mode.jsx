@@ -1639,49 +1639,86 @@ function WordSortPlayer({ item, progressKey, onBack }) {
     const correct  = allWords.filter(w => placements[w.id] === w.category).length;
     const finalPct = Math.round(correct / total * 100);
     const allRight = correct === total;
+    const [showAnswer, setShowAnswer] = useQM(false);
 
     if (allRight) {
       if (window.playSound) window.playSound('complete');
     }
 
+    const colCount = `repeat(${Math.min(categories.length, 4)}, 1fr)`;
+
     return (
       <div className="ws-result">
+        {/* Score header */}
         <div className="ws-result-head">
           <span className="ws-result-emoji">{allRight ? '🏆' : finalPct >= 70 ? '🎉' : '💪'}</span>
           <span className="ws-result-score">{correct} / {total}</span>
           <span className="ws-result-pct">{finalPct}%</span>
         </div>
 
-        {/* Show all columns with correct/wrong marking */}
-        <div className="ws-grid" style={{gridTemplateColumns: `repeat(${Math.min(categories.length, 4)}, 1fr)`}}>
-          {categories.map(cat => (
-            <div key={cat} className="ws-col">
-              <div className="ws-col-head">{cat}</div>
-              <div className="ws-col-body">
-                {allWords.filter(w => w.category === cat).map(w => {
-                  const placed = placements[w.id] === cat;
-                  return (
-                    <div key={w.id} className={`ws-word-chip result ${placed ? 'correct' : 'missing'}`}>
-                      {placed ? '✓' : '✗'} {resultLabel(w, cat)}
-                    </div>
-                  );
-                })}
-                {/* Words student put here that are wrong */}
-                {allWords.filter(w => placements[w.id] === cat && w.category !== cat).map(w => (
-                  <div key={w.id + '_wrong'} className="ws-word-chip result wrong">
-                    ✗ {resultLabel(w, cat)}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+        {/* Tab toggle */}
+        <div className="ws-result-tabs">
+          <button
+            className={`ws-result-tab${!showAnswer ? ' active' : ''}`}
+            onClick={() => setShowAnswer(false)}
+          >你的答案</button>
+          <button
+            className={`ws-result-tab${showAnswer ? ' active' : ''}`}
+            onClick={() => setShowAnswer(true)}
+          >✅ 正確答案</button>
         </div>
 
+        {/* Student's answer view */}
+        {!showAnswer && (
+          <div className="ws-grid" style={{gridTemplateColumns: colCount}}>
+            {categories.map(cat => (
+              <div key={cat} className="ws-col">
+                <div className="ws-col-head">{cat}</div>
+                <div className="ws-col-body">
+                  {allWords.filter(w => w.category === cat).map(w => {
+                    const placed = placements[w.id] === cat;
+                    return (
+                      <div key={w.id} className={`ws-word-chip result ${placed ? 'correct' : 'missing'}`}>
+                        {placed ? '✓' : '✗'} {resultLabel(w, cat)}
+                      </div>
+                    );
+                  })}
+                  {allWords.filter(w => placements[w.id] === cat && w.category !== cat).map(w => (
+                    <div key={w.id + '_wrong'} className="ws-word-chip result wrong">
+                      ✗ {resultLabel(w, cat)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Correct answer view */}
+        {showAnswer && (
+          <div className="ws-grid" style={{gridTemplateColumns: colCount}}>
+            {categories.map(cat => (
+              <div key={cat} className="ws-col">
+                <div className="ws-col-head">{cat}</div>
+                <div className="ws-col-body">
+                  {allWords.filter(w => w.category === cat).map(w => (
+                    <div key={w.id} className="ws-word-chip result correct">
+                      ✓ {resultLabel(w, cat)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Buttons — equal size */}
         <div className="ws-result-btns">
-          <button className="qm-btn secondary" onClick={() => { setPlacements({}); setSelected(null); setSubmitted(false); }}>
+          <button className="qm-btn secondary ws-result-btn"
+            onClick={() => { setPlacements({}); setSelected(null); setSubmitted(false); setShowAnswer(false); }}>
             再試一次
           </button>
-          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+          <button className="qm-btn primary ws-result-btn" onClick={onBack}>← Back</button>
         </div>
       </div>
     );
