@@ -905,8 +905,8 @@
   z-index: 1;
 }
 
-/* Student cut (not yet submitted) — black */
-.sd-gap.cut .sd-gap-line  { background: var(--ink); width: 2.5px; top: 10%; bottom: 10%; }
+/* Student cut (not yet submitted) — black slash, line hidden immediately */
+.sd-gap.cut .sd-gap-line  { display: none; }
 .sd-gap.cut .sd-gap-slash { color: var(--ink); animation: sd-snap 0.16s ease; }
 
 /* Hide separator lines once submitted (slash marks replace them) */
