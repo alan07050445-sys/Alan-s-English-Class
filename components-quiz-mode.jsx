@@ -1540,9 +1540,9 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
 /* ══════════════════════════════════════════════════════
    WORD SORT — INTRO
 ══════════════════════════════════════════════════════ */
-/* Helper: strip leading "-" from suffix category and combine with stem */
+/* Helper: combine stem + suffix category. Strips any trailing _ from stem first. */
 function makeSuffixWord(stem, cat) {
-  return stem + cat.replace(/^-/, '');
+  return stem.replace(/_+$/, '') + cat.replace(/^-/, '');
 }
 
 function WordSortIntro({ item, onStart }) {
@@ -1597,10 +1597,11 @@ function WordSortPlayer({ item, progressKey, onBack }) {
   const poolWords = allWords.filter(w => !placements[w.id]);
   const allPlaced = poolWords.length === 0;
 
-  // Display helpers
-  const poolLabel   = (w) => suffixMode ? w.word + '_' : w.word;
-  const placedLabel = (w, cat) => suffixMode ? makeSuffixWord(w.word, cat) : w.word;
-  const resultLabel = (w, cat) => suffixMode ? makeSuffixWord(w.word, cat) : w.word;
+  // Display helpers — strip trailing _ before any manipulation so teacher can type either "final" or "final_"
+  const stem        = (w) => w.word.replace(/_+$/, '');
+  const poolLabel   = (w) => suffixMode ? stem(w) + '_' : w.word;
+  const placedLabel = (w, cat) => suffixMode ? makeSuffixWord(stem(w), cat) : w.word;
+  const resultLabel = (w, cat) => suffixMode ? makeSuffixWord(stem(w), cat) : w.word;
 
   const wordsInCat = (cat) => allWords.filter(w => placements[w.id] === cat);
 

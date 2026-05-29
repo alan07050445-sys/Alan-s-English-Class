@@ -1055,9 +1055,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 7px 14px;
+  padding: 8px 16px;
   border-radius: 20px;
-  font-size: 15px;
+  font-size: 17px;
   font-family: var(--serif, Georgia, serif);
   font-weight: 600;
   cursor: pointer;
