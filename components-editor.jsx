@@ -12,6 +12,7 @@ const TYPE_OPTIONS = [
   { id: "writing-practice", label: "Writing Practice", hint: "✍ AI 造句批改 — 學生逐題造句，AI 給星評分" },
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
+  { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -146,6 +147,11 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               questions={form.saQuestions || []}
               onChangePassage={v => update("passage", v)}
               onChangeQuestions={qs => update("saQuestions", qs)}
+            />
+          ) : form.type === "syllable-div" ? (
+            <SyllableDivEditor
+              words={form.sdWords || []}
+              onChangeWords={ws => update("sdWords", ws)}
             />
           ) : form.type === "note" ? (
             <div className="field">
@@ -1053,6 +1059,116 @@ function ShortAnswerEditor({ passage, questions, onChangePassage, onChangeQuesti
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── SyllableDivEditor ── */
+function SyllableDivEditor({ words, onChangeWords }) {
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr, setImportErr] = useS('');
+
+  const addWord  = () => onChangeWords([...words, { id: Date.now().toString(), word: '', answer: '' }]);
+  const delWord  = (id) => onChangeWords(words.filter(w => w.id !== id));
+  const updWord  = (id, field, val) => onChangeWords(words.map(w => w.id === id ? {...w, [field]: val} : w));
+
+  const doImport = () => {
+    const lines = importText.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsed = [];
+    lines.forEach((line, i) => {
+      const parts = line.split('\t');
+      const word   = parts[0]?.trim() || '';
+      const answer = parts[1]?.trim() || '';
+      if (!word) return;
+      parsed.push({ id: Date.now().toString() + i, word, answer });
+    });
+    if (!parsed.length) { setImportErr('沒有可匯入的資料，請確認格式'); return; }
+    onChangeWords([...words, ...parsed]);
+    setImportText(''); setImporting(false); setImportErr('');
+  };
+
+  return (
+    <div>
+      <div className="field">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>單字 Words ({words.length})</label>
+          <div style={{display:'flex',gap:6}}>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
+              onClick={() => { setImporting(v=>!v); setImportErr(''); }}>
+              {importing ? '✕ 取消' : '⬇ Import'}
+            </button>
+            <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addWord}>+ Add</button>
+          </div>
+        </div>
+
+        {importing && (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper,#f9f7f2)'}}>
+            <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
+              從 Excel / Google Sheets 複製貼上：<br/>
+              <code style={{background:'rgba(0,0,0,0.06)',padding:'1px 5px',borderRadius:2}}>
+                單字 [Tab] 切法（例 sur/prise）
+              </code>
+              <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
+                · 切法欄可以先留空，之後在表格裡補上<br/>
+                · 用 / 標示切割點：con/tract、mon/ster
+              </span>
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+              placeholder={'surprise\tsur/prise\nmonster\tmon/ster\nhundred\thun/dred\ncontract\tcon/tract'}
+              rows={6}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',
+                background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,
+                fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
+            />
+            {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:4}}>{importErr}</div>}
+            <div style={{display:'flex',gap:8,marginTop:8,justifyContent:'flex-end'}}>
+              <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}}
+                onClick={() => { setImporting(false); setImportText(''); setImportErr(''); }}>取消</button>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}}
+                onClick={doImport} disabled={!importText.trim()}>
+                匯入 {importText.trim() ? `(${importText.split('\n').filter(l=>l.trim()).length} 個)` : ''}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Word（單字）</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Answer（切法 · 用 / 分隔）</div>
+          <div/>
+          {words.map(w => (
+            <React.Fragment key={w.id}>
+              <input
+                value={w.word}
+                onChange={e => updWord(w.id, 'word', e.target.value)}
+                placeholder="surprise"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+              />
+              <input
+                value={w.answer}
+                onChange={e => updWord(w.id, 'answer', e.target.value)}
+                placeholder="sur/prise"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14,fontFamily:'var(--mono)'}}
+              />
+              <button
+                onClick={() => delWord(w.id)}
+                style={{padding:'7px 10px',border:'1px solid var(--border)',borderRadius:2,background:'none',cursor:'pointer',color:'var(--ink-3)',fontSize:13}}
+              >✕</button>
+            </React.Fragment>
+          ))}
+        </div>
+        {words.length === 0 && (
+          <div style={{padding:'12px',textAlign:'center',color:'var(--ink-faint)',fontStyle:'italic',fontSize:13}}>
+            尚未新增單字 — 點選右上方 Add 或 Import
+          </div>
+        )}
+        <div className="field-help">
+          Answer 欄位用 / 標示切割點，例如：<code>sur/prise</code>、<code>mon/ster</code>、<code>hun/dred</code>。可有多個切割點：<code>ath/let/ic</code>。
         </div>
       </div>
     </div>

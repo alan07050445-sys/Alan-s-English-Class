@@ -80,7 +80,8 @@ function getQuizItems(items) {
     (item.type === 'quiz'             && (item.questions || []).length > 0) ||
     (item.type === 'writing-practice' && item.linkedFlashcardId) ||
     (item.type === 'type-answer'      && (item.pairs || []).length >= 1) ||
-    (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1)
+    (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
+    (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1)
   );
 }
 
@@ -289,10 +290,11 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
-            const isWriting     = item.type === 'writing-practice';
-            const isTypeAnswer  = item.type === 'type-answer';
-            const isShortAnswer = item.type === 'short-answer';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer;
+            const isWriting      = item.type === 'writing-practice';
+            const isTypeAnswer   = item.type === 'type-answer';
+            const isShortAnswer  = item.type === 'short-answer';
+            const isSyllableDiv  = item.type === 'syllable-div';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -316,7 +318,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : `${totalQ} questions`}
+                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -423,6 +425,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'short-answer' && phase === 'intro' ? (
           <ShortAnswerIntro
+            item={selectedItem}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'syllable-div' && phase === 'quiz' ? (
+          <SyllableDivPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'syllable-div' && phase === 'intro' ? (
+          <SyllableDivIntro
             item={selectedItem}
             onStart={() => setPhase('quiz')}
           />
@@ -1277,4 +1291,224 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer });
+/* ══════════════════════════════════════════════════════
+   SYLLABLE DIVISION — INTRO
+══════════════════════════════════════════════════════ */
+function SyllableDivIntro({ item, onStart }) {
+  const count = (item.sdWords || []).length;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">✂️</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{count} words · 音節切割練習</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>👀</span><span>看到單字，找出音節切割點</span></div>
+        <div className="qm-intro-rule-row"><span>✂️</span><span>點擊字母之間的縫隙來切割</span></div>
+        <div className="qm-intro-rule-row"><span>🔄</span><span>再點一次可以取消切割</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>切割位置完全正確才算答對</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          開始練習 · Start →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Parse answer string into set of correct gap indices ── */
+function parseSyllableCuts(answer) {
+  // "sur/prise" → cut at gap index 2 (after letter[2], before letter[3])
+  // "con/tract" → cut at gap index 2
+  // "ath/let/ic" → cuts at gap index 2, 5
+  const cuts = new Set();
+  let pos = 0;
+  const parts = (answer || '').split('/');
+  for (let i = 0; i < parts.length - 1; i++) {
+    pos += parts[i].length;
+    cuts.add(pos - 1); // gap after letter at index (pos-1)
+  }
+  return cuts;
+}
+
+/* ══════════════════════════════════════════════════════
+   SYLLABLE DIVISION — PLAYER
+══════════════════════════════════════════════════════ */
+function SyllableDivPlayer({ item, progressKey, onBack }) {
+  const words = useQMM(() => item.sdWords || [], [item.id]);
+
+  const [idx,       setIdx]       = useQM(0);
+  const [cuts,      setCuts]      = useQM(() => new Set());
+  const [submitted, setSubmitted] = useQM(false);
+  const [scores,    setScores]    = useQM([]); // true/false per word
+  const [done,      setDone]      = useQM(false);
+
+  const total   = words.length;
+  const current = words[idx];
+  const pct     = Math.round(idx / total * 100);
+
+  if (!total) return (
+    <div className="wp-empty">
+      <div className="wp-empty-icon">✂️</div>
+      <div className="wp-empty-msg">尚無單字</div>
+      <div className="wp-empty-sub">請在編輯模式中新增單字與切法</div>
+    </div>
+  );
+
+  const letters      = current ? current.word.split('') : [];
+  const correctCuts  = current ? parseSyllableCuts(current.answer) : new Set();
+
+  const toggleCut = (gapIdx) => {
+    if (submitted) return;
+    setCuts(prev => {
+      const next = new Set(prev);
+      if (next.has(gapIdx)) next.delete(gapIdx); else next.add(gapIdx);
+      return next;
+    });
+  };
+
+  const submit = () => {
+    const isCorrect = cuts.size === correctCuts.size && [...cuts].every(c => correctCuts.has(c));
+    setScores(prev => [...prev, isCorrect]);
+    if (window.playSound) window.playSound(isCorrect ? 'correct' : 'wrong');
+    setSubmitted(true);
+  };
+
+  const next = () => {
+    if (idx + 1 >= total) { setDone(true); return; }
+    setIdx(i => i + 1);
+    setCuts(new Set());
+    setSubmitted(false);
+  };
+
+  /* ── Done screen ── */
+  if (done) {
+    const correct  = scores.filter(Boolean).length;
+    const finalPct = Math.round(correct / total * 100);
+    const emoji    = finalPct === 100 ? '🏆' : finalPct >= 80 ? '🎉' : finalPct >= 60 ? '👍' : '💪';
+    const msg      = finalPct === 100 ? 'Perfect! 全對！' : finalPct >= 80 ? 'Excellent! 非常好！' : finalPct >= 60 ? 'Good job! 繼續練習！' : 'Keep going! 多練習！';
+    // Save progress
+    const prev = loadQMProg();
+    prev[progressKey] = { done: total, score: correct, total, ts: Date.now() };
+    saveQMProg(prev);
+    return (
+      <div className="qm-result">
+        <div className="qm-result-emoji">{emoji}</div>
+        <div className="qm-result-cat-title">{item.title}</div>
+        <div className="qm-result-score">
+          <span className="qm-result-num">{correct}</span>
+          <span className="qm-result-denom"> / {total}</span>
+        </div>
+        <div className="qm-result-pct">{finalPct}% correct</div>
+        <div className="qm-result-msg">{msg}</div>
+        <div className="sd-done-breakdown">
+          {words.map((w, i) => (
+            <div key={i} className="sd-done-row">
+              <span className={`sd-done-icon ${scores[i] ? 'correct' : 'wrong'}`}>{scores[i] ? '✓' : '✗'}</span>
+              <span className="sd-done-word">{w.word}</span>
+              <span className="sd-done-answer">{w.answer || '—'}</span>
+            </div>
+          ))}
+        </div>
+        <div className="qm-result-btns">
+          <button className="qm-btn secondary" onClick={() => { setIdx(0); setCuts(new Set()); setSubmitted(false); setScores([]); setDone(false); }}>
+            再試一次
+          </button>
+          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  const isWordCorrect = submitted && cuts.size === correctCuts.size && [...cuts].every(c => correctCuts.has(c));
+
+  /* ── Play screen ── */
+  return (
+    <div className="qm-player-shell">
+      <div className="qm-player-head">
+        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="qm-player-bar-wrap">
+          <div className="qm-player-bar">
+            <div className="qm-player-fill" style={{width: pct + '%'}}/>
+          </div>
+        </div>
+        <span className="qm-player-counter">{idx + 1} / {total}</span>
+      </div>
+
+      <div className="qm-question-area" style={{paddingBottom:0}}>
+        <div className="qm-question-hint">
+          {submitted ? (isWordCorrect ? '✓ 切對了！' : '✗ 看看正確的切割位置') : '點擊字母之間的縫隙來切割音節'}
+        </div>
+      </div>
+
+      {/* Interactive word display */}
+      <div className="sd-word-display">
+        {letters.map((letter, i) => {
+          // Determine gap state after each letter (except last)
+          let gapClass = '';
+          let showSlash = false;
+          if (i < letters.length - 1) {
+            if (!submitted) {
+              showSlash = cuts.has(i);
+              gapClass  = cuts.has(i) ? 'cut' : '';
+            } else {
+              const studentCut = cuts.has(i);
+              const shouldCut  = correctCuts.has(i);
+              showSlash = studentCut || shouldCut;
+              gapClass  = studentCut && shouldCut ? 'correct'
+                        : shouldCut && !studentCut ? 'missed'
+                        : studentCut && !shouldCut ? 'wrong-cut'
+                        : '';
+            }
+          }
+          return (
+            <React.Fragment key={i}>
+              <span className="sd-letter">{letter}</span>
+              {i < letters.length - 1 && (
+                <button
+                  className={`sd-gap${gapClass ? ' ' + gapClass : ''}`}
+                  onClick={() => toggleCut(i)}
+                  disabled={submitted}
+                  aria-label={`gap after ${letter}`}
+                >
+                  {showSlash ? '/' : '·'}
+                </button>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Legend after submit */}
+      {submitted && !isWordCorrect && (
+        <div className="sd-legend">
+          {[...correctCuts].some(c => cuts.has(c)) && <span className="sd-leg correct">✓ 切對</span>}
+          {[...correctCuts].some(c => !cuts.has(c)) && <span className="sd-leg missed">/ 漏切</span>}
+          {[...cuts].some(c => !correctCuts.has(c)) && <span className="sd-leg wrong-cut">/ 切錯</span>}
+        </div>
+      )}
+
+      <div className="qm-feedback" style={{marginTop:16}}>
+        {!submitted ? (
+          <button className="qm-btn primary" onClick={submit}>
+            確認 · Check →
+          </button>
+        ) : (
+          <>
+            {!isWordCorrect && (
+              <div className="sd-answer-reveal">
+                <span className="sd-answer-label">正確答案</span>
+                <span className="sd-answer-val">{current.answer}</span>
+              </div>
+            )}
+            <button className="qm-btn primary" onClick={next}>
+              {idx + 1 >= total ? '查看成績 →' : '下一個 →'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer });
