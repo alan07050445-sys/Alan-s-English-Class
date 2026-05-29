@@ -1588,10 +1588,11 @@ function WordSortPlayer({ item, progressKey, onBack }) {
   const suffixMode  = !!item.sortSuffixMode;
   const allWords    = useQMM(() => shuffleArr(item.sortWords || []), [item.id]);
 
-  const [placements, setPlacements] = useQM({}); // wordId → category
-  const [selected,   setSelected]   = useQM(null); // selected wordId (in pool)
-  const [submitted,  setSubmitted]  = useQM(false);
-  const [done,       setDone]       = useQM(false);
+  const [placements,  setPlacements]  = useQM({}); // wordId → category
+  const [selected,    setSelected]    = useQM(null); // selected wordId (in pool)
+  const [submitted,   setSubmitted]   = useQM(false);
+  const [done,        setDone]        = useQM(false);
+  const [showAnswer,  setShowAnswer]  = useQM(false); // result screen tab
 
   const total     = allWords.length;
   const poolWords = allWords.filter(w => !placements[w.id]);
@@ -1639,7 +1640,6 @@ function WordSortPlayer({ item, progressKey, onBack }) {
     const correct  = allWords.filter(w => placements[w.id] === w.category).length;
     const finalPct = Math.round(correct / total * 100);
     const allRight = correct === total;
-    const [showAnswer, setShowAnswer] = useQM(false);
 
     if (allRight) {
       if (window.playSound) window.playSound('complete');
@@ -1715,7 +1715,7 @@ function WordSortPlayer({ item, progressKey, onBack }) {
         {/* Buttons — equal size */}
         <div className="ws-result-btns">
           <button className="qm-btn secondary ws-result-btn"
-            onClick={() => { setPlacements({}); setSelected(null); setSubmitted(false); setShowAnswer(false); }}>
+            onClick={() => { setPlacements({}); setSelected(null); setSubmitted(false); setShowAnswer(false); setDone(false); }}>
             再試一次
           </button>
           <button className="qm-btn primary ws-result-btn" onClick={onBack}>← Back</button>
