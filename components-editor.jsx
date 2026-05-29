@@ -158,8 +158,10 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
             <WordSortEditor
               categories={form.sortCategories || []}
               words={form.sortWords || []}
+              suffixMode={!!form.sortSuffixMode}
               onChangeCategories={cats => update("sortCategories", cats)}
               onChangeWords={ws => update("sortWords", ws)}
+              onChangeSuffixMode={v => update("sortSuffixMode", v)}
             />
           ) : form.type === "note" ? (
             <div className="field">
@@ -1184,7 +1186,7 @@ function SyllableDivEditor({ words, onChangeWords }) {
 }
 
 /* ── WordSortEditor ── */
-function WordSortEditor({ categories, words, onChangeCategories, onChangeWords }) {
+function WordSortEditor({ categories, words, suffixMode, onChangeCategories, onChangeWords, onChangeSuffixMode }) {
   const [catInput, setCatInput] = useS(categories.join(', '));
   const [importing, setImporting] = useS(false);
   const [importText, setImportText] = useS('');
@@ -1232,6 +1234,30 @@ function WordSortEditor({ categories, words, onChangeCategories, onChangeWords }
         </div>
       </div>
 
+      {/* Suffix Mode Toggle */}
+      <div className="field">
+        <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',userSelect:'none'}}>
+          <input
+            type="checkbox"
+            checked={suffixMode}
+            onChange={e => onChangeSuffixMode(e.target.checked)}
+            style={{width:16,height:16,accentColor:'var(--accent)',cursor:'pointer'}}
+          />
+          <span style={{fontSize:14,fontWeight:600}}>字尾組合模式 Suffix Mode</span>
+        </label>
+        {suffixMode ? (
+          <div className="field-help" style={{marginTop:6}}>
+            ✅ 已開啟：單字填入<strong>字根</strong>（不含底線），例如 <code>final</code>、<code>cap</code>。<br/>
+            分類名稱設定字尾，例如 <code>-le, -ture</code>。<br/>
+            學生看到 <code>final_</code>，放進 <code>-le</code> 欄後自動顯示 <code>finale</code>。
+          </div>
+        ) : (
+          <div className="field-help" style={{marginTop:6}}>
+            關閉：單字原樣顯示（一般分類模式）。開啟後可做字尾拼接練習。
+          </div>
+        )}
+      </div>
+
       {/* Words */}
       <div className="field">
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
@@ -1250,16 +1276,16 @@ function WordSortEditor({ categories, words, onChangeCategories, onChangeWords }
             <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
               從 Excel / Google Sheets 複製貼上：<br/>
               <code style={{background:'rgba(0,0,0,0.06)',padding:'1px 5px',borderRadius:2}}>
-                單字 [Tab] 分類名稱
+                {suffixMode ? '字根 [Tab] 分類名稱' : '單字 [Tab] 分類名稱'}
               </code>
               <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
-                分類名稱要和上方的欄位名稱完全一致，例如：<code>candle [Tab] -le</code>
+                分類名稱要和上方的欄位名稱完全一致，例如：<code>{suffixMode ? 'final [Tab] -le' : 'candle [Tab] -le'}</code>
               </span>
             </div>
             <textarea
               value={importText}
               onChange={e => { setImportText(e.target.value); setImportErr(''); }}
-              placeholder={'candle\t-le\ncreature\t-ture\nactive\t-ive\nfinalize\t-ize'}
+              placeholder={suffixMode ? 'final\t-le\ncap\t-ture\nposit\t-ive\nvisual\t-ize' : 'candle\t-le\ncreature\t-ture\nactive\t-ive\nfinalize\t-ize'}
               rows={6}
               style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',
                 background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,
@@ -1278,7 +1304,7 @@ function WordSortEditor({ categories, words, onChangeCategories, onChangeWords }
         )}
 
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
-          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Word（單字）</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>{suffixMode ? '字根 Stem（不含底線）' : 'Word（單字）'}</div>
           <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Category（分類）</div>
           <div/>
           {words.map(w => (
@@ -1286,7 +1312,7 @@ function WordSortEditor({ categories, words, onChangeCategories, onChangeWords }
               <input
                 value={w.word}
                 onChange={e => updWord(w.id, 'word', e.target.value)}
-                placeholder="candle"
+                placeholder={suffixMode ? "final（字根，不含底線）" : "candle"}
                 style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
               />
               {categories.length > 0 ? (

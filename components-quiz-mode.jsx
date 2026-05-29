@@ -1540,19 +1540,36 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
 /* ══════════════════════════════════════════════════════
    WORD SORT — INTRO
 ══════════════════════════════════════════════════════ */
+/* Helper: strip leading "-" from suffix category and combine with stem */
+function makeSuffixWord(stem, cat) {
+  return stem + cat.replace(/^-/, '');
+}
+
 function WordSortIntro({ item, onStart }) {
-  const cats  = item.sortCategories || [];
-  const count = (item.sortWords || []).length;
+  const cats       = item.sortCategories || [];
+  const count      = (item.sortWords || []).length;
+  const suffixMode = !!item.sortSuffixMode;
   return (
     <div className="qm-intro">
       <div className="qm-intro-icon">🗂</div>
       <div className="qm-intro-title">{item.title}</div>
       <div className="qm-intro-meta">{count} words · {cats.length} categories</div>
       <div className="qm-intro-rules">
-        <div className="qm-intro-rule-row"><span>👀</span><span>看清楚每個分類的名稱</span></div>
-        <div className="qm-intro-rule-row"><span>👆</span><span>點一個單字，再點它所屬的欄位</span></div>
-        <div className="qm-intro-rule-row"><span>🔄</span><span>點已放入的單字可以移回重選</span></div>
-        <div className="qm-intro-rule-row"><span>✅</span><span>全部放完才能提交</span></div>
+        {suffixMode ? (
+          <>
+            <div className="qm-intro-rule-row"><span>🔤</span><span>每個單字都有底線（字根），代表字尾還沒填上</span></div>
+            <div className="qm-intro-rule-row"><span>👆</span><span>點一個字根，再點你覺得正確的字尾欄位</span></div>
+            <div className="qm-intro-rule-row"><span>✨</span><span>放入後字尾會自動接上去，看看對不對！</span></div>
+            <div className="qm-intro-rule-row"><span>🔄</span><span>點已放入的單字可以移回重新選</span></div>
+          </>
+        ) : (
+          <>
+            <div className="qm-intro-rule-row"><span>👀</span><span>看清楚每個分類的名稱</span></div>
+            <div className="qm-intro-rule-row"><span>👆</span><span>點一個單字，再點它所屬的欄位</span></div>
+            <div className="qm-intro-rule-row"><span>🔄</span><span>點已放入的單字可以移回重選</span></div>
+            <div className="qm-intro-rule-row"><span>✅</span><span>全部放完才能提交</span></div>
+          </>
+        )}
       </div>
       <div className="qm-intro-btns">
         <button className="qm-btn primary" onClick={onStart}>
@@ -1567,17 +1584,23 @@ function WordSortIntro({ item, onStart }) {
    WORD SORT — PLAYER
 ══════════════════════════════════════════════════════ */
 function WordSortPlayer({ item, progressKey, onBack }) {
-  const categories = item.sortCategories || [];
-  const allWords   = useQMM(() => shuffleArr(item.sortWords || []), [item.id]);
+  const categories  = item.sortCategories || [];
+  const suffixMode  = !!item.sortSuffixMode;
+  const allWords    = useQMM(() => shuffleArr(item.sortWords || []), [item.id]);
 
   const [placements, setPlacements] = useQM({}); // wordId → category
   const [selected,   setSelected]   = useQM(null); // selected wordId (in pool)
   const [submitted,  setSubmitted]  = useQM(false);
   const [done,       setDone]       = useQM(false);
 
-  const total    = allWords.length;
+  const total     = allWords.length;
   const poolWords = allWords.filter(w => !placements[w.id]);
   const allPlaced = poolWords.length === 0;
+
+  // Display helpers
+  const poolLabel   = (w) => suffixMode ? w.word + '_' : w.word;
+  const placedLabel = (w, cat) => suffixMode ? makeSuffixWord(w.word, cat) : w.word;
+  const resultLabel = (w, cat) => suffixMode ? makeSuffixWord(w.word, cat) : w.word;
 
   const wordsInCat = (cat) => allWords.filter(w => placements[w.id] === cat);
 
@@ -1636,17 +1659,16 @@ function WordSortPlayer({ item, progressKey, onBack }) {
               <div className="ws-col-body">
                 {allWords.filter(w => w.category === cat).map(w => {
                   const placed = placements[w.id] === cat;
-                  const wronglyPlaced = Object.entries(placements).find(([id, c]) => id === w.id && c !== cat);
                   return (
                     <div key={w.id} className={`ws-word-chip result ${placed ? 'correct' : 'missing'}`}>
-                      {placed ? '✓' : '✗'} {w.word}
+                      {placed ? '✓' : '✗'} {resultLabel(w, cat)}
                     </div>
                   );
                 })}
                 {/* Words student put here that are wrong */}
                 {allWords.filter(w => placements[w.id] === cat && w.category !== cat).map(w => (
                   <div key={w.id + '_wrong'} className="ws-word-chip result wrong">
-                    ✗ {w.word}
+                    ✗ {resultLabel(w, cat)}
                   </div>
                 ))}
               </div>
@@ -1676,10 +1698,10 @@ function WordSortPlayer({ item, progressKey, onBack }) {
           {poolWords.map(w => (
             <button
               key={w.id}
-              className={`ws-word-chip pool${selected === w.id ? ' selected' : ''}`}
+              className={`ws-word-chip pool${selected === w.id ? ' selected' : ''}${suffixMode ? ' suffix' : ''}`}
               onClick={() => clickPoolWord(w.id)}
             >
-              {w.word}
+              {poolLabel(w)}
             </button>
           ))}
           {allPlaced && <span className="ws-pool-done">🎉</span>}
@@ -1703,7 +1725,7 @@ function WordSortPlayer({ item, progressKey, onBack }) {
                   onClick={(e) => { e.stopPropagation(); clickPlacedWord(w.id); }}
                   title="點擊移回"
                 >
-                  {w.word}
+                  {placedLabel(w, cat)}
                 </button>
               ))}
               {selected && wordsInCat(cat).length === 0 && (

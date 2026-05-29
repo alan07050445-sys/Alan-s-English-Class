@@ -1068,6 +1068,12 @@
   color: var(--ink);
 }
 
+/* Suffix mode: monospace so underscore _ is clearly visible */
+.ws-word-chip.suffix {
+  font-family: var(--mono, 'Courier New', monospace);
+  letter-spacing: 0.02em;
+}
+
 .ws-word-chip.pool:hover {
   border-color: var(--ink-soft);
   transform: translateY(-1px);
