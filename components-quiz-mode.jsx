@@ -1329,9 +1329,11 @@ function parseSyllableCuts(answer) {
   // "sur/prise" → cut at gap index 2 (after letter[2], before letter[3])
   // "con/tract" → cut at gap index 2
   // "ath/let/ic" → cuts at gap index 2, 5
+  // Spaces are stripped so "dis / trict" works same as "dis/trict"
   const cuts = new Set();
   let pos = 0;
-  const parts = (answer || '').split('/');
+  const normalized = (answer || '').replace(/\s+/g, ''); // remove all spaces
+  const parts = normalized.split('/');
   for (let i = 0; i < parts.length - 1; i++) {
     pos += parts[i].length;
     cuts.add(pos - 1); // gap after letter at index (pos-1)
@@ -1363,7 +1365,7 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
     </div>
   );
 
-  const letters      = current ? current.word.split('') : [];
+  const letters      = current ? current.word.replace(/\s+/g, '').split('') : [];
   const correctCuts  = current ? parseSyllableCuts(current.answer) : new Set();
 
   const toggleCut = (gapIdx) => {
@@ -1474,7 +1476,7 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
               <span className="sd-letter">{letter}</span>
               {i < letters.length - 1 && (
                 <button
-                  className={`sd-gap${gapClass ? ' ' + gapClass : ''}`}
+                  className={`sd-gap${submitted ? ' done' : ''}${gapClass ? ' ' + gapClass : ''}`}
                   onClick={() => toggleCut(i)}
                   disabled={submitted}
                   aria-label={`cut after ${letter}`}

@@ -905,21 +905,21 @@
   z-index: 1;
 }
 
-/* Student cut (not yet submitted) */
-.sd-gap.cut .sd-gap-line  { background: #ef4444; width: 2.5px; top: 10%; bottom: 10%; }
-.sd-gap.cut .sd-gap-slash { color: #ef4444; animation: sd-snap 0.16s ease; }
+/* Student cut (not yet submitted) — black */
+.sd-gap.cut .sd-gap-line  { background: var(--ink); width: 2.5px; top: 10%; bottom: 10%; }
+.sd-gap.cut .sd-gap-slash { color: var(--ink); animation: sd-snap 0.16s ease; }
 
-/* After submit: correct (student cut + should cut) */
-.sd-gap.correct .sd-gap-line  { background: #16a34a; width: 2.5px; top: 10%; bottom: 10%; }
-.sd-gap.correct .sd-gap-slash { color: #16a34a; }
+/* Hide separator lines once submitted (slash marks replace them) */
+.sd-gap.done .sd-gap-line { display: none; }
 
-/* After submit: missed (should cut, student didn't) */
-.sd-gap.missed .sd-gap-line  { background: #d97706; width: 2px; top: 12%; bottom: 12%; }
-.sd-gap.missed .sd-gap-slash { color: #d97706; animation: sd-pulse 0.55s ease; }
+/* After submit: correct (student cut + should cut) — green */
+.sd-gap.done.correct .sd-gap-slash { color: #16a34a; font-size: 1.8rem; }
 
-/* After submit: wrong-cut (student cut, shouldn't) */
-.sd-gap.wrong-cut .sd-gap-line  { background: #ef4444; width: 2px; top: 12%; bottom: 12%; opacity: 0.4; }
-.sd-gap.wrong-cut .sd-gap-slash { color: #ef4444; text-decoration: line-through; }
+/* After submit: missed (should cut, student didn't) — RED, animate */
+.sd-gap.done.missed .sd-gap-slash { color: #dc2626; animation: sd-pulse 0.55s ease; font-size: 1.8rem; }
+
+/* After submit: wrong-cut (student cut, shouldn't) — faded strikethrough */
+.sd-gap.done.wrong-cut .sd-gap-slash { color: #dc2626; text-decoration: line-through; opacity: 0.55; font-size: 1.6rem; }
 
 @keyframes sd-snap {
   0%   { transform: scale(1.35) rotate(-5deg); }
@@ -944,10 +944,10 @@
 
 .sd-leg { display: inline-flex; align-items: center; gap: 4px; }
 .sd-leg.correct   { color: #16a34a; }
-.sd-leg.missed    { color: #d97706; }
-.sd-leg.wrong-cut { color: #dc2626; }
+.sd-leg.missed    { color: #dc2626; }
+.sd-leg.wrong-cut { color: #dc2626; opacity: 0.6; }
 
-/* Answer reveal */
+/* Answer reveal — red so students remember the correct answer */
 .sd-answer-reveal {
   display: flex;
   align-items: center;
@@ -955,14 +955,14 @@
   gap: 10px;
   margin-bottom: 12px;
   padding: 10px 18px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: #fff1f2;
+  border: 1.5px solid #fca5a5;
   border-radius: 8px;
 }
 
 .sd-answer-label {
   font-size: 12px;
-  color: #166534;
+  color: #991b1b;
   font-family: var(--mono, monospace);
   letter-spacing: 0.05em;
 }
@@ -970,9 +970,9 @@
 .sd-answer-val {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #15803d;
+  color: #dc2626;
   font-family: var(--serif, Georgia, serif);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 
 /* Done breakdown */
