@@ -8,6 +8,13 @@ const _saveWeeksG3       = window.saveWeeks;
 const _saveWeekOrderG3   = window.saveWeekOrder;
 const _subscribeG3       = window.subscribeToClassData;
 
+// ── Grade helper: resolve grade-specific functions ─────────────────────────
+function _gradeOf(g, { g2, g5, g3 }) {
+  if (g === 'g2') return g2;
+  if (g === 'g5') return g5;
+  return g3;
+}
+
 // Parse "May 17 – May 23" → { start: Date, end: Date } using the given year.
 function parseDateRange(str, year) {
   const MONTHS = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
@@ -74,17 +81,17 @@ function App() {
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return g === 'g2' ? window.loadWeeksG2() : window.loadWeeks();
+    return _gradeOf(g, { g2: window.loadWeeksG2(), g5: window.loadWeeksG5(), g3: window.loadWeeks() });
   });
   const [weekOrder, setWeekOrder] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return g === 'g2' ? window.loadWeekOrderG2() : window.loadWeekOrder();
+    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
   });
   const [progress, setProgress] = useAppState(() => window.loadProgress());
   const [weekIdx, setWeekIdx] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    const ord = g === 'g2' ? window.loadWeekOrderG2() : window.loadWeekOrder();
-    const wks = g === 'g2' ? window.loadWeeksG2()     : window.loadWeeks();
+    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
+    const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g5: window.loadWeeksG5(),     g3: window.loadWeeks() });
     return bestWeekIdx(ord, wks);
   });
   const [openCat, setOpenCat] = useAppState("vocab");
@@ -220,13 +227,12 @@ function App() {
   // Also points window.saveWeeks / saveWeekOrder at the right collection.
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
-    const isG2        = grade === 'g2';
-    window.saveWeeks     = isG2 ? window.saveWeeksG2     : _saveWeeksG3;
-    window.saveWeekOrder = isG2 ? window.saveWeekOrderG2 : _saveWeekOrderG3;
+    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g5: window.saveWeeksG5,     g3: _saveWeeksG3 });
+    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g5: window.saveWeekOrderG5, g3: _saveWeekOrderG3 });
 
-    const subscribeFn = isG2 ? window.subscribeToClassDataG2 : _subscribeG3;
-    const storageKey  = isG2 ? 'alans-english-g2-data-v1'    : 'alans-english-data-v3';
-    const orderKey    = isG2 ? 'alans-english-g2-order-v1'   : 'alans-english-week-order-v1';
+    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g5: window.subscribeToClassDataG5, g3: _subscribeG3 });
+    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g5: 'alans-english-g5-data-v1', g3: 'alans-english-data-v3' });
+    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g5: 'alans-english-g5-order-v1', g3: 'alans-english-week-order-v1' });
 
     const unsub = subscribeFn((newWeeks, newOrder) => {
       setWeeks(newWeeks);
@@ -256,17 +262,21 @@ function App() {
     id: weekId, label: weekId || "—", dateRange: "—", theme: "—", themeZh: "", items: {vocab:[], grammar:[], word:[], reading:[]}
   };
 
-  // Active categories — switches between G2 and G3 definitions on grade change
-  const activeCategories = grade === 'g2' ? (window.CATEGORIES_G2 || _CATS_G3) : _CATS_G3;
+  // Active categories — switches between G2, G3, G5 definitions on grade change
+  const activeCategories = _gradeOf(grade, {
+    g2: window.CATEGORIES_G2 || _CATS_G3,
+    g5: window.CATEGORIES_G5 || _CATS_G3,
+    g3: _CATS_G3,
+  });
 
   const allItems = useAppMemo(() => {
-    const cats = grade === 'g2' ? (window.CATEGORIES_G2 || _CATS_G3) : _CATS_G3;
+    const cats = activeCategories;
     return cats.flatMap(c => (week.items[c.id] || []).map(it => ({...it, _cat: c.id})));
   }, [week, grade]);
 
   const weekQuizItems = useAppMemo(() => {
     if (!window.getQuizItems) return [];
-    const cats = grade === 'g2' ? (window.CATEGORIES_G2 || _CATS_G3) : _CATS_G3;
+    const cats = activeCategories;
     return cats.flatMap(c => window.getQuizItems((week.items || {})[c.id] || []));
   }, [week, grade]);
 
@@ -554,8 +564,8 @@ function App() {
   const handleSelectGrade = (g) => {
     // Immediately load the correct grade's data so the page never
     // flashes the previous grade's content while Firestore syncs.
-    const newWeeks = g === 'g2' ? window.loadWeeksG2() : window.loadWeeks();
-    const newOrder = g === 'g2' ? window.loadWeekOrderG2() : window.loadWeekOrder();
+    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g5: window.loadWeeksG5(), g3: window.loadWeeks() });
+    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
     try { localStorage.setItem('alan-grade', g); } catch(e) {}
     setGrade(g);
     setWeeks(newWeeks);

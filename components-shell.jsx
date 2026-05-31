@@ -350,6 +350,11 @@ function GradeSelector({ onSelect }) {
             <span className="grade-sel-card-label">Grade 3</span>
             <span className="grade-sel-card-desc">FET + Word Study</span>
           </button>
+          <button className="grade-sel-card" onClick={() => onSelect('g5')}>
+            <span className="grade-sel-badge">G5</span>
+            <span className="grade-sel-card-label">Grade 5</span>
+            <span className="grade-sel-card-desc">FET · Grammar · Word Study · Reading</span>
+          </button>
         </div>
       </div>
     </div>
