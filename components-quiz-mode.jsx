@@ -590,99 +590,72 @@ function renderMd(text) {
   );
 }
 
+/* ── Shared section-based feedback renderer ────────────── */
+function SectionFeedback({ text, config }) {
+  // config: array of { key, label, icon, style }
+  // style: 'score' | 'green' | 'blue' | 'purple' | 'orange' | 'comment' | 'default'
+  const sections = parseEssaySections(text);
+  const scoreText = sections['Score'] || sections['Overall Score'] || '';
+  const starCount = countStars(scoreText);
+  const scoreDesc = scoreText.replace(/[⭐★☆✩\s]+/g, c => /\s/.test(c) ? c : '').trim();
+
+  return (
+    <div className="sf-feedback">
+      {/* Score card */}
+      {scoreText && (
+        <div className="sf-score-card">
+          <div className="sf-stars">
+            {[1,2,3,4,5].map(i => (
+              <span key={i} className={`sf-star ${i <= starCount ? 'filled' : 'empty'}`}>
+                {i <= starCount ? '⭐' : '☆'}
+              </span>
+            ))}
+          </div>
+          {scoreDesc && <div className="sf-score-desc">{scoreDesc}</div>}
+        </div>
+      )}
+
+      {/* Each configured section */}
+      {config.map(({ key, label, icon, style }) => {
+        const body = sections[key];
+        if (!body) return null;
+        return (
+          <div key={key} className={`sf-section sf-${style || 'default'}`}>
+            <div className="sf-sec-title">{icon} {label}</div>
+            <div className="sf-sec-body">{body}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Writing Practice feedback config */
+const WF_CONFIG = [
+  { key: 'Word Usage',         label: 'Word Usage',         icon: '📝', style: 'default' },
+  { key: 'Grammar',            label: 'Grammar',            icon: '✏️', style: 'default' },
+  { key: 'Teacher Comment',    label: 'Teacher Comment',    icon: '💬', style: 'comment' },
+  { key: 'Corrected Sentence', label: 'Corrected Sentence', icon: '📋', style: 'blue'    },
+  { key: 'Better Sentence',    label: 'Better Sentence',    icon: '🌟', style: 'purple'  },
+];
+
+/* Short Answer feedback config */
+const SA_CONFIG = [
+  { key: 'Answer Check',      label: 'Answer Check',      icon: '✅', style: 'default' },
+  { key: 'Text Evidence',     label: 'Text Evidence',     icon: '📖', style: 'default' },
+  { key: 'Needs Improvement', label: 'Needs Improvement', icon: '🔸', style: 'orange'  },
+  { key: 'Teacher Comment',   label: 'Teacher Comment',   icon: '💬', style: 'comment' },
+  { key: 'Corrected Answer',  label: 'Corrected Answer',  icon: '📋', style: 'blue'    },
+  { key: 'Better Answer',     label: 'Better Answer',     icon: '🌟', style: 'purple'  },
+];
+
 function WritingFeedback({ text }) {
-  const lines = text.split('\n');
-  const elements = [];
-  let inExamples = false;
-
-  lines.forEach((line, i) => {
-    const trimmed = line.trim();
-    if (!trimmed) { inExamples = false; elements.push(<div key={i} className="wf-spacer"/>); return; }
-
-    // ── Writing-practice format ──────────────────────────
-    if (trimmed.startsWith('文法')) {
-      const isCorrect = /CORRECT/i.test(trimmed) && !/INCORRECT/i.test(trimmed);
-      elements.push(
-        <div key={i} className={`wf-verdict ${isCorrect ? 'correct' : 'incorrect'}`}>
-          <span className="wf-verdict-icon">{isCorrect ? '✓' : '✗'}</span>
-          <span className="wf-verdict-label">文法</span>
-          <span className="wf-verdict-val">{isCorrect ? 'CORRECT' : 'INCORRECT'}</span>
-        </div>
-      );
-      return;
-    }
-    if (trimmed.startsWith('意思')) {
-      const val = trimmed.replace(/^意思\s*/, '');
-      elements.push(<div key={i} className="wf-row"><span className="wf-key">意思</span><span className="wf-val meaning">{val}</span></div>);
-      return;
-    }
-    if (trimmed.startsWith('修正')) {
-      const val = trimmed.replace(/^修正\s*/, '');
-      elements.push(<div key={i} className="wf-row"><span className="wf-key">修正</span><span className="wf-val correction">{val}</span></div>);
-      return;
-    }
-    if (trimmed.startsWith('改進')) {
-      const val = trimmed.replace(/^改進\s*/, '');
-      elements.push(<div key={i} className="wf-row"><span className="wf-key improve">改進</span><span className="wf-val improve-val">{renderMd(val)}</span></div>);
-      return;
-    }
-    if (trimmed === '範例') {
-      inExamples = true;
-      elements.push(<div key={i} className="wf-examples-title">範例</div>);
-      return;
-    }
-    if (trimmed.startsWith('·') || trimmed.startsWith('•')) {
-      const val = trimmed.replace(/^[·•]\s*/, '');
-      elements.push(<div key={i} className="wf-example-row"><span className="wf-bullet">·</span><span>{val}</span></div>);
-      return;
-    }
-
-    // ── Short-answer format ──────────────────────────────
-    if (trimmed.startsWith('理解')) {
-      const rest = trimmed.replace(/^理解\s*/, '');
-      const isCorrect = /CORRECT/i.test(rest) && !/INCORRECT/i.test(rest) && !/PARTIAL/i.test(rest);
-      const isPartial = /PARTIAL/i.test(rest);
-      const cls = isCorrect ? 'correct' : isPartial ? 'partial' : 'incorrect';
-      const icon = isCorrect ? '✓' : isPartial ? '△' : '✗';
-      const label = isCorrect ? 'CORRECT' : isPartial ? 'PARTIAL' : 'INCORRECT';
-      elements.push(
-        <div key={i} className={`wf-verdict ${cls}`}>
-          <span className="wf-verdict-icon">{icon}</span>
-          <span className="wf-verdict-label">理解度</span>
-          <span className="wf-verdict-val">{label}</span>
-        </div>
-      );
-      return;
-    }
-    if (trimmed.startsWith('建議')) {
-      const val = trimmed.replace(/^建議\s*/, '');
-      elements.push(
-        <div key={i} className="wf-tip">
-          <span className="wf-tip-icon">💡</span>
-          <span className="wf-tip-text">{renderMd(val)}</span>
-        </div>
-      );
-      return;
-    }
-
-    // ── Shared ───────────────────────────────────────────
-    if (trimmed.startsWith('評分')) {
-      const stars = trimmed.replace(/^評分\s*/, '');
-      elements.push(
-        <div key={i} className="wf-score">
-          <span className="wf-key">評分</span>
-          <span className="wf-stars">{stars}</span>
-        </div>
-      );
-      return;
-    }
-
-    // Encouragement line — strip surrounding parentheses if present
-    const encourage = trimmed.replace(/^\(?(.*?)\)?$/, '$1');
-    elements.push(<div key={i} className="wf-encourage">{renderMd(encourage)}</div>);
-  });
-
-  return <div className="qm-writing-feedback wf-card">{elements}</div>;
+  // If new 【Section】 format, use SectionFeedback; otherwise fall back to raw text
+  if (text && text.includes('【Score】')) {
+    return <SectionFeedback text={text} config={WF_CONFIG} />;
+  }
+  // Legacy fallback — just show raw text
+  return <div className="qm-writing-feedback wf-card" style={{whiteSpace:'pre-wrap',fontSize:14,lineHeight:1.7}}>{text}</div>;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1333,8 +1306,12 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   const total   = questions.length;
 
   const extractStars = (text) => {
-    const m = text.match(/[★☆]{1,3}/);
-    if (!m) return 2;
+    // New format: count ⭐ from 【Score】 block (1-5 scale)
+    const filled = (text.match(/⭐/g) || []).length;
+    if (filled > 0) return Math.min(5, filled);
+    // Legacy fallback: ★ stars
+    const m = text.match(/[★☆]{1,5}/);
+    if (!m) return 3;
     return (m[0].match(/★/g) || []).length;
   };
 
@@ -1374,13 +1351,13 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
       <div className="wp-done-sub">已完成 {total} 題閱讀理解</div>
       <div className="wp-done-score">
         <span className="wp-done-avg">{avg.toFixed(1)}</span>
-        <span className="wp-done-maxstar"> / 3 ★</span>
+        <span className="wp-done-maxstar"> / 5 ★</span>
       </div>
       <div className="wp-done-breakdown">
         {questions.map((q, i) => (
           <div key={i} className="wp-done-row">
             <span className="wp-done-word" style={{flex:1,textAlign:'left',fontSize:12}}>{q.question}</span>
-            <span className="wp-done-stars">{'★'.repeat(scores[i]||0)}{'☆'.repeat(3-(scores[i]||0))}</span>
+            <span className="wp-done-stars">{'★'.repeat(scores[i]||0)}{'☆'.repeat(5-(scores[i]||0))}</span>
           </div>
         ))}
       </div>
@@ -1414,11 +1391,11 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
 
       {!feedback ? (
         <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !answer.trim()}>
-          {checking ? '批改中…' : '送出答案 →'}
+          {checking ? '🤖 批改中…' : '送出答案 →'}
         </button>
       ) : (
         <>
-          <WritingFeedback text={feedback}/>
+          <SectionFeedback text={feedback} config={SA_CONFIG}/>
           <button className="qm-btn primary wp-next" onClick={next}>
             {idx+1 >= total ? '完成 ✦' : '下一題 →'}
           </button>

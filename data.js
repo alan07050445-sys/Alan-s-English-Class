@@ -556,6 +556,54 @@ const ANTHROPIC_API_KEY = ''; // Key is stored in Cloudflare Worker env var  // 
 async function checkWriting(word, sentence) {
   if (!sentence || !sentence.trim()) return '請先寫一個英文句子。';
   const endpoint = AI_WRITING_ENDPOINT || localStorage.getItem('alan-ai-writing-endpoint') || '';
+
+  const systemPrompt =
+`你是一位小學生英文老師。請幫我批改學生的 vocabulary writing practice，也就是「用指定單字造句」。
+
+請不要只看文法，也要判斷學生是否真的正確使用這個單字。
+
+請根據以下標準批改：
+
+1. Word Meaning / 單字意思
+- 學生有沒有理解這個單字的意思？句子中的用法是否符合單字原意？
+- 如果學生只是把單字放進句子，但意思不對，請指出來。
+
+2. Correct Usage / 使用是否正確
+- 單字的詞性是否用對？例如 noun / verb / adjective / adverb。
+- 單字前後搭配是否自然？句子是否能清楚看出這個單字的意思？
+
+3. Sentence Completeness / 句子完整度
+- 句子是否有主詞和動詞？是否是一個完整句子，不是片語？
+
+4. Grammar and Spelling / 文法與拼字
+- 檢查時態、主詞動詞一致、冠詞、介系詞、標點、大小寫。
+- 如果錯誤影響意思，請特別指出。
+
+5. Clarity / 清楚度
+- 句子是否自然、清楚？小學生能不能理解這個句子？
+
+請按照以下格式回覆（必須包含所有區塊，用繁體中文）：
+
+【Score】
+給 1–5 顆星（用 ⭐ 符號），並簡短說明原因。
+
+【Word Usage】
+說明學生是否正確使用指定單字。
+
+【Grammar】
+指出主要文法問題，不需要過度挑小錯。如果沒有文法問題，寫「No major grammar issues.」
+
+【Teacher Comment】
+用老師口吻給學生一句簡短回饋（約 1-2 句，溫暖鼓勵）。
+
+【Corrected Sentence】
+保留學生原本的意思，幫他改成正確、自然、適合小學生程度的英文句子。如果原句完全正確自然，寫「Your sentence is already correct!」
+
+【Better Sentence】
+提供一個更好的造句版本，讓學生知道怎麼把句子寫得更清楚、更完整。`;
+
+  const userMessage = `指定單字：${word}\n\n學生句子：${sentence.trim()}`;
+
   if (endpoint) {
     try {
       const res = await fetch(endpoint, {
@@ -563,70 +611,24 @@ async function checkWriting(word, sentence) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 500,
-          messages: [{ role: 'user', content:
-            `You are a friendly English teacher for young learners (ages 8-14).\n` +
-            `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
-            `Reply in Traditional Chinese (繁體中文) using this exact format (no emoji, clean style):\n\n` +
-            `文法   ✓ CORRECT 或 ✗ INCORRECT\n` +
-            `意思   （把學生的句子翻譯成中文）\n\n` +
-            `（一句溫暖鼓勵的話）\n\n` +
-            `修正   （如果文法有錯，給出正確版本；正確則省略此行）\n\n` +
-            `改進   （如果評分未達5顆星，用一句話說明學生可以怎麼做才能拿到滿分；5顆星則省略此行）\n\n` +
-            `範例\n` +
-            `· （範例句 1）\n` +
-            `· （範例句 2）\n` +
-            `· （範例句 3）\n\n` +
-            `評分   ★★★★☆（滿分5顆）\n\n` +
-            `Important rules:\n` +
-            `1. Grammar: check if the sentence is grammatically correct English.\n` +
-            `2. Usage: the word "${word}" must be used with its real meaning in context. Simply mentioning it (e.g. "The teacher taught us the word ${word}") is NOT acceptable → mark INCORRECT.\n` +
-            `3. Length (STRICT): count every word in the student's sentence carefully, including articles (a, an, the), prepositions, and conjunctions. The sentence MUST contain at least 7 words total. If it has 6 or fewer words, mark as INCORRECT and deduct stars.\n` +
-            `4. Score strictly: 5★ = grammar correct + real usage + 7+ words + vivid/specific sentence. Deduct 1★ for each issue: wrong grammar, superficial usage, fewer than 7 words, or very short/simple expression. Always give a minimum of 1★.\n` +
-            `5. 改進 line: if score < 5★, tell the student exactly what to fix to reach 5★ (e.g. "句子只有4個字，需要再加長到7個字以上" or "可以加上更多細節讓句子更生動").\n` +
-            `6. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different everyday contexts.`
-          }],
+          max_tokens: 900,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
         }),
       });
       const data = await res.json().catch(() => null);
-      console.log('[AI] Worker response:', JSON.stringify(data));
-      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式沒有 feedback。\n\nDebug: ' + JSON.stringify(data);
+      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
     } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
   }
   if (!ANTHROPIC_API_KEY) return localWritingFeedback(word, sentence);
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 500,
-        messages: [{ role: 'user', content:
-          `You are a friendly English teacher for young learners (ages 8-14).\n` +
-          `The student is practicing the word "${word}" and wrote:\n"${sentence}"\n\n` +
-          `Reply in Traditional Chinese (繁體中文) using this exact format (no emoji, clean style):\n\n` +
-          `文法   ✓ CORRECT 或 ✗ INCORRECT\n` +
-          `意思   （把學生的句子翻譯成中文）\n\n` +
-          `（一句溫暖鼓勵的話）\n\n` +
-          `修正   （如果文法有錯，給出正確版本；正確則省略此行）\n\n` +
-          `改進   （如果評分未達5顆星，用一句話說明學生可以怎麼做才能拿到滿分；5顆星則省略此行）\n\n` +
-          `範例\n` +
-          `· （範例句 1）\n` +
-          `· （範例句 2）\n` +
-          `· （範例句 3）\n\n` +
-          `評分   ★★★★☆（滿分5顆）\n\n` +
-          `Important rules:\n` +
-          `1. Grammar: check if the sentence is grammatically correct English.\n` +
-          `2. Usage: the word "${word}" must be used with its real meaning in context. Simply mentioning it (e.g. "The teacher taught us the word ${word}") is NOT acceptable → mark INCORRECT.\n` +
-          `3. Length (STRICT): count every word in the student's sentence carefully, including articles (a, an, the), prepositions, and conjunctions. The sentence MUST contain at least 7 words total. If it has 6 or fewer words, mark as INCORRECT and deduct stars.\n` +
-          `4. Score strictly: 5★ = grammar correct + real usage + 7+ words + vivid/specific sentence. Deduct 1★ for each issue: wrong grammar, superficial usage, fewer than 7 words, or very short/simple expression. Always give a minimum of 1★.\n` +
-          `5. 改進 line: if score < 5★, tell the student exactly what to fix to reach 5★ (e.g. "句子只有4個字，需要再加長到7個字以上" or "可以加上更多細節讓句子更生動").\n` +
-          `6. All 3 example sentences must be at least 7 words and use "${word}" with its real meaning in different everyday contexts.`
-        }],
+        model: 'claude-haiku-4-5', max_tokens: 900,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
       }),
     });
     const data = await res.json();
@@ -638,27 +640,57 @@ async function checkWriting(word, sentence) {
 async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   if (!studentAnswer?.trim()) return '請先寫下你的答案。';
   const endpoint = AI_WRITING_ENDPOINT || '';
-  const passageSection = passage?.trim()
-    ? `\n\n【閱讀文章】\n${passage.trim()}`
-    : '';
-  const pointsSection = keyPoints?.trim()
-    ? `\n【答案要點】${keyPoints.trim()}`
-    : '';
-  const prompt =
-    `你是一個親切的小學英語閱讀理解老師（學生年齡 8-14 歲）。${passageSection}\n\n` +
-    `【問題】${question}${pointsSection}\n` +
-    `【學生的答案】${studentAnswer.trim()}\n\n` +
-    `請判斷學生的回答是否正確地回應了問題。用繁體中文回覆，嚴格依照以下格式（不要多餘文字）：\n\n` +
-    `理解   ✓ CORRECT 或 △ PARTIAL 或 ✗ INCORRECT\n` +
-    `（一句溫暖鼓勵的話，不超過 20 字，去掉括號直接寫）\n` +
-    `建議   （若評分是 0、1 或 2 顆星，必須給一句中英夾雜的具體建議，把關鍵英文詞彙用 **粗體** 標示，並在後面加上「例如："英文標準答案"」讓學生參考；評分是 3 顆星時省略整行）\n` +
-    `        建議格式範例：可以加上 **specific details**（具體細節），例如："The jay learned that it doesn't matter how you look, but what kind of bird you are inside."\n` +
-    `評分   只能是以下四種之一，總共 3 個字符：★★★ 或 ★★☆ 或 ★☆☆ 或 ☆☆☆\n\n` +
-    `評分標準（滿分 3 顆星，不是 4 顆、不是 5 顆）：\n` +
-    `★★★ = 完整正確回答，涵蓋主要要點，表達清楚\n` +
-    `★★☆ = 部分正確，有答到重點但不夠完整或細節不足\n` +
-    `★☆☆ = 方向正確但內容明顯不足或有誤解\n` +
-    `☆☆☆ = 完全沒有回答問題或答錯`;
+
+  const systemPrompt =
+`你是一位小學生英文閱讀老師。請幫我批改學生的 short answer reading comprehension。
+
+請不要只改文法，最重要的是判斷學生有沒有真正回答問題，答案是否有根據文章內容。
+
+請根據以下標準批改：
+
+1. Answers the Question / 是否回答問題
+- 學生有沒有真正回答題目？答案是否切題？
+- 如果學生只寫到相關內容，但沒有直接回答問題，請指出來。
+
+2. Text Evidence / 是否有文章根據
+- 學生的答案是否根據文章內容？有沒有使用文章中的細節支持答案？
+- 如果答案是自己亂猜或文章沒有提到，請指出來。
+
+3. Complete Idea / 想法是否完整
+- 答案是否只寫一兩個字，還是有完整表達想法？
+- 是否有清楚說明原因、結果、感受或推論？
+
+4. Inference / 推論能力
+- 如果題目是推論題，學生有沒有根據文章線索做合理推論？
+
+5. Sentence Quality / 句子品質
+- 是否使用完整句子？文法、拼字、標點是否清楚？
+
+請按照以下格式回覆（必須包含所有區塊，用繁體中文）：
+
+【Score】
+給 1–5 顆星（用 ⭐ 符號），並簡短說明原因。
+
+【Answer Check】
+說明學生有沒有回答到題目重點。
+
+【Text Evidence】
+說明學生有沒有使用文章根據，或是否需要補充 evidence。
+
+【Needs Improvement】
+指出學生可以加強的地方。如果答得很完整，寫「Great job! No major improvements needed.」
+
+【Teacher Comment】
+用老師口吻給學生一句簡短鼓勵與建議（約 1-2 句）。
+
+【Corrected Answer】
+保留學生原本意思，幫他改成正確、清楚、適合小學生程度的英文答案。
+
+【Better Answer】
+提供一個更完整、更高分的答案，要包含清楚回答 + 文章根據 / 解釋。`;
+
+  const passageSection = passage?.trim() ? `\n文章內容或相關段落：\n${passage.trim()}\n` : '';
+  const userMessage = `題目：${question.trim()}\n${passageSection}\n學生答案：${studentAnswer.trim()}`;
 
   if (endpoint) {
     try {
@@ -667,8 +699,9 @@ async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 300,
-          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
         }),
       });
       const data = await res.json().catch(() => null);

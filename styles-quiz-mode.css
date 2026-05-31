@@ -1599,3 +1599,53 @@
   .essay-detail-tabs { gap: 2px; }
   .essay-detail-tab { font-size: 11px; padding: 5px 8px; }
 }
+
+/* ══════════════════════════════════════════════════════
+   SECTION FEEDBACK (Writing Practice + Short Answer)
+══════════════════════════════════════════════════════ */
+.sf-feedback {
+  display: flex; flex-direction: column; gap: 12px;
+  animation: feedback-rise 0.28s cubic-bezier(.22,.68,0,1.2);
+}
+
+/* Score card */
+.sf-score-card {
+  background: #fff; border: 1px solid var(--border-soft);
+  border-radius: 10px; padding: 16px 20px; text-align: center;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+}
+.sf-stars { display: flex; justify-content: center; gap: 4px; margin-bottom: 8px; }
+.sf-star { font-size: 24px; }
+.sf-star.empty { opacity: 0.2; }
+.sf-score-desc { font-size: 14px; color: var(--ink-soft); line-height: 1.6; }
+
+/* Section cards */
+.sf-section {
+  border-radius: 10px; padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-card);
+}
+.sf-sec-title {
+  font: 700 12px/1 var(--sans); letter-spacing: 0.03em;
+  text-transform: uppercase; margin-bottom: 8px; color: var(--ink);
+}
+.sf-sec-body {
+  font-size: 14px; line-height: 1.75; color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+/* Style variants */
+.sf-section.sf-comment  { background: #f5f3ff; border-color: #ddd6fe; }
+.sf-section.sf-comment .sf-sec-title  { color: #5b21b6; }
+
+.sf-section.sf-blue     { background: #f0f9ff; border-color: #bae6fd; }
+.sf-section.sf-blue .sf-sec-title     { color: #0369a1; }
+
+.sf-section.sf-purple   { background: #fdf4ff; border-color: #e9d5ff; }
+.sf-section.sf-purple .sf-sec-title   { color: #7e22ce; }
+
+.sf-section.sf-orange   { background: #fffbeb; border-color: #fde68a; }
+.sf-section.sf-orange .sf-sec-title   { color: #92400e; }
+
+.sf-section.sf-green    { background: #f0fdf4; border-color: #bbf7d0; }
+.sf-section.sf-green .sf-sec-title    { color: #15803d; }
