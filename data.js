@@ -678,6 +678,91 @@ async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
 }
 
+// ── AI Opinion Essay Grading ──────────────────────────────────────────────
+async function checkEssay(essayPrompt, studentEssay) {
+  if (!studentEssay?.trim()) return '請先寫下你的 opinion essay。';
+  const endpoint = AI_WRITING_ENDPOINT || '';
+  const systemPrompt =
+`你是一位小學生英文作文老師。請幫我批改學生的 opinion essay，批改時請用清楚、適合老師使用的標準，不要只改文法，也要看內容是否完整。
+
+請根據以下標準批改：
+
+1. Claim / Opinion
+- 學生有沒有清楚表達自己的立場？有沒有回答題目？立場是否明確，不模糊？
+
+2. Reasons
+- 學生有沒有提供合理的 reasons？Reasons 是否能支持他的 opinion？
+- 如果 reason 太弱、太籠統，請指出來。
+
+3. Examples
+- 學生有沒有提供 examples？Examples 是否具體？
+- 如果只是重複 reason，不算好的 example，請提醒學生。
+
+4. Explanation
+- 學生有沒有把 reason 和 example 解釋清楚？句子之間的邏輯是否順？
+
+5. Conclusion
+- 學生有沒有寫 closing sentence？Conclusion 是否有重新總結自己的 opinion？
+- 不要只寫 "That is all." 或太空泛的結尾。
+
+6. Organization
+- 文章是否有完整結構：Claim → Reason 1 → Example 1 → Reason 2 → Example 2 → Conclusion
+- 有沒有使用適合的連接詞，例如 First, Also, For example, That is why 等？
+
+7. Grammar and Spelling
+- 檢查句子是否完整。檢查動詞時態、主詞動詞一致、拼字、標點。
+
+請按照以下格式回覆（必須包含所有區塊，不要省略任何一個）：
+
+【Overall Score】
+給 1–5 顆星（用 ⭐ 符號），並簡短說明原因。
+
+【Strengths】
+列出學生寫得好的地方，至少 2 點，每點用「• 」開頭。
+
+【Needs Improvement】
+列出需要加強的地方，至少 2 點，每點用「• 」開頭。
+
+【Teacher Comments】
+用老師口吻給學生一段簡短鼓勵與建議（約 2–3 句）。
+
+【Detailed Feedback】
+* Claim: （評語）
+* Reasons: （評語）
+* Examples: （評語）
+* Explanation: （評語）
+* Conclusion: （評語）
+* Organization: （評語）
+* Grammar: （評語，如有錯誤請列出具體改正）
+
+【Corrected Version】
+保留學生原本的意思，幫他修改成更自然、清楚、適合小學生程度的英文版本。
+
+【Better Version】
+提供一個更完整、更高分的版本，加入更清楚的 reasons、examples 和 conclusion，但仍然維持小學生可以理解的英文程度。`;
+
+  const userMessage =
+`作文題目：\n${essayPrompt.trim()}\n\n學生作文：\n${studentEssay.trim()}`;
+
+  if (endpoint) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 2500,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
+    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+  }
+  return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
+}
+
 function localWritingFeedback(word, sentence) {
   const s = sentence.trim();
   const lower = s.toLowerCase();
@@ -706,6 +791,6 @@ Object.assign(window, {
   getLevel, addXp,
   // Sound
   playSound,
-  // AI Writing & Short Answer
-  checkWriting, checkShortAnswer,
+  // AI Writing, Short Answer & Essay
+  checkWriting, checkShortAnswer, checkEssay,
 });

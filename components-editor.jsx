@@ -14,6 +14,7 @@ const TYPE_OPTIONS = [
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
+  { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -164,6 +165,13 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               onChangeCategories={cats => update("sortCategories", cats)}
               onChangeWords={ws => update("sortWords", ws)}
               onChangeSuffixMode={v => update("sortSuffixMode", v)}
+            />
+          ) : form.type === "essay" ? (
+            <EssayEditor
+              prompt={form.essayPrompt || ''}
+              scaffold={form.essayScaffold || ''}
+              onChangePrompt={v => update("essayPrompt", v)}
+              onChangeScaffold={v => update("essayScaffold", v)}
             />
           ) : form.type === "note" ? (
             <div className="field">
@@ -1364,6 +1372,53 @@ function WordSortEditor({ categories, words, suffixMode, onChangeCategories, onC
         <div className="field-help">
           預覽：學生將看到所有單字打亂後，逐一點選分到正確欄位。
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── EssayEditor ── */
+function EssayEditor({ prompt, scaffold, onChangePrompt, onChangeScaffold }) {
+  return (
+    <div>
+      {/* Essay prompt */}
+      <div className="field">
+        <label className="field-label">✍ 作文題目 Essay Prompt</label>
+        <textarea
+          value={prompt}
+          onChange={e => onChangePrompt(e.target.value)}
+          placeholder="例：Do you think students should have less homework? Give your opinion with reasons and examples."
+          rows={4}
+          style={{width:'100%',fontFamily:'var(--sans)',fontSize:14,padding:'10px 12px',
+            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
+            borderRadius:2,resize:'vertical',lineHeight:1.7,boxSizing:'border-box'}}
+        />
+        <div className="field-help">學生作答時會看到這個題目。請用完整英文句子描述題目。</div>
+      </div>
+
+      {/* Scaffold / hint */}
+      <div className="field">
+        <label className="field-label">📋 寫作架構提示 Scaffold（選填）</label>
+        <textarea
+          value={scaffold}
+          onChange={e => onChangeScaffold(e.target.value)}
+          placeholder={`例：\nClaim → Reason 1 → Example 1 → Reason 2 → Example 2 → Conclusion\n\nUseful words: First, Also, For example, That is why, In conclusion`}
+          rows={5}
+          style={{width:'100%',fontFamily:'var(--mono)',fontSize:13,padding:'10px 12px',
+            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
+            borderRadius:2,resize:'vertical',lineHeight:1.7,boxSizing:'border-box'}}
+        />
+        <div className="field-help">
+          選填。學生作答頁面會顯示這段架構提示，幫助他們組織文章。
+          可以列出結構、有用的連接詞或評分標準。
+        </div>
+      </div>
+
+      <div style={{padding:'12px 16px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,fontSize:13,color:'#166534',lineHeight:1.7}}>
+        <strong>AI 批改標準（自動套用）：</strong><br/>
+        Claim · Reasons · Examples · Explanation · Conclusion · Organization · Grammar<br/>
+        AI 會給出 Overall Score ⭐⭐⭐⭐⭐、Strengths、Needs Improvement、Teacher Comments、
+        Detailed Feedback、Corrected Version、Better Version。
       </div>
     </div>
   );

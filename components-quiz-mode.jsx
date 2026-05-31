@@ -106,7 +106,8 @@ function getQuizItems(items) {
     (item.type === 'type-answer'      && (item.pairs || []).length >= 1) ||
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
-    (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2)
+    (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
+    (item.type === 'essay'            && !!(item.essayPrompt || '').trim())
   );
 }
 
@@ -202,6 +203,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             if (item.type === 'short-answer') return (item.saQuestions || []).length;
             if (item.type === 'syllable-div') return (item.sdWords || []).length;
             if (item.type === 'word-sort')    return (item.sortWords || []).length;
+            if (item.type === 'essay')        return 1; // one essay = 1 task
             if (item.type === 'writing-practice') return 1; // counts as 1 unit
             return getItemQuestions(item).length;
           };
@@ -329,7 +331,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isShortAnswer  = item.type === 'short-answer';
             const isSyllableDiv  = item.type === 'syllable-div';
             const isWordSort     = item.type === 'word-sort';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort;
+            const isEssay        = item.type === 'essay';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -353,7 +356,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : `${totalQ} questions`}
+                        {isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -484,6 +487,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'word-sort' && phase === 'intro' ? (
           <WordSortIntro
+            item={selectedItem}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'essay' && phase === 'quiz' ? (
+          <EssayPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'essay' && phase === 'intro' ? (
+          <EssayIntro
             item={selectedItem}
             onStart={() => setPhase('quiz')}
           />
@@ -1888,4 +1903,204 @@ function WordSortPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer });
+/* ══════════════════════════════════════════════════════
+   OPINION ESSAY — INTRO
+══════════════════════════════════════════════════════ */
+function EssayIntro({ item, onStart }) {
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">✍</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">Opinion Essay · AI 7-criteria grading</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>📋</span><span>閱讀題目，想好你的立場（Claim）</span></div>
+        <div className="qm-intro-rule-row"><span>💡</span><span>寫出 2 個 Reasons，每個 Reason 搭配 Example</span></div>
+        <div className="qm-intro-rule-row"><span>🔚</span><span>最後寫 Conclusion，總結你的 Opinion</span></div>
+        <div className="qm-intro-rule-row"><span>🤖</span><span>AI 批改 7 項：Claim · Reasons · Examples · Explanation · Conclusion · Organization · Grammar</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始寫作 · Start Writing →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Parse 【Section】 blocks from AI response ── */
+function parseEssaySections(text) {
+  const sections = {};
+  const regex = /【([^】]+)】([\s\S]*?)(?=【|$)/g;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    sections[m[1].trim()] = m[2].trim();
+  }
+  return sections;
+}
+
+/* ── Count stars in AI overall score text ── */
+function countStars(text) {
+  const filled = (text.match(/[⭐★]/g) || []).length;
+  return Math.min(5, Math.max(1, filled));
+}
+
+/* ══════════════════════════════════════════════════════
+   OPINION ESSAY — PLAYER
+══════════════════════════════════════════════════════ */
+function EssayPlayer({ item, progressKey, onBack }) {
+  const [essay,     setEssay]     = useQM('');
+  const [feedback,  setFeedback]  = useQM('');
+  const [checking,  setChecking]  = useQM(false);
+  const [submitted, setSubmitted] = useQM(false);
+  const [activeTab, setActiveTab] = useQM('strengths'); // for detailed feedback tabs
+
+  const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
+  const prompt    = item.essayPrompt  || '';
+  const scaffold  = item.essayScaffold || '';
+
+  const submit = async () => {
+    if (!essay.trim() || checking) return;
+    setChecking(true);
+    const result = await window.checkEssay(prompt, essay);
+    setFeedback(result);
+    setChecking(false);
+    setSubmitted(true);
+    // Save progress
+    const prev = loadQMProg();
+    prev[progressKey] = { done: 1, score: null, ts: Date.now() };
+    saveQMProg(prev);
+  };
+
+  const sections = submitted ? parseEssaySections(feedback) : {};
+  const overallText = sections['Overall Score'] || '';
+  const starCount   = submitted ? countStars(overallText) : 0;
+  const detailText  = sections['Detailed Feedback'] || '';
+
+  // Parse Detailed Feedback sub-items
+  const detailItems = ['Claim','Reasons','Examples','Explanation','Conclusion','Organization','Grammar'];
+  const parsedDetail = {};
+  detailItems.forEach(key => {
+    const m = detailText.match(new RegExp(`\\*?\\s*${key}:\\s*([^\\n*]+(?:\\n(?![\\*\\-•])[^\\n]+)*)`, 'i'));
+    parsedDetail[key] = m ? m[1].trim() : '';
+  });
+
+  return (
+    <div className="essay-player">
+      {/* Prompt */}
+      <div className="essay-prompt-card">
+        <div className="essay-prompt-label">✍ Essay Prompt</div>
+        <div className="essay-prompt-text">{prompt}</div>
+        {scaffold && (
+          <div className="essay-scaffold">
+            <div className="essay-scaffold-label">📋 Writing Guide</div>
+            <pre className="essay-scaffold-body">{scaffold}</pre>
+          </div>
+        )}
+      </div>
+
+      {/* Writing area (hide after submit) */}
+      {!submitted && (
+        <>
+          <textarea
+            className="essay-input"
+            value={essay}
+            onChange={e => setEssay(e.target.value)}
+            placeholder="Start writing your opinion essay here…&#10;&#10;Begin with your Claim (立場), then give Reasons with Examples, and finish with a Conclusion."
+            rows={12}
+            disabled={checking}
+          />
+          <div className="essay-meta-row">
+            <span className="essay-word-count">{wordCount} words</span>
+            <button
+              className="qm-btn primary"
+              onClick={submit}
+              disabled={wordCount < 10 || checking}
+              style={{opacity: wordCount < 10 ? 0.45 : 1}}
+            >
+              {checking ? '🤖 AI 批改中…' : '送出批改 →'}
+            </button>
+          </div>
+          {checking && <div className="essay-checking-bar"><div className="essay-checking-fill"/></div>}
+        </>
+      )}
+
+      {/* Feedback */}
+      {submitted && feedback && (
+        <div className="essay-feedback">
+          {/* Overall score */}
+          <div className="essay-score-card">
+            <div className="essay-stars">
+              {[1,2,3,4,5].map(i => (
+                <span key={i} className={`essay-star ${i <= starCount ? 'filled' : 'empty'}`}>
+                  {i <= starCount ? '⭐' : '☆'}
+                </span>
+              ))}
+            </div>
+            <div className="essay-score-text">
+              {overallText.replace(/[⭐★☆✩]+/g, '').trim()}
+            </div>
+          </div>
+
+          {/* Strengths + Needs Improvement side by side */}
+          <div className="essay-two-col">
+            <div className="essay-col-card strengths">
+              <div className="essay-col-title">✅ Strengths</div>
+              <div className="essay-col-body">{sections['Strengths'] || '—'}</div>
+            </div>
+            <div className="essay-col-card improve">
+              <div className="essay-col-title">🔸 Needs Improvement</div>
+              <div className="essay-col-body">{sections['Needs Improvement'] || '—'}</div>
+            </div>
+          </div>
+
+          {/* Teacher comments */}
+          {sections['Teacher Comments'] && (
+            <div className="essay-teacher-comment">
+              <span className="essay-teacher-icon">💬</span>
+              <div>{sections['Teacher Comments']}</div>
+            </div>
+          )}
+
+          {/* Detailed Feedback tabs */}
+          <div className="essay-detail-section">
+            <div className="essay-detail-title">📋 Detailed Feedback</div>
+            <div className="essay-detail-tabs">
+              {detailItems.map(key => (
+                <button
+                  key={key}
+                  className={`essay-detail-tab${activeTab === key ? ' active' : ''}`}
+                  onClick={() => setActiveTab(key)}
+                >{key}</button>
+              ))}
+            </div>
+            <div className="essay-detail-body">
+              {parsedDetail[activeTab] || detailText}
+            </div>
+          </div>
+
+          {/* Corrected + Better versions */}
+          {sections['Corrected Version'] && (
+            <div className="essay-version corrected">
+              <div className="essay-version-title">📝 Corrected Version</div>
+              <div className="essay-version-body">{sections['Corrected Version']}</div>
+            </div>
+          )}
+          {sections['Better Version'] && (
+            <div className="essay-version better">
+              <div className="essay-version-title">🌟 Better Version</div>
+              <div className="essay-version-body">{sections['Better Version']}</div>
+            </div>
+          )}
+
+          {/* Retry / Back */}
+          <div className="essay-result-btns">
+            <button className="qm-btn secondary" onClick={() => { setSubmitted(false); setFeedback(''); setEssay(''); }}>
+              重新寫一次
+            </button>
+            <button className="qm-btn primary" onClick={onBack}>← Back</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer });
