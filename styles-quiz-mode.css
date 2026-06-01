@@ -1663,9 +1663,16 @@
 /* ══════════════════════════════════════════════════════
    STORY MOUNTAIN PLAYER
 ══════════════════════════════════════════════════════ */
-.sm-svg { width:100%; max-width:500px; display:block; margin:0 auto 8px; }
+.sm-svg {
+  width: 100%;
+  max-width: 700px;
+  display: block;
+  margin: 0 auto 4px;
+  /* add a little top padding so SVG text at y=23 isn't clipped */
+  overflow: visible;
+}
 
-.sm-player { display:flex; flex-direction:column; gap:16px; max-width:680px; margin:0 auto; padding-bottom:32px; }
+.sm-player { display:flex; flex-direction:column; gap:16px; max-width:720px; margin:0 auto; padding-bottom:32px; }
 
 /* Prompt card */
 .sm-prompt-card {

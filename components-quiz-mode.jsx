@@ -2105,48 +2105,95 @@ function EssayPlayer({ item, progressKey, onBack }) {
    STORY MOUNTAIN — constants
 ══════════════════════════════════════════════════════ */
 const SM_STAGES = [
-  { key:'intro',      label:'Introduction',   emoji:'🏠', cx:50,  cy:160 },
-  { key:'rising',     label:'Rising Action',  emoji:'📈', cx:135, cy:100 },
-  { key:'climax',     label:'Climax',         emoji:'⭐', cx:220, cy:25  },
-  { key:'falling',    label:'Falling Action', emoji:'📉', cx:305, cy:100 },
-  { key:'resolution', label:'Resolution',     emoji:'🏁', cx:390, cy:160 },
+  { key:'intro',      label:'Introduction',   short:'Intro',   num:'1', cx:70,  cy:215 },
+  { key:'rising',     label:'Rising Action',  short:'Rising',  num:'2', cx:175, cy:138 },
+  { key:'climax',     label:'Climax',         short:'Climax',  num:'3', cx:280, cy:55  },
+  { key:'falling',    label:'Falling Action', short:'Falling', num:'4', cx:385, cy:138 },
+  { key:'resolution', label:'Resolution',     short:'End',     num:'5', cx:490, cy:215 },
+];
+
+/* Bezier segments between consecutive stages */
+const SM_SEGMENTS = [
+  'M 70,215 C 100,210 145,143 175,138',
+  'M 175,138 C 205,133 250,60 280,55',
+  'M 280,55 C 310,50 355,133 385,138',
+  'M 385,138 C 415,143 460,210 490,215',
 ];
 
 /* ── SVG Mountain Diagram ── */
 function StoryMountainSVG({ activeKey, doneKeys }) {
-  const pts = SM_STAGES.map(s => `${s.cx},${s.cy}`).join(' ');
+  const allReached = [...doneKeys, activeKey];
+  const fullPath = 'M 70,215 C 100,210 145,143 175,138 C 205,133 250,60 280,55 C 310,50 355,133 385,138 C 415,143 460,210 490,215';
+  const fillPath = fullPath + ' L 490,240 L 70,240 Z';
+
   return (
-    <svg viewBox="0 0 440 200" className="sm-svg">
-      {/* base line */}
-      <line x1="20" y1="175" x2="420" y2="175" stroke="#e5e2dc" strokeWidth="1.5"/>
-      {/* mountain path */}
-      <polyline points={pts} fill="none" stroke="#d4cfc9" strokeWidth="3" strokeLinejoin="round"/>
-      {/* highlight done path */}
-      {SM_STAGES.map((s, i) => {
-        if (i === 0) return null;
-        const prev = SM_STAGES[i-1];
-        const prevDone = doneKeys.includes(prev.key);
-        const currActive = activeKey === s.key || doneKeys.includes(s.key);
-        if (!prevDone || !currActive) return null;
-        return <line key={s.key+'-hl'} x1={prev.cx} y1={prev.cy} x2={s.cx} y2={s.cy}
-          stroke="var(--accent,#8b3120)" strokeWidth="3" strokeLinejoin="round"/>;
+    <svg viewBox="0 0 560 275" className="sm-svg">
+      <defs>
+        <linearGradient id="sm-mtn-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#8b3120" stopOpacity="0.09"/>
+          <stop offset="100%" stopColor="#8b3120" stopOpacity="0.02"/>
+        </linearGradient>
+        <filter id="sm-glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      {/* Mountain fill */}
+      <path d={fillPath} fill="url(#sm-mtn-grad)"/>
+
+      {/* Base line */}
+      <line x1="30" y1="238" x2="530" y2="238" stroke="#e2ddd9" strokeWidth="1.5" strokeDasharray="4 4"/>
+
+      {/* Mountain outline — grey */}
+      <path d={fullPath} fill="none" stroke="#ddd8d2" strokeWidth="4" strokeLinecap="round"/>
+
+      {/* Highlighted segments (completed path) */}
+      {SM_SEGMENTS.map((d, i) => {
+        const from = SM_STAGES[i];
+        const to   = SM_STAGES[i+1];
+        if (!from || !to) return null;
+        const fromOk = allReached.includes(from.key);
+        const toOk   = allReached.includes(to.key);
+        if (!fromOk || !toOk) return null;
+        return <path key={i} d={d} fill="none" stroke="var(--accent,#8b3120)"
+          strokeWidth="4" strokeLinecap="round" opacity="0.85"/>;
       })}
-      {/* nodes */}
+
+      {/* Stage nodes */}
       {SM_STAGES.map(s => {
-        const done    = doneKeys.includes(s.key);
-        const active  = activeKey === s.key;
-        const fill    = done ? '#16a34a' : active ? 'var(--accent,#8b3120)' : '#c9c4be';
-        const labelY  = s.cy < 80 ? s.cy - 22 : s.cy + 28;
+        const done   = doneKeys.includes(s.key);
+        const active = activeKey === s.key;
+        const fill   = done ? '#16a34a' : active ? 'var(--accent,#8b3120)' : '#ccc8c2';
+        const textFill = done ? '#166534' : active ? 'var(--accent,#8b3120)' : '#999';
+        const above  = s.cy < 140; // Climax label goes above
+        const labelY = above ? s.cy - 32 : s.cy + 36;
+
         return (
           <g key={s.key}>
-            <circle cx={s.cx} cy={s.cy} r="18" fill={fill} stroke="#fff" strokeWidth="2.5"/>
-            <text x={s.cx} y={s.cy+5} textAnchor="middle" fontSize="14" fill="#fff">
-              {done ? '✓' : s.emoji}
+            {/* glow ring on active */}
+            {active && <circle cx={s.cx} cy={s.cy} r="30" fill="var(--accent,#8b3120)" opacity="0.15"/>}
+            {/* node shadow */}
+            <circle cx={s.cx} cy={s.cy+3} r="22" fill="#000" opacity="0.08"/>
+            {/* node */}
+            <circle cx={s.cx} cy={s.cy} r="22" fill={fill} stroke="#fff" strokeWidth="3"
+              filter={active ? 'url(#sm-glow)' : undefined}/>
+            {/* number or check */}
+            <text x={s.cx} y={s.cy+6} textAnchor="middle" fontSize="15"
+              fontWeight="700" fill="#fff" fontFamily="system-ui,sans-serif">
+              {done ? '✓' : s.num}
             </text>
-            <text x={s.cx} y={labelY} textAnchor="middle" fontSize="11"
-              fill={active ? 'var(--accent,#8b3120)' : done ? '#166534' : '#888'} fontWeight={active ? '700' : '500'}>
+            {/* stage label */}
+            <text x={s.cx} y={labelY} textAnchor="middle" fontSize="13"
+              fontWeight={active ? '700' : '500'} fill={textFill} fontFamily="system-ui,sans-serif">
               {s.label}
             </text>
+            {/* short sub-label for bottom nodes */}
+            {!above && (
+              <text x={s.cx} y={labelY+16} textAnchor="middle" fontSize="11"
+                fill="#bbb" fontFamily="system-ui,sans-serif">
+              </text>
+            )}
           </g>
         );
       })}
