@@ -934,7 +934,7 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
               <input
                 value={p.explain || ''}
                 onChange={e => updPair(p.id, 'explain', e.target.value)}
-                placeholder='"The dog" is singular → runs"
+                placeholder="e.g. singular subject → verb+s"
                 style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink-soft)',borderRadius:2,fontSize:12,fontStyle:'italic'}}
               />
               <button
