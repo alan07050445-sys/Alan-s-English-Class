@@ -840,7 +840,7 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
   const [importText, setImportText] = useS('');
   const [importErr,  setImportErr]  = useS('');
 
-  const addPair  = () => onChangePairs([...pairs, { id: Date.now().toString(), prompt: '', answer: '' }]);
+  const addPair  = () => onChangePairs([...pairs, { id: Date.now().toString(), prompt: '', answer: '', explain: '' }]);
   const delPair  = (id) => onChangePairs(pairs.filter(p => p.id !== id));
   const updPair  = (id, field, val) => onChangePairs(pairs.map(p => p.id === id ? {...p, [field]: val} : p));
 
@@ -853,7 +853,7 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
       const sep = line.includes('\t') ? '\t' : ',';
       const cols = line.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
       if (cols.length < 2 || !cols[0] || !cols[1]) { bad.push(i + 1); return; }
-      parsed.push({ id: Date.now().toString() + i, prompt: cols[0], answer: cols[1] });
+      parsed.push({ id: Date.now().toString() + i, prompt: cols[0], answer: cols[1], explain: cols[2] || '' });
     });
     if (parsed.length === 0) { setImportErr('沒有可匯入的資料，請確認格式（每行：題目 TAB 答案）'); return; }
     onChangePairs([...pairs, ...parsed]);
@@ -891,12 +891,12 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
           <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-cream,#f7f3eb)'}}>
             <div style={{fontSize:12,fontFamily:'var(--mono)',color:'var(--ink-3)',marginBottom:8}}>
               從 Excel / Google Sheets 複製，貼上後按「匯入」。<br/>
-              格式：<strong>第一欄 = Prompt（題目）</strong>，<strong>第二欄 = Answer（答案）</strong>，Tab 或逗號分隔皆可。
+              格式：<strong>第一欄 = Prompt</strong>，<strong>第二欄 = Answer</strong>，<strong>第三欄 = Explain（選填）</strong>，Tab 分隔。
             </div>
             <textarea
               value={importText}
               onChange={e => { setImportText(e.target.value); setImportErr(''); }}
-              placeholder={'go\twent\nrun\tran\nsee\tsaw\nbuy\tbought'}
+              placeholder={'go\twent\nThe dog ____ fast. (run)\truns\t"The dog" is singular → runs'}
               rows={6}
               style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box'}}
             />
@@ -912,23 +912,30 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
           </div>
         )}
 
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 1.2fr auto',gap:'6px 8px',alignItems:'center',marginBottom:8}}>
           <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Prompt（題目）</div>
           <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Answer（答案）</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)',paddingLeft:2}}>Explain（詳解，選填）</div>
           <div/>
           {pairs.map(p => (
             <React.Fragment key={p.id}>
               <input
                 value={p.prompt}
                 onChange={e => updPair(p.id, 'prompt', e.target.value)}
-                placeholder="go"
-                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+                placeholder="The dog ____ fast. (run)"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13}}
               />
               <input
                 value={p.answer}
                 onChange={e => updPair(p.id, 'answer', e.target.value)}
-                placeholder="went"
-                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:14}}
+                placeholder="runs"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13}}
+              />
+              <input
+                value={p.explain || ''}
+                onChange={e => updPair(p.id, 'explain', e.target.value)}
+                placeholder='"The dog" is singular → runs"
+                style={{padding:'7px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink-soft)',borderRadius:2,fontSize:12,fontStyle:'italic'}}
               />
               <button
                 onClick={() => delPair(p.id)}
@@ -941,7 +948,7 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
         <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}} onClick={addPair}>
           ＋ Add pair
         </button>
-        <div className="field-help">每行一題：左欄是學生看到的提示，右欄是正確答案（批改時不分大小寫）。</div>
+        <div className="field-help">Explain 欄（選填）：答題後顯示給學生，說明語法規則或答題邏輯。</div>
       </div>
     </div>
   );

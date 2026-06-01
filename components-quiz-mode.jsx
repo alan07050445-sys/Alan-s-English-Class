@@ -801,6 +801,12 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
             <div className={`qm-feedback-banner ${result}`}>
               {result === 'correct' ? '✓ Correct! 答對了！' : `✗ The answer is: ${current.answer}`}
             </div>
+            {current.explain && (
+              <div className="ta-explain">
+                <span className="ta-explain-icon">💡</span>
+                <span>{current.explain}</span>
+              </div>
+            )}
             <button className="qm-btn primary" onClick={next}>
               {idx + 1 >= total ? '查看成績 →' : '下一題 →'}
             </button>
