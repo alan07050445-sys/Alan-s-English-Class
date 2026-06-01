@@ -15,6 +15,7 @@ const TYPE_OPTIONS = [
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
   { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
+  { id: "story-mountain",   label: "Story Mountain",   hint: "🏔 故事山脈 — 逐步填寫 Introduction → Rising Action → Climax → Falling Action → Resolution，AI 批改結構與文法（10 分制）" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -172,6 +173,15 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               scaffold={form.essayScaffold || ''}
               onChangePrompt={v => update("essayPrompt", v)}
               onChangeScaffold={v => update("essayScaffold", v)}
+            />
+          ) : form.type === "story-mountain" ? (
+            <StoryMountainEditor
+              prompt={form.smPrompt || ''}
+              passage={form.smPassage || ''}
+              hints={form.smHints || {}}
+              onChangePrompt={v => update("smPrompt", v)}
+              onChangePassage={v => update("smPassage", v)}
+              onChangeHints={h => update("smHints", h)}
             />
           ) : form.type === "note" ? (
             <div className="field">
@@ -1426,6 +1436,82 @@ function EssayEditor({ prompt, scaffold, onChangePrompt, onChangeScaffold }) {
         Claim · Reasons · Examples · Explanation · Conclusion · Organization · Grammar<br/>
         AI 會給出 Overall Score ⭐⭐⭐⭐⭐、Strengths、Needs Improvement、Teacher Comments、
         Detailed Feedback、Corrected Version、Better Version。
+      </div>
+    </div>
+  );
+}
+
+/* ── StoryMountainEditor ── */
+const SM_STAGE_KEYS = ['intro','rising','climax','falling','resolution'];
+const SM_STAGE_LABELS = { intro:'Introduction', rising:'Rising Action', climax:'Climax', falling:'Falling Action', resolution:'Resolution' };
+const SM_STAGE_EMOJIS = { intro:'🏠', rising:'📈', climax:'⭐', falling:'📉', resolution:'🏁' };
+
+function StoryMountainEditor({ prompt, passage, hints, onChangePrompt, onChangePassage, onChangeHints }) {
+  const updateHint = (key, val) => onChangeHints({ ...hints, [key]: val });
+  return (
+    <div>
+      {/* Writing topic */}
+      <div className="field">
+        <label className="field-label">🏔 寫作題目 Writing Topic</label>
+        <textarea
+          value={prompt}
+          onChange={e => onChangePrompt(e.target.value)}
+          placeholder="例：Write a story about a brave student who faced a big challenge at school."
+          rows={3}
+          style={{width:'100%',fontFamily:'var(--sans)',fontSize:14,padding:'10px 12px',
+            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
+            borderRadius:2,resize:'vertical',lineHeight:1.7,boxSizing:'border-box'}}
+        />
+        <div className="field-help">學生作答時看到的題目。如果是閱讀分析（學生根據文章填寫），可以不填。</div>
+      </div>
+
+      {/* Reference story/passage */}
+      <div className="field">
+        <label className="field-label">📄 參考文章文字稿（選填）</label>
+        <textarea
+          value={passage}
+          onChange={e => onChangePassage(e.target.value)}
+          placeholder="貼上課堂故事或閱讀文章。AI 批改時會用這篇文章判斷學生的 Story Mountain 是否正確..."
+          rows={6}
+          style={{width:'100%',fontFamily:'var(--sans)',fontSize:13,padding:'10px 12px',
+            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
+            borderRadius:2,resize:'vertical',lineHeight:1.7,boxSizing:'border-box'}}
+        />
+        <div className="field-help">
+          ✅ <strong>閱讀分析</strong>：貼上文章，AI 比對學生的 Story Mountain 是否符合原文<br/>
+          ✅ <strong>創意寫作</strong>：不填，AI 直接根據故事本身判斷邏輯
+        </div>
+      </div>
+
+      {/* Per-stage hints */}
+      <div className="field">
+        <label className="field-label">💡 各階段提示（選填）</label>
+        <div className="field-help" style={{marginBottom:10}}>每個階段可設定提示語，引導學生知道要寫什麼。</div>
+        {SM_STAGE_KEYS.map(key => (
+          <div key={key} style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:8}}>
+            <span style={{fontSize:13,fontWeight:700,width:130,flexShrink:0,paddingTop:9,color:'var(--ink)'}}>
+              {SM_STAGE_EMOJIS[key]} {SM_STAGE_LABELS[key]}
+            </span>
+            <input
+              value={hints[key] || ''}
+              onChange={e => updateHint(key, e.target.value)}
+              placeholder={
+                key==='intro' ? 'Who are the main characters? Where does the story happen?' :
+                key==='rising' ? 'What problem or challenge starts to appear?' :
+                key==='climax' ? 'What is the most exciting or most difficult moment?' :
+                key==='falling' ? 'How does the character start to deal with the problem?' :
+                'How does the story end? What did the character learn?'
+              }
+              style={{flex:1,padding:'7px 10px',border:'1px solid var(--border)',
+                background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13}}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div style={{padding:'12px 16px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,fontSize:13,color:'#166534',lineHeight:1.7}}>
+        <strong>AI 批改標準（自動套用）：</strong><br/>
+        Overall Score /10 · 每個階段 /2 · Strengths · Things to Improve · Grammar Corrections · Teacher Comment · Suggested Revised Version
       </div>
     </div>
   );

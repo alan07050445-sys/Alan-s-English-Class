@@ -809,6 +809,101 @@ function localWritingFeedback(word, sentence) {
   return `📝 小提醒：\n${checks.map(x => `• ${x}`).join('\n')}\n\nScore: ${'⭐'.repeat(stars)}\n\n修好後再送一次會更漂亮！`;
 }
 
+// ── AI Story Mountain Grading ─────────────────────────────────────────────
+async function checkStoryMountain(prompt, passage, answers) {
+  const { intro, rising, climax, falling, resolution } = answers || {};
+  if (!intro && !rising && !climax && !falling && !resolution) return '請先完成所有五個部分。';
+  const endpoint = AI_WRITING_ENDPOINT || '';
+
+  const systemPrompt =
+`You are a professional elementary English writing teacher. Please help me grade a student's Story Mountain writing.
+
+The Story Mountain only needs these five parts:
+1. Introduction
+2. Rising Action
+3. Climax
+4. Falling Action
+5. Resolution
+
+Please check both the story structure and the English writing quality. Do not only correct grammar. Also check whether the story is complete, logical, and interesting.
+
+## Grading Standards
+
+### 1. Introduction
+Check if the student clearly introduces: the main character, the setting, the situation, and enough background information for the reader to understand the story.
+
+### 2. Rising Action
+Check if: the story starts to become more interesting, events build up toward the main problem, the events are connected logically, the reader can understand why the problem is getting bigger.
+
+### 3. Climax
+Check if: there is a clear most important or most exciting moment, the main character faces the biggest problem, challenge, or decision, this part feels like the turning point of the story.
+
+### 4. Falling Action
+Check if: the story begins to calm down after the climax, the character starts dealing with the result of the problem, the events after the climax are clear and logical.
+
+### 5. Resolution
+Check if: the story has a clear ending, the problem is solved or explained, the ending shows a result, lesson, feeling, or change, the story feels complete.
+
+## Language Check
+Please also check: grammar, verb tense, sentence structure, vocabulary, spelling, punctuation, clarity of ideas.
+
+## Output Format
+
+### Overall Score
+Give a score: __/10
+
+### Story Mountain Checklist
+| Part | Score | Feedback |
+| --- | ---: | --- |
+| Introduction | __/2 | |
+| Rising Action | __/2 | |
+| Climax | __/2 | |
+| Falling Action | __/2 | |
+| Resolution | __/2 | |
+
+### Strengths
+List 2–3 things the student did well.
+
+### Things to Improve
+List 2–3 important things the student should improve. Please make the advice specific and easy for elementary students to understand.
+
+### Grammar & Sentence Corrections
+| Original Sentence | Corrected Sentence | Explanation |
+| --- | --- | --- |
+(The explanation should use simple English with some Chinese support, so the student can understand easily.)
+
+### Teacher Comment
+Write a short encouraging teacher comment, about 3–5 sentences.
+
+### Suggested Revised Version
+Rewrite the student's story into a better version. Requirements: Keep the student's original ideas. Do not make the writing too difficult. Use natural English suitable for upper elementary students. Make the five Story Mountain parts clear. Improve grammar, details, and sentence flow.`;
+
+  const passageSection = passage?.trim()
+    ? `\n\n**Reference Story / Passage:**\n${passage.trim()}\n`
+    : '';
+  const promptSection = prompt?.trim() ? `**Writing Topic:** ${prompt.trim()}\n` : '';
+  const userMessage =
+    `${promptSection}${passageSection}\n**Student writing:**\n\n**Introduction:**\n${intro || '(not written)'}\n\n**Rising Action:**\n${rising || '(not written)'}\n\n**Climax:**\n${climax || '(not written)'}\n\n**Falling Action:**\n${falling || '(not written)'}\n\n**Resolution:**\n${resolution || '(not written)'}`;
+
+  if (endpoint) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 3000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
+    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+  }
+  return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
+}
+
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
@@ -824,6 +919,6 @@ Object.assign(window, {
   getLevel, addXp,
   // Sound
   playSound,
-  // AI Writing, Short Answer & Essay
-  checkWriting, checkShortAnswer, checkEssay,
+  // AI Writing, Short Answer, Essay & Story Mountain
+  checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
 });

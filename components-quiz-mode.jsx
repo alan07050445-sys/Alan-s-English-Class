@@ -107,7 +107,8 @@ function getQuizItems(items) {
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
     (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
-    (item.type === 'essay'            && !!(item.essayPrompt || '').trim())
+    (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
+    (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || ''))
   );
 }
 
@@ -203,7 +204,8 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             if (item.type === 'short-answer') return (item.saQuestions || []).length;
             if (item.type === 'syllable-div') return (item.sdWords || []).length;
             if (item.type === 'word-sort')    return (item.sortWords || []).length;
-            if (item.type === 'essay')        return 1; // one essay = 1 task
+            if (item.type === 'essay')          return 1;
+            if (item.type === 'story-mountain') return 1;
             if (item.type === 'writing-practice') return 1; // counts as 1 unit
             return getItemQuestions(item).length;
           };
@@ -332,7 +334,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isSyllableDiv  = item.type === 'syllable-div';
             const isWordSort     = item.type === 'word-sort';
             const isEssay        = item.type === 'essay';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay;
+            const isStoryMtn     = item.type === 'story-mountain';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -356,7 +359,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : `${totalQ} questions`}
+                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -487,6 +490,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'word-sort' && phase === 'intro' ? (
           <WordSortIntro
+            item={selectedItem}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'story-mountain' && phase === 'quiz' ? (
+          <StoryMountainPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'story-mountain' && phase === 'intro' ? (
+          <StoryMountainIntro
             item={selectedItem}
             onStart={() => setPhase('quiz')}
           />
@@ -2086,4 +2101,301 @@ function EssayPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer });
+/* ══════════════════════════════════════════════════════
+   STORY MOUNTAIN — constants
+══════════════════════════════════════════════════════ */
+const SM_STAGES = [
+  { key:'intro',      label:'Introduction',   emoji:'🏠', cx:50,  cy:160 },
+  { key:'rising',     label:'Rising Action',  emoji:'📈', cx:135, cy:100 },
+  { key:'climax',     label:'Climax',         emoji:'⭐', cx:220, cy:25  },
+  { key:'falling',    label:'Falling Action', emoji:'📉', cx:305, cy:100 },
+  { key:'resolution', label:'Resolution',     emoji:'🏁', cx:390, cy:160 },
+];
+
+/* ── SVG Mountain Diagram ── */
+function StoryMountainSVG({ activeKey, doneKeys }) {
+  const pts = SM_STAGES.map(s => `${s.cx},${s.cy}`).join(' ');
+  return (
+    <svg viewBox="0 0 440 200" className="sm-svg">
+      {/* base line */}
+      <line x1="20" y1="175" x2="420" y2="175" stroke="#e5e2dc" strokeWidth="1.5"/>
+      {/* mountain path */}
+      <polyline points={pts} fill="none" stroke="#d4cfc9" strokeWidth="3" strokeLinejoin="round"/>
+      {/* highlight done path */}
+      {SM_STAGES.map((s, i) => {
+        if (i === 0) return null;
+        const prev = SM_STAGES[i-1];
+        const prevDone = doneKeys.includes(prev.key);
+        const currActive = activeKey === s.key || doneKeys.includes(s.key);
+        if (!prevDone || !currActive) return null;
+        return <line key={s.key+'-hl'} x1={prev.cx} y1={prev.cy} x2={s.cx} y2={s.cy}
+          stroke="var(--accent,#8b3120)" strokeWidth="3" strokeLinejoin="round"/>;
+      })}
+      {/* nodes */}
+      {SM_STAGES.map(s => {
+        const done    = doneKeys.includes(s.key);
+        const active  = activeKey === s.key;
+        const fill    = done ? '#16a34a' : active ? 'var(--accent,#8b3120)' : '#c9c4be';
+        const labelY  = s.cy < 80 ? s.cy - 22 : s.cy + 28;
+        return (
+          <g key={s.key}>
+            <circle cx={s.cx} cy={s.cy} r="18" fill={fill} stroke="#fff" strokeWidth="2.5"/>
+            <text x={s.cx} y={s.cy+5} textAnchor="middle" fontSize="14" fill="#fff">
+              {done ? '✓' : s.emoji}
+            </text>
+            <text x={s.cx} y={labelY} textAnchor="middle" fontSize="11"
+              fill={active ? 'var(--accent,#8b3120)' : done ? '#166534' : '#888'} fontWeight={active ? '700' : '500'}>
+              {s.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ── Parse ### sections from AI response ── */
+function parseHashSections(text) {
+  const sections = {};
+  const regex = /###\s+([^\n]+)\n([\s\S]*?)(?=###\s|\s*$)/g;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    sections[m[1].trim()] = m[2].trim();
+  }
+  return sections;
+}
+
+/* ── Parse markdown table → { headers, rows } ── */
+function parseMdTable(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.startsWith('|'));
+  if (lines.length < 3) return null;
+  const headers = lines[0].split('|').slice(1,-1).map(h => h.trim());
+  const rows    = lines.slice(2).map(l => l.split('|').slice(1,-1).map(c => c.trim()));
+  return { headers, rows };
+}
+
+/* ══════════════════════════════════════════════════════
+   STORY MOUNTAIN — INTRO
+══════════════════════════════════════════════════════ */
+function StoryMountainIntro({ item, onStart }) {
+  return (
+    <div className="qm-intro" style={{maxWidth:560}}>
+      <div className="qm-intro-icon">🏔</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">Story Mountain · 5 stages · AI 10-point grading</div>
+      <StoryMountainSVG activeKey="intro" doneKeys={[]}/>
+      <div className="qm-intro-rules" style={{marginTop:12}}>
+        <div className="qm-intro-rule-row"><span>🏠</span><span><strong>Introduction</strong> — characters, setting, situation</span></div>
+        <div className="qm-intro-rule-row"><span>📈</span><span><strong>Rising Action</strong> — the problem builds up</span></div>
+        <div className="qm-intro-rule-row"><span>⭐</span><span><strong>Climax</strong> — the most exciting moment</span></div>
+        <div className="qm-intro-rule-row"><span>📉</span><span><strong>Falling Action</strong> — things start to calm down</span></div>
+        <div className="qm-intro-rule-row"><span>🏁</span><span><strong>Resolution</strong> — the story ends clearly</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始寫作 · Start Writing →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   STORY MOUNTAIN — PLAYER
+══════════════════════════════════════════════════════ */
+function StoryMountainPlayer({ item, progressKey, onBack }) {
+  const [stageIdx,   setStageIdx]   = useQM(0);
+  const [answers,    setAnswers]    = useQM({ intro:'', rising:'', climax:'', falling:'', resolution:'' });
+  const [screen,     setScreen]     = useQM('write'); // 'write' | 'review' | 'checking' | 'result'
+  const [feedback,   setFeedback]   = useQM('');
+  const [activeTab,  setActiveTab]  = useQM('checklist');
+
+  const current  = SM_STAGES[stageIdx];
+  const hints    = item.smHints || {};
+  const doneKeys = SM_STAGES.slice(0, stageIdx).map(s => s.key);
+  const wordCount = (answers[current?.key] || '').trim().split(/\s+/).filter(Boolean).length;
+
+  const goNext = () => {
+    if (stageIdx < SM_STAGES.length - 1) setStageIdx(i => i + 1);
+    else setScreen('review');
+  };
+  const goPrev = () => {
+    if (stageIdx > 0) setStageIdx(i => i - 1);
+  };
+
+  const submit = async () => {
+    setScreen('checking');
+    const result = await window.checkStoryMountain(item.smPrompt, item.smPassage, answers);
+    setFeedback(result);
+    const prev = loadQMProg();
+    prev[progressKey] = { done: 1, score: null, ts: Date.now() };
+    saveQMProg(prev);
+    setScreen('result');
+  };
+
+  /* ── Checking screen ── */
+  if (screen === 'checking') return (
+    <div className="sm-checking">
+      <div className="sm-checking-icon">🤖</div>
+      <div className="sm-checking-msg">AI 正在批改你的 Story Mountain…</div>
+      <div className="sm-checking-bar"><div className="sm-checking-fill"/></div>
+    </div>
+  );
+
+  /* ── Result screen ── */
+  if (screen === 'result' && feedback) {
+    const secs    = parseHashSections(feedback);
+    const scoreT  = secs['Overall Score'] || '';
+    const scoreM  = scoreT.match(/(\d+)\s*\/\s*10/);
+    const score   = scoreM ? parseInt(scoreM[1]) : null;
+    const checklist = parseMdTable(secs['Story Mountain Checklist'] || '');
+    const grammarT  = parseMdTable(secs['Grammar & Sentence Corrections'] || '');
+
+    return (
+      <div className="sm-result">
+        {/* Score */}
+        <div className="sm-score-card">
+          {score !== null && (
+            <div className="sm-score-num">{score}<span className="sm-score-den">/10</span></div>
+          )}
+          <div className="sm-score-desc">{scoreT.replace(/\d+\s*\/\s*10\s*/,'').trim()}</div>
+        </div>
+
+        {/* Tabs */}
+        <div className="sm-tabs">
+          {[
+            ['checklist','📋 Checklist'],
+            ['strengths','✅ Strengths'],
+            ['improve','🔸 Improve'],
+            ['grammar','✏️ Grammar'],
+            ['comment','💬 Comment'],
+            ['revised','🌟 Revised'],
+          ].map(([k,l]) => (
+            <button key={k} className={`sm-tab${activeTab===k?' active':''}`} onClick={()=>setActiveTab(k)}>{l}</button>
+          ))}
+        </div>
+
+        <div className="sm-tab-body">
+          {activeTab === 'checklist' && checklist && (
+            <div className="sm-checklist">
+              {checklist.rows.map((row, i) => (
+                <div key={i} className="sm-check-row">
+                  <span className="sm-check-emoji">{SM_STAGES[i]?.emoji || '📌'}</span>
+                  <span className="sm-check-part">{row[0]}</span>
+                  <span className="sm-check-score">{row[1]}</span>
+                  <span className="sm-check-feedback">{row[2]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {activeTab === 'strengths' && (
+            <div className="sm-section-body">{secs['Strengths'] || '—'}</div>
+          )}
+          {activeTab === 'improve' && (
+            <div className="sm-section-body">{secs['Things to Improve'] || '—'}</div>
+          )}
+          {activeTab === 'grammar' && (
+            grammarT ? (
+              <div className="sm-grammar-table">
+                {grammarT.rows.map((row, i) => (
+                  <div key={i} className="sm-grammar-row">
+                    <div className="sm-g-orig">✗ {row[0]}</div>
+                    <div className="sm-g-corr">✓ {row[1]}</div>
+                    {row[2] && <div className="sm-g-explain">💡 {row[2]}</div>}
+                  </div>
+                ))}
+              </div>
+            ) : <div className="sm-section-body">{secs['Grammar & Sentence Corrections'] || 'No corrections needed! 🎉'}</div>
+          )}
+          {activeTab === 'comment' && (
+            <div className="sm-teacher-comment">
+              <span className="sm-comment-icon">💬</span>
+              <div>{secs['Teacher Comment'] || '—'}</div>
+            </div>
+          )}
+          {activeTab === 'revised' && (
+            <div className="sm-revised">{secs['Suggested Revised Version'] || '—'}</div>
+          )}
+        </div>
+
+        <div className="sm-result-btns">
+          <button className="qm-btn secondary"
+            onClick={() => { setScreen('write'); setStageIdx(0); setFeedback(''); setAnswers({intro:'',rising:'',climax:'',falling:'',resolution:''}); }}>
+            重新寫一次
+          </button>
+          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Review screen ── */
+  if (screen === 'review') return (
+    <div className="sm-review">
+      <div className="sm-review-title">📋 Review your Story Mountain</div>
+      {SM_STAGES.map(s => (
+        <div key={s.key} className="sm-review-stage">
+          <div className="sm-review-stage-head">{s.emoji} {s.label}</div>
+          <div className="sm-review-stage-body">{answers[s.key] || <em style={{color:'var(--ink-muted)'}}>（未填寫）</em>}</div>
+        </div>
+      ))}
+      <div className="sm-review-btns">
+        <button className="qm-btn secondary" onClick={() => { setStageIdx(SM_STAGES.length-1); setScreen('write'); }}>
+          ← 修改
+        </button>
+        <button className="qm-btn primary" onClick={submit}>
+          🤖 送出 AI 批改 →
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ── Write screen ── */
+  return (
+    <div className="sm-player">
+      {/* Mountain diagram */}
+      <StoryMountainSVG activeKey={current.key} doneKeys={doneKeys}/>
+
+      {/* Writing prompt (if any) */}
+      {item.smPrompt && (
+        <div className="sm-prompt-card">
+          <span className="sm-prompt-label">✍ Topic</span>
+          <span className="sm-prompt-text">{item.smPrompt}</span>
+        </div>
+      )}
+
+      {/* Stage card */}
+      <div className="sm-stage-card">
+        <div className="sm-stage-head">
+          <span className="sm-stage-emoji">{current.emoji}</span>
+          <div>
+            <div className="sm-stage-label">{current.label}</div>
+            <div className="sm-stage-step">Step {stageIdx+1} of {SM_STAGES.length}</div>
+          </div>
+        </div>
+        {hints[current.key] && (
+          <div className="sm-stage-hint">💡 {hints[current.key]}</div>
+        )}
+        <textarea
+          className="sm-textarea"
+          value={answers[current.key]}
+          onChange={e => setAnswers(prev => ({...prev, [current.key]: e.target.value}))}
+          placeholder={`Write your ${current.label} here…`}
+          rows={6}
+          autoFocus
+        />
+        <div className="sm-word-count">{wordCount} words</div>
+      </div>
+
+      {/* Navigation */}
+      <div className="sm-nav">
+        <button className="qm-btn secondary" onClick={goPrev} disabled={stageIdx === 0}>
+          ← Previous
+        </button>
+        <button className="qm-btn primary" onClick={goNext}>
+          {stageIdx < SM_STAGES.length - 1 ? 'Next →' : 'Review & Submit →'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer });
