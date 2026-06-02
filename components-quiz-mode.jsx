@@ -154,140 +154,110 @@ function getQuizItemTotal(item) {
   return getItemQuestions(item).length;
 }
 
-function buildTodayMissionPlan({ week, weekId, categories, qmProg }) {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const todayStart = start.getTime();
-  const entries = [];
-  const flashEntries = [];
+const PATH_STEPS = {
+  vocab: [
+    { label: 'Preview', zh: '預習' },
+    { label: 'Flashcards', zh: '單字卡' },
+    { label: 'Practice', zh: '練習' },
+    { label: 'Review', zh: '錯題' },
+    { label: 'Sentence', zh: '造句' },
+  ],
+  grammar: [
+    { label: 'Rule', zh: '規則' },
+    { label: 'Examples', zh: '例句' },
+    { label: 'Accuracy', zh: '準確度' },
+    { label: 'Fix', zh: '修正' },
+    { label: 'Apply', zh: '應用' },
+  ],
+  word: [
+    { label: 'Notice', zh: '觀察' },
+    { label: 'Sort', zh: '分類' },
+    { label: 'Decode', zh: '拆解' },
+    { label: 'Check', zh: '檢查' },
+    { label: 'Master', zh: '精熟' },
+  ],
+  reading: [
+    { label: 'Read', zh: '閱讀' },
+    { label: 'Key Ideas', zh: '重點' },
+    { label: 'Questions', zh: '理解' },
+    { label: 'Evidence', zh: '證據' },
+    { label: 'Response', zh: '回應' },
+  ],
+};
 
-  (categories || []).forEach(cat => {
-    const catItems = (week.items || {})[cat.id] || [];
-    catItems.forEach(item => {
-      if (item.type === 'flashcard' && (item.cards || []).length > 0) {
-        flashEntries.push({ cat, item, count: (item.cards || []).length });
-      }
-    });
-    getQuizItems(catItems).forEach(item => {
-      const total = getQuizItemTotal(item);
-      if (total <= 0) return;
-      const key = `${weekId}_${item.id}`;
-      const prog = qmProg[key] || null;
-      const isToday = !!(prog?.ts && prog.ts >= todayStart);
-      entries.push({
-        cat, item, total, prog, isToday,
-        done: !!prog,
-        perfect: !!prog && Number(prog.score || 0) >= Number(prog.total || total),
-        scorePct: prog?.total ? Math.round((prog.score || 0) / prog.total * 100) : null,
-      });
-    });
-  });
-
-  const todayDone = entries.filter(e => e.isToday);
-  const todayPerfect = todayDone.some(e => e.perfect);
-  const incomplete = entries.find(e => !e.done) || entries[0] || null;
-  const imperfect = entries.find(e => e.done && !e.perfect) || null;
-  const writing = entries.find(e => ['writing-practice', 'short-answer', 'essay', 'story-mountain'].includes(e.item.type) && !e.done)
-    || entries.find(e => ['writing-practice', 'short-answer', 'essay', 'story-mountain'].includes(e.item.type));
-  const flash = flashEntries[0] || null;
-
-  const tasks = [
-    {
-      id: 'start',
-      icon: '▶',
-      title: '開始今天的練習',
-      sub: todayDone.length > 0 ? `今天已完成 ${todayDone.length} 個練習` : '先完成 1 個小練習，建立節奏',
-      done: todayDone.length >= 1,
-      target: incomplete,
-      cta: todayDone.length >= 1 ? '已完成' : '開始',
-    },
-    imperfect ? {
-      id: 'review',
-      icon: '↻',
-      title: '補強一個低分單元',
-      sub: `${imperfect.item.title} · ${imperfect.scorePct}%`,
-      done: false,
-      target: imperfect,
-      cta: '複習',
-    } : {
-      id: 'perfect',
-      icon: '★',
-      title: '挑戰一次滿分',
-      sub: todayPerfect ? '今天已經拿到滿分，漂亮！' : '選一個單元挑戰 Perfect',
-      done: todayPerfect,
-      target: incomplete,
-      cta: todayPerfect ? '已完成' : '挑戰',
-    },
-    {
-      id: 'output',
-      icon: '✎',
-      title: writing ? '完成一個輸出練習' : '複習單字卡',
-      sub: writing
-        ? '寫作或短答能讓家長看見學習成果'
-        : (flash ? `${flash.item.title} · ${Math.min(flash.count, 10)} 張快速複習` : '再做一個單元，讓記憶更穩'),
-      done: writing ? !!writing.done : todayDone.length >= 2,
-      target: writing || (flash ? { cat: flash.cat, item: flash.item } : incomplete),
-      cta: writing?.done ? '已完成' : '前往',
-    },
-  ];
-
-  const allDone = tasks.every(t => t.done);
-  const bonusTarget = entries.find(e => !e.done && e !== incomplete) || incomplete || entries[0] || null;
-  const bonus = {
-    title: allDone ? 'Bonus Challenge unlocked' : 'Bonus Challenge',
-    sub: allDone
-      ? '再完成 1 個單元，拿加分挑戰'
-      : '完成今日任務後，挑戰更多 XP',
-    target: bonusTarget,
-    locked: !allDone,
-  };
-  return { tasks, bonus, doneCount: tasks.filter(t => t.done).length, allDone };
+function getPathSteps(catId) {
+  return PATH_STEPS[catId] || PATH_STEPS.vocab;
 }
 
-function TodayMissionPanel({ week, weekId, categories, qmProg, onEnterCat }) {
-  const plan = buildTodayMissionPlan({ week, weekId, categories, qmProg });
-  const go = (target) => {
-    if (!target?.cat) return;
-    onEnterCat(target.cat);
-  };
+function buildWeeklyLearningPath({ week, weekId, categories, qmProg }) {
+  return (categories || []).map(cat => {
+    const allCatItems = (week.items || {})[cat.id] || [];
+    const quizItems = getQuizItems(allCatItems);
+    const steps = getPathSteps(cat.id);
+    const totalUnits = quizItems.length;
+    const doneUnits = quizItems.filter(item => qmProg[`${weekId}_${item.id}`]).length;
+    const pct = totalUnits > 0 ? Math.min(100, Math.round(doneUnits / totalUnits * 100)) : 0;
+    const completedSteps = pct >= 100
+      ? steps.length
+      : Math.min(steps.length - 1, Math.max(0, Math.floor((pct / 100) * steps.length)));
+    const nextStep = pct >= 100 ? null : steps[completedSteps];
+    return { cat, steps, totalUnits, doneUnits, pct, completedSteps, nextStep };
+  });
+}
+
+function WeeklyLearningPathPanel({ week, weekId, categories, qmProg, onEnterCat }) {
+  const paths = buildWeeklyLearningPath({ week, weekId, categories, qmProg });
   return (
-    <section className="qm-mission">
-      <div className="qm-mission-head">
+    <section className="qm-path">
+      <div className="qm-path-head">
         <div>
-          <div className="qm-mission-kicker mono">Today's path · 今日任務</div>
-          <h2 className="qm-mission-title">先完成基本任務，再挑戰加分</h2>
-        </div>
-        <div className="qm-mission-ring" aria-label={`${plan.doneCount} of 3 tasks done`}>
-          <span>{plan.doneCount}</span><small>/3</small>
+          <div className="qm-path-kicker mono">This week's learning path · 本週學習路線</div>
+          <h2 className="qm-path-title">照著路線走完，不只是完成任務</h2>
+          <p className="qm-path-sub">每一類能力都有自己的節奏：理解、練習、修正、應用。</p>
         </div>
       </div>
-      <div className="qm-mission-body">
-        <div className="qm-mission-list">
-          {plan.tasks.map(task => (
+      <div className="qm-path-grid">
+        {paths.map(path => {
+          const isEmpty = path.totalUnits === 0;
+          return (
             <button
-              key={task.id}
-              className={`qm-mission-task${task.done ? ' done' : ''}`}
-              onClick={() => !task.done && go(task.target)}
-              disabled={task.done || !task.target}
+              key={path.cat.id}
+              className={`qm-path-card${isEmpty ? ' empty' : ''}`}
+              onClick={() => !isEmpty && onEnterCat(path.cat)}
+              disabled={isEmpty}
             >
-              <span className="qm-mission-icon">{task.done ? '✓' : task.icon}</span>
-              <span className="qm-mission-copy">
-                <strong>{task.title}</strong>
-                <small>{task.sub}</small>
-              </span>
-              <span className="qm-mission-cta">{task.cta}</span>
+              <div className="qm-path-card-top">
+                <span className="qm-path-icon" style={{ background: CAT_BG[path.cat.id] }}>
+                  {CAT_ICONS[path.cat.id]}
+                </span>
+                <span className="qm-path-name-wrap">
+                  <strong className="qm-path-name">{path.cat.name}</strong>
+                  <small className="qm-path-zh mono">{path.cat.zh}</small>
+                </span>
+                <span className="qm-path-percent mono">{path.pct}%</span>
+              </div>
+              <div className="qm-path-nodes" aria-label={`${path.cat.name} learning path`}>
+                {path.steps.map((step, idx) => {
+                  const state = idx < path.completedSteps
+                    ? 'done'
+                    : (idx === path.completedSteps && path.pct < 100 ? 'active' : 'future');
+                  return (
+                    <span key={step.label} className={`qm-path-node ${state}`}>
+                      <span className="qm-path-dot">{state === 'done' ? '✓' : idx + 1}</span>
+                      <span className="qm-path-node-label">{step.label}<small>{step.zh}</small></span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="qm-path-foot">
+                <span>{isEmpty ? 'No units yet' : `${path.doneUnits}/${path.totalUnits} units`}</span>
+                <span className="qm-path-next">
+                  {isEmpty ? 'Preparing' : (path.nextStep ? `Next: ${path.nextStep.label}` : 'Complete')}
+                </span>
+              </div>
             </button>
-          ))}
-        </div>
-        <button
-          className={`qm-bonus${plan.bonus.locked ? ' locked' : ''}`}
-          onClick={() => !plan.bonus.locked && go(plan.bonus.target)}
-          disabled={plan.bonus.locked || !plan.bonus.target}
-        >
-          <span className="qm-bonus-label mono">{plan.bonus.locked ? 'Locked' : '+20 XP'}</span>
-          <strong>{plan.bonus.title}</strong>
-          <small>{plan.bonus.sub}</small>
-        </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -346,7 +316,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
       </div>
 
       {!editMode && (
-        <TodayMissionPanel
+        <WeeklyLearningPathPanel
           week={week}
           weekId={weekId}
           categories={activeCats}
