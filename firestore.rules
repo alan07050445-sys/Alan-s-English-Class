@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 課程資料（G3 / G5）─────────────────────────────────
+    // 所有人可讀（學生不需登入也能看）
+    // 只有老師可以寫
+    match /class/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email == 'alan07050445@gmail.com';
+    }
+
+    // ── 課程資料（G2）──────────────────────────────────────
+    match /class-g2/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email == 'alan07050445@gmail.com';
+    }
+
+    // ── 學生個人進度（progress 集合）───────────────────────
+    // 學生：只能讀寫自己的文件
+    // 老師：可以讀所有學生的文件（給 Class Report dashboard 用）
+    match /progress/{userId} {
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId
+                      || request.auth.token.email == 'alan07050445@gmail.com');
+      allow write: if request.auth != null
+                   && request.auth.uid == userId;
+    }
+
+    // ── 學生 XP / Streak / Badges（users 集合）─────────────
+    // 只有本人可以讀寫自己的資料
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+      // 老師可以讀（例如查看學生徽章）
+      allow read: if request.auth != null
+                  && request.auth.token.email == 'alan07050445@gmail.com';
+    }
+
+    // ── 其他文件（leaderboard 等）──────────────────────────
+    // 登入用戶可讀，老師可寫
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.token.email == 'alan07050445@gmail.com';
+    }
+  }
+}
