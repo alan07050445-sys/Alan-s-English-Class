@@ -559,17 +559,29 @@ async function checkWriting(word, sentence) {
 
   const systemPrompt =
 `You are an elementary English teacher grading a student's sentence using the word "${word}".
-Check: correct word usage, grammar, sentence completeness, and clarity.
-Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
+Grade objectively. Do not invent praise. Every Good Job item must point to something actually present in the student's sentence.
+If there is no clear objective strength, write: "目前還沒有明確做到的地方，先把句子補完整。"
+
+Scoring standard (5 stars):
+5★ = target word is used with its real meaning + grammar is correct + at least 7 words + capitalization/punctuation are correct + sentence is specific/clear.
+4★ = mostly correct, with one small issue.
+3★ = understandable, but has a grammar issue, weak detail, or only basic word usage.
+2★ = target word is present but usage/grammar/completeness is weak.
+1★ = missing target word, wrong meaning, fragment, or too unclear.
+
+Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+
+【Score】
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
 
 【Good Job】
-List 1-2 specific things the student did well.
+List 1-2 specific, factual things the student actually did well. Do not say "good grammar" unless grammar is correct. Do not say "used the word well" unless "${word}" is used with the correct meaning.
 
 【To Improve】
-List 1-2 specific changes needed to get a higher score. Be concrete and encouraging.
+List 1-2 objective fixes. Mention exact issues such as missing target word, wrong word meaning, grammar error, fewer than 7 words, missing capital letter, missing punctuation, or not enough detail.
 
-【Example Answer】
-Write a better sentence using "${word}" that keeps the student's idea but is more complete and natural.`;
+【Better Version】
+Write one improved sentence using "${word}" correctly. Keep the student's idea when possible. The sentence must be at least 7 words, natural, and suitable for elementary students.`;
 
   const userMessage = `指定單字：${word}\n\n學生句子：${sentence.trim()}`;
 
@@ -612,20 +624,33 @@ async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
 
   const systemPrompt =
 `You are an elementary English reading comprehension teacher.
-Check: did the student answer the question? Is there text evidence? Is it complete?
-Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
+Grade objectively. Do not invent praise. Every Good Job item must point to something actually present in the student's answer.
+If there is no clear objective strength, write: "目前還沒有明確答對的地方，先回到題目和文章找答案。"
+
+Scoring standard (5 stars):
+5★ = directly answers the question + matches the passage/key points + complete sentence + clear details + understandable grammar.
+4★ = correct answer with one small missing detail or minor grammar issue.
+3★ = partly answers the question but misses an important detail or evidence.
+2★ = related to the topic but answer is incomplete or partly inaccurate.
+1★ = does not answer the question, contradicts the passage, or is too unclear.
+
+Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+
+【Score】
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
 
 【Good Job】
-List 1-2 specific things the student answered correctly or did well.
+List 1-2 specific, factual things the student actually answered correctly. If only one part is correct, name that exact part.
 
 【To Improve】
-List 1-2 specific ways to improve the answer to get more points.
+List 1-2 objective fixes. Mention the missing answer point, missing evidence, incomplete sentence, wrong information, or grammar issue.
 
-【Example Answer】
-Write a complete, ideal answer to the question in simple English.`;
+【Better Version】
+Write a complete improved answer in simple English. Use the passage/key points if provided.`;
 
   const passageSection = passage?.trim() ? `\n文章內容或相關段落：\n${passage.trim()}\n` : '';
-  const userMessage = `題目：${question.trim()}\n${passageSection}\n學生答案：${studentAnswer.trim()}`;
+  const keyPointSection = keyPoints?.trim() ? `\n答案要點：${keyPoints.trim()}\n` : '';
+  const userMessage = `題目：${question.trim()}\n${passageSection}${keyPointSection}\n學生答案：${studentAnswer.trim()}`;
 
   if (endpoint) {
     try {
@@ -652,17 +677,29 @@ async function checkEssay(essayPrompt, studentEssay) {
   const endpoint = AI_WRITING_ENDPOINT || '';
   const systemPrompt =
 `You are an elementary English essay teacher. Grade the student's opinion essay.
-Check: clear claim, supporting reasons, examples, conclusion, grammar, and organization (Claim→Reason→Example→Conclusion).
-Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
+Grade objectively. Do not invent praise. Every Good Job item must point to something actually present in the essay.
+If there is no clear objective strength, write: "目前還沒有明確完成的段落，先寫出清楚的 claim。"
+
+Scoring standard (5 stars):
+5★ = clear claim + at least two relevant reasons + examples/details + conclusion + organized paragraphs + mostly correct grammar.
+4★ = clear claim and support, but one part is thin or has several small grammar issues.
+3★ = has an opinion but support/examples/organization are incomplete.
+2★ = topic-related but claim or reasons are unclear.
+1★ = too short, off-topic, or not understandable.
+
+Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+
+【Score】
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
 
 【Good Job】
-List 2 specific strengths in the essay.
+List 1-2 specific, factual strengths. Mention the exact element, such as claim, reason, example, conclusion, organization, or grammar. Do not praise an element that is missing.
 
 【To Improve】
-List 2 specific improvements to get a higher score. Mention which part needs fixing (e.g., Claim, Reason, Example, Conclusion).
+List 1-2 objective fixes. Mention the exact part to improve: Claim, Reason, Example, Explanation, Conclusion, Organization, or Grammar.
 
-【Example Answer】
-A better version of the essay keeping the student's main ideas. Use simple English suitable for elementary students.`;
+【Better Version】
+Write a better version of the essay keeping the student's main idea when possible. Use simple English suitable for elementary students.`;
 
   const userMessage = `作文題目：\n${essayPrompt.trim()}\n\n學生作文：\n${studentEssay.trim()}`;
 
@@ -689,13 +726,19 @@ function localWritingFeedback(word, sentence) {
   const s = sentence.trim();
   const lower = s.toLowerCase();
   const checks = [];
-  if (word && !lower.includes(String(word).toLowerCase())) checks.push(`句子裡還沒有用到「${word}」。`);
+  const wordUsed = !!(word && lower.includes(String(word).toLowerCase()));
+  const wordCount = s.split(/\s+/).filter(Boolean).length;
+  if (word && !wordUsed) checks.push(`句子裡還沒有用到「${word}」。`);
+  if (wordCount < 7) checks.push(`句子目前只有 ${wordCount} 個字，需要至少 7 個字。`);
   if (!/^[A-Z]/.test(s)) checks.push('英文句子開頭通常要大寫。');
   if (!/[.!?]$/.test(s)) checks.push('句尾記得加上句號、問號或驚嘆號。');
   if (/\bi\b/.test(s)) checks.push('單獨的 I 要大寫。');
-  const stars = Math.max(2, 5 - checks.length);
-  if (checks.length === 0) return `✅ 很棒！這個句子看起來很完整。\nScore: ${'⭐'.repeat(5)}\n\n想要真正 AI 文法批改時，請設定 AI_WRITING_ENDPOINT。`;
-  return `📝 小提醒：\n${checks.map(x => `• ${x}`).join('\n')}\n\nScore: ${'⭐'.repeat(stars)}\n\n修好後再送一次會更漂亮！`;
+  const stars = Math.max(1, 5 - checks.length);
+  const starLine = `${'⭐'.repeat(stars)}${'☆'.repeat(5 - stars)} (${stars}/5)`;
+  if (checks.length === 0) {
+    return `【Score】\n${starLine} — 有使用指定單字，句子長度、大小寫和標點都符合基本標準。\n\n【Good Job】\n- 句子有用到「${word}」。\n- 句子有至少 7 個字，並且有完整標點。\n\n【To Improve】\n- 可以加入更具體的時間、地點或原因，讓句子更生動。\n\n【Better Version】\n${s}`;
+  }
+  return `【Score】\n${starLine} — ${checks[0]}\n\n【Good Job】\n${wordUsed ? `- 句子有嘗試使用「${word}」。` : '- 目前還沒有明確做到的地方，先把句子補完整。'}\n\n【To Improve】\n${checks.map(x => `- ${x}`).join('\n')}\n\n【Better Version】\n${word ? `I can use ${word} in a clear sentence today.` : 'I can write a clear sentence today.'}`;
 }
 
 // ── AI Story Mountain Grading ─────────────────────────────────────────────
@@ -706,17 +749,30 @@ async function checkStoryMountain(prompt, passage, answers) {
 
   const systemPrompt =
 `You are an elementary English writing teacher. Grade the student's Story Mountain (Introduction → Rising Action → Climax → Falling Action → Resolution).
-Check story structure, logic, completeness, and English quality.
-Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
+Grade objectively. Do not invent praise. Every Good Job item must point to something actually present in the student's five sections.
+If a reference passage is provided, compare the Story Mountain with it and do not praise details that contradict the passage.
+If there is no clear objective strength, write: "目前還沒有明確完成的部分，先補上 Introduction 和問題。"
+
+Scoring standard (5 stars):
+5★ = all five stages are complete + logical story arc + climax is clear + resolution connects to the problem + English is understandable.
+4★ = all or most stages are present, with one weak or missing detail.
+3★ = basic story is understandable, but 2+ stages are thin or unclear.
+2★ = some stages are present but story logic is incomplete.
+1★ = most stages are missing, off-topic, or too unclear.
+
+Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+
+【Score】
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
 
 【Good Job】
-List 2 specific things the student did well (mention which part: Introduction/Rising/Climax/Falling/Resolution).
+List 1-2 specific, factual strengths. Mention which stage: Introduction, Rising Action, Climax, Falling Action, or Resolution. Do not praise a missing stage.
 
 【To Improve】
-List 2 specific improvements needed to get a higher score. Mention which part needs fixing.
+List 1-2 objective fixes. Mention exactly which stage is missing, unclear, illogical, too short, or grammatically hard to understand.
 
-【Example Answer】
-A better version of the full story keeping the student's main ideas. Keep it simple and natural for elementary students.`;
+【Better Version】
+Write a better full Story Mountain version keeping the student's main idea when possible. Keep it simple and natural for elementary students.`;
 
   const passageSection = passage?.trim()
     ? `\n\n**Reference Story / Passage:**\n${passage.trim()}\n`

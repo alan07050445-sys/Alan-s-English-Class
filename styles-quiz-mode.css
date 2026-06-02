@@ -1770,10 +1770,23 @@
   border-radius: 10px; padding: 16px 18px;
   border: 1px solid var(--border-soft);
 }
+.wf3-score {
+  text-align: center;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
 .wf3-title {
   font: 700 13px/1 var(--sans); margin-bottom: 10px;
   letter-spacing: 0.02em;
 }
+.wf3-stars {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0 10px;
+  font-size: 24px;
+}
+.wf3-stars .empty { opacity: 0.28; }
 .wf3-body {
   font-size: 14px; line-height: 1.75; color: var(--ink-soft);
   white-space: pre-wrap;

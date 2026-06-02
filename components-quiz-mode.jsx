@@ -668,17 +668,35 @@ const SA_CONFIG = [
 function WritingFeedback({ text }) {
   if (!text) return null;
   const secs = parseEssaySections(text);
+  const scoreText = secs['Score'] || secs['Overall Score'];
   const hasGood    = secs['Good Job'];
   const hasImprove = secs['To Improve'];
-  const hasExample = secs['Example Answer'];
-  const hasSections = hasGood || hasImprove || hasExample;
+  const hasBetter  = secs['Better Version'] || secs['Example Answer'] || secs['Better Answer'];
+  const hasSections = scoreText || hasGood || hasImprove || hasBetter;
 
   if (!hasSections) {
     // Fallback: raw text
     return <div className="wf3-raw">{text}</div>;
   }
+  const starCount = scoreText ? countStars(scoreText) : 0;
+  const scoreDesc = scoreText
+    ? scoreText.replace(/[⭐★☆✩\s()0-9/]+/g, ' ').replace(/\s+/g, ' ').replace(/^[-—:：]\s*/, '').trim()
+    : '';
   return (
     <div className="wf3-feedback">
+      {scoreText && (
+        <div className="wf3-card wf3-score">
+          <div className="wf3-title">⭐ Score</div>
+          <div className="wf3-stars" aria-label={`${starCount} out of 5 stars`}>
+            {[1,2,3,4,5].map(i => (
+              <span key={i} className={i <= starCount ? 'filled' : 'empty'}>
+                {i <= starCount ? '⭐' : '☆'}
+              </span>
+            ))}
+          </div>
+          {scoreDesc && <div className="wf3-body">{scoreDesc}</div>}
+        </div>
+      )}
       {hasGood && (
         <div className="wf3-card wf3-green">
           <div className="wf3-title">✅ Good Job!</div>
@@ -691,10 +709,10 @@ function WritingFeedback({ text }) {
           <div className="wf3-body">{hasImprove}</div>
         </div>
       )}
-      {hasExample && (
+      {hasBetter && (
         <div className="wf3-card wf3-blue">
-          <div className="wf3-title">📝 Example Answer</div>
-          <div className="wf3-body">{hasExample}</div>
+          <div className="wf3-title">📝 Better Version</div>
+          <div className="wf3-body">{hasBetter}</div>
         </div>
       )}
     </div>
@@ -1324,7 +1342,7 @@ function ShortAnswerIntro({ item, onStart }) {
           <div className="qm-intro-rules" style={{marginTop:16}}>
             <div className="qm-intro-rule-row"><span>📺</span><span>看完影片後再開始作答</span></div>
             <div className="qm-intro-rule-row"><span>✍</span><span>用英文打字回答，盡量完整</span></div>
-            <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 3 顆星</span></div>
+            <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 5 顆星</span></div>
           </div>
         </>
       ) : (
@@ -1334,7 +1352,7 @@ function ShortAnswerIntro({ item, onStart }) {
           <div className="qm-intro-meta">{qCount} 題短答 · AI 閱讀理解批改</div>
           <div className="qm-intro-rules">
             <div className="qm-intro-rule-row"><span>✍</span><span>用英文打字回答，盡量完整</span></div>
-            <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 3 顆星</span></div>
+            <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，每題最高 5 顆星</span></div>
           </div>
         </>
       )}
@@ -1454,7 +1472,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
         </button>
       ) : (
         <>
-          <SectionFeedback text={feedback} config={SA_CONFIG}/>
+          <WritingFeedback text={feedback}/>
           <button className="qm-btn primary wp-next" onClick={next}>
             {idx+1 >= total ? '完成 ✦' : '下一題 →'}
           </button>

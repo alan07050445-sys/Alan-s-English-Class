@@ -1434,8 +1434,7 @@ function EssayEditor({ prompt, scaffold, onChangePrompt, onChangeScaffold }) {
       <div style={{padding:'12px 16px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,fontSize:13,color:'#166534',lineHeight:1.7}}>
         <strong>AI 批改標準（自動套用）：</strong><br/>
         Claim · Reasons · Examples · Explanation · Conclusion · Organization · Grammar<br/>
-        AI 會給出 Overall Score ⭐⭐⭐⭐⭐、Strengths、Needs Improvement、Teacher Comments、
-        Detailed Feedback、Corrected Version、Better Version。
+        AI 會給出 Score ⭐⭐⭐⭐⭐、Good Job（客觀優點）、To Improve（客觀改進點）、Better Version。
       </div>
     </div>
   );
@@ -1511,7 +1510,7 @@ function StoryMountainEditor({ prompt, passage, hints, onChangePrompt, onChangeP
 
       <div style={{padding:'12px 16px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,fontSize:13,color:'#166534',lineHeight:1.7}}>
         <strong>AI 批改標準（自動套用）：</strong><br/>
-        Overall Score /10 · 每個階段 /2 · Strengths · Things to Improve · Grammar Corrections · Teacher Comment · Suggested Revised Version
+        Score ⭐⭐⭐⭐⭐ · Good Job（客觀優點）· To Improve（客觀改進點）· Better Version
       </div>
     </div>
   );
