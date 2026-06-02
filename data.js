@@ -558,49 +558,18 @@ async function checkWriting(word, sentence) {
   const endpoint = AI_WRITING_ENDPOINT || localStorage.getItem('alan-ai-writing-endpoint') || '';
 
   const systemPrompt =
-`你是一位小學生英文老師。請幫我批改學生的 vocabulary writing practice，也就是「用指定單字造句」。
+`You are an elementary English teacher grading a student's sentence using the word "${word}".
+Check: correct word usage, grammar, sentence completeness, and clarity.
+Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
 
-請不要只看文法，也要判斷學生是否真的正確使用這個單字。
+【Good Job】
+List 1-2 specific things the student did well.
 
-請根據以下標準批改：
+【To Improve】
+List 1-2 specific changes needed to get a higher score. Be concrete and encouraging.
 
-1. Word Meaning / 單字意思
-- 學生有沒有理解這個單字的意思？句子中的用法是否符合單字原意？
-- 如果學生只是把單字放進句子，但意思不對，請指出來。
-
-2. Correct Usage / 使用是否正確
-- 單字的詞性是否用對？例如 noun / verb / adjective / adverb。
-- 單字前後搭配是否自然？句子是否能清楚看出這個單字的意思？
-
-3. Sentence Completeness / 句子完整度
-- 句子是否有主詞和動詞？是否是一個完整句子，不是片語？
-
-4. Grammar and Spelling / 文法與拼字
-- 檢查時態、主詞動詞一致、冠詞、介系詞、標點、大小寫。
-- 如果錯誤影響意思，請特別指出。
-
-5. Clarity / 清楚度
-- 句子是否自然、清楚？小學生能不能理解這個句子？
-
-請按照以下格式回覆（必須包含所有區塊，用繁體中文）：
-
-【Score】
-給 1–5 顆星（用 ⭐ 符號），並簡短說明原因。
-
-【Word Usage】
-說明學生是否正確使用指定單字。
-
-【Grammar】
-指出主要文法問題，不需要過度挑小錯。如果沒有文法問題，寫「No major grammar issues.」
-
-【Teacher Comment】
-用老師口吻給學生一句簡短回饋（約 1-2 句，溫暖鼓勵）。
-
-【Corrected Sentence】
-保留學生原本的意思，幫他改成正確、自然、適合小學生程度的英文句子。如果原句完全正確自然，寫「Your sentence is already correct!」
-
-【Better Sentence】
-提供一個更好的造句版本，讓學生知道怎麼把句子寫得更清楚、更完整。`;
+【Example Answer】
+Write a better sentence using "${word}" that keeps the student's idea but is more complete and natural.`;
 
   const userMessage = `指定單字：${word}\n\n學生句子：${sentence.trim()}`;
 
@@ -611,7 +580,7 @@ async function checkWriting(word, sentence) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 900,
+          max_tokens: 500,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
@@ -626,7 +595,7 @@ async function checkWriting(word, sentence) {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5', max_tokens: 900,
+        model: 'claude-haiku-4-5', max_tokens: 500,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -642,52 +611,18 @@ async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   const endpoint = AI_WRITING_ENDPOINT || '';
 
   const systemPrompt =
-`你是一位小學生英文閱讀老師。請幫我批改學生的 short answer reading comprehension。
+`You are an elementary English reading comprehension teacher.
+Check: did the student answer the question? Is there text evidence? Is it complete?
+Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
 
-請不要只改文法，最重要的是判斷學生有沒有真正回答問題，答案是否有根據文章內容。
+【Good Job】
+List 1-2 specific things the student answered correctly or did well.
 
-請根據以下標準批改：
+【To Improve】
+List 1-2 specific ways to improve the answer to get more points.
 
-1. Answers the Question / 是否回答問題
-- 學生有沒有真正回答題目？答案是否切題？
-- 如果學生只寫到相關內容，但沒有直接回答問題，請指出來。
-
-2. Text Evidence / 是否有文章根據
-- 學生的答案是否根據文章內容？有沒有使用文章中的細節支持答案？
-- 如果答案是自己亂猜或文章沒有提到，請指出來。
-
-3. Complete Idea / 想法是否完整
-- 答案是否只寫一兩個字，還是有完整表達想法？
-- 是否有清楚說明原因、結果、感受或推論？
-
-4. Inference / 推論能力
-- 如果題目是推論題，學生有沒有根據文章線索做合理推論？
-
-5. Sentence Quality / 句子品質
-- 是否使用完整句子？文法、拼字、標點是否清楚？
-
-請按照以下格式回覆（必須包含所有區塊，用繁體中文）：
-
-【Score】
-給 1–5 顆星（用 ⭐ 符號），並簡短說明原因。
-
-【Answer Check】
-說明學生有沒有回答到題目重點。
-
-【Text Evidence】
-說明學生有沒有使用文章根據，或是否需要補充 evidence。
-
-【Needs Improvement】
-指出學生可以加強的地方。如果答得很完整，寫「Great job! No major improvements needed.」
-
-【Teacher Comment】
-用老師口吻給學生一句簡短鼓勵與建議（約 1-2 句）。
-
-【Corrected Answer】
-保留學生原本意思，幫他改成正確、清楚、適合小學生程度的英文答案。
-
-【Better Answer】
-提供一個更完整、更高分的答案，要包含清楚回答 + 文章根據 / 解釋。`;
+【Example Answer】
+Write a complete, ideal answer to the question in simple English.`;
 
   const passageSection = passage?.trim() ? `\n文章內容或相關段落：\n${passage.trim()}\n` : '';
   const userMessage = `題目：${question.trim()}\n${passageSection}\n學生答案：${studentAnswer.trim()}`;
@@ -699,7 +634,7 @@ async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 1000,
+          max_tokens: 500,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
@@ -716,66 +651,20 @@ async function checkEssay(essayPrompt, studentEssay) {
   if (!studentEssay?.trim()) return '請先寫下你的 opinion essay。';
   const endpoint = AI_WRITING_ENDPOINT || '';
   const systemPrompt =
-`你是一位小學生英文作文老師。請幫我批改學生的 opinion essay，批改時請用清楚、適合老師使用的標準，不要只改文法，也要看內容是否完整。
+`You are an elementary English essay teacher. Grade the student's opinion essay.
+Check: clear claim, supporting reasons, examples, conclusion, grammar, and organization (Claim→Reason→Example→Conclusion).
+Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
 
-請根據以下標準批改：
+【Good Job】
+List 2 specific strengths in the essay.
 
-1. Claim / Opinion
-- 學生有沒有清楚表達自己的立場？有沒有回答題目？立場是否明確，不模糊？
+【To Improve】
+List 2 specific improvements to get a higher score. Mention which part needs fixing (e.g., Claim, Reason, Example, Conclusion).
 
-2. Reasons
-- 學生有沒有提供合理的 reasons？Reasons 是否能支持他的 opinion？
-- 如果 reason 太弱、太籠統，請指出來。
+【Example Answer】
+A better version of the essay keeping the student's main ideas. Use simple English suitable for elementary students.`;
 
-3. Examples
-- 學生有沒有提供 examples？Examples 是否具體？
-- 如果只是重複 reason，不算好的 example，請提醒學生。
-
-4. Explanation
-- 學生有沒有把 reason 和 example 解釋清楚？句子之間的邏輯是否順？
-
-5. Conclusion
-- 學生有沒有寫 closing sentence？Conclusion 是否有重新總結自己的 opinion？
-- 不要只寫 "That is all." 或太空泛的結尾。
-
-6. Organization
-- 文章是否有完整結構：Claim → Reason 1 → Example 1 → Reason 2 → Example 2 → Conclusion
-- 有沒有使用適合的連接詞，例如 First, Also, For example, That is why 等？
-
-7. Grammar and Spelling
-- 檢查句子是否完整。檢查動詞時態、主詞動詞一致、拼字、標點。
-
-請按照以下格式回覆（必須包含所有區塊，不要省略任何一個）：
-
-【Overall Score】
-給 1–5 顆星（用 ⭐ 符號），並簡短說明原因。
-
-【Strengths】
-列出學生寫得好的地方，至少 2 點，每點用「• 」開頭。
-
-【Needs Improvement】
-列出需要加強的地方，至少 2 點，每點用「• 」開頭。
-
-【Teacher Comments】
-用老師口吻給學生一段簡短鼓勵與建議（約 2–3 句）。
-
-【Detailed Feedback】
-* Claim: （評語）
-* Reasons: （評語）
-* Examples: （評語）
-* Explanation: （評語）
-* Conclusion: （評語）
-* Organization: （評語）
-* Grammar: （評語，如有錯誤請列出具體改正）
-
-【Corrected Version】
-保留學生原本的意思，幫他修改成更自然、清楚、適合小學生程度的英文版本。
-
-【Better Version】
-提供一個更完整、更高分的版本，加入更清楚的 reasons、examples 和 conclusion，但仍然維持小學生可以理解的英文程度。`;
-
-  const userMessage =
-`作文題目：\n${essayPrompt.trim()}\n\n學生作文：\n${studentEssay.trim()}`;
+  const userMessage = `作文題目：\n${essayPrompt.trim()}\n\n學生作文：\n${studentEssay.trim()}`;
 
   if (endpoint) {
     try {
@@ -783,8 +672,8 @@ async function checkEssay(essayPrompt, studentEssay) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 2500,
+          model: 'claude-haiku-4-5',
+          max_tokens: 700,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
@@ -816,67 +705,18 @@ async function checkStoryMountain(prompt, passage, answers) {
   const endpoint = AI_WRITING_ENDPOINT || '';
 
   const systemPrompt =
-`You are a professional elementary English writing teacher. Please help me grade a student's Story Mountain writing.
+`You are an elementary English writing teacher. Grade the student's Story Mountain (Introduction → Rising Action → Climax → Falling Action → Resolution).
+Check story structure, logic, completeness, and English quality.
+Reply in Traditional Chinese (繁體中文). Output ONLY these three sections:
 
-The Story Mountain only needs these five parts:
-1. Introduction
-2. Rising Action
-3. Climax
-4. Falling Action
-5. Resolution
+【Good Job】
+List 2 specific things the student did well (mention which part: Introduction/Rising/Climax/Falling/Resolution).
 
-Please check both the story structure and the English writing quality. Do not only correct grammar. Also check whether the story is complete, logical, and interesting.
+【To Improve】
+List 2 specific improvements needed to get a higher score. Mention which part needs fixing.
 
-## Grading Standards
-
-### 1. Introduction
-Check if the student clearly introduces: the main character, the setting, the situation, and enough background information for the reader to understand the story.
-
-### 2. Rising Action
-Check if: the story starts to become more interesting, events build up toward the main problem, the events are connected logically, the reader can understand why the problem is getting bigger.
-
-### 3. Climax
-Check if: there is a clear most important or most exciting moment, the main character faces the biggest problem, challenge, or decision, this part feels like the turning point of the story.
-
-### 4. Falling Action
-Check if: the story begins to calm down after the climax, the character starts dealing with the result of the problem, the events after the climax are clear and logical.
-
-### 5. Resolution
-Check if: the story has a clear ending, the problem is solved or explained, the ending shows a result, lesson, feeling, or change, the story feels complete.
-
-## Language Check
-Please also check: grammar, verb tense, sentence structure, vocabulary, spelling, punctuation, clarity of ideas.
-
-## Output Format
-
-### Overall Score
-Give a score: __/10
-
-### Story Mountain Checklist
-| Part | Score | Feedback |
-| --- | ---: | --- |
-| Introduction | __/2 | |
-| Rising Action | __/2 | |
-| Climax | __/2 | |
-| Falling Action | __/2 | |
-| Resolution | __/2 | |
-
-### Strengths
-List 2–3 things the student did well.
-
-### Things to Improve
-List 2–3 important things the student should improve. Please make the advice specific and easy for elementary students to understand.
-
-### Grammar & Sentence Corrections
-| Original Sentence | Corrected Sentence | Explanation |
-| --- | --- | --- |
-(The explanation should use simple English with some Chinese support, so the student can understand easily.)
-
-### Teacher Comment
-Write a short encouraging teacher comment, about 3–5 sentences.
-
-### Suggested Revised Version
-Rewrite the student's story into a better version. Requirements: Keep the student's original ideas. Do not make the writing too difficult. Use natural English suitable for upper elementary students. Make the five Story Mountain parts clear. Improve grammar, details, and sentence flow.`;
+【Example Answer】
+A better version of the full story keeping the student's main ideas. Keep it simple and natural for elementary students.`;
 
   const passageSection = passage?.trim()
     ? `\n\n**Reference Story / Passage:**\n${passage.trim()}\n`
@@ -891,8 +731,8 @@ Rewrite the student's story into a better version. Requirements: Keep the studen
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 3000,
+          model: 'claude-haiku-4-5',
+          max_tokens: 700,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),

@@ -205,7 +205,10 @@ function App() {
   }, [user?.uid]);
 
   // ── Sync Firestore progress when user is logged in ──────
+  // IMPORTANT: clear progress FIRST on any user change to prevent
+  // cross-account data leakage when switching accounts on same device.
   useAppEffect(() => {
+    setProgress({}); // always reset immediately when user changes (incl. logout)
     if (!user) return;
     const unsub = window.subscribeMyProgress(user.uid, (firestoreItems) => {
       // Convert Firestore format { itemId: {done, score?, time?} } → app format { itemId: timestamp }
@@ -631,7 +634,7 @@ function App() {
               }
             }}
             onShowDashboard={() => setDashOpen(true)}
-            streak={user ? userProfile.streak : localStreak}
+            streak={localStreak.count > 0 ? localStreak : (user ? userProfile.streak : localStreak)}
             badges={userProfile.badges}
             xp={userProfile.xp || 0}
             onShowBadges={() => setBadgesOpen(true)}

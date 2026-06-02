@@ -1758,3 +1758,35 @@
   .sm-tabs { gap:2px; }
   .sm-tab  { font-size:11px; padding:6px 8px; }
 }
+
+/* ══════════════════════════════════════════════════════
+   UNIFIED 3-CARD WRITING FEEDBACK
+══════════════════════════════════════════════════════ */
+.wf3-feedback {
+  display: flex; flex-direction: column; gap: 12px;
+  animation: feedback-rise 0.28s cubic-bezier(.22,.68,0,1.2);
+}
+.wf3-card {
+  border-radius: 10px; padding: 16px 18px;
+  border: 1px solid var(--border-soft);
+}
+.wf3-title {
+  font: 700 13px/1 var(--sans); margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+.wf3-body {
+  font-size: 14px; line-height: 1.75; color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+.wf3-green  { background: #f0fdf4; border-color: #bbf7d0; }
+.wf3-green .wf3-title  { color: #15803d; }
+.wf3-orange { background: #fffbeb; border-color: #fde68a; }
+.wf3-orange .wf3-title { color: #92400e; }
+.wf3-blue   { background: #f0f9ff; border-color: #bae6fd; }
+.wf3-blue .wf3-title   { color: #0369a1; }
+.wf3-raw {
+  white-space: pre-wrap; font-size: 14px; line-height: 1.75;
+  color: var(--ink-soft); padding: 16px;
+  background: var(--bg-card); border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}

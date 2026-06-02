@@ -389,7 +389,6 @@ function FlashcardPlayer({ item, onComplete }) {
       <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={enterLearn}>📖 學習</button>
       <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={enterMatch}>⚡ 配對</button>
       <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={enterFill}>✏️ 填空</button>
-      <button className={"fc-tab" + (active === "test"  ? " active" : "")} onClick={enterTest}>📝 測驗</button>
     </div>
   );
 

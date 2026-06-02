@@ -664,13 +664,41 @@ const SA_CONFIG = [
   { key: 'Better Answer',     label: 'Better Answer',     icon: '🌟', style: 'purple'  },
 ];
 
+/* ── Unified 3-card writing feedback (all writing types) ── */
 function WritingFeedback({ text }) {
-  // If new 【Section】 format, use SectionFeedback; otherwise fall back to raw text
-  if (text && text.includes('【Score】')) {
-    return <SectionFeedback text={text} config={WF_CONFIG} />;
+  if (!text) return null;
+  const secs = parseEssaySections(text);
+  const hasGood    = secs['Good Job'];
+  const hasImprove = secs['To Improve'];
+  const hasExample = secs['Example Answer'];
+  const hasSections = hasGood || hasImprove || hasExample;
+
+  if (!hasSections) {
+    // Fallback: raw text
+    return <div className="wf3-raw">{text}</div>;
   }
-  // Legacy fallback — just show raw text
-  return <div className="qm-writing-feedback wf-card" style={{whiteSpace:'pre-wrap',fontSize:14,lineHeight:1.7}}>{text}</div>;
+  return (
+    <div className="wf3-feedback">
+      {hasGood && (
+        <div className="wf3-card wf3-green">
+          <div className="wf3-title">✅ Good Job!</div>
+          <div className="wf3-body">{hasGood}</div>
+        </div>
+      )}
+      {hasImprove && (
+        <div className="wf3-card wf3-orange">
+          <div className="wf3-title">🔸 To Improve</div>
+          <div className="wf3-body">{hasImprove}</div>
+        </div>
+      )}
+      {hasExample && (
+        <div className="wf3-card wf3-blue">
+          <div className="wf3-title">📝 Example Answer</div>
+          <div className="wf3-body">{hasExample}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ══════════════════════════════════════════════════════
@@ -958,18 +986,22 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
 }
 
 function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone }) {
-  const [idx,        setIdx]       = useQM(0);
+  // Adaptive deck: wrong questions are reinserted 3 positions later
+  const uniqueTotal = questions.length;
+  const [deck,       setDeck]      = useQM(() => [...questions]);
+  const [deckPos,    setDeckPos]   = useQM(0);
   const [selected,   setSelected]  = useQM(null);
-  const [score,      setScore]     = useQM(0);
+  const [firstRight, setFirstRight]= useQM(0);  // correct on FIRST attempt (for score)
   const [screen,     setScreen]    = useQM('quiz');
   const [wrongList,  setWrongList] = useQM([]);
-  const [plusOneKey, setPlusOneKey]= useQM(0);   // bumped on each correct → retriggers animation
-  const [lastRight,  setLastRight] = useQM(null); // true/false after answer
+  const [plusOneKey, setPlusOneKey]= useQM(0);
+  const [lastRight,  setLastRight] = useQM(null);
 
-  const q     = questions[idx];
-  const total = questions.length;
-  const pct   = Math.round((idx + (selected !== null ? 1 : 0)) / total * 100);
-  const isLast= idx === total - 1;
+  const q      = deck[deckPos];
+  const total  = uniqueTotal;
+  const isLast = deckPos >= deck.length - 1;
+  // Progress = first-try correct / unique total
+  const pct    = Math.round((firstRight + (selected !== null && lastRight ? 1 : 0)) / total * 100);
 
   if (!q) return null;
 
@@ -978,25 +1010,33 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     setSelected(optIdx);
     const correct = optIdx === q.correct;
     if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
-    if (correct) { setScore(s => s + 1); setPlusOneKey(k => k + 1); }
-    else setWrongList(prev => [...prev, q]);
+    if (correct) {
+      if (!q._retry) setFirstRight(s => s + 1); // only count first-attempt correct
+      setPlusOneKey(k => k + 1);
+    } else {
+      if (!q._retry) setWrongList(prev => [...prev, q]); // add to wrong list once
+      // Reinsert 3 positions later in deck
+      setDeck(prev => {
+        const next = [...prev];
+        next.splice(Math.min(deckPos + 4, next.length), 0, {...q, _retry: true});
+        return next;
+      });
+    }
     setLastRight(correct);
   };
 
   const handleNext = () => {
     if (isLast) {
-      // score state is already updated by handleSelect (no need to add last Q again)
-      const finalScore = score;
-      // Save progress
+      const finalScore = firstRight + (lastRight && !q._retry ? 0 : 0); // already accumulated
+      const fs = firstRight; // use firstRight as the final correct count
       const prev = loadQMProg();
-      prev[progressKey] = { done: total, score: finalScore, total, ts: Date.now() };
+      prev[progressKey] = { done: total, score: fs, total, ts: Date.now() };
       saveQMProg(prev);
       if (window.playSound) window.playSound('complete');
-      const finalPctCalc = Math.round(finalScore / total * 100);
+      const finalPctCalc = Math.round(fs / total * 100);
       if (finalPctCalc >= 70 && window.triggerStarBurst) window.triggerStarBurst();
-      if (onQuizDone) onQuizDone(); // refreshes sidebar scores immediately
+      if (onQuizDone) onQuizDone();
       const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
-      // Firestore sync
       const u = window._currentUser;
       if (u && window.saveProgressItem) {
         window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
@@ -1007,28 +1047,26 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
         });
       }
       if (window._onQuizComplete) {
-        window._onQuizComplete(finalScore, total, wrongList, {
-          weekId,
-          itemId: progressKey,
-          itemTitle: item?.title || '',
-          allWeekQuizDone,
+        window._onQuizComplete(fs, total, wrongList, {
+          weekId, itemId: progressKey, itemTitle: item?.title || '', allWeekQuizDone,
         });
       }
       setScreen('result');
     } else {
-      setIdx(i => i + 1);
+      setDeckPos(i => i + 1);
       setSelected(null);
       setLastRight(null);
     }
   };
 
   const restart = () => {
-    setIdx(0); setSelected(null); setScore(0); setScreen('quiz'); setWrongList([]); setLastRight(null); setPlusOneKey(0);
+    setDeck([...questions]); setDeckPos(0); setSelected(null);
+    setFirstRight(0); setScreen('quiz'); setWrongList([]); setLastRight(null); setPlusOneKey(0);
   };
 
   /* ── Result ── */
   if (screen === 'result') {
-    const finalScore = score;
+    const finalScore = firstRight;
     const finalPct   = Math.round(finalScore / total * 100);
     return (
       <QuizResultScreen
@@ -1055,7 +1093,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
         {/* Live score badge with +1 float */}
         <div className="qm-score-wrap">
           <span className={`qm-score-badge${lastRight === false ? ' shake' : ''}`}>
-            ⭐ {score}
+            ⭐ {firstRight}
           </span>
           {lastRight === true && (
             <span key={plusOneKey} className="qm-plus-one">+1</span>
@@ -2020,75 +2058,10 @@ function EssayPlayer({ item, progressKey, onBack }) {
         </>
       )}
 
-      {/* Feedback */}
+      {/* Feedback — unified 3-card display */}
       {submitted && feedback && (
         <div className="essay-feedback">
-          {/* Overall score */}
-          <div className="essay-score-card">
-            <div className="essay-stars">
-              {[1,2,3,4,5].map(i => (
-                <span key={i} className={`essay-star ${i <= starCount ? 'filled' : 'empty'}`}>
-                  {i <= starCount ? '⭐' : '☆'}
-                </span>
-              ))}
-            </div>
-            <div className="essay-score-text">
-              {overallText.replace(/[⭐★☆✩]+/g, '').trim()}
-            </div>
-          </div>
-
-          {/* Strengths + Needs Improvement side by side */}
-          <div className="essay-two-col">
-            <div className="essay-col-card strengths">
-              <div className="essay-col-title">✅ Strengths</div>
-              <div className="essay-col-body">{sections['Strengths'] || '—'}</div>
-            </div>
-            <div className="essay-col-card improve">
-              <div className="essay-col-title">🔸 Needs Improvement</div>
-              <div className="essay-col-body">{sections['Needs Improvement'] || '—'}</div>
-            </div>
-          </div>
-
-          {/* Teacher comments */}
-          {sections['Teacher Comments'] && (
-            <div className="essay-teacher-comment">
-              <span className="essay-teacher-icon">💬</span>
-              <div>{sections['Teacher Comments']}</div>
-            </div>
-          )}
-
-          {/* Detailed Feedback tabs */}
-          <div className="essay-detail-section">
-            <div className="essay-detail-title">📋 Detailed Feedback</div>
-            <div className="essay-detail-tabs">
-              {detailItems.map(key => (
-                <button
-                  key={key}
-                  className={`essay-detail-tab${activeTab === key ? ' active' : ''}`}
-                  onClick={() => setActiveTab(key)}
-                >{key}</button>
-              ))}
-            </div>
-            <div className="essay-detail-body">
-              {parsedDetail[activeTab] || detailText}
-            </div>
-          </div>
-
-          {/* Corrected + Better versions */}
-          {sections['Corrected Version'] && (
-            <div className="essay-version corrected">
-              <div className="essay-version-title">📝 Corrected Version</div>
-              <div className="essay-version-body">{sections['Corrected Version']}</div>
-            </div>
-          )}
-          {sections['Better Version'] && (
-            <div className="essay-version better">
-              <div className="essay-version-title">🌟 Better Version</div>
-              <div className="essay-version-body">{sections['Better Version']}</div>
-            </div>
-          )}
-
-          {/* Retry / Back */}
+          <WritingFeedback text={feedback}/>
           <div className="essay-result-btns">
             <button className="qm-btn secondary" onClick={() => { setSubmitted(false); setFeedback(''); setEssay(''); }}>
               重新寫一次
@@ -2296,110 +2269,12 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
 
   /* ── Result screen ── */
   if (screen === 'result' && feedback) {
-    const secs    = parseHashSections(feedback);
-    const noSections = Object.keys(secs).length === 0;
-    const scoreT  = secs['Overall Score'] || '';
-    const scoreM  = scoreT.match(/(\d+)\s*\/\s*10/);
-    const score   = scoreM ? parseInt(scoreM[1]) : null;
-    const checklist = parseMdTable(secs['Story Mountain Checklist'] || '');
-    const grammarT  = parseMdTable(secs['Grammar & Sentence Corrections'] || '');
-
-    // If parsing completely failed, show raw text
-    if (noSections) {
-      return (
-        <div className="sm-result">
-          <div className="sm-score-card">
-            <div className="sm-score-desc" style={{textAlign:'left',whiteSpace:'pre-wrap',fontSize:14,lineHeight:1.75}}>
-              {feedback}
-            </div>
-          </div>
-          <div className="sm-result-btns">
-            <button className="qm-btn secondary"
-              onClick={() => { setScreen('write'); setStageIdx(0); setFeedback(''); setAnswers({intro:'',rising:'',climax:'',falling:'',resolution:''}); }}>
-              重新寫一次
-            </button>
-            <button className="qm-btn primary" onClick={onBack}>← Back</button>
-          </div>
-        </div>
-      );
-    }
-
+    const retryFn = () => { setScreen('write'); setStageIdx(0); setFeedback(''); setAnswers({intro:'',rising:'',climax:'',falling:'',resolution:''}); };
     return (
       <div className="sm-result">
-        {/* Score */}
-        <div className="sm-score-card">
-          {score !== null && (
-            <div className="sm-score-num">{score}<span className="sm-score-den">/10</span></div>
-          )}
-          <div className="sm-score-desc">{scoreT.replace(/\d+\s*\/\s*10\s*/,'').trim()}</div>
-        </div>
-
-        {/* Tabs */}
-        <div className="sm-tabs">
-          {[
-            ['checklist','📋 Checklist'],
-            ['strengths','✅ Strengths'],
-            ['improve','🔸 Improve'],
-            ['grammar','✏️ Grammar'],
-            ['comment','💬 Comment'],
-            ['revised','🌟 Revised'],
-          ].map(([k,l]) => (
-            <button key={k} className={`sm-tab${activeTab===k?' active':''}`} onClick={()=>setActiveTab(k)}>{l}</button>
-          ))}
-        </div>
-
-        <div className="sm-tab-body">
-          {activeTab === 'checklist' && (
-            checklist ? (
-              <div className="sm-checklist">
-                {checklist.rows.map((row, i) => (
-                  <div key={i} className="sm-check-row">
-                    <span className="sm-check-emoji">{['🏠','📈','⭐','📉','🏁'][i] || '📌'}</span>
-                    <span className="sm-check-part">{row[0]}</span>
-                    <span className="sm-check-score">{row[1]}</span>
-                    <span className="sm-check-feedback">{row[2]}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="sm-section-body">{secs['Story Mountain Checklist'] || '—'}</div>
-            )
-          )}
-          {activeTab === 'strengths' && (
-            <div className="sm-section-body">{secs['Strengths'] || '—'}</div>
-          )}
-          {activeTab === 'improve' && (
-            <div className="sm-section-body">{secs['Things to Improve'] || '—'}</div>
-          )}
-          {activeTab === 'grammar' && (
-            grammarT ? (
-              <div className="sm-grammar-table">
-                {grammarT.rows.map((row, i) => (
-                  <div key={i} className="sm-grammar-row">
-                    <div className="sm-g-orig">✗ {row[0]}</div>
-                    <div className="sm-g-corr">✓ {row[1]}</div>
-                    {row[2] && <div className="sm-g-explain">💡 {row[2]}</div>}
-                  </div>
-                ))}
-              </div>
-            ) : <div className="sm-section-body">{secs['Grammar & Sentence Corrections'] || 'No corrections needed! 🎉'}</div>
-          )}
-          {activeTab === 'comment' && (
-            <div className="sm-teacher-comment">
-              <span className="sm-comment-icon">💬</span>
-              <div>{secs['Teacher Comment'] || '—'}</div>
-            </div>
-          )}
-          {activeTab === 'revised' && (
-            <div className="sm-revised">{secs['Suggested Revised Version'] || '—'}</div>
-          )}
-        </div>
-
+        <WritingFeedback text={feedback}/>
         <div className="sm-result-btns">
-          <button className="qm-btn secondary"
-            onClick={() => { setScreen('write'); setStageIdx(0); setFeedback(''); setAnswers({intro:'',rising:'',climax:'',falling:'',resolution:''}); }}>
-            重新寫一次
-          </button>
+          <button className="qm-btn secondary" onClick={retryFn}>重新寫一次</button>
           <button className="qm-btn primary" onClick={onBack}>← Back</button>
         </div>
       </div>
