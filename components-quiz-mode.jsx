@@ -529,8 +529,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <div className="qm-fc-player-wrap">
             <div className="qm-fc-player-bar">
               <span className="qm-fc-player-title">{flashItem.title}</span>
-              <button className="qm-btn primary" style={{padding:'7px 18px',fontSize:13}} onClick={() => setPhase('quiz')}>
-                開始測驗 →
+              <button className="qm-fc-start-btn" onClick={() => setPhase('quiz')}>
+                開始測驗 <span>Start Quiz</span>
               </button>
             </div>
             <window.FlashcardPlayer
@@ -770,18 +770,20 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
     const correct = input.trim().toLowerCase() === (current.answer || '').trim().toLowerCase();
     setResult(correct ? 'correct' : 'wrong');
     if (correct) {
-      setScore(s => s + 1);
+      const nextScore = score + 1;
+      setScore(nextScore);
       if (window.playSound) window.playSound('correct');
+      setTimeout(() => next(nextScore), 650);
     } else {
       if (window.playSound) window.playSound('wrong');
     }
   };
 
-  const next = () => {
+  const next = (scoreOverride = null) => {
+    const finalScoreBase = typeof scoreOverride === 'number' ? scoreOverride : score;
     if (idx + 1 >= total) {
-      const finalScore = score + (result === 'correct' ? 1 : 0);
       const prev = loadQMProg();
-      prev[progressKey] = { done: total, score: finalScore, total, ts: Date.now() };
+      prev[progressKey] = { done: total, score: finalScoreBase, total, ts: Date.now() };
       saveQMProg(prev);
       if (window.playSound) window.playSound('complete');
       setScreen('done');
@@ -793,7 +795,10 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
   };
 
   const handleKey = (e) => {
-    if (e.key === 'Enter') { result === null ? check() : next(); }
+    if (e.key === 'Enter') {
+      if (result === null) check();
+      else if (result === 'wrong') next();
+    }
   };
 
   /* ── Done screen ── */
@@ -868,9 +873,15 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
                 <span>{current.explain}</span>
               </div>
             )}
-            <button className="qm-btn primary" onClick={next}>
-              {idx + 1 >= total ? '查看成績 →' : '下一題 →'}
-            </button>
+            {result === 'correct' ? (
+              <div className="qm-auto-next">
+                {idx + 1 >= total ? '答對了，自動查看成績…' : '答對了，自動下一題…'}
+              </div>
+            ) : (
+              <button className="qm-btn primary" onClick={() => next()}>
+                {idx + 1 >= total ? '查看成績 →' : '下一題 →'}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1600,6 +1611,9 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
     setScores(prev => [...prev, isCorrect]);
     if (window.playSound) window.playSound(isCorrect ? 'correct' : 'wrong');
     setSubmitted(true);
+    if (isCorrect) {
+      setTimeout(() => next(), 650);
+    }
   };
 
   const next = () => {
@@ -1730,9 +1744,15 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
                 <span className="sd-answer-val">{current.answer}</span>
               </div>
             )}
-            <button className="qm-btn primary" onClick={next}>
-              {idx + 1 >= total ? '查看成績 →' : '下一個 →'}
-            </button>
+            {isWordCorrect ? (
+              <div className="qm-auto-next">
+                {idx + 1 >= total ? '切對了，自動查看成績…' : '切對了，自動下一個…'}
+              </div>
+            ) : (
+              <button className="qm-btn primary" onClick={next}>
+                {idx + 1 >= total ? '查看成績 →' : '下一個 →'}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1818,12 +1838,14 @@ function WordSortPlayer({ item, progressKey, onBack }) {
     if (submitted) return;
     setPlacements(prev => { const p = {...prev}; delete p[wordId]; return p; });
     setSelected(null);
+    if (window.playSound) window.playSound('match');
   };
 
   const clickCategory = (cat) => {
     if (submitted || !selected) return;
     setPlacements(prev => ({ ...prev, [selected]: cat }));
     setSelected(null);
+    if (window.playSound) window.playSound('match');
   };
 
   const submit = () => {

@@ -665,11 +665,47 @@
 .qm-fc-player-wrap { display: flex; flex-direction: column; height: 100%; }
 .qm-fc-player-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 0 16px; border-bottom: 1px solid var(--border); margin-bottom: 0;
+  gap: 18px;
+  padding: 0 0 18px; border-bottom: 1px solid var(--border); margin-bottom: 0;
   flex-shrink: 0;
 }
 .qm-fc-player-title {
   font-family: var(--sans); font-size: 16px; font-weight: 700; color: var(--ink-2);
+  line-height: 1.35;
+  max-width: min(520px, 55vw);
+}
+.qm-fc-start-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 172px;
+  padding: 13px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--bg-card);
+  color: var(--ink);
+  box-shadow: 0 6px 18px rgba(21, 19, 14, 0.09);
+  font: 800 15px/1 var(--sans);
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.qm-fc-start-btn span {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  opacity: 0.58;
+}
+.qm-fc-start-btn::after {
+  content: '→';
+  font-size: 18px;
+  line-height: 1;
+}
+.qm-fc-start-btn:hover {
+  transform: translateY(-1px);
+  background: var(--ink);
+  color: var(--bg-paper);
+  box-shadow: 0 10px 24px rgba(21, 19, 14, 0.16);
 }
 
 /* ── Quick flashcard review ──────────────────────────── */
@@ -782,6 +818,9 @@
   .qm-intro-rule-row { font-size: 16px; }
   .qm-fc-card { min-height: 260px; padding: 44px 24px; }
   .qm-fc-text { font-size: 34px; }
+  .qm-fc-player-bar { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .qm-fc-player-title { max-width: 100%; font-size: 17px; }
+  .qm-fc-start-btn { width: 100%; min-width: 0; padding: 15px 18px; }
   .ta-prompt { font-size: 40px; }
   .qm-result-num { font-size: 60px; }
   .qm-result-btns { flex-direction: column; align-items: stretch; }

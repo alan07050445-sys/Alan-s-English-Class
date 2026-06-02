@@ -482,13 +482,15 @@ function FlashcardPlayer({ item, onComplete }) {
           <div className="fc-player">
             <div className="fc-complete">
               <div className="fc-complete-icon">🎉</div>
-              <div className="serif" style={{fontSize: 36, marginBottom: 8}}>All Learned!</div>
-              <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 24}}>
+              <div className="fc-complete-title serif">All Learned!</div>
+              <div className="fc-complete-meta mono">
                 {correctIds.size} / {cards.length} mastered
               </div>
-              <div style={{display: "flex", gap: 12}}>
+              <div className="fc-complete-actions">
                 <button className="btn ghost" onClick={enterLearn}>Practice Again</button>
-                <button className="btn primary" onClick={enterTest}>Take Test →</button>
+                <button className="btn primary" onClick={onComplete || enterTest}>
+                  {onComplete ? '開始測驗 · Start Quiz →' : 'Take Test →'}
+                </button>
               </div>
             </div>
           </div>

@@ -185,8 +185,34 @@
 .fc-choice-badge { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 15px; }
 
 /* ── Complete screen ── */
-.fc-complete { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 0; }
-.fc-complete-icon { font-size: 52px; margin-bottom: 16px; }
+.fc-complete {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 72px 16px; min-height: 520px;
+}
+.fc-complete-icon { font-size: 78px; margin-bottom: 22px; line-height: 1; }
+.fc-complete-title {
+  font-size: clamp(58px, 7vw, 84px);
+  line-height: 1.02;
+  margin-bottom: 14px;
+}
+.fc-complete-meta {
+  color: var(--ink-muted);
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  margin-bottom: 34px;
+}
+.fc-complete-actions {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.fc-complete-actions .btn {
+  min-width: 260px;
+  padding: 20px 34px;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+}
 
 /* ── Review list ── */
 .fc-review-list { width: 100%; max-width: 480px; text-align: left; display: flex; flex-direction: column; gap: 5px; }
@@ -981,4 +1007,10 @@
   .fc-fill-zh { font-size: 38px; }
   .fc-fill-btn { font-size: 19px; padding: 18px 12px; }
   .fc-nav-btn { font-size: 11px; padding: 11px 16px; }
+  .fc-complete { min-height: 420px; padding: 52px 12px; }
+  .fc-complete-icon { font-size: 58px; }
+  .fc-complete-title { font-size: 48px; }
+  .fc-complete-meta { font-size: 16px; letter-spacing: 0.08em; }
+  .fc-complete-actions { width: 100%; gap: 12px; }
+  .fc-complete-actions .btn { width: 100%; min-width: 0; font-size: 13px; padding: 17px 18px; }
 }
