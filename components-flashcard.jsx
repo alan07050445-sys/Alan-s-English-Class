@@ -421,7 +421,7 @@ function FlashcardPlayer({ item, onComplete }) {
               <div className="fc-face fc-front">
                 <SpeakerBtn text={card.term} lang="en-US" className="fc-face-speaker"/>
                 <div className="fc-term serif">{card.term}</div>
-                <div className="fc-flip-hint mono">tap to flip · 點擊翻面</div>
+                <div className="fc-flip-hint mono">tap to reveal · 點擊顯示</div>
               </div>
               {/* BACK — Chinese + image */}
               <div className="fc-face fc-back">
