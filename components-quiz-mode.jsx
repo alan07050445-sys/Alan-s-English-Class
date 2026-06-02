@@ -142,6 +142,157 @@ function getTodayInputValue(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
+function getQuizItemTotal(item) {
+  if (!item) return 0;
+  if (item.type === 'type-answer')  return (item.pairs || []).length;
+  if (item.type === 'short-answer') return (item.saQuestions || []).length;
+  if (item.type === 'syllable-div') return (item.sdWords || []).length;
+  if (item.type === 'word-sort')    return (item.sortWords || []).length;
+  if (item.type === 'essay') return 1;
+  if (item.type === 'story-mountain') return 1;
+  if (item.type === 'writing-practice') return 1;
+  return getItemQuestions(item).length;
+}
+
+function buildTodayMissionPlan({ week, weekId, categories, qmProg }) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const todayStart = start.getTime();
+  const entries = [];
+  const flashEntries = [];
+
+  (categories || []).forEach(cat => {
+    const catItems = (week.items || {})[cat.id] || [];
+    catItems.forEach(item => {
+      if (item.type === 'flashcard' && (item.cards || []).length > 0) {
+        flashEntries.push({ cat, item, count: (item.cards || []).length });
+      }
+    });
+    getQuizItems(catItems).forEach(item => {
+      const total = getQuizItemTotal(item);
+      if (total <= 0) return;
+      const key = `${weekId}_${item.id}`;
+      const prog = qmProg[key] || null;
+      const isToday = !!(prog?.ts && prog.ts >= todayStart);
+      entries.push({
+        cat, item, total, prog, isToday,
+        done: !!prog,
+        perfect: !!prog && Number(prog.score || 0) >= Number(prog.total || total),
+        scorePct: prog?.total ? Math.round((prog.score || 0) / prog.total * 100) : null,
+      });
+    });
+  });
+
+  const todayDone = entries.filter(e => e.isToday);
+  const todayPerfect = todayDone.some(e => e.perfect);
+  const incomplete = entries.find(e => !e.done) || entries[0] || null;
+  const imperfect = entries.find(e => e.done && !e.perfect) || null;
+  const writing = entries.find(e => ['writing-practice', 'short-answer', 'essay', 'story-mountain'].includes(e.item.type) && !e.done)
+    || entries.find(e => ['writing-practice', 'short-answer', 'essay', 'story-mountain'].includes(e.item.type));
+  const flash = flashEntries[0] || null;
+
+  const tasks = [
+    {
+      id: 'start',
+      icon: '▶',
+      title: '開始今天的練習',
+      sub: todayDone.length > 0 ? `今天已完成 ${todayDone.length} 個練習` : '先完成 1 個小練習，建立節奏',
+      done: todayDone.length >= 1,
+      target: incomplete,
+      cta: todayDone.length >= 1 ? '已完成' : '開始',
+    },
+    imperfect ? {
+      id: 'review',
+      icon: '↻',
+      title: '補強一個低分單元',
+      sub: `${imperfect.item.title} · ${imperfect.scorePct}%`,
+      done: false,
+      target: imperfect,
+      cta: '複習',
+    } : {
+      id: 'perfect',
+      icon: '★',
+      title: '挑戰一次滿分',
+      sub: todayPerfect ? '今天已經拿到滿分，漂亮！' : '選一個單元挑戰 Perfect',
+      done: todayPerfect,
+      target: incomplete,
+      cta: todayPerfect ? '已完成' : '挑戰',
+    },
+    {
+      id: 'output',
+      icon: '✎',
+      title: writing ? '完成一個輸出練習' : '複習單字卡',
+      sub: writing
+        ? '寫作或短答能讓家長看見學習成果'
+        : (flash ? `${flash.item.title} · ${Math.min(flash.count, 10)} 張快速複習` : '再做一個單元，讓記憶更穩'),
+      done: writing ? !!writing.done : todayDone.length >= 2,
+      target: writing || (flash ? { cat: flash.cat, item: flash.item } : incomplete),
+      cta: writing?.done ? '已完成' : '前往',
+    },
+  ];
+
+  const allDone = tasks.every(t => t.done);
+  const bonusTarget = entries.find(e => !e.done && e !== incomplete) || incomplete || entries[0] || null;
+  const bonus = {
+    title: allDone ? 'Bonus Challenge unlocked' : 'Bonus Challenge',
+    sub: allDone
+      ? '再完成 1 個單元，拿加分挑戰'
+      : '完成今日任務後，挑戰更多 XP',
+    target: bonusTarget,
+    locked: !allDone,
+  };
+  return { tasks, bonus, doneCount: tasks.filter(t => t.done).length, allDone };
+}
+
+function TodayMissionPanel({ week, weekId, categories, qmProg, onEnterCat }) {
+  const plan = buildTodayMissionPlan({ week, weekId, categories, qmProg });
+  const go = (target) => {
+    if (!target?.cat) return;
+    onEnterCat(target.cat);
+  };
+  return (
+    <section className="qm-mission">
+      <div className="qm-mission-head">
+        <div>
+          <div className="qm-mission-kicker mono">Today's path · 今日任務</div>
+          <h2 className="qm-mission-title">先完成基本任務，再挑戰加分</h2>
+        </div>
+        <div className="qm-mission-ring" aria-label={`${plan.doneCount} of 3 tasks done`}>
+          <span>{plan.doneCount}</span><small>/3</small>
+        </div>
+      </div>
+      <div className="qm-mission-body">
+        <div className="qm-mission-list">
+          {plan.tasks.map(task => (
+            <button
+              key={task.id}
+              className={`qm-mission-task${task.done ? ' done' : ''}`}
+              onClick={() => !task.done && go(task.target)}
+              disabled={task.done || !task.target}
+            >
+              <span className="qm-mission-icon">{task.done ? '✓' : task.icon}</span>
+              <span className="qm-mission-copy">
+                <strong>{task.title}</strong>
+                <small>{task.sub}</small>
+              </span>
+              <span className="qm-mission-cta">{task.cta}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          className={`qm-bonus${plan.bonus.locked ? ' locked' : ''}`}
+          onClick={() => !plan.bonus.locked && go(plan.bonus.target)}
+          disabled={plan.bonus.locked || !plan.bonus.target}
+        >
+          <span className="qm-bonus-label mono">{plan.bonus.locked ? 'Locked' : '+20 XP'}</span>
+          <strong>{plan.bonus.title}</strong>
+          <small>{plan.bonus.sub}</small>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /* ── Visual config ───────────────────────────────────── */
 const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
 const CAT_BG    = {
@@ -194,25 +345,25 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
         )}
       </div>
 
+      {!editMode && (
+        <TodayMissionPanel
+          week={week}
+          weekId={weekId}
+          categories={activeCats}
+          qmProg={qmProg}
+          onEnterCat={onEnterCat}
+        />
+      )}
+
       <div className="qm-blocks">
         {activeCats.map(cat => {
           const allCatItems = (week.items || {})[cat.id] || [];
           const quizItems = getQuizItems(allCatItems);
           // For special item types (non-MC), use their own word/question count
-          const getItemTotal = (item) => {
-            if (item.type === 'type-answer')  return (item.pairs || []).length;
-            if (item.type === 'short-answer') return (item.saQuestions || []).length;
-            if (item.type === 'syllable-div') return (item.sdWords || []).length;
-            if (item.type === 'word-sort')    return (item.sortWords || []).length;
-            if (item.type === 'essay')          return 1;
-            if (item.type === 'story-mountain') return 1;
-            if (item.type === 'writing-practice') return 1; // counts as 1 unit
-            return getItemQuestions(item).length;
-          };
-          const total  = quizItems.reduce((s, it) => s + getItemTotal(it), 0);
+          const total  = quizItems.reduce((s, it) => s + getQuizItemTotal(it), 0);
           const done   = quizItems.reduce((s, it) => {
             const p = qmProg[`${weekId}_${it.id}`];
-            return s + (p ? Math.min(p.done || 0, getItemTotal(it)) : 0);
+            return s + (p ? Math.min(p.done || 0, getQuizItemTotal(it)) : 0);
           }, 0);
           const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
           const clickable = total > 0 || editMode;
