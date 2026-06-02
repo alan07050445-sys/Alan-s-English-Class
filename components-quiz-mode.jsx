@@ -2203,12 +2203,19 @@ function StoryMountainSVG({ activeKey, doneKeys }) {
 
 /* ── Parse ### sections from AI response ── */
 function parseHashSections(text) {
+  // Robust split: handle ### at start of text or after newline
   const sections = {};
-  const regex = /###\s+([^\n]+)\n([\s\S]*?)(?=###\s|\s*$)/g;
-  let m;
-  while ((m = regex.exec(text)) !== null) {
-    sections[m[1].trim()] = m[2].trim();
-  }
+  if (!text) return sections;
+  const normalized = /^###/.test(text.trim()) ? '\n' + text.trim() : text;
+  const parts = normalized.split(/\n###\s+/);
+  parts.forEach((part, i) => {
+    if (i === 0) return; // text before first ### heading
+    const nl = part.indexOf('\n');
+    if (nl === -1) { sections[part.trim()] = ''; return; }
+    const key  = part.slice(0, nl).trim();
+    const body = part.slice(nl + 1).trim();
+    if (key) sections[key] = body;
+  });
   return sections;
 }
 
@@ -2290,11 +2297,32 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
   /* ── Result screen ── */
   if (screen === 'result' && feedback) {
     const secs    = parseHashSections(feedback);
+    const noSections = Object.keys(secs).length === 0;
     const scoreT  = secs['Overall Score'] || '';
     const scoreM  = scoreT.match(/(\d+)\s*\/\s*10/);
     const score   = scoreM ? parseInt(scoreM[1]) : null;
     const checklist = parseMdTable(secs['Story Mountain Checklist'] || '');
     const grammarT  = parseMdTable(secs['Grammar & Sentence Corrections'] || '');
+
+    // If parsing completely failed, show raw text
+    if (noSections) {
+      return (
+        <div className="sm-result">
+          <div className="sm-score-card">
+            <div className="sm-score-desc" style={{textAlign:'left',whiteSpace:'pre-wrap',fontSize:14,lineHeight:1.75}}>
+              {feedback}
+            </div>
+          </div>
+          <div className="sm-result-btns">
+            <button className="qm-btn secondary"
+              onClick={() => { setScreen('write'); setStageIdx(0); setFeedback(''); setAnswers({intro:'',rising:'',climax:'',falling:'',resolution:''}); }}>
+              重新寫一次
+            </button>
+            <button className="qm-btn primary" onClick={onBack}>← Back</button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="sm-result">
@@ -2321,17 +2349,21 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
         </div>
 
         <div className="sm-tab-body">
-          {activeTab === 'checklist' && checklist && (
-            <div className="sm-checklist">
-              {checklist.rows.map((row, i) => (
-                <div key={i} className="sm-check-row">
-                  <span className="sm-check-emoji">{SM_STAGES[i]?.emoji || '📌'}</span>
-                  <span className="sm-check-part">{row[0]}</span>
-                  <span className="sm-check-score">{row[1]}</span>
-                  <span className="sm-check-feedback">{row[2]}</span>
-                </div>
-              ))}
-            </div>
+          {activeTab === 'checklist' && (
+            checklist ? (
+              <div className="sm-checklist">
+                {checklist.rows.map((row, i) => (
+                  <div key={i} className="sm-check-row">
+                    <span className="sm-check-emoji">{['🏠','📈','⭐','📉','🏁'][i] || '📌'}</span>
+                    <span className="sm-check-part">{row[0]}</span>
+                    <span className="sm-check-score">{row[1]}</span>
+                    <span className="sm-check-feedback">{row[2]}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="sm-section-body">{secs['Story Mountain Checklist'] || '—'}</div>
+            )
           )}
           {activeTab === 'strengths' && (
             <div className="sm-section-body">{secs['Strengths'] || '—'}</div>
