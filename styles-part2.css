@@ -212,8 +212,8 @@
 
 .item-type {
   font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.18em;
+  font-size: 11px;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   padding: 5px 0;
   text-align: center;
@@ -227,18 +227,18 @@
 .item-body { min-width: 0; }
 .item-title {
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.25;
   letter-spacing: -0.005em;
   margin-bottom: 2px;
 }
 .item-title em { font-style: italic; color: var(--ink-soft); }
-.item-zh { color: var(--ink-muted); font-size: 13px; }
+.item-zh { color: var(--ink-muted); font-size: 15px; line-height: 1.45; }
 
 .item-meta {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   color: var(--ink-muted);
   display: flex; gap: 12px; align-items: center;
 }
@@ -246,10 +246,10 @@
 
 .item-action {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: 1px solid var(--ink);
   border-radius: 999px;
   display: inline-flex; align-items: center; gap: 8px;
@@ -647,14 +647,14 @@
     flex-wrap: wrap;
   }
   .brand-mono { display: none; }
-  .brand-name { font-size: 17px; }
+  .brand-name { font-size: 19px; }
   .week-nav {
     grid-column: 1 / -1;
     justify-content: center;
     gap: 10px;
     order: 3;
   }
-  .week-nav .label { font-size: 10px; min-width: 60px; }
+  .week-nav .label { font-size: 12px; min-width: 72px; }
   .header-right { gap: 10px; }
   .progress-pill span:first-child { display: none; }
 
@@ -662,7 +662,7 @@
   .hero { padding: 36px 0 24px; }
   .hero-eyebrow { margin-bottom: 16px; gap: 10px; font-size: 10px; }
   .hero-title { font-size: clamp(40px, 11vw, 56px); margin-bottom: 14px; }
-  .hero-sub { font-size: 14px; margin-bottom: 24px; }
+  .hero-sub { font-size: 16px; margin-bottom: 24px; }
   .stat-row { gap: 14px; padding-top: 14px; }
   .stat-value { font-size: 26px; }
 
@@ -675,9 +675,9 @@
 
   /* Items */
   .item { padding: 14px 0; gap: 8px; }
-  .item-title { font-size: 17px; }
-  .item-zh { font-size: 12px; }
-  .item-action { padding: 8px 12px; font-size: 9px; }
+  .item-title { font-size: 20px; }
+  .item-zh { font-size: 15px; }
+  .item-action { padding: 11px 14px; font-size: 11px; }
   .item-edit-tools { gap: 4px; }
 
   /* Edit banner */
@@ -729,7 +729,7 @@
     color: var(--ink-muted); padding: 0;
     transition: color 0.12s, background 0.12s;
     font-family: var(--mono);
-    font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
     border-radius: 0;
     position: relative;
   }
@@ -742,7 +742,7 @@
     background: var(--accent);
   }
   .mobile-nav-btn:disabled { opacity: 0.3; cursor: default; }
-  .mobile-nav-icon { font-size: 20px; line-height: 1; }
+  .mobile-nav-icon { font-size: 22px; line-height: 1; }
   .mobile-nav-divider {
     width: 1px; background: var(--border); margin: 10px 0; flex-shrink: 0;
   }

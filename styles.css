@@ -26,8 +26,8 @@ html, body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.58;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -37,8 +37,8 @@ img { display: block; max-width: 100%; }
 
 .mono {
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 500;
 }
@@ -66,8 +66,8 @@ img { display: block; max-width: 100%; }
 }
 .brand-mono {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.24em;
+  font-size: 11px;
+  letter-spacing: 0.18em;
   border: 1px solid var(--ink);
   padding: 4px 6px;
   line-height: 1;
@@ -83,8 +83,8 @@ img { display: block; max-width: 100%; }
 .week-nav {
   display: flex; align-items: center; gap: 18px;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  font-size: 12px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .week-nav button {
@@ -103,8 +103,8 @@ img { display: block; max-width: 100%; }
 .progress-pill {
   display: inline-flex; align-items: center; gap: 10px;
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
 }
 .progress-track {

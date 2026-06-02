@@ -5,10 +5,10 @@
 .fc-mode-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-paper); }
 .fc-tab {
   flex: 1;
-  padding: 16px 8px;
+  padding: 18px 10px;
   font-family: var(--mono);
-  font-size: 13px;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-muted);
   border-bottom: 2px solid transparent;
@@ -19,10 +19,10 @@
 .fc-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
 
 /* ── Player ── */
-.fc-player { padding: 24px; }
-.fc-empty { padding: 48px; text-align: center; color: var(--ink-muted); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; }
+.fc-player { padding: 28px; }
+.fc-empty { padding: 48px; text-align: center; color: var(--ink-muted); font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; }
 .fc-topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.fc-topbar .mono { white-space: nowrap; font-size: 13px; color: var(--ink-muted); }
+.fc-topbar .mono { white-space: nowrap; font-size: 14px; color: var(--ink-muted); }
 .fc-progress-bar { flex: 1; height: 2px; background: var(--border); border-radius: 1px; position: relative; }
 .fc-progress-fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--ink); border-radius: 1px; transition: width 0.4s; }
 
@@ -68,7 +68,7 @@
 .fc-face-speaker-dark:hover { color: var(--ink); border-color: var(--ink); background: var(--bg); }
 
 /* ── Reveal card ── */
-.fc-flip-card { width: 100%; height: 400px; margin-bottom: 24px; cursor: pointer; }
+.fc-flip-card { width: 100%; height: 480px; margin-bottom: 28px; cursor: pointer; }
 .fc-flip-inner { width: 100%; height: 100%; position: relative; }
 .fc-face {
   position: absolute; inset: 0;
@@ -77,7 +77,7 @@
   border: 1px solid var(--border);
   background: var(--bg-card);
   border-radius: 4px;
-  padding: 24px;
+  padding: 32px;
   text-align: center;
   gap: 0;
   overflow: hidden;
@@ -112,12 +112,12 @@
 
 /* Image on the BACK of card */
 .fc-back-img-wrap {
-  width: 100%; max-height: 280px;
+  width: 100%; max-height: 340px;
   display: flex; justify-content: center;
-  margin-bottom: 14px; flex-shrink: 0; overflow: hidden;
+  margin-bottom: 18px; flex-shrink: 0; overflow: hidden;
 }
 .fc-back-img-wrap img {
-  max-height: 280px; max-width: 80%;
+  max-height: 340px; max-width: 92%;
   object-fit: contain; border-radius: 6px; opacity: 0.95;
 }
 
@@ -125,16 +125,16 @@
 .fc-card-img-wrap { max-height: 200px; margin-bottom: 12px; }
 .fc-card-img-wrap img { max-height: 200px; max-width: 260px; object-fit: contain; border-radius: 4px; }
 
-.fc-term { font-size: 36px; line-height: 1.1; letter-spacing: -0.01em; margin-bottom: 8px; }
-.fc-flip-hint { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
-.fc-zh { font-size: 28px; font-weight: 700; margin-bottom: 10px; }
-.fc-example { font-size: 14px; color: var(--ink-muted); max-width: 360px; line-height: 1.55; }
+.fc-term { font-size: 46px; line-height: 1.1; letter-spacing: -0.005em; margin-bottom: 10px; }
+.fc-flip-hint { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.fc-zh { font-size: 36px; font-weight: 700; margin-bottom: 12px; line-height: 1.25; }
+.fc-example { font-size: 17px; color: var(--ink-muted); max-width: 520px; line-height: 1.6; }
 
 /* ── Card nav ── */
 .fc-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .fc-nav-btn {
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
-  padding: 10px 18px; border: 1px solid var(--ink); border-radius: 999px; transition: all 0.15s;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 12px 22px; border: 1px solid var(--ink); border-radius: 999px; transition: all 0.15s;
 }
 .fc-nav-btn:hover:not(:disabled) { background: var(--ink); color: var(--bg-paper); }
 .fc-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: var(--border); }
@@ -147,20 +147,20 @@
   display: flex; flex-direction: column; align-items: center;
   text-align: center; padding: 16px 0 24px;
 }
-.fc-learn-img { max-height: 240px; max-width: 380px; object-fit: contain; margin-bottom: 18px; border-radius: 6px; }
+.fc-learn-img { max-height: 320px; max-width: min(520px, 94%); object-fit: contain; margin-bottom: 22px; border-radius: 6px; }
 
 /* Chinese shown as the question in learn mode */
 .fc-learn-zh {
-  font-size: 46px; font-weight: 700; line-height: 1.2;
+  font-size: 52px; font-weight: 700; line-height: 1.2;
   letter-spacing: 0.02em; margin-bottom: 6px;
 }
 .fc-learn-example {
-  font-size: 13px; color: var(--ink-muted); max-width: 360px;
+  font-size: 17px; color: var(--ink-muted); max-width: 520px;
   line-height: 1.55; margin-bottom: 4px;
 }
 
 /* (kept for any remnant references) */
-.fc-learn-term { font-size: 40px; line-height: 1.1; letter-spacing: -0.015em; }
+.fc-learn-term { font-size: 46px; line-height: 1.1; letter-spacing: -0.005em; }
 
 /* "再試一次吧" retry badge */
 .fc-retry-badge {
@@ -173,8 +173,8 @@
 
 .fc-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .fc-choice {
-  padding: 18px 12px; border: 1.5px solid var(--border);
-  font-size: 17px; font-family: var(--sans); font-weight: 600;
+  padding: 22px 16px; border: 1.5px solid var(--border);
+  font-size: 20px; font-family: var(--sans); font-weight: 700;
   border-radius: 4px; text-align: center; transition: all 0.15s;
   position: relative; background: var(--bg-card); cursor: pointer;
 }
@@ -518,12 +518,12 @@
   border-radius: 4px; margin-bottom: 16px;
 }
 .fc-fill-text {
-  font-size: 32px; font-weight: 700; line-height: 1.4;
+  font-size: 36px; font-weight: 700; line-height: 1.4;
   color: var(--ink); font-family: var(--sans);
   max-width: 680px;
 }
 .fc-fill-zh {
-  font-size: 44px; letter-spacing: 0.03em;
+  font-size: 50px; letter-spacing: 0.02em;
 }
 .fc-fill-blank {
   display: inline-block;
@@ -537,8 +537,8 @@
   gap: 12px; margin-top: 8px;
 }
 .fc-fill-btn {
-  padding: 22px 16px; border-radius: 8px; border: none;
-  font-size: 22px; font-weight: 700; font-family: var(--sans);
+  padding: 24px 18px; border-radius: 8px; border: none;
+  font-size: 24px; font-weight: 700; font-family: var(--sans);
   color: #fff; text-align: center; cursor: pointer;
   transition: all 0.15s; box-shadow: 0 4px 0 rgba(0,0,0,0.18);
 }
@@ -959,17 +959,26 @@
   .fc-img-add, .fc-img-preview img { height: 80px; }
   .img-search-grid { grid-template-columns: repeat(3, 1fr); }
   .img-search-overlay { padding: 10px; }
-  .fc-player { padding: 14px; }
-  .fc-flip-card { height: 260px; }
-  .fc-term { font-size: 28px; }
-  .fc-learn-zh { font-size: 28px; }
-  .fc-learn-term { font-size: 30px; }
+  .fc-player { padding: 16px; }
+  .fc-flip-card { height: 360px; margin-bottom: 22px; }
+  .fc-face { padding: 22px 16px; }
+  .fc-back-img-wrap { max-height: 220px; margin-bottom: 14px; }
+  .fc-back-img-wrap img { max-height: 220px; max-width: 94%; }
+  .fc-term { font-size: 36px; }
+  .fc-zh { font-size: 30px; }
+  .fc-example { font-size: 16px; max-width: 100%; }
+  .fc-flip-hint { font-size: 10px; letter-spacing: 0.06em; }
+  .fc-learn-img { max-height: 230px; max-width: 96%; }
+  .fc-learn-zh { font-size: 36px; }
+  .fc-learn-example { font-size: 16px; max-width: 100%; }
+  .fc-learn-term { font-size: 38px; }
   .fc-mode-tabs { overflow-x: auto; }
-  .fc-tab { font-size: 9px; padding: 12px 6px; white-space: nowrap; }
+  .fc-tab { font-size: 11px; padding: 14px 8px; white-space: nowrap; }
   .fc-match-grid { grid-template-columns: repeat(2, 1fr); height: calc(100vh - 220px); }
-  .fc-match-tile { font-size: 14px; }
+  .fc-match-tile { font-size: 16px; }
   .fc-fill-player { padding: 14px 14px 20px; }
-  .fc-fill-text { font-size: 22px; }
-  .fc-fill-zh { font-size: 32px; }
-  .fc-fill-btn { font-size: 17px; padding: 16px 10px; }
+  .fc-fill-text { font-size: 26px; }
+  .fc-fill-zh { font-size: 38px; }
+  .fc-fill-btn { font-size: 19px; padding: 18px 12px; }
+  .fc-nav-btn { font-size: 11px; padding: 11px 16px; }
 }

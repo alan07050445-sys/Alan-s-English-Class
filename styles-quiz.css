@@ -128,7 +128,7 @@
   background: var(--bg-card);
 }
 .quiz-result-left { display: flex; flex-direction: column; gap: 4px; }
-.quiz-result-label { color: var(--ink-muted); font-size: 10px; letter-spacing: 0.18em; }
+.quiz-result-label { color: var(--ink-muted); font-size: 12px; letter-spacing: 0.10em; }
 .quiz-result-score {
   font-size: 72px;
   line-height: 1;
@@ -141,8 +141,8 @@
   margin-left: 4px;
 }
 .quiz-result-pct {
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  font-size: 13px;
+  letter-spacing: 0.10em;
   color: var(--ink-soft);
   margin-top: 4px;
 }
@@ -173,13 +173,13 @@
   margin-bottom: 10px;
 }
 .quiz-q-num {
-  font-size: 10px;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  letter-spacing: 0.10em;
   color: var(--ink-muted);
 }
 .quiz-q-mark {
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
   padding: 3px 8px;
   border-radius: 999px;
 }
@@ -187,7 +187,7 @@
 .quiz-q-mark.bad { background: var(--accent); color: var(--bg-paper); }
 
 .quiz-q-text {
-  font-size: 22px;
+  font-size: 25px;
   line-height: 1.35;
   letter-spacing: -0.005em;
   margin-bottom: 18px;
@@ -201,13 +201,13 @@
   grid-template-columns: 28px 1fr auto;
   align-items: center;
   gap: 14px;
-  padding: 14px 18px;
+  padding: 17px 20px;
   border: 1px solid var(--border);
   background: var(--bg-card);
   text-align: left;
   transition: all 0.15s;
   border-radius: 4px;
-  font-size: 15px;
+  font-size: 18px;
 }
 .quiz-option:not(:disabled):hover {
   border-color: var(--ink);
@@ -235,11 +235,11 @@
 .quiz-option.wrong-pick .quiz-option-letter { color: var(--accent); }
 
 .quiz-option-letter {
-  width: 28px; height: 28px;
+  width: 32px; height: 32px;
   border: 1px solid currentColor;
   border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0;
   color: var(--ink-muted);
   font-weight: 500;
@@ -255,13 +255,13 @@
   border-left: 3px solid var(--ink);
 }
 .quiz-explain-label {
-  font-size: 10px;
-  letter-spacing: 0.18em;
+  font-size: 12px;
+  letter-spacing: 0.10em;
   color: var(--ink-muted);
   margin-bottom: 8px;
 }
 .quiz-explain-body {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.65;
   color: var(--ink-soft);
   white-space: pre-wrap;
