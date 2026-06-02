@@ -421,10 +421,11 @@ function StarBurst({ count = 20, onDone }) {
 }
 
 /* ════ MobileNav — fixed bottom bar (mobile only) ════ */
-function MobileNav({ weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBackFromCat, onShowBadges, user }) {
+function MobileNav({ week, weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBackFromCat, onShowBadges, user }) {
   const atStart = weekIdx <= 0;
   const atEnd   = weekIdx >= (weekOrder?.length || 1) - 1;
   const inCat   = !!catView;
+  const weekLabel = week?.label || (weekOrder?.[weekIdx] || `Week ${weekIdx + 1}`);
 
   // When inside a category: show Back | cat name | nothing
   // When on main screen: show ← Week | home dot | Week →
@@ -458,7 +459,7 @@ function MobileNav({ weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBack
           <div className="mobile-nav-divider"/>
           <button className="mobile-nav-btn active" disabled>
             <span className="mobile-nav-icon">📅</span>
-            <span>Week {weekIdx + 1}</span>
+            <span>{weekLabel}</span>
           </button>
           <div className="mobile-nav-divider"/>
           <button className="mobile-nav-btn" onClick={onNextWeek} disabled={atEnd}>

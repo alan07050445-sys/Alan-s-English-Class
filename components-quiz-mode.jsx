@@ -1215,6 +1215,8 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   const total   = words.length;
 
   const extractStars = (text) => {
+    const filled = (text.match(/⭐/g) || []).length;
+    if (filled > 0) return Math.min(5, filled);
     const m = text.match(/[★☆]{1,5}/);
     if (!m) return 3;
     return (m[0].match(/★/g) || []).length;
@@ -2022,19 +2024,6 @@ function EssayPlayer({ item, progressKey, onBack }) {
     prev[progressKey] = { done: 1, score: null, ts: Date.now() };
     saveQMProg(prev);
   };
-
-  const sections = submitted ? parseEssaySections(feedback) : {};
-  const overallText = sections['Overall Score'] || '';
-  const starCount   = submitted ? countStars(overallText) : 0;
-  const detailText  = sections['Detailed Feedback'] || '';
-
-  // Parse Detailed Feedback sub-items
-  const detailItems = ['Claim','Reasons','Examples','Explanation','Conclusion','Organization','Grammar'];
-  const parsedDetail = {};
-  detailItems.forEach(key => {
-    const m = detailText.match(new RegExp(`\\*?\\s*${key}:\\s*([^\\n*]+(?:\\n(?![\\*\\-•])[^\\n]+)*)`, 'i'));
-    parsedDetail[key] = m ? m[1].trim() : '';
-  });
 
   return (
     <div className="essay-player">

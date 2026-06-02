@@ -88,6 +88,7 @@ function App() {
     return _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
   });
   const [progress, setProgress] = useAppState(() => window.loadProgress());
+  const [qmProgressVersion, setQmProgressVersion] = useAppState(0);
   const [weekIdx, setWeekIdx] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
     const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
@@ -283,8 +284,18 @@ function App() {
     return cats.flatMap(c => window.getQuizItems((week.items || {})[c.id] || []));
   }, [week, grade]);
 
-  const totalItems = allItems.length;
-  const totalDone = allItems.filter(it => progress[it.id]).length;
+  const qmProgress = useAppMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('alans-qm-v1') || '{}');
+    } catch(e) {
+      return {};
+    }
+  }, [qmProgressVersion, weekId, grade]);
+
+  const totalItems = weekQuizItems.length || allItems.length;
+  const totalDone = weekQuizItems.length
+    ? weekQuizItems.filter(it => progress[it.id] || qmProgress[`${weekId}_${it.id}`]).length
+    : allItems.filter(it => progress[it.id]).length;
 
   const showToast = (msg) => {
     setToast(msg);
@@ -481,6 +492,7 @@ function App() {
   // ── Quiz complete handler (streak + XP + badges) ────────
   window._onQuizComplete = async (score, total, wrongList, meta = {}) => {
     const u = window._currentUser;
+    setQmProgressVersion(v => v + 1);
 
     // ── Local streak (works without login) ──
     const localResult = updateLocalStreak();
@@ -686,6 +698,7 @@ function App() {
           <window.Footer/>
 
           <window.MobileNav
+            week={week}
             weekIdx={weekIdx}
             weekOrder={weekOrder}
             onPrevWeek={goPrevWeek}
