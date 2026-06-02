@@ -486,6 +486,9 @@ function FlashcardPlayer({ item, onComplete }) {
               <div className="fc-complete-meta mono">
                 {correctIds.size} / {cards.length} mastered
               </div>
+              <div className="fc-complete-note">
+                {onComplete ? 'Ready for quiz · 可以開始測驗了' : 'Nice work · 再複習一次會更熟'}
+              </div>
               <div className="fc-complete-actions">
                 <button className="btn ghost" onClick={enterLearn}>Practice Again</button>
                 <button className="btn primary" onClick={onComplete || enterTest}>

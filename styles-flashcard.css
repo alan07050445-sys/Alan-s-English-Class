@@ -187,31 +187,50 @@
 /* ── Complete screen ── */
 .fc-complete {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 72px 16px; min-height: 520px;
+  text-align: center; padding: 48px 16px; min-height: 410px;
 }
-.fc-complete-icon { font-size: 78px; margin-bottom: 22px; line-height: 1; }
+.fc-complete-icon { font-size: 54px; margin-bottom: 18px; line-height: 1; }
 .fc-complete-title {
-  font-size: clamp(58px, 7vw, 84px);
-  line-height: 1.02;
-  margin-bottom: 14px;
+  font-size: clamp(44px, 5vw, 58px);
+  line-height: 1.08;
+  margin-bottom: 10px;
 }
 .fc-complete-meta {
   color: var(--ink-muted);
-  font-size: 22px;
-  letter-spacing: 0.12em;
-  margin-bottom: 34px;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.fc-complete-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 16px;
+  margin-bottom: 26px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 2px 0 rgba(21,19,14,0.04);
 }
 .fc-complete-actions {
   display: flex;
   justify-content: center;
-  gap: 18px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 .fc-complete-actions .btn {
-  min-width: 260px;
-  padding: 20px 34px;
-  font-size: 16px;
-  letter-spacing: 0.12em;
+  min-width: 190px;
+  padding: 14px 22px;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+}
+.fc-complete-actions .btn.primary {
+  min-width: 230px;
+  box-shadow: 0 10px 24px rgba(21,19,14,0.16);
 }
 
 /* ── Review list ── */
@@ -1007,10 +1026,12 @@
   .fc-fill-zh { font-size: 38px; }
   .fc-fill-btn { font-size: 19px; padding: 18px 12px; }
   .fc-nav-btn { font-size: 11px; padding: 11px 16px; }
-  .fc-complete { min-height: 420px; padding: 52px 12px; }
-  .fc-complete-icon { font-size: 58px; }
-  .fc-complete-title { font-size: 48px; }
-  .fc-complete-meta { font-size: 16px; letter-spacing: 0.08em; }
+  .fc-complete { min-height: 360px; padding: 40px 12px; }
+  .fc-complete-icon { font-size: 46px; margin-bottom: 14px; }
+  .fc-complete-title { font-size: 40px; }
+  .fc-complete-meta { font-size: 14px; letter-spacing: 0.06em; }
+  .fc-complete-note { font-size: 14px; margin-bottom: 20px; }
   .fc-complete-actions { width: 100%; gap: 12px; }
-  .fc-complete-actions .btn { width: 100%; min-width: 0; font-size: 13px; padding: 17px 18px; }
+  .fc-complete-actions .btn,
+  .fc-complete-actions .btn.primary { width: 100%; min-width: 0; font-size: 12px; padding: 15px 18px; }
 }
