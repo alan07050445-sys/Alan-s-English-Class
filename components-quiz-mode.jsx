@@ -154,113 +154,31 @@ function getQuizItemTotal(item) {
   return getItemQuestions(item).length;
 }
 
-const PATH_STEPS = {
-  vocab: [
-    { label: 'Preview', zh: '預習' },
-    { label: 'Flashcards', zh: '單字卡' },
-    { label: 'Practice', zh: '練習' },
-    { label: 'Review', zh: '錯題' },
-    { label: 'Sentence', zh: '造句' },
-  ],
-  grammar: [
-    { label: 'Rule', zh: '規則' },
-    { label: 'Examples', zh: '例句' },
-    { label: 'Accuracy', zh: '準確度' },
-    { label: 'Fix', zh: '修正' },
-    { label: 'Apply', zh: '應用' },
-  ],
-  word: [
-    { label: 'Notice', zh: '觀察' },
-    { label: 'Sort', zh: '分類' },
-    { label: 'Decode', zh: '拆解' },
-    { label: 'Check', zh: '檢查' },
-    { label: 'Master', zh: '精熟' },
-  ],
-  reading: [
-    { label: 'Read', zh: '閱讀' },
-    { label: 'Key Ideas', zh: '重點' },
-    { label: 'Questions', zh: '理解' },
-    { label: 'Evidence', zh: '證據' },
-    { label: 'Response', zh: '回應' },
-  ],
-};
+function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null, total = 1, wrongQuestions = [] } = {}) {
+  const ts = Date.now();
+  const localTotal = total || doneCount || 1;
+  const localScore = typeof score === 'number' ? score : null;
+  const prev = loadQMProg();
+  prev[progressKey] = { done: doneCount || localTotal, score: localScore, total: localTotal, ts };
+  saveQMProg(prev);
 
-function getPathSteps(catId) {
-  return PATH_STEPS[catId] || PATH_STEPS.vocab;
-}
-
-function buildWeeklyLearningPath({ week, weekId, categories, qmProg }) {
-  return (categories || []).map(cat => {
-    const allCatItems = (week.items || {})[cat.id] || [];
-    const quizItems = getQuizItems(allCatItems);
-    const steps = getPathSteps(cat.id);
-    const totalUnits = quizItems.length;
-    const doneUnits = quizItems.filter(item => qmProg[`${weekId}_${item.id}`]).length;
-    const pct = totalUnits > 0 ? Math.min(100, Math.round(doneUnits / totalUnits * 100)) : 0;
-    const completedSteps = pct >= 100
-      ? steps.length
-      : Math.min(steps.length - 1, Math.max(0, Math.floor((pct / 100) * steps.length)));
-    const nextStep = pct >= 100 ? null : steps[completedSteps];
-    return { cat, steps, totalUnits, doneUnits, pct, completedSteps, nextStep };
-  });
-}
-
-function WeeklyLearningPathPanel({ week, weekId, categories, qmProg, onEnterCat }) {
-  const paths = buildWeeklyLearningPath({ week, weekId, categories, qmProg });
-  return (
-    <section className="qm-path">
-      <div className="qm-path-head">
-        <div>
-          <div className="qm-path-kicker mono">This week's learning path · 本週學習路線</div>
-          <h2 className="qm-path-title">照著路線走完，不只是完成任務</h2>
-          <p className="qm-path-sub">每一類能力都有自己的節奏：理解、練習、修正、應用。</p>
-        </div>
-      </div>
-      <div className="qm-path-grid">
-        {paths.map(path => {
-          const isEmpty = path.totalUnits === 0;
-          return (
-            <button
-              key={path.cat.id}
-              className={`qm-path-card${isEmpty ? ' empty' : ''}`}
-              onClick={() => !isEmpty && onEnterCat(path.cat)}
-              disabled={isEmpty}
-            >
-              <div className="qm-path-card-top">
-                <span className="qm-path-icon" style={{ background: CAT_BG[path.cat.id] }}>
-                  {CAT_ICONS[path.cat.id]}
-                </span>
-                <span className="qm-path-name-wrap">
-                  <strong className="qm-path-name">{path.cat.name}</strong>
-                  <small className="qm-path-zh mono">{path.cat.zh}</small>
-                </span>
-                <span className="qm-path-percent mono">{path.pct}%</span>
-              </div>
-              <div className="qm-path-nodes" aria-label={`${path.cat.name} learning path`}>
-                {path.steps.map((step, idx) => {
-                  const state = idx < path.completedSteps
-                    ? 'done'
-                    : (idx === path.completedSteps && path.pct < 100 ? 'active' : 'future');
-                  return (
-                    <span key={step.label} className={`qm-path-node ${state}`}>
-                      <span className="qm-path-dot">{state === 'done' ? '✓' : idx + 1}</span>
-                      <span className="qm-path-node-label">{step.label}<small>{step.zh}</small></span>
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="qm-path-foot">
-                <span>{isEmpty ? 'No units yet' : `${path.doneUnits}/${path.totalUnits} units`}</span>
-                <span className="qm-path-next">
-                  {isEmpty ? 'Preparing' : (path.nextStep ? `Next: ${path.nextStep.label}` : 'Complete')}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
+  const u = window._currentUser;
+  if (u && window.saveProgressItem) {
+    const scorePct = localScore == null ? null : Math.round((localScore / localTotal) * 100);
+    const payload = {
+      done: ts,
+      score: scorePct,
+      total: localTotal,
+      itemTitle: item?.title || '',
+      itemType: item?.type || '',
+    };
+    if (wrongQuestions.length) {
+      payload.wrongQuestions = wrongQuestions;
+      payload.wrongCount = wrongQuestions.length;
+    }
+    window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, payload);
+  }
+  return prev;
 }
 
 /* ── Visual config ───────────────────────────────────── */
@@ -314,16 +232,6 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
           </p>
         )}
       </div>
-
-      {!editMode && (
-        <WeeklyLearningPathPanel
-          week={week}
-          weekId={weekId}
-          categories={activeCats}
-          qmProg={qmProg}
-          onEnterCat={onEnterCat}
-        />
-      )}
 
       <div className="qm-blocks">
         {activeCats.map(cat => {
@@ -903,9 +811,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
   const next = (scoreOverride = null) => {
     const finalScoreBase = typeof scoreOverride === 'number' ? scoreOverride : score;
     if (idx + 1 >= total) {
-      const prev = loadQMProg();
-      prev[progressKey] = { done: total, score: finalScoreBase, total, ts: Date.now() };
-      saveQMProg(prev);
+      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScoreBase, total });
       if (window.playSound) window.playSound('complete');
       setScreen('done');
     } else {
@@ -1162,23 +1068,18 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   };
 
   const completeQuiz = (fs = firstRight, finalWrongList = wrongList) => {
-    const prev = loadQMProg();
-    prev[progressKey] = { done: total, score: fs, total, ts: Date.now() };
-    saveQMProg(prev);
+    const wrongQuestions = finalWrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] }));
+    const prev = saveQuizModeCompletion(progressKey, item, {
+      doneCount: total,
+      score: fs,
+      total,
+      wrongQuestions,
+    });
     if (window.playSound) window.playSound('complete');
     const finalPctCalc = Math.round(fs / total * 100);
     if (finalPctCalc >= 70 && window.triggerStarBurst) window.triggerStarBurst();
     if (onQuizDone) onQuizDone();
     const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
-    const u = window._currentUser;
-    if (u && window.saveProgressItem) {
-      window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
-        done: Date.now(),
-        score: finalPctCalc,
-        wrongQuestions: finalWrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] })),
-        wrongCount: finalWrongList.length,
-      });
-    }
     if (window._onQuizComplete) {
       window._onQuizComplete(fs, total, finalWrongList, {
         weekId, itemId: progressKey, itemTitle: item?.title || '', allWeekQuizDone,
@@ -1390,7 +1291,12 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   };
 
   const next = () => {
-    if (idx + 1 >= total) { setDone(true); return; }
+    if (idx + 1 >= total) {
+      const avgStars = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+      saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: avgStars, total: 5 });
+      setDone(true);
+      return;
+    }
     setIdx(idx + 1);
     setSentence('');
     setFeedback('');
@@ -1571,7 +1477,12 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   };
 
   const next = () => {
-    if (idx + 1 >= total) { setDone(true); return; }
+    if (idx + 1 >= total) {
+      const avgStars = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+      saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: avgStars, total: 5 });
+      setDone(true);
+      return;
+    }
     setIdx(idx + 1);
     setAnswer('');
     setFeedback('');
@@ -1738,7 +1649,12 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
   };
 
   const next = () => {
-    if (idx + 1 >= total) { setDone(true); return; }
+    if (idx + 1 >= total) {
+      const correct = scores.filter(Boolean).length;
+      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total });
+      setDone(true);
+      return;
+    }
     setIdx(i => i + 1);
     setCuts(new Set());
     setSubmitted(false);
@@ -1750,10 +1666,6 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
     const finalPct = Math.round(correct / total * 100);
     const emoji    = finalPct === 100 ? '🏆' : finalPct >= 80 ? '🎉' : finalPct >= 60 ? '👍' : '💪';
     const msg      = finalPct === 100 ? 'Perfect! 全對！' : finalPct >= 80 ? 'Excellent! 非常好！' : finalPct >= 60 ? 'Good job! 繼續練習！' : 'Keep going! 多練習！';
-    // Save progress
-    const prev = loadQMProg();
-    prev[progressKey] = { done: total, score: correct, total, ts: Date.now() };
-    saveQMProg(prev);
     return (
       <div className="qm-result">
         <div className="qm-result-emoji">{emoji}</div>
@@ -1974,9 +1886,7 @@ function WordSortPlayer({ item, progressKey, onBack }) {
     allWords.forEach(w => {
       if (placements[w.id] === w.category) correct++;
     });
-    const prev = loadQMProg();
-    prev[progressKey] = { done: total, score: correct, total, ts: Date.now() };
-    saveQMProg(prev);
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total });
     if (window.playSound) window.playSound(correct === total ? 'complete' : 'wrong');
     setSubmitted(true);
   };
@@ -2195,10 +2105,7 @@ function EssayPlayer({ item, progressKey, onBack }) {
     setFeedback(result);
     setChecking(false);
     setSubmitted(true);
-    // Save progress
-    const prev = loadQMProg();
-    prev[progressKey] = { done: 1, score: null, ts: Date.now() };
-    saveQMProg(prev);
+    saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: countStars(result), total: 5 });
   };
 
   return (
@@ -2435,9 +2342,7 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
     setScreen('checking');
     const result = await window.checkStoryMountain(item.smPrompt, item.smPassage, answers);
     setFeedback(result);
-    const prev = loadQMProg();
-    prev[progressKey] = { done: 1, score: null, ts: Date.now() };
-    saveQMProg(prev);
+    saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: countStars(result), total: 5 });
     setScreen('result');
   };
 

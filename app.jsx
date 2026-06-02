@@ -205,6 +205,29 @@ function App() {
     });
   }, [user?.uid]);
 
+  // Backfill quiz-mode progress that was saved locally before every item type
+  // started syncing to the teacher report.
+  useAppEffect(() => {
+    if (!user || !window.saveProgressItem) return;
+    try {
+      const qm = JSON.parse(localStorage.getItem('alans-qm-v1') || '{}');
+      Object.entries(qm).forEach(([itemId, val]) => {
+        if (!val?.done) return;
+        const total = Number(val.total || val.done || 1) || 1;
+        const rawScore = val.score == null ? null : Number(val.score);
+        const score = rawScore == null || Number.isNaN(rawScore)
+          ? null
+          : Math.round((rawScore / total) * 100);
+        window.saveProgressItem(user.uid, user.displayName || '', user.email || '', itemId, {
+          done: val.ts || Date.now(),
+          score,
+          total,
+          itemType: 'quiz-mode',
+        });
+      });
+    } catch(e) {}
+  }, [user?.uid]);
+
   // ── Sync Firestore progress when user is logged in ──────
   // IMPORTANT: clear progress FIRST on any user change to prevent
   // cross-account data leakage when switching accounts on same device.

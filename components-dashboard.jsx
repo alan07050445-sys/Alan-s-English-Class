@@ -19,6 +19,11 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
   const [refreshKey, setRefreshKey]= useDash(0);
 
   useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
+  useDashE(() => {
+    if (!selected) return;
+    const fresh = students.find(s => s.uid === selected.uid);
+    if (fresh && fresh !== selected) setSelected(fresh);
+  }, [students, selected?.uid]);
 
   // Flatten all items across every week (for "X / total" calculation)
   const allItems = useDashM(() => {
