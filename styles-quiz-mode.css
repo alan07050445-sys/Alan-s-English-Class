@@ -378,6 +378,13 @@
 }
 .qm-btn.secondary { background: transparent; color: var(--ink-2); border: 1px solid var(--border); }
 .qm-btn.secondary:hover { border-color: var(--ink-3); color: var(--ink); }
+.qm-auto-next {
+  font: 700 13px/1.4 var(--mono);
+  color: #15803d;
+  text-align: center;
+  padding: 10px 0 2px;
+  letter-spacing: 0.04em;
+}
 
 /* ── Result screen ───────────────────────────────────── */
 .qm-result { max-width: 440px; margin: 40px auto; text-align: center; padding-bottom: 64px; }

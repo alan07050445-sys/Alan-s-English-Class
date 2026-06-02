@@ -1019,9 +1019,41 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   const total  = uniqueTotal;
   const isLast = deckPos >= deck.length - 1;
   // Progress = first-try correct / unique total
-  const pct    = Math.round((firstRight + (selected !== null && lastRight ? 1 : 0)) / total * 100);
+  const pct    = Math.round(firstRight / total * 100);
 
   if (!q) return null;
+
+  const goToNextQuestion = () => {
+    setDeckPos(i => i + 1);
+    setSelected(null);
+    setLastRight(null);
+  };
+
+  const completeQuiz = (fs = firstRight, finalWrongList = wrongList) => {
+    const prev = loadQMProg();
+    prev[progressKey] = { done: total, score: fs, total, ts: Date.now() };
+    saveQMProg(prev);
+    if (window.playSound) window.playSound('complete');
+    const finalPctCalc = Math.round(fs / total * 100);
+    if (finalPctCalc >= 70 && window.triggerStarBurst) window.triggerStarBurst();
+    if (onQuizDone) onQuizDone();
+    const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
+    const u = window._currentUser;
+    if (u && window.saveProgressItem) {
+      window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
+        done: Date.now(),
+        score: finalPctCalc,
+        wrongQuestions: finalWrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] })),
+        wrongCount: finalWrongList.length,
+      });
+    }
+    if (window._onQuizComplete) {
+      window._onQuizComplete(fs, total, finalWrongList, {
+        weekId, itemId: progressKey, itemTitle: item?.title || '', allWeekQuizDone,
+      });
+    }
+    setScreen('result');
+  };
 
   const handleSelect = (optIdx) => {
     if (selected !== null) return;
@@ -1029,51 +1061,32 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     const correct = optIdx === q.correct;
     if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
     if (correct) {
-      if (!q._retry) setFirstRight(s => s + 1); // only count first-attempt correct
+      const nextFirstRight = !q._retry ? firstRight + 1 : firstRight;
+      setFirstRight(nextFirstRight);
       setPlusOneKey(k => k + 1);
-    } else {
-      if (!q._retry) setWrongList(prev => [...prev, q]); // add to wrong list once
-      // Reinsert 3 positions later in deck
-      setDeck(prev => {
-        const next = [...prev];
-        next.splice(Math.min(deckPos + 4, next.length), 0, {...q, _retry: true});
-        return next;
-      });
+      setLastRight(true);
+      setTimeout(() => {
+        if (isLast) completeQuiz(nextFirstRight, wrongList);
+        else goToNextQuestion();
+      }, 650);
+      return;
     }
-    setLastRight(correct);
+
+    const nextWrongList = !q._retry ? [...wrongList, q] : wrongList;
+    setWrongList(nextWrongList);
+    setDeck(prev => {
+      const next = [...prev];
+      next.splice(Math.min(deckPos + 4, next.length), 0, {...q, _retry: true});
+      return next;
+    });
+    setLastRight(false);
   };
 
   const handleNext = () => {
     if (isLast) {
-      const finalScore = firstRight + (lastRight && !q._retry ? 0 : 0); // already accumulated
-      const fs = firstRight; // use firstRight as the final correct count
-      const prev = loadQMProg();
-      prev[progressKey] = { done: total, score: fs, total, ts: Date.now() };
-      saveQMProg(prev);
-      if (window.playSound) window.playSound('complete');
-      const finalPctCalc = Math.round(fs / total * 100);
-      if (finalPctCalc >= 70 && window.triggerStarBurst) window.triggerStarBurst();
-      if (onQuizDone) onQuizDone();
-      const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
-      const u = window._currentUser;
-      if (u && window.saveProgressItem) {
-        window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, {
-          done: Date.now(),
-          score: finalPctCalc,
-          wrongQuestions: wrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] })),
-          wrongCount: wrongList.length,
-        });
-      }
-      if (window._onQuizComplete) {
-        window._onQuizComplete(fs, total, wrongList, {
-          weekId, itemId: progressKey, itemTitle: item?.title || '', allWeekQuizDone,
-        });
-      }
-      setScreen('result');
+      completeQuiz(firstRight, wrongList);
     } else {
-      setDeckPos(i => i + 1);
-      setSelected(null);
-      setLastRight(null);
+      goToNextQuestion();
     }
   };
 
@@ -1147,9 +1160,13 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
             {selected === q.correct ? '✓ Correct! 答對了！' : `✗ The answer is: ${q.options[q.correct]}`}
           </div>
           {q.explain && <div className="qm-explain">{q.explain}</div>}
-          <button className="qm-btn primary" onClick={handleNext}>
-            {isLast ? '查看成績 →' : '下一題 →'}
-          </button>
+          {selected === q.correct ? (
+            <div className="qm-auto-next">答對了，自動下一題…</div>
+          ) : (
+            <button className="qm-btn primary" onClick={handleNext}>
+              {isLast ? '查看成績 →' : '下一題 →'}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1223,7 +1240,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   };
 
   const submit = async () => {
-    if (!sentence.trim()) return;
+    if (!sentence.trim() || checking || feedback) return;
     setChecking(true);
     setFeedback('');
     const result = await window.checkWriting(current.word, sentence);
@@ -1231,6 +1248,13 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
     const stars = extractStars(result);
     setScores(prev => [...prev, stars]);
     setChecking(false);
+  };
+
+  const handleSentenceKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !feedback && !checking) {
+      e.preventDefault();
+      submit();
+    }
   };
 
   const next = () => {
@@ -1294,6 +1318,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
         className="qm-writing-input wp-input"
         value={sentence}
         onChange={e => setSentence(e.target.value)}
+        onKeyDown={handleSentenceKeyDown}
         placeholder={`Write a sentence using "${current.word}"…`}
         disabled={!!feedback}
       />
@@ -1395,7 +1420,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   };
 
   const submit = async () => {
-    if (!answer.trim()) return;
+    if (!answer.trim() || checking || feedback) return;
     setChecking(true);
     setFeedback('');
     const result = await window.checkShortAnswer(
@@ -1404,6 +1429,13 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
     setFeedback(result);
     setScores(prev => [...prev, extractStars(result)]);
     setChecking(false);
+  };
+
+  const handleShortAnswerKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !feedback && !checking) {
+      e.preventDefault();
+      submit();
+    }
   };
 
   const next = () => {
@@ -1463,6 +1495,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
         className="qm-writing-input wp-input sa-input"
         value={answer}
         onChange={e => setAnswer(e.target.value)}
+        onKeyDown={handleShortAnswerKeyDown}
         placeholder="Write your answer here…"
         disabled={!!feedback}
         rows={4}

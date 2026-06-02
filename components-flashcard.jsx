@@ -376,11 +376,16 @@ function FlashcardPlayer({ item, onComplete }) {
     const correct = chosen.id === card.id;
     setFillSelected(chosen.id);
     if (correct) setFillScore(s => s + 1);
+    if (!correct) return;
     setTimeout(() => {
-      const next = fillIdx + 1;
-      if (next >= fillCards.length) { setFillDone(true); }
-      else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
-    }, correct ? 800 : 1400);
+      goNextFill();
+    }, 650);
+  };
+
+  const goNextFill = () => {
+    const next = fillIdx + 1;
+    if (next >= fillCards.length) { setFillDone(true); }
+    else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
   };
 
   const ModeTabs = ({ active }) => (
@@ -418,13 +423,29 @@ function FlashcardPlayer({ item, onComplete }) {
           <div className={"fc-flip-card" + (flipped ? " flipped" : "")} onClick={() => setFlipped(f => !f)}>
             <div className="fc-flip-inner">
               {/* FRONT — English only */}
-              <div className="fc-face fc-front">
+              <div
+                className={`fc-face fc-front ${flipped ? "is-hidden" : "is-visible"}`}
+                style={{
+                  opacity: flipped ? 0 : 1,
+                  visibility: flipped ? 'hidden' : 'visible',
+                  pointerEvents: flipped ? 'none' : 'auto',
+                  transform: flipped ? 'translateY(-4px)' : 'translateY(0)',
+                }}
+              >
                 <SpeakerBtn text={card.term} lang="en-US" className="fc-face-speaker"/>
                 <div className="fc-term serif">{card.term}</div>
                 <div className="fc-flip-hint mono">tap to reveal · 點擊顯示</div>
               </div>
               {/* BACK — Chinese + image */}
-              <div className="fc-face fc-back">
+              <div
+                className={`fc-face fc-back ${flipped ? "is-visible" : "is-hidden"}`}
+                style={{
+                  opacity: flipped ? 1 : 0,
+                  visibility: flipped ? 'visible' : 'hidden',
+                  pointerEvents: flipped ? 'auto' : 'none',
+                  transform: flipped ? 'translateY(0)' : 'translateY(6px)',
+                }}
+              >
                 <SpeakerBtn text={card.zh} lang="zh-TW" className="fc-face-speaker fc-face-speaker-dark"/>
                 {card.imageUrl && (
                   <div className="fc-back-img-wrap">
@@ -888,6 +909,11 @@ function FlashcardPlayer({ item, onComplete }) {
               );
             })}
           </div>
+          {fillSelected && fillSelected !== card.id && (
+            <div className="fc-fill-next-row">
+              <button className="btn primary" onClick={goNextFill}>下一題 →</button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1059,17 +1085,22 @@ function FillBlankPlayer({ item, onComplete }) {
     const newAnswers = [...userAnswers, { sentence: q.sentence, answer: q.answer, userAnswer: ch, correct }];
     setUserAnswers(newAnswers);
     if (correct) setFBScore(s => s + 1);
+    if (!correct) return;
     setTimeout(() => {
-      const next = idx + 1;
-      if (next >= questions.length) {
-        const t = Math.round((Date.now() - (startTimeRef.current || Date.now())) / 100) / 10;
-        setElapsed(t);
-        setScreen('complete');
-        if (onComplete) onComplete();
-      } else {
-        setIdx(next); setFBChoices(makeFBChoices(next)); setFBSelected(null);
-      }
-    }, correct ? 800 : 1400);
+      goNextFB();
+    }, 650);
+  };
+
+  const goNextFB = () => {
+    const next = idx + 1;
+    if (next >= questions.length) {
+      const t = Math.round((Date.now() - (startTimeRef.current || Date.now())) / 100) / 10;
+      setElapsed(t);
+      setScreen('complete');
+      if (onComplete) onComplete();
+    } else {
+      setIdx(next); setFBChoices(makeFBChoices(next)); setFBSelected(null);
+    }
   };
 
   const handleSubmitName = async () => {
@@ -1325,6 +1356,11 @@ function FillBlankPlayer({ item, onComplete }) {
             );
           })}
         </div>
+        {selected && selected !== q.answer && (
+          <div className="fc-fill-next-row">
+            <button className="btn primary" onClick={goNextFB}>下一題 →</button>
+          </div>
+        )}
       </div>
     </div>
   );
