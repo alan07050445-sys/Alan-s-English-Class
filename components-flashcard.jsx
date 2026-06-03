@@ -423,29 +423,13 @@ function FlashcardPlayer({ item, onComplete }) {
           <div className={"fc-flip-card" + (flipped ? " flipped" : "")} onClick={() => setFlipped(f => !f)}>
             <div className="fc-flip-inner">
               {/* FRONT — English only */}
-              <div
-                className={`fc-face fc-front ${flipped ? "is-hidden" : "is-visible"}`}
-                style={{
-                  opacity: flipped ? 0 : 1,
-                  visibility: flipped ? 'hidden' : 'visible',
-                  pointerEvents: flipped ? 'none' : 'auto',
-                  transform: flipped ? 'translateY(-4px)' : 'translateY(0)',
-                }}
-              >
+              <div className="fc-face fc-front">
                 <SpeakerBtn text={card.term} lang="en-US" className="fc-face-speaker"/>
                 <div className="fc-term serif">{card.term}</div>
                 <div className="fc-flip-hint mono">tap to reveal · 點擊顯示</div>
               </div>
               {/* BACK — Chinese + image */}
-              <div
-                className={`fc-face fc-back ${flipped ? "is-visible" : "is-hidden"}`}
-                style={{
-                  opacity: flipped ? 1 : 0,
-                  visibility: flipped ? 'visible' : 'hidden',
-                  pointerEvents: flipped ? 'auto' : 'none',
-                  transform: flipped ? 'translateY(0)' : 'translateY(6px)',
-                }}
-              >
+              <div className="fc-face fc-back">
                 <SpeakerBtn text={card.zh} lang="zh-TW" className="fc-face-speaker fc-face-speaker-dark"/>
                 {card.imageUrl && (
                   <div className="fc-back-img-wrap">

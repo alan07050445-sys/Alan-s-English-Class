@@ -67,9 +67,19 @@
 }
 .fc-face-speaker-dark:hover { color: var(--ink); border-color: var(--ink); background: var(--bg); }
 
-/* ── Reveal card ── */
-.fc-flip-card { width: 100%; height: 480px; margin-bottom: 28px; cursor: pointer; }
-.fc-flip-inner { width: 100%; height: 100%; position: relative; }
+/* ── Reveal card — true CSS 3D flip ── */
+.fc-flip-card {
+  width: 100%; height: 480px; margin-bottom: 28px; cursor: pointer;
+  perspective: 1200px;
+}
+.fc-flip-inner {
+  width: 100%; height: 100%; position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+.fc-flip-card.flipped .fc-flip-inner {
+  transform: rotateY(180deg);
+}
 .fc-face {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
@@ -81,33 +91,19 @@
   text-align: center;
   gap: 0;
   overflow: hidden;
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
-.fc-front { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.fc-front {
+  transform: rotateY(0deg);
+}
 .fc-back {
-  opacity: 0; visibility: hidden; pointer-events: none;
-  transform: translateY(6px);
+  transform: rotateY(180deg);
   background: var(--bg-card); color: var(--ink);
-}
-.fc-flip-card.flipped .fc-front {
-  opacity: 0; visibility: hidden; pointer-events: none;
-  transform: translateY(-4px);
-}
-.fc-flip-card.flipped .fc-back {
-  opacity: 1; visibility: visible; pointer-events: auto;
-  transform: translateY(0);
-}
-.fc-front.is-hidden {
-  opacity: 0; visibility: hidden; pointer-events: none;
-  transform: translateY(-4px);
-}
-.fc-back.is-visible {
-  opacity: 1; visibility: visible; pointer-events: auto;
-  transform: translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fc-face { transition: none; }
+  .fc-flip-inner { transition: none; }
 }
 
 /* Image on the BACK of card */
