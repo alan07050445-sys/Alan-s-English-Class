@@ -326,6 +326,7 @@ function App() {
   };
 
   const [slideDir, setSlideDir] = useAppState(null); // 'left' | 'right'
+  const [mainKey,  setMainKey]  = useAppState(0);    // increments on back-to-main
   const goPrevWeek = () => { setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); };
   const goNextWeek = () => { setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); };
 
@@ -690,7 +691,7 @@ function App() {
               cat={catView}
               items={(week.items || {})[catView.id] || []}
               weekId={weekId}
-              onBack={() => setCatView(null)}
+              onBack={() => { setCatView(null); setMainKey(k => k + 1); }}
               editMode={editMode}
               onAddItem={handleAddItem}
               onEditItem={handleEditItem}
@@ -701,7 +702,7 @@ function App() {
               weekQuizItems={weekQuizItems}
             />
           ) : (
-            <div className="shell">
+            <div key={mainKey} className="shell main-enter">
               <window.QuizModeBlocks
                 week={week}
                 weekId={weekId}

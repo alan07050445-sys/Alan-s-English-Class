@@ -14,14 +14,19 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 @keyframes catExpand {
-  from { opacity: 0; transform: translateY(-10px); clip-path: inset(0 0 100% 0); }
-  to   { opacity: 1; transform: translateY(0);     clip-path: inset(0 0 0% 0); }
+  from { opacity: 0; transform: translateY(-22px) scaleY(0.92); }
+  to   { opacity: 1; transform: translateY(0)     scaleY(1); }
 }
-.page { animation: pageEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes mainEnter {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page       { animation: pageEnter  0.5s  cubic-bezier(0.22, 1, 0.36, 1) both; }
+.main-enter { animation: mainEnter  0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .week-slide-left  { animation: weekSlideLeft  0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .week-slide-right { animation: weekSlideRight 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) {
-  .page, .week-slide-left, .week-slide-right { animation: none; }
+  .page, .main-enter, .week-slide-left, .week-slide-right { animation: none; }
 }
 
 :root {
