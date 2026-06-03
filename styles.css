@@ -44,7 +44,8 @@
 @media (prefers-reduced-motion: reduce) {
   .page, .main-enter, .week-slide-left, .week-slide-right,
   .qm-cat-enter, .qm-quiz-swap, .qm-question-swap, .qm-options-swap .qm-option,
-  .qm-block, .cat-detail, .item-embed {
+  .qm-block, .cat-detail, .item-embed,
+  .grade-selector, .grade-selector-inner, .grade-sel-card {
     animation: none !important;
     transition-duration: 0.01ms !important;
   }
