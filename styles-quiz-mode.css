@@ -1873,3 +1873,104 @@
   .wf3-body,
   .wf3-raw { font-size: 15px; }
 }
+
+/* ══════════════════════════════════════════════════════
+   CLOZE TEST PLAYER
+══════════════════════════════════════════════════════ */
+.cloze-player {
+  display: flex; flex-direction: column;
+  min-height: 480px; padding: 0;
+}
+.cloze-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 28px 14px; border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.cloze-score-badge {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  padding: 4px 14px; border-radius: 999px;
+  background: var(--bg-paper); border: 1px solid var(--border);
+  color: var(--ink);
+}
+.cloze-score-badge.great { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+.cloze-score-badge.ok    { background: #fff8e1; border-color: #ffb300; color: #e65100; }
+.cloze-score-badge.low   { background: #ffebee; border-color: #f44336; color: #c62828; }
+
+.cloze-passage {
+  flex: 1;
+  padding: 28px 32px;
+  font-size: 19px;
+  line-height: 2.4;
+  font-family: var(--sans);
+  color: var(--ink);
+}
+
+/* Each blank group: circle number + input/result + hint */
+.cloze-blank-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+.cloze-blank-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #2196f3; color: #fff;
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+  flex-shrink: 0; line-height: 1;
+}
+.cloze-input {
+  display: inline-block;
+  width: 90px;
+  border: none;
+  border-bottom: 2px solid var(--ink);
+  background: transparent;
+  font-size: 17px; font-family: var(--sans);
+  color: var(--ink);
+  padding: 0 4px 2px;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+.cloze-input:focus { border-bottom-color: #2196f3; }
+.cloze-hint {
+  font-size: 14px; color: var(--ink-muted);
+  font-style: italic; margin-left: 1px;
+}
+
+/* After submit */
+.cloze-blank-result {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 17px; font-weight: 700;
+  padding: 1px 8px; border-radius: 4px;
+  min-width: 60px; text-align: center; justify-content: center;
+}
+.cloze-blank-result.correct { background: #e8f5e9; color: #2e7d32; }
+.cloze-blank-result.wrong   { background: #ffebee; flex-direction: column; gap: 0; padding: 2px 8px; }
+.cloze-check { font-size: 13px; }
+.cloze-wrong-ans {
+  color: #c62828; text-decoration: line-through;
+  font-size: 13px; font-weight: 400;
+}
+.cloze-right-ans {
+  color: #2e7d32; font-size: 16px; font-weight: 700;
+}
+
+.cloze-footer {
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 16px;
+}
+.cloze-result-row {
+  display: flex; align-items: center; gap: 16px; width: 100%;
+}
+.cloze-result-emoji { font-size: 26px; line-height: 1; }
+.cloze-result-text  { flex: 1; font-size: 16px; font-weight: 600; color: var(--ink); }
+
+@media (max-width: 640px) {
+  .cloze-passage { padding: 18px 16px; font-size: 17px; line-height: 2.2; }
+  .cloze-input { width: 72px; font-size: 15px; }
+  .cloze-topbar { padding: 14px 16px 12px; }
+  .cloze-footer { padding: 16px; }
+}

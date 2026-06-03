@@ -108,7 +108,8 @@ function getQuizItems(items) {
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
     (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
-    (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || ''))
+    (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
+    (item.type === 'cloze'            && (item.passage || '').includes('['))
   );
 }
 
@@ -150,6 +151,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'word-sort')    return (item.sortWords || []).length;
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
+  if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
   if (item.type === 'writing-practice') return 1;
   return getItemQuestions(item).length;
 }
@@ -364,7 +366,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isWordSort     = item.type === 'word-sort';
             const isEssay        = item.type === 'essay';
             const isStoryMtn     = item.type === 'story-mountain';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn;
+            const isCloze        = item.type === 'cloze';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -388,7 +391,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : `${totalQ} questions`}
+                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -541,6 +544,15 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             progressKey={`${weekId}_${selectedItem.id}`}
             onBack={() => setPhase('intro')}
           />
+        ) : selectedItem?.type === 'cloze' && phase === 'quiz' ? (
+          <ClozePlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'cloze' && phase === 'intro' ? (
+          <ClozeIntro item={selectedItem} onStart={() => setPhase('quiz')} />
         ) : selectedItem?.type === 'essay' && phase === 'intro' ? (
           <EssayIntro
             item={selectedItem}
@@ -2440,4 +2452,161 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer });
+/* ══════════════════════════════════════════════════════
+   CLOZE TEST
+══════════════════════════════════════════════════════ */
+function parseClozePassage(passage) {
+  const regex = /\[([^\]]+)\](?:\(([^)]*)\))?/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  let blankNum = 0;
+  while ((match = regex.exec(passage)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', text: passage.slice(lastIndex, match.index) });
+    }
+    blankNum++;
+    parts.push({ type: 'blank', num: blankNum, answer: match[1].trim(), hint: match[2] ? match[2].trim() : null });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < passage.length) {
+    parts.push({ type: 'text', text: passage.slice(lastIndex) });
+  }
+  return parts;
+}
+
+function ClozeIntro({ item, onStart }) {
+  const blankCount = ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">📝</div>
+      <div className="qm-intro-title">{item.title}</div>
+      {item.zh && <div className="qm-intro-meta">{item.zh}</div>}
+      <div className="qm-intro-meta">{blankCount} blanks · 段落填空</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>📖</span><span>閱讀整段文章，在空格中填入正確答案</span></div>
+        <div className="qm-intro-rule-row"><span>💡</span><span>括號內是原形提示，填入正確的動詞變化</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫，拼對就算對</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始填空 · Start →</button>
+      </div>
+    </div>
+  );
+}
+
+function ClozePlayer({ item, progressKey, onBack }) {
+  const parts   = useQMM(() => parseClozePassage(item.passage || ''), [item.id]);
+  const blanks  = useQMM(() => parts.filter(p => p.type === 'blank'), [parts]);
+  const total   = blanks.length;
+  const [inputs,    setInputs]    = useQM({});
+  const [submitted, setSubmitted] = useQM(false);
+  const [score,     setScore]     = useQM(0);
+  const inputRefs = React.useRef({});
+
+  const handleInput = (num, val) => setInputs(prev => ({...prev, [num]: val}));
+
+  const handleKeyDown = (e, num) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const nextRef = inputRefs.current[num + 1];
+      if (nextRef) nextRef.focus();
+    }
+  };
+
+  const handleSubmit = () => {
+    let correct = 0;
+    const wrongList = [];
+    blanks.forEach(b => {
+      const userVal = (inputs[b.num] || '').trim().toLowerCase();
+      if (userVal === b.answer.toLowerCase()) {
+        correct++;
+      } else {
+        wrongList.push({ q: `Blank ${b.num}${b.hint ? ` (${b.hint})` : ''}`, answer: b.answer });
+      }
+    });
+    setScore(correct);
+    setSubmitted(true);
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total, wrongQuestions: wrongList });
+    if (window._onQuizComplete) window._onQuizComplete(correct, total, wrongList, { itemId: progressKey });
+  };
+
+  const answeredCount = blanks.filter(b => (inputs[b.num] || '').trim()).length;
+  const pct = total > 0 ? Math.round(score / total * 100) : 0;
+
+  const renderPassage = () => parts.map((part, i) => {
+    if (part.type === 'text') {
+      return part.text.split('\n').reduce((acc, line, j, arr) => {
+        if (j > 0) acc.push(<br key={`br-${i}-${j}`}/>);
+        if (line) acc.push(<span key={`t-${i}-${j}`}>{line}</span>);
+        return acc;
+      }, []);
+    }
+    const b = part;
+    const userVal   = inputs[b.num] || '';
+    const isCorrect = submitted && userVal.trim().toLowerCase() === b.answer.toLowerCase();
+    const isWrong   = submitted && !isCorrect;
+    return (
+      <span key={`b-${i}`} className="cloze-blank-wrap">
+        <span className="cloze-blank-num">{b.num}</span>
+        {submitted ? (
+          <span className={`cloze-blank-result ${isCorrect ? 'correct' : 'wrong'}`}>
+            {isCorrect
+              ? <>{userVal} <span className="cloze-check">✓</span></>
+              : <>{userVal && <span className="cloze-wrong-ans">{userVal || '—'}</span>}<span className="cloze-right-ans">{b.answer}</span></>
+            }
+          </span>
+        ) : (
+          <input
+            ref={el => { inputRefs.current[b.num] = el; }}
+            className="cloze-input"
+            value={userVal}
+            onChange={e => handleInput(b.num, e.target.value)}
+            onKeyDown={e => handleKeyDown(e, b.num)}
+            placeholder="___"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        )}
+        {b.hint && <span className="cloze-hint">({b.hint})</span>}
+      </span>
+    );
+  });
+
+  return (
+    <div className="cloze-player">
+      <div className="cloze-topbar">
+        <button className="qm-back-btn" onClick={onBack}>← Back</button>
+        {submitted
+          ? <span className={`cloze-score-badge ${pct >= 80 ? 'great' : pct >= 60 ? 'ok' : 'low'}`}>
+              {score}/{total} · {pct}%
+            </span>
+          : <span className="mono" style={{fontSize:12,color:'var(--ink-muted)'}}>
+              {answeredCount} / {total} filled
+            </span>
+        }
+      </div>
+
+      <div className="cloze-passage">
+        {renderPassage()}
+      </div>
+
+      <div className="cloze-footer">
+        {!submitted ? (
+          <button className="qm-btn primary" onClick={handleSubmit} disabled={answeredCount === 0}>
+            Submit · 交卷 ({answeredCount}/{total})
+          </button>
+        ) : (
+          <div className="cloze-result-row">
+            <span className="cloze-result-emoji">{pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪'}</span>
+            <span className="cloze-result-text">{score} / {total} correct · {pct}%</span>
+            <button className="qm-btn secondary" onClick={onBack}>← Back</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, ClozePlayer, ClozeIntro });

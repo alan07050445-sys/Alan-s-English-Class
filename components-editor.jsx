@@ -16,6 +16,7 @@ const TYPE_OPTIONS = [
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
   { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
   { id: "story-mountain",   label: "Story Mountain",   hint: "🏔 故事山脈 — 逐步填寫 Introduction → Rising Action → Climax → Falling Action → Resolution，AI 批改結構與文法（10 分制）" },
+  { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -44,7 +45,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "cloze") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -173,6 +174,11 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               scaffold={form.essayScaffold || ''}
               onChangePrompt={v => update("essayPrompt", v)}
               onChangeScaffold={v => update("essayScaffold", v)}
+            />
+          ) : form.type === "cloze" ? (
+            <ClozeEditor
+              passage={form.passage || ''}
+              onChangePassage={v => update("passage", v)}
             />
           ) : form.type === "story-mountain" ? (
             <StoryMountainEditor
@@ -1511,6 +1517,43 @@ function StoryMountainEditor({ prompt, passage, hints, onChangePrompt, onChangeP
       <div style={{padding:'12px 16px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,fontSize:13,color:'#166534',lineHeight:1.7}}>
         <strong>AI 批改標準（自動套用）：</strong><br/>
         Score ⭐⭐⭐⭐⭐ · Good Job（客觀優點）· To Improve（客觀改進點）· Better Version
+      </div>
+    </div>
+  );
+}
+
+/* ── ClozeEditor ── */
+function ClozeEditor({ passage, onChangePassage }) {
+  const blankCount = (passage.match(/\[[^\]]+\]/g) || []).length;
+  return (
+    <div>
+      <div className="field">
+        <label className="field-label">文章內容 Passage</label>
+        <div className="field-help" style={{marginBottom:10,lineHeight:1.7}}>
+          用 <code style={{background:'var(--border-soft)',padding:'1px 5px',borderRadius:2}}>[答案]</code> 標記空格，
+          加括號可附原形提示：<code style={{background:'var(--border-soft)',padding:'1px 5px',borderRadius:2}}>[答案](提示)</code>
+          <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
+            例：Two summers ago we <code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>[had](have)</code> a holiday in Scotland. We <code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>[drove](drive)</code> there.
+          </span>
+        </div>
+        <textarea
+          value={passage}
+          onChange={e => onChangePassage(e.target.value)}
+          rows={12}
+          placeholder={"Two summers ago we [had](have) a holiday in Scotland. We [drove](drive) there from London, but our car [broke](break) down on the motorway and we [spent](spend) the first night in Birmingham.\n\nWhen we [got](get) to Edinburgh we [couldn't](not can) find a good hotel..."}
+          style={{width:'100%',fontFamily:'var(--sans)',fontSize:14,padding:'10px 12px',
+            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
+            borderRadius:2,resize:'vertical',lineHeight:1.9,boxSizing:'border-box'}}
+        />
+        {blankCount > 0 ? (
+          <div className="field-help" style={{marginTop:6,color:'var(--moss)'}}>
+            ✅ 已偵測到 <strong>{blankCount}</strong> 個空格
+          </div>
+        ) : passage.trim() ? (
+          <div className="field-help" style={{marginTop:6,color:'var(--accent)'}}>
+            ⚠ 尚未偵測到空格，請用 [答案] 標記
+          </div>
+        ) : null}
       </div>
     </div>
   );
