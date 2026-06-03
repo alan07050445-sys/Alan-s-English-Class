@@ -1524,34 +1524,137 @@ function StoryMountainEditor({ prompt, passage, hints, onChangePrompt, onChangeP
 
 /* ── ClozeEditor ── */
 function ClozeEditor({ passage, onChangePassage }) {
+  const [importing,    setImporting]    = useS(false);
+  const [importPassage, setImportPassage] = useS('');
+  const [importAnswers, setImportAnswers] = useS('');
+  const [importErr,    setImportErr]    = useS('');
+
   const blankCount = (passage.match(/\[[^\]]+\]/g) || []).length;
+
+  const doImport = () => {
+    setImportErr('');
+    const passageText = importPassage.trim();
+    if (!passageText) { setImportErr('請貼上文章內容'); return; }
+
+    // Find all ___ (with optional hint like (have))
+    const blankRegex = /___(?:\s*\(([^)]*)\))?/g;
+    const blanksFound = [...passageText.matchAll(blankRegex)];
+    if (blanksFound.length === 0) { setImportErr('在文章中找不到 ___ 空格，請確認格式'); return; }
+
+    // Parse answers (one per line, ignore empty lines)
+    const answers = importAnswers.split('\n').map(l => l.trim()).filter(Boolean);
+    if (answers.length === 0) { setImportErr('請在右欄填入答案（每行一個）'); return; }
+    if (answers.length !== blanksFound.length) {
+      setImportErr(`空格數 (${blanksFound.length}) 與答案數 (${answers.length}) 不符，請確認`);
+      return;
+    }
+
+    // Replace each ___ with [answer](hint) or [answer]
+    let idx = 0;
+    const result = passageText.replace(/___(?:\s*\(([^)]*)\))?/g, (match, hint) => {
+      const ans = answers[idx++] || '';
+      return hint ? `[${ans}](${hint})` : `[${ans}]`;
+    });
+
+    onChangePassage(result);
+    setImporting(false);
+    setImportPassage('');
+    setImportAnswers('');
+  };
+
   return (
     <div>
+      {/* Import panel */}
       <div className="field">
-        <label className="field-label">文章內容 Passage</label>
-        <div className="field-help" style={{marginBottom:10,lineHeight:1.7}}>
-          用 <code style={{background:'var(--border-soft)',padding:'1px 5px',borderRadius:2}}>[答案]</code> 標記空格，
-          加括號可附原形提示：<code style={{background:'var(--border-soft)',padding:'1px 5px',borderRadius:2}}>[答案](提示)</code>
-          <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
-            例：Two summers ago we <code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>[had](have)</code> a holiday in Scotland. We <code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>[drove](drive)</code> there.
-          </span>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>文章內容 Passage</label>
+          <button
+            className={"btn ghost" + (importing ? " active" : "")}
+            style={{fontSize:11, padding:'4px 12px'}}
+            onClick={() => { setImporting(v => !v); setImportErr(''); }}
+          >
+            {importing ? '✕ 取消' : '⬇ Import'}
+          </button>
         </div>
+
+        {importing && (
+          <div style={{marginBottom:14, padding:'14px 16px', border:'1px solid var(--border)', borderRadius:6, background:'var(--bg-paper)'}}>
+            <div style={{fontSize:12, fontFamily:'var(--mono)', color:'var(--ink-muted)', marginBottom:12, lineHeight:1.7}}>
+              左欄貼入原始文章（用 <code style={{background:'rgba(0,0,0,0.06)',padding:'1px 4px',borderRadius:2}}>___</code> 當空格，括號提示保留）；
+              右欄每行貼一個答案，順序需與空格一致。
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+              <div>
+                <div style={{fontSize:11, fontFamily:'var(--mono)', color:'var(--ink-muted)', marginBottom:4}}>
+                  文章（___ 當空格）
+                </div>
+                <textarea
+                  value={importPassage}
+                  onChange={e => { setImportPassage(e.target.value); setImportErr(''); }}
+                  rows={10}
+                  placeholder={"Two summers ago we ___ (have) a holiday in Scotland. We ___ (drive) there from London, but our car ___ (break) down on the motorway and we ___ (spend) the first night in Birmingham."}
+                  style={{width:'100%', fontFamily:'var(--sans)', fontSize:13, padding:'9px 10px',
+                    border:'1px solid var(--border)', background:'var(--bg)', color:'var(--ink)',
+                    borderRadius:2, resize:'vertical', lineHeight:1.8, boxSizing:'border-box'}}
+                />
+              </div>
+              <div>
+                <div style={{fontSize:11, fontFamily:'var(--mono)', color:'var(--ink-muted)', marginBottom:4}}>
+                  答案（每行一個，照順序）
+                </div>
+                <textarea
+                  value={importAnswers}
+                  onChange={e => { setImportAnswers(e.target.value); setImportErr(''); }}
+                  rows={10}
+                  placeholder={"had\ndrove\nbroke\nspent"}
+                  style={{width:'100%', fontFamily:'var(--mono)', fontSize:14, padding:'9px 10px',
+                    border:'1px solid var(--border)', background:'var(--bg)', color:'var(--ink)',
+                    borderRadius:2, resize:'vertical', lineHeight:1.9, boxSizing:'border-box'}}
+                />
+              </div>
+            </div>
+            {importErr && (
+              <div style={{color:'var(--accent)', fontSize:12, marginTop:8, fontFamily:'var(--mono)'}}>⚠ {importErr}</div>
+            )}
+            {importPassage && importAnswers && (() => {
+              const blanks = [...importPassage.matchAll(/___(?:\s*\([^)]*\))?/g)].length;
+              const ans    = importAnswers.split('\n').filter(l => l.trim()).length;
+              return blanks > 0 && (
+                <div style={{fontSize:12, color: blanks === ans ? 'var(--moss)' : 'var(--accent)', marginTop:6, fontFamily:'var(--mono)'}}>
+                  {blanks === ans ? `✅ ${blanks} 個空格 · ${ans} 個答案 — 可以匯入` : `⚠ ${blanks} 個空格 vs ${ans} 個答案 — 數量不符`}
+                </div>
+              );
+            })()}
+            <div style={{display:'flex', gap:8, marginTop:10, justifyContent:'flex-end'}}>
+              <button className="btn ghost" style={{fontSize:12, padding:'6px 14px'}}
+                onClick={() => { setImporting(false); setImportPassage(''); setImportAnswers(''); setImportErr(''); }}>
+                取消
+              </button>
+              <button className="btn primary" style={{fontSize:12, padding:'6px 16px'}}
+                onClick={doImport} disabled={!importPassage.trim() || !importAnswers.trim()}>
+                匯入 →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Main passage editor */}
         <textarea
           value={passage}
           onChange={e => onChangePassage(e.target.value)}
-          rows={12}
-          placeholder={"Two summers ago we [had](have) a holiday in Scotland. We [drove](drive) there from London, but our car [broke](break) down on the motorway and we [spent](spend) the first night in Birmingham.\n\nWhen we [got](get) to Edinburgh we [couldn't](not can) find a good hotel..."}
-          style={{width:'100%',fontFamily:'var(--sans)',fontSize:14,padding:'10px 12px',
-            border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',
-            borderRadius:2,resize:'vertical',lineHeight:1.9,boxSizing:'border-box'}}
+          rows={10}
+          placeholder={"Two summers ago we [had](have) a holiday in Scotland. We [drove](drive) there from London...\n\n（也可以用上方 Import 按鈕，分別貼入文章和答案，自動合成格式）"}
+          style={{width:'100%', fontFamily:'var(--sans)', fontSize:14, padding:'10px 12px',
+            border:'1px solid var(--border)', background:'var(--bg)', color:'var(--ink)',
+            borderRadius:2, resize:'vertical', lineHeight:1.9, boxSizing:'border-box'}}
         />
         {blankCount > 0 ? (
-          <div className="field-help" style={{marginTop:6,color:'var(--moss)'}}>
+          <div className="field-help" style={{marginTop:6, color:'var(--moss)'}}>
             ✅ 已偵測到 <strong>{blankCount}</strong> 個空格
           </div>
         ) : passage.trim() ? (
-          <div className="field-help" style={{marginTop:6,color:'var(--accent)'}}>
-            ⚠ 尚未偵測到空格，請用 [答案] 標記
+          <div className="field-help" style={{marginTop:6, color:'var(--accent)'}}>
+            ⚠ 尚未偵測到空格，請用 [答案] 標記，或使用上方 Import
           </div>
         ) : null}
       </div>
