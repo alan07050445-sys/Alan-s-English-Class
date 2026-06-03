@@ -308,6 +308,8 @@
   border: 1px solid var(--border);
   overflow: hidden;
   border-radius: 4px;
+  transform-origin: top center;
+  animation: questionSwap 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 /* When a themed FillBlank is inside, remove border and show theme bg cleanly */
 .item-embed:has(.fc-wrap.fc-theme-classroom),

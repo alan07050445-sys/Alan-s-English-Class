@@ -319,9 +319,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const qmProg = useQMM(() => loadQMProg(), [progVersion]);
   const hasSelection = !!selectedItem;
+  const quizSwapKey = selectedItem ? `${selectedItem.id}-${phase}-${playerKey}` : 'empty';
 
   return (
-    <div className={`qm-cat-view${hasSelection ? ' has-selection' : ''}`}>
+    <div className={`qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}`}>
 
       {/* ── Left sidebar ── */}
       <div className="qm-sidebar">
@@ -452,6 +453,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 
       {/* ── Right: intro / flashcards / quiz / placeholder ── */}
       <div className="qm-quiz-area">
+        <div key={quizSwapKey} className="qm-quiz-swap">
         {!selectedItem ? (
           <div className="qm-placeholder">
             <div className="qm-placeholder-icon">👈</div>
@@ -592,6 +594,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             onQuizDone={() => setProgVersion(v => v + 1)}
           />
         )}
+        </div>
       </div>
     </div>
   );
@@ -875,7 +878,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
         <span className="qm-player-counter">{idx + 1} / {total}</span>
       </div>
 
-      <div className="qm-question-area">
+      <div key={idx} className="qm-question-area qm-question-swap">
         {item.instruction && <div className="qm-question-hint">{item.instruction}</div>}
         <div className="ta-prompt">{current?.prompt}</div>
       </div>
@@ -1177,12 +1180,12 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
         </div>
       </div>
 
-      <div className="qm-question-area">
+      <div key={deckPos} className="qm-question-area qm-question-swap">
         {q.hint && <div className="qm-question-hint">{q.hint}</div>}
         <div className="qm-question-text">{q.q}</div>
       </div>
 
-      <div className="qm-options">
+      <div key={`opts-${deckPos}`} className="qm-options qm-options-swap">
         {q.options.map((opt, i) => {
           let cls = 'qm-option';
           if (selected !== null) {
@@ -1356,7 +1359,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
         <span className="wp-counter">{idx + 1} / {total}</span>
         <span className="wp-avg">{scores.length > 0 ? `avg ${avgDisplay}★` : ''}</span>
       </div>
-      <div className="wp-card">
+      <div key={idx} className="wp-card qm-question-swap">
         <div className="wp-instruction">Use the word in a sentence</div>
         <div className="wp-word">{current.word}</div>
         <div className="wp-rules">
@@ -1541,7 +1544,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
         <span className="wp-counter">{idx+1} / {total}</span>
         </div>
 
-      <div className="wp-card">
+      <div key={idx} className="wp-card qm-question-swap">
         <div className="wp-instruction">Question {idx+1}</div>
         <div className="sa-question">{current.question}</div>
       </div>
@@ -1729,7 +1732,7 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
       </div>
 
       {/* Interactive word display */}
-      <div className="sd-word-display">
+      <div key={idx} className="sd-word-display qm-question-swap">
         {letters.map((letter, i) => {
           // Determine gap state after each letter (except last)
           let gapClass = '';
@@ -2406,7 +2409,9 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
   return (
     <div className="sm-player">
       {/* Mountain diagram */}
-      <StoryMountainSVG activeKey={current.key} doneKeys={doneKeys}/>
+      <div key={current.key} className="qm-question-swap">
+        <StoryMountainSVG activeKey={current.key} doneKeys={doneKeys}/>
+      </div>
 
       {/* Writing prompt (if any) */}
       {item.smPrompt && (

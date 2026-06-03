@@ -54,7 +54,13 @@
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
   box-shadow: 0 2px 0 rgba(21,19,14,0.05);
+  animation: softRise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+.qm-block:nth-child(1) { animation-delay: 0.03s; }
+.qm-block:nth-child(2) { animation-delay: 0.08s; }
+.qm-block:nth-child(3) { animation-delay: 0.13s; }
+.qm-block:nth-child(4) { animation-delay: 0.18s; }
+.qm-block:nth-child(n+5) { animation-delay: 0.22s; }
 .qm-block:hover:not(.empty) {
   border-color: var(--ink); transform: translateY(-3px);
   box-shadow: 0 10px 28px rgba(21,19,14,0.12);
@@ -87,6 +93,9 @@
   display: flex;
   min-height: calc(100vh - 110px);
   width: 100%;
+}
+.qm-cat-enter {
+  animation: softSlideIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .qm-sidebar {
@@ -131,12 +140,13 @@
   display: flex; align-items: center; gap: 12px;
   padding: 15px 20px; cursor: pointer;
   border-left: 3px solid transparent;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background 0.14s, border-color 0.14s, transform 0.14s;
 }
-.qm-unit-row:hover { background: var(--bg); }
+.qm-unit-row:hover { background: var(--bg); transform: translateX(2px); }
 .qm-unit-row.active {
   background: var(--bg);
   border-left-color: var(--accent);
+  animation: questionSwap 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .qm-unit-row.done .qm-unit-row-title { color: var(--ink-2); }
 
@@ -197,6 +207,10 @@
   flex: 1;
   overflow-y: auto;
   padding: 32px 32px;
+}
+.qm-quiz-swap {
+  min-height: 100%;
+  animation: questionSwap 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .qm-placeholder {
@@ -267,11 +281,20 @@
 
 /* ── Question ────────────────────────────────────────── */
 .qm-question-area { text-align: center; margin-bottom: 36px; padding: 0 4px; }
+.qm-question-swap {
+  animation: questionSwap 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 .qm-question-hint { font-size: 13px; color: var(--ink-3); font-family: var(--mono); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 20px; }
 .qm-question-text { font-family: var(--serif); font-size: 52px; font-weight: 600; color: var(--ink); line-height: 1.18; }
 
 /* ── Options ─────────────────────────────────────────── */
 .qm-options { display: flex; flex-direction: column; gap: 12px; }
+.qm-options-swap .qm-option {
+  animation: optionRise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.qm-options-swap .qm-option:nth-child(2) { animation-delay: 0.04s; }
+.qm-options-swap .qm-option:nth-child(3) { animation-delay: 0.08s; }
+.qm-options-swap .qm-option:nth-child(4) { animation-delay: 0.12s; }
 .qm-option {
   display: flex; align-items: center; gap: 16px;
   padding: 22px 24px;
