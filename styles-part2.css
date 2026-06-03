@@ -166,7 +166,9 @@
   background: var(--bg-card);
   padding: 48px 56px 56px;
   border-top: 1px solid var(--rule);
+  animation: catExpand 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+@media (prefers-reduced-motion: reduce) { .cat-detail { animation: none; } }
 .cat-detail-head {
   display: flex; justify-content: space-between; align-items: flex-end;
   padding-bottom: 24px;

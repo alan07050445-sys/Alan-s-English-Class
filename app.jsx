@@ -325,8 +325,9 @@ function App() {
     setTimeout(() => setToast(null), 1800);
   };
 
-  const goPrevWeek = () => { setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); };
-  const goNextWeek = () => { setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); };
+  const [slideDir, setSlideDir] = useAppState(null); // 'left' | 'right'
+  const goPrevWeek = () => { setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); };
+  const goNextWeek = () => { setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -683,6 +684,7 @@ function App() {
           />
 
           {/* ── QUIZ MODE ── */}
+          <div key={weekId} className={slideDir ? `week-slide-${slideDir}` : ''}>
           {catView ? (
             <window.QuizModeCategoryView
               cat={catView}
@@ -717,6 +719,7 @@ function App() {
               />
             </div>
           )}
+          </div>{/* end week-slide wrapper */}
 
           <window.Footer/>
 
