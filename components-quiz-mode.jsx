@@ -2500,6 +2500,14 @@ function ClozeIntro({ item, onStart }) {
   );
 }
 
+function normalizeClozeAnswer(answer) {
+  return String(answer || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u02bc\uff07`]/g, "'")
+    .replace(/\s+/g, ' ');
+}
+
 function ClozePlayer({ item, progressKey, onBack }) {
   const parts   = useQMM(() => parseClozePassage(item.passage || ''), [item.id]);
   const blanks  = useQMM(() => parts.filter(p => p.type === 'blank'), [parts]);
@@ -2523,8 +2531,8 @@ function ClozePlayer({ item, progressKey, onBack }) {
     let correct = 0;
     const wrongList = [];
     blanks.forEach(b => {
-      const userVal = (inputs[b.num] || '').trim().toLowerCase();
-      if (userVal === b.answer.toLowerCase()) {
+      const userVal = normalizeClozeAnswer(inputs[b.num]);
+      if (userVal === normalizeClozeAnswer(b.answer)) {
         correct++;
       } else {
         wrongList.push({ q: `Blank ${b.num}${b.hint ? ` (${b.hint})` : ''}`, answer: b.answer });
@@ -2549,7 +2557,7 @@ function ClozePlayer({ item, progressKey, onBack }) {
     }
     const b = part;
     const userVal   = inputs[b.num] || '';
-    const isCorrect = submitted && userVal.trim().toLowerCase() === b.answer.toLowerCase();
+    const isCorrect = submitted && normalizeClozeAnswer(userVal) === normalizeClozeAnswer(b.answer);
     const isWrong   = submitted && !isCorrect;
     return (
       <span key={`b-${i}`} className="cloze-blank-wrap">
