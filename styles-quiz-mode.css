@@ -1890,6 +1890,187 @@
 }
 
 /* ══════════════════════════════════════════════════════
+   CIRCLE ANSWER PLAYER
+══════════════════════════════════════════════════════ */
+.circle-player {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+}
+.circle-topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.circle-instruction {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+.circle-progress {
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.circle-question-list {
+  display: grid;
+  gap: 12px;
+  padding: 24px 28px;
+}
+.circle-question {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 14px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.circle-question.correct { border-color: #9bcba5; }
+.circle-question.wrong { border-color: #e3aaa5; }
+.circle-question-number {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 2;
+}
+.circle-question-body { min-width: 0; }
+.circle-sentence {
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 20px;
+  line-height: 2;
+}
+.circle-word {
+  appearance: none;
+  display: inline-block;
+  margin: 0 -1px;
+  padding: 0 5px 1px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s;
+}
+.circle-word:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-paper);
+}
+.circle-word.selected {
+  border-color: var(--ink);
+  background: var(--bg-paper);
+}
+.circle-word.selected.correct,
+.circle-word.answer {
+  border-color: #27833d;
+  background: #edf8ef;
+  color: #17672c;
+}
+.circle-word.selected.wrong {
+  border-color: #bd3434;
+  background: #fff0f0;
+  color: #9b2727;
+}
+.circle-word:disabled { cursor: default; }
+.circle-classify {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.circle-classify-label {
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.circle-label-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.circle-label-option {
+  padding: 7px 14px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+}
+.circle-label-option:hover:not(:disabled),
+.circle-label-option.selected {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+.circle-label-option.selected.correct,
+.circle-label-option.answer {
+  border-color: #27833d;
+  background: #edf8ef;
+  color: #17672c;
+}
+.circle-label-option.selected.wrong {
+  border-color: #bd3434;
+  background: #fff0f0;
+  color: #9b2727;
+}
+.circle-correction {
+  margin-top: 12px;
+  color: #9b2727;
+  font-size: 13px;
+}
+.circle-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+}
+.circle-result {
+  margin-right: auto;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .circle-topbar {
+    grid-template-columns: auto 1fr;
+    padding: 14px 16px;
+  }
+  .circle-instruction {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 15px;
+    text-align: left;
+  }
+  .circle-progress { justify-self: end; }
+  .circle-question-list { padding: 16px; }
+  .circle-question {
+    grid-template-columns: 22px 1fr;
+    gap: 8px;
+    padding: 16px 14px;
+  }
+  .circle-sentence { font-size: 18px; }
+  .circle-footer {
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════
    CLOZE TEST PLAYER
 ══════════════════════════════════════════════════════ */
 .cloze-player {

@@ -296,6 +296,7 @@ const TYPE_META = {
   flashcard:  { label: "Flashcard",  zh: "單字卡", embed: false, cta: "Study →" },
   fillblank:  { label: "Fill Blank", zh: "填空",   embed: false, cta: "Play →" },
   "vocab-quiz":{ label: "Vocab Quiz", zh: "單字測驗", embed: false, cta: "Start →" },
+  "circle-answer":{ label: "Circle Answer", zh: "圈選題", embed: false, cta: "Start →" },
 };
 
 function dedupeDoubled(s) {

@@ -17,6 +17,7 @@ const TYPE_OPTIONS = [
   { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
   { id: "story-mountain",   label: "Story Mountain",   hint: "🏔 故事山脈 — 逐步填寫 Introduction → Rising Action → Climax → Falling Action → Resolution，AI 批改結構與文法（10 分制）" },
   { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
+  { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -45,7 +46,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "cloze") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "cloze" || form.type === "circle-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -179,6 +180,15 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
             <ClozeEditor
               passage={form.passage || ''}
               onChangePassage={v => update("passage", v)}
+            />
+          ) : form.type === "circle-answer" ? (
+            <CircleAnswerEditor
+              questions={form.circleQuestions || []}
+              instruction={form.circleInstruction || ''}
+              labels={form.circleLabels || []}
+              onChangeQuestions={questions => update("circleQuestions", questions)}
+              onChangeInstruction={v => update("circleInstruction", v)}
+              onChangeLabels={labels => update("circleLabels", labels)}
             />
           ) : form.type === "story-mountain" ? (
             <StoryMountainEditor
@@ -675,6 +685,7 @@ const TYPE_META = {
   note:     { label: "Notes",    zh: "筆記",   embed: false, cta: "Read →" },
   image:    { label: "Image",    zh: "圖片",   embed: false, cta: "View →" },
   quiz:     { label: "Quiz",     zh: "測驗",   embed: false, cta: "Start →" },
+  "circle-answer": { label: "Circle Answer", zh: "圈選題", embed: false, cta: "Start →" },
 };
 
 const STORAGE_KEY = "alans-english-data-v3";
@@ -1517,6 +1528,148 @@ function StoryMountainEditor({ prompt, passage, hints, onChangePrompt, onChangeP
       <div style={{padding:'12px 16px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,fontSize:13,color:'#166534',lineHeight:1.7}}>
         <strong>AI 批改標準（自動套用）：</strong><br/>
         Score ⭐⭐⭐⭐⭐ · Good Job（客觀優點）· To Improve（客觀改進點）· Better Version
+      </div>
+    </div>
+  );
+}
+
+/* ── CircleAnswerEditor ── */
+function CircleAnswerEditor({ questions, instruction, labels, onChangeQuestions, onChangeInstruction, onChangeLabels }) {
+  const [labelText, setLabelText] = useS((labels || []).join(', '));
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr, setImportErr] = useS('');
+
+  useE(() => { setLabelText((labels || []).join(', ')); }, [JSON.stringify(labels || [])]);
+
+  const commitLabels = (raw = labelText) => {
+    const next = raw.split(/[,\n]+/).map(v => v.trim()).filter(Boolean);
+    onChangeLabels([...new Set(next)]);
+  };
+  const addQuestion = () => onChangeQuestions([
+    ...questions,
+    { id: 'circle' + Date.now() + Math.random().toString(36).slice(2, 5), sentence: '', answer: '', label: '' }
+  ]);
+  const updateQuestion = (id, field, value) => onChangeQuestions(
+    questions.map(q => q.id === id ? { ...q, [field]: value } : q)
+  );
+  const deleteQuestion = (id) => onChangeQuestions(questions.filter(q => q.id !== id));
+
+  const doImport = () => {
+    const parsed = [];
+    const foundLabels = [];
+    importText.split('\n').map(line => line.trim()).filter(Boolean).forEach((line, index) => {
+      const separator = line.includes('\t') ? '\t' : line.includes('|') ? '|' : null;
+      if (!separator) return;
+      const cols = line.split(separator).map(v => v.trim().replace(/^"|"$/g, ''));
+      if (!cols[0] || !cols[1]) return;
+      parsed.push({
+        id: 'circle' + Date.now() + index + Math.random().toString(36).slice(2, 4),
+        sentence: cols[0],
+        answer: cols[1],
+        label: cols[2] || ''
+      });
+      if (cols[2]) foundLabels.push(cols[2]);
+    });
+    if (!parsed.length) {
+      setImportErr('沒有可匯入的題目。請使用：句子 [Tab] 要圈的答案 [Tab] 分類答案（選填）');
+      return;
+    }
+    onChangeQuestions([...questions, ...parsed]);
+    if (foundLabels.length) {
+      const nextLabels = [...new Set([...(labels || []), ...foundLabels])];
+      onChangeLabels(nextLabels);
+      setLabelText(nextLabels.join(', '));
+    }
+    setImportText('');
+    setImportErr('');
+    setImporting(false);
+  };
+
+  return (
+    <div>
+      <div className="field">
+        <label className="field-label">Instruction · 作答指示</label>
+        <input
+          value={instruction}
+          onChange={e => onChangeInstruction(e.target.value)}
+          placeholder="Circle the adjective or adverb in the sentence."
+        />
+      </div>
+
+      <div className="field">
+        <label className="field-label">Optional classification choices · 第二步分類選項（選填）</label>
+        <input
+          value={labelText}
+          onChange={e => setLabelText(e.target.value)}
+          onBlur={() => commitLabels()}
+          placeholder="adjective, adverb"
+        />
+        <div className="field-help">
+          留空時學生只要圈答案；填入選項後，學生還需要完成第二步分類。
+        </div>
+      </div>
+
+      <div className="field">
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>Questions · 題目 ({questions.length})</label>
+          <div style={{display:'flex', gap:6}}>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
+              onClick={() => { setImporting(v => !v); setImportErr(''); }}>
+              {importing ? '✕ 取消' : '⬇ Import'}
+            </button>
+            <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addQuestion}>+ Add</button>
+          </div>
+        </div>
+
+        {importing && (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper)'}}>
+            <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8,lineHeight:1.7}}>
+              從 Excel / Google Sheets 貼上三欄：句子、要圈的答案、分類答案（選填）。
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+              placeholder={'The tiny bird sat on the tree.\ttiny\tadjective\nWe will clean the room soon.\tsoon\tadverb'}
+              rows={7}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box'}}
+            />
+            {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:5}}>{importErr}</div>}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:8}}>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}} onClick={doImport} disabled={!importText.trim()}>
+                Import questions
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:'grid',gridTemplateColumns:'1.8fr .55fr .65fr auto',gap:'6px 8px',alignItems:'center'}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)'}}>Sentence · 句子</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)'}}>Circle · 圈出</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)'}}>Classify · 分類</div>
+          <div/>
+          {questions.map(q => (
+            <React.Fragment key={q.id}>
+              <input value={q.sentence || ''} onChange={e => updateQuestion(q.id, 'sentence', e.target.value)}
+                placeholder="The tiny bird sat on the tree." style={{fontSize:13}} />
+              <input value={q.answer || ''} onChange={e => updateQuestion(q.id, 'answer', e.target.value)}
+                placeholder="tiny" style={{fontSize:13}} />
+              <input value={q.label || ''} onChange={e => updateQuestion(q.id, 'label', e.target.value)}
+                placeholder="optional" list="circle-label-options" style={{fontSize:13}} />
+              <button onClick={() => deleteQuestion(q.id)}
+                style={{padding:'7px 10px',border:'1px solid var(--border)',borderRadius:2,background:'none',cursor:'pointer',color:'var(--ink-3)',fontSize:13}}
+                title="Delete">✕</button>
+            </React.Fragment>
+          ))}
+        </div>
+        <datalist id="circle-label-options">
+          {(labels || []).map(label => <option key={label} value={label}/>)}
+        </datalist>
+        {questions.length === 0 && (
+          <div style={{padding:16,textAlign:'center',color:'var(--ink-faint)',fontSize:13}}>
+            尚未新增題目 — 使用 Add 或 Import
+          </div>
+        )}
       </div>
     </div>
   );

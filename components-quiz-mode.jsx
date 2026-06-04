@@ -109,7 +109,8 @@ function getQuizItems(items) {
     (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
     (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
-    (item.type === 'cloze'            && (item.passage || '').includes('['))
+    (item.type === 'cloze'            && (item.passage || '').includes('[')) ||
+    (item.type === 'circle-answer'    && (item.circleQuestions || []).some(q => q.sentence && q.answer))
   );
 }
 
@@ -152,6 +153,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
+  if (item.type === 'circle-answer') return (item.circleQuestions || []).filter(q => q.sentence && q.answer).length;
   if (item.type === 'writing-practice') return 1;
   return getItemQuestions(item).length;
 }
@@ -368,7 +370,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isEssay        = item.type === 'essay';
             const isStoryMtn     = item.type === 'story-mountain';
             const isCloze        = item.type === 'cloze';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze;
+            const isCircle       = item.type === 'circle-answer';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle;
             const hw       = (homework || {})[item.id]; // { dueDate }
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
@@ -392,7 +395,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : `${totalQ} questions`}
+                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} questions` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -555,6 +558,15 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'cloze' && phase === 'intro' ? (
           <ClozeIntro item={selectedItem} onStart={() => setPhase('quiz')} />
+        ) : selectedItem?.type === 'circle-answer' && phase === 'quiz' ? (
+          <CircleAnswerPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'circle-answer' && phase === 'intro' ? (
+          <CircleAnswerIntro item={selectedItem} onStart={() => setPhase('quiz')} />
         ) : selectedItem?.type === 'essay' && phase === 'intro' ? (
           <EssayIntro
             item={selectedItem}
@@ -2458,6 +2470,187 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
 }
 
 /* ══════════════════════════════════════════════════════
+   CIRCLE ANSWER
+══════════════════════════════════════════════════════ */
+function normalizeCircleValue(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u02bc\uff07`]/g, "'")
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+}
+
+function tokenizeCircleSentence(sentence) {
+  return String(sentence || '').match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\p{L}\p{N}\s]+|\s+/gu) || [];
+}
+
+function CircleAnswerIntro({ item, onStart }) {
+  const questions = (item.circleQuestions || []).filter(q => q.sentence && q.answer);
+  const hasClassification = questions.some(q => q.label);
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">⭕</div>
+      <div className="qm-intro-title">{item.title}</div>
+      {item.zh && <div className="qm-intro-meta">{item.zh}</div>}
+      <div className="qm-intro-meta">{questions.length} questions · 圈出答案</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>⭕</span><span>點選句子中的正確單字，把它圈起來</span></div>
+        {hasClassification && <div className="qm-intro-rule-row"><span>✏️</span><span>圈選後，再完成單字分類</span></div>}
+        <div className="qm-intro-rule-row"><span>🔍</span><span>交卷前可以隨時更改答案</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始作答 · Start →</button>
+      </div>
+    </div>
+  );
+}
+
+function CircleAnswerPlayer({ item, progressKey, onBack }) {
+  const questions = useQMM(
+    () => (item.circleQuestions || [])
+      .filter(q => q.sentence && q.answer)
+      .map((q, index) => ({ ...q, _circleKey: q.id || `circle-${index}` })),
+    [item.id]
+  );
+  const labels = useQMM(() => {
+    const configured = (item.circleLabels || []).map(v => String(v).trim()).filter(Boolean);
+    const fromQuestions = questions.map(q => String(q.label || '').trim()).filter(Boolean);
+    return [...new Set([...configured, ...fromQuestions])];
+  }, [item.id, questions]);
+  const [selectedWords, setSelectedWords] = useQM({});
+  const [selectedLabels, setSelectedLabels] = useQM({});
+  const [submitted, setSubmitted] = useQM(false);
+  const [score, setScore] = useQM(0);
+
+  const isQuestionComplete = q => selectedWords[q._circleKey] !== undefined && (!q.label || !!selectedLabels[q._circleKey]);
+  const completedCount = questions.filter(isQuestionComplete).length;
+
+  const isCircleCorrect = q => {
+    const tokens = tokenizeCircleSentence(q.sentence);
+    return normalizeCircleValue(tokens[selectedWords[q._circleKey]]) === normalizeCircleValue(q.answer);
+  };
+  const isLabelCorrect = q => !q.label || normalizeCircleValue(selectedLabels[q._circleKey]) === normalizeCircleValue(q.label);
+  const isQuestionCorrect = q => isCircleCorrect(q) && isLabelCorrect(q);
+
+  const handleSubmit = () => {
+    const correct = questions.filter(isQuestionCorrect).length;
+    const wrongList = questions.reduce((list, q, index) => {
+      if (!isQuestionCorrect(q)) {
+        list.push({
+          q: `Question ${index + 1}: ${q.sentence}`,
+          answer: q.label ? `${q.answer} · ${q.label}` : q.answer
+        });
+      }
+      return list;
+    }, []);
+    setScore(correct);
+    setSubmitted(true);
+    saveQuizModeCompletion(progressKey, item, {
+      doneCount: questions.length,
+      score: correct,
+      total: questions.length,
+      wrongQuestions: wrongList
+    });
+    if (window._onQuizComplete) window._onQuizComplete(correct, questions.length, wrongList, { itemId: progressKey });
+  };
+
+  const reset = () => {
+    setSelectedWords({});
+    setSelectedLabels({});
+    setSubmitted(false);
+    setScore(0);
+  };
+
+  return (
+    <div className="circle-player">
+      <div className="circle-topbar">
+        <button className="qm-back-btn" onClick={onBack}>← Back</button>
+        <span className="circle-instruction">
+          {item.circleInstruction || 'Circle the correct answer in each sentence.'}
+        </span>
+        <span className="circle-progress">{submitted ? `${score}/${questions.length}` : `${completedCount}/${questions.length}`}</span>
+      </div>
+
+      <div className="circle-question-list">
+        {questions.map((q, qIndex) => {
+          const tokens = tokenizeCircleSentence(q.sentence);
+          const circleCorrect = submitted && isCircleCorrect(q);
+          const labelCorrect = submitted && isLabelCorrect(q);
+          const questionCorrect = submitted && circleCorrect && labelCorrect;
+          return (
+            <div key={q._circleKey} className={`circle-question${submitted ? questionCorrect ? ' correct' : ' wrong' : ''}`}>
+              <div className="circle-question-number">{qIndex + 1}</div>
+              <div className="circle-question-body">
+                <div className="circle-sentence">
+                  {tokens.map((token, tokenIndex) => {
+                    if (/^\s+$/.test(token)) return <span key={tokenIndex}>{token}</span>;
+                    if (!/[\p{L}\p{N}]/u.test(token)) return <span key={tokenIndex}>{token}</span>;
+                    const selected = selectedWords[q._circleKey] === tokenIndex;
+                    const correctAnswer = submitted && normalizeCircleValue(token) === normalizeCircleValue(q.answer);
+                    return (
+                      <button
+                        key={tokenIndex}
+                        className={`circle-word${selected ? ' selected' : ''}${submitted && selected ? circleCorrect ? ' correct' : ' wrong' : ''}${correctAnswer ? ' answer' : ''}`}
+                        onClick={() => !submitted && setSelectedWords(prev => ({...prev, [q._circleKey]: tokenIndex}))}
+                        disabled={submitted}
+                      >
+                        {token}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {q.label && (
+                  <div className="circle-classify">
+                    <span className="circle-classify-label">Classify:</span>
+                    <div className="circle-label-options">
+                      {labels.map(label => {
+                        const selected = selectedLabels[q._circleKey] === label;
+                        const correctAnswer = submitted && normalizeCircleValue(label) === normalizeCircleValue(q.label);
+                        return (
+                          <button
+                            key={label}
+                            className={`circle-label-option${selected ? ' selected' : ''}${submitted && selected ? labelCorrect ? ' correct' : ' wrong' : ''}${correctAnswer ? ' answer' : ''}`}
+                            onClick={() => !submitted && setSelectedLabels(prev => ({...prev, [q._circleKey]: label}))}
+                            disabled={submitted}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {submitted && !questionCorrect && (
+                  <div className="circle-correction">
+                    Correct answer: <strong>{q.answer}</strong>{q.label ? <> · <strong>{q.label}</strong></> : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="circle-footer">
+        {!submitted ? (
+          <button className="qm-btn primary" onClick={handleSubmit} disabled={completedCount < questions.length}>
+            Submit · 交卷 ({completedCount}/{questions.length})
+          </button>
+        ) : (
+          <>
+            <div className="circle-result">{score} / {questions.length} correct</div>
+            <button className="qm-btn secondary" onClick={reset}>Try again</button>
+            <button className="qm-btn secondary" onClick={onBack}>← Back</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
    CLOZE TEST
 ══════════════════════════════════════════════════════ */
 function parseClozePassage(passage) {
@@ -2622,4 +2815,4 @@ function ClozePlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, ClozePlayer, ClozeIntro });
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro });
