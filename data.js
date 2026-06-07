@@ -570,19 +570,32 @@ Scoring standard (5 stars):
 2★ = target word is present but usage/grammar/completeness is weak.
 1★ = missing target word, wrong meaning, fragment, or too unclear.
 
-Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+Reply bilingually in Traditional Chinese + simple English. Output ONLY these four sections.
+Every section must include BOTH Chinese and English, even when the score is 4★ or 5★.
+Do not output an English-only explanation. Do not output a Chinese-only explanation.
 
 【Score】
-Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then:
+中文：one short objective reason in Traditional Chinese.
+English: one short objective reason in simple English.
 
 【Good Job】
-List 1-2 specific, factual things the student actually did well. Do not say "good grammar" unless grammar is correct. Do not say "used the word well" unless "${word}" is used with the correct meaning.
+List 1-2 specific, factual things the student actually did well.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Do not say "good grammar" unless grammar is correct. Do not say "used the word well" unless "${word}" is used with the correct meaning.
 
 【To Improve】
-List 1-2 objective fixes. Mention exact issues such as missing target word, wrong word meaning, grammar error, fewer than 7 words, missing capital letter, missing punctuation, or not enough detail.
+List 1-2 objective fixes.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Mention exact issues such as missing target word, wrong word meaning, grammar error, fewer than 7 words, missing capital letter, missing punctuation, or not enough detail.
 
 【Better Version】
-Write one improved sentence using "${word}" correctly. Keep the student's idea when possible. The sentence must be at least 7 words, natural, and suitable for elementary students.`;
+English: Write one improved sentence using "${word}" correctly. Keep the student's idea when possible. The sentence must be at least 7 words, natural, and suitable for elementary students.
+中文：Write a Traditional Chinese meaning/explanation of the improved sentence.`;
 
   const userMessage = `指定單字：${word}\n\n學生句子：${sentence.trim()}`;
 
@@ -593,7 +606,7 @@ Write one improved sentence using "${word}" correctly. Keep the student's idea w
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 500,
+          max_tokens: 700,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
@@ -608,7 +621,7 @@ Write one improved sentence using "${word}" correctly. Keep the student's idea w
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5', max_tokens: 500,
+        model: 'claude-haiku-4-5', max_tokens: 700,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -635,19 +648,32 @@ Scoring standard (5 stars):
 2★ = related to the topic but answer is incomplete or partly inaccurate.
 1★ = does not answer the question, contradicts the passage, or is too unclear.
 
-Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+Reply bilingually in Traditional Chinese + simple English. Output ONLY these four sections.
+Every section must include BOTH Chinese and English, even when the score is 4★ or 5★.
+Do not output an English-only explanation. Do not output a Chinese-only explanation.
 
 【Score】
-Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then:
+中文：one short objective reason in Traditional Chinese.
+English: one short objective reason in simple English.
 
 【Good Job】
-List 1-2 specific, factual things the student actually answered correctly. If only one part is correct, name that exact part.
+List 1-2 specific, factual things the student actually answered correctly.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+If only one part is correct, name that exact part.
 
 【To Improve】
-List 1-2 objective fixes. Mention the missing answer point, missing evidence, incomplete sentence, wrong information, or grammar issue.
+List 1-2 objective fixes.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Mention the missing answer point, missing evidence, incomplete sentence, wrong information, or grammar issue.
 
 【Better Version】
-Write a complete improved answer in simple English. Use the passage/key points if provided.`;
+English: Write a complete improved answer in simple English. Use the passage/key points if provided.
+中文：Write the Traditional Chinese meaning/explanation of the improved answer.`;
 
   const passageSection = passage?.trim() ? `\n文章內容或相關段落：\n${passage.trim()}\n` : '';
   const keyPointSection = keyPoints?.trim() ? `\n答案要點：${keyPoints.trim()}\n` : '';
@@ -660,7 +686,7 @@ Write a complete improved answer in simple English. Use the passage/key points i
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 500,
+          max_tokens: 700,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
@@ -688,19 +714,32 @@ Scoring standard (5 stars):
 2★ = topic-related but claim or reasons are unclear.
 1★ = too short, off-topic, or not understandable.
 
-Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+Reply bilingually in Traditional Chinese + simple English. Output ONLY these four sections.
+Every section must include BOTH Chinese and English, even when the score is 4★ or 5★.
+Do not output an English-only explanation. Do not output a Chinese-only explanation.
 
 【Score】
-Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then:
+中文：one short objective reason in Traditional Chinese.
+English: one short objective reason in simple English.
 
 【Good Job】
-List 1-2 specific, factual strengths. Mention the exact element, such as claim, reason, example, conclusion, organization, or grammar. Do not praise an element that is missing.
+List 1-2 specific, factual strengths.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Mention the exact element, such as claim, reason, example, conclusion, organization, or grammar. Do not praise an element that is missing.
 
 【To Improve】
-List 1-2 objective fixes. Mention the exact part to improve: Claim, Reason, Example, Explanation, Conclusion, Organization, or Grammar.
+List 1-2 objective fixes.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Mention the exact part to improve: Claim, Reason, Example, Explanation, Conclusion, Organization, or Grammar.
 
 【Better Version】
-Write a better version of the essay keeping the student's main idea when possible. Use simple English suitable for elementary students.`;
+English: Write a better version of the essay keeping the student's main idea when possible. Use simple English suitable for elementary students.
+中文：Write a Traditional Chinese meaning/explanation of the improved essay.`;
 
   const userMessage = `作文題目：\n${essayPrompt.trim()}\n\n學生作文：\n${studentEssay.trim()}`;
 
@@ -711,7 +750,7 @@ Write a better version of the essay keeping the student's main idea when possibl
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 700,
+          max_tokens: 900,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
@@ -737,9 +776,9 @@ function localWritingFeedback(word, sentence) {
   const stars = Math.max(1, 5 - checks.length);
   const starLine = `${'⭐'.repeat(stars)}${'☆'.repeat(5 - stars)} (${stars}/5)`;
   if (checks.length === 0) {
-    return `【Score】\n${starLine} — 有使用指定單字，句子長度、大小寫和標點都符合基本標準。\n\n【Good Job】\n- 句子有用到「${word}」。\n- 句子有至少 7 個字，並且有完整標點。\n\n【To Improve】\n- 可以加入更具體的時間、地點或原因，讓句子更生動。\n\n【Better Version】\n${s}`;
+    return `【Score】\n${starLine}\n中文：有使用指定單字，句子長度、大小寫和標點都符合基本標準。\nEnglish: The sentence uses the target word and has enough words, capitalization, and punctuation.\n\n【Good Job】\n- 中文：句子有用到「${word}」。\n  English: You used the target word "${word}".\n- 中文：句子有至少 7 個字，並且有完整標點。\n  English: Your sentence has at least 7 words and correct punctuation.\n\n【To Improve】\n- 中文：可以加入更具體的時間、地點或原因，讓句子更生動。\n  English: You can add a time, place, or reason to make the sentence more specific.\n\n【Better Version】\nEnglish: ${s}\n中文：這句已經符合基本要求，可以再加入更多細節。`;
   }
-  return `【Score】\n${starLine} — ${checks[0]}\n\n【Good Job】\n${wordUsed ? `- 句子有嘗試使用「${word}」。` : '- 目前還沒有明確做到的地方，先把句子補完整。'}\n\n【To Improve】\n${checks.map(x => `- ${x}`).join('\n')}\n\n【Better Version】\n${word ? `I can use ${word} in a clear sentence today.` : 'I can write a clear sentence today.'}`;
+  return `【Score】\n${starLine}\n中文：${checks[0]}\nEnglish: Please fix this first: ${checks[0]}\n\n【Good Job】\n${wordUsed ? `- 中文：句子有嘗試使用「${word}」。\n  English: You tried to use the target word "${word}".` : '- 中文：目前還沒有明確做到的地方，先把句子補完整。\n  English: There is not a clear complete sentence yet. Please complete the sentence first.'}\n\n【To Improve】\n${checks.map(x => `- 中文：${x}\n  English: ${x}`).join('\n')}\n\n【Better Version】\nEnglish: ${word ? `I can use ${word} in a clear sentence today.` : 'I can write a clear sentence today.'}\n中文：我可以今天寫出一個清楚完整的英文句子。`;
 }
 
 // ── AI Story Mountain Grading ─────────────────────────────────────────────
@@ -761,19 +800,32 @@ Scoring standard (5 stars):
 2★ = some stages are present but story logic is incomplete.
 1★ = most stages are missing, off-topic, or too unclear.
 
-Reply in Traditional Chinese (繁體中文). Output ONLY these four sections:
+Reply bilingually in Traditional Chinese + simple English. Output ONLY these four sections.
+Every section must include BOTH Chinese and English, even when the score is 4★ or 5★.
+Do not output an English-only explanation. Do not output a Chinese-only explanation.
 
 【Score】
-Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then one short objective reason.
+Use exactly 5 star characters, e.g. ⭐⭐⭐☆☆ (3/5), then:
+中文：one short objective reason in Traditional Chinese.
+English: one short objective reason in simple English.
 
 【Good Job】
-List 1-2 specific, factual strengths. Mention which stage: Introduction, Rising Action, Climax, Falling Action, or Resolution. Do not praise a missing stage.
+List 1-2 specific, factual strengths.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Mention which stage: Introduction, Rising Action, Climax, Falling Action, or Resolution. Do not praise a missing stage.
 
 【To Improve】
-List 1-2 objective fixes. Mention exactly which stage is missing, unclear, illogical, too short, or grammatically hard to understand.
+List 1-2 objective fixes.
+Each bullet must include:
+中文：Traditional Chinese feedback.
+English: simple English feedback.
+Mention exactly which stage is missing, unclear, illogical, too short, or grammatically hard to understand.
 
 【Better Version】
-Write a better full Story Mountain version keeping the student's main idea when possible. Keep it simple and natural for elementary students.`;
+English: Write a better full Story Mountain version keeping the student's main idea when possible. Keep it simple and natural for elementary students.
+中文：Write a Traditional Chinese meaning/explanation of the improved Story Mountain.`;
 
   const passageSection = passage?.trim()
     ? `\n\n**Reference Story / Passage:**\n${passage.trim()}\n`
@@ -789,7 +841,7 @@ Write a better full Story Mountain version keeping the student's main idea when 
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5',
-          max_tokens: 700,
+          max_tokens: 900,
           system: systemPrompt,
           messages: [{ role: 'user', content: userMessage }],
         }),
