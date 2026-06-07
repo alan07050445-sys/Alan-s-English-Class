@@ -102,7 +102,7 @@ function getQuizItems(items) {
     (item.type === 'vocab-quiz'       && (item.words || []).length >= 2) ||
     (item.type === 'fillblank'        && (item.questions || []).length >= 2) ||
     (item.type === 'quiz'             && (item.questions || []).length > 0) ||
-    (item.type === 'writing-practice' && item.linkedFlashcardId) ||
+    (item.type === 'writing-practice' && (item.linkedFlashcardId || (item.writingPrompts || []).some(p => p.word))) ||
     (item.type === 'type-answer'      && (item.pairs || []).length >= 1) ||
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
@@ -395,7 +395,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? '✍ Writing Practice' : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} questions` : `${totalQ} questions`}
+                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} prompts` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} questions` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                       </>
                     )}
@@ -1236,22 +1236,41 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
 /* ══════════════════════════════════════════════════════
    WRITING PRACTICE INTRO
 ══════════════════════════════════════════════════════ */
-function WritingPracticeIntro({ item, catItems, onStart }) {
+function getWritingPracticePrompts(item, catItems) {
   const allFc = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
   const fc = item.linkedFlashcardId
     ? (allFc.find(it => it.id === item.linkedFlashcardId) || allFc[0])
-    : allFc[0];
-  const wordCount = fc ? (fc.cards || []).filter(c => (c.term || c.front || c.en || '').trim()).length : 0;
+    : null;
+  const fromFlashcard = fc
+    ? (fc.cards || []).map(c => ({
+        word: c.term || c.front || c.en || '',
+        zh: c.zh || c.back || '',
+        instruction: 'Use the word in a sentence',
+        source: 'flashcard',
+      })).filter(c => c.word.trim())
+    : [];
+  const custom = (item.writingPrompts || []).map(p => ({
+    word: p.word || p.prompt || '',
+    zh: p.zh || '',
+    instruction: p.instruction || '',
+    source: 'custom',
+  })).filter(p => p.word.trim());
+  return [...fromFlashcard, ...custom];
+}
+
+function WritingPracticeIntro({ item, catItems, onStart }) {
+  const prompts = getWritingPracticePrompts(item, catItems);
+  const wordCount = prompts.length;
 
   return (
     <div className="qm-intro">
       <div className="qm-intro-icon">✍</div>
       <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{wordCount} words · AI 造句批改</div>
+      <div className="qm-intro-meta">{wordCount} prompts · AI 造句批改</div>
       <div className="qm-intro-rules">
-        <div className="qm-intro-rule-row"><span>📝</span><span>每個單字造一個英文句子</span></div>
+        <div className="qm-intro-rule-row"><span>📝</span><span>每個題目造一個英文句子</span></div>
         <div className="qm-intro-rule-row"><span>📏</span><span>至少 7 個字</span></div>
-        <div className="qm-intro-rule-row"><span>✅</span><span>必須正確表達單字的意思</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>必須符合題目要求或正確表達單字意思</span></div>
         <div className="qm-intro-rule-row"><span>⭐</span><span>AI 評分，最高 5 顆星</span></div>
       </div>
       <div className="qm-intro-btns">
@@ -1267,19 +1286,7 @@ function WritingPracticeIntro({ item, catItems, onStart }) {
    WRITING PRACTICE PLAYER
 ══════════════════════════════════════════════════════ */
 function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
-  // Get words from linked flashcard
-  const words = useQMM(() => {
-    const allFc = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
-    // Try linked flashcard first, then fall back to first available
-    const fc = item.linkedFlashcardId
-      ? (allFc.find(it => it.id === item.linkedFlashcardId) || allFc[0])
-      : allFc[0];
-    if (!fc) return [];
-    return (fc.cards || []).map(c => ({
-      word: c.term || c.front || c.en || '',
-      zh: c.zh || c.back || '',
-    })).filter(c => c.word.trim());
-  }, [item, catItems]);
+  const words = useQMM(() => getWritingPracticePrompts(item, catItems), [item, catItems]);
 
   const [idx, setIdx]           = useQM(0);
   const [sentence, setSentence] = useQM('');
@@ -1303,7 +1310,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
     if (!sentence.trim() || checking || feedback) return;
     setChecking(true);
     setFeedback('');
-    const result = await window.checkWriting(current.word, sentence);
+    const result = await window.checkWriting(current.word, sentence, current.instruction || '', current.zh || '');
     setFeedback(result);
     const stars = extractStars(result);
     setScores(prev => [...prev, stars]);
@@ -1335,8 +1342,8 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
   if (!words.length) return (
     <div className="wp-empty">
       <div className="wp-empty-icon">✍</div>
-      <div className="wp-empty-msg">找不到單字卡</div>
-      <div className="wp-empty-sub">請在編輯模式中為此練習綁定一組單字卡</div>
+      <div className="wp-empty-msg">找不到造句題</div>
+      <div className="wp-empty-sub">請綁定單字卡，或在編輯模式中新增自訂造句題</div>
     </div>
   );
 
@@ -1344,7 +1351,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
     <div className="wp-done">
       <div className="wp-done-icon">✦</div>
       <div className="wp-done-title">Writing Practice Complete</div>
-      <div className="wp-done-sub">已完成 {total} 個單字造句</div>
+      <div className="wp-done-sub">已完成 {total} 題造句</div>
       <div className="wp-done-score">
         <span className="wp-done-avg">{avgDisplay}</span>
         <span className="wp-done-maxstar"> / 5 ★</span>
@@ -1372,10 +1379,11 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
         <span className="wp-avg">{scores.length > 0 ? `avg ${avgDisplay}★` : ''}</span>
       </div>
       <div key={idx} className="wp-card qm-question-swap">
-        <div className="wp-instruction">Use the word in a sentence</div>
+        <div className="wp-instruction">{current.instruction || 'Use this prompt in a sentence'}</div>
         <div className="wp-word">{current.word}</div>
+        {current.zh && <div className="wp-zh">{current.zh}</div>}
         <div className="wp-rules">
-          <span>· Must clearly express the word's meaning</span>
+          <span>· Must clearly answer the prompt</span>
           <span>· At least 7 words</span>
         </div>
       </div>
@@ -1384,7 +1392,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
         value={sentence}
         onChange={e => setSentence(e.target.value)}
         onKeyDown={handleSentenceKeyDown}
-        placeholder={`Write a sentence using "${current.word}"…`}
+        placeholder={`Write a sentence for "${current.word}"…`}
         disabled={!!feedback}
       />
       {!feedback ? (
@@ -1395,7 +1403,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
         <>
           <WritingFeedback text={feedback} />
           <button className="qm-btn primary wp-next" onClick={next}>
-            {idx + 1 >= total ? '完成 ✦' : '下一個單字 →'}
+            {idx + 1 >= total ? '完成 ✦' : '下一題 →'}
           </button>
         </>
       )}

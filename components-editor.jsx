@@ -125,20 +125,13 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               />
             </>
           ) : form.type === "writing-practice" ? (
-            <div className="field">
-              <label className="field-label">Linked Flashcard · 綁定單字卡（必選）</label>
-              <select
-                value={form.linkedFlashcardId || ""}
-                onChange={e => update("linkedFlashcardId", e.target.value || undefined)}
-                style={{width:"100%",padding:"9px 12px",border:"1px solid var(--border)",background:"var(--bg)",color:"var(--ink)",borderRadius:2,fontSize:14}}
-              >
-                <option value="">— 請選擇一組單字卡 —</option>
-                {(catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0).map(fc => (
-                  <option key={fc.id} value={fc.id}>{fc.title} ({(fc.cards||[]).length} 張)</option>
-                ))}
-              </select>
-              <div className="field-help">學生將逐一對單字卡裡的每個單字造句，AI 自動批改並給星評分。</div>
-            </div>
+            <WritingPracticeEditor
+              catItems={catItems || []}
+              linkedFlashcardId={form.linkedFlashcardId || ''}
+              prompts={form.writingPrompts || []}
+              onChangeLinkedFlashcardId={v => update("linkedFlashcardId", v || undefined)}
+              onChangePrompts={prompts => update("writingPrompts", prompts)}
+            />
           ) : form.type === "type-answer" ? (
             <TypeAnswerEditor
               pairs={form.pairs || []}
@@ -856,6 +849,128 @@ Object.assign(window, {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── WritingPracticeEditor ── */
+function WritingPracticeEditor({ catItems, linkedFlashcardId, prompts, onChangeLinkedFlashcardId, onChangePrompts }) {
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr, setImportErr] = useS('');
+  const flashcards = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
+
+  const addPrompt = () => onChangePrompts([
+    ...prompts,
+    { id: 'wp' + Date.now() + Math.random().toString(36).slice(2, 5), word: '', zh: '', instruction: '' }
+  ]);
+  const updatePrompt = (id, field, value) => onChangePrompts(
+    prompts.map(p => p.id === id ? { ...p, [field]: value } : p)
+  );
+  const deletePrompt = (id) => onChangePrompts(prompts.filter(p => p.id !== id));
+
+  const doImport = () => {
+    const parsed = [];
+    importText.split('\n').map(line => line.trim()).filter(Boolean).forEach((line, index) => {
+      const sep = line.includes('\t') ? '\t' : line.includes('|') ? '|' : null;
+      const cols = sep ? line.split(sep).map(c => c.trim().replace(/^"|"$/g, '')) : [line.trim()];
+      const word = cols[0] || '';
+      if (!word) return;
+      parsed.push({
+        id: 'wp' + Date.now() + index + Math.random().toString(36).slice(2, 4),
+        word,
+        zh: cols[1] || '',
+        instruction: cols[2] || ''
+      });
+    });
+    if (!parsed.length) {
+      setImportErr('沒有可匯入的題目。格式：造句要求 [Tab] 中文提示（選填） [Tab] 補充規則（選填）');
+      return;
+    }
+    onChangePrompts([...prompts, ...parsed]);
+    setImportText('');
+    setImportErr('');
+    setImporting(false);
+  };
+
+  return (
+    <div>
+      <div className="field">
+        <label className="field-label">Mode · 出題方式</label>
+        <div className="field-help" style={{marginBottom:8}}>
+          可以綁定單字卡，也可以在下方直接新增造句題；兩種可以同時存在。
+        </div>
+        <select
+          value={linkedFlashcardId || ''}
+          onChange={e => onChangeLinkedFlashcardId(e.target.value)}
+          style={{width:"100%",padding:"9px 12px",border:"1px solid var(--border)",background:"var(--bg)",color:"var(--ink)",borderRadius:2,fontSize:14}}
+        >
+          <option value="">— 不綁定單字卡，使用自訂題目 —</option>
+          {flashcards.map(fc => (
+            <option key={fc.id} value={fc.id}>{fc.title} ({(fc.cards||[]).length} 張)</option>
+          ))}
+        </select>
+        <div className="field-help">若有綁定單字卡，學生會先做單字卡造句；下方自訂題會接在後面。</div>
+      </div>
+
+      <div className="field">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <label className="field-label" style={{margin:0}}>Custom writing prompts · 自訂造句題 ({prompts.length})</label>
+          <div style={{display:'flex',gap:6}}>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
+              onClick={() => { setImporting(v => !v); setImportErr(''); }}>
+              {importing ? '✕ 取消' : '⬇ Import'}
+            </button>
+            <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={addPrompt}>+ Add</button>
+          </div>
+        </div>
+
+        {importing && (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper)'}}>
+            <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8,lineHeight:1.7}}>
+              每行一題。可從試算表貼上：造句要求 / 中文提示 / 補充規則。
+            </div>
+            <textarea
+              value={importText}
+              onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+              placeholder={'because\t因為\tWrite a sentence using because.\nmy favorite animal\t我最喜歡的動物\tWrite at least 8 words.'}
+              rows={7}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:13,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box'}}
+            />
+            {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:5}}>{importErr}</div>}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:8}}>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}} onClick={doImport} disabled={!importText.trim()}>
+                Import prompts
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:'grid',gridTemplateColumns:'0.8fr 0.8fr 1.2fr auto',gap:'6px 8px',alignItems:'center'}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)'}}>Prompt / Word</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)'}}>中文提示</div>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-3)'}}>Instruction（選填）</div>
+          <div/>
+          {prompts.map(p => (
+            <React.Fragment key={p.id}>
+              <input value={p.word || ''} onChange={e => updatePrompt(p.id, 'word', e.target.value)}
+                placeholder="because / my favorite animal" style={{fontSize:13}} />
+              <input value={p.zh || ''} onChange={e => updatePrompt(p.id, 'zh', e.target.value)}
+                placeholder="因為 / 我最喜歡的動物" style={{fontSize:13}} />
+              <input value={p.instruction || ''} onChange={e => updatePrompt(p.id, 'instruction', e.target.value)}
+                placeholder="Write at least 8 words." style={{fontSize:13}} />
+              <button onClick={() => deletePrompt(p.id)}
+                style={{padding:'7px 10px',border:'1px solid var(--border)',borderRadius:2,background:'none',cursor:'pointer',color:'var(--ink-3)',fontSize:13}}
+                title="Delete">✕</button>
+            </React.Fragment>
+          ))}
+        </div>
+        {prompts.length === 0 && (
+          <div style={{padding:16,textAlign:'center',color:'var(--ink-faint)',fontSize:13}}>
+            尚未新增自訂題。若不綁單字卡，請至少新增一題。
+          </div>
+        )}
       </div>
     </div>
   );

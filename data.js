@@ -554,21 +554,24 @@ function subscribeUserProfile(uid, callback) {
 const AI_WRITING_ENDPOINT = 'https://alan-ai-proxy.alan07050445.workers.dev';
 const ANTHROPIC_API_KEY = ''; // Key is stored in Cloudflare Worker env var  // browser-only fallback; safer to use the endpoint above.
 
-async function checkWriting(word, sentence) {
+async function checkWriting(word, sentence, instruction = '', zhHint = '') {
   if (!sentence || !sentence.trim()) return '請先寫一個英文句子。';
   const endpoint = AI_WRITING_ENDPOINT || localStorage.getItem('alan-ai-writing-endpoint') || '';
 
   const systemPrompt =
-`You are an elementary English teacher grading a student's sentence using the word "${word}".
+`You are an elementary English teacher grading a student's sentence.
+The teacher may provide either a target word, phrase, grammar pattern, or writing prompt: "${word}".
+If it is clearly a vocabulary word or phrase, check whether the student uses it correctly.
+If it is a topic or writing prompt, check whether the sentence clearly answers the prompt.
 Grade objectively. Do not invent praise. Every Good Job item must point to something actually present in the student's sentence.
 If there is no clear objective strength, write: "目前還沒有明確做到的地方，先把句子補完整。"
 
 Scoring standard (5 stars):
-5★ = target word is used with its real meaning + grammar is correct + at least 7 words + capitalization/punctuation are correct + sentence is specific/clear.
+5★ = target word/prompt is answered correctly + grammar is correct + at least 7 words + capitalization/punctuation are correct + sentence is specific/clear.
 4★ = mostly correct, with one small issue.
 3★ = understandable, but has a grammar issue, weak detail, or only basic word usage.
-2★ = target word is present but usage/grammar/completeness is weak.
-1★ = missing target word, wrong meaning, fragment, or too unclear.
+2★ = target word/prompt is attempted but usage/grammar/completeness is weak.
+1★ = missing the target word/prompt, wrong meaning, fragment, or too unclear.
 
 Reply bilingually in Traditional Chinese + simple English. Output ONLY these four sections.
 Every section must include BOTH Chinese and English, even when the score is 4★ or 5★.
@@ -591,13 +594,13 @@ List 1-2 objective fixes.
 Each bullet must include:
 中文：Traditional Chinese feedback.
 English: simple English feedback.
-Mention exact issues such as missing target word, wrong word meaning, grammar error, fewer than 7 words, missing capital letter, missing punctuation, or not enough detail.
+Mention exact issues such as missing target word/prompt, wrong meaning, grammar error, fewer than 7 words, missing capital letter, missing punctuation, or not enough detail.
 
 【Better Version】
-English: Write one improved sentence using "${word}" correctly. Keep the student's idea when possible. The sentence must be at least 7 words, natural, and suitable for elementary students.
+English: Write one improved sentence using or answering "${word}" correctly. Keep the student's idea when possible. The sentence must be at least 7 words, natural, and suitable for elementary students.
 中文：Write a Traditional Chinese meaning/explanation of the improved sentence.`;
 
-  const userMessage = `指定單字：${word}\n\n學生句子：${sentence.trim()}`;
+  const userMessage = `造句題目 / Target prompt：${word}\n${zhHint ? `中文提示：${zhHint}\n` : ''}${instruction ? `老師補充規則：${instruction}\n` : ''}\n學生句子：${sentence.trim()}`;
 
   if (endpoint) {
     try {

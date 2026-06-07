@@ -1,17 +1,17 @@
 // sw.js — Service Worker for Alan's English Class PWA
-const CACHE = 'alans-english-v114';
+const CACHE = 'alans-english-v115';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
 const asset = path => BASE + path;
 const PRECACHE = [
-  asset('/'), asset('/index.html'), asset('/manifest.json?v=114'),
-  asset('/styles.css?v=114'), asset('/styles-part2.css?v=114'), asset('/styles-quiz.css?v=114'),
-  asset('/styles-flashcard.css?v=114'), asset('/styles-auth.css?v=114'), asset('/styles-quiz-mode.css?v=114'),
-  asset('/data.js?v=114'), asset('/data-g2.js?v=114'), asset('/data-g5.js?v=114'),
-  asset('/components-shell.jsx?v=114'), asset('/components-cat.jsx?v=114'), asset('/components-quiz.jsx?v=114'),
-  asset('/components-flashcard.jsx?v=114'), asset('/components-editor.jsx?v=114'),
-  asset('/components-quiz-mode.jsx?v=114'), asset('/components-dashboard.jsx?v=114'),
-  asset('/tweaks-panel.jsx?v=114'), asset('/app.jsx?v=114'),
+  asset('/'), asset('/index.html'), asset('/manifest.json?v=115'),
+  asset('/styles.css?v=115'), asset('/styles-part2.css?v=115'), asset('/styles-quiz.css?v=115'),
+  asset('/styles-flashcard.css?v=115'), asset('/styles-auth.css?v=115'), asset('/styles-quiz-mode.css?v=115'),
+  asset('/data.js?v=115'), asset('/data-g2.js?v=115'), asset('/data-g5.js?v=115'),
+  asset('/components-shell.jsx?v=115'), asset('/components-cat.jsx?v=115'), asset('/components-quiz.jsx?v=115'),
+  asset('/components-flashcard.jsx?v=115'), asset('/components-editor.jsx?v=115'),
+  asset('/components-quiz-mode.jsx?v=115'), asset('/components-dashboard.jsx?v=115'),
+  asset('/tweaks-panel.jsx?v=115'), asset('/app.jsx?v=115'),
   asset('/icon.svg'), asset('/icon-512.png'), asset('/apple-touch-icon.png'),
 ];
 
