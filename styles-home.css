@@ -1,0 +1,244 @@
+/* styles-home.css — 學習旅程首頁（Learning Home） */
+
+/* ═══ 「想多練習？」分隔標題（次要遊戲化區） ═══ */
+.home-more-head {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; margin: 28px 0 14px;
+}
+.home-more-head::before,
+.home-more-head::after {
+  content: ""; flex: 1; height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--border-soft), transparent);
+}
+.home-more-label {
+  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  letter-spacing: .02em; color: var(--ink-muted); white-space: nowrap;
+}
+
+/* ═══ 進度環共用 ═══ */
+.lh-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.lh-ring-svg { display: block; }
+.lh-ring-center {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ═══ 學習者英雄區 ═══ */
+.lh-hero {
+  margin: 22px 0 18px;
+  padding: 22px 26px;
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(139,49,32,.10), transparent 55%),
+    linear-gradient(135deg, rgba(246,241,230,0.93) 0%, rgba(240,234,220,0.88) 100%),
+    url('hero-bg.png') center / cover no-repeat;
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-md, 0 12px 28px -10px rgba(21,19,14,.18));
+  overflow: hidden;
+}
+.lh-hero-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.lh-greet { display: flex; flex-direction: column; gap: 3px; }
+.lh-greet-hi {
+  font-family: var(--serif);
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.lh-greet-sub {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.lh-cta-wrap { flex-shrink: 0; }
+.lh-continue {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 12px 26px;
+  border: none;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--bg-paper);
+  cursor: pointer;
+  transition: transform .14s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;
+  box-shadow: 0 6px 18px -6px rgba(21,19,14,.5);
+}
+.lh-continue:hover { transform: translateY(-2px); box-shadow: 0 12px 26px -8px rgba(21,19,14,.55); }
+.lh-continue:active { transform: translateY(0) scale(.98); }
+.lh-continue:disabled {
+  cursor: not-allowed;
+  background: var(--border);
+  color: var(--ink-muted);
+  box-shadow: none;
+}
+.lh-continue:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+.lh-continue:focus-visible,
+.lh-stat-btn:focus-visible,
+.wj-node:focus-visible {
+  outline: 3px solid rgba(139,49,32,.28);
+  outline-offset: 4px;
+}
+.lh-continue-label { font-family: var(--sans); font-size: 15px; font-weight: 800; }
+.lh-continue-week { font-family: var(--mono); font-size: 11px; opacity: .7; letter-spacing: .02em; }
+
+/* 統計列 */
+.lh-stats {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+.lh-stat {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.lh-stat-btn { cursor: pointer; border-radius: 12px; transition: transform .12s; }
+.lh-stat-btn:hover { transform: translateY(-1px); }
+.lh-stat-icon { font-size: 22px; }
+.lh-stat-text { display: flex; flex-direction: column; align-items: flex-start; }
+.lh-stat-num { font-family: var(--sans); font-size: 16px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+.lh-stat-big {
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.lh-streak { color: var(--accent); }
+.lh-stat-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  letter-spacing: .02em;
+}
+
+/* ═══ 週次旅程 ═══ */
+.wj-wrap { margin: 0 0 22px; }
+.wj-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.wj-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.wj-sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.wj-scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 2px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.wj-scroller::-webkit-scrollbar { height: 6px; }
+.wj-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.wj-track {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: min-content;
+  position: relative;
+}
+/* 連接線 */
+.wj-track::before {
+  content: '';
+  position: absolute;
+  top: 33px; left: 30px; right: 30px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--border) 0 8px, transparent 8px 16px);
+  z-index: 0;
+}
+.wj-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 96px;
+  flex-shrink: 0;
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform .14s;
+}
+.wj-node:hover { transform: translateY(-3px); }
+.wj-node .lh-ring { background: var(--bg); border-radius: 50%; }
+.wj-node-icon {
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink-muted);
+}
+.wj-node.done .wj-node-icon { color: var(--moss); font-size: 22px; }
+.wj-node.current .wj-node-icon { font-size: 22px; }
+.wj-node-label {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.wj-node.current .wj-node-label { color: var(--accent); }
+.wj-node-theme {
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+  text-align: center;
+  line-height: 1.3;
+  max-width: 88px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.wj-node.current .lh-ring {
+  box-shadow: 0 0 0 4px rgba(139,49,32,.12);
+}
+
+/* 旅程之後、分類卡之前的週次橫幅減重，避免三重週次標題打架 */
+.qm-week-banner { padding-top: 4px; }
+
+@media (max-width: 760px) {
+  .lh-hero { padding: 18px; border-radius: 18px; }
+  .lh-hero-main { gap: 14px; }
+  .lh-continue { width: 100%; align-items: center; }
+  .lh-stats { gap: 18px; justify-content: space-between; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lh-continue, .lh-stat-btn, .wj-node { transition: none; }
+  .lh-ring-svg circle { transition: none !important; }
+}

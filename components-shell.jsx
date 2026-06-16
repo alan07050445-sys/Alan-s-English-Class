@@ -33,6 +33,8 @@ function Header({
   user, onLogin, onLogout, onShowDashboard,
   // Gamification
   streak, badges, onShowBadges, xp,
+  // Mistakes
+  mistakesCount, onShowMistakes,
   // Grade
   grade, onSwitchGrade,
 }) {
@@ -94,6 +96,20 @@ function Header({
                   </button>
                 )}
               </div>
+            )}
+
+            {/* Mistakes button (logged-in students) */}
+            {user && onShowMistakes && (
+              <button
+                className="mk-header-btn"
+                onClick={onShowMistakes}
+                title="我的錯題"
+              >
+                📕
+                {mistakesCount > 0 && (
+                  <span className="mk-header-badge">{mistakesCount}</span>
+                )}
+              </button>
             )}
 
             {/* Auth area */}
@@ -288,14 +304,20 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 function BadgesModal({ badges, onClose }) {
   const BADGES = window.BADGES || {};
   const ALL_IDS = Object.keys(BADGES);
+  const got = ALL_IDS.filter(id => !!badges?.[id]).length;
+  const total = ALL_IDS.length;
+  const pct = total > 0 ? Math.round(got / total * 100) : 0;
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:440}}>
-        <div className="modal-head">
-          <h3>我的<em>成就</em></h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+      <div className="modal bdg-modal" onClick={e => e.stopPropagation()} style={{maxWidth:460}}>
+        <button className="modal-close bdg-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        <div className="bdg-hero">
+          <img src="trophy.png" alt="" className="bdg-hero-img"/>
+          <h3 className="bdg-hero-title">我的成就</h3>
+          <p className="bdg-hero-sub">已解鎖 <strong>{got}</strong> / {total} 個徽章</p>
+          <div className="bdg-progress"><div className="bdg-progress-fill" style={{width: pct + '%'}}/></div>
         </div>
-        <div className="modal-body" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        <div className="bdg-grid">
           {ALL_IDS.map(id => {
             const b = BADGES[id];
             const unlocked = !!badges?.[id];
@@ -350,12 +372,57 @@ function GradeSelector({ onSelect }) {
             <span className="grade-sel-card-label">Grade 3</span>
             <span className="grade-sel-card-desc">FET + Word Study</span>
           </button>
+          <button className="grade-sel-card" onClick={() => onSelect('g4')}>
+            <span className="grade-sel-badge">G4</span>
+            <span className="grade-sel-card-label">Grade 4</span>
+            <span className="grade-sel-card-desc">FET · Grammar · Word Study · Reading</span>
+          </button>
           <button className="grade-sel-card" onClick={() => onSelect('g5')}>
             <span className="grade-sel-badge">G5</span>
             <span className="grade-sel-card-label">Grade 5</span>
             <span className="grade-sel-card-desc">FET · Grammar · Word Study · Reading</span>
           </button>
+          <button className="grade-sel-card" onClick={() => onSelect('g6')}>
+            <span className="grade-sel-badge">G6</span>
+            <span className="grade-sel-card-label">Grade 6</span>
+            <span className="grade-sel-card-desc">FET · Grammar · Word Study · Reading</span>
+          </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────── Lock Screen（名單外 / 未授權） ───────── */
+function LockScreen({ user, onLogin, onLogout }) {
+  return (
+    <div className="login-screen">
+      <div className="login-card lock-card">
+        <div className="lock-icon">🔒</div>
+        <h1 className="login-title">需要授權才能使用</h1>
+        {user ? (
+          <>
+            <p className="lock-msg">
+              這個帳號（<strong>{user.email}</strong>）目前不在學生名單內。
+            </p>
+            <p className="lock-sub">
+              請確認你用的是<strong>報名時提供的 Google 帳號</strong>。<br/>
+              如果還沒報名，歡迎聯絡 Alan 老師！
+            </p>
+            <button className="google-btn lock-btn" onClick={onLogout}>
+              換一個帳號登入
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="lock-msg">課程內容僅開放給已報名的學生。</p>
+            <p className="lock-sub">請使用報名時提供的 Google 帳號登入。</p>
+            <button className="google-btn lock-btn" onClick={onLogin}>
+              使用 Google 登入
+            </button>
+          </>
+        )}
+        <p className="lock-contact">📩 聯絡 Alan 老師：alan07050445@gmail.com</p>
       </div>
     </div>
   );
@@ -479,6 +546,7 @@ function LoadingScreen({ fading }) {
       {/* Subtle decorative radial glow */}
       <div className="ls-glow"/>
       <div className="ls-brand">
+        <img src="icon.svg" alt="Alan's English Class" className="ls-logo"/>
         <div className="ls-est">EST · 2026</div>
         <div className="ls-name">Alan<em>'s</em> English Class</div>
         <div className="ls-bar-wrap">
@@ -489,4 +557,4 @@ function LoadingScreen({ fading }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen });
+Object.assign(window, { Icon, Header, Hero, LoginScreen, LockScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen });

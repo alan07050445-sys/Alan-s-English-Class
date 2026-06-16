@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── PDF 檔案 ────────────────────────────────────────────
+    // 所有人可讀（學生下載練習卷）
+    // 只有老師可以上傳 / 刪除
+    match /pdfs/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email == 'alan07050445@gmail.com';
+    }
+  }
+}

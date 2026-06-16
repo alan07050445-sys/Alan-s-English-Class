@@ -6,14 +6,9 @@ const PIXABAY_KEY = "55964296-48988fd7e26a6999ecaff6b95";
 const PEXELS_KEY  = "ddCplPdhHd2AvScvkob1rxUHoz7UEoLk0yETCc6tdBZ3rlhR5Zwsjs4P";
 const RETRY_GAP = 4; // wrong cards reappear after this many cards
 
-/* ── Text-to-speech ── */
+/* ── Text-to-speech (delegates to shared window.speakText in data.js) ── */
 function speak(text, lang = 'en-US') {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = lang;
-  utt.rate = 0.88;
-  window.speechSynthesis.speak(utt);
+  window.speakText(text, { lang });
 }
 
 function SpeakerBtn({ text, lang = 'en-US', className = "" }) {

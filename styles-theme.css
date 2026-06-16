@@ -1,0 +1,345 @@
+/* ═══════════════════════════════════════════════════════════════
+   styles-theme.css — 視覺改造層（最後載入，覆寫前面所有樣式）
+   設計方向：溫暖雜誌風 × 兒童活力
+   - 保留奶油紙張 + 襯線字的高級感（家長視角的質感）
+   - 注入分類色彩系統 + 觸感元件（學生視角的活力）
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 分類色 — 對齊既有 icon 漸層（vocab紫 grammar粉 word藍 reading綠） */
+  --c-vocab:    #6D5BD0;
+  --c-vocab-bg: #F3F0FC;
+  --c-grammar:  #E0507A;
+  --c-grammar-bg:#FDF0F4;
+  --c-word:     #2E8FD0;
+  --c-word-bg:  #EDF6FD;
+  --c-reading:  #2FA56B;
+  --c-reading-bg:#EDFAF2;
+
+  /* 層次更分明的陰影 */
+  --shadow-sm: 0 1px 2px rgba(21,19,14,.05), 0 2px 8px -2px rgba(21,19,14,.06);
+  --shadow-md: 0 2px 4px rgba(21,19,14,.05), 0 12px 28px -10px rgba(21,19,14,.14);
+  --shadow-lg: 0 4px 8px rgba(21,19,14,.06), 0 24px 56px -16px rgba(21,19,14,.22);
+}
+
+/* ═══ 1. HEADER — 更輕、更精緻 ═══════════════════════════ */
+.header {
+  background: rgba(244,240,231,.86);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner { height: 64px; }
+.brand-mono {
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+.grade-chip {
+  background: var(--accent) !important;
+  border-radius: 7px !important;
+  padding: 3px 9px !important;
+  font-size: 11px !important;
+}
+.week-nav button {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-card);
+  transition: all .15s;
+}
+.week-nav button:not(:disabled):hover {
+  border-color: var(--ink);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.week-nav button:disabled { opacity: .3; }
+.progress-pill {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  box-shadow: var(--shadow-sm);
+}
+.progress-fill { background: linear-gradient(90deg, var(--moss), #5FA851); }
+
+/* ═══ 2. 週次橫幅 — 標題更有存在感 ═══════════════════════ */
+.qm-week-banner { position: relative; padding-bottom: 18px; }
+.qm-week-title {
+  font-size: clamp(30px, 4.2vw, 44px);
+  letter-spacing: -0.02em;
+}
+.qm-week-banner::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: 6px;
+  width: 64px; height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-soft));
+}
+
+/* ═══ 3. 分類卡片 — 色彩系統注入 ═════════════════════════ */
+.qm-blocks { gap: 18px; }
+.qm-block {
+  --cat-c: var(--ink);
+  --cat-bg: var(--bg-paper);
+  border-radius: 18px;
+  border-width: 1.5px;
+  padding: 24px 22px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+/* 順序固定：vocab → grammar → word → reading（G2 少數分類也安全：只是少用幾個顏色） */
+.qm-blocks .qm-block:nth-of-type(1) { --cat-c: var(--c-vocab);   --cat-bg: var(--c-vocab-bg); }
+.qm-blocks .qm-block:nth-of-type(2) { --cat-c: var(--c-grammar); --cat-bg: var(--c-grammar-bg); }
+.qm-blocks .qm-block:nth-of-type(3) { --cat-c: var(--c-word);    --cat-bg: var(--c-word-bg); }
+.qm-blocks .qm-block:nth-of-type(4) { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+
+/* 頂部色條 — 每張卡有自己的身份 */
+.qm-block::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--cat-c);
+  opacity: .9;
+}
+.qm-block:hover:not(.empty) {
+  border-color: var(--cat-c);
+  box-shadow: var(--shadow-md);
+}
+.qm-block-icon {
+  width: 60px; height: 60px;
+  border-radius: 16px;
+  font-size: 28px;
+  box-shadow: 0 6px 16px -6px var(--cat-c);
+}
+.qm-block-title { font-size: 18px; }
+.qm-block-title-zh {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cat-c);
+  margin-bottom: 12px;
+}
+.qm-block-count {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.qm-progress-bar {
+  height: 8px;
+  border-radius: 5px;
+  background: var(--border-soft);
+}
+.qm-progress-fill {
+  border-radius: 5px;
+  background: var(--cat-c);
+}
+.qm-pct {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--cat-c);
+}
+.qm-block-arrow {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1.5px solid var(--border-soft);
+  font-size: 18px;
+  transition: all .18s;
+}
+.qm-block:hover:not(.empty) .qm-block-arrow {
+  background: var(--cat-c);
+  border-color: var(--cat-c);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+/* ═══ 4. 側欄 — 從文件大綱變成單元卡片 ═══════════════════ */
+.qm-sidebar-cat-icon { border-radius: 14px !important; box-shadow: var(--shadow-sm); }
+.qm-unit-list { padding: 6px 10px; }
+.qm-unit-row {
+  border-radius: 12px;
+  margin-bottom: 4px;
+  border: 1.5px solid transparent;
+  transition: all .15s;
+}
+.qm-unit-row:hover {
+  background: var(--bg);
+  border-color: var(--border-soft);
+  transform: none;
+}
+/* 選中：墨色翻轉 — 一眼看出現在在哪 */
+.qm-unit-row.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+.qm-unit-row.active .qm-unit-row-title { color: var(--bg-paper); }
+.qm-unit-row.active .qm-unit-row-meta,
+.qm-unit-row.active .qm-type-badge { color: var(--ink-faint); }
+.qm-unit-row.active .qm-type-badge { background: rgba(255,255,255,.12); border-color: transparent; }
+.qm-unit-row.active .qm-unit-score-badge { background: rgba(255,255,255,.16); color: #fff; border-color: transparent; }
+.qm-unit-row.active .qm-unit-row-status { color: var(--bg-paper); }
+.qm-unit-row.active .qm-unit-row-status.done { color: #6EE7A0; }
+.qm-sidebar-back {
+  border-radius: 10px;
+  transition: all .15s;
+}
+.qm-sidebar-back:hover { background: var(--bg); }
+
+/* ═══ 5. 測驗選項 — 字母圓徽更大更可愛 ═══════════════════ */
+.qm-option { border-radius: 14px; }
+.qm-opt-letter {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--ink-muted);
+  flex-shrink: 0;
+  transition: all .12s;
+}
+.qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) .qm-opt-letter {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.qm-option.correct .qm-opt-letter {
+  background: #16a34a; border-color: #16a34a; color: #fff;
+}
+.qm-option.wrong .qm-opt-letter {
+  background: #dc2626; border-color: #dc2626; color: #fff;
+}
+
+/* 測驗進度條 — 加粗 + 漸層 */
+.qm-player-bar { height: 10px !important; border-radius: 6px !important; }
+.qm-player-fill {
+  border-radius: 6px !important;
+  background: linear-gradient(90deg, var(--moss), #5FA851) !important;
+}
+
+/* ═══ 6. 年級選擇 — 正確的網格 + 每年級一個顏色 ═══════════ */
+.grade-sel-cards {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.grade-sel-card {
+  --g-c: var(--ink);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 26px 14px 22px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  transition: all .18s cubic-bezier(.22,1,.36,1);
+  position: relative;
+  overflow: hidden;
+}
+.grade-sel-card:nth-child(1) { --g-c: #D08770; }
+.grade-sel-card:nth-child(2) { --g-c: var(--c-vocab); }
+.grade-sel-card:nth-child(3) { --g-c: var(--c-grammar); }
+.grade-sel-card:nth-child(4) { --g-c: var(--c-word); }
+.grade-sel-card:nth-child(5) { --g-c: var(--c-reading); }
+.grade-sel-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--g-c);
+  opacity: 0;
+  transition: opacity .18s;
+}
+.grade-sel-card:hover {
+  border-color: var(--g-c);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+.grade-sel-card:hover::before { opacity: 1; }
+.grade-sel-badge {
+  color: var(--g-c) !important;
+  font-size: 40px !important;
+}
+.grade-sel-card-desc {
+  font-size: 10px !important;
+  line-height: 1.5 !important;
+}
+
+/* ═══ 7. 總複習入口 — 獎盃金 ═════════════════════════════ */
+.rv-launcher-btn {
+  background: linear-gradient(120deg, #FFF8E8 0%, var(--bg-card) 55%);
+  border-color: #E8D9B0;
+}
+.rv-launcher-btn:hover { border-color: #C9A84C; }
+.rv-launcher-btn:hover .rv-launcher-arrow { color: #C9A84C; }
+.rv-launcher-emoji { filter: drop-shadow(0 3px 6px rgba(201,168,76,.4)); }
+
+/* ═══ 8. 全站統一細節 ════════════════════════════════════ */
+/* 卡片圓角統一 18px 系列 */
+.dash-panel, .mk-panel, .rv-panel, .report-modal { border-radius: 18px; }
+
+/* 主要 CTA 按鈕一致的彈性手感 */
+.qm-btn.primary, .rv-start-btn, .mk-drill-btn, .report-copy-btn, .roster-add-btn {
+  transition: background .15s, transform .12s cubic-bezier(.34,1.56,.64,1), box-shadow .15s;
+}
+.qm-btn.primary:hover, .rv-start-btn:hover, .mk-drill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -6px rgba(21,19,14,.4);
+}
+
+/* 選取文字的顏色也跟主題走 */
+::selection { background: rgba(139,49,32,.18); }
+
+/* ═══ 9. 行動裝置 ════════════════════════════════════════ */
+@media (max-width: 760px) {
+  .header-inner { height: 56px; }
+  .qm-week-title { font-size: 28px; }
+  .grade-sel-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grade-sel-card { padding: 20px 10px 16px; }
+  .grade-sel-badge { font-size: 32px !important; }
+  .qm-block { padding: 18px 16px; }
+  .qm-block-icon { width: 50px; height: 50px; font-size: 24px; border-radius: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qm-block, .grade-sel-card, .week-nav button, .qm-option { transition: none !important; }
+}
+
+/* 品牌名不折行（中等寬度時縮小取代換行） */
+.brand-name { white-space: nowrap; }
+@media (max-width: 1020px) {
+  .brand-name { font-size: 18px; }
+  .header-inner { gap: 16px; }
+}
+
+/* 年級選擇容器放寬，讓五張卡有呼吸空間 */
+.grade-selector-inner { max-width: 880px !important; width: 100%; }
+.grade-sel-cards { margin-top: 8px; }
+.grade-sel-card-label { font-weight: 700 !important; }
+
+/* ═══ 星級精熟 ⭐ ═══ */
+.qm-stars { display: inline-flex; gap: 1px; margin-left: 6px; vertical-align: middle; }
+.qm-star { color: var(--border); line-height: 1; }
+.qm-star.on { color: #F0C04A; }
+.qm-unit-row.active .qm-star { color: rgba(255,255,255,.25); }
+.qm-unit-row.active .qm-star.on { color: #F4D06A; }
+.qm-block-stars {
+  display: flex; align-items: center; gap: 3px;
+  margin-top: 7px;
+  font-family: var(--sans); font-size: 12px; font-weight: 800; color: #B8932F;
+}
+.qm-block-stars .qm-star { font-size: 14px; }
+.qm-block-stars-max { color: var(--ink-faint); font-weight: 600; }

@@ -65,7 +65,7 @@ const G5_SEED_WEEKS = {
 };
 
 /* ─── Firestore subscribe ────────────────────────────────────────────────── */
-function subscribeToClassDataG5(callback) {
+function subscribeToClassDataG5(callback, onError) {
   return _classDocG5.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
@@ -86,6 +86,9 @@ function subscribeToClassDataG5(callback) {
       _classDocG5.set({ _version: G5_DATA_VERSION, weeks: G5_SEED_WEEKS, weekOrder: G5_DEFAULT_WEEK_ORDER }).catch(() => {});
       callback(G5_SEED_WEEKS, G5_DEFAULT_WEEK_ORDER.slice());
     }
+  }, err => {
+    console.warn('subscribeToClassDataG5:', err?.code);
+    if (onError) onError(err);
   });
 }
 

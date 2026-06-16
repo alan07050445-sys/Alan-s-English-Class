@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>本週學習週報 · Alan's English Class</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Nunito:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --paper:#F6F1E6; --card:#FBF8F1; --ink:#1F1B14; --ink-soft:#4A4439; --ink-muted:#8A8270;
+    --accent:#8B3120; --terra:#B85A45; --gold:#C9A84C; --moss:#5E8A57; --border:#E6DDC9; --border-soft:#EFE8D8;
+    --serif:'Lora',Georgia,serif; --sans:'Nunito','Noto Sans TC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:#ECE4D2; font-family:var(--sans); color:var(--ink);
+    -webkit-font-smoothing:antialiased; padding:18px 0 40px;
+  }
+  .sheet{max-width:430px;margin:0 auto;padding:0 16px;}
+
+  /* header */
+  .pr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 4px;}
+  .pr-brand{font-family:var(--serif);font-weight:600;font-size:15px;color:var(--ink);}
+  .pr-brand .dot{color:var(--terra);}
+  .pr-sync{font-family:var(--sans);font-size:11px;font-weight:700;color:var(--accent);background:#F3E6E1;border:1px solid #E8D2CB;padding:3px 9px;border-radius:999px;}
+
+  .pr-hero-head{
+    border-radius:20px;padding:20px 22px 18px;margin-bottom:14px;color:#fff;
+    background:linear-gradient(135deg,#9A3A26 0%,#B85A45 100%);
+    box-shadow:0 14px 30px -12px rgba(139,49,32,.5);
+  }
+  .pr-eyebrow{font-size:12px;font-weight:700;letter-spacing:.04em;opacity:.85;margin-bottom:6px;}
+  .pr-title{font-family:var(--serif);font-size:24px;font-weight:600;line-height:1.2;}
+  .pr-stu{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;}
+  .pr-stu span{background:rgba(255,255,255,.16);padding:4px 12px;border-radius:999px;font-weight:600;}
+
+  /* card base */
+  .card{background:var(--card);border:1.5px solid var(--border);border-radius:18px;padding:18px 18px;margin-bottom:14px;box-shadow:0 6px 18px -12px rgba(31,27,20,.2);}
+  .card-label{display:flex;align-items:center;gap:7px;font-family:var(--sans);font-size:13px;font-weight:800;color:var(--ink-muted);letter-spacing:.02em;margin-bottom:14px;text-transform:none;}
+  .card-label .ic{font-size:15px;}
+
+  /* score hero */
+  .score-card{text-align:center;background:
+    radial-gradient(120% 120% at 50% 0%, rgba(201,168,76,.16), transparent 62%), var(--card);}
+  .score-ring{position:relative;width:148px;height:148px;margin:2px auto 4px;}
+  .score-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .score-num b{font-family:var(--serif);font-size:46px;font-weight:600;color:var(--accent);line-height:1;}
+  .score-num small{font-size:12px;color:var(--ink-muted);font-weight:700;margin-top:2px;}
+  .score-trend{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:800;color:var(--moss);background:#EAF1E8;border:1px solid #D6E5D3;padding:5px 13px;border-radius:999px;margin-top:4px;}
+  .score-sub{font-size:12.5px;color:var(--ink-muted);margin-top:8px;font-weight:600;}
+
+  /* stat row */
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .stat{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:14px 8px;text-align:center;box-shadow:0 6px 18px -12px rgba(31,27,20,.2);}
+  .stat b{display:block;font-family:var(--serif);font-size:22px;font-weight:600;color:var(--ink);line-height:1;}
+  .stat b small{font-size:13px;color:var(--ink-muted);}
+  .stat span{display:block;font-size:11.5px;color:var(--ink-muted);font-weight:700;margin-top:6px;}
+  .stat-strip{margin:14px 0;}
+
+  /* homework */
+  .hw{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--border-soft);}
+  .hw:last-child{border-bottom:none;}
+  .hw-ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;font-weight:800;}
+  .hw-done .hw-ic{background:#EAF1E8;color:var(--moss);}
+  .hw-wait .hw-ic{background:#FBF0DA;color:#B98A1E;}
+  .hw-name{flex:1;font-size:14.5px;font-weight:700;color:var(--ink-soft);}
+  .hw-tag{font-size:11.5px;font-weight:800;}
+  .hw-done .hw-tag{color:var(--moss);}
+  .hw-wait .hw-tag{color:#B98A1E;}
+
+  /* skills */
+  .skill{margin-bottom:13px;}
+  .skill:last-child{margin-bottom:0;}
+  .skill-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .skill-name{font-size:14px;font-weight:800;color:var(--ink-soft);}
+  .skill-score{font-family:var(--serif);font-size:15px;font-weight:600;}
+  .skill-bar{height:9px;border-radius:999px;background:var(--border-soft);overflow:hidden;}
+  .skill-fill{height:100%;border-radius:999px;}
+  .good .skill-score{color:var(--moss);} .good .skill-fill{background:linear-gradient(90deg,#7AA873,#5E8A57);}
+  .warn .skill-score{color:#C08A2A;} .warn .skill-fill{background:linear-gradient(90deg,#E0B24C,#C9982E);}
+
+  .wrong-box{margin-top:16px;background:#FBF4F2;border:1px solid #EEDAD4;border-radius:14px;padding:13px 14px;}
+  .wrong-head{font-size:12.5px;font-weight:800;color:var(--accent);margin-bottom:9px;}
+  .wrong-item{font-size:13px;color:var(--ink-soft);line-height:1.6;padding:6px 0;border-bottom:1px dashed #EAD9D3;}
+  .wrong-item:last-child{border-bottom:none;}
+  .wrong-item .q{font-weight:700;}
+  .wrong-item .a{color:var(--moss);font-weight:800;}
+  .wrong-item .x{color:#C0503C;text-decoration:line-through;font-weight:700;}
+
+  /* teacher note */
+  .note-card{background:linear-gradient(135deg,#FBF8F1,#F6EFE0);border:1.5px solid var(--border);}
+  .note-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
+  .note-avatar{width:46px;height:46px;border-radius:50%;background:#F3E6E1;border:1.5px solid #E8D2CB;object-fit:contain;flex-shrink:0;}
+  .note-by b{display:block;font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink);}
+  .note-by span{font-size:11.5px;color:var(--ink-muted);font-weight:700;}
+  .note-body{font-size:14px;line-height:1.85;color:var(--ink-soft);font-weight:500;}
+
+  .pr-foot{text-align:center;margin-top:6px;padding:14px;}
+  .pr-foot-line{font-family:var(--serif);font-size:14px;color:var(--ink);font-weight:600;}
+  .pr-foot-sub{font-size:11.5px;color:var(--ink-muted);margin-top:4px;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="pr-top">
+    <div class="pr-brand">Alan<span class="dot">.</span> English Class</div>
+    <div class="pr-sync">康橋進度同步</div>
+  </div>
+
+  <div class="pr-hero-head">
+    <div class="pr-eyebrow">本週學習週報 · WEEKLY REPORT</div>
+    <div class="pr-title">語桐這週的英文學習</div>
+    <div class="pr-stu">
+      <span>👧 陳語桐 · 四年級</span>
+      <span>G4 Week 8 · 6/9–6/15</span>
+    </div>
+  </div>
+
+  <div class="card score-card">
+    <div class="card-label"><span class="ic">📊</span>本週成績</div>
+    <div class="score-ring">
+      <svg width="148" height="148" viewBox="0 0 148 148">
+        <circle cx="74" cy="74" r="64" fill="none" stroke="#EFE8D8" stroke-width="12"/>
+        <circle cx="74" cy="74" r="64" fill="none" stroke="#B85A45" stroke-width="12"
+          stroke-linecap="round" stroke-dasharray="402" stroke-dashoffset="48"
+          transform="rotate(-90 74 74)"/>
+      </svg>
+      <div class="score-num"><b>88</b><small>平均分數</small></div>
+    </div>
+    <div class="score-trend">▲ 比上週進步 6 分</div>
+    <div class="score-sub">本週完成 3 份測驗 · 班級平均 81 分</div>
+  </div>
+
+  <div class="card-label" style="padding:0 6px;margin-bottom:10px;"><span class="ic">🏃</span>本週練習量</div>
+  <div class="stat-row stat-strip">
+    <div class="stat"><b>9<small>/10</small></b><span>完成練習</span></div>
+    <div class="stat"><b>58<small>/64</small></b><span>答對題數</span></div>
+    <div class="stat"><b>5<small> 天</small></b><span>學習天數 🔥</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label"><span class="ic">📋</span>作業完成狀況</div>
+    <div class="hw hw-done"><div class="hw-ic">✓</div><div class="hw-name">單字 Quizlet 練習</div><div class="hw-tag">已完成</div></div>
+    <div class="hw hw-done"><div class="hw-ic">✓</div><div class="hw-name">文法影片 + 線上練習</div><div class="hw-tag">已完成</div></div>
+    <div class="hw hw-wait"><div class="hw-ic">!</div><div class="hw-name">閱讀理解學習單</div><div class="hw-tag">尚未完成</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label"><span class="ic">🎯</span>學習狀況分析</div>
+    <div class="skill good">
+      <div class="skill-top"><span class="skill-name">單字 Vocabulary</span><span class="skill-score">96 分</span></div>
+      <div class="skill-bar"><div class="skill-fill" style="width:96%"></div></div>
+    </div>
+    <div class="skill good">
+      <div class="skill-top"><span class="skill-name">閱讀 Reading</span><span class="skill-score">90 分</span></div>
+      <div class="skill-bar"><div class="skill-fill" style="width:90%"></div></div>
+    </div>
+    <div class="skill warn">
+      <div class="skill-top"><span class="skill-name">文法 Grammar</span><span class="skill-score">72 分 · 需加強</span></div>
+      <div class="skill-bar"><div class="skill-fill" style="width:72%"></div></div>
+    </div>
+
+    <div class="wrong-box">
+      <div class="wrong-head">📕 本週需複習的錯題（2 題）</div>
+      <div class="wrong-item"><span class="q">She ___ to school every day.</span><br/>正解 <span class="a">goes</span> · 語桐選了 <span class="x">go</span></div>
+      <div class="wrong-item"><span class="q">There are many ___ on the table.</span><br/>正解 <span class="a">apples</span> · 語桐選了 <span class="x">apple</span></div>
+    </div>
+  </div>
+
+  <div class="card note-card">
+    <div class="note-head">
+      <img src="owl-proud.png" alt="" class="note-avatar"/>
+      <div class="note-by"><b>老師的話</b><span>Alan 老師 · 康橋英文</span></div>
+    </div>
+    <div class="note-body">
+      語桐這週單字表現非常棒，幾乎全對 👏 閱讀也很穩定。<br/>
+      目前文法的「第三人稱單數」（he / she 後面動詞要加 s）還容易混淆，我已經幫她加了兩題針對練習。<br/>
+      閱讀學習單還沒完成，週末再麻煩您提醒她完成喔！整體進步很明顯，請放心，我們繼續加油 💪
+    </div>
+  </div>
+
+  <div class="pr-foot">
+    <div class="pr-foot-line">Alan's English Class</div>
+    <div class="pr-foot-sub">康橋進度同步學習系統 · 每週一更新</div>
+  </div>
+
+</div>
+</body>
+</html>

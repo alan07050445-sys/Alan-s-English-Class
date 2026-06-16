@@ -36,7 +36,25 @@ function shuffleArr(arr) {
   return a;
 }
 
-// Auto-generate MC questions from word pairs (both directions, mixed)
+// Generate listening (hear word → pick the word) questions from word pairs.
+// Capped so long word lists don't bloat the quiz.
+function generateListeningQuestions(words, cap = 8) {
+  if (!words || words.length < 4 || !window.speechSynthesis) return [];
+  return shuffleArr(words).slice(0, cap).map(word => {
+    const wrongEn = shuffleArr(words.filter(w => w.en !== word.en).map(w => w.en)).slice(0, 3);
+    const opts = shuffleArr([word.en, ...wrongEn]);
+    return {
+      qtype: 'listening',
+      word: word.en,
+      q: `🔊 聽音選字：${word.en}`, // stored in wrongQuestions as-is; never displayed during the quiz
+      hint: 'Listen and choose · 聽聽看，選出你聽到的字',
+      options: opts,
+      correct: opts.indexOf(word.en),
+    };
+  });
+}
+
+// Auto-generate MC questions from word pairs (both directions + listening, mixed)
 function generateVocabQuestions(words) {
   if (!words || words.length < 2) return [];
   const qs = [];
@@ -49,6 +67,7 @@ function generateVocabQuestions(words) {
     const enOpts  = shuffleArr([word.en, ...wrongEn]);
     qs.push({ q: word.zh, hint: 'Choose the English word · 選出英文單字', options: enOpts, correct: enOpts.indexOf(word.en) });
   });
+  qs.push(...generateListeningQuestions(words));
   return shuffleArr(qs);
 }
 
@@ -138,6 +157,23 @@ const QM_KEY = 'alans-qm-v1';
 function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY) || '{}'); } catch(e) { return {}; } }
 function saveQMProg(p) { try { localStorage.setItem(QM_KEY, JSON.stringify(p)); } catch(e) {} }
 
+// 星級精熟：用最佳分數決定 0~3 星，鼓勵回去重練拿滿星（驅動複習）
+function starsFromScore(pct) {
+  if (pct == null) return 0;
+  if (pct >= 100) return 3;
+  if (pct >= 80)  return 2;
+  if (pct >= 50)  return 1;
+  return 0;
+}
+function StarMastery({ pct, size = 13 }) {
+  const n = starsFromScore(pct);
+  return (
+    <span className="qm-stars" style={{ fontSize: size }} title={`精熟度 ${n}/3 星`}>
+      {[0,1,2].map(i => <span key={i} className={`qm-star${i < n ? ' on' : ''}`}>★</span>)}
+    </span>
+  );
+}
+
 function getTodayInputValue(offsetDays = 0) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -156,6 +192,13 @@ function getQuizItemTotal(item) {
   if (item.type === 'circle-answer') return (item.circleQuestions || []).filter(q => q.sentence && q.answer).length;
   if (item.type === 'writing-practice') return 1;
   return getItemQuestions(item).length;
+}
+
+function getCategoryCountLabel(cat) {
+  const title = `${cat?.title || ''} ${cat?.titleZh || ''}`.toLowerCase();
+  return (title.includes('word study') || title.includes('字根') || title.includes('字首'))
+    ? 'words'
+    : 'questions';
 }
 
 function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null, total = 1, wrongQuestions = [] } = {}) {
@@ -187,12 +230,26 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
 
 /* ── Visual config ───────────────────────────────────── */
 const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
+const CAT_IMG   = {
+  vocab:   'icon-vocab.png',
+  grammar: 'icon-grammar.png',
+  word:    'icon-word.png',
+  reading: 'icon-reading.png',
+};
 const CAT_BG    = {
   vocab:   'linear-gradient(135deg,#667eea,#764ba2)',
   grammar: 'linear-gradient(135deg,#f093fb,#f5576c)',
   word:    'linear-gradient(135deg,#4facfe,#00f2fe)',
   reading: 'linear-gradient(135deg,#43e97b,#38f9d7)',
 };
+/* 分類圖示：優先使用 AI 插畫圖，找不到時回退 emoji + 漸層 */
+function CatIcon({ catId, className }) {
+  const img = CAT_IMG[catId];
+  if (img) {
+    return <div className={className}><img src={img} alt="" className="qm-cat-img"/></div>;
+  }
+  return <div className={className} style={{ background: CAT_BG[catId] }}>{CAT_ICONS[catId]}</div>;
+}
 
 /* ══════════════════════════════════════════════════════
    MAIN SCREEN — 4 blocks
@@ -237,6 +294,12 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
         )}
       </div>
 
+      {!editMode && (
+        <div className="qm-blocks-head">
+          <h2 className="qm-blocks-title">📚 本週練習</h2>
+          <span className="qm-blocks-hint">完成這些，本週就達標 ✅</span>
+        </div>
+      )}
       <div className="qm-blocks">
         {activeCats.map(cat => {
           const allCatItems = (week.items || {})[cat.id] || [];
@@ -248,34 +311,51 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             return s + (p ? Math.min(p.done || 0, getQuizItemTotal(it)) : 0);
           }, 0);
           const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+          const catStars = quizItems.reduce((s, it) => {
+            const p = qmProg[`${weekId}_${it.id}`];
+            const sp = (p && p.total) ? Math.round(p.score / p.total * 100) : null;
+            return s + starsFromScore(sp);
+          }, 0);
+          const maxStars = quizItems.length * 3;
           const clickable = total > 0 || editMode;
+          const countLabel = getCategoryCountLabel(cat);
+          const BlockTag = editMode ? 'div' : 'button';
+          const blockProps = editMode ? {} : {
+            type: 'button',
+            disabled: !clickable,
+            'aria-label': total > 0
+              ? `${cat.title} ${cat.titleZh}, ${quizItems.length} units, ${total} ${countLabel}, ${pct}% complete`
+              : `${cat.title} ${cat.titleZh}, coming soon`,
+          };
 
           return (
-            <div
+            <BlockTag
               key={cat.id}
               className={`qm-block${!clickable ? ' empty' : ''}`}
               onClick={() => clickable && onEnterCat(cat)}
+              {...blockProps}
             >
-              <div className="qm-block-icon" style={{ background: CAT_BG[cat.id] }}>
-                {CAT_ICONS[cat.id]}
-              </div>
+              <CatIcon catId={cat.id} className="qm-block-icon"/>
               <div className="qm-block-content">
                 <div className="qm-block-title">{cat.title}</div>
                 <div className="qm-block-title-zh">{cat.titleZh}</div>
                 {total > 0 ? (
                   <>
-                    <div className="qm-block-count">{quizItems.length} units · {total} {quizItems.some(it => it.type === 'syllable-div' || it.type === 'type-answer') ? 'words' : 'questions'}</div>
+                    <div className="qm-block-count">{quizItems.length} units · {total} {countLabel}</div>
                     <div className="qm-block-progress">
                       <div className="qm-progress-bar">
                         <div className="qm-progress-fill" style={{ width: pct + '%' }}/>
                       </div>
                       <span className="qm-pct">{pct}%</span>
                     </div>
+                    <div className="qm-block-stars" title={`精熟星數 ${catStars}/${maxStars}`}>
+                      <span className="qm-star on">★</span> {catStars}<span className="qm-block-stars-max">/{maxStars}</span>
+                    </div>
                   </>
                 ) : editMode ? (
                   <div className="qm-block-count">{allCatItems.length} items · no quiz yet</div>
                 ) : (
-                  <div className="qm-block-empty">No quiz yet</div>
+                  <div className="qm-block-empty">準備中 · Coming soon</div>
                 )}
               </div>
               {editMode ? (
@@ -287,7 +367,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
               ) : total > 0 ? (
                 <div className="qm-block-arrow">›</div>
               ) : null}
-            </div>
+            </BlockTag>
           );
         })}
       </div>
@@ -333,9 +413,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         </button>
 
         <div className="qm-sidebar-cat">
-          <span className="qm-sidebar-cat-icon" style={{ background: CAT_BG[cat.id] }}>
-            {CAT_ICONS[cat.id]}
-          </span>
+          <CatIcon catId={cat.id} className="qm-sidebar-cat-icon"/>
           <div>
             <div className="qm-sidebar-cat-name">{cat.title}</div>
             <div className="qm-sidebar-cat-zh">{cat.titleZh}</div>
@@ -397,6 +475,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <>
                         {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} prompts` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} questions` : `${totalQ} questions`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
+                        {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
                     )}
                   </div>
@@ -1086,6 +1165,15 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   // Progress = first-try correct / unique total
   const pct    = Math.round(firstRight / total * 100);
 
+  // Auto-play listening questions when they appear (may silently fail on iOS
+  // before the first user gesture — the 🔊 button always works as fallback).
+  useQME(() => {
+    const cur = deck[deckPos];
+    if (cur?.qtype === 'listening' && screen === 'quiz') {
+      window.speakText(cur.word);
+    }
+  }, [deckPos, screen]);
+
   if (!q) return null;
 
   const goToNextQuestion = () => {
@@ -1194,7 +1282,14 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
 
       <div key={deckPos} className="qm-question-area qm-question-swap">
         {q.hint && <div className="qm-question-hint">{q.hint}</div>}
-        <div className="qm-question-text">{q.q}</div>
+        {q.qtype === 'listening' ? (
+          <button className="qm-listen-btn" onClick={() => window.speakText(q.word)} title="再聽一次">
+            <span className="qm-listen-icon">🔊</span>
+            <span className="qm-listen-label">點擊重聽 · Tap to replay</span>
+          </button>
+        ) : (
+          <div className="qm-question-text">{q.q}</div>
+        )}
       </div>
 
       <div key={`opts-${deckPos}`} className="qm-options qm-options-swap">
@@ -2823,4 +2918,4 @@ function ClozePlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro });
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro });

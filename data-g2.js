@@ -623,7 +623,7 @@ function _mergeG2WithSeed(existingWeeks, seedWeeks) {
   return result;
 }
 
-function subscribeToClassDataG2(callback) {
+function subscribeToClassDataG2(callback, onError) {
   return _classDocG2.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
@@ -646,6 +646,9 @@ function subscribeToClassDataG2(callback) {
       _classDocG2.set({ _version: G2_DATA_VERSION, weeks: G2_SEED_WEEKS, weekOrder: G2_DEFAULT_WEEK_ORDER }).catch(() => {});
       callback(G2_SEED_WEEKS, G2_DEFAULT_WEEK_ORDER.slice());
     }
+  }, err => {
+    console.warn('subscribeToClassDataG2:', err?.code);
+    if (onError) onError(err);
   });
 }
 

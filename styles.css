@@ -238,3 +238,69 @@ img { display: block; max-width: 100%; }
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* ═══════════════════════════════════════════════════════
+   UI POLISH — 全站一致的 modal 進場、毛玻璃、捲軸、focus
+═══════════════════════════════════════════════════════ */
+
+/* 所有覆蓋層：淡入 + 毛玻璃 */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes panelRiseIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.dash-overlay, .mk-overlay, .rv-overlay, .report-modal-overlay {
+  animation: overlayFadeIn 0.22s ease both;
+  backdrop-filter: blur(7px) saturate(0.92);
+  -webkit-backdrop-filter: blur(7px) saturate(0.92);
+}
+.dash-panel, .mk-panel, .rv-panel, .report-modal {
+  animation: panelRiseIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 細捲軸（modal 內捲動區） */
+.mk-list, .rv-body, .rv-options-pad, .report-preview, .dash-body,
+.rv-panel-result, .qm-options {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.mk-list::-webkit-scrollbar, .rv-body::-webkit-scrollbar,
+.report-preview::-webkit-scrollbar, .dash-body::-webkit-scrollbar {
+  width: 8px;
+}
+.mk-list::-webkit-scrollbar-thumb, .rv-body::-webkit-scrollbar-thumb,
+.report-preview::-webkit-scrollbar-thumb, .dash-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* 鍵盤導覽 focus ring — 一致且不干擾滑鼠操作 */
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 按鈕按下的一致觸感 */
+.btn:active, .icon-btn:active, .dash-tab:active, .rv-chip:active,
+.roster-add-btn:active, .mk-header-btn:active {
+  transform: scale(0.96);
+}
+
+/* 數字等寬 — 進度、分數不跳動 */
+.progress-pill, .qm-score-badge, .rv-play-count, .mk-drill-progress,
+.dt-count, .sdetail-count {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-overlay, .mk-overlay, .rv-overlay, .report-modal-overlay,
+  .dash-panel, .mk-panel, .rv-panel, .report-modal {
+    animation: none !important;
+  }
+}

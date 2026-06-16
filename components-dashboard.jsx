@@ -2,6 +2,127 @@
 
 const { useState: useDash, useEffect: useDashE, useMemo: useDashM } = React;
 
+/* ── Weekly Report Modal (single student) ─────────────── */
+function WeeklyReportModal({ student, weeks, weekOrder, onClose }) {
+  const [selWeekId, setSelWeekId] = useDash(() =>
+    weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
+  );
+  const [copied, setCopied] = useDash(false);
+  const [note, setNote] = useDash('');
+
+  const report = useDashM(() =>
+    window.buildWeeklyReport(student, weeks, weekOrder, { weekId: selWeekId }),
+    [student, weeks, weekOrder, selWeekId]
+  );
+  const name = friendlyName(student);
+  const textReport = useDashM(() => window.formatReportAsText(report, name), [report, name]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(textReport).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    }).catch(() => {});
+  };
+
+  const openVisual = () => {
+    if (!window.buildReportHTML) return;
+    const html = window.buildReportHTML(report, name, note);
+    const w = window.open('', '_blank');
+    if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+  };
+
+  return (
+    <div className="report-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="report-modal">
+        <div className="report-modal-head">
+          <h3 className="report-modal-title">📋 學習週報 — {name}</h3>
+          <button className="icon-btn" onClick={onClose}><window.Icon name="close" size={16}/></button>
+        </div>
+        <div className="report-modal-controls">
+          <label className="report-week-label">週次</label>
+          <select className="report-week-select" value={selWeekId || ''} onChange={e => setSelWeekId(e.target.value)}>
+            {(weekOrder || []).slice().reverse().map(wid => (
+              <option key={wid} value={wid}>
+                {weeks[wid]?.label || wid}{weeks[wid]?.dateRange ? `  (${weeks[wid].dateRange})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="report-note-field">
+          <label className="report-week-label">老師的話（會出現在圖文週報，可留空）</label>
+          <textarea
+            className="report-note-input"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="例如：語桐這週單字進步很多，文法的第三人稱單數再多練習就更穩了！"
+            rows={3}
+          />
+        </div>
+        <button className="report-visual-btn" onClick={openVisual}>
+          🖼️ 開啟圖文週報（給家長 · 截圖傳 LINE）
+        </button>
+        <div className="report-preview">
+          <pre className="report-preview-text">{textReport}</pre>
+        </div>
+        <button className={`report-copy-btn${copied ? ' copied' : ''}`} onClick={handleCopy}>
+          {copied ? '已複製 ✓' : '📋 複製文字版（貼到 LINE）'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── All-Class Report Modal ────────────────────────────── */
+function AllClassReportModal({ students, weeks, weekOrder, onClose }) {
+  const [selWeekId, setSelWeekId] = useDash(() =>
+    weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
+  );
+  const [copied, setCopied] = useDash(false);
+
+  const allText = useDashM(() => {
+    if (!selWeekId || !students.length) return '尚無學生資料。';
+    return students.map(s => {
+      const r = window.buildWeeklyReport(s, weeks, weekOrder, { weekId: selWeekId });
+      return window.formatReportAsText(r, friendlyName(s));
+    }).join('\n\n' + '－'.repeat(28) + '\n\n');
+  }, [students, weeks, weekOrder, selWeekId]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(allText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    }).catch(() => {});
+  };
+
+  return (
+    <div className="report-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="report-modal report-modal-wide">
+        <div className="report-modal-head">
+          <h3 className="report-modal-title">📋 全班週報</h3>
+          <button className="icon-btn" onClick={onClose}><window.Icon name="close" size={16}/></button>
+        </div>
+        <div className="report-modal-controls">
+          <label className="report-week-label">週次</label>
+          <select className="report-week-select" value={selWeekId || ''} onChange={e => setSelWeekId(e.target.value)}>
+            {(weekOrder || []).slice().reverse().map(wid => (
+              <option key={wid} value={wid}>
+                {weeks[wid]?.label || wid}{weeks[wid]?.dateRange ? `  (${weeks[wid].dateRange})` : ''}
+              </option>
+            ))}
+          </select>
+          <span className="report-student-count">{students.length} 位學生</span>
+        </div>
+        <div className="report-preview report-preview-tall">
+          <pre className="report-preview-text">{allText}</pre>
+        </div>
+        <button className={`report-copy-btn${copied ? ' copied' : ''}`} onClick={handleCopy}>
+          {copied ? '已複製 ✓' : '📋 複製全班週報'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Detect Firebase-UID-like strings (28 chars [A-Za-z0-9]) ── */
 function isUid(str) {
   return !str || /^[A-Za-z0-9]{20,}$/.test(str.trim());
@@ -12,11 +133,92 @@ function friendlyName(s) {
   return s.email ? s.email.split('@')[0] : '未命名學生';
 }
 
+/* ── Roster management tab (學生名單) ──────────────────── */
+function RosterManager() {
+  const [roster, setRoster]   = useDash([]);
+  const [email, setEmail]     = useDash('');
+  const [name, setName]       = useDash('');
+  const [grade, setGrade]     = useDash('g3');
+  const [err, setErr]         = useDash(null);
+  const [busy, setBusy]       = useDash(false);
+
+  useDashE(() => window.subscribeRoster(setRoster, () => setErr('讀取名單失敗 — 請先到 Firebase Console 部署新版 firestore.rules')), []);
+
+  const handleAdd = async () => {
+    setErr(null);
+    if (!email.trim().includes('@')) { setErr('請輸入有效的 email'); return; }
+    setBusy(true);
+    try {
+      await window.addRosterStudent(email, name, grade);
+      setEmail(''); setName('');
+    } catch(e) { setErr('新增失敗：' + (e.code || e.message)); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="roster-wrap">
+      <div className="roster-form">
+        <input
+          className="roster-input"
+          placeholder="學生 Google email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+        />
+        <input
+          className="roster-input roster-input-name"
+          placeholder="姓名"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+        />
+        <select className="roster-input roster-input-grade" value={grade} onChange={e => setGrade(e.target.value)}>
+          {['g2','g3','g4','g5','g6'].map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
+        </select>
+        <button className="roster-add-btn" onClick={handleAdd} disabled={busy}>＋ 新增</button>
+      </div>
+      {err && <div className="roster-err">⚠️ {err}</div>}
+
+      <div className="roster-hint">
+        名單在「部署新版 firestore.rules」後才會生效 — 屆時只有名單內（啟用中）的學生能看到課程內容。
+      </div>
+
+      {roster.length === 0 ? (
+        <div className="dt-empty"><p>名單是空的</p><p className="dt-empty-hint">把學生的 Google email 加進來，部署規則後就只有他們能使用。</p></div>
+      ) : (
+        <div className="roster-list">
+          {roster.map(s => (
+            <div key={s.email} className={`roster-row${s.active === false ? ' inactive' : ''}`}>
+              <div className="roster-row-info">
+                <span className="roster-row-name">{s.name || '—'}</span>
+                <span className="roster-row-email">{s.email}</span>
+              </div>
+              <span className="roster-row-grade">{(s.grade || '').toUpperCase()}</span>
+              <button
+                className="roster-toggle-btn"
+                onClick={() => window.setRosterStudentActive(s.email, s.active === false)}
+                title={s.active === false ? '重新啟用' : '停用（保留資料）'}
+              >{s.active === false ? '已停用' : '啟用中'}</button>
+              <button
+                className="roster-del-btn"
+                onClick={() => { if (confirm(`確定刪除 ${s.email}？`)) window.deleteRosterStudent(s.email); }}
+                title="刪除"
+              ><window.Icon name="trash" size={13}/></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder }) {
-  const [students,   setStudents]  = useDash([]);
-  const [selected,   setSelected]  = useDash(null);
-  const [refreshKey, setRefreshKey]= useDash(0);
+  const [students,       setStudents]      = useDash([]);
+  const [selected,       setSelected]      = useDash(null);
+  const [refreshKey,     setRefreshKey]    = useDash(0);
+  const [allReportOpen,  setAllReportOpen] = useDash(false);
+  const [tab,            setTab]           = useDash('report'); // 'report' | 'roster'
 
   useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
   useDashE(() => {
@@ -95,11 +297,29 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         <div className="dash-head">
           <div>
             <h2 className="dash-title">Class Report</h2>
-            <p className="dash-meta">
-              {students.length} students · {total} total items · {questionStats.length} hot questions
-            </p>
+            <div className="dash-tabs">
+              <button
+                className={`dash-tab${tab === 'report' ? ' on' : ''}`}
+                onClick={() => { setTab('report'); setSelected(null); }}
+              >📊 學習報告</button>
+              <button
+                className={`dash-tab${tab === 'roster' ? ' on' : ''}`}
+                onClick={() => { setTab('roster'); setSelected(null); }}
+              >👥 學生名單</button>
+            </div>
+            {tab === 'report' && (
+              <p className="dash-meta">
+                {students.length} students · {total} total items · {questionStats.length} hot questions
+              </p>
+            )}
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <button
+              className="btn ghost"
+              style={{fontSize:12,padding:'5px 12px'}}
+              onClick={() => setAllReportOpen(true)}
+              title="產生全班週報"
+            >📋 全班週報</button>
             <button
               className="btn ghost"
               style={{fontSize:12,padding:'5px 12px'}}
@@ -114,9 +334,12 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
         {/* Body */}
         <div className="dash-body">
-          {!selected ? (
+          {tab === 'roster' ? (
+            <RosterManager/>
+          ) : !selected ? (
             /* ── Overview table ── */
               <>
+              {window.CoopGoalSetter && <window.CoopGoalSetter/>}
               <div className="dash-hot">
                 <div className="dash-section-title">Most Missed Questions</div>
                 {questionStats.length === 0 ? (
@@ -170,17 +393,30 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
             <StudentDetail
               student={selected}
               allItems={allItems}
+              weeks={weeks}
+              weekOrder={weekOrder}
               onBack={() => setSelected(null)}
             />
           )}
         </div>
       </div>
+
+      {allReportOpen && (
+        <AllClassReportModal
+          students={students}
+          weeks={weeks}
+          weekOrder={weekOrder}
+          onClose={() => setAllReportOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 /* ── Per-student detail view ───────────────────────────── */
-function StudentDetail({ student, allItems, onBack }) {
+function StudentDetail({ student, allItems, weeks, weekOrder, onBack }) {
+  const [reportOpen, setReportOpen] = useDash(false);
+
   const its = student.items || {};
   const done = allItems.filter(it =>
     (its[it.progressId]?.done) || (its[it.id]?.done) ||
@@ -196,9 +432,14 @@ function StudentDetail({ student, allItems, onBack }) {
 
   return (
     <>
-      <button className="dash-back" onClick={onBack}>
-        <window.Icon name="arrow-left" size={14}/> Back
-      </button>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+        <button className="dash-back" onClick={onBack} style={{marginBottom:0}}>
+          <window.Icon name="arrow-left" size={14}/> Back
+        </button>
+        <button className="report-gen-btn" onClick={() => setReportOpen(true)} title="產生學習週報">
+          📋 產生週報
+        </button>
+      </div>
 
       <div className="sdetail-header">
         <div>
@@ -210,6 +451,15 @@ function StudentDetail({ student, allItems, onBack }) {
           <span className="sdetail-count-label">items done</span>
         </div>
       </div>
+
+      {reportOpen && (
+        <WeeklyReportModal
+          student={student}
+          weeks={weeks}
+          weekOrder={weekOrder}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
 
       {Object.entries(byWeek).map(([weekLabel, items]) => (
         <div key={weekLabel} className="sdetail-week">

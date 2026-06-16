@@ -9,9 +9,11 @@ const _saveWeekOrderG3   = window.saveWeekOrder;
 const _subscribeG3       = window.subscribeToClassData;
 
 // ── Grade helper: resolve grade-specific functions ─────────────────────────
-function _gradeOf(g, { g2, g5, g3 }) {
+function _gradeOf(g, { g2, g4, g5, g6, g3 }) {
   if (g === 'g2') return g2;
+  if (g === 'g4' && g4 !== undefined) return g4;
   if (g === 'g5') return g5;
+  if (g === 'g6' && g6 !== undefined) return g6;
   return g3;
 }
 
@@ -81,18 +83,18 @@ function App() {
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeeksG2(), g5: window.loadWeeksG5(), g3: window.loadWeeks() });
+    return _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks() });
   });
   const [weekOrder, setWeekOrder] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
+    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder() });
   });
   const [progress, setProgress] = useAppState(() => window.loadProgress());
   const [qmProgressVersion, setQmProgressVersion] = useAppState(0);
   const [weekIdx, setWeekIdx] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
-    const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g5: window.loadWeeksG5(),     g3: window.loadWeeks() });
+    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder() });
+    const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g4: window.loadWeeksG4(),     g5: window.loadWeeksG5(),     g6: window.loadWeeksG6(),     g3: window.loadWeeks() });
     return bestWeekIdx(ord, wks);
   });
   const [openCat, setOpenCat] = useAppState("vocab");
@@ -113,6 +115,28 @@ function App() {
   const prevBadgeKeys = useAppRef(null);
   const [starBurst,   setStarBurst]   = useAppState(false);
   const [streakToast, setStreakToast] = useAppState(null); // { count } — shown briefly
+
+  // ── Mistakes state ──────────────────────────────────
+  const [mistakesOpen,    setMistakesOpen]    = useAppState(false);
+  const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
+
+  // ── Review state ────────────────────────────────────
+  const [reviewSetupOpen, setReviewSetupOpen] = useAppState(false);
+  const [reviewSession,   setReviewSession]   = useAppState(null); // { questions, startWid, endWid }
+
+  // ── Access lock (firestore.rules 部署後，未在名單內 → 鎖定頁) ──
+  const [accessLocked, setAccessLocked] = useAppState(false);
+
+  // ── Companion / Coins / Daily goal (gamification) ──
+  const [companion, setCompanion] = useAppState(() => window.loadCompanion());
+  const [coins,     setCoins]     = useAppState(() => window.loadCoins());
+  const [daily,     setDaily]     = useAppState(() => window.loadDaily());
+  const [goalToast, setGoalToast] = useAppState(false);
+  const [wardrobe,  setWardrobe]  = useAppState(() => window.loadWardrobe());
+  const [shopOpen,  setShopOpen]  = useAppState(false);
+  const [bossOpen,  setBossOpen]  = useAppState(false);
+  const [quests,    setQuests]    = useAppState(() => window.loadQuests());
+  const [coop,      setCoop]      = useAppState(null);
 
   // ── Local streak helpers (works without Firebase login) ─
   const getLocalStreak = () => {
@@ -232,7 +256,8 @@ function App() {
   // IMPORTANT: clear progress FIRST on any user change to prevent
   // cross-account data leakage when switching accounts on same device.
   useAppEffect(() => {
-    setProgress({}); // always reset immediately when user changes (incl. logout)
+    setProgress({});
+    setMyProgressItems({});
     if (!user) return;
     const unsub = window.subscribeMyProgress(user.uid, (firestoreItems) => {
       // Convert Firestore format { itemId: {done, score?, time?} } → app format { itemId: timestamp }
@@ -241,9 +266,17 @@ function App() {
         if (val?.done) appProgress[id] = val.done;
       });
       setProgress(appProgress);
+      setMyProgressItems(firestoreItems); // keep raw items for wrong-question count + mistakes panel
     });
     return unsub;
   }, [user?.uid]);
+
+  // ── Subscribe to class co-op goal (shared Firestore doc) ──
+  useAppEffect(() => {
+    if (!window.subscribeCoop) return;
+    const unsub = window.subscribeCoop(setCoop, () => setCoop(null));
+    return unsub;
+  }, []);
 
   // Always-fresh ref to weeks — prevents stale-closure bugs in CRUD handlers.
   const weeksRef = useAppRef(weeks);
@@ -254,14 +287,15 @@ function App() {
   // Also points window.saveWeeks / saveWeekOrder at the right collection.
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
-    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g5: window.saveWeeksG5,     g3: _saveWeeksG3 });
-    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g5: window.saveWeekOrderG5, g3: _saveWeekOrderG3 });
+    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3 });
+    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3 });
 
-    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g5: window.subscribeToClassDataG5, g3: _subscribeG3 });
-    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g5: 'alans-english-g5-data-v1', g3: 'alans-english-data-v3' });
-    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g5: 'alans-english-g5-order-v1', g3: 'alans-english-week-order-v1' });
+    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3 });
+    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3' });
+    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1' });
 
     const unsub = subscribeFn((newWeeks, newOrder) => {
+      setAccessLocked(false);
       setWeeks(newWeeks);
       setWeekOrder(newOrder);
       setWeekIdx(bestWeekIdx(newOrder, newWeeks));
@@ -269,9 +303,14 @@ function App() {
         localStorage.setItem(storageKey, JSON.stringify(newWeeks));
         localStorage.setItem(orderKey,   JSON.stringify(newOrder));
       } catch(e) {}
+    }, (err) => {
+      // permission-denied → 名單外或未登入（rules 部署後才會發生）
+      if (err?.code === 'permission-denied' && !window.isAdminUser(window._currentUser)) {
+        setAccessLocked(true);
+      }
     });
     return unsub;
-  }, [grade]);
+  }, [grade, user?.uid]);
 
   // Progress — keep in localStorage as offline cache.
   // When logged in, Firestore is the source of truth (see subscribeMyProgress above).
@@ -289,10 +328,12 @@ function App() {
     id: weekId, label: weekId || "—", dateRange: "—", theme: "—", themeZh: "", items: {vocab:[], grammar:[], word:[], reading:[]}
   };
 
-  // Active categories — switches between G2, G3, G5 definitions on grade change
+  // Active categories — switches between grade definitions on grade change
   const activeCategories = _gradeOf(grade, {
     g2: window.CATEGORIES_G2 || _CATS_G3,
+    g4: window.CATEGORIES_G4 || _CATS_G3,
     g5: window.CATEGORIES_G5 || _CATS_G3,
+    g6: window.CATEGORIES_G6 || _CATS_G3,
     g3: _CATS_G3,
   });
 
@@ -320,15 +361,59 @@ function App() {
     ? weekQuizItems.filter(it => progress[it.id] || qmProgress[`${weekId}_${it.id}`]).length
     : allItems.filter(it => progress[it.id]).length;
 
+  const getCategoryProgress = (cat) => {
+    const quizItems = window.getQuizItems ? window.getQuizItems((week.items || {})[cat.id] || []) : [];
+    if (!quizItems.length) return { total: 0, done: 0 };
+    const done = quizItems.reduce((sum, it) => {
+      const key = `${weekId}_${it.id}`;
+      return sum + ((progress[it.id] || qmProgress[key]) ? 1 : 0);
+    }, 0);
+    return { total: quizItems.length, done };
+  };
+
+  const getNextStudyCategory = () => {
+    const withProgress = activeCategories.map(cat => ({ cat, ...getCategoryProgress(cat) }));
+    const next = withProgress.find(c => c.total > 0 && c.done < c.total);
+    if (next) return next.cat;
+    return withProgress.find(c => c.total > 0)?.cat || null;
+  };
+
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 1800);
   };
 
+  const scrollPageToTop = () => {
+    const jump = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    try {
+      if (document.activeElement && document.activeElement.blur) {
+        document.activeElement.blur();
+      }
+      jump();
+      requestAnimationFrame(() => {
+        jump();
+        requestAnimationFrame(jump);
+      });
+      setTimeout(jump, 80);
+      setTimeout(jump, 180);
+    } catch(e) {
+      try { window.scrollTo(0, 0); } catch(_) {}
+    }
+  };
+
   const [slideDir, setSlideDir] = useAppState(null); // 'left' | 'right'
   const [mainKey,  setMainKey]  = useAppState(0);    // increments on back-to-main
-  const goPrevWeek = () => { setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); };
-  const goNextWeek = () => { setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); };
+
+  useAppEffect(() => {
+    scrollPageToTop();
+  }, [grade, weekIdx, catView?.id || '', mainKey, pageKey]);
+
+  const goPrevWeek = () => { setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
+  const goNextWeek = () => { setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -528,6 +613,27 @@ function App() {
       setTimeout(() => setStreakToast(null), 3200);
     }
 
+    // ── Coins + Daily goal (works without login — guests too) ──
+    const pctLocal = total > 0 ? Math.round(score / total * 100) : 0;
+    const earned = Math.max(3, Math.round((score / Math.max(1, total)) * 10) + (pctLocal === 100 ? 5 : 0));
+    setCoins(window.addCoins(earned));
+    const dres = window.bumpDaily(1);
+    setDaily(dres);
+    if (dres.justCompleted) {
+      window.addCoins(10);                 // 達標獎勵金幣
+      setCoins(window.loadCoins());
+      if (window.playSound) window.playSound('complete');
+      if (window.triggerStarBurst) window.triggerStarBurst();
+      setGoalToast(true);
+      setTimeout(() => setGoalToast(false), 3600);
+    }
+
+    // ── 每週任務進度 + 全班合作貢獻 ──
+    window.bumpQuests({ practices: 1, correct: score });
+    if (dres.justCompleted) window.bumpQuests({ dailyReached: 1 });
+    setQuests(window.loadQuests());
+    window.contributeCoop(score); // 盡力而為，未部署規則時靜默略過
+
     if (!u) return;
     const pct = total > 0 ? Math.round(score / total * 100) : 0;
     // Award XP — perfect = 100, otherwise 50
@@ -604,8 +710,8 @@ function App() {
   const handleSelectGrade = (g) => {
     // Immediately load the correct grade's data so the page never
     // flashes the previous grade's content while Firestore syncs.
-    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g5: window.loadWeeksG5(), g3: window.loadWeeks() });
-    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g5: window.loadWeekOrderG5(), g3: window.loadWeekOrder() });
+    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks() });
+    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder() });
     try { localStorage.setItem('alan-grade', g); } catch(e) {}
     setGrade(g);
     setWeeks(newWeeks);
@@ -614,6 +720,7 @@ function App() {
     setOpenCat('vocab');
     setCatView(null);
     setPageKey(k => k + 1); // force .page remount → replay fade-in
+    scrollPageToTop();
   };
 
   // ── Determine what to render under the loading overlay ──────────────
@@ -622,7 +729,20 @@ function App() {
   // All "early return" logic is folded into appContent below.
   let appContent = null;
   if (authReady) {
-    if (!user && !skippedLogin) {
+    if (accessLocked && !isTeacher) {
+      appContent = (
+        <window.LockScreen
+          user={user}
+          onLogin={() => window.signInWithGoogle()}
+          onLogout={() => {
+            window.signOutUser();
+            try { sessionStorage.removeItem('alan-guest'); } catch(e) {}
+            setSkippedLogin(false);
+            setAccessLocked(false);
+          }}
+        />
+      );
+    } else if (!user && !skippedLogin) {
       appContent = (
         <window.LoginScreen
           onLogin={() => window.signInWithGoogle()}
@@ -639,6 +759,13 @@ function App() {
 
   // If authReady + grade, fall through to render the full .page below.
   // appContent stays null in that case.
+
+  // Count wrong questions for the header badge (simple sum, no dedup needed for the count)
+  const mistakesCount = useAppMemo(() => {
+    let n = 0;
+    Object.values(myProgressItems).forEach(p => { n += (p?.wrongQuestions?.length || 0); });
+    return n;
+  }, [myProgressItems]);
 
   // ── Single return — LoadingScreen always at the same Fragment position ──
   // IMPORTANT: LoadingScreen must never change its tree position between renders.
@@ -676,11 +803,14 @@ function App() {
             xp={userProfile.xp || 0}
             onShowBadges={() => setBadgesOpen(true)}
             onEditWeek={() => setWeekEditOpen(true)}
+            mistakesCount={mistakesCount}
+            onShowMistakes={user ? () => setMistakesOpen(true) : null}
             grade={grade}
             onSwitchGrade={() => {
               try { localStorage.removeItem('alan-grade'); } catch(e) {}
               setGrade(null);
               setCatView(null);
+              scrollPageToTop();
             }}
           />
 
@@ -691,7 +821,7 @@ function App() {
               cat={catView}
               items={(week.items || {})[catView.id] || []}
               weekId={weekId}
-              onBack={() => { setCatView(null); setMainKey(k => k + 1); }}
+              onBack={() => { setCatView(null); setMainKey(k => k + 1); scrollPageToTop(); }}
               editMode={editMode}
               onAddItem={handleAddItem}
               onEditItem={handleEditItem}
@@ -703,10 +833,35 @@ function App() {
             />
           ) : (
             <div key={mainKey} className="shell main-enter">
+              {!editMode && (
+                  <window.LearnHero
+                    user={user}
+                    xp={userProfile.xp || 0}
+                    streak={localStreak.count > 0 ? localStreak : (user ? userProfile.streak : localStreak)}
+                    coins={coins}
+                    daily={daily}
+                    companion={companion}
+                    equipped={wardrobe.equipped}
+                    onShowShop={() => setShopOpen(true)}
+                    weekProg={{ pct: totalItems > 0 ? Math.round(totalDone / totalItems * 100) : 0 }}
+                    weekLabel={week.label || weekId}
+                    nextLabel={(() => {
+                      const nextCat = getNextStudyCategory();
+                      return nextCat ? `${nextCat.title} · ${nextCat.titleZh}` : '';
+                    })()}
+                    onContinue={() => {
+                      const nextCat = getNextStudyCategory();
+                      if (nextCat) { setCatView(nextCat); scrollPageToTop(); }
+                    }}
+                    onShowBadges={() => setBadgesOpen(true)}
+                    onShowMistakes={user ? () => setMistakesOpen(true) : null}
+                    mistakesCount={mistakesCount}
+                  />
+              )}
               <window.QuizModeBlocks
                 week={week}
                 weekId={weekId}
-                onEnterCat={(cat) => setCatView(cat)}
+                onEnterCat={(cat) => { setCatView(cat); scrollPageToTop(); }}
                 editMode={editMode}
                 categories={activeCategories}
                 onUpdateWeek={(patch) => {
@@ -718,6 +873,55 @@ function App() {
                 }}
                 onAddItem={handleAddItem}
               />
+              {!editMode && (
+                <>
+                  {weekOrder.length > 1 && (
+                    <div className="home-more-head">
+                      <span className="home-more-label">想多練習？加碼挑戰 🚀</span>
+                    </div>
+                  )}
+                  {weekOrder.length > 1 && (
+                    <div className="rv-launcher-row rv-launcher-duo">
+                      <button className="rv-launcher-btn" onClick={() => setReviewSetupOpen(true)}>
+                        <span className="rv-launcher-emoji rv-launcher-img"><img src="trophy.png" alt=""/></span>
+                        <span className="rv-launcher-text">
+                          <span className="rv-launcher-title">總複習 Review</span>
+                          <span className="rv-launcher-sub">混合多週題目 · 考前總驗收</span>
+                        </span>
+                        <span className="rv-launcher-arrow">›</span>
+                      </button>
+                      <button className="rv-launcher-btn rv-launcher-boss" onClick={() => setBossOpen(true)}>
+                        <span className="rv-launcher-emoji rv-launcher-img"><img src="boss-monster.png" alt=""/></span>
+                        <span className="rv-launcher-text">
+                          <span className="rv-launcher-title">大魔王挑戰</span>
+                          <span className="rv-launcher-sub">打倒魔王 · 贏金幣</span>
+                        </span>
+                        <span className="rv-launcher-arrow">›</span>
+                      </button>
+                    </div>
+                  )}
+                  <div className="goals-row">
+                    <window.QuestsCard
+                      quests={quests}
+                      disabled={weekQuizItems.length === 0}
+                      onClaim={(id) => {
+                        const r = window.claimQuest(id);
+                        if (r.ok) { setCoins(r.coins); setQuests(r.quests); if (window.playSound) window.playSound('badge'); }
+                      }}
+                    />
+                    <window.CoopCard coop={coop}/>
+                  </div>
+                  {weekOrder.length > 1 && (
+                    <window.WeekJourney
+                      weeks={weeks}
+                      weekOrder={weekOrder}
+                      weekIdx={weekIdx}
+                      categories={activeCategories}
+                      onSelectWeek={(idx) => { setSlideDir(idx > weekIdx ? 'left' : 'right'); setWeekIdx(idx); setOpenCat(null); setCatView(null); scrollPageToTop(); }}
+                    />
+                  )}
+                </>
+              )}
             </div>
           )}
           </div>{/* end week-slide wrapper */}
@@ -731,7 +935,7 @@ function App() {
             onPrevWeek={goPrevWeek}
             onNextWeek={goNextWeek}
             catView={catView}
-            onBackFromCat={() => setCatView(null)}
+            onBackFromCat={() => { setCatView(null); scrollPageToTop(); }}
             onShowBadges={() => setBadgesOpen(true)}
             user={user}
           />
@@ -768,6 +972,68 @@ function App() {
               weeks={weeks}
               weekOrder={weekOrder}
             />
+          )}
+
+          {mistakesOpen && user && (
+            <window.MistakesPanel
+              user={user}
+              progressItems={myProgressItems}
+              weeks={weeks}
+              weekOrder={weekOrder}
+              onClose={() => setMistakesOpen(false)}
+            />
+          )}
+
+          {reviewSetupOpen && (
+            <window.ReviewSetupModal
+              weeks={weeks}
+              weekOrder={weekOrder}
+              onClose={() => setReviewSetupOpen(false)}
+              onStart={(session) => { setReviewSetupOpen(false); setReviewSession(session); }}
+            />
+          )}
+
+          {reviewSession && (
+            <window.ReviewPlayer
+              questions={reviewSession.questions}
+              startWid={reviewSession.startWid}
+              endWid={reviewSession.endWid}
+              user={user}
+              onClose={() => setReviewSession(null)}
+            />
+          )}
+
+          {!companion && !isTeacher && !editMode && (
+            <window.CompanionSetup onDone={(c) => setCompanion(c)} />
+          )}
+
+          {shopOpen && (
+            <window.ShopModal
+              companion={companion}
+              coins={coins}
+              onClose={() => setShopOpen(false)}
+              onChange={(newCoins, newWard) => { setCoins(newCoins); setWardrobe(newWard); }}
+            />
+          )}
+
+          {bossOpen && (
+            <window.BossModal
+              weeks={weeks}
+              weekOrder={weekOrder}
+              user={user}
+              onClose={() => setBossOpen(false)}
+              onReward={() => setCoins(window.loadCoins())}
+            />
+          )}
+
+          {goalToast && (
+            <div className="goal-toast" key="goal">
+              <img src="owl-celebrate.png" alt="" className="goal-toast-art"/>
+              <div className="goal-toast-text">
+                <div className="goal-toast-main">今日目標達成！</div>
+                <div className="goal-toast-sub">+10 金幣獎勵 · 明天再來保持連勝！</div>
+              </div>
+            </div>
           )}
 
           {badgesOpen && (

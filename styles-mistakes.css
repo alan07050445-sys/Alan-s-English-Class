@@ -1,0 +1,368 @@
+/* styles-mistakes.css — 錯題本 + 重練模式 */
+
+/* ── Header button ─────────────────────────────────── */
+.mk-header-btn {
+  position: relative;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.mk-header-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+.mk-header-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+/* ── Overlay + Panel ───────────────────────────────── */
+.mk-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(21,19,14,.54);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 16px;
+}
+.mk-panel {
+  background: var(--bg-paper);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px -16px rgba(21,19,14,.28);
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mk-panel-center {
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  padding: 40px 32px;
+  gap: 10px;
+}
+
+/* ── Panel Header ──────────────────────────────────── */
+.mk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+.mk-title {
+  font-family: var(--sans);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+/* ── Summary bar ───────────────────────────────────── */
+.mk-summary {
+  padding: 10px 20px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+.mk-summary strong { color: var(--ink); }
+
+/* ── Scrollable list ───────────────────────────────── */
+.mk-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 20px 4px;
+}
+
+/* ── Group by week ─────────────────────────────────── */
+.mk-group { margin-bottom: 18px; }
+.mk-group-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+
+/* ── Single wrong-question row ─────────────────────── */
+.mk-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+.mk-item-q {
+  flex: 1 1 100%;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.mk-item-cat {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  color: var(--ink-muted);
+}
+.mk-item-answer {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.mk-item-answer.revealed {
+  border-style: solid;
+  border-color: var(--moss);
+  color: var(--moss);
+  font-weight: 600;
+}
+
+/* ── Drill button ──────────────────────────────────── */
+.mk-drill-btn {
+  margin: 10px 20px 16px;
+  padding: 11px 0;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  border-radius: 9px;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.mk-drill-btn:hover { background: var(--ink-soft); }
+.mk-drill-btn:active { transform: scale(0.98); }
+
+/* ── Empty state ───────────────────────────────────── */
+.mk-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 8px;
+}
+.mk-empty-icon { font-size: 52px; }
+.mk-empty-art {
+  width: 150px; height: 150px; object-fit: contain;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 10px 20px rgba(21,19,14,.12));
+  animation: mkEmptyFloat 3.4s ease-in-out infinite;
+}
+@keyframes mkEmptyFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@media (prefers-reduced-motion: reduce) { .mk-empty-art { animation: none; } }
+.mk-empty-msg {
+  font-family: var(--sans);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mk-empty-sub {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* ── Drill: header ─────────────────────────────────── */
+.mk-drill-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+.mk-drill-progress {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.mk-drill-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--border-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mk-drill-bar-fill {
+  height: 100%;
+  background: var(--moss);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ── Drill: question ───────────────────────────────── */
+.mk-drill-q {
+  padding: 24px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mk-drill-q-text {
+  font-family: var(--sans);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+/* ── Drill: options ────────────────────────────────── */
+.mk-drill-options {
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow-y: auto;
+}
+.mk-drill-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, transform 0.08s;
+}
+.mk-drill-option:not(:disabled):hover {
+  border-color: var(--ink-muted);
+  background: var(--bg);
+}
+.mk-drill-option:active { transform: scale(0.98); }
+.mk-drill-option.mk-opt-correct {
+  border-color: var(--moss);
+  background: rgba(74,90,62,.08);
+  color: var(--moss);
+  font-weight: 700;
+}
+.mk-drill-option.mk-opt-wrong {
+  border-color: var(--accent);
+  background: rgba(139,49,32,.07);
+  color: var(--accent);
+}
+.mk-drill-option.mk-opt-dim { opacity: 0.4; }
+.mk-opt-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+
+/* ── Drill: feedback ───────────────────────────────── */
+.mk-drill-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 16px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 14px;
+  flex-shrink: 0;
+}
+.mk-fb-correct {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--moss);
+}
+.mk-fb-wrong {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.mk-next-btn {
+  padding: 8px 18px;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.mk-next-btn:hover { background: var(--ink-soft); }
+
+/* ── Drill: complete screen ────────────────────────── */
+.mk-complete-icon { font-size: 56px; margin-bottom: 4px; }
+.mk-complete-title {
+  font-family: var(--sans);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.mk-complete-stat, .mk-complete-xp {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.mk-complete-xp { color: var(--moss); font-weight: 700; }
+.mk-complete-badge {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-soft);
+}

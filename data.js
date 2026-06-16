@@ -198,7 +198,7 @@ const WEEK_ORDER_KEY = "alans-english-week-order-v1";
 // Subscribe to live class data. Returns an unsubscribe function.
 // callback(weeks, weekOrder) fires immediately and on every change.
 // progress is intentionally excluded — it stays per-device in localStorage.
-function subscribeToClassData(callback) {
+function subscribeToClassData(callback, onError) {
   return _classDoc.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
@@ -210,7 +210,45 @@ function subscribeToClassData(callback) {
     } else {
       callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice());
     }
+  }, err => {
+    console.warn('subscribeToClassData:', err?.code);
+    if (onError) onError(err);
   });
+}
+
+// ── 學生名單（roster）— 老師專用 ──────────────────────────
+// 文件 ID = 學生 email（小寫）；內容 { name, grade, active, addedAt }
+function subscribeRoster(callback, onError) {
+  return _db.collection('roster').onSnapshot(snap => {
+    const list = [];
+    snap.forEach(doc => list.push({ email: doc.id, ...doc.data() }));
+    list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    callback(list);
+  }, err => {
+    console.warn('subscribeRoster:', err?.code);
+    if (onError) onError(err);
+  });
+}
+
+async function addRosterStudent(email, name, grade) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !id.includes('@')) throw new Error('invalid-email');
+  await _db.collection('roster').doc(id).set({
+    name: (name || '').trim(),
+    grade: grade || '',
+    active: true,
+    addedAt: Date.now(),
+  });
+}
+
+async function setRosterStudentActive(email, active) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('roster').doc(id).set({ active: !!active }, { merge: true });
+}
+
+async function deleteRosterStudent(email) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('roster').doc(id).delete();
 }
 
 async function saveWeeks(weeks) {
@@ -262,6 +300,144 @@ function loadProgress() {
 }
 function saveProgress(prog) {
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog)); } catch (e) {}
+}
+
+// ── Companion / Coins / Daily Goal (localStorage — works for guests too) ──
+const COMPANION_KEY = 'alan-companion';
+const COINS_KEY     = 'alan-coins';
+const DAILY_KEY     = 'alan-daily';
+const DAILY_GOAL    = 3; // 每天完成幾個練習算達標
+
+function loadCompanion() {
+  try { const r = localStorage.getItem(COMPANION_KEY); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+}
+function saveCompanion(c) {
+  try { localStorage.setItem(COMPANION_KEY, JSON.stringify({ ...c, createdAt: c.createdAt || Date.now() })); } catch(e) {}
+  return loadCompanion();
+}
+function loadCoins() {
+  try { return parseInt(localStorage.getItem(COINS_KEY) || '0', 10) || 0; } catch(e) { return 0; }
+}
+function addCoins(n) {
+  const next = Math.max(0, loadCoins() + (n || 0));
+  try { localStorage.setItem(COINS_KEY, String(next)); } catch(e) {}
+  return next;
+}
+function _todayStr() { return new Date().toISOString().slice(0, 10); }
+function loadDaily() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DAILY_KEY) || 'null');
+    if (d && d.date === _todayStr()) return { date: d.date, done: d.done || 0, goal: DAILY_GOAL };
+  } catch(e) {}
+  return { date: _todayStr(), done: 0, goal: DAILY_GOAL };
+}
+// 完成一次練習 → 推進每日進度，回傳 { done, goal, justCompleted }
+function bumpDaily(n = 1) {
+  const cur = loadDaily();
+  const before = cur.done;
+  const done = Math.min(cur.goal, before + n);
+  const rec = { date: cur.date, done, goal: cur.goal };
+  try { localStorage.setItem(DAILY_KEY, JSON.stringify(rec)); } catch(e) {}
+  return { ...rec, justCompleted: before < cur.goal && done >= cur.goal };
+}
+
+// ── 商店 / 衣櫥（金幣換造型） ──────────────────────────
+const WARDROBE_KEY = 'alan-wardrobe';
+const SHOP_ITEMS = [
+  { id: 'bow',   name: '蝴蝶結',  price: 20 },
+  { id: 'party', name: '派對帽',  price: 30 },
+  { id: 'grad',  name: '學士帽',  price: 50 },
+  { id: 'cap',   name: '鴨舌帽',  price: 60 },
+  { id: 'wizard',name: '魔法帽',  price: 90 },
+  { id: 'crown', name: '皇冠',    price: 150 },
+];
+function loadWardrobe() {
+  try {
+    const r = JSON.parse(localStorage.getItem(WARDROBE_KEY) || 'null');
+    if (r) return { owned: Array.isArray(r.owned) ? r.owned : [], equipped: r.equipped || null };
+  } catch(e) {}
+  return { owned: [], equipped: null };
+}
+function saveWardrobe(w) {
+  try { localStorage.setItem(WARDROBE_KEY, JSON.stringify(w)); } catch(e) {}
+  return loadWardrobe();
+}
+// 購買：扣金幣、加入衣櫥並自動穿上。回傳 { ok, coins, wardrobe, reason? }
+function buyItem(id) {
+  const item = SHOP_ITEMS.find(i => i.id === id);
+  if (!item) return { ok: false, reason: 'bad-item' };
+  const w = loadWardrobe();
+  if (w.owned.includes(id)) { w.equipped = id; return { ok: true, coins: loadCoins(), wardrobe: saveWardrobe(w) }; }
+  if (loadCoins() < item.price) return { ok: false, reason: 'broke', coins: loadCoins() };
+  const coins = addCoins(-item.price);
+  w.owned = [...w.owned, id];
+  w.equipped = id;
+  return { ok: true, coins, wardrobe: saveWardrobe(w) };
+}
+// 穿上 / 脫下（再點一次同件 = 脫下）
+function equipItem(id) {
+  const w = loadWardrobe();
+  w.equipped = (w.equipped === id) ? null : id;
+  return saveWardrobe(w);
+}
+
+// ── 個人每週任務（localStorage，每週一自動重置） ──────────
+const QUESTS_KEY = 'alan-quests';
+const WEEKLY_QUESTS = [
+  { id: 'q_practice', label: '完成 12 個練習', goal: 12, metric: 'practices',    reward: 40 },
+  { id: 'q_correct',  label: '答對 60 題',     goal: 60, metric: 'correct',      reward: 50 },
+  { id: 'q_daily',    label: '達成 3 次每日目標', goal: 3, metric: 'dailyReached', reward: 60 },
+];
+function _weekKey() {
+  const d = new Date();
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const wk = Math.ceil((((d - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${wk}`;
+}
+function loadQuests() {
+  let q;
+  try { q = JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null'); } catch(e) {}
+  if (!q || q.weekKey !== _weekKey()) {
+    q = { weekKey: _weekKey(), progress: { practices: 0, correct: 0, dailyReached: 0 }, claimed: [] };
+    try { localStorage.setItem(QUESTS_KEY, JSON.stringify(q)); } catch(e) {}
+  }
+  return q;
+}
+function bumpQuests(delta) {
+  const q = loadQuests();
+  Object.keys(delta || {}).forEach(k => { q.progress[k] = (q.progress[k] || 0) + delta[k]; });
+  try { localStorage.setItem(QUESTS_KEY, JSON.stringify(q)); } catch(e) {}
+  return q;
+}
+function claimQuest(id) {
+  const q = loadQuests();
+  const def = WEEKLY_QUESTS.find(x => x.id === id);
+  if (!def || q.claimed.includes(id)) return { ok: false, quests: q, coins: loadCoins() };
+  if ((q.progress[def.metric] || 0) < def.goal) return { ok: false, quests: q, coins: loadCoins() };
+  const coins = addCoins(def.reward);
+  q.claimed.push(id);
+  try { localStorage.setItem(QUESTS_KEY, JSON.stringify(q)); } catch(e) {}
+  return { ok: true, quests: q, coins, reward: def.reward };
+}
+
+// ── 全班合作目標（Firestore 共享計數；學生貢獻需部署新版 rules） ──
+const _coopDoc = _db.collection('coop').doc('current');
+function subscribeCoop(callback, onError) {
+  return _coopDoc.onSnapshot(
+    snap => callback(snap.exists ? snap.data() : null),
+    err => { if (onError) onError(err); }
+  );
+}
+async function setCoopGoal(goal, reward) { // 老師專用
+  await _coopDoc.set({ goal: Number(goal) || 0, reward: reward || '', weekKey: _weekKey(), count: 0, updatedAt: Date.now() }, { merge: true });
+}
+async function contributeCoop(n) { // 學生每次練習貢獻（失敗靜默）
+  try {
+    await _coopDoc.set({
+      count: firebase.firestore.FieldValue.increment(n || 0),
+      weekKey: _weekKey(),
+    }, { merge: true });
+  } catch(e) { /* 規則未部署或未授權時靜默略過 */ }
 }
 
 // ── Utilities ──────────────────────────────────────────
@@ -416,11 +592,29 @@ function subscribeAllStudents(callback) {
         email: d.email || '',
         items: d.items || {},
         updatedAt: d.updatedAt || 0,
+        xp: d.xp || 0,
+        streak: d.streak || { count: 0 },
+        badges: d.badges || {},
       });
     });
     all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     callback(all);
   });
+}
+
+// ── Text-to-Speech (shared) ────────────────────────────────────────────
+// iOS Safari requires a user gesture before the first utterance; callers
+// should treat silent failure as acceptable and offer a manual 🔊 button.
+function speakText(text, { rate = 0.88, lang = 'en-US' } = {}) {
+  try {
+    if (!window.speechSynthesis || !text) return false;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(String(text));
+    utt.lang = lang;
+    utt.rate = rate;
+    window.speechSynthesis.speak(utt);
+    return true;
+  } catch(e) { return false; }
 }
 
 // ── Sound Effects ──────────────────────────────────────────────────────
@@ -458,9 +652,10 @@ const BADGES = {
   streak_30:   { emoji:'💎', name:'月冠軍',     nameEn:'30-Day Streak',  desc:'連續30天學習' },
   scholar:     { emoji:'📚', name:'週全勤',     nameEn:'Week Complete',  desc:'完成當週全部測驗' },
   quiz_10:     { emoji:'⚡', name:'練習王',     nameEn:'Quiz Veteran',   desc:'完成10個測驗' },
-  xp_500:      { emoji:'🥈', name:'積分新星',   nameEn:'XP Rising Star', desc:'累積500 XP' },
-  xp_1000:     { emoji:'🥇', name:'積分達人',   nameEn:'XP Expert',      desc:'累積1000 XP' },
-  xp_3000:     { emoji:'👑', name:'英語之星',   nameEn:'English Star',   desc:'累積3000 XP' },
+  xp_500:         { emoji:'🥈', name:'積分新星',   nameEn:'XP Rising Star',   desc:'累積500 XP' },
+  xp_1000:        { emoji:'🥇', name:'積分達人',   nameEn:'XP Expert',        desc:'累積1000 XP' },
+  xp_3000:        { emoji:'👑', name:'英語之星',   nameEn:'English Star',     desc:'累積3000 XP' },
+  mistake_master: { emoji:'🎯', name:'錯題終結者', nameEn:'Mistake Master',   desc:'一次清空所有錯題' },
 };
 
 // ── XP helpers ─────────────────────────────────────────────────────────
@@ -856,11 +1051,270 @@ English: Write a better full Story Mountain version keeping the student's main i
   return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
 }
 
+
+// ── Wrong Question Helpers ─────────────────────────────────────────────
+
+// Flatten all wrong questions from a student's progress items into a list,
+// reverse-lookup week/category, and deduplicate identical questions.
+function collectWrongQuestions(progressItems, weeks, weekOrder) {
+  const result = [];
+  const seen = new Set();
+  Object.entries(progressItems || {}).forEach(([itemKey, prog]) => {
+    if (!prog?.wrongQuestions?.length) return;
+    let weekLabel = '過往內容', cat = '', itemTitle = itemKey;
+    if (itemKey.startsWith('review_')) {
+      weekLabel = '🏆 總複習'; itemTitle = '總複習';
+    } else
+    outer: for (const wid of (weekOrder || [])) {
+      const w = weeks && weeks[wid];
+      if (!w) continue;
+      for (const c of (CATEGORIES || [])) {
+        const items = (w.items && w.items[c.id]) || [];
+        const found = items.find(it =>
+          itemKey === `${wid}_${it.id}` || itemKey === it.id || itemKey.endsWith('_' + it.id)
+        );
+        if (found) {
+          weekLabel = w.label || wid;
+          cat = c.titleZh;
+          itemTitle = found.title || found.zh || found.id;
+          break outer;
+        }
+      }
+    }
+    prog.wrongQuestions.forEach(wq => {
+      const key = `${wq.q}|||${wq.answer}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat });
+    });
+  });
+  return result;
+}
+
+// Remove a single wrong question from a student's Firestore progress.
+async function removeWrongQuestion(uid, itemId, q, answer) {
+  if (!uid || !itemId) return;
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const existing = snap.data()?.items?.[itemId]?.wrongQuestions || [];
+    const updated = existing.filter(wq => !(wq.q === q && wq.answer === answer));
+    const u = {};
+    u[`items.${itemId}.wrongQuestions`] = updated;
+    u[`items.${itemId}.wrongCount`] = updated.length;
+    await ref.update(u);
+  } catch(e) { console.warn('removeWrongQuestion:', e); }
+}
+
+// ── Weekly Report Helpers ──────────────────────────────────────────────
+// Build a structured report object for one student + one week.
+function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
+  const targetWeekId = weekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null);
+  const empty = { weekLabel: '—', dateRange: '', completed: [], pending: [], weekVocab: [], completionRate: 0, avgScore: null, totalItems: 0, streak: { count: 0 }, xp: 0, badges: {}, wrongQuestions: [], weekId: targetWeekId };
+  if (!targetWeekId || !weeks || !weeks[targetWeekId]) return empty;
+
+  const week = weeks[targetWeekId];
+  const its = student.items || {};
+
+  const getProgress = (itemId) => {
+    const pk = `${targetWeekId}_${itemId}`;
+    return its[pk] || its[itemId] ||
+      its[Object.keys(its).find(k => k.endsWith('_' + itemId)) || ''] || null;
+  };
+
+  const completed = [], pending = [];
+  let allWrongQ = [];
+  const weekVocab = [];
+
+  CATEGORIES.forEach(cat => {
+    const items = (week.items && week.items[cat.id]) || [];
+    items.forEach(item => {
+      const prog = getProgress(item.id);
+      const isDone = !!(prog && prog.done);
+      const title = item.title || item.zh || item.id;
+      if (cat.id === 'vocab') weekVocab.push(title);
+      if (isDone) {
+        const score = prog.score != null ? Math.min(100, Math.round(prog.score)) : null;
+        completed.push({ cat: cat.titleZh, title, score });
+        (prog.wrongQuestions || []).forEach(wq => allWrongQ.push(wq));
+      } else {
+        pending.push({ cat: cat.titleZh, title });
+      }
+    });
+  });
+
+  allWrongQ = allWrongQ.slice(0, 5);
+  const totalItems = completed.length + pending.length;
+  const completionRate = totalItems > 0 ? Math.round(completed.length / totalItems * 100) : 0;
+  const scored = completed.filter(c => c.score != null);
+  const avgScore = scored.length > 0 ? Math.round(scored.reduce((s, c) => s + c.score, 0) / scored.length) : null;
+
+  return {
+    weekId: targetWeekId,
+    weekLabel: week.label || targetWeekId,
+    dateRange: week.dateRange || '',
+    completed, pending, weekVocab,
+    completionRate, avgScore, totalItems,
+    streak: student.streak || { count: 0 },
+    xp: student.xp || 0,
+    badges: student.badges || {},
+    wrongQuestions: allWrongQ,
+  };
+}
+
+// Format a report object into plain text suitable for LINE.
+function formatReportAsText(report, studentName) {
+  const name = studentName || '學生';
+  if (!report || report.totalItems === 0) {
+    const weekPart = report ? `${report.weekLabel}${report.dateRange ? `（${report.dateRange}）` : ''}` : '本週';
+    return `📚 Alan's English Class 學習週報\n👤 ${name} ｜ ${weekPart}\n\n本週尚未開始學習。\n\n— Alan 老師`;
+  }
+  const lines = [];
+  lines.push(`📚 Alan's English Class 學習週報`);
+  const datePart = report.dateRange ? `（${report.dateRange}）` : '';
+  lines.push(`👤 ${name} ｜ ${report.weekLabel}${datePart}`);
+  lines.push('');
+  lines.push(`✅ 本週完成 ${report.completed.length}/${report.totalItems} 項（${report.completionRate}%）`);
+  if (report.avgScore != null) lines.push(`⭐ 測驗平均：${report.avgScore} 分`);
+  if (report.streak && report.streak.count > 1) lines.push(`🔥 連續學習：${report.streak.count} 天`);
+
+  const bycat = {};
+  report.completed.forEach(c => { (bycat[c.cat] = bycat[c.cat] || []).push(c.title); });
+  if (Object.keys(bycat).length > 0) {
+    lines.push(''); lines.push('本週學習內容：');
+    Object.entries(bycat).forEach(([cat, titles]) => lines.push(`• ${cat}：${titles.join('、')}`));
+  }
+  if (report.pending.length > 0) {
+    lines.push(''); lines.push(`📝 尚未完成（${report.pending.length} 項）：`);
+    report.pending.forEach(p => lines.push(`• ${p.cat}：${p.title}`));
+  }
+  if (report.wrongQuestions && report.wrongQuestions.length > 0) {
+    lines.push(''); lines.push('💪 建議加強（答錯的題目）：');
+    report.wrongQuestions.forEach(wq => lines.push(`• ${wq.q} → ${wq.answer}`));
+  }
+  lines.push(''); lines.push('— Alan 老師');
+  return lines.join('\n');
+}
+
+// Render a report object into a polished, mobile-first HTML page (for parents, share via LINE).
+function buildReportHTML(report, studentName, teacherNote) {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const name = esc(studentName || '學生');
+  const weekLine = esc(`${report.weekLabel || ''}${report.dateRange ? ' · ' + report.dateRange : ''}`);
+  const avg = report.avgScore;
+  const hasScore = avg != null;
+  const circ = 402;
+  const off = hasScore ? Math.round(circ * (1 - Math.max(0, Math.min(100, avg)) / 100)) : circ;
+  const compN = report.completed.length, totN = report.totalItems;
+  const rate = report.completionRate;
+  const streakN = (report.streak && report.streak.count) || 0;
+
+  const cm = {};
+  report.completed.forEach(c => { if (c.score == null) return; (cm[c.cat] = cm[c.cat] || { s: 0, n: 0 }); cm[c.cat].s += c.score; cm[c.cat].n++; });
+  const cats = Object.keys(cm).map(k => ({ cat: k, score: Math.round(cm[k].s / cm[k].n) })).sort((a, b) => b.score - a.score);
+  const catRows = cats.map(c => {
+    const warn = c.score < 80;
+    return `<div class="skill ${warn ? 'warn' : 'good'}"><div class="skill-top"><span class="skill-name">${esc(c.cat)}</span><span class="skill-score">${c.score} 分${warn ? ' · 需加強' : ''}</span></div><div class="skill-bar"><div class="skill-fill" style="width:${c.score}%"></div></div></div>`;
+  }).join('') || '<p style="font-size:13px;color:#8A8270;font-weight:600;">本週尚無已完成的測驗分數。</p>';
+
+  const doneRows = report.completed.map(c => `<div class="hw hw-done"><div class="hw-ic">✓</div><div class="hw-name">${esc(c.title)}</div><div class="hw-tag">${c.score != null ? c.score + ' 分' : '已完成'}</div></div>`).join('');
+  const pendRows = report.pending.map(p => `<div class="hw hw-wait"><div class="hw-ic">!</div><div class="hw-name">${esc(p.title)}</div><div class="hw-tag">尚未完成</div></div>`).join('');
+  const hwRows = (doneRows + pendRows) || '<p style="font-size:13px;color:#8A8270;font-weight:600;">本週尚無練習項目。</p>';
+
+  const wrongRows = (report.wrongQuestions || []).map(wq => `<div class="wrong-item"><span class="q">${esc(wq.q)}</span><br/>正解 <span class="a">${esc(wq.answer)}</span></div>`).join('');
+  const wrongBox = wrongRows ? `<div class="wrong-box"><div class="wrong-head">📕 本週需複習的錯題</div>${wrongRows}</div>` : '';
+
+  const note = teacherNote && teacherNote.trim() ? esc(teacherNote).replace(/\n/g, '<br/>') : '這週辛苦了！繼續保持，有任何問題都歡迎隨時問老師。';
+  const scoreInner = hasScore
+    ? `<b>${avg}</b><small>平均分數</small>`
+    : `<b style="font-size:24px;">—</b><small>本週尚未測驗</small>`;
+
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>學習週報 · ${name}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=Nunito:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+:root{--paper:#F6F1E6;--card:#FBF8F1;--ink:#1F1B14;--ink-soft:#4A4439;--ink-muted:#8A8270;--accent:#8B3120;--terra:#B85A45;--moss:#5E8A57;--border:#E6DDC9;--border-soft:#EFE8D8;--serif:'Lora',Georgia,serif;--sans:'Nunito','Noto Sans TC',sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#ECE4D2;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:18px 0 40px;}
+.sheet{max-width:430px;margin:0 auto;padding:0 16px;}
+.pr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 4px;}
+.pr-brand{font-family:var(--serif);font-weight:600;font-size:15px;}.pr-brand .dot{color:var(--terra);}
+.pr-sync{font-size:11px;font-weight:700;color:var(--accent);background:#F3E6E1;border:1px solid #E8D2CB;padding:3px 9px;border-radius:999px;}
+.pr-hero-head{border-radius:20px;padding:20px 22px 18px;margin-bottom:14px;color:#fff;background:linear-gradient(135deg,#9A3A26 0%,#B85A45 100%);box-shadow:0 14px 30px -12px rgba(139,49,32,.5);}
+.pr-eyebrow{font-size:12px;font-weight:700;letter-spacing:.04em;opacity:.85;margin-bottom:6px;}
+.pr-title{font-family:var(--serif);font-size:23px;font-weight:600;line-height:1.2;}
+.pr-stu{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;}
+.pr-stu span{background:rgba(255,255,255,.16);padding:4px 12px;border-radius:999px;font-weight:600;}
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 6px 18px -12px rgba(31,27,20,.2);}
+.card-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:var(--ink-muted);margin-bottom:14px;}
+.score-card{text-align:center;background:radial-gradient(120% 120% at 50% 0%,rgba(201,168,76,.16),transparent 62%),var(--card);}
+.score-ring{position:relative;width:148px;height:148px;margin:2px auto 4px;}
+.score-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.score-num b{font-family:var(--serif);font-size:46px;font-weight:600;color:var(--accent);line-height:1;}
+.score-num small{font-size:12px;color:var(--ink-muted);font-weight:700;margin-top:2px;}
+.score-sub{font-size:12.5px;color:var(--ink-muted);margin-top:8px;font-weight:600;}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;}
+.stat{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:14px 6px;text-align:center;box-shadow:0 6px 18px -12px rgba(31,27,20,.2);}
+.stat b{display:block;font-family:var(--serif);font-size:22px;font-weight:600;line-height:1;}.stat b small{font-size:13px;color:var(--ink-muted);}
+.stat span{display:block;font-size:11.5px;color:var(--ink-muted);font-weight:700;margin-top:6px;}
+.hw{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--border-soft);}.hw:last-child{border-bottom:none;}
+.hw-ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;font-weight:800;}
+.hw-done .hw-ic{background:#EAF1E8;color:var(--moss);}.hw-wait .hw-ic{background:#FBF0DA;color:#B98A1E;}
+.hw-name{flex:1;font-size:14.5px;font-weight:700;color:var(--ink-soft);}
+.hw-tag{font-size:11.5px;font-weight:800;}.hw-done .hw-tag{color:var(--moss);}.hw-wait .hw-tag{color:#B98A1E;}
+.skill{margin-bottom:13px;}.skill:last-child{margin-bottom:0;}
+.skill-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.skill-name{font-size:14px;font-weight:800;color:var(--ink-soft);}
+.skill-score{font-family:var(--serif);font-size:15px;font-weight:600;}
+.skill-bar{height:9px;border-radius:999px;background:var(--border-soft);overflow:hidden;}.skill-fill{height:100%;border-radius:999px;}
+.good .skill-score{color:var(--moss);}.good .skill-fill{background:linear-gradient(90deg,#7AA873,#5E8A57);}
+.warn .skill-score{color:#C08A2A;}.warn .skill-fill{background:linear-gradient(90deg,#E0B24C,#C9982E);}
+.wrong-box{margin-top:16px;background:#FBF4F2;border:1px solid #EEDAD4;border-radius:14px;padding:13px 14px;}
+.wrong-head{font-size:12.5px;font-weight:800;color:var(--accent);margin-bottom:9px;}
+.wrong-item{font-size:13px;color:var(--ink-soft);line-height:1.6;padding:6px 0;border-bottom:1px dashed #EAD9D3;}.wrong-item:last-child{border-bottom:none;}
+.wrong-item .q{font-weight:700;}.wrong-item .a{color:var(--moss);font-weight:800;}
+.note-card{background:linear-gradient(135deg,#FBF8F1,#F6EFE0);}
+.note-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
+.note-avatar{width:46px;height:46px;border-radius:50%;background:#F3E6E1;border:1.5px solid #E8D2CB;object-fit:contain;flex-shrink:0;}
+.note-by b{display:block;font-family:var(--serif);font-size:16px;font-weight:600;}.note-by span{font-size:11.5px;color:var(--ink-muted);font-weight:700;}
+.note-body{font-size:14px;line-height:1.85;color:var(--ink-soft);font-weight:500;}
+.pr-foot{text-align:center;margin-top:6px;padding:14px;}
+.pr-foot-line{font-family:var(--serif);font-size:14px;font-weight:600;}
+.pr-foot-sub{font-size:11.5px;color:var(--ink-muted);margin-top:4px;font-weight:600;}
+</style></head><body><div class="sheet">
+<div class="pr-top"><div class="pr-brand">Alan<span class="dot">.</span> English Class</div><div class="pr-sync">康橋進度同步</div></div>
+<div class="pr-hero-head"><div class="pr-eyebrow">本週學習週報 · WEEKLY REPORT</div><div class="pr-title">${name} 這週的英文學習</div>
+<div class="pr-stu"><span>👤 ${name}</span><span>${weekLine}</span></div></div>
+<div class="card score-card"><div class="card-label" style="justify-content:center;"><span>📊</span>本週成績</div>
+<div class="score-ring"><svg width="148" height="148" viewBox="0 0 148 148"><circle cx="74" cy="74" r="64" fill="none" stroke="#EFE8D8" stroke-width="12"/><circle cx="74" cy="74" r="64" fill="none" stroke="#B85A45" stroke-width="12" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}" transform="rotate(-90 74 74)"/></svg>
+<div class="score-num">${scoreInner}</div></div>
+<div class="score-sub">本週完成 ${compN}/${totN} 項練習</div></div>
+<div class="card-label" style="padding:0 6px;margin-bottom:10px;"><span>🏃</span>本週練習量</div>
+<div class="stat-row"><div class="stat"><b>${compN}<small>/${totN}</small></b><span>完成練習</span></div><div class="stat"><b>${rate}<small>%</small></b><span>完成率</span></div><div class="stat"><b>${streakN}<small> 天</small></b><span>連續學習 🔥</span></div></div>
+<div class="card"><div class="card-label"><span>📋</span>練習完成狀況</div>${hwRows}</div>
+<div class="card"><div class="card-label"><span>🎯</span>學習狀況分析</div>${catRows}${wrongBox}</div>
+<div class="card note-card"><div class="note-head"><img src="owl-proud.png" alt="" class="note-avatar"/><div class="note-by"><b>老師的話</b><span>Alan 老師 · 康橋英文</span></div></div><div class="note-body">${note}</div></div>
+<div class="pr-foot"><div class="pr-foot-line">Alan's English Class</div><div class="pr-foot-sub">康橋進度同步學習系統 · 每週更新</div></div>
+</div></body></html>`;
+}
+
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage,
+  // Companion / Coins / Daily Goal
+  loadCompanion, saveCompanion, loadCoins, addCoins, loadDaily, bumpDaily, DAILY_GOAL,
+  // Shop / Wardrobe
+  SHOP_ITEMS, loadWardrobe, saveWardrobe, buyItem, equipItem,
+  // Quests / Co-op
+  WEEKLY_QUESTS, loadQuests, bumpQuests, claimQuest,
+  subscribeCoop, setCoopGoal, contributeCoop,
+  // Roster
+  subscribeRoster, addRosterStudent, setRosterStudentActive, deleteRosterStudent,
   addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
   // Auth
   signInWithGoogle, signOutUser, subscribeAuth, isAdminUser,
@@ -869,8 +1323,13 @@ Object.assign(window, {
   // Streak, Badges & XP
   BADGES, updateStreak, unlockBadge, subscribeUserProfile,
   getLevel, addXp,
-  // Sound
-  playSound,
+  buildReportHTML,
+  // Sound & TTS
+  playSound, speakText,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
+  // Wrong questions
+  collectWrongQuestions, removeWrongQuestion,
+  // Weekly Report
+  buildWeeklyReport, formatReportAsText,
 });

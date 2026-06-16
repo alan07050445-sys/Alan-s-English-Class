@@ -2,49 +2,61 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── 課程資料（G3 / G5）─────────────────────────────────
-    // 所有人可讀（學生不需登入也能看）
-    // 只有老師可以寫
+    // ── Helper ──────────────────────────────────────────────
+    function isTeacher() {
+      return request.auth != null
+             && request.auth.token.email == 'alan07050445@gmail.com';
+    }
+
+    // ── 課程內容（G3/G4/G5/G6 都在 class 集合，G2 在 class-g2）──
+    // 公開可讀（維持現狀，避免鎖住學生）；只有老師可寫。
     match /class/{docId} {
       allow read: if true;
-      allow write: if request.auth != null
-                   && request.auth.token.email == 'alan07050445@gmail.com';
+      allow write: if isTeacher();
     }
-
-    // ── 課程資料（G2）──────────────────────────────────────
     match /class-g2/{docId} {
       allow read: if true;
-      allow write: if request.auth != null
-                   && request.auth.token.email == 'alan07050445@gmail.com';
+      allow write: if isTeacher();
     }
 
-    // ── 學生個人進度（progress 集合）───────────────────────
-    // 學生：只能讀寫自己的文件
-    // 老師：可以讀所有學生的文件（給 Class Report dashboard 用）
+    // ── 學生個人進度（成績 / 完成度 / 錯題）─────────────────
+    // 只有「本人」或「老師」可讀；只有本人可寫。
     match /progress/{userId} {
       allow read: if request.auth != null
-                  && (request.auth.uid == userId
-                      || request.auth.token.email == 'alan07050445@gmail.com');
+                  && (request.auth.uid == userId || isTeacher());
       allow write: if request.auth != null
                    && request.auth.uid == userId;
     }
 
-    // ── 學生 XP / Streak / Badges（users 集合）─────────────
-    // 只有本人可以讀寫自己的資料
+    // ── 學生 XP / Streak / Badges（users 集合）──────────────
+    // 本人可讀寫；老師可讀。
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null
                          && request.auth.uid == userId;
-      // 老師可以讀（例如查看學生徽章）
-      allow read: if request.auth != null
-                  && request.auth.token.email == 'alan07050445@gmail.com';
+      allow read: if isTeacher();
     }
 
-    // ── 其他文件（leaderboard 等）──────────────────────────
-    // 登入用戶可讀，老師可寫
-    match /{document=**} {
+    // ── 班級名單（roster）──────────────────────────────────
+    // 登入者可讀（顯示同學名字等）；只有老師可寫。
+    match /roster/{docId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
-                   && request.auth.token.email == 'alan07050445@gmail.com';
+      allow write: if isTeacher();
+    }
+
+    // ── 全班合作目標（coop）────────────────────────────────
+    // 登入者可讀；只有老師可寫（維持現狀）。
+    match /coop/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher();
+    }
+
+    // ── 其他未列出的文件 ───────────────────────────────────
+    // 關鍵修正：舊版這裡是 "allow read: if request.auth != null"，
+    // 由於 Firestore 規則是 OR 邏輯，那條會「架空」上面 progress 的限制，
+    // 讓任何登入的人都能讀到別人的成績與錯題。
+    // 改成「預設拒絕讀取、只有老師可寫」，洩漏即關閉。
+    match /{document=**} {
+      allow write: if isTeacher();
     }
   }
 }
