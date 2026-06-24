@@ -98,7 +98,7 @@
         snaps.forEach((snap,index)=>{if(!snap.exists||snap.data().status!=='open')throw new Error(`${dateText(selected[index].date)} ${selected[index].start} 剛剛被選走了，請重新選擇。`);});
         selected.forEach((slot,index)=>{
           transaction.update(refs[index],{status:'booked',bookedAt:firebase.firestore.FieldValue.serverTimestamp()});
-          transaction.create(db.collection(BOOKINGS).doc(slot.id),{slotId:slot.id,date:slot.date,start:slot.start,end:slot.end,studentName,bookingGroup:group,status:'confirmed',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+          transaction.set(db.collection(BOOKINGS).doc(slot.id),{slotId:slot.id,date:slot.date,start:slot.start,end:slot.end,studentName,bookingGroup:group,status:'confirmed',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         });
       });
       selected.forEach(slot=>state.booked.add(slot.id)); state.selectedSlots=[]; $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
