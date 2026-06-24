@@ -7,7 +7,7 @@
   };
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  const SLOTS = 'summerSlots2026', BOOKINGS = 'summerBookings2026', ADMIN_EMAIL = 'alan07050445@gmail.com';
+  const SLOTS = 'summerSlots2026', BOOKINGS = 'summerBookings2026', CONFIG = 'summerConfig2026', ADMIN_EMAIL = 'alan07050445@gmail.com';
   const TIMES = [['10:00','12:00'],['13:00','15:00'],['15:00','17:00'],['17:00','19:00']];
   const SPECIAL_TIMES = [['10:00','12:00'],['13:00','16:00'],['16:00','18:00'],['18:00','20:00']];
   const KEVIN_ELAINE_DATES = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21'];
@@ -122,22 +122,19 @@
       $('admin-booking-count').textContent = entries.length ? `${entries.length} 位學生` : '尚未有人選課';
       $('admin-booking-list').innerHTML = entries.length ? entries.map(entry => {
         const slots = entry.slots.sort((a,b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
-        return `<div class="admin-booking"><b>${entry.studentName}</b> · ${slots.length} 堂<div class="admin-booking-slots">${slots.map(slot => `${dateText(slot.date)} ${slot.start}–${slot.end}`).join('<br>')}</div><button class="release-booking" type="button" data-group="${entry.groupId}">釋放這位學生的時段</button></div>`;
+        return `<div class="admin-booking"><b>${entry.studentName}</b> · ${slots.length} 堂<div class="admin-booking-slots">${slots.map(slot => `<div class="admin-booking-slot"><span>${dateText(slot.date)} ${slot.start}–${slot.end}</span><button class="release-slot" type="button" data-slot-id="${slot.slotId}">釋放</button></div>`).join('')}</div></div>`;
       }).join('') : '<div class="admin-booking">目前還沒有家長選課。</div>';
-      $('admin-booking-list').querySelectorAll('.release-booking').forEach(button => button.addEventListener('click', () => releaseBookingGroup(button.dataset.group)));
+      $('admin-booking-list').querySelectorAll('.release-slot').forEach(button => button.addEventListener('click', () => releaseBookingSlot(button.dataset.slotId)));
     }, error => { console.error(error); $('admin-booking-list').innerHTML = '<div class="admin-booking">讀取選課名單失敗，請重新登入管理頁。</div>'; });
   };
-  const releaseBookingGroup = async groupId => {
-    if (!window.confirm('要釋放這位學生的所有時段嗎？這會刪除本次選課紀錄。')) return;
+  const releaseBookingSlot = async slotId => {
+    if (!window.confirm('要釋放這一堂課嗎？')) return;
     try {
-      const bookings = await db.collection(BOOKINGS).where('bookingGroup', '==', groupId).get();
       const batch = db.batch();
-      bookings.forEach(doc => {
-        batch.update(db.collection(SLOTS).doc(doc.id), { status: 'open', bookedAt: firebase.firestore.FieldValue.delete() });
-        batch.delete(doc.ref);
-      });
+      batch.update(db.collection(SLOTS).doc(slotId), { status: 'open', bookedAt: firebase.firestore.FieldValue.delete() });
+      batch.delete(db.collection(BOOKINGS).doc(slotId));
       await batch.commit();
-    } catch (error) { console.error(error); showError('無法釋放時段，請稍後再試。'); }
+    } catch (error) { console.error(error); showError('無法釋放這一堂課，請稍後再試。'); }
   };
   const signInAsAdmin = async () => {
     const login=$('admin-login');login.disabled=true;login.textContent='正在登入…';
@@ -149,6 +146,9 @@
   };
   const ensureKevinElaineBooking = async () => {
     await db.runTransaction(async transaction => {
+      const configRef = db.collection(CONFIG).doc('config');
+      const config = await transaction.get(configRef);
+      if (config.exists && config.data().kevinElaineApplied) return;
       const refs = KEVIN_ELAINE_DATES.flatMap(date => ['13:00','15:00','17:00','16:00','18:00'].map(start => db.collection(SLOTS).doc(keyFor(date,start))));
       const snaps = await Promise.all(refs.map(ref => transaction.get(ref)));
       snaps.forEach((snap, index) => {
@@ -163,6 +163,7 @@
         transaction.delete(db.collection(SLOTS).doc(keyFor(date,'17:00')));
         [['16:00','18:00'],['18:00','20:00']].forEach(([start,end]) => { const id=keyFor(date,start); transaction.set(db.collection(SLOTS).doc(id), { slotId:id, date, start, end, status:'open', createdAt:firebase.firestore.FieldValue.serverTimestamp() }); });
       });
+      transaction.set(configRef, { kevinElaineApplied: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     });
   };
   const saveManualSlot = async event => {
