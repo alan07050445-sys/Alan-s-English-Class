@@ -114,7 +114,7 @@
     stopAdminBookingListener = db.collection(BOOKINGS).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
       const groups = new Map();
       snapshot.forEach(doc => {
-        const booking = doc.data(), groupId = booking.bookingGroup || doc.id;
+        const booking = doc.data(), groupId = (booking.studentName || '').trim() || doc.id;
         if (!groups.has(groupId)) groups.set(groupId, { groupId, studentName: booking.studentName, slots: [] });
         groups.get(groupId).slots.push(booking);
       });
