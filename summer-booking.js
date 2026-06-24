@@ -1,5 +1,12 @@
 /* 暑假上課時間 — public multi-slot booking page (2026) */
 (function () {
+  const entrance = document.getElementById('summer-entrance');
+  const dismissEntrance = () => { if (entrance) entrance.classList.add('summer-entrance-hidden'); };
+  if (entrance) {
+    window.setTimeout(dismissEntrance, 2300);
+    entrance.addEventListener('click', dismissEntrance);
+    entrance.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') dismissEntrance(); });
+  }
   const firebaseConfig = {
     apiKey: 'AIzaSyD1fQDneiwkGhbMOUxpOzVxZi8EIkourAs', authDomain: 'alan-s-english-class.firebaseapp.com',
     projectId: 'alan-s-english-class', storageBucket: 'alan-s-english-class.firebasestorage.app',
