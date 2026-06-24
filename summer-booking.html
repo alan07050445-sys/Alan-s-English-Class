@@ -8,8 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="summer-booking.css?v=156" />
-  <link rel="stylesheet" href="summer-booking-admin.css?v=156" />
+  <link rel="stylesheet" href="summer-booking.css?v=157" />
+  <link rel="stylesheet" href="summer-booking-admin.css?v=157" />
+  <link rel="stylesheet" href="summer-booking-cart.css?v=157" />
 </head>
 <body>
   <main class="booking-page">
@@ -19,7 +20,7 @@
         <div>
           <p class="eyebrow">SUMMER 2026 · 暑假限定</p>
           <h1>暑假上課時間</h1>
-          <p class="hero-copy">選好時間、填完資料，名額就會立刻為你保留。</p>
+          <p class="hero-copy">把想上的時段先加入清單，最後填一次學生名字就能一起保留。</p>
           <div class="rules">
             <span>週一至週五</span><span>每堂 2 小時</span><span>即時鎖位</span>
           </div>
@@ -32,9 +33,9 @@
       <div class="booking-steps" aria-label="預約步驟">
         <div class="step active"><b>1</b><span>選日期</span></div>
         <i></i>
-        <div class="step" id="step-two"><b>2</b><span>選時段</span></div>
+        <div class="step" id="step-two"><b>2</b><span>加入時段</span></div>
         <i></i>
-        <div class="step" id="step-three"><b>3</b><span>填寫資料</span></div>
+        <div class="step" id="step-three"><b>3</b><span>確認時間</span></div>
       </div>
 
       <div id="loading" class="loading-card"><span class="spinner"></span>正在讀取可選時段…</div>
@@ -61,9 +62,15 @@
         </section>
 
         <section id="times-panel" class="times-panel" hidden aria-labelledby="times-title">
-          <div class="panel-head"><div><p class="kicker">STEP 2</p><h2 id="times-title">選擇上課時段</h2></div><button id="change-date" class="text-button" type="button">更換日期</button></div>
-          <p id="selected-date-label" class="selected-date-label"></p>
+          <div class="panel-head"><div><p class="kicker">STEP 2</p><h2 id="times-title">把時段加入清單</h2></div><button id="change-date" class="text-button" type="button">更換日期</button></div>
+          <p id="selected-date-label" class="selected-date-label">可重複選日期與時段，最後再一次確認。</p>
           <div id="time-slots" class="time-slots"></div>
+        </section>
+
+        <section id="cart-panel" class="cart-panel" hidden aria-labelledby="cart-title">
+          <div class="panel-head"><div><p class="kicker">YOUR SUMMER PLAN</p><h2 id="cart-title">已選時段 <span id="selected-count"></span></h2></div></div>
+          <div id="selected-slots" class="selected-slots"></div>
+          <button id="continue-to-form" class="submit-button" type="button">確認這些時間 <span>→</span></button>
         </section>
 
         <section id="form-panel" class="form-panel" hidden aria-labelledby="form-title">
@@ -72,14 +79,9 @@
           <form id="booking-form">
             <div class="field-grid">
               <label>學生姓名<input name="studentName" required maxlength="50" autocomplete="name" placeholder="例：王小明" /></label>
-              <label>目前年級<select name="grade" required><option value="">請選擇</option><option>G2</option><option>G3</option><option>G4</option><option>G5</option><option>G6</option><option>其他</option></select></label>
-              <label>家長姓名<input name="parentName" required maxlength="50" placeholder="例：王媽媽" /></label>
-              <label>LINE ID 或手機號碼<input name="contact" required maxlength="80" inputmode="tel" placeholder="方便 Alan 老師聯絡您" /></label>
-              <label>預計報名堂數<select name="lessonCount" required><option value="">請選擇</option><option value="1">1 堂</option><option value="4">4 堂</option><option value="8">8 堂</option><option value="12">12 堂</option><option value="other">其他</option></select></label>
-              <label>備註（選填）<input name="notes" maxlength="240" placeholder="例：想再安排同一時段" /></label>
             </div>
-            <p class="form-note">送出後，這個時段會立刻鎖住。若需要更改，請直接聯絡 Alan 老師。</p>
-            <button id="submit-booking" class="submit-button" type="submit">確認保留這個時段 <span>→</span></button>
+            <p class="form-note">送出後，這些時段會一起鎖住。若需要更改，請直接聯絡 Alan 老師。</p>
+            <button id="submit-booking" class="submit-button" type="submit">確認保留所有時段 <span>→</span></button>
           </form>
         </section>
 
@@ -100,6 +102,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="summer-booking.js?v=156"></script>
+  <script src="summer-booking.js?v=157"></script>
 </body>
 </html>

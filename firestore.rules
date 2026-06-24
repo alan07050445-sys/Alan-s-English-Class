@@ -66,23 +66,18 @@ service cloud.firestore {
 
     match /summerBookings2026/{slotId} {
       allow create: if request.resource.data.keys().hasAll([
-          'slotId', 'date', 'start', 'end', 'studentName', 'grade', 'parentName',
-          'contact', 'lessonCount', 'notes', 'status', 'createdAt'
+          'slotId', 'date', 'start', 'end', 'studentName', 'bookingGroup', 'status', 'createdAt'
         ])
         && request.resource.data.keys().hasOnly([
-          'slotId', 'date', 'start', 'end', 'studentName', 'grade', 'parentName',
-          'contact', 'lessonCount', 'notes', 'status', 'createdAt'
+          'slotId', 'date', 'start', 'end', 'studentName', 'bookingGroup', 'status', 'createdAt'
         ])
         && request.resource.data.slotId == slotId
         && request.resource.data.studentName is string
         && request.resource.data.studentName.size() > 0
         && request.resource.data.studentName.size() <= 50
-        && request.resource.data.parentName is string
-        && request.resource.data.parentName.size() > 0
-        && request.resource.data.parentName.size() <= 50
-        && request.resource.data.contact is string
-        && request.resource.data.contact.size() > 0
-        && request.resource.data.contact.size() <= 80
+        && request.resource.data.bookingGroup is string
+        && request.resource.data.bookingGroup.size() > 0
+        && request.resource.data.bookingGroup.size() <= 80
         && getAfter(/databases/$(database)/documents/summerSlots2026/$(slotId)).data.status == 'booked';
       allow read, update, delete: if isTeacher();
     }
