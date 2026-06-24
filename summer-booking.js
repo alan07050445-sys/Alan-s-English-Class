@@ -123,6 +123,7 @@
   const changeOwnBookings = async () => {
     const own = [...state.ownBookings];
     if (!own.length) { $('success-panel').hidden=true; return; }
+    if (own.some(slot => !slot.changeToken)) return showError('這筆是更新前建立的舊測試預約，請由 Alan 管理頁釋放後再重新選課。');
     if (!window.confirm('要釋放您目前保留的時段，重新選擇嗎？')) return;
     try {
       const batch=db.batch();
