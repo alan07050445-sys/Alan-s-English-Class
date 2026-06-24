@@ -173,12 +173,13 @@
     if (!data.date || !data.start || !data.end || data.end <= data.start) return showError('請填寫正確的日期與開始／結束時間。');
     const day = new Date(`${data.date}T12:00:00`).getDay();
     if (day === 0 || day === 6 || data.date < '2026-07-01' || data.date > '2026-08-31') return showError('只可設定 2026 年 7–8 月的週一至週五。');
-    const overlaps = [...state.slots.values()].some(slot => slot.date === data.date && data.start < slot.end && data.end > slot.start);
+    const id = keyFor(data.date, data.start);
+    const overlaps = [...state.slots.values()].some(slot => slot.slotId !== id && slot.date === data.date && data.start < slot.end && data.end > slot.start);
     if (overlaps) return showError('這個時間和既有時段重疊，請先釋放或選擇其他時間。');
     const button = event.currentTarget.querySelector('button[type="submit"]');
     button.disabled = true; button.textContent = '儲存中…';
     try {
-      const id = keyFor(data.date, data.start), batch = db.batch();
+      const batch = db.batch();
       batch.set(db.collection(SLOTS).doc(id), { slotId:id, date:data.date, start:data.start, end:data.end, status:studentName ? 'booked' : 'open', ...(studentName ? { bookedAt:firebase.firestore.FieldValue.serverTimestamp() } : { createdAt:firebase.firestore.FieldValue.serverTimestamp() }) });
       if (studentName) batch.set(db.collection(BOOKINGS).doc(id), { slotId:id, date:data.date, start:data.start, end:data.end, studentName, bookingGroup:`manual-${id}`, status:'confirmed', createdAt:firebase.firestore.FieldValue.serverTimestamp() });
       await batch.commit();
