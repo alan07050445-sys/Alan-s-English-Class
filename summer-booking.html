@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="summer-entrance-controls.css?v=169" />
   <link rel="stylesheet" href="summer-logo-entrance.css?v=169" />
   <link rel="stylesheet" href="summer-own-bookings.css?v=171" />
+  <link rel="stylesheet" href="summer-own-switch.css?v=174" />
 </head>
 <body>
   <div id="summer-entrance" class="summer-logo-entrance" role="button" tabindex="0" aria-label="略過開場動畫">
@@ -55,6 +56,7 @@
       <div id="loading" class="loading-card"><span class="spinner"></span>正在讀取可選時段…</div>
 
       <div id="booking-app" hidden>
+        <button id="clear-own-bookings" class="own-booking-switch" type="button" hidden>不是我的課程／換一位家長</button>
         <section id="admin-panel" class="admin-panel" hidden>
           <p class="kicker">ALAN ONLY</p>
           <h2>暑假時段管理</h2>
@@ -133,6 +135,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="summer-booking.js?v=173"></script>
+  <script src="summer-booking.js?v=174"></script>
 </body>
 </html>
