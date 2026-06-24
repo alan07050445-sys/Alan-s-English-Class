@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#8B3120" />
+  <title>暑假上課時間｜Alan's English Class</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="summer-booking.css?v=156" />
+  <link rel="stylesheet" href="summer-booking-admin.css?v=156" />
+</head>
+<body>
+  <main class="booking-page">
+    <header class="booking-hero">
+      <a class="brand" href="./" aria-label="Alan's English Class 首頁">Alan<span>’s</span> English Class</a>
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">SUMMER 2026 · 暑假限定</p>
+          <h1>暑假上課時間</h1>
+          <p class="hero-copy">選好時間、填完資料，名額就會立刻為你保留。</p>
+          <div class="rules">
+            <span>週一至週五</span><span>每堂 2 小時</span><span>即時鎖位</span>
+          </div>
+        </div>
+        <img class="owl" src="owl-mascot.png" alt="Alan English Class 貓頭鷹夥伴" />
+      </div>
+    </header>
+
+    <section class="booking-shell" aria-live="polite">
+      <div class="booking-steps" aria-label="預約步驟">
+        <div class="step active"><b>1</b><span>選日期</span></div>
+        <i></i>
+        <div class="step" id="step-two"><b>2</b><span>選時段</span></div>
+        <i></i>
+        <div class="step" id="step-three"><b>3</b><span>填寫資料</span></div>
+      </div>
+
+      <div id="loading" class="loading-card"><span class="spinner"></span>正在讀取可選時段…</div>
+
+      <div id="booking-app" hidden>
+        <section id="admin-panel" class="admin-panel" hidden>
+          <p class="kicker">ALAN ONLY</p>
+          <h2>暑假時段管理</h2>
+          <p id="admin-copy">第一次啟用時，請用 Alan 的 Google 帳號登入並建立所有開放時段。</p>
+          <div class="admin-actions">
+            <button id="admin-login" class="small-button" type="button">以 Alan 帳號登入</button>
+            <button id="seed-slots" class="small-button primary" type="button" hidden>建立 168 個開放時段</button>
+          </div>
+        </section>
+        <div class="month-tabs" role="tablist" aria-label="選擇月份">
+          <button class="month-tab active" data-month="6" role="tab" aria-selected="true">7 月</button>
+          <button class="month-tab" data-month="7" role="tab" aria-selected="false">8 月</button>
+        </div>
+
+        <section class="calendar-panel" aria-labelledby="calendar-title">
+          <div class="panel-head"><div><p class="kicker">STEP 1</p><h2 id="calendar-title">先選上課日期</h2></div><p>灰色日期為不開課或已額滿</p></div>
+          <div class="weekday-row"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div id="calendar" class="calendar" aria-label="暑假可選日期"></div>
+        </section>
+
+        <section id="times-panel" class="times-panel" hidden aria-labelledby="times-title">
+          <div class="panel-head"><div><p class="kicker">STEP 2</p><h2 id="times-title">選擇上課時段</h2></div><button id="change-date" class="text-button" type="button">更換日期</button></div>
+          <p id="selected-date-label" class="selected-date-label"></p>
+          <div id="time-slots" class="time-slots"></div>
+        </section>
+
+        <section id="form-panel" class="form-panel" hidden aria-labelledby="form-title">
+          <div class="panel-head"><div><p class="kicker">STEP 3</p><h2 id="form-title">留下聯絡資料</h2></div><button id="change-time" class="text-button" type="button">更換時段</button></div>
+          <div id="chosen-slot" class="chosen-slot"></div>
+          <form id="booking-form">
+            <div class="field-grid">
+              <label>學生姓名<input name="studentName" required maxlength="50" autocomplete="name" placeholder="例：王小明" /></label>
+              <label>目前年級<select name="grade" required><option value="">請選擇</option><option>G2</option><option>G3</option><option>G4</option><option>G5</option><option>G6</option><option>其他</option></select></label>
+              <label>家長姓名<input name="parentName" required maxlength="50" placeholder="例：王媽媽" /></label>
+              <label>LINE ID 或手機號碼<input name="contact" required maxlength="80" inputmode="tel" placeholder="方便 Alan 老師聯絡您" /></label>
+              <label>預計報名堂數<select name="lessonCount" required><option value="">請選擇</option><option value="1">1 堂</option><option value="4">4 堂</option><option value="8">8 堂</option><option value="12">12 堂</option><option value="other">其他</option></select></label>
+              <label>備註（選填）<input name="notes" maxlength="240" placeholder="例：想再安排同一時段" /></label>
+            </div>
+            <p class="form-note">送出後，這個時段會立刻鎖住。若需要更改，請直接聯絡 Alan 老師。</p>
+            <button id="submit-booking" class="submit-button" type="submit">確認保留這個時段 <span>→</span></button>
+          </form>
+        </section>
+
+        <section id="success-panel" class="success-panel" hidden>
+          <div class="success-mark">✓</div>
+          <p class="kicker">BOOKING CONFIRMED</p>
+          <h2>時段已為你保留！</h2>
+          <p id="success-copy"></p>
+          <p class="success-hint">Alan 老師會透過你留下的聯絡方式確認課程安排。</p>
+          <button id="book-another" class="secondary-button" type="button">再選一個時段</button>
+        </section>
+      </div>
+    </section>
+
+    <footer>Alan’s English Class · 康橋英文課程</footer>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="summer-booking.js?v=156"></script>
+</body>
+</html>

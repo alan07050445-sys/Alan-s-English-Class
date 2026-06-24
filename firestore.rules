@@ -50,6 +50,43 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    // ── 2026 暑假選課 ───────────────────────────────────────
+    // 時段本身沒有個資，公開讀取讓家長只看到「可選 / 已額滿」。
+    // 家長留下的姓名與聯絡方式則只允許 Alan 老師查看。
+    match /summerSlots2026/{slotId} {
+      allow read: if true;
+      allow create, delete: if isTeacher();
+      allow update: if isTeacher() || (
+        resource.data.status == 'open'
+        && request.resource.data.status == 'booked'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'bookedAt'])
+        && existsAfter(/databases/$(database)/documents/summerBookings2026/$(slotId))
+      );
+    }
+
+    match /summerBookings2026/{slotId} {
+      allow create: if request.resource.data.keys().hasAll([
+          'slotId', 'date', 'start', 'end', 'studentName', 'grade', 'parentName',
+          'contact', 'lessonCount', 'notes', 'status', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'slotId', 'date', 'start', 'end', 'studentName', 'grade', 'parentName',
+          'contact', 'lessonCount', 'notes', 'status', 'createdAt'
+        ])
+        && request.resource.data.slotId == slotId
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() > 0
+        && request.resource.data.studentName.size() <= 50
+        && request.resource.data.parentName is string
+        && request.resource.data.parentName.size() > 0
+        && request.resource.data.parentName.size() <= 50
+        && request.resource.data.contact is string
+        && request.resource.data.contact.size() > 0
+        && request.resource.data.contact.size() <= 80
+        && getAfter(/databases/$(database)/documents/summerSlots2026/$(slotId)).data.status == 'booked';
+      allow read, update, delete: if isTeacher();
+    }
+
     // ── 其他未列出的文件 ───────────────────────────────────
     // 關鍵修正：舊版這裡是 "allow read: if request.auth != null"，
     // 由於 Firestore 規則是 OR 邏輯，那條會「架空」上面 progress 的限制，
