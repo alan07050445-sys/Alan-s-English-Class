@@ -7,7 +7,7 @@
   };
   if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  const SLOTS = 'summerSlots2026', BOOKINGS = 'summerBookings2026', CONFIG = 'summerConfig2026', ADMIN_EMAIL = 'alan07050445@gmail.com';
+  const SLOTS = 'summerSlots2026', BOOKINGS = 'summerBookings2026', ADMIN_EMAIL = 'alan07050445@gmail.com';
   const TIMES = [['10:00','12:00'],['13:00','15:00'],['15:00','17:00'],['17:00','19:00']];
   const SPECIAL_TIMES = [['10:00','12:00'],['13:00','16:00'],['16:00','18:00'],['18:00','20:00']];
   const KEVIN_ELAINE_DATES = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21'];
@@ -146,7 +146,7 @@
   };
   const ensureKevinElaineBooking = async () => {
     await db.runTransaction(async transaction => {
-      const configRef = db.collection(CONFIG).doc('config');
+      const configRef = db.collection('class').doc('summer-booking-2026');
       const config = await transaction.get(configRef);
       if (config.exists && config.data().kevinElaineApplied) return;
       const refs = KEVIN_ELAINE_DATES.flatMap(date => ['13:00','15:00','17:00','16:00','18:00'].map(start => db.collection(SLOTS).doc(keyFor(date,start))));
