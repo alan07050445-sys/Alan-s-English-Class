@@ -21,14 +21,10 @@
   const defaultTimesForDate = date => KEVIN_ELAINE_DATES.includes(date) ? SPECIAL_TIMES : TIMES;
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
   const IS_ADMIN_PAGE = new URLSearchParams(window.location.search).has('admin');
-  const OWN_STORAGE = 'alan-summer-own-bookings-2026';
-  const readOwnBookings = () => { try { return JSON.parse(localStorage.getItem(OWN_STORAGE) || '[]'); } catch (_) { return []; } };
-  const saveOwnBookings = bookings => localStorage.setItem(OWN_STORAGE, JSON.stringify(bookings));
-  const state = { month: 6, booked: new Set(), slots: new Map(), selectedDate: null, selectedSlots: [], ownBookings: readOwnBookings() };
+  const state = { month: 6, booked: new Set(), slots: new Map(), selectedDate: null, selectedSlots: [], ownBookings: [] };
   let stopSlotListener = null;
   let stopAdminBookingListener = null;
   const $ = id => document.getElementById(id);
-  const renderOwnBookingSwitch = () => { $('clear-own-bookings').hidden = IS_ADMIN_PAGE || !state.ownBookings.length; };
   const pad = n => String(n).padStart(2, '0');
   const keyFor = (date, start) => `${date}-${start.replace(':','')}`;
   const timesForDate = date => {
@@ -115,7 +111,7 @@
           transaction.set(db.collection(BOOKINGS).doc(slot.id),{slotId:slot.id,date:slot.date,start:slot.start,end:slot.end,studentName,bookingGroup:group,changeToken,status:'confirmed',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         });
       });
-      selected.forEach(slot=>state.booked.add(slot.id)); state.ownBookings=[...state.ownBookings.filter(existing=>!selected.some(slot=>slot.id===existing.id)),...selected.map(slot=>({...slot,changeToken}))];saveOwnBookings(state.ownBookings);renderOwnBookingSwitch(); state.selectedSlots=[]; $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
+      selected.forEach(slot=>state.booked.add(slot.id)); state.ownBookings=[...state.ownBookings.filter(existing=>!selected.some(slot=>slot.id===existing.id)),...selected.map(slot=>({...slot,changeToken}))]; state.selectedSlots=[]; $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
       $('success-copy').textContent=`${studentName} 已成功保留 ${selected.length} 個暑假上課時段。`;
       renderCalendar(); $('success-panel').scrollIntoView({behavior:'smooth',block:'center'});
     } catch(error) {
@@ -134,7 +130,7 @@
         batch.update(db.collection(SLOTS).doc(slot.id),{status:'open',bookedAt:firebase.firestore.FieldValue.delete()});
       });
       await batch.commit();
-      state.ownBookings=[];saveOwnBookings([]);renderOwnBookingSwitch();$('success-panel').hidden=true;$('booking-form').reset();state.selectedDate=null;state.selectedSlots=[];updateSteps(1);renderCart();renderCalendar();window.scrollTo({top:0,behavior:'smooth'});
+      state.ownBookings=[];$('success-panel').hidden=true;$('booking-form').reset();state.selectedDate=null;state.selectedSlots=[];updateSteps(1);renderCart();renderCalendar();window.scrollTo({top:0,behavior:'smooth'});
     } catch(error){console.error(error);showError('目前無法更改時段，請稍後再試或聯絡 Alan 老師。');}
   };
   const watchAdminBookings = () => {
@@ -218,7 +214,7 @@
     finally { button.disabled = false; button.textContent = '儲存這個時段'; }
   };
   const setup = async () => {
-    try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(IS_ADMIN_PAGE)$('admin-panel').hidden=false;renderOwnBookingSwitch();renderCalendar();watchSlots();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
+    try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(IS_ADMIN_PAGE)$('admin-panel').hidden=false;renderCalendar();watchSlots();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
   };
   document.querySelectorAll('.month-tab').forEach(button=>button.addEventListener('click',()=>{state.month=Number(button.dataset.month);document.querySelectorAll('.month-tab').forEach(tab=>{const selected=tab===button;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',selected);});renderCalendar();}));
   $('change-date').addEventListener('click',()=>{$('times-panel').hidden=true;state.selectedDate=null;updateSteps(state.selectedSlots.length?2:1);renderCalendar();});
@@ -226,6 +222,5 @@
   $('continue-to-form').addEventListener('click',openConfirmation);$('booking-form').addEventListener('submit',submitBooking);
   $('book-another').addEventListener('click',()=>{$('success-panel').hidden=true;$('booking-form').reset();state.selectedDate=null;state.selectedSlots=[];updateSteps(1);renderCart();renderCalendar();window.scrollTo({top:0,behavior:'smooth'});});
   $('change-bookings').addEventListener('click',changeOwnBookings);
-  $('clear-own-bookings').addEventListener('click',()=>{if(window.confirm('只清除這台裝置的「您的課程」標示，不會取消真正的預約。要繼續嗎？')){state.ownBookings=[];saveOwnBookings([]);renderOwnBookingSwitch();renderCalendar();renderTimes();}});
   $('admin-login').addEventListener('click',signInAsAdmin);$('admin-manual-form').addEventListener('submit',saveManualSlot);setup();
 })();
