@@ -20,6 +20,7 @@
   const KEVIN_ELAINE_DATES = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21'];
   const defaultTimesForDate = date => KEVIN_ELAINE_DATES.includes(date) ? SPECIAL_TIMES : TIMES;
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
+  const IS_ADMIN_PAGE = new URLSearchParams(window.location.search).has('admin');
   const OWN_STORAGE = 'alan-summer-own-bookings-2026';
   const readOwnBookings = () => { try { return JSON.parse(localStorage.getItem(OWN_STORAGE) || '[]'); } catch (_) { return []; } };
   const saveOwnBookings = bookings => localStorage.setItem(OWN_STORAGE, JSON.stringify(bookings));
@@ -42,7 +43,7 @@
     for(let i=0;i<(first===0?6:first-1);i++)fragments.push('<div class="day-empty"></div>');
     for(let day=1;day<=days;day++){
       const date=`2026-${pad(state.month+1)}-${pad(day)}`, closed=!eligibleDates().includes(date), full=!closed&&isDateFull(date), selected=state.selectedDate===date;
-      const mine=state.ownBookings.some(slot=>slot.date===date);
+      const mine=!IS_ADMIN_PAGE && state.ownBookings.some(slot=>slot.date===date);
       const classes=['day',closed?'disabled closed':'',full?'disabled full':'',mine?'mine':'',selected?'selected':''].filter(Boolean).join(' ');
       fragments.push(`<button type="button" class="${classes}" data-date="${date}" ${closed||full?'disabled':''}>${day}</button>`);
     }
@@ -57,7 +58,7 @@
   const renderTimes = () => {
     if(!state.selectedDate)return;
     $('time-slots').innerHTML=timesForDate(state.selectedDate).map(([start,end])=>{
-      const id=keyFor(state.selectedDate,start), booked=state.booked.has(id), picked=state.selectedSlots.some(slot=>slot.id===id), mine=state.ownBookings.some(slot=>slot.id===id);
+      const id=keyFor(state.selectedDate,start), booked=state.booked.has(id), picked=state.selectedSlots.some(slot=>slot.id===id), mine=!IS_ADMIN_PAGE && state.ownBookings.some(slot=>slot.id===id);
       return `<button type="button" class="time-slot ${picked?'picked':''} ${mine?'mine':''}" data-start="${start}" data-end="${end}" ${booked?'disabled':''}><span>${start} – ${end}</span><small>${mine?'您的課程':booked?'已排課':picked?'已加入 ✓':'加入清單 +'}</small></button>`;
     }).join('');
     $('time-slots').querySelectorAll('.time-slot:not(:disabled)').forEach(b=>b.addEventListener('click',()=>toggleSlot(state.selectedDate,b.dataset.start,b.dataset.end)));
@@ -216,7 +217,7 @@
     finally { button.disabled = false; button.textContent = '儲存這個時段'; }
   };
   const setup = async () => {
-    try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(new URLSearchParams(window.location.search).has('admin'))$('admin-panel').hidden=false;renderCalendar();watchSlots();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
+    try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(IS_ADMIN_PAGE)$('admin-panel').hidden=false;renderCalendar();watchSlots();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
   };
   document.querySelectorAll('.month-tab').forEach(button=>button.addEventListener('click',()=>{state.month=Number(button.dataset.month);document.querySelectorAll('.month-tab').forEach(tab=>{const selected=tab===button;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',selected);});renderCalendar();}));
   $('change-date').addEventListener('click',()=>{$('times-panel').hidden=true;state.selectedDate=null;updateSteps(state.selectedSlots.length?2:1);renderCalendar();});
