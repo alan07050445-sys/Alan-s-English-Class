@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="summer-booking.css?v=160" />
-  <link rel="stylesheet" href="summer-booking-admin.css?v=160" />
-  <link rel="stylesheet" href="summer-booking-cart.css?v=160" />
-  <link rel="stylesheet" href="summer-booking-admin-list.css?v=160" />
+  <link rel="stylesheet" href="summer-booking.css?v=161" />
+  <link rel="stylesheet" href="summer-booking-admin.css?v=161" />
+  <link rel="stylesheet" href="summer-booking-cart.css?v=161" />
+  <link rel="stylesheet" href="summer-booking-admin-list.css?v=161" />
 </head>
 <body>
   <main class="booking-page">
@@ -55,6 +55,17 @@
             <div class="admin-bookings-head"><b>家長最新選課</b><span id="admin-booking-count"></span></div>
             <div id="admin-booking-list"></div>
           </div>
+          <form id="admin-manual-form" class="admin-manual" hidden>
+            <b>手動新增／改排時段</b>
+            <p>學生姓名留白＝新增家長可選的時段；填入姓名＝直接替該學生排課。若要修改既有學生時段，先按「釋放」，再在此建立新時段。</p>
+            <div class="admin-manual-fields">
+              <input name="date" type="date" min="2026-07-01" max="2026-08-31" required />
+              <input name="start" type="time" required value="10:00" />
+              <input name="end" type="time" required value="12:00" />
+              <input name="studentName" maxlength="50" placeholder="學生姓名（選填）" />
+            </div>
+            <button class="small-button primary" type="submit">儲存這個時段</button>
+          </form>
         </section>
         <div class="month-tabs" role="tablist" aria-label="選擇月份">
           <button class="month-tab active" data-month="6" role="tab" aria-selected="true">7 月</button>
@@ -108,6 +119,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="summer-booking.js?v=160"></script>
+  <script src="summer-booking.js?v=161"></script>
 </body>
 </html>

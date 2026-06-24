@@ -11,14 +11,18 @@
   const TIMES = [['10:00','12:00'],['13:00','15:00'],['15:00','17:00'],['17:00','19:00']];
   const SPECIAL_TIMES = [['10:00','12:00'],['13:00','16:00'],['16:00','18:00'],['18:00','20:00']];
   const KEVIN_ELAINE_DATES = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21'];
-  const timesForDate = date => KEVIN_ELAINE_DATES.includes(date) ? SPECIAL_TIMES : TIMES;
+  const defaultTimesForDate = date => KEVIN_ELAINE_DATES.includes(date) ? SPECIAL_TIMES : TIMES;
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
-  const state = { month: 6, booked: new Set(), selectedDate: null, selectedSlots: [] };
+  const state = { month: 6, booked: new Set(), slots: new Map(), selectedDate: null, selectedSlots: [] };
   let stopSlotListener = null;
   let stopAdminBookingListener = null;
   const $ = id => document.getElementById(id);
   const pad = n => String(n).padStart(2, '0');
   const keyFor = (date, start) => `${date}-${start.replace(':','')}`;
+  const timesForDate = date => {
+    const stored = [...state.slots.values()].filter(slot => slot.date === date).sort((a,b) => a.start.localeCompare(b.start));
+    return stored.length ? stored.map(slot => [slot.start, slot.end]) : defaultTimesForDate(date);
+  };
   const dateText = date => { const d = new Date(`${date}T12:00:00`); return `${d.getMonth()+1} 月 ${d.getDate()} 日（${'日一二三四五六'[d.getDay()]}）`; };
   const eligibleDates = () => { const out=[]; for(let d=new Date('2026-07-01T12:00:00');d<=new Date('2026-08-31T12:00:00');d.setDate(d.getDate()+1)){const v=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;if(d.getDay()!==0&&d.getDay()!==6&&!CLOSED.has(v))out.push(v);} return out; };
   const updateSteps = step => [['step-two',step>=2],['step-three',step>=3]].forEach(([id,on]) => $(id).classList.toggle('active',on));
@@ -67,12 +71,12 @@
     updateSteps(3); $('form-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
   };
   const showError = message => window.alert(message);
-  const loadSlots = async () => { const snap=await db.collection(SLOTS).get(); state.booked=new Set(); snap.forEach(doc=>{if(doc.data().status==='booked')state.booked.add(doc.id);}); };
+  const loadSlots = async () => { const snap=await db.collection(SLOTS).get(); state.booked=new Set(); state.slots=new Map(); snap.forEach(doc=>{state.slots.set(doc.id,doc.data());if(doc.data().status==='booked')state.booked.add(doc.id);}); };
   const watchSlots = () => {
     if (stopSlotListener) stopSlotListener();
     stopSlotListener = db.collection(SLOTS).onSnapshot(snapshot => {
-      state.booked = new Set();
-      snapshot.forEach(doc => { if (doc.data().status === 'booked') state.booked.add(doc.id); });
+      state.booked = new Set(); state.slots = new Map();
+      snapshot.forEach(doc => { state.slots.set(doc.id,doc.data()); if (doc.data().status === 'booked') state.booked.add(doc.id); });
       const before = state.selectedSlots.length;
       state.selectedSlots = state.selectedSlots.filter(slot => !state.booked.has(slot.id));
       if (before !== state.selectedSlots.length) {
@@ -137,11 +141,11 @@
   };
   const signInAsAdmin = async () => {
     const login=$('admin-login');login.disabled=true;login.textContent='正在登入…';
-    try { const provider=new firebase.auth.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});const result=await firebase.auth().signInWithPopup(provider);if(result.user.email!==ADMIN_EMAIL){await firebase.auth().signOut();throw new Error('請使用 Alan 的 Google 帳號登入。');}$('admin-copy').textContent='已登入 Alan 管理帳號。按下按鈕即可建立尚未存在的開放時段；已被家長預約的時段不會被覆蓋。';login.hidden=true;$('seed-slots').hidden=false;$('apply-kevin-elaine').hidden=false;watchAdminBookings(); } catch(error) {showError(error.message||'登入失敗，請再試一次。');login.disabled=false;login.textContent='以 Alan 帳號登入';}
+    try { const provider=new firebase.auth.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});const result=await firebase.auth().signInWithPopup(provider);if(result.user.email!==ADMIN_EMAIL){await firebase.auth().signOut();throw new Error('請使用 Alan 的 Google 帳號登入。');}$('admin-copy').textContent='已登入 Alan 管理帳號。按下按鈕即可建立尚未存在的開放時段；已被家長預約的時段不會被覆蓋。';login.hidden=true;$('seed-slots').hidden=false;$('apply-kevin-elaine').hidden=false;$('admin-manual-form').hidden=false;watchAdminBookings(); } catch(error) {showError(error.message||'登入失敗，請再試一次。');login.disabled=false;login.textContent='以 Alan 帳號登入';}
   };
   const seedSlots = async () => {
     const button=$('seed-slots');button.disabled=true;button.textContent='正在建立時段…';
-    try {const existing=await db.collection(SLOTS).get(), ids=new Set(existing.docs.map(doc=>doc.id)),batch=db.batch();let created=0;eligibleDates().forEach(date=>timesForDate(date).forEach(([start,end])=>{const id=keyFor(date,start);if(!ids.has(id)){batch.set(db.collection(SLOTS).doc(id),{slotId:id,date,start,end,status:'open',createdAt:firebase.firestore.FieldValue.serverTimestamp()});created++;}}));if(created)await batch.commit();await loadSlots();renderCalendar();$('admin-copy').textContent=created?`完成：已建立 ${created} 個開放時段。現在家長可以開始選課。`:'所有暑假時段都已建立完成。';button.textContent='時段已建立完成';}catch(error){console.error(error);showError(error.message||'建立時段失敗，請確認 Firestore 規則已發布。');button.disabled=false;button.textContent='再試一次';}
+    try {const existing=await db.collection(SLOTS).get(), ids=new Set(existing.docs.map(doc=>doc.id)),batch=db.batch();let created=0;eligibleDates().forEach(date=>defaultTimesForDate(date).forEach(([start,end])=>{const id=keyFor(date,start);if(!ids.has(id)){batch.set(db.collection(SLOTS).doc(id),{slotId:id,date,start,end,status:'open',createdAt:firebase.firestore.FieldValue.serverTimestamp()});created++;}}));if(created)await batch.commit();await loadSlots();renderCalendar();$('admin-copy').textContent=created?`完成：已建立 ${created} 個開放時段。現在家長可以開始選課。`:'所有暑假時段都已建立完成。';button.textContent='時段已建立完成';}catch(error){console.error(error);showError(error.message||'建立時段失敗，請確認 Firestore 規則已發布。');button.disabled=false;button.textContent='再試一次';}
   };
   const applyKevinElaineBooking = async () => {
     const button = $('apply-kevin-elaine');
@@ -164,6 +168,26 @@
       button.textContent = 'Kevin & Elaine 已加入';
     } catch (error) { console.error(error); showError(error.message || '無法加入預排時段，請稍後再試。'); button.disabled = false; button.textContent = '加入 Kevin & Elaine 的預排時段'; }
   };
+  const saveManualSlot = async event => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const studentName = data.studentName.trim();
+    if (!data.date || !data.start || !data.end || data.end <= data.start) return showError('請填寫正確的日期與開始／結束時間。');
+    const day = new Date(`${data.date}T12:00:00`).getDay();
+    if (day === 0 || day === 6 || data.date < '2026-07-01' || data.date > '2026-08-31') return showError('只可設定 2026 年 7–8 月的週一至週五。');
+    const overlaps = [...state.slots.values()].some(slot => slot.date === data.date && data.start < slot.end && data.end > slot.start);
+    if (overlaps) return showError('這個時間和既有時段重疊，請先釋放或選擇其他時間。');
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true; button.textContent = '儲存中…';
+    try {
+      const id = keyFor(data.date, data.start), batch = db.batch();
+      batch.set(db.collection(SLOTS).doc(id), { slotId:id, date:data.date, start:data.start, end:data.end, status:studentName ? 'booked' : 'open', ...(studentName ? { bookedAt:firebase.firestore.FieldValue.serverTimestamp() } : { createdAt:firebase.firestore.FieldValue.serverTimestamp() }) });
+      if (studentName) batch.set(db.collection(BOOKINGS).doc(id), { slotId:id, date:data.date, start:data.start, end:data.end, studentName, bookingGroup:`manual-${id}`, status:'confirmed', createdAt:firebase.firestore.FieldValue.serverTimestamp() });
+      await batch.commit();
+      event.currentTarget.reset();
+    } catch (error) { console.error(error); showError('無法儲存時段，請稍後再試。'); }
+    finally { button.disabled = false; button.textContent = '儲存這個時段'; }
+  };
   const setup = async () => {
     try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(new URLSearchParams(window.location.search).has('admin'))$('admin-panel').hidden=false;renderCalendar();watchSlots();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
   };
@@ -172,5 +196,5 @@
   $('change-time').addEventListener('click',()=>{$('form-panel').hidden=true;updateSteps(2);$('cart-panel').scrollIntoView({behavior:'smooth',block:'nearest'});});
   $('continue-to-form').addEventListener('click',openConfirmation);$('booking-form').addEventListener('submit',submitBooking);
   $('book-another').addEventListener('click',()=>{$('success-panel').hidden=true;$('booking-form').reset();state.selectedDate=null;state.selectedSlots=[];updateSteps(1);renderCart();renderCalendar();window.scrollTo({top:0,behavior:'smooth'});});
-  $('admin-login').addEventListener('click',signInAsAdmin);$('seed-slots').addEventListener('click',seedSlots);$('apply-kevin-elaine').addEventListener('click',applyKevinElaineBooking);setup();
+  $('admin-login').addEventListener('click',signInAsAdmin);$('seed-slots').addEventListener('click',seedSlots);$('apply-kevin-elaine').addEventListener('click',applyKevinElaineBooking);$('admin-manual-form').addEventListener('submit',saveManualSlot);setup();
 })();
