@@ -11,6 +11,7 @@
   const TIMES = [['10:00','12:00'],['13:00','15:00'],['15:00','17:00'],['17:00','19:00']];
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
   const state = { month: 6, booked: new Set(), selectedDate: null, selectedSlots: [] };
+  let stopAdminBookingListener = null;
   const $ = id => document.getElementById(id);
   const pad = n => String(n).padStart(2, '0');
   const keyFor = (date, start) => `${date}-${start.replace(':','')}`;
@@ -85,9 +86,27 @@
       console.error(error); showError(error.message||'暫時無法完成預約，請稍後再試。'); await loadSlots(); state.selectedSlots=state.selectedSlots.filter(slot=>!state.booked.has(slot.id)); renderTimes();renderCart();renderCalendar();
     } finally { submit.disabled=false; submit.innerHTML='確認保留所有時段 <span>→</span>'; }
   };
+  const watchAdminBookings = () => {
+    if (stopAdminBookingListener) stopAdminBookingListener();
+    $('admin-bookings').hidden = false;
+    stopAdminBookingListener = db.collection(BOOKINGS).orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+      const groups = new Map();
+      snapshot.forEach(doc => {
+        const booking = doc.data(), groupId = booking.bookingGroup || doc.id;
+        if (!groups.has(groupId)) groups.set(groupId, { studentName: booking.studentName, slots: [] });
+        groups.get(groupId).slots.push(booking);
+      });
+      const entries = [...groups.values()];
+      $('admin-booking-count').textContent = entries.length ? `${entries.length} 位學生` : '尚未有人選課';
+      $('admin-booking-list').innerHTML = entries.length ? entries.map(entry => {
+        const slots = entry.slots.sort((a,b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
+        return `<div class="admin-booking"><b>${entry.studentName}</b> · ${slots.length} 堂<div class="admin-booking-slots">${slots.map(slot => `${dateText(slot.date)} ${slot.start}–${slot.end}`).join('<br>')}</div></div>`;
+      }).join('') : '<div class="admin-booking">目前還沒有家長選課。</div>';
+    }, error => { console.error(error); $('admin-booking-list').innerHTML = '<div class="admin-booking">讀取選課名單失敗，請重新登入管理頁。</div>'; });
+  };
   const signInAsAdmin = async () => {
     const login=$('admin-login');login.disabled=true;login.textContent='正在登入…';
-    try { const provider=new firebase.auth.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});const result=await firebase.auth().signInWithPopup(provider);if(result.user.email!==ADMIN_EMAIL){await firebase.auth().signOut();throw new Error('請使用 Alan 的 Google 帳號登入。');}$('admin-copy').textContent='已登入 Alan 管理帳號。按下按鈕即可建立尚未存在的開放時段；已被家長預約的時段不會被覆蓋。';login.hidden=true;$('seed-slots').hidden=false; } catch(error) {showError(error.message||'登入失敗，請再試一次。');login.disabled=false;login.textContent='以 Alan 帳號登入';}
+    try { const provider=new firebase.auth.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});const result=await firebase.auth().signInWithPopup(provider);if(result.user.email!==ADMIN_EMAIL){await firebase.auth().signOut();throw new Error('請使用 Alan 的 Google 帳號登入。');}$('admin-copy').textContent='已登入 Alan 管理帳號。按下按鈕即可建立尚未存在的開放時段；已被家長預約的時段不會被覆蓋。';login.hidden=true;$('seed-slots').hidden=false;watchAdminBookings(); } catch(error) {showError(error.message||'登入失敗，請再試一次。');login.disabled=false;login.textContent='以 Alan 帳號登入';}
   };
   const seedSlots = async () => {
     const button=$('seed-slots');button.disabled=true;button.textContent='正在建立時段…';
