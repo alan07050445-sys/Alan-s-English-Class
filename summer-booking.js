@@ -93,16 +93,29 @@
       const groups = new Map();
       snapshot.forEach(doc => {
         const booking = doc.data(), groupId = booking.bookingGroup || doc.id;
-        if (!groups.has(groupId)) groups.set(groupId, { studentName: booking.studentName, slots: [] });
+        if (!groups.has(groupId)) groups.set(groupId, { groupId, studentName: booking.studentName, slots: [] });
         groups.get(groupId).slots.push(booking);
       });
       const entries = [...groups.values()];
       $('admin-booking-count').textContent = entries.length ? `${entries.length} 位學生` : '尚未有人選課';
       $('admin-booking-list').innerHTML = entries.length ? entries.map(entry => {
         const slots = entry.slots.sort((a,b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
-        return `<div class="admin-booking"><b>${entry.studentName}</b> · ${slots.length} 堂<div class="admin-booking-slots">${slots.map(slot => `${dateText(slot.date)} ${slot.start}–${slot.end}`).join('<br>')}</div></div>`;
+        return `<div class="admin-booking"><b>${entry.studentName}</b> · ${slots.length} 堂<div class="admin-booking-slots">${slots.map(slot => `${dateText(slot.date)} ${slot.start}–${slot.end}`).join('<br>')}</div><button class="release-booking" type="button" data-group="${entry.groupId}">釋放這位學生的時段</button></div>`;
       }).join('') : '<div class="admin-booking">目前還沒有家長選課。</div>';
+      $('admin-booking-list').querySelectorAll('.release-booking').forEach(button => button.addEventListener('click', () => releaseBookingGroup(button.dataset.group)));
     }, error => { console.error(error); $('admin-booking-list').innerHTML = '<div class="admin-booking">讀取選課名單失敗，請重新登入管理頁。</div>'; });
+  };
+  const releaseBookingGroup = async groupId => {
+    if (!window.confirm('要釋放這位學生的所有時段嗎？這會刪除本次選課紀錄。')) return;
+    try {
+      const bookings = await db.collection(BOOKINGS).where('bookingGroup', '==', groupId).get();
+      const batch = db.batch();
+      bookings.forEach(doc => {
+        batch.update(db.collection(SLOTS).doc(doc.id), { status: 'open', bookedAt: firebase.firestore.FieldValue.delete() });
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+    } catch (error) { console.error(error); showError('無法釋放時段，請稍後再試。'); }
   };
   const signInAsAdmin = async () => {
     const login=$('admin-login');login.disabled=true;login.textContent='正在登入…';
