@@ -9,7 +9,7 @@
   const db = firebase.firestore();
   const SLOTS = 'summerSlots2026', BOOKINGS = 'summerBookings2026', ADMIN_EMAIL = 'alan07050445@gmail.com';
   const TIMES = [['10:00','12:00'],['13:00','15:00'],['15:00','17:00'],['17:00','19:00']];
-  const SPECIAL_TIMES = [['13:00','16:00'],['16:00','18:00'],['18:00','20:00']];
+  const SPECIAL_TIMES = [['10:00','12:00'],['13:00','16:00'],['16:00','18:00'],['18:00','20:00']];
   const KEVIN_ELAINE_DATES = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21'];
   const timesForDate = date => KEVIN_ELAINE_DATES.includes(date) ? SPECIAL_TIMES : TIMES;
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
