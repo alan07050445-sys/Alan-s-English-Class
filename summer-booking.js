@@ -11,6 +11,7 @@
   const TIMES = [['10:00','12:00'],['13:00','15:00'],['15:00','17:00'],['17:00','19:00']];
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
   const state = { month: 6, booked: new Set(), selectedDate: null, selectedSlots: [] };
+  let stopSlotListener = null;
   let stopAdminBookingListener = null;
   const $ = id => document.getElementById(id);
   const pad = n => String(n).padStart(2, '0');
@@ -64,6 +65,20 @@
   };
   const showError = message => window.alert(message);
   const loadSlots = async () => { const snap=await db.collection(SLOTS).get(); state.booked=new Set(); snap.forEach(doc=>{if(doc.data().status==='booked')state.booked.add(doc.id);}); };
+  const watchSlots = () => {
+    if (stopSlotListener) stopSlotListener();
+    stopSlotListener = db.collection(SLOTS).onSnapshot(snapshot => {
+      state.booked = new Set();
+      snapshot.forEach(doc => { if (doc.data().status === 'booked') state.booked.add(doc.id); });
+      const before = state.selectedSlots.length;
+      state.selectedSlots = state.selectedSlots.filter(slot => !state.booked.has(slot.id));
+      if (before !== state.selectedSlots.length) {
+        $('form-panel').hidden = true;
+        renderCart();
+      }
+      if (!$('booking-app').hidden) { renderCalendar(); renderTimes(); }
+    });
+  };
   const submitBooking = async event => {
     event.preventDefault(); if(!state.selectedSlots.length)return;
     const studentName=new FormData(event.currentTarget).get('studentName').trim(), selected=[...state.selectedSlots];
@@ -79,7 +94,7 @@
           transaction.create(db.collection(BOOKINGS).doc(slot.id),{slotId:slot.id,date:slot.date,start:slot.start,end:slot.end,studentName,bookingGroup:group,status:'confirmed',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         });
       });
-      selected.forEach(slot=>state.booked.add(slot.id)); $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
+      selected.forEach(slot=>state.booked.add(slot.id)); state.selectedSlots=[]; $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
       $('success-copy').textContent=`${studentName} 已成功保留 ${selected.length} 個暑假上課時段。`;
       renderCalendar(); $('success-panel').scrollIntoView({behavior:'smooth',block:'center'});
     } catch(error) {
@@ -126,7 +141,7 @@
     try {const existing=await db.collection(SLOTS).get(), ids=new Set(existing.docs.map(doc=>doc.id)),batch=db.batch();let created=0;eligibleDates().forEach(date=>TIMES.forEach(([start,end])=>{const id=keyFor(date,start);if(!ids.has(id)){batch.set(db.collection(SLOTS).doc(id),{slotId:id,date,start,end,status:'open',createdAt:firebase.firestore.FieldValue.serverTimestamp()});created++;}}));if(created)await batch.commit();await loadSlots();renderCalendar();$('admin-copy').textContent=created?`完成：已建立 ${created} 個開放時段。現在家長可以開始選課。`:'所有暑假時段都已建立完成。';button.textContent='時段已建立完成';}catch(error){console.error(error);showError(error.message||'建立時段失敗，請確認 Firestore 規則已發布。');button.disabled=false;button.textContent='再試一次';}
   };
   const setup = async () => {
-    try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(new URLSearchParams(window.location.search).has('admin'))$('admin-panel').hidden=false;renderCalendar();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
+    try {await loadSlots();$('loading').hidden=true;$('booking-app').hidden=false;if(new URLSearchParams(window.location.search).has('admin'))$('admin-panel').hidden=false;renderCalendar();watchSlots();}catch(error){console.error(error);$('loading').innerHTML='目前無法讀取時段，請稍後再試或直接聯絡 Alan 老師。';}
   };
   document.querySelectorAll('.month-tab').forEach(button=>button.addEventListener('click',()=>{state.month=Number(button.dataset.month);document.querySelectorAll('.month-tab').forEach(tab=>{const selected=tab===button;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',selected);});renderCalendar();}));
   $('change-date').addEventListener('click',()=>{$('times-panel').hidden=true;state.selectedDate=null;updateSteps(state.selectedSlots.length?2:1);renderCalendar();});
