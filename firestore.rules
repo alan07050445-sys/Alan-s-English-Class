@@ -61,15 +61,20 @@ service cloud.firestore {
         && request.resource.data.status == 'booked'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'bookedAt'])
         && existsAfter(/databases/$(database)/documents/summerBookings2026/$(slotId))
+      ) || (
+        resource.data.status == 'booked'
+        && request.resource.data.status == 'open'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'bookedAt'])
+        && getAfter(/databases/$(database)/documents/summerBookings2026/$(slotId)).data.status == 'cancel_requested'
       );
     }
 
     match /summerBookings2026/{slotId} {
       allow create: if request.resource.data.keys().hasAll([
-          'slotId', 'date', 'start', 'end', 'studentName', 'bookingGroup', 'status', 'createdAt'
+          'slotId', 'date', 'start', 'end', 'studentName', 'bookingGroup', 'changeToken', 'status', 'createdAt'
         ])
         && request.resource.data.keys().hasOnly([
-          'slotId', 'date', 'start', 'end', 'studentName', 'bookingGroup', 'status', 'createdAt'
+          'slotId', 'date', 'start', 'end', 'studentName', 'bookingGroup', 'changeToken', 'status', 'createdAt'
         ])
         && request.resource.data.slotId == slotId
         && request.resource.data.studentName is string
@@ -78,8 +83,16 @@ service cloud.firestore {
         && request.resource.data.bookingGroup is string
         && request.resource.data.bookingGroup.size() > 0
         && request.resource.data.bookingGroup.size() <= 80
+        && request.resource.data.changeToken is string
+        && request.resource.data.changeToken.size() > 10
         && getAfter(/databases/$(database)/documents/summerSlots2026/$(slotId)).data.status == 'booked';
-      allow read, update, delete: if isTeacher();
+      allow update: if isTeacher() || (
+        resource.data.status == 'confirmed'
+        && request.resource.data.status == 'cancel_requested'
+        && request.resource.data.changeToken == resource.data.changeToken
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      );
+      allow read, delete: if isTeacher();
     }
 
     // ── 其他未列出的文件 ───────────────────────────────────

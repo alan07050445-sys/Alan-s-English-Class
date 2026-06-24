@@ -20,7 +20,10 @@
   const KEVIN_ELAINE_DATES = ['2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-17','2026-08-18','2026-08-19','2026-08-20','2026-08-21'];
   const defaultTimesForDate = date => KEVIN_ELAINE_DATES.includes(date) ? SPECIAL_TIMES : TIMES;
   const CLOSED = new Set(['2026-07-09','2026-07-10']);
-  const state = { month: 6, booked: new Set(), slots: new Map(), selectedDate: null, selectedSlots: [] };
+  const OWN_STORAGE = 'alan-summer-own-bookings-2026';
+  const readOwnBookings = () => { try { return JSON.parse(localStorage.getItem(OWN_STORAGE) || '[]'); } catch (_) { return []; } };
+  const saveOwnBookings = bookings => localStorage.setItem(OWN_STORAGE, JSON.stringify(bookings));
+  const state = { month: 6, booked: new Set(), slots: new Map(), selectedDate: null, selectedSlots: [], ownBookings: readOwnBookings() };
   let stopSlotListener = null;
   let stopAdminBookingListener = null;
   const $ = id => document.getElementById(id);
@@ -39,7 +42,8 @@
     for(let i=0;i<(first===0?6:first-1);i++)fragments.push('<div class="day-empty"></div>');
     for(let day=1;day<=days;day++){
       const date=`2026-${pad(state.month+1)}-${pad(day)}`, closed=!eligibleDates().includes(date), full=!closed&&isDateFull(date), selected=state.selectedDate===date;
-      const classes=['day',closed?'disabled closed':'',full?'disabled full':'',selected?'selected':''].filter(Boolean).join(' ');
+      const mine=state.ownBookings.some(slot=>slot.date===date);
+      const classes=['day',closed?'disabled closed':'',full?'disabled full':'',mine?'mine':'',selected?'selected':''].filter(Boolean).join(' ');
       fragments.push(`<button type="button" class="${classes}" data-date="${date}" ${closed||full?'disabled':''}>${day}</button>`);
     }
     $('calendar').innerHTML=fragments.join('');
@@ -53,8 +57,8 @@
   const renderTimes = () => {
     if(!state.selectedDate)return;
     $('time-slots').innerHTML=timesForDate(state.selectedDate).map(([start,end])=>{
-      const id=keyFor(state.selectedDate,start), booked=state.booked.has(id), picked=state.selectedSlots.some(slot=>slot.id===id);
-      return `<button type="button" class="time-slot ${picked?'picked':''}" data-start="${start}" data-end="${end}" ${booked?'disabled':''}><span>${start} – ${end}</span><small>${booked?'已排課':picked?'已加入 ✓':'加入清單 +'}</small></button>`;
+      const id=keyFor(state.selectedDate,start), booked=state.booked.has(id), picked=state.selectedSlots.some(slot=>slot.id===id), mine=state.ownBookings.some(slot=>slot.id===id);
+      return `<button type="button" class="time-slot ${picked?'picked':''} ${mine?'mine':''}" data-start="${start}" data-end="${end}" ${booked?'disabled':''}><span>${start} – ${end}</span><small>${mine?'您的課程':booked?'已排課':picked?'已加入 ✓':'加入清單 +'}</small></button>`;
     }).join('');
     $('time-slots').querySelectorAll('.time-slot:not(:disabled)').forEach(b=>b.addEventListener('click',()=>toggleSlot(state.selectedDate,b.dataset.start,b.dataset.end)));
   };
@@ -99,21 +103,36 @@
     const submit=$('submit-booking'); submit.disabled=true; submit.textContent='正在保留所有時段…';
     try {
       const group=`summer-2026-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      const changeToken=(crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
       await db.runTransaction(async transaction=>{
         const refs=selected.map(slot=>db.collection(SLOTS).doc(slot.id));
         const snaps=await Promise.all(refs.map(ref=>transaction.get(ref)));
         snaps.forEach((snap,index)=>{if(!snap.exists||snap.data().status!=='open')throw new Error(`${dateText(selected[index].date)} ${selected[index].start} 剛剛被選走了，請重新選擇。`);});
         selected.forEach((slot,index)=>{
           transaction.update(refs[index],{status:'booked',bookedAt:firebase.firestore.FieldValue.serverTimestamp()});
-          transaction.set(db.collection(BOOKINGS).doc(slot.id),{slotId:slot.id,date:slot.date,start:slot.start,end:slot.end,studentName,bookingGroup:group,status:'confirmed',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+          transaction.set(db.collection(BOOKINGS).doc(slot.id),{slotId:slot.id,date:slot.date,start:slot.start,end:slot.end,studentName,bookingGroup:group,changeToken,status:'confirmed',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         });
       });
-      selected.forEach(slot=>state.booked.add(slot.id)); state.selectedSlots=[]; $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
+      selected.forEach(slot=>state.booked.add(slot.id)); state.ownBookings=[...state.ownBookings.filter(existing=>!selected.some(slot=>slot.id===existing.id)),...selected.map(slot=>({...slot,changeToken}))];saveOwnBookings(state.ownBookings); state.selectedSlots=[]; $('times-panel').hidden=true;$('cart-panel').hidden=true;$('form-panel').hidden=true;$('success-panel').hidden=false;
       $('success-copy').textContent=`${studentName} 已成功保留 ${selected.length} 個暑假上課時段。`;
       renderCalendar(); $('success-panel').scrollIntoView({behavior:'smooth',block:'center'});
     } catch(error) {
       console.error(error); showError(error.message||'暫時無法完成預約，請稍後再試。'); await loadSlots(); state.selectedSlots=state.selectedSlots.filter(slot=>!state.booked.has(slot.id)); renderTimes();renderCart();renderCalendar();
     } finally { submit.disabled=false; submit.innerHTML='確認保留所有時段 <span>→</span>'; }
+  };
+  const changeOwnBookings = async () => {
+    const own = [...state.ownBookings];
+    if (!own.length) { $('success-panel').hidden=true; return; }
+    if (!window.confirm('要釋放您目前保留的時段，重新選擇嗎？')) return;
+    try {
+      const batch=db.batch();
+      own.forEach(slot=>{
+        batch.update(db.collection(BOOKINGS).doc(slot.id),{status:'cancel_requested',changeToken:slot.changeToken});
+        batch.update(db.collection(SLOTS).doc(slot.id),{status:'open',bookedAt:firebase.firestore.FieldValue.delete()});
+      });
+      await batch.commit();
+      state.ownBookings=[];saveOwnBookings([]);$('success-panel').hidden=true;$('booking-form').reset();state.selectedDate=null;state.selectedSlots=[];updateSteps(1);renderCart();renderCalendar();window.scrollTo({top:0,behavior:'smooth'});
+    } catch(error){console.error(error);showError('目前無法更改時段，請稍後再試或聯絡 Alan 老師。');}
   };
   const watchAdminBookings = () => {
     if (stopAdminBookingListener) stopAdminBookingListener();
@@ -122,6 +141,7 @@
       const groups = new Map();
       snapshot.forEach(doc => {
         const booking = doc.data(), groupId = (booking.studentName || '').trim() || doc.id;
+        if (booking.status !== 'confirmed') return;
         if (!groups.has(groupId)) groups.set(groupId, { groupId, studentName: booking.studentName, slots: [] });
         groups.get(groupId).slots.push(booking);
       });
@@ -202,5 +222,6 @@
   $('change-time').addEventListener('click',()=>{$('form-panel').hidden=true;updateSteps(2);$('cart-panel').scrollIntoView({behavior:'smooth',block:'nearest'});});
   $('continue-to-form').addEventListener('click',openConfirmation);$('booking-form').addEventListener('submit',submitBooking);
   $('book-another').addEventListener('click',()=>{$('success-panel').hidden=true;$('booking-form').reset();state.selectedDate=null;state.selectedSlots=[];updateSteps(1);renderCart();renderCalendar();window.scrollTo({top:0,behavior:'smooth'});});
+  $('change-bookings').addEventListener('click',changeOwnBookings);
   $('admin-login').addEventListener('click',signInAsAdmin);$('admin-manual-form').addEventListener('submit',saveManualSlot);setup();
 })();

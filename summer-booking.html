@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="summer-entrance.css?v=169" />
   <link rel="stylesheet" href="summer-entrance-controls.css?v=169" />
   <link rel="stylesheet" href="summer-logo-entrance.css?v=169" />
+  <link rel="stylesheet" href="summer-own-bookings.css?v=171" />
 </head>
 <body>
   <div id="summer-entrance" class="summer-logo-entrance" role="button" tabindex="0" aria-label="略過開場動畫">
@@ -118,7 +119,10 @@
           <h2>時段已為你保留！</h2>
           <p id="success-copy"></p>
           <p class="success-hint">Alan 老師會透過你留下的聯絡方式確認課程安排。</p>
-          <button id="book-another" class="secondary-button" type="button">再選一個時段</button>
+          <div class="success-actions">
+            <button id="book-another" class="secondary-button" type="button">再選一個時段</button>
+            <button id="change-bookings" class="secondary-button change-button" type="button">更改時段</button>
+          </div>
         </section>
       </div>
     </section>
@@ -129,6 +133,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="summer-booking.js?v=169"></script>
+  <script src="summer-booking.js?v=171"></script>
 </body>
 </html>
