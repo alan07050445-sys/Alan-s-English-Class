@@ -118,6 +118,7 @@ function getItemQuestions(item) {
 // All quiz-able items in a category
 function getQuizItems(items) {
   return (items || []).filter(item =>
+    (item.type === 'flashcard'        && (item.cards || []).length >= 1) || // v233: 單字卡也是可完成的練習
     (item.type === 'vocab-quiz'       && (item.words || []).length >= 2) ||
     (item.type === 'fillblank'        && (item.questions || []).length >= 2) ||
     (item.type === 'quiz'             && (item.questions || []).length > 0) ||
@@ -200,6 +201,7 @@ function getTodayInputValue(offsetDays = 0) {
 
 function getQuizItemTotal(item) {
   if (!item) return 0;
+  if (item.type === 'flashcard')    return (item.cards || []).length;
   if (item.type === 'type-answer')  return (item.pairs || []).length;
   if (item.type === 'short-answer') return (item.saQuestions || []).length;
   if (item.type === 'syllable-div') return (item.sdWords || []).length;
@@ -506,7 +508,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const progKey  = `${weekId}_${item.id}`;
             const prog     = qmProg[progKey];
             const totalQ   = getItemQuestions(item).length;
-            const scorePct = prog ? Math.round(prog.score / prog.total * 100) : null;
+            const scorePct = (prog && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null; // 單字卡完成無分數 → 不顯示 %
             const isDone   = !!prog;
             const isActive = selectedItem?.id === item.id;
             const isWriting      = item.type === 'writing-practice';
@@ -518,7 +520,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isStoryMtn     = item.type === 'story-mountain';
             const isCloze        = item.type === 'cloze';
             const isCircle       = item.type === 'circle-answer';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle;
+            const isFlashcard    = item.type === 'flashcard';
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
@@ -547,7 +550,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -625,6 +628,24 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               ✎ Edit this item
             </button>
           </div>
+        ) : selectedItem?.type === 'flashcard' && phase === 'intro' ? (
+          <FlashcardStandaloneIntro
+            item={selectedItem}
+            cat={cat}
+            done={!!qmProg[`${weekId}_${selectedItem.id}`]}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'flashcard' ? (
+          <FlashcardStandalone
+            key={quizSwapKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            isHomework={!editMode && !!((homework || {})[selectedItem.id])}
+            onDone={(goTasks) => {
+              setProgVersion(v => v + 1);
+              if (goTasks) onBack(); else setPhase('intro');
+            }}
+          />
         ) : selectedItem?.type === 'type-answer' && phase === 'quiz' ? (
           <TypeAnswerPlayer
             key={playerKey}
@@ -764,6 +785,48 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   單字卡獨立練習（v233）——flashcard 自己就是一份功課：
+   intro → FlashcardPlayer（卡片/配對/拼字自由玩）→「完成練習」寫進度。
+   完全不動題庫資料，只寫學生自己的完成紀錄。
+══════════════════════════════════════════════════════ */
+function FlashcardStandaloneIntro({ item, cat, done, onStart }) {
+  const n = (item.cards || []).length;
+  return (
+    <div className="qm-intro">
+      {cat ? <CatIcon catId={cat.id} className="qm-intro-caticon"/> : <div className="qm-intro-icon">🃏</div>}
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{n} 張單字卡</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>🃏</span><span>翻卡片記單字，也可以玩配對、拼字小遊戲</span></div>
+        <div className="qm-intro-rule-row"><span>✓</span><span>練熟之後，按上方的「完成練習」就完成了</span></div>
+      </div>
+      {done && <div className="qm-intro-fcdone">✓ 已經完成過——再練一次，單字更熟！</div>}
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary qm-intro-start" onClick={onStart}>開始練習 →</button>
+      </div>
+    </div>
+  );
+}
+
+function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
+  const finish = () => {
+    const n = (item.cards || []).length || 1;
+    saveQuizModeCompletion(progressKey, item, { doneCount: n, score: null, total: n });
+    if (window.playSound) window.playSound('complete');
+    onDone(isHomework);
+  };
+  return (
+    <div className="qm-fc-player-wrap">
+      <div className="qm-fc-player-bar">
+        <span className="qm-fc-player-title">{item.title}</span>
+        <button className="qm-fc-start-btn" onClick={finish}>✓ 完成練習{isHomework ? ' · 回今天的任務' : ''}</button>
+      </div>
+      <window.FlashcardPlayer item={item}/>
     </div>
   );
 }
