@@ -7,7 +7,7 @@
   border: 1.5px solid var(--border);
   border-radius: 8px;
   padding: 4px 9px;
-  font-size: 16px;
+  font-size: 17px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   line-height: 1;
@@ -23,7 +23,7 @@
   background: var(--accent);
   color: #fff;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   min-width: 16px;
   height: 16px;
@@ -76,7 +76,7 @@
 }
 .mk-title {
   font-family: var(--sans);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--ink);
 }
@@ -84,7 +84,7 @@
 /* ── Summary bar ───────────────────────────────────── */
 .mk-summary {
   padding: 10px 20px;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink-muted);
   border-bottom: 1px solid var(--border-soft);
   flex-shrink: 0;
@@ -102,7 +102,7 @@
 .mk-group { margin-bottom: 18px; }
 .mk-group-label {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .06em;
@@ -125,13 +125,13 @@
 .mk-item-q {
   flex: 1 1 100%;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 600;
   color: var(--ink);
 }
 .mk-item-cat {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   padding: 2px 7px;
   border-radius: 5px;
   background: var(--bg);
@@ -145,7 +145,7 @@
   border: 1px dashed var(--border);
   border-radius: 6px;
   padding: 4px 10px;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink-muted);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
@@ -166,7 +166,7 @@
   border: none;
   border-radius: 9px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
@@ -202,7 +202,7 @@
 }
 .mk-empty-sub {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink-muted);
 }
 
@@ -217,7 +217,7 @@
 }
 .mk-drill-progress {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -267,7 +267,7 @@
   border: 1.5px solid var(--border);
   border-radius: 10px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 500;
   color: var(--ink);
   cursor: pointer;
@@ -301,7 +301,7 @@
   background: var(--bg);
   border: 1px solid var(--border-soft);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
   color: var(--ink-muted);
@@ -320,13 +320,13 @@
 }
 .mk-fb-correct {
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--moss);
 }
 .mk-fb-wrong {
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 600;
   color: var(--accent);
 }
@@ -337,7 +337,7 @@
   border: none;
   border-radius: 8px;
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -356,13 +356,13 @@
 }
 .mk-complete-stat, .mk-complete-xp {
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   color: var(--ink-muted);
 }
 .mk-complete-xp { color: var(--moss); font-weight: 700; }
 .mk-complete-badge {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--accent-soft);
 }

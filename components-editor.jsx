@@ -424,37 +424,55 @@ function formatBytes(b) {
 }
 
 /* Footer */
-function Footer() {
+function Footer({ onOpenGuide }) {
+  const gmailUrl = "https://mail.google.com/mail/?view=cm&fs=1&to=alan07050445%40gmail.com";
+  const lineUrl = "https://line.me/R/ti/p/~9161791608";
+
   return (
     <footer className="footer">
       <div className="shell">
         <div className="footer-grid">
           <div>
-            <div className="footer-mark">Alan<em>'s</em></div>
+            <div className="footer-mark">Alan<em>'s</em> English Class</div>
             <p className="footer-tagline">
-              A weekly English programme for young learners — built around four foundations: vocabulary, grammar, word study, and reading.
+              對齊康橋國際學校每週進度的英文練習平台。<br/>
+              單字、文法、字根字首、閱讀寫作，<br/>
+              在家練的就是學校在教的。
             </p>
           </div>
           <div className="footer-col">
-            <h4>Class</h4>
+            <h4>學習項目</h4>
             <ul>
-              <li><a href="#">This Week</a></li>
-              <li><a href="#">Past Weeks</a></li>
-              <li><a href="#">Resources</a></li>
+              <li><span className="footer-static">單字</span></li>
+              <li><span className="footer-static">文法</span></li>
+              <li><span className="footer-static">字根字首</span></li>
+              <li><span className="footer-static">閱讀寫作</span></li>
             </ul>
           </div>
           <div className="footer-col">
-            <h4>Contact</h4>
+            <h4>聯絡老師</h4>
             <ul>
-              <li><a href="#">Email Alan</a></li>
-              <li><a href="#">Subscribe</a></li>
-              <li><a href="#">LINE</a></li>
+              <li>
+                <a href={gmailUrl} target="_blank" rel="noopener noreferrer" aria-label="使用 Gmail 聯絡 Alan 老師">
+                  Email 聯絡
+                </a>
+              </li>
+              <li>
+                <a href={lineUrl} target="_blank" rel="noopener noreferrer" aria-label="使用 LINE 聯絡 Alan 老師">
+                  LINE 諮詢
+                </a>
+              </li>
+              {onOpenGuide && (
+                <li>
+                  <button className="footer-guide-btn" onClick={onOpenGuide}>新手教學</button>
+                </li>
+              )}
             </ul>
           </div>
         </div>
         <div className="footer-baseline">
-          <span>© 2026 Alan's English Class</span>
-          <span>Made with care · 用心製作</span>
+          <span>© {new Date().getFullYear()} Alan's English Class</span>
+          <span>對齊康橋國際學校每週進度 · 用心製作</span>
         </div>
       </div>
     </footer>

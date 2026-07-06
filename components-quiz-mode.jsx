@@ -157,6 +157,24 @@ const QM_KEY = 'alans-qm-v1';
 function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY) || '{}'); } catch(e) { return {}; } }
 function saveQMProg(p) { try { localStorage.setItem(QM_KEY, JSON.stringify(p)); } catch(e) {} }
 
+/* ── 續做（resume）：測驗做到一半離開，下次從同一題接著做 ── */
+const QM_RESUME_KEY = 'alans-qm-resume-v1';
+function loadResumeMap() { try { return JSON.parse(localStorage.getItem(QM_RESUME_KEY) || '{}'); } catch(e) { return {}; } }
+function getResume(progressKey, questionCount) {
+  const r = loadResumeMap()[progressKey];
+  if (!r || !r.deck || r.deckPos == null) return null;
+  if (r.deckPos < 1 || r.deckPos >= r.deck.length) return null;
+  if (questionCount != null && r.uniqueTotal !== questionCount) return null; // 老師改過題目 → 作廢
+  if (Date.now() - (r.ts || 0) > 7 * 24 * 60 * 60 * 1000) return null;       // 一週後過期
+  return r;
+}
+function saveResume(progressKey, data) {
+  try { const m = loadResumeMap(); m[progressKey] = { ...data, ts: Date.now() }; localStorage.setItem(QM_RESUME_KEY, JSON.stringify(m)); } catch(e) {}
+}
+function clearResume(progressKey) {
+  try { const m = loadResumeMap(); if (m[progressKey] !== undefined) { delete m[progressKey]; localStorage.setItem(QM_RESUME_KEY, JSON.stringify(m)); } } catch(e) {}
+}
+
 // 星級精熟：用最佳分數決定 0~3 星，鼓勵回去重練拿滿星（驅動複習）
 function starsFromScore(pct) {
   if (pct == null) return 0;
@@ -262,42 +280,48 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
 
   return (
     <>
-      <div className="qm-week-banner">
-        <div className="qm-week-eyebrow">
-          <span className="dot"/>
-          <span>{weekId}{week.dateRange ? ' · ' : ''}</span>
-          <ET
-            value={week.dateRange || ''}
-            placeholder="May 17 – May 23"
-            editMode={editMode}
-            className="mono"
-            onChange={v => onUpdateWeek({ dateRange: v })}
-          />
-        </div>
-        <h1 className="qm-week-title">
-          <ET
-            value={week.theme || week.label || ''}
-            placeholder="Week theme…"
-            editMode={editMode}
-            onChange={v => onUpdateWeek({ theme: v })}
-          />
-        </h1>
-        {(week.subtitle || editMode) && (
-          <p className="qm-week-sub">
+      {editMode && (
+        <div className="qm-week-banner">
+          <div className="qm-week-eyebrow">
+            <span className="dot"/>
+            <span>{weekId}{week.dateRange ? ' · ' : ''}</span>
             <ET
-              value={week.subtitle || ''}
-              placeholder="English subtitle…"
+              value={week.dateRange || ''}
+              placeholder="May 17 – May 23"
               editMode={editMode}
-              onChange={v => onUpdateWeek({ subtitle: v })}
+              className="mono"
+              onChange={v => onUpdateWeek({ dateRange: v })}
             />
-          </p>
-        )}
-      </div>
+          </div>
+          <h1 className="qm-week-title">
+            <ET
+              value={week.theme || week.label || ''}
+              placeholder="Week theme…"
+              editMode={editMode}
+              onChange={v => onUpdateWeek({ theme: v })}
+            />
+          </h1>
+          {(week.subtitle || editMode) && (
+            <p className="qm-week-sub">
+              <ET
+                value={week.subtitle || ''}
+                placeholder="English subtitle…"
+                editMode={editMode}
+                onChange={v => onUpdateWeek({ subtitle: v })}
+              />
+            </p>
+          )}
+        </div>
+      )}
 
-      {!editMode && (
+      {editMode ? (
         <div className="qm-blocks-head">
-          <h2 className="qm-blocks-title">📚 本週練習</h2>
-          <span className="qm-blocks-hint">完成這些，本週就達標 ✅</span>
+          <h2 className="qm-blocks-title">本週練習</h2>
+          <span className="qm-blocks-hint">編輯分類內容</span>
+        </div>
+      ) : (
+        <div className="qm-blocks-head qm-blocks-head-view">
+          <h2 className="qm-blocks-title">{/^sl-/.test(weekId) ? '我的暑假練習' : '自由練習'}</h2>
         </div>
       )}
       <div className="qm-blocks">
@@ -324,8 +348,8 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             type: 'button',
             disabled: !clickable,
             'aria-label': total > 0
-              ? `${cat.title} ${cat.titleZh}, ${quizItems.length} units, ${total} ${countLabel}, ${pct}% complete`
-              : `${cat.title} ${cat.titleZh}, coming soon`,
+              ? `${cat.titleZh || cat.title} ${cat.title}, ${quizItems.length} units, ${total} ${countLabel}, ${pct}% complete`
+              : `${cat.titleZh || cat.title} ${cat.title}, coming soon`,
           };
 
           return (
@@ -337,25 +361,39 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             >
               <CatIcon catId={cat.id} className="qm-block-icon"/>
               <div className="qm-block-content">
-                <div className="qm-block-title">{cat.title}</div>
-                <div className="qm-block-title-zh">{cat.titleZh}</div>
+                <div className="qm-block-title">{cat.titleZh || cat.title}</div>
+                {cat.titleZh && <div className="qm-block-title-zh">{cat.title}</div>}
                 {total > 0 ? (
                   <>
-                    <div className="qm-block-count">{quizItems.length} units · {total} {countLabel}</div>
+                    <div className="qm-block-count">{(() => {
+                      const doneUnits = quizItems.filter(it => qmProg[`${weekId}_${it.id}`]).length;
+                      return doneUnits >= quizItems.length ? '本週練習完成 ✓' : `完成 ${doneUnits} / ${quizItems.length}`;
+                    })()}</div>
                     <div className="qm-block-progress">
                       <div className="qm-progress-bar">
                         <div className="qm-progress-fill" style={{ width: pct + '%' }}/>
                       </div>
                       <span className="qm-pct">{pct}%</span>
                     </div>
-                    <div className="qm-block-stars" title={`精熟星數 ${catStars}/${maxStars}`}>
-                      <span className="qm-star on">★</span> {catStars}<span className="qm-block-stars-max">/{maxStars}</span>
-                    </div>
+                    {!editMode && (() => {
+                      // 接下來要練的單元＋已練平均分（有才顯示）
+                      const nextItem = quizItems.find(it => !qmProg[`${weekId}_${it.id}`]);
+                      const scored = quizItems
+                        .map(it => qmProg[`${weekId}_${it.id}`])
+                        .filter(p => p && p.total > 0);
+                      const avg = scored.length
+                        ? Math.round(scored.reduce((s, p) => s + p.score / p.total * 100, 0) / scored.length)
+                        : null;
+                      const parts = [];
+                      if (nextItem) parts.push(`接下來：${nextItem.title}`);
+                      if (avg != null) parts.push(`已練平均 ${avg} 分`);
+                      return parts.length ? <div className="qm-block-meta">{parts.join(' · ')}</div> : null;
+                    })()}
                   </>
                 ) : editMode ? (
                   <div className="qm-block-count">{allCatItems.length} items · no quiz yet</div>
                 ) : (
-                  <div className="qm-block-empty">準備中 · Coming soon</div>
+                  <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'}</div>
                 )}
               </div>
               {editMode ? (
@@ -379,7 +417,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, homework, onSetHomework, weekQuizItems }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, homework, onSetHomework, weekQuizItems, initialItemId }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -389,6 +427,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const quizItems = useQMM(() => getQuizItems(items), [items]);
   // Edit mode: show ALL items so teacher can see & edit non-quiz types too
   const sidebarItems = editMode ? (items || []) : quizItems;
+  const explicitMainIds = useQMM(() => new Set((sidebarItems || [])
+    .filter(it => it?.mission === 'main' || it?.missionType === 'main' || it?.required === true || it?.isMain === true)
+    .map(it => it.id)), [sidebarItems]);
+  const homeworkMainIds = useQMM(() => new Set(Object.keys(homework || {})), [homework]);
+  const fallbackMainId = !editMode && explicitMainIds.size === 0 && homeworkMainIds.size === 0
+    ? sidebarItems[0]?.id
+    : null;
 
   const selectItem = (item) => {
     setSelectedItem(item);
@@ -396,6 +441,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     setFlashItem(null);
     setPlayerKey(k => k + 1);
   };
+
+  useQME(() => {
+    if (editMode || selectedItem || sidebarItems.length === 0) return;
+    // 從「今天的任務」點進來 → 直接打開那一個單元
+    const wanted = initialItemId && sidebarItems.find(it => it.id === initialItemId);
+    if (wanted) { selectItem(wanted); return; }
+    const firstMain = sidebarItems.find(it =>
+      explicitMainIds.has(it.id) ||
+      homeworkMainIds.has(it.id) ||
+      it.id === fallbackMainId
+    );
+    selectItem(firstMain || sidebarItems[0]);
+  }, [cat.id, editMode, sidebarItems.length, fallbackMainId]);
 
   // Re-read localStorage every time a quiz finishes (progVersion bumps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -409,16 +467,27 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
       {/* ── Left sidebar ── */}
       <div className="qm-sidebar">
         <button className="qm-sidebar-back" onClick={onBack}>
-          <window.Icon name="arrow-left" size={14}/> All categories
+          <window.Icon name="arrow-left" size={14}/> 返回大廳
         </button>
 
         <div className="qm-sidebar-cat">
           <CatIcon catId={cat.id} className="qm-sidebar-cat-icon"/>
           <div>
-            <div className="qm-sidebar-cat-name">{cat.title}</div>
-            <div className="qm-sidebar-cat-zh">{cat.titleZh}</div>
+            <div className="qm-sidebar-cat-name">{cat.titleZh || cat.title}</div>
+            {cat.titleZh && <div className="qm-sidebar-cat-zh">{cat.title}</div>}
           </div>
         </div>
+
+        {!editMode && quizItems.length > 0 && (() => {
+          const doneN = quizItems.filter(it => qmProg[`${weekId}_${it.id}`]).length;
+          const pct = Math.round(doneN / quizItems.length * 100);
+          return (
+            <div className="qm-sidebar-prog" aria-label={`本分類完成 ${doneN} / ${quizItems.length}`}>
+              <div className="qm-sidebar-prog-bar"><i style={{ width: pct + '%' }}/></div>
+              <span className="qm-sidebar-prog-lbl">{doneN === quizItems.length ? '✓ 全部完成' : `完成 ${doneN} / ${quizItems.length}`}</span>
+            </div>
+          );
+        })()}
 
         <div className="qm-unit-list">
           {editMode && (
@@ -451,6 +520,11 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isCircle       = item.type === 'circle-answer';
             const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle;
             const hw       = (homework || {})[item.id]; // { dueDate }
+            const isMainMission = !editMode && (
+              explicitMainIds.has(item.id) ||
+              homeworkMainIds.has(item.id) ||
+              item.id === fallbackMainId
+            );
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
               const diff = Math.ceil((d - new Date()) / 86400000);
@@ -473,7 +547,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isStoryMtn ? '🏔 Story Mountain' : isEssay ? '✍ Opinion Essay' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} prompts` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} words` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} questions` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} words` : isWordSort ? `🗂 ${(item.sortWords||[]).length} words` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} blanks` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} questions` : `${totalQ} questions`}
+                        {isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -654,17 +728,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         ) : phase === 'intro' ? (
           <QuizIntroScreen
             item={selectedItem}
+            cat={cat}
             questions={getItemQuestions(selectedItem)}
             catItems={items || []}
             onFlashcards={(fi) => { setFlashItem(fi); setPhase('flashcards'); }}
             onStartQuiz={() => setPhase('quiz')}
+            resumeAt={(getResume(`${weekId}_${selectedItem.id}`, getItemQuestions(selectedItem).length) || {}).deckPos || null}
           />
         ) : phase === 'flashcards' && flashItem ? (
           <div className="qm-fc-player-wrap">
             <div className="qm-fc-player-bar">
               <span className="qm-fc-player-title">{flashItem.title}</span>
               <button className="qm-fc-start-btn" onClick={() => setPhase('quiz')}>
-                開始測驗 <span>Start Quiz</span>
+                開始測驗 →
               </button>
             </div>
             <window.FlashcardPlayer
@@ -683,6 +759,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             allQuizItems={weekQuizItems || quizItems}
             onBack={() => setPhase('intro')}
             onQuizDone={() => setProgVersion(v => v + 1)}
+            onBackToTasks={!editMode && homework && selectedItem && homework[selectedItem.id] ? onBack : null}
           />
         )}
         </div>
@@ -694,7 +771,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 /* ══════════════════════════════════════════════════════
    PRE-QUIZ INTRO SCREEN
 ══════════════════════════════════════════════════════ */
-function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz }) {
+function QuizIntroScreen({ item, cat, questions, catItems, onFlashcards, onStartQuiz, resumeAt }) {
   // If this quiz/fillblank has a linked flashcard, show only that one.
   // Otherwise show all available flashcard items.
   const linkedFcItem = item.linkedFlashcardId
@@ -706,15 +783,19 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
 
   return (
     <div className="qm-intro">
-      <div className="qm-intro-icon">
-        {item.type === 'vocab-quiz' ? '📚' : item.type === 'fillblank' ? '✏️' : '📝'}
-      </div>
+      {cat ? (
+        <CatIcon catId={cat.id} className="qm-intro-caticon"/>
+      ) : (
+        <div className="qm-intro-icon">
+          {item.type === 'vocab-quiz' ? '📚' : item.type === 'fillblank' ? '✏️' : '📝'}
+        </div>
+      )}
       <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{questions.length} questions</div>
+      <div className="qm-intro-meta">{questions.length} 題</div>
       <div className="qm-intro-btns">
         {fcItems.length > 0 && (
           <div className="qm-intro-fc-group">
-            <div className="qm-intro-fc-label">📖 先複習單字卡 · Review first</div>
+            <div className="qm-intro-fc-label">📖 先複習單字卡</div>
             {fcItems.map(fc => (
               <button key={fc.id} className="qm-btn secondary qm-intro-fc-btn" onClick={() => onFlashcards(fc)}>
                 {fc.title} <span className="qm-intro-fc-count">({(fc.cards||[]).length} 張)</span>
@@ -722,9 +803,10 @@ function QuizIntroScreen({ item, questions, catItems, onFlashcards, onStartQuiz 
             ))}
           </div>
         )}
-        <button className="qm-btn primary" onClick={onStartQuiz}>
-          開始測驗 · Start Quiz →
+        <button className="qm-btn primary qm-intro-start" onClick={onStartQuiz}>
+          {resumeAt ? `繼續測驗 · 從第 ${resumeAt + 1} 題 →` : '開始測驗 →'}
         </button>
+        {resumeAt ? <div className="qm-intro-resume">上次做到一半，進度已幫你保留 ✓</div> : null}
       </div>
     </div>
   );
@@ -1083,7 +1165,7 @@ function QuickFlashcardReview({ item, onDone }) {
 /* ══════════════════════════════════════════════════════
    QUIZ RESULT SCREEN — animated Duolingo-style
 ══════════════════════════════════════════════════════ */
-function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack }) {
+function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack, onBackToTasks }) {
   const starCount  = finalPct === 100 ? 3 : finalPct >= 70 ? 2 : finalPct >= 40 ? 1 : 0;
   const xpGain     = finalPct === 100 ? 100 : 50;
   const msg        = finalPct === 100 ? 'Perfect! 滿分！'
@@ -1117,24 +1199,23 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
         <span className="qm-result-num">{animScore}</span>
         <span className="qm-result-denom"> / {total}</span>
       </div>
-      <div className="qm-result-pct">{animPct}% correct</div>
-
-      {/* XP gain */}
-      <div className="qm-result-xp-row">
-        <span className="qm-result-xp">+{animXp} XP</span>
-        {finalPct === 100 && <span className="qm-result-xp-badge">✨ Perfect Bonus!</span>}
-      </div>
+      <div className="qm-result-pct">答對率 {animPct}%</div>
 
       <div className="qm-result-msg">{msg}</div>
 
       <div className="qm-result-btns">
         <button className="qm-btn secondary" onClick={onRestart}>再試一次</button>
-        <button className="qm-btn primary"   onClick={onBack}>← Back</button>
+        {onBackToTasks
+          ? <button className="qm-btn primary" onClick={onBackToTasks}>回今天的任務 →</button>
+          : <button className="qm-btn primary" onClick={onBack}>回單元列表 →</button>}
       </div>
+      {onBackToTasks && (
+        <button className="qm-result-alt" onClick={onBack}>留在這一類，看單元列表 →</button>
+      )}
 
       {wrongList && wrongList.length > 0 && (
         <div className="qm-wrong-list">
-          <div className="qm-wrong-title">需要複習 · Review ({wrongList.length})</div>
+          <div className="qm-wrong-title">需要複習（{wrongList.length}）</div>
           {wrongList.map((wq, i) => (
             <div key={i} className="qm-wrong-item">
               <span className="qm-wrong-q">{wq.q}</span>
@@ -1147,15 +1228,17 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
   );
 }
 
-function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone }) {
+function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone, onBackToTasks }) {
   // Adaptive deck: wrong questions are reinserted 3 positions later
   const uniqueTotal = questions.length;
-  const [deck,       setDeck]      = useQM(() => [...questions]);
-  const [deckPos,    setDeckPos]   = useQM(0);
+  // 有做到一半的紀錄 → 從那一題接著做（deck 含補考題、對錯數都還原）
+  const resume = useQMM(() => getResume(progressKey, questions.length), []);
+  const [deck,       setDeck]      = useQM(() => resume ? resume.deck : [...questions]);
+  const [deckPos,    setDeckPos]   = useQM(() => resume ? resume.deckPos : 0);
   const [selected,   setSelected]  = useQM(null);
-  const [firstRight, setFirstRight]= useQM(0);  // correct on FIRST attempt (for score)
+  const [firstRight, setFirstRight]= useQM(() => resume ? resume.firstRight : 0);  // correct on FIRST attempt (for score)
   const [screen,     setScreen]    = useQM('quiz');
-  const [wrongList,  setWrongList] = useQM([]);
+  const [wrongList,  setWrongList] = useQM(() => resume ? (resume.wrongList || []) : []);
   const [plusOneKey, setPlusOneKey]= useQM(0);
   const [lastRight,  setLastRight] = useQM(null);
 
@@ -1174,6 +1257,12 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     }
   }, [deckPos, screen]);
 
+  // 每前進一題就把進度存起來——中途關掉，下次不用重來
+  useQME(() => {
+    if (screen !== 'quiz' || deckPos <= 0) return;
+    saveResume(progressKey, { deck, deckPos, firstRight, wrongList, uniqueTotal });
+  }, [deckPos]);
+
   if (!q) return null;
 
   const goToNextQuestion = () => {
@@ -1183,6 +1272,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   };
 
   const completeQuiz = (fs = firstRight, finalWrongList = wrongList) => {
+    clearResume(progressKey); // 做完了 → 清掉中途紀錄
     const wrongQuestions = finalWrongList.map(wq => ({ q: wq.q, answer: wq.options[wq.correct] }));
     const prev = saveQuizModeCompletion(progressKey, item, {
       doneCount: total,
@@ -1253,6 +1343,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
         title={item?.title || cat.title}
         wrongList={wrongList}
         onRestart={restart} onBack={onBack}
+        onBackToTasks={onBackToTasks}
       />
     );
   }
@@ -2918,4 +3009,387 @@ function ClozePlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro });
+/* ══════════════════════════════════════════════════════
+   WEEKLY CONTACT BOOK — 本週聯絡簿（家長看的指定作業清單）
+   來源：老師用 📌 標成作業的項目（week.homework）＋ 老師留言（week.parentNote）
+   狀態：從 qmProg 抓孩子的完成/分數。可收合。
+══════════════════════════════════════════════════════ */
+/* ── 本週總覽 hero：週次/主題/日期 + 完成度圓環 + 繼續練習 ── */
+function WeekHero({ week, weekIdx, weekOrder, done, total, who }) {
+  const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+  const weekNum = ((week.label || '').match(/(\d+)\s*$/) || [])[1] || (weekIdx + 1);
+  const title = week.themeZh || week.theme || (who ? `${who} 的第 ${weekNum} 週任務` : `第 ${weekNum} 週的練習`);
+  const enTheme = week.themeZh ? week.theme : '';
+  const R = 26, CIRC = 2 * Math.PI * R;
+  const allDone = total > 0 && done >= total;
+
+  // 圓環進度動畫：從 0 畫到目前完成度（回到大廳時重播；reduced-motion 直接定住）
+  const ringRef = React.useRef(null);
+  useQME(() => {
+    const el = ringRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return;
+    el.style.transition = 'none';
+    el.style.strokeDashoffset = CIRC;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transition = 'stroke-dashoffset .9s cubic-bezier(.4,0,.2,1) .15s';
+      el.style.strokeDashoffset = CIRC * (1 - pct / 100);
+    }));
+  }, []);
+
+  return (
+    <section className="wh" aria-label="本週總覽">
+      <div className="wh-info">
+        <div className="wh-kicker">
+          <span className="wh-pill">Week {weekNum}</span>
+          <span className="wh-kick-txt">{who ? `${who} 的暑假` : '本週進度'}</span>
+        </div>
+        <h1 className="wh-title">{title}</h1>
+        {(enTheme || (week.dateRange && week.dateRange !== '—')) && (
+          <div className="wh-meta">
+            {enTheme && <span className="wh-theme-en">{enTheme}</span>}
+            {week.dateRange && week.dateRange !== '—' && <span className="wh-date">{week.dateRange}</span>}
+          </div>
+        )}
+      </div>
+      <div className="wh-side">
+        {total > 0 ? (
+          <>
+            <div className="wh-ring-wrap" role="img" aria-label={`本週完成度 ${pct}%`}>
+              <svg className="wh-ring" viewBox="0 0 64 64">
+                <circle className="wh-ring-bg" cx="32" cy="32" r={R}/>
+                <circle ref={ringRef} className="wh-ring-fill" cx="32" cy="32" r={R}
+                  strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - pct / 100)}/>
+              </svg>
+              <span className="wh-ring-num">{pct}%</span>
+            </div>
+            <div className="wh-side-info">
+              <span className="wh-count">完成 {done} / {total} 個練習</span>
+              {allDone && <span className="wh-done-msg">🎉 本週練習全部完成！</span>}
+            </div>
+          </>
+        ) : (
+          <span className="wh-empty">老師正在準備本週內容，可以先回顧前幾週</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   今天的任務（v229）——學習頁主角：老師指定作業攤平成待辦清單，
+   點一條直達該單元；做到一半顯示「繼續」；完成打勾。
+   （老師編輯模式仍用下面的 WeeklyContactBook 來釘作業/寫給家長的話）
+══════════════════════════════════════════════════════ */
+function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) {
+  const note = week.parentNote || '';
+  const hw = week.homework || {};
+  const itemById = {};
+  (allItems || []).forEach(it => { itemById[it.id] = it; });
+  const dueText = (d) => {
+    if (!d) return null;
+    const diff = Math.ceil((new Date(d + 'T00:00:00') - new Date()) / 86400000);
+    return diff > 1 ? `${diff} 天後到期` : diff === 1 ? '明天到期' : diff === 0 ? '今天到期' : '已過期';
+  };
+  const tasks = Object.keys(hw).map(id => {
+    const it = itemById[id];
+    if (!it) return null;
+    const prog = (qmProg || {})[`${weekId}_${id}`];
+    const done = !!(prog && prog.done);
+    const pct  = (done && prog.total && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null;
+    const resume = !done ? getResume(`${weekId}_${id}`, null) : null;
+    const cat = (categories || []).find(c => c.id === it._cat);
+    return { id, it, cat, dueDate: hw[id] && hw[id].dueDate, done, pct, resumeAt: resume ? resume.deckPos : null };
+  }).filter(Boolean);
+  // 未完成在前（先到期的先做），完成的沉底
+  tasks.sort((a, b) => (a.done - b.done) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')));
+  const doneN = tasks.filter(t => t.done).length;
+  const allDone = tasks.length > 0 && doneN === tasks.length;
+
+  return (
+    <section className="tt" aria-label="今天的任務">
+      <div className="tt-head">
+        <span className="tt-title">📌 今天的任務</span>
+        {tasks.length > 0 && !allDone && <span className="tt-count">完成 {doneN} / {tasks.length}</span>}
+      </div>
+      {note && <div className="tt-note">💬 老師的話：{note}</div>}
+      {tasks.length === 0 ? (
+        <div className="tt-empty">這週老師沒有指定作業——從下面挑一個自由練習吧！</div>
+      ) : (
+        <div className="tt-list">
+          {tasks.map(t => {
+            const due = dueText(t.dueDate);
+            return (
+              <button key={t.id} className={`tt-row${t.done ? ' tt-done' : ''}`} onClick={() => t.cat && onOpenTask(t.cat, t.id)}>
+                <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>
+                <span className="tt-body">
+                  <b className="tt-name">{t.it.title}</b>
+                  <span className="tt-meta">
+                    {t.cat ? (t.cat.titleZh || t.cat.title) : ''}
+                    {due && !t.done ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null}
+                  </span>
+                </span>
+                <span className="tt-state">
+                  {t.done
+                    ? <span className="tt-s-ok">✓ {t.pct != null ? `${t.pct} 分` : '完成'}</span>
+                    : t.resumeAt
+                      ? <span className="tt-s-resume">▶ 繼續 · 第 {t.resumeAt + 1} 題</span>
+                      : <span className="tt-s-todo">開始 →</span>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {allDone && <div className="tt-alldone">🎉 今天的作業都完成了，太棒了！</div>}
+    </section>
+  );
+}
+
+function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnterCat, editMode, onUpdateWeek }) {
+  const CB_KEY = 'alan-cb-collapsed';
+  const [collapsed, setCollapsed] = useQM(() => {
+    try { return localStorage.getItem(CB_KEY) !== '0'; } catch(e) { return true; }
+  });
+  const toggle = () => setCollapsed(c => {
+    const n = !c;
+    try { localStorage.setItem(CB_KEY, n ? '1' : '0'); } catch(e) {}
+    return n;
+  });
+
+  const ET = window.EditableText;
+  const note = week.parentNote || '';
+  const hw = week.homework || {};
+  const hwIds = Object.keys(hw);
+
+  const itemById = {};
+  (allItems || []).forEach(it => { itemById[it.id] = it; });
+
+  const assignments = hwIds.map(id => {
+    const it   = itemById[id];
+    const prog = (qmProg || {})[`${weekId}_${id}`];
+    const done = !!(prog && prog.done);
+    const pct  = (prog && prog.total) ? Math.round(prog.score / prog.total * 100) : null;
+    const cat  = (categories || []).find(c => c.id === (it && it._cat));
+    return { id, title: it ? it.title : id, catTitle: cat ? cat.title : '', cat, dueDate: hw[id] && hw[id].dueDate, done, pct };
+  });
+  const total     = assignments.length;
+  const doneCount = assignments.filter(a => a.done).length;
+  const allDone   = total > 0 && doneCount === total;
+
+  // 沒作業也保留收合條——家長才知道有這個功能（v203）
+
+  const dueText = (d) => {
+    if (!d) return '待完成';
+    const diff = Math.ceil((new Date(d + 'T00:00:00') - new Date()) / 86400000);
+    return diff > 0 ? `${diff} 天後到期` : diff === 0 ? '今天到期' : '已過期';
+  };
+
+  return (
+    <div className={`cb${collapsed ? '' : ' open'}`}>
+      <button className="cb-bar" onClick={toggle} aria-expanded={!collapsed}>
+        <span className="cb-bar-title"><span className="cb-ico">📓</span> 本週聯絡簿</span>
+        {collapsed && total > 0 && !allDone && (() => {
+          // 收合時直接預覽下一項作業（依到期日先後）
+          const next = assignments
+            .filter(a => !a.done)
+            .sort((a, b) => String(a.dueDate || '9999') < String(b.dueDate || '9999') ? -1 : 1)[0];
+          return next ? (
+            <span className="cb-next">
+              下一項：{next.title}{next.dueDate ? ` · ${dueText(next.dueDate)}` : ''}
+            </span>
+          ) : null;
+        })()}
+        <span className="cb-bar-right">
+          {allDone
+            ? <span className="cb-status done">✓ 本週作業都完成了！</span>
+            : total > 0
+              ? <span className="cb-status">{doneCount} / {total} 完成</span>
+              : <span className="cb-status muted">尚未指定作業</span>}
+          <span className={`cb-chev${collapsed ? '' : ' open'}`}>⌄</span>
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="cb-body">
+          {(note || editMode) && (
+            <div className="cb-note">
+              <span className="cb-note-ico">💬</span>
+              {editMode
+                ? <ET value={note} editMode multiline placeholder="給家長的話…（例：星期五前完成造句，下週小考會考）" onChange={v => onUpdateWeek({ parentNote: v })} className="cb-note-input"/>
+                : <span className="cb-note-text">{note}</span>}
+            </div>
+          )}
+          {total === 0 ? (
+            <div className="cb-empty">{editMode ? '在各分類用 📌 把練習指定為作業，就會出現在這裡' : '本週尚未指定作業'}</div>
+          ) : (
+            <div className="cb-list">
+              {assignments.map(a => (
+                <button key={a.id} className={`cb-row${a.done ? ' done' : ''}`} onClick={() => a.cat && onEnterCat(a.cat)}>
+                  <span className={`cb-check${a.done ? ' done' : ''}`}>{a.done ? '✓' : ''}</span>
+                  <span className="cb-row-info">
+                    <span className="cb-row-title">{a.title}</span>
+                    <span className="cb-row-cat">{a.catTitle}</span>
+                  </span>
+                  {a.done
+                    ? <span className="cb-row-status done">{a.pct != null ? `完成 · ${a.pct}分` : '完成'}</span>
+                    : <span className="cb-row-due">{dueText(a.dueDate)}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Growth Report (parent-facing, cross-week progress) ──── */
+function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClose }) {
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const data = React.useMemo(() => {
+    const perWeek = [];
+    let totalDone = 0, gSum = 0, gN = 0;
+    (weekOrder || []).forEach(wid => {
+      const w = weeks[wid];
+      if (!w) return;
+      let total = 0, done = 0, sSum = 0, sN = 0;
+      (categories || []).forEach(c => {
+        ((w.items && w.items[c.id]) || []).forEach(it => {
+          total++;
+          const p = (qmProg || {})[`${wid}_${it.id}`];
+          if (p && p.done) {
+            done++; totalDone++;
+            if (p.total) {
+              const pct = Math.min(100, Math.round(p.score / p.total * 100));
+              sSum += pct; sN++; gSum += pct; gN++;
+            }
+          }
+        });
+      });
+      if (total === 0) return;
+      perWeek.push({
+        wid, label: w.label || wid, dateRange: w.dateRange || '',
+        theme: w.themeZh || w.theme || '',
+        total, done, pct: Math.round(done / total * 100), avg: sN ? Math.round(sSum / sN) : null,
+      });
+    });
+    return {
+      perWeek, totalDone,
+      activeWeeks: perWeek.filter(p => p.done > 0).length,
+      avgScore: gN ? Math.round(gSum / gN) : null,
+      bestPct: perWeek.reduce((m, p) => Math.max(m, p.pct), 0),
+    };
+  }, [weeks, weekOrder, qmProg, categories]);
+
+  const pw = data.perWeek;
+  const hasData = data.totalDone > 0;
+
+  // ── SVG line chart geometry ──
+  const W = 640, H = 200, padL = 14, padR = 14, padT = 16, padB = 30;
+  const innerW = W - padL - padR, innerH = H - padT - padB, baseline = padT + innerH;
+  const n = pw.length;
+  const xAt = (i) => n > 1 ? padL + i * innerW / (n - 1) : padL + innerW / 2;
+  const yAt = (pct) => padT + (1 - pct / 100) * innerH;
+  const linePts = pw.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.pct).toFixed(1)}`).join(' ');
+  const areaPts = n > 0 ? `${xAt(0).toFixed(1)},${baseline} ${linePts} ${xAt(n - 1).toFixed(1)},${baseline}` : '';
+  const labelStep = n <= 7 ? 1 : Math.ceil(n / 6);
+  const shortLabel = (l) => (l || '').replace(/Week\s*/i, 'W');
+
+  return (
+    <div className="growth-overlay" onClick={onClose}>
+      <div className="growth-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="學習成長">
+        <header className="growth-head">
+          <div>
+            <div className="growth-kicker">📈 學習成長</div>
+            <h2 className="growth-title">{studentName ? `${studentName} 的進步軌跡` : '這學期的進步軌跡'}</h2>
+          </div>
+          <button className="growth-x" onClick={onClose} aria-label="關閉">×</button>
+        </header>
+
+        <div className="growth-body">
+          {!hasData ? (
+            <div className="growth-empty">
+              <div className="growth-empty-ico">🌱</div>
+              <p className="growth-empty-title">還沒有學習紀錄</p>
+              <p className="growth-empty-sub">完成練習後，這裡會畫出每週的成長軌跡，看得到一整學期的進步。</p>
+            </div>
+          ) : (
+            <>
+              <div className="growth-stats">
+                <div className="growth-stat">
+                  <div className="growth-stat-num">{data.totalDone}</div>
+                  <div className="growth-stat-label">完成練習</div>
+                </div>
+                <div className="growth-stat">
+                  <div className="growth-stat-num">{data.activeWeeks}</div>
+                  <div className="growth-stat-label">學習週數</div>
+                </div>
+                <div className="growth-stat">
+                  <div className="growth-stat-num">{data.avgScore != null ? data.avgScore : '—'}</div>
+                  <div className="growth-stat-label">平均分數</div>
+                </div>
+                <div className="growth-stat">
+                  <div className="growth-stat-num">{data.bestPct}%</div>
+                  <div className="growth-stat-label">最佳單週</div>
+                </div>
+              </div>
+
+              <div className="growth-chart-wrap">
+                <div className="growth-chart-title">每週完成率</div>
+                <svg className="growth-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="每週完成率折線圖">
+                  {[0, 25, 50, 75, 100].map(g => (
+                    <g key={g}>
+                      <line x1={padL} y1={yAt(g)} x2={W - padR} y2={yAt(g)} className="growth-grid"/>
+                      <text x={padL - 2} y={yAt(g) - 2} className="growth-axis-y">{g}</text>
+                    </g>
+                  ))}
+                  {areaPts && <polygon points={areaPts} className="growth-area"/>}
+                  {n > 1 && <polyline points={linePts} className="growth-line"/>}
+                  {pw.map((p, i) => (
+                    <g key={p.wid}>
+                      <circle cx={xAt(i)} cy={yAt(p.pct)} r="4" className="growth-dot"/>
+                      {(i % labelStep === 0 || i === n - 1) && (
+                        <text x={xAt(i)} y={H - 10} className="growth-axis-x">{shortLabel(p.label)}</text>
+                      )}
+                    </g>
+                  ))}
+                </svg>
+              </div>
+
+              <div className="growth-weeks">
+                {pw.slice().reverse().map(p => (
+                  <div className="growth-wrow" key={p.wid}>
+                    <div className="growth-wrow-head">
+                      <span className="growth-wrow-label">{p.label}</span>
+                      {p.dateRange && <span className="growth-wrow-date">{p.dateRange}</span>}
+                    </div>
+                    <div className="growth-wrow-bar">
+                      <div className="growth-wrow-fill" style={{ width: p.pct + '%' }}/>
+                    </div>
+                    <div className="growth-wrow-meta">
+                      <span className="growth-wrow-pct">{p.done}/{p.total}（{p.pct}%）</span>
+                      {p.avg != null && <span className="growth-wrow-avg">平均 {p.avg} 分</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <footer className="growth-foot">
+          <span className="growth-foot-hint">家長可截圖保存 · 紀錄存在這台裝置與帳號</span>
+          <button className="growth-done" onClick={onClose}>關閉</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });

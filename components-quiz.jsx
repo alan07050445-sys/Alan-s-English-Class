@@ -112,6 +112,7 @@ function QuizPlayer({ item, onComplete }) {
 
   const [answers, setAnswers] = useQS(() => lastAttempt?.answers || {});
   const [submitted, setSubmitted] = useQS(() => !!lastAttempt);
+  const [cut, setCut] = useQS(null); // 過關/失敗 過場
 
   const allAnswered = questions.length > 0 && questions.every((_, i) => answers[i] !== undefined);
 
@@ -142,6 +143,7 @@ function QuizPlayer({ item, onComplete }) {
     attempts[item.id] = { answers, perms, submittedAt: Date.now(), score: score.correct, total: score.total };
     saveAttempts(attempts);
     setSubmitted(true);
+    setCut({ pct: score.pct });   // 觸發過關/失敗過場
     if (onComplete) onComplete(item.id);
     // Celebrate good scores with stars
     if (score.pct >= 70 && window.triggerStarBurst) window.triggerStarBurst();
@@ -173,6 +175,14 @@ function QuizPlayer({ item, onComplete }) {
 
   return (
     <div className="quiz-player">
+      {cut && window.GameResultCutscene && (
+        <window.GameResultCutscene
+          pct={cut.pct}
+          companion={window.loadCompanion ? window.loadCompanion() : null}
+          onRetry={() => { setCut(null); reset(); }}
+          onClose={() => setCut(null)}
+        />
+      )}
       {submitted && (
         <div className="quiz-result-banner">
           <div className="quiz-result-left">

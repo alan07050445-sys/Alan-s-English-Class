@@ -261,4 +261,36 @@ function CompanionSetup({ onDone }) {
   );
 }
 
-Object.assign(window, { CompanionAvatar, CompanionSetup, COMPANION_TYPES });
+/* ── 過關/失敗 過場動畫（夥伴反應 + 67 吐槽 + 必達 70）── */
+function GameResultCutscene({ pct, companion, onRetry, onClose }) {
+  const pass = pct >= 70;
+  const line = (window.pickLine ? window.pickLine(pass ? 'win' : 'lose') : (pass ? '太強了！' : '再試一次！'));
+  const img = pass ? 'owl-celebrate.png' : 'owl-sleeping.png';
+  const reward = pct >= 100 ? 100 : 50;
+  React.useEffect(() => { if (window.playSound) window.playSound(pass ? 'complete' : 'wrong'); }, []);
+  return (
+    <div className="gr-overlay" onClick={e => { if (e.target === e.currentTarget && pass) onClose(); }}>
+      <div className={`gr-card ${pass ? 'gr-win' : 'gr-lose'}`}>
+        {pass && <div className="gr-rays"/>}
+        <img src={img} alt="" className="gr-img"/>
+        <div className="gr-title">{pass ? '🎉 過關！' : '💥 差一點…'}</div>
+        <div className="gr-score">{pct}<span>分</span></div>
+        <div className="gr-speech">{line}</div>
+        {pass ? (
+          <>
+            <div className="gr-reward">+{reward} XP ⚡　+{Math.round(reward/5)} 🪙</div>
+            <button className="gr-btn" onClick={onClose}>太棒了！繼續冒險 →</button>
+          </>
+        ) : (
+          <>
+            <div className="gr-hint">要 <b>70 分</b> 才算過關喔，再挑戰一次！</div>
+            <button className="gr-btn gr-btn-retry" onClick={onRetry}>↻ 再挑戰一次</button>
+            <button className="gr-link" onClick={onClose}>先看詳解 ›</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { CompanionAvatar, CompanionSetup, COMPANION_TYPES, GameResultCutscene });

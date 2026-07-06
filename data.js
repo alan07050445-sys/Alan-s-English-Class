@@ -535,10 +535,23 @@ function subscribeLeaderboard(itemId, callback) {
 
 // ── Firebase Auth ──────────────────────────────────────────────────────
 
-function signInWithGoogle() {
+function _googleProvider() {
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' }); // always show account picker
-  return _auth.signInWithPopup(provider);
+  return provider;
+}
+
+function signInWithGoogle() {
+  // 彈窗登入；被瀏覽器擋下時自動改用整頁跳轉（Chrome COOP 政策有時會卡住彈窗流程）
+  return _auth.signInWithPopup(_googleProvider()).catch(err => {
+    if (err && err.code === 'auth/popup-blocked') return _auth.signInWithRedirect(_googleProvider());
+    throw err;
+  });
+}
+
+// 整頁跳轉登入 — 不受彈窗／COOP 問題影響；跳回來後 onAuthStateChanged 會自動接手
+function signInWithGoogleRedirect() {
+  return _auth.signInWithRedirect(_googleProvider());
 }
 
 function signOutUser() { return _auth.signOut(); }
@@ -657,6 +670,19 @@ const BADGES = {
   xp_3000:        { emoji:'👑', name:'英語之星',   nameEn:'English Star',     desc:'累積3000 XP' },
   mistake_master: { emoji:'🎯', name:'錯題終結者', nameEn:'Mistake Master',   desc:'一次清空所有錯題' },
 };
+
+// ── 夥伴台詞表（可自由增減 / 換梗）──────────────────────────────────
+// correct/wrong：答題當下；win/lose：整份完成時。鼓勵為主 + 小小吐槽（對題目調皮、不傷人）。
+const COMPANION_LINES = {
+  correct: ['太強了吧 😎', '這題難不倒你！', '答對了，繼續衝！', '根本高手 🔥', '帥喔～'],
+  wrong:   ['哎呀～這題想偷襲你 😏 再試一次！', '差一點點，我都替你緊張 😅', '67～有點太菜了喔 👋', '再想想，你可以的 💪'],
+  win:     ['太強了吧 😎 你根本是冒險者！', '完美通關！夥伴超驕傲 🥹', '這實力，魔王都怕你 🔥', '帥到認不出來！'],
+  lose:    ['67～有點太菜了喔 👋 再挑戰一次！', '差一點點！我都替你緊張 😅', '沒關係，高手都是練出來的 💪', '再來一次，這次一定過！'],
+};
+function pickLine(kind) {
+  const arr = (COMPANION_LINES[kind] || ['加油！']);
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 // ── XP helpers ─────────────────────────────────────────────────────────
 function getLevel(xp) {
@@ -1317,13 +1343,14 @@ Object.assign(window, {
   subscribeRoster, addRosterStudent, setRosterStudentActive, deleteRosterStudent,
   addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
   // Auth
-  signInWithGoogle, signOutUser, subscribeAuth, isAdminUser,
+  signInWithGoogle, signInWithGoogleRedirect, signOutUser, subscribeAuth, isAdminUser,
   // Per-user progress
   saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes,
   // Streak, Badges & XP
   BADGES, updateStreak, unlockBadge, subscribeUserProfile,
   getLevel, addXp,
   buildReportHTML,
+  COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText,
   // AI Writing, Short Answer, Essay & Story Mountain

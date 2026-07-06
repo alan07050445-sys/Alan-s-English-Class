@@ -31,13 +31,13 @@
 .rv-launcher-text { display: flex; flex-direction: column; gap: 1px; flex: 1; }
 .rv-launcher-title {
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 800;
   color: var(--ink);
 }
 .rv-launcher-sub {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 .rv-launcher-arrow {
@@ -91,7 +91,7 @@
 }
 .rv-title {
   font-family: var(--sans);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   color: var(--ink);
 }
@@ -105,14 +105,14 @@
 .rv-field { display: flex; flex-direction: column; gap: 8px; }
 .rv-label {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .05em;
   color: var(--ink-muted);
 }
 .rv-range-row { display: flex; align-items: center; gap: 8px; }
-.rv-range-sep { color: var(--ink-faint); font-size: 14px; }
+.rv-range-sep { color: var(--ink-faint); font-size: 15.5px; }
 .rv-select {
   flex: 1;
   min-width: 0;
@@ -121,7 +121,7 @@
   border-radius: 8px;
   background: var(--bg-card);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink);
   outline: none;
   transition: border-color 0.15s;
@@ -135,7 +135,7 @@
   border-radius: 999px;
   background: var(--bg-card);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--ink-muted);
   cursor: pointer;
@@ -153,7 +153,7 @@
   align-items: center;
   gap: 9px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 600;
   color: var(--ink-soft);
   cursor: pointer;
@@ -167,7 +167,7 @@
 
 .rv-available {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--ink-muted);
   padding: 9px 13px;
   background: var(--bg);
@@ -177,7 +177,7 @@
 .rv-available strong { color: var(--ink); }
 .rv-warn {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--accent);
   font-weight: 600;
 }
@@ -190,7 +190,7 @@
   border: none;
   border-radius: 10px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
@@ -210,7 +210,7 @@
 }
 .rv-play-week {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .04em;
   padding: 3px 9px;
@@ -235,7 +235,7 @@
 }
 .rv-play-count {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -261,7 +261,7 @@
 .rv-result-pct { font-size: 26px; color: var(--ink-muted); }
 .rv-result-stat {
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   color: var(--ink-muted);
 }
 .rv-week-stats {
@@ -278,7 +278,7 @@
 }
 .rv-week-stat-label {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-soft);
   min-width: 84px;
@@ -301,7 +301,7 @@
 }
 .rv-week-stat-num {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   min-width: 38px;
   text-align: right;
@@ -309,13 +309,13 @@
 .rv-weakest {
   margin-top: 12px;
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--accent-soft);
 }
 .rv-mistake-note {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
@@ -351,7 +351,7 @@
 }
 .qm-listen-label {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-muted);
 }

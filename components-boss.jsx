@@ -74,10 +74,12 @@ function BossModal({ weeks, weekOrder, user, onClose, onReward }) {
   const [hearts, setHearts] = useBoss(3);
   const [selected, setSelected] = useBoss(null);
   const [mood, setMood]     = useBoss('idle');
+  const [react, setReact]   = useBoss(null); // 夥伴反應 {kind, line}
   const savedRef = React.useRef(false);
 
   const maxHp = questions.length;
   const q = questions[idx];
+  const petType = (window.loadCompanion && window.loadCompanion()?.type) || 'owl';
 
   useBossE(() => {
     if (phase === 'win' && !savedRef.current) {
@@ -115,19 +117,21 @@ function BossModal({ weeks, weekOrder, user, onClose, onReward }) {
       const nhp = hp - 1;
       setHp(nhp);
       setMood('hurt');
+      setReact({ kind: 'correct', line: window.pickLine ? window.pickLine('correct') : '答對了！' });
       setTimeout(() => {
         if (nhp <= 0) { setPhase('win'); return; }
-        setMood('idle'); setSelected(null); setIdx(i => (i + 1) % questions.length);
-      }, 700);
+        setMood('idle'); setSelected(null); setReact(null); setIdx(i => (i + 1) % questions.length);
+      }, 800);
     } else {
       window.playSound && window.playSound('wrong');
       const nh = hearts - 1;
       setHearts(nh);
       setMood('idle');
+      setReact({ kind: 'wrong', line: window.pickLine ? window.pickLine('wrong') : '再試一次！' });
       setTimeout(() => {
         if (nh <= 0) { setPhase('lose'); return; }
-        setSelected(null); setIdx(i => (i + 1) % questions.length);
-      }, 1100);
+        setSelected(null); setReact(null); setIdx(i => (i + 1) % questions.length);
+      }, 1200);
     }
   };
 
@@ -176,6 +180,10 @@ function BossModal({ weeks, weekOrder, user, onClose, onReward }) {
 
         <div className="boss-stage">
           <BossMonster mood={mood} size={120}/>
+          <div className="boss-buddy">
+            {react && <div className={`boss-buddy-bubble ${react.kind}`}>{react.line}</div>}
+            <window.CompanionAvatar type={petType} size={58} mood={react?.kind === 'correct' ? 'celebrate' : 'idle'}/>
+          </div>
           <div className="boss-hpbar">
             <div className="boss-hpbar-fill" style={{ width: `${Math.round((hp / maxHp) * 100)}%` }}/>
           </div>

@@ -19,8 +19,8 @@
   display: flex; align-items: baseline; justify-content: space-between;
   margin-bottom: 12px;
 }
-.goals-title { font-family: var(--sans); font-size: 14px; font-weight: 800; color: var(--ink); }
-.goals-sub { font-family: var(--sans); font-size: 11px; color: var(--ink-muted); }
+.goals-title { font-family: var(--sans); font-size: 15.5px; font-weight: 800; color: var(--ink); }
+.goals-sub { font-family: var(--sans); font-size: 12px; color: var(--ink-muted); }
 
 /* ── 任務列 ── */
 .quest-list { display: flex; flex-direction: column; gap: 12px; }
@@ -33,28 +33,28 @@
 }
 .quest-empty-title {
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 900;
   color: var(--ink);
   margin-bottom: 5px;
 }
 .quest-empty-sub {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--ink-muted);
 }
 .quest-row { display: flex; align-items: center; gap: 12px; }
 .quest-row.claimed { opacity: .55; }
 .quest-info { flex: 1; min-width: 0; }
-.quest-label { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
+.quest-label { font-family: var(--sans); font-size: 14.5px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
 .quest-bar { height: 7px; background: var(--border-soft); border-radius: 4px; overflow: hidden; }
 .quest-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width .5s cubic-bezier(.22,1,.36,1); }
-.quest-count { font-family: var(--mono); font-size: 10px; color: var(--ink-muted); margin-top: 3px; }
+.quest-count { font-family: var(--mono); font-size: 11px; color: var(--ink-muted); margin-top: 3px; }
 .quest-claim {
   flex-shrink: 0;
   padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 10px;
-  background: var(--bg); font-family: var(--sans); font-size: 12px; font-weight: 800;
+  background: var(--bg); font-family: var(--sans); font-size: 13px; font-weight: 800;
   color: var(--ink-faint); cursor: default; white-space: nowrap;
 }
 .quest-claim.ready {
@@ -63,7 +63,7 @@
 }
 @keyframes questPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 .quest-claim.ready:hover { background: #E8B433; }
-.quest-claimed { flex-shrink: 0; font-family: var(--sans); font-size: 12px; font-weight: 700; color: var(--moss); }
+.quest-claimed { flex-shrink: 0; font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--moss); }
 
 /* ── 全班合作 ── */
 .coop-card {
@@ -71,12 +71,12 @@
   border-color: #B8E0CA;
 }
 .coop-body { display: flex; flex-direction: column; gap: 8px; }
-.coop-stat { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); }
+.coop-stat { font-family: var(--sans); font-size: 15.5px; color: var(--ink-soft); }
 .coop-stat strong { font-size: 22px; font-weight: 800; color: var(--moss); font-variant-numeric: tabular-nums; }
 .coop-bar { height: 12px; background: var(--border-soft); border-radius: 6px; overflow: hidden; }
 .coop-bar-fill { height: 100%; background: linear-gradient(90deg, var(--moss), #5FA851); border-radius: 6px; transition: width .6s cubic-bezier(.22,1,.36,1); }
-.coop-hint { font-family: var(--sans); font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
-.coop-reached { font-family: var(--sans); font-size: 13px; font-weight: 800; color: var(--moss); }
+.coop-hint { font-family: var(--sans); font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+.coop-reached { font-family: var(--sans); font-size: 14.5px; font-weight: 800; color: var(--moss); }
 
 /* ── 老師：設定合作目標（儀表板） ── */
 .coop-setter {
@@ -86,19 +86,19 @@
   padding: 14px 16px;
   margin-bottom: 16px;
 }
-.coop-setter-title { font-family: var(--sans); font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
-.coop-setter-prog { font-family: var(--sans); font-size: 12px; color: var(--ink-muted); margin-bottom: 10px; }
+.coop-setter-title { font-family: var(--sans); font-size: 15.5px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+.coop-setter-prog { font-family: var(--sans); font-size: 13px; color: var(--ink-muted); margin-bottom: 10px; }
 .coop-setter-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .coop-setter-input {
   flex: 1; min-width: 120px;
   padding: 8px 11px; border: 1.5px solid var(--border); border-radius: 9px;
-  background: var(--bg-card); font-family: var(--sans); font-size: 13px; color: var(--ink); outline: none;
+  background: var(--bg-card); font-family: var(--sans); font-size: 14.5px; color: var(--ink); outline: none;
 }
 .coop-setter-input:focus { border-color: var(--moss); }
 .coop-setter-btn {
   padding: 8px 16px; border: none; border-radius: 9px;
-  background: var(--moss); color: #fff; font-family: var(--sans); font-size: 13px; font-weight: 800;
+  background: var(--moss); color: #fff; font-family: var(--sans); font-size: 14.5px; font-weight: 800;
   cursor: pointer; white-space: nowrap; transition: opacity .15s;
 }
 .coop-setter-btn:hover { opacity: .88; }
-.coop-setter-note { font-family: var(--sans); font-size: 11px; color: var(--accent); margin-top: 8px; }
+.coop-setter-note { font-family: var(--sans); font-size: 12px; color: var(--accent); margin-top: 8px; }

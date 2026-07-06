@@ -36,13 +36,14 @@
   color: var(--bg);
   border-radius: 4px;
   padding: 4px 7px;
-  font-size: 10px;
+  font-size: 10px; /* 裝飾性品牌章，維持小巧不隨全站字級放大 */
+  white-space: nowrap;
 }
 .grade-chip {
   background: var(--accent) !important;
   border-radius: 7px !important;
   padding: 3px 9px !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
 }
 .week-nav button {
   width: 30px; height: 30px;
@@ -123,12 +124,12 @@
 .qm-block-title-zh {
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--cat-c);
   margin-bottom: 12px;
 }
 .qm-block-count {
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 8px;
 }
 .qm-progress-bar {
@@ -143,7 +144,7 @@
 .qm-pct {
   font-family: var(--sans);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 14.5px;
   color: var(--cat-c);
 }
 .qm-block-arrow {
@@ -205,7 +206,7 @@
   border: 1.5px solid var(--border);
   font-family: var(--sans);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 15.5px;
   color: var(--ink-muted);
   flex-shrink: 0;
   transition: all .12s;
@@ -239,7 +240,7 @@
   padding: 0 20px;
 }
 .grade-sel-card {
-  --g-c: var(--ink);
+  --g-c: #8B3120;
   border: 1.5px solid var(--border);
   border-radius: 18px;
   padding: 26px 14px 22px;
@@ -249,18 +250,13 @@
   position: relative;
   overflow: hidden;
 }
-.grade-sel-card:nth-child(1) { --g-c: #D08770; }
-.grade-sel-card:nth-child(2) { --g-c: var(--c-vocab); }
-.grade-sel-card:nth-child(3) { --g-c: var(--c-grammar); }
-.grade-sel-card:nth-child(4) { --g-c: var(--c-word); }
-.grade-sel-card:nth-child(5) { --g-c: var(--c-reading); }
 .grade-sel-card::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 4px;
-  background: var(--g-c);
-  opacity: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #8B3120, #B85A45);
+  opacity: .85;
   transition: opacity .18s;
 }
 .grade-sel-card:hover {
@@ -274,8 +270,11 @@
   font-size: 40px !important;
 }
 .grade-sel-card-desc {
-  font-size: 10px !important;
+  font-family: var(--sans) !important;
+  font-size: 13px !important;
   line-height: 1.5 !important;
+  letter-spacing: 0 !important;
+  color: var(--ink-3);
 }
 
 /* ═══ 7. 總複習入口 — 獎盃金 ═════════════════════════════ */
@@ -307,11 +306,58 @@
 @media (max-width: 760px) {
   .header-inner { height: 56px; }
   .qm-week-title { font-size: 28px; }
-  .grade-sel-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grade-sel-cards { grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .grade-sel-card { padding: 20px 10px 16px; }
   .grade-sel-badge { font-size: 32px !important; }
   .qm-block { padding: 18px 16px; }
   .qm-block-icon { width: 50px; height: 50px; font-size: 24px; border-radius: 13px; }
+}
+
+@media (max-width: 560px) {
+  .qm-blocks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    /* v203: 懸浮 week-nav 的讓位改由 .page-lobby .shell 統一處理（styles-home.css） */
+    padding-top: 12px;
+  }
+  .qm-block {
+    min-height: 190px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 18px 14px;
+  }
+  .qm-block-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+  }
+  .qm-block-title {
+    font-size: 17px;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+  }
+  .qm-block-title-zh {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .qm-block-count {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .qm-block-progress {
+    width: 100%;
+  }
+  .qm-block-stars {
+    margin-top: 6px;
+  }
+  .qm-block-arrow {
+    position: absolute;
+    top: 18px;
+    right: 14px;
+    width: 30px;
+    height: 30px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -328,6 +374,118 @@
 /* 年級選擇容器放寬，讓五張卡有呼吸空間 */
 .grade-selector-inner { max-width: 880px !important; width: 100%; }
 .grade-sel-cards { margin-top: 8px; }
+
+/* v153：分類內頁改成任務板，而不是後台列表 */
+.page-mission .header {
+  background: rgba(251,248,241,.88);
+  border-bottom-color: rgba(139,49,32,.18);
+}
+.page-mission .qm-cat-view {
+  gap: 20px;
+  padding: 18px 24px 32px;
+  min-height: calc(100vh - 72px);
+}
+.page-mission .qm-sidebar {
+  width: 360px;
+  border: 1px solid rgba(221,214,196,.9);
+  border-radius: 20px;
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 18px 42px -30px rgba(21,19,14,.34);
+  overflow: hidden;
+}
+.page-mission .qm-sidebar-back {
+  background: rgba(246,241,230,.76);
+  border-bottom-color: rgba(221,214,196,.82);
+  color: var(--accent);
+}
+.page-mission .qm-sidebar-cat {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.92), rgba(246,241,230,.72));
+  border-bottom-color: rgba(221,214,196,.82);
+}
+.page-mission .qm-sidebar-cat::after { content: none; }
+.page-mission .qm-unit-list {
+  padding: 12px;
+}
+.page-mission .qm-unit-row {
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1.5px solid rgba(221,214,196,.86);
+  border-left: 5px solid var(--cat-c, var(--accent));
+  border-radius: 14px;
+  background: rgba(255,255,255,.86);
+  box-shadow: 0 8px 18px -16px rgba(21,19,14,.28);
+}
+.page-mission .qm-unit-row:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+.page-mission .qm-unit-row.active {
+  background: #fffaf0;
+  border-color: rgba(255,183,67,.82);
+  border-left-color: #f59e0b;
+  box-shadow: 0 14px 26px -18px rgba(156,95,18,.35);
+}
+.page-mission .qm-unit-row.active .qm-unit-row-title,
+.page-mission .qm-unit-row.active .qm-unit-row-meta {
+  color: var(--ink) !important;
+}
+.page-mission .qm-unit-row-status {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+}
+.page-mission .qm-unit-row.active .qm-unit-row-status {
+  background: #fff2bd;
+  color: #9a5a0a;
+  border-color: #facc15;
+}
+.page-mission .qm-quiz-area {
+  flex: 1;
+  min-height: calc(100vh - 140px);
+  border: none;
+  border-radius: 22px;
+  background: transparent;
+  box-shadow: none;
+}
+.page-mission .qm-placeholder {
+  min-height: 520px;
+}
+.page-mission .qm-intro {
+  min-height: 520px;
+  border: none;
+  background: transparent;
+  border-radius: 18px;
+  box-shadow: none;
+}
+.page-mission .qm-intro-icon {
+  filter: drop-shadow(0 10px 16px rgba(21,19,14,.16));
+}
+.page-mission .qm-intro-title {
+  font-family: var(--serif);
+}
+.page-mission .qm-btn.primary {
+  box-shadow: 0 12px 24px -14px rgba(21,19,14,.46);
+}
+@media (max-width: 768px) {
+  .page-mission .qm-cat-view {
+    margin: 0;
+    padding: 12px 10px 76px;
+  }
+  .page-mission .qm-sidebar {
+    width: 100%;
+    max-height: none;
+    border-radius: 18px;
+  }
+  .page-mission .qm-quiz-area {
+    min-height: calc(100vh - 126px);
+    border-radius: 18px;
+  }
+}
 .grade-sel-card-label { font-weight: 700 !important; }
 
 /* ═══ 星級精熟 ⭐ ═══ */
@@ -339,7 +497,33 @@
 .qm-block-stars {
   display: flex; align-items: center; gap: 3px;
   margin-top: 7px;
-  font-family: var(--sans); font-size: 12px; font-weight: 800; color: #B8932F;
+  font-family: var(--sans); font-size: 13px; font-weight: 800; color: #B8932F;
 }
-.qm-block-stars .qm-star { font-size: 14px; }
+.qm-block-stars .qm-star { font-size: 15.5px; }
 .qm-block-stars-max { color: var(--ink-faint); font-weight: 600; }
+
+/* v207: 暑假班表只有 3 個分類——第 3 張（閱讀理解）沿用綠色而非位置色 */
+.qm-blocks .qm-block:nth-of-type(3):last-child { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+
+/* v208: 學習頁質感輪（最後載入的覆寫層） */
+/* 側欄分類：中文為主，英文變小標籤 */
+.qm-sidebar-cat-name { font-size: 17px; }
+.qm-sidebar-cat-zh {
+  font-family: var(--mono);
+  font-size: 11px !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* 開始測驗 CTA 用品牌暖紅（原本是墨黑） */
+.page-mission .qm-intro .qm-intro-start {
+  background: var(--g-c, #8B3120);
+  color: #fff;
+}
+.page-mission .qm-intro .qm-intro-start:hover { filter: brightness(1.08); }
+/* 結果分數與 intro 標題：中文字也走襯線 */
+.page-mission .qm-intro-title,
+.qm-result-num {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+}
+.qm-result-num { font-weight: 700; color: var(--g-c, #8B3120); }

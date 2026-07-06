@@ -62,46 +62,25 @@ function LearnHero({ user, xp, streak, coins, daily, companion, equipped, weekPr
       : `${greet}！一起完成今天的目標吧 💪`;
 
   return (
-    <div className="lh-hero">
+    <div className="lh-hero lh-hero-slim">
       <div className="lh-hero-main">
-        {/* Student companion + daily goal ring */}
+        {/* Student companion + daily goal ring (compact) */}
         <button className="lh-pet-wrap" onClick={onShowBadges} title={`${petName} · Lv.${lvl.level} ${lvl.name}`}>
-          <ProgressRing pct={reached ? 100 : dailyPct} size={132} stroke={8} color={reached ? 'var(--moss)' : 'var(--accent)'}>
-            <window.CompanionAvatar type={petType} size={92} mood={reached ? 'celebrate' : 'idle'} accessory={equipped}/>
+          <ProgressRing pct={reached ? 100 : dailyPct} size={88} stroke={6} color={reached ? 'var(--moss)' : 'var(--accent)'}>
+            <window.CompanionAvatar type={petType} size={60} mood={reached ? 'celebrate' : 'idle'} accessory={equipped}/>
           </ProgressRing>
-          <span className="lh-pet-daily">{reached ? '✓ 今日達標' : `今日 ${d.done}/${d.goal}`}</span>
+          <span className="lh-pet-daily">{reached ? '✓ 達標' : `今日 ${d.done}/${d.goal}`}</span>
         </button>
 
         <div className="lh-hero-text">
-          <div className="lh-speech">{speech}</div>
           <div className="lh-greet-hi">{greet}，{firstName} 👋</div>
-          <div className="lh-pet-name">{petName} · Lv.{lvl.level} {lvl.name}</div>
-          <button className="lh-continue" onClick={onContinue} disabled={!canContinue}>
-            <span className="lh-continue-label">{canContinue ? '繼續學習' : '本週準備中'}</span>
-            <span className="lh-continue-week">{canContinue ? `下一步 · ${nextLabel}` : '老師很快就會放上練習'}</span>
-          </button>
+          <div className="lh-pet-name">{petName} · Lv.{lvl.level} {lvl.name} · 🔥{streakN} · ⚡{xp || 0}</div>
         </div>
-      </div>
 
-      <div className="lh-stats">
-        <div className="lh-stat">
-          <div className="lh-stat-big lh-streak">🔥 {streakN}</div>
-          <span className="lh-stat-label">天連勝</span>
-        </div>
-        <div className="lh-stat">
-          <div className="lh-stat-big">⚡ {xp || 0}</div>
-          <span className="lh-stat-label">XP</span>
-        </div>
-        <button className="lh-stat lh-stat-btn" onClick={onShowShop} title="造型商店">
-          <div className="lh-stat-big lh-coins">🪙 {coins || 0}</div>
-          <span className="lh-stat-label">商店 🎁</span>
+        <button className="lh-continue" onClick={onContinue} disabled={!canContinue}>
+          <span className="lh-continue-label">{canContinue ? '繼續' : '準備中'}</span>
+          <span className="lh-continue-week">{canContinue ? nextLabel : '老師很快放上'}</span>
         </button>
-        {onShowMistakes && (
-          <button className="lh-stat lh-stat-btn" onClick={onShowMistakes} title="我的錯題">
-            <div className="lh-stat-big">📕 {mistakesCount || 0}</div>
-            <span className="lh-stat-label">錯題複習</span>
-          </button>
-        )}
       </div>
     </div>
   );
@@ -166,4 +145,196 @@ function WeekJourney({ weeks, weekOrder, weekIdx, categories, onSelectWeek }) {
   );
 }
 
-Object.assign(window, { LearnHero, WeekJourney });
+/* ── 冒險地圖（全螢幕遊戲地圖，週=據點）──────────────── */
+function AdventureMap({ weeks, weekOrder, weekIdx, categories, companion, equipped, onSelectWeek, onOpenBoss, onClose }) {
+  const qmProg = useHomeM(() => (window.loadQMProg ? window.loadQMProg() : {}), [weekIdx]);
+  const nodes = useHomeM(() => weekOrder.map((wid, i) => {
+    const w = weeks[wid];
+    const prog = w ? _weekProgress(w, wid, categories, qmProg) : { pct: 0, total: 0 };
+    return { wid, i, label: w?.label || wid, theme: w?.theme || w?.themeZh || '', pct: prog.pct, hasContent: prog.total > 0 };
+  }), [weeks, weekOrder, categories, qmProg]);
+
+  const scrollRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = scrollRef.current?.querySelector('.am-node-wrap.current');
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, []);
+
+  const petType = companion?.type || 'owl';
+
+  // 計算每個關卡的座標，畫一條滿版、會亮起來的 RPG 主線路徑。
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 900;
+  const W = Math.min(980, Math.max(360, viewportW - 32));
+  const STEP = viewportW < 560 ? 150 : 170;
+  const AMP = W * (viewportW < 560 ? 0.24 : 0.32);
+  const CENTER = W / 2;
+  const PAD = viewportW < 560 ? 96 : 120;
+  const H = Math.max(680, nodes.length * STEP + PAD + 120);
+  const pts = nodes.map((n, idx) => ({ x: CENTER + Math.sin(idx * 0.9) * AMP, y: PAD + idx * STEP }));
+  const trailD = pts.map((p, i) => (i === 0 ? `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}` : `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
+  const litPts = pts.slice(0, Math.min(weekIdx + 2, pts.length));
+  const litD = litPts.map((p, i) => (i === 0 ? `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}` : `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
+
+  return (
+    <div className="am-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="am-panel">
+        <div className="am-top">
+          <div>
+            <div className="am-title">冒險地圖</div>
+            <div className="am-subtitle">亮起來的路，就是你目前的冒險進度</div>
+          </div>
+          <button className="am-close" onClick={onClose} aria-label="關閉"><window.Icon name="close" size={16}/></button>
+        </div>
+        <div className="am-scroll" ref={scrollRef}>
+          <div className="am-path" style={{ position: 'relative', width: W + 'px', height: H + 'px', margin: '0 auto' }}>
+            <svg className="am-trail" width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+              <path className="am-trail-base" d={trailD} fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              {litD && <path className="am-trail-lit" d={litD} fill="none" strokeLinecap="round" strokeLinejoin="round"/>}
+              {litD && <path className="am-trail-sparks" d={litD} fill="none" strokeLinecap="round" strokeLinejoin="round"/>}
+            </svg>
+            {nodes.map((n, idx) => {
+              const p = pts[idx];
+              const isCurrent = n.i === weekIdx;
+              const isPast = n.i < weekIdx;
+              const isDone = isPast || (n.pct >= 100 && n.hasContent);
+              const state = isCurrent ? 'current' : isDone ? 'done' : n.pct > 0 ? 'progress' : 'todo';
+              return (
+                <div
+                  key={n.wid}
+                  className={`am-node-wrap${isCurrent ? ' current' : ''}`}
+                  style={{ left: p.x + 'px', top: p.y + 'px', animationDelay: `${idx * 55}ms` }}
+                >
+                  {isCurrent && <span className="am-here">目前位置</span>}
+                  <button className={`am-node ${state}`} onClick={() => { onSelectWeek(n.i); onClose(); }} title={n.label}>
+                    {isCurrent ? (
+                      <window.CompanionAvatar type={petType} size={48} mood="happy" accessory={equipped}/>
+                    ) : (
+                      <span className="am-node-num">{isDone ? '✓' : (idx + 1)}</span>
+                    )}
+                  </button>
+                  <span className="am-node-label">{n.label}</span>
+                  {n.theme && <span className="am-node-theme">{n.theme}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="am-boss-dock">
+          <button
+            className="am-boss-btn"
+            onClick={() => { onClose(); if (onOpenBoss) onOpenBoss(); }}
+          >
+            <img src="boss-monster.png" alt="" className="am-boss-img"/>
+            <span className="am-boss-text">
+              <span className="am-boss-title">地圖 Boss</span>
+              <span className="am-boss-sub">打倒魔王 · 贏金幣</span>
+            </span>
+            <span className="am-boss-arrow">›</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TutorialOverlay({ companion, onDone }) {
+  const [step, setStep] = React.useState(0);
+  const petType = companion?.type || 'owl';
+  const petName = companion?.name || '貓頭鷹夥伴';
+  const steps = [
+    {
+      key: 'cards',
+      title: '先選一個冒險入口',
+      body: '這四張卡就是四種關卡。想練單字、文法、字根或閱讀，直接點卡片進去。',
+    },
+    {
+      key: 'map',
+      title: '用地圖切換週次',
+      body: '點右上角小地圖，就能看到你走到哪一週，也能從地圖挑戰 Boss。',
+    },
+    {
+      key: 'avatar',
+      title: '角色資料都在這裡',
+      body: '右下角頭像可以打開造型、商店、錯題本和成就。',
+    },
+  ];
+  const current = steps[step];
+  const isLast = step === steps.length - 1;
+  return (
+    <div className={`tutorial-overlay tutorial-guide step-${current.key}`}>
+      <button className="tutorial-skip" onClick={onDone}>跳過</button>
+      <div className={`tutorial-spotlight ${current.key}`}/>
+      <div className={`tutorial-arrow ${current.key}`}>
+        <span>{step + 1}</span>
+      </div>
+      <div className="tutorial-panel">
+        <div className="tutorial-buddy">
+          <window.CompanionAvatar type={petType} size={104} mood="happy"/>
+        </div>
+        <div className="tutorial-bubble">
+          <div className="tutorial-name">{petName}</div>
+          <h2 className="tutorial-title">{current.title}</h2>
+          <p className="tutorial-copy">{current.body}</p>
+          <div className="tutorial-dots">
+            {steps.map((s, i) => <span key={s.key} className={i === step ? 'on' : ''}/>)}
+          </div>
+          <div className="tutorial-actions">
+            {step > 0 && <button className="tutorial-back" onClick={() => setStep(s => s - 1)}>上一步</button>}
+            <button className="tutorial-start" onClick={() => isLast ? onDone() : setStep(s => s + 1)}>
+              {isLast ? '開始冒險' : '下一步'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfilePanel({ user, companion, wardrobe, coins, xp, streak, badges, mistakesCount, onClose, onOpenShop, onOpenMistakes, onOpenBadges }) {
+  const petType = companion?.type || 'owl';
+  const petName = companion?.name || '貓頭鷹夥伴';
+  const lvl = window.getLevel ? window.getLevel(xp || 0) : { level: 1, name: '新苗' };
+  const badgeCount = Object.keys(badges || {}).length;
+  const firstName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || '冒險者';
+
+  return (
+    <div className="profile-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="profile-panel">
+        <div className="profile-head">
+          <div className="profile-title">我的角色</div>
+          <button className="profile-close" onClick={onClose} aria-label="關閉"><window.Icon name="close" size={16}/></button>
+        </div>
+
+        <div className="profile-hero">
+          <window.CompanionAvatar type={petType} size={118} mood="happy" accessory={wardrobe?.equipped}/>
+          <div className="profile-info">
+            <div className="profile-name">{firstName}</div>
+            <div className="profile-pet">{petName} · Lv.{lvl.level} {lvl.name}</div>
+            <div className="profile-stats">
+              <span>🪙 {coins || 0}</span>
+              <span>⚡ {xp || 0}</span>
+              <span>🔥 {streak?.count || 0}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="profile-actions">
+          <button onClick={() => { onClose(); onOpenShop(); }}>
+            <span className="profile-action-ic">🎩</span>
+            <span><strong>造型 / 商店</strong><small>換裝、花金幣</small></span>
+          </button>
+          <button onClick={() => { onClose(); onOpenMistakes && onOpenMistakes(); }} disabled={!onOpenMistakes}>
+            <span className="profile-action-ic">📕</span>
+            <span><strong>錯題本</strong><small>{onOpenMistakes ? `${mistakesCount || 0} 題需要複習` : '登入後可使用'}</small></span>
+          </button>
+          <button onClick={() => { onClose(); onOpenBadges(); }}>
+            <span className="profile-action-ic">🏆</span>
+            <span><strong>成就</strong><small>已解鎖 {badgeCount} 個徽章</small></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { LearnHero, WeekJourney, AdventureMap, TutorialOverlay, ProfilePanel });

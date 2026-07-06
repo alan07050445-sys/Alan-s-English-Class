@@ -9,7 +9,11 @@ const _saveWeekOrderG3   = window.saveWeekOrder;
 const _subscribeG3       = window.subscribeToClassData;
 
 // ── Grade helper: resolve grade-specific functions ─────────────────────────
-function _gradeOf(g, { g2, g4, g5, g6, g3 }) {
+// 暑假班表（s1–s6）也走這裡：map.summer 可以是值，或 (trackId) => 值 的函式
+function _gradeOf(g, { g2, g4, g5, g6, g3, summer }) {
+  if (summer !== undefined && window.isSummerTrack && window.isSummerTrack(g)) {
+    return typeof summer === 'function' ? summer(g) : summer;
+  }
   if (g === 'g2') return g2;
   if (g === 'g4' && g4 !== undefined) return g4;
   if (g === 'g5') return g5;
@@ -78,23 +82,27 @@ function App() {
   const [grade, setGrade] = useAppState(() => {
     try { return localStorage.getItem('alan-grade') || null; } catch(e) { return null; }
   });
+  // 門口頁：每次開啟 app（新 session）都先讓學生選「進入教室」或「暑假專區」
+  const [entered, setEntered] = useAppState(() => {
+    try { return sessionStorage.getItem('alan-entered') === '1'; } catch(e) { return false; }
+  });
 
   // ── Content state ───────────────────────────────────────
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks() });
+    return _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks() });
   });
   const [weekOrder, setWeekOrder] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder() });
+    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder() });
   });
   const [progress, setProgress] = useAppState(() => window.loadProgress());
   const [qmProgressVersion, setQmProgressVersion] = useAppState(0);
   const [weekIdx, setWeekIdx] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder() });
-    const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g4: window.loadWeeksG4(),     g5: window.loadWeeksG5(),     g6: window.loadWeeksG6(),     g3: window.loadWeeks() });
+    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder() });
+    const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g4: window.loadWeeksG4(),     g5: window.loadWeeksG5(),     g6: window.loadWeeksG6(),     g3: window.loadWeeks(),     summer: (t) => window.summerApi(t).loadWeeks() });
     return bestWeekIdx(ord, wks);
   });
   const [openCat, setOpenCat] = useAppState("vocab");
@@ -118,6 +126,10 @@ function App() {
 
   // ── Mistakes state ──────────────────────────────────
   const [mistakesOpen,    setMistakesOpen]    = useAppState(false);
+  const [growthOpen,      setGrowthOpen]      = useAppState(false);
+  const [welcomeOpen,     setWelcomeOpen]     = useAppState(false); // 文字版（門口頁連結／導覽 fallback）
+  const [tourOpen,        setTourOpen]        = useAppState(false); // 實境導覽（大廳聚光燈）
+  const [viewLanding,     setViewLanding]     = useAppState(false); // 從 app 內點 logo 回落地頁
   const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
 
   // ── Review state ────────────────────────────────────
@@ -134,7 +146,13 @@ function App() {
   const [goalToast, setGoalToast] = useAppState(false);
   const [wardrobe,  setWardrobe]  = useAppState(() => window.loadWardrobe());
   const [shopOpen,  setShopOpen]  = useAppState(false);
+  const [profileOpen, setProfileOpen] = useAppState(false);
   const [bossOpen,  setBossOpen]  = useAppState(false);
+  const [mapOpen,   setMapOpen]   = useAppState(false);
+  const [intro,     setIntro]     = useAppState(false); // 選年級後開場動畫
+  const [tutorialSeen, setTutorialSeen] = useAppState(() => {
+    try { return localStorage.getItem('alan-tutorial-done') === '1'; } catch(e) { return false; }
+  });
   const [quests,    setQuests]    = useAppState(() => window.loadQuests());
   const [coop,      setCoop]      = useAppState(null);
 
@@ -174,7 +192,9 @@ function App() {
       const elapsed = Date.now() - loaderStartRef.current;
       const minShow = 1400; // minimum display time so animation always completes
       const waitMs  = Math.max(0, minShow - elapsed);
-      const t1 = setTimeout(() => setLoaderFading(true), waitMs);          // fade-out
+      // 開始淡出的同時 bump pageKey → 讓門口頁／首頁在載入畫面底下先掛載的
+      // 進場動畫重新播放（否則動畫早在 loader 蓋住時就跑完了，使用者看不到）
+      const t1 = setTimeout(() => { setLoaderFading(true); setPageKey(k => k + 1); }, waitMs); // fade-out
       const t2 = setTimeout(() => setShowLoader(false), waitMs + 680);     // unmount
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
@@ -287,12 +307,12 @@ function App() {
   // Also points window.saveWeeks / saveWeekOrder at the right collection.
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
-    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3 });
-    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3 });
+    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks });
+    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder });
 
-    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3 });
-    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3' });
-    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1' });
+    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe });
+    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey });
+    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey });
 
     const unsub = subscribeFn((newWeeks, newOrder) => {
       setAccessLocked(false);
@@ -311,6 +331,25 @@ function App() {
     });
     return unsub;
   }, [grade, user?.uid]);
+
+  // ── 暑假 meta（每人一份派發清單；v209 題庫＋個人清單制）────
+  const [summerMeta, setSummerMeta] = useAppState({ students: {} });
+  useAppEffect(() => {
+    if (!window.subscribeSummerMeta) return;
+    return window.subscribeSummerMeta(setSummerMeta, () => {});
+  }, [user?.uid]);
+  const isSummer = !!(window.isSummerTrack && window.isSummerTrack(grade));
+  const isSummerLib = grade === (window.SUMMER_LIB || 'sl');
+  const mySummerPlan = (user && user.email && (summerMeta.students || {})[user.email.toLowerCase()]) || null;
+  const hasSummerPlan = !!(mySummerPlan && Object.values(mySummerPlan.weeks || {}).some(a => a && a.length));
+  // 名單姓名格式是「王騰樂Tayler Wang」→ 抽英文名（Tayler）進標題
+  const _englishName = (n) => {
+    const m = String(n || '').match(/[A-Za-z][A-Za-z .'-]*/);
+    return m ? m[0].trim().split(/\s+/)[0] : String(n || '');
+  };
+  const summerWho = _englishName(mySummerPlan && mySummerPlan.name)
+    || (user && user.displayName ? user.displayName.split(' ')[0] : '')
+    || '我';
 
   // Progress — keep in localStorage as offline cache.
   // When logged in, Firestore is the source of truth (see subscribeMyProgress above).
@@ -335,6 +374,7 @@ function App() {
     g5: window.CATEGORIES_G5 || _CATS_G3,
     g6: window.CATEGORIES_G6 || _CATS_G3,
     g3: _CATS_G3,
+    summer: window.SUMMER_CATEGORIES || _CATS_G3,
   });
 
   const allItems = useAppMemo(() => {
@@ -382,6 +422,38 @@ function App() {
     setToast(msg);
     setTimeout(() => setToast(null), 1800);
   };
+
+  const finishTutorial = () => {
+    try { localStorage.setItem('alan-tutorial-done', '1'); } catch(e) {}
+    setTutorialSeen(true);
+  };
+
+  // First-time onboarding — 每個帳號各看一次（共用電腦的手足互不影響）；
+  // 老師不自動跳（可從門口頁／footer 手動打開）。等真正進到教室再出現，
+  // 並稍等大廳進場動畫落定，才不會兩個動畫打架。
+  // 自動跳的是「實境導覽」（聚光燈圈真的元素，小朋友不用讀字）；
+  // 文字版 WelcomeGuide 留給門口頁連結與導覽的 fallback。
+  const welcomeKey = () => (user && user.uid) ? ('alan-welcome-v2:' + user.uid) : 'alan-welcome-v2';
+  useAppEffect(() => {
+    if (!authReady || !grade || !entered || isTeacher) return;
+    let seen = false;
+    try { seen = localStorage.getItem(welcomeKey()) === '1'; } catch(e) {}
+    if (seen) return;
+    const t = setTimeout(() => setTourOpen(true), 700);
+    return () => clearTimeout(t);
+  }, [authReady, grade, entered, isTeacher, user?.uid]);
+
+  const dismissWelcome = () => {
+    try { localStorage.setItem(welcomeKey(), '1'); } catch(e) {}
+    setWelcomeOpen(false);
+  };
+  const dismissTour = () => {
+    try { localStorage.setItem(welcomeKey(), '1'); } catch(e) {}
+    setTourOpen(false);
+  };
+
+  // If the user logs in while viewing the landing, close it and continue into the app.
+  useAppEffect(() => { if (user) setViewLanding(false); }, [user]);
 
   const scrollPageToTop = () => {
     const jump = () => {
@@ -706,12 +778,18 @@ function App() {
   };
 
   // ── Grade selector handler ─────────────────────────────
-  // Defined before the final return so it can be passed as a prop.
-  const handleSelectGrade = (g) => {
+  // 專屬年級記憶「跟著帳號走」：每個 Google 帳號一把 key（訪客用共用 key）
+  const homeGradeKey = () => (user && user.uid) ? ('alan-home-grade:' + user.uid) : 'alan-home-grade';
+  const readHomeGrade = () => {
+    try { return localStorage.getItem(homeGradeKey()); } catch(e) { return null; }
+  };
+
+  // 只切資料，不動「已進入」狀態（門口頁 / 帳號切換共用）
+  const applyGradeData = (g) => {
     // Immediately load the correct grade's data so the page never
     // flashes the previous grade's content while Firestore syncs.
-    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks() });
-    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder() });
+    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks() });
+    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder() });
     try { localStorage.setItem('alan-grade', g); } catch(e) {}
     setGrade(g);
     setWeeks(newWeeks);
@@ -723,13 +801,79 @@ function App() {
     scrollPageToTop();
   };
 
+  const handleSelectGrade = (g) => {
+    applyGradeData(g);
+    // 記住這個帳號的專屬年級（暑假/題庫不算）；標記本 session 已進入
+    if (/^g\d$/.test(g)) { try { localStorage.setItem(homeGradeKey(), g); } catch(e) {} }
+    setEntered(true);
+    try { sessionStorage.setItem('alan-entered', '1'); } catch(e) {}
+  };
+
+  // ── 帳號切換（登入／登出／換人）→ 回門口頁、載入「這個帳號」的年級 ──
+  const prevUidRef = useAppRef(undefined);
+  useAppEffect(() => {
+    if (!authReady) return;
+    const uid = user ? user.uid : null;
+    if (prevUidRef.current === undefined) { prevUidRef.current = uid; return; } // 首次解析，不重置
+    if (prevUidRef.current === uid) return;
+    prevUidRef.current = uid;
+    setEntered(false);
+    try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+    setCatView(null);
+    const hg = readHomeGrade();
+    if (hg && /^g\d$/.test(hg)) {
+      applyGradeData(hg);       // 有自己的年級 → 門口頁顯示「進入 Gx 教室」
+    } else {
+      try { localStorage.removeItem('alan-grade'); } catch(e) {}
+      setGrade(null);           // 新帳號第一次 → 選年級
+    }
+  }, [authReady, user?.uid]);
+
+  // ── 暑假進出 ───────────────────────────────────────────
+  const enterSummer = () => {
+    if (!hasSummerPlan) return;
+    try { if (grade && !window.isSummerTrack(grade)) localStorage.setItem('alan-sem-grade', grade); } catch(e) {}
+    handleSelectGrade(window.SUMMER_ME || 'sme');
+  };
+  const backToSemester = () => {
+    let g = null;
+    try { g = localStorage.getItem('alan-sem-grade'); } catch(e) {}
+    if (!g) g = readHomeGrade();
+    if (g && !(window.isSummerTrack && window.isSummerTrack(g))) {
+      handleSelectGrade(g);
+    } else {
+      // 不知道原本年級 → 回到選年級畫面
+      try { localStorage.removeItem('alan-grade'); } catch(e) {}
+      setGrade(null);
+      setCatView(null);
+      scrollPageToTop();
+    }
+  };
+
   // ── Determine what to render under the loading overlay ──────────────
   // LoadingScreen MUST stay in one fixed tree-position (Fragment child #1)
   // so React never unmounts/remounts it — that would reset its CSS animations.
   // All "early return" logic is folded into appContent below.
   let appContent = null;
   if (authReady) {
-    if (accessLocked && !isTeacher) {
+    if (viewLanding) {
+      // "回首頁" from inside the app — show the landing again, with a way back.
+      appContent = (
+        <window.LoginScreen
+          onLogin={() => window.signInWithGoogle()}
+          onSkip={() => {
+            try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
+            setSkippedLogin(true);
+            // 從介紹頁「先逛逛」進來 → 一律回門口頁（第二頁），不直接跳教室
+            setEntered(false);
+            try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+            setViewLanding(false);
+          }}
+          onBack={(grade || skippedLogin || user) ? () => setViewLanding(false) : null}
+          loggedIn={!!user}
+        />
+      );
+    } else if (accessLocked && !isTeacher) {
       appContent = (
         <window.LockScreen
           user={user}
@@ -745,15 +889,45 @@ function App() {
     } else if (!user && !skippedLogin) {
       appContent = (
         <window.LoginScreen
+          key={pageKey}
           onLogin={() => window.signInWithGoogle()}
           onSkip={() => {
             try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
             setSkippedLogin(true);
+            // 「先逛逛」一律先到門口頁
+            setEntered(false);
+            try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
           }}
         />
       );
-    } else if (!grade) {
-      appContent = <window.GradeSelector onSelect={handleSelectGrade} />;
+    } else if (!grade || !entered) {
+      // 門口頁：第一次選年級；之後每次開啟顯示「進入教室／暑假專區」
+      // 年級記憶跟著帳號走（共用電腦的手足各自獨立）
+      const homeGrade = readHomeGrade();
+      appContent = (
+        <window.GradeSelector
+          key={pageKey}
+          onSelect={handleSelectGrade}
+          homeGrade={homeGrade}
+          who={user ? _englishName(user.displayName) : null}
+          onChangeGrade={(g) => {
+            // 換年級 → 回門口頁（教室卡換成新年級），不直接進教室（太突兀）
+            applyGradeData(g); // 會 bump pageKey → 門口頁 remount、進場動畫重播
+            if (/^g\d$/.test(g)) { try { localStorage.setItem(homeGradeKey(), g); } catch(e) {} }
+            // 保險：不管從哪條路進來換年級（logo／年級章），都不能殘留「已進入」
+            setEntered(false);
+            try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+          }}
+          summer={(isTeacher || hasSummerPlan) ? { lib: isTeacher, mine: hasSummerPlan, who: summerWho } : null}
+          onViewLanding={() => setViewLanding(true)}
+          onOpenGuide={homeGrade ? () => {
+            // 門口頁「新手教學」→ 直接進自己的教室跑實境導覽
+            // （還沒選過年級的人選完年級本來就會自動看到導覽，不顯示此連結）
+            handleSelectGrade(homeGrade);
+            setTimeout(() => setTourOpen(true), 400); // 等 scrollPageToTop / 進場落定
+          } : null}
+        />
+      );
     }
   }
 
@@ -775,11 +949,23 @@ function App() {
     <React.Fragment>
       {/* App content — null while loading, then login/grade/main as auth resolves */}
       {appContent ? appContent : (authReady && grade && (
-        <div key={pageKey} className="page">
+        <div key={pageKey} className={`page${!catView && !editMode ? ' page-lobby' : ''}${catView && !editMode ? ' page-mission' : ''}${isSummer ? ' page-summer' : ''}`}>
           <window.Header
             week={week}
             weekOrder={weekOrder}
             weekIdx={weekIdx}
+            onHome={() => {
+              setCatView(null);
+              setOpenCat(null);
+              if (user) {
+                // 已登入：logo = 回門口頁（進入教室／暑假），不是行銷首頁
+                setEntered(false);
+                try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+                scrollPageToTop();
+              } else {
+                setViewLanding(true);
+              }
+            }}
             onPrevWeek={goPrevWeek}
             onNextWeek={goNextWeek}
             canEdit={isTeacher}
@@ -806,10 +992,14 @@ function App() {
             mistakesCount={mistakesCount}
             onShowMistakes={user ? () => setMistakesOpen(true) : null}
             grade={grade}
+            compactLobby={!catView && !editMode}
             onSwitchGrade={() => {
               try { localStorage.removeItem('alan-grade'); } catch(e) {}
               setGrade(null);
               setCatView(null);
+              // 跟 logo 一樣要清「已進入」——否則從門口改選年級會直接跳進教室
+              setEntered(false);
+              try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
               scrollPageToTop();
             }}
           />
@@ -819,6 +1009,7 @@ function App() {
           {catView ? (
             <window.QuizModeCategoryView
               cat={catView}
+              initialItemId={catView.itemId || null}
               items={(week.items || {})[catView.id] || []}
               weekId={weekId}
               onBack={() => { setCatView(null); setMainKey(k => k + 1); scrollPageToTop(); }}
@@ -833,30 +1024,64 @@ function App() {
             />
           ) : (
             <div key={mainKey} className="shell main-enter">
+              {!editMode && !isSummer && hasSummerPlan && (
+                <button className="sb" onClick={enterSummer}>
+                  <span className="sb-sun" aria-hidden="true">☀️</span>
+                  <span className="sb-text">
+                    <b>{summerWho} 的暑假任務</b>
+                    <span>7/1 – 8/31 · Alan 老師為你安排的暑假練習</span>
+                  </span>
+                  <span className="sb-cta">開始暑假任務 →</span>
+                </button>
+              )}
+              {!editMode && isSummer && (
+                <div className="sb sb-on sb-slim">
+                  <span className="sb-sun" aria-hidden="true">☀️</span>
+                  <span className="sb-text">
+                    <b>{isSummerLib ? '暑假題庫' : `${summerWho} 的暑假任務`}</b>
+                    <span>{isSummerLib
+                      ? '所有暑假內容的唯一來源 · 出題後到老師後台發派給學生'
+                      : '7/1 – 8/31'}</span>
+                  </span>
+                  <button className="sb-back" onClick={backToSemester}>回學期課程 →</button>
+                </div>
+              )}
               {!editMode && (
-                  <window.LearnHero
-                    user={user}
-                    xp={userProfile.xp || 0}
-                    streak={localStreak.count > 0 ? localStreak : (user ? userProfile.streak : localStreak)}
-                    coins={coins}
-                    daily={daily}
-                    companion={companion}
-                    equipped={wardrobe.equipped}
-                    onShowShop={() => setShopOpen(true)}
-                    weekProg={{ pct: totalItems > 0 ? Math.round(totalDone / totalItems * 100) : 0 }}
-                    weekLabel={week.label || weekId}
-                    nextLabel={(() => {
-                      const nextCat = getNextStudyCategory();
-                      return nextCat ? `${nextCat.title} · ${nextCat.titleZh}` : '';
-                    })()}
-                    onContinue={() => {
-                      const nextCat = getNextStudyCategory();
-                      if (nextCat) { setCatView(nextCat); scrollPageToTop(); }
-                    }}
-                    onShowBadges={() => setBadgesOpen(true)}
-                    onShowMistakes={user ? () => setMistakesOpen(true) : null}
-                    mistakesCount={mistakesCount}
-                  />
+                <window.WeekHero
+                  week={week}
+                  weekIdx={weekIdx}
+                  weekOrder={weekOrder}
+                  done={totalDone}
+                  total={totalItems}
+                  who={isSummer && !isSummerLib ? summerWho : null}
+                />
+              )}
+              {editMode ? (
+                <window.WeeklyContactBook
+                  week={week}
+                  allItems={allItems}
+                  qmProg={qmProgress}
+                  weekId={weekId}
+                  categories={activeCategories}
+                  onEnterCat={(cat) => { setCatView(cat); scrollPageToTop(); }}
+                  editMode={editMode}
+                  onUpdateWeek={(patch) => {
+                    const w = JSON.parse(JSON.stringify(weeksRef.current));
+                    if (!w[weekId]) return;
+                    w[weekId] = { ...w[weekId], ...patch };
+                    setWeeks(w);
+                    window.saveWeeks(w);
+                  }}
+                />
+              ) : (
+                <window.TodayTasks
+                  week={week}
+                  allItems={allItems}
+                  qmProg={qmProgress}
+                  weekId={weekId}
+                  categories={activeCategories}
+                  onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
+                />
               )}
               <window.QuizModeBlocks
                 week={week}
@@ -874,71 +1099,34 @@ function App() {
                 onAddItem={handleAddItem}
               />
               {!editMode && (
-                <>
-                  {weekOrder.length > 1 && (
-                    <div className="home-more-head">
-                      <span className="home-more-label">想多練習？加碼挑戰 🚀</span>
-                    </div>
-                  )}
-                  {weekOrder.length > 1 && (
-                    <div className="rv-launcher-row rv-launcher-duo">
-                      <button className="rv-launcher-btn" onClick={() => setReviewSetupOpen(true)}>
-                        <span className="rv-launcher-emoji rv-launcher-img"><img src="trophy.png" alt=""/></span>
-                        <span className="rv-launcher-text">
-                          <span className="rv-launcher-title">總複習 Review</span>
-                          <span className="rv-launcher-sub">混合多週題目 · 考前總驗收</span>
-                        </span>
-                        <span className="rv-launcher-arrow">›</span>
-                      </button>
-                      <button className="rv-launcher-btn rv-launcher-boss" onClick={() => setBossOpen(true)}>
-                        <span className="rv-launcher-emoji rv-launcher-img"><img src="boss-monster.png" alt=""/></span>
-                        <span className="rv-launcher-text">
-                          <span className="rv-launcher-title">大魔王挑戰</span>
-                          <span className="rv-launcher-sub">打倒魔王 · 贏金幣</span>
-                        </span>
-                        <span className="rv-launcher-arrow">›</span>
-                      </button>
-                    </div>
-                  )}
-                  <div className="goals-row">
-                    <window.QuestsCard
-                      quests={quests}
-                      disabled={weekQuizItems.length === 0}
-                      onClaim={(id) => {
-                        const r = window.claimQuest(id);
-                        if (r.ok) { setCoins(r.coins); setQuests(r.quests); if (window.playSound) window.playSound('badge'); }
-                      }}
-                    />
-                    <window.CoopCard coop={coop}/>
-                  </div>
-                  {weekOrder.length > 1 && (
-                    <window.WeekJourney
-                      weeks={weeks}
-                      weekOrder={weekOrder}
-                      weekIdx={weekIdx}
-                      categories={activeCategories}
-                      onSelectWeek={(idx) => { setSlideDir(idx > weekIdx ? 'left' : 'right'); setWeekIdx(idx); setOpenCat(null); setCatView(null); scrollPageToTop(); }}
-                    />
-                  )}
-                </>
+                <button className="growth-entry" onClick={() => setGrowthOpen(true)}>
+                  <span className="growth-entry-ico">📈</span>
+                  <span className="growth-entry-text">
+                    <span className="growth-entry-title">學習成長</span>
+                    <span className="growth-entry-sub">{isSummer ? '看看這個暑假的進步軌跡' : '看看這學期的進步軌跡'}</span>
+                  </span>
+                  <span className="growth-entry-chev">›</span>
+                </button>
               )}
             </div>
           )}
           </div>{/* end week-slide wrapper */}
 
-          <window.Footer/>
+          {(!catView || editMode) && <window.Footer onOpenGuide={() => setTourOpen(true)}/>}
 
-          <window.MobileNav
-            week={week}
-            weekIdx={weekIdx}
-            weekOrder={weekOrder}
-            onPrevWeek={goPrevWeek}
-            onNextWeek={goNextWeek}
-            catView={catView}
-            onBackFromCat={() => { setCatView(null); scrollPageToTop(); }}
-            onShowBadges={() => setBadgesOpen(true)}
-            user={user}
-          />
+          {(catView || editMode) && (
+            <window.MobileNav
+              week={week}
+              weekIdx={weekIdx}
+              weekOrder={weekOrder}
+              onPrevWeek={goPrevWeek}
+              onNextWeek={goNextWeek}
+              catView={catView}
+              onBackFromCat={() => { setCatView(null); scrollPageToTop(); }}
+              onShowBadges={() => setBadgesOpen(true)}
+              user={user}
+            />
+          )}
 
           <window.EditorModal
             open={editorOpen}
@@ -984,6 +1172,24 @@ function App() {
             />
           )}
 
+          {growthOpen && (
+            <window.GrowthReport
+              weeks={weeks}
+              weekOrder={weekOrder}
+              qmProg={qmProgress}
+              categories={activeCategories}
+              studentName={user ? (user.displayName || '') : ''}
+              onClose={() => setGrowthOpen(false)}
+            />
+          )}
+
+          {tourOpen && (
+            <window.SpotlightTour
+              onClose={dismissTour}
+              onEmpty={() => { setTourOpen(false); setWelcomeOpen(true); }}
+            />
+          )}
+
           {reviewSetupOpen && (
             <window.ReviewSetupModal
               weeks={weeks}
@@ -1003,62 +1209,12 @@ function App() {
             />
           )}
 
-          {!companion && !isTeacher && !editMode && (
-            <window.CompanionSetup onDone={(c) => setCompanion(c)} />
-          )}
-
-          {shopOpen && (
-            <window.ShopModal
-              companion={companion}
-              coins={coins}
-              onClose={() => setShopOpen(false)}
-              onChange={(newCoins, newWard) => { setCoins(newCoins); setWardrobe(newWard); }}
-            />
-          )}
-
-          {bossOpen && (
-            <window.BossModal
-              weeks={weeks}
-              weekOrder={weekOrder}
-              user={user}
-              onClose={() => setBossOpen(false)}
-              onReward={() => setCoins(window.loadCoins())}
-            />
-          )}
-
-          {goalToast && (
-            <div className="goal-toast" key="goal">
-              <img src="owl-celebrate.png" alt="" className="goal-toast-art"/>
-              <div className="goal-toast-text">
-                <div className="goal-toast-main">今日目標達成！</div>
-                <div className="goal-toast-sub">+10 金幣獎勵 · 明天再來保持連勝！</div>
-              </div>
-            </div>
-          )}
-
-          {badgesOpen && (
-            <window.BadgesModal badges={userProfile.badges} onClose={() => setBadgesOpen(false)}/>
-          )}
-
-          {badgeToast && (
-            <window.BadgeToast badge={badgeToast} onDone={() => setBadgeToast(null)}/>
-          )}
-
-          {streakToast && (
-            <div className="streak-toast" key={streakToast.count}>
-              <span className="streak-toast-fire">🔥</span>
-              <div className="streak-toast-text">
-                <div className="streak-toast-main">{streakToast.count} 天連續學習！</div>
-                <div className="streak-toast-sub">Keep it up! 繼續保持！</div>
-              </div>
-            </div>
-          )}
-
-          {starBurst && (
-            <window.StarBurst onDone={() => setStarBurst(false)}/>
-          )}
         </div>
       ))}
+
+      {/* 新手教學 — top-level so it can overlay the door page too (門口頁的
+          「新手教學」連結、老師預覽都會用到)，不只 .page 內 */}
+      {welcomeOpen && <window.WelcomeGuide onClose={dismissWelcome} />}
 
       {/* LoadingScreen is always the LAST child of this Fragment.
           Keeping it in the same tree position prevents unmount/remount
