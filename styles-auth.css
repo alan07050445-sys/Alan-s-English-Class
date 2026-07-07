@@ -3739,3 +3739,48 @@
   max-width: 680px;
   margin-left: auto; margin-right: auto;
 }
+
+/* ═══════════ v234: 門口頁暑假呼吸指標 + 老師端暑假發派週次收合 ═══════════ */
+.gs-summer-point {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin: 2px 0 10px;
+  font-size: 15.5px; font-weight: 800;
+  color: #9c6a06;
+}
+.gs-summer-point-arrow { display: inline-block; font-size: 18px; line-height: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .gs-summer-point { animation: gs-point-breathe 1.7s ease-in-out infinite; }
+  .gs-summer-point-arrow { animation: gs-point-bounce 1.7s ease-in-out infinite; }
+}
+@keyframes gs-point-breathe {
+  0%, 100% { opacity: .72; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.05); }
+}
+@keyframes gs-point-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(5px); }
+}
+
+/* 暑假發派：週列預設收合，一行看到已派數 */
+.sa-week-head-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit;
+  padding: 10px 4px;
+}
+.sa-week-head-btn:hover { background: rgba(21, 19, 14, 0.03); border-radius: 8px; }
+.sa-week-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-3, #8a8270);
+  background: var(--bg, #f6f1e6);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.sa-week-count.on { color: #9c6a06; background: #faf0d6; font-weight: 700; }
+.sa-week-chev { color: var(--ink-3, #8a8270); font-size: 13px; flex-shrink: 0; }
+.sa-week.closed { padding-bottom: 0; }
+.sa-week-tools { display: flex; justify-content: flex-end; padding: 2px 4px 6px; }

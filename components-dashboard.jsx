@@ -249,6 +249,7 @@ function SummerAdmin() {
   const [meta, setMeta]       = useDash({ students: {} });
   const [lib, setLib]         = useDash({ weeks: null, order: [] });
   const [openStu, setOpenStu] = useDash(null);  // 展開中的學生 email
+  const [openWeek, setOpenWeek] = useDash(null); // 展開中的週（v234: 週次收合，介面才不會爆炸）
   const [err, setErr]         = useDash(null);
 
   useDashE(() => window.subscribeRoster(setRoster, () => setErr('讀取名單失敗')), []);
@@ -333,7 +334,7 @@ function SummerAdmin() {
         const others = active.filter(o => o.email !== stu.email && countOf(planOf(o.email)) > 0);
         return (
           <div className={`sa-stu2${open ? ' open' : ''}`} key={stu.email}>
-            <button className="sa-stu2-head" onClick={() => setOpenStu(open ? null : stu.email)}>
+            <button className="sa-stu2-head" onClick={() => { setOpenStu(open ? null : stu.email); setOpenWeek(null); }}>
               <span className="sa-stu2-name">☀️ {stu.name || stu.email}</span>
               <span className="sa-stu2-email">{stu.email}</span>
               <span className={`sa-stu2-count${n > 0 ? ' on' : ''}`}>{n > 0 ? `已派 ${n} 項` : '未發派'}</span>
@@ -360,31 +361,42 @@ function SummerAdmin() {
                   const w = libWeekOf(sfx);
                   const sel = new Set((plan && plan.weeks && plan.weeks[sfx]) || []);
                   const allIds = groups.flatMap(g => g.items.map(it => it.id));
+                  const wOpen = openWeek === sfx;
                   return (
-                    <div className="sa-week" key={sfx}>
-                      <div className="sa-week-head">
+                    <div className={`sa-week${wOpen ? '' : ' closed'}`} key={sfx}>
+                      <button className="sa-week-head sa-week-head-btn" onClick={() => setOpenWeek(wOpen ? null : sfx)}>
                         <span className="sa-week-title">Week {i + 1}<em>{w && w.dateRange}</em></span>
-                        <button className="sa-week-all" onClick={() => toggleWeekAll(stu, sfx)}>
-                          {sel.size >= allIds.length ? '清空本週' : '全選本週'}
-                        </button>
-                      </div>
-                      {groups.map(g => (
-                        <div className="sa-cat" key={g.cat.id}>
-                          <span className="sa-cat-lbl">{g.cat.titleZh}</span>
-                          <div className="sa-chips">
-                            {g.items.map(it => (
-                              <label className={`sa-chip${sel.has(it.id) ? ' on' : ''}`} key={it.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={sel.has(it.id)}
-                                  onChange={() => toggleItem(stu, sfx, it.id)}
-                                />
-                                <span>{it.title}</span>
-                              </label>
-                            ))}
+                        <span className={`sa-week-count${sel.size > 0 ? ' on' : ''}`}>
+                          {sel.size > 0 ? `已派 ${sel.size} / ${allIds.length}` : `未發派 · ${allIds.length} 個單元`}
+                        </span>
+                        <span className="sa-week-chev">{wOpen ? '⌃' : '⌄'}</span>
+                      </button>
+                      {wOpen && (
+                        <>
+                          <div className="sa-week-tools">
+                            <button className="sa-week-all" onClick={() => toggleWeekAll(stu, sfx)}>
+                              {sel.size >= allIds.length ? '清空本週' : '全選本週'}
+                            </button>
                           </div>
-                        </div>
-                      ))}
+                          {groups.map(g => (
+                            <div className="sa-cat" key={g.cat.id}>
+                              <span className="sa-cat-lbl">{g.cat.titleZh}</span>
+                              <div className="sa-chips">
+                                {g.items.map(it => (
+                                  <label className={`sa-chip${sel.has(it.id) ? ' on' : ''}`} key={it.id}>
+                                    <input
+                                      type="checkbox"
+                                      checked={sel.has(it.id)}
+                                      onChange={() => toggleItem(stu, sfx, it.id)}
+                                    />
+                                    <span>{it.title}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
                   );
                 })}

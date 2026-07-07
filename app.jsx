@@ -1024,28 +1024,7 @@ function App() {
             />
           ) : (
             <div key={mainKey} className="shell main-enter">
-              {!editMode && !isSummer && hasSummerPlan && (
-                <button className="sb" onClick={enterSummer}>
-                  <span className="sb-sun" aria-hidden="true">☀️</span>
-                  <span className="sb-text">
-                    <b>{summerWho} 的暑假任務</b>
-                    <span>7/1 – 8/31 · Alan 老師為你安排的暑假練習</span>
-                  </span>
-                  <span className="sb-cta">開始暑假任務 →</span>
-                </button>
-              )}
-              {!editMode && isSummer && (
-                <div className="sb sb-on sb-slim">
-                  <span className="sb-sun" aria-hidden="true">☀️</span>
-                  <span className="sb-text">
-                    <b>{isSummerLib ? '暑假題庫' : `${summerWho} 的暑假任務`}</b>
-                    <span>{isSummerLib
-                      ? '所有暑假內容的唯一來源 · 出題後到老師後台發派給學生'
-                      : '7/1 – 8/31'}</span>
-                  </span>
-                  <button className="sb-back" onClick={backToSemester}>回學期課程 →</button>
-                </div>
-              )}
+              {/* v234: 暑假進出改由門口頁引導（呼吸箭頭＋開學標註），大廳橫幅移除 */}
               {!editMode && (
                 <window.WeekHero
                   week={week}

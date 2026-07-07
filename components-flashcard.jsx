@@ -200,6 +200,20 @@ function FlashcardPlayer({ item, onComplete }) {
   const cards = item.cards || [];
   const [mode, setMode] = useFC("card");
 
+  // v234: 學習模式鍵盤作答——1~4 選英文單字
+  React.useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (!/^[1-4]$/.test(e.key)) return;
+      const btns = document.querySelectorAll('.fc-choices .fc-choice');
+      const b = btns[parseInt(e.key, 10) - 1];
+      if (b) b.click();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   // Card mode
   const [cardIdx, setCardIdx] = useFC(0);
   const [flipped, setFlipped] = useFC(false);

@@ -1326,6 +1326,25 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     saveResume(progressKey, { deck, deckPos, firstRight, wrongList, uniqueTotal });
   }, [deckPos]);
 
+  // v234: 鍵盤作答——1~4（或 A~D）選答案，Enter 下一題
+  useQME(() => {
+    const onKey = (e) => {
+      if (screen !== 'quiz') return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const cur = deck[deckPos];
+      if (!cur || !cur.options) return;
+      const letterMap = { a: 0, b: 1, c: 2, d: 3 };
+      const idx = /^[1-9]$/.test(e.key) ? parseInt(e.key, 10) - 1
+                : letterMap[e.key.toLowerCase()] !== undefined ? letterMap[e.key.toLowerCase()]
+                : -1;
+      if (idx >= 0 && idx < cur.options.length && selected === null) { handleSelect(idx); return; }
+      if (e.key === 'Enter' && selected !== null && selected !== cur.correct) handleNext();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
   if (!q) return null;
 
   const goToNextQuestion = () => {

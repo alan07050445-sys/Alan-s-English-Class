@@ -1323,6 +1323,12 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
         <h1 className="grade-sel-title">{doorMode ? (who ? `歡迎回來，${who}！` : '歡迎回來！') : '現在讀幾年級呢？'}</h1>
         <p className="grade-sel-sub">{doorMode ? '今天要從哪裡開始呢？' : '選好就直接帶你進入這一週的練習。'}</p>
         {summer && summer.mine && (
+          <div className="gs-summer-point" aria-hidden="true">
+            <span>☀️ 暑假任務點這邊</span>
+            <span className="gs-summer-point-arrow">👇</span>
+          </div>
+        )}
+        {summer && summer.mine && (
           <button className="gs-mine" onClick={() => onSelect(window.SUMMER_ME || 'sme')}>
             <span className="gs-mine-sun" aria-hidden="true">☀️</span>
             <span className="gs-mine-text">
@@ -1338,7 +1344,7 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
               <span className="gs-room-badge">{home.n}</span>
               <span className="gs-mine-text">
                 <b>進入 {home.n} 教室</b>
-                <span>{home.zh} · 每週跟著學校進度練</span>
+                <span>{home.zh} · {summer && summer.mine ? '開學後再從這裡進教室' : '每週跟著學校進度練'}</span>
               </span>
               <span className="gs-mine-cta">進入 →</span>
             </button>
