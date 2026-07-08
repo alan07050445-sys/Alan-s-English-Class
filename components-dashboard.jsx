@@ -134,6 +134,8 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
   const [selWeekId, setSelWeekId] = useDash(() =>
     weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
   );
+  const [gradeFilter, setGradeFilter] = useDash('all'); // v237: 年級篩選
+  const [q, setQ] = useDash('');                         // v237: 學生搜尋
 
   const rows = useDashM(() => {
     if (!selWeekId) return [];
@@ -150,7 +152,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
         const st = m.total === 0 ? 'none' : (m.done === 0 ? 'red' : (m.done >= m.total ? 'green' : 'yellow'));
         return { short: (CWO_CATS[i] || {}).short || c.titleZh, ...m, st };
       });
-      return { s, name: friendlyName(s), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt };
+      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt };
     });
   }, [students, weeks, weekOrder, selWeekId]);
 
@@ -160,17 +162,45 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
       (orderRank[a.status] - orderRank[b.status]) || (a.pct - b.pct) || a.name.localeCompare(b.name)
     ), [rows]);
 
+  // v237: 年級篩選 + 搜尋（KPI 跟著篩選後的名單計算）
+  const gradeChips = useDashM(() => {
+    const present = new Set(rows.map(r => r.grade).filter(Boolean));
+    const chips = ['all', ...['g2', 'g3', 'g4', 'g5', 'g6'].filter(g => present.has(g))];
+    if (rows.some(r => !r.grade)) chips.push('other');
+    return chips;
+  }, [rows]);
+  const shown = useDashM(() => sorted.filter(r =>
+    (gradeFilter === 'all' || (gradeFilter === 'other' ? !r.grade : r.grade === gradeFilter)) &&
+    (!q.trim() || (r.name + ' ' + (r.s.email || '')).toLowerCase().includes(q.trim().toLowerCase()))
+  ), [sorted, gradeFilter, q]);
+
   const sum = useDashM(() => {
     let green = 0, yellow = 0, red = 0, none = 0, sp = 0, n = 0;
-    rows.forEach(r => {
+    shown.forEach(r => {
       if (r.status === 'green') green++; else if (r.status === 'yellow') yellow++;
       else if (r.status === 'red') red++; else none++;
       if (r.total > 0) { sp += r.pct; n++; }
     });
     return { green, yellow, red, none, avgPct: n ? Math.round(sp / n) : 0, items: rows[0]?.total || 0 };
-  }, [rows]);
+  }, [shown, rows]);
 
-  const fmtLast = (t) => t ? new Date(t).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' }) : '—';
+  const fmtLast = (t) => {
+    if (!t) return '—';
+    const days = Math.floor((Date.now() - t) / 86400000);
+    return days <= 0 ? '今天' : days === 1 ? '昨天' : days < 7 ? `${days} 天前`
+      : new Date(t).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
+  };
+
+  const exportCsv = () => {
+    const head = ['姓名', 'Email', '年級', '完成', '總數', '完成率%', '平均分', '最後活動'];
+    const lines = shown.map(r => [r.name, r.s.email || '', r.grade ? r.grade.toUpperCase() : '',
+      r.done, r.total, r.pct, r.avg != null ? r.avg : '', r.last ? new Date(r.last).toLocaleDateString('zh-TW') : '']);
+    const csv = '\uFEFF' + [head, ...lines].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const aEl = document.createElement('a');
+    aEl.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    aEl.download = `班級總覽_${(weeks[selWeekId] && weeks[selWeekId].label) || selWeekId || ''}.csv`;
+    document.body.appendChild(aEl); aEl.click(); aEl.remove();
+  };
 
   return (
     <div className="cwo">
@@ -184,6 +214,17 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
           ))}
         </select>
         <span className="cwo-itemcount">本週 {sum.items} 項練習</span>
+        {gradeChips.length > 2 && (
+          <div className="cwo-fchips">
+            {gradeChips.map(g => (
+              <button key={g} className={`cwo-fchip${gradeFilter === g ? ' on' : ''}`} onClick={() => setGradeFilter(g)}>
+                {g === 'all' ? '全部' : g === 'other' ? '其他' : g.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+        <input className="cwo-search" placeholder="🔍 搜尋學生…" value={q} onChange={e => setQ(e.target.value)}/>
+        <button className="cwo-export" onClick={exportCsv} title="下載目前名單的 CSV（Excel 可開）">⬇ CSV</button>
       </div>
 
       <div className="cwo-summary">
@@ -203,11 +244,11 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
         </div>
       ) : (
         <div className="cwo-list">
-          {sorted.map(r => (
+          {shown.map(r => (
             <div key={r.s.uid} className={`cwo-row st-${r.status}`} onClick={() => onSelect(r.s)} title="點擊查看詳情與週報">
               <span className={`cwo-light st-${r.status}`}/>
               <div className="cwo-name-wrap">
-                <span className="cwo-name">{r.name}</span>
+                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}</span>
                 <span className="cwo-email">{r.s.email || ''}</span>
               </div>
               <div className="cwo-prog">
@@ -262,7 +303,11 @@ function SummerAdmin() {
 
   const suffixes = window.SUMMER_WEEK_SUFFIXES || [];
   const cats     = window.SUMMER_CATEGORIES || [];
-  const active   = roster.filter(s => s.active !== false);
+  const active   = roster.filter(s => s.active !== false).slice().sort((a, b) => {
+    const ga = window.gradeFromEmail(a.email) || a.grade || 'zz';
+    const gb = window.gradeFromEmail(b.email) || b.grade || 'zz';
+    return String(ga).localeCompare(String(gb)) || String(a.name || a.email).localeCompare(String(b.name || b.email), 'zh-Hant');
+  });
 
   const planOf  = (email) => (meta.students || {})[String(email || '').toLowerCase()] || null;
   const countOf = (plan) => plan ? Object.values(plan.weeks || {}).reduce((s, a) => s + (a ? a.length : 0), 0) : 0;
@@ -335,7 +380,7 @@ function SummerAdmin() {
         return (
           <div className={`sa-stu2${open ? ' open' : ''}`} key={stu.email}>
             <button className="sa-stu2-head" onClick={() => { setOpenStu(open ? null : stu.email); setOpenWeek(null); }}>
-              <span className="sa-stu2-name">☀️ {stu.name || stu.email}</span>
+              <span className="sa-stu2-name">☀️ {stu.name || stu.email}{(window.gradeFromEmail(stu.email) || stu.grade) && <span className="dash-grade">{String(window.gradeFromEmail(stu.email) || stu.grade).toUpperCase()}</span>}</span>
               <span className="sa-stu2-email">{stu.email}</span>
               <span className={`sa-stu2-count${n > 0 ? ' on' : ''}`}>{n > 0 ? `已派 ${n} 項` : '未發派'}</span>
               <span className="sa-stu2-chev">{open ? '⌃' : '⌄'}</span>
@@ -436,9 +481,14 @@ function RosterManager() {
       <div className="roster-form">
         <input
           className="roster-input"
-          placeholder="學生 Google email"
+          placeholder="學生 Google email（學校帳號會自動帶年級）"
           value={email}
-          onChange={e => setEmail(e.target.value)}
+          onChange={e => {
+            const v = e.target.value;
+            setEmail(v);
+            const g = window.gradeFromEmail(v);
+            if (g) setGrade(g); // leNN 開頭 → 自動選對年級
+          }}
           onKeyDown={e => e.key === 'Enter' && handleAdd()}
         />
         <input
@@ -672,7 +722,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                 return (
                   <div key={s.uid} className="dt-row" onClick={() => setSelected(s)}>
                     <div className="dt-student-info">
-                      <span className="dt-sname">{friendlyName(s)}</span>
+                      <span className="dt-sname">{friendlyName(s)}{window.gradeFromEmail(s.email) && <span className="dash-grade">{window.gradeFromEmail(s.email).toUpperCase()}</span>}</span>
                       <span className="dt-semail">{s.email || s.uid.slice(0, 12) + '…'}</span>
                     </div>
                     <div className="dt-progress">

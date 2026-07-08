@@ -824,7 +824,7 @@ function App() {
     setEntered(false);
     try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
     setCatView(null);
-    const hg = readHomeGrade();
+    const hg = readHomeGrade() || (user ? window.gradeFromEmail(user.email) : null);
     if (hg && /^g\d$/.test(hg)) {
       applyGradeData(hg);       // 有自己的年級 → 門口頁顯示「進入 Gx 教室」
     } else {
@@ -907,7 +907,8 @@ function App() {
     } else if (!grade || !entered) {
       // 門口頁：第一次選年級；之後每次開啟顯示「進入教室／暑假專區」
       // 年級記憶跟著帳號走（共用電腦的手足各自獨立）
-      const homeGrade = readHomeGrade();
+      // 學校帳號（leNN…）自動判定年級 → 新同學第一次登入就直接看到自己的教室卡
+      const homeGrade = readHomeGrade() || (user ? window.gradeFromEmail(user.email) : null);
       appContent = (
         <window.GradeSelector
           key={pageKey}

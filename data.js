@@ -1360,3 +1360,15 @@ Object.assign(window, {
   // Weekly Report
   buildWeeklyReport, formatReportAsText,
 });
+
+/* ── 學校帳號自動分年級（v237）──
+   康橋學號 email：le<NN>...@stu.kcislk...  年級 = LE_GRADE_BASE − NN
+   2026 學年 base=16：le13→G3、le12→G4、le11→G5、le10→G6
+   ⚠️ 每年開學要 +1（2027 學年改成 17）——非學校帳號回傳 null，不自動分類 */
+const LE_GRADE_BASE = 16;
+window.gradeFromEmail = function (email) {
+  const m = String(email || '').toLowerCase().match(/^le(\d{2})/);
+  if (!m) return null;
+  const g = LE_GRADE_BASE - parseInt(m[1], 10);
+  return (g >= 2 && g <= 6) ? ('g' + g) : null;
+};
