@@ -601,10 +601,14 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   const total = allItems.length;
 
+  // v239: 常錯題只統計「目前範圍」的項目（暑假模式=暑假題庫），不再混到學期舊紀錄
+  const currentIds = useDashM(() => new Set(allItems.map(it => it.id)), [allItems]);
   const questionStats = useDashM(() => {
     const map = {};
     students.forEach(s => {
       Object.entries(s.items || {}).forEach(([itemId, prog]) => {
+        const bare = itemId.includes('_') ? itemId.slice(itemId.lastIndexOf('_') + 1) : itemId;
+        if (!currentIds.has(bare) && !currentIds.has(itemId)) return;
         (prog?.wrongQuestions || []).forEach(w => {
           const key = `${itemId}::${w.q}::${w.answer}`;
           if (!map[key]) map[key] = { itemId, q: w.q, answer: w.answer, count: 0 };
@@ -613,7 +617,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
       });
     });
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8);
-  }, [students]);
+  }, [students, currentIds]);
 
   const stats = (s) => {
     const its = s.items || {};
@@ -633,10 +637,11 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
     // Score: only count items that also have 'done' (avoids ghost scores from deleted items)
     // and cap at 100 to prevent impossible percentages from data corruption
-    const scored = Object.keys(its).filter(id => its[id]?.score != null && its[id]?.done);
-    const avg = scored.length
-      ? Math.min(100, Math.round(scored.reduce((acc, id) => acc + Math.min(100, its[id].score || 0), 0) / scored.length))
-      : null;
+    // v239: 平均分只算目前範圍內（且派給他）的項目——學期舊成績不會混進暑假報告
+    const progFor = (it) => its[it.progressId] || its[it.id] ||
+      its[Object.keys(its).find(k => k.endsWith('_' + it.id)) || ''] || null;
+    const scores = list.map(progFor).filter(pr => pr && pr.done && pr.score != null).map(pr => Math.min(100, pr.score || 0));
+    const avg = scores.length ? Math.round(scores.reduce((acc, v) => acc + v, 0) / scores.length) : null;
     const last = s.updatedAt
       ? new Date(s.updatedAt).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
       : '—';
