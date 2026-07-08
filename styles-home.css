@@ -1459,3 +1459,30 @@
   .tt-state { font-size: 13px; }
   .tt-s-resume { font-size: 12px; padding: 4px 9px; }
 }
+
+/* ═══════════ v235: 任務清單依文章分組 + 題庫模式提示 ═══════════ */
+.tt-group { margin-top: 4px; }
+.tt-group + .tt-group,
+.tt-row + .tt-group,
+.tt-group + .tt-row { border-top: 1px solid var(--border-soft, #efe9d8); }
+.tt-group-name {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 8px 4px;
+  font-size: 14px; font-weight: 800;
+  color: #5a2418;
+}
+.tt-group-ico { font-size: 13px; }
+.tt-group-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px; font-weight: 400;
+  color: var(--ink-3, #8a8270);
+}
+.tt-group .tt-row { padding-left: 26px; }
+.tt-group .tt-row + .tt-row { border-top: 1px dashed var(--border-soft, #efe9d8); }
+.tt-group .tt-row .tt-ic { width: 32px; height: 32px; border-radius: 9px; }
+.tt-group .tt-row .tt-name { font-size: 15px; }
+.tt-libhint .tt-empty { line-height: 1.7; }
+@media (max-width: 640px) {
+  .tt-group .tt-row { padding-left: 16px; }
+}

@@ -1273,7 +1273,7 @@ function BadgeToast({ badge, onDone }) {
 }
 
 /* ───────── Grade Selector ───────── */
-function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide }) {
+function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, summerOnly }) {
   const grades = [
     { id: 'g2', n: 'G2', zh: '二年級' },
     { id: 'g3', n: 'G3', zh: '三年級' },
@@ -1338,7 +1338,7 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <span className="gs-mine-cta">進入 →</span>
           </button>
         )}
-        {doorMode ? (
+        {summerOnly ? null : doorMode ? (
           <>
             <button className="gs-room" onClick={() => onSelect(home.id)}>
               <span className="gs-room-badge">{home.n}</span>
@@ -1379,7 +1379,7 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             {onViewLanding && (
               <button className="gs-switch gs-landing-link" onClick={onViewLanding}>查看網站介紹頁</button>
             )}
-            {onOpenGuide && (
+            {onOpenGuide && !summerOnly && (
               <button className="gs-switch gs-landing-link" onClick={onOpenGuide}>新手教學</button>
             )}
           </div>

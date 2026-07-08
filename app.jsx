@@ -69,6 +69,10 @@ function bestWeekIdx(order, weeks) {
   return best >= 0 ? best : Math.max(0, order.length - 1);
 }
 
+// ☀️ 暑假限定模式：有暑假任務的學生，門口頁只顯示暑假入口（怕誤點學期教室）。
+// 開學時把這個改成 false 就恢復（或叫 Claude 改）。老師、沒有暑假任務的帳號不受影響。
+const SUMMER_ONLY_DOOR = true;
+
 function App() {
   // ── Auth state ──────────────────────────────────────────
   const [user, setUser]           = useAppState(null);
@@ -910,6 +914,7 @@ function App() {
           onSelect={handleSelectGrade}
           homeGrade={homeGrade}
           who={user ? _englishName(user.displayName) : null}
+          summerOnly={SUMMER_ONLY_DOOR && !isTeacher && hasSummerPlan}
           onChangeGrade={(g) => {
             // 換年級 → 回門口頁（教室卡換成新年級），不直接進教室（太突兀）
             applyGradeData(g); // 會 bump pageKey → 門口頁 remount、進場動畫重播
@@ -1052,6 +1057,16 @@ function App() {
                     window.saveWeeks(w);
                   }}
                 />
+              ) : isSummerLib ? (
+                /* 題庫視角：這裡的 homework 是「全部學生任務的總集合」，
+                   長得像學生頁會誤導（也會爆量）→ 換成老師提示 */
+                <div className="tt tt-libhint">
+                  <div className="tt-head"><span className="tt-title">📌 題庫模式</span></div>
+                  <div className="tt-empty">
+                    這裡是暑假題庫的完整內容（所有學生任務的總集合）。
+                    每個學生只會看到你在後台「☀️ 暑假發派」勾給他的任務，不會像這頁全部列出。
+                  </div>
+                </div>
               ) : (
                 <window.TodayTasks
                   week={week}

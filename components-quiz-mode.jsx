@@ -3184,10 +3184,82 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     const cat = (categories || []).find(c => c.id === it._cat);
     return { id, it, cat, dueDate: hw[id] && hw[id].dueDate, done, pct, resumeAt: resume ? resume.deckPos : null };
   }).filter(Boolean);
-  // 未完成在前（先到期的先做），完成的沉底
-  tasks.sort((a, b) => (a.done - b.done) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')));
   const doneN = tasks.filter(t => t.done).length;
   const allDone = tasks.length > 0 && doneN === tasks.length;
+
+  // ── v235: 依「文章／主題」分組——同一篇文章的題目收在同一個標題下 ──
+  // 沒有資料欄位可用，所以用標題歸戶：去掉題型字眼與編號後相同 → 同一篇
+  const TYPE_WORDS = /(單字卡|單字練習|手寫練習|選擇題|簡答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test)/gi;
+  const SEP_TRIM = /[\s\-–—_·．.。,，()（）0-9０-９]+$/;
+  const keyOf = (t) => String(t || '').toLowerCase().replace(TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
+  const lcpOf = (arr) => {
+    let pfx = arr[0] || '';
+    for (const str of arr.slice(1)) {
+      let i = 0;
+      while (i < pfx.length && i < str.length && pfx[i] === str[i]) i++;
+      pfx = pfx.slice(0, i);
+    }
+    return pfx;
+  };
+  const byKey = {};
+  tasks.forEach(t => {
+    const k = keyOf(t.it.title) || `_${t.id}`;
+    (byKey[k] = byKey[k] || []).push(t);
+  });
+  const sortRows = (a, b) => (a.done - b.done) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
+  const entries = Object.values(byKey).map(group => {
+    group.sort(sortRows);
+    if (group.length < 2) return { group: false, tasks: group };
+    let name = lcpOf(group.map(t => t.it.title)).replace(TYPE_WORDS, '').replace(SEP_TRIM, '').trim();
+    if (name.length < 2) name = '';
+    return name ? { group: true, name, tasks: group } : { group: false, tasks: group };
+  });
+  // 攤平非分組的（各自一列）；排序：未完成的組在前、依最早到期
+  const flat = [];
+  entries.forEach(e => {
+    if (e.group) flat.push(e);
+    else e.tasks.forEach(t => flat.push({ group: false, name: null, tasks: [t] }));
+  });
+  flat.sort((a, b) => {
+    const ad = a.tasks.every(t => t.done) ? 1 : 0, bd = b.tasks.every(t => t.done) ? 1 : 0;
+    if (ad !== bd) return ad - bd;
+    const adu = String((a.tasks.find(t => !t.done) || a.tasks[0]).dueDate || '9999');
+    const bdu = String((b.tasks.find(t => !t.done) || b.tasks[0]).dueDate || '9999');
+    return adu.localeCompare(bdu);
+  });
+
+  const rowLabel = (t, groupName) => {
+    if (!groupName) return t.it.title;
+    const title = t.it.title;
+    if (title.toLowerCase().startsWith(groupName.toLowerCase())) {
+      const rest = title.slice(groupName.length).replace(/^[\s\-–—_·．.。,，]+/, '').trim();
+      if (rest) return rest;
+    }
+    return title;
+  };
+
+  const renderRow = (t, groupName) => {
+    const due = dueText(t.dueDate);
+    return (
+      <button key={t.id} className={`tt-row${t.done ? ' tt-done' : ''}${groupName ? ' in-group' : ''}`} onClick={() => t.cat && onOpenTask(t.cat, t.id)}>
+        <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>
+        <span className="tt-body">
+          <b className="tt-name">{rowLabel(t, groupName)}</b>
+          <span className="tt-meta">
+            {t.cat ? (t.cat.titleZh || t.cat.title) : ''}
+            {due && !t.done ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null}
+          </span>
+        </span>
+        <span className="tt-state">
+          {t.done
+            ? <span className="tt-s-ok">✓ {t.pct != null ? `${t.pct} 分` : '完成'}</span>
+            : t.resumeAt
+              ? <span className="tt-s-resume">▶ 繼續 · 第 {t.resumeAt + 1} 題</span>
+              : <span className="tt-s-todo">開始 →</span>}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <section className="tt" aria-label="今天的任務">
@@ -3200,28 +3272,16 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
         <div className="tt-empty">這週老師沒有指定作業——從下面挑一個自由練習吧！</div>
       ) : (
         <div className="tt-list">
-          {tasks.map(t => {
-            const due = dueText(t.dueDate);
-            return (
-              <button key={t.id} className={`tt-row${t.done ? ' tt-done' : ''}`} onClick={() => t.cat && onOpenTask(t.cat, t.id)}>
-                <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>
-                <span className="tt-body">
-                  <b className="tt-name">{t.it.title}</b>
-                  <span className="tt-meta">
-                    {t.cat ? (t.cat.titleZh || t.cat.title) : ''}
-                    {due && !t.done ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null}
-                  </span>
-                </span>
-                <span className="tt-state">
-                  {t.done
-                    ? <span className="tt-s-ok">✓ {t.pct != null ? `${t.pct} 分` : '完成'}</span>
-                    : t.resumeAt
-                      ? <span className="tt-s-resume">▶ 繼續 · 第 {t.resumeAt + 1} 題</span>
-                      : <span className="tt-s-todo">開始 →</span>}
-                </span>
-              </button>
-            );
-          })}
+          {flat.map((e, i) => e.group ? (
+            <div className="tt-group" key={`g${i}`}>
+              <div className="tt-group-name">
+                <span className="tt-group-ico" aria-hidden="true">📄</span>
+                {e.name}
+                <span className="tt-group-count">{e.tasks.filter(t => t.done).length} / {e.tasks.length}</span>
+              </div>
+              {e.tasks.map(t => renderRow(t, e.name))}
+            </div>
+          ) : renderRow(e.tasks[0], null))}
         </div>
       )}
       {allDone && <div className="tt-alldone">🎉 今天的作業都完成了，太棒了！</div>}
