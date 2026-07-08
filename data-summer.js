@@ -168,4 +168,5 @@ Object.assign(window, {
   subscribeSummerMeta,
   saveSummerStudent,
   removeSummerStudent,
+  filterWeeksForPlan: _filterWeeksForPlan, // v238: 後台按「發派給誰」過濾用
 });

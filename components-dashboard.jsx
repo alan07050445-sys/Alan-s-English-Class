@@ -73,7 +73,7 @@ function WeeklyReportModal({ student, weeks, weekOrder, onClose }) {
 }
 
 /* ── All-Class Report Modal ────────────────────────────── */
-function AllClassReportModal({ students, weeks, weekOrder, onClose }) {
+function AllClassReportModal({ students, weeks, weekOrder, weeksFor, onClose }) {
   const [selWeekId, setSelWeekId] = useDash(() =>
     weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
   );
@@ -82,10 +82,10 @@ function AllClassReportModal({ students, weeks, weekOrder, onClose }) {
   const allText = useDashM(() => {
     if (!selWeekId || !students.length) return '尚無學生資料。';
     return students.map(s => {
-      const r = window.buildWeeklyReport(s, weeks, weekOrder, { weekId: selWeekId });
+      const r = window.buildWeeklyReport(s, weeksFor ? weeksFor(s) : weeks, weekOrder, { weekId: selWeekId });
       return window.formatReportAsText(r, friendlyName(s));
     }).join('\n\n' + '－'.repeat(28) + '\n\n');
-  }, [students, weeks, weekOrder, selWeekId]);
+  }, [students, weeks, weekOrder, selWeekId, weeksFor]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(allText).then(() => {
@@ -130,7 +130,7 @@ const CWO_CATS = [
   { id: 'word',    short: '字根' },
   { id: 'reading', short: '閱讀' },
 ];
-function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
+function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect }) {
   const [selWeekId, setSelWeekId] = useDash(() =>
     weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
   );
@@ -140,7 +140,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
   const rows = useDashM(() => {
     if (!selWeekId) return [];
     return students.map(s => {
-      const r = window.buildWeeklyReport(s, weeks, weekOrder, { weekId: selWeekId });
+      const r = window.buildWeeklyReport(s, weeksFor ? weeksFor(s) : weeks, weekOrder, { weekId: selWeekId }); // v238: 暑假=只算派給他的
       const catMap = {};
       (window.CATEGORIES || []).forEach(c => { catMap[c.titleZh] = { done: 0, total: 0 }; });
       r.completed.forEach(x => { if (catMap[x.cat]) { catMap[x.cat].done++; catMap[x.cat].total++; } });
@@ -154,7 +154,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
       });
       return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt };
     });
-  }, [students, weeks, weekOrder, selWeekId]);
+  }, [students, weeks, weekOrder, selWeekId, weeksFor]);
 
   const orderRank = { red: 0, yellow: 1, none: 2, green: 3 };
   const sorted = useDashM(() =>
@@ -181,7 +181,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, onSelect }) {
       else if (r.status === 'red') red++; else none++;
       if (r.total > 0) { sp += r.pct; n++; }
     });
-    return { green, yellow, red, none, avgPct: n ? Math.round(sp / n) : 0, items: rows[0]?.total || 0 };
+    return { green, yellow, red, none, avgPct: n ? Math.round(sp / n) : 0, items: rows.reduce((m, r) => Math.max(m, r.total), 0) };
   }, [shown, rows]);
 
   const fmtLast = (t) => {
@@ -547,6 +547,35 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
   const [tab,            setTab]           = useDash('overview'); // 'overview' | 'report' | 'roster'
 
   useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
+
+  // v238: 暑假發派名單——暑假模式下，每個學生的總數只算「發派給他」的單元
+  const [summerMeta, setSummerMeta] = useDash({ students: {} });
+  useDashE(() => (window.subscribeSummerMeta ? window.subscribeSummerMeta(setSummerMeta, () => {}) : undefined), []);
+  const isSummerData = useDashM(
+    () => (weekOrder || []).some(wid => window.isSummerTrack && window.isSummerTrack(String(wid).split('-')[0])),
+    [weekOrder]
+  );
+  const weeksForStudent = (s) => {
+    if (!isSummerData || !window.filterWeeksForPlan) return weeks;
+    const plan = (summerMeta.students || {})[String((s && s.email) || '').toLowerCase()] || null;
+    return window.filterWeeksForPlan(weeks, weekOrder, plan);
+  };
+  const allItemsFor = (s) => {
+    const w = weeksForStudent(s);
+    return weekOrder.flatMap(wid => {
+      const wk = w[wid];
+      if (!wk) return [];
+      return window.CATEGORIES.flatMap(c =>
+        (wk.items[c.id] || []).map(it => ({
+          id: it.id,
+          progressId: `${wid}_${it.id}`,
+          title: it.title || it.id,
+          weekLabel: wk.label,
+          cat: c.title,
+        }))
+      );
+    });
+  };
   useDashE(() => {
     if (!selected) return;
     const fresh = students.find(s => s.uid === selected.uid);
@@ -588,6 +617,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   const stats = (s) => {
     const its = s.items || {};
+    const list = allItemsFor(s); // v238: 暑假模式只算發派給這位學生的
 
     // Match by progressId (weekId_itemId), bare itemId, OR any key ending in _itemId
     // — handles cases where weekId changed (week rebuilt / grade switched)
@@ -599,7 +629,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         k => (k === it.id || k.endsWith('_' + it.id)) && its[k]?.done
       );
     };
-    const done = allItems.filter(isDone).length;
+    const done = list.filter(isDone).length;
 
     // Score: only count items that also have 'done' (avoids ghost scores from deleted items)
     // and cap at 100 to prevent impossible percentages from data corruption
@@ -610,7 +640,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
     const last = s.updatedAt
       ? new Date(s.updatedAt).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
       : '—';
-    return { done, avg, last };
+    return { done, avg, last, total: list.length };
   };
 
   // v236: 專業後台外殼——側欄導覽 + 頂列，內容元件不變
@@ -674,8 +704,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
             /* ── Individual student detail ── */
             <StudentDetail
               student={selected}
-              allItems={allItems}
-              weeks={weeks}
+              allItems={allItemsFor(selected)}
+              weeks={weeksForStudent(selected)}
               weekOrder={weekOrder}
               onBack={() => setSelected(null)}
             />
@@ -684,6 +714,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
               students={students}
               weeks={weeks}
               weekOrder={weekOrder}
+              weeksFor={weeksForStudent}
               onSelect={setSelected}
             />
           ) : (
@@ -717,8 +748,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                   <p className="dt-empty-hint">學生必須用 Google 帳號登入，完成題目後才會出現在這裡。</p>
                 </div>
               ) : students.map(s => {
-                const { done, avg, last } = stats(s);
-                const pct = total > 0 ? Math.round(done / total * 100) : 0;
+                const { done, avg, last, total: sTotal } = stats(s);
+                const pct = sTotal > 0 ? Math.round(done / sTotal * 100) : 0;
                 return (
                   <div key={s.uid} className="dt-row" onClick={() => setSelected(s)}>
                     <div className="dt-student-info">
@@ -726,7 +757,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                       <span className="dt-semail">{s.email || s.uid.slice(0, 12) + '…'}</span>
                     </div>
                     <div className="dt-progress">
-                      <span className="dt-count">{done} / {total}</span>
+                      <span className="dt-count">{done} / {sTotal}</span>
                       <div className="dt-bar">
                         <div className="dt-bar-fill" style={{ width: pct + '%' }}/>
                       </div>
@@ -747,6 +778,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
             students={students}
             weeks={weeks}
             weekOrder={weekOrder}
+            weeksFor={weeksForStudent}
             onClose={() => setAllReportOpen(false)}
           />
         )}
