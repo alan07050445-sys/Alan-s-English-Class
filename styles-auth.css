@@ -3784,3 +3784,121 @@
 .sa-week-chev { color: var(--ink-3, #8a8270); font-size: 13px; flex-shrink: 0; }
 .sa-week.closed { padding-bottom: 0; }
 .sa-week-tools { display: flex; justify-content: flex-end; padding: 2px 4px 6px; }
+
+/* ═══════════ v236: 老師後台 → 全螢幕專業主控台 ═══════════ */
+.dash-overlay.tdash {
+  position: fixed; inset: 0; z-index: 900;
+  background: #16120b;
+  display: block; padding: 0;
+}
+.tdash-shell { display: flex; width: 100%; height: 100%; }
+
+/* 左側深色導覽欄 */
+.tdash-side {
+  width: 232px; flex-shrink: 0;
+  background: linear-gradient(180deg, #1f1910, #17120a);
+  color: #efe9d8;
+  display: flex; flex-direction: column;
+  padding: 20px 14px 16px;
+}
+.tdash-brand { display: flex; align-items: center; gap: 11px; padding: 2px 8px 20px; border-bottom: 1px solid rgba(239,233,216,.12); }
+.tdash-brand-a {
+  font-family: var(--serif, Georgia); font-size: 25px; font-weight: 700; font-style: italic;
+  background: #efe9d8; color: #16120b;
+  width: 42px; height: 42px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+}
+.tdash-brand-a i { font-style: normal; color: var(--g-c, #8B3120); }
+.tdash-brand-t { display: flex; flex-direction: column; font-size: 16px; font-weight: 800; }
+.tdash-brand-t em { font-style: normal; font-family: var(--mono); font-size: 9.5px; letter-spacing: .18em; color: rgba(239,233,216,.45); margin-top: 3px; }
+
+.tdash-nav { display: flex; flex-direction: column; gap: 4px; padding: 16px 0; flex: 1; }
+.tdash-nav-item {
+  display: flex; align-items: center; gap: 12px;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; color: rgba(239,233,216,.72);
+  padding: 11px 12px; border-radius: 12px;
+  text-align: left;
+  transition: background .15s, color .15s;
+}
+.tdash-nav-item:hover { background: rgba(239,233,216,.07); color: #efe9d8; }
+.tdash-nav-item.on { background: var(--g-c, #8B3120); color: #fff; box-shadow: 0 6px 16px rgba(139,49,32,.35); }
+.tdash-nav-ico { font-size: 17px; width: 24px; text-align: center; }
+.tdash-nav-txt { display: flex; flex-direction: column; font-size: 15px; font-weight: 800; }
+.tdash-nav-txt em { font-style: normal; font-size: 11.5px; font-weight: 500; opacity: .62; margin-top: 1px; }
+
+.tdash-side-foot { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid rgba(239,233,216,.12); padding-top: 12px; }
+.tdash-side-btn {
+  background: none; border: 1px solid rgba(239,233,216,.22); border-radius: 10px;
+  color: rgba(239,233,216,.85); cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700;
+  padding: 8px 12px; text-align: left;
+  transition: background .15s, border-color .15s;
+}
+.tdash-side-btn:hover { background: rgba(239,233,216,.08); border-color: rgba(239,233,216,.4); }
+.tdash-exit { border-color: transparent; color: rgba(239,233,216,.55); }
+
+/* 右側內容 */
+.tdash-main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg, #f6f1e6); }
+.tdash-top {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 28px 14px;
+  border-bottom: 1px solid var(--border, #e5dfc8);
+  background: #fbf9f3;
+}
+.tdash-top-title h2 { font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 23px; font-weight: 700; margin: 0; color: var(--ink, #15130e); }
+.tdash-top-meta { font-size: 13px; color: var(--ink-3, #8a8270); }
+.tdash-close {
+  margin-left: auto;
+  background: none; border: 1px solid var(--border, #e5dfc8); border-radius: 10px;
+  width: 34px; height: 34px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-2, #5c554a);
+}
+.tdash-close:hover { border-color: var(--ink-3, #8a8270); }
+.tdash-content { flex: 1; overflow-y: auto; padding: 22px 28px 40px; }
+
+@media (max-width: 760px) {
+  .tdash-shell { flex-direction: column; }
+  .tdash-side { width: 100%; flex-direction: row; align-items: center; gap: 8px; padding: 10px 12px; overflow-x: auto; }
+  .tdash-brand { padding: 0 8px 0 0; border-bottom: none; border-right: 1px solid rgba(239,233,216,.12); }
+  .tdash-brand-t { display: none; }
+  .tdash-nav { flex-direction: row; padding: 0; gap: 4px; }
+  .tdash-nav-txt em { display: none; }
+  .tdash-nav-item { padding: 8px 10px; }
+  .tdash-side-foot { flex-direction: row; border-top: none; padding-top: 0; margin-left: auto; }
+  .tdash-side-btn { font-size: 12px; padding: 7px 9px; white-space: nowrap; }
+  .tdash-top { padding: 12px 14px 10px; }
+  .tdash-content { padding: 14px 12px 30px; }
+}
+
+/* 門口頁：老師後台大卡（深色、跟學生卡明確區隔） */
+.grade-selector .gs-admin {
+  width: 100%; max-width: 680px;
+  display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(135deg, #221b10, #171208);
+  border: 1.5px solid #3a3020;
+  border-radius: 16px;
+  padding: 15px 18px;
+  margin: 0 auto 18px;
+  cursor: pointer;
+  font-family: inherit; text-align: left;
+  color: #efe9d8;
+  box-shadow: 0 10px 26px rgba(21, 19, 14, 0.18);
+  transition: transform .18s, box-shadow .18s;
+}
+.grade-selector .gs-admin:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(21, 19, 14, 0.26); }
+.gs-admin-ico {
+  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(239,233,216,.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 21px;
+}
+.gs-admin .gs-mine-text b { color: #efe9d8; font-size: 16px; }
+.gs-admin .gs-mine-text > span { color: rgba(239,233,216,.55); }
+.gs-admin-cta {
+  margin-left: auto; flex-shrink: 0;
+  background: #efe9d8; color: #16120b;
+  font-weight: 800; font-size: 14px;
+  border-radius: 999px; padding: 9px 18px;
+}

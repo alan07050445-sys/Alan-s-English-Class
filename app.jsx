@@ -915,6 +915,7 @@ function App() {
           homeGrade={homeGrade}
           who={user ? _englishName(user.displayName) : null}
           summerOnly={SUMMER_ONLY_DOOR && !isTeacher && hasSummerPlan}
+          onOpenAdmin={isTeacher ? () => setDashOpen(true) : null}
           onChangeGrade={(g) => {
             // 換年級 → 回門口頁（教室卡換成新年級），不直接進教室（太突兀）
             applyGradeData(g); // 會 bump pageKey → 門口頁 remount、進場動畫重播
@@ -1148,14 +1149,6 @@ function App() {
 
           {toast && <div className="toast">{toast}</div>}
 
-          {dashOpen && isTeacher && (
-            <window.TeacherDashboard
-              onClose={() => setDashOpen(false)}
-              weeks={weeks}
-              weekOrder={weekOrder}
-            />
-          )}
-
           {mistakesOpen && user && (
             <window.MistakesPanel
               user={user}
@@ -1209,6 +1202,15 @@ function App() {
       {/* 新手教學 — top-level so it can overlay the door page too (門口頁的
           「新手教學」連結、老師預覽都會用到)，不只 .page 內 */}
       {welcomeOpen && <window.WelcomeGuide onClose={dismissWelcome} />}
+
+      {/* 老師後台 — top-level：門口頁的「老師後台」卡也能直接開 */}
+      {dashOpen && isTeacher && (
+        <window.TeacherDashboard
+          onClose={() => setDashOpen(false)}
+          weeks={weeks}
+          weekOrder={weekOrder}
+        />
+      )}
 
       {/* LoadingScreen is always the LAST child of this Fragment.
           Keeping it in the same tree position prevents unmount/remount

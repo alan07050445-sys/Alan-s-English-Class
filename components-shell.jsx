@@ -1273,7 +1273,7 @@ function BadgeToast({ badge, onDone }) {
 }
 
 /* ───────── Grade Selector ───────── */
-function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, summerOnly }) {
+function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, summerOnly, onOpenAdmin }) {
   const grades = [
     { id: 'g2', n: 'G2', zh: '二年級' },
     { id: 'g3', n: 'G3', zh: '三年級' },
@@ -1322,6 +1322,16 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
         <div className="gs-kicker">Alan’s English Class</div>
         <h1 className="grade-sel-title">{doorMode ? (who ? `歡迎回來，${who}！` : '歡迎回來！') : '現在讀幾年級呢？'}</h1>
         <p className="grade-sel-sub">{doorMode ? '今天要從哪裡開始呢？' : '選好就直接帶你進入這一週的練習。'}</p>
+        {onOpenAdmin && (
+          <button className="gs-admin" onClick={onOpenAdmin}>
+            <span className="gs-admin-ico" aria-hidden="true">🛠</span>
+            <span className="gs-mine-text">
+              <b>老師後台</b>
+              <span>總覽 · 學生 · 發派 · 報告</span>
+            </span>
+            <span className="gs-admin-cta">進入 →</span>
+          </button>
+        )}
         {summer && summer.mine && (
           <div className="gs-summer-point" aria-hidden="true">
             <span>☀️ 暑假任務點這邊</span>

@@ -563,61 +563,59 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
     return { done, avg, last };
   };
 
+  // v236: 專業後台外殼——側欄導覽 + 頂列，內容元件不變
+  const NAV = [
+    { id: 'overview', ico: '🚦', label: '總覽', sub: '誰需要關心' },
+    { id: 'report',   ico: '📊', label: '學習報告', sub: '成績與常錯題' },
+    { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
+    { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
+  ];
+  const cur = NAV.find(n => n.id === tab) || NAV[0];
+
   return (
-    <div
-      className="dash-overlay"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="dash-panel">
-        {/* Header */}
-        <div className="dash-head">
-          <div>
-            <h2 className="dash-title">Class Report</h2>
-            <div className="dash-tabs">
-              <button
-                className={`dash-tab${tab === 'overview' ? ' on' : ''}`}
-                onClick={() => { setTab('overview'); setSelected(null); }}
-              >🚦 本週總覽</button>
-              <button
-                className={`dash-tab${tab === 'report' ? ' on' : ''}`}
-                onClick={() => { setTab('report'); setSelected(null); }}
-              >📊 學習報告</button>
-              <button
-                className={`dash-tab${tab === 'roster' ? ' on' : ''}`}
-                onClick={() => { setTab('roster'); setSelected(null); }}
-              >👥 學生名單</button>
-              <button
-                className={`dash-tab${tab === 'summer' ? ' on' : ''}`}
-                onClick={() => { setTab('summer'); setSelected(null); }}
-              >☀️ 暑假發派</button>
-            </div>
-            {tab === 'report' && (
-              <p className="dash-meta">
-                {students.length} students · {total} total items · {questionStats.length} hot questions
-              </p>
-            )}
+    <div className="dash-overlay tdash">
+      <div className="tdash-shell">
+        <aside className="tdash-side">
+          <div className="tdash-brand">
+            <span className="tdash-brand-a">A<i>.</i></span>
+            <span className="tdash-brand-t">老師後台<em>Admin Console</em></span>
           </div>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <button
-              className="btn ghost"
-              style={{fontSize:12,padding:'5px 12px'}}
-              onClick={() => setAllReportOpen(true)}
-              title="產生全班週報"
-            >📋 全班週報</button>
-            <button
-              className="btn ghost"
-              style={{fontSize:12,padding:'5px 12px'}}
-              onClick={() => setRefreshKey(k => k + 1)}
-              title="重新載入學生資料"
-            >↻ 重新整理</button>
-            <button className="icon-btn" onClick={onClose} title="Close">
+          <nav className="tdash-nav">
+            {NAV.map(n => (
+              <button
+                key={n.id}
+                className={`tdash-nav-item${tab === n.id ? ' on' : ''}`}
+                onClick={() => { setTab(n.id); setSelected(null); }}
+              >
+                <span className="tdash-nav-ico">{n.ico}</span>
+                <span className="tdash-nav-txt">{n.label}<em>{n.sub}</em></span>
+              </button>
+            ))}
+          </nav>
+          <div className="tdash-side-foot">
+            <button className="tdash-side-btn" onClick={() => setAllReportOpen(true)}>📋 全班週報</button>
+            <button className="tdash-side-btn" onClick={() => setRefreshKey(k => k + 1)}>↻ 重新整理</button>
+            <button className="tdash-side-btn tdash-exit" onClick={onClose}>← 回到網站</button>
+          </div>
+        </aside>
+
+        <main className="tdash-main">
+          <header className="tdash-top">
+            <div className="tdash-top-title">
+              <h2>{selected ? `${selected.name || '學生'} 的學習紀錄` : cur.label}</h2>
+              <span className="tdash-top-meta">
+                {selected ? '個人完成度、分數與錯題' : tab === 'report'
+                  ? `${students.length} 位學生 · ${total} 個項目`
+                  : cur.sub}
+              </span>
+            </div>
+            <button className="tdash-close" onClick={onClose} title="關閉後台">
               <window.Icon name="close" size={16}/>
             </button>
-          </div>
-        </div>
+          </header>
 
-        {/* Body */}
-        <div className="dash-body">
+          {/* Body */}
+          <div className="dash-body tdash-content">
           {tab === 'roster' ? (
             <RosterManager/>
           ) : tab === 'summer' ? (
@@ -691,17 +689,18 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
               </div>
               </>
           )}
-        </div>
-      </div>
+          </div>
+        </main>
 
-      {allReportOpen && (
-        <AllClassReportModal
-          students={students}
-          weeks={weeks}
-          weekOrder={weekOrder}
-          onClose={() => setAllReportOpen(false)}
-        />
-      )}
+        {allReportOpen && (
+          <AllClassReportModal
+            students={students}
+            weeks={weeks}
+            weekOrder={weekOrder}
+            onClose={() => setAllReportOpen(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }
