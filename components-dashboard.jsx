@@ -3,9 +3,9 @@
 const { useState: useDash, useEffect: useDashE, useMemo: useDashM } = React;
 
 /* ── Weekly Report Modal (single student) ─────────────── */
-function WeeklyReportModal({ student, weeks, weekOrder, onClose }) {
+function WeeklyReportModal({ student, weeks, weekOrder, initialWeekId, onClose }) {
   const [selWeekId, setSelWeekId] = useDash(() =>
-    weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
+    initialWeekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null)
   );
   const [copied, setCopied] = useDash(false);
   const [note, setNote] = useDash('');
@@ -73,9 +73,9 @@ function WeeklyReportModal({ student, weeks, weekOrder, onClose }) {
 }
 
 /* ── All-Class Report Modal ────────────────────────────── */
-function AllClassReportModal({ students, weeks, weekOrder, weeksFor, onClose }) {
+function AllClassReportModal({ students, weeks, weekOrder, weeksFor, initialWeekId, onClose }) {
   const [selWeekId, setSelWeekId] = useDash(() =>
-    weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
+    initialWeekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null)
   );
   const [copied, setCopied] = useDash(false);
 
@@ -130,10 +130,8 @@ const CWO_CATS = [
   { id: 'word',    short: '字根' },
   { id: 'reading', short: '閱讀' },
 ];
-function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect }) {
-  const [selWeekId, setSelWeekId] = useDash(() =>
-    weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null
-  );
+function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, selWeekId, setSelWeekId }) {
+  // v251: selWeekId 由 TeacherDashboard 統一管理（進學生詳情返回不再重置、預設=今天所在週）
   const [gradeFilter, setGradeFilter] = useDash('all'); // v237: 年級篩選
   const [q, setQ] = useDash('');                         // v237: 學生搜尋
 
@@ -284,14 +282,38 @@ function friendlyName(s) {
   return s.email ? s.email.split('@')[0] : '未命名學生';
 }
 
-/* ── 暑假發派 tab（v209：題庫單元 → 逐一勾選發派給學生）──── */
+/* ── v251 週次工具：解析 "Jul 1 – Jul 5" 日期區間、找「今天所在的週」 ── */
+function _dashParseRange(dr) {
+  if (!dr) return null;
+  const parts = String(dr).split(/[–—]|-(?= )/).map(x => x.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const yr = new Date().getFullYear();
+  const start = new Date(parts[0] + ' ' + yr);
+  const end = new Date(parts[1] + ' ' + yr);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+function dashCurrentWeekId(weeks, order) {
+  const now = new Date();
+  let lastStarted = null;
+  for (const wid of (order || [])) {
+    const r = _dashParseRange(weeks[wid] && weeks[wid].dateRange);
+    if (!r) continue;
+    if (now >= r.start && now <= r.end) return wid;
+    if (r.start <= now) lastStarted = wid;
+  }
+  return lastStarted || (order && order.length ? order[order.length - 1] : null);
+}
+
+/* ── 暑假發派（v251：週次 × 單元×學生 勾選矩陣——一眼看全班、整列批次發派）──── */
 function SummerAdmin() {
-  const [roster, setRoster]   = useDash([]);
-  const [meta, setMeta]       = useDash({ students: {} });
-  const [lib, setLib]         = useDash({ weeks: null, order: [] });
-  const [openStu, setOpenStu] = useDash(null);  // 展開中的學生 email
-  const [openWeek, setOpenWeek] = useDash(null); // 展開中的週（v234: 週次收合，介面才不會爆炸）
-  const [err, setErr]         = useDash(null);
+  const [roster, setRoster] = useDash([]);
+  const [meta, setMeta]     = useDash({ students: {} });
+  const [lib, setLib]       = useDash({ weeks: null, order: [] });
+  const [sfx, setSfx]       = useDash(null);   // 當前週 suffix（SW01…）
+  const [err, setErr]       = useDash(null);
+  const [busy, setBusy]     = useDash(false);
 
   useDashE(() => window.subscribeRoster(setRoster, () => setErr('讀取名單失敗')), []);
   useDashE(() => (window.subscribeSummerMeta ? window.subscribeSummerMeta(setMeta, () => setErr('讀取暑假設定失敗')) : undefined), []);
@@ -303,33 +325,50 @@ function SummerAdmin() {
 
   const suffixes = window.SUMMER_WEEK_SUFFIXES || [];
   const cats     = window.SUMMER_CATEGORIES || [];
-  const active   = roster.filter(s => s.active !== false).slice().sort((a, b) => {
+  const active   = roster.filter(st => st.active !== false).slice().sort((a, b) => {
     const ga = window.gradeFromEmail(a.email) || a.grade || 'zz';
     const gb = window.gradeFromEmail(b.email) || b.grade || 'zz';
     return String(ga).localeCompare(String(gb)) || String(a.name || a.email).localeCompare(String(b.name || b.email), 'zh-Hant');
   });
 
-  const planOf  = (email) => (meta.students || {})[String(email || '').toLowerCase()] || null;
-  const countOf = (plan) => plan ? Object.values(plan.weeks || {}).reduce((s, a) => s + (a ? a.length : 0), 0) : 0;
-
-  // 取某週的題庫內容（依分類分組；空分類不顯示）
-  const libWeekOf = (sfx) => {
-    const wid = (lib.order || []).find(id => String(id).endsWith(sfx));
+  const libWeekOf = (suffix) => {
+    const wid = (lib.order || []).find(id => String(id).endsWith(suffix));
     return (wid && lib.weeks && lib.weeks[wid]) || null;
   };
-  const weekGroups = (sfx) => {
+
+  // 預設選「今天所在的暑假週」
+  useDashE(() => {
+    if (sfx || !lib.order || !lib.order.length) return;
+    const wid = dashCurrentWeekId(lib.weeks || {}, lib.order);
+    const suf = wid ? suffixes.find(x => String(wid).endsWith(x)) : null;
+    setSfx(suf || suffixes[0] || null);
+  }, [lib.order]);
+
+  const groups = useDashM(() => {
+    if (!sfx) return [];
     const w = libWeekOf(sfx);
     if (!w) return [];
-    return cats
-      .map(c => ({ cat: c, items: (w.items || {})[c.id] || [] }))
-      .filter(g => g.items.length > 0);
-  };
-  const libHasContent = suffixes.some(sfx => weekGroups(sfx).length > 0);
+    return cats.map(c => ({ cat: c, items: (w.items || {})[c.id] || [] })).filter(g => g.items.length > 0);
+  }, [lib, sfx]);
+  const allIds = groups.flatMap(g => g.items.map(it => it.id));
 
-  // 完整寫回（每週都帶陣列，取消勾選才會確實覆蓋）
-  const writePlan = async (stu, weeksMap) => {
+  // v251b: 樂觀更新——連續快速勾選時不等 Firestore 快照回來，避免互相蓋寫
+  const [optimistic, setOptimistic] = useDash({}); // email → weeks map（本地最新意圖）
+  const planOf = (email) => (meta.students || {})[String(email || '').toLowerCase()] || null;
+  const weeksOf = (stu) => optimistic[String(stu.email).toLowerCase()] || ((planOf(stu.email) || {}).weeks || {});
+  const setOf  = (stu) => new Set((weeksOf(stu) || {})[sfx] || []);
+  const shortName = (stu) => {
+    const m = String(stu.name || '').match(/[A-Za-z]+/);
+    return m ? m[0] : String(stu.name || stu.email).slice(0, 4);
+  };
+
+  // 寫回這位學生「本週」的完整清單（其他週保留原樣）
+  const writePlan = async (stu, ids) => {
+    const base = weeksOf(stu);
     const full = {};
-    suffixes.forEach(sfx => { full[sfx] = (weeksMap && weeksMap[sfx]) || []; });
+    suffixes.forEach(x => { full[x] = base[x] || []; });
+    full[sfx] = ids;
+    setOptimistic(prev => ({ ...prev, [String(stu.email).toLowerCase()]: full }));
     try {
       await window.saveSummerStudent(stu.email, {
         name: stu.name || String(stu.email).split('@')[0],
@@ -337,119 +376,162 @@ function SummerAdmin() {
       });
     } catch (e) { alert('儲存失敗：' + ((e && e.message) || e)); }
   };
-
-  const toggleItem = (stu, sfx, itemId) => {
-    const plan = planOf(stu.email);
-    const cur = new Set((plan && plan.weeks && plan.weeks[sfx]) || []);
+  const toggleCell = (stu, itemId) => {
+    const cur = setOf(stu);
     if (cur.has(itemId)) cur.delete(itemId); else cur.add(itemId);
-    writePlan(stu, { ...((plan && plan.weeks) || {}), [sfx]: Array.from(cur) });
+    writePlan(stu, Array.from(cur));
+  };
+  const toggleRow = async (itemId) => {         // 整列：這個單元 → 全班發派／全班取消
+    const everyone = active.length > 0 && active.every(stu => setOf(stu).has(itemId));
+    setBusy(true);
+    await Promise.all(active.map(stu => {
+      const cur = setOf(stu);
+      if (everyone) cur.delete(itemId); else cur.add(itemId);
+      return writePlan(stu, Array.from(cur));
+    }));
+    setBusy(false);
+  };
+  const toggleCol = (stu) => {                  // 整欄：這位學生本週 全選／清空
+    const cur = setOf(stu);
+    writePlan(stu, cur.size >= allIds.length ? [] : allIds.slice());
   };
 
-  const toggleWeekAll = (stu, sfx) => {
-    const all = weekGroups(sfx).flatMap(g => g.items.map(it => it.id));
-    const plan = planOf(stu.email);
-    const cur = (plan && plan.weeks && plan.weeks[sfx]) || [];
-    const next = cur.length >= all.length ? [] : all;
-    writePlan(stu, { ...((plan && plan.weeks) || {}), [sfx]: next });
-  };
-
-  const applyFrom = (stu, fromEmail) => {
-    const src = planOf(fromEmail);
-    if (!src) return;
-    if (!confirm(`把「${src.name || fromEmail}」的清單套用到「${stu.name || stu.email}」？（會覆蓋現有勾選；套用的是同一份題目的引用，不是複製）`)) return;
-    writePlan(stu, src.weeks || {});
+  // v253: 「＋出題給他」——從學生視角直接出題：存進題庫＋自動發派給這位學生
+  const [compose, setCompose] = useDash(null); // { stu, catId?, draft? }
+  const startCompose = (catId) => setCompose(prev => ({
+    ...prev,
+    catId,
+    draft: {
+      id: catId[0] + Date.now() + Math.random().toString(36).slice(2, 6),
+      _isNew: true,
+      type: 'flashcard',
+      title: '', zh: '', duration: '', url: '', embed: '', body: '',
+    },
+  }));
+  const saveCompose = async (form) => {
+    const { _isNew, ...clean } = form;
+    const wid = (lib.order || []).find(id => String(id).endsWith(sfx));
+    if (!wid || !lib.weeks) { alert('題庫還沒載入，稍等再試。'); return; }
+    const w = JSON.parse(JSON.stringify(lib.weeks));
+    if (!w[wid].items) w[wid].items = {};
+    const list = w[wid].items[compose.catId] || [];
+    w[wid].items[compose.catId] = [...list, clean];
+    try {
+      await window.summerApi(window.SUMMER_LIB || 'sl').saveWeeks(w);
+    } catch (e) { alert('儲存失敗：' + ((e && e.message) || e)); return; }
+    setLib(prev => ({ ...prev, weeks: w })); // 樂觀更新（快照回來會覆蓋成一致）
+    const cur = setOf(compose.stu);
+    cur.add(clean.id);
+    await writePlan(compose.stu, Array.from(cur));
+    setCompose(null);
   };
 
   return (
     <div className="sa">
       {err && <div className="sa-err">{err}</div>}
       <div className="sa-hint">
-        先到「暑假題庫」出題（登出年級後選年級頁的 ☀️ 入口），再回這裡勾選發派。
-        同一單元發給多位學生時<b>共用同一份內容</b>——題庫改了，所有人同步更新。
+        先到「暑假題庫」出題，再回這裡勾選發派。同一單元發給多位學生時<b>共用同一份內容</b>——題庫改了，所有人同步更新。
       </div>
-      {!libHasContent && lib.weeks && (
-        <div className="sa-empty">題庫還沒有內容——先到暑假題庫出題，這裡就會出現可勾選的單元。</div>
-      )}
-      {active.length === 0 && <div className="sa-empty">名單是空的——先到「學生名單」新增學生。</div>}
 
-      {active.map(stu => {
-        const plan = planOf(stu.email);
-        const n = countOf(plan);
-        const open = openStu === stu.email;
-        const others = active.filter(o => o.email !== stu.email && countOf(planOf(o.email)) > 0);
-        return (
-          <div className={`sa-stu2${open ? ' open' : ''}`} key={stu.email}>
-            <button className="sa-stu2-head" onClick={() => { setOpenStu(open ? null : stu.email); setOpenWeek(null); }}>
-              <span className="sa-stu2-name">☀️ {stu.name || stu.email}{(window.gradeFromEmail(stu.email) || stu.grade) && <span className="dash-grade">{String(window.gradeFromEmail(stu.email) || stu.grade).toUpperCase()}</span>}</span>
-              <span className="sa-stu2-email">{stu.email}</span>
-              <span className={`sa-stu2-count${n > 0 ? ' on' : ''}`}>{n > 0 ? `已派 ${n} 項` : '未發派'}</span>
-              <span className="sa-stu2-chev">{open ? '⌃' : '⌄'}</span>
+      <div className="sa-weeks">
+        {suffixes.map((x, i) => {
+          const w = libWeekOf(x);
+          if (!w) return null;
+          const has = cats.some(c => ((w.items || {})[c.id] || []).length > 0);
+          if (!has) return null;
+          return (
+            <button key={x} className={`sa-wchip${sfx === x ? ' on' : ''}`} onClick={() => setSfx(x)}>
+              <b>Week {i + 1}</b>
+              {w.dateRange ? <span>{w.dateRange}</span> : null}
             </button>
-            {open && (
-              <div className="sa-stu2-body">
-                {others.length > 0 && (
-                  <div className="sa-apply">
-                    <span>快速套用其他學生的清單：</span>
-                    <select defaultValue="" onChange={e => { const v = e.target.value; e.target.value = ''; if (v) applyFrom(stu, v); }}>
-                      <option value="">選擇學生…</option>
-                      {others.map(o => (
-                        <option key={o.email} value={o.email}>
-                          {o.name || o.email}（{countOf(planOf(o.email))} 項）
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {suffixes.map((sfx, i) => {
-                  const groups = weekGroups(sfx);
-                  if (!groups.length) return null;
-                  const w = libWeekOf(sfx);
-                  const sel = new Set((plan && plan.weeks && plan.weeks[sfx]) || []);
-                  const allIds = groups.flatMap(g => g.items.map(it => it.id));
-                  const wOpen = openWeek === sfx;
-                  return (
-                    <div className={`sa-week${wOpen ? '' : ' closed'}`} key={sfx}>
-                      <button className="sa-week-head sa-week-head-btn" onClick={() => setOpenWeek(wOpen ? null : sfx)}>
-                        <span className="sa-week-title">Week {i + 1}<em>{w && w.dateRange}</em></span>
-                        <span className={`sa-week-count${sel.size > 0 ? ' on' : ''}`}>
-                          {sel.size > 0 ? `已派 ${sel.size} / ${allIds.length}` : `未發派 · ${allIds.length} 個單元`}
-                        </span>
-                        <span className="sa-week-chev">{wOpen ? '⌃' : '⌄'}</span>
+          );
+        })}
+      </div>
+
+      {groups.length === 0 ? (
+        <div className="sa-empty">這一週題庫還沒有內容——先到暑假題庫出題，這裡就會出現可勾選的單元。</div>
+      ) : active.length === 0 ? (
+        <div className="sa-empty">名單是空的——先到「學生名單」新增學生。</div>
+      ) : (
+        <div className="sa-mx-wrap">
+          <table className="sa-mx">
+            <thead>
+              <tr>
+                <th className="sa-mx-unitcol">單元 × 學生</th>
+                {active.map(stu => (
+                  <th key={stu.email}>
+                    <div className="sa-mx-stuwrap">
+                      <button className="sa-mx-stu" onClick={() => toggleCol(stu)} title={`${stu.name || stu.email}：點一下＝本週全選／清空`}>
+                        <b>{shortName(stu)}</b>
+                        <span className={setOf(stu).size > 0 ? 'on' : ''}>{setOf(stu).size}/{allIds.length}</span>
                       </button>
-                      {wOpen && (
-                        <>
-                          <div className="sa-week-tools">
-                            <button className="sa-week-all" onClick={() => toggleWeekAll(stu, sfx)}>
-                              {sel.size >= allIds.length ? '清空本週' : '全選本週'}
-                            </button>
-                          </div>
-                          {groups.map(g => (
-                            <div className="sa-cat" key={g.cat.id}>
-                              <span className="sa-cat-lbl">{g.cat.titleZh}</span>
-                              <div className="sa-chips">
-                                {g.items.map(it => (
-                                  <label className={`sa-chip${sel.has(it.id) ? ' on' : ''}`} key={it.id}>
-                                    <input
-                                      type="checkbox"
-                                      checked={sel.has(it.id)}
-                                      onChange={() => toggleItem(stu, sfx, it.id)}
-                                    />
-                                    <span>{it.title}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </>
-                      )}
+                      <button className="sa-mx-add" title={`出題給 ${shortName(stu)}：新單元存進題庫並直接發派給他`} onClick={() => setCompose({ stu })}>＋</button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(g => (
+                <React.Fragment key={g.cat.id}>
+                  <tr className="sa-mx-cat"><td colSpan={active.length + 1}>{g.cat.titleZh}</td></tr>
+                  {g.items.map(it => (
+                    <tr key={it.id}>
+                      <td className="sa-mx-unitcol">
+                        <span className="sa-mx-title">{it.title}</span>
+                        <button className="sa-mx-all" disabled={busy} onClick={() => toggleRow(it.id)} title="這個單元：全班一鍵發派／取消">全班</button>
+                      </td>
+                      {active.map(stu => {
+                        const onIt = setOf(stu).has(it.id);
+                        return (
+                          <td key={stu.email} className="sa-mx-cell">
+                            <button
+                              className={`sa-mx-chk${onIt ? ' on' : ''}`}
+                              onClick={() => toggleCell(stu, it.id)}
+                              aria-label={`${stu.name || stu.email} · ${it.title}${onIt ? '（已發派）' : ''}`}
+                            >{onIt ? '✓' : ''}</button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="cwo-hint">格子打勾＝發派給該學生；「全班」＝整列一鍵發派／取消；點學生名字＝該生本週全選／清空；欄頭「＋」＝直接出題給他。</p>
+
+      {compose && !compose.catId && (
+        <div className="report-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setCompose(null); }}>
+          <div className="report-modal sa-compose">
+            <div className="report-modal-head">
+              <h3 className="report-modal-title">＋ 出題給 {shortName(compose.stu)}</h3>
+              <button className="icon-btn" onClick={() => setCompose(null)}><window.Icon name="close" size={16}/></button>
+            </div>
+            <p className="sa-compose-hint">
+              選擇分類後開啟出題編輯器——儲存後會存進題庫，並<b>自動發派給 {shortName(compose.stu)}</b>（之後也能在矩陣勾給其他學生）。
+            </p>
+            <div className="sa-compose-cats">
+              {cats.map(c => (
+                <button key={c.id} onClick={() => startCompose(c.id)}>{c.titleZh}</button>
+              ))}
+            </div>
           </div>
-        );
-      })}
+        </div>
+      )}
+      {compose && compose.catId && compose.draft && window.EditorModal && (
+        <window.EditorModal
+          open={true}
+          draft={compose.draft}
+          weekId={(lib.order || []).find(id => String(id).endsWith(sfx)) || ''}
+          catItems={(libWeekOf(sfx) && libWeekOf(sfx).items && libWeekOf(sfx).items[compose.catId]) || []}
+          onClose={() => setCompose(null)}
+          onSave={saveCompose}
+          onDelete={() => setCompose(null)}
+        />
+      )}
     </div>
   );
 }
@@ -548,21 +630,42 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
 
-  // v238: 暑假發派名單——暑假模式下，每個學生的總數只算「發派給他」的單元
-  const [summerMeta, setSummerMeta] = useDash({ students: {} });
-  useDashE(() => (window.subscribeSummerMeta ? window.subscribeSummerMeta(setSummerMeta, () => {}) : undefined), []);
-  const isSummerData = useDashM(
+  // v251: 範圍切換——「教室（目前年級）」／「☀️ 暑假」，後台自己訂閱暑假題庫，不必出去繞一圈
+  const appIsSummer = useDashM(
     () => (weekOrder || []).some(wid => window.isSummerTrack && window.isSummerTrack(String(wid).split('-')[0])),
     [weekOrder]
   );
+  const [scope, setScope] = useDash('app'); // 'app' | 'summer'
+  const [sumLib, setSumLib] = useDash({ weeks: null, order: [] });
+  useDashE(() => {
+    if (!window.summerApi) return;
+    return window.summerApi(window.SUMMER_LIB || 'sl')
+      .subscribe((w, o) => setSumLib({ weeks: w, order: o }), () => {});
+  }, []);
+  const useSummerScope = scope === 'summer' && !appIsSummer;
+  const dWeeks = useSummerScope ? (sumLib.weeks || {}) : weeks;
+  const dOrder = useSummerScope ? (sumLib.order || []) : (weekOrder || []);
+
+  // v251: 選中的週統一管理——進學生詳情按 Back 不再重置；預設＝今天所在的週
+  const [selWeekId, setSelWeekId] = useDash(null);
+  useDashE(() => {
+    if (!dOrder.length) return;
+    if (selWeekId && dOrder.indexOf(selWeekId) !== -1) return;
+    setSelWeekId(dashCurrentWeekId(dWeeks, dOrder));
+  }, [dOrder, scope]);
+
+  // v238: 暑假發派名單——暑假模式下，每個學生的總數只算「發派給他」的單元
+  const [summerMeta, setSummerMeta] = useDash({ students: {} });
+  useDashE(() => (window.subscribeSummerMeta ? window.subscribeSummerMeta(setSummerMeta, () => {}) : undefined), []);
+  const isSummerData = useSummerScope || appIsSummer;
   const weeksForStudent = (s) => {
-    if (!isSummerData || !window.filterWeeksForPlan) return weeks;
+    if (!isSummerData || !window.filterWeeksForPlan) return dWeeks;
     const plan = (summerMeta.students || {})[String((s && s.email) || '').toLowerCase()] || null;
-    return window.filterWeeksForPlan(weeks, weekOrder, plan);
+    return window.filterWeeksForPlan(dWeeks, dOrder, plan);
   };
   const allItemsFor = (s) => {
     const w = weeksForStudent(s);
-    return weekOrder.flatMap(wid => {
+    return dOrder.flatMap(wid => {
       const wk = w[wid];
       if (!wk) return [];
       return window.CATEGORIES.flatMap(c =>
@@ -584,8 +687,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   // Flatten all items across every week (for "X / total" calculation)
   const allItems = useDashM(() => {
-    return weekOrder.flatMap(wid => {
-      const w = weeks[wid];
+    return dOrder.flatMap(wid => {
+      const w = dWeeks[wid];
       if (!w) return [];
       return window.CATEGORIES.flatMap(c =>
         (w.items[c.id] || []).map(it => ({
@@ -597,7 +700,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         }))
       );
     });
-  }, [weeks, weekOrder]);
+  }, [dWeeks, dOrder]);
 
   const total = allItems.length;
 
@@ -694,6 +797,12 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                   : cur.sub}
               </span>
             </div>
+            {window.summerApi && !appIsSummer && (
+              <div className="tdash-scope" role="tablist" aria-label="資料範圍">
+                <button role="tab" aria-selected={scope === 'app'} className={scope === 'app' ? 'on' : ''} onClick={() => setScope('app')}>教室</button>
+                <button role="tab" aria-selected={scope === 'summer'} className={scope === 'summer' ? 'on' : ''} onClick={() => setScope('summer')}>☀️ 暑假</button>
+              </div>
+            )}
             <button className="tdash-close" onClick={onClose} title="關閉後台">
               <window.Icon name="close" size={16}/>
             </button>
@@ -711,16 +820,19 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
               student={selected}
               allItems={allItemsFor(selected)}
               weeks={weeksForStudent(selected)}
-              weekOrder={weekOrder}
+              weekOrder={dOrder}
+              selWeekId={selWeekId}
               onBack={() => setSelected(null)}
             />
           ) : tab === 'overview' ? (
             <ClassWeekOverview
               students={students}
-              weeks={weeks}
-              weekOrder={weekOrder}
+              weeks={dWeeks}
+              weekOrder={dOrder}
               weeksFor={weeksForStudent}
               onSelect={setSelected}
+              selWeekId={selWeekId}
+              setSelWeekId={setSelWeekId}
             />
           ) : (
             /* ── Overview table ── */
@@ -781,9 +893,10 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         {allReportOpen && (
           <AllClassReportModal
             students={students}
-            weeks={weeks}
-            weekOrder={weekOrder}
+            weeks={dWeeks}
+            weekOrder={dOrder}
             weeksFor={weeksForStudent}
+            initialWeekId={selWeekId}
             onClose={() => setAllReportOpen(false)}
           />
         )}
@@ -793,8 +906,9 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 }
 
 /* ── Per-student detail view ───────────────────────────── */
-function StudentDetail({ student, allItems, weeks, weekOrder, onBack }) {
+function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack }) {
   const [reportOpen, setReportOpen] = useDash(false);
+  const [wrongOpen, setWrongOpen] = useDash(null); // v251: 展開中的錯題單元 id
 
   const its = student.items || {};
   const done = allItems.filter(it =>
@@ -836,6 +950,7 @@ function StudentDetail({ student, allItems, weeks, weekOrder, onBack }) {
           student={student}
           weeks={weeks}
           weekOrder={weekOrder}
+          initialWeekId={selWeekId}
           onClose={() => setReportOpen(false)}
         />
       )}
@@ -850,17 +965,38 @@ function StudentDetail({ student, allItems, weeks, weekOrder, onBack }) {
                 its[Object.keys(its).find(k => k.endsWith('_' + it.id)) || ''] || null;
               const isDone = !!prog?.done;
               const score  = prog?.score != null ? Math.min(100, prog.score) : null;
+              const wrongs = prog?.wrongQuestions || [];
+              const wOpen  = wrongOpen === it.id;
               return (
-                <div key={it.id} className={`sdetail-item${isDone ? ' done' : ''}`}>
-                  <span className={`sdetail-check${isDone ? ' done' : ''}`}>
-                    {isDone ? '✓' : '○'}
-                  </span>
-                  <span className="sdetail-iname">{it.title}</span>
-                  <span className="sdetail-cat">{it.cat}</span>
-                  <span className="sdetail-score">
-                    {score != null ? score + '%' : ''}
-                  </span>
-                </div>
+                <React.Fragment key={it.id}>
+                  <div className={`sdetail-item${isDone ? ' done' : ''}`}>
+                    <span className={`sdetail-check${isDone ? ' done' : ''}`}>
+                      {isDone ? '✓' : '○'}
+                    </span>
+                    <span className="sdetail-iname">{it.title}</span>
+                    {wrongs.length > 0 && (
+                      <button
+                        className={`sdetail-wrongbtn${wOpen ? ' on' : ''}`}
+                        onClick={() => setWrongOpen(wOpen ? null : it.id)}
+                        title="看這個單元錯了哪些題"
+                      >✗ 錯 {wrongs.length} 題 {wOpen ? '⌃' : '⌄'}</button>
+                    )}
+                    <span className="sdetail-cat">{it.cat}</span>
+                    <span className="sdetail-score">
+                      {score != null ? score + '%' : ''}
+                    </span>
+                  </div>
+                  {wOpen && (
+                    <div className="sdetail-wrongs">
+                      {wrongs.map((w, wi) => (
+                        <div className="sdetail-wrong-row" key={wi}>
+                          <span className="sdetail-wrong-q">{w.q}</span>
+                          <span className="sdetail-wrong-a">正解：{w.answer}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
           </div>

@@ -618,13 +618,51 @@ function subscribeAllStudents(callback) {
 // ── Text-to-Speech (shared) ────────────────────────────────────────────
 // iOS Safari requires a user gesture before the first utterance; callers
 // should treat silent failure as acceptable and offer a manual 🔊 button.
-function speakText(text, { rate = 0.88, lang = 'en-US' } = {}) {
+// v244: 不指定語音時，macOS/Chrome 常落到 Albert / Fred 這類整人語音（氣音老人聲）。
+// 主動挑高品質語音：Google / Natural / Premium / Enhanced / Samantha…，整人語音進黑名單。
+let _ttsVoiceCache = {};
+const _TTS_NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|fred|good news|hysterical|jester|junior|kathy|organ|superstar|trinoids|whisper|wobble|zarvox|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|ralph/;
+function _ttsPickVoice(lang) {
+  const synth = window.speechSynthesis;
+  if (!synth) return null;
+  const voices = synth.getVoices();
+  if (!voices.length) return null;
+  const key = String(lang).toLowerCase();
+  const cached = _ttsVoiceCache[key];
+  if (cached && voices.indexOf(cached) !== -1) return cached;
+  const norm = (l) => String(l || '').toLowerCase().replace('_', '-');
+  const base = key.split('-')[0];
+  const cands = voices.filter(v => norm(v.lang).indexOf(base) === 0);
+  const score = (v) => {
+    const n = v.name.toLowerCase();
+    let s = 0;
+    if (norm(v.lang) === key) s += 4;                                   // 完整 locale 相符
+    if (n.indexOf('google') !== -1) s += 8;                             // Chrome 的 Google 語音最自然
+    if (/natural|premium|enhanced/.test(n)) s += 7;                     // Edge Natural / macOS 加強版
+    if (/samantha|ava|allison|karen|daniel|nicky|joelle|mei-jia|meijia|siri/.test(n)) s += 5; // 已知的好聲音
+    if (_TTS_NOVELTY.test(n)) s -= 20;                                  // 黑名單墊底
+    return s;
+  };
+  cands.sort((a, b) => score(b) - score(a));
+  _ttsVoiceCache[key] = cands[0] || null;
+  return _ttsVoiceCache[key];
+}
+if (window.speechSynthesis) {
+  try {
+    window.speechSynthesis.getVoices(); // 觸發語音清單載入（部分瀏覽器第一次回空陣列）
+    window.speechSynthesis.addEventListener('voiceschanged', () => { _ttsVoiceCache = {}; });
+  } catch (e) {}
+}
+function speakText(text, { rate = 0.95, lang = 'en-US' } = {}) {
   try {
     if (!window.speechSynthesis || !text) return false;
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(String(text));
     utt.lang = lang;
     utt.rate = rate;
+    utt.pitch = 1;
+    const v = _ttsPickVoice(lang);
+    if (v) utt.voice = v;
     window.speechSynthesis.speak(utt);
     return true;
   } catch(e) { return false; }

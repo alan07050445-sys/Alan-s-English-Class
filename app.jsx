@@ -456,8 +456,30 @@ function App() {
     setTourOpen(false);
   };
 
-  // If the user logs in while viewing the landing, close it and continue into the app.
-  useAppEffect(() => { if (user) setViewLanding(false); }, [user]);
+  // v249: 從行銷頁按「開始學習」登入 → 留在首頁（CTA 變「進入課程」）；
+  // 其他情況（重新整理自動恢復登入等）不動──學生日常仍直達門口頁。
+  const loginFromLandingRef = useAppRef(false);
+  useAppEffect(() => {
+    if (!user) return;
+    if (loginFromLandingRef.current) {
+      loginFromLandingRef.current = false;
+      setViewLanding(true);   // 留在首頁，敘述換成「進入課程」
+    } else if (viewLanding) {
+      // 舊行為保留：非首頁發起的登入完成時，把殘留的行銷頁關掉
+      setViewLanding(false);
+    }
+  }, [user]);
+
+  // v252: 泡泡轉場改純 DOM（spawnPageWave）——點擊下一幀就出現，不等 App re-render（後台很重時會頓）
+  const wavingRef = useAppRef(false);
+  const runWave = (cb) => {
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || wavingRef.current || !window.spawnPageWave) { cb(); return; }
+    wavingRef.current = true;
+    window.spawnPageWave(1900);
+    setTimeout(cb, 560);                      // 泡泡最密、紗幕全遮的瞬間切頁
+    setTimeout(() => { wavingRef.current = false; }, 1850);
+  };
 
   const scrollPageToTop = () => {
     const jump = () => {
@@ -864,17 +886,18 @@ function App() {
       // "回首頁" from inside the app — show the landing again, with a way back.
       appContent = (
         <window.LoginScreen
-          onLogin={() => window.signInWithGoogle()}
+          onLogin={() => { loginFromLandingRef.current = true; window.signInWithGoogle(); }}
           onSkip={() => {
             try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
             setSkippedLogin(true);
-            // 從介紹頁「先逛逛」進來 → 一律回門口頁（第二頁），不直接跳教室
             setEntered(false);
             try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
             setViewLanding(false);
           }}
-          onBack={(grade || skippedLogin || user) ? () => setViewLanding(false) : null}
+          onBack={(grade || skippedLogin || user) ? () => runWave(() => setViewLanding(false)) : null}
           loggedIn={!!user}
+          userName={user ? (_englishName(user.displayName) || user.displayName || null) : null}
+          onLogout={user ? () => { window.signOutUser(); try { sessionStorage.removeItem('alan-guest'); } catch(e) {} setSkippedLogin(false); } : null}
         />
       );
     } else if (accessLocked && !isTeacher) {
@@ -894,7 +917,7 @@ function App() {
       appContent = (
         <window.LoginScreen
           key={pageKey}
-          onLogin={() => window.signInWithGoogle()}
+          onLogin={() => { loginFromLandingRef.current = true; window.signInWithGoogle(); }}
           onSkip={() => {
             try { sessionStorage.setItem('alan-guest', '1'); } catch(e) {}
             setSkippedLogin(true);
@@ -912,7 +935,7 @@ function App() {
       appContent = (
         <window.GradeSelector
           key={pageKey}
-          onSelect={handleSelectGrade}
+          onSelect={(g) => runWave(() => handleSelectGrade(g))}
           homeGrade={homeGrade}
           who={user ? _englishName(user.displayName) : null}
           summerOnly={SUMMER_ONLY_DOOR && !isTeacher && hasSummerPlan}
@@ -1010,6 +1033,14 @@ function App() {
               scrollPageToTop();
             }}
           />
+
+          {/* v249: 首頁深海幽靈字延伸到教室（極淡、靜態，不干擾練習） */}
+          {!catView && !editMode && (
+            <div className="lobby-deep" aria-hidden="true">
+              <span className="deep-lite dl-a">Aa</span>
+              <span className="deep-lite dl-c">✓</span>
+            </div>
+          )}
 
           {/* ── QUIZ MODE ── */}
           <div key={weekId} className={slideDir ? `week-slide-${slideDir}` : ''}>
@@ -1207,7 +1238,7 @@ function App() {
       {/* 老師後台 — top-level：門口頁的「老師後台」卡也能直接開 */}
       {dashOpen && isTeacher && (
         <window.TeacherDashboard
-          onClose={() => setDashOpen(false)}
+          onClose={() => runWave(() => setDashOpen(false))}
           weeks={weeks}
           weekOrder={weekOrder}
         />

@@ -958,13 +958,28 @@ function FlashcardEditor({ cards, onChange }) {
     [arr[i], arr[j]] = [arr[j], arr[i]]; onChange(arr);
   };
   const handleImport = () => {
+    // v251: 統一分隔符——Tab（試算表/Quizlet 直貼）優先，其次「|」，再來「 - 」
     const parsed = importText.split('\n').filter(l => l.trim()).map(line => {
-      const p = line.split(/\s*-\s*/);
+      const p = line.includes('\t') ? line.split('\t')
+        : line.includes('|') ? line.split('|')
+        : line.split(/\s+-\s+/);
       return { id: "c"+Date.now()+Math.random().toString(36).slice(2,5), term:(p[0]||"").trim(), zh:(p[1]||"").trim(), example:(p[2]||"").trim(), imageUrl:"" };
     }).filter(c => c.term);
     if (!parsed.length) return;
     onChange([...cards, ...parsed]);
     setImportText(""); setImporting(false);
+  };
+  // v251: 匯出成 Quizlet 可直接匯入的格式（英文[Tab]中文，每行一張）
+  const handleExport = () => {
+    const text = cards.filter(c => (c.term || '').trim())
+      .map(c => `${(c.term || '').trim()}\t${(c.zh || '').trim()}`).join('\n');
+    if (!text) { alert('還沒有卡片可以匯出。'); return; }
+    const done = () => alert(`已複製 ${cards.length} 張卡（英文 Tab 中文）——到 Quizlet 選「匯入」直接貼上即可。`);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => window.prompt('複製下面內容貼到 Quizlet：', text));
+    } else {
+      window.prompt('複製下面內容貼到 Quizlet：', text);
+    }
   };
   const importLineCount = importText.split('\n').filter(l => l.trim()).length;
 
@@ -977,13 +992,14 @@ function FlashcardEditor({ cards, onChange }) {
         <span className="mono" style={{fontSize:10, color:"var(--ink-muted)"}}>{cards.length} 張卡片</span>
         <div style={{display:"flex", gap:8}}>
           <button className={"btn ghost"+(importing?" active":"")} style={{padding:"6px 12px",fontSize:11}} onClick={() => setImporting(v=>!v)}>⬇ Import</button>
+          <button className="btn ghost" style={{padding:"6px 12px",fontSize:11}} onClick={handleExport} title="複製成 Quizlet 匯入格式（英文 Tab 中文）">⬆ 匯出 Quizlet</button>
           <button className="btn primary" style={{padding:"6px 12px",fontSize:11}} onClick={addCard}>+ Add Card</button>
         </div>
       </div>
       {importing && (
         <div className="fc-import-box">
           <div className="mono" style={{fontSize:10,color:"var(--ink-muted)",marginBottom:8}}>
-            每行一張卡：<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>英文 - 中文 - 例句</code>（例句可省略）
+            每行一張卡，欄位用 <code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>Tab</code>（試算表／Quizlet 直貼）、<code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}>|</code> 或 <code style={{background:"var(--border-soft)",padding:"1px 4px",borderRadius:2}}> - </code> 分隔：英文／中文／例句（後兩欄可省略）
           </div>
           <textarea className="fc-import-ta" value={importText} onChange={e=>setImportText(e.target.value)} rows={7}
             placeholder={"queen - 女王 - The queen ruled the kingdom.\nfable - 寓言故事\ntrack (v.) - 追蹤"}/>

@@ -143,23 +143,45 @@ function Header({
 }
 
 /* ───────── Login Screen ───────── */
-function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
+function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
   const [loading, setLoading] = React.useState(false);
+  const [acctOpen, setAcctOpen] = React.useState(false); // v249: 右上帳號下拉
+  React.useEffect(() => {
+    if (!acctOpen) return;
+    const close = (e) => { if (!e.target.closest || !e.target.closest('.ll-acct')) setAcctOpen(false); };
+    document.addEventListener('click', close, true);
+    return () => document.removeEventListener('click', close, true);
+  }, [acctOpen]);
   const [policyOpen, setPolicyOpen] = React.useState(false);
   const [teacherOpen, setTeacherOpen] = React.useState(false);
   const [shot, setShot] = React.useState(0);        // 產品畫面展示的分頁
   const [shotHover, setShotHover] = React.useState(false);
   const shotHoverRef = React.useRef(false);
   const [faqOpen, setFaqOpen] = React.useState(0);  // 展開中的 FAQ（-1 = 全收合）
-  const [expCat, setExpCat] = React.useState(null); // 四大項目聚光燈（觸控用點按；滑鼠靠 :hover）
+  const [expCat, setExpCat] = React.useState('vocab'); // v241: hero 文具卡展開中的分類（預設第一張）
+  const [asmRun, setAsmRun] = React.useState(false); // v245: 組裝段落是否已觸發
+  const [asmKey, setAsmKey] = React.useState(0);     // v245: 「再看一次」重播 key
 
-  // 產品畫面自動輪播（hover 暫停；點分頁會重置計時；reduced-motion 不輪播）
+  // 題型展示自動輪播（hover 暫停；點分頁會重置計時；reduced-motion 不輪播）
   React.useEffect(() => {
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) return;
-    const t = setInterval(() => { if (!shotHoverRef.current) setShot(s => (s + 1) % 3); }, 6000);
+    const t = setInterval(() => { if (!shotHoverRef.current) setShot(s => (s + 1) % 4); }, 6500);
     return () => clearInterval(t);
   }, [shot, shotHover]);
+
+  // v245: 組裝段落——捲進視野才開始編排，跑完靜止；reduced-motion / 無 IO 直接完成態
+  React.useEffect(() => {
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const el = document.querySelector('.asm');
+    const root = document.querySelector('.login-landing');
+    if (!el || !root || reduce || !('IntersectionObserver' in window)) { setAsmRun(true); return; }
+    const io = new IntersectionObserver((ents) => {
+      ents.forEach(en => { if (en.isIntersecting) { setAsmRun(true); io.disconnect(); } });
+    }, { root, threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [asmKey]);
 
   // Scroll-reveal motion (respects prefers-reduced-motion)
   React.useEffect(() => {
@@ -184,7 +206,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     const fine = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!fine || reduce) return;
-    const cards = document.querySelectorAll('.ll-results .ll-hpc, .ll-feat, .ll-pain, .ll-testi-card'); // v205: .ll-cat 改用聚光燈手風琴，不再 tilt
+    const cards = document.querySelectorAll('.ll-hm, .ll-hpc, .ll-pain, .ll-testi-card'); // v241: hpc 不再包在 .ll-results；.ll-feat 已拆
     if (!cards.length) return;
     const bound = [];
     cards.forEach(card => {
@@ -293,16 +315,14 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     const bar = root.querySelector('.ll-nav-progress');
     const fine = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const heroImg = root.querySelector('.ll-hero-img');
+    const heroImg = root.querySelector('.ll-hcards'); // v241: 視差作用在 hero 文具卡列（mockup 已移駐 Skills 區）
     const secs = Array.from(root.querySelectorAll('.ll-section'));
     // v223 背景色漸變：底色在各區顏色間隨捲動平滑內插（內容不動、不會暈）
     const BLEND = [
       ['#ll-top',     [249, 245, 236]],
       ['#ll-pains',   [255, 253, 248]],
       ['#ll-learn',   [246, 241, 230]],
-      ['#ll-why',     [255, 253, 248]],
-      ['#ll-product', [246, 241, 230]],
-      ['#ll-results', [244, 236, 221]],
+      ['#ll-skills',  [244, 236, 221]],
       ['#ll-voices',  [251, 249, 243]],
       ['#ll-teacher', [246, 241, 230]],
       ['#ll-faq',     [255, 253, 248]],
@@ -310,6 +330,21 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     ].map(([sel, c]) => ({ el: root.querySelector(sel), c })).filter(a => a.el);
     if (BLEND.length > 1) root.classList.add('ll-blend');
     const sun = root.querySelector('.ll-sun');
+    // v246: 學期進度 HUD——捲動＝一個學期的進步（Week 1·59分 → Week 16·99分）
+    const hud = root.querySelector('.ll-hud');
+    const hudWeek = hud && hud.querySelector('.ll-hud-week');
+    const hudZone = hud && hud.querySelector('.ll-hud-zone');
+    const hudScore = hud && hud.querySelector('.ll-hud-score');
+    const hudBar = hud && hud.querySelector('.ll-hud-bar-i');
+    let hudLast = -1;
+    // v248: 學習深海——幽靈字依景深速度漂過（near 快=近、far 慢=遠）
+    const deepIts = Array.from(root.querySelectorAll('.ll-deep-it')).map(el => ({
+      el,
+      p: parseFloat(el.dataset.p),
+      f: el.classList.contains('dp-near') ? 2.3 : el.classList.contains('dp-mid') ? 1.55 : 1.0,
+    }));
+    // v248: 內容「由遠至近」——各區隨捲動位置縮放/淡入（scrub；居中閱讀時＝原尺寸靜止）
+    const dSecs = Array.from(root.querySelectorAll('.ll-hero, .ll-section, .ll-teacher, .ll-final'));
     let raf = 0;
     const apply = () => {
       raf = 0;
@@ -335,6 +370,48 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
         // 暖光從右上往左下慢慢漂（跟著底色一起變暖）
         const pr = max > 0 ? root.scrollTop / max : 0;
         sun.style.transform = 'translate(' + ((0.62 - pr * 0.45) * root.clientWidth).toFixed(0) + 'px, ' + ((0.06 + pr * 0.6) * root.clientHeight).toFixed(0) + 'px)';
+      }
+      if (deepIts.length) {
+        // v248: 幽靈字漂過（位置映射；停止捲動就靜止）
+        const p = max > 0 ? Math.min(1, root.scrollTop / max) : 0;
+        const vh2 = root.clientHeight;
+        deepIts.forEach(o => {
+          const dy = (o.p - p) * o.f * vh2 * 4.5; // 係數大→字更專屬於自己的深度段，同屏 3-5 個
+          if (Math.abs(dy) > vh2 * 0.85) {
+            if (o.el.style.visibility !== 'hidden') o.el.style.visibility = 'hidden';
+            return;
+          }
+          o.el.style.visibility = 'visible';
+          o.el.style.transform = 'translate(-50%, ' + dy.toFixed(0) + 'px)';
+        });
+      }
+      if (!reduce && dSecs.length) {
+        // v248: 內容由遠至近——離視窗中心越遠越小越淡；置中＝1:1 靜止（不影響閱讀）
+        const vh2 = root.clientHeight;
+        dSecs.forEach(s => {
+          const r2 = s.getBoundingClientRect();
+          if (r2.bottom < -160 || r2.top > vh2 + 160) return;
+          const c = (r2.top + r2.height / 2 - vh2 / 2) / vh2;
+          const k = Math.min(1, Math.abs(c) / 0.6);
+          s.style.transform = 'scale(' + (1 - k * 0.055).toFixed(4) + ')';
+          s.style.opacity = (1 - k * 0.38).toFixed(3);
+        });
+      }
+      if (hud) {
+        // 位置映射（同 BLEND，不算動畫）：週次/分數/階段跟著捲動爬升
+        const p = max > 0 ? Math.min(1, root.scrollTop / max) : 0;
+        const step = Math.round(p * 200);
+        if (step !== hudLast) {
+          hudLast = step;
+          const pb = Math.min(1, p * 1.04); // scroll-snap 會吸在離底一點點的位置——提前 4% 滿分
+          const wk = Math.min(20, 1 + Math.floor(pb * 20));
+          const sc = Math.round(pb * 100); // v248: Alan 選 0→100（可愛）
+          const zone = p < .1 ? '開學' : p < .42 ? '每週練習' : p < .72 ? '穩定進步' : p < .93 ? '期末成果' : '換你的孩子了';
+          if (hudWeek) hudWeek.textContent = 'WEEK ' + String(wk).padStart(2, '0');
+          if (hudZone && hudZone.textContent !== zone) hudZone.textContent = zone;
+          if (hudScore) hudScore.textContent = sc;
+          if (hudBar) hudBar.style.width = (pb * 100).toFixed(1) + '%';
+        }
       }
       if (fine && !reduce) {
         if (heroImg) heroImg.style.transform = 'translateY(' + Math.min(44, root.scrollTop * 0.08).toFixed(1) + 'px)';
@@ -370,9 +447,8 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     { id: 'll-top', label: '首頁' },
     { id: 'll-pains', label: '痛點' },
     { id: 'll-learn', label: '學什麼' },
-    { id: 'll-product', label: '看畫面' },
-    { id: 'll-results', label: '成效' },
-    { id: 'll-voices', label: '見證' },
+    { id: 'll-skills', label: '能力' },
+    { id: 'll-voices', label: '回饋' },
     { id: 'll-teacher', label: '老師' },
   ];
   const scrollToId = (id) => {
@@ -403,20 +479,16 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     root.addEventListener('scroll', onScroll, { passive: true });
     return () => { io.disconnect(); root.removeEventListener('scroll', onScroll); };
   }, []);
+  // v243: CTA 改品牌主題按鈕「開始學習」（動作仍是 Google 登入，下方小字說明）
   const GoogleBtn = (
-    <button className="google-btn" onClick={handleLogin} disabled={loading}>
-      <svg className="google-icon" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-      </svg>
-      {loading ? '登入中…' : '使用 Google 登入'}
+    <button className="google-btn ll-start-btn" onClick={handleLogin} disabled={loading}>
+      {loading ? '登入中…' : '開始學習 →'}
     </button>
   );
   const GoogleBtnGroup = (
     <>
       {GoogleBtn}
+      <span className="ll-login-hint">以 Google 帳號登入 · 免安裝</span>
       {loginSlow && (
         <button className="ll-login-alt" onClick={handleLoginRedirect}>
           登入視窗沒有回應？點此改用跳轉登入 →
@@ -426,17 +498,17 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
   );
   // 已登入的人從 app 內回來看首頁：CTA 變「回到學習」，不再出現登入按鈕
   const PrimaryCta = (loggedIn && onBack)
-    ? <button className="google-btn" onClick={onBack}>回到我的學習頁 →</button>
+    ? <button className="google-btn ll-start-btn" onClick={onBack}>進入課程 →</button>
     : GoogleBtnGroup;
 
   const cats = [
-    { key:'vocab',   zh:'單字',     en:'Vocabulary',   desc:'外師單字 · 卡片、配對、拼寫',
+    { key:'vocab',   zh:'單字',     en:'Vocabulary',   hero:'Words.',   desc:'外師單字 · 卡片、配對、拼寫',
       chips:['單字卡','配對','拼寫','選擇題'] },
-    { key:'grammar', zh:'文法',     en:'Grammar',      desc:'句型與時態 · 選擇、填空、造句',
+    { key:'grammar', zh:'文法',     en:'Grammar',      hero:'Grammar.', desc:'句型與時態 · 選擇、填空、造句',
       chips:['選擇題','填空','造句','句型重組'] },
-    { key:'word',    zh:'字根字首', en:'Word Study',   desc:'拆解構詞 · 字根、字首、字尾',
+    { key:'word',    zh:'字根字首', en:'Word Study',   hero:'Roots.',   desc:'拆解構詞 · 字根、字首、字尾',
       chips:['字根拆解','音節切分','選擇題'] },
-    { key:'reading', zh:'閱讀寫作', en:'Reading & Writing', desc:'閱讀理解 · 意見寫作（AI 批改）',
+    { key:'reading', zh:'閱讀寫作', en:'Reading & Writing', hero:'Read.', desc:'閱讀理解 · 意見寫作（AI 批改）',
       chips:['閱讀理解','短文問答','意見寫作','AI 批改'] },
   ];
 
@@ -446,7 +518,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
       <div className="lldm lldm-vocab" aria-hidden="true">
         <div className="lldm-flip">
           <div className="lldm-face lldm-front">apple</div>
-          <div className="lldm-face lldm-back">蘋果 🍎</div>
+          <div className="lldm-face lldm-back"><img className="lldm-apple" src="demo-apple.png" alt=""/>蘋果</div>
         </div>
         <div className="lldm-cap">單字卡 · 自動翻面複習</div>
       </div>
@@ -484,20 +556,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     { img:'feat-week.png',   role:'孩子', rc:'k', title:'每週跟著練',     desc:'在家用自己的步調練當週內容，完成度、分數與錯題自動記錄。' },
     { img:'feat-record.png', role:'家長', rc:'p', title:'隨時看得到',     desc:'打開聯絡簿與成長報告，孩子練了什麼、進步多少一目了然。' },
   ];
-  const FlowArrow = (
-    <div className="ll-flow-arrow" aria-hidden="true">
-      <svg viewBox="0 0 46 12">
-        <line className="ll-flow-dash" x1="2" y1="6" x2="35" y2="6"/>
-        <path className="ll-flow-head" d="M35 1.5 L43 6 L35 10.5"/>
-      </svg>
-    </div>
-  );
-
-  const shots = [
-    { k:'contact', who:'學生端', t:'本週聯絡簿', d:'這週要練什麼、完成了沒，孩子一打開就知道。' },
-    { k:'growth',  who:'家長端', t:'成長報告',   d:'每週完成率與分數自動畫成圖表，進步看得見。' },
-    { k:'class',   who:'老師端', t:'全班總覽',   d:'誰完成、誰卡住，老師一眼掌握、即時提醒。' },
-  ];
+  // v241: FlowArrow（放心設計橫向循環）與 shots（三端畫面展示）已隨區塊重組移除
   const faqs = [
     { q:'這個平台需要付費嗎？', a:'不用。這是 Alan 老師為學生與家長打造的練習平台，用 Google 帳號登入就能開始，不需要任何費用。' },
     { q:'需要準備什麼設備？', a:'有瀏覽器的電腦或平板就可以，不用安裝任何 App。建議使用電腦或平板，畫面較大、練習體驗最好。' },
@@ -518,9 +577,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
     { q:'每次上完課都知道孩子哪裡需要加強，回家練習也更有方向，不會只是盲目寫題目。', who:'Emma · G3' },
     { q:'老師設計的練習很有趣，孩子覺得像在闖關，不會覺得英文很無聊，學習意願也提高很多。', who:'Lucas · G2' },
   ];
-  const testiCols = [[], [], []];
-  testi.forEach((t, i) => testiCols[i % 3].push(t));
-  const testiDur = ['28s', '35s', '32s']; // v213: 提速 ~20%（Alan：10 分變 12 分）
+  // v241: 見證改 Skillex 式箭頭輪播（wall of love 移除）
 
   return (
     <div className="login-screen login-landing">
@@ -538,37 +595,109 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
           ))}
         </div>
         {(loggedIn && onBack)
-          ? <button className="ll-nav-cta" onClick={onBack}>回學習</button>
+          ? (
+            <div className="ll-acct">
+              <button className="ll-nav-cta ll-acct-btn" onClick={() => setAcctOpen(o => !o)} aria-haspopup="true" aria-expanded={acctOpen}>
+                {userName || '我的帳號'}<i className="ll-acct-caret">▾</i>
+              </button>
+              {acctOpen && (
+                <div className="ll-acct-menu" role="menu">
+                  <button role="menuitem" onClick={() => { setAcctOpen(false); onBack(); }}>進入課程 →</button>
+                  {onLogout && <button role="menuitem" className="ll-acct-out" onClick={() => { setAcctOpen(false); onLogout(); }}>登出</button>}
+                </div>
+              )}
+            </div>
+          )
           : <button className="ll-nav-cta" onClick={handleLogin} disabled={loading}>登入</button>}
         <span className="ll-nav-progress" aria-hidden="true"/>
       </nav>
 
       <div className="ll-sun" aria-hidden="true"/>{/* v225 暖陽光暈：隨捲動漂移 */}
+      {/* v248: 學習深海——滿版幽靈字世界，捲動＝潛入學習深度（字母→單字→句子→成績），三種景深速度不同 */}
+      <div className="ll-deep" aria-hidden="true">
+        {[
+          { t: 'A',                   p: .02, x: 10, d: 'far'  },
+          { t: 'a b c',               p: .05, x: 76, d: 'mid'  },
+          { t: 'Bb',                  p: .09, x: 20, d: 'near' },
+          { t: 'ABC',                 p: .12, x: 64, d: 'far'  },
+          { t: 'apple',               p: .17, x: 12, d: 'mid'  },
+          { t: 'read',                p: .21, x: 72, d: 'near' },
+          { t: 'c·a·t',               p: .25, x: 28, d: 'far'  },
+          { t: 'study',               p: .29, x: 80, d: 'mid'  },
+          { t: 'week',                p: .33, x: 10, d: 'near' },
+          { t: 'spell',               p: .37, x: 56, d: 'far'  },
+          { t: 'learn',               p: .41, x: 16, d: 'mid'  },
+          { t: 'I can read.',         p: .46, x: 62, d: 'near' },
+          { t: '✓',                   p: .50, x: 12, d: 'mid'  },
+          { t: 'She goes to school.', p: .55, x: 34, d: 'far'  },
+          { t: 'un·break·able',       p: .60, x: 68, d: 'mid'  },
+          { t: '✓ ✓',                 p: .65, x: 14, d: 'near' },
+          { t: '+10',                 p: .70, x: 76, d: 'mid'  },
+          { t: '85',                  p: .76, x: 24, d: 'far'  },
+          { t: 'Well done!',          p: .82, x: 64, d: 'near' },
+          { t: 'A+',                  p: .87, x: 12, d: 'mid'  },
+          { t: '★',                   p: .92, x: 78, d: 'far'  },
+          { t: '100',                 p: .97, x: 42, d: 'near' },
+        ].map((it, i) => (
+          <span key={i} className={`ll-deep-it dp-${it.d}`} style={{ left: it.x + '%' }} data-p={it.p}>{it.t}</span>
+        ))}
+      </div>
+      {/* v246: 學期進度 HUD——貫穿全頁的連串感：捲動＝一個學期 59→99 的進步 */}
+      <div className="ll-hud" aria-hidden="true">
+        <div className="ll-hud-top">
+          <span className="ll-hud-week">WEEK 01</span>
+          <span className="ll-hud-zone">開學</span>
+        </div>
+        <div className="ll-hud-scorerow"><b className="ll-hud-score">0</b><span className="ll-hud-unit">分</span></div>
+        <div className="ll-hud-bar"><i className="ll-hud-bar-i"/></div>
+        <div className="ll-hud-note">從 0 到 100 的一學期</div>
+      </div>
       <div className="ll-wrap">
 
         <header className="ll-hero" id="ll-top">
           <div className="ll-hero-grid">
             <div className="ll-hero-text">
               <div className="ll-eyebrow">康橋國際學校 · 英文每週練習平台</div>
-              <h1 className="ll-title">把每週英文進度<br/>變成孩子做得到的練習</h1>
+              <h1 className="ll-title">跟不上學校進度？<br/><em className="ll-title-em">每週對齊康橋，練得完、跟得上。</em></h1>
               <p className="ll-lead">
-                對齊康橋國際學校每週課程，單字、文法、字根字首、閱讀寫作一站完成。
-                登入後自動記錄學習進度，家長隨時看得到。
+                學校教到哪，就練到哪——單字、文法、字根字首、閱讀寫作，
+                老師依康橋當週課程親自出題，完成度與分數家長隨時看得到。
               </p>
-              <div className="ll-hero-badge">
-                <span>✦ 真實學生 · 康橋評量</span>
-                <b>59 → 99</b>
-                <span className="ll-hero-badge-sep">·</span>
-                <span>E1 平均</span><b>95+</b>
-              </div>
               <div className="ll-cta">
                 {PrimaryCta}
-                {!loggedIn && <button className="ll-guest" onClick={onSkip}>先逛逛 · 不記錄進度</button>}
               </div>
-              <div className="ll-trustline">🔒 僅用於記錄學習進度，不對外公開、不作其他用途</div>
             </div>
             <div className="ll-hero-art">
-              <img className="ll-hero-img" src="hero-kid.png" alt="開心閱讀與書寫英文的孩子"/>
+              {/* v241: 文具風直向卡片（RosyPosy 單字本質感）——hover/點按展開 */}
+              <div className="ll-hcards" role="list" aria-label="四大學習項目">
+                {cats.map(c => (
+                  <div
+                    role="listitem"
+                    key={c.key}
+                    className={`ll-hc${expCat === c.key ? ' exp' : ''}`}
+                    style={{ '--cc': `var(--c-${c.key})` }}
+                    onClick={() => setExpCat(c.key)}
+                    onMouseEnter={() => setExpCat(c.key)}
+                  >
+                    <div className="ll-hc-rings" aria-hidden="true">
+                      {Array.from({ length: 7 }, (_, i) => <span key={i}/>)}
+                    </div>
+                    <div className="ll-hc-spine" aria-hidden="true">{c.zh}</div>
+                    <div className="ll-hc-open">
+                      <div className="ll-hc-en">{c.hero}</div>
+                      <div className="ll-hc-zh">{c.zh}</div>
+                      <div className="ll-hc-desc">{c.desc}</div>
+                      <div className="ll-hc-chips">
+                        {c.chips.slice(0, 3).map(ch => <span key={ch}>{ch}</span>)}
+                      </div>
+                    </div>
+                    <div className="ll-hc-clip" aria-hidden="true">
+                      <span className="ll-hc-clip-neck"><i/></span>
+                      <span className="ll-hc-clip-base"/>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -586,7 +715,6 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
         </header>
 
         <section className="ll-section reveal-group" id="ll-pains">
-          <img className="ll-sec-art" src="pain-kid.png" alt=""/>
           <div className="ll-kicker">家長的心聲</div>
           <h2 className="ll-h2">你的孩子，是不是也這樣？</h2>
           <p className="ll-sub">這些困擾，我們都陪著孩子一個一個解決。</p>
@@ -620,75 +748,20 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
         </section>
 
         <section className="ll-section reveal-group" id="ll-learn">
-          <div className="ll-kicker">學什麼</div>
-          <h2 className="ll-h2">四大學習項目</h2>
-          <p className="ll-sub">四個面向紮實打底，一週的英文一次到位。</p>
-          <div className="ll-cats">
-            {cats.map(c => (
-              <div
-                className={`ll-cat${expCat === c.key ? ' exp' : ''}`}
-                key={c.key}
-                style={{'--cc':`var(--c-${c.key})`,'--ccbg':`var(--c-${c.key}-bg)`}}
-                onClick={() => setExpCat(expCat === c.key ? null : c.key)}
-                onMouseLeave={() => setExpCat(v => (v === c.key ? null : v))}
-              >
-                <img className="ll-cat-icon" src={`cat-${c.key}.png`} alt=""/>
-                <div className="ll-cat-zh">{c.zh}</div>
-                <div className="ll-cat-en">{c.en}</div>
-                <div className="ll-cat-desc">{c.desc}</div>
-                <div className="ll-cat-more">
-                  <div className="ll-cat-more-in">
-                    <div className="ll-cat-chips">
-                      {c.chips.map(ch => <span className="ll-chip" key={ch}>{ch}</span>)}
-                    </div>
-                    {catDemo(c.key)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="ll-section reveal-group" id="ll-why">
-          <div className="ll-kicker">為什麼專業</div>
-          <h2 className="ll-h2">給孩子、也給家長放心的設計</h2>
-          <p className="ll-sub">老師出題、孩子練習、家長看見——一個每週運轉的循環。</p>
-          <div className="ll-feats ll-flow reveal-group">
-            {flow.map((f, i) => (
-              <React.Fragment key={f.rc}>
-                {i > 0 && FlowArrow}
-                <div className="ll-feat ll-flow-node">
-                  <span className={`ll-flow-role r-${f.rc}`}>{f.role}</span>
-                  <img className="ll-feat-ic" src={f.img} alt=""/>
-                  <div className="ll-feat-title">{f.title}</div>
-                  <div className="ll-feat-desc">{f.desc}</div>
-                </div>
-              </React.Fragment>
-            ))}
-            <div className="ll-flow-loop" aria-hidden="true">
-              <svg viewBox="0 0 100 14" preserveAspectRatio="none">
-                <path className="ll-flow-dash" d="M 84 1 C 84 12, 16 12, 16 2.5"/>
-              </svg>
-              <svg className="ll-flow-loop-head" viewBox="0 0 12 8"><path className="ll-flow-head" d="M1.5 7 L6 1 L10.5 7"/></svg>
-              <span className="ll-flow-loop-lbl">每週循環 · 持續進步</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="ll-section reveal-group" id="ll-product">
-          <div className="ll-kicker">實際畫面</div>
-          <h2 className="ll-h2">孩子、家長、老師，都看得一清二楚</h2>
-          <p className="ll-sub">不用想像——這就是登入後每週會看到的畫面。</p>
+          <div className="ll-kicker">學什麼 · 怎麼練</div>
+          <h2 className="ll-h2">多元題型，把一週的英文練透</h2>
+          <p className="ll-sub">不是死背——每個項目都有好幾種練法，做錯了馬上知道為什麼。</p>
           <div className={`llp-zone${shotHover ? ' paused' : ''}`}
             onMouseEnter={() => { shotHoverRef.current = true; setShotHover(true); }}
             onMouseLeave={() => { shotHoverRef.current = false; setShotHover(false); }}>
-          <div className="llp-tabs" role="tablist" aria-label="產品畫面切換">
-            {shots.map((s, i) => (
-              <button key={s.k} role="tab" aria-selected={shot === i}
+          <div className="llp-tabs llx-tabs" role="tablist" aria-label="學習項目切換">
+            {cats.map((c, i) => (
+              <button key={c.key} role="tab" aria-selected={shot === i}
                 className={`llp-tab${shot === i ? ' on' : ''}`}
+                style={{ '--cc': `var(--c-${c.key})` }}
                 onClick={() => setShot(i)}>
-                <span className="llp-tab-who">{s.who}</span>
-                <span className="llp-tab-t">{s.t}</span>
+                <span className="llp-tab-who">{c.en}</span>
+                <span className="llp-tab-t">{c.zh}</span>
               </button>
             ))}
           </div>
@@ -698,101 +771,93 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
                 <span/><span/><span/>
                 <div className="llp-url">Alan’s English Class</div>
               </div>
-              <div className="llp-stage">
+              <div className="llp-stage llx-stage">
 
-                <div className={`llp-panel${shot === 0 ? ' on' : ''}`} aria-hidden={shot !== 0}>
-                  <div className="llp-mkhead">
-                    <span className="llp-mktitle">📒 本週聯絡簿</span>
-                    <span className="llp-mktag">第 14 週 · 5/25 – 5/29</span>
-                  </div>
-                  <div className="llp-note">老師的話：本週重點是 Unit 8 單字與過去式句型，請每天練 10 分鐘。</div>
-                  <div className="llp-hw">
-                    <div className="llp-hw-row">
-                      <span className="llp-pin">📌</span>
-                      <span className="llp-hw-name">單字 · Unit 8 卡片與拼寫</span>
-                      <span className="llp-hw-due">週四前</span>
-                      <span className="llp-hw-st ok">✓ 92 分</span>
-                    </div>
-                    <div className="llp-hw-row">
-                      <span className="llp-pin">📌</span>
-                      <span className="llp-hw-name">文法 · 過去式填空與造句</span>
-                      <span className="llp-hw-due">週五前</span>
-                      <span className="llp-hw-st ok">✓ 88 分</span>
-                    </div>
-                    <div className="llp-hw-row">
-                      <span className="llp-pin">📌</span>
-                      <span className="llp-hw-name">閱讀 · 短文理解</span>
-                      <span className="llp-hw-due">週六前</span>
-                      <span className="llp-hw-st doing">● 進行中</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`llp-panel${shot === 1 ? ' on' : ''}`} aria-hidden={shot !== 1}>
-                  <div className="llp-mkhead">
-                    <span className="llp-mktitle">📈 成長報告</span>
-                    <span className="llp-mktag">近 8 週</span>
-                  </div>
-                  <div className="llp-stats">
-                    <div className="llp-stat"><b>46</b><span>完成練習</span></div>
-                    <div className="llp-stat"><b>8</b><span>學習週數</span></div>
-                    <div className="llp-stat"><b>86</b><span>平均分數</span></div>
-                    <div className="llp-stat"><b>100</b><span>最佳單週</span></div>
-                  </div>
-                  <svg className="llp-chart" viewBox="0 0 300 100" preserveAspectRatio="none" aria-label="每週完成率折線圖">
-                    <polygon className="llp-area" points="10,78 50,70 90,62 130,52 170,44 210,34 250,26 290,14 290,96 10,96"/>
-                    <polyline className="llp-line" points="10,78 50,70 90,62 130,52 170,44 210,34 250,26 290,14"/>
-                    <circle className="llp-dot" cx="10" cy="78" r="3"/>
-                    <circle className="llp-dot" cx="90" cy="62" r="3"/>
-                    <circle className="llp-dot" cx="170" cy="44" r="3"/>
-                    <circle className="llp-dot" cx="250" cy="26" r="3"/>
-                    <circle className="llp-dot llp-dot-last" cx="290" cy="14" r="4.5"/>
-                  </svg>
-                  <div className="llp-chart-lbl"><span>8 週前</span><span>每週完成率</span><span>本週</span></div>
-                </div>
-
-                <div className={`llp-panel${shot === 2 ? ' on' : ''}`} aria-hidden={shot !== 2}>
-                  <div className="llp-mkhead">
-                    <span className="llp-mktitle">🚦 本週全班總覽</span>
-                    <span className="llp-mktag">18 位學生</span>
-                  </div>
-                  <div className="llp-sum">
-                    <span className="llp-chip">全班平均 <b>82%</b></span>
-                    <span className="llp-chip g">🟢 完成 12</span>
-                    <span className="llp-chip y">🟡 進行中 4</span>
-                    <span className="llp-chip r">🔴 未開始 2</span>
-                  </div>
-                  <div className="llp-cls">
-                    {[
-                      { n:'王同學', w:'100%', c:'g', s:'94 分' },
-                      { n:'林同學', w:'85%',  c:'g', s:'88 分' },
-                      { n:'陳同學', w:'45%',  c:'y', s:'76 分' },
-                      { n:'張同學', w:'8%',   c:'r', s:'— ' },
-                    ].map((r, i) => (
-                      <div className="llp-cls-row" key={i}>
-                        <span className={`llp-light ${r.c}`}/>
-                        <span className="llp-cls-name">{r.n}</span>
-                        <span className="llp-bar"><i style={{ '--w': r.w }}/></span>
-                        <span className="llp-cls-score">{r.s}</span>
+                <div className={`llp-panel llx-panel${shot === 0 ? ' on' : ''}`} aria-hidden={shot !== 0} style={{ '--cc': 'var(--c-vocab)', '--ccbg': 'var(--c-vocab-bg)' }}>
+                  <div className="llx-demo">{catDemo('vocab')}</div>
+                  <div className="llx-demo">
+                    <div className="lldm lldm-listen">
+                      <button
+                        type="button"
+                        className="lldm-spk"
+                        title="點我聽 apple 的發音"
+                        aria-label="播放 apple 的發音"
+                        onClick={() => window.speakText && window.speakText('apple', { lang: 'en-US' })}
+                      >🔊</button>
+                      <div className="lldm-opts" aria-hidden="true">
+                        <span>ant</span>
+                        <span className="lldm-opt-hit">apple<i>✓</i></span>
+                        <span>act</span>
+                        <span>add</span>
                       </div>
-                    ))}
+                      <div className="lldm-cap">聽音選字 · 點喇叭聽聽看</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`llp-panel llx-panel${shot === 1 ? ' on' : ''}`} aria-hidden={shot !== 1} style={{ '--cc': 'var(--c-grammar)', '--ccbg': 'var(--c-grammar-bg)' }}>
+                  <div className="llx-demo">{catDemo('grammar')}</div>
+                  <div className="llx-demo">
+                    <div className="lldm lldm-mc" aria-hidden="true">
+                      <div className="lldm-mc-q">Yesterday she ___ a book.</div>
+                      <div className="lldm-mc-opts">
+                        <span className="lldm-opt-hit">read<i>✓</i></span>
+                        <span>reads</span>
+                        <span>reading</span>
+                        <span>to read</span>
+                      </div>
+                      <div className="lldm-cap">選擇題 · 時態一眼判斷</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`llp-panel llx-panel${shot === 2 ? ' on' : ''}`} aria-hidden={shot !== 2} style={{ '--cc': 'var(--c-word)', '--ccbg': 'var(--c-word-bg)' }}>
+                  <div className="llx-demo">{catDemo('word')}</div>
+                  <div className="llx-demo">
+                    <div className="lldm lldm-syl" aria-hidden="true">
+                      <div className="lldm-syl-w">won<i>·</i>der<i>·</i>ful</div>
+                      <div className="lldm-syl-tags"><span>3 個音節</span><span>唸得出來</span></div>
+                      <div className="lldm-cap">音節切分 · 長字不再卡住</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`llp-panel llx-panel${shot === 3 ? ' on' : ''}`} aria-hidden={shot !== 3} style={{ '--cc': 'var(--c-reading)', '--ccbg': 'var(--c-reading-bg)' }}>
+                  <div className="llx-demo">{catDemo('reading')}</div>
+                  <div className="llx-demo">
+                    <div className="lldm lldm-write" aria-hidden="true">
+                      <div className="lldm-wr-line">I think school lunch is great<span className="lldm-caret"/></div>
+                      <div className="lldm-ai">AI 批改 · 再加一個理由會更有說服力 ✍️</div>
+                      <div className="lldm-cap">意見寫作 · AI 即時回饋＋老師批改</div>
+                    </div>
                   </div>
                 </div>
 
               </div>
             </div>
-            <p className="llp-cap" key={shot}>{shots[shot].d}</p>
+            <p className="llp-cap" key={shot}>{cats[shot].desc}</p>
           </div>
           </div>
-          <p className="ll-proof-note">以上為示意畫面，實際內容依每週課程與班級而定。</p>
+          <p className="ll-proof-note">以上為示意畫面，實際題目依每週課程而定。</p>
         </section>
 
-        <section className="ll-section reveal-group" id="ll-results">
-          <img className="ll-sec-art" src="win-kid.png" alt=""/>
-          <div className="ll-kicker">看得到的成效</div>
-          <h2 className="ll-h2">學生的進步，不是說說而已</h2>
-          <p className="ll-sub">數字會說話——以下都是康橋校內評量的真實成績。</p>
-          <div className="ll-results">
+        <section className="ll-section reveal-group" id="ll-skills">
+          <div className="ll-kicker">帶得走的能力</div>
+          <h2 className="ll-h2">讓孩子帶得走的，不只是分數</h2>
+          <p className="ll-sub">一個每週運轉的循環——老師出題、孩子練習、家長看見，成績自然跟上。</p>
+
+          <div className="ll-sk-grid">
+            <div className="ll-skb-col" aria-label="每週學習循環">
+              {flow.map(f => (
+                <div className="ll-skb" key={f.rc}>
+                  <span className={`ll-skb-ic r-${f.rc}`}><img className="ll-feat-ic" src={f.img} alt=""/></span>
+                  <div className="ll-skb-tx">
+                    <b><em className={`ll-skb-role r-${f.rc}`}>{f.role}</em>{f.title}</b>
+                    <span>{f.desc}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
             <div className="ll-hpc ll-hpc-lg">
               <div className="ll-hpc-head">
                 <span className="ll-hpc-title">📈 一位學生的成績軌跡</span>
@@ -814,34 +879,105 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
                 <span className="ll-hpc-plus">+40 分</span>
               </div>
             </div>
-            <div className="ll-proof">
-              <div className="ll-pstat"><span className="ll-pstat-num">95+</span><span className="ll-pstat-lbl">E1 學生平均</span></div>
-              <div className="ll-pstat"><span className="ll-pstat-num">85+</span><span className="ll-pstat-lbl">E2 學生平均</span></div>
-              <div className="ll-pstat"><span className="ll-pstat-num">59→99</span><span className="ll-pstat-lbl">明顯進步實例</span></div>
-              <div className="ll-pstat"><span className="ll-pstat-num">50+</span><span className="ll-pstat-lbl">家教學生</span></div>
-            </div>
           </div>
-          <p className="ll-proof-note">以上為學生在康橋國際學校校內評量的整體表現。</p>
+
+          <div className="ll-statbar">
+            <div className="ll-stat"><b>3 年</b><span>康橋教學</span></div>
+            <div className="ll-stat"><b>50+</b><span>家教學生</span></div>
+            <div className="ll-stat"><b>95+</b><span>E1 學生平均</span></div>
+            <div className="ll-stat"><b>85+</b><span>E2 學生平均</span></div>
+          </div>
+
+          <div className="ll-sk-banner">
+            {/* v245: 招牌組裝段落——捲到這裡元件依序飛入定位，成品＝真實產品畫面（之後可換真實上課影片） */}
+            <h3 className="asm-title">一週的英文，是怎麼組起來的？</h3>
+            <div className={`asm${asmRun ? ' run' : ''}`} key={asmKey}>
+              <div className="asm-stage">
+                <div className="asm-notes" aria-hidden="true">
+                  <div className="asm-note n1"><b><i>1</i>老師親自出題</b><span>依康橋當週課程編寫</span></div>
+                  <div className="asm-note n2"><b><i>2</i>每週對齊進度</b><span>學校教到哪，就練到哪</span></div>
+                  <div className="asm-note n3"><b><i>3</i>10+ 種題型</b><span>單字卡到 AI 寫作批改</span></div>
+                  <div className="asm-note n4"><b><i>4</i>自動記錄</b><span>完成度與分數，家長看得到</span></div>
+                </div>
+                <div className="ll-hm-wrap">
+              <div className="ll-hm" role="img" aria-label="產品畫面示意：本週進度環與今天的任務清單">
+                <div className="ll-hm-chrome" aria-hidden="true">
+                  <span/><span/><span/>
+                  <span className="ll-hm-url">alan's english class</span>
+                  <span className="ll-hm-tag">示意畫面</span>
+                </div>
+                <div className="ll-hm-body" aria-hidden="true">
+                  <div className="ll-hm-week">
+                    <div className="ll-hm-week-l">
+                      <span className="ll-hm-pill">WEEK 16</span>
+                      <span className="ll-hm-theme">食物與料理</span>
+                    </div>
+                    <svg className="ll-hm-ring" viewBox="0 0 60 60">
+                      <circle className="bg" cx="30" cy="30" r="24"/>
+                      <circle className="fg" cx="30" cy="30" r="24" transform="rotate(-90 30 30)"/>
+                      <text x="30" y="34.5">2/4</text>
+                    </svg>
+                  </div>
+                  <div className="ll-hm-cap">📌 今天的任務</div>
+                  <div className="ll-hm-tasks">
+                    <div className="ll-hm-task done t1">
+                      <span className="ll-hm-chk">✓</span>
+                      <span className="ll-hm-tt">單字卡 · Food We Eat</span>
+                      <b className="ll-hm-score">100 分</b>
+                    </div>
+                    <div className="ll-hm-task done t2">
+                      <span className="ll-hm-chk">✓</span>
+                      <span className="ll-hm-tt">選擇題 · Food We Eat</span>
+                      <b className="ll-hm-score">85 分</b>
+                    </div>
+                    <div className="ll-hm-task next">
+                      <span className="ll-hm-play">▶</span>
+                      <span className="ll-hm-tt">填空練習 · Food We Eat</span>
+                      <b className="ll-hm-cta">繼續 · 第 4 題</b>
+                    </div>
+                    <div className="ll-hm-task todo">
+                      <span className="ll-hm-go">→</span>
+                      <span className="ll-hm-tt">閱讀理解 · A Yummy Trip</span>
+                      <b className="ll-hm-cta dim">開始</b>
+                    </div>
+                  </div>
+                </div>
+                <div className="ll-hm-toast" aria-hidden="true">
+                  <span className="ll-hm-toast-ic">✓</span>
+                  <span>選擇題完成 · <b>85 分</b></span>
+                </div>
+              </div>
+            </div>
+              </div>
+            </div>
+            <p className="ll-sk-banner-cap">
+              孩子每週打開，看到的就是這個畫面——該練什麼、練到哪，一目了然。
+              <button className="asm-replay" onClick={() => { setAsmRun(false); setAsmKey(k => k + 1); }}>↻ 再看一次</button>
+            </p>
+          </div>
+          <p className="ll-proof-note">成績皆為康橋國際學校校內評量真實數據。</p>
         </section>
 
         <section className="ll-section reveal-group" id="ll-voices">
           <div className="ll-kicker">家長怎麼說</div>
           <h2 className="ll-h2">家長的真實回饋</h2>
           <p className="ll-sub">來自 30+ 個家庭，最真實的聲音。</p>
-          <div className="ll-testi-wall">
-            {testiCols.map((col, ci) => (
-              <div className="ll-testi-col" key={ci}>
-                <div className="ll-testi-track" style={{ '--dur': testiDur[ci] }}>
-                  {[...col, ...col].map((t, i) => (
-                    <div className={`ll-testi-card${i >= col.length ? ' testi-dupe' : ''}`} key={i} aria-hidden={i >= col.length ? 'true' : undefined}>
-                      <div className="ll-testi-stars">★★★★★</div>
-                      <p className="ll-testi-q">「{t.q}」</p>
-                      <div className="ll-testi-who">{t.who}</div>
-                    </div>
-                  ))}
+          <div className="ll-tcar-wrap">
+            <div className="ll-tcar" id="ll-tcar">
+              {testi.map((t, i) => (
+                <div className="ll-testi-card" key={i}>
+                  <div className="ll-testi-stars">★★★★★</div>
+                  <p className="ll-testi-q">「{t.q}」</p>
+                  <div className="ll-testi-who">{t.who}</div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="ll-tcar-nav">
+              <button className="ll-tcar-btn" aria-label="上一頁"
+                onClick={() => { const el = document.getElementById('ll-tcar'); if (el) el.scrollBy({ left: -el.clientWidth * 0.9, behavior: 'smooth' }); }}>←</button>
+              <button className="ll-tcar-btn" aria-label="下一頁"
+                onClick={() => { const el = document.getElementById('ll-tcar'); if (el) el.scrollBy({ left: el.clientWidth * 0.9, behavior: 'smooth' }); }}>→</button>
+            </div>
           </div>
         </section>
 
@@ -908,23 +1044,39 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn }) {
           </div>
           <div className="ll-cta ll-cta-center">
             {PrimaryCta}
-            {!loggedIn && <button className="ll-guest" onClick={onSkip}>先逛逛 · 不記錄進度</button>}
           </div>
-          <div className="ll-trustline">🔒 僅用於記錄學習進度，不對外公開、不作其他用途</div>
         </section>
 
-        <footer className="ll-foot">
-          <div className="ll-foot-brand">Alan’s English Class</div>
-          <div className="ll-foot-line">對齊康橋國際學校每週進度</div>
-          <div className="ll-foot-contact">
-            <a href="mailto:alan07050445@gmail.com">alan07050445@gmail.com</a>
-            <span>·</span>
-            <span>LINE：9161791608</span>
+        <footer className="ll-foot2">
+          <div className="ll-foot2-top">
+            <div className="ll-foot2-brand">
+              <b>Alan’s English Class<i>.</i></b>
+              <p>對齊康橋國際學校每週進度的英文練習平台——讓孩子跟得上、家長看得到。</p>
+            </div>
+            <div className="ll-foot2-cols">
+              <div className="ll-foot2-col">
+                <b>快速前往</b>
+                <button onClick={() => scrollToId('ll-learn')}>學什麼</button>
+                <button onClick={() => scrollToId('ll-skills')}>帶得走的能力</button>
+                <button onClick={() => scrollToId('ll-voices')}>家長回饋</button>
+              </div>
+              <div className="ll-foot2-col">
+                <b>了解更多</b>
+                <button onClick={() => setTeacherOpen(true)}>關於 Alan 老師</button>
+                <button onClick={() => scrollToId('ll-faq')}>常見問題</button>
+                <button onClick={() => setPolicyOpen(true)}>隱私與資料保護</button>
+              </div>
+            </div>
+            <div className="ll-foot2-contact">
+              <b>聯絡 Alan 老師</b>
+              <a className="ll-foot2-btn" href="mailto:alan07050445@gmail.com">✉️ Email 聯絡</a>
+              <div className="ll-foot2-lineid"><span>LINE ID</span>9161791608</div>
+            </div>
           </div>
-          <div className="ll-foot-links">
-            <button className="ll-foot-link" onClick={() => setPolicyOpen(true)}>隱私與資料保護</button>
+          <div className="ll-foot2-bar">
+            <span>© {new Date().getFullYear()} Alan’s English Class · All rights reserved</span>
+            <span className="ll-foot2-mini">康橋國際學校 · 小學部英文</span>
           </div>
-          <div className="ll-foot-copy">© {new Date().getFullYear()} Alan’s English Class</div>
         </footer>
 
       </div>
@@ -1316,6 +1468,10 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
         <span className="gs-blob gs-blob-b"/>
         <svg className="gs-spark gs-spark-1" viewBox="0 0 24 24"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z"/></svg>
         <svg className="gs-spark gs-spark-2" viewBox="0 0 24 24"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z"/></svg>
+        {/* v249: 首頁「學習深海」幽靈字延伸到門口頁（靜態、更淡）——三頁同一片海 */}
+        <span className="deep-lite dl-a">Aa</span>
+        <span className="deep-lite dl-b">read</span>
+        <span className="deep-lite dl-c">✓</span>
       </div>
       <div className="grade-selector-inner">
         <img src="icon.svg" alt="Alan's English Class" className="grade-sel-logo-img"/>
@@ -1563,11 +1719,49 @@ function LoadingScreen({ fading }) {
   );
 }
 
+/* ───────── v252: 海綿寶寶泡泡轉場——純 DOM 直接生成（點擊下一幀就出現，不等 React render）───────── */
+function spawnPageWave(ttl) {
+  try {
+    const B = [
+      [4, 120, 0, 1.15, 'A'], [12, 54, .12, 1.0, ''], [18, 88, .05, 1.2, 'b'], [24, 140, .18, 1.3, 'C'],
+      [30, 46, .02, .95, ''], [36, 96, .22, 1.15, 'd'], [42, 64, .08, 1.05, 'E'], [48, 150, .15, 1.35, ''],
+      [54, 80, .03, 1.1, 'f'], [60, 110, .2, 1.25, 'G'], [66, 50, .1, .95, ''], [72, 132, .06, 1.3, 'h'],
+      [78, 70, .25, 1.05, 'I'], [84, 100, .02, 1.2, ''], [90, 58, .16, 1.0, 'j'], [95, 86, .09, 1.15, 'K'],
+      [8, 72, .3, 1.05, 'L'], [16, 118, .26, 1.3, ''], [26, 60, .33, 1.0, 'm'], [34, 90, .28, 1.2, 'N'],
+      [44, 52, .35, .95, ''], [52, 124, .3, 1.35, 'o'], [62, 76, .27, 1.1, 'P'], [70, 98, .34, 1.25, ''],
+      [80, 56, .29, 1.0, 'q'], [88, 136, .32, 1.35, 'R'], [94, 66, .26, 1.05, ''], [2, 94, .31, 1.2, 's'],
+      [22, 48, .38, .9, ''], [38, 104, .4, 1.25, 'T'], [58, 62, .42, 1.0, 'u'], [76, 116, .38, 1.3, 'V'],
+      [10, 44, .45, .9, ''], [46, 84, .44, 1.15, 'w'], [68, 58, .47, 1.0, 'X'], [86, 92, .42, 1.2, 'y'],
+    ];
+    const root = document.createElement('div');
+    root.className = 'pw';
+    root.setAttribute('aria-hidden', 'true');
+    const veil = document.createElement('div');
+    veil.className = 'pw-veil';
+    root.appendChild(veil);
+    B.forEach(b => {
+      const sp = document.createElement('span');
+      sp.className = 'pwb';
+      sp.style.left = b[0] + '%';
+      sp.style.width = b[1] + 'px';
+      sp.style.height = b[1] + 'px';
+      sp.style.animationDelay = b[2] + 's';
+      sp.style.animationDuration = b[3] + 's';
+      sp.style.fontSize = Math.round(b[1] * .42) + 'px';
+      if (b[4]) sp.textContent = b[4];
+      root.appendChild(sp);
+    });
+    document.body.appendChild(root);
+    setTimeout(() => { try { root.remove(); } catch (e) {} }, ttl || 1900);
+    return root;
+  } catch (e) { return null; }
+}
+
 /* ───────── First-time welcome / onboarding ───────── */
 function WelcomeGuide({ onClose }) {
-  // 用行銷頁同一批插畫，前後風格一致（同一個男孩 + 三個功能 icon）
+  // v240: 首步改用品牌 logo（AI 插畫已移除），後三步沿用功能 icon
   const steps = [
-    { img: 'hero-kid.png',    kick: '歡迎',      title: '歡迎來到 Alan’s English Class',
+    { img: 'icon.svg',        kick: '歡迎',      title: '歡迎來到 Alan’s English Class',
       body: '這裡的練習對齊康橋國際學校的每週進度——在家練的，就是學校正在教的。每週打開一次，跟著練就對了。' },
     { img: 'feat-week.png',   kick: '每週練習',   title: '每週一個目標，跟著練',
       body: '最上面是本週進度，點「開始練習」就會帶你到下一個該練的項目；也可以自己從單字、文法、字根字首、閱讀寫作挑一個開始。' },
@@ -1798,4 +1992,4 @@ function SpotlightTour({ onClose, onEmpty }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, LockScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour });
+Object.assign(window, { Icon, Header, Hero, LoginScreen, LockScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave });

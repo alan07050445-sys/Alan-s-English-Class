@@ -415,6 +415,37 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
   );
 }
 
+/* ── v253: 標題歸戶（與 TodayTasks v235 同法）——老師題庫側欄「依文章分組」用 ── */
+const QM_TYPE_WORDS = /(單字卡|單字練習|手寫練習|選擇題|簡答題|短答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|short answer)/gi;
+function qmGroupByArticle(items) {
+  const keyOf = (t) => String(t || '').toLowerCase().replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
+  const map = new Map();
+  (items || []).forEach(it => {
+    const k = keyOf(it.title);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(it);
+  });
+  const out = [];
+  const seen = new Set();
+  (items || []).forEach(it => {
+    const k = keyOf(it.title);
+    if (seen.has(k)) return;
+    seen.add(k);
+    const arr = map.get(k);
+    if (k.length < 3 || arr.length < 2) { arr.forEach(x => out.push({ single: x })); return; }
+    let name = arr[0].title || '';
+    for (const x of arr) {
+      const t = x.title || '';
+      let i = 0;
+      while (i < name.length && i < t.length && name[i] === t[i]) i++;
+      name = name.slice(0, i);
+    }
+    name = name.replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）]+$/g, '').trim() || (arr[0].title || '').slice(0, 14);
+    out.push({ key: k, name, items: arr });
+  });
+  return out;
+}
+
 /* ══════════════════════════════════════════════════════
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
@@ -461,6 +492,51 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const qmProg = useQMM(() => loadQMProg(), [progVersion]);
   const hasSelection = !!selectedItem;
+
+  // v253: 老師視角（editMode 或 暑假題庫）——側欄依文章分組收合＋題庫學生濾鏡
+  const isLibView = String(weekId || '').startsWith('sl');
+  const groupsView = editMode || isLibView;
+  const [openGroups, setOpenGroups] = useQM({});
+  const [libMeta, setLibMeta] = useQM(null);
+  const [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
+  useQME(() => {
+    if (!isLibView || !window.subscribeSummerMeta) return;
+    return window.subscribeSummerMeta(setLibMeta, () => {});
+  }, [isLibView]);
+  const libSfx = isLibView ? String(weekId).split('-').pop() : null;
+  const assignedOf = useQMM(() => {
+    // itemId → Set(emails)（只看當前週）
+    const m = new Map();
+    if (!isLibView || !libMeta) return m;
+    Object.entries(libMeta.students || {}).forEach(([email, plan]) => {
+      (((plan || {}).weeks || {})[libSfx] || []).forEach(id => {
+        if (!m.has(id)) m.set(id, new Set());
+        m.get(id).add(email);
+      });
+    });
+    return m;
+  }, [isLibView, libMeta, libSfx, weekId]);
+  const viewItems = useQMM(() => {
+    if (!isLibView || stuFilter === 'all') return sidebarItems;
+    if (stuFilter === 'none') return sidebarItems.filter(it => !assignedOf.has(it.id));
+    return sidebarItems.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
+  }, [sidebarItems, isLibView, stuFilter, assignedOf]);
+  const grouped = useQMM(() => (groupsView ? qmGroupByArticle(viewItems) : null), [groupsView, viewItems]);
+  useQME(() => {
+    // 選中單元時自動展開它所在的組
+    if (!grouped || !selectedItem) return;
+    const g = grouped.find(x => x.items && x.items.some(it => it.id === selectedItem.id));
+    if (g && !openGroups[g.key]) setOpenGroups(o => ({ ...o, [g.key]: true }));
+  }, [selectedItem && selectedItem.id, grouped]);
+  const filterStudents = useQMM(() => {
+    if (!isLibView || !libMeta) return [];
+    return Object.entries(libMeta.students || {})
+      .filter(([, plan]) => Object.values((plan || {}).weeks || {}).some(a => a && a.length))
+      .map(([email, plan]) => {
+        const m = String((plan || {}).name || '').match(/[A-Za-z]+/);
+        return { email, name: m ? m[0] : email.split('@')[0] };
+      });
+  }, [isLibView, libMeta]);
   const quizSwapKey = selectedItem ? `${selectedItem.id}-${phase}-${playerKey}` : 'empty';
 
   return (
@@ -492,19 +568,29 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         })()}
 
         <div className="qm-unit-list">
+          {isLibView && filterStudents.length > 0 && (
+            <div className="qm-stufilter" aria-label="依學生篩選">
+              <button className={stuFilter === 'all' ? 'on' : ''} onClick={() => setStuFilter('all')}>全部</button>
+              <button className={stuFilter === 'none' ? 'on' : ''} onClick={() => setStuFilter('none')}>未發派</button>
+              {filterStudents.map(f => (
+                <button key={f.email} className={stuFilter === f.email ? 'on' : ''} onClick={() => setStuFilter(stuFilter === f.email ? 'all' : f.email)}>{f.name}</button>
+              ))}
+            </div>
+          )}
           {editMode && (
             <button className="qm-unit-add-btn" onClick={() => onAddItem(cat.id)}>
               <window.Icon name="plus" size={12}/> Add item
             </button>
           )}
-          {sidebarItems.length === 0 && (
+          {viewItems.length === 0 && (
             <div className="qm-unit-empty">
               {editMode
                 ? 'No items yet. Click "+ Add item" above!'
                 : 'No quiz items yet.\nAsk your teacher to add some!'}
             </div>
           )}
-          {sidebarItems.map(item => {
+          {(() => {
+            const renderUnitRow = (item) => {
             const progKey  = `${weekId}_${item.id}`;
             const prog     = qmProg[progKey];
             const totalQ   = getItemQuestions(item).length;
@@ -606,7 +692,23 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 </div>
               </div>
             );
-          })}
+          };
+            if (!grouped) return viewItems.map(renderUnitRow);
+            return grouped.map((g, gi) => g.items ? (
+              <div className={`qm-ugroup${openGroups[g.key] ? ' open' : ''}`} key={g.key || gi}>
+                <button
+                  className="qm-ugroup-head"
+                  onClick={() => setOpenGroups(o => ({ ...o, [g.key]: !o[g.key] }))}
+                  aria-expanded={!!openGroups[g.key]}
+                >
+                  <span className="qm-ugroup-chev">{openGroups[g.key] ? '▾' : '▸'}</span>
+                  <span className="qm-ugroup-name">{g.name}</span>
+                  <span className="qm-ugroup-count">{g.items.length}</span>
+                </button>
+                {openGroups[g.key] ? g.items.map(renderUnitRow) : null}
+              </div>
+            ) : renderUnitRow(g.single));
+          })()}
         </div>
       </div>
 

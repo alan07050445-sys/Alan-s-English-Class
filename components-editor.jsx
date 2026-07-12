@@ -891,8 +891,11 @@ function WritingPracticeEditor({ catItems, linkedFlashcardId, prompts, onChangeL
   const doImport = () => {
     const parsed = [];
     importText.split('\n').map(line => line.trim()).filter(Boolean).forEach((line, index) => {
-      const sep = line.includes('\t') ? '\t' : line.includes('|') ? '|' : null;
-      const cols = sep ? line.split(sep).map(c => c.trim().replace(/^"|"$/g, '')) : [line.trim()];
+      // v251: 統一分隔符——Tab／|／「 - 」都吃
+      const cols = (line.includes('\t') ? line.split('\t')
+        : line.includes('|') ? line.split('|')
+        : /\s+-\s+/.test(line) ? line.split(/\s+-\s+/)
+        : [line]).map(c => c.trim().replace(/^"|"$/g, ''));
       const word = cols[0] || '';
       if (!word) return;
       parsed.push({
@@ -1009,9 +1012,11 @@ function TypeAnswerEditor({ pairs, instruction, onChangePairs, onChangeInstructi
     const parsed = [];
     const bad = [];
     lines.forEach((line, i) => {
-      // support tab (from Excel/Sheets) or comma
-      const sep = line.includes('\t') ? '\t' : ',';
-      const cols = line.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+      // v251: 統一分隔符——Tab／|／「 - 」，最後才試逗號（舊格式相容）
+      const cols = (line.includes('\t') ? line.split('\t')
+        : line.includes('|') ? line.split('|')
+        : /\s+-\s+/.test(line) ? line.split(/\s+-\s+/)
+        : line.split(',')).map(c => c.trim().replace(/^"|"$/g, ''));
       if (cols.length < 2 || !cols[0] || !cols[1]) { bad.push(i + 1); return; }
       parsed.push({ id: Date.now().toString() + i, prompt: cols[0], answer: cols[1], explain: cols[2] || '' });
     });

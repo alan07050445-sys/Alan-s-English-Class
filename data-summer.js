@@ -113,9 +113,11 @@ function _filterWeeksForPlan(libWeeks, libOrder, plan) {
     Object.entries(w.items || {}).forEach(([catId, arr]) => {
       items[catId] = (arr || []).filter(it => allowed.has(it.id));
     });
+    // v252: 暑假邏輯＝「發派即任務」——所有派給這位學生的單元都進任務清單，
+    // 題庫有釘 📌 的保留到期日等設定，沒釘的也照樣列為任務。
     const homework = {};
-    Object.entries(w.homework || {}).forEach(([itemId, hw]) => {
-      if (allowed.has(itemId)) homework[itemId] = hw;
+    allowed.forEach(itemId => {
+      homework[itemId] = (w.homework && w.homework[itemId]) || {};
     });
     out[wid] = { ...w, items, homework };
   });
