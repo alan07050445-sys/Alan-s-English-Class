@@ -985,14 +985,18 @@ function App() {
             weekOrder={weekOrder}
             weekIdx={weekIdx}
             onHome={() => {
-              setCatView(null);
-              setOpenCat(null);
               if (user) {
-                // 已登入：logo = 回門口頁（進入教室／暑假），不是行銷首頁
-                setEntered(false);
-                try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
-                scrollPageToTop();
+                // 已登入：logo = 回門口頁（進入教室／暑假），不是行銷首頁——v254 加泡泡
+                runWave(() => {
+                  setCatView(null);
+                  setOpenCat(null);
+                  setEntered(false);
+                  try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+                  scrollPageToTop();
+                });
               } else {
+                setCatView(null);
+                setOpenCat(null);
                 setViewLanding(true);
               }
             }}
@@ -1023,7 +1027,7 @@ function App() {
             onShowMistakes={user ? () => setMistakesOpen(true) : null}
             grade={grade}
             compactLobby={!catView && !editMode}
-            onSwitchGrade={() => {
+            onSwitchGrade={() => runWave(() => {
               try { localStorage.removeItem('alan-grade'); } catch(e) {}
               setGrade(null);
               setCatView(null);
@@ -1031,7 +1035,7 @@ function App() {
               setEntered(false);
               try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
               scrollPageToTop();
-            }}
+            })}
           />
 
           {/* v249: 首頁深海幽靈字延伸到教室（極淡、靜態，不干擾練習） */}
@@ -1062,6 +1066,19 @@ function App() {
             />
           ) : (
             <div key={mainKey} className="shell main-enter">
+              {/* v254: 明確的「上一頁」——小朋友不用知道要點 logo 才能回門口 */}
+              {!editMode && (
+                <button
+                  className="lobby-back"
+                  onClick={() => runWave(() => {
+                    setCatView(null);
+                    setOpenCat(null);
+                    setEntered(false);
+                    try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+                    scrollPageToTop();
+                  })}
+                >← 上一頁</button>
+              )}
               {/* v234: 暑假進出改由門口頁引導（呼吸箭頭＋開學標註），大廳橫幅移除 */}
               {!editMode && (
                 <window.WeekHero

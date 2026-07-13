@@ -11,6 +11,7 @@ const TYPE_OPTIONS = [
   { id: "fillblank",        label: "Fill Blank",       hint: "填空題 — 自訂句子填空，支援主題換色" },
   { id: "writing-practice", label: "Writing Practice", hint: "✍ AI 造句批改 — 學生逐題造句，AI 給星評分" },
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
+  { id: "spelling",         label: "Spelling 聽寫",     hint: "🔊 聽單字拼出來 — 匯入單字清單，學生聽發音自己拼字，自動批改" },
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
@@ -46,7 +47,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "cloze" || form.type === "circle-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -85,6 +86,22 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               onChange={e => update("zh", e.target.value)}
               placeholder="例：20 個本週核心單字"
             />
+          </div>
+
+          <div className="field">
+            <label className="field-label">分組 · Group（文章名，選填）</label>
+            <input
+              value={form.group || ""}
+              onChange={e => update("group", e.target.value)}
+              placeholder="例：Emotional Blackmail — 同組單元會收在一起"
+              list="qm-group-datalist"
+            />
+            <datalist id="qm-group-datalist">
+              {Array.from(new Set((catItems || []).map(it => String(it.group || '').trim()).filter(Boolean))).map(g => (
+                <option key={g} value={g}/>
+              ))}
+            </datalist>
+            <div className="field-help">學生任務清單與題庫側欄會依這個名字分組；留空＝依標題自動歸戶。</div>
           </div>
 
           <div className="field">
@@ -132,6 +149,31 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               onChangeLinkedFlashcardId={v => update("linkedFlashcardId", v || undefined)}
               onChangePrompts={prompts => update("writingPrompts", prompts)}
             />
+          ) : form.type === "spelling" ? (
+            <>
+              <div className="field">
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={form.spellShowZh !== false}
+                    onChange={e => update("spellShowZh", e.target.checked)}
+                  />
+                  <span>
+                    <b>顯示中文提示 · 聽寫時同時顯示中文意思</b>
+                    <span style={{display: "block", color: "var(--ink-muted)", fontSize: 12, marginTop: 2}}>
+                      關閉＝純聽力拼寫，難度更高。
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div className="field">
+                <label className="field-label">Words · 聽寫單字</label>
+                <SpellingEditor
+                  words={form.spellWords || []}
+                  onChange={ws => update("spellWords", ws)}
+                />
+              </div>
+            </>
           ) : form.type === "type-answer" ? (
             <TypeAnswerEditor
               pairs={form.pairs || []}
@@ -993,6 +1035,66 @@ function WritingPracticeEditor({ catItems, linkedFlashcardId, prompts, onChangeL
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── v254: SpellingEditor —— 聽寫單字清單（匯入 Tab/|/「 - 」＋逐列編輯＋試聽）── */
+function SpellingEditor({ words, onChange }) {
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+
+  const upd = (id, field, val) => onChange(words.map(w => w.id === id ? { ...w, [field]: val } : w));
+  const del = (id) => onChange(words.filter(w => w.id !== id));
+  const add = () => onChange([...words, { id: 'sp' + Date.now() + Math.random().toString(36).slice(2, 4), word: '', zh: '' }]);
+  const doImport = () => {
+    const parsed = importText.split('\n').map(l => l.trim()).filter(Boolean).map((line, i) => {
+      const cols = (line.includes('\t') ? line.split('\t')
+        : line.includes('|') ? line.split('|')
+        : /\s+-\s+/.test(line) ? line.split(/\s+-\s+/)
+        : [line]).map(c => c.trim().replace(/^"|"$/g, ''));
+      return { id: 'sp' + Date.now() + i + Math.random().toString(36).slice(2, 4), word: cols[0] || '', zh: cols[1] || '' };
+    }).filter(w => w.word);
+    if (!parsed.length) return;
+    onChange([...words, ...parsed]);
+    setImportText(''); setImporting(false);
+  };
+  const hear = (w) => { if (window.speakText && w.word) window.speakText(w.word, { lang: 'en-US', rate: 0.82 }); };
+
+  return (
+    <div className="spe">
+      <div className="spe-bar">
+        <span className="mono" style={{fontSize:10, color:"var(--ink-muted)"}}>{words.length} 個單字</span>
+        <div style={{display:"flex", gap:8}}>
+          <button type="button" className={"btn ghost"+(importing?" active":"")} style={{padding:"6px 12px",fontSize:11}} onClick={() => setImporting(v=>!v)}>⬇ Import</button>
+          <button type="button" className="btn primary" style={{padding:"6px 12px",fontSize:11}} onClick={add}>+ 加一個</button>
+        </div>
+      </div>
+      {importing && (
+        <div className="fc-import-box">
+          <div className="mono" style={{fontSize:10,color:"var(--ink-muted)",marginBottom:8}}>
+            每行一個單字，欄位用 Tab（試算表直貼）、| 或「 - 」分隔：英文／中文提示（中文可省略）
+          </div>
+          <textarea className="fc-import-ta" rows={7} value={importText} onChange={e=>setImportText(e.target.value)}
+            placeholder={"apple - 蘋果\nqueen - 女王\nbeautiful"}/>
+          <div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}>
+            <button type="button" className="btn ghost" onClick={()=>{setImporting(false);setImportText('');}}>Cancel</button>
+            <button type="button" className="btn primary" onClick={doImport} disabled={!importText.trim()}>Import</button>
+          </div>
+        </div>
+      )}
+      {words.length === 0 && !importing && (
+        <div className="fc-card-empty mono">還沒有單字 — 點「+ 加一個」或 Import 匯入</div>
+      )}
+      {words.map((w, i) => (
+        <div className="spe-row" key={w.id}>
+          <span className="spe-num mono">{i + 1}</span>
+          <input className="spe-word" value={w.word} placeholder="英文單字" onChange={e => upd(w.id, 'word', e.target.value)}/>
+          <input className="spe-zh" value={w.zh || ''} placeholder="中文提示（選填）" onChange={e => upd(w.id, 'zh', e.target.value)}/>
+          <button type="button" className="btn ghost spe-hear" title="試聽發音" onClick={() => hear(w)}>🔊</button>
+          <button type="button" className="btn ghost spe-del" title="刪除" onClick={() => del(w.id)}>✕</button>
+        </div>
+      ))}
     </div>
   );
 }

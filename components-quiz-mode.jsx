@@ -76,6 +76,7 @@ function generateVocabQuestions(words) {
 // so we shuffle options + question order when the quiz starts.
 function getItemQuestions(item) {
   if (!item) return [];
+  if (item.type === 'spelling') return (item.spellWords || []).filter(w => w && w.word); // v254
   if (item.type === 'vocab-quiz' && (item.words || []).length >= 2) {
     return generateVocabQuestions(item.words);
   }
@@ -124,6 +125,7 @@ function getQuizItems(items) {
     (item.type === 'quiz'             && (item.questions || []).length > 0) ||
     (item.type === 'writing-practice' && (item.linkedFlashcardId || (item.writingPrompts || []).some(p => p.word))) ||
     (item.type === 'type-answer'      && (item.pairs || []).length >= 1) ||
+    (item.type === 'spelling'         && (item.spellWords || []).length >= 1) || // v254: 聽寫
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
     (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
@@ -203,6 +205,7 @@ function getQuizItemTotal(item) {
   if (!item) return 0;
   if (item.type === 'flashcard')    return (item.cards || []).length;
   if (item.type === 'type-answer')  return (item.pairs || []).length;
+  if (item.type === 'spelling')     return (item.spellWords || []).length; // v254
   if (item.type === 'short-answer') return (item.saQuestions || []).length;
   if (item.type === 'syllable-div') return (item.sdWords || []).length;
   if (item.type === 'word-sort')    return (item.sortWords || []).length;
@@ -416,22 +419,31 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
 }
 
 /* ── v253: 標題歸戶（與 TodayTasks v235 同法）——老師題庫側欄「依文章分組」用 ── */
-const QM_TYPE_WORDS = /(單字卡|單字練習|手寫練習|選擇題|簡答題|短答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|short answer)/gi;
+const QM_TYPE_WORDS = /(單字卡|單字聽寫|聽寫|拼字|單字練習|手寫練習|選擇題|簡答題|短答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|short answer|spelling)/gi;
 function qmGroupByArticle(items) {
   const keyOf = (t) => String(t || '').toLowerCase().replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
+  // v254: 老師手動分組（item.group）優先；沒設才用標題自動歸戶
+  const kOf = (it) => {
+    const manual = String(it.group || '').trim();
+    return manual ? 'm:' + manual.toLowerCase() : keyOf(it.title);
+  };
   const map = new Map();
   (items || []).forEach(it => {
-    const k = keyOf(it.title);
+    const k = kOf(it);
     if (!map.has(k)) map.set(k, []);
     map.get(k).push(it);
   });
   const out = [];
   const seen = new Set();
   (items || []).forEach(it => {
-    const k = keyOf(it.title);
+    const k = kOf(it);
     if (seen.has(k)) return;
     seen.add(k);
     const arr = map.get(k);
+    if (k.indexOf('m:') === 0) { // 手動組：永遠成組（就算只有 1 個），名字照老師打的
+      out.push({ key: k, name: String(arr[0].group || '').trim(), items: arr });
+      return;
+    }
     if (k.length < 3 || arr.length < 2) { arr.forEach(x => out.push({ single: x })); return; }
     let name = arr[0].title || '';
     for (const x of arr) {
@@ -599,6 +611,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isActive = selectedItem?.id === item.id;
             const isWriting      = item.type === 'writing-practice';
             const isTypeAnswer   = item.type === 'type-answer';
+            const isSpelling     = item.type === 'spelling'; // v254
             const isShortAnswer  = item.type === 'short-answer';
             const isSyllableDiv  = item.type === 'syllable-div';
             const isWordSort     = item.type === 'word-sort';
@@ -607,7 +620,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isCloze        = item.type === 'cloze';
             const isCircle       = item.type === 'circle-answer';
             const isFlashcard    = item.type === 'flashcard';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || (isFlashcard && (item.cards || []).length > 0);
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
@@ -636,7 +649,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -748,6 +761,15 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               if (goTasks) onBack(); else setPhase('intro');
             }}
           />
+        ) : selectedItem?.type === 'spelling' && phase === 'quiz' ? (
+          <SpellingPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'spelling' && phase === 'intro' ? (
+          <SpellingIntro item={selectedItem} onStart={() => setPhase('quiz')} />
         ) : selectedItem?.type === 'type-answer' && phase === 'quiz' ? (
           <TypeAnswerPlayer
             key={playerKey}
@@ -1104,6 +1126,161 @@ function WritingFeedback({ text }) {
 /* ══════════════════════════════════════════════════════
    TYPE-ANSWER INTRO
 ══════════════════════════════════════════════════════ */
+/* ── v254: Spelling 聽寫——聽發音、打拼字 ── */
+function SpellingIntro({ item, onStart }) {
+  const count = (item.spellWords || []).filter(w => w && w.word).length;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">🔊</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{count} 個單字</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>🔊</span><span>先聽發音（可以按喇叭重聽，不限次數）</span></div>
+        <div className="qm-intro-rule-row"><span>⌨</span><span>把聽到的單字拼出來</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫，拼對就算對</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          開始聽寫 · Start →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SpellingPlayer({ item, progressKey, onBack }) {
+  const words = useQMM(() => shuffleArr((item.spellWords || []).filter(w => w && w.word)), [item.id]);
+  const [idx,    setIdx]    = useQM(0);
+  const [input,  setInput]  = useQM('');
+  const [result, setResult] = useQM(null); // null | 'correct' | 'wrong'
+  const [score,  setScore]  = useQM(0);
+  const [screen, setScreen] = useQM('play');
+  const wrongsRef = React.useRef([]);
+  const inputRef  = React.useRef(null);
+
+  const total   = words.length;
+  const current = words[idx];
+  const pct     = Math.round(idx / total * 100);
+  const showZh  = item.spellShowZh !== false;
+
+  const speak = () => {
+    if (current && window.speakText) window.speakText(current.word, { lang: 'en-US', rate: 0.82 });
+  };
+  React.useEffect(() => { speak(); }, [idx]); // 每題自動唸一次（進場點擊已是手勢，iOS OK）
+  React.useEffect(() => {
+    if (result === null && inputRef.current) inputRef.current.focus();
+  }, [idx, result]);
+
+  const check = () => {
+    if (!input.trim()) return;
+    const correct = input.trim().toLowerCase() === (current.word || '').trim().toLowerCase();
+    setResult(correct ? 'correct' : 'wrong');
+    if (correct) {
+      const nextScore = score + 1;
+      setScore(nextScore);
+      if (window.playSound) window.playSound('correct');
+      setTimeout(() => next(nextScore), 650);
+    } else {
+      wrongsRef.current.push({ q: '🔊 聽寫' + (current.zh ? '：' + current.zh : ''), answer: current.word });
+      if (window.playSound) window.playSound('wrong');
+    }
+  };
+
+  const next = (scoreOverride = null) => {
+    const finalScoreBase = typeof scoreOverride === 'number' ? scoreOverride : score;
+    if (idx + 1 >= total) {
+      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScoreBase, total, wrongQuestions: wrongsRef.current });
+      if (window.playSound) window.playSound('complete');
+      setScreen('done');
+    } else {
+      setIdx(i => i + 1);
+      setInput('');
+      setResult(null);
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') {
+      if (result === null) check();
+      else if (result === 'wrong') next();
+    }
+  };
+
+  if (screen === 'done') {
+    const finalPct = Math.round(score / total * 100);
+    const emoji = finalPct === 100 ? '🏆' : finalPct >= 80 ? '🎉' : finalPct >= 60 ? '👍' : '💪';
+    return (
+      <div className="qm-result">
+        <div className="qm-result-emoji">{emoji}</div>
+        <div className="qm-result-cat-title">{item.title}</div>
+        <div className="qm-result-score">
+          <span className="qm-result-num">{score}</span>
+          <span className="qm-result-denom"> / {total}</span>
+        </div>
+        <div className="qm-result-pct">答對率 {finalPct}%</div>
+        <div className="qm-result-btns">
+          <button className="qm-btn secondary" onClick={() => { wrongsRef.current = []; setIdx(0); setInput(''); setResult(null); setScore(0); setScreen('play'); }}>再試一次</button>
+          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="qm-player-shell">
+      <div className="qm-player-head">
+        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="qm-player-bar-wrap">
+          <div className="qm-player-bar">
+            <div className="qm-player-fill" style={{width: pct + '%'}}/>
+          </div>
+        </div>
+        <span className="qm-player-counter">{idx + 1} / {total}</span>
+      </div>
+
+      <div key={idx} className="qm-question-area qm-question-swap">
+        <div className="qm-question-hint">SPELLING · 聽發音，拼出單字</div>
+        <button type="button" className="sp-speak" onClick={speak} aria-label="再聽一次發音">
+          <span className="sp-speak-ic">🔊</span>
+          <span className="sp-speak-lbl">再聽一次</span>
+        </button>
+        {showZh && current?.zh && <div className="sp-zh">{current.zh}</div>}
+      </div>
+
+      <div className="ta-input-wrap">
+        <input
+          ref={inputRef}
+          className={`ta-input${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
+          value={input}
+          onChange={e => { if (result === null) setInput(e.target.value); }}
+          onKeyDown={handleKey}
+          placeholder="把聽到的單字拼出來…"
+          disabled={result !== null}
+          autoComplete="off" autoCapitalize="none" spellCheck={false}
+        />
+        {result === 'wrong' && (
+          <div className="ta-correct-ans">✓ {current.word}</div>
+        )}
+      </div>
+
+      <div className="qm-feedback" style={{marginTop: result ? 8 : 0}}>
+        {result === null ? (
+          <button className="qm-btn primary" onClick={check} disabled={!input.trim()}>
+            確認 · Check →
+          </button>
+        ) : result === 'wrong' ? (
+          <>
+            <div className="qm-feedback-banner wrong">✗ 正確拼法：{current.word}</div>
+            <button className="qm-btn primary" onClick={() => next()}>下一題 →</button>
+          </>
+        ) : (
+          <div className="qm-feedback-banner correct">✓ Correct! 答對了！</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TypeAnswerIntro({ item, onStart }) {
   const count = (item.pairs || []).length;
   return (
@@ -3291,7 +3468,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
 
   // ── v235: 依「文章／主題」分組——同一篇文章的題目收在同一個標題下 ──
   // 沒有資料欄位可用，所以用標題歸戶：去掉題型字眼與編號後相同 → 同一篇
-  const TYPE_WORDS = /(單字卡|單字練習|手寫練習|選擇題|簡答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test)/gi;
+  const TYPE_WORDS = /(單字卡|單字聽寫|聽寫|拼字|單字練習|手寫練習|選擇題|簡答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|spelling)/gi;
   const SEP_TRIM = /[\s\-–—_·．.。,，()（）0-9０-９]+$/;
   const keyOf = (t) => String(t || '').toLowerCase().replace(TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
   const lcpOf = (arr) => {
@@ -3305,12 +3482,15 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
   };
   const byKey = {};
   tasks.forEach(t => {
-    const k = keyOf(t.it.title) || `_${t.id}`;
+    const manual = String(t.it.group || '').trim(); // v254: 老師手動分組優先
+    const k = manual ? `m:${manual.toLowerCase()}` : (keyOf(t.it.title) || `_${t.id}`);
     (byKey[k] = byKey[k] || []).push(t);
   });
   const sortRows = (a, b) => (a.done - b.done) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
   const entries = Object.values(byKey).map(group => {
     group.sort(sortRows);
+    const manualName = String(group[0].it.group || '').trim(); // v254
+    if (manualName) return { group: true, name: manualName, tasks: group };
     if (group.length < 2) return { group: false, tasks: group };
     let name = lcpOf(group.map(t => t.it.title)).replace(TYPE_WORDS, '').replace(SEP_TRIM, '').trim();
     if (name.length < 2) name = '';
@@ -3636,4 +3816,4 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
   );
 }
 
-Object.assign(window, { QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });
+Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });
