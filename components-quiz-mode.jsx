@@ -229,11 +229,19 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
   const localTotal = total || doneCount || 1;
   const localScore = typeof score === 'number' ? score : null;
   const prev = loadQMProg();
-  prev[progressKey] = { done: doneCount || localTotal, score: localScore, total: localTotal, ts };
+  // v255: 重做取「最好的一次」——考更好會更新，考差不會把好成績蓋掉
+  const old = prev[progressKey];
+  const newPct = localScore != null ? localScore / localTotal : null;
+  const oldPct = (old && old.score != null && old.total) ? old.score / old.total : null;
+  const keepOld = !!(old && oldPct != null && newPct != null && oldPct > newPct);
+  prev[progressKey] = keepOld
+    ? { ...old, ts }
+    : { done: doneCount || localTotal, score: localScore, total: localTotal, ts };
   saveQMProg(prev);
+  if (window._bumpQmProgress) window._bumpQmProgress(); // 大廳（今天的任務）即時刷新——所有題型都會走這裡
 
   const u = window._currentUser;
-  if (u && window.saveProgressItem) {
+  if (u && !keepOld && window.saveProgressItem) {
     const scorePct = localScore == null ? null : Math.round((localScore / localTotal) * 100);
     const payload = {
       done: ts,

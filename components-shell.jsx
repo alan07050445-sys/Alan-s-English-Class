@@ -349,6 +349,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
     const apply = () => {
       raf = 0;
       const max = root.scrollHeight - root.clientHeight;
+      root.classList.toggle('ll-off-top', root.scrollTop > 80); // v255: 捲離頂部 → 藏「往下看更多」
       if (bar) bar.style.transform = 'scaleX(' + (max > 0 ? (root.scrollTop / max).toFixed(4) : 0) + ')';
       if (BLEND.length > 1) {
         // 以「視窗中線」落在哪兩個區塊中心之間來內插顏色
@@ -700,6 +701,11 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
               </div>
             </div>
           </div>
+
+          <button className="ll-scrollcue" aria-label="往下捲動看更多" onClick={() => scrollToId('ll-pains')}>
+            <span>往下看更多</span>
+            <i aria-hidden="true">⌄</i>
+          </button>
 
           <div className="ll-hero-decor" aria-hidden="true">
             <svg className="ll-doodle d-blob-a" viewBox="0 0 200 200"><path d="M40,-52C53,-43,65,-32,69,-19C73,-5,69,10,62,24C55,38,44,50,30,57C16,63,-2,64,-18,59C-34,53,-48,41,-57,26C-66,11,-70,-8,-64,-24C-58,-40,-42,-52,-26,-59C-10,-66,7,-67,23,-64C39,-61,27,-61,40,-52Z" transform="translate(100 100)"/></svg>

@@ -5117,3 +5117,29 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .spe-word { flex: 1.1; }
 .spe-zh { flex: 1; }
 .spe-hear, .spe-del { flex: none; padding: 6px 10px !important; font-size: 13px !important; }
+
+/* ═══════════ v255: 首頁「往下看更多」捲動提示 ═══════════ */
+.ll-scrollcue {
+  position: absolute;
+  left: 50%; bottom: 18px;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: none; border: none;
+  font-family: inherit;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .12em;
+  color: #a3977e;
+  cursor: pointer;
+  z-index: 2;
+  transition: opacity .4s ease, color .15s;
+  opacity: .9;
+}
+.ll-scrollcue:hover { color: #8B3120; }
+.ll-scrollcue i { font-style: normal; font-size: 22px; line-height: .7; }
+.login-landing.ll-off-top .ll-scrollcue { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .ll-scrollcue i { animation: ll-cue-bob 1.6s ease-in-out infinite; display: block; }
+}
+@keyframes ll-cue-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}

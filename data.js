@@ -637,9 +637,10 @@ function _ttsPickVoice(lang) {
     const n = v.name.toLowerCase();
     let s = 0;
     if (norm(v.lang) === key) s += 4;                                   // 完整 locale 相符
-    if (n.indexOf('google') !== -1) s += 8;                             // Chrome 的 Google 語音最自然
+    if (n.indexOf('google') !== -1) s += 7;                             // Chrome 的 Google 語音自然（但是網路語音、偶爾啞掉）
     if (/natural|premium|enhanced/.test(n)) s += 7;                     // Edge Natural / macOS 加強版
     if (/samantha|ava|allison|karen|daniel|nicky|joelle|mei-jia|meijia|siri/.test(n)) s += 5; // 已知的好聲音
+    if (v.localService) s += 3;                                         // v256: 本機語音更穩（網路語音會無聲）
     if (_TTS_NOVELTY.test(n)) s -= 20;                                  // 黑名單墊底
     return s;
   };
@@ -656,14 +657,34 @@ if (window.speechSynthesis) {
 function speakText(text, { rate = 0.95, lang = 'en-US' } = {}) {
   try {
     if (!window.speechSynthesis || !text) return false;
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(String(text));
-    utt.lang = lang;
-    utt.rate = rate;
-    utt.pitch = 1;
-    const v = _ttsPickVoice(lang);
-    if (v) utt.voice = v;
-    window.speechSynthesis.speak(utt);
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const fire = (useVoice) => {
+      const utt = new SpeechSynthesisUtterance(String(text));
+      utt.lang = lang;
+      utt.rate = rate;
+      utt.pitch = 1;
+      if (useVoice) {
+        const v = _ttsPickVoice(lang);
+        if (v) utt.voice = v;
+      }
+      let started = false;
+      utt.onstart = () => { started = true; };
+      if (useVoice) {
+        // v256: 看門狗——挑的語音沒出聲（Google 網路語音偶爾整個啞掉）→ 改用系統預設重講
+        const fallback = () => {
+          if (started || synth.speaking) return;
+          try { synth.cancel(); } catch (e) {}
+          fire(false);
+        };
+        utt.onerror = fallback;
+        setTimeout(fallback, 650);
+      }
+      try { synth.resume(); } catch (e) {} // 有些瀏覽器卡在 paused 狀態
+      synth.speak(utt);
+    };
+    // v256: Chrome 在 cancel() 同一拍 speak 會吞掉 utterance——隔一拍再講
+    setTimeout(() => fire(true), 30);
     return true;
   } catch(e) { return false; }
 }

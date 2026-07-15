@@ -393,12 +393,18 @@ function App() {
   }, [week, grade]);
 
   const qmProgress = useAppMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('alans-qm-v1') || '{}');
-    } catch(e) {
-      return {};
-    }
-  }, [qmProgressVersion, weekId, grade]);
+    let local = {};
+    try { local = JSON.parse(localStorage.getItem('alans-qm-v1') || '{}'); } catch(e) {}
+    // v255: 併入雲端成績（跨裝置一致），同一單元取「較好的一次」
+    const pctOf = (p) => (p && p.score != null && p.total) ? p.score / p.total : (p && p.done ? -1 : -2);
+    Object.entries(myProgressItems || {}).forEach(([key, fp]) => {
+      if (!fp || !fp.done) return;
+      const remote = { done: 1, score: fp.score != null ? fp.score : null, total: fp.score != null ? 100 : (fp.total || 1), ts: fp.done };
+      const cur = local[key];
+      if (!cur || pctOf(remote) > pctOf(cur)) local[key] = remote;
+    });
+    return local;
+  }, [qmProgressVersion, weekId, grade, myProgressItems]);
 
   const totalItems = weekQuizItems.length || allItems.length;
   const totalDone = weekQuizItems.length
@@ -697,6 +703,9 @@ function App() {
     showToast(hwData ? "設定作業 ✓" : "取消作業");
   };
 
+  // v255: 所有題型完成時刷新大廳進度（saveQuizModeCompletion 會呼叫）
+  window._bumpQmProgress = () => setQmProgressVersion(v => v + 1);
+
   // ── Quiz complete handler (streak + XP + badges) ────────
   window._onQuizComplete = async (score, total, wrongList, meta = {}) => {
     const u = window._currentUser;
@@ -949,7 +958,7 @@ function App() {
             try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
           }}
           summer={(isTeacher || hasSummerPlan) ? { lib: isTeacher, mine: hasSummerPlan, who: summerWho } : null}
-          onViewLanding={() => setViewLanding(true)}
+          onViewLanding={() => runWave(() => setViewLanding(true))}
           onOpenGuide={homeGrade ? () => {
             // 門口頁「新手教學」→ 直接進自己的教室跑實境導覽
             // （還沒選過年級的人選完年級本來就會自動看到導覽，不顯示此連結）
