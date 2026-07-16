@@ -1533,6 +1533,23 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <span className="gs-card-cta">進入 →</span>
           </button>
         )}
+        {/* v261: 暑假期間題庫是老師的主要工作區——排在後台正下方、用暑假金黃主題 */}
+        {summer && summer.lib && (
+          <button className="gs-card gs-card-lib" onClick={() => onSelect(window.SUMMER_LIB || 'sl')}>
+            <span className="gs-card-ico gs-card-ico-lib" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5V6.5A2.5 2.5 0 016.5 4H20v13H6.5A2.5 2.5 0 004 19.5z"/>
+                <path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/>
+                <path d="M9 8.5h7M9 12h4.5"/>
+              </svg>
+            </span>
+            <span className="gs-card-text">
+              <b>暑假題庫</b>
+              <span>老師專用 · 出題後到後台發派給學生</span>
+            </span>
+            <span className="gs-card-cta">進入 →</span>
+          </button>
+        )}
         {summer && summer.mine && (
           <button className="gs-card gs-card-summer" onClick={() => onSelect(window.SUMMER_ME || 'sme')}>
             {ringScope ? (
@@ -1588,22 +1605,6 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             </div>
             <p className="gs-hint">之後隨時可以從右上角的年級標籤切換</p>
           </>
-        )}
-        {summer && summer.lib && (
-          <button className="gs-card gs-card-lib" onClick={() => onSelect(window.SUMMER_LIB || 'sl')}>
-            <span className="gs-card-ico gs-card-ico-lib" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5V6.5A2.5 2.5 0 016.5 4H20v13H6.5A2.5 2.5 0 004 19.5z"/>
-                <path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/>
-                <path d="M9 8.5h7M9 12h4.5"/>
-              </svg>
-            </span>
-            <span className="gs-card-text">
-              <b>暑假題庫</b>
-              <span>老師專用 · 出題後到後台發派給學生</span>
-            </span>
-            <span className="gs-card-cta">進入 →</span>
-          </button>
         )}
         {(onViewLanding || onOpenGuide) && (
           <div className="gs-links">

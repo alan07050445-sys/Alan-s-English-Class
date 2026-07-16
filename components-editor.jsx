@@ -51,7 +51,9 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    // v261: 點到編輯器外面「不再」直接關閉——出到一半的題目會全部不見（Alan 踩過）。
+    // 要離開請按右上 ✕ 或 Cancel。
+    <div className="modal-backdrop">
       <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>

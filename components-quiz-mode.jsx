@@ -506,6 +506,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     // 從「今天的任務」點進來 → 直接打開那一個單元
     const wanted = initialItemId && sidebarItems.find(it => it.id === initialItemId);
     if (wanted) { selectItem(wanted); return; }
+    // v261: 題庫視角不自動選第一個單元——自動選會連帶展開它的分組，Alan 要「進來時全部收合」
+    if (String(weekId || '').startsWith('sl')) return;
     const firstMain = sidebarItems.find(it =>
       explicitMainIds.has(it.id) ||
       homeworkMainIds.has(it.id) ||
@@ -3503,6 +3505,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
   const tasks = Object.keys(hw).map(id => {
     const it = itemById[id];
     if (!it) return null;
+    if (getQuizItems([it]).length === 0) return null; // v261: 空單元（0 題）不進任務清單——點進去也沒東西可做
     const prog = (qmProg || {})[`${weekId}_${id}`];
     const done = !!(prog && prog.done);
     const pct  = (done && prog.total && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null;
@@ -3557,12 +3560,29 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     return adu.localeCompare(bdu);
   });
 
+  // v261: 題型中文名——去掉組名後標題只剩「2」這種編號時，補上題型（「聽寫 2」）才看得懂
+  const TT_TYPE_ZH = {
+    flashcard: '單字卡', spelling: '聽寫', fillblank: '填空', quiz: '測驗',
+    'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
+    cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
+    'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山', 'writing-practice': '造句',
+  };
   const rowLabel = (t, groupName) => {
     if (!groupName) return t.it.title;
     const title = t.it.title;
     if (title.toLowerCase().startsWith(groupName.toLowerCase())) {
       const rest = title.slice(groupName.length).replace(/^[\s\-–—_·．.。,，]+/, '').trim();
-      if (rest) return rest;
+      if (rest) {
+        // 剩下的只有數字／符號（沒有任何中英文字）→ 補題型名
+        if (!/[A-Za-z一-鿿]/.test(rest)) {
+          const tz = TT_TYPE_ZH[t.it.type];
+          return tz ? `${tz} ${rest}` : rest;
+        }
+        return rest;
+      }
+      // 整個標題＝組名（沒有多餘字）→ 顯示題型名，不再重複一次長標題
+      const tz = TT_TYPE_ZH[t.it.type];
+      if (tz) return tz;
     }
     return title;
   };

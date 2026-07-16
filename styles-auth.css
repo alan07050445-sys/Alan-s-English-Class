@@ -5289,14 +5289,13 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 }
 .grade-selector .gs-card-room:hover { border-color: #B85A45; }
 
-/* 暑假題庫卡（老師）：輕量 outline */
+/* 暑假題庫卡（老師）：v261 改暑假金黃主題——暑假期間這是老師的主要工作區 */
 .grade-selector .gs-card-lib {
-  background: var(--bg-card, #faf7f0);
-  box-shadow: none;
-  margin-top: 4px;
+  background: linear-gradient(115deg, #fdf6e3 0%, #f9e9c8 100%);
+  border-color: rgba(201,168,76,.65);
 }
-.gs-card-lib .gs-card-ico { background: #fff; color: #8a6d1c; }
-.gs-card-lib .gs-card-text b { font-size: 15.5px; }
+.gs-card-lib .gs-card-ico { background: #fff; color: #8a6d1c; box-shadow: 0 0 0 4px rgba(255,205,90,.22); }
+.gs-card-lib .gs-card-text > span { color: #8a6d1c; }
 
 @media (max-width: 560px) {
   .grade-selector .gs-card { gap: 11px; padding: 13px 12px; border-radius: 16px; }
