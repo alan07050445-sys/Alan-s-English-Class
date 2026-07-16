@@ -1329,6 +1329,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
   const [score,    setScore]    = useQM(0);
   const [screen,   setScreen]   = useQM('play'); // 'play' | 'done'
   const inputRef = React.useRef(null);
+  const wrongsRef = React.useRef([]); // v258: 錯題記錄（老師端＋錯題本）
 
   const total   = pairs.length;
   const current = pairs[idx];
@@ -1348,6 +1349,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
       if (window.playSound) window.playSound('correct');
       setTimeout(() => next(nextScore), 650);
     } else {
+      wrongsRef.current.push({ q: current.prompt || '(打字題)', answer: current.answer || '' });
       if (window.playSound) window.playSound('wrong');
     }
   };
@@ -1355,7 +1357,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
   const next = (scoreOverride = null) => {
     const finalScoreBase = typeof scoreOverride === 'number' ? scoreOverride : score;
     if (idx + 1 >= total) {
-      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScoreBase, total });
+      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScoreBase, total, wrongQuestions: wrongsRef.current });
       if (window.playSound) window.playSound('complete');
       setScreen('done');
     } else {
@@ -1387,7 +1389,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
         </div>
         <div className="qm-result-pct">{finalPct}% correct</div>
         <div className="qm-result-btns">
-          <button className="qm-btn secondary" onClick={() => { setIdx(0); setInput(''); setResult(null); setScore(0); setScreen('play'); }}>再試一次</button>
+          <button className="qm-btn secondary" onClick={() => { wrongsRef.current = []; setIdx(0); setInput(''); setResult(null); setScore(0); setScreen('play'); }}>再試一次</button>
           <button className="qm-btn primary"   onClick={onBack}>← Back</button>
         </div>
       </div>
@@ -2039,6 +2041,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   const [checking, setChecking] = useQM(false);
   const [scores, setScores]   = useQM([]);
   const [done, setDone]       = useQM(false);
+  const wrongsRef = React.useRef([]); // v258: AI 評 2 星以下＝需要加強的題目
 
   const current = questions[idx];
   const total   = questions.length;
@@ -2061,7 +2064,11 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
       current.question, current.keyPoints || '', passage, answer
     );
     setFeedback(result);
-    setScores(prev => [...prev, extractStars(result)]);
+    const stars = extractStars(result);
+    setScores(prev => [...prev, stars]);
+    if (stars <= 2) {
+      wrongsRef.current.push({ q: current.question, answer: current.keyPoints || '（參考 AI 回饋）' });
+    }
     setChecking(false);
   };
 
@@ -2075,7 +2082,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
   const next = () => {
     if (idx + 1 >= total) {
       const avgStars = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-      saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: avgStars, total: 5 });
+      saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: avgStars, total: 5, wrongQuestions: wrongsRef.current });
       setDone(true);
       return;
     }
@@ -2236,18 +2243,24 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
 
   const submit = () => {
     const isCorrect = cuts.size === correctCuts.size && [...cuts].every(c => correctCuts.has(c));
-    setScores(prev => [...prev, isCorrect]);
+    const nextScores = [...scores, isCorrect];
+    setScores(nextScores);
     if (window.playSound) window.playSound(isCorrect ? 'correct' : 'wrong');
     setSubmitted(true);
     if (isCorrect) {
-      setTimeout(() => next(), 650);
+      // v258: 把最新的 scores 一起帶過去——setTimeout 裡的 next 是舊 render 的閉包，
+      // 直接讀 state 會少算剛答對的最後一題（滿分被存成少一題）
+      setTimeout(() => next(nextScores), 650);
     }
   };
 
-  const next = () => {
+  const next = (scoresOverride = null) => {
+    const s = scoresOverride || scores;
     if (idx + 1 >= total) {
-      const correct = scores.filter(Boolean).length;
-      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total });
+      const correct = s.filter(Boolean).length;
+      // v258: 錯題記錄——切錯的單字＋正確切法
+      const wrongList = words.filter((w, i) => !s[i]).map(w => ({ q: w.word, answer: w.answer || '' }));
+      saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total, wrongQuestions: wrongList });
       setDone(true);
       return;
     }
@@ -2482,7 +2495,14 @@ function WordSortPlayer({ item, progressKey, onBack }) {
     allWords.forEach(w => {
       if (placements[w.id] === w.category) correct++;
     });
-    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total });
+    // v258: 錯題記錄——放錯欄位的單字＋正確答案（字尾模式記完整單字，一般模式記正確分類）
+    const wrongList = allWords
+      .filter(w => placements[w.id] !== w.category)
+      .map(w => ({
+        q: suffixMode ? stem(w) + '_' : w.word,
+        answer: suffixMode ? makeSuffixWord(stem(w), w.category) : w.category,
+      }));
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total, wrongQuestions: wrongList });
     if (window.playSound) window.playSound(correct === total ? 'complete' : 'wrong');
     setSubmitted(true);
   };
