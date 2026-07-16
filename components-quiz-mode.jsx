@@ -607,7 +607,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           )}
           {editMode && (
             <button className="qm-unit-add-btn" onClick={() => onAddItem(cat.id)}>
-              <window.Icon name="plus" size={12}/> Add item
+              <window.Icon name="plus" size={14}/> 出新題目 · Add item
             </button>
           )}
           {viewItems.length === 0 && (
