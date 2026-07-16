@@ -42,6 +42,11 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
 
   const handleSave = () => {
     if (!form.title?.trim()) { alert("Please enter a title"); return; }
+    // v260: 空單元防呆——練習型單元存檔時 0 題，學生頁不會顯示，先問一聲
+    const PLAYABLE = ['quiz', 'flashcard', 'vocab-quiz', 'fillblank', 'type-answer', 'spelling', 'short-answer', 'syllable-div', 'word-sort', 'essay', 'story-mountain', 'cloze', 'circle-answer', 'writing-practice'];
+    if (PLAYABLE.includes(form.type) && window.getQuizItems && window.getQuizItems([form]).length === 0) {
+      if (!window.confirm('⚠ 這個單元目前是 0 題，儲存後學生頁「不會顯示」它。\n\n（題目清單會標「⚠ 沒有題目」提醒你補題）\n\n仍要儲存嗎？')) return;
+    }
     onSave(form);
   };
 
