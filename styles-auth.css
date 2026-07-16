@@ -5320,3 +5320,28 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   /* HUD 只在捲動敘事段出現，不壓住 hero／結尾的置中按鈕 */
   .login-landing.ll-hud-quiet .ll-hud { opacity: 0; }
 }
+
+/* ═══════════ v259: 空單元警告——沒有題目的項目學生頁看不到，老師端標出來 ═══════════ */
+.qm-empty-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px; font-weight: 800;
+  color: #a3372a;
+  background: #fdf1ee;
+  border: 1px solid #f0c9c2;
+  border-radius: 100px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.sa-mx-empty {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10.5px; font-weight: 800;
+  color: #a3372a;
+  background: #fdf1ee;
+  border: 1px solid #f0c9c2;
+  border-radius: 100px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}

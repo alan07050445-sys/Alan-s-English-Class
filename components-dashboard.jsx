@@ -479,6 +479,10 @@ function SummerAdmin() {
                     <tr key={it.id}>
                       <td className="sa-mx-unitcol">
                         <span className="sa-mx-title">{it.title}</span>
+                        {/* v259: 空項目提示——沒有題目的單元就算發派了，學生頁也不會顯示 */}
+                        {window.getQuizItems && window.getQuizItems([it]).length === 0 && (
+                          <span className="sa-mx-empty" title="這個單元還沒有題目，學生頁不會顯示。到題庫點鉛筆補題目。">⚠ 沒有題目</span>
+                        )}
                         <button className="sa-mx-all" disabled={busy} onClick={() => toggleRow(it.id)} title="這個單元：全班一鍵發派／取消">全班</button>
                       </td>
                       {active.map(stu => {

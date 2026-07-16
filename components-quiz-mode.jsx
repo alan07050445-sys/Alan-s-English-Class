@@ -660,7 +660,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                   </div>
                   <div className="qm-unit-row-meta">
                     {editMode ? (
-                      <span className="qm-type-badge">{item.type}{totalQ > 0 ? ` · ${totalQ}q` : ''}</span>
+                      <>
+                        <span className="qm-type-badge">{item.type}{(() => { const n = totalQ || getQuizItemTotal(item); return n > 0 ? ` · ${n}q` : ''; })()}</span>
+                        {/* v259: 空項目學生頁會被濾掉——老師端要看得到警告，不然像消失了 */}
+                        {getQuizItems([item]).length === 0 && (
+                          <span className="qm-empty-badge" title="這個單元還沒有題目，學生頁不會顯示。點鉛筆進去新增題目。">⚠ 沒有題目 · 學生看不到</span>
+                        )}
+                      </>
                     ) : (
                       <>
                         {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
