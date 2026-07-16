@@ -2394,3 +2394,55 @@
   padding: 6px 14px;
   display: inline-block;
 }
+
+/* ═══════════ v263: 上傳作業（UploadHomeworkPlayer）═══════════ */
+.uh { max-width: 640px; }
+.uh-instruction {
+  margin: 10px auto 4px;
+  max-width: 480px;
+  text-align: left;
+  font-size: 14.5px; line-height: 1.7; color: var(--ink-2, #5c554a);
+  background: #fbf7ec;
+  border: 1px solid var(--border, #e5dfc8);
+  border-radius: 12px;
+  padding: 12px 16px;
+  white-space: pre-wrap;
+}
+.uh-block { margin: 16px auto 0; max-width: 480px; text-align: left; }
+.uh-block-title { font-size: 13.5px; font-weight: 800; color: var(--ink-2, #5c554a); margin-bottom: 8px; }
+.uh-graded { color: #1f7d4f; }
+.uh-waiting { color: #9a6a00; }
+.uh-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.uh-thumb {
+  position: relative;
+  display: block;
+  width: 96px; height: 96px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--border, #e5dfc8);
+  background: #fff;
+  box-shadow: 0 4px 12px -6px rgba(21,19,14,.2);
+}
+.uh-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.uh-thumb-pending { border-style: dashed; border-color: #C9A84C; }
+.uh-thumb-del {
+  position: absolute; top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  border: none; border-radius: 50%;
+  background: rgba(21,19,14,.72); color: #fff;
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+}
+.uh-err {
+  margin: 14px auto 0; max-width: 480px;
+  font-size: 13.5px; font-weight: 700; color: #a3372a;
+  background: #fdf1ee; border: 1px solid #f0c9c2;
+  border-radius: 10px; padding: 10px 14px;
+}
+.uh-btns { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 20px; flex-wrap: wrap; }
+.uh-pick { cursor: pointer; }
+.uh-pick.disabled { opacity: .5; pointer-events: none; }
+.uh-hint { margin-top: 10px; font-size: 12.5px; color: var(--ink-3, #8a8270); }
+@media (max-width: 560px) {
+  .uh-thumb { width: 84px; height: 84px; }
+}

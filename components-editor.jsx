@@ -19,6 +19,7 @@ const TYPE_OPTIONS = [
   { id: "story-mountain",   label: "Story Mountain",   hint: "🏔 故事山脈 — 逐步填寫 Introduction → Rising Action → Climax → Falling Action → Resolution，AI 批改結構與文法（10 分制）" },
   { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
   { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
+  { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
 function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
@@ -188,6 +189,22 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               onChangePairs={pairs => update("pairs", pairs)}
               onChangeInstruction={v => update("instruction", v)}
             />
+          ) : form.type === "upload" ? (
+            /* v263: 上傳作業——只需要一段給學生看的說明 */
+            <div className="field">
+              <label className="field-label">作業說明 · Instruction</label>
+              <textarea
+                value={form.instruction || ""}
+                onChange={e => update("instruction", e.target.value)}
+                rows={4}
+                placeholder={"例：完成講義 p.12–13，寫完整頁拍照上傳（字要拍清楚喔！）"}
+                style={{width:'100%',padding:'10px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:4,fontSize:14,fontFamily:'inherit',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
+              />
+              <div className="field-help">
+                學生會在上傳頁看到這段說明，拍照（可多張）送出後你就能在後台「學生詳情」看照片、打分數。
+                截止日一樣用題目清單上的 📌 設定。
+              </div>
+            </div>
           ) : form.type === "short-answer" ? (
             <ShortAnswerEditor
               passage={form.passage || ''}

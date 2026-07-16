@@ -132,7 +132,8 @@ function getQuizItems(items) {
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
     (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
     (item.type === 'cloze'            && (item.passage || '').includes('[')) ||
-    (item.type === 'circle-answer'    && (item.circleQuestions || []).some(q => q.sentence && q.answer))
+    (item.type === 'circle-answer'    && (item.circleQuestions || []).some(q => q.sentence && q.answer)) ||
+    (item.type === 'upload') // v263: 上傳作業——單元本身就是任務，不需要題目
   );
 }
 
@@ -220,6 +221,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
   if (item.type === 'circle-answer') return (item.circleQuestions || []).filter(q => q.sentence && q.answer).length;
   if (item.type === 'writing-practice') return 1;
+  if (item.type === 'upload') return 1; // v263: 上傳作業＝一件事
   return getItemQuestions(item).length;
 }
 
@@ -230,7 +232,7 @@ function getCategoryCountLabel(cat) {
     : 'questions';
 }
 
-function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null, total = 1, wrongQuestions = [] } = {}) {
+function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null, total = 1, wrongQuestions = [], extra = null } = {}) {
   const ts = Date.now();
   const localTotal = total || doneCount || 1;
   const localScore = typeof score === 'number' ? score : null;
@@ -260,6 +262,7 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
       payload.wrongQuestions = wrongQuestions;
       payload.wrongCount = wrongQuestions.length;
     }
+    if (extra) Object.assign(payload, extra); // v263: 題型自帶欄位（上傳作業的照片清單等）
     window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, payload);
   }
   return prev;
@@ -636,7 +639,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isCloze        = item.type === 'cloze';
             const isCircle       = item.type === 'circle-answer';
             const isFlashcard    = item.type === 'flashcard';
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || (isFlashcard && (item.cards || []).length > 0);
+            const isUpload       = item.type === 'upload'; // v263
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || isUpload || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
@@ -671,7 +675,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -792,6 +796,14 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'spelling' && phase === 'intro' ? (
           <SpellingIntro item={selectedItem} onStart={() => setPhase('quiz')} />
+        ) : selectedItem?.type === 'upload' ? (
+          /* v263: 上傳作業——單一畫面（說明＋拍照上傳＋已交/批改狀態），不分 intro/quiz */
+          <UploadHomeworkPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={onBack}
+          />
         ) : selectedItem?.type === 'type-answer' && phase === 'quiz' ? (
           <TypeAnswerPlayer
             key={playerKey}
@@ -3566,6 +3578,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
     cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
     'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山', 'writing-practice': '造句',
+    upload: '上傳作業',
   };
   const rowLabel = (t, groupName) => {
     if (!groupName) return t.it.title;
@@ -3883,4 +3896,134 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
   );
 }
 
-Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });
+/* ══════════════════════════════════════════════════════
+   UPLOAD HOMEWORK — v263「上傳作業」題型
+   紙本作業拍照上傳：學生拍照/選圖 → 縮圖預覽 → 送出（自動縮小後傳
+   Firebase Storage）→ 老師在後台學生詳情看照片、打分數。
+══════════════════════════════════════════════════════ */
+function UploadHomeworkPlayer({ item, progressKey, onBack }) {
+  const [pending,   setPending]   = useQM([]);   // [{ file, url }] 還沒送出的
+  const [busy,      setBusy]      = useQM(false);
+  const [err,       setErr]       = useQM('');
+  const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
+  const u = window._currentUser;
+
+  // 已交過的照片與批改結果：聽自己的雲端 progress（老師打完分數會即時看到）
+  useQME(() => {
+    if (!u || !window.subscribeMyProgress) return;
+    return window.subscribeMyProgress(u.uid, items => setCloudProg(items[progressKey] || null));
+  }, []);
+
+  const submitted = (cloudProg && cloudProg.files) || [];
+  const score     = cloudProg && cloudProg.score != null ? cloudProg.score : null;
+
+  // 照片縮小到最長邊 1600px 的 JPEG——平板原圖動輒 5-10MB，上傳太慢
+  const shrink = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1600;
+      const k = Math.min(1, MAX / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.width * k));
+      cv.height = Math.max(1, Math.round(img.height * k));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => b ? resolve(b) : reject(new Error('無法處理這張圖片')), 'image/jpeg', 0.85);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('圖片讀取失敗')); };
+    img.src = URL.createObjectURL(file);
+  });
+
+  const pickFiles = (e) => {
+    const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
+    if (!files.length) return;
+    setErr('');
+    setPending(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))]);
+    e.target.value = ''; // 同一張可以再選
+  };
+  const removePending = (i) => setPending(prev => { URL.revokeObjectURL(prev[i].url); return prev.filter((_, j) => j !== i); });
+
+  const submit = async () => {
+    if (!u) { setErr('要先登入才能交作業喔！'); return; }
+    if (!pending.length || busy) return;
+    setBusy(true); setErr('');
+    try {
+      const urls = [];
+      for (let i = 0; i < pending.length; i++) {
+        const blob = await shrink(pending[i].file);
+        urls.push(await window.uploadSubmissionPhoto(u.uid, progressKey, blob, i));
+      }
+      const all = [...submitted, ...urls];
+      saveQuizModeCompletion(progressKey, item, {
+        doneCount: 1, score: null, total: 1,
+        extra: { files: all, graded: false, submittedAt: Date.now() },
+      });
+      pending.forEach(p => URL.revokeObjectURL(p.url));
+      setPending([]);
+      if (window.playSound) window.playSound('complete');
+    } catch (e) {
+      const denied = e && (e.code === 'storage/unauthorized' || /permission|unauthorized/i.test(String(e && e.message)));
+      setErr(denied
+        ? '上傳被擋下來了——請告訴老師「上傳權限還沒開」。'
+        : '上傳失敗，請檢查網路再試一次。' + (e && e.message ? `（${e.message}）` : ''));
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="qm-intro uh">
+      <div className="qm-intro-icon">📎</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">拍照上傳作業</div>
+      {item.instruction && (
+        <div className="uh-instruction">📋 {item.instruction}</div>
+      )}
+
+      {submitted.length > 0 && (
+        <div className="uh-block">
+          <div className="uh-block-title">
+            {score != null
+              ? <span className="uh-graded">✓ 老師改好了：{score} 分</span>
+              : <span className="uh-waiting">已交 {submitted.length} 張 · 等老師批改 ⏳</span>}
+          </div>
+          <div className="uh-grid">
+            {submitted.map((url, i) => (
+              <a key={i} className="uh-thumb" href={url} target="_blank" rel="noreferrer" title="點開看大圖">
+                <img src={url} alt={`已交作業 ${i + 1}`}/>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="uh-block">
+          <div className="uh-block-title">還沒送出（{pending.length} 張）</div>
+          <div className="uh-grid">
+            {pending.map((p, i) => (
+              <span key={i} className="uh-thumb uh-thumb-pending">
+                <img src={p.url} alt={`預覽 ${i + 1}`}/>
+                <button className="uh-thumb-del" onClick={() => removePending(i)} aria-label="移除這張">✕</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {err && <div className="uh-err">⚠ {err}</div>}
+
+      <div className="uh-btns">
+        <label className={`qm-btn secondary uh-pick${busy ? ' disabled' : ''}`}>
+          📷 拍照或選照片
+          <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy} style={{ display: 'none' }}/>
+        </label>
+        <button className="qm-btn primary" onClick={submit} disabled={busy || pending.length === 0}>
+          {busy ? '上傳中…' : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}
+        </button>
+      </div>
+      <div className="uh-hint">可以一次選好幾張；交出去之後還是可以再補交。</div>
+    </div>
+  );
+}
+
+Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });

@@ -877,6 +877,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack }) {
   const [reportOpen, setReportOpen] = useDash(false);
   const [wrongOpen, setWrongOpen] = useDash(null); // v251: 展開中的錯題單元 id
+  const [filesOpen, setFilesOpen] = useDash(null); // v263: 展開中的作業照片單元 id
+  const [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
 
   const its = student.items || {};
   const done = allItems.filter(it =>
@@ -940,6 +942,10 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
               const score  = prog?.score != null ? Math.min(100, prog.score) : null;
               const wrongs = prog?.wrongQuestions || [];
               const wOpen  = wrongOpen === it.id;
+              // v263: 上傳作業——照片與批改
+              const files  = prog?.files || [];
+              const fOpen  = filesOpen === it.id;
+              const needsGrading = files.length > 0 && prog?.score == null;
               // v257: 遲交——截止日 23:59 之後才完成
               const dueEnd = it.dueDate ? new Date(it.dueDate + 'T23:59:59').getTime() : null;
               const isLate = !!(isDone && dueEnd && typeof prog.done === 'number' && prog.done > dueEnd);
@@ -967,6 +973,13 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
                           title="看這個單元錯了哪些題"
                         >✗ 錯 {wrongs.length} 題 {wOpen ? '⌃' : '⌄'}</button>
                       )}
+                      {files.length > 0 && (
+                        <button
+                          className={`sdetail-filesbtn${fOpen ? ' on' : ''}${needsGrading ? ' grading' : ''}`}
+                          onClick={() => setFilesOpen(fOpen ? null : it.id)}
+                          title="看學生交的作業照片、打分數"
+                        >📎 {files.length} 張{needsGrading ? ' · ⏳ 待批改' : ''} {fOpen ? '⌃' : '⌄'}</button>
+                      )}
                     </span>
                     <span className="sdetail-cat">{it.cat}</span>
                     <span className="sdetail-score">
@@ -992,6 +1005,42 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
                           <span className="sdetail-wrong-a">正解：{w.answer}</span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {fOpen && (
+                    /* v263: 作業照片＋打分數（老師可直接寫學生 progress——rules 的 isTeacher 通則） */
+                    <div className="sdetail-files">
+                      <div className="sdetail-files-grid">
+                        {files.map((url, fi) => (
+                          <a key={fi} href={url} target="_blank" rel="noreferrer" title="點開看大圖">
+                            <img src={url} alt={`作業照片 ${fi + 1}`} loading="lazy"/>
+                          </a>
+                        ))}
+                      </div>
+                      <div className="sdetail-grade-row">
+                        <input
+                          type="number" min="0" max="100"
+                          className="sdetail-grade-input"
+                          placeholder="分數 0–100"
+                          value={gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : (prog.score != null ? prog.score : '')}
+                          onChange={e => setGradeDraft(d => ({ ...d, [it.id]: e.target.value }))}
+                        />
+                        <button
+                          className="sdetail-grade-btn"
+                          onClick={() => {
+                            const raw = gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score;
+                            const n = Math.round(Number(raw));
+                            if (raw === '' || raw == null || Number.isNaN(n) || n < 0 || n > 100) { alert('請輸入 0–100 的分數'); return; }
+                            window.saveProgressItem(student.uid, '', '', progKeys[0], { ...prog, score: n, graded: true, gradedAt: Date.now() });
+                          }}
+                        >✓ 給分</button>
+                        {prog.graded && prog.score != null && <span className="sdetail-graded-note">已批改 · 學生會看到 {prog.score} 分</span>}
+                        {prog.submittedAt && (
+                          <span className="sdetail-submitted-at">
+                            交於 {new Date(prog.submittedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </React.Fragment>

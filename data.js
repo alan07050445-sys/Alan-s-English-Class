@@ -266,6 +266,15 @@ async function uploadPdfToStorage(weekId, itemId, file) {
   return storageRef.getDownloadURL();
 }
 
+// v263: 學生作業照片上傳（「上傳作業」題型）——存 submissions/{uid}/{progressKey}/
+// ⚠ 需要 storage.rules 的 submissions 區塊已發布（Firebase Console → Storage → Rules）
+async function uploadSubmissionPhoto(uid, progressKey, blob, idx) {
+  const safeKey = String(progressKey).replace(/[^A-Za-z0-9_-]/g, '_');
+  const ref = _storage.ref(`submissions/${uid}/${safeKey}/${Date.now()}_${idx}.jpg`);
+  await ref.put(blob, { contentType: 'image/jpeg' });
+  return ref.getDownloadURL();
+}
+
 // ── localStorage (initial cache + per-device progress) ─
 
 function loadWeekOrder() {
@@ -1402,7 +1411,7 @@ Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
-  subscribeToClassData, uploadPdfToStorage,
+  subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto,
   // Companion / Coins / Daily Goal
   loadCompanion, saveCompanion, loadCoins, addCoins, loadDaily, bumpDaily, DAILY_GOAL,
   // Shop / Wardrobe
