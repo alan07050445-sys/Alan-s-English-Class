@@ -150,7 +150,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
         const st = m.total === 0 ? 'none' : (m.done === 0 ? 'red' : (m.done >= m.total ? 'green' : 'yellow'));
         return { short: (CWO_CATS[i] || {}).short || c.titleZh, ...m, st };
       });
-      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt };
+      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt, late: r.lateCount || 0 };
     });
   }, [students, weeks, weekOrder, selWeekId, weeksFor]);
 
@@ -190,9 +190,9 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
   };
 
   const exportCsv = () => {
-    const head = ['姓名', 'Email', '年級', '完成', '總數', '完成率%', '平均分', '最後活動'];
+    const head = ['姓名', 'Email', '年級', '完成', '總數', '完成率%', '平均分', '補交', '最後活動'];
     const lines = shown.map(r => [r.name, r.s.email || '', r.grade ? r.grade.toUpperCase() : '',
-      r.done, r.total, r.pct, r.avg != null ? r.avg : '', r.last ? new Date(r.last).toLocaleDateString('zh-TW') : '']);
+      r.done, r.total, r.pct, r.avg != null ? r.avg : '', r.late || 0, r.last ? new Date(r.last).toLocaleDateString('zh-TW') : '']);
     const csv = '\uFEFF' + [head, ...lines].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const aEl = document.createElement('a');
     aEl.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -246,7 +246,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
             <div key={r.s.uid} className={`cwo-row st-${r.status}`} onClick={() => onSelect(r.s)} title="點擊查看詳情與週報">
               <span className={`cwo-light st-${r.status}`}/>
               <div className="cwo-name-wrap">
-                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}</span>
+                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}{r.late > 0 && <span className="cwo-late" title="截止日之後才完成的項目數">⏰ {r.late} 補交</span>}</span>
                 <span className="cwo-email">{r.s.email || ''}</span>
               </div>
               <div className="cwo-prog">
@@ -675,6 +675,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
           title: it.title || it.id,
           weekLabel: wk.label,
           cat: c.title,
+          dueDate: ((wk.homework || {})[it.id] || {}).dueDate || null, // v257: 遲交判定用
         }))
       );
     });
@@ -752,9 +753,10 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
   };
 
   // v236: 專業後台外殼——側欄導覽 + 頂列，內容元件不變
+  // v257: 「學習報告」分頁與總覽重複（同樣是學生×完成度×平均分）——合併：
+  // 總覽＝紅黃綠燈＋全班常錯題；個人成績細節在學生詳情、家長版在週報。
   const NAV = [
-    { id: 'overview', ico: '🚦', label: '總覽', sub: '誰需要關心' },
-    { id: 'report',   ico: '📊', label: '學習報告', sub: '成績與常錯題' },
+    { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題' },
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
   ];
@@ -792,9 +794,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
             <div className="tdash-top-title">
               <h2>{selected ? `${selected.name || '學生'} 的學習紀錄` : cur.label}</h2>
               <span className="tdash-top-meta">
-                {selected ? '個人完成度、分數與錯題' : tab === 'report'
-                  ? `${students.length} 位學生 · ${total} 個項目`
-                  : cur.sub}
+                {selected ? '個人完成度、分數與錯題' : cur.sub}
               </span>
             </div>
             {window.summerApi && !appIsSummer && (
@@ -824,22 +824,20 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
               selWeekId={selWeekId}
               onBack={() => setSelected(null)}
             />
-          ) : tab === 'overview' ? (
-            <ClassWeekOverview
-              students={students}
-              weeks={dWeeks}
-              weekOrder={dOrder}
-              weeksFor={weeksForStudent}
-              onSelect={setSelected}
-              selWeekId={selWeekId}
-              setSelWeekId={setSelWeekId}
-            />
           ) : (
-            /* ── Overview table ── */
-              <>
-              {window.CoopGoalSetter && <window.CoopGoalSetter/>}
+            /* ── 總覽（v257: 併入原「學習報告」的全班常錯題）── */
+            <>
+              <ClassWeekOverview
+                students={students}
+                weeks={dWeeks}
+                weekOrder={dOrder}
+                weeksFor={weeksForStudent}
+                onSelect={setSelected}
+                selWeekId={selWeekId}
+                setSelWeekId={setSelWeekId}
+              />
               <div className="dash-hot">
-                <div className="dash-section-title">Most Missed Questions</div>
+                <div className="dash-section-title">全班常錯題 · Most Missed</div>
                 {questionStats.length === 0 ? (
                   <div className="dash-hot-empty">學生完成測驗後，這裡會顯示全班最常錯的題目。</div>
                 ) : questionStats.map((q, i) => (
@@ -851,41 +849,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                   </div>
                 ))}
               </div>
-              <div className="dash-table">
-              <div className="dt-head">
-                <span>Student</span>
-                <span>Completed</span>
-                <span>Avg Score</span>
-                <span>Last Active</span>
-              </div>
-
-              {students.length === 0 ? (
-                <div className="dt-empty">
-                  <p>還沒有學生資料</p>
-                  <p className="dt-empty-hint">學生必須用 Google 帳號登入，完成題目後才會出現在這裡。</p>
-                </div>
-              ) : students.map(s => {
-                const { done, avg, last, total: sTotal } = stats(s);
-                const pct = sTotal > 0 ? Math.round(done / sTotal * 100) : 0;
-                return (
-                  <div key={s.uid} className="dt-row" onClick={() => setSelected(s)}>
-                    <div className="dt-student-info">
-                      <span className="dt-sname">{friendlyName(s)}{window.gradeFromEmail(s.email) && <span className="dash-grade">{window.gradeFromEmail(s.email).toUpperCase()}</span>}</span>
-                      <span className="dt-semail">{s.email || s.uid.slice(0, 12) + '…'}</span>
-                    </div>
-                    <div className="dt-progress">
-                      <span className="dt-count">{done} / {sTotal}</span>
-                      <div className="dt-bar">
-                        <div className="dt-bar-fill" style={{ width: pct + '%' }}/>
-                      </div>
-                    </div>
-                    <span className="dt-score">{avg != null ? avg + '%' : '—'}</span>
-                    <span className="dt-last">{last}</span>
-                  </div>
-                );
-              })}
-              </div>
-              </>
+            </>
           )}
           </div>
         </main>
@@ -961,30 +925,60 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
           <div className="sdetail-items">
             {items.map(it => {
               // Fuzzy match: try progressId, bare id, or any key ending in _itemId
-              const prog = its[it.progressId] || its[it.id] ||
-                its[Object.keys(its).find(k => k.endsWith('_' + it.id)) || ''] || null;
+              // v257: 把「所有」對得上的 key 都找出來——刪除單筆成績時要整組刪乾淨
+              const progKeys = [...new Set([
+                its[it.progressId] ? it.progressId : null,
+                its[it.id] ? it.id : null,
+                ...Object.keys(its).filter(k => k.endsWith('_' + it.id)),
+              ].filter(Boolean))];
+              const prog = progKeys.length ? its[progKeys[0]] : null;
               const isDone = !!prog?.done;
               const score  = prog?.score != null ? Math.min(100, prog.score) : null;
               const wrongs = prog?.wrongQuestions || [];
               const wOpen  = wrongOpen === it.id;
+              // v257: 遲交——截止日 23:59 之後才完成
+              const dueEnd = it.dueDate ? new Date(it.dueDate + 'T23:59:59').getTime() : null;
+              const isLate = !!(isDone && dueEnd && typeof prog.done === 'number' && prog.done > dueEnd);
+              const doneDay = isDone && typeof prog.done === 'number'
+                ? new Date(prog.done).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+                : null;
               return (
                 <React.Fragment key={it.id}>
                   <div className={`sdetail-item${isDone ? ' done' : ''}`}>
                     <span className={`sdetail-check${isDone ? ' done' : ''}`}>
                       {isDone ? '✓' : '○'}
                     </span>
-                    <span className="sdetail-iname">{it.title}</span>
-                    {wrongs.length > 0 && (
-                      <button
-                        className={`sdetail-wrongbtn${wOpen ? ' on' : ''}`}
-                        onClick={() => setWrongOpen(wOpen ? null : it.id)}
-                        title="看這個單元錯了哪些題"
-                      >✗ 錯 {wrongs.length} 題 {wOpen ? '⌃' : '⌄'}</button>
-                    )}
+                    {/* v257: chip／錯題鈕都收在名稱欄裡——row 是固定欄位的 grid，多一格就會爆行 */}
+                    <span className="sdetail-iname">
+                      {it.title}
+                      {isLate && (
+                        <span className="sdetail-late" title={`截止 ${it.dueDate}，${doneDay} 才完成`}>
+                          ⏰ 補交 · {doneDay}
+                        </span>
+                      )}
+                      {wrongs.length > 0 && (
+                        <button
+                          className={`sdetail-wrongbtn${wOpen ? ' on' : ''}`}
+                          onClick={() => setWrongOpen(wOpen ? null : it.id)}
+                          title="看這個單元錯了哪些題"
+                        >✗ 錯 {wrongs.length} 題 {wOpen ? '⌃' : '⌄'}</button>
+                      )}
+                    </span>
                     <span className="sdetail-cat">{it.cat}</span>
                     <span className="sdetail-score">
                       {score != null ? score + '%' : ''}
                     </span>
+                    {prog ? (
+                      <button
+                        className="sdetail-del"
+                        title="刪除這筆成績（清除誤登入／共用電腦造成的錯誤紀錄）"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`確定刪除 ${friendlyName(student)} 的「${it.title}」這筆成績？\n\n刪除後無法復原（用來清掉共用電腦誤登入造成的錯誤紀錄）。`)) return;
+                          progKeys.forEach(k => window.saveProgressItem(student.uid, '', '', k, null));
+                        }}
+                      >✕</button>
+                    ) : <span/>}
                   </div>
                   {wOpen && (
                     <div className="sdetail-wrongs">

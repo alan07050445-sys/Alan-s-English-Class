@@ -527,3 +527,31 @@
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
 }
 .qm-result-num { font-weight: 700; color: var(--g-c, #8B3120); }
+
+/* ═══ v257: 手機/平板減壅擠 ═══════════════════════════════ */
+/* 手機版 header 只留一列（品牌＋帳號）：週切換移進 WeekHero 卡片，
+   不再折行懸浮在內容上；老師編輯模式維持原本的完整 header。 */
+.wh-weeknav { display: none; }
+@media (max-width: 640px) {
+  .header:not(.edit-mode) .week-nav { display: none; }
+  .header.edit-mode .header-inner { height: auto; }
+  /* 右側進度膠囊在手機上會把「登入」擠出畫面——大廳/任務頁都有自己的進度顯示 */
+  .progress-pill { display: none; }
+  /* week-nav 不再懸浮 → 大廳內容不用再讓位（原本 padding-top: 44px） */
+  .page-lobby .shell.main-enter { padding-top: 10px; }
+
+  .wh-weeknav { display: inline-flex; gap: 7px; margin-left: auto; }
+  .wh-weeknav button {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--border, #e5dfc8);
+    background: #fff;
+    color: var(--ink-2, #5c554a);
+    font-size: 18px; line-height: 1;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+  .wh-weeknav button:disabled { opacity: .3; }
+}

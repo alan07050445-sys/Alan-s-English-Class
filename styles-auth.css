@@ -1761,7 +1761,7 @@
 
 .sdetail-item {
   display: grid;
-  grid-template-columns: 20px 1fr 80px 60px;
+  grid-template-columns: 20px 1fr 80px 60px 24px; /* v257: 尾欄＝刪除單筆成績 */
   gap: 10px;
   align-items: center;
   padding: 9px 12px;
@@ -1811,8 +1811,9 @@
   .dash-body { padding: 16px 20px 32px; }
   .dt-head, .dt-row { grid-template-columns: 1fr 100px 70px; }
   .dt-head > :last-child, .dt-row > :last-child { display: none; }
-  .sdetail-item { grid-template-columns: 20px 1fr 60px; }
-  .sdetail-item > :last-child { display: none; }
+  /* v257: 手機藏「分類」欄（原本藏最後一欄＝分數；現在最後一欄是刪除鈕） */
+  .sdetail-item { grid-template-columns: 20px 1fr 60px 24px; }
+  .sdetail-item .sdetail-cat { display: none; }
   .user-name { display: none; }
   .header-gamification { display: none; }
   .dash-hot-row { grid-template-columns: 24px 1fr 42px; }
@@ -4984,6 +4985,38 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   transition: background .12s;
 }
 .sdetail-wrongbtn:hover, .sdetail-wrongbtn.on { background: #f9e2dc; }
+/* v257: 遲交（補交）標記＋單筆成績刪除 */
+.sdetail-late {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11.5px; font-weight: 800; color: #9a6a00;
+  background: #fdf3dc; border: 1px solid #ecd9a4;
+  border-radius: 100px; padding: 3px 9px;
+  white-space: nowrap;
+}
+.sdetail-del {
+  flex: none;
+  width: 24px; height: 24px;
+  margin-left: 6px;
+  border: 1px solid transparent; background: none;
+  border-radius: 8px;
+  font-size: 12px; color: #c6bda6;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, background .12s, color .12s;
+}
+.sdetail-item:hover .sdetail-del { opacity: 1; }
+.sdetail-del:hover { background: #fdf1ee; border-color: #f0c9c2; color: #a3372a; }
+@media (hover: none) { .sdetail-del { opacity: .55; } }
+.cwo-late {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px; font-weight: 800; color: #9a6a00;
+  background: #fdf3dc; border: 1px solid #ecd9a4;
+  border-radius: 100px; padding: 2px 8px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
 .sdetail-wrongs {
   margin: 2px 0 8px 30px;
   border-left: 3px solid #f0c9c2;
@@ -5121,20 +5154,22 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 /* ═══════════ v255: 首頁「往下看更多」捲動提示 ═══════════ */
 .ll-scrollcue {
   position: absolute;
-  left: 50%; bottom: 18px;
+  left: 50%; bottom: 22px;
   transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   background: none; border: none;
   font-family: inherit;
-  font-size: 12.5px; font-weight: 700; letter-spacing: .12em;
-  color: #a3977e;
+  /* v257: Alan 要更明顯——加大字級與箭頭 */
+  font-size: 16px; font-weight: 800; letter-spacing: .14em;
+  color: #8a7f66;
   cursor: pointer;
   z-index: 2;
   transition: opacity .4s ease, color .15s;
-  opacity: .9;
+  opacity: .95;
+  padding: 10px 16px;
 }
 .ll-scrollcue:hover { color: #8B3120; }
-.ll-scrollcue i { font-style: normal; font-size: 22px; line-height: .7; }
+.ll-scrollcue i { font-style: normal; font-size: 32px; line-height: .7; }
 .login-landing.ll-off-top .ll-scrollcue { opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) {
   .ll-scrollcue i { animation: ll-cue-bob 1.6s ease-in-out infinite; display: block; }
@@ -5142,4 +5177,146 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 @keyframes ll-cue-bob {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(6px); }
+}
+
+/* ═══════════ v257: 門口頁質感改版——時段問候＋統一卡片系統＋進度環 ═══════════ */
+.grade-selector .grade-sel-logo-img {
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(21,19,14,.08), 0 12px 28px -10px rgba(21,19,14,.18);
+}
+.grade-selector .grade-sel-title { margin-bottom: 8px; letter-spacing: .01em; }
+.grade-selector .grade-sel-sub {
+  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  font-size: 14.5px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+.gs-date { font-family: var(--mono, monospace); font-size: 12.5px; letter-spacing: .06em; color: var(--ink-3, #8a8270); }
+.gs-date-dot { color: #d7cdb2; }
+
+/* 卡片系統：門口頁所有入口共用一套骨架 */
+.grade-selector .gs-card {
+  position: relative;
+  width: 100%;
+  display: flex; align-items: center; gap: 14px;
+  text-align: left;
+  font-family: inherit;
+  background: #fff;
+  border: 1.5px solid var(--border, #e5dfc8);
+  border-radius: 18px;
+  padding: 15px 16px 15px 15px;
+  margin: 0 0 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(21,19,14,.04), 0 10px 26px -14px rgba(21,19,14,.14);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.grade-selector .gs-card:hover {
+  transform: translateY(-2px);
+  border-color: #C9A84C;
+  box-shadow: 0 2px 4px rgba(21,19,14,.05), 0 18px 40px -16px rgba(139,49,32,.22);
+}
+.grade-selector .gs-card:active { transform: translateY(0); }
+.gs-card-ico {
+  flex: none;
+  width: 46px; height: 46px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  background: #f6f1e2;
+  color: var(--g-c, #8B3120);
+}
+.gs-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gs-card-text b {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 17px; font-weight: 700; line-height: 1.25;
+  color: var(--ink, #15130e);
+}
+.gs-card-text > span { font-size: 12.5px; line-height: 1.45; color: var(--ink-3, #8a8270); }
+.gs-card-cta {
+  flex: none;
+  font-size: 13px; font-weight: 700;
+  color: var(--ink-2, #5c554a);
+  background: var(--bg-card, #faf7f0);
+  border: 1px solid var(--border, #e5dfc8);
+  padding: 8px 14px; border-radius: 100px;
+  white-space: nowrap;
+  transition: transform .18s ease;
+}
+.gs-card-cta-brand { background: var(--g-c, #8B3120); border-color: var(--g-c, #8B3120); color: #fff; }
+.grade-selector .gs-card:hover .gs-card-cta { transform: translateX(3px); }
+
+/* 老師後台卡：墨色 */
+.grade-selector .gs-card-admin {
+  background: linear-gradient(150deg, #262117 0%, #15130e 100%);
+  border-color: #15130e;
+}
+.grade-selector .gs-card-admin:hover { border-color: #C9A84C; }
+.gs-card-admin .gs-card-ico { background: rgba(201,168,76,.16); color: #dfc98a; }
+.gs-card-admin .gs-card-text b { color: #f3eedd; }
+.gs-card-admin .gs-card-text > span { color: rgba(243,238,221,.55); }
+.gs-card-admin .gs-card-cta { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #f3eedd; }
+
+/* 暑假任務卡：暖金 */
+.grade-selector .gs-card-summer {
+  background: linear-gradient(115deg, #fdf6e3 0%, #f9e9c8 100%);
+  border-color: rgba(201,168,76,.65);
+}
+.gs-card-summer .gs-card-text > span { color: #8a6d1c; }
+.gs-card-ico-sun { background: #fff; font-size: 22px; box-shadow: 0 0 0 4px rgba(255,205,90,.26); }
+
+/* 進度環 */
+.gs-ring { position: relative; background: #fff; border-radius: 50%; box-shadow: 0 0 0 4px rgba(255,205,90,.26); }
+.gs-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.gs-ring circle { fill: none; stroke-width: 4; }
+.gs-ring-track { stroke: #efe4c4; }
+.gs-ring-fill { stroke: #C9862B; stroke-linecap: round; transition: stroke-dashoffset .8s cubic-bezier(.22,1,.36,1); }
+.gs-ring em {
+  position: relative;
+  font-style: normal;
+  font-family: var(--mono, monospace);
+  font-size: 11px; font-weight: 700;
+  color: #8a6d1c;
+  letter-spacing: -.02em;
+}
+
+/* 教室卡：白底＋serif 年級章 */
+.gs-card-badge {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 19px; font-weight: 700;
+  color: var(--g-c, #8B3120);
+  background: #f6ece7;
+}
+.grade-selector .gs-card-room:hover { border-color: #B85A45; }
+
+/* 暑假題庫卡（老師）：輕量 outline */
+.grade-selector .gs-card-lib {
+  background: var(--bg-card, #faf7f0);
+  box-shadow: none;
+  margin-top: 4px;
+}
+.gs-card-lib .gs-card-ico { background: #fff; color: #8a6d1c; }
+.gs-card-lib .gs-card-text b { font-size: 15.5px; }
+
+@media (max-width: 560px) {
+  .grade-selector .gs-card { gap: 11px; padding: 13px 12px; border-radius: 16px; }
+  .gs-card-ico { width: 42px; height: 42px; border-radius: 12px; }
+  .gs-card-text b { font-size: 15.5px; }
+  .gs-card-text > span { font-size: 12px; }
+  .gs-card-cta { padding: 7px 11px; font-size: 12px; }
+  .grade-selector .grade-sel-sub { gap: 6px; margin-bottom: 24px; }
+}
+
+/* ═══════════ v257: 行銷首頁手機版微調——nav 截斷加淡出、HUD 讓開 CTA ═══════════ */
+.ll-hud { transition: opacity .35s ease; }
+@media (max-width: 640px) {
+  /* nav 連結列可橫捲——右緣淡出提示「還有更多」，不再硬生生切字 */
+  .ll-nav-link { font-size: 13px; padding: 6px 9px; }
+  .ll-nav-cta { font-size: 13.5px; }
+  .ll-nav-links {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent);
+  }
+  /* HUD 只在捲動敘事段出現，不壓住 hero／結尾的置中按鈕 */
+  .login-landing.ll-hud-quiet .ll-hud { opacity: 0; }
 }

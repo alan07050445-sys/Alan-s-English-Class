@@ -46,7 +46,7 @@ function Header({
   const firstName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || '';
 
   return (
-    <header className="header">
+    <header className={'header' + (editMode && canEdit ? ' edit-mode' : '')}>
       <div className="shell">
         <div className="header-inner">
           <div className="brand">
@@ -350,6 +350,9 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       raf = 0;
       const max = root.scrollHeight - root.clientHeight;
       root.classList.toggle('ll-off-top', root.scrollTop > 80); // v255: 捲離頂部 → 藏「往下看更多」
+      // v257: 手機上 HUD 會壓到 hero／結尾的置中 CTA 與 footer——進入捲動敘事段才顯示
+      // （結尾 scroll-snap 會停在離底 ~4% 處，門檻取 .93；CSS 只在 ≤640 生效）
+      root.classList.toggle('ll-hud-quiet', root.scrollTop < root.clientHeight * 0.8 || (max > 0 && root.scrollTop / max > 0.93));
       if (bar) bar.style.transform = 'scaleX(' + (max > 0 ? (root.scrollTop / max).toFixed(4) : 0) + ')';
       if (BLEND.length > 1) {
         // 以「視窗中線」落在哪兩個區塊中心之間來內插顏色
@@ -1443,6 +1446,33 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
   const [showAll, setShowAll] = React.useState(!home); // 有專屬年級 → 門口模式；否則完整選單
   const doorMode = home && !showAll;
 
+  // v257: 時段問候＋今天日期＋暑假第幾週
+  const hourNow = new Date().getHours();
+  const greet = hourNow < 5 ? '晚安' : hourNow < 11 ? '早安' : hourNow < 18 ? '午安' : '晚安';
+  const dateLine = new Date().toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' });
+  const sfxNow = window.summerCurrentSuffix ? window.summerCurrentSuffix() : null;
+  const summerWeekNo = sfxNow ? parseInt(sfxNow.slice(2), 10) : null;
+
+  // v257: 老師卡即時資訊——今天已有幾位學生練習過（只有老師會掛這個訂閱）
+  const [todayActive, setTodayActive] = React.useState(null);
+  React.useEffect(() => {
+    if (!onOpenAdmin || !window.subscribeAllStudents) return;
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    try {
+      return window.subscribeAllStudents(all => {
+        setTodayActive(all.filter(s => (s.updatedAt || 0) >= t0.getTime()).length);
+      });
+    } catch(e) {}
+  }, []);
+
+  // v257: 暑假卡進度環——優先顯示本週任務，本週沒派任務就看整個暑假
+  const prog = summer && summer.prog;
+  const ringScope = prog && prog.wkTotal > 0
+    ? { done: prog.wkDone, total: prog.wkTotal, label: '本週任務' }
+    : (prog && prog.allTotal > 0 ? { done: prog.allDone, total: prog.allTotal, label: '暑假任務' } : null);
+  const ringPct = ringScope ? ringScope.done / ringScope.total : 0;
+  const RING_C = 2 * Math.PI * 17;
+
   // 游標暖光：緩慢漂向滑鼠位置（僅滑鼠裝置、尊重 reduced-motion）
   React.useEffect(() => {
     const fine = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -1482,43 +1512,67 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
       <div className="grade-selector-inner">
         <img src="icon.svg" alt="Alan's English Class" className="grade-sel-logo-img"/>
         <div className="gs-kicker">Alan’s English Class</div>
-        <h1 className="grade-sel-title">{doorMode ? (who ? `歡迎回來，${who}！` : '歡迎回來！') : '現在讀幾年級呢？'}</h1>
-        <p className="grade-sel-sub">{doorMode ? '今天要從哪裡開始呢？' : '選好就直接帶你進入這一週的練習。'}</p>
+        <h1 className="grade-sel-title">{doorMode ? (who ? `${greet}，${who}！` : `${greet}！`) : '現在讀幾年級呢？'}</h1>
+        <p className="grade-sel-sub">
+          {doorMode
+            ? <><span className="gs-date">{dateLine}</span><span className="gs-date-dot">·</span>今天要從哪裡開始呢？</>
+            : '選好就直接帶你進入這一週的練習。'}
+        </p>
         {onOpenAdmin && (
-          <button className="gs-admin" onClick={onOpenAdmin}>
-            <span className="gs-admin-ico" aria-hidden="true">🛠</span>
-            <span className="gs-mine-text">
-              <b>老師後台</b>
-              <span>總覽 · 學生 · 發派 · 報告</span>
+          <button className="gs-card gs-card-admin" onClick={onOpenAdmin}>
+            <span className="gs-card-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/>
+                <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8"/>
+              </svg>
             </span>
-            <span className="gs-admin-cta">進入 →</span>
+            <span className="gs-card-text">
+              <b>老師後台</b>
+              <span>{todayActive != null ? `今天已有 ${todayActive} 位學生練習過` : '總覽 · 學生 · 發派 · 報告'}</span>
+            </span>
+            <span className="gs-card-cta">進入 →</span>
           </button>
         )}
         {summer && summer.mine && (
-          <div className="gs-summer-point" aria-hidden="true">
-            <span>☀️ 暑假任務點這邊</span>
-            <span className="gs-summer-point-arrow">👇</span>
-          </div>
-        )}
-        {summer && summer.mine && (
-          <button className="gs-mine" onClick={() => onSelect(window.SUMMER_ME || 'sme')}>
-            <span className="gs-mine-sun" aria-hidden="true">☀️</span>
-            <span className="gs-mine-text">
+          <button className="gs-card gs-card-summer" onClick={() => onSelect(window.SUMMER_ME || 'sme')}>
+            {ringScope ? (
+              <span className="gs-card-ico gs-ring" aria-hidden="true">
+                <svg viewBox="0 0 44 44">
+                  <circle className="gs-ring-track" cx="22" cy="22" r="17"/>
+                  <circle
+                    className="gs-ring-fill"
+                    cx="22" cy="22" r="17"
+                    strokeDasharray={RING_C}
+                    strokeDashoffset={RING_C * (1 - ringPct)}
+                  />
+                </svg>
+                <em>{ringScope.done}/{ringScope.total}</em>
+              </span>
+            ) : (
+              <span className="gs-card-ico gs-card-ico-sun" aria-hidden="true">☀️</span>
+            )}
+            <span className="gs-card-text">
               <b>{summer.who || '我'} 的暑假任務</b>
-              <span>Alan 老師為你安排的暑假練習 · 7/1 – 8/31</span>
+              <span>
+                {ringScope
+                  ? (ringScope.done >= ringScope.total
+                      ? `${ringScope.label}全部完成，太棒了！🎉`
+                      : `${ringScope.label}完成 ${ringScope.done}/${ringScope.total}${summerWeekNo ? ` · 暑假第 ${summerWeekNo} 週` : ''}`)
+                  : 'Alan 老師為你安排的暑假練習 · 7/1 – 8/31'}
+              </span>
             </span>
-            <span className="gs-mine-cta">進入 →</span>
+            <span className="gs-card-cta gs-card-cta-brand">{ringScope && ringScope.done > 0 && ringScope.done < ringScope.total ? '繼續 →' : '進入 →'}</span>
           </button>
         )}
         {summerOnly ? null : doorMode ? (
           <>
-            <button className="gs-room" onClick={() => onSelect(home.id)}>
-              <span className="gs-room-badge">{home.n}</span>
-              <span className="gs-mine-text">
+            <button className="gs-card gs-card-room" onClick={() => onSelect(home.id)}>
+              <span className="gs-card-ico gs-card-badge">{home.n}</span>
+              <span className="gs-card-text">
                 <b>進入 {home.n} 教室</b>
                 <span>{home.zh} · {summer && summer.mine ? '開學後再從這裡進教室' : '每週跟著學校進度練'}</span>
               </span>
-              <span className="gs-mine-cta">進入 →</span>
+              <span className="gs-card-cta gs-card-cta-brand">進入 →</span>
             </button>
             <button className="gs-switch" onClick={() => setShowAll(true)}>不是{home.zh}了嗎？改選其他年級</button>
           </>
@@ -1536,15 +1590,20 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
           </>
         )}
         {summer && summer.lib && (
-          <div className="gs-summer">
-            <div className="gs-summer-title">☀️ 暑假（老師專用）</div>
-            <div className="gs-summer-cards gs-summer-single">
-              <button className="gs-summer-card" onClick={() => onSelect(window.SUMMER_LIB || 'sl')}>
-                <span className="gs-summer-id">題庫</span>
-                <span className="gs-summer-name">暑假題庫 · 出題後到後台發派給學生</span>
-              </button>
-            </div>
-          </div>
+          <button className="gs-card gs-card-lib" onClick={() => onSelect(window.SUMMER_LIB || 'sl')}>
+            <span className="gs-card-ico gs-card-ico-lib" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5V6.5A2.5 2.5 0 016.5 4H20v13H6.5A2.5 2.5 0 004 19.5z"/>
+                <path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/>
+                <path d="M9 8.5h7M9 12h4.5"/>
+              </svg>
+            </span>
+            <span className="gs-card-text">
+              <b>暑假題庫</b>
+              <span>老師專用 · 出題後到後台發派給學生</span>
+            </span>
+            <span className="gs-card-cta">進入 →</span>
+          </button>
         )}
         {(onViewLanding || onOpenGuide) && (
           <div className="gs-links">

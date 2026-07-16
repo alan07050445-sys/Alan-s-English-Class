@@ -156,13 +156,19 @@ function getFlashcardData(item) {
 }
 
 // Progress persistence (localStorage)
+// v257: key 按帳號隔離——共用電腦上換帳號，不會再看到（或繼承）別人的紀錄。
+// 舊的全機共用 key（無後綴）從此不再讀寫；雲端 progress 才是每人的真資料。
 const QM_KEY = 'alans-qm-v1';
-function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY) || '{}'); } catch(e) { return {}; } }
-function saveQMProg(p) { try { localStorage.setItem(QM_KEY, JSON.stringify(p)); } catch(e) {} }
+function qmScope() {
+  const u = window._currentUser;
+  return u && u.uid ? ':u:' + u.uid : ':anon';
+}
+function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY + qmScope()) || '{}'); } catch(e) { return {}; } }
+function saveQMProg(p) { try { localStorage.setItem(QM_KEY + qmScope(), JSON.stringify(p)); } catch(e) {} }
 
 /* ── 續做（resume）：測驗做到一半離開，下次從同一題接著做 ── */
 const QM_RESUME_KEY = 'alans-qm-resume-v1';
-function loadResumeMap() { try { return JSON.parse(localStorage.getItem(QM_RESUME_KEY) || '{}'); } catch(e) { return {}; } }
+function loadResumeMap() { try { return JSON.parse(localStorage.getItem(QM_RESUME_KEY + qmScope()) || '{}'); } catch(e) { return {}; } }
 function getResume(progressKey, questionCount) {
   const r = loadResumeMap()[progressKey];
   if (!r || !r.deck || r.deckPos == null) return null;
@@ -172,10 +178,10 @@ function getResume(progressKey, questionCount) {
   return r;
 }
 function saveResume(progressKey, data) {
-  try { const m = loadResumeMap(); m[progressKey] = { ...data, ts: Date.now() }; localStorage.setItem(QM_RESUME_KEY, JSON.stringify(m)); } catch(e) {}
+  try { const m = loadResumeMap(); m[progressKey] = { ...data, ts: Date.now() }; localStorage.setItem(QM_RESUME_KEY + qmScope(), JSON.stringify(m)); } catch(e) {}
 }
 function clearResume(progressKey) {
-  try { const m = loadResumeMap(); if (m[progressKey] !== undefined) { delete m[progressKey]; localStorage.setItem(QM_RESUME_KEY, JSON.stringify(m)); } } catch(e) {}
+  try { const m = loadResumeMap(); if (m[progressKey] !== undefined) { delete m[progressKey]; localStorage.setItem(QM_RESUME_KEY + qmScope(), JSON.stringify(m)); } } catch(e) {}
 }
 
 // 星級精熟：用最佳分數決定 0~3 星，鼓勵回去重練拿滿星（驅動複習）
@@ -3384,7 +3390,7 @@ function ClozePlayer({ item, progressKey, onBack }) {
    狀態：從 qmProg 抓孩子的完成/分數。可收合。
 ══════════════════════════════════════════════════════ */
 /* ── 本週總覽 hero：週次/主題/日期 + 完成度圓環 + 繼續練習 ── */
-function WeekHero({ week, weekIdx, weekOrder, done, total, who }) {
+function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNextWeek }) {
   const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
   const weekNum = ((week.label || '').match(/(\d+)\s*$/) || [])[1] || (weekIdx + 1);
   const title = week.themeZh || week.theme || (who ? `${who} 的第 ${weekNum} 週任務` : `第 ${weekNum} 週的練習`);
@@ -3413,6 +3419,13 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who }) {
         <div className="wh-kicker">
           <span className="wh-pill">Week {weekNum}</span>
           <span className="wh-kick-txt">{who ? `${who} 的暑假` : '本週進度'}</span>
+          {/* v257: 手機版 header 不再放週切換——改到這裡（桌機以 CSS 隱藏） */}
+          {onPrevWeek && onNextWeek && (
+            <span className="wh-weeknav">
+              <button onClick={onPrevWeek} disabled={weekIdx <= 0} aria-label="上一週">‹</button>
+              <button onClick={onNextWeek} disabled={weekIdx >= (weekOrder ? weekOrder.length : 1) - 1} aria-label="下一週">›</button>
+            </span>
+          )}
         </div>
         <h1 className="wh-title">{title}</h1>
         {(enTheme || (week.dateRange && week.dateRange !== '—')) && (

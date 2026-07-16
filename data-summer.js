@@ -32,6 +32,20 @@ const SUMMER_WEEK_DEFS = [
 const SUMMER_WEEK_SUFFIXES = SUMMER_WEEK_DEFS.map(([sfx]) => sfx);
 
 function _libWeekId(sfx) { return `sl-2026-${sfx}`; }
+
+// v257: 今天落在哪個暑假週（門口頁進度環用）；暑假期間外回傳 null
+const _SUMMER_WEEK_STARTS = [
+  ['SW01', '2026-07-01'], ['SW02', '2026-07-06'], ['SW03', '2026-07-13'],
+  ['SW04', '2026-07-20'], ['SW05', '2026-07-27'], ['SW06', '2026-08-03'],
+  ['SW07', '2026-08-10'], ['SW08', '2026-08-17'], ['SW09', '2026-08-24'],
+];
+function summerCurrentSuffix(now) {
+  const t = now || new Date();
+  if (t >= new Date('2026-09-01T00:00:00') || t < new Date('2026-07-01T00:00:00')) return null;
+  let cur = null;
+  _SUMMER_WEEK_STARTS.forEach(([sfx, d]) => { if (t >= new Date(d + 'T00:00:00')) cur = sfx; });
+  return cur;
+}
 function _libSeed() {
   const weeks = {};
   SUMMER_WEEK_DEFS.forEach(([sfx, range], i) => {
@@ -166,6 +180,8 @@ Object.assign(window, {
   SUMMER_WEEK_SUFFIXES,
   isSummerTrack,
   summerWeekSuffix,
+  summerCurrentSuffix,
+  summerLibWeekId: _libWeekId,
   summerApi,
   subscribeSummerMeta,
   saveSummerStudent,

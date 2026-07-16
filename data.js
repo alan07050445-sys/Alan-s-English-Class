@@ -1196,7 +1196,7 @@ async function removeWrongQuestion(uid, itemId, q, answer) {
 // Build a structured report object for one student + one week.
 function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
   const targetWeekId = weekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null);
-  const empty = { weekLabel: '—', dateRange: '', completed: [], pending: [], weekVocab: [], completionRate: 0, avgScore: null, totalItems: 0, streak: { count: 0 }, xp: 0, badges: {}, wrongQuestions: [], weekId: targetWeekId };
+  const empty = { weekLabel: '—', dateRange: '', completed: [], pending: [], weekVocab: [], completionRate: 0, avgScore: null, totalItems: 0, lateCount: 0, streak: { count: 0 }, xp: 0, badges: {}, wrongQuestions: [], weekId: targetWeekId };
   if (!targetWeekId || !weeks || !weeks[targetWeekId]) return empty;
 
   const week = weeks[targetWeekId];
@@ -1212,6 +1212,15 @@ function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
   let allWrongQ = [];
   const weekVocab = [];
 
+  // v257: 遲交判定——有截止日的項目，在截止日當天 23:59 之後才完成的算「補交」
+  const hw = week.homework || {};
+  const dueEndOf = (itemId) => {
+    const d = hw[itemId] && hw[itemId].dueDate;
+    if (!d) return null;
+    const t = new Date(d + 'T23:59:59').getTime();
+    return Number.isNaN(t) ? null : t;
+  };
+
   CATEGORIES.forEach(cat => {
     const items = (week.items && week.items[cat.id]) || [];
     items.forEach(item => {
@@ -1221,7 +1230,9 @@ function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
       if (cat.id === 'vocab') weekVocab.push(title);
       if (isDone) {
         const score = prog.score != null ? Math.min(100, Math.round(prog.score)) : null;
-        completed.push({ cat: cat.titleZh, title, score });
+        const due = dueEndOf(item.id);
+        const late = !!(due && typeof prog.done === 'number' && prog.done > due);
+        completed.push({ cat: cat.titleZh, title, score, late, doneAt: typeof prog.done === 'number' ? prog.done : null });
         (prog.wrongQuestions || []).forEach(wq => allWrongQ.push(wq));
       } else {
         pending.push({ cat: cat.titleZh, title });
@@ -1234,13 +1245,14 @@ function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
   const completionRate = totalItems > 0 ? Math.round(completed.length / totalItems * 100) : 0;
   const scored = completed.filter(c => c.score != null);
   const avgScore = scored.length > 0 ? Math.round(scored.reduce((s, c) => s + c.score, 0) / scored.length) : null;
+  const lateCount = completed.filter(c => c.late).length;
 
   return {
     weekId: targetWeekId,
     weekLabel: week.label || targetWeekId,
     dateRange: week.dateRange || '',
     completed, pending, weekVocab,
-    completionRate, avgScore, totalItems,
+    completionRate, avgScore, totalItems, lateCount,
     streak: student.streak || { count: 0 },
     xp: student.xp || 0,
     badges: student.badges || {},

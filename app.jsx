@@ -253,28 +253,9 @@ function App() {
     });
   }, [user?.uid]);
 
-  // Backfill quiz-mode progress that was saved locally before every item type
-  // started syncing to the teacher report.
-  useAppEffect(() => {
-    if (!user || !window.saveProgressItem) return;
-    try {
-      const qm = JSON.parse(localStorage.getItem('alans-qm-v1') || '{}');
-      Object.entries(qm).forEach(([itemId, val]) => {
-        if (!val?.done) return;
-        const total = Number(val.total || val.done || 1) || 1;
-        const rawScore = val.score == null ? null : Number(val.score);
-        const score = rawScore == null || Number.isNaN(rawScore)
-          ? null
-          : Math.round((rawScore / total) * 100);
-        window.saveProgressItem(user.uid, user.displayName || '', user.email || '', itemId, {
-          done: val.ts || Date.now(),
-          score,
-          total,
-          itemType: 'quiz-mode',
-        });
-      });
-    } catch(e) {}
-  }, [user?.uid]);
+  // v257: 舊的「backfill」已移除——它會把這台電腦全機共用的舊紀錄，
+  // 整包上傳到「任何一個登入的帳號」的雲端成績（共用電腦上 A 的成績變成 B 的）。
+  // 現在完成當下就會同步雲端（saveQuizModeCompletion），不需要回填。
 
   // ── Sync Firestore progress when user is logged in ──────
   // IMPORTANT: clear progress FIRST on any user change to prevent
@@ -355,6 +336,25 @@ function App() {
     || (user && user.displayName ? user.displayName.split(' ')[0] : '')
     || '我';
 
+  // v257: 門口頁進度環——本週（或整個暑假）派給我的任務完成了幾項
+  const doorSummerProg = useAppMemo(() => {
+    if (!mySummerPlan) return null;
+    let local = {};
+    try { local = window.loadQMProg ? window.loadQMProg() : {}; } catch(e) {}
+    const sfxNow = window.summerCurrentSuffix ? window.summerCurrentSuffix() : null;
+    let wkDone = 0, wkTotal = 0, allDone = 0, allTotal = 0;
+    Object.entries(mySummerPlan.weeks || {}).forEach(([sfx, ids]) => {
+      (ids || []).forEach(id => {
+        const wid = window.summerLibWeekId ? window.summerLibWeekId(sfx) : `sl-2026-${sfx}`;
+        const key = `${wid}_${id}`;
+        const d = !!((myProgressItems[key] && myProgressItems[key].done) || (local[key] && local[key].done));
+        allTotal++; if (d) allDone++;
+        if (sfx === sfxNow) { wkTotal++; if (d) wkDone++; }
+      });
+    });
+    return { wkDone, wkTotal, allDone, allTotal };
+  }, [mySummerPlan, myProgressItems, qmProgressVersion, user?.uid]);
+
   // Progress — keep in localStorage as offline cache.
   // When logged in, Firestore is the source of truth (see subscribeMyProgress above).
   useAppEffect(() => { window.saveProgress(progress); }, [progress]);
@@ -393,8 +393,9 @@ function App() {
   }, [week, grade]);
 
   const qmProgress = useAppMemo(() => {
+    // v257: 改讀「這個帳號自己的」本機紀錄（loadQMProg 內建帳號隔離）
     let local = {};
-    try { local = JSON.parse(localStorage.getItem('alans-qm-v1') || '{}'); } catch(e) {}
+    try { local = window.loadQMProg ? window.loadQMProg() : {}; } catch(e) {}
     // v255: 併入雲端成績（跨裝置一致），同一單元取「較好的一次」
     const pctOf = (p) => (p && p.score != null && p.total) ? p.score / p.total : (p && p.done ? -1 : -2);
     Object.entries(myProgressItems || {}).forEach(([key, fp]) => {
@@ -404,7 +405,7 @@ function App() {
       if (!cur || pctOf(remote) > pctOf(cur)) local[key] = remote;
     });
     return local;
-  }, [qmProgressVersion, weekId, grade, myProgressItems]);
+  }, [qmProgressVersion, weekId, grade, myProgressItems, user?.uid]);
 
   const totalItems = weekQuizItems.length || allItems.length;
   const totalDone = weekQuizItems.length
@@ -957,7 +958,7 @@ function App() {
             setEntered(false);
             try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
           }}
-          summer={(isTeacher || hasSummerPlan) ? { lib: isTeacher, mine: hasSummerPlan, who: summerWho } : null}
+          summer={(isTeacher || hasSummerPlan) ? { lib: isTeacher, mine: hasSummerPlan, who: summerWho, prog: doorSummerProg } : null}
           onViewLanding={() => runWave(() => setViewLanding(true))}
           onOpenGuide={homeGrade ? () => {
             // 門口頁「新手教學」→ 直接進自己的教室跑實境導覽
@@ -1097,6 +1098,8 @@ function App() {
                   done={totalDone}
                   total={totalItems}
                   who={isSummer && !isSummerLib ? summerWho : null}
+                  onPrevWeek={goPrevWeek}
+                  onNextWeek={goNextWeek}
                 />
               )}
               {editMode ? (
