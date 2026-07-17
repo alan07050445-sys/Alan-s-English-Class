@@ -635,3 +635,6 @@
   .tt-group-name { font-size: 15.5px; }
   .tt-group-rows { margin-left: 8px; padding-left: 9px; }
 }
+
+/* ═══ v265: intro 的「重新開始」按鈕 ═══ */
+.qm-intro-restart { margin-top: 2px; }

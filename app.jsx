@@ -1064,6 +1064,7 @@ function App() {
               initialItemId={catView.itemId || null}
               items={(week.items || {})[catView.id] || []}
               weekId={weekId}
+              cloudProg={qmProgress}
               onBack={() => { setCatView(null); setMainKey(k => k + 1); scrollPageToTop(); }}
               editMode={editMode}
               onAddItem={handleAddItem}
@@ -1142,6 +1143,7 @@ function App() {
               <window.QuizModeBlocks
                 week={week}
                 weekId={weekId}
+                cloudProg={qmProgress}
                 onEnterCat={(cat) => { setCatView(cat); scrollPageToTop(); }}
                 editMode={editMode}
                 categories={activeCategories}
