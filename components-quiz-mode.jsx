@@ -3641,7 +3641,10 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
                 {e.name}
                 <span className="tt-group-count">{e.tasks.filter(t => t.done).length} / {e.tasks.length}</span>
               </div>
-              {e.tasks.map(t => renderRow(t, e.name))}
+              {/* v264: 子項目包一層——縮排＋左側直線，階層一眼看懂 */}
+              <div className="tt-group-rows">
+                {e.tasks.map(t => renderRow(t, e.name))}
+              </div>
             </div>
           ) : renderRow(e.tasks[0], null))}
         </div>
