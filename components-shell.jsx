@@ -1454,13 +1454,20 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
   const summerWeekNo = sfxNow ? parseInt(sfxNow.slice(2), 10) : null;
 
   // v257: 老師卡即時資訊——今天已有幾位學生練習過（只有老師會掛這個訂閱）
+  // v268: 加上「⏳ N 份作業待批改」——開門就知道今天要不要改作業
   const [todayActive, setTodayActive] = React.useState(null);
+  const [pendingGrade, setPendingGrade] = React.useState(0);
   React.useEffect(() => {
     if (!onOpenAdmin || !window.subscribeAllStudents) return;
     const t0 = new Date(); t0.setHours(0, 0, 0, 0);
     try {
       return window.subscribeAllStudents(all => {
         setTodayActive(all.filter(s => (s.updatedAt || 0) >= t0.getTime()).length);
+        let pg = 0;
+        all.forEach(s => Object.values(s.items || {}).forEach(p => {
+          if (p && p.files && p.files.length && p.score == null) pg++;
+        }));
+        setPendingGrade(pg);
       });
     } catch(e) {}
   }, []);
@@ -1528,7 +1535,10 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             </span>
             <span className="gs-card-text">
               <b>老師後台</b>
-              <span>{todayActive != null ? `今天已有 ${todayActive} 位學生練習過` : '總覽 · 學生 · 發派 · 報告'}</span>
+              <span>
+                {todayActive != null ? `今天已有 ${todayActive} 位學生練習過` : '總覽 · 學生 · 發派 · 報告'}
+                {pendingGrade > 0 && <em className="gs-admin-pending"> · ⏳ {pendingGrade} 份作業待批改</em>}
+              </span>
             </span>
             <span className="gs-card-cta">進入 →</span>
           </button>

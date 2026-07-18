@@ -422,6 +422,19 @@ function App() {
     return { total: quizItems.length, done };
   };
 
+  // v268: 本週平均分——WeekHero 給家長掃一眼用
+  const weekAvgScore = useAppMemo(() => {
+    let sum = 0, n = 0;
+    weekQuizItems.forEach(it => {
+      const p = qmProgress[`${weekId}_${it.id}`];
+      if (p && p.done && p.score != null && p.total) {
+        sum += Math.min(100, Math.round(p.score / p.total * 100));
+        n++;
+      }
+    });
+    return n ? Math.round(sum / n) : null;
+  }, [weekQuizItems, qmProgress, weekId]);
+
   // v266: 完成一題後的「下一個任務」——本週作業裡還沒完成的下一項（依到期日排）
   const getNextTask = (excludeId) => {
     const hw = week.homework || {};
@@ -1120,6 +1133,15 @@ function App() {
                   who={isSummer && !isSummerLib ? summerWho : null}
                   onPrevWeek={goPrevWeek}
                   onNextWeek={goNextWeek}
+                  nextTask={(() => {
+                    const nt = getNextTask(null);
+                    if (!nt) return null;
+                    const it = allItems.find(x => x.id === nt.itemId);
+                    return { ...nt, label: (it && it.title) || '' };
+                  })()}
+                  onStartNext={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
+                  weekAvg={weekAvgScore}
+                  onOpenGrowth={() => setGrowthOpen(true)}
                 />
               )}
               {editMode ? (
