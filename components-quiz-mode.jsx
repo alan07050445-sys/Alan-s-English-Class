@@ -3643,6 +3643,7 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
    （老師編輯模式仍用下面的 WeeklyContactBook 來釘作業/寫給家長的話）
 ══════════════════════════════════════════════════════ */
 function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) {
+  const [ttOpen, setTtOpen] = useQM({}); // v267: 分組收合狀態（未動過＝全完成收、未完成開）
   const note = week.parentNote || '';
   const hw = week.homework || {};
   const itemById = {};
@@ -3774,19 +3775,36 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
         <div className="tt-empty">這週老師沒有指定作業——從下面挑一個自由練習吧！</div>
       ) : (
         <div className="tt-list">
-          {flat.map((e, i) => e.group ? (
-            <div className="tt-group" key={`g${i}`}>
-              <div className="tt-group-name">
-                <span className="tt-group-ico" aria-hidden="true">📄</span>
-                {e.name}
-                <span className="tt-group-count">{e.tasks.filter(t => t.done).length} / {e.tasks.length}</span>
+          {flat.map((e, i) => {
+            if (!e.group) return renderRow(e.tasks[0], null);
+            // v267: 分組可收合——全部完成的組預設收起來（一行帶 ✓），任務再多也不會佔滿頁面
+            const gDone = e.tasks.filter(t => t.done).length;
+            const gAll  = gDone === e.tasks.length && e.tasks.length > 0;
+            const gKey  = 'g:' + (e.name || i);
+            const open  = ttOpen[gKey] !== undefined ? ttOpen[gKey] : !gAll;
+            return (
+              <div className={`tt-group${open ? ' open' : ''}`} key={`g${i}`}>
+                <button
+                  className="tt-group-name"
+                  onClick={() => setTtOpen(o => ({ ...o, [gKey]: !open }))}
+                  aria-expanded={open}
+                >
+                  <span className={`tt-group-chev${open ? ' open' : ''}`} aria-hidden="true">▸</span>
+                  <span className="tt-group-ico" aria-hidden="true">📄</span>
+                  <span className="tt-group-title">{e.name}</span>
+                  {gAll
+                    ? <span className="tt-group-count all-done">✓ 全部完成</span>
+                    : <span className="tt-group-count">{gDone} / {e.tasks.length}</span>}
+                </button>
+                {/* v264: 子項目包一層——縮排＋左側直線，階層一眼看懂 */}
+                {open && (
+                  <div className="tt-group-rows">
+                    {e.tasks.map(t => renderRow(t, e.name))}
+                  </div>
+                )}
               </div>
-              {/* v264: 子項目包一層——縮排＋左側直線，階層一眼看懂 */}
-              <div className="tt-group-rows">
-                {e.tasks.map(t => renderRow(t, e.name))}
-              </div>
-            </div>
-          ) : renderRow(e.tasks[0], null))}
+            );
+          })}
         </div>
       )}
       {allDone && <div className="tt-alldone">🎉 今天的作業都完成了，太棒了！</div>}

@@ -651,3 +651,53 @@
   font-size: 15px;
 }
 .tt-group .tt-row .tt-ic-upload { font-size: 13px; }
+
+/* ═══ v267: 今天的任務——分組收合＋字體質感 ═══════════════ */
+/* 面板標題與群組標題改襯線（與 WeekHero/品牌一致），列密度收緊 */
+.tt-title {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 19px; font-weight: 700;
+  letter-spacing: .01em;
+}
+.tt-group-name {
+  width: 100%;
+  background: none; border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 10px;
+  transition: background .12s;
+}
+.tt-group-name:hover { background: #faf7ef; }
+.tt-group-title {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-weight: 700;
+  font-size: 16.5px;
+  color: var(--ink, #15130e);
+  flex: 1; min-width: 0;
+  line-height: 1.35;
+}
+.tt-group-chev {
+  flex: none;
+  font-size: 11px; line-height: 1;
+  color: #b3a98f;
+  transition: transform .18s ease;
+}
+.tt-group-chev.open { transform: rotate(90deg); }
+.tt-group-count.all-done {
+  color: #1f7d4f;
+  background: #eaf5ec;
+  border-color: #cfe6d5;
+  font-weight: 800;
+}
+/* 收合的組只剩一行——上下留一點空隙就好 */
+.tt-group:not(.open) { padding-bottom: 4px; }
+/* 列密度與文字層次 */
+.tt-group .tt-row { padding: 9px 8px 9px 10px; }
+.tt-name { font-weight: 700; letter-spacing: .01em; }
+.tt-meta { font-size: 12px; color: #a39a84; }
+@media (max-width: 640px) {
+  .tt-title { font-size: 17px; }
+  .tt-group-title { font-size: 15.5px; }
+}
