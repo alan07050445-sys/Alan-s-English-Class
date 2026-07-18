@@ -366,3 +366,15 @@
   font-weight: 600;
   color: var(--accent-soft);
 }
+
+/* v266: 去 RPG 化——乾淨的空狀態勾勾（取代貓頭鷹插圖） */
+.mk-empty-check {
+  width: 64px; height: 64px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #eaf5ec;
+  border: 2px solid #bfe0c8;
+  color: #1f7d4f;
+  font-size: 30px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}

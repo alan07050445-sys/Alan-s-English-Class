@@ -150,7 +150,18 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
         const st = m.total === 0 ? 'none' : (m.done === 0 ? 'red' : (m.done >= m.total ? 'green' : 'yellow'));
         return { short: (CWO_CATS[i] || {}).short || c.titleZh, ...m, st };
       });
-      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt, late: r.lateCount || 0 };
+      // v266: 待批改——這週已交照片但還沒給分的上傳作業數
+      const wk = (weeksFor ? weeksFor(s) : weeks)[selWeekId];
+      let pendingGrade = 0;
+      if (wk) {
+        (window.CATEGORIES || []).forEach(c => ((wk.items || {})[c.id] || []).forEach(it => {
+          const its2 = s.items || {};
+          const pr = its2[`${selWeekId}_${it.id}`] || its2[it.id] ||
+            its2[Object.keys(its2).find(k => k.endsWith('_' + it.id)) || ''] || null;
+          if (pr && pr.files && pr.files.length && pr.score == null) pendingGrade++;
+        }));
+      }
+      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt, late: r.lateCount || 0, pendingGrade };
     });
   }, [students, weeks, weekOrder, selWeekId, weeksFor]);
 
@@ -246,7 +257,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
             <div key={r.s.uid} className={`cwo-row st-${r.status}`} onClick={() => onSelect(r.s)} title="點擊查看詳情與週報">
               <span className={`cwo-light st-${r.status}`}/>
               <div className="cwo-name-wrap">
-                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}{r.late > 0 && <span className="cwo-late" title="截止日之後才完成的項目數">⏰ {r.late} 補交</span>}</span>
+                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}{r.late > 0 && <span className="cwo-late" title="截止日之後才完成的項目數">⏰ {r.late} 補交</span>}{r.pendingGrade > 0 && <span className="cwo-grading" title="已交作業照片、等你批改">⏳ {r.pendingGrade} 待批改</span>}</span>
                 <span className="cwo-email">{r.s.email || ''}</span>
               </div>
               <div className="cwo-prog">
@@ -879,6 +890,7 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
   const [wrongOpen, setWrongOpen] = useDash(null); // v251: 展開中的錯題單元 id
   const [filesOpen, setFilesOpen] = useDash(null); // v263: 展開中的作業照片單元 id
   const [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
+  const [commentDraft, setCommentDraft] = useDash({}); // v266: 評語草稿
 
   const its = student.items || {};
   const done = allItems.filter(it =>
@@ -1025,16 +1037,26 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
                           value={gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : (prog.score != null ? prog.score : '')}
                           onChange={e => setGradeDraft(d => ({ ...d, [it.id]: e.target.value }))}
                         />
+                        {/* v266: 選填評語——學生上傳頁看得到 */}
+                        <input
+                          type="text"
+                          className="sdetail-comment-input"
+                          placeholder="評語（選填）：例：字再工整一點"
+                          maxLength={120}
+                          value={commentDraft[it.id] !== undefined ? commentDraft[it.id] : (prog.comment || '')}
+                          onChange={e => setCommentDraft(d => ({ ...d, [it.id]: e.target.value }))}
+                        />
                         <button
                           className="sdetail-grade-btn"
                           onClick={() => {
                             const raw = gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score;
                             const n = Math.round(Number(raw));
                             if (raw === '' || raw == null || Number.isNaN(n) || n < 0 || n > 100) { alert('請輸入 0–100 的分數'); return; }
-                            window.saveProgressItem(student.uid, '', '', progKeys[0], { ...prog, score: n, graded: true, gradedAt: Date.now() });
+                            const comment = String(commentDraft[it.id] !== undefined ? commentDraft[it.id] : (prog.comment || '')).trim();
+                            window.saveProgressItem(student.uid, '', '', progKeys[0], { ...prog, score: n, comment, graded: true, gradedAt: Date.now() });
                           }}
                         >✓ 給分</button>
-                        {prog.graded && prog.score != null && <span className="sdetail-graded-note">已批改 · 學生會看到 {prog.score} 分</span>}
+                        {prog.graded && prog.score != null && <span className="sdetail-graded-note">已批改 · 學生會看到 {prog.score} 分{prog.comment ? '＋評語' : ''}</span>}
                         {prog.submittedAt && (
                           <span className="sdetail-submitted-at">
                             交於 {new Date(prog.submittedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}

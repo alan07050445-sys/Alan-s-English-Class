@@ -5389,3 +5389,22 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .sdetail-grade-btn:hover { filter: brightness(1.1); }
 .sdetail-graded-note { font-size: 12.5px; font-weight: 700; color: #1f7d4f; }
 .sdetail-submitted-at { font-size: 12px; color: var(--ink-3, #8a8270); }
+
+/* ═══════════ v266: 批改評語＋待批改 chip ═══════════ */
+.cwo-grading {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px; font-weight: 800; color: #8a6d1c;
+  background: #fdf6e3; border: 1px solid #e8d9ac;
+  border-radius: 100px; padding: 2px 8px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.sdetail-comment-input {
+  flex: 1;
+  min-width: 200px;
+  font-family: inherit; font-size: 13.5px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff; color: var(--ink, #15130e);
+}

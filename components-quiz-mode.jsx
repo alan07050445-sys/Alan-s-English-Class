@@ -202,6 +202,22 @@ function StarMastery({ pct, size = 13 }) {
   );
 }
 
+/* v266: 完成頁導航——各題型共用：「下一個任務 →」＋「回今天的任務」（沒有任務脈絡時退回 onBack） */
+function QmDoneNavBtns({ onBack, onBackToTasks, onNextTask, backLabel }) {
+  return (
+    <>
+      {onNextTask ? (
+        <button className="qm-btn primary" onClick={onNextTask}>下一個任務 →</button>
+      ) : null}
+      {onBackToTasks ? (
+        <button className={'qm-btn ' + (onNextTask ? 'secondary' : 'primary')} onClick={onBackToTasks}>回今天的任務</button>
+      ) : (
+        <button className={'qm-btn ' + (onNextTask ? 'secondary' : 'primary')} onClick={onBack}>{backLabel || '← Back'}</button>
+      )}
+    </>
+  );
+}
+
 function getTodayInputValue(offsetDays = 0) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -481,7 +497,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -584,6 +600,20 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     setPhase('quiz');
   };
 
+  // v266: 完成頁導航——「回今天的任務」（作業項目）＋「下一個任務 →」（還有未完成作業時）
+  const nextTaskTarget = (!editMode && getNextTask && selectedItem) ? getNextTask(selectedItem.id) : null;
+  const onNextTask = (nextTaskTarget && onOpenTask)
+    ? () => onOpenTask(nextTaskTarget.cat, nextTaskTarget.itemId)
+    : null;
+  const onBackToTasksShared = !editMode && homework && selectedItem && homework[selectedItem.id] ? onBack : null;
+
+  // v266: 同分類跳下一題——initialItemId 變了就切換單元（跨分類靠 remount 的 mount effect）
+  useQME(() => {
+    if (!initialItemId) return;
+    const wanted = sidebarItems.find(it => it.id === initialItemId);
+    if (wanted && (!selectedItem || selectedItem.id !== wanted.id)) selectItem(wanted);
+  }, [initialItemId]);
+
   return (
     <div className={`qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}`}>
 
@@ -664,7 +694,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const dueLabel = hw?.dueDate ? (() => {
               const d = new Date(hw.dueDate + 'T00:00:00');
               const diff = Math.ceil((d - new Date()) / 86400000);
-              return diff > 0 ? `📌 ${diff}天` : diff === 0 ? '📌 今天到期' : '📌 已過期';
+              return diff > 0 ? `📌 ${diff}天` : diff === 0 ? '📌 今天到期' : diff >= -7 ? '📌 已過期' : '已結束'; // v266
             })() : null;
 
             return (
@@ -676,7 +706,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 <div className="qm-unit-row-info">
                   <div className="qm-unit-row-title">
                     {item.title}
-                    {dueLabel && !editMode && <span className={`qm-hw-badge${isDone ? ' done' : ''}`}>{isDone ? '✓ 作業完成' : dueLabel}</span>}
+                    {dueLabel && !editMode && <span className={`qm-hw-badge${isDone ? ' done' : ''}${dueLabel === '已結束' ? ' ended' : ''}`}>{isDone ? '✓ 作業完成' : dueLabel}</span>}
                   </div>
                   <div className="qm-unit-row-meta">
                     {editMode ? (
@@ -803,6 +833,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'spelling' && phase === 'quiz' ? (
           <SpellingPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -825,6 +857,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'type-answer' && phase === 'quiz' ? (
           <TypeAnswerPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -839,6 +873,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'writing-practice' && phase === 'quiz' ? (
           <WritingPracticePlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             item={selectedItem}
             catItems={items || []}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -852,6 +888,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'short-answer' && phase === 'quiz' ? (
           <ShortAnswerPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -864,6 +902,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'syllable-div' && phase === 'quiz' ? (
           <SyllableDivPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -878,6 +918,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'word-sort' && phase === 'quiz' ? (
           <WordSortPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -890,6 +932,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'story-mountain' && phase === 'quiz' ? (
           <StoryMountainPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -902,6 +946,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'essay' && phase === 'quiz' ? (
           <EssayPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -909,6 +955,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'cloze' && phase === 'quiz' ? (
           <ClozePlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -918,6 +966,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <ClozeIntro item={selectedItem} onStart={() => setPhase('quiz')} />
         ) : selectedItem?.type === 'circle-answer' && phase === 'quiz' ? (
           <CircleAnswerPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
             key={playerKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
@@ -965,7 +1015,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             allQuizItems={weekQuizItems || quizItems}
             onBack={() => setPhase('intro')}
             onQuizDone={() => setProgVersion(v => v + 1)}
-            onBackToTasks={!editMode && homework && selectedItem && homework[selectedItem.id] ? onBack : null}
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
           />
         )}
         </div>
@@ -1217,7 +1268,7 @@ function SpellingIntro({ item, onStart, resumeAt, onRestart }) {
   );
 }
 
-function SpellingPlayer({ item, progressKey, onBack }) {
+function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const base = useQMM(() => (item.spellWords || []).filter(w => w && w.word), [item.id]);
   // v265: 續做——上次的題目順序、做到第幾題、得分、錯題都接回來
   const rz = useQMM(() => {
@@ -1305,7 +1356,7 @@ function SpellingPlayer({ item, progressKey, onBack }) {
         <div className="qm-result-pct">答對率 {finalPct}%</div>
         <div className="qm-result-btns">
           <button className="qm-btn secondary" onClick={() => { wrongsRef.current = []; setIdx(0); setInput(''); setResult(null); setScore(0); setScreen('play'); }}>再試一次</button>
-          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+          <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
         </div>
       </div>
     );
@@ -1396,7 +1447,7 @@ function TypeAnswerIntro({ item, onStart, resumeAt, onRestart }) {
 /* ══════════════════════════════════════════════════════
    TYPE-ANSWER PLAYER
 ══════════════════════════════════════════════════════ */
-function TypeAnswerPlayer({ item, progressKey, onBack }) {
+function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const base = useQMM(() => (item.pairs || []), [item.id]);
   // v265: 續做——順序、進度、得分、錯題
   const rz = useQMM(() => {
@@ -1481,7 +1532,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack }) {
         <div className="qm-result-pct">{finalPct}% correct</div>
         <div className="qm-result-btns">
           <button className="qm-btn secondary" onClick={() => { wrongsRef.current = []; setIdx(0); setInput(''); setResult(null); setScore(0); setScreen('play'); }}>再試一次</button>
-          <button className="qm-btn primary"   onClick={onBack}>← Back</button>
+          <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
         </div>
       </div>
     );
@@ -1614,7 +1665,7 @@ function QuickFlashcardReview({ item, onDone }) {
 /* ══════════════════════════════════════════════════════
    QUIZ RESULT SCREEN — animated Duolingo-style
 ══════════════════════════════════════════════════════ */
-function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack, onBackToTasks }) {
+function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack, onBackToTasks, onNextTask }) {
   const starCount  = finalPct === 100 ? 3 : finalPct >= 70 ? 2 : finalPct >= 40 ? 1 : 0;
   const xpGain     = finalPct === 100 ? 100 : 50;
   const msg        = finalPct === 100 ? 'Perfect! 滿分！'
@@ -1654,9 +1705,7 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
 
       <div className="qm-result-btns">
         <button className="qm-btn secondary" onClick={onRestart}>再試一次</button>
-        {onBackToTasks
-          ? <button className="qm-btn primary" onClick={onBackToTasks}>回今天的任務 →</button>
-          : <button className="qm-btn primary" onClick={onBack}>回單元列表 →</button>}
+        <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="回單元列表 →"/>
       </div>
       {onBackToTasks && (
         <button className="qm-result-alt" onClick={onBack}>留在這一類，看單元列表 →</button>
@@ -1677,7 +1726,7 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
   );
 }
 
-function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone, onBackToTasks }) {
+function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone, onBackToTasks, onNextTask }) {
   // Adaptive deck: wrong questions are reinserted 3 positions later
   const uniqueTotal = questions.length;
   // 有做到一半的紀錄 → 從那一題接著做（deck 含補考題、對錯數都還原）
@@ -1812,6 +1861,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
         wrongList={wrongList}
         onRestart={restart} onBack={onBack}
         onBackToTasks={onBackToTasks}
+        onNextTask={onNextTask}
       />
     );
   }
@@ -1939,7 +1989,7 @@ function WritingPracticeIntro({ item, catItems, onStart }) {
 /* ══════════════════════════════════════════════════════
    WRITING PRACTICE PLAYER
 ══════════════════════════════════════════════════════ */
-function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
+function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTasks, onNextTask }) {
   const words = useQMM(() => getWritingPracticePrompts(item, catItems), [item, catItems]);
 
   const [idx, setIdx]           = useQM(0);
@@ -2018,7 +2068,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack }) {
           </div>
         ))}
       </div>
-      <button className="qm-btn secondary" onClick={onBack} style={{marginTop:20}}>← 返回</button>
+      <div className="qm-result-btns" style={{marginTop:20}}><QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="← 返回"/></div>
     </div>
   );
 
@@ -2122,7 +2172,7 @@ function ShortAnswerIntro({ item, onStart }) {
 /* ══════════════════════════════════════════════════════
    SHORT ANSWER — PLAYER
 ══════════════════════════════════════════════════════ */
-function ShortAnswerPlayer({ item, progressKey, onBack }) {
+function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const questions   = item.saQuestions || [];
   const passage     = item.passage || '';
 
@@ -2209,7 +2259,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack }) {
           </div>
         ))}
       </div>
-      <button className="qm-btn secondary" onClick={onBack} style={{marginTop:20}}>← 返回</button>
+      <div className="qm-result-btns" style={{marginTop:20}}><QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="← 返回"/></div>
     </div>
   );
 
@@ -2303,7 +2353,7 @@ function parseSyllableCuts(answer) {
 /* ══════════════════════════════════════════════════════
    SYLLABLE DIVISION — PLAYER
 ══════════════════════════════════════════════════════ */
-function SyllableDivPlayer({ item, progressKey, onBack }) {
+function SyllableDivPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const words = useQMM(() => item.sdWords || [], [item.id]);
   // v265: 續做——做到第幾個字＋每個字的對錯
   const rz = useQMM(() => {
@@ -2406,7 +2456,7 @@ function SyllableDivPlayer({ item, progressKey, onBack }) {
           <button className="qm-btn secondary" onClick={() => { setIdx(0); setCuts(new Set()); setSubmitted(false); setScores([]); setDone(false); }}>
             再試一次
           </button>
-          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+          <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
         </div>
       </div>
     );
@@ -2556,7 +2606,7 @@ function WordSortIntro({ item, onStart }) {
 /* ══════════════════════════════════════════════════════
    WORD SORT — PLAYER
 ══════════════════════════════════════════════════════ */
-function WordSortPlayer({ item, progressKey, onBack }) {
+function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const categories  = item.sortCategories || [];
   const suffixMode  = !!item.sortSuffixMode;
   const allWords    = useQMM(() => shuffleArr(item.sortWords || []), [item.id]);
@@ -2698,7 +2748,7 @@ function WordSortPlayer({ item, progressKey, onBack }) {
             onClick={() => { setPlacements({}); setSelected(null); setSubmitted(false); setShowAnswer(false); setDone(false); }}>
             再試一次
           </button>
-          <button className="qm-btn primary ws-result-btn" onClick={onBack}>← Back</button>
+          <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
         </div>
       </div>
     );
@@ -2811,7 +2861,7 @@ function countStars(text) {
 /* ══════════════════════════════════════════════════════
    OPINION ESSAY — PLAYER
 ══════════════════════════════════════════════════════ */
-function EssayPlayer({ item, progressKey, onBack }) {
+function EssayPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [essay,     setEssay]     = useQM('');
   const [feedback,  setFeedback]  = useQM('');
   const [checking,  setChecking]  = useQM(false);
@@ -2880,7 +2930,7 @@ function EssayPlayer({ item, progressKey, onBack }) {
             <button className="qm-btn secondary" onClick={() => { setSubmitted(false); setFeedback(''); setEssay(''); }}>
               重新寫一次
             </button>
-            <button className="qm-btn primary" onClick={onBack}>← Back</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
           </div>
         </div>
       )}
@@ -3042,7 +3092,7 @@ function StoryMountainIntro({ item, onStart }) {
 /* ══════════════════════════════════════════════════════
    STORY MOUNTAIN — PLAYER
 ══════════════════════════════════════════════════════ */
-function StoryMountainPlayer({ item, progressKey, onBack }) {
+function StoryMountainPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [stageIdx,   setStageIdx]   = useQM(0);
   const [answers,    setAnswers]    = useQM({ intro:'', rising:'', climax:'', falling:'', resolution:'' });
   const [screen,     setScreen]     = useQM('write'); // 'write' | 'review' | 'checking' | 'result'
@@ -3087,7 +3137,7 @@ function StoryMountainPlayer({ item, progressKey, onBack }) {
         <WritingFeedback text={feedback}/>
         <div className="sm-result-btns">
           <button className="qm-btn secondary" onClick={retryFn}>重新寫一次</button>
-          <button className="qm-btn primary" onClick={onBack}>← Back</button>
+          <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
         </div>
       </div>
     );
@@ -3202,7 +3252,7 @@ function CircleAnswerIntro({ item, onStart }) {
   );
 }
 
-function CircleAnswerPlayer({ item, progressKey, onBack }) {
+function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const questions = useQMM(
     () => (item.circleQuestions || [])
       .filter(q => q.sentence && q.answer)
@@ -3339,7 +3389,7 @@ function CircleAnswerPlayer({ item, progressKey, onBack }) {
           <>
             <div className="circle-result">{score} / {questions.length} correct</div>
             <button className="qm-btn secondary" onClick={reset}>Try again</button>
-            <button className="qm-btn secondary" onClick={onBack}>← Back</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
           </>
         )}
       </div>
@@ -3398,7 +3448,7 @@ function normalizeClozeAnswer(answer) {
     .replace(/\s+/g, ' ');
 }
 
-function ClozePlayer({ item, progressKey, onBack }) {
+function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const parts   = useQMM(() => parseClozePassage(item.passage || ''), [item.id]);
   const blanks  = useQMM(() => parts.filter(p => p.type === 'blank'), [parts]);
   const total   = blanks.length;
@@ -3504,7 +3554,7 @@ function ClozePlayer({ item, progressKey, onBack }) {
           <div className="cloze-result-row">
             <span className="cloze-result-emoji">{pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪'}</span>
             <span className="cloze-result-text">{score} / {total} correct · {pct}%</span>
-            <button className="qm-btn secondary" onClick={onBack}>← Back</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
           </div>
         )}
       </div>
@@ -3600,7 +3650,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
   const dueText = (d) => {
     if (!d) return null;
     const diff = Math.ceil((new Date(d + 'T00:00:00') - new Date()) / 86400000);
-    return diff > 1 ? `${diff} 天後到期` : diff === 1 ? '明天到期' : diff === 0 ? '今天到期' : '已過期';
+    return diff > 1 ? `${diff} 天後到期` : diff === 1 ? '明天到期' : diff === 0 ? '今天到期' : diff >= -7 ? '已過期' : '已結束'; // v266: 過期 7 天以上＝已結束（灰色）
   };
   const tasks = Object.keys(hw).map(id => {
     const it = itemById[id];
@@ -3692,11 +3742,13 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     const due = dueText(t.dueDate);
     return (
       <button key={t.id} className={`tt-row${t.done ? ' tt-done' : ''}${groupName ? ' in-group' : ''}`} onClick={() => t.cat && onOpenTask(t.cat, t.id)}>
-        <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>
+        {t.it.type === 'upload'
+          ? <span className="tt-ic tt-ic-upload" aria-hidden="true">📎</span>
+          : <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>}
         <span className="tt-body">
           <b className="tt-name">{rowLabel(t, groupName)}</b>
           <span className="tt-meta">
-            {t.cat ? (t.cat.titleZh || t.cat.title) : ''}
+            {t.it.type === 'upload' ? '上傳作業 · 拍照繳交' : t.cat ? (t.cat.titleZh || t.cat.title) : ''}
             {due && !t.done ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null}
           </span>
         </span>
@@ -3778,7 +3830,7 @@ function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnter
   const dueText = (d) => {
     if (!d) return '待完成';
     const diff = Math.ceil((new Date(d + 'T00:00:00') - new Date()) / 86400000);
-    return diff > 0 ? `${diff} 天後到期` : diff === 0 ? '今天到期' : '已過期';
+    return diff > 0 ? `${diff} 天後到期` : diff === 0 ? '今天到期' : diff >= -7 ? '已過期' : '已結束'; // v266
   };
 
   return (
@@ -3995,6 +4047,7 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
 function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   const [pending,   setPending]   = useQM([]);   // [{ file, url }] 還沒送出的
   const [busy,      setBusy]      = useQM(false);
+  const [upMsg,     setUpMsg]     = useQM('');   // v266: 上傳進度「2/3」
   const [err,       setErr]       = useQM('');
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
@@ -4041,6 +4094,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     try {
       const urls = [];
       for (let i = 0; i < pending.length; i++) {
+        setUpMsg(`${i + 1}/${pending.length}`); // v266: 讓學生知道傳到第幾張
         const blob = await shrink(pending[i].file);
         urls.push(await window.uploadSubmissionPhoto(u.uid, progressKey, blob, i));
       }
@@ -4059,6 +4113,27 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         : '上傳失敗，請檢查網路再試一次。' + (e && e.message ? `（${e.message}）` : ''));
     }
     setBusy(false);
+    setUpMsg('');
+  };
+
+  // v266: 未批改前可以刪掉自己傳錯的照片；全部刪光＝視同還沒繳交
+  const removeSubmitted = (url) => {
+    if (!u || busy || score != null) return;
+    if (!window.confirm('刪掉這張照片？（刪掉後老師就看不到它了）')) return;
+    const rest = submitted.filter(x => x !== url);
+    if (rest.length) {
+      saveQuizModeCompletion(progressKey, item, {
+        doneCount: 1, score: null, total: 1,
+        extra: { files: rest, graded: false, submittedAt: (cloudProg && cloudProg.submittedAt) || Date.now() },
+      });
+    } else {
+      window.saveProgressItem(u.uid, u.displayName || '', u.email || '', progressKey, null);
+      try {
+        const m = loadQMProg();
+        if (m[progressKey] !== undefined) { delete m[progressKey]; saveQMProg(m); }
+        if (window._bumpQmProgress) window._bumpQmProgress();
+      } catch (e) {}
+    }
   };
 
   return (
@@ -4077,11 +4152,21 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
               ? <span className="uh-graded">✓ 老師改好了：{score} 分</span>
               : <span className="uh-waiting">已交 {submitted.length} 張 · 等老師批改 ⏳</span>}
           </div>
+          {/* v266: 老師評語 */}
+          {score != null && cloudProg && cloudProg.comment ? (
+            <div className="uh-comment">💬 老師說：{cloudProg.comment}</div>
+          ) : null}
           <div className="uh-grid">
             {submitted.map((url, i) => (
-              <a key={i} className="uh-thumb" href={url} target="_blank" rel="noreferrer" title="點開看大圖">
-                <img src={url} alt={`已交作業 ${i + 1}`}/>
-              </a>
+              <span key={i} className="uh-thumb">
+                <a href={url} target="_blank" rel="noreferrer" title="點開看大圖">
+                  <img src={url} alt={`已交作業 ${i + 1}`}/>
+                </a>
+                {/* v266: 未批改前可刪掉傳錯的照片 */}
+                {score == null && (
+                  <button className="uh-thumb-del" onClick={() => removeSubmitted(url)} aria-label="刪掉這張">✕</button>
+                )}
+              </span>
             ))}
           </div>
         </div>
@@ -4109,7 +4194,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
           <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy} style={{ display: 'none' }}/>
         </label>
         <button className="qm-btn primary" onClick={submit} disabled={busy || pending.length === 0}>
-          {busy ? '上傳中…' : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}
+          {busy ? `上傳中 ${upMsg}…` : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}
         </button>
       </div>
       <div className="uh-hint">可以一次選好幾張；交出去之後還是可以再補交。</div>

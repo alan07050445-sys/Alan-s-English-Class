@@ -422,6 +422,23 @@ function App() {
     return { total: quizItems.length, done };
   };
 
+  // v266: 完成一題後的「下一個任務」——本週作業裡還沒完成的下一項（依到期日排）
+  const getNextTask = (excludeId) => {
+    const hw = week.homework || {};
+    const byId = {};
+    allItems.forEach(it => { byId[it.id] = it; });
+    const candidates = Object.keys(hw)
+      .filter(id => id !== excludeId)
+      .map(id => ({ id, it: byId[id], due: String((hw[id] && hw[id].dueDate) || '9999') }))
+      .filter(c => c.it
+        && !(progress[c.id] || qmProgress[`${weekId}_${c.id}`])
+        && window.getQuizItems && window.getQuizItems([c.it]).length > 0)
+      .sort((a, b) => a.due.localeCompare(b.due));
+    if (!candidates.length) return null;
+    const cat = activeCategories.find(c => c.id === candidates[0].it._cat);
+    return cat ? { cat, itemId: candidates[0].id } : null;
+  };
+
   const getNextStudyCategory = () => {
     const withProgress = activeCategories.map(cat => ({ cat, ...getCategoryProgress(cat) }));
     const next = withProgress.find(c => c.total > 0 && c.done < c.total);
@@ -1074,6 +1091,8 @@ function App() {
               homework={week.homework || {}}
               onSetHomework={handleSetHomework}
               weekQuizItems={weekQuizItems}
+              getNextTask={getNextTask}
+              onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
             />
           ) : (
             <div key={mainKey} className="shell main-enter">

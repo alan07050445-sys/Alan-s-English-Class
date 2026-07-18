@@ -638,3 +638,16 @@
 
 /* ═══ v265: intro 的「重新開始」按鈕 ═══ */
 .qm-intro-restart { margin-top: 2px; }
+
+/* ═══ v266: UX 八項改善 ═══════════════════════════════════ */
+/* 過期 7 天以上＝已結束（灰色，紅色只留給近期） */
+.qm-hw-badge.ended { background: var(--bg, #f6f1e6); color: var(--ink-3, #8a8270); border-color: var(--border-soft, #efe9d8); }
+.tt-ended { color: var(--ink-3, #8a8270); }
+/* 任務列的上傳作業 📎 圖示 */
+.tt-ic-upload {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #fdf6e3, #f9e9c8);
+  border: 1px solid rgba(201, 168, 76, .5);
+  font-size: 15px;
+}
+.tt-group .tt-row .tt-ic-upload { font-size: 13px; }

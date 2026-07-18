@@ -46,7 +46,6 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
   const [idx, setIdx]         = useMK(0);
   const [selected, setSelected] = useMK(null);
   const [cleared, setCleared]   = useMK(0);
-  const [xpEarned, setXpEarned] = useMK(0);
   const [done, setDone]         = useMK(false);
 
   const current = mcQuestions[idx];
@@ -60,8 +59,6 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
       setCleared(c => c + 1);
       if (user?.uid) {
         window.removeWrongQuestion(user.uid, current.itemId, current.q, current.answer);
-        window.addXp(user.uid, 5);
-        setXpEarned(x => x + 5);
       }
     }
   };
@@ -76,8 +73,7 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
   };
 
   useMKE(() => {
-    if (done && cleared === mcQuestions.length && user?.uid) {
-      window.unlockBadge(user.uid, 'mistake_master');
+    if (done && cleared === mcQuestions.length) {
       window.playSound('complete');
     }
   }, [done]);
@@ -89,13 +85,12 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
         <div className="mk-panel mk-panel-center">
           <div className="mk-complete-icon">{allCleared ? '🎯' : '💪'}</div>
           <h3 className="mk-complete-title">
-            {allCleared ? '全部答對！錯題本已清空！' : '重練完成！'}
+            {allCleared ? '全部答對！錯題本清空了！' : '重練完成！'}
           </h3>
-          <p className="mk-complete-stat">答對 {cleared} / {mcQuestions.length} 題</p>
-          {xpEarned > 0 && <p className="mk-complete-xp">+{xpEarned} XP 獲得！</p>}
-          {allCleared && (
-            <p className="mk-complete-badge">🏆 解鎖徽章：錯題終結者！</p>
-          )}
+          <p className="mk-complete-stat">
+            答對 {cleared} / {mcQuestions.length} 題
+            {allCleared ? '' : ' · 答對的已從錯題本移除'}
+          </p>
           <button
             className="mk-drill-btn"
             onClick={allCleared ? onAllCleared : onClose}
@@ -152,7 +147,7 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
         {selected !== null && (
           <div className="mk-drill-feedback">
             {selected === current.correct
-              ? <span className="mk-fb-correct">✓ 答對了！+5 XP</span>
+              ? <span className="mk-fb-correct">✓ 答對了！已從錯題本移除</span>
               : <span className="mk-fb-wrong">✗ 正確答案：{current.options[current.correct]}</span>
             }
             <button className="mk-next-btn" onClick={handleNext}>
@@ -212,9 +207,9 @@ function MistakesPanel({ user, progressItems, weeks, weekOrder, onClose }) {
         {allWrong.length === 0 ? (
           /* Empty state */
           <div className="mk-empty">
-            <img src="owl-proud.png" alt="" className="mk-empty-art"/>
+            <div className="mk-empty-check" aria-hidden="true">✓</div>
             <p className="mk-empty-msg">太棒了！目前沒有錯題</p>
-            <p className="mk-empty-sub">Keep it up! 繼續保持！</p>
+            <p className="mk-empty-sub">答錯的題目會自動收進來，方便隨時複習</p>
           </div>
         ) : (
           <>
@@ -234,7 +229,7 @@ function MistakesPanel({ user, progressItems, weeks, weekOrder, onClose }) {
             </div>
 
             <button className="mk-drill-btn" onClick={startDrill}>
-              🚀 開始重練（{allWrong.length} 題）
+              ↻ 開始重練（{allWrong.length} 題）
             </button>
           </>
         )}
