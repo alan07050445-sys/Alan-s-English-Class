@@ -3568,7 +3568,7 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
    狀態：從 qmProg 抓孩子的完成/分數。可收合。
 ══════════════════════════════════════════════════════ */
 /* ── 本週總覽 hero：週次/主題/日期 + 完成度圓環 + 繼續練習 ── */
-function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNextWeek, nextTask, onStartNext, weekAvg, onOpenGrowth }) {
+function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNextWeek, weekAvg, onOpenGrowth }) {
   const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
   const weekNum = ((week.label || '').match(/(\d+)\s*$/) || [])[1] || (weekIdx + 1);
   const title = week.themeZh || week.theme || (who ? `${who} 的第 ${weekNum} 週任務` : `第 ${weekNum} 週的練習`);
@@ -3627,12 +3627,6 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
             <div className="wh-side-info">
               <span className="wh-count">完成 {done} / {total} 個練習</span>
               {allDone && <span className="wh-done-msg">🎉 本週練習全部完成！</span>}
-              {/* v268: 零決策入口——直接深連結第一個未完成任務 */}
-              {!allDone && nextTask && onStartNext && (
-                <button className="wh-cta" onClick={() => onStartNext(nextTask.cat, nextTask.itemId)}>
-                  ▶ 今天先做這個：{nextTask.label && nextTask.label.length > 14 ? nextTask.label.slice(0, 14) + '…' : (nextTask.label || '下一個任務')}
-                </button>
-              )}
               {/* v268: 家長共看畫面——本週平均＋成長報告入口 */}
               {weekAvg != null && onOpenGrowth && (
                 <button className="wh-growth-link" onClick={onOpenGrowth}>本週平均 {weekAvg} 分 · 看成長報告 →</button>

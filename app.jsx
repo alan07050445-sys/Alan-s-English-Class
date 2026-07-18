@@ -1133,16 +1133,17 @@ function App() {
                   who={isSummer && !isSummerLib ? summerWho : null}
                   onPrevWeek={goPrevWeek}
                   onNextWeek={goNextWeek}
-                  nextTask={(() => {
-                    const nt = getNextTask(null);
-                    if (!nt) return null;
-                    const it = allItems.find(x => x.id === nt.itemId);
-                    return { ...nt, label: (it && it.title) || '' };
-                  })()}
-                  onStartNext={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
                   weekAvg={weekAvgScore}
                   onOpenGrowth={() => setGrowthOpen(true)}
                 />
+              )}
+              {/* v269: 還有未完成任務時，一個呼吸的金色箭頭輕輕指向任務清單（全做完就消失） */}
+              {!editMode && !isSummerLib && getNextTask(null) && (
+                <div className="wh-task-cue" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="26" height="26" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 9l7 7 7-7"/>
+                  </svg>
+                </div>
               )}
               {editMode ? (
                 <window.WeeklyContactBook
