@@ -377,7 +377,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
           const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
           const catStars = quizItems.reduce((s, it) => {
             const p = qmProg[`${weekId}_${it.id}`];
-            const sp = (p && p.total) ? Math.round(p.score / p.total * 100) : null;
+            const sp = (p && p.score != null && p.total) ? Math.round(p.score / p.total * 100) : null; // v270
             return s + starsFromScore(sp);
           }, 0);
           const maxStars = quizItems.length * 3;
@@ -420,7 +420,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                       const nextItem = quizItems.find(it => !qmProg[`${weekId}_${it.id}`]);
                       const scored = quizItems
                         .map(it => qmProg[`${weekId}_${it.id}`])
-                        .filter(p => p && p.total > 0);
+                        .filter(p => p && p.score != null && p.total > 0); // v270: 無分數不列入
                       const avg = scored.length
                         ? Math.round(scored.reduce((s, p) => s + p.score / p.total * 100, 0) / scored.length)
                         : null;
@@ -3871,7 +3871,7 @@ function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnter
     const it   = itemById[id];
     const prog = (qmProg || {})[`${weekId}_${id}`];
     const done = !!(prog && prog.done);
-    const pct  = (prog && prog.total) ? Math.round(prog.score / prog.total * 100) : null;
+    const pct  = (prog && prog.score != null && prog.total) ? Math.round(prog.score / prog.total * 100) : null; // v270
     const cat  = (categories || []).find(c => c.id === (it && it._cat));
     return { id, title: it ? it.title : id, catTitle: cat ? cat.title : '', cat, dueDate: hw[id] && hw[id].dueDate, done, pct };
   });
@@ -3966,7 +3966,8 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
           const p = (qmProg || {})[`${wid}_${it.id}`];
           if (p && p.done) {
             done++; totalDone++;
-            if (p.total) {
+            // v270: 沒有分數的完成（單字卡、待批改的上傳作業）不列入平均——否則被當 0 分拉低
+            if (p.score != null && p.total) {
               const pct = Math.min(100, Math.round(p.score / p.total * 100));
               sSum += pct; sN++; gSum += pct; gN++;
             }
