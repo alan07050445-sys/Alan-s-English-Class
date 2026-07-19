@@ -3981,11 +3981,16 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
         total, done, pct: Math.round(done / total * 100), avg: sN ? Math.round(sSum / sN) : null,
       });
     });
+    // v271: 最後一週還沒全做完＝進行中（曲線與列表都特別標示，不讓它看起來像退步）
+    perWeek.forEach((p, i) => { p.inProgress = (i === perWeek.length - 1 && p.done < p.total); });
+    const scoredWeeks = perWeek.filter(p => p.avg != null);
+    const lastScored = scoredWeeks[scoredWeeks.length - 1] || null;
+    const prevScored = scoredWeeks[scoredWeeks.length - 2] || null;
     return {
-      perWeek, totalDone,
-      activeWeeks: perWeek.filter(p => p.done > 0).length,
+      perWeek, totalDone, scoredWeeks,
+      thisWeekAvg: lastScored ? lastScored.avg : null,
+      delta: (lastScored && prevScored) ? lastScored.avg - prevScored.avg : null,
       avgScore: gN ? Math.round(gSum / gN) : null,
-      bestPct: perWeek.reduce((m, p) => Math.max(m, p.pct), 0),
     };
   }, [weeks, weekOrder, qmProg, categories]);
 
@@ -3993,13 +3998,16 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
   const hasData = data.totalDone > 0;
 
   // ── SVG line chart geometry ──
-  const W = 640, H = 200, padL = 14, padR = 14, padT = 16, padB = 30;
+  // v271: 主軸改「每週平均分數」（家長最在意的成果）；只畫有分數的週
+  const cw = data.scoredWeeks;
+  const W = 640, H = 200, padL = 14, padR = 14, padT = 26, padB = 30;
   const innerW = W - padL - padR, innerH = H - padT - padB, baseline = padT + innerH;
-  const n = pw.length;
+  const n = cw.length;
   const xAt = (i) => n > 1 ? padL + i * innerW / (n - 1) : padL + innerW / 2;
-  const yAt = (pct) => padT + (1 - pct / 100) * innerH;
-  const linePts = pw.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.pct).toFixed(1)}`).join(' ');
-  const areaPts = n > 0 ? `${xAt(0).toFixed(1)},${baseline} ${linePts} ${xAt(n - 1).toFixed(1)},${baseline}` : '';
+  const yAt = (v) => padT + (1 - v / 100) * innerH;
+  // 進行中的那一點用虛線接入：實線只畫到倒數第二點
+  const lastInProg = n > 1 && cw[n - 1].inProgress;
+  const solidPts = (lastInProg ? cw.slice(0, n - 1) : cw).map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.avg).toFixed(1)}`).join(' ');
   const labelStep = n <= 7 ? 1 : Math.ceil(n / 6);
   const shortLabel = (l) => (l || '').replace(/Week\s*/i, 'W');
 
@@ -4023,60 +4031,84 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
             </div>
           ) : (
             <>
-              <div className="growth-stats">
+              <div className="growth-stats growth-stats-3">
                 <div className="growth-stat">
-                  <div className="growth-stat-num">{data.totalDone}</div>
+                  <div className="growth-stat-num">{data.thisWeekAvg != null ? data.thisWeekAvg : '—'}<em>分</em></div>
+                  <div className="growth-stat-label">本週平均</div>
+                  {data.delta != null && data.delta !== 0 && (
+                    <div className={`growth-stat-delta${data.delta > 0 ? ' up' : ' down'}`}>
+                      {data.delta > 0 ? '▲' : '▼'} 較上週 {data.delta > 0 ? '+' : ''}{data.delta} 分
+                    </div>
+                  )}
+                  {data.delta === 0 && <div className="growth-stat-delta">與上週持平</div>}
+                </div>
+                <div className="growth-stat">
+                  <div className="growth-stat-num">{data.avgScore != null ? data.avgScore : '—'}<em>分</em></div>
+                  <div className="growth-stat-label">整體平均</div>
+                </div>
+                <div className="growth-stat">
+                  <div className="growth-stat-num">{data.totalDone}<em>項</em></div>
                   <div className="growth-stat-label">完成練習</div>
-                </div>
-                <div className="growth-stat">
-                  <div className="growth-stat-num">{data.activeWeeks}</div>
-                  <div className="growth-stat-label">學習週數</div>
-                </div>
-                <div className="growth-stat">
-                  <div className="growth-stat-num">{data.avgScore != null ? data.avgScore : '—'}</div>
-                  <div className="growth-stat-label">平均分數</div>
-                </div>
-                <div className="growth-stat">
-                  <div className="growth-stat-num">{data.bestPct}%</div>
-                  <div className="growth-stat-label">最佳單週</div>
                 </div>
               </div>
 
-              <div className="growth-chart-wrap">
-                <div className="growth-chart-title">每週完成率</div>
-                <svg className="growth-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="每週完成率折線圖">
-                  {[0, 25, 50, 75, 100].map(g => (
-                    <g key={g}>
-                      <line x1={padL} y1={yAt(g)} x2={W - padR} y2={yAt(g)} className="growth-grid"/>
-                      <text x={padL - 2} y={yAt(g) - 2} className="growth-axis-y">{g}</text>
-                    </g>
-                  ))}
-                  {areaPts && <polygon points={areaPts} className="growth-area"/>}
-                  {n > 1 && <polyline points={linePts} className="growth-line"/>}
-                  {pw.map((p, i) => (
-                    <g key={p.wid}>
-                      <circle cx={xAt(i)} cy={yAt(p.pct)} r="4" className="growth-dot"/>
-                      {(i % labelStep === 0 || i === n - 1) && (
-                        <text x={xAt(i)} y={H - 10} className="growth-axis-x">{shortLabel(p.label)}</text>
-                      )}
-                    </g>
-                  ))}
-                </svg>
-              </div>
+              {n > 0 && (
+                <div className="growth-chart-wrap">
+                  <div className="growth-chart-title">每週平均分數</div>
+                  <svg className="growth-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="每週平均分數折線圖">
+                    {[0, 25, 50, 75, 100].map(g => (
+                      <g key={g}>
+                        <line x1={padL} y1={yAt(g)} x2={W - padR} y2={yAt(g)} className="growth-grid"/>
+                        <text x={padL - 2} y={yAt(g) - 2} className="growth-axis-y">{g}</text>
+                      </g>
+                    ))}
+                    {n > 1 && <polyline points={solidPts} className="growth-line"/>}
+                    {lastInProg && (
+                      <line
+                        x1={xAt(n - 2)} y1={yAt(cw[n - 2].avg)}
+                        x2={xAt(n - 1)} y2={yAt(cw[n - 1].avg)}
+                        className="growth-line growth-line-dash"
+                      />
+                    )}
+                    {cw.map((p, i) => (
+                      <g key={p.wid}>
+                        <circle cx={xAt(i)} cy={yAt(p.avg)} r="4.5" className={`growth-dot${p.inProgress ? ' live' : ''}`}/>
+                        {/* 邊緣的分數標籤往內靠，避免壓到座標軸／被裁掉 */}
+                        <text
+                          x={xAt(i) + (i === 0 ? 14 : i === n - 1 ? -14 : 0)}
+                          y={yAt(p.avg) - 9}
+                          className="growth-dot-num"
+                        >{p.avg}</text>
+                        {(i % labelStep === 0 || i === n - 1) && (
+                          <text
+                            x={xAt(i)}
+                            y={H - 10}
+                            className="growth-axis-x"
+                            style={i === n - 1 ? { textAnchor: 'end' } : i === 0 ? { textAnchor: 'start' } : undefined}
+                          >{shortLabel(p.label)}{p.inProgress ? '·進行中' : ''}</text>
+                        )}
+                      </g>
+                    ))}
+                  </svg>
+                </div>
+              )}
 
               <div className="growth-weeks">
                 {pw.slice().reverse().map(p => (
-                  <div className="growth-wrow" key={p.wid}>
+                  <div className={`growth-wrow${p.inProgress ? ' inprog' : ''}`} key={p.wid}>
                     <div className="growth-wrow-head">
                       <span className="growth-wrow-label">{p.label}</span>
                       {p.dateRange && <span className="growth-wrow-date">{p.dateRange}</span>}
+                      {p.inProgress && <span className="growth-wrow-live">進行中</span>}
+                      <span className="growth-wrow-score">
+                        {p.avg != null ? <>平均 <b>{p.avg}</b> 分</> : '尚無分數'}
+                      </span>
                     </div>
                     <div className="growth-wrow-bar">
                       <div className="growth-wrow-fill" style={{ width: p.pct + '%' }}/>
                     </div>
                     <div className="growth-wrow-meta">
-                      <span className="growth-wrow-pct">{p.done}/{p.total}（{p.pct}%）</span>
-                      {p.avg != null && <span className="growth-wrow-avg">平均 {p.avg} 分</span>}
+                      <span className="growth-wrow-pct">完成 {p.done}/{p.total}（{p.pct}%）{p.inProgress ? ' · 這週還在進行' : ''}</span>
                     </div>
                   </div>
                 ))}

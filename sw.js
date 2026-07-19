@@ -1,23 +1,23 @@
 // sw.js — Service Worker for Alan's English Class PWA
-const CACHE = 'alans-english-v270';
+const CACHE = 'alans-english-v271';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
 const asset = path => BASE + path;
 const PRECACHE = [
-  asset('/'), asset('/index.html'), asset('/manifest.json?v=270'),
-  asset('/styles.css?v=270'), asset('/styles-part2.css?v=270'), asset('/styles-quiz.css?v=270'),
-  asset('/styles-flashcard.css?v=270'), asset('/styles-auth.css?v=270'), asset('/styles-quiz-mode.css?v=270'),
-  asset('/data.js?v=270'), asset('/data-g2.js?v=270'), asset('/data-g4.js?v=270'), asset('/data-g5.js?v=270'), asset('/data-g6.js?v=270'), asset('/data-summer.js?v=270'),
-  asset('/components-shell.jsx?v=270'), asset('/components-cat.jsx?v=270'), asset('/components-quiz.jsx?v=270'),
-  asset('/components-flashcard.jsx?v=270'), asset('/components-editor.jsx?v=270'),
-  asset('/components-quiz-mode.jsx?v=270'), asset('/components-dashboard.jsx?v=270'),
-  asset('/components-mistakes.jsx?v=270'), asset('/styles-mistakes.css?v=270'),
-  asset('/components-review.jsx?v=270'), asset('/styles-review.css?v=270'), asset('/styles-theme.css?v=270'),
-  asset('/components-home.jsx?v=270'), asset('/styles-home.css?v=270'),
-  asset('/components-companion.jsx?v=270'), asset('/styles-companion.css?v=270'),
-  asset('/components-shop.jsx?v=270'), asset('/components-boss.jsx?v=270'), asset('/components-goals.jsx?v=270'), asset('/styles-goals.css?v=270'), asset('/styles-boss.css?v=270'),
-  asset('/tweaks-panel.jsx?v=270'), asset('/app.jsx?v=270'),
-  asset('/summer-booking.html'), asset('/summer-booking.css?v=270'), asset('/summer-booking-admin.css?v=270'), asset('/summer-booking.js?v=270'),
+  asset('/'), asset('/index.html'), asset('/manifest.json?v=271'),
+  asset('/styles.css?v=271'), asset('/styles-part2.css?v=271'), asset('/styles-quiz.css?v=271'),
+  asset('/styles-flashcard.css?v=271'), asset('/styles-auth.css?v=271'), asset('/styles-quiz-mode.css?v=271'),
+  asset('/data.js?v=271'), asset('/data-g2.js?v=271'), asset('/data-g4.js?v=271'), asset('/data-g5.js?v=271'), asset('/data-g6.js?v=271'), asset('/data-summer.js?v=271'),
+  asset('/components-shell.jsx?v=271'), asset('/components-cat.jsx?v=271'), asset('/components-quiz.jsx?v=271'),
+  asset('/components-flashcard.jsx?v=271'), asset('/components-editor.jsx?v=271'),
+  asset('/components-quiz-mode.jsx?v=271'), asset('/components-dashboard.jsx?v=271'),
+  asset('/components-mistakes.jsx?v=271'), asset('/styles-mistakes.css?v=271'),
+  asset('/components-review.jsx?v=271'), asset('/styles-review.css?v=271'), asset('/styles-theme.css?v=271'),
+  asset('/components-home.jsx?v=271'), asset('/styles-home.css?v=271'),
+  asset('/components-companion.jsx?v=271'), asset('/styles-companion.css?v=271'),
+  asset('/components-shop.jsx?v=271'), asset('/components-boss.jsx?v=271'), asset('/components-goals.jsx?v=271'), asset('/styles-goals.css?v=271'), asset('/styles-boss.css?v=271'),
+  asset('/tweaks-panel.jsx?v=271'), asset('/app.jsx?v=271'),
+  asset('/summer-booking.html'), asset('/summer-booking.css?v=271'), asset('/summer-booking-admin.css?v=271'), asset('/summer-booking.js?v=271'),
   asset('/icon.svg'), asset('/icon-512.png'), asset('/apple-touch-icon.png'),
 ];
 

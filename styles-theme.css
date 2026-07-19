@@ -764,3 +764,50 @@
   0%, 100% { transform: translateY(0); opacity: .45; }
   50%      { transform: translateY(6px); opacity: .95; }
 }
+
+/* ═══ v271: 成長報告——分數曲線為主軸 ═══════════════════ */
+.growth-stats-3 { grid-template-columns: repeat(3, 1fr) !important; }
+.growth-stat-num em {
+  font-style: normal;
+  font-size: 13px; font-weight: 700;
+  color: var(--ink-3, #8a8270);
+  margin-left: 3px;
+}
+.growth-stat-delta {
+  margin-top: 4px;
+  font-size: 11.5px; font-weight: 800;
+  color: var(--ink-3, #8a8270);
+}
+.growth-stat-delta.up { color: #1f7d4f; }
+.growth-stat-delta.down { color: #a3372a; }
+.growth-dot-num {
+  font-family: var(--mono, monospace);
+  font-size: 11px; font-weight: 700;
+  fill: #7a3020;
+  text-anchor: middle;
+}
+.growth-dot.live { fill: #fff; stroke: #8B3120; stroke-width: 2; }
+.growth-line-dash { stroke-dasharray: 5 5; opacity: .65; }
+.growth-wrow-live {
+  flex: none;
+  font-size: 10.5px; font-weight: 800;
+  color: #8a6d1c;
+  background: #fdf6e3;
+  border: 1px solid #e8d9ac;
+  border-radius: 100px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.growth-wrow-score {
+  margin-left: auto;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--ink-2, #5c554a);
+  white-space: nowrap;
+}
+.growth-wrow-score b {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 19px; font-weight: 700;
+  color: var(--g-c, #8B3120);
+  margin: 0 2px;
+}
