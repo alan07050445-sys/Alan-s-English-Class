@@ -825,3 +825,89 @@
   padding: 5px 14px;
   letter-spacing: .02em;
 }
+
+/* ═══ v274: 單字卡套件升級 ═══════════════════════════════ */
+/* 星號鈕（卡片模式頂列＋學習模式題目角落） */
+.fc-star-btn {
+  background: none; border: none; padding: 4px 8px;
+  font-size: 22px; line-height: 1;
+  color: #d8cfb6;
+  cursor: pointer;
+  transition: color .15s, transform .12s;
+}
+.fc-star-btn:hover { transform: scale(1.15); }
+.fc-star-btn.on { color: #E0A63C; text-shadow: 0 1px 4px rgba(224, 166, 60, .4); }
+.fc-star-btn-corner { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.fc-learn-q { position: relative; }
+/* 只練星號濾鏡 chip */
+.fc-tab.fc-star-filter { color: #8a6d1c; }
+.fc-tab.fc-star-filter.active { background: #fdf6e3; border-color: #E0A63C; color: #8a6d1c; }
+/* 配對方塊字加大 */
+.fc-match-tile-text { font-size: 19px !important; font-weight: 700 !important; line-height: 1.3; }
+@media (max-width: 640px) { .fc-match-tile-text { font-size: 16.5px !important; } }
+
+/* 聽寫答錯 → 音節拆解＋照拼訂正 */
+.sp-redo { text-align: center; margin-top: 4px; }
+.sp-redo-title { font-size: 13.5px; font-weight: 800; color: #a3372a; margin-bottom: 10px; }
+.sp-syllables {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.sp-syl {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 30px; font-weight: 700; letter-spacing: .04em;
+  color: var(--g-c, #8B3120);
+  background: #fdf6e3;
+  border: 1.5px solid rgba(201, 168, 76, .6);
+  border-radius: 12px;
+  padding: 6px 14px;
+}
+.sp-syl-dot { font-size: 24px; font-weight: 800; color: #C9A84C; }
+@media (prefers-reduced-motion: no-preference) {
+  .sp-syl, .sp-syl-dot { opacity: 0; animation: sp-syl-pop .4s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+}
+@keyframes sp-syl-pop {
+  from { opacity: 0; transform: translateY(8px) scale(.85); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sp-redo-hint { font-size: 13px; color: var(--ink-2, #5c554a); margin-bottom: 6px; }
+.sp-skip { margin-top: 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .sp-shake-wrap { display: block; animation: sp-shake .4s ease; }
+}
+@keyframes sp-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-7px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-4px); }
+}
+
+/* 測驗前「先複習單字卡」醒目入口卡 */
+.qm-fcb {
+  display: flex; align-items: center; gap: 13px;
+  width: 100%; max-width: 380px;
+  margin: 0 auto 6px;
+  text-align: left;
+  font-family: inherit;
+  background: linear-gradient(115deg, #fdf6e3 0%, #f9e9c8 100%);
+  border: 1.5px solid rgba(201, 168, 76, .65);
+  border-radius: 16px;
+  padding: 13px 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px -8px rgba(139, 49, 32, .18);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s;
+}
+.qm-fcb:hover { transform: translateY(-2px); border-color: #C9A84C; box-shadow: 0 12px 26px -10px rgba(139, 49, 32, .28); }
+.qm-fcb-ico {
+  flex: none;
+  width: 42px; height: 42px; border-radius: 12px;
+  background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 0 0 3px rgba(255, 205, 90, .25);
+}
+.qm-fcb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qm-fcb-text b { font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 16px; color: var(--ink, #15130e); }
+.qm-fcb-text > span { font-size: 12px; color: #8a6d1c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qm-fcb-arrow { flex: none; font-size: 18px; font-weight: 700; color: var(--g-c, #8B3120); }

@@ -196,17 +196,68 @@ function ImageSearch({ term: initialTerm, onSelect, onClose }) {
 /* ══════════════════════════════════════════════════════
    FLASHCARD PLAYER
 ══════════════════════════════════════════════════════ */
+/* v274: 星號（像 Quizlet）——不熟的字打 ★，可只練星號的；按帳號存本機 */
+function fcStarStoreKey() {
+  const u = window._currentUser;
+  return 'alan-fc-stars' + (u && u.uid ? ':u:' + u.uid : ':anon');
+}
+function fcLoadStars(itemId) {
+  try { return new Set((JSON.parse(localStorage.getItem(fcStarStoreKey()) || '{}'))[itemId] || []); }
+  catch (e) { return new Set(); }
+}
+function fcSaveStars(itemId, set) {
+  try {
+    const all = JSON.parse(localStorage.getItem(fcStarStoreKey()) || '{}');
+    all[itemId] = Array.from(set);
+    localStorage.setItem(fcStarStoreKey(), JSON.stringify(all));
+  } catch (e) {}
+}
+
+/* v274: 配對計時器獨立成小元件——原本每 100ms 重繪整個播放器，
+   平板上點擊會被重繪吃掉（又 lag 又點不到離開鈕） */
+function MatchTimer({ startRef }) {
+  const [t, setT] = useFC(0);
+  useFC_E(() => {
+    const id = setInterval(() => {
+      if (startRef.current) setT(Math.round((Date.now() - startRef.current) / 100) / 10);
+    }, 100);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="fc-match-timer mono">{t.toFixed(1)}<span style={{fontSize:14}}>s</span></span>;
+}
+
 function FlashcardPlayer({ item, onComplete }) {
   const cards = item.cards || [];
   const [mode, setMode] = useFC("card");
+
+  // v274: 星號標記＋「只練星號」
+  const [stars, setStars] = useFC(() => fcLoadStars(item.id));
+  const [starOnly, setStarOnly] = useFC(false);
+  const toggleStar = (cardId) => setStars(prev => {
+    const nx = new Set(prev);
+    if (nx.has(cardId)) nx.delete(cardId); else nx.add(cardId);
+    fcSaveStars(item.id, nx);
+    return nx;
+  });
+  const pool = (flag = starOnly) => {
+    const list = flag ? cards.filter(c => stars.has(c.id)) : cards;
+    return list.length ? list : cards; // 星號被清空時退回全部
+  };
+  const [learnTotal, setLearnTotal] = useFC(cards.length);
 
   // v234: 學習模式鍵盤作答——1~4 選英文單字
   React.useEffect(() => {
     const onKey = (e) => {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'Enter') {
+        const nx = document.querySelector('.fc-fill-next-row .btn'); // v274: 填空答錯後 Enter＝下一題
+        if (nx) nx.click();
+        return;
+      }
       if (!/^[1-4]$/.test(e.key)) return;
-      const btns = document.querySelectorAll('.fc-choices .fc-choice');
+      // v274: 學習與填空模式都支援 1-4 鍵盤作答
+      const btns = document.querySelectorAll('.fc-choices .fc-choice, .fc-fill-choices .fc-fill-btn');
       const b = btns[parseInt(e.key, 10) - 1];
       if (b) b.click();
     };
@@ -261,8 +312,10 @@ function FlashcardPlayer({ item, onComplete }) {
 
   const enterCard = () => { stopMatchTimer(); setMode("card"); setCardIdx(0); setFlipped(false); };
 
-  const enterLearn = () => { stopMatchTimer();
-    const order = shuffle([...cards]);
+  const enterLearn = (flag = starOnly) => { stopMatchTimer();
+    const src = pool(flag);
+    setLearnTotal(src.length);
+    const order = shuffle([...src]);
     const queue = order.map(card => ({ card, isRetry: false }));
     setLearnQueue(queue);
     setCorrectIds(new Set());
@@ -298,13 +351,14 @@ function FlashcardPlayer({ item, onComplete }) {
     setTestSetup(false);
   };
 
-  const enterMatch = () => {
+  const enterMatch = (flag = starOnly) => {
     stopMatchTimer();
     let best = null;
     try { best = parseFloat(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
     setMatchBest(best);
     // Pick 6 random pairs each round (shuffle for variety)
-    const picked = shuffle([...cards]).slice(0, Math.min(6, cards.length));
+    const src = pool(flag); // v274: 星號池
+    const picked = shuffle([...src]).slice(0, Math.min(6, src.length));
     const tiles = [];
     picked.forEach(card => {
       tiles.push({ id: 'en-' + card.id, text: card.term, pairId: card.id, isZh: false, imageUrl: '' });
@@ -324,9 +378,8 @@ function FlashcardPlayer({ item, onComplete }) {
   const startMatch = () => {
     setMatchStarted(true);
     matchStartRef.current = Date.now();
-    matchTimerRef.current = setInterval(() => {
-      setMatchElapsed(Math.round((Date.now() - matchStartRef.current) / 100) / 10);
-    }, 100);
+    // v274: 計時顯示交給 <MatchTimer>（獨立元件自己 100ms 更新），
+    // 父層不再每 0.1 秒重繪 → 點擊不再 lag、離開鈕一按就有反應
   };
 
   const handleMatchClick = (tile) => {
@@ -361,15 +414,16 @@ function FlashcardPlayer({ item, onComplete }) {
     } else {
       if (window.playSound) window.playSound('wrong');
       setMatchWrong([matchSelected, tile.id]);
-      setTimeout(() => { setMatchWrong([]); setMatchSelected(null); }, 800);
+      setTimeout(() => { setMatchWrong([]); setMatchSelected(null); }, 450); // v274: 縮短鎖定，節奏更順
     }
   };
 
-  const enterFill = () => {
+  const enterFill = (flag = starOnly) => {
     stopMatchTimer();
-    const eligible = cards.filter(c => c.example && c.example.trim());
-    const pool = eligible.length >= 2 ? eligible : cards;
-    const shuffled = shuffle([...pool]);
+    const src = pool(flag); // v274: 星號池
+    const eligible = src.filter(c => c.example && c.example.trim());
+    const fillPool = eligible.length >= 2 ? eligible : src;
+    const shuffled = shuffle([...fillPool]);
     setFillCards(shuffled);
     setFillIdx(0);
     setFillScore(0);
@@ -397,12 +451,29 @@ function FlashcardPlayer({ item, onComplete }) {
     else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
   };
 
+  // v274: 只練星號——切換後重進當前模式換卡池
+  const toggleStarOnly = (active) => {
+    if (!starOnly && stars.size === 0) return;
+    const nx = !starOnly;
+    setStarOnly(nx);
+    setCardIdx(0); setFlipped(false);
+    if (active === 'learn') enterLearn(nx);
+    else if (active === 'match') enterMatch(nx);
+    else if (active === 'fill') enterFill(nx);
+  };
   const ModeTabs = ({ active }) => (
     <div className="fc-mode-tabs">
       <button className={"fc-tab" + (active === "card"  ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
-      <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={enterLearn}>📖 學習</button>
-      <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={enterMatch}>⚡ 配對</button>
-      <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={enterFill}>✏️ 填空</button>
+      <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => enterLearn()}>📖 學習</button>
+      <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={() => enterMatch()}>⚡ 配對</button>
+      <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={() => enterFill()}>✏️ 填空</button>
+      {(stars.size > 0 || starOnly) && (
+        <button
+          className={"fc-tab fc-star-filter" + (starOnly ? " active" : "")}
+          onClick={() => toggleStarOnly(active)}
+          title="只練打星號（不熟）的單字"
+        >⭐ 只練星號（{stars.size}）</button>
+      )}
     </div>
   );
 
@@ -417,15 +488,23 @@ function FlashcardPlayer({ item, onComplete }) {
 
   /* ────────────────── CARD MODE ────────────────── */
   if (mode === "card") {
-    const card = cards[cardIdx];
+    const deck = pool(); // v274: 星號濾鏡也作用在卡片模式
+    const safeIdx = Math.min(cardIdx, deck.length - 1);
+    const card = deck[safeIdx];
     return (
       <div className="fc-wrap">
         <ModeTabs active="card"/>
         <div className="fc-player">
           <div className="fc-topbar">
-            <span className="mono">{cardIdx + 1} / {cards.length}</span>
+            <span className="mono">{safeIdx + 1} / {deck.length}</span>
+            <button
+              className={"fc-star-btn" + (stars.has(card.id) ? " on" : "")}
+              onClick={() => toggleStar(card.id)}
+              aria-label={stars.has(card.id) ? '取消星號' : '標記為不熟'}
+              title="不熟的字打 ★，之後可以只練星號的"
+            >★</button>
             <div className="fc-progress-bar">
-              <div className="fc-progress-fill" style={{width: `${((cardIdx + 1) / cards.length) * 100}%`}}/>
+              <div className="fc-progress-fill" style={{width: `${((safeIdx + 1) / deck.length) * 100}%`}}/>
             </div>
           </div>
 
@@ -468,13 +547,13 @@ function FlashcardPlayer({ item, onComplete }) {
           </div>
 
           <div className="fc-nav">
-            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => i - 1); setFlipped(false); }} disabled={cardIdx === 0}>← Prev</button>
+            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }} disabled={safeIdx === 0}>← Prev</button>
             <div className="fc-dots">
-              {cards.map((_, i) => (
-                <span key={i} className={"fc-dot" + (i === cardIdx ? " active" : "")} onClick={() => { setCardIdx(i); setFlipped(false); }}/>
+              {deck.map((_, i) => (
+                <span key={i} className={"fc-dot" + (i === safeIdx ? " active" : "")} onClick={() => { setCardIdx(i); setFlipped(false); }}/>
               ))}
             </div>
-            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => i + 1); setFlipped(false); }} disabled={cardIdx === cards.length - 1}>Next →</button>
+            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => i + 1); setFlipped(false); }} disabled={safeIdx === deck.length - 1}>Next →</button>
           </div>
         </div>
       </div>
@@ -493,13 +572,13 @@ function FlashcardPlayer({ item, onComplete }) {
               <div className="fc-complete-icon">🎉</div>
               <div className="fc-complete-title serif">All Learned!</div>
               <div className="fc-complete-meta mono">
-                {correctIds.size} / {cards.length} mastered
+                {correctIds.size} / {learnTotal} mastered
               </div>
               <div className="fc-complete-note">
                 {onComplete ? 'Ready for quiz · 可以開始測驗了' : 'Nice work · 再複習一次會更熟'}
               </div>
               <div className="fc-complete-actions">
-                <button className="btn ghost" onClick={enterLearn}>Practice Again</button>
+                <button className="btn ghost" onClick={() => enterLearn()}>Practice Again</button>
                 <button className="btn primary" onClick={onComplete || enterTest}>
                   {onComplete ? '開始測驗 · Start Quiz →' : 'Take Test →'}
                 </button>
@@ -539,9 +618,15 @@ function FlashcardPlayer({ item, onComplete }) {
       <div className="fc-wrap">
         <ModeTabs active="learn"/>
         <div className="fc-player">
-          <DualProgressBar correct={correctIds.size} total={cards.length}/>
+          <DualProgressBar correct={correctIds.size} total={learnTotal}/>
 
           <div className="fc-learn-q">
+            <button
+              className={"fc-star-btn fc-star-btn-corner" + (stars.has(card.id) ? " on" : "")}
+              onClick={() => toggleStar(card.id)}
+              aria-label={stars.has(card.id) ? '取消星號' : '標記為不熟'}
+              title="不熟的字打 ★"
+            >★</button>
             {isRetry && <div className="fc-retry-badge mono">再試一次吧 · Try again</div>}
             {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-learn-img"/>}
             <div className="fc-learn-zh">{card.zh}</div>
@@ -670,7 +755,7 @@ function FlashcardPlayer({ item, onComplete }) {
               </div>
               <div style={{display: "flex", gap: 12, marginTop: 20}}>
                 <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setQuestionTypes({}); setTestDone(false); }}>Try Again</button>
-                <button className="btn primary" onClick={enterLearn}>Study More →</button>
+                <button className="btn primary" onClick={() => enterLearn()}>Study More →</button>
               </div>
             </div>
           </div>
@@ -808,8 +893,8 @@ function FlashcardPlayer({ item, onComplete }) {
                 All {matchTiles.length / 2} pairs matched!
               </div>
               <div style={{display: "flex", gap: 12}}>
-                <button className="btn ghost" onClick={enterMatch}>Play Again</button>
-                <button className="btn primary" onClick={enterLearn}>Study More →</button>
+                <button className="btn ghost" onClick={() => enterMatch()}>Play Again</button>
+                <button className="btn primary" onClick={() => enterLearn()}>Study More →</button>
               </div>
             </div>
           </div>
@@ -821,7 +906,7 @@ function FlashcardPlayer({ item, onComplete }) {
         <ModeTabs active="match"/>
         <div className="fc-player">
           <div className="fc-match-topbar">
-            <span className="fc-match-timer mono">{matchElapsed.toFixed(1)}<span style={{fontSize:14}}>s</span></span>
+            <MatchTimer startRef={matchStartRef}/>
             <span className="mono" style={{fontSize: 11, color: "var(--ink-muted)"}}>
               {matchMatched.size} / {matchTiles.length / 2} matched
             </span>
@@ -876,8 +961,8 @@ function FlashcardPlayer({ item, onComplete }) {
                 {fillScore} / {fillCards.length} correct · 答對
               </div>
               <div style={{display: "flex", gap: 12}}>
-                <button className="btn ghost" onClick={enterFill}>Try Again</button>
-                <button className="btn primary" onClick={enterLearn}>Study More →</button>
+                <button className="btn ghost" onClick={() => enterFill()}>Try Again</button>
+                <button className="btn primary" onClick={() => enterLearn()}>Study More →</button>
               </div>
             </div>
           </div>

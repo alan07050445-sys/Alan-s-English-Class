@@ -230,6 +230,23 @@ const QM_TYPE_ORDER = {
 };
 const qmTypeRank = (t) => (QM_TYPE_ORDER[t] !== undefined ? QM_TYPE_ORDER[t] : 9);
 
+/* v274: 粗略音節拆解——「子音+母音群」切塊、多子音群首字歸前節
+   （adapt→a·dapt、happen→hap·pen、survive→sur·vi·ve）。教學提示用，非嚴格音節。 */
+function qmSyllables(word) {
+  const w = String(word || '').trim();
+  if (w.length <= 3 || /[^A-Za-z]/.test(w)) return [w];
+  const chunks = w.match(/[^aeiouyAEIOUY]*[aeiouyAEIOUY]+/g) || [w];
+  const used = chunks.join('').length;
+  if (used < w.length) chunks[chunks.length - 1] += w.slice(used);
+  for (let i = 1; i < chunks.length; i++) {
+    if (/^[^aeiouyAEIOUY]{2,}/.test(chunks[i])) {
+      chunks[i - 1] += chunks[i][0];
+      chunks[i] = chunks[i].slice(1);
+    }
+  }
+  return chunks.filter(Boolean);
+}
+
 function qmShortLabel(item, groupName) {
   const title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
@@ -1151,10 +1168,15 @@ function QuizIntroScreen({ item, cat, questions, catItems, onFlashcards, onStart
       <div className="qm-intro-btns">
         {fcItems.length > 0 && (
           <div className="qm-intro-fc-group">
-            <div className="qm-intro-fc-label">📖 先複習單字卡</div>
+            {/* v274: 小朋友看不到低調的複習入口——改成醒目的金色卡片 */}
             {fcItems.map(fc => (
-              <button key={fc.id} className="qm-btn secondary qm-intro-fc-btn" onClick={() => onFlashcards(fc)}>
-                {fc.title} <span className="qm-intro-fc-count">({(fc.cards||[]).length} 張)</span>
+              <button key={fc.id} className="qm-fcb" onClick={() => onFlashcards(fc)}>
+                <span className="qm-fcb-ico" aria-hidden="true">🃏</span>
+                <span className="qm-fcb-text">
+                  <b>先複習單字卡</b>
+                  <span>{fc.title} · {(fc.cards || []).length} 張</span>
+                </span>
+                <span className="qm-fcb-arrow" aria-hidden="true">→</span>
               </button>
             ))}
           </div>
@@ -1339,6 +1361,8 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   const [result, setResult] = useQM(null); // null | 'correct' | 'wrong'
   const [score,  setScore]  = useQM(rz ? (rz.score || 0) : 0);
   const [screen, setScreen] = useQM('play');
+  const [redo,   setRedo]   = useQM(false); // v274: 答錯 → 看音節照著拼一次才過關
+  const [redoTry, setRedoTry] = useQM(0);   // 訂正又拼錯的搖晃動畫 key
   const wrongsRef = React.useRef(rz && Array.isArray(rz.wrongs) ? rz.wrongs.slice() : []);
   const inputRef  = React.useRef(null);
 
@@ -1357,7 +1381,21 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
 
   const check = () => {
     if (!input.trim()) return;
-    const correct = input.trim().toLowerCase() === (current.word || '').trim().toLowerCase();
+    const target = (current.word || '').trim().toLowerCase();
+    // v274: 訂正模式——看著音節照拼一次（不影響分數，拼對才前進）
+    if (redo) {
+      if (input.trim().toLowerCase() === target) {
+        if (window.playSound) window.playSound('correct');
+        setRedo(false);
+        next();
+      } else {
+        if (window.playSound) window.playSound('wrong');
+        setRedoTry(k => k + 1);
+        setInput('');
+      }
+      return;
+    }
+    const correct = input.trim().toLowerCase() === target;
     setResult(correct ? 'correct' : 'wrong');
     if (correct) {
       const nextScore = score + 1;
@@ -1367,6 +1405,8 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
     } else {
       wrongsRef.current.push({ q: '🔊 聽寫' + (current.zh ? '：' + current.zh : ''), answer: current.word });
       if (window.playSound) window.playSound('wrong');
+      setRedo(true);
+      setInput('');
     }
   };
 
@@ -1389,12 +1429,13 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
       setIdx(i => i + 1);
       setInput('');
       setResult(null);
+      setRedo(false); // v274
     }
   };
 
   const handleKey = (e) => {
     if (e.key === 'Enter') {
-      if (result === null) check();
+      if (result === null || redo) check();
       else if (result === 'wrong') next();
     }
   };
@@ -1441,19 +1482,18 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
       </div>
 
       <div className="ta-input-wrap">
-        <input
-          ref={inputRef}
-          className={`ta-input${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
-          value={input}
-          onChange={e => { if (result === null) setInput(e.target.value); }}
-          onKeyDown={handleKey}
-          placeholder="把聽到的單字拼出來…"
-          disabled={result !== null}
-          autoComplete="off" autoCapitalize="none" spellCheck={false}
-        />
-        {result === 'wrong' && (
-          <div className="ta-correct-ans">✓ {current.word}</div>
-        )}
+        <span key={redoTry} className={redoTry ? 'sp-shake-wrap' : undefined} style={{ display: 'block' }}>
+          <input
+            ref={inputRef}
+            className={`ta-input${result === 'correct' ? ' correct' : result === 'wrong' && !redo ? ' wrong' : ''}`}
+            value={input}
+            onChange={e => { if (result === null || redo) setInput(e.target.value); }}
+            onKeyDown={handleKey}
+            placeholder={redo ? '看著上面的音節，照著拼一次…' : '把聽到的單字拼出來…'}
+            disabled={result !== null && !redo}
+            autoComplete="off" autoCapitalize="none" spellCheck={false}
+          />
+        </span>
       </div>
 
       <div className="qm-feedback" style={{marginTop: result ? 8 : 0}}>
@@ -1463,8 +1503,20 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
           </button>
         ) : result === 'wrong' ? (
           <>
-            <div className="qm-feedback-banner wrong">✗ 正確拼法：{current.word}</div>
-            <button className="qm-btn primary" onClick={() => next()}>下一題 →</button>
+            {/* v274: 音節拆解——一節一節彈出來，看著拼一次才過關 */}
+            <div className="sp-redo" key={current.word}>
+              <div className="sp-redo-title">✗ 正確拼法是</div>
+              <div className="sp-syllables" aria-label={`正確拼法 ${current.word}`}>
+                {qmSyllables(current.word).map((syl, si) => (
+                  <React.Fragment key={si}>
+                    {si > 0 && <span className="sp-syl-dot" style={{ animationDelay: (si * 0.22 - 0.08) + 's' }}>·</span>}
+                    <span className="sp-syl" style={{ animationDelay: (si * 0.22) + 's' }}>{syl}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="sp-redo-hint">跟著唸一唸，照著拼一次就過關！</div>
+            </div>
+            <button className="qm-result-alt sp-skip" onClick={() => next()}>先跳過這題 →</button>
           </>
         ) : (
           <div className="qm-feedback-banner correct">✓ Correct! 答對了！</div>
