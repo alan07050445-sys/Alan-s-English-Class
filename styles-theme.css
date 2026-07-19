@@ -811,3 +811,17 @@
   color: var(--g-c, #8B3120);
   margin: 0 2px;
 }
+
+/* ═══ v272: 作答頁題型章＋側欄短名 ═══════════════════════ */
+.qm-type-chip {
+  align-self: center;
+  margin: 4px auto -6px;
+  width: fit-content;
+  font-size: 13px; font-weight: 800;
+  color: #8a6d1c;
+  background: #fdf6e3;
+  border: 1px solid rgba(201, 168, 76, .55);
+  border-radius: 100px;
+  padding: 5px 14px;
+  letter-spacing: .02em;
+}

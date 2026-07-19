@@ -202,6 +202,38 @@ function StarMastery({ pct, size = 13 }) {
   );
 }
 
+/* v272: 題型中文名＋短名——任務清單、側欄、作答頁三處用同一套稱呼，
+   學生點「聽寫」進去，看到的每一層都叫「聽寫」 */
+const QM_TYPE_ZH = {
+  flashcard: '單字卡', spelling: '聽寫', fillblank: '填空', quiz: '測驗',
+  'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
+  cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
+  'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山',
+  'writing-practice': '造句', upload: '上傳作業',
+};
+const QM_TYPE_ICO = {
+  flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
+  'type-answer': '⌨', 'short-answer': '📖', cloze: '📝', 'circle-answer': '⭕',
+  'syllable-div': '✂️', 'word-sort': '🗂', essay: '✍', 'story-mountain': '🏔',
+  'writing-practice': '✍', upload: '📎',
+};
+function qmShortLabel(item, groupName) {
+  const title = item.title || '';
+  if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
+    const rest = title.slice(String(groupName).length).replace(/^[\s\-–—_·．.。,，]+/, '').trim();
+    if (rest) {
+      if (!/[A-Za-z一-鿿]/.test(rest)) {
+        const tz = QM_TYPE_ZH[item.type];
+        return tz ? `${tz} ${rest}` : rest;
+      }
+      return rest;
+    }
+    const tz = QM_TYPE_ZH[item.type];
+    if (tz) return tz;
+  }
+  return title;
+}
+
 /* v266: 完成頁導航——各題型共用：「下一個任務 →」＋「回今天的任務」（沒有任務脈絡時退回 onBack） */
 function QmDoneNavBtns({ onBack, onBackToTasks, onNextTask, backLabel }) {
   return (
@@ -607,6 +639,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     : null;
   const onBackToTasksShared = !editMode && homework && selectedItem && homework[selectedItem.id] ? onBack : null;
 
+  // v272: 選中單元後，側欄自動捲到那張卡（從任務點進來時卡可能在列表下方）
+  useQME(() => {
+    if (!selectedItem) return;
+    const el = document.querySelector('.qm-unit-row.active');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedItem && selectedItem.id]);
+
   // v266: 同分類跳下一題——initialItemId 變了就切換單元（跨分類靠 remount 的 mount effect）
   useQME(() => {
     if (!initialItemId) return;
@@ -665,7 +704,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             </div>
           )}
           {(() => {
-            const renderUnitRow = (item) => {
+            const renderUnitRow = (item, groupName) => {
             const progKey  = `${weekId}_${item.id}`;
             const prog     = qmProg[progKey];
             const totalQ   = getItemQuestions(item).length;
@@ -705,7 +744,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               >
                 <div className="qm-unit-row-info">
                   <div className="qm-unit-row-title">
-                    {item.title}
+                    {/* v272: 同組之下用短名（聽寫/填空 2…）——跟任務清單一致，四張同名卡不再分不出誰是誰 */}
+                    {!editMode && groupName ? qmShortLabel(item, groupName) : item.title}
                     {dueLabel && !editMode && <span className={`qm-hw-badge${isDone ? ' done' : ''}${dueLabel === '已結束' ? ' ended' : ''}`}>{isDone ? '✓ 作業完成' : dueLabel}</span>}
                   </div>
                   <div className="qm-unit-row-meta">
@@ -776,7 +816,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               </div>
             );
           };
-            if (!grouped) return viewItems.map(renderUnitRow);
+            if (!grouped) return viewItems.map(it => renderUnitRow(it));
             return grouped.map((g, gi) => g.items ? (
               <div className={`qm-ugroup${openGroups[g.key] ? ' open' : ''}`} key={g.key || gi}>
                 <button
@@ -788,7 +828,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                   <span className="qm-ugroup-name">{g.name}</span>
                   <span className="qm-ugroup-count">{g.items.length}</span>
                 </button>
-                {openGroups[g.key] ? g.items.map(renderUnitRow) : null}
+                {openGroups[g.key] ? g.items.map(it => renderUnitRow(it, g.name)) : null}
               </div>
             ) : renderUnitRow(g.single));
           })()}
@@ -797,6 +837,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 
       {/* ── Right: intro / flashcards / quiz / placeholder ── */}
       <div className="qm-quiz-area">
+        {/* v272: 題型章——學生點「聽寫」進來，第一眼就看到「🔊 聽寫」確認沒點錯 */}
+        {selectedItem && !editMode && phase === 'intro' && QM_TYPE_ZH[selectedItem.type] && (
+          <div className="qm-type-chip">{QM_TYPE_ICO[selectedItem.type] || ''} {QM_TYPE_ZH[selectedItem.type]}</div>
+        )}
         <div key={quizSwapKey} className="qm-quiz-swap">
         {!selectedItem ? (
           <div className="qm-placeholder">
@@ -3734,33 +3778,8 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     return adu.localeCompare(bdu);
   });
 
-  // v261: 題型中文名——去掉組名後標題只剩「2」這種編號時，補上題型（「聽寫 2」）才看得懂
-  const TT_TYPE_ZH = {
-    flashcard: '單字卡', spelling: '聽寫', fillblank: '填空', quiz: '測驗',
-    'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
-    cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
-    'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山', 'writing-practice': '造句',
-    upload: '上傳作業',
-  };
-  const rowLabel = (t, groupName) => {
-    if (!groupName) return t.it.title;
-    const title = t.it.title;
-    if (title.toLowerCase().startsWith(groupName.toLowerCase())) {
-      const rest = title.slice(groupName.length).replace(/^[\s\-–—_·．.。,，]+/, '').trim();
-      if (rest) {
-        // 剩下的只有數字／符號（沒有任何中英文字）→ 補題型名
-        if (!/[A-Za-z一-鿿]/.test(rest)) {
-          const tz = TT_TYPE_ZH[t.it.type];
-          return tz ? `${tz} ${rest}` : rest;
-        }
-        return rest;
-      }
-      // 整個標題＝組名（沒有多餘字）→ 顯示題型名，不再重複一次長標題
-      const tz = TT_TYPE_ZH[t.it.type];
-      if (tz) return tz;
-    }
-    return title;
-  };
+  // v272: 改用共用的 qmShortLabel——任務清單與側欄稱呼一致
+  const rowLabel = (t, groupName) => groupName ? qmShortLabel(t.it, groupName) : t.it.title;
 
   const renderRow = (t, groupName) => {
     const due = dueText(t.dueDate);
