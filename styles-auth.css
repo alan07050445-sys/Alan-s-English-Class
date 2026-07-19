@@ -5408,3 +5408,32 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   padding: 7px 10px;
   background: #fff; color: var(--ink, #15130e);
 }
+
+/* ══ v275: footer 捲得到底 + LINE 按鈕 + 課程頁共用 footer ══ */
+/* 行銷頁整頁 scroll-snap，footer 過去不是吸附點 → 捲到底被 .ll-final 吸回去、
+   LINE 資訊永遠看不到。讓 footer 自己成為「終點吸附」。 */
+.ll-foot2 { scroll-snap-align: end; }
+
+/* 聯絡按鈕直排；LINE 用品牌綠 */
+.ll-foot2-contact { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.ll-foot2-contact b { margin-bottom: 2px; }
+.ll-foot2-btn-line { background: #06C755; }
+.ll-foot2-btn-line:hover { box-shadow: 0 10px 22px rgba(6, 199, 85, .32); }
+
+/* 課程頁 footer 借用 .ll-foot2 的 app 版差異 */
+.app-foot2 { margin-top: 84px; }
+.ll-foot2-col span {
+  display: block;
+  padding: 5px 0;
+  font-size: 16px; color: #7a6a5f;
+}
+
+/* 到末段（p>.93）HUD 全尺寸淡出讓位給 footer；透明時不擋點擊。
+   ⚠ .ll-hud 入場動畫 animation-fill-mode:both 的終值 opacity:1 會永遠壓過
+   一般規則——淡出必須 !important（v257 手機版 ll-hud-quiet 同病，一併治好） */
+.login-landing.ll-hud-end .ll-hud { opacity: 0 !important; }
+@media (max-width: 640px) {
+  .login-landing.ll-hud-quiet .ll-hud { opacity: 0 !important; }
+}
+.login-landing.ll-hud-quiet .ll-hud,
+.login-landing.ll-hud-end .ll-hud { pointer-events: none; }

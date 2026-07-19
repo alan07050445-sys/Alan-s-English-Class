@@ -489,57 +489,40 @@ function formatBytes(b) {
   return (b / 1024 / 1024).toFixed(2) + " MB";
 }
 
-/* Footer */
+/* Footer — v275: 跟行銷頁同一套 .ll-foot2 樣式（styles-auth.css 全站都有載） */
 function Footer({ onOpenGuide }) {
   const gmailUrl = "https://mail.google.com/mail/?view=cm&fs=1&to=alan07050445%40gmail.com";
   const lineUrl = "https://line.me/R/ti/p/~9161791608";
 
   return (
-    <footer className="footer">
-      <div className="shell">
-        <div className="footer-grid">
-          <div>
-            <div className="footer-mark">Alan<em>'s</em> English Class</div>
-            <p className="footer-tagline">
-              對齊康橋國際學校每週進度的英文練習平台。<br/>
-              單字、文法、字根字首、閱讀寫作，<br/>
-              在家練的就是學校在教的。
-            </p>
+    <footer className="ll-foot2 app-foot2">
+      <div className="ll-foot2-top">
+        <div className="ll-foot2-brand">
+          <b>Alan’s English Class<i>.</i></b>
+          <p>對齊康橋國際學校每週進度的英文練習平台——在家練的就是學校在教的。</p>
+        </div>
+        <div className="ll-foot2-cols">
+          <div className="ll-foot2-col">
+            <b>學習項目</b>
+            <span>單字</span>
+            <span>文法</span>
+            <span>字根字首</span>
+            <span>閱讀寫作</span>
           </div>
-          <div className="footer-col">
-            <h4>學習項目</h4>
-            <ul>
-              <li><span className="footer-static">單字</span></li>
-              <li><span className="footer-static">文法</span></li>
-              <li><span className="footer-static">字根字首</span></li>
-              <li><span className="footer-static">閱讀寫作</span></li>
-            </ul>
-          </div>
-          <div className="footer-col">
-            <h4>聯絡老師</h4>
-            <ul>
-              <li>
-                <a href={gmailUrl} target="_blank" rel="noopener noreferrer" aria-label="使用 Gmail 聯絡 Alan 老師">
-                  Email 聯絡
-                </a>
-              </li>
-              <li>
-                <a href={lineUrl} target="_blank" rel="noopener noreferrer" aria-label="使用 LINE 聯絡 Alan 老師">
-                  LINE 諮詢
-                </a>
-              </li>
-              {onOpenGuide && (
-                <li>
-                  <button className="footer-guide-btn" onClick={onOpenGuide}>新手教學</button>
-                </li>
-              )}
-            </ul>
+          <div className="ll-foot2-col">
+            <b>使用說明</b>
+            {onOpenGuide && <button onClick={onOpenGuide}>新手教學</button>}
           </div>
         </div>
-        <div className="footer-baseline">
-          <span>© {new Date().getFullYear()} Alan's English Class</span>
-          <span>對齊康橋國際學校每週進度 · 用心製作</span>
+        <div className="ll-foot2-contact">
+          <b>聯絡 Alan 老師</b>
+          <a className="ll-foot2-btn" href={gmailUrl} target="_blank" rel="noopener noreferrer" aria-label="使用 Gmail 聯絡 Alan 老師">✉️ Email 聯絡</a>
+          <a className="ll-foot2-btn ll-foot2-btn-line" href={lineUrl} target="_blank" rel="noopener noreferrer" aria-label="加 Alan 老師的 LINE 好友">💬 LINE 加好友</a>
         </div>
+      </div>
+      <div className="ll-foot2-bar">
+        <span>© {new Date().getFullYear()} Alan’s English Class</span>
+        <span className="ll-foot2-mini">對齊康橋國際學校每週進度 · 用心製作</span>
       </div>
     </footer>
   );

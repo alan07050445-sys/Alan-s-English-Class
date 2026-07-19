@@ -353,6 +353,8 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       // v257: 手機上 HUD 會壓到 hero／結尾的置中 CTA 與 footer——進入捲動敘事段才顯示
       // （結尾 scroll-snap 會停在離底 ~4% 處，門檻取 .93；CSS 只在 ≤640 生效）
       root.classList.toggle('ll-hud-quiet', root.scrollTop < root.clientHeight * 0.8 || (max > 0 && root.scrollTop / max > 0.93));
+      // v275: footer 現在捲得到底（snap-align:end）——到末段所有寬度都讓 HUD 退場，別壓住聯絡按鈕
+      root.classList.toggle('ll-hud-end', max > 0 && root.scrollTop / max > 0.93);
       if (bar) bar.style.transform = 'scaleX(' + (max > 0 ? (root.scrollTop / max).toFixed(4) : 0) + ')';
       if (BLEND.length > 1) {
         // 以「視窗中線」落在哪兩個區塊中心之間來內插顏色
@@ -1079,7 +1081,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
             <div className="ll-foot2-contact">
               <b>聯絡 Alan 老師</b>
               <a className="ll-foot2-btn" href="mailto:alan07050445@gmail.com">✉️ Email 聯絡</a>
-              <div className="ll-foot2-lineid"><span>LINE ID</span>9161791608</div>
+              <a className="ll-foot2-btn ll-foot2-btn-line" href="https://line.me/R/ti/p/~9161791608" target="_blank" rel="noopener noreferrer">💬 LINE 加好友</a>
             </div>
           </div>
           <div className="ll-foot2-bar">
@@ -1173,7 +1175,7 @@ function TeacherOverlay({ onClose, onOpenPrivacy }) {
             <h3>聯絡 Alan 老師</h3>
             <p>
               想了解課程或合作，歡迎聯絡：<br/>
-              <a href="mailto:alan07050445@gmail.com">alan07050445@gmail.com</a>　·　LINE：9161791608
+              <a href="mailto:alan07050445@gmail.com">alan07050445@gmail.com</a>　·　<a href="https://line.me/R/ti/p/~9161791608" target="_blank" rel="noopener noreferrer">LINE：9161791608</a>
             </p>
           </section>
         </div>
@@ -1258,7 +1260,7 @@ function PrivacyOverlay({ onClose }) {
             <h3>6 · 聯絡我們</h3>
             <p>
               對資料保護有任何疑問，請聯絡：<br/>
-              <a href="mailto:alan07050445@gmail.com">alan07050445@gmail.com</a>　·　LINE：9161791608
+              <a href="mailto:alan07050445@gmail.com">alan07050445@gmail.com</a>　·　<a href="https://line.me/R/ti/p/~9161791608" target="_blank" rel="noopener noreferrer">LINE：9161791608</a>
             </p>
           </section>
 
