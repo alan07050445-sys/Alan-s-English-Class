@@ -217,6 +217,19 @@ const QM_TYPE_ICO = {
   'syllable-div': '✂️', 'word-sort': '🗂', essay: '✍', 'story-mountain': '🏔',
   'writing-practice': '✍', upload: '📎',
 };
+/* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
+   任務清單與學生側欄都按這個順序排；老師編輯模式維持原始順序 */
+const QM_TYPE_ORDER = {
+  flashcard: 0,
+  'vocab-quiz': 1, quiz: 1,
+  fillblank: 2, cloze: 3, 'circle-answer': 4,
+  spelling: 5, 'type-answer': 5, 'syllable-div': 5, 'word-sort': 5,
+  'short-answer': 6, 'writing-practice': 6,
+  essay: 7, 'story-mountain': 7,
+  upload: 8,
+};
+const qmTypeRank = (t) => (QM_TYPE_ORDER[t] !== undefined ? QM_TYPE_ORDER[t] : 9);
+
 function qmShortLabel(item, groupName) {
   const title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
@@ -828,7 +841,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                   <span className="qm-ugroup-name">{g.name}</span>
                   <span className="qm-ugroup-count">{g.items.length}</span>
                 </button>
-                {openGroups[g.key] ? g.items.map(it => renderUnitRow(it, g.name)) : null}
+                {openGroups[g.key] ? (editMode ? g.items : [...g.items].sort((a, b) => qmTypeRank(a.type) - qmTypeRank(b.type))).map(it => renderUnitRow(it, g.name)) : null}
               </div>
             ) : renderUnitRow(g.single));
           })()}
@@ -3754,7 +3767,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     const k = manual ? `m:${manual.toLowerCase()}` : (keyOf(t.it.title) || `_${t.id}`);
     (byKey[k] = byKey[k] || []).push(t);
   });
-  const sortRows = (a, b) => (a.done - b.done) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
+  const sortRows = (a, b) => (a.done - b.done) || (qmTypeRank(a.it.type) - qmTypeRank(b.it.type)) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')); // v273: 組內按學習順序
   const entries = Object.values(byKey).map(group => {
     group.sort(sortRows);
     const manualName = String(group[0].it.group || '').trim(); // v254
