@@ -13,6 +13,7 @@ const TYPE_OPTIONS = [
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
   { id: "spelling",         label: "Spelling 聽寫",     hint: "🔊 聽單字拼出來 — 匯入單字清單，學生聽發音自己拼字，自動批改" },
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
+  { id: "guided-reading",   label: "分段閱讀 📖",       hint: "📖 分段閱讀 — 長文切小段，每讀完一小段馬上答題（選擇＋簡答），小朋友不放空；短文一段搞定。支援貼整篇文章自動分段。" },
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
   { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
@@ -44,7 +45,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
   const handleSave = () => {
     if (!form.title?.trim()) { alert("Please enter a title"); return; }
     // v260: 空單元防呆——練習型單元存檔時 0 題，學生頁不會顯示，先問一聲
-    const PLAYABLE = ['quiz', 'flashcard', 'vocab-quiz', 'fillblank', 'type-answer', 'spelling', 'short-answer', 'syllable-div', 'word-sort', 'essay', 'story-mountain', 'cloze', 'circle-answer', 'writing-practice'];
+    const PLAYABLE = ['quiz', 'flashcard', 'vocab-quiz', 'fillblank', 'type-answer', 'spelling', 'short-answer', 'syllable-div', 'word-sort', 'essay', 'story-mountain', 'cloze', 'circle-answer', 'writing-practice', 'guided-reading'];
     if (PLAYABLE.includes(form.type) && window.getQuizItems && window.getQuizItems([form]).length === 0) {
       if (!window.confirm('⚠ 這個單元目前是 0 題，儲存後學生頁「不會顯示」它。\n\n（題目清單會標「⚠ 沒有題目」提醒你補題）\n\n仍要儲存嗎？')) return;
     }
@@ -55,7 +56,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
     // v261: 點到編輯器外面「不再」直接關閉——出到一半的題目會全部不見（Alan 踩過）。
     // 要離開請按右上 ✕ 或 Cancel。
     <div className="modal-backdrop">
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -205,6 +206,11 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
                 截止日一樣用題目清單上的 📌 設定。
               </div>
             </div>
+          ) : form.type === "guided-reading" ? (
+            <GuidedReadingEditor
+              segments={form.grSegments || []}
+              onChange={segs => update("grSegments", segs)}
+            />
           ) : form.type === "short-answer" ? (
             <ShortAnswerEditor
               passage={form.passage || ''}
@@ -1377,6 +1383,144 @@ function ShortAnswerEditor({ passage, questions, saYoutube, onChangePassage, onC
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── GuidedReadingEditor 分段閱讀（v276）──
+   段落 = { id, text, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] } */
+function GuidedReadingEditor({ segments, onChange }) {
+  const [pasting, setPasting] = useS(false);
+  const [pasteText, setPasteText] = useS('');
+
+  const mkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
+  const upd = (i, patch) => onChange(segments.map((s, si) => si === i ? { ...s, ...patch } : s));
+  const delSeg = (i) => onChange(segments.filter((_, si) => si !== i));
+  const moveSeg = (i, d) => {
+    const j = i + d;
+    if (j < 0 || j >= segments.length) return;
+    const a = [...segments]; [a[i], a[j]] = [a[j], a[i]];
+    onChange(a);
+  };
+  const addSeg = () => onChange([...segments, { id: mkId('gs'), text: '', questions: [] }]);
+
+  const pasteChunks = pasteText.split(/\n\s*\n+/).map(t => t.trim()).filter(Boolean);
+  const doPaste = () => {
+    if (!pasteChunks.length) return;
+    onChange([...segments, ...pasteChunks.map(t => ({ id: mkId('gs'), text: t, questions: [] }))]);
+    setPasteText(''); setPasting(false);
+  };
+
+  const addQ = (si, kind) => {
+    const q = kind === 'short'
+      ? { id: mkId('gq'), kind: 'short', q: '', keyPoints: '' }
+      : { id: mkId('gq'), kind: 'mc', q: '', options: ['', '', '', ''], answer: 0 };
+    upd(si, { questions: [...(segments[si].questions || []), q] });
+  };
+  const updQ = (si, qi, patch) => upd(si, { questions: (segments[si].questions || []).map((q, i) => i === qi ? { ...q, ...patch } : q) });
+  const delQ = (si, qi) => upd(si, { questions: (segments[si].questions || []).filter((_, i) => i !== qi) });
+
+  const inputStyle = {width:'100%',padding:'8px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:3,fontSize:13,boxSizing:'border-box'};
+
+  return (
+    <div className="field">
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <label className="field-label" style={{margin:0}}>段落 Segments ({segments.length})</label>
+        <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
+          {pasting ? '✕ 取消' : '⬇ 貼整篇文章自動分段'}
+        </button>
+      </div>
+      <div className="field-help" style={{marginBottom:10}}>
+        長文：切成多個小段，每段配 1–2 題，小朋友讀一小段就答題、不放空。短文：只放一段，題目全放這段底下。
+      </div>
+
+      {pasting && (
+        <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper)'}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
+            貼上整篇文章——<b>空一行</b>的地方會自動切成新的段落，切好後再幫每段加題目。
+          </div>
+          <textarea
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            rows={8}
+            placeholder={"One day, a little fox found a red balloon in the forest…\n\nThe fox carried the balloon to the river. There, he met an old turtle…\n\nSuddenly, the wind blew very hard…"}
+            style={{...inputStyle,fontSize:12,fontFamily:'var(--mono)',resize:'vertical',lineHeight:1.6}}
+          />
+          <div style={{display:'flex',gap:8,marginTop:8,justifyContent:'flex-end'}}>
+            <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}} onClick={() => { setPasting(false); setPasteText(''); }}>取消</button>
+            <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}} onClick={doPaste} disabled={!pasteChunks.length}>
+              分段匯入{pasteChunks.length ? `（${pasteChunks.length} 段）` : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {segments.length === 0 && (
+        <div className="fc-card-empty mono" style={{marginBottom:10}}>尚未新增段落 — 點「＋ 新增段落」或「⬇ 貼整篇文章自動分段」</div>
+      )}
+
+      {segments.map((seg, si) => (
+        <div key={seg.id || si} style={{border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:14,background:'var(--bg-paper)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <b style={{fontSize:13}}>第 {si + 1} 段</b>
+            <span style={{fontSize:11,color:'var(--ink-muted)'}}>{(seg.questions || []).length} 題</span>
+            <span style={{flex:1}}/>
+            <button className="btn ghost" style={{fontSize:11,padding:'3px 8px'}} onClick={() => moveSeg(si, -1)} disabled={si === 0}>▲</button>
+            <button className="btn ghost" style={{fontSize:11,padding:'3px 8px'}} onClick={() => moveSeg(si, 1)} disabled={si === segments.length - 1}>▼</button>
+            <button className="btn ghost" style={{fontSize:11,padding:'3px 8px',color:'var(--accent)'}}
+              onClick={() => { if (confirm('刪除這一段（含底下的題目）？')) delSeg(si); }}>✕</button>
+          </div>
+          <textarea
+            value={seg.text || ''}
+            onChange={e => upd(si, { text: e.target.value })}
+            rows={5}
+            placeholder="這一段的文章內容…（學生會看到；空行＝換段落顯示）"
+            style={{...inputStyle,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}
+          />
+
+          {(seg.questions || []).map((q, qi) => (
+            <div key={q.id || qi} style={{border:'1px dashed var(--border)',borderRadius:6,padding:'10px 12px',marginTop:8,background:'var(--bg)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)'}}>{q.kind === 'short' ? '✍ 簡答' : '🅰 選擇'} Q{qi + 1}</span>
+                <span style={{flex:1}}/>
+                <button onClick={() => { if (confirm('刪除這一題？')) delQ(si, qi); }}
+                  style={{color:'var(--accent)',background:'none',border:'none',cursor:'pointer',fontSize:13}}>✕</button>
+              </div>
+              <input value={q.q || ''} onChange={e => updQ(si, qi, { q: e.target.value })}
+                placeholder={q.kind === 'short' ? 'Why did the fox let the balloon go?' : 'What did the fox find in the forest?'}
+                style={inputStyle}/>
+              {q.kind === 'short' ? (
+                <>
+                  <input value={q.keyPoints || ''} onChange={e => updQ(si, qi, { keyPoints: e.target.value })}
+                    placeholder="答案要點（AI 評分依據，用 / 分隔，選填）"
+                    style={{...inputStyle,marginTop:6}}/>
+                  <div className="field-help" style={{marginTop:4}}>AI 會拿「這一段的文字＋答案要點」批改，給 1–5 星。</div>
+                </>
+              ) : (
+                <div style={{marginTop:6,display:'grid',gap:6}}>
+                  {(q.options || ['', '', '', '']).map((opt, oi) => (
+                    <label key={oi} style={{display:'flex',alignItems:'center',gap:8}}>
+                      <input type="radio" checked={(q.answer || 0) === oi} onChange={() => updQ(si, qi, { answer: oi })} title="正確答案"/>
+                      <input value={opt}
+                        onChange={e => { const os = [...(q.options || ['', '', '', ''])]; os[oi] = e.target.value; updQ(si, qi, { options: os }); }}
+                        placeholder={`選項 ${['A', 'B', 'C', 'D'][oi]}${oi >= 2 ? '（選填）' : ''}`}
+                        style={inputStyle}/>
+                    </label>
+                  ))}
+                  <div className="field-help" style={{margin:0}}>點左邊圓圈＝正確答案。至少填 A、B 兩個選項；選項照你排的順序顯示（不洗牌）。</div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div style={{display:'flex',gap:6,marginTop:8}}>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => addQ(si, 'mc')}>＋ 選擇題</button>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => addQ(si, 'short')}>＋ 簡答題</button>
+          </div>
+        </div>
+      ))}
+
+      <button className="btn primary" style={{fontSize:12,padding:'7px 16px'}} onClick={addSeg}>＋ 新增段落</button>
     </div>
   );
 }

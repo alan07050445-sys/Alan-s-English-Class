@@ -116,6 +116,25 @@ function getItemQuestions(item) {
   return [];
 }
 
+/* ── v276 分段閱讀 guided-reading：資料 helpers ──
+   段落 = { id, text, questions:[{ kind:'mc', q, options[4], answer:idx } | { kind:'short', q, keyPoints }] }
+   有效題目定義三處共用（可玩判定/總題數/播放器），避免計數不一致 */
+function grValidQs(seg) {
+  return (seg && Array.isArray(seg.questions) ? seg.questions : []).filter(q => {
+    if (!q || !(q.q || '').trim()) return false;
+    if (q.kind === 'short') return true;
+    const opts = (q.options || []).map(o => String(o || '').trim());
+    return opts.filter(Boolean).length >= 2 && !!opts[q.answer != null ? q.answer : 0];
+  });
+}
+function grSegs(item) {
+  return (item && Array.isArray(item.grSegments) ? item.grSegments : [])
+    .filter(s => s && ((s.text || '').trim() || grValidQs(s).length > 0));
+}
+function grTotalQ(item) {
+  return grSegs(item).reduce((n, s) => n + grValidQs(s).length, 0);
+}
+
 // All quiz-able items in a category
 function getQuizItems(items) {
   return (items || []).filter(item =>
@@ -133,7 +152,8 @@ function getQuizItems(items) {
     (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
     (item.type === 'cloze'            && (item.passage || '').includes('[')) ||
     (item.type === 'circle-answer'    && (item.circleQuestions || []).some(q => q.sentence && q.answer)) ||
-    (item.type === 'upload') // v263: 上傳作業——單元本身就是任務，不需要題目
+    (item.type === 'upload') || // v263: 上傳作業——單元本身就是任務，不需要題目
+    (item.type === 'guided-reading' && grTotalQ(item) >= 1) // v276: 分段閱讀——至少一題才可玩
   );
 }
 
@@ -209,20 +229,20 @@ const QM_TYPE_ZH = {
   'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
   cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
   'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山',
-  'writing-practice': '造句', upload: '上傳作業',
+  'writing-practice': '造句', upload: '上傳作業', 'guided-reading': '分段閱讀',
 };
 const QM_TYPE_ICO = {
   flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
   'type-answer': '⌨', 'short-answer': '📖', cloze: '📝', 'circle-answer': '⭕',
   'syllable-div': '✂️', 'word-sort': '🗂', essay: '✍', 'story-mountain': '🏔',
-  'writing-practice': '✍', upload: '📎',
+  'writing-practice': '✍', upload: '📎', 'guided-reading': '📖',
 };
 /* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
    任務清單與學生側欄都按這個順序排；老師編輯模式維持原始順序 */
 const QM_TYPE_ORDER = {
   flashcard: 0,
   'vocab-quiz': 1, quiz: 1,
-  fillblank: 2, cloze: 3, 'circle-answer': 4,
+  fillblank: 2, cloze: 3, 'guided-reading': 3, 'circle-answer': 4,
   spelling: 5, 'type-answer': 5, 'syllable-div': 5, 'word-sort': 5,
   'short-answer': 6, 'writing-practice': 6,
   essay: 7, 'story-mountain': 7,
@@ -300,6 +320,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'circle-answer') return (item.circleQuestions || []).filter(q => q.sentence && q.answer).length;
   if (item.type === 'writing-practice') return 1;
   if (item.type === 'upload') return 1; // v263: 上傳作業＝一件事
+  if (item.type === 'guided-reading') return grTotalQ(item); // v276: 分段閱讀＝全部段落的題數
   return getItemQuestions(item).length;
 }
 
@@ -745,6 +766,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isTypeAnswer   = item.type === 'type-answer';
             const isSpelling     = item.type === 'spelling'; // v254
             const isShortAnswer  = item.type === 'short-answer';
+            const isGuided       = item.type === 'guided-reading'; // v276
             const isSyllableDiv  = item.type === 'syllable-div';
             const isWordSort     = item.type === 'word-sort';
             const isEssay        = item.type === 'essay';
@@ -789,7 +811,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -1049,6 +1071,22 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'circle-answer' && phase === 'intro' ? (
           <CircleAnswerIntro item={selectedItem} onStart={() => setPhase('quiz')} />
+        ) : selectedItem?.type === 'guided-reading' && phase === 'quiz' ? (
+          <GuidedReadingPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'guided-reading' && phase === 'intro' ? (
+          <GuidedReadingIntro
+            item={selectedItem}
+            onStart={() => setPhase('quiz')}
+            resumeAt={resumeFor(it => grTotalQ(it))}
+            onRestart={restartFresh}
+          />
         ) : selectedItem?.type === 'essay' && phase === 'intro' ? (
           <EssayIntro
             item={selectedItem}
@@ -2409,6 +2447,303 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   GUIDED READING 分段閱讀 — INTRO + PLAYER (v276)
+   長文切小段：每讀完一小段馬上答題（注意力有錨點）；
+   短文＝一段、問題在最後。讀過的段落留在上面可回頭看。
+══════════════════════════════════════════════════════ */
+function grExtractStars(text) {
+  const filled = (String(text || '').match(/⭐/g) || []).length;
+  if (filled > 0) return Math.min(5, filled);
+  const m = String(text || '').match(/[★☆]{1,5}/);
+  if (!m) return 3;
+  return (m[0].match(/★/g) || []).length;
+}
+// 選項照老師順序（不洗牌——閱讀理解常有「以上皆是」型選項）；空白選項剔除後修正正解索引
+function grNormalizeQ(q) {
+  if (q.kind === 'short') return q;
+  const opts = (q.options || []).map(o => String(o || '').trim());
+  const ansTxt = opts[q.answer != null ? q.answer : 0];
+  const kept = opts.filter(Boolean);
+  return { ...q, options: kept, correct: Math.max(0, kept.indexOf(ansTxt)) };
+}
+
+function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
+  const segs = grSegs(item);
+  const total = grTotalQ(item);
+  const hasShort = segs.some(s => grValidQs(s).some(q => q.kind === 'short'));
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">📖</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{segs.length > 1 ? `${segs.length} 段文章 · ` : ''}{total} 題</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>📖</span><span>{segs.length > 1 ? '一次讀一小段，讀完馬上回答問題' : '讀完文章後回答問題'}</span></div>
+        <div className="qm-intro-rule-row"><span>👀</span><span>忘記內容沒關係，可以捲回去看讀過的部分</span></div>
+        <div className="qm-intro-rule-row"><span>⭐</span><span>{hasShort ? '選擇題自動改分；簡答題 AI 批改' : '答對加一分，答錯會告訴你正確答案'}</span></div>
+      </div>
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>
+          {resumeAt ? `▶ 繼續上一次 · 從第 ${resumeAt + 1} 題 →` : '開始閱讀 · Start →'}
+        </button>
+        {resumeAt && onRestart ? (
+          <button className="qm-btn secondary" onClick={onRestart}>↻ 重新開始</button>
+        ) : null}
+        {resumeAt ? <div className="qm-intro-resume">上次做到一半，進度已幫你保留 ✓</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const segs  = useQMM(() => grSegs(item), [item]);
+  const segQs = useQMM(() => segs.map(s => grValidQs(s)), [segs]);
+  const total = useQMM(() => segQs.reduce((n, qs) => n + qs.length, 0), [segQs]);
+
+  const [segIdx, setSegIdx]     = useQM(0);
+  const [qIdx, setQIdx]         = useQM(0);      // 段內題序；>= 段題數＝這段答完（0 題段落顯示「繼續」）
+  const [res, setRes]           = useQM({});     // 全域題序 -> { pts }
+  const [selected, setSelected] = useQM(null);   // 選擇題已選索引
+  const [answer, setAnswer]     = useQM('');     // 簡答輸入
+  const [feedback, setFeedback] = useQM('');     // 簡答 AI 回饋
+  const [checking, setChecking] = useQM(false);
+  const [done, setDone]         = useQM(false);
+  const wrongsRef = React.useRef([]);
+  const autoRef   = React.useRef(null);
+  const curSegRef = React.useRef(null);
+
+  // 續做恢復（resume 存的是「下一個未答題」的位置）
+  useQME(() => {
+    const r = getResume(progressKey, total);
+    if (r && r.gr && typeof r.gr.segIdx === 'number') {
+      setSegIdx(Math.min(r.gr.segIdx, Math.max(0, segs.length - 1)));
+      setQIdx(r.gr.qIdx || 0);
+      setRes(r.gr.res || {});
+      wrongsRef.current = Array.isArray(r.gr.wrongs) ? r.gr.wrongs : [];
+    }
+    return () => clearTimeout(autoRef.current);
+  }, []);
+
+  // 進到新段落時把它捲進視野（前面的段落留著可回頭看）
+  useQME(() => {
+    if (segIdx > 0 && curSegRef.current && curSegRef.current.scrollIntoView) {
+      curSegRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [segIdx]);
+
+  const gIdxOf = (si, qi) => segQs.slice(0, si).reduce((n, qs) => n + qs.length, 0) + qi;
+  const answered = Object.keys(res).length;
+  const score = Object.values(res).reduce((s, r) => s + (r.pts || 0), 0);
+
+  const persist = (nres) => {
+    const count = Object.keys(nres).length;
+    if (count < 1 || count >= total) return;
+    let si = segIdx, qi = qIdx + 1;
+    if (qi >= segQs[si].length && si + 1 < segs.length) { si += 1; qi = 0; }
+    saveResume(progressKey, {
+      deck: Array.from({ length: total }, (_, i) => i),
+      deckPos: count,
+      uniqueTotal: total,
+      gr: { segIdx: si, qIdx: qi, res: nres, wrongs: wrongsRef.current },
+    });
+  };
+
+  const finish = (nres) => {
+    const finalScore = Object.values(nres).reduce((s, r) => s + (r.pts || 0), 0);
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScore, total, wrongQuestions: wrongsRef.current });
+    clearResume(progressKey);
+    setDone(true);
+  };
+
+  const advance = (nres) => {
+    clearTimeout(autoRef.current);
+    setSelected(null); setAnswer(''); setFeedback('');
+    if (qIdx + 1 < segQs[segIdx].length) { setQIdx(qIdx + 1); return; }
+    if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setQIdx(0); return; }
+    finish(nres);
+  };
+
+  const handlePick = (i) => {
+    if (selected !== null) return;
+    const q = grNormalizeQ(segQs[segIdx][qIdx]);
+    setSelected(i);
+    const ok = i === q.correct;
+    if (!ok) wrongsRef.current.push({ q: q.q, answer: q.options[q.correct] });
+    const nres = { ...res, [gIdxOf(segIdx, qIdx)]: { pts: ok ? 1 : 0 } };
+    setRes(nres);
+    persist(nres);
+    if (ok) autoRef.current = setTimeout(() => advance(nres), 900);
+  };
+
+  const submitShort = async () => {
+    if (!answer.trim() || checking || feedback) return;
+    const q = segQs[segIdx][qIdx];
+    setChecking(true);
+    const result = await window.checkShortAnswer(q.q, q.keyPoints || '', segs[segIdx].text || '', answer);
+    const stars = grExtractStars(result);
+    if (stars <= 2) wrongsRef.current.push({ q: q.q, answer: q.keyPoints || '（參考 AI 回饋）' });
+    const nres = { ...res, [gIdxOf(segIdx, qIdx)]: { pts: stars >= 3 ? 1 : 0 } };
+    setRes(nres);
+    persist(nres);
+    setFeedback(result);
+    setChecking(false);
+  };
+
+  // 鍵盤：1–4 選選項、Enter 下一題（簡答的 Enter 由 textarea 自己處理）
+  useQME(() => {
+    const onKey = (e) => {
+      if (done || e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      const qs = segQs[segIdx];
+      if (qIdx >= qs.length) return;
+      const q = grNormalizeQ(qs[qIdx]);
+      if (q.kind === 'short') return;
+      if (selected === null && /^[1-9]$/.test(e.key)) {
+        const i = Number(e.key) - 1;
+        if (i < q.options.length) handlePick(i);
+      } else if (selected !== null && e.key === 'Enter') {
+        advance(res);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  if (!total) return (
+    <div className="wp-empty">
+      <div className="wp-empty-icon">📖</div>
+      <div className="wp-empty-msg">尚無題目</div>
+      <div className="wp-empty-sub">請在編輯模式中新增段落與問題</div>
+    </div>
+  );
+
+  if (done) return (
+    <div className="wp-done">
+      <div className="wp-done-icon">✦</div>
+      <div className="wp-done-title">Reading Complete!</div>
+      <div className="wp-done-sub">讀完 {segs.length > 1 ? `${segs.length} 段文章` : '文章'} · 回答 {total} 題</div>
+      <div className="wp-done-score">
+        <span className="wp-done-avg">{score}</span>
+        <span className="wp-done-maxstar"> / {total}</span>
+      </div>
+      {wrongsRef.current.length > 0 && (
+        <div className="gr-done-note">答錯的 {wrongsRef.current.length} 題已幫你收進錯題本 📔</div>
+      )}
+      <div className="qm-result-btns" style={{marginTop:20}}>
+        <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="← 返回"/>
+      </div>
+    </div>
+  );
+
+  const renderParas = (text) => String(text || '').split(/\n+/).map(t => t.trim()).filter(Boolean)
+    .map((t, i) => <p key={i}>{t}</p>);
+
+  const renderCurrent = () => {
+    const qs = segQs[segIdx];
+    // 這段沒有（剩餘）題目 → 讀完按繼續
+    if (qIdx >= qs.length) {
+      const isLastSeg = segIdx + 1 >= segs.length;
+      return (
+        <div className="gr-continue">
+          <button className="qm-btn primary" onClick={() => advance(res)}>
+            {isLastSeg ? '讀完了，完成 ✦' : '讀完了，繼續下一段 ↓'}
+          </button>
+        </div>
+      );
+    }
+    const q = grNormalizeQ(qs[qIdx]);
+    return (
+      <div className="gr-q" key={`q-${segIdx}-${qIdx}`}>
+        <div className="gr-q-count">問題 {qIdx + 1} / {qs.length}</div>
+        <div className="gr-q-text qm-question-swap">{q.q}</div>
+        {q.kind === 'short' ? (
+          <>
+            <textarea
+              className="qm-writing-input wp-input sa-input"
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !feedback && !checking) { e.preventDefault(); submitShort(); } }}
+              placeholder="Write your answer here…"
+              disabled={!!feedback}
+              rows={4}
+            />
+            {!feedback ? (
+              <button className="qm-btn primary wp-submit" onClick={submitShort} disabled={checking || !answer.trim()}>
+                {checking ? '🤖 批改中…' : '送出答案 →'}
+              </button>
+            ) : (
+              <>
+                <WritingFeedback text={feedback}/>
+                <button className="qm-btn primary wp-next" onClick={() => advance(res)}>
+                  {qIdx + 1 >= qs.length && segIdx + 1 >= segs.length ? '完成 ✦' : '下一題 →'}
+                </button>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="qm-options qm-options-swap">
+              {q.options.map((opt, i) => {
+                let cls = 'qm-option';
+                if (selected !== null) {
+                  if (i === q.correct) cls += ' correct';
+                  else if (i === selected) cls += ' wrong';
+                  else cls += ' dim';
+                }
+                return (
+                  <button key={i} className={cls} onClick={() => handlePick(i)}>
+                    <span className="qm-opt-letter">{['A','B','C','D'][i]}</span>
+                    <span className="qm-opt-text">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selected !== null && (
+              <div className="qm-feedback">
+                <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
+                  {selected === q.correct ? '✓ Correct! 答對了！' : `✗ The answer is: ${q.options[q.correct]}`}
+                </div>
+                {selected === q.correct ? (
+                  <div className="qm-auto-next">答對了，自動下一題…</div>
+                ) : (
+                  <button className="qm-btn primary" onClick={() => advance(res)}>
+                    {qIdx + 1 >= segQs[segIdx].length && segIdx + 1 >= segs.length ? '完成 →' : '下一題 →'}
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="gr-player">
+      <div className="wp-progress-bar">
+        <div className="wp-progress-fill" style={{width:`${total ? (answered/total)*100 : 0}%`}}/>
+      </div>
+      <div className="wp-header">
+        <button className="wp-back" onClick={onBack}>←</button>
+        <span className="wp-counter">
+          {segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : ''}{answered} / {total} 題
+        </span>
+      </div>
+      {segs.slice(0, segIdx + 1).map((seg, si) => {
+        const isCur = si === segIdx;
+        const qs = segQs[si];
+        return (
+          <div key={si} className={'gr-seg' + (isCur ? ' cur' : ' past')} ref={isCur ? curSegRef : null}>
+            {segs.length > 1 && <div className="gr-seg-label">第 {si + 1} 段</div>}
+            {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
+            {!isCur && qs.length > 0 && <div className="gr-past-chip">✓ 已回答 {qs.length} 題</div>}
+            {isCur && renderCurrent()}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -4373,4 +4708,4 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });
+Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });

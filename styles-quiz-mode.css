@@ -2458,3 +2458,65 @@
   padding: 9px 13px;
 }
 .uh-thumb a { display: block; width: 100%; height: 100%; }
+
+/* ══ v276: 分段閱讀 guided-reading ══
+   段落卡＝襯線閱讀排版；讀過的段落留在上面（可回頭看）、目前段落接題目。
+   選項/回饋/按鈕沿用 .qm-option / .qm-feedback / .qm-btn 現有樣式。 */
+.gr-player { max-width: 720px; margin: 0 auto; }
+.gr-seg {
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e5ddc8);
+  border-radius: 14px;
+  padding: 22px 26px;
+  margin-bottom: 16px;
+  scroll-margin-top: 74px;
+}
+.gr-seg.past { opacity: .85; }
+.gr-seg-label {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: var(--ink-muted, #8a7d6b);
+  margin-bottom: 8px;
+}
+.gr-seg-text {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.85;
+  color: var(--ink, #2f2519);
+}
+.gr-seg-text p { margin: 0 0 12px; }
+.gr-seg-text p:last-child { margin-bottom: 0; }
+.gr-past-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 12px;
+  font-size: 12.5px; font-weight: 700;
+  color: #2e7d32;
+  background: rgba(67, 160, 71, .1);
+  border-radius: 100px;
+  padding: 4px 12px;
+}
+.gr-q {
+  border-top: 1px dashed var(--border, #e5ddc8);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.gr-q-count {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--ink-muted, #8a7d6b);
+  margin-bottom: 6px;
+}
+.gr-q-text {
+  font-size: 16.5px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.gr-continue { margin-top: 18px; text-align: center; }
+.gr-done-note { margin-top: 10px; font-size: 13px; color: var(--ink-muted, #8a7d6b); }
+@media (max-width: 640px) {
+  .gr-seg { padding: 16px; border-radius: 12px; }
+  .gr-seg-text { font-size: 16px; }
+}
