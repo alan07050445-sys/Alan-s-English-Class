@@ -2809,7 +2809,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       </div>
 
       {/* v284: 換頁時整頁淡入上滑——key 換了就重播動畫 */}
-      <div key={`pg-${mode}-${segIdx}`} className="gr-page">
+      <div key={`pg-${mode}-${segIdx}`} className={'gr-page gr-page-' + (mode === 'read' ? 'read' : mode === 'final-intro' ? 'intro' : 'quiz')}>
       {mode === 'read' ? (
         /* ── 文章頁：只有這一段的內容＋「完成閱讀」── */
         <>

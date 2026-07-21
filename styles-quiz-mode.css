@@ -2663,3 +2663,20 @@
   .grd-img { animation: none; }
   .gr-dots span { transition: none; }
 }
+
+/* ══ v285: 閱讀頁放寬放大（Alan：文章太窄很難看）══
+   閱讀頁吃滿 ~1060px——掃描頁照片大很多；答題頁維持適中寬度（選項太寬難點）。 */
+.gr-player { max-width: 1060px; }
+.gr-page-quiz .gr-seg { max-width: 800px; margin-left: auto; margin-right: auto; }
+.gr-page-intro .qm-intro { max-width: 640px; margin-left: auto; margin-right: auto; }
+.gr-page-read .gr-seg-text {
+  font-size: 18.5px;
+  line-height: 1.9;
+  max-width: 46em;   /* 純文字段落：行寬別超過好讀範圍，照片不受限 */
+  margin-left: auto;
+  margin-right: auto;
+}
+.gr-continue { max-width: 560px; margin-left: auto; margin-right: auto; }
+@media (max-width: 640px) {
+  .gr-page-read .gr-seg-text { font-size: 17px; }
+}
