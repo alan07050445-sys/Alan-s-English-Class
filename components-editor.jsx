@@ -1562,8 +1562,10 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
   const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
   const [impSeg, setImpSeg] = useS(null);   // 哪個匯入面板打開（段索引 | 'final'）
   const [impText, setImpText] = useS('');
+  const [reOcrSeg, setReOcrSeg] = useS(null); // v288: 等老師重選原始檔辨識的段落
   const fileRef = React.useRef(null);
   const pdfRef = React.useRef(null);
+  const reOcrRef = React.useRef(null);
 
   const mkId = grMkId;
 
@@ -1585,11 +1587,12 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
   });
 
   // v287: 上傳後順手 OCR（點字查義＋朗讀用）——失敗不擋上傳，之後可按「🔍 辨識單字」補
-  const ocrAndUpload = async (worker, cv) => {
+  // v288: 改存 Firestore（Storage 下載沒有 CORS 標頭，學生端 fetch 會被瀏覽器擋）
+  const ocrAndSave = async (worker, cv) => {
     try {
       const wl = await grOcrCanvas(worker, cv);
       if (!wl.words.length) return undefined;
-      return await window.uploadReadingWords(itemId || 'gr', wl);
+      return await window.saveReadingWords(wl);
     } catch (e) { return undefined; }
   };
 
@@ -1607,9 +1610,9 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
         const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
         setUploading(`辨識單字 ${i + 1}/${files.length}…（點字查義用）`);
         if (!worker) { try { worker = await grOcrWorker(); } catch (e2) { worker = 'fail'; } }
-        const wordsUrl = worker && worker !== 'fail' ? await ocrAndUpload(worker, cv) : undefined;
+        const wordsId = worker && worker !== 'fail' ? await ocrAndSave(worker, cv) : undefined;
         const img = { url, ar, y0: 0, y1: 1 };
-        if (wordsUrl) img.wordsUrl = wordsUrl;
+        if (wordsId) img.wordsId = wordsId;
         added.push({ id: mkId('gs'), text: '', img, questions: [] });
       }
       onChange([...segments, ...added]);
@@ -1660,9 +1663,9 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
         const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
         setUploading(`辨識單字 ${p}/${pdf.numPages}…（點字查義用）`);
         if (!worker) { try { worker = await grOcrWorker(); } catch (e2) { worker = 'fail'; } }
-        const wordsUrl = worker && worker !== 'fail' ? await ocrAndUpload(worker, cv) : undefined;
+        const wordsId = worker && worker !== 'fail' ? await ocrAndSave(worker, cv) : undefined;
         const img = { url, ar: cv.height / cv.width, y0: 0, y1: 1 };
-        if (wordsUrl) img.wordsUrl = wordsUrl;
+        if (wordsId) img.wordsId = wordsId;
         added.push({ id: mkId('gs'), text: '', img, questions: [] });
       }
       if (worker && worker !== 'fail') { try { await worker.terminate(); } catch (e2) {} }
@@ -1675,26 +1678,56 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
   };
 
   // v287: 舊照片（還沒有單字資料的）補辨識——同一張照片的所有段落共用同一份
+  // v288: Storage 檔案下載沒有 CORS 標頭→雲端照片讀不到像素。先試一次（帶 cache-buster），
+  //       失敗就請老師重選「原始照片檔」在本機辨識（只辨識、不重新上傳照片）。
+  const finishOcr = async (seg, cv) => {
+    let worker = null;
+    try {
+      worker = await grOcrWorker();
+      const wl = await grOcrCanvas(worker, cv);
+      if (!wl.words.length) throw new Error('辨識不到英文字（照片太模糊或沒有英文）');
+      const wordsId = await window.saveReadingWords(wl);
+      onChange(segments.map(s => (s.img && s.img.url === seg.img.url) ? { ...s, img: { ...s.img, wordsId } } : s));
+      setReOcrSeg(null);
+    } finally {
+      if (worker) { try { await worker.terminate(); } catch (e2) {} }
+    }
+  };
+
   const ocrExisting = async (seg) => {
     setUpErr('');
-    let worker = null;
     try {
       setUploading('辨識單字中…（第一次會多等幾秒）');
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('照片載入失敗')); img.src = seg.img.url; });
+      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('cors')); img.src = seg.img.url + '&r=' + Date.now(); });
       const cv = document.createElement('canvas');
       cv.width = img.naturalWidth; cv.height = img.naturalHeight;
       cv.getContext('2d').drawImage(img, 0, 0);
-      worker = await grOcrWorker();
-      const wl = await grOcrCanvas(worker, cv);
-      if (!wl.words.length) throw new Error('這張照片辨識不到英文字');
-      const wordsUrl = await window.uploadReadingWords(itemId || 'gr', wl);
-      onChange(segments.map(s => (s.img && s.img.url === seg.img.url) ? { ...s, img: { ...s.img, wordsUrl } } : s));
+      await finishOcr(seg, cv);
+    } catch (err) {
+      if (String(err && err.message) === 'cors') {
+        setReOcrSeg(seg);
+        setUpErr('瀏覽器擋住了雲端照片的讀取——請按照片下方新出現的「📁 選原始照片來辨識」，選你當初的同一張照片（只用來辨識，不會重新上傳）。');
+      } else {
+        setUpErr('辨識失敗：' + ((err && err.message) || err));
+      }
+    }
+    setUploading('');
+  };
+
+  const pickReOcr = async (e) => {
+    const file = (e.target.files || [])[0];
+    e.target.value = '';
+    if (!file || !reOcrSeg) return;
+    setUpErr('');
+    try {
+      setUploading('辨識單字中…');
+      const { cv } = await shrinkPhoto(file);
+      await finishOcr(reOcrSeg, cv);
     } catch (err) {
       setUpErr('辨識失敗：' + ((err && err.message) || err));
     }
-    if (worker) { try { await worker.terminate(); } catch (e2) {} }
     setUploading('');
   };
 
@@ -1771,6 +1804,7 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
       </div>
       <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={pickPhotos}/>
       <input ref={pdfRef} type="file" accept="application/pdf,.pdf" style={{display:'none'}} onChange={pickPdf}/>
+      <input ref={reOcrRef} type="file" accept="image/*" style={{display:'none'}} onChange={pickReOcr}/>
       <div className="field-help" style={{marginBottom:10}}>
         掃描 PDF：每一頁自動變一段；照片：一張＝一段。太長的頁面點「✂ 裁切」再切細，每段配 1–2 題，小朋友讀一小段就答題、不放空。
       </div>
@@ -1819,7 +1853,7 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
                 <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={() => setCropSeg(seg)}>
                   ✂ 裁切這張照片
                 </button>
-                {seg.img.wordsUrl ? (
+                {seg.img.wordsId ? (
                   <span style={{fontSize:11,color:'#2e7d32'}}>🔍 點字查義 ✓</span>
                 ) : (
                   <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} disabled={!!uploading}
@@ -1827,6 +1861,12 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
                     🔍 辨識單字（點字查義）
                   </button>
                 )}
+                {reOcrSeg && reOcrSeg.img && seg.img.url === reOcrSeg.img.url && !seg.img.wordsId ? (
+                  <button className="btn primary" style={{fontSize:11,padding:'4px 10px'}} disabled={!!uploading}
+                    onClick={() => reOcrRef.current && reOcrRef.current.click()}>
+                    📁 選原始照片來辨識
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}

@@ -275,12 +275,24 @@ async function uploadReadingPhoto(itemId, blob) {
   return ref.getDownloadURL();
 }
 
-// v287: 分段閱讀 OCR 單字資料（點字查義＋照片朗讀）——同樣放 pdfs/ 底下沿用規則
-async function uploadReadingWords(itemId, obj) {
-  const safe = String(itemId || 'gr').replace(/[^A-Za-z0-9_-]/g, '_');
-  const ref = _storage.ref(`pdfs/reading/${safe}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.words.json`);
-  await ref.put(new Blob([JSON.stringify(obj)], { type: 'application/json' }), { contentType: 'application/json' });
-  return ref.getDownloadURL();
+// v288: OCR 單字資料改存 Firestore 的 class 集合（公開可讀、老師可寫——規則現成）
+// ⚠ 教訓：Firebase Storage 的「檔案下載」(alt=media) 不回 CORS 標頭（metadata 有、檔案沒有），
+// 網頁 fetch/crossOrigin 讀圖都會被瀏覽器擋——除非去 GCS 設 bucket CORS。Firestore SDK 不經 CORS。
+async function saveReadingWords(obj) {
+  const id = 'grwords_' + Date.now() + Math.random().toString(36).slice(2, 6);
+  await _db.collection('class').doc(id).set(obj);
+  return id;
+}
+async function fetchReadingWords(ref) {
+  if (!ref) return null;
+  if (/^grwords_/.test(String(ref))) {
+    try {
+      const snap = await _db.collection('class').doc(String(ref)).get();
+      return snap.exists ? snap.data() : null;
+    } catch (e) { return null; }
+  }
+  // 舊資料（v287 存 Storage URL）——多半被 CORS 擋，盡力而為
+  try { const r = await fetch(ref); return r.ok ? r.json() : null; } catch (e) { return null; }
 }
 
 // v287: 點字查義——走同一個 AI 代理（system prompt 在前端組，Worker 不用改）
@@ -1494,8 +1506,8 @@ Object.assign(window, {
   COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText, ttsPickVoice: _ttsPickVoice,
-  // v287: 分段閱讀——OCR 單字檔上傳＋點字查義
-  uploadReadingWords, lookupWord,
+  // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
+  saveReadingWords, fetchReadingWords, lookupWord,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions

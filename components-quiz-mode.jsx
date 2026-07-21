@@ -2491,11 +2491,12 @@ function GrImgCrop({ img, onZoom, className, onWord }) {
   const [wdata, setWdata] = useQM(null);
   const imgRef = React.useRef(null);
   useQME(() => { if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth) setLoaded(true); }, []);
+  const wkey = img.wordsId || img.wordsUrl;
   useQME(() => {
     let dead = false;
-    if (img.wordsUrl && onWord) grFetchWords(img.wordsUrl).then(d => { if (!dead && d) setWdata(d); });
+    if (wkey && onWord) grFetchWords(wkey).then(d => { if (!dead && d) setWdata(d); });
     return () => { dead = true; };
-  }, [img.wordsUrl, !!onWord]);
+  }, [wkey, !!onWord]);
   const bandWords = (onWord && wdata && wdata.words ? wdata.words : [])
     .filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; });
   return (
@@ -2518,15 +2519,17 @@ function grPreloadImgs(item) {
   const urls = [...new Set(grSegs(item).map(s => s.img && s.img.url).filter(Boolean))];
   urls.forEach(u => { const im = new Image(); im.src = u; });
   // v287: 順便預抓 OCR 單字檔（點字查義＋照片朗讀）
-  grSegs(item).forEach(s => { if (s.img && s.img.wordsUrl) grFetchWords(s.img.wordsUrl); });
+  grSegs(item).forEach(s => { if (s.img && (s.img.wordsId || s.img.wordsUrl)) grFetchWords(s.img.wordsId || s.img.wordsUrl); });
 }
 
 // v287: OCR 單字檔快取（{words:[{t,x,y,w,h}], lines:[{t,y}]}，座標＝整張圖比例）
 const grWordsCache = {};
-function grFetchWords(url) {
-  if (!url) return Promise.resolve(null);
-  if (!grWordsCache[url]) grWordsCache[url] = fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
-  return grWordsCache[url];
+function grFetchWords(key) { // v288: grwords_* → Firestore（不經 CORS）；舊 http URL 盡力 fetch
+  if (!key) return Promise.resolve(null);
+  if (!grWordsCache[key]) {
+    grWordsCache[key] = (window.fetchReadingWords ? window.fetchReadingWords(key) : Promise.resolve(null)).catch(() => null);
+  }
+  return grWordsCache[key];
 }
 
 function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFlashcards }) {
@@ -2624,8 +2627,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     if (mode !== 'read' || !segs[segIdx]) return;
     const seg = segs[segIdx];
     if ((seg.text || '').trim()) { setTtsText(seg.text); return; }
-    if (seg.img && seg.img.wordsUrl) {
-      grFetchWords(seg.img.wordsUrl).then(d => {
+    if (seg.img && (seg.img.wordsId || seg.img.wordsUrl)) {
+      grFetchWords(seg.img.wordsId || seg.img.wordsUrl).then(d => {
         if (dead || !d) return;
         const zy0 = seg.img.y0 || 0, zy1 = seg.img.y1 == null ? 1 : seg.img.y1;
         const t = (d.lines || []).filter(l => l.y >= zy0 && l.y <= zy1).map(l => l.t).join(' ');
@@ -2953,7 +2956,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               ) : null}
             </div>
             {renderSegContent(segs[segIdx], true)}
-            {((segs[segIdx].text || '').trim() || (segs[segIdx].img && segs[segIdx].img.wordsUrl)) ? (
+            {((segs[segIdx].text || '').trim() || (segs[segIdx].img && (segs[segIdx].img.wordsId || segs[segIdx].img.wordsUrl))) ? (
               <div className="gr-tap-hint">💡 不會的單字點一下，聽發音、看意思</div>
             ) : null}
           </div>
