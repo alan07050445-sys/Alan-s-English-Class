@@ -2555,3 +2555,38 @@
   margin-top: 12px;
   font-family: var(--mono, monospace);
 }
+
+/* ══ v281: 分段閱讀翻頁式流程——答題頁「回頭看文章」＋綜合題 ══ */
+.gr-quiz-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.gr-quiz-head .gr-seg-label { margin-bottom: 0; }
+.gr-peek-btn {
+  background: none;
+  border: 1.5px solid var(--border, #e5ddc8);
+  border-radius: 100px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-muted, #8a7d6b);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.gr-peek-btn:hover { color: var(--accent, #8B3120); border-color: var(--accent, #8B3120); }
+.gr-peek-panel {
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px dashed var(--border, #e5ddc8);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 10px 0 4px;
+  background: rgba(255, 253, 248, .6);
+}
+.gr-peek-seg { margin-bottom: 14px; }
+.gr-peek-seg:last-child { margin-bottom: 0; }
+.gr-quiz-head + .gr-q, .gr-peek-panel + .gr-q { border-top: none; margin-top: 10px; padding-top: 0; }

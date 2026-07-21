@@ -131,8 +131,11 @@ function grSegs(item) {
   return (item && Array.isArray(item.grSegments) ? item.grSegments : [])
     .filter(s => s && ((s.text || '').trim() || (s.img && s.img.url) || grValidQs(s).length > 0));
 }
+function grFinalQs(item) { // v281: 全部讀完後的整篇綜合題（item.grFinal）
+  return grValidQs({ questions: (item && item.grFinal) || [] });
+}
 function grTotalQ(item) {
-  return grSegs(item).reduce((n, s) => n + grValidQs(s).length, 0);
+  return grSegs(item).reduce((n, s) => n + grValidQs(s).length, 0) + grFinalQs(item).length;
 }
 
 // All quiz-able items in a category
@@ -2490,16 +2493,18 @@ function GrImgCrop({ img, onZoom, className }) {
 
 function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
   const segs = grSegs(item);
+  const finalN = grFinalQs(item).length;
   const total = grTotalQ(item);
-  const hasShort = segs.some(s => grValidQs(s).some(q => q.kind === 'short'));
+  const hasShort = segs.some(s => grValidQs(s).some(q => q.kind === 'short')) || grFinalQs(item).some(q => q.kind === 'short');
   return (
     <div className="qm-intro">
       <div className="qm-intro-icon">📖</div>
       <div className="qm-intro-title">{item.title}</div>
       <div className="qm-intro-meta">{segs.length > 1 ? `${segs.length} 段文章 · ` : ''}{total} 題</div>
       <div className="qm-intro-rules">
-        <div className="qm-intro-rule-row"><span>📖</span><span>{segs.length > 1 ? '一次讀一小段，讀完馬上回答問題' : '讀完文章後回答問題'}</span></div>
-        <div className="qm-intro-rule-row"><span>👀</span><span>忘記內容沒關係，可以捲回去看讀過的部分</span></div>
+        <div className="qm-intro-rule-row"><span>📖</span><span>{segs.length > 1 ? '一次讀一段——讀完按「完成閱讀」，再回答這段的問題' : '讀完文章按「完成閱讀」，再回答問題'}</span></div>
+        <div className="qm-intro-rule-row"><span>👀</span><span>答題時忘了內容，按「回頭看文章」就能再看一次</span></div>
+        {finalN > 0 && <div className="qm-intro-rule-row"><span>📚</span><span>全部讀完後，還有 {finalN} 題整篇文章的綜合題</span></div>}
         <div className="qm-intro-rule-row"><span>⭐</span><span>{hasShort ? '選擇題自動改分；簡答題 AI 批改' : '答對加一分，答錯會告訴你正確答案'}</span></div>
       </div>
       <div className="qm-intro-btns">
@@ -2516,28 +2521,34 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
 }
 
 function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
-  const segs  = useQMM(() => grSegs(item), [item]);
-  const segQs = useQMM(() => segs.map(s => grValidQs(s)), [segs]);
-  const total = useQMM(() => segQs.reduce((n, qs) => n + qs.length, 0), [segQs]);
+  const segs     = useQMM(() => grSegs(item), [item]);
+  const segQs    = useQMM(() => segs.map(s => grValidQs(s)), [segs]);
+  const finalQs  = useQMM(() => grFinalQs(item), [item]);
+  const segTotal = useQMM(() => segQs.reduce((n, qs) => n + qs.length, 0), [segQs]);
+  const total    = segTotal + finalQs.length;
 
+  /* v281: 翻頁式流程（Alan 拍板）——「文章頁」讀完按「完成閱讀」→「問題頁」
+     一題一題答（可展開「回頭看文章」）→ 下一段文章頁 → … → 綜合題 → 完成 */
   const [segIdx, setSegIdx]     = useQM(0);
-  const [qIdx, setQIdx]         = useQM(0);      // 段內題序；>= 段題數＝這段答完（0 題段落顯示「繼續」）
-  const [res, setRes]           = useQM({});     // 全域題序 -> { pts }
-  const [selected, setSelected] = useQM(null);   // 選擇題已選索引
-  const [answer, setAnswer]     = useQM('');     // 簡答輸入
-  const [feedback, setFeedback] = useQM('');     // 簡答 AI 回饋
+  const [mode, setMode]         = useQM('read');  // 'read' | 'quiz' | 'final'
+  const [qIdx, setQIdx]         = useQM(0);
+  const [res, setRes]           = useQM({});      // 全域題序 -> { pts }
+  const [selected, setSelected] = useQM(null);
+  const [answer, setAnswer]     = useQM('');
+  const [feedback, setFeedback] = useQM('');
   const [checking, setChecking] = useQM(false);
+  const [peek, setPeek]         = useQM(false);   // 答題頁展開「回頭看文章」
   const [done, setDone]         = useQM(false);
-  const [zoom, setZoom]         = useQM(null);   // v277: 點照片放大
+  const [zoom, setZoom]         = useQM(null);
   const wrongsRef = React.useRef([]);
   const autoRef   = React.useRef(null);
-  const curSegRef = React.useRef(null);
+  const topRef    = React.useRef(null);
 
-  // 續做恢復（resume 存的是「下一個未答題」的位置）
   useQME(() => {
     const r = getResume(progressKey, total);
     if (r && r.gr && typeof r.gr.segIdx === 'number') {
       setSegIdx(Math.min(r.gr.segIdx, Math.max(0, segs.length - 1)));
+      setMode(r.gr.mode === 'final' && finalQs.length ? 'final' : (r.gr.mode === 'quiz' ? 'quiz' : 'read'));
       setQIdx(r.gr.qIdx || 0);
       setRes(r.gr.res || {});
       wrongsRef.current = Array.isArray(r.gr.wrongs) ? r.gr.wrongs : [];
@@ -2545,27 +2556,33 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     return () => clearTimeout(autoRef.current);
   }, []);
 
-  // 進到新段落時把它捲進視野（前面的段落留著可回頭看）
+  // 每翻一頁（換段落或換模式）捲回頁頂
   useQME(() => {
-    if (segIdx > 0 && curSegRef.current && curSegRef.current.scrollIntoView) {
-      curSegRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [segIdx]);
+    if (topRef.current && topRef.current.scrollIntoView) topRef.current.scrollIntoView({ block: 'start' });
+  }, [segIdx, mode]);
 
+  const curQs = mode === 'final' ? finalQs : (segQs[segIdx] || []);
   const gIdxOf = (si, qi) => segQs.slice(0, si).reduce((n, qs) => n + qs.length, 0) + qi;
+  const curGIdx = mode === 'final' ? segTotal + qIdx : gIdxOf(segIdx, qIdx);
   const answered = Object.keys(res).length;
   const score = Object.values(res).reduce((s, r) => s + (r.pts || 0), 0);
+
+  const resetQState = () => { setSelected(null); setAnswer(''); setFeedback(''); setPeek(false); };
 
   const persist = (nres) => {
     const count = Object.keys(nres).length;
     if (count < 1 || count >= total) return;
-    let si = segIdx, qi = qIdx + 1;
-    if (qi >= segQs[si].length && si + 1 < segs.length) { si += 1; qi = 0; }
+    // 存「下一個未答題」的位置
+    let nSeg = segIdx, nMode = mode, nQ = qIdx + 1;
+    if (nMode === 'quiz' && nQ >= (segQs[nSeg] || []).length) {
+      if (nSeg + 1 < segs.length) { nSeg += 1; nMode = 'read'; nQ = 0; }
+      else if (finalQs.length) { nMode = 'final'; nQ = 0; }
+    }
     saveResume(progressKey, {
       deck: Array.from({ length: total }, (_, i) => i),
       deckPos: count,
       uniqueTotal: total,
-      gr: { segIdx: si, qIdx: qi, res: nres, wrongs: wrongsRef.current },
+      gr: { segIdx: nSeg, mode: nMode, qIdx: nQ, res: nres, wrongs: wrongsRef.current },
     });
   };
 
@@ -2578,19 +2595,30 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
   const advance = (nres) => {
     clearTimeout(autoRef.current);
-    setSelected(null); setAnswer(''); setFeedback('');
-    if (qIdx + 1 < segQs[segIdx].length) { setQIdx(qIdx + 1); return; }
-    if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setQIdx(0); return; }
+    resetQState();
+    if (qIdx + 1 < curQs.length) { setQIdx(qIdx + 1); return; }
+    if (mode === 'final') { finish(nres); return; }
+    if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setMode('read'); setQIdx(0); return; }
+    if (finalQs.length) { setMode('final'); setQIdx(0); return; }
     finish(nres);
+  };
+
+  // 「✅ 完成閱讀」——這段有題進答題頁；沒題直接下一段/綜合題/完成
+  const finishReading = () => {
+    resetQState();
+    if ((segQs[segIdx] || []).length) { setMode('quiz'); setQIdx(0); return; }
+    if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setMode('read'); setQIdx(0); return; }
+    if (finalQs.length) { setMode('final'); setQIdx(0); return; }
+    finish(res);
   };
 
   const handlePick = (i) => {
     if (selected !== null) return;
-    const q = grNormalizeQ(segQs[segIdx][qIdx]);
+    const q = grNormalizeQ(curQs[qIdx]);
     setSelected(i);
     const ok = i === q.correct;
     if (!ok) wrongsRef.current.push({ q: q.q, answer: q.options[q.correct] });
-    const nres = { ...res, [gIdxOf(segIdx, qIdx)]: { pts: ok ? 1 : 0 } };
+    const nres = { ...res, [curGIdx]: { pts: ok ? 1 : 0 } };
     setRes(nres);
     persist(nres);
     if (ok) autoRef.current = setTimeout(() => advance(nres), 900);
@@ -2598,25 +2626,29 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
   const submitShort = async () => {
     if (!answer.trim() || checking || feedback) return;
-    const q = segQs[segIdx][qIdx];
+    const q = curQs[qIdx];
+    // 綜合題給 AI 整篇文字當依據；段落題給該段文字
+    const passage = mode === 'final'
+      ? segs.map(s => s.text || '').filter(Boolean).join('\n\n')
+      : (segs[segIdx].text || '');
     setChecking(true);
-    const result = await window.checkShortAnswer(q.q, q.keyPoints || '', segs[segIdx].text || '', answer);
+    const result = await window.checkShortAnswer(q.q, q.keyPoints || '', passage, answer);
     const stars = grExtractStars(result);
     if (stars <= 2) wrongsRef.current.push({ q: q.q, answer: q.keyPoints || '（參考 AI 回饋）' });
-    const nres = { ...res, [gIdxOf(segIdx, qIdx)]: { pts: stars >= 3 ? 1 : 0 } };
+    const nres = { ...res, [curGIdx]: { pts: stars >= 3 ? 1 : 0 } };
     setRes(nres);
     persist(nres);
     setFeedback(result);
     setChecking(false);
   };
 
-  // 鍵盤：1–4 選選項、Enter 下一題（簡答的 Enter 由 textarea 自己處理）
+  // 鍵盤：文章頁 Enter＝完成閱讀；答題頁 1–4 選選項、Enter 下一題
   useQME(() => {
     const onKey = (e) => {
-      if (done || e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-      const qs = segQs[segIdx];
-      if (qIdx >= qs.length) return;
-      const q = grNormalizeQ(qs[qIdx]);
+      if (done || (e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) return;
+      if (mode === 'read') { if (e.key === 'Enter') finishReading(); return; }
+      if (qIdx >= curQs.length) return;
+      const q = grNormalizeQ(curQs[qIdx]);
       if (q.kind === 'short') return;
       if (selected === null && /^[1-9]$/.test(e.key)) {
         const i = Number(e.key) - 1;
@@ -2629,10 +2661,10 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  if (!total) return (
+  if (!segs.length) return (
     <div className="wp-empty">
       <div className="wp-empty-icon">📖</div>
-      <div className="wp-empty-msg">尚無題目</div>
+      <div className="wp-empty-msg">尚無內容</div>
       <div className="wp-empty-sub">請在編輯模式中新增段落與問題</div>
     </div>
   );
@@ -2641,7 +2673,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     <div className="wp-done">
       <div className="wp-done-icon">✦</div>
       <div className="wp-done-title">Reading Complete!</div>
-      <div className="wp-done-sub">讀完 {segs.length > 1 ? `${segs.length} 段文章` : '文章'} · 回答 {total} 題</div>
+      <div className="wp-done-sub">讀完 {segs.length > 1 ? `${segs.length} 段文章` : '文章'} · 回答 {total} 題{finalQs.length ? '（含綜合題）' : ''}</div>
       <div className="wp-done-score">
         <span className="wp-done-avg">{score}</span>
         <span className="wp-done-maxstar"> / {total}</span>
@@ -2658,23 +2690,18 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const renderParas = (text) => String(text || '').split(/\n+/).map(t => t.trim()).filter(Boolean)
     .map((t, i) => <p key={i}>{t}</p>);
 
-  const renderCurrent = () => {
-    const qs = segQs[segIdx];
-    // 這段沒有（剩餘）題目 → 讀完按繼續
-    if (qIdx >= qs.length) {
-      const isLastSeg = segIdx + 1 >= segs.length;
-      return (
-        <div className="gr-continue">
-          <button className="qm-btn primary" onClick={() => advance(res)}>
-            {isLastSeg ? '讀完了，完成 ✦' : '讀完了，繼續下一段 ↓'}
-          </button>
-        </div>
-      );
-    }
-    const q = grNormalizeQ(qs[qIdx]);
+  const renderSegContent = (seg, allowZoom) => (
+    <>
+      {seg.img && seg.img.url ? <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}/> : null}
+      {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
+    </>
+  );
+
+  const renderQuestion = () => {
+    const q = grNormalizeQ(curQs[qIdx]);
     return (
-      <div className="gr-q" key={`q-${segIdx}-${qIdx}`}>
-        <div className="gr-q-count">問題 {qIdx + 1} / {qs.length}</div>
+      <div className="gr-q" key={`q-${mode}-${segIdx}-${qIdx}`}>
+        <div className="gr-q-count">問題 {qIdx + 1} / {curQs.length}</div>
         <div className="gr-q-text qm-question-swap">{q.q}</div>
         {q.kind === 'short' ? (
           <>
@@ -2695,7 +2722,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               <>
                 <WritingFeedback text={feedback}/>
                 <button className="qm-btn primary wp-next" onClick={() => advance(res)}>
-                  {qIdx + 1 >= qs.length && segIdx + 1 >= segs.length ? '完成 ✦' : '下一題 →'}
+                  {qIdx + 1 >= curQs.length && (mode === 'final' || (segIdx + 1 >= segs.length && !finalQs.length)) ? '完成 ✦' : '下一題 →'}
                 </button>
               </>
             )}
@@ -2726,9 +2753,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
                 {selected === q.correct ? (
                   <div className="qm-auto-next">答對了，自動下一題…</div>
                 ) : (
-                  <button className="qm-btn primary" onClick={() => advance(res)}>
-                    {qIdx + 1 >= segQs[segIdx].length && segIdx + 1 >= segs.length ? '完成 →' : '下一題 →'}
-                  </button>
+                  <button className="qm-btn primary" onClick={() => advance(res)}>下一題 →</button>
                 )}
               </div>
             )}
@@ -2739,29 +2764,52 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   };
 
   return (
-    <div className="gr-player">
+    <div className="gr-player" ref={topRef}>
       <div className="wp-progress-bar">
         <div className="wp-progress-fill" style={{width:`${total ? (answered/total)*100 : 0}%`}}/>
       </div>
       <div className="wp-header">
         <button className="wp-back" onClick={onBack}>←</button>
         <span className="wp-counter">
-          {segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : ''}{answered} / {total} 題
+          {mode === 'final' ? '📚 綜合題 · ' : (segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : '')}
+          {total ? `${answered} / ${total} 題` : ''}
         </span>
       </div>
-      {segs.slice(0, segIdx + 1).map((seg, si) => {
-        const isCur = si === segIdx;
-        const qs = segQs[si];
-        return (
-          <div key={si} className={'gr-seg' + (isCur ? ' cur' : ' past')} ref={isCur ? curSegRef : null}>
-            {segs.length > 1 && <div className="gr-seg-label">第 {si + 1} 段</div>}
-            {seg.img && seg.img.url ? <GrImgCrop img={seg.img} onZoom={() => setZoom(seg.img)}/> : null}
-            {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
-            {!isCur && qs.length > 0 && <div className="gr-past-chip">✓ 已回答 {qs.length} 題</div>}
-            {isCur && renderCurrent()}
+
+      {mode === 'read' ? (
+        /* ── 文章頁：只有這一段的內容＋「完成閱讀」── */
+        <>
+          <div className="gr-seg cur">
+            {segs.length > 1 && <div className="gr-seg-label">第 {segIdx + 1} 段</div>}
+            {renderSegContent(segs[segIdx], true)}
           </div>
-        );
-      })}
+          <div className="gr-continue">
+            <button className="qm-btn primary" onClick={finishReading}>✅ 完成閱讀</button>
+          </div>
+        </>
+      ) : (
+        /* ── 問題頁：一題一題答；可展開「回頭看文章」── */
+        <div className="gr-seg cur">
+          <div className="gr-quiz-head">
+            <div className="gr-seg-label">{mode === 'final' ? '📚 綜合題 · 關於整篇文章' : `第 ${segIdx + 1} 段的問題`}</div>
+            <button className="gr-peek-btn" onClick={() => setPeek(p => !p)}>
+              {peek ? '收起文章 ▴' : '📖 回頭看文章 ▾'}
+            </button>
+          </div>
+          {peek && (
+            <div className="gr-peek-panel">
+              {(mode === 'final' ? segs : [segs[segIdx]]).map((seg, i) => (
+                <div key={i} className="gr-peek-seg">
+                  {mode === 'final' && segs.length > 1 && <div className="gr-seg-label">第 {i + 1} 段</div>}
+                  {renderSegContent(seg, true)}
+                </div>
+              ))}
+            </div>
+          )}
+          {renderQuestion()}
+        </div>
+      )}
+
       {zoom && (
         <div className="gr-lightbox" onClick={() => setZoom(null)}>
           <div className="gr-lightbox-in">

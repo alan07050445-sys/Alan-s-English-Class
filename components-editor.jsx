@@ -211,6 +211,8 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               itemId={form.id}
               segments={form.grSegments || []}
               onChange={segs => update("grSegments", segs)}
+              finalQs={form.grFinal || []}
+              onChangeFinal={qs => update("grFinal", qs)}
             />
           ) : form.type === "short-answer" ? (
             <ShortAnswerEditor
@@ -1388,52 +1390,143 @@ function ShortAnswerEditor({ passage, questions, saYoutube, onChangePassage, onC
   );
 }
 
-/* ── GuidedReadingEditor 分段閱讀（v276；v277 加文章照片＋自動裁切）──
+/* ── 分段閱讀共用 helpers（v281 抽出：段落題與綜合題共用同一套題目編輯/匯入）── */
+const grMkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
+
+// 匯入解析——沿用測驗題慣例「第一個選項＝正解」；0–1 個選項欄＝簡答題；
+// 分段閱讀作答時不洗牌，所以匯入當下就把選項打散。
+function grParseImport(text) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/\r/g, '')).filter(l => l.trim());
+  const errs = [], adds = [];
+  lines.forEach((line, li) => {
+    const cols = line.split('\t').map(c => c.trim());
+    const q = cols[0] || '';
+    if (!q) { errs.push(`第 ${li + 1} 行：沒有題目文字`); return; }
+    const rest = cols.slice(1).filter(Boolean);
+    if (rest.length >= 2) {
+      const options = rest.slice(0, 4);
+      const correctText = options[0];
+      for (let i = options.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [options[i], options[j]] = [options[j], options[i]]; }
+      const answer = options.indexOf(correctText);
+      while (options.length < 4) options.push('');
+      adds.push({ id: grMkId('gq'), kind: 'mc', q, options, answer });
+    } else {
+      adds.push({ id: grMkId('gq'), kind: 'short', q, keyPoints: rest[0] || '' });
+    }
+  });
+  return { errs, adds };
+}
+
+/* 題目清單編輯器——段落題與綜合題共用：題目卡＋新增＋⬇ 匯入面板 */
+function GrQuestionsEditor({ qs, onChange, impOpen, onToggleImp, impText, onImpText, previewLabel, inputStyle, aiHint }) {
+  const addQ = (kind) => onChange([...qs, kind === 'short'
+    ? { id: grMkId('gq'), kind: 'short', q: '', keyPoints: '' }
+    : { id: grMkId('gq'), kind: 'mc', q: '', options: ['', '', '', ''], answer: 0 }]);
+  const updQ = (qi, patch) => onChange(qs.map((q, i) => i === qi ? { ...q, ...patch } : q));
+  const delQ = (qi) => onChange(qs.filter((_, i) => i !== qi));
+  const { errs, adds } = impOpen ? grParseImport(impText) : { errs: [], adds: [] };
+  const mcN = adds.filter(a => a.kind === 'mc').length;
+  const doImp = () => {
+    if (errs.length || !adds.length) return;
+    onChange([...qs, ...adds]);
+    onImpText(''); onToggleImp();
+  };
+
+  return (
+    <>
+      {qs.map((q, qi) => (
+        <div key={q.id || qi} style={{border:'1px dashed var(--border)',borderRadius:6,padding:'10px 12px',marginTop:8,background:'var(--bg)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+            <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)'}}>{q.kind === 'short' ? '✍ 簡答' : '🅰 選擇'} Q{qi + 1}</span>
+            <span style={{flex:1}}/>
+            <button onClick={() => { if (confirm('刪除這一題？')) delQ(qi); }}
+              style={{color:'var(--accent)',background:'none',border:'none',cursor:'pointer',fontSize:13}}>✕</button>
+          </div>
+          <input value={q.q || ''} onChange={e => updQ(qi, { q: e.target.value })}
+            placeholder={q.kind === 'short' ? 'Why did the fox let the balloon go?' : 'What did the fox find in the forest?'}
+            style={inputStyle}/>
+          {q.kind === 'short' ? (
+            <>
+              <input value={q.keyPoints || ''} onChange={e => updQ(qi, { keyPoints: e.target.value })}
+                placeholder="答案要點（AI 評分依據，用 / 分隔，選填）"
+                style={{...inputStyle,marginTop:6}}/>
+              <div className="field-help" style={{marginTop:4}}>{aiHint || 'AI 會拿「這一段的文字＋答案要點」批改，給 1–5 星。'}</div>
+            </>
+          ) : (
+            <div style={{marginTop:6,display:'grid',gap:6}}>
+              {(q.options || ['', '', '', '']).map((opt, oi) => (
+                <label key={oi} style={{display:'flex',alignItems:'center',gap:8}}>
+                  <input type="radio" checked={(q.answer || 0) === oi} onChange={() => updQ(qi, { answer: oi })} title="正確答案"/>
+                  <input value={opt}
+                    onChange={e => { const os = [...(q.options || ['', '', '', ''])]; os[oi] = e.target.value; updQ(qi, { options: os }); }}
+                    placeholder={`選項 ${['A', 'B', 'C', 'D'][oi]}${oi >= 2 ? '（選填）' : ''}`}
+                    style={inputStyle}/>
+                </label>
+              ))}
+              <div className="field-help" style={{margin:0}}>點左邊圓圈＝正確答案。至少填 A、B 兩個選項；選項照你排的順序顯示（不洗牌）。</div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div style={{display:'flex',gap:6,marginTop:8}}>
+        <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => addQ('mc')}>＋ 選擇題</button>
+        <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => addQ('short')}>＋ 簡答題</button>
+        <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => { onImpText(''); onToggleImp(); }}>
+          {impOpen ? '✕ 取消' : '⬇ 匯入'}
+        </button>
+      </div>
+
+      {impOpen && (
+        <div style={{marginTop:8,padding:'10px 12px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg)'}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:6,lineHeight:1.8}}>
+            從 Excel / Google Sheets 複製貼上，每行一題：<br/>
+            選擇題：<code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>題目 [Tab] 正解 [Tab] 其他選項…</code>（跟測驗題一樣<b>第一個＝正解</b>，最多 4 個，匯入時自動打散順序）<br/>
+            簡答題：<code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>題目 [Tab] 答案要點（選填，用 / 分隔）</code>——選項欄只有 0–1 個就算簡答
+          </div>
+          <textarea
+            value={impText}
+            onChange={e => onImpText(e.target.value)}
+            rows={5}
+            placeholder={"What did the fox find?\tA red balloon\tA kite\tA hat\nWhy was the fox happy?\tHe found a balloon / He liked red"}
+            style={{width:'100%',padding:'8px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
+          />
+          {errs.length > 0 && (
+            <div style={{color:'#dc2626',fontSize:12,marginTop:4,whiteSpace:'pre-line'}}>{errs.slice(0, 5).join('\n')}</div>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:6,alignItems:'center'}}>
+            <span style={{fontSize:12,color:'var(--ink-muted)'}}>
+              {adds.length ? `${previewLabel}：${mcN} 題選擇＋${adds.length - mcN} 題簡答` : ''}
+            </span>
+            <span style={{flex:1}}/>
+            <button className="btn ghost" style={{fontSize:12,padding:'5px 12px'}}
+              onClick={() => { onImpText(''); onToggleImp(); }}>取消</button>
+            <button className="btn primary" style={{fontSize:12,padding:'5px 14px'}}
+              onClick={doImp} disabled={!adds.length || errs.length > 0}>
+              匯入{adds.length ? `（${adds.length} 題）` : ''}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── GuidedReadingEditor 分段閱讀（v276；v277 照片＋裁切；v278 PDF；v281 綜合題）──
    段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
-   img 只存裁切範圍（y0~y1 為高度比例），不產生新圖檔——隨時可重裁 */
-function GuidedReadingEditor({ itemId, segments, onChange }) {
+   grFinal = 全部讀完後的整篇綜合題（同題目格式）；img 只存裁切範圍，不產生新圖檔 */
+function GuidedReadingEditor({ itemId, segments, onChange, finalQs, onChangeFinal }) {
   const [pasting, setPasting] = useS(false);
   const [pasteText, setPasteText] = useS('');
   const [uploading, setUploading] = useS('');
   const [upErr, setUpErr] = useS('');
   const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
-  const [impSeg, setImpSeg] = useS(null);   // v280: 哪一段的「⬇ 匯入」面板打開（段索引）
+  const [impSeg, setImpSeg] = useS(null);   // 哪個匯入面板打開（段索引 | 'final'）
   const [impText, setImpText] = useS('');
   const fileRef = React.useRef(null);
   const pdfRef = React.useRef(null);
 
-  // v280: 每段各自匯入題目（Alan：出題的單位是段落）——沿用測驗題慣例「第一個選項＝正解」。
-  // 0–1 個選項欄＝簡答題；分段閱讀作答時不洗牌，所以匯入當下就把選項打散。
-  const parseSegRows = () => {
-    const lines = impText.split('\n').map(l => l.replace(/\r/g, '')).filter(l => l.trim());
-    const errs = [], adds = [];
-    lines.forEach((line, li) => {
-      const cols = line.split('\t').map(c => c.trim());
-      const q = cols[0] || '';
-      if (!q) { errs.push(`第 ${li + 1} 行：沒有題目文字`); return; }
-      const rest = cols.slice(1).filter(Boolean);
-      if (rest.length >= 2) {
-        const options = rest.slice(0, 4);
-        const correctText = options[0];
-        for (let i = options.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [options[i], options[j]] = [options[j], options[i]]; }
-        const answer = options.indexOf(correctText);
-        while (options.length < 4) options.push('');
-        adds.push({ id: mkId('gq'), kind: 'mc', q, options, answer });
-      } else {
-        adds.push({ id: mkId('gq'), kind: 'short', q, keyPoints: rest[0] || '' });
-      }
-    });
-    return { errs, adds };
-  };
-
-  const doImportSeg = (si) => {
-    const { errs, adds } = parseSegRows();
-    if (errs.length || !adds.length) return;
-    upd(si, { questions: [...(segments[si].questions || []), ...adds] });
-    setImpSeg(null); setImpText('');
-  };
-
-  const mkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
+  const mkId = grMkId;
 
   // 照片縮到最長邊 1600px JPEG（同上傳作業的做法），順便量長寬比
   const shrinkPhoto = (file) => new Promise((resolve, reject) => {
@@ -1553,15 +1646,6 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
     setPasteText(''); setPasting(false);
   };
 
-  const addQ = (si, kind) => {
-    const q = kind === 'short'
-      ? { id: mkId('gq'), kind: 'short', q: '', keyPoints: '' }
-      : { id: mkId('gq'), kind: 'mc', q: '', options: ['', '', '', ''], answer: 0 };
-    upd(si, { questions: [...(segments[si].questions || []), q] });
-  };
-  const updQ = (si, qi, patch) => upd(si, { questions: (segments[si].questions || []).map((q, i) => i === qi ? { ...q, ...patch } : q) });
-  const delQ = (si, qi) => upd(si, { questions: (segments[si].questions || []).filter((_, i) => i !== qi) });
-
   const inputStyle = {width:'100%',padding:'8px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:3,fontSize:13,boxSizing:'border-box'};
 
   return (
@@ -1641,90 +1725,42 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
             style={{...inputStyle,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}
           />
 
-          {(seg.questions || []).map((q, qi) => (
-            <div key={q.id || qi} style={{border:'1px dashed var(--border)',borderRadius:6,padding:'10px 12px',marginTop:8,background:'var(--bg)'}}>
-              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
-                <span style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)'}}>{q.kind === 'short' ? '✍ 簡答' : '🅰 選擇'} Q{qi + 1}</span>
-                <span style={{flex:1}}/>
-                <button onClick={() => { if (confirm('刪除這一題？')) delQ(si, qi); }}
-                  style={{color:'var(--accent)',background:'none',border:'none',cursor:'pointer',fontSize:13}}>✕</button>
-              </div>
-              <input value={q.q || ''} onChange={e => updQ(si, qi, { q: e.target.value })}
-                placeholder={q.kind === 'short' ? 'Why did the fox let the balloon go?' : 'What did the fox find in the forest?'}
-                style={inputStyle}/>
-              {q.kind === 'short' ? (
-                <>
-                  <input value={q.keyPoints || ''} onChange={e => updQ(si, qi, { keyPoints: e.target.value })}
-                    placeholder="答案要點（AI 評分依據，用 / 分隔，選填）"
-                    style={{...inputStyle,marginTop:6}}/>
-                  <div className="field-help" style={{marginTop:4}}>AI 會拿「這一段的文字＋答案要點」批改，給 1–5 星。</div>
-                </>
-              ) : (
-                <div style={{marginTop:6,display:'grid',gap:6}}>
-                  {(q.options || ['', '', '', '']).map((opt, oi) => (
-                    <label key={oi} style={{display:'flex',alignItems:'center',gap:8}}>
-                      <input type="radio" checked={(q.answer || 0) === oi} onChange={() => updQ(si, qi, { answer: oi })} title="正確答案"/>
-                      <input value={opt}
-                        onChange={e => { const os = [...(q.options || ['', '', '', ''])]; os[oi] = e.target.value; updQ(si, qi, { options: os }); }}
-                        placeholder={`選項 ${['A', 'B', 'C', 'D'][oi]}${oi >= 2 ? '（選填）' : ''}`}
-                        style={inputStyle}/>
-                    </label>
-                  ))}
-                  <div className="field-help" style={{margin:0}}>點左邊圓圈＝正確答案。至少填 A、B 兩個選項；選項照你排的順序顯示（不洗牌）。</div>
-                </div>
-              )}
-            </div>
-          ))}
-
-          <div style={{display:'flex',gap:6,marginTop:8}}>
-            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => addQ(si, 'mc')}>＋ 選擇題</button>
-            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => addQ(si, 'short')}>＋ 簡答題</button>
-            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
-              onClick={() => { setImpText(''); setImpSeg(impSeg === si ? null : si); }}>
-              {impSeg === si ? '✕ 取消' : '⬇ 匯入'}
-            </button>
-          </div>
-
-          {impSeg === si && (() => {
-            const { errs, adds } = parseSegRows();
-            const mcN = adds.filter(a => a.kind === 'mc').length;
-            const shN = adds.length - mcN;
-            return (
-              <div style={{marginTop:8,padding:'10px 12px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg)'}}>
-                <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:6,lineHeight:1.8}}>
-                  這一段的題目，從 Excel / Google Sheets 複製貼上，每行一題：<br/>
-                  選擇題：<code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>題目 [Tab] 正解 [Tab] 其他選項…</code>（跟測驗題一樣<b>第一個＝正解</b>，最多 4 個，匯入時自動打散順序）<br/>
-                  簡答題：<code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>題目 [Tab] 答案要點（選填，用 / 分隔）</code>——選項欄只有 0–1 個就算簡答
-                </div>
-                <textarea
-                  value={impText}
-                  onChange={e => setImpText(e.target.value)}
-                  rows={5}
-                  placeholder={"What did the fox find?\tA red balloon\tA kite\tA hat\nWhy was the fox happy?\tHe found a balloon / He liked red"}
-                  style={{width:'100%',padding:'8px 10px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
-                />
-                {errs.length > 0 && (
-                  <div style={{color:'#dc2626',fontSize:12,marginTop:4,whiteSpace:'pre-line'}}>{errs.slice(0, 5).join('\n')}</div>
-                )}
-                <div style={{display:'flex',gap:8,marginTop:6,alignItems:'center'}}>
-                  <span style={{fontSize:12,color:'var(--ink-muted)'}}>
-                    {adds.length ? `將加進第 ${si + 1} 段：${mcN} 題選擇＋${shN} 題簡答` : ''}
-                  </span>
-                  <span style={{flex:1}}/>
-                  <button className="btn ghost" style={{fontSize:12,padding:'5px 12px'}}
-                    onClick={() => { setImpSeg(null); setImpText(''); }}>取消</button>
-                  <button className="btn primary" style={{fontSize:12,padding:'5px 14px'}}
-                    onClick={() => doImportSeg(si)} disabled={!adds.length || errs.length > 0}>
-                    匯入{adds.length ? `（${adds.length} 題）` : ''}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+          <GrQuestionsEditor
+            qs={seg.questions || []}
+            onChange={qs2 => upd(si, { questions: qs2 })}
+            impOpen={impSeg === si}
+            onToggleImp={() => setImpSeg(impSeg === si ? null : si)}
+            impText={impText}
+            onImpText={setImpText}
+            previewLabel={`將加進第 ${si + 1} 段`}
+            inputStyle={inputStyle}
+          />
         </div>
       ))}
 
       <button className="btn primary" style={{fontSize:12,padding:'7px 16px'}} onClick={addSeg}>＋ 新增段落</button>
+
+      {/* v281: 全部讀完後的整篇綜合題（Alan 要求） */}
+      <div style={{marginTop:18,padding:'12px 14px',border:'1.5px solid var(--border)',borderRadius:8,background:'var(--bg-paper)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+          <b style={{fontSize:13}}>📚 綜合題（全部讀完後）</b>
+          <span style={{fontSize:11,color:'var(--ink-muted)'}}>{(finalQs || []).length} 題</span>
+        </div>
+        <div className="field-help" style={{marginBottom:4}}>
+          學生把每一段都讀完、答完後，最後出現的整篇文章綜合題（選填）。答題時可展開整篇文章回頭看。
+        </div>
+        <GrQuestionsEditor
+          qs={finalQs || []}
+          onChange={onChangeFinal}
+          impOpen={impSeg === 'final'}
+          onToggleImp={() => setImpSeg(impSeg === 'final' ? null : 'final')}
+          impText={impText}
+          onImpText={setImpText}
+          previewLabel="將加進綜合題"
+          inputStyle={inputStyle}
+          aiHint="綜合題的簡答：AI 會拿「整篇文章的文字＋答案要點」批改，給 1–5 星。"
+        />
+      </div>
 
       {cropSeg && (
         <GrCropModal
