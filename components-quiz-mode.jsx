@@ -778,7 +778,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isCircle       = item.type === 'circle-answer';
             const isFlashcard    = item.type === 'flashcard';
             const isUpload       = item.type === 'upload'; // v263
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || isUpload || (isFlashcard && (item.cards || []).length > 0);
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || isUpload || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
