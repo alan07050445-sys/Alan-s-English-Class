@@ -2527,10 +2527,10 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const segTotal = useQMM(() => segQs.reduce((n, qs) => n + qs.length, 0), [segQs]);
   const total    = segTotal + finalQs.length;
 
-  /* v281: 翻頁式流程（Alan 拍板）——「文章頁」讀完按「完成閱讀」→「問題頁」
-     一題一題答（可展開「回頭看文章」）→ 下一段文章頁 → … → 綜合題 → 完成 */
+  /* v283: 翻頁式流程——「文章頁」讀完按「完成閱讀」→「問題頁」
+     一題一題答（可展開「回頭看文章」）→ 下一段文章頁 → … → 綜合題過場 → 綜合題 → 完成 */
   const [segIdx, setSegIdx]     = useQM(0);
-  const [mode, setMode]         = useQM('read');  // 'read' | 'quiz' | 'final'
+  const [mode, setMode]         = useQM('read');  // 'read' | 'quiz' | 'final-intro' | 'final'
   const [qIdx, setQIdx]         = useQM(0);
   const [res, setRes]           = useQM({});      // 全域題序 -> { pts }
   const [selected, setSelected] = useQM(null);
@@ -2548,7 +2548,11 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     const r = getResume(progressKey, total);
     if (r && r.gr && typeof r.gr.segIdx === 'number') {
       setSegIdx(Math.min(r.gr.segIdx, Math.max(0, segs.length - 1)));
-      setMode(r.gr.mode === 'final' && finalQs.length ? 'final' : (r.gr.mode === 'quiz' ? 'quiz' : 'read'));
+      setMode(r.gr.mode === 'final' && finalQs.length
+        ? 'final'
+        : (r.gr.mode === 'final-intro' && finalQs.length
+          ? 'final-intro'
+          : (r.gr.mode === 'quiz' ? 'quiz' : 'read')));
       setQIdx(r.gr.qIdx || 0);
       setRes(r.gr.res || {});
       wrongsRef.current = Array.isArray(r.gr.wrongs) ? r.gr.wrongs : [];
@@ -2569,21 +2573,25 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
   const resetQState = () => { setSelected(null); setAnswer(''); setFeedback(''); setPeek(false); };
 
-  const persist = (nres) => {
+  const savePosition = (nres, nSeg, nMode, nQ) => {
     const count = Object.keys(nres).length;
     if (count < 1 || count >= total) return;
-    // 存「下一個未答題」的位置
-    let nSeg = segIdx, nMode = mode, nQ = qIdx + 1;
-    if (nMode === 'quiz' && nQ >= (segQs[nSeg] || []).length) {
-      if (nSeg + 1 < segs.length) { nSeg += 1; nMode = 'read'; nQ = 0; }
-      else if (finalQs.length) { nMode = 'final'; nQ = 0; }
-    }
     saveResume(progressKey, {
       deck: Array.from({ length: total }, (_, i) => i),
       deckPos: count,
       uniqueTotal: total,
       gr: { segIdx: nSeg, mode: nMode, qIdx: nQ, res: nres, wrongs: wrongsRef.current },
     });
+  };
+
+  const persist = (nres) => {
+    // 存「下一個未答題」的位置
+    let nSeg = segIdx, nMode = mode, nQ = qIdx + 1;
+    if (nMode === 'quiz' && nQ >= (segQs[nSeg] || []).length) {
+      if (nSeg + 1 < segs.length) { nSeg += 1; nMode = 'read'; nQ = 0; }
+      else if (finalQs.length) { nMode = 'final-intro'; nQ = 0; }
+    }
+    savePosition(nres, nSeg, nMode, nQ);
   };
 
   const finish = (nres) => {
@@ -2599,7 +2607,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     if (qIdx + 1 < curQs.length) { setQIdx(qIdx + 1); return; }
     if (mode === 'final') { finish(nres); return; }
     if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setMode('read'); setQIdx(0); return; }
-    if (finalQs.length) { setMode('final'); setQIdx(0); return; }
+    if (finalQs.length) { setMode('final-intro'); setQIdx(0); return; }
     finish(nres);
   };
 
@@ -2608,8 +2616,15 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     resetQState();
     if ((segQs[segIdx] || []).length) { setMode('quiz'); setQIdx(0); return; }
     if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setMode('read'); setQIdx(0); return; }
-    if (finalQs.length) { setMode('final'); setQIdx(0); return; }
+    if (finalQs.length) { setMode('final-intro'); setQIdx(0); return; }
     finish(res);
+  };
+
+  const startFinal = () => {
+    resetQState();
+    savePosition(res, segIdx, 'final', 0);
+    setMode('final');
+    setQIdx(0);
   };
 
   const handlePick = (i) => {
@@ -2647,6 +2662,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     const onKey = (e) => {
       if (done || (e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) return;
       if (mode === 'read') { if (e.key === 'Enter') finishReading(); return; }
+      if (mode === 'final-intro') { if (e.key === 'Enter') startFinal(); return; }
       if (qIdx >= curQs.length) return;
       const q = grNormalizeQ(curQs[qIdx]);
       if (q.kind === 'short') return;
@@ -2771,7 +2787,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       <div className="wp-header">
         <button className="wp-back" onClick={onBack}>←</button>
         <span className="wp-counter">
-          {mode === 'final' ? '📚 綜合題 · ' : (segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : '')}
+          {mode === 'final' || mode === 'final-intro' ? '📚 綜合練習 · ' : (segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : '')}
           {total ? `${answered} / ${total} 題` : ''}
         </span>
       </div>
@@ -2787,6 +2803,20 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
             <button className="qm-btn primary" onClick={finishReading}>✅ 完成閱讀</button>
           </div>
         </>
+      ) : mode === 'final-intro' ? (
+        /* ── 文章與綜合題之間的過場：讓學生明確知道閱讀階段已完成 ── */
+        <div className="qm-intro gr-final-intro">
+          <div className="qm-intro-icon">✅</div>
+          <div className="qm-intro-title">已經讀完文章！</div>
+          <div className="qm-intro-meta">接下來開始做綜合練習</div>
+          <div className="qm-intro-rules">
+            <div className="qm-intro-rule-row"><span>📚</span><span>用剛才讀完的整篇文章，完成最後 {finalQs.length} 題綜合題。</span></div>
+            <div className="qm-intro-rule-row"><span>👀</span><span>忘記內容時，可以按「回頭看文章」再次查看。</span></div>
+          </div>
+          <div className="qm-intro-btns">
+            <button className="qm-btn primary" onClick={startFinal}>開始綜合練習 →</button>
+          </div>
+        </div>
       ) : (
         /* ── 問題頁：一題一題答；可展開「回頭看文章」── */
         <div className="gr-seg cur">
