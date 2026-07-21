@@ -2520,3 +2520,38 @@
   .gr-seg { padding: 16px; border-radius: 12px; }
   .gr-seg-text { font-size: 16px; }
 }
+
+/* ══ v277: 分段閱讀——文章照片切片＋點圖放大 ══ */
+.grd-img {
+  position: relative;
+  height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f5f1e8;
+  cursor: zoom-in;
+}
+.grd-img img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  display: block;
+}
+.gr-seg .grd-img { margin-bottom: 10px; }
+.gr-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(24, 18, 10, .92);
+  overflow: auto;
+  padding: 24px 12px 40px;
+  cursor: zoom-out;
+}
+.gr-lightbox-in { width: min(1200px, 175vw); margin: 0 auto; }
+.gr-lightbox .grd-img { cursor: zoom-out; border-radius: 6px; }
+.gr-lightbox-hint {
+  text-align: center;
+  color: #d8cbb4;
+  font-size: 12.5px;
+  margin-top: 12px;
+  font-family: var(--mono, monospace);
+}

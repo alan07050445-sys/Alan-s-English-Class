@@ -13,7 +13,7 @@ const TYPE_OPTIONS = [
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
   { id: "spelling",         label: "Spelling 聽寫",     hint: "🔊 聽單字拼出來 — 匯入單字清單，學生聽發音自己拼字，自動批改" },
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
-  { id: "guided-reading",   label: "分段閱讀 📖",       hint: "📖 分段閱讀 — 長文切小段，每讀完一小段馬上答題（選擇＋簡答），小朋友不放空；短文一段搞定。支援貼整篇文章自動分段。" },
+  { id: "guided-reading",   label: "分段閱讀 📖",       hint: "📖 分段閱讀 — 上傳文章照片（✂ 可自動裁切分段）或貼文字；長文切小段、每讀完一小段馬上答題（選擇＋簡答），小朋友不放空；短文一段搞定。" },
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
   { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
@@ -208,6 +208,7 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
             </div>
           ) : form.type === "guided-reading" ? (
             <GuidedReadingEditor
+              itemId={form.id}
               segments={form.grSegments || []}
               onChange={segs => update("grSegments", segs)}
             />
@@ -1387,13 +1388,74 @@ function ShortAnswerEditor({ passage, questions, saYoutube, onChangePassage, onC
   );
 }
 
-/* ── GuidedReadingEditor 分段閱讀（v276）──
-   段落 = { id, text, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] } */
-function GuidedReadingEditor({ segments, onChange }) {
+/* ── GuidedReadingEditor 分段閱讀（v276；v277 加文章照片＋自動裁切）──
+   段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
+   img 只存裁切範圍（y0~y1 為高度比例），不產生新圖檔——隨時可重裁 */
+function GuidedReadingEditor({ itemId, segments, onChange }) {
   const [pasting, setPasting] = useS(false);
   const [pasteText, setPasteText] = useS('');
+  const [uploading, setUploading] = useS('');
+  const [upErr, setUpErr] = useS('');
+  const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
+  const fileRef = React.useRef(null);
 
   const mkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
+
+  // 照片縮到最長邊 1600px JPEG（同上傳作業的做法），順便量長寬比
+  const shrinkPhoto = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1600;
+      const k = Math.min(1, MAX / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(img.width * k));
+      cv.height = Math.max(1, Math.round(img.height * k));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => b ? resolve({ blob: b, ar: cv.height / cv.width }) : reject(new Error('無法處理這張圖片')), 'image/jpeg', 0.85);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('圖片讀取失敗')); };
+    img.src = URL.createObjectURL(file);
+  });
+
+  const pickPhotos = async (e) => {
+    const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
+    e.target.value = '';
+    if (!files.length) return;
+    setUpErr('');
+    const added = [];
+    try {
+      for (let i = 0; i < files.length; i++) {
+        setUploading(`上傳中 ${i + 1}/${files.length}…`);
+        const { blob, ar } = await shrinkPhoto(files[i]);
+        const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
+        added.push({ id: mkId('gs'), text: '', img: { url, ar, y0: 0, y1: 1 }, questions: [] });
+      }
+      onChange([...segments, ...added]);
+    } catch (err) {
+      if (added.length) onChange([...segments, ...added]);
+      setUpErr('上傳失敗：' + ((err && err.message) || err) + '——請確認你是用老師帳號登入。');
+    }
+    setUploading('');
+  };
+
+  // 裁切確認：同一張照片的所有段落照新裁切線重建；原本各段的題目/文字按順序保留
+  const applyCrop = (bands) => {
+    const url = cropSeg.img.url;
+    const isSame = (s) => s.img && s.img.url === url;
+    const groupSegs = segments.filter(isSame).sort((a, b) => (a.img.y0 || 0) - (b.img.y0 || 0));
+    const gi = segments.findIndex(isSame);
+    const rest = segments.filter(s => !isSame(s));
+    const insertAt = segments.slice(0, gi).filter(s => !isSame(s)).length;
+    const rebuilt = bands.map((b, i) => ({
+      id: (groupSegs[i] && groupSegs[i].id) || mkId('gs'),
+      text: (groupSegs[i] && groupSegs[i].text) || '',
+      img: { url, ar: cropSeg.img.ar, y0: b[0], y1: b[1] },
+      questions: (groupSegs[i] && groupSegs[i].questions) || [],
+    }));
+    onChange([...rest.slice(0, insertAt), ...rebuilt, ...rest.slice(insertAt)]);
+    setCropSeg(null);
+  };
   const upd = (i, patch) => onChange(segments.map((s, si) => si === i ? { ...s, ...patch } : s));
   const delSeg = (i) => onChange(segments.filter((_, si) => si !== i));
   const moveSeg = (i, d) => {
@@ -1424,15 +1486,23 @@ function GuidedReadingEditor({ segments, onChange }) {
 
   return (
     <div className="field">
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,gap:6,flexWrap:'wrap'}}>
         <label className="field-label" style={{margin:0}}>段落 Segments ({segments.length})</label>
-        <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
-          {pasting ? '✕ 取消' : '⬇ 貼整篇文章自動分段'}
-        </button>
+        <div style={{display:'flex',gap:6}}>
+          <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}}
+            onClick={() => fileRef.current && fileRef.current.click()} disabled={!!uploading}>
+            {uploading || '📷 上傳文章照片'}
+          </button>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
+            {pasting ? '✕ 取消' : '⬇ 貼文字自動分段'}
+          </button>
+        </div>
       </div>
+      <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={pickPhotos}/>
       <div className="field-help" style={{marginBottom:10}}>
-        長文：切成多個小段，每段配 1–2 題，小朋友讀一小段就答題、不放空。短文：只放一段，題目全放這段底下。
+        照片：一張＝先當一段，太長的照片點「✂ 裁切」自動分段。長文：每段配 1–2 題，小朋友讀一小段就答題、不放空；短文只放一段、題目全放最後。
       </div>
+      {upErr && <div style={{fontSize:12,color:'#dc2626',marginBottom:8}}>{upErr}</div>}
 
       {pasting && (
         <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper)'}}>
@@ -1470,11 +1540,19 @@ function GuidedReadingEditor({ segments, onChange }) {
             <button className="btn ghost" style={{fontSize:11,padding:'3px 8px',color:'var(--accent)'}}
               onClick={() => { if (confirm('刪除這一段（含底下的題目）？')) delSeg(si); }}>✕</button>
           </div>
+          {seg.img && seg.img.url ? (
+            <div style={{marginBottom:8}}>
+              <GrEdCropThumb img={seg.img}/>
+              <button className="btn ghost" style={{fontSize:11,padding:'4px 10px',marginTop:6}} onClick={() => setCropSeg(seg)}>
+                ✂ 裁切這張照片
+              </button>
+            </div>
+          ) : null}
           <textarea
             value={seg.text || ''}
             onChange={e => upd(si, { text: e.target.value })}
-            rows={5}
-            placeholder="這一段的文章內容…（學生會看到；空行＝換段落顯示）"
+            rows={seg.img && seg.img.url ? 2 : 5}
+            placeholder={seg.img && seg.img.url ? '補充文字（選填，顯示在照片下方）' : '這一段的文章內容…（學生會看到；空行＝換段落顯示）'}
             style={{...inputStyle,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}
           />
 
@@ -1521,6 +1599,166 @@ function GuidedReadingEditor({ segments, onChange }) {
       ))}
 
       <button className="btn primary" style={{fontSize:12,padding:'7px 16px'}} onClick={addSeg}>＋ 新增段落</button>
+
+      {cropSeg && (
+        <GrCropModal
+          url={cropSeg.img.url}
+          group={segments.filter(s => s.img && s.img.url === cropSeg.img.url)}
+          onCancel={() => setCropSeg(null)}
+          onConfirm={applyCrop}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── 編輯器：段落照片縮圖（固定寬，px 計算高度）── */
+function GrEdCropThumb({ img }) {
+  const y0 = img.y0 || 0;
+  const y1 = img.y1 == null ? 1 : img.y1;
+  const W = 300;
+  const h = Math.max(8, W * (img.ar || 1.3) * Math.max(0.02, y1 - y0));
+  return (
+    <div style={{width:W,maxWidth:'100%',height:h,position:'relative',overflow:'hidden',borderRadius:6,border:'1px solid var(--border)',background:'#f5f1e8'}}>
+      <img src={img.url} alt="" style={{position:'absolute',top:0,left:0,width:'100%',transform:`translateY(-${y0 * 100}%)`,display:'block'}}/>
+    </div>
+  );
+}
+
+/* ── 照片裁切視窗（v277）──
+   點照片＝加線、拖線＝微調、✕＝刪線；🪄 自動偵測＝掃描橫列亮度，
+   段落間的空白（比行距明顯大的白帶）自動畫線。只存比例，不產生新圖。 */
+function GrCropModal({ url, group, onCancel, onConfirm }) {
+  const sorted = [...group].sort((a, b) => (a.img.y0 || 0) - (b.img.y0 || 0));
+  const init = sorted.slice(0, -1).map(s => (s.img.y1 == null ? 1 : s.img.y1)).filter(y => y > 0 && y < 1);
+  const [lines, setLines] = useS(init);
+  const [busy, setBusy] = useS(false);
+  const [err, setErr] = useS('');
+  const wrapRef = React.useRef(null);
+  const dragRef = React.useRef(null);
+
+  const yFromClient = (clientY) => {
+    const r = wrapRef.current.getBoundingClientRect();
+    return Math.min(0.98, Math.max(0.02, (clientY - r.top) / r.height));
+  };
+  const addLineAt = (e) => setLines(ls => [...ls, yFromClient(e.clientY)].sort((a, b) => a - b));
+  const startDrag = (i) => (e) => { e.preventDefault(); e.stopPropagation(); dragRef.current = i; };
+
+  useE(() => {
+    const move = (e) => {
+      if (dragRef.current == null || !wrapRef.current) return;
+      if (e.touches) e.preventDefault();
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      const i = dragRef.current;
+      const y = yFromClient(cy);
+      setLines(ls => ls.map((v, j) => j === i ? y : v));
+    };
+    const up = () => { if (dragRef.current != null) { dragRef.current = null; setLines(ls => [...ls].sort((a, b) => a - b)); } };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', up);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', up);
+    };
+  }, []);
+
+  const autoDetect = () => {
+    setBusy(true); setErr('');
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // Firebase Storage 下載 URL 有 CORS *，canvas 讀得到
+    img.onload = () => {
+      try {
+        const W = 400;
+        const H = Math.max(1, Math.round(W * (img.naturalHeight / img.naturalWidth)));
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const cx = cv.getContext('2d');
+        cx.drawImage(img, 0, 0, W, H);
+        const d = cx.getImageData(0, 0, W, H).data;
+        const isText = new Array(H);
+        for (let y = 0; y < H; y++) {
+          let c = 0;
+          for (let x = 0; x < W; x += 2) {
+            const i = (y * W + x) * 4;
+            if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 140) c++;
+          }
+          isText[y] = (c / (W / 2)) > 0.02;
+        }
+        // 連續「非文字列」＝空白帶；行距的白帶小、段落間的白帶大 → 取明顯大於中位數的
+        const gaps = [];
+        let s = null;
+        for (let y = 0; y <= H; y++) {
+          const t = y < H ? isText[y] : true;
+          if (!t && s == null) s = y;
+          if (t && s != null) { gaps.push({ start: s, len: y - s }); s = null; }
+        }
+        const interior = gaps.filter(g => g.start > 0 && g.start + g.len < H);
+        if (!interior.length) { setErr('偵測不到段落空隙——請直接點照片手動加線。'); setBusy(false); return; }
+        const lens = interior.map(g => g.len).sort((a, b) => a - b);
+        const med = lens[Math.floor(lens.length / 2)];
+        let cuts = interior
+          .filter(g => g.len >= Math.max(med * 1.7, H * 0.012))
+          .map(g => (g.start + g.len / 2) / H)
+          .filter(y => y > 0.03 && y < 0.97);
+        cuts = cuts.filter((c, i) => i === 0 || c - cuts[i - 1] > 0.04).slice(0, 12);
+        if (!cuts.length) { setErr('空隙都差不多大，自動分不出段落——請直接點照片手動加線。'); setBusy(false); return; }
+        setLines(cuts);
+      } catch (e2) {
+        setErr('這張照片無法自動偵測——請直接點照片手動加線。');
+      }
+      setBusy(false);
+    };
+    img.onerror = () => { setErr('照片載入失敗——請直接點照片手動加線。'); setBusy(false); };
+    img.src = url;
+  };
+
+  const bands = (() => {
+    const ys = [0, ...lines, 1];
+    const out = [];
+    for (let i = 0; i + 1 < ys.length; i++) if (ys[i + 1] - ys[i] > 0.02) out.push([ys[i], ys[i + 1]]);
+    return out;
+  })();
+
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:300,background:'rgba(24,18,10,.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onCancel}>
+      <div style={{background:'var(--bg,#fff)',borderRadius:10,maxWidth:560,width:'100%',maxHeight:'92vh',display:'flex',flexDirection:'column',padding:'14px 16px',boxSizing:'border-box'}} onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,flexWrap:'wrap'}}>
+          <b style={{fontSize:14}}>✂ 裁切照片</b>
+          <span style={{flex:1}}/>
+          <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={autoDetect} disabled={busy}>
+            {busy ? '偵測中…' : '🪄 自動偵測段落'}
+          </button>
+          <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={() => setLines([])} disabled={!lines.length}>清除線</button>
+        </div>
+        <div style={{fontSize:11.5,color:'var(--ink-muted)',marginBottom:6}}>
+          點照片＝加一條裁切線；拖線＝微調；點線上的 ✕＝刪除。兩條線之間＝一段。
+        </div>
+        {err && <div style={{fontSize:12,color:'#dc2626',marginBottom:6}}>{err}</div>}
+        <div style={{overflow:'auto',flex:1,minHeight:0,border:'1px solid var(--border)',borderRadius:6}}>
+          <div ref={wrapRef} style={{position:'relative',cursor:'crosshair'}} onClick={addLineAt}>
+            <img src={url} alt="" style={{width:'100%',display:'block',userSelect:'none',pointerEvents:'none'}}/>
+            {lines.map((y, i) => (
+              <div key={i}
+                style={{position:'absolute',left:0,right:0,top:`${y * 100}%`,borderTop:'2px dashed #B85A45',cursor:'ns-resize',height:14,marginTop:-7,paddingTop:7,boxSizing:'border-box'}}
+                onMouseDown={startDrag(i)} onTouchStart={startDrag(i)} onClick={e => e.stopPropagation()}>
+                <span style={{position:'absolute',left:6,top:-9,background:'#B85A45',color:'#fff',fontSize:10,borderRadius:3,padding:'0 5px',pointerEvents:'none'}}>✂ {i + 1}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setLines(ls => ls.filter((_, j) => j !== i)); }}
+                  onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+                  style={{position:'absolute',right:6,top:-11,background:'#B85A45',color:'#fff',border:'none',borderRadius:'50%',width:22,height:22,fontSize:11,cursor:'pointer',lineHeight:'22px',padding:0}}>✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:10}}>
+          <button className="btn ghost" onClick={onCancel}>取消</button>
+          <button className="btn primary" onClick={() => onConfirm(bands)}>✅ 完成裁切（{bands.length} 段）</button>
+        </div>
+      </div>
     </div>
   );
 }

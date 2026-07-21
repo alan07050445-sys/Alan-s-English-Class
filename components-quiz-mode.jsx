@@ -129,7 +129,7 @@ function grValidQs(seg) {
 }
 function grSegs(item) {
   return (item && Array.isArray(item.grSegments) ? item.grSegments : [])
-    .filter(s => s && ((s.text || '').trim() || grValidQs(s).length > 0));
+    .filter(s => s && ((s.text || '').trim() || (s.img && s.img.url) || grValidQs(s).length > 0));
 }
 function grTotalQ(item) {
   return grSegs(item).reduce((n, s) => n + grValidQs(s).length, 0);
@@ -2472,6 +2472,22 @@ function grNormalizeQ(q) {
   return { ...q, options: kept, correct: Math.max(0, kept.indexOf(ansTxt)) };
 }
 
+/* v277: 段落照片切片——只存裁切範圍 {url, ar, y0, y1}（0~1 高度比例），
+   不產生新圖片：CSS 高度=寬×ar×(y1-y0)、img translateY(-y0%) 顯示該帶。 */
+function GrImgCrop({ img, onZoom, className }) {
+  const y0 = img.y0 || 0;
+  const y1 = img.y1 == null ? 1 : img.y1;
+  const band = Math.max(0.02, y1 - y0);
+  const ar = img.ar || 1.3;
+  return (
+    <div className={'grd-img' + (className ? ' ' + className : '')}
+      style={{ paddingBottom: (ar * band * 100) + '%' }}
+      onClick={onZoom} title={onZoom ? '點一下放大' : undefined}>
+      <img src={img.url} style={{ transform: `translateY(-${y0 * 100}%)` }} alt="文章段落" loading="lazy"/>
+    </div>
+  );
+}
+
 function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
   const segs = grSegs(item);
   const total = grTotalQ(item);
@@ -2512,6 +2528,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [feedback, setFeedback] = useQM('');     // 簡答 AI 回饋
   const [checking, setChecking] = useQM(false);
   const [done, setDone]         = useQM(false);
+  const [zoom, setZoom]         = useQM(null);   // v277: 點照片放大
   const wrongsRef = React.useRef([]);
   const autoRef   = React.useRef(null);
   const curSegRef = React.useRef(null);
@@ -2738,12 +2755,21 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         return (
           <div key={si} className={'gr-seg' + (isCur ? ' cur' : ' past')} ref={isCur ? curSegRef : null}>
             {segs.length > 1 && <div className="gr-seg-label">第 {si + 1} 段</div>}
+            {seg.img && seg.img.url ? <GrImgCrop img={seg.img} onZoom={() => setZoom(seg.img)}/> : null}
             {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
             {!isCur && qs.length > 0 && <div className="gr-past-chip">✓ 已回答 {qs.length} 題</div>}
             {isCur && renderCurrent()}
           </div>
         );
       })}
+      {zoom && (
+        <div className="gr-lightbox" onClick={() => setZoom(null)}>
+          <div className="gr-lightbox-in">
+            <GrImgCrop img={zoom}/>
+            <div className="gr-lightbox-hint">點一下任意處關閉</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
