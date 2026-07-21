@@ -13,7 +13,7 @@ const TYPE_OPTIONS = [
   { id: "type-answer",      label: "Type Answer",      hint: "⌨ 看提示打答案 — 例：base form → past tense，老師自訂題目與答案" },
   { id: "spelling",         label: "Spelling 聽寫",     hint: "🔊 聽單字拼出來 — 匯入單字清單，學生聽發音自己拼字，自動批改" },
   { id: "short-answer",     label: "Short Answer",     hint: "📖 閱讀理解短答題 — 貼文章，學生逐題打字回答，AI 批改 0–3 星" },
-  { id: "guided-reading",   label: "分段閱讀 📖",       hint: "📖 分段閱讀 — 上傳文章照片（✂ 可自動裁切分段）或貼文字；長文切小段、每讀完一小段馬上答題（選擇＋簡答），小朋友不放空；短文一段搞定。" },
+  { id: "guided-reading",   label: "分段閱讀 📖",       hint: "📖 分段閱讀 — 匯入掃描 PDF（每頁一段）／上傳照片／貼文字，✂ 可自動裁切分段；長文切小段、每讀完一小段馬上答題（選擇＋簡答），小朋友不放空；短文一段搞定。" },
   { id: "syllable-div",     label: "Syllable Cut",     hint: "✂️ 切音節練習 — 輸入單字與切法，學生點擊字母縫隙自己切，系統自動批改" },
   { id: "word-sort",        label: "Word Sort",        hint: "🗂 分類排序 — 設定分類欄位，學生把單字拖進正確欄位，系統自動批改" },
   { id: "essay",            label: "Opinion Essay",    hint: "✍ 意見文寫作 — 學生寫 opinion essay，AI 依照 7 項標準批改（Claim / Reasons / Examples / Explanation / Conclusion / Organization / Grammar）" },
@@ -1398,6 +1398,7 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
   const [upErr, setUpErr] = useS('');
   const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
   const fileRef = React.useRef(null);
+  const pdfRef = React.useRef(null);
 
   const mkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
 
@@ -1435,6 +1436,52 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
     } catch (err) {
       if (added.length) onChange([...segments, ...added]);
       setUpErr('上傳失敗：' + ((err && err.message) || err) + '——請確認你是用老師帳號登入。');
+    }
+    setUploading('');
+  };
+
+  // v278: 匯入掃描 PDF——pdf.js（用到才從 CDN 載）把每頁畫成 1600px JPEG，
+  // 之後跟照片完全同一條路：一頁＝一段，太長再 ✂ 裁切
+  const loadPdfJs = () => new Promise((resolve, reject) => {
+    if (window.pdfjsLib) return resolve(window.pdfjsLib);
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => {
+      try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => reject(new Error('PDF 元件載入失敗，請確認網路'));
+    document.head.appendChild(s);
+  });
+
+  const pickPdf = async (e) => {
+    const file = (e.target.files || [])[0];
+    e.target.value = '';
+    if (!file) return;
+    setUpErr('');
+    const added = [];
+    try {
+      setUploading('讀取 PDF…');
+      const pdfjs = await loadPdfJs();
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: buf }).promise;
+      for (let p = 1; p <= pdf.numPages; p++) {
+        setUploading(`轉換第 ${p}/${pdf.numPages} 頁…`);
+        const page = await pdf.getPage(p);
+        const vp1 = page.getViewport({ scale: 1 });
+        const vp = page.getViewport({ scale: Math.min(3, 1600 / vp1.width) });
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+        await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+        const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('頁面轉檔失敗')), 'image/jpeg', 0.85));
+        setUploading(`上傳第 ${p}/${pdf.numPages} 頁…`);
+        const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
+        added.push({ id: mkId('gs'), text: '', img: { url, ar: cv.height / cv.width, y0: 0, y1: 1 }, questions: [] });
+      }
+      onChange([...segments, ...added]);
+    } catch (err) {
+      if (added.length) onChange([...segments, ...added]);
+      setUpErr('PDF 匯入失敗：' + ((err && err.message) || err));
     }
     setUploading('');
   };
@@ -1488,19 +1535,24 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
     <div className="field">
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,gap:6,flexWrap:'wrap'}}>
         <label className="field-label" style={{margin:0}}>段落 Segments ({segments.length})</label>
-        <div style={{display:'flex',gap:6}}>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
           <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}}
+            onClick={() => pdfRef.current && pdfRef.current.click()} disabled={!!uploading}>
+            {uploading || '📄 匯入 PDF'}
+          </button>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
             onClick={() => fileRef.current && fileRef.current.click()} disabled={!!uploading}>
-            {uploading || '📷 上傳文章照片'}
+            📷 照片
           </button>
           <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
-            {pasting ? '✕ 取消' : '⬇ 貼文字自動分段'}
+            {pasting ? '✕ 取消' : '⬇ 貼文字'}
           </button>
         </div>
       </div>
       <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={pickPhotos}/>
+      <input ref={pdfRef} type="file" accept="application/pdf,.pdf" style={{display:'none'}} onChange={pickPdf}/>
       <div className="field-help" style={{marginBottom:10}}>
-        照片：一張＝先當一段，太長的照片點「✂ 裁切」自動分段。長文：每段配 1–2 題，小朋友讀一小段就答題、不放空；短文只放一段、題目全放最後。
+        掃描 PDF：每一頁自動變一段；照片：一張＝一段。太長的頁面點「✂ 裁切」再切細，每段配 1–2 題，小朋友讀一小段就答題、不放空。
       </div>
       {upErr && <div style={{fontSize:12,color:'#dc2626',marginBottom:8}}>{upErr}</div>}
 
