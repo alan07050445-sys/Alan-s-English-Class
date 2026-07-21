@@ -1089,6 +1089,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             onStart={() => setPhase('quiz')}
             resumeAt={resumeFor(it => grTotalQ(it))}
             onRestart={restartFresh}
+            catItems={items || []}
+            onFlashcards={(fi) => { setFlashItem(fi); setPhase('flashcards'); }}
           />
         ) : selectedItem?.type === 'essay' && phase === 'intro' ? (
           <EssayIntro
@@ -1111,7 +1113,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             <div className="qm-fc-player-bar">
               <span className="qm-fc-player-title">{flashItem.title}</span>
               <button className="qm-fc-start-btn" onClick={() => setPhase('quiz')}>
-                開始測驗 →
+                {selectedItem?.type === 'guided-reading' ? '開始閱讀 →' : '開始測驗 →'}
               </button>
             </div>
             <window.FlashcardPlayer
@@ -2503,12 +2505,16 @@ function grPreloadImgs(item) {
   urls.forEach(u => { const im = new Image(); im.src = u; });
 }
 
-function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
+function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFlashcards }) {
   const segs = grSegs(item);
   const finalN = grFinalQs(item).length;
   const total = grTotalQ(item);
   const hasShort = segs.some(s => grValidQs(s).some(q => q.kind === 'short')) || grFinalQs(item).some(q => q.kind === 'short');
   useQME(() => { grPreloadImgs(item); }, [item && item.id]); // 停在說明頁時就先抓圖
+  // v286: 綁定單字卡——先練文章單字再開始讀（Alan 要的流程）
+  const linkedFc = item.linkedFlashcardId
+    ? (catItems || []).find(it => it.id === item.linkedFlashcardId && it.type === 'flashcard' && (it.cards || []).length > 0)
+    : null;
   return (
     <div className="qm-intro">
       <div className="qm-intro-icon">📖</div>
@@ -2521,6 +2527,18 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
         <div className="qm-intro-rule-row"><span>⭐</span><span>{hasShort ? '選擇題自動改分；簡答題 AI 批改' : '答對加一分，答錯會告訴你正確答案'}</span></div>
       </div>
       <div className="qm-intro-btns">
+        {linkedFc && onFlashcards ? (
+          <div className="qm-intro-fc-group">
+            <button className="qm-fcb" onClick={() => onFlashcards(linkedFc)}>
+              <span className="qm-fcb-ico" aria-hidden="true">🃏</span>
+              <span className="qm-fcb-text">
+                <b>先練習本文章單字</b>
+                <span>{linkedFc.title} · {(linkedFc.cards || []).length} 張</span>
+              </span>
+              <span className="qm-fcb-arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        ) : null}
         <button className="qm-btn primary" onClick={onStart}>
           {resumeAt ? `▶ 繼續上一次 · 從第 ${resumeAt + 1} 題 →` : '開始閱讀 · Start →'}
         </button>

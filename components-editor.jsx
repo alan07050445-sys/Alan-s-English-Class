@@ -209,6 +209,9 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
           ) : form.type === "guided-reading" ? (
             <GuidedReadingEditor
               itemId={form.id}
+              catItems={catItems || []}
+              linkedFlashcardId={form.linkedFlashcardId || ''}
+              onChangeLinked={v => update("linkedFlashcardId", v || undefined)}
               segments={form.grSegments || []}
               onChange={segs => update("grSegments", segs)}
               finalQs={form.grFinal || []}
@@ -1515,7 +1518,8 @@ function GrQuestionsEditor({ qs, onChange, impOpen, onToggleImp, impText, onImpT
 /* ── GuidedReadingEditor 分段閱讀（v276；v277 照片＋裁切；v278 PDF；v281 綜合題）──
    段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
    grFinal = 全部讀完後的整篇綜合題（同題目格式）；img 只存裁切範圍，不產生新圖檔 */
-function GuidedReadingEditor({ itemId, segments, onChange, finalQs, onChangeFinal }) {
+function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLinked, segments, onChange, finalQs, onChangeFinal }) {
+  const fcOptions = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
   const [pasting, setPasting] = useS(false);
   const [pasteText, setPasteText] = useS('');
   const [uploading, setUploading] = useS('');
@@ -1650,6 +1654,23 @@ function GuidedReadingEditor({ itemId, segments, onChange, finalQs, onChangeFina
 
   return (
     <div className="field">
+      {/* v286: 綁定單字卡——學生在「開始閱讀」前先練文章單字（Alan 要的流程） */}
+      {fcOptions.length > 0 && (
+        <div className="field" style={{marginBottom:14}}>
+          <label className="field-label">🃏 綁定單字卡 · 讀文章前先練（選填）</label>
+          <select
+            value={linkedFlashcardId || ''}
+            onChange={e => onChangeLinked(e.target.value)}
+            style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:3,fontSize:14}}
+          >
+            <option value="">— 不綁定 (None) —</option>
+            {fcOptions.map(fc => (
+              <option key={fc.id} value={fc.id}>{fc.title}（{(fc.cards || []).length} 張）</option>
+            ))}
+          </select>
+          <div className="field-help">綁定後，學生的開始頁會多一張金色「先練習本文章單字」卡——練完（或跳過）才開始讀。</div>
+        </div>
+      )}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,gap:6,flexWrap:'wrap'}}>
         <label className="field-label" style={{margin:0}}>段落 Segments ({segments.length})</label>
         <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
