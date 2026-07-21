@@ -2693,3 +2693,60 @@
   .gr-q-text { font-size: 18.5px; }
   .gr-q .qm-opt-text { font-size: 16.5px; }
 }
+
+/* ══ v287: 點字查義＋朗讀 ══ */
+/* 文字段落的可點單字——平常不打擾，按下去亮一下 */
+.grd-tword { cursor: pointer; border-radius: 4px; transition: background .12s; }
+.grd-tword:hover { background: rgba(185, 169, 127, .22); }
+.grd-tword:active { background: rgba(139, 49, 32, .18); }
+/* 照片上的隱形字框——點得到但看不到；按下瞬間亮金 */
+.grd-word {
+  position: absolute;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.grd-word:active { background: rgba(201, 168, 76, .35); }
+/* 讀頁頂列：段落標籤＋朗讀按鈕 */
+.gr-read-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 8px; min-height: 30px;
+}
+.gr-read-head .gr-seg-label { margin-bottom: 0; }
+.gr-tts-btn.on { color: var(--accent, #8B3120); border-color: var(--accent, #8B3120); }
+.gr-tap-hint {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-muted, #8a7d6b);
+  text-align: center;
+}
+/* 點字查義小卡：固定底部置中 */
+.gr-word-pop {
+  position: fixed;
+  left: 50%; bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 900;
+  width: min(440px, calc(100vw - 28px));
+  background: #fffdf8;
+  border: 1px solid #e2d7bd;
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(58, 43, 20, .18);
+  padding: 12px 16px;
+  animation: grPageIn .28s cubic-bezier(.22, 1, .36, 1) both;
+}
+.gr-word-pop-head { display: flex; align-items: center; gap: 8px; }
+.gr-word-pop-head b {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 20px;
+}
+.gr-word-say {
+  background: none; border: none; cursor: pointer; font-size: 17px; padding: 2px 4px;
+}
+.gr-word-x {
+  background: none; border: none; cursor: pointer;
+  font-size: 14px; color: var(--ink-muted, #8a7d6b); padding: 2px 6px;
+}
+.gr-word-pop-body { margin-top: 6px; font-size: 14.5px; line-height: 1.8; }
+.gr-word-loading { color: var(--ink-muted, #8a7d6b); }

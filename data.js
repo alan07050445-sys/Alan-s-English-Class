@@ -275,6 +275,58 @@ async function uploadReadingPhoto(itemId, blob) {
   return ref.getDownloadURL();
 }
 
+// v287: 分段閱讀 OCR 單字資料（點字查義＋照片朗讀）——同樣放 pdfs/ 底下沿用規則
+async function uploadReadingWords(itemId, obj) {
+  const safe = String(itemId || 'gr').replace(/[^A-Za-z0-9_-]/g, '_');
+  const ref = _storage.ref(`pdfs/reading/${safe}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.words.json`);
+  await ref.put(new Blob([JSON.stringify(obj)], { type: 'application/json' }), { contentType: 'application/json' });
+  return ref.getDownloadURL();
+}
+
+// v287: 點字查義——走同一個 AI 代理（system prompt 在前端組，Worker 不用改）
+// 小朋友點文章裡的單字 → 中文意思＋簡單英文釋義；localStorage 快取，同字不重打
+const DICT_CACHE_KEY = 'alan-dict-v1';
+function _dictCache() { try { return JSON.parse(localStorage.getItem(DICT_CACHE_KEY) || '{}'); } catch (e) { return {}; } }
+async function lookupWord(word, context) {
+  const w = String(word || '').trim().toLowerCase();
+  if (!w) return '';
+  const cache = _dictCache();
+  if (cache[w]) return cache[w];
+  const endpoint = AI_WRITING_ENDPOINT || '';
+  if (!endpoint) return '（查詢服務未設定）';
+  const systemPrompt =
+`You are a dictionary for Taiwanese elementary school students learning English.
+Given a word (and the sentence it appears in, if provided), reply in EXACTLY this format, nothing else:
+
+【中文】the Traditional Chinese meaning of the word AS USED in the context (2-6 characters if possible)
+【英文】one very simple English definition an 8-year-old understands (max 12 words)
+【例句】one short, natural example sentence using the word (max 10 words)
+
+If the input is not a real English word (typo/garbled), reply only: 【中文】（這個字讀不出來）`;
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 160,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `Word: ${w}${context ? `\nContext: ${String(context).slice(0, 200)}` : ''}` }],
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    const text = data?.content?.[0]?.text || '';
+    if (text && text.includes('【中文】')) {
+      const c = _dictCache();
+      const keys = Object.keys(c);
+      if (keys.length > 600) keys.slice(0, 200).forEach(k => delete c[k]); // 快取上限
+      c[w] = text;
+      try { localStorage.setItem(DICT_CACHE_KEY, JSON.stringify(c)); } catch (e) {}
+    }
+    return text || '查詢失敗，請再點一次。';
+  } catch (e) { return '網路連不上，請再試一次。'; }
+}
+
 // v263: 學生作業照片上傳（「上傳作業」題型）——存 submissions/{uid}/{progressKey}/
 // ⚠ 需要 storage.rules 的 submissions 區塊已發布（Firebase Console → Storage → Rules）
 async function uploadSubmissionPhoto(uid, progressKey, blob, idx) {
@@ -1441,7 +1493,9 @@ Object.assign(window, {
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS
-  playSound, speakText,
+  playSound, speakText, ttsPickVoice: _ttsPickVoice,
+  // v287: 分段閱讀——OCR 單字檔上傳＋點字查義
+  uploadReadingWords, lookupWord,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions

@@ -5437,3 +5437,27 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 }
 .login-landing.ll-hud-quiet .ll-hud,
 .login-landing.ll-hud-end .ll-hud { pointer-events: none; }
+
+/* ══ v287: 後台總覽——分段閱讀各段答對率 ══ */
+.dash-grseg-item { margin-bottom: 16px; }
+.dash-grseg-item:last-child { margin-bottom: 0; }
+.dash-grseg-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.dash-grseg-title span { font-weight: 400; font-size: 12px; color: var(--ink-muted, #8a7d6b); }
+.dash-grseg-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 6px;
+}
+.dash-grseg-label { flex: 0 0 74px; font-size: 12.5px; color: var(--ink-muted, #6f6353); }
+.dash-grseg-bar {
+  flex: 1; height: 10px;
+  background: rgba(58, 43, 20, .08);
+  border-radius: 100px; overflow: hidden;
+}
+.dash-grseg-bar i {
+  display: block; height: 100%;
+  background: #7da87d;
+  border-radius: 100px;
+}
+.dash-grseg-bar i.low { background: #c96a4f; }
+.dash-grseg-rate { flex: 0 0 44px; text-align: right; font-size: 12.5px; font-weight: 700; }
+.dash-grseg-rate.low { color: #b4432a; }

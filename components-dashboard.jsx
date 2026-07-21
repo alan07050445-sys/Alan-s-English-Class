@@ -738,6 +738,30 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8);
   }, [students, currentIds]);
 
+  // v287: 分段閱讀各段答對率——「哪一段全班最卡」一眼看到（資料來自 progress.grStats）
+  const grSegRates = useDashM(() => {
+    const map = {};
+    students.forEach(s => {
+      Object.entries(s.items || {}).forEach(([itemId, prog]) => {
+        const bare = itemId.includes('_') ? itemId.slice(itemId.lastIndexOf('_') + 1) : itemId;
+        if (!currentIds.has(bare) && !currentIds.has(itemId)) return;
+        const g = prog && prog.grStats;
+        if (!g || !Array.isArray(g.segs)) return;
+        const key = prog.itemTitle || bare;
+        if (!map[key]) map[key] = { title: key, segs: [], final: { ok: 0, total: 0 }, n: 0 };
+        const m = map[key];
+        m.n += 1;
+        g.segs.forEach((st, i) => {
+          if (!m.segs[i]) m.segs[i] = { ok: 0, total: 0 };
+          m.segs[i].ok += st.ok || 0;
+          m.segs[i].total += st.total || 0;
+        });
+        if (g.final) { m.final.ok += g.final.ok || 0; m.final.total += g.final.total || 0; }
+      });
+    });
+    return Object.values(map).filter(m => m.segs.some(st => st && st.total > 0) || m.final.total > 0);
+  }, [students, currentIds]);
+
   const stats = (s) => {
     const its = s.items || {};
     const list = allItemsFor(s); // v238: 暑假模式只算發派給這位學生的
@@ -864,6 +888,31 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                   </div>
                 ))}
               </div>
+              {/* v287: 分段閱讀各段答對率——答對率最低的段落標紅，備課時知道哪段要多講 */}
+              {grSegRates.length > 0 && (
+                <div className="dash-hot dash-grseg">
+                  <div className="dash-section-title">分段閱讀 · 各段答對率</div>
+                  {grSegRates.map(m => {
+                    const rows = m.segs.map((st, i) => ({ label: `第 ${i + 1} 段`, ...(st || { ok: 0, total: 0 }) })).filter(r => r.total > 0);
+                    if (m.final.total > 0) rows.push({ label: '📚 綜合題', ok: m.final.ok, total: m.final.total });
+                    const rates = rows.map(r => Math.round((r.ok / r.total) * 100));
+                    const minRate = Math.min(...rates);
+                    const markLow = (rate) => rows.length > 1 && rate === minRate && rate < 100;
+                    return (
+                      <div key={m.title} className="dash-grseg-item">
+                        <div className="dash-grseg-title">📖 {m.title} <span>· {m.n} 人次</span></div>
+                        {rows.map((r, i) => (
+                          <div key={i} className="dash-grseg-row">
+                            <span className="dash-grseg-label">{r.label}</span>
+                            <span className="dash-grseg-bar"><i className={markLow(rates[i]) ? 'low' : ''} style={{ width: Math.max(4, rates[i]) + '%' }}/></span>
+                            <span className={'dash-grseg-rate' + (markLow(rates[i]) ? ' low' : '')}>{rates[i]}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
           </div>

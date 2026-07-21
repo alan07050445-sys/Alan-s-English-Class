@@ -2479,7 +2479,7 @@ function grNormalizeQ(q) {
 
 /* v277: 段落照片切片——只存裁切範圍 {url, ar, y0, y1}（0~1 高度比例），
    不產生新圖片：CSS 高度=寬×ar×(y1-y0)、img translateY(-y0%) 顯示該帶。 */
-function GrImgCrop({ img, onZoom, className }) {
+function GrImgCrop({ img, onZoom, className, onWord }) {
   const y0 = img.y0 || 0;
   const y1 = img.y1 == null ? 1 : img.y1;
   const band = Math.max(0.02, y1 - y0);
@@ -2487,14 +2487,28 @@ function GrImgCrop({ img, onZoom, className }) {
   // v282: 載入前 shimmer、載完淡入。⚠ 不能用 loading="lazy"——瀏覽器會刻意延後載入，
   // 就是 Alan 抱怨「圖片要跑一小段時間」的元凶之一
   const [loaded, setLoaded] = useQM(false);
+  // v287: 點字查義——OCR 字框疊在照片上（只疊這個裁切帶內的字）
+  const [wdata, setWdata] = useQM(null);
   const imgRef = React.useRef(null);
   useQME(() => { if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth) setLoaded(true); }, []);
+  useQME(() => {
+    let dead = false;
+    if (img.wordsUrl && onWord) grFetchWords(img.wordsUrl).then(d => { if (!dead && d) setWdata(d); });
+    return () => { dead = true; };
+  }, [img.wordsUrl, !!onWord]);
+  const bandWords = (onWord && wdata && wdata.words ? wdata.words : [])
+    .filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; });
   return (
     <div className={'grd-img' + (loaded ? ' loaded' : '') + (className ? ' ' + className : '')}
       style={{ paddingBottom: (ar * band * 100) + '%' }}
       onClick={onZoom} title={onZoom ? '點一下放大' : undefined}>
       <img ref={imgRef} src={img.url} style={{ transform: `translateY(-${y0 * 100}%)` }}
         alt="文章段落" decoding="async" onLoad={() => setLoaded(true)}/>
+      {bandWords.map((w, i) => (
+        <button key={i} className="grd-word" aria-label={`查 ${w.t}`}
+          style={{ left: (w.x * 100) + '%', top: (((w.y - y0) / band) * 100) + '%', width: (w.w * 100) + '%', height: ((w.h / band) * 100) + '%' }}
+          onClick={(e) => { e.stopPropagation(); onWord(w.t); }}/>
+      ))}
     </div>
   );
 }
@@ -2503,6 +2517,16 @@ function GrImgCrop({ img, onZoom, className }) {
 function grPreloadImgs(item) {
   const urls = [...new Set(grSegs(item).map(s => s.img && s.img.url).filter(Boolean))];
   urls.forEach(u => { const im = new Image(); im.src = u; });
+  // v287: 順便預抓 OCR 單字檔（點字查義＋照片朗讀）
+  grSegs(item).forEach(s => { if (s.img && s.img.wordsUrl) grFetchWords(s.img.wordsUrl); });
+}
+
+// v287: OCR 單字檔快取（{words:[{t,x,y,w,h}], lines:[{t,y}]}，座標＝整張圖比例）
+const grWordsCache = {};
+function grFetchWords(url) {
+  if (!url) return Promise.resolve(null);
+  if (!grWordsCache[url]) grWordsCache[url] = fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+  return grWordsCache[url];
 }
 
 function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFlashcards }) {
@@ -2571,9 +2595,66 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [peek, setPeek]         = useQM(false);   // 答題頁展開「回頭看文章」
   const [done, setDone]         = useQM(false);
   const [zoom, setZoom]         = useQM(null);
+  const [dict, setDict]         = useQM(null);    // v287: 點字查義 {word, text|null}
+  const [speaking, setSpeaking] = useQM(false);   // v287: 朗讀中
+  const [ttsText, setTtsText]   = useQM('');      // v287: 這一段可朗讀的文字（文字段落或 OCR）
   const wrongsRef = React.useRef([]);
   const autoRef   = React.useRef(null);
   const topRef    = React.useRef(null);
+
+  // v287: 點單字 → 唸給他聽＋AI 查中文意思（localStorage 快取，同字秒回）
+  const openWord = (w, ctx) => {
+    const word = String(w || '').replace(/^[^A-Za-z'’-]+|[^A-Za-z'’-]+$/g, '');
+    if (!word) return;
+    if (window.speakText) window.speakText(word);
+    setDict({ word, text: null });
+    if (window.lookupWord) {
+      window.lookupWord(word, ctx || '').then(t => {
+        setDict(d => (d && d.word === word) ? { word, text: t } : d);
+      });
+    }
+  };
+
+  // v287: 朗讀——文字段落直接唸；照片段落唸 OCR 行（只唸這個裁切帶內的）
+  const stopSpeak = () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} setSpeaking(false); };
+  useQME(() => {
+    let dead = false;
+    stopSpeak();
+    setTtsText('');
+    if (mode !== 'read' || !segs[segIdx]) return;
+    const seg = segs[segIdx];
+    if ((seg.text || '').trim()) { setTtsText(seg.text); return; }
+    if (seg.img && seg.img.wordsUrl) {
+      grFetchWords(seg.img.wordsUrl).then(d => {
+        if (dead || !d) return;
+        const zy0 = seg.img.y0 || 0, zy1 = seg.img.y1 == null ? 1 : seg.img.y1;
+        const t = (d.lines || []).filter(l => l.y >= zy0 && l.y <= zy1).map(l => l.t).join(' ');
+        if (t.trim()) setTtsText(t);
+      });
+    }
+    return () => { dead = true; };
+  }, [segIdx, mode]);
+
+  const speakSeg = () => {
+    const synth = window.speechSynthesis;
+    if (!synth || !ttsText) return;
+    if (speaking) { stopSpeak(); return; }
+    const parts = String(ttsText).match(/[^.!?]+[.!?]*/g) || [String(ttsText)];
+    synth.cancel();
+    setSpeaking(true);
+    let i = 0;
+    const next = () => {
+      if (i >= parts.length) { setSpeaking(false); return; }
+      const u = new SpeechSynthesisUtterance(parts[i].trim());
+      u.lang = 'en-US'; u.rate = 0.92; u.pitch = 1;
+      const v = window.ttsPickVoice && window.ttsPickVoice('en-US');
+      if (v) u.voice = v;
+      u.onend = () => { i += 1; next(); };
+      u.onerror = () => { i += 1; next(); };
+      synth.speak(u);
+    };
+    setTimeout(next, 80); // Chrome cancel→speak 同一拍會吞掉 utterance
+  };
 
   useQME(() => {
     const r = getResume(progressKey, total);
@@ -2588,7 +2669,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       setRes(r.gr.res || {});
       wrongsRef.current = Array.isArray(r.gr.wrongs) ? r.gr.wrongs : [];
     }
-    return () => clearTimeout(autoRef.current);
+    return () => { clearTimeout(autoRef.current); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} };
   }, []);
 
   // 每翻一頁（換段落或換模式）捲回頁頂
@@ -2630,7 +2711,19 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
   const finish = (nres) => {
     const finalScore = Object.values(nres).reduce((s, r) => s + (r.pts || 0), 0);
-    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScore, total, wrongQuestions: wrongsRef.current });
+    // v287: 每段答對統計——老師後台看「哪一段全班最卡」
+    const segStats = segQs.map((qs2, si) => ({
+      ok: qs2.reduce((n, _, qi) => n + (((nres[gIdxOf(si, qi)] || {}).pts) || 0), 0),
+      total: qs2.length,
+    }));
+    const grStats = { segs: segStats };
+    if (finalQs.length) {
+      grStats.final = {
+        ok: finalQs.reduce((n, _, qi) => n + (((nres[segTotal + qi] || {}).pts) || 0), 0),
+        total: finalQs.length,
+      };
+    }
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: finalScore, total, wrongQuestions: wrongsRef.current, extra: { grStats } });
     clearResume(progressKey);
     setDone(true);
   };
@@ -2737,12 +2830,24 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     </div>
   );
 
+  // v287: 文字段落每個英文字都可點——點了唸給他聽＋查中文意思
   const renderParas = (text) => String(text || '').split(/\n+/).map(t => t.trim()).filter(Boolean)
-    .map((t, i) => <p key={i}>{t}</p>);
+    .map((t, i) => (
+      <p key={i}>
+        {t.split(/([A-Za-z][A-Za-z'’-]*)/g).map((tok, j) =>
+          /^[A-Za-z]/.test(tok) && tok.length > 1
+            ? <span key={j} className="grd-tword" onClick={() => openWord(tok, t)}>{tok}</span>
+            : tok
+        )}
+      </p>
+    ));
 
   const renderSegContent = (seg, allowZoom) => (
     <>
-      {seg.img && seg.img.url ? <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}/> : null}
+      {seg.img && seg.img.url ? (
+        <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
+          onWord={(w) => openWord(w, '')}/>
+      ) : null}
       {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
     </>
   );
@@ -2839,8 +2944,18 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
             </div>
           )}
           <div className="gr-seg cur">
-            {segs.length > 1 && <div className="gr-seg-label">第 {segIdx + 1} 段</div>}
+            <div className="gr-read-head">
+              {segs.length > 1 ? <div className="gr-seg-label">第 {segIdx + 1} 段</div> : <span/>}
+              {ttsText ? (
+                <button className={'gr-peek-btn gr-tts-btn' + (speaking ? ' on' : '')} onClick={speakSeg}>
+                  {speaking ? '⏹ 停止朗讀' : '🔊 聽這一段'}
+                </button>
+              ) : null}
+            </div>
             {renderSegContent(segs[segIdx], true)}
+            {((segs[segIdx].text || '').trim() || (segs[segIdx].img && segs[segIdx].img.wordsUrl)) ? (
+              <div className="gr-tap-hint">💡 不會的單字點一下，聽發音、看意思</div>
+            ) : null}
           </div>
           <div className="gr-continue">
             <button className="qm-btn primary gr-readdone" onClick={finishReading}>✅ 完成閱讀</button>
@@ -2883,6 +2998,23 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         </div>
       )}
       </div>{/* end .gr-page */}
+
+      {/* v287: 點字查義小卡（點單字出現；自動唸一次，可再按 🔊） */}
+      {dict && (
+        <div className="gr-word-pop" role="dialog" aria-label={`單字 ${dict.word}`}>
+          <div className="gr-word-pop-head">
+            <b>{dict.word}</b>
+            <button className="gr-word-say" onClick={() => window.speakText && window.speakText(dict.word)} title="再聽一次">🔊</button>
+            <span style={{flex:1}}/>
+            <button className="gr-word-x" onClick={() => setDict(null)}>✕</button>
+          </div>
+          <div className="gr-word-pop-body">
+            {dict.text == null
+              ? <span className="gr-word-loading">查詢中…</span>
+              : dict.text.split('\n').map(l => l.trim()).filter(Boolean).map((l, i) => <div key={i}>{l}</div>)}
+          </div>
+        </div>
+      )}
 
       {zoom && (
         <div className="gr-lightbox" onClick={() => setZoom(null)}>
