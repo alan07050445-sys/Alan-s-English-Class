@@ -2590,3 +2590,76 @@
 .gr-peek-seg { margin-bottom: 14px; }
 .gr-peek-seg:last-child { margin-bottom: 0; }
 .gr-quiz-head + .gr-q, .gr-peek-panel + .gr-q { border-top: none; margin-top: 10px; padding-top: 0; }
+
+/* ══ v284: 分段閱讀質感＋順暢度——翻頁轉場、圖片預載淡入、書頁感 ══ */
+/* 換頁：整頁淡入上滑（讀到一半的內容不會動——只在翻頁瞬間播一次） */
+.gr-page { animation: grPageIn .38s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes grPageIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 圖片：載入前柔和 shimmer、載完淡入（配合預載，多數時候直接就緒） */
+.grd-img {
+  border-radius: 10px;
+  background: linear-gradient(100deg, #f0e9da 40%, #faf6ec 50%, #f0e9da 60%);
+  background-size: 200% 100%;
+  animation: grShimmer 1.1s linear infinite;
+}
+.grd-img.loaded { animation: none; background: #f5f1e8; }
+@keyframes grShimmer { to { background-position: -200% 0; } }
+.grd-img img { opacity: 0; transition: opacity .3s ease; }
+.grd-img.loaded img { opacity: 1; }
+
+/* 文章頁：書頁感——白紙、柔和陰影、更寬裕的留白 */
+.gr-seg {
+  background: #fffdf8;
+  border: 1px solid #eee4d0;
+  border-radius: 16px;
+  padding: 26px 30px;
+  box-shadow: 0 2px 16px rgba(58, 43, 20, .05);
+}
+.gr-seg-label { letter-spacing: .18em; }
+
+/* 段落進度點：讀到第幾段一眼看到 */
+.gr-dots {
+  display: flex; justify-content: center; gap: 7px;
+  margin: 2px 0 14px;
+}
+.gr-dots span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #ddd2ba;
+  transition: transform .25s ease, background .25s ease;
+}
+.gr-dots span.past { background: #b9a97f; }
+.gr-dots span.cur { background: var(--accent, #8B3120); transform: scale(1.35); }
+
+/* 完成閱讀：主按鈕加大置中，儀式感 */
+.gr-continue { margin-top: 20px; }
+.gr-continue .gr-readdone {
+  padding: 14px 36px;
+  font-size: 16.5px;
+  border-radius: 100px;
+  box-shadow: 0 8px 20px rgba(139, 49, 32, .18);
+}
+
+/* 問題：題目文字改襯線，跟文章同一個聲音 */
+.gr-q-text {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 17.5px;
+  font-weight: 600;
+}
+.gr-quiz-head .gr-seg-label {
+  background: rgba(185, 169, 127, .16);
+  border-radius: 100px;
+  padding: 4px 12px;
+}
+
+@media (max-width: 640px) {
+  .gr-seg { padding: 18px; border-radius: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gr-page { animation: none; }
+  .grd-img { animation: none; }
+  .gr-dots span { transition: none; }
+}

@@ -2482,13 +2482,25 @@ function GrImgCrop({ img, onZoom, className }) {
   const y1 = img.y1 == null ? 1 : img.y1;
   const band = Math.max(0.02, y1 - y0);
   const ar = img.ar || 1.3;
+  // v282: 載入前 shimmer、載完淡入。⚠ 不能用 loading="lazy"——瀏覽器會刻意延後載入，
+  // 就是 Alan 抱怨「圖片要跑一小段時間」的元凶之一
+  const [loaded, setLoaded] = useQM(false);
+  const imgRef = React.useRef(null);
+  useQME(() => { if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth) setLoaded(true); }, []);
   return (
-    <div className={'grd-img' + (className ? ' ' + className : '')}
+    <div className={'grd-img' + (loaded ? ' loaded' : '') + (className ? ' ' + className : '')}
       style={{ paddingBottom: (ar * band * 100) + '%' }}
       onClick={onZoom} title={onZoom ? '點一下放大' : undefined}>
-      <img src={img.url} style={{ transform: `translateY(-${y0 * 100}%)` }} alt="文章段落" loading="lazy"/>
+      <img ref={imgRef} src={img.url} style={{ transform: `translateY(-${y0 * 100}%)` }}
+        alt="文章段落" decoding="async" onLoad={() => setLoaded(true)}/>
     </div>
   );
+}
+
+// v282: 把整篇文章的圖片預先抓下來（intro 停留時就開始）——翻頁時圖幾乎都已在快取
+function grPreloadImgs(item) {
+  const urls = [...new Set(grSegs(item).map(s => s.img && s.img.url).filter(Boolean))];
+  urls.forEach(u => { const im = new Image(); im.src = u; });
 }
 
 function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
@@ -2496,6 +2508,7 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart }) {
   const finalN = grFinalQs(item).length;
   const total = grTotalQ(item);
   const hasShort = segs.some(s => grValidQs(s).some(q => q.kind === 'short')) || grFinalQs(item).some(q => q.kind === 'short');
+  useQME(() => { grPreloadImgs(item); }, [item && item.id]); // 停在說明頁時就先抓圖
   return (
     <div className="qm-intro">
       <div className="qm-intro-icon">📖</div>
@@ -2564,6 +2577,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   useQME(() => {
     if (topRef.current && topRef.current.scrollIntoView) topRef.current.scrollIntoView({ block: 'start' });
   }, [segIdx, mode]);
+
+  // v282: 圖片預載——進播放器就把整篇的圖抓齊，翻頁不再等圖
+  useQME(() => { grPreloadImgs(item); }, [item && item.id]);
 
   const curQs = mode === 'final' ? finalQs : (segQs[segIdx] || []);
   const gIdxOf = (si, qi) => segQs.slice(0, si).reduce((n, qs) => n + qs.length, 0) + qi;
@@ -2792,15 +2808,24 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         </span>
       </div>
 
+      {/* v284: 換頁時整頁淡入上滑——key 換了就重播動畫 */}
+      <div key={`pg-${mode}-${segIdx}`} className="gr-page">
       {mode === 'read' ? (
         /* ── 文章頁：只有這一段的內容＋「完成閱讀」── */
         <>
+          {segs.length > 1 && (
+            <div className="gr-dots" aria-hidden="true">
+              {segs.map((_, i) => (
+                <span key={i} className={i < segIdx ? 'past' : i === segIdx ? 'cur' : ''}/>
+              ))}
+            </div>
+          )}
           <div className="gr-seg cur">
             {segs.length > 1 && <div className="gr-seg-label">第 {segIdx + 1} 段</div>}
             {renderSegContent(segs[segIdx], true)}
           </div>
           <div className="gr-continue">
-            <button className="qm-btn primary" onClick={finishReading}>✅ 完成閱讀</button>
+            <button className="qm-btn primary gr-readdone" onClick={finishReading}>✅ 完成閱讀</button>
           </div>
         </>
       ) : mode === 'final-intro' ? (
@@ -2839,6 +2864,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           {renderQuestion()}
         </div>
       )}
+      </div>{/* end .gr-page */}
 
       {zoom && (
         <div className="gr-lightbox" onClick={() => setZoom(null)}>
