@@ -1397,8 +1397,48 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
   const [uploading, setUploading] = useS('');
   const [upErr, setUpErr] = useS('');
   const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
+  const [importingQ, setImportingQ] = useS(false);
+  const [importQText, setImportQText] = useS('');
   const fileRef = React.useRef(null);
   const pdfRef = React.useRef(null);
+
+  // v279: 題目批次匯入——沿用測驗題的慣例「第一個選項＝正解」，前面多一欄段號。
+  // 0–1 個選項欄＝簡答題；分段閱讀作答時不洗牌，所以匯入當下就把選項打散。
+  const parseQRows = () => {
+    const lines = importQText.split('\n').map(l => l.replace(/\r/g, '')).filter(l => l.trim());
+    const errs = [], adds = [];
+    if (lines.length && !segments.length) return { errs: ['請先建立段落（匯入 PDF／照片／貼文字），再匯入題目。'], adds: [] };
+    lines.forEach((line, li) => {
+      const cols = line.split('\t').map(c => c.trim());
+      if (li === 0 && cols[0] && !/^\d+$/.test(cols[0])) return; // 第一行是標題列 → 自動略過
+      if (!/^\d+$/.test(cols[0] || '')) { errs.push(`第 ${li + 1} 行：第一欄要是段號（數字）`); return; }
+      const segIdx = parseInt(cols[0], 10) - 1;
+      if (segIdx < 0 || segIdx >= segments.length) { errs.push(`第 ${li + 1} 行：找不到第 ${cols[0]} 段（目前只有 ${segments.length} 段）`); return; }
+      const q = cols[1] || '';
+      if (!q) { errs.push(`第 ${li + 1} 行：沒有題目文字`); return; }
+      const rest = cols.slice(2).filter(Boolean);
+      if (rest.length >= 2) {
+        const options = rest.slice(0, 4);
+        const correctText = options[0];
+        for (let i = options.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [options[i], options[j]] = [options[j], options[i]]; }
+        const answer = options.indexOf(correctText);
+        while (options.length < 4) options.push('');
+        adds.push({ segIdx, q: { id: mkId('gq'), kind: 'mc', q, options, answer } });
+      } else {
+        adds.push({ segIdx, q: { id: mkId('gq'), kind: 'short', q, keyPoints: rest[0] || '' } });
+      }
+    });
+    return { errs, adds };
+  };
+
+  const doImportQ = () => {
+    const { errs, adds } = parseQRows();
+    if (errs.length || !adds.length) return;
+    const bySeg = {};
+    adds.forEach(a => { (bySeg[a.segIdx] = bySeg[a.segIdx] || []).push(a.q); });
+    onChange(segments.map((s, i) => bySeg[i] ? { ...s, questions: [...(s.questions || []), ...bySeg[i]] } : s));
+    setImportingQ(false); setImportQText('');
+  };
 
   const mkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
 
@@ -1544,8 +1584,11 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
             onClick={() => fileRef.current && fileRef.current.click()} disabled={!!uploading}>
             📷 照片
           </button>
-          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => { setPasting(v => !v); setImportingQ(false); }}>
             {pasting ? '✕ 取消' : '⬇ 貼文字'}
+          </button>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => { setImportingQ(v => !v); setPasting(false); }}>
+            {importingQ ? '✕ 取消' : '⬇ 匯入題目'}
           </button>
         </div>
       </div>
@@ -1576,6 +1619,44 @@ function GuidedReadingEditor({ itemId, segments, onChange }) {
           </div>
         </div>
       )}
+
+      {importingQ && (() => {
+        const { errs, adds } = parseQRows();
+        const mcN = adds.filter(a => a.q.kind === 'mc').length;
+        const shN = adds.length - mcN;
+        return (
+          <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper)'}}>
+            <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8,lineHeight:1.8}}>
+              從 Excel / Google Sheets 複製貼上，每行一題：<br/>
+              選擇題：<code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>段號 [Tab] 題目 [Tab] 正解選項 [Tab] 其他選項…</code>（跟測驗題一樣<b>第一個選項＝正解</b>，最多 4 個；匯入時自動打散順序）<br/>
+              簡答題：<code style={{background:'var(--border-soft)',padding:'1px 4px',borderRadius:2}}>段號 [Tab] 題目 [Tab] 答案要點（選填，用 / 分隔）</code><br/>
+              · 段號＝下面段落卡的「第 N 段」 · 選項欄只有 0–1 個＝簡答題 · 第一行若是標題會自動略過
+            </div>
+            <textarea
+              value={importQText}
+              onChange={e => setImportQText(e.target.value)}
+              rows={7}
+              placeholder={"1\tWhat did the fox find?\tA red balloon\tA kite\tA hat\n1\tWhy was the fox happy?\tHe found a balloon / He liked red\n2\tWho did the fox meet?\tAn old turtle\tA rabbit"}
+              style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}
+            />
+            {errs.length > 0 && (
+              <div style={{color:'#dc2626',fontSize:12,marginTop:6,whiteSpace:'pre-line'}}>{errs.slice(0, 5).join('\n')}</div>
+            )}
+            <div style={{display:'flex',gap:8,marginTop:8,alignItems:'center'}}>
+              <span style={{fontSize:12,color:'var(--ink-muted)'}}>
+                {adds.length ? `將匯入：${mcN} 題選擇＋${shN} 題簡答` : ''}
+              </span>
+              <span style={{flex:1}}/>
+              <button className="btn ghost" style={{fontSize:12,padding:'6px 14px'}}
+                onClick={() => { setImportingQ(false); setImportQText(''); }}>取消</button>
+              <button className="btn primary" style={{fontSize:12,padding:'6px 16px'}}
+                onClick={doImportQ} disabled={!adds.length || errs.length > 0}>
+                匯入{adds.length ? `（${adds.length} 題）` : ''}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {segments.length === 0 && (
         <div className="fc-card-empty mono" style={{marginBottom:10}}>尚未新增段落 — 點「＋ 新增段落」或「⬇ 貼整篇文章自動分段」</div>
