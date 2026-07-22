@@ -212,6 +212,8 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
               catItems={catItems || []}
               linkedFlashcardId={form.linkedFlashcardId || ''}
               onChangeLinked={v => update("linkedFlashcardId", v || undefined)}
+              audioUrl={form.grAudioUrl || ''}
+              onChangeAudio={v => update("grAudioUrl", v || undefined)}
               segments={form.grSegments || []}
               onChange={segs => update("grSegments", segs)}
               finalQs={form.grFinal || []}
@@ -1553,7 +1555,7 @@ function GrQuestionsEditor({ qs, onChange, impOpen, onToggleImp, impText, onImpT
 /* ── GuidedReadingEditor 分段閱讀（v276；v277 照片＋裁切；v278 PDF；v281 綜合題）──
    段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
    grFinal = 全部讀完後的整篇綜合題（同題目格式）；img 只存裁切範圍，不產生新圖檔 */
-function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLinked, segments, onChange, finalQs, onChangeFinal }) {
+function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLinked, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
   const fcOptions = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
   const [pasting, setPasting] = useS(false);
   const [pasteText, setPasteText] = useS('');
@@ -1566,6 +1568,7 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
   const fileRef = React.useRef(null);
   const pdfRef = React.useRef(null);
   const reOcrRef = React.useRef(null);
+  const audioRef = React.useRef(null);
 
   const mkId = grMkId;
 
@@ -1716,6 +1719,23 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
     setUploading('');
   };
 
+  // v289: 課文音檔——課本配音/老師自錄；學生閱讀頁優先播這個（取代機器人 TTS）
+  const pickAudio = async (e) => {
+    const file = (e.target.files || [])[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { setUpErr('音檔太大（上限 20MB）——請先壓成 MP3'); return; }
+    setUpErr('');
+    try {
+      setUploading('上傳音檔中…');
+      const url = await window.uploadReadingAudio(itemId || 'gr', file);
+      onChangeAudio(url);
+    } catch (err) {
+      setUpErr('音檔上傳失敗：' + ((err && err.message) || err));
+    }
+    setUploading('');
+  };
+
   const pickReOcr = async (e) => {
     const file = (e.target.files || [])[0];
     e.target.value = '';
@@ -1805,6 +1825,27 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
       <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={pickPhotos}/>
       <input ref={pdfRef} type="file" accept="application/pdf,.pdf" style={{display:'none'}} onChange={pickPdf}/>
       <input ref={reOcrRef} type="file" accept="image/*" style={{display:'none'}} onChange={pickReOcr}/>
+      <input ref={audioRef} type="file" accept="audio/*,.mp3,.m4a" style={{display:'none'}} onChange={pickAudio}/>
+
+      {/* v289: 課文音檔——有音檔時學生閱讀頁播它（課本配音的抑揚頓挫），沒有才用機器語音 */}
+      <div style={{display:'flex',alignItems:'center',gap:8,margin:'0 0 10px',flexWrap:'wrap'}}>
+        {audioUrl ? (
+          <>
+            <span style={{fontSize:12,color:'#2e7d32',fontWeight:700}}>🎧 課文音檔 ✓</span>
+            <audio controls preload="none" src={audioUrl} style={{height:30,maxWidth:280}}/>
+            <button className="btn ghost" style={{fontSize:11,padding:'3px 8px',color:'var(--accent)'}}
+              onClick={() => { if (confirm('移除音檔？（學生會改聽機器語音）')) onChangeAudio(''); }}>✕ 移除</button>
+          </>
+        ) : (
+          <>
+            <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} disabled={!!uploading}
+              onClick={() => audioRef.current && audioRef.current.click()}>
+              🎧 上傳課文音檔（選填）
+            </button>
+            <span style={{fontSize:11,color:'var(--ink-muted)'}}>課本配音或自己錄——學生閱讀時播這個，比機器語音自然很多</span>
+          </>
+        )}
+      </div>
       <div className="field-help" style={{marginBottom:10}}>
         掃描 PDF：每一頁自動變一段；照片：一張＝一段。太長的頁面點「✂ 裁切」再切細，每段配 1–2 題，小朋友讀一小段就答題、不放空。
       </div>

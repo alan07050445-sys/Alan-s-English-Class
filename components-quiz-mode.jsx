@@ -2508,7 +2508,7 @@ function GrImgCrop({ img, onZoom, className, onWord }) {
       {bandWords.map((w, i) => (
         <button key={i} className="grd-word" aria-label={`查 ${w.t}`}
           style={{ left: (w.x * 100) + '%', top: (((w.y - y0) / band) * 100) + '%', width: (w.w * 100) + '%', height: ((w.h / band) * 100) + '%' }}
-          onClick={(e) => { e.stopPropagation(); onWord(w.t); }}/>
+          onClick={(e) => { e.stopPropagation(); onWord(w.t, e); }}/>
       ))}
     </div>
   );
@@ -2604,19 +2604,52 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const wrongsRef = React.useRef([]);
   const autoRef   = React.useRef(null);
   const topRef    = React.useRef(null);
+  const audioRef  = React.useRef(null);   // v289: 課文音檔——掛在翻頁容器外，換段不重置進度
+
+  // v289: 進答題/綜合題就暫停音檔（讀下一段時從剛才的位置繼續）
+  useQME(() => {
+    if (mode !== 'read' && audioRef.current && !audioRef.current.paused) audioRef.current.pause();
+  }, [mode]);
 
   // v287: 點單字 → 唸給他聽＋AI 查中文意思（localStorage 快取，同字秒回）
-  const openWord = (w, ctx) => {
+  // v289: 小卡貼著被點的單字（上方空間不夠就開在下面），不再固定頁尾
+  const openWord = (w, ctx, evt) => {
     const word = String(w || '').replace(/^[^A-Za-z'’-]+|[^A-Za-z'’-]+$/g, '');
     if (!word) return;
     if (window.speakText) window.speakText(word);
-    setDict({ word, text: null });
+    let pos = null;
+    try {
+      const el = evt && (evt.currentTarget || evt.target);
+      const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+      if (r) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const half = Math.min(170, vw / 2 - 12);
+        const above = r.bottom > vh - 250;
+        pos = {
+          x: Math.min(Math.max(r.left + r.width / 2, half + 12), vw - half - 12),
+          y: above ? Math.max(12, r.top - 10) : Math.min(vh - 12, r.bottom + 10),
+          above,
+        };
+      }
+    } catch (e) {}
+    setDict({ word, text: null, pos });
     if (window.lookupWord) {
       window.lookupWord(word, ctx || '').then(t => {
-        setDict(d => (d && d.word === word) ? { word, text: t } : d);
+        setDict(d => (d && d.word === word) ? { ...d, text: t } : d);
       });
     }
   };
+
+  // v289: 點小卡以外的地方就關掉（點別的單字＝換字，不算關）
+  useQME(() => {
+    if (!dict) return;
+    const close = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.gr-word-pop, .grd-tword, .grd-word')) return;
+      setDict(null);
+    };
+    const t = setTimeout(() => window.addEventListener('click', close), 0);
+    return () => { clearTimeout(t); window.removeEventListener('click', close); };
+  }, [dict && dict.word]);
 
   // v287: 朗讀——文字段落直接唸；照片段落唸 OCR 行（只唸這個裁切帶內的）
   const stopSpeak = () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} setSpeaking(false); };
@@ -2839,7 +2872,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       <p key={i}>
         {t.split(/([A-Za-z][A-Za-z'’-]*)/g).map((tok, j) =>
           /^[A-Za-z]/.test(tok) && tok.length > 1
-            ? <span key={j} className="grd-tword" onClick={() => openWord(tok, t)}>{tok}</span>
+            ? <span key={j} className="grd-tword" onClick={(e) => openWord(tok, t, e)}>{tok}</span>
             : tok
         )}
       </p>
@@ -2849,7 +2882,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     <>
       {seg.img && seg.img.url ? (
         <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
-          onWord={(w) => openWord(w, '')}/>
+          onWord={(w, e) => openWord(w, '', e)}/>
       ) : null}
       {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
     </>
@@ -2934,6 +2967,14 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         </span>
       </div>
 
+      {/* v289: 課文音檔（課本配音）——非閱讀頁隱藏但不卸載，播放位置一路保留 */}
+      {item.grAudioUrl ? (
+        <div className={'gr-audio' + (mode === 'read' ? '' : ' hide')}>
+          <span className="gr-audio-label">🎧 課文朗讀</span>
+          <audio ref={audioRef} controls preload="metadata" src={item.grAudioUrl}/>
+        </div>
+      ) : null}
+
       {/* v284: 換頁時整頁淡入上滑——key 換了就重播動畫 */}
       <div key={`pg-${mode}-${segIdx}`} className={'gr-page gr-page-' + (mode === 'read' ? 'read' : mode === 'final-intro' ? 'intro' : 'quiz')}>
       {mode === 'read' ? (
@@ -2949,7 +2990,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           <div className="gr-seg cur">
             <div className="gr-read-head">
               {segs.length > 1 ? <div className="gr-seg-label">第 {segIdx + 1} 段</div> : <span/>}
-              {ttsText ? (
+              {ttsText && !item.grAudioUrl ? (
                 <button className={'gr-peek-btn gr-tts-btn' + (speaking ? ' on' : '')} onClick={speakSeg}>
                   {speaking ? '⏹ 停止朗讀' : '🔊 聽這一段'}
                 </button>
@@ -3004,7 +3045,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
       {/* v287: 點字查義小卡（點單字出現；自動唸一次，可再按 🔊） */}
       {dict && (
-        <div className="gr-word-pop" role="dialog" aria-label={`單字 ${dict.word}`}>
+        <div className={'gr-word-pop' + (dict.pos ? ' anch' : '')} role="dialog" aria-label={`單字 ${dict.word}`}
+          style={dict.pos ? { left: dict.pos.x, top: dict.pos.y, bottom: 'auto', transform: dict.pos.above ? 'translate(-50%, -100%)' : 'translateX(-50%)' } : undefined}>
           <div className="gr-word-pop-head">
             <b>{dict.word}</b>
             <button className="gr-word-say" onClick={() => window.speakText && window.speakText(dict.word)} title="再聽一次">🔊</button>
@@ -3022,8 +3064,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       {zoom && (
         <div className="gr-lightbox" onClick={() => setZoom(null)}>
           <div className="gr-lightbox-in">
-            <GrImgCrop img={zoom}/>
-            <div className="gr-lightbox-hint">點一下任意處關閉</div>
+            <GrImgCrop img={zoom} onWord={(w, e) => openWord(w, '', e)}/>
+            <div className="gr-lightbox-hint">點單字＝查意思 · 點其他地方關閉</div>
           </div>
         </div>
       )}

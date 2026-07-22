@@ -278,6 +278,15 @@ async function uploadReadingPhoto(itemId, blob) {
 // v288: OCR 單字資料改存 Firestore 的 class 集合（公開可讀、老師可寫——規則現成）
 // ⚠ 教訓：Firebase Storage 的「檔案下載」(alt=media) 不回 CORS 標頭（metadata 有、檔案沒有），
 // 網頁 fetch/crossOrigin 讀圖都會被瀏覽器擋——除非去 GCS 設 bucket CORS。Firestore SDK 不經 CORS。
+// v289: 課文音檔（老師上傳課本配音/自錄）——<audio> 播放跟 <img> 一樣不需要 CORS
+async function uploadReadingAudio(itemId, file) {
+  const safe = String(itemId || 'gr').replace(/[^A-Za-z0-9_-]/g, '_');
+  const ext = (String(file.name || '').match(/\.(mp3|m4a|aac|wav|ogg)$/i) || [, 'mp3'])[1].toLowerCase();
+  const ref = _storage.ref(`pdfs/reading/${safe}/${Date.now()}_audio.${ext}`);
+  await ref.put(file, { contentType: file.type || 'audio/mpeg' });
+  return ref.getDownloadURL();
+}
+
 async function saveReadingWords(obj) {
   const id = 'grwords_' + Date.now() + Math.random().toString(36).slice(2, 6);
   await _db.collection('class').doc(id).set(obj);
@@ -1507,7 +1516,7 @@ Object.assign(window, {
   // Sound & TTS
   playSound, speakText, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
-  saveReadingWords, fetchReadingWords, lookupWord,
+  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions
