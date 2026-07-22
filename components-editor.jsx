@@ -1590,10 +1590,10 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
     if (!d) return '';
     const zy0 = s.img.y0 || 0, zy1 = s.img.y1 == null ? 1 : s.img.y1;
     const main = (s.img.readRects || []).find(r => r.kind === 'main');
-    return (d.lines || [])
+    return window.grJoinReadLines((d.lines || [])
       .filter(l => l.y >= zy0 && l.y <= zy1)
       .filter(l => !main || grLineInRect(l, main))
-      .map(l => l.t).join(' ');
+      .map(l => l.t)); // v291: 清掉段落編號/頁碼/斷詞——不再唸怪數字
   };
 
   // v290: AI 產生自然朗讀——每段產生一個 MP3（seg.audioUrl），只餵主文

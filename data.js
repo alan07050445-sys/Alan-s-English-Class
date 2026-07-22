@@ -278,6 +278,25 @@ async function uploadReadingPhoto(itemId, blob) {
 // v288: OCR 單字資料改存 Firestore 的 class 集合（公開可讀、老師可寫——規則現成）
 // ⚠ 教訓：Firebase Storage 的「檔案下載」(alt=media) 不回 CORS 標頭（metadata 有、檔案沒有），
 // 網頁 fetch/crossOrigin 讀圖都會被瀏覽器擋——除非去 GCS 設 bucket CORS。Firestore SDK 不經 CORS。
+// v291: OCR 行 → 朗讀文字的清洗（Alan 回報：換行處會唸出怪數字）
+// 課本掃描會混進：行首段落編號、行尾頁碼/音軌號、純數字或噪音行、行尾連字號斷詞。
+function grJoinReadLines(lineTexts) {
+  const cleaned = (lineTexts || [])
+    .map(t => String(t || '')
+      .replace(/^\s*\d+[.)\]]?\s+/, '')                 // 行首「1 」「2) 」段落編號
+      .replace(/\s+\d+\s*$/, '')                        // 行尾頁碼/音軌號
+      .replace(/[|_~•·¤©®°§\\\/<>\[\]{}*#@^=+]+/g, ' ') // OCR 噪音符號
+      .replace(/\s{2,}/g, ' ')
+      .trim())
+    .filter(t => /[A-Za-z]{2}/.test(t)); // 整行沒有像樣的英文字（純數字/雜訊）→ 丟掉
+  let out = '';
+  cleaned.forEach(t => {
+    if (/[A-Za-z]-$/.test(out)) out = out.replace(/-$/, '') + t; // 行尾連字號＝斷詞，接回
+    else out += (out ? ' ' : '') + t;
+  });
+  return out;
+}
+
 // v290: AI 產生自然朗讀——打同一個 Worker 的 /tts 路由（Workers AI 神經語音）。
 // 長文按句切塊（~1400 字/塊）逐塊產生再串接；Worker 還沒加 /tts 時丟 'tts-missing'
 // 讓編輯器顯示開通指引。產生一次存成 MP3，之後學生播放零成本。
@@ -1550,7 +1569,7 @@ Object.assign(window, {
   // Sound & TTS
   playSound, speakText, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
-  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio,
+  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions

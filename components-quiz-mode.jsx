@@ -2681,10 +2681,10 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         if (dead || !d) return;
         const zy0 = seg.img.y0 || 0, zy1 = seg.img.y1 == null ? 1 : seg.img.y1;
         const main = (seg.img.readRects || []).find(r => r.kind === 'main'); // v290: 有框主文就只唸主文
-        const t = (d.lines || [])
+        const t = window.grJoinReadLines((d.lines || [])
           .filter(l => l.y >= zy0 && l.y <= zy1)
           .filter(l => !main || grLineInRect(l, main))
-          .map(l => l.t).join(' ');
+          .map(l => l.t)); // v291: 清掉段落編號/頁碼/斷詞
         if (t.trim()) setTtsText(t);
       });
     }
@@ -2695,7 +2695,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const speakSideRect = async (img2, rect) => {
     const d = await grFetchWords(img2.wordsId || img2.wordsUrl);
     if (!d) return;
-    const t = (d.lines || []).filter(l => grLineInRect(l, rect)).map(l => l.t).join(' ');
+    const t = window.grJoinReadLines((d.lines || []).filter(l => grLineInRect(l, rect)).map(l => l.t));
     if (t.trim() && window.speakText) window.speakText(t);
   };
 
