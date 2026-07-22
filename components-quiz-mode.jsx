@@ -2617,15 +2617,33 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [dict, setDict]         = useQM(null);    // v287: 點字查義 {word, text|null}
   const [speaking, setSpeaking] = useQM(false);   // v287: 朗讀中
   const [ttsText, setTtsText]   = useQM('');      // v287: 這一段可朗讀的文字（文字段落或 OCR）
+  const [readRate, setReadRate] = useQM(() => {   // v293: 朗讀速度（放慢＝更自然）——記住學生的選擇
+    const v = parseFloat(localStorage.getItem('alan-read-rate') || '');
+    return (v >= 0.5 && v <= 1) ? v : 0.8;
+  });
   const wrongsRef = React.useRef([]);
   const autoRef   = React.useRef(null);
   const topRef    = React.useRef(null);
   const audioRef  = React.useRef(null);   // v289: 課文音檔——掛在翻頁容器外，換段不重置進度
+  const segAudioRef = React.useRef(null); // v293: 每段 AI 音檔——同樣要套用朗讀速度
+  const speakStopRef = React.useRef(null);// v293: 逐句朗讀的中止函式
 
   // v289: 進答題/綜合題就暫停音檔（讀下一段時從剛才的位置繼續）
   useQME(() => {
     if (mode !== 'read' && audioRef.current && !audioRef.current.paused) audioRef.current.pause();
   }, [mode]);
+
+  // v293: 朗讀速度——套到課文音檔＋每段 AI 音檔（保留原音色，只放慢節奏，唸起來更自然）。
+  const applyRate = (el) => {
+    if (!el) return;
+    try { el.playbackRate = readRate; } catch (e) {}
+    try { el.preservesPitch = true; el.mozPreservesPitch = true; el.webkitPreservesPitch = true; } catch (e) {}
+  };
+  useQME(() => {
+    applyRate(audioRef.current);
+    applyRate(segAudioRef.current);
+    try { localStorage.setItem('alan-read-rate', String(readRate)); } catch (e) {}
+  }, [readRate, mode, segIdx, item.grAudioUrl]);
 
   // v287: 點單字 → 唸給他聽＋AI 查中文意思（localStorage 快取，同字秒回）
   // v289: 小卡貼著被點的單字（上方空間不夠就開在下面），不再固定頁尾
@@ -2668,7 +2686,11 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   }, [dict && dict.word]);
 
   // v287: 朗讀——文字段落直接唸；照片段落唸 OCR 行（只唸這個裁切帶內的）
-  const stopSpeak = () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} setSpeaking(false); };
+  const stopSpeak = () => {
+    if (speakStopRef.current) { try { speakStopRef.current(); } catch (e) {} speakStopRef.current = null; }
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+    setSpeaking(false);
+  };
   useQME(() => {
     let dead = false;
     stopSpeak();
@@ -2688,34 +2710,39 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     return () => { dead = true; };
   }, [segIdx, mode]);
 
+  // v293: 瀏覽器朗讀的語速——跟著學生選的速度，但夾在語音合成聽起來自然的範圍內
+  const speechRate = () => Math.max(0.7, Math.min(0.95, readRate));
+
   // v290: 附註（side 框）——學生點照片上的 🔊 單獨聽那一塊
   const speakSideRect = async (img2, rect) => {
     const d = await grFetchWords(img2.wordsId || img2.wordsUrl);
     if (!d) return;
     const t = window.grReadTextFrom(d, 0, 1, rect); // v292: 字層級——附註框也拆得乾淨
-    if (t.trim() && window.speakText) window.speakText(t);
+    if (t.trim() && window.speakSentences) window.speakSentences(t, { rate: speechRate() });
   };
 
+  // v293: 逐句朗讀——遇標點停頓、放慢語速，比一口氣唸完自然許多
   const speakSeg = () => {
-    const synth = window.speechSynthesis;
-    if (!synth || !ttsText) return;
+    if (!window.speechSynthesis || !ttsText) return;
     if (speaking) { stopSpeak(); return; }
-    const parts = String(ttsText).match(/[^.!?]+[.!?]*/g) || [String(ttsText)];
-    synth.cancel();
     setSpeaking(true);
-    let i = 0;
-    const next = () => {
-      if (i >= parts.length) { setSpeaking(false); return; }
-      const u = new SpeechSynthesisUtterance(parts[i].trim());
-      u.lang = 'en-US'; u.rate = 0.92; u.pitch = 1;
-      const v = window.ttsPickVoice && window.ttsPickVoice('en-US');
-      if (v) u.voice = v;
-      u.onend = () => { i += 1; next(); };
-      u.onerror = () => { i += 1; next(); };
-      synth.speak(u);
-    };
-    setTimeout(next, 80); // Chrome cancel→speak 同一拍會吞掉 utterance
+    speakStopRef.current = window.speakSentences(ttsText, {
+      rate: speechRate(),
+      onDone: () => { speakStopRef.current = null; setSpeaking(false); },
+    });
   };
+
+  // v293: 朗讀速度小控制——放在音檔旁，學生可再調慢／回原速（記住選擇）
+  const speedCtl = () => (
+    <div className="gr-rate" role="group" aria-label="朗讀速度">
+      <span className="gr-rate-cap">速度</span>
+      {[['🐢 慢', 0.7], ['適中', 0.8], ['原速', 1]].map(([lab, r]) => (
+        <button key={r} type="button"
+          className={'gr-rate-btn' + (Math.abs(readRate - r) < 0.02 ? ' on' : '')}
+          onClick={() => setReadRate(r)}>{lab}</button>
+      ))}
+    </div>
+  );
 
   useQME(() => {
     const r = getResume(progressKey, total);
@@ -2730,7 +2757,11 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       setRes(r.gr.res || {});
       wrongsRef.current = Array.isArray(r.gr.wrongs) ? r.gr.wrongs : [];
     }
-    return () => { clearTimeout(autoRef.current); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} };
+    return () => {
+      clearTimeout(autoRef.current);
+      if (speakStopRef.current) { try { speakStopRef.current(); } catch (e) {} speakStopRef.current = null; }
+      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+    };
   }, []);
 
   // 每翻一頁（換段落或換模式）捲回頁頂
@@ -2997,7 +3028,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       {item.grAudioUrl ? (
         <div className={'gr-audio' + (mode === 'read' && !(segs[segIdx] && segs[segIdx].audioUrl) ? '' : ' hide')}>
           <span className="gr-audio-label">🎧 課文朗讀</span>
-          <audio ref={audioRef} controls preload="metadata" src={item.grAudioUrl}/>
+          <audio ref={audioRef} controls preload="metadata" src={item.grAudioUrl}
+            onLoadedMetadata={(e) => applyRate(e.target)}/>
+          {speedCtl()}
         </div>
       ) : null}
 
@@ -3009,7 +3042,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           {segs[segIdx].audioUrl ? (
             <div className="gr-audio gr-audio-seg">
               <span className="gr-audio-label">🎧 課文朗讀</span>
-              <audio controls preload="metadata" src={segs[segIdx].audioUrl}/>
+              <audio ref={segAudioRef} controls preload="metadata" src={segs[segIdx].audioUrl}
+                onLoadedMetadata={(e) => applyRate(e.target)}/>
+              {speedCtl()}
             </div>
           ) : null}
           {segs.length > 1 && (

@@ -336,7 +336,14 @@ function grReadTextFrom(d, y0, y1, rect) {
 async function generateTtsAudio(text) {
   const endpoint = AI_WRITING_ENDPOINT || '';
   if (!endpoint) throw new Error('tts-missing');
-  const sents = String(text || '').match(/[^.!?]+[.!?]*/g) || [String(text || '')];
+  // v293: 整理文字讓神經語音把句子斷得乾淨——標點後補空格、收掉多餘空白、
+  // 結尾補句號，神經語音才會在標點自然停頓（少了句號會一路連著唸）。
+  let prepped = String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/([.!?,;:])(?=[A-Za-z])/g, '$1 ')  // 標點黏字→補空格
+    .trim();
+  if (prepped && !/[.!?]$/.test(prepped)) prepped += '.';
+  const sents = prepped.match(/[^.!?]+[.!?]*/g) || [prepped];
   const chunks = [];
   let cur = '';
   sents.forEach(t => {
@@ -831,10 +838,11 @@ if (window.speechSynthesis) {
     window.speechSynthesis.addEventListener('voiceschanged', () => { _ttsVoiceCache = {}; });
   } catch (e) {}
 }
-function speakText(text, { rate = 0.95, lang = 'en-US' } = {}) {
+function speakText(text, { rate = 0.85, lang = 'en-US' } = {}) {
   try {
     if (!window.speechSynthesis || !text) return false;
     const synth = window.speechSynthesis;
+    if (_activeSpeak) { try { _activeSpeak(); } catch (e) {} } // v293: 先停掉逐句朗讀，避免疊音
     synth.cancel();
     const fire = (useVoice) => {
       const utt = new SpeechSynthesisUtterance(String(text));
@@ -864,6 +872,63 @@ function speakText(text, { rate = 0.95, lang = 'en-US' } = {}) {
     setTimeout(() => fire(true), 30);
     return true;
   } catch(e) { return false; }
+}
+
+// v293: 把一段文字切成「句子／子句」，並為每塊標一個停頓時間（毫秒）——
+// 讓瀏覽器朗讀遇到標點會停一下、更像真人在讀。句末(.!?)停久一點、逗號類短停。
+function grSpeechChunks(text) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return [];
+  const sents = s.match(/[^.!?]+[.!?]+["'”’)]*|[^.!?]+$/g) || [s];
+  const out = [];
+  sents.forEach(sent => {
+    const clauses = sent.match(/[^,;:—–]+[,;:—–]?/g) || [sent];
+    clauses.forEach(cl => {
+      const t = cl.trim();
+      if (!t || !/[A-Za-z0-9]/.test(t)) return;
+      const endSent = /[.!?]["'”’)]*$/.test(t);
+      const endClause = /[,;:—–]$/.test(t);
+      out.push({ t, pause: endSent ? 420 : endClause ? 230 : 130 });
+    });
+  });
+  if (out.length) out[out.length - 1].pause = 0;
+  return out;
+}
+
+// v293: 逐句朗讀（瀏覽器語音）——句子之間留自然停頓、語速放慢，比一口氣唸完自然得多。
+// 回傳 stop() 讓呼叫端中止；朗讀完（或被中止）呼叫 onDone。全站同時只跑一個朗讀
+// （_activeSpeak）——連點單字／附註／整段不會兩段聲音疊在一起。
+let _activeSpeak = null;
+function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone } = {}) {
+  const synth = window.speechSynthesis;
+  const chunks = grSpeechChunks(text);
+  if (_activeSpeak) { try { _activeSpeak(); } catch (e) {} }
+  _activeSpeak = null;
+  if (!synth || !chunks.length) { if (onDone) onDone(); return () => {}; }
+  try { synth.cancel(); } catch (e) {}
+  let i = 0, stopped = false, done = false;
+  const finish = () => {
+    if (done) return; done = true;
+    if (_activeSpeak === stop) _activeSpeak = null;
+    if (onDone) onDone();
+  };
+  const stop = () => { stopped = true; try { synth.cancel(); } catch (e) {} finish(); };
+  const v = _ttsPickVoice(lang);
+  const step = () => {
+    if (stopped) return;
+    if (i >= chunks.length) { finish(); return; }
+    const c = chunks[i];
+    const u = new SpeechSynthesisUtterance(c.t);
+    u.lang = lang; u.rate = rate; u.pitch = 1;
+    if (v) u.voice = v;
+    u.onend = () => { i += 1; if (!stopped) setTimeout(step, c.pause); };
+    u.onerror = () => { i += 1; if (!stopped) setTimeout(step, c.pause); };
+    try { synth.resume(); } catch (e) {}
+    synth.speak(u);
+  };
+  _activeSpeak = stop;
+  setTimeout(() => { if (!stopped) step(); }, 60);
+  return stop;
 }
 
 // ── Sound Effects ──────────────────────────────────────────────────────
@@ -1600,7 +1665,7 @@ Object.assign(window, {
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS
-  playSound, speakText, ttsPickVoice: _ttsPickVoice,
+  playSound, speakText, speakSentences, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
