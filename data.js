@@ -297,6 +297,39 @@ function grJoinReadLines(lineTexts) {
   return out;
 }
 
+// v292: 從 OCR 資料取「朗讀文字」——關鍵：OCR 的「行」會橫跨兩欄（課文行黏到旁邊圖說），
+// 所以框選過濾要用「字」層級（每個字有自己的座標）。新資料的字帶 r（含標點原文，
+// 朗讀停頓自然）；舊資料退回 t（無標點）。沒有 rect（沒框主文）時退回行清洗。
+function grReadTextFrom(d, y0, y1, rect) {
+  if (!d) return '';
+  const inRect = (cx, cy) => cy >= rect.y && cy <= rect.y + rect.h && cx >= rect.x && cx <= rect.x + rect.w;
+  if (rect && (d.words || []).length) {
+    const toks = (d.words || []).filter(w => {
+      const cy = w.y + (w.h || 0) / 2;
+      const cx = (w.x || 0) + (w.w || 0) / 2;
+      return cy >= y0 && cy <= y1 && inRect(cx, cy);
+    }).map(w => String(w.r || w.t || '').trim()).filter(Boolean);
+    let out = '';
+    toks.forEach((t, i) => {
+      if (!/[A-Za-z]/.test(t)) {
+        // 純數字 token：夾在正常單字中間才保留（其餘幾乎都是頁碼/編號雜訊）
+        const prev = toks[i - 1] || '', next = toks[i + 1] || '';
+        if (!(/^\d{1,4}[.,!?]?$/.test(t) && /[A-Za-z]/.test(prev) && /[A-Za-z]/.test(next))) return;
+      }
+      if (/[A-Za-z]-$/.test(out)) out = out.replace(/-$/, '') + t; // 行尾斷詞接回
+      else out += (out ? ' ' : '') + t;
+    });
+    return out.replace(/\s{2,}/g, ' ').trim();
+  }
+  const lines = (d.lines || []).filter(l => l.y >= y0 && l.y <= y1).filter(l => {
+    if (!rect) return true;
+    if (l.y < rect.y || l.y > rect.y + rect.h) return false;
+    if (l.x == null) return true;
+    return (l.x + (l.w || 0)) > rect.x && l.x < rect.x + rect.w;
+  });
+  return grJoinReadLines(lines.map(l => l.t));
+}
+
 // v290: AI 產生自然朗讀——打同一個 Worker 的 /tts 路由（Workers AI 神經語音）。
 // 長文按句切塊（~1400 字/塊）逐塊產生再串接；Worker 還沒加 /tts 時丟 'tts-missing'
 // 讓編輯器顯示開通指引。產生一次存成 MP3，之後學生播放零成本。
@@ -1569,7 +1602,7 @@ Object.assign(window, {
   // Sound & TTS
   playSound, speakText, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
-  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines,
+  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions

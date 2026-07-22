@@ -1430,6 +1430,7 @@ async function grOcrCanvas(worker, cv) {
     .filter(w => w.confidence > 50 && w.bbox && /[A-Za-z]/.test(w.text))
     .map(w => ({
       t: String(w.text).replace(/^[^A-Za-z'’-]+|[^A-Za-z'’-]+$/g, ''),
+      r: String(w.text).trim().replace(/[|_~•·¤©®°§\\<>{}*#@^=+]+/g, ''), // v292: 含標點原文（朗讀用）
       x: r4(w.bbox.x0 / W), y: r4(w.bbox.y0 / H),
       w: r4((w.bbox.x1 - w.bbox.x0) / W), h: r4((w.bbox.y1 - w.bbox.y0) / H),
     }))
@@ -1590,10 +1591,8 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
     if (!d) return '';
     const zy0 = s.img.y0 || 0, zy1 = s.img.y1 == null ? 1 : s.img.y1;
     const main = (s.img.readRects || []).find(r => r.kind === 'main');
-    return window.grJoinReadLines((d.lines || [])
-      .filter(l => l.y >= zy0 && l.y <= zy1)
-      .filter(l => !main || grLineInRect(l, main))
-      .map(l => l.t)); // v291: 清掉段落編號/頁碼/斷詞——不再唸怪數字
+    // v292: 字層級過濾——OCR 的行會跨欄黏到圖說，行過濾擋不乾淨
+    return window.grReadTextFrom(d, zy0, zy1, main || null);
   };
 
   // v290: AI 產生自然朗讀——每段產生一個 MP3（seg.audioUrl），只餵主文
@@ -1979,7 +1978,16 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
               <span style={{fontSize:11,color:'#2e7d32',fontWeight:700}}>🎧 這段的朗讀 ✓</span>
               <audio controls preload="none" src={seg.audioUrl} style={{height:28,maxWidth:240}}/>
               <button className="btn ghost" style={{fontSize:11,padding:'3px 8px',color:'var(--accent)'}}
-                onClick={() => { if (confirm('移除這段的朗讀音檔？')) onChange(segments.map((s2, i2) => { if (i2 !== si) return s2; const { audioUrl, ...rest } = s2; return rest; })); }}>✕</button>
+                onClick={() => {
+                  if (!confirm('移除這段的朗讀音檔？')) return;
+                  // v292: 用段落 id 比對＋顯式 delete——舊寫法不生效（Alan 回報「移除不了」）
+                  onChange(segments.map(s2 => {
+                    if ((s2.id || s2) !== (seg.id || seg)) return s2;
+                    const n = { ...s2 };
+                    delete n.audioUrl;
+                    return n;
+                  }));
+                }}>✕</button>
             </div>
           ) : null}
           <textarea

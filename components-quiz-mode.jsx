@@ -2681,10 +2681,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         if (dead || !d) return;
         const zy0 = seg.img.y0 || 0, zy1 = seg.img.y1 == null ? 1 : seg.img.y1;
         const main = (seg.img.readRects || []).find(r => r.kind === 'main'); // v290: 有框主文就只唸主文
-        const t = window.grJoinReadLines((d.lines || [])
-          .filter(l => l.y >= zy0 && l.y <= zy1)
-          .filter(l => !main || grLineInRect(l, main))
-          .map(l => l.t)); // v291: 清掉段落編號/頁碼/斷詞
+        const t = window.grReadTextFrom(d, zy0, zy1, main || null); // v292: 字層級過濾（行會跨欄）
         if (t.trim()) setTtsText(t);
       });
     }
@@ -2695,7 +2692,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const speakSideRect = async (img2, rect) => {
     const d = await grFetchWords(img2.wordsId || img2.wordsUrl);
     if (!d) return;
-    const t = window.grJoinReadLines((d.lines || []).filter(l => grLineInRect(l, rect)).map(l => l.t));
+    const t = window.grReadTextFrom(d, 0, 1, rect); // v292: 字層級——附註框也拆得乾淨
     if (t.trim() && window.speakText) window.speakText(t);
   };
 
