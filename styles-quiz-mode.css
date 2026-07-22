@@ -2768,3 +2768,20 @@
 /* 查義小卡：錨定在單字旁；蓋過燈箱（放大時也能查） */
 .gr-word-pop { z-index: 1300; }
 .gr-word-pop.anch { position: fixed; width: min(340px, calc(100vw - 24px)); }
+
+/* ══ v290: 主文/附註框選——附註 🔊 小鈕 ══ */
+.grd-side-btn {
+  position: absolute;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: #3b6ea5;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(30, 55, 85, .35);
+  z-index: 3;
+  transition: transform .15s;
+}
+.grd-side-btn:hover { transform: scale(1.12); }
+.gr-audio-seg { margin-bottom: 14px; }

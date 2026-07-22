@@ -2479,7 +2479,7 @@ function grNormalizeQ(q) {
 
 /* v277: 段落照片切片——只存裁切範圍 {url, ar, y0, y1}（0~1 高度比例），
    不產生新圖片：CSS 高度=寬×ar×(y1-y0)、img translateY(-y0%) 顯示該帶。 */
-function GrImgCrop({ img, onZoom, className, onWord }) {
+function GrImgCrop({ img, onZoom, className, onWord, onSide }) {
   const y0 = img.y0 || 0;
   const y1 = img.y1 == null ? 1 : img.y1;
   const band = Math.max(0.02, y1 - y0);
@@ -2510,6 +2510,15 @@ function GrImgCrop({ img, onZoom, className, onWord }) {
           style={{ left: (w.x * 100) + '%', top: (((w.y - y0) / band) * 100) + '%', width: (w.w * 100) + '%', height: ((w.h / band) * 100) + '%' }}
           onClick={(e) => { e.stopPropagation(); onWord(w.t, e); }}/>
       ))}
+      {/* v290: 附註框的 🔊 ——點了單獨聽這一塊（caption/圖說） */}
+      {(onSide ? (img.readRects || []) : [])
+        .filter(r => r.kind === 'side')
+        .filter(r => { const cy = r.y + r.h / 2; return cy >= y0 && cy <= y1; })
+        .map((r, i) => (
+          <button key={'sd' + i} className="grd-side-btn" title="聽這一塊"
+            style={{ left: `calc(${Math.min(r.x + r.w, 0.99) * 100}% - 26px)`, top: (((r.y - y0) / band) * 100) + '%' }}
+            onClick={(e) => { e.stopPropagation(); onSide(r); }}>🔊</button>
+        ))}
     </div>
   );
 }
@@ -2520,6 +2529,13 @@ function grPreloadImgs(item) {
   urls.forEach(u => { const im = new Image(); im.src = u; });
   // v287: 順便預抓 OCR 單字檔（點字查義＋照片朗讀）
   grSegs(item).forEach(s => { if (s.img && (s.img.wordsId || s.img.wordsUrl)) grFetchWords(s.img.wordsId || s.img.wordsUrl); });
+}
+
+// v290: 行是否落在框內（主文/附註框選；舊資料沒 x 就只看 y）
+function grLineInRect(l, r) {
+  if (l.y < r.y || l.y > r.y + r.h) return false;
+  if (l.x == null) return true;
+  return (l.x + (l.w || 0)) > r.x && l.x < r.x + r.w;
 }
 
 // v287: OCR 單字檔快取（{words:[{t,x,y,w,h}], lines:[{t,y}]}，座標＝整張圖比例）
@@ -2664,12 +2680,24 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       grFetchWords(seg.img.wordsId || seg.img.wordsUrl).then(d => {
         if (dead || !d) return;
         const zy0 = seg.img.y0 || 0, zy1 = seg.img.y1 == null ? 1 : seg.img.y1;
-        const t = (d.lines || []).filter(l => l.y >= zy0 && l.y <= zy1).map(l => l.t).join(' ');
+        const main = (seg.img.readRects || []).find(r => r.kind === 'main'); // v290: 有框主文就只唸主文
+        const t = (d.lines || [])
+          .filter(l => l.y >= zy0 && l.y <= zy1)
+          .filter(l => !main || grLineInRect(l, main))
+          .map(l => l.t).join(' ');
         if (t.trim()) setTtsText(t);
       });
     }
     return () => { dead = true; };
   }, [segIdx, mode]);
+
+  // v290: 附註（side 框）——學生點照片上的 🔊 單獨聽那一塊
+  const speakSideRect = async (img2, rect) => {
+    const d = await grFetchWords(img2.wordsId || img2.wordsUrl);
+    if (!d) return;
+    const t = (d.lines || []).filter(l => grLineInRect(l, rect)).map(l => l.t).join(' ');
+    if (t.trim() && window.speakText) window.speakText(t);
+  };
 
   const speakSeg = () => {
     const synth = window.speechSynthesis;
@@ -2882,7 +2910,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     <>
       {seg.img && seg.img.url ? (
         <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
-          onWord={(w, e) => openWord(w, '', e)}/>
+          onWord={(w, e) => openWord(w, '', e)}
+          onSide={(r) => speakSideRect(seg.img, r)}/>
       ) : null}
       {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
     </>
@@ -2969,7 +2998,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
       {/* v289: 課文音檔（課本配音）——非閱讀頁隱藏但不卸載，播放位置一路保留 */}
       {item.grAudioUrl ? (
-        <div className={'gr-audio' + (mode === 'read' ? '' : ' hide')}>
+        <div className={'gr-audio' + (mode === 'read' && !(segs[segIdx] && segs[segIdx].audioUrl) ? '' : ' hide')}>
           <span className="gr-audio-label">🎧 課文朗讀</span>
           <audio ref={audioRef} controls preload="metadata" src={item.grAudioUrl}/>
         </div>
@@ -2980,6 +3009,12 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       {mode === 'read' ? (
         /* ── 文章頁：只有這一段的內容＋「完成閱讀」── */
         <>
+          {segs[segIdx].audioUrl ? (
+            <div className="gr-audio gr-audio-seg">
+              <span className="gr-audio-label">🎧 課文朗讀</span>
+              <audio controls preload="metadata" src={segs[segIdx].audioUrl}/>
+            </div>
+          ) : null}
           {segs.length > 1 && (
             <div className="gr-dots" aria-hidden="true">
               {segs.map((_, i) => (
@@ -2990,7 +3025,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           <div className="gr-seg cur">
             <div className="gr-read-head">
               {segs.length > 1 ? <div className="gr-seg-label">第 {segIdx + 1} 段</div> : <span/>}
-              {ttsText && !item.grAudioUrl ? (
+              {ttsText && !item.grAudioUrl && !segs[segIdx].audioUrl ? (
                 <button className={'gr-peek-btn gr-tts-btn' + (speaking ? ' on' : '')} onClick={speakSeg}>
                   {speaking ? '⏹ 停止朗讀' : '🔊 聽這一段'}
                 </button>
@@ -3064,7 +3099,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       {zoom && (
         <div className="gr-lightbox" onClick={() => setZoom(null)}>
           <div className="gr-lightbox-in">
-            <GrImgCrop img={zoom} onWord={(w, e) => openWord(w, '', e)}/>
+            <GrImgCrop img={zoom} onWord={(w, e) => openWord(w, '', e)} onSide={(r) => speakSideRect(zoom, r)}/>
             <div className="gr-lightbox-hint">點單字＝查意思 · 點其他地方關閉</div>
           </div>
         </div>

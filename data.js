@@ -278,6 +278,40 @@ async function uploadReadingPhoto(itemId, blob) {
 // v288: OCR 單字資料改存 Firestore 的 class 集合（公開可讀、老師可寫——規則現成）
 // ⚠ 教訓：Firebase Storage 的「檔案下載」(alt=media) 不回 CORS 標頭（metadata 有、檔案沒有），
 // 網頁 fetch/crossOrigin 讀圖都會被瀏覽器擋——除非去 GCS 設 bucket CORS。Firestore SDK 不經 CORS。
+// v290: AI 產生自然朗讀——打同一個 Worker 的 /tts 路由（Workers AI 神經語音）。
+// 長文按句切塊（~1400 字/塊）逐塊產生再串接；Worker 還沒加 /tts 時丟 'tts-missing'
+// 讓編輯器顯示開通指引。產生一次存成 MP3，之後學生播放零成本。
+async function generateTtsAudio(text) {
+  const endpoint = AI_WRITING_ENDPOINT || '';
+  if (!endpoint) throw new Error('tts-missing');
+  const sents = String(text || '').match(/[^.!?]+[.!?]*/g) || [String(text || '')];
+  const chunks = [];
+  let cur = '';
+  sents.forEach(t => {
+    if ((cur + t).length > 1400) { if (cur.trim()) chunks.push(cur); cur = t; }
+    else cur += t;
+  });
+  if (cur.trim()) chunks.push(cur);
+  const parts = [];
+  for (const c of chunks) {
+    const res = await fetch(endpoint + '/tts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: c.trim() }),
+    });
+    if (res.status === 404 || res.status === 405) throw new Error('tts-missing');
+    if (!res.ok) throw new Error('TTS 服務回應 ' + res.status);
+    const data = await res.json().catch(() => null);
+    if (!data || !data.audio) throw new Error('tts-missing'); // 舊 Worker 沒有 /tts 會回 Claude 格式
+    const bin = atob(data.audio);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    parts.push(u8);
+  }
+  if (!parts.length) throw new Error('沒有可朗讀的文字');
+  return new Blob(parts, { type: 'audio/mpeg' });
+}
+
 // v289: 課文音檔（老師上傳課本配音/自錄）——<audio> 播放跟 <img> 一樣不需要 CORS
 async function uploadReadingAudio(itemId, file) {
   const safe = String(itemId || 'gr').replace(/[^A-Za-z0-9_-]/g, '_');
@@ -1516,7 +1550,7 @@ Object.assign(window, {
   // Sound & TTS
   playSound, speakText, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
-  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio,
+  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions

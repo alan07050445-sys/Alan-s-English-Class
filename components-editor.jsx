@@ -1398,6 +1398,13 @@ function ShortAnswerEditor({ passage, questions, saYoutube, onChangePassage, onC
 /* ── 分段閱讀共用 helpers（v281 抽出：段落題與綜合題共用同一套題目編輯/匯入）── */
 const grMkId = (p) => p + Date.now() + Math.random().toString(36).slice(2, 5);
 
+/* v290: OCR 的「行」是否落在框內——y 中心在框的縱向範圍且 x 有重疊（舊資料沒 x 就只看 y） */
+function grLineInRect(l, r) {
+  if (l.y < r.y || l.y > r.y + r.h) return false;
+  if (l.x == null) return true;
+  return (l.x + (l.w || 0)) > r.x && l.x < r.x + r.w;
+}
+
 /* v287: OCR——照片/PDF 的「點字查義＋朗讀」資料來源。Tesseract.js 用到才從 CDN 載。 */
 const loadTesseract = () => new Promise((resolve, reject) => {
   if (window.Tesseract) return resolve(window.Tesseract);
@@ -1429,7 +1436,11 @@ async function grOcrCanvas(worker, cv) {
     .filter(w => w.t.length > 1);
   const lines = (data.lines || [])
     .filter(l => l.bbox && String(l.text || '').trim())
-    .map(l => ({ t: String(l.text).trim(), y: r4(((l.bbox.y0 + l.bbox.y1) / 2) / H) }));
+    .map(l => ({
+      t: String(l.text).trim(),
+      y: r4(((l.bbox.y0 + l.bbox.y1) / 2) / H),
+      x: r4(l.bbox.x0 / W), w: r4((l.bbox.x1 - l.bbox.x0) / W), // v290: 朗讀區域框選需要水平位置
+    }));
   return { words, lines };
 }
 
@@ -1565,10 +1576,51 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
   const [impSeg, setImpSeg] = useS(null);   // 哪個匯入面板打開（段索引 | 'final'）
   const [impText, setImpText] = useS('');
   const [reOcrSeg, setReOcrSeg] = useS(null); // v288: 等老師重選原始檔辨識的段落
+  const [regSeg, setRegSeg] = useS(null);     // v290: 開啟「朗讀區域」框選的段落
   const fileRef = React.useRef(null);
   const pdfRef = React.useRef(null);
   const reOcrRef = React.useRef(null);
   const audioRef = React.useRef(null);
+
+  // v290: 取一段的「主文」文字——有框選就只拿主文框內的行；沒框就整個裁切帶
+  const grSegMainText = async (s) => {
+    if ((s.text || '').trim()) return s.text.trim();
+    if (!s.img || !s.img.wordsId) return '';
+    const d = await window.fetchReadingWords(s.img.wordsId);
+    if (!d) return '';
+    const zy0 = s.img.y0 || 0, zy1 = s.img.y1 == null ? 1 : s.img.y1;
+    const main = (s.img.readRects || []).find(r => r.kind === 'main');
+    return (d.lines || [])
+      .filter(l => l.y >= zy0 && l.y <= zy1)
+      .filter(l => !main || grLineInRect(l, main))
+      .map(l => l.t).join(' ');
+  };
+
+  // v290: AI 產生自然朗讀——每段產生一個 MP3（seg.audioUrl），只餵主文
+  const genAiAudio = async () => {
+    setUpErr('');
+    const targets = segments.map((s, i) => ({ s, i })).filter(({ s }) => (s.text || '').trim() || (s.img && s.img.wordsId));
+    if (!targets.length) { setUpErr('沒有可朗讀的內容——請先加文字，或幫照片「🔍 辨識單字」。'); return; }
+    try {
+      const out = [...segments];
+      for (let k = 0; k < targets.length; k++) {
+        const { s, i } = targets[k];
+        setUploading(`AI 產生朗讀 ${k + 1}/${targets.length}…`);
+        const text = await grSegMainText(s);
+        if (!text.trim()) continue;
+        const blob = await window.generateTtsAudio(text);
+        const url = await window.uploadReadingAudio(itemId || 'gr', new File([blob], `seg${i + 1}.mp3`, { type: 'audio/mpeg' }));
+        out[i] = { ...out[i], audioUrl: url };
+      }
+      onChange(out);
+    } catch (err) {
+      const msg = String((err && err.message) || err);
+      setUpErr(msg === 'tts-missing'
+        ? '🗣 AI 語音還沒開通——需要在你的 Cloudflare Worker 貼一小段程式（步驟我已經給你，照著做一次就永久有效）。'
+        : 'AI 朗讀產生失敗：' + msg);
+    }
+    setUploading('');
+  };
 
   const mkId = grMkId;
 
@@ -1838,11 +1890,15 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
           </>
         ) : (
           <>
+            <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} disabled={!!uploading}
+              onClick={genAiAudio} title="用 AI 神經語音把每段主文唸成 MP3——產生一次，學生播放不用錢">
+              🗣 AI 產生朗讀（自然人聲）
+            </button>
             <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} disabled={!!uploading}
               onClick={() => audioRef.current && audioRef.current.click()}>
-              🎧 上傳課文音檔（選填）
+              🎧 或上傳音檔
             </button>
-            <span style={{fontSize:11,color:'var(--ink-muted)'}}>課本配音或自己錄——學生閱讀時播這個，比機器語音自然很多</span>
+            <span style={{fontSize:11,color:'var(--ink-muted)'}}>照片先「🔍 辨識單字」＋框好「🗣 朗讀區域」，AI 就只唸主文、不唸旁邊小字</span>
           </>
         )}
       </div>
@@ -1895,7 +1951,14 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
                   ✂ 裁切這張照片
                 </button>
                 {seg.img.wordsId ? (
-                  <span style={{fontSize:11,color:'#2e7d32'}}>🔍 點字查義 ✓</span>
+                  <>
+                    <span style={{fontSize:11,color:'#2e7d32'}}>🔍 點字查義 ✓</span>
+                    <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} disabled={!!uploading}
+                      onClick={() => setRegSeg(seg)}
+                      title="框出主文與旁邊小字——AI 朗讀只唸主文；小字變成學生可點的 🔊">
+                      🗣 朗讀區域{(seg.img.readRects || []).length ? ` ✓（${(seg.img.readRects || []).length} 框）` : ''}
+                    </button>
+                  </>
                 ) : (
                   <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} disabled={!!uploading}
                     onClick={() => ocrExisting(seg)} title="辨識照片裡的英文字，學生就能點單字查意思、聽朗讀">
@@ -1909,6 +1972,14 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
                   </button>
                 ) : null}
               </div>
+            </div>
+          ) : null}
+          {seg.audioUrl ? (
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+              <span style={{fontSize:11,color:'#2e7d32',fontWeight:700}}>🎧 這段的朗讀 ✓</span>
+              <audio controls preload="none" src={seg.audioUrl} style={{height:28,maxWidth:240}}/>
+              <button className="btn ghost" style={{fontSize:11,padding:'3px 8px',color:'var(--accent)'}}
+                onClick={() => { if (confirm('移除這段的朗讀音檔？')) onChange(segments.map((s2, i2) => { if (i2 !== si) return s2; const { audioUrl, ...rest } = s2; return rest; })); }}>✕</button>
             </div>
           ) : null}
           <textarea
@@ -1964,7 +2035,145 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
           onConfirm={applyCrop}
         />
       )}
+
+      {regSeg && (
+        <GrRegionModal
+          seg={regSeg}
+          onCancel={() => setRegSeg(null)}
+          onConfirm={(rects) => {
+            onChange(segments.map(s => s.id === regSeg.id ? { ...s, img: { ...s.img, readRects: rects } } : s));
+            setRegSeg(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ── 朗讀區域框選（v290）——在這段的裁切畫面上拖出方框：
+   第一框＝主文（金色，AI/機器朗讀只唸這裡）；其餘＝附註（藍色，學生端變 🔊 可點）。
+   座標存整張圖比例（同 words），顯示時換算到裁切帶內。 */
+function GrRegionModal({ seg, onCancel, onConfirm }) {
+  const img = seg.img;
+  const zy0 = img.y0 || 0;
+  const zy1 = img.y1 == null ? 1 : img.y1;
+  const band = Math.max(0.02, zy1 - zy0);
+  const [rects, setRects] = useS(() => (img.readRects || []).map(r => ({ ...r })));
+  const [draft, setDraft] = useS(null); // band 內比例 {x0,y0,x1,y1}
+  const wrapRef = React.useRef(null);
+  const startRef = React.useRef(null);
+
+  const toFrac = (e) => {
+    const r = wrapRef.current.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: Math.min(1, Math.max(0, (cx - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, (cy - r.top) / r.height)),
+    };
+  };
+  const down = (e) => {
+    if (e.target.closest && e.target.closest('.gr-reg-x')) return;
+    e.preventDefault();
+    const p = toFrac(e);
+    startRef.current = p;
+    setDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+  };
+  useE(() => {
+    if (!startRef.current) return;
+    const move = (e) => {
+      if (!startRef.current) return;
+      if (e.touches) e.preventDefault();
+      const p = toFrac(e);
+      setDraft({ x0: startRef.current.x, y0: startRef.current.y, x1: p.x, y1: p.y });
+    };
+    const up = () => {
+      const s0 = startRef.current;
+      startRef.current = null;
+      setDraft(d => {
+        if (d && s0) {
+          const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
+          if (w > 0.04 && h > 0.02) {
+            // band 比例 → 整張圖比例
+            setRects(rs => [...rs, {
+              x: Math.min(d.x0, d.x1), w,
+              y: zy0 + Math.min(d.y0, d.y1) * band, h: h * band,
+            }]);
+          }
+        }
+        return null;
+      });
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', up);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', up);
+    };
+  }, [draft != null]);
+
+  // 存檔時第一框標 main、其餘 side
+  const finalize = () => onConfirm(rects.map((r, i) => ({ ...r, kind: i === 0 ? 'main' : 'side' })));
+
+  const bandTop = (y) => ((y - zy0) / band) * 100;
+
+  return ReactDOM.createPortal(
+    <div style={{position:'fixed',inset:0,zIndex:300,background:'rgba(24,18,10,.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onCancel}>
+      <div style={{background:'var(--bg,#fff)',borderRadius:10,maxWidth:620,width:'100%',maxHeight:'92vh',display:'flex',flexDirection:'column',padding:'14px 16px',boxSizing:'border-box'}} onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,flexWrap:'wrap'}}>
+          <b style={{fontSize:14}}>🗣 朗讀區域</b>
+          <span style={{flex:1}}/>
+          <button className="btn ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={() => setRects([])} disabled={!rects.length}>清除全部</button>
+        </div>
+        <div style={{fontSize:11.5,color:'var(--ink-muted)',marginBottom:6,lineHeight:1.7}}>
+          在照片上<b>拖出方框</b>：第一個框＝<b style={{color:'#a07d1c'}}>主文</b>（朗讀只唸這裡）；
+          再框的＝<b style={{color:'#3b6ea5'}}>附註</b>（學生點 🔊 可單獨聽）。框錯點 ✕ 重拉。
+        </div>
+        <div style={{overflow:'auto',flex:1,minHeight:0,border:'1px solid var(--border)',borderRadius:6}}>
+          <div ref={wrapRef}
+            style={{position:'relative',cursor:'crosshair',height:0,overflow:'hidden',paddingBottom:((img.ar || 1.3) * band * 100) + '%'}}
+            onMouseDown={down} onTouchStart={down}>
+            <img src={img.url} alt="" draggable={false}
+              style={{position:'absolute',top:0,left:0,width:'100%',display:'block',userSelect:'none',pointerEvents:'none',transform:`translateY(-${zy0 * 100}%)`}}/>
+            {rects.map((r, i) => (
+              <div key={i} style={{
+                position:'absolute',
+                left: (r.x * 100) + '%', top: bandTop(r.y) + '%',
+                width: (r.w * 100) + '%', height: ((r.h / band) * 100) + '%',
+                border: `2.5px solid ${i === 0 ? '#c9a84c' : '#3b6ea5'}`,
+                background: i === 0 ? 'rgba(201,168,76,.12)' : 'rgba(59,110,165,.10)',
+                borderRadius: 6, boxSizing: 'border-box',
+              }}>
+                <span style={{position:'absolute',left:4,top:2,fontSize:10,fontWeight:800,color:i===0?'#a07d1c':'#3b6ea5',background:'rgba(255,255,255,.85)',borderRadius:3,padding:'0 4px',pointerEvents:'none'}}>
+                  {i === 0 ? '主文' : `附註 ${i}`}
+                </span>
+                <button className="gr-reg-x"
+                  onClick={(e) => { e.stopPropagation(); setRects(rs => rs.filter((_, j) => j !== i)); }}
+                  onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+                  style={{position:'absolute',right:-10,top:-10,width:22,height:22,borderRadius:'50%',border:'none',background:i===0?'#c9a84c':'#3b6ea5',color:'#fff',fontSize:11,cursor:'pointer',lineHeight:'22px',padding:0}}>✕</button>
+              </div>
+            ))}
+            {draft && (
+              <div style={{
+                position:'absolute',
+                left: (Math.min(draft.x0, draft.x1) * 100) + '%', top: (Math.min(draft.y0, draft.y1) * 100) + '%',
+                width: (Math.abs(draft.x1 - draft.x0) * 100) + '%', height: (Math.abs(draft.y1 - draft.y0) * 100) + '%',
+                border: '2px dashed #B85A45', borderRadius: 6, boxSizing: 'border-box', pointerEvents: 'none',
+              }}/>
+            )}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:10}}>
+          <button className="btn ghost" onClick={onCancel}>取消</button>
+          <button className="btn primary" onClick={finalize}>✅ 完成（{rects.length} 框）</button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2079,7 +2288,8 @@ function GrCropModal({ url, group, onCancel, onConfirm }) {
     return out;
   })();
 
-  return (
+  // v290: portal 到 body——.modal 的 transform 會把 fixed 困在彈窗裡（containing block）
+  return ReactDOM.createPortal(
     <div style={{position:'fixed',inset:0,zIndex:300,background:'rgba(24,18,10,.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onCancel}>
       <div style={{background:'var(--bg,#fff)',borderRadius:10,maxWidth:560,width:'100%',maxHeight:'92vh',display:'flex',flexDirection:'column',padding:'14px 16px',boxSizing:'border-box'}} onClick={e => e.stopPropagation()}>
         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,flexWrap:'wrap'}}>
@@ -2115,7 +2325,8 @@ function GrCropModal({ url, group, onCancel, onConfirm }) {
           <button className="btn primary" onClick={() => onConfirm(bands)}>✅ 完成裁切（{bands.length} 段）</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
