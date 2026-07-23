@@ -146,6 +146,7 @@ function Header({
 function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
   const [loading, setLoading] = React.useState(false);
   const [acctOpen, setAcctOpen] = React.useState(false); // v249: 右上帳號下拉
+  const [bye, setBye] = React.useState(false);           // v294: 登出確認小提示（淡入淡出）
   React.useEffect(() => {
     if (!acctOpen) return;
     const close = (e) => { if (!e.target.closest || !e.target.closest('.ll-acct')) setAcctOpen(false); };
@@ -587,6 +588,12 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
 
   return (
     <div className="login-screen login-landing">
+      {bye && (
+        <div className="ll-bye" role="status" aria-live="polite">
+          <span className="ll-bye-check">✓</span>
+          <span className="ll-bye-text">已登出<small>期待下次見面 👋</small></span>
+        </div>
+      )}
       {onBack && (
         <button className="ll-back" onClick={onBack}>← 返回學習</button>
       )}
@@ -609,7 +616,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
               {acctOpen && (
                 <div className="ll-acct-menu" role="menu">
                   <button role="menuitem" onClick={() => { setAcctOpen(false); onBack(); }}>進入課程 →</button>
-                  {onLogout && <button role="menuitem" className="ll-acct-out" onClick={() => { setAcctOpen(false); onLogout(); }}>登出</button>}
+                  {onLogout && <button role="menuitem" className="ll-acct-out" onClick={() => { setAcctOpen(false); setBye(true); onLogout(); setTimeout(() => setBye(false), 2000); }}>登出</button>}
                 </div>
               )}
             </div>

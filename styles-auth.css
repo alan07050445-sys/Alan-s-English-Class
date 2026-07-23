@@ -121,6 +121,53 @@
 }
 
 /* ── Streak Toast ─────────────────────────────── */
+/* v294: 登出確認小提示——淡入、停留、淡出，讓「登出成功」不再唐突 */
+.ll-bye {
+  position: fixed;
+  top: 26px; left: 50%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 22px 13px 16px;
+  background: rgba(255, 253, 248, .96);
+  border: 1px solid #ecdfc6;
+  border-radius: 100px;
+  box-shadow: 0 10px 34px rgba(58, 43, 20, .16);
+  backdrop-filter: blur(6px);
+  z-index: 100000;
+  white-space: nowrap;
+  animation: ll-bye-in .42s cubic-bezier(.22,.68,0,1.2) forwards,
+             ll-bye-out .4s ease 1.5s forwards;
+}
+.ll-bye-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: none;
+  border-radius: 50%;
+  background: #2f7d4f; color: #fff;
+  font-size: 15px; font-weight: 900;
+  animation: ll-bye-pop .5s cubic-bezier(.36,.07,.19,1.4) .08s both;
+}
+.ll-bye-text {
+  display: flex; flex-direction: column; line-height: 1.2;
+  font-weight: 800; font-size: 15.5px; color: #4a3a26;
+}
+.ll-bye-text small { font-weight: 600; font-size: 11.5px; color: #a08a68; margin-top: 1px; }
+@keyframes ll-bye-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(.94); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@keyframes ll-bye-out {
+  from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(.97); }
+}
+@keyframes ll-bye-pop {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ll-bye { animation: ll-bye-in .01s forwards, ll-bye-out .3s ease 1.7s forwards; }
+  .ll-bye-check { animation: none; }
+}
+
 .streak-toast {
   position: fixed;
   bottom: 32px; left: 50%; transform: translateX(-50%);
