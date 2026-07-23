@@ -583,12 +583,14 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
   const [playerKey,    setPlayerKey]    = useQM(0);
   const [progVersion,  setProgVersion]  = useQM(0);      // bumped after quiz completes → refreshes sidebar scores
+  const [copyItem,     setCopyItem]     = useQM(null);   // v294: 「沿用到其他週」的題目
+  const [copySel,      setCopySel]      = useQM([]);     // v294: 勾選的目標週 id
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
   // Edit mode: show ALL items so teacher can see & edit non-quiz types too
@@ -851,6 +853,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                         }}
                         title={hw ? `作業: ${hw.dueDate}` : '設為作業'}
                       >📌</button>
+                      {onCopyToWeeks && (weekChoices || []).length > 0 && (
+                        <button
+                          className="qm-unit-copy-btn"
+                          onClick={(e) => { e.stopPropagation(); setCopySel([]); setCopyItem(item); }}
+                          title="沿用到其他週"
+                        ><window.Icon name="copy" size={12}/></button>
+                      )}
                       <button
                         className="qm-unit-edit-btn"
                         onClick={(e) => { e.stopPropagation(); onEditItem(item); }}
@@ -1138,6 +1147,42 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         )}
         </div>
       </div>
+
+      {/* v294: 沿用題目到其他週——勾選目標週，複製一份過去（各週獨立） */}
+      {copyItem && ReactDOM.createPortal(
+        <div className="qm-copy-overlay" onClick={() => setCopyItem(null)}>
+          <div className="qm-copy-modal" onClick={e => e.stopPropagation()}>
+            <div className="qm-copy-head">
+              <div className="qm-copy-title">沿用到其他週</div>
+              <button className="qm-copy-x" onClick={() => setCopyItem(null)} aria-label="關閉"><window.Icon name="close" size={16}/></button>
+            </div>
+            <div className="qm-copy-sub">把「{copyItem.title}」複製到你勾選的週。<b>各週獨立</b>——哪一週想微調就改哪週，成績也分開算。</div>
+            <div className="qm-copy-list">
+              {(weekChoices || []).map(wc => {
+                const on = copySel.includes(wc.id);
+                return (
+                  <button key={wc.id} type="button" className={'qm-copy-wk' + (on ? ' on' : '')}
+                    onClick={() => setCopySel(s => on ? s.filter(x => x !== wc.id) : [...s, wc.id])}>
+                    <span className="qm-copy-wk-check">{on ? '✓' : ''}</span>
+                    <span className="qm-copy-wk-info">
+                      <span className="qm-copy-wk-label">{wc.label}</span>
+                      {wc.sub ? <span className="qm-copy-wk-sub">{wc.sub}</span> : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="qm-copy-actions">
+              <button className="qm-copy-cancel" onClick={() => setCopyItem(null)}>取消</button>
+              <button className="qm-copy-go" disabled={!copySel.length}
+                onClick={() => { onCopyToWeeks(copyItem, copySel); setCopyItem(null); }}>
+                沿用到 {copySel.length || ''} 週
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

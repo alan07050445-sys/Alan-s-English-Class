@@ -134,6 +134,33 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
   // v251: selWeekId 由 TeacherDashboard 統一管理（進學生詳情返回不再重置、預設=今天所在週）
   const [gradeFilter, setGradeFilter] = useDash('all'); // v237: 年級篩選
   const [q, setQ] = useDash('');                         // v237: 學生搜尋
+  const [notifyOpen, setNotifyOpen] = useDash(false);    // v294: 家長通知文字視窗
+  const [notifyText, setNotifyText] = useDash('');
+  const [notifyCopied, setNotifyCopied] = useDash(false);
+
+  // v294: 一鍵產生「本週作業」LINE 通知文字——列出本週 📌 作業＋截止日＋練習連結
+  const SITE_URL = 'https://alan07050445-sys.github.io/Alan-s-English-Class/';
+  const buildNotifyText = () => {
+    const wk = weeks[selWeekId];
+    if (!wk) return '';
+    const label = wk.label || selWeekId;
+    const hw = wk.homework || {};
+    const byId = {};
+    Object.values(wk.items || {}).forEach(arr => (arr || []).forEach(it => { byId[it.id] = it; }));
+    const fmtDue = (d) => { try { const x = new Date(d + 'T00:00:00'); return `${x.getMonth() + 1}/${x.getDate()}`; } catch (e) { return d; } };
+    const lines = Object.keys(hw).map(id => {
+      const it = byId[id];
+      const due = hw[id] && hw[id].dueDate ? `（截止 ${fmtDue(hw[id].dueDate)}）` : '';
+      return `・${(it && it.title) || id}${due}`;
+    });
+    const head = `📚 ${label} 本週作業來囉！`;
+    const body = lines.length ? lines.join('\n') : '本週練習已更新，快來看看！';
+    const note = (wk.parentNote || '').trim();
+    return [head, '', body, note ? '\n' + note : '', '', `👉 開始練習：${SITE_URL}`, '（登入後點「進入課程」就看得到囉～）'].filter(x => x !== undefined).join('\n');
+  };
+  const openNotify = () => { setNotifyText(buildNotifyText()); setNotifyCopied(false); setNotifyOpen(true); };
+  const copyNotify = () => { navigator.clipboard.writeText(notifyText).then(() => { setNotifyCopied(true); setTimeout(() => setNotifyCopied(false), 2200); }).catch(() => {}); };
+  const sendViaLine = () => { window.open('https://line.me/R/msg/text/?' + encodeURIComponent(notifyText), '_blank', 'noopener'); };
 
   const rows = useDashM(() => {
     if (!selWeekId) return [];
@@ -234,7 +261,27 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
         )}
         <input className="cwo-search" placeholder="🔍 搜尋學生…" value={q} onChange={e => setQ(e.target.value)}/>
         <button className="cwo-export" onClick={exportCsv} title="下載目前名單的 CSV（Excel 可開）">⬇ CSV</button>
+        <button className="cwo-notify" onClick={openNotify} title="產生本週作業的 LINE 通知文字，貼到班級群組送出">📣 通知家長</button>
       </div>
+
+      {/* v294: 家長通知文字——LINE 一鍵傳送 / 複製 */}
+      {notifyOpen && (
+        <div className="nt-overlay" onClick={() => setNotifyOpen(false)}>
+          <div className="nt-modal" onClick={e => e.stopPropagation()}>
+            <div className="nt-head">
+              <div className="nt-title">📣 本週作業通知</div>
+              <button className="nt-x" onClick={() => setNotifyOpen(false)} aria-label="關閉">✕</button>
+            </div>
+            <div className="nt-sub">貼到班級 LINE 群組送出，家長小孩就會看到。內容可以直接改。</div>
+            <textarea className="nt-text" value={notifyText} onChange={e => setNotifyText(e.target.value)} rows={10}/>
+            <div className="nt-actions">
+              <button className="nt-line" onClick={sendViaLine}>用 LINE 傳送 →</button>
+              <button className="nt-copy" onClick={copyNotify}>{notifyCopied ? '✓ 已複製' : '複製文字'}</button>
+            </div>
+            <div className="nt-hint">💡「用 LINE 傳送」會打開 LINE 讓你選要貼到哪個群組；電腦上若沒反應，改用「複製文字」再自己貼。</div>
+          </div>
+        </div>
+      )}
 
       <div className="cwo-summary">
         <div className="cwo-stat cwo-stat-big">

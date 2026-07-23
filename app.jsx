@@ -734,6 +734,30 @@ function App() {
     showToast(hwData ? "設定作業 ✓" : "取消作業");
   };
 
+  // v294: 沿用題目到其他週——深拷貝一份（各週獨立；進度分開算，因 key = weekId_itemId）。
+  // 只帶內容，不自動設為作業（老師到目標週再用 📌 指派）。
+  const handleCopyItemToWeeks = (catId, item, targetWeekIds) => {
+    if (!item || !targetWeekIds || !targetWeekIds.length) return;
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    let copied = 0;
+    targetWeekIds.forEach(tw => {
+      if (!w[tw]) return; // 只沿用到已存在的週
+      if (!w[tw].items) w[tw].items = { vocab: [], grammar: [], word: [], reading: [] };
+      if (!w[tw].items[catId]) w[tw].items[catId] = [];
+      const taken = new Set(Object.values(w[tw].items).flat().map(it => it.id));
+      let id = item.id, n = 2;
+      while (taken.has(id)) { id = `${item.id}-${n}`; n++; } // 目標週內 id 撞了就換一個
+      const clone = JSON.parse(JSON.stringify(item));
+      clone.id = id;
+      w[tw].items[catId].push(clone);
+      copied++;
+    });
+    if (!copied) { showToast('沒有可沿用的週'); return; }
+    setWeeks(w);
+    window.saveWeeks(w);
+    showToast(`已沿用到 ${copied} 週 ✓`);
+  };
+
   // v255: 所有題型完成時刷新大廳進度（saveQuizModeCompletion 會呼叫）
   window._bumpQmProgress = () => setQmProgressVersion(v => v + 1);
 
@@ -1101,6 +1125,12 @@ function App() {
               onEditItem={handleEditItem}
               onDeleteItem={handleDeleteItem}
               onMoveItem={(itemId, dir) => handleMoveItem(catView.id, itemId, dir)}
+              weekChoices={weekOrder.filter(id => id !== weekId).map(id => ({
+                id,
+                label: (weeks[id] && (weeks[id].label || weeks[id].id)) || id,
+                sub: weeks[id] ? [weeks[id].dateRange, weeks[id].theme].filter(Boolean).join(' · ') : '',
+              }))}
+              onCopyToWeeks={(item, targetIds) => handleCopyItemToWeeks(catView.id, item, targetIds)}
               homework={week.homework || {}}
               onSetHomework={handleSetHomework}
               weekQuizItems={weekQuizItems}
