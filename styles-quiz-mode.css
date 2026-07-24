@@ -2526,6 +2526,25 @@
 .uh-pick { cursor: pointer; }
 .uh-pick.disabled { opacity: .5; pointer-events: none; }
 .uh-hint { margin-top: 10px; font-size: 12.5px; color: var(--ink-3, #8a8270); }
+/* v299: 掃描模式開關＋已掃描徽章 */
+.uh-scan-toggle {
+  display: inline-flex; align-items: center; gap: 8px; margin: 18px auto 0;
+  padding: 8px 16px; border-radius: 100px; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 700;
+  border: 1.5px solid var(--border, #e5dfc8); background: #fff; color: var(--ink-3, #8a8270);
+  transition: all .14s;
+}
+.uh-scan-toggle .uh-scan-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3, #b9ad92); flex: none; transition: background .14s;
+}
+.uh-scan-toggle.on { border-color: var(--g-c, #8B3120); color: var(--g-c, #8B3120); background: #fdf6f2; }
+.uh-scan-toggle.on .uh-scan-dot { background: #2f9e5f; box-shadow: 0 0 0 3px rgba(47,158,95,.16); }
+.uh-scan-toggle:disabled { opacity: .55; cursor: default; }
+.uh-thumb-badge {
+  position: absolute; left: 5px; bottom: 5px; z-index: 2;
+  background: rgba(47,125,79,.92); color: #fff; font-size: 10px; font-weight: 800;
+  padding: 2px 7px; border-radius: 100px; letter-spacing: .02em;
+}
 @media (max-width: 560px) {
   .uh-thumb { width: 84px; height: 84px; }
 }

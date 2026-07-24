@@ -5057,11 +5057,80 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
    紙本作業拍照上傳：學生拍照/選圖 → 縮圖預覽 → 送出（自動縮小後傳
    Firebase Storage）→ 老師在後台學生詳情看照片、打分數。
 ══════════════════════════════════════════════════════ */
+// v299: 上傳作業「掃描模式」——自動抓紙張邊界＋透視校正＋裁切＋增強對比，
+// 讓小朋友交出來的都是置中、方正、清楚的圖（也方便日後 AI 批改）。
+// OpenCV.js(~3.8MB gzip)＋jscanify 只在學生第一次按掃描時才載入，平時零負擔。
+let _cvPromise = null, _jsPromise = null;
+function ensureOpenCV() {
+  if (window.cv && window.cv.Mat) return Promise.resolve(window.cv);
+  if (_cvPromise) return _cvPromise;
+  _cvPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://docs.opencv.org/4.10.0/opencv.js'; s.async = true;
+    s.onload = () => {
+      const check = () => (window.cv && window.cv.Mat)
+        ? resolve(window.cv)
+        : (window.cv && typeof window.cv.then === 'function'
+            ? window.cv.then(m => { window.cv = m; resolve(m); })
+            : setTimeout(check, 60));
+      check();
+    };
+    s.onerror = () => { _cvPromise = null; reject(new Error('OpenCV 載入失敗')); };
+    document.head.appendChild(s);
+  });
+  return _cvPromise;
+}
+function ensureJscanify() {
+  if (window.jscanify) return Promise.resolve(window.jscanify);
+  if (_jsPromise) return _jsPromise;
+  _jsPromise = ensureOpenCV().then(() => new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jscanify@1.4.0/src/jscanify.min.js';
+    s.onload = () => res(window.jscanify);
+    s.onerror = () => { _jsPromise = null; rej(new Error('掃描元件載入失敗')); };
+    document.head.appendChild(s);
+  }));
+  return _jsPromise;
+}
+// 回傳掃描後的 JPEG blob；偵測不到紙張就 throw，讓呼叫端退回一般縮圖
+async function scanDocumentToBlob(file) {
+  const jscanify = await ensureJscanify();
+  const img = await new Promise((ok, no) => {
+    const im = new Image();
+    im.onload = () => ok(im);
+    im.onerror = () => no(new Error('圖片讀取失敗'));
+    im.src = URL.createObjectURL(file);
+  });
+  const scanner = new jscanify();
+  const cvImg = window.cv.imread(img);
+  const contour = scanner.findPaperContour(cvImg);
+  if (!contour) { cvImg.delete(); URL.revokeObjectURL(img.src); throw new Error('no-contour'); }
+  const pts = scanner.getCornerPoints(contour, cvImg);
+  const W = 1000, H = 1400; // A4 直式比例
+  const warped = scanner.extractPaper(img, W, H, pts); // canvas
+  // 溫和增強對比，字更清楚
+  try {
+    const ctx = warped.getContext('2d');
+    const d = ctx.getImageData(0, 0, warped.width, warped.height), a = d.data, C = 1.22, B = -8;
+    for (let i = 0; i < a.length; i += 4) {
+      a[i]   = Math.max(0, Math.min(255, (a[i]   - 128) * C + 128 + B));
+      a[i+1] = Math.max(0, Math.min(255, (a[i+1] - 128) * C + 128 + B));
+      a[i+2] = Math.max(0, Math.min(255, (a[i+2] - 128) * C + 128 + B));
+    }
+    ctx.putImageData(d, 0, 0);
+  } catch (e) {}
+  cvImg.delete();
+  URL.revokeObjectURL(img.src);
+  return new Promise((ok, no) => warped.toBlob(b => b ? ok(b) : no(new Error('無法輸出')), 'image/jpeg', 0.88));
+}
+
 function UploadHomeworkPlayer({ item, progressKey, onBack }) {
-  const [pending,   setPending]   = useQM([]);   // [{ file, url }] 還沒送出的
+  const [pending,   setPending]   = useQM([]);   // [{ file, url, outBlob, scanned }] 還沒送出的
   const [busy,      setBusy]      = useQM(false);
   const [upMsg,     setUpMsg]     = useQM('');   // v266: 上傳進度「2/3」
   const [err,       setErr]       = useQM('');
+  const [scanOn,    setScanOn]    = useQM(true);   // v299: 掃描模式（預設開）
+  const [scanning,  setScanning]  = useQM(false);  // v299: 掃描處理中
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
 
@@ -5091,12 +5160,26 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     img.src = URL.createObjectURL(file);
   });
 
-  const pickFiles = (e) => {
+  // v299: 掃描模式開 → 每張自動抓邊界/校正/裁切（失敗退回一般縮圖）；關 → 原圖
+  const pickFiles = async (e) => {
     const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
+    e.target.value = ''; // 同一張可以再選
     if (!files.length) return;
     setErr('');
-    setPending(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f) }))]);
-    e.target.value = ''; // 同一張可以再選
+    if (!scanOn) {
+      setPending(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f), scanned: false }))]);
+      return;
+    }
+    setScanning(true);
+    const added = [];
+    for (const f of files) {
+      let outBlob = null, scanned = false;
+      try { outBlob = await scanDocumentToBlob(f); scanned = true; }
+      catch (e2) { try { outBlob = await shrink(f); } catch (e3) { outBlob = f; } } // 偵測不到→一般縮圖
+      added.push({ file: f, outBlob, url: URL.createObjectURL(outBlob), scanned });
+    }
+    setPending(prev => [...prev, ...added]);
+    setScanning(false);
   };
   const removePending = (i) => setPending(prev => { URL.revokeObjectURL(prev[i].url); return prev.filter((_, j) => j !== i); });
 
@@ -5108,7 +5191,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
       const urls = [];
       for (let i = 0; i < pending.length; i++) {
         setUpMsg(`${i + 1}/${pending.length}`); // v266: 讓學生知道傳到第幾張
-        const blob = await shrink(pending[i].file);
+        const blob = pending[i].outBlob || await shrink(pending[i].file); // v299: 已掃描就用掃描後的圖
         urls.push(await window.uploadSubmissionPhoto(u.uid, progressKey, blob, i));
       }
       const all = [...submitted, ...urls];
@@ -5192,6 +5275,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
             {pending.map((p, i) => (
               <span key={i} className="uh-thumb uh-thumb-pending">
                 <img src={p.url} alt={`預覽 ${i + 1}`}/>
+                {p.scanned && <span className="uh-thumb-badge">✓ 已掃描</span>}
                 <button className="uh-thumb-del" onClick={() => removePending(i)} aria-label="移除這張">✕</button>
               </span>
             ))}
@@ -5201,16 +5285,20 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
 
       {err && <div className="uh-err">⚠ {err}</div>}
 
+      {/* v299: 掃描模式開關 */}
+      <button className={`uh-scan-toggle${scanOn ? ' on' : ''}`} onClick={() => setScanOn(v => !v)} disabled={busy || scanning}>
+        <span className="uh-scan-dot"/>{scanOn ? '🔳 掃描模式：自動拉正、裁切、增強' : '📷 原圖模式（不校正）'}
+      </button>
       <div className="uh-btns">
-        <label className={`qm-btn secondary uh-pick${busy ? ' disabled' : ''}`}>
-          📷 拍照或選照片
-          <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy} style={{ display: 'none' }}/>
+        <label className={`qm-btn secondary uh-pick${(busy || scanning) ? ' disabled' : ''}`}>
+          {scanning ? '⏳ 掃描處理中…' : '📷 拍照或選照片'}
+          <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy || scanning} style={{ display: 'none' }}/>
         </label>
-        <button className="qm-btn primary" onClick={submit} disabled={busy || pending.length === 0}>
+        <button className="qm-btn primary" onClick={submit} disabled={busy || scanning || pending.length === 0}>
           {busy ? `上傳中 ${upMsg}…` : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}
         </button>
       </div>
-      <div className="uh-hint">可以一次選好幾張；交出去之後還是可以再補交。</div>
+      <div className="uh-hint">{scanOn ? '掃描模式會自動抓紙張邊界、拉正、裁切成清楚方正的圖；抓不到邊界就用原圖。' : '一次可選好幾張；交出去後還能再補交。'}</div>
     </div>
   );
 }
