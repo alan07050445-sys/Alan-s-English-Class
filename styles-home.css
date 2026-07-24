@@ -1106,6 +1106,45 @@
 .growth-entry-sub { font-size: 13px; color: var(--ink-3, #8a8270); }
 .growth-entry-chev { font-size: 22px; color: var(--ink-3, #8a8270); }
 
+/* ── v301: 內嵌「學習成長」卡（像參考圖4）——直接看到折線＋本週平均 ── */
+.growth-inline {
+  display: block; width: 100%; margin: 18px 0 0; padding: 22px 24px 20px;
+  background: var(--bg-card, #fffdf8);
+  border: 1px solid var(--border, #eadfc6); border-radius: 20px; cursor: pointer; text-align: left;
+  box-shadow: 0 10px 30px -18px rgba(58,43,20,.35), 0 1px 3px rgba(58,43,20,.05);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.growth-inline:hover { transform: translateY(-2px); box-shadow: 0 18px 40px -18px rgba(58,43,20,.4), 0 1px 3px rgba(58,43,20,.05); }
+.gi-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.gi-kicker { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-size: 15px; font-weight: 600; letter-spacing: .06em; color: var(--ink-3, #9b8f76); }
+.gi-more { font-size: 13px; font-weight: 700; color: var(--g-c, #8B3120); opacity: .9; white-space: nowrap; }
+.growth-inline:hover .gi-more { text-decoration: underline; text-underline-offset: 3px; }
+.gi-chart-wrap { margin: 14px 0 4px; }
+.gi-chart { display: block; width: 100%; height: 118px; overflow: visible; }
+.gi-baseline { stroke: #d9cfb8; stroke-width: 1.4; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; }
+.gi-line { fill: none; stroke: #6f9d73; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 3px 5px rgba(111,157,115,.28)); }
+.gi-dot { fill: #fff; stroke: #6f9d73; stroke-width: 3.5; vector-effect: non-scaling-stroke; }
+.gi-single { padding: 26px 4px; text-align: center; font-size: 14px; color: var(--ink-3, #9b8f76); }
+.gi-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.gi-big { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700; font-size: 40px; line-height: 1; color: var(--ink, #2A2018); }
+.gi-big em { font-style: normal; font-size: 18px; font-weight: 600; color: var(--ink-2, #6E5C43); }
+.gi-delta { font-size: 15px; font-weight: 700; }
+.gi-delta.up { color: #3f8f5f; }
+.gi-delta.down { color: #b06a4a; }
+.gi-delta.flat, .gi-delta.muted { color: var(--ink-3, #9b8f76); font-weight: 600; font-size: 14px; }
+/* 空狀態（還沒紀錄）維持一行小卡 */
+.growth-inline-empty { display: flex; align-items: center; gap: 14px; padding: 16px 20px; }
+.gi-empty-ico { font-size: 24px; flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: rgba(111,157,115,.12); }
+.gi-empty-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.gi-empty-text b { font-size: 16.5px; color: var(--ink, #15130e); }
+.gi-empty-text span { font-size: 13px; color: var(--ink-3, #9b8f76); }
+.gi-chev { font-size: 22px; color: var(--ink-3, #9b8f76); }
+@media (max-width: 560px) {
+  .growth-inline { padding: 18px 18px 16px; border-radius: 16px; }
+  .gi-big { font-size: 34px; }
+  .gi-more { font-size: 12px; }
+}
+
 /* ── Growth report overlay ───────────────────────────────── */
 .growth-overlay {
   position: fixed; inset: 0; z-index: 400;

@@ -167,23 +167,33 @@
 /* v298: 側欄收合（學生自控，專心作答用） */
 .qm-sidebar-top { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
 .qm-sidebar-top .qm-sidebar-back { flex: 1; border-bottom: none; }
+/* v301: 收合鈕加文字標籤、更醒目（Alan：原本太不明顯） */
 .qm-sidebar-collapse {
   flex-shrink: 0; background: none; border: none; border-left: 1px solid var(--border);
-  cursor: pointer; color: var(--ink-3); padding: 0 15px; display: flex; align-items: center;
+  cursor: pointer; color: var(--ink-2, #5c554a); padding: 0 16px; display: flex; align-items: center; gap: 6px;
+  font-family: var(--sans); font-size: 13.5px; font-weight: 700;
   transition: color .12s, background .12s;
 }
+.qm-collapse-lab { line-height: 1; }
 .qm-sidebar-collapse:hover { color: var(--accent, #8B3120); background: var(--bg); }
 .qm-cat-view { position: relative; }
 .qm-cat-view.sidebar-hidden .qm-sidebar { display: none; }
+/* v301: 展開鈕改 fixed——收合後往下捲，這顆一直跟在畫面左上角，不用捲回頂端才能按；
+   accent 底色＋較強陰影，明顯很多但仍精緻。 */
 .qm-sidebar-reopen {
-  position: absolute; top: 12px; left: 12px; z-index: 30;
-  display: flex; align-items: center; gap: 6px;
-  background: var(--bg-card, #fff); border: 1px solid var(--border); border-radius: 100px;
-  padding: 8px 15px 8px 12px; cursor: pointer; font-family: var(--sans);
-  font-size: 13.5px; font-weight: 700; color: var(--ink-2, #5c554a);
-  box-shadow: 0 3px 10px rgba(58,43,20,.1); transition: all .12s;
+  position: fixed; top: 74px; left: 18px; z-index: 60;
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--g-c, #8B3120); border: 1px solid var(--g-c, #8B3120); border-radius: 100px;
+  padding: 10px 18px 10px 15px; cursor: pointer; font-family: var(--sans);
+  font-size: 14px; font-weight: 700; color: #fff;
+  box-shadow: 0 8px 22px -6px rgba(139,49,32,.5), 0 2px 6px rgba(58,43,20,.16);
+  transition: transform .14s, box-shadow .14s, filter .14s;
+  animation: qm-reopen-in .28s cubic-bezier(.2,.8,.2,1) both;
 }
-.qm-sidebar-reopen:hover { border-color: var(--accent, #8B3120); color: var(--accent, #8B3120); transform: translateY(-1px); }
+.qm-sidebar-reopen:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 26px -6px rgba(139,49,32,.55), 0 2px 6px rgba(58,43,20,.16); }
+@keyframes qm-reopen-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+@media (max-width: 640px) { .qm-sidebar-reopen { top: auto; bottom: 20px; left: 16px; } }
+@media (prefers-reduced-motion: reduce) { .qm-sidebar-reopen { animation: none; } }
 
 .qm-sidebar-cat {
   display: flex; align-items: center; gap: 12px;
@@ -2545,9 +2555,69 @@
   background: rgba(47,125,79,.92); color: #fff; font-size: 10px; font-weight: 800;
   padding: 2px 7px; border-radius: 100px; letter-spacing: .02em;
 }
+.uh-thumb-badge.raw { background: rgba(154,106,0,.92); }
+/* v301: 一般提示（例如引擎載不動退回原圖） */
+.uh-note {
+  margin: 12px auto 0; max-width: 480px;
+  font-size: 13px; line-height: 1.6; color: var(--ink-2, #5c554a);
+  background: #fbf6ea; border: 1px solid #ecdcb6; border-radius: 10px; padding: 10px 14px;
+}
+/* v301: 抓不到邊界、要手動框/重拍的區塊 */
+.uh-block-fix .uh-fix-title { color: #9a6a00; }
+.uh-fix-hint { font-size: 12.5px; line-height: 1.55; color: var(--ink-3, #8a8270); margin-bottom: 10px; }
+.uh-thumb-fix { width: 118px; height: 118px; border-color: #E0B84A; border-style: solid; }
+.uh-thumb-warn {
+  position: absolute; left: 5px; top: 5px; z-index: 2;
+  background: rgba(154,106,0,.94); color: #fff; font-size: 10px; font-weight: 800;
+  padding: 2px 7px; border-radius: 100px;
+}
+.uh-fix-actions {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; gap: 1px; background: rgba(21,19,14,.28);
+}
+.uh-fix-btn {
+  flex: 1; border: none; cursor: pointer; padding: 7px 4px;
+  font-family: inherit; font-size: 11.5px; font-weight: 800; color: #fff;
+  background: rgba(139,49,32,.92); transition: filter .12s;
+}
+.uh-fix-btn.ghost { background: rgba(60,52,40,.86); }
+.uh-fix-btn:hover { filter: brightness(1.1); }
 @media (max-width: 560px) {
   .uh-thumb { width: 84px; height: 84px; }
+  .uh-thumb-fix { width: 108px; height: 108px; }
 }
+
+/* ══ v301: 手動框四角 modal ══ */
+.ca-overlay {
+  position: fixed; inset: 0; z-index: 1400; display: grid; place-items: center;
+  background: rgba(24,18,10,.62); padding: 18px; animation: ca-fade .2s ease;
+}
+@keyframes ca-fade { from { opacity: 0; } to { opacity: 1; } }
+.ca-sheet {
+  background: var(--bg-card, #fff); border-radius: 20px; width: min(560px, 96vw);
+  max-height: 92vh; overflow: auto; padding: 18px 18px 20px;
+  box-shadow: 0 30px 70px -20px rgba(21,19,14,.55); text-align: center;
+}
+.ca-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.ca-head b { font-size: 16px; color: var(--ink, #2A2018); }
+.ca-x { background: none; border: none; font-size: 18px; color: var(--ink-3, #9E8C6E); cursor: pointer; line-height: 1; }
+.ca-stage {
+  position: relative; display: inline-block; max-width: 100%; line-height: 0;
+  border-radius: 12px; overflow: hidden; background: #201812; touch-action: none;
+}
+.ca-img { display: block; max-width: 100%; max-height: 62vh; width: auto; height: auto; user-select: none; -webkit-user-drag: none; }
+.ca-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ca-poly { fill: rgba(200,138,66,.18); stroke: #F2C368; stroke-width: .6; vector-effect: non-scaling-stroke; }
+.ca-handle {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  border-radius: 50%; border: 3px solid #fff; background: rgba(139,49,32,.9);
+  box-shadow: 0 2px 8px rgba(0,0,0,.4); cursor: grab; touch-action: none; padding: 0; z-index: 3;
+}
+.ca-handle:active { cursor: grabbing; transform: scale(1.12); }
+.ca-hint { margin-top: 12px; font-size: 12.5px; line-height: 1.55; color: var(--ink-3, #8a8270); }
+.ca-err { max-width: none; }
+.ca-btns { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .ca-overlay { animation: none; } }
 
 /* v266: 上傳頁——老師評語＋縮圖內連結填滿 */
 .uh-comment {
@@ -2801,6 +2871,17 @@
 .grd-tword { cursor: pointer; border-radius: 4px; transition: background .12s; }
 .grd-tword:hover { background: rgba(185, 169, 127, .22); }
 .grd-tword:active { background: rgba(139, 49, 32, .18); }
+/* v301: 逐字朗讀高亮——唸到的字亮起來、還沒唸到的變淡（引導閱讀） */
+.gr-plainword { border-radius: 4px; }
+.gr-hw { transition: color .2s ease, opacity .2s ease, background .2s ease, box-shadow .2s ease; }
+.gr-hw-ahead { opacity: .38; }
+.gr-hw-done  { opacity: 1; }
+.gr-hw-now {
+  opacity: 1; color: var(--g-c, #8B3120); font-weight: 700;
+  background: rgba(200,138,66,.24); box-shadow: 0 0 0 3px rgba(200,138,66,.24);
+  border-radius: 5px;
+}
+@media (prefers-reduced-motion: reduce) { .gr-hw { transition: none; } }
 /* 照片上的隱形字框——點得到但看不到；按下瞬間亮金 */
 .grd-word {
   position: absolute;
@@ -2811,6 +2892,14 @@
   border-radius: 3px;
 }
 .grd-word:active { background: rgba(201, 168, 76, .35); }
+/* v301: 照片段落逐字朗讀高亮框——唸到哪個字就框亮 */
+.grd-hlbox {
+  position: absolute; z-index: 3; pointer-events: none;
+  background: rgba(242,195,104,.34); border: 2px solid rgba(200,138,66,.9);
+  border-radius: 5px; box-shadow: 0 0 0 3px rgba(242,195,104,.22);
+  transition: left .15s ease, top .15s ease, width .15s ease, height .15s ease;
+  margin: -2px 0 0 -2px; padding: 2px;
+}
 /* 讀頁頂列：段落標籤＋朗讀按鈕 */
 .gr-read-head {
   display: flex; align-items: center; justify-content: space-between;

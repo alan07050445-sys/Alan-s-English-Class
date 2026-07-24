@@ -133,7 +133,11 @@ function App() {
   const [growthOpen,      setGrowthOpen]      = useAppState(false);
   const [welcomeOpen,     setWelcomeOpen]     = useAppState(false); // 文字版（門口頁連結／導覽 fallback）
   const [tourOpen,        setTourOpen]        = useAppState(false); // 實境導覽（大廳聚光燈）
-  const [viewLanding,     setViewLanding]     = useAppState(false); // 從 app 內點 logo 回落地頁
+  // v301: 封面／落地頁狀態也記進 sessionStorage——重新整理時停在原本那一頁（Alan 第 9 點）
+  const [viewLanding,     setViewLanding]     = useAppState(() => {
+    try { return sessionStorage.getItem('alan-view-landing') === '1'; } catch(e) { return false; }
+  });
+  const [farewell,        setFarewell]        = useAppState(false); // v301: 登出「期待下次見面」過場（別太突兀）
   const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
 
   // ── Review state ────────────────────────────────────
@@ -495,14 +499,26 @@ function App() {
 
   // v249: 從行銷頁按「開始學習」登入 → 留在首頁（CTA 變「進入課程」）；
   // 其他情況（重新整理自動恢復登入等）不動──學生日常仍直達門口頁。
+  // v301: 重新整理時停在原本那頁——把封面/落地頁狀態同步到 sessionStorage
+  useAppEffect(() => {
+    try {
+      if (viewLanding) sessionStorage.setItem('alan-view-landing', '1');
+      else sessionStorage.removeItem('alan-view-landing');
+    } catch(e) {}
+  }, [viewLanding]);
+
   const loginFromLandingRef = useAppRef(false);
+  const firstAuthResolveRef = useAppRef(true);
   useAppEffect(() => {
     if (!user) return;
+    const firstResolve = firstAuthResolveRef.current;
+    firstAuthResolveRef.current = false;
     if (loginFromLandingRef.current) {
       loginFromLandingRef.current = false;
       setViewLanding(true);   // 留在首頁，敘述換成「進入課程」
-    } else if (viewLanding) {
-      // 舊行為保留：非首頁發起的登入完成時，把殘留的行銷頁關掉
+    } else if (viewLanding && !firstResolve) {
+      // 非首頁發起的「新」登入完成時，把殘留的行銷頁關掉；
+      // 但「重新整理自動還原登入」(firstResolve) 不算——那要停在原本那頁。
       setViewLanding(false);
     }
   }, [user]);
@@ -516,6 +532,24 @@ function App() {
     window.spawnPageWave(1900);
     setTimeout(cb, 560);                      // 泡泡最密、紗幕全遮的瞬間切頁
     setTimeout(() => { wavingRef.current = false; }, 1850);
+  };
+
+  // v301: 登出時先淡出一個「👋 期待下次見面」的過場，約 1 秒後才真的登出——
+  // 比「按下去畫面瞬間跳掉」有質感許多。所有登出入口都走這裡。
+  const farewellRef = useAppRef(false);
+  const signOutWithFarewell = (cleanup) => {
+    if (farewellRef.current) return;
+    farewellRef.current = true;
+    setFarewell(true);
+    setTimeout(() => {
+      try { window.signOutUser(); } catch(e) {}
+      try { sessionStorage.removeItem('alan-guest'); } catch(e) {}
+      try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
+      setSkippedLogin(false);
+      if (cleanup) { try { cleanup(); } catch(e) {} }
+      // 稍留一下讓封面在紗幕底下先掛載，再淡開過場
+      setTimeout(() => { setFarewell(false); farewellRef.current = false; }, 620);
+    }, 1050);
   };
 
   const scrollPageToTop = () => {
@@ -961,7 +995,7 @@ function App() {
           onBack={(grade || skippedLogin || user) ? () => runWave(() => setViewLanding(false)) : null}
           loggedIn={!!user}
           userName={user ? (_englishName(user.displayName) || user.displayName || null) : null}
-          onLogout={user ? () => { window.signOutUser(); try { sessionStorage.removeItem('alan-guest'); } catch(e) {} setSkippedLogin(false); } : null}
+          onLogout={user ? () => signOutWithFarewell(() => setViewLanding(false)) : null}
         />
       );
     } else if (accessLocked && !isTeacher) {
@@ -1041,6 +1075,16 @@ function App() {
   // Solution: one Fragment, appContent slot first, LoadingScreen always last.
   return (
     <React.Fragment>
+      {/* v301: 登出過場——柔和淡入的「期待下次見面」，約 1 秒後才真的登出 */}
+      {farewell && (
+        <div className="app-farewell" role="status" aria-live="polite">
+          <div className="app-farewell-in">
+            <div className="app-farewell-wave" aria-hidden="true">👋</div>
+            <div className="app-farewell-title">期待下次見面</div>
+            <div className="app-farewell-sub">正在登出…</div>
+          </div>
+        </div>
+      )}
       {/* App content — null while loading, then login/grade/main as auth resolves */}
       {appContent ? appContent : (authReady && grade && (
         <div key={pageKey} className={`page${!catView && !editMode ? ' page-lobby' : ''}${catView && !editMode ? ' page-mission' : ''}${isSummer ? ' page-summer' : ''}`}>
@@ -1075,10 +1119,8 @@ function App() {
             user={user}
             onLogin={() => window.signInWithGoogle()}
             onLogout={() => {
-              if (confirm('Sign out?')) {
-                window.signOutUser();
-                try { sessionStorage.removeItem('alan-guest'); } catch(e) {}
-                setSkippedLogin(false);
+              if (confirm('要登出嗎？')) {
+                signOutWithFarewell(() => { setCatView(null); setEntered(false); });
               }
             }}
             onShowDashboard={() => setDashOpen(true)}
@@ -1229,14 +1271,14 @@ function App() {
                 onAddItem={handleAddItem}
               />
               {!editMode && (
-                <button className="growth-entry" onClick={() => setGrowthOpen(true)}>
-                  <span className="growth-entry-ico">📈</span>
-                  <span className="growth-entry-text">
-                    <span className="growth-entry-title">學習成長</span>
-                    <span className="growth-entry-sub">{isSummer ? '看看這個暑假的進步軌跡' : '看看這學期的進步軌跡'}</span>
-                  </span>
-                  <span className="growth-entry-chev">›</span>
-                </button>
+                <window.GrowthInlineCard
+                  weeks={weeks}
+                  weekOrder={weekOrder}
+                  qmProg={qmProgress}
+                  categories={activeCategories}
+                  isSummer={isSummer}
+                  onOpen={() => setGrowthOpen(true)}
+                />
               )}
             </div>
           )}

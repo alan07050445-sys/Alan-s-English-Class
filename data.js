@@ -283,12 +283,13 @@ async function uploadReadingPhoto(itemId, blob) {
 function grJoinReadLines(lineTexts) {
   const cleaned = (lineTexts || [])
     .map(t => String(t || '')
-      .replace(/^\s*\d+[.)\]]?\s+/, '')                 // 行首「1 」「2) 」段落編號
-      .replace(/\s+\d+\s*$/, '')                        // 行尾頁碼/音軌號
+      .replace(/^\s*\d{1,3}[.)\]]?\s+/, '')             // 行首「1 」「2) 」段落編號（限 1–3 位）
+      .replace(/\s+\d{1,3}\s*$/, '')                    // 行尾頁碼/音軌號（限 1–3 位，長數字留著唸）
       .replace(/[|_~•·¤©®°§\\\/<>\[\]{}*#@^=+]+/g, ' ') // OCR 噪音符號
       .replace(/\s{2,}/g, ' ')
       .trim())
-    .filter(t => /[A-Za-z]{2}/.test(t)); // 整行沒有像樣的英文字（純數字/雜訊）→ 丟掉
+    // v301: 保留「有 2 個以上英文字」或「含 3 位數以上數字」的行——後者讓 12345678 這類被唸出來
+    .filter(t => /[A-Za-z]{2}/.test(t) || /\d{3,}/.test(t));
   let out = '';
   cleaned.forEach(t => {
     if (/[A-Za-z]-$/.test(out)) out = out.replace(/-$/, '') + t; // 行尾連字號＝斷詞，接回
@@ -312,12 +313,16 @@ function grReadTextFrom(d, y0, y1, rect) {
     let out = '';
     toks.forEach((t, i) => {
       if (!/[A-Za-z]/.test(t)) {
-        // v298: 純標點雜訊→丟；數字→只丟「孤零零一顆」（多半是頁碼），
-        // 句中／行尾／日期／清單裡的數字都保留給神經語音唸（之前會整個跳過）。
+        // v301: 數字幾乎一律唸出來（Alan：像 12345678 這種會被整個跳過）。
+        // 只略過「孤立、且只有 1–2 位數」的 token（那才多半是頁碼）；
+        // 3 位數以上、或前後接得到字/數字的數字，全部保留給神經語音唸。
         if (!/\d/.test(t)) return;                       // 沒字也沒數字＝純標點，丟
-        const prev = toks[i - 1] || '', next = toks[i + 1] || '';
-        const isWord = s => /[A-Za-z0-9]/.test(s);
-        if (!isWord(prev) && !isWord(next)) return;      // 前後都不是字/數字＝孤立頁碼，略過
+        const digits = (t.match(/\d/g) || []).length;
+        if (digits <= 2) {
+          const prev = toks[i - 1] || '', next = toks[i + 1] || '';
+          const isWord = s => /[A-Za-z0-9]/.test(s);
+          if (!isWord(prev) && !isWord(next)) return;    // 孤立的一兩位數＝頁碼，略過
+        }
       }
       if (/[A-Za-z]-$/.test(out)) out = out.replace(/-$/, '') + t; // 行尾斷詞接回
       else out += (out ? ' ' : '') + t;
@@ -331,6 +336,31 @@ function grReadTextFrom(d, y0, y1, rect) {
     return (l.x + (l.w || 0)) > rect.x && l.x < rect.x + rect.w;
   });
   return grJoinReadLines(lines.map(l => l.t));
+}
+
+// v301: 跟 grReadTextFrom 同一套過濾，但回傳「有座標的字物件」清單（給照片段落逐字高亮）。
+// 只在有字層級資料 (d.words) 時有效；沒有就回空陣列（那種舊資料無法逐字高亮）。
+function grReadWordsFrom(d, y0, y1, rect) {
+  if (!d || !(d.words || []).length) return [];
+  const inRect = (cx, cy) => !rect || (cy >= rect.y && cy <= rect.y + rect.h && cx >= rect.x && cx <= rect.x + rect.w);
+  const toks = (d.words || []).filter(w => {
+    const cy = w.y + (w.h || 0) / 2;
+    const cx = (w.x || 0) + (w.w || 0) / 2;
+    return cy >= y0 && cy <= y1 && inRect(cx, cy);
+  });
+  const isWord = (ww) => ww && /[A-Za-z0-9]/.test(String(ww.r || ww.t || ''));
+  const out = [];
+  toks.forEach((w, i) => {
+    const t = String(w.r || w.t || '').trim();
+    if (!t) return;
+    if (!/[A-Za-z]/.test(t)) {
+      if (!/\d/.test(t)) return;                       // 純標點，丟
+      const digits = (t.match(/\d/g) || []).length;
+      if (digits <= 2 && !isWord(toks[i - 1]) && !isWord(toks[i + 1])) return; // 孤立一兩位數＝頁碼
+    }
+    out.push({ t: t, r: w.r || t, x: w.x, y: w.y, w: w.w, h: w.h });
+  });
+  return out;
 }
 
 // v290: AI 產生自然朗讀——打同一個 Worker 的 /tts 路由（Workers AI 神經語音）。
@@ -902,17 +932,22 @@ function grSpeechChunks(text) {
 // 回傳 stop() 讓呼叫端中止；朗讀完（或被中止）呼叫 onDone。全站同時只跑一個朗讀
 // （_activeSpeak）——連點單字／附註／整段不會兩段聲音疊在一起。
 let _activeSpeak = null;
-function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone } = {}) {
+// v301: onProgress(fraction 0~1)——朗讀到哪個字，回報進度（給「逐字亮起來」用）
+function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress } = {}) {
   const synth = window.speechSynthesis;
   const chunks = grSpeechChunks(text);
   if (_activeSpeak) { try { _activeSpeak(); } catch (e) {} }
   _activeSpeak = null;
   if (!synth || !chunks.length) { if (onDone) onDone(); return () => {}; }
   try { synth.cancel(); } catch (e) {}
+  const totalChars = chunks.reduce((n, c) => n + c.t.length, 0) || 1;
+  const before = []; let acc = 0; chunks.forEach(c => { before.push(acc); acc += c.t.length; });
   let i = 0, stopped = false, done = false;
+  const report = (f) => { if (onProgress) { try { onProgress(Math.max(0, Math.min(1, f))); } catch (e) {} } };
   const finish = () => {
     if (done) return; done = true;
     if (_activeSpeak === stop) _activeSpeak = null;
+    report(1);
     if (onDone) onDone();
   };
   const stop = () => { stopped = true; try { synth.cancel(); } catch (e) {} finish(); };
@@ -924,7 +959,8 @@ function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone } = {}) {
     const u = new SpeechSynthesisUtterance(c.t);
     u.lang = lang; u.rate = rate; u.pitch = 1;
     if (v) u.voice = v;
-    u.onend = () => { i += 1; if (!stopped) setTimeout(step, c.pause); };
+    if (onProgress) u.onboundary = (e) => { report((before[i] + (e.charIndex || 0)) / totalChars); };
+    u.onend = () => { report((before[i] + c.t.length) / totalChars); i += 1; if (!stopped) setTimeout(step, c.pause); };
     u.onerror = () => { i += 1; if (!stopped) setTimeout(step, c.pause); };
     try { synth.resume(); } catch (e) {}
     synth.speak(u);
@@ -1670,7 +1706,7 @@ Object.assign(window, {
   // Sound & TTS
   playSound, speakText, speakSentences, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
-  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom,
+  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions

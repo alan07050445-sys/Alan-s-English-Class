@@ -551,10 +551,10 @@
 .lc-under { width: 70px; height: 2px; background: linear-gradient(90deg,transparent,var(--g-c,#8B3120),transparent); margin: 16px 0 20px; animation-delay: .28s; }
 .lc-tag { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-size: clamp(17px,2.2vw,21px); color: var(--g-c, #8B3120); font-weight: 700; margin: 0; animation-delay: .34s; }
 .lc-sub { font-size: 14.5px; color: var(--ink-2, #6E5C43); margin: 12px 0 0; line-height: 1.75; max-width: 30em; animation-delay: .4s; }
-.lc-welcome { font-size: 14px; color: var(--ink-2, #6E5C43); margin: 26px 0 10px; animation-delay: .46s; }
+.lc-welcome { font-size: 17px; font-weight: 500; color: var(--ink-2, #6E5C43); margin: 28px 0 12px; animation-delay: .46s; }
 .lc-cta {
-  margin-top: 32px; display: inline-flex; align-items: center; gap: 11px; background: var(--g-c, #8B3120); color: #fff; border: 0;
-  font-family: inherit; font-size: 16px; font-weight: 700; padding: 15px 30px; border-radius: 100px; cursor: pointer;
+  margin-top: 32px; display: inline-flex; align-items: center; gap: 12px; background: var(--g-c, #8B3120); color: #fff; border: 0;
+  font-family: inherit; font-size: 18px; font-weight: 700; padding: 17px 38px; border-radius: 100px; cursor: pointer;
   box-shadow: 0 10px 26px -8px rgba(139,49,32,.5); transition: transform .16s, box-shadow .16s, filter .16s; animation-delay: .48s;
 }
 .lc-welcome + .lc-cta { margin-top: 0; }
@@ -562,13 +562,32 @@
 .lc-cta:disabled { opacity: .7; cursor: default; }
 .lc-gg { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-weight: 800; color: var(--g-c, #8B3120); font-size: 13px; }
 .lc-mini { margin-top: 14px; font-size: 12.5px; color: var(--ink-3, #9E8C6E); animation-delay: .54s; }
-.lc-logout { margin-top: 14px; background: none; border: 0; font-family: inherit; font-size: 13px; color: var(--ink-3, #9E8C6E); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; animation-delay: .54s; }
+.lc-logout { margin-top: 18px; background: none; border: 0; font-family: inherit; font-size: 15px; color: var(--ink-2, #6E5C43); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; animation-delay: .54s; transition: color .14s; }
+.lc-logout:hover { color: var(--g-c, #8B3120); }
 .lc-slow { margin-top: 12px; background: none; border: 0; font-family: inherit; font-size: 12.5px; color: var(--ink-2, #6E5C43); text-decoration: underline; cursor: pointer; }
 .lc-back {
   position: absolute; top: 20px; left: 20px; z-index: 3; background: #fff; border: 1px solid var(--border, #E4D7BF);
-  border-radius: 100px; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink-2, #6E5C43); padding: 8px 16px; cursor: pointer;
+  border-radius: 100px; font-family: inherit; font-size: 15px; font-weight: 600; color: var(--ink-2, #6E5C43); padding: 9px 18px; cursor: pointer;
 }
 .lc-back:hover { border-color: var(--g-c, #8B3120); color: var(--g-c, #8B3120); }
+/* ══ v301: 登出過場——柔和淡入的「期待下次見面」 ══ */
+.app-farewell {
+  position: fixed; inset: 0; z-index: 4000; display: grid; place-items: center;
+  background: radial-gradient(120% 120% at 50% 42%, #FBF7EF 0%, #F3ECDD 68%, #EDE4D1 100%);
+  animation: af-in .5s ease forwards;
+}
+.app-farewell-in { text-align: center; opacity: 0; transform: translateY(10px); animation: af-up .7s cubic-bezier(.2,.8,.2,1) .08s forwards; }
+.app-farewell-wave { font-size: 52px; line-height: 1; animation: af-wave 1.4s ease-in-out .3s infinite; transform-origin: 70% 80%; }
+.app-farewell-title { margin-top: 16px; font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700; font-size: 27px; color: var(--ink, #2A2018); letter-spacing: .01em; }
+.app-farewell-sub { margin-top: 8px; font-family: var(--mono, monospace); font-size: 13px; letter-spacing: .18em; color: var(--ink-3, #9E8C6E); }
+@keyframes af-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes af-up { to { opacity: 1; transform: translateY(0); } }
+@keyframes af-wave { 0%,60%,100% { transform: rotate(0); } 15% { transform: rotate(16deg); } 30% { transform: rotate(-8deg); } 45% { transform: rotate(12deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .app-farewell, .app-farewell-in { animation-duration: .01s; }
+  .app-farewell-wave { animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) { .lc-stack > * { animation-duration: .01s; } }
 @media (max-height: 620px) { .lc-school { display: none; } }
 
@@ -593,10 +612,11 @@
   animation: lc-grow .7s ease .95s forwards; }
 @keyframes lc-grow { to { width: 150px; } }
 .lc-subtitle {
-  position: relative; z-index: 2; margin: 12px 0 0; font-family: var(--mono, monospace);
-  font-size: 13px; letter-spacing: .22em; color: var(--ink-3, #9E8C6E);
+  position: relative; z-index: 2; margin: 14px 0 0; font-family: var(--mono, monospace);
+  font-size: 15.5px; letter-spacing: .2em; color: var(--ink-2, #6E5C43); font-weight: 500;
   opacity: 0; animation: lc-fade .7s ease 1.1s forwards;
 }
+@media (max-width: 640px) { .lc-subtitle { font-size: 14px; letter-spacing: .16em; } }
 .lc-fan { position: relative; z-index: 1; width: min(650px, 92vw); height: 272px; margin-top: 38px; }
 .lc-card {
   position: absolute; left: 50%; top: 0; width: 178px; height: 238px; margin-left: -89px; border-radius: 20px;
@@ -2029,7 +2049,7 @@
 .grade-selector-inner {
   position: relative;
   text-align: center;
-  max-width: 660px;
+  max-width: 580px;
   width: 100%;
   animation: softRise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -5411,35 +5431,41 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 
 /* ═══════════ v257: 門口頁質感改版——時段問候＋統一卡片系統＋進度環 ═══════════ */
 .grade-selector .grade-sel-logo-img {
-  width: 64px; height: 64px;
-  border-radius: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 6px rgba(21,19,14,.08), 0 12px 28px -10px rgba(21,19,14,.18);
+  width: 68px; height: 68px;
+  border-radius: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 6px rgba(21,19,14,.08), 0 14px 32px -10px rgba(21,19,14,.2);
 }
-.grade-selector .grade-sel-title { margin-bottom: 8px; letter-spacing: .01em; }
+/* v301: 門口頁問候更氣派——呼應封面的大 serif 標題（Alan：第二頁跟著首頁風格更高級） */
+.grade-selector .gs-kicker { font-size: 12.5px; letter-spacing: .2em; margin-bottom: 14px; }
+.grade-selector .grade-sel-title {
+  font-size: clamp(34px, 6vw, 50px); font-weight: 700; margin-bottom: 10px; letter-spacing: .005em; line-height: 1.08;
+}
 .grade-selector .grade-sel-sub {
   display: flex; align-items: baseline; justify-content: center; gap: 8px;
-  font-size: 14.5px;
-  margin-bottom: 30px;
+  font-size: 15.5px; color: var(--ink-2, #6E5C43);
+  margin-bottom: 34px;
   flex-wrap: wrap;
 }
-.gs-date { font-family: var(--mono, monospace); font-size: 12.5px; letter-spacing: .06em; color: var(--ink-3, #8a8270); }
+.gs-date { font-family: var(--mono, monospace); font-size: 13px; letter-spacing: .06em; color: var(--ink-3, #8a8270); }
 .gs-date-dot { color: #d7cdb2; }
 
 /* 卡片系統：門口頁所有入口共用一套骨架 */
 .grade-selector .gs-card {
   position: relative;
   width: 100%;
-  display: flex; align-items: center; gap: 14px;
+  /* v301: 門口頁入口卡收窄置中——單張卡不再拉成一條很空的長條（更聚焦、更精緻） */
+  max-width: 560px;
+  display: flex; align-items: center; gap: 15px;
   text-align: left;
   font-family: inherit;
   background: #fff;
   border: 1.5px solid var(--border, #e5dfc8);
   border-radius: 18px;
-  padding: 15px 16px 15px 15px;
-  margin: 0 0 12px;
+  padding: 18px 18px 18px 17px;
+  margin: 0 auto 13px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(21,19,14,.04), 0 10px 26px -14px rgba(21,19,14,.14);
+  box-shadow: 0 1px 2px rgba(21,19,14,.04), 0 12px 30px -14px rgba(21,19,14,.16);
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .grade-selector .gs-card:hover {
@@ -5450,8 +5476,8 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .grade-selector .gs-card:active { transform: translateY(0); }
 .gs-card-ico {
   flex: none;
-  width: 46px; height: 46px;
-  border-radius: 14px;
+  width: 50px; height: 50px;
+  border-radius: 15px;
   display: flex; align-items: center; justify-content: center;
   background: #f6f1e2;
   color: var(--g-c, #8B3120);
@@ -5459,17 +5485,17 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .gs-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .gs-card-text b {
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
-  font-size: 17px; font-weight: 700; line-height: 1.25;
+  font-size: 18.5px; font-weight: 700; line-height: 1.25;
   color: var(--ink, #15130e);
 }
-.gs-card-text > span { font-size: 12.5px; line-height: 1.45; color: var(--ink-3, #8a8270); }
+.gs-card-text > span { font-size: 13px; line-height: 1.45; color: var(--ink-3, #8a8270); }
 .gs-card-cta {
   flex: none;
-  font-size: 13px; font-weight: 700;
+  font-size: 13.5px; font-weight: 700;
   color: var(--ink-2, #5c554a);
   background: var(--bg-card, #faf7f0);
   border: 1px solid var(--border, #e5dfc8);
-  padding: 8px 14px; border-radius: 100px;
+  padding: 9px 16px; border-radius: 100px;
   white-space: nowrap;
   transition: transform .18s ease;
 }

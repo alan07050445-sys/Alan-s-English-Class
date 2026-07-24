@@ -718,10 +718,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   return (
     <div className={`qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}${sidebarHidden ? ' sidebar-hidden' : ''}`}>
 
-      {/* v298: 側欄收合時，左上角浮出「展開單元列表」小鈕 */}
+      {/* v298: 側欄收合時浮出「展開單元列表」鈕；v301: 改 fixed 跟著捲動、更醒目 */}
       {!editMode && sidebarHidden && (
         <button className="qm-sidebar-reopen" onClick={toggleSidebar} title="展開單元列表">
-          <window.Icon name="arrow-right" size={14}/> 單元
+          <window.Icon name="list" size={15}/> 單元列表
         </button>
       )}
 
@@ -733,7 +733,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           </button>
           {!editMode && (
             <button className="qm-sidebar-collapse" onClick={toggleSidebar} title="收合單元列表（專心作答）" aria-label="收合單元列表">
-              <window.Icon name="arrow-left" size={13}/>
+              <window.Icon name="arrow-left" size={14}/><span className="qm-collapse-lab">收合</span>
             </button>
           )}
         </div>
@@ -2544,7 +2544,7 @@ function grNormalizeQ(q) {
 
 /* v277: 段落照片切片——只存裁切範圍 {url, ar, y0, y1}（0~1 高度比例），
    不產生新圖片：CSS 高度=寬×ar×(y1-y0)、img translateY(-y0%) 顯示該帶。 */
-function GrImgCrop({ img, onZoom, className, onWord, onSide, sideBusy }) {
+function GrImgCrop({ img, onZoom, className, onWord, onSide, sideBusy, hlRect }) {
   const y0 = img.y0 || 0;
   const y1 = img.y1 == null ? 1 : img.y1;
   const band = Math.max(0.02, y1 - y0);
@@ -2575,6 +2575,11 @@ function GrImgCrop({ img, onZoom, className, onWord, onSide, sideBusy }) {
           style={{ left: (w.x * 100) + '%', top: (((w.y - y0) / band) * 100) + '%', width: (w.w * 100) + '%', height: ((w.h / band) * 100) + '%' }}
           onClick={(e) => { e.stopPropagation(); onWord(w.t, e); }}/>
       ))}
+      {/* v301: 逐字朗讀高亮框——照片段落唸到哪個字就框起來 */}
+      {hlRect && (
+        <div className="grd-hlbox" aria-hidden="true"
+          style={{ left: (hlRect.x * 100) + '%', top: (((hlRect.y - y0) / band) * 100) + '%', width: (hlRect.w * 100) + '%', height: ((hlRect.h / band) * 100) + '%' }}/>
+      )}
       {/* v290: 附註框的 🔊 ——點了單獨聽這一塊（caption/圖說） */}
       {(onSide ? (img.readRects || []) : [])
         .filter(r => r.kind === 'side')
@@ -2663,6 +2668,54 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFl
   );
 }
 
+// v301: 逐字朗讀高亮——把一段文字切成 token（word / 非word），每個 word 依長度＋標點停頓
+// 給一個「時間權重」。播放時用 目前秒數/總長 的比例，回推現在唸到第幾個 word。
+function grBuildWordModel(text) {
+  const s = String(text || '');
+  const tokens = [];
+  const re = /[A-Za-z0-9][A-Za-z0-9'’\-]*/g;
+  let last = 0, m;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) tokens.push({ text: s.slice(last, m.index), isWord: false });
+    tokens.push({ text: m[0], isWord: true });
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) tokens.push({ text: s.slice(last), isWord: false });
+  const weights = [];
+  let wi = 0;
+  tokens.forEach((t, idx) => {
+    if (!t.isWord) return;
+    t.wi = wi++;
+    let w = t.text.length + 1;
+    const nxt = tokens[idx + 1];
+    if (nxt && !nxt.isWord) {
+      if (/[.!?]/.test(nxt.text)) w += 6;
+      else if (/[,;:—–]/.test(nxt.text)) w += 3;
+    }
+    weights.push(w);
+  });
+  const cumEnd = []; let acc = 0;
+  weights.forEach(w => { acc += w; cumEnd.push(acc); });
+  return { tokens, count: weights.length, total: acc || 1, cumEnd };
+}
+function grWordAtFraction(model, f) {
+  if (!model || !model.count) return -1;
+  const target = Math.max(0, Math.min(1, f)) * model.total;
+  for (let i = 0; i < model.cumEnd.length; i++) { if (target < model.cumEnd[i]) return i; }
+  return model.count - 1;
+}
+// v301: 照片段落的逐字模型——直接吃 grReadWordsFrom 回來的字物件清單（跟 TTS 文字同一套）
+function grWeightWords(words) {
+  const weights = (words || []).map(w => {
+    const t = String(w.r || w.t || '');
+    let x = t.replace(/[^A-Za-z0-9]/g, '').length + 1;
+    if (/[.!?]["'”’)]?$/.test(t)) x += 6; else if (/[,;:—–]$/.test(t)) x += 3;
+    return x;
+  });
+  const cumEnd = []; let acc = 0; weights.forEach(w => { acc += w; cumEnd.push(acc); });
+  return { count: weights.length, total: acc || 1, cumEnd };
+}
+
 function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const segs     = useQMM(() => grSegs(item), [item]);
   const segQs    = useQMM(() => segs.map(s => grValidQs(s)), [segs]);
@@ -2690,6 +2743,12 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     const v = parseFloat(localStorage.getItem('alan-read-rate') || '');
     return (v >= 0.5 && v <= 1) ? v : 0.8;
   });
+  const [activeWord, setActiveWord] = useQM(-1); // v301: 逐字朗讀高亮——目前唸到第幾個字
+  const [readWords, setReadWords]   = useQM([]); // v301: 照片段落的 OCR 讀字清單（含座標，給逐字高亮）
+  // 文字段落的逐字模型；照片段落改用 readWords 建模。照片/文字擇一有效。
+  const wordModel  = useQMM(() => grBuildWordModel((segs[segIdx] && segs[segIdx].text) || ''), [segIdx, segs]);
+  const photoModel = useQMM(() => grWeightWords(readWords), [readWords]);
+  const activeModel = wordModel.count ? wordModel : photoModel;
   const wrongsRef = React.useRef([]);
   const autoRef   = React.useRef(null);
   const topRef    = React.useRef(null);
@@ -2761,11 +2820,14 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     if (speakStopRef.current) { try { speakStopRef.current(); } catch (e) {} speakStopRef.current = null; }
     try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
     setSpeaking(false);
+    setActiveWord(-1); // v301: 停止朗讀＝清掉逐字高亮
   };
   useQME(() => {
     let dead = false;
     stopSpeak();
     setTtsText('');
+    setReadWords([]);
+    setActiveWord(-1); // 換段/換模式＝重置高亮
     if (mode !== 'read' || !segs[segIdx]) return;
     const seg = segs[segIdx];
     if ((seg.text || '').trim()) { setTtsText(seg.text); return; }
@@ -2776,6 +2838,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         const main = (seg.img.readRects || []).find(r => r.kind === 'main'); // v290: 有框主文就只唸主文
         const t = window.grReadTextFrom(d, zy0, zy1, main || null); // v292: 字層級過濾（行會跨欄）
         if (t.trim()) setTtsText(t);
+        // v301: 同一套過濾拿「有座標的字」——照片段落逐字高亮
+        if (window.grReadWordsFrom) setReadWords(window.grReadWordsFrom(d, zy0, zy1, main || null));
       });
     }
     return () => { dead = true; };
@@ -2818,9 +2882,19 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     setSpeaking(true);
     speakStopRef.current = window.speakSentences(ttsText, {
       rate: speechRate(),
-      onDone: () => { speakStopRef.current = null; setSpeaking(false); },
+      onProgress: (f) => setActiveWord(grWordAtFraction(activeModel, f)), // v301: 逐字高亮
+      onDone: () => { speakStopRef.current = null; setSpeaking(false); setTimeout(() => setActiveWord(-1), 500); },
     });
   };
+
+  // v301: MP3 課文音檔——用 目前秒數/總長 的比例回推唸到第幾個字（closed-loop，比較準）。
+  // ⚠ 整篇音檔(item.grAudioUrl)只有「單段文章」時對得上（多段時音檔橫跨全部，不逐字亮）。
+  const onSegAudioTime = (el) => {
+    if (!el || !activeModel.count || !el.duration || !isFinite(el.duration)) return;
+    setActiveWord(grWordAtFraction(activeModel, el.currentTime / el.duration));
+  };
+  const onWholeAudioTime = (el) => { if (segs.length === 1) onSegAudioTime(el); };
+  const onAudioEnd = () => { if (activeModel.count) { setActiveWord(activeModel.count - 1); setTimeout(() => setActiveWord(-1), 600); } };
 
   // v293: 朗讀速度小控制——放在音檔旁，學生可再調慢／回原速（記住選擇）
   const speedCtl = () => (
@@ -3013,27 +3087,45 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   );
 
   // v287: 文字段落每個英文字都可點——點了唸給他聽＋查中文意思
-  const renderParas = (text) => String(text || '').split(/\n+/).map(t => t.trim()).filter(Boolean)
-    .map((t, i) => (
-      <p key={i}>
-        {t.split(/([A-Za-z][A-Za-z'’-]*)/g).map((tok, j) =>
-          /^[A-Za-z]/.test(tok) && tok.length > 1
-            ? <span key={j} className="grd-tword" onClick={(e) => openWord(tok, t, e)}>{tok}</span>
-            : tok
-        )}
-      </p>
-    ));
+  // v301: 每個字包 span 並帶「word 索引」——朗讀到哪個字就亮起來（gr-hw-*）；其餘變淡。
+  //       word 的切法要跟 grBuildWordModel 一致，索引才對得上。
+  const renderParas = (text, highlight) => {
+    const hl = (typeof highlight === 'number' && highlight >= 0) ? highlight : null;
+    let wn = -1; // 跨整段文字的 word 累計索引
+    return String(text || '').split(/\n+/).map(t => t.trim()).filter(Boolean)
+      .map((para, i) => (
+        <p key={i}>
+          {para.split(/([A-Za-z0-9][A-Za-z0-9'’\-]*)/g).map((tok, j) => {
+            if (tok && /^[A-Za-z0-9]/.test(tok)) {
+              wn += 1; const wi = wn;
+              const alpha = /[A-Za-z]/.test(tok) && tok.length > 1;
+              let cls = alpha ? 'grd-tword' : 'gr-plainword';
+              if (hl != null) cls += ' gr-hw ' + (wi === hl ? 'gr-hw-now' : wi < hl ? 'gr-hw-done' : 'gr-hw-ahead');
+              return alpha
+                ? <span key={j} className={cls} onClick={(e) => openWord(tok, para, e)}>{tok}</span>
+                : <span key={j} className={cls}>{tok}</span>;
+            }
+            return tok;
+          })}
+        </p>
+      ));
+  };
 
-  const renderSegContent = (seg, allowZoom) => (
-    <>
-      {seg.img && seg.img.url ? (
-        <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
-          onWord={(w, e) => openWord(w, '', e)}
-          onSide={(r) => speakSideRect(seg.img, r)} sideBusy={sideBusy}/>
-      ) : null}
-      {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
-    </>
-  );
+  const renderSegContent = (seg, allowZoom, highlight) => {
+    const hl = (typeof highlight === 'number' && highlight >= 0) ? highlight : null;
+    // 照片段落逐字高亮：只在「當前正在讀的這一段」且有 readWords 時，把當前字的框傳給 GrImgCrop
+    const hlRect = (hl != null && seg === segs[segIdx] && readWords[hl]) ? readWords[hl] : null;
+    return (
+      <>
+        {seg.img && seg.img.url ? (
+          <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
+            onWord={(w, e) => openWord(w, '', e)} hlRect={hlRect}
+            onSide={(r) => speakSideRect(seg.img, r)} sideBusy={sideBusy}/>
+        ) : null}
+        {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text, highlight)}</div> : null}
+      </>
+    );
+  };
 
   const renderQuestion = () => {
     const q = grNormalizeQ(curQs[qIdx]);
@@ -3119,7 +3211,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         <div className={'gr-audio' + (mode === 'read' && !(segs[segIdx] && segs[segIdx].audioUrl) ? '' : ' hide')}>
           <span className="gr-audio-label">🎧 課文朗讀</span>
           <audio ref={audioRef} controls preload="metadata" src={item.grAudioUrl}
-            onLoadedMetadata={(e) => applyRate(e.target)}/>
+            onLoadedMetadata={(e) => applyRate(e.target)}
+            onTimeUpdate={(e) => onWholeAudioTime(e.target)} onEnded={onAudioEnd}/>
           {speedCtl()}
         </div>
       ) : null}
@@ -3133,7 +3226,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
             <div className="gr-audio gr-audio-seg">
               <span className="gr-audio-label">🎧 課文朗讀</span>
               <audio ref={segAudioRef} controls preload="metadata" src={segs[segIdx].audioUrl}
-                onLoadedMetadata={(e) => applyRate(e.target)}/>
+                onLoadedMetadata={(e) => applyRate(e.target)}
+                onTimeUpdate={(e) => onSegAudioTime(e.target)} onEnded={onAudioEnd}/>
               {speedCtl()}
             </div>
           ) : null}
@@ -3153,7 +3247,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
                 </button>
               ) : null}
             </div>
-            {renderSegContent(segs[segIdx], true)}
+            {renderSegContent(segs[segIdx], true, activeWord)}
             {((segs[segIdx].text || '').trim() || (segs[segIdx].img && (segs[segIdx].img.wordsId || segs[segIdx].img.wordsUrl))) ? (
               <div className="gr-tap-hint">💡 不會的單字點一下，聽發音、看意思</div>
             ) : null}
@@ -4867,6 +4961,48 @@ function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnter
   );
 }
 
+/* ── Growth data (shared by the full report + the inline learning-page card) ── */
+function computeGrowthData(weeks, weekOrder, qmProg, categories) {
+  const perWeek = [];
+  let totalDone = 0, gSum = 0, gN = 0;
+  (weekOrder || []).forEach(wid => {
+    const w = weeks[wid];
+    if (!w) return;
+    let total = 0, done = 0, sSum = 0, sN = 0;
+    (categories || []).forEach(c => {
+      ((w.items && w.items[c.id]) || []).forEach(it => {
+        total++;
+        const p = (qmProg || {})[`${wid}_${it.id}`];
+        if (p && p.done) {
+          done++; totalDone++;
+          // v270: 沒有分數的完成（單字卡、待批改的上傳作業）不列入平均——否則被當 0 分拉低
+          if (p.score != null && p.total) {
+            const pct = Math.min(100, Math.round(p.score / p.total * 100));
+            sSum += pct; sN++; gSum += pct; gN++;
+          }
+        }
+      });
+    });
+    if (total === 0) return;
+    perWeek.push({
+      wid, label: w.label || wid, dateRange: w.dateRange || '',
+      theme: w.themeZh || w.theme || '',
+      total, done, pct: Math.round(done / total * 100), avg: sN ? Math.round(sSum / sN) : null,
+    });
+  });
+  // v271: 最後一週還沒全做完＝進行中（曲線與列表都特別標示，不讓它看起來像退步）
+  perWeek.forEach((p, i) => { p.inProgress = (i === perWeek.length - 1 && p.done < p.total); });
+  const scoredWeeks = perWeek.filter(p => p.avg != null);
+  const lastScored = scoredWeeks[scoredWeeks.length - 1] || null;
+  const prevScored = scoredWeeks[scoredWeeks.length - 2] || null;
+  return {
+    perWeek, totalDone, scoredWeeks,
+    thisWeekAvg: lastScored ? lastScored.avg : null,
+    delta: (lastScored && prevScored) ? lastScored.avg - prevScored.avg : null,
+    avgScore: gN ? Math.round(gSum / gN) : null,
+  };
+}
+
 /* ── Growth Report (parent-facing, cross-week progress) ──── */
 function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClose }) {
   React.useEffect(() => {
@@ -4875,46 +5011,7 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const data = React.useMemo(() => {
-    const perWeek = [];
-    let totalDone = 0, gSum = 0, gN = 0;
-    (weekOrder || []).forEach(wid => {
-      const w = weeks[wid];
-      if (!w) return;
-      let total = 0, done = 0, sSum = 0, sN = 0;
-      (categories || []).forEach(c => {
-        ((w.items && w.items[c.id]) || []).forEach(it => {
-          total++;
-          const p = (qmProg || {})[`${wid}_${it.id}`];
-          if (p && p.done) {
-            done++; totalDone++;
-            // v270: 沒有分數的完成（單字卡、待批改的上傳作業）不列入平均——否則被當 0 分拉低
-            if (p.score != null && p.total) {
-              const pct = Math.min(100, Math.round(p.score / p.total * 100));
-              sSum += pct; sN++; gSum += pct; gN++;
-            }
-          }
-        });
-      });
-      if (total === 0) return;
-      perWeek.push({
-        wid, label: w.label || wid, dateRange: w.dateRange || '',
-        theme: w.themeZh || w.theme || '',
-        total, done, pct: Math.round(done / total * 100), avg: sN ? Math.round(sSum / sN) : null,
-      });
-    });
-    // v271: 最後一週還沒全做完＝進行中（曲線與列表都特別標示，不讓它看起來像退步）
-    perWeek.forEach((p, i) => { p.inProgress = (i === perWeek.length - 1 && p.done < p.total); });
-    const scoredWeeks = perWeek.filter(p => p.avg != null);
-    const lastScored = scoredWeeks[scoredWeeks.length - 1] || null;
-    const prevScored = scoredWeeks[scoredWeeks.length - 2] || null;
-    return {
-      perWeek, totalDone, scoredWeeks,
-      thisWeekAvg: lastScored ? lastScored.avg : null,
-      delta: (lastScored && prevScored) ? lastScored.avg - prevScored.avg : null,
-      avgScore: gN ? Math.round(gSum / gN) : null,
-    };
-  }, [weeks, weekOrder, qmProg, categories]);
+  const data = React.useMemo(() => computeGrowthData(weeks, weekOrder, qmProg, categories), [weeks, weekOrder, qmProg, categories]);
 
   const pw = data.perWeek;
   const hasData = data.totalDone > 0;
@@ -5052,6 +5149,82 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
   );
 }
 
+/* v301: 學習頁「學習成長」改成內嵌卡片（像 Alan 貼的圖4）——直接看到每週平均折線，
+   點卡片才展開完整報告；不再是一顆大 button。 */
+function GrowthInlineCard({ weeks, weekOrder, qmProg, categories, isSummer, onOpen }) {
+  const data = React.useMemo(() => computeGrowthData(weeks, weekOrder, qmProg, categories), [weeks, weekOrder, qmProg, categories]);
+  const cw = data.scoredWeeks;
+  const n = cw.length;
+  const cuWeek = useCountUp(data.thisWeekAvg || 0, 900, 250);
+  const hasData = data.totalDone > 0;
+
+  if (!hasData) {
+    return (
+      <button className="growth-inline growth-inline-empty" onClick={onOpen}>
+        <span className="gi-empty-ico">🌱</span>
+        <span className="gi-empty-text">
+          <b>學習成長</b>
+          <span>{isSummer ? '完成練習後，這裡會畫出這個暑假的成長軌跡' : '完成練習後，這裡會畫出每週的進步軌跡'}</span>
+        </span>
+        <span className="gi-chev">›</span>
+      </button>
+    );
+  }
+
+  const W = 520, H = 150, padL = 8, padR = 8, padT = 16, padB = 14;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const vals = cw.map(p => p.avg);
+  const minV = Math.max(0, Math.min.apply(null, vals) - 8);
+  const maxV = Math.min(100, Math.max.apply(null, vals) + 6);
+  const span = Math.max(1, maxV - minV);
+  const xAt = (i) => n > 1 ? padL + i * innerW / (n - 1) : padL + innerW / 2;
+  const yAt = (v) => padT + (1 - (v - minV) / span) * innerH;
+  const linePts = cw.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.avg).toFixed(1)}`).join(' ');
+  const areaPts = `${padL},${(padT + innerH).toFixed(1)} ${linePts} ${xAt(n - 1).toFixed(1)},${(padT + innerH).toFixed(1)}`;
+  const lastX = xAt(n - 1), lastY = yAt(cw[n - 1].avg);
+
+  return (
+    <button className="growth-inline" onClick={onOpen}>
+      <div className="gi-head">
+        <span className="gi-kicker">學習成長 · 每週平均</span>
+        <span className="gi-more">看完整報告 →</span>
+      </div>
+      <div className="gi-chart-wrap">
+        {n > 1 ? (
+          <svg className="gi-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="giFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(122,168,126,.36)"/>
+                <stop offset="100%" stopColor="rgba(122,168,126,0)"/>
+              </linearGradient>
+            </defs>
+            <line x1={padL} y1={lastY.toFixed(1)} x2={W - padR} y2={lastY.toFixed(1)} className="gi-baseline"/>
+            <polygon points={areaPts} fill="url(#giFill)"/>
+            <polyline points={linePts} className="gi-line"/>
+            <circle cx={lastX.toFixed(1)} cy={lastY.toFixed(1)} r="5.5" className="gi-dot"/>
+          </svg>
+        ) : (
+          <div className="gi-single">已經開始累積紀錄——再多做幾週，這裡就會畫出成長曲線 🌱</div>
+        )}
+      </div>
+      <div className="gi-foot">
+        <div className="gi-big">{data.thisWeekAvg != null ? cuWeek : '—'}<em> 分</em></div>
+        <div className="gi-foot-r">
+          {data.delta != null && data.delta !== 0 ? (
+            <span className={'gi-delta' + (data.delta > 0 ? ' up' : ' down')}>
+              {data.delta > 0 ? '▲' : '▼'} 較上週 {data.delta > 0 ? '+' : ''}{data.delta}
+            </span>
+          ) : data.delta === 0 ? (
+            <span className="gi-delta flat">與上週持平</span>
+          ) : (
+            <span className="gi-delta muted">本週平均</span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 /* ══════════════════════════════════════════════════════
    UPLOAD HOMEWORK — v263「上傳作業」題型
    紙本作業拍照上傳：學生拍照/選圖 → 縮圖預覽 → 送出（自動縮小後傳
@@ -5066,7 +5239,9 @@ function ensureOpenCV() {
   if (_cvPromise) return _cvPromise;
   _cvPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://docs.opencv.org/4.10.0/opencv.js'; s.async = true;
+    // v301: 改用 jsdelivr 的 @techstark/opencv-js——docs.opencv.org 常常載不動/被擋
+    // （就是 Alan「怎麼掃都維持原圖」的元兇：載入失敗→靜默退回原圖）。
+    s.src = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js'; s.async = true;
     s.onload = () => {
       const check = () => (window.cv && window.cv.Mat)
         ? resolve(window.cv)
@@ -5092,26 +5267,28 @@ function ensureJscanify() {
   }));
   return _jsPromise;
 }
-// 回傳掃描後的 JPEG blob；偵測不到紙張就 throw，讓呼叫端退回一般縮圖
-async function scanDocumentToBlob(file) {
-  const jscanify = await ensureJscanify();
-  const img = await new Promise((ok, no) => {
+// 載入一張本機圖片成 <img>（自然尺寸）
+function loadImgEl(file) {
+  return new Promise((ok, no) => {
     const im = new Image();
     im.onload = () => ok(im);
     im.onerror = () => no(new Error('圖片讀取失敗'));
     im.src = URL.createObjectURL(file);
   });
-  const scanner = new jscanify();
-  const cvImg = window.cv.imread(img);
-  const contour = scanner.findPaperContour(cvImg);
-  if (!contour) { cvImg.delete(); URL.revokeObjectURL(img.src); throw new Error('no-contour'); }
-  const pts = scanner.getCornerPoints(contour, cvImg);
-  const W = 1000, H = 1400; // A4 直式比例
-  const warped = scanner.extractPaper(img, W, H, pts); // canvas
-  // 溫和增強對比，字更清楚
+}
+// 依四角算輸出尺寸（保留紙張真實長寬比，不硬套 A4），最長邊上限 1600
+function cornerDims(pts) {
+  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const tl = pts.topLeftCorner, tr = pts.topRightCorner, bl = pts.bottomLeftCorner, br = pts.bottomRightCorner;
+  let w = Math.max(200, Math.round((d(tl, tr) + d(bl, br)) / 2));
+  let h = Math.max(200, Math.round((d(tl, bl) + d(tr, br)) / 2));
+  const MAX = 1600, k = Math.min(1, MAX / Math.max(w, h));
+  return { w: Math.round(w * k), h: Math.round(h * k) };
+}
+function enhanceCanvas(canvas) {
   try {
-    const ctx = warped.getContext('2d');
-    const d = ctx.getImageData(0, 0, warped.width, warped.height), a = d.data, C = 1.22, B = -8;
+    const ctx = canvas.getContext('2d');
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height), a = d.data, C = 1.22, B = -8;
     for (let i = 0; i < a.length; i += 4) {
       a[i]   = Math.max(0, Math.min(255, (a[i]   - 128) * C + 128 + B));
       a[i+1] = Math.max(0, Math.min(255, (a[i+1] - 128) * C + 128 + B));
@@ -5119,18 +5296,142 @@ async function scanDocumentToBlob(file) {
     }
     ctx.putImageData(d, 0, 0);
   } catch (e) {}
+}
+// 用四角點透視校正 → 增強對比 → JPEG blob
+function warpCornersToBlob(scanner, img, pts) {
+  const { w, h } = cornerDims(pts);
+  const warped = scanner.extractPaper(img, w, h, pts); // canvas
+  enhanceCanvas(warped);
+  return new Promise((ok, no) => warped.toBlob(b => b ? ok(b) : no(new Error('無法輸出')), 'image/jpeg', 0.9));
+}
+// 自動掃描：抓紙張邊界→校正。偵測不到→丟 code:'no-contour'（呼叫端請學生手動框/重拍）；
+// 引擎載入失敗→一般 Error（呼叫端退回原圖，不讓學生被我們的網路卡住）。
+async function autoScanBlob(file) {
+  const jscanify = await ensureJscanify();  // 載不動 → 這裡就 throw（engine）
+  const img = await loadImgEl(file);
+  const scanner = new jscanify();
+  const cvImg = window.cv.imread(img);
+  let contour = null;
+  try { contour = scanner.findPaperContour(cvImg); } catch (e) { contour = null; }
+  if (!contour) {
+    cvImg.delete(); URL.revokeObjectURL(img.src);
+    const e = new Error('no-contour'); e.code = 'no-contour'; throw e;
+  }
+  const pts = scanner.getCornerPoints(contour, cvImg);
   cvImg.delete();
+  const blob = await warpCornersToBlob(scanner, img, pts);
   URL.revokeObjectURL(img.src);
-  return new Promise((ok, no) => warped.toBlob(b => b ? ok(b) : no(new Error('無法輸出')), 'image/jpeg', 0.88));
+  return blob;
+}
+
+// v301: 手動框四角——自動抓不到紙張邊界時，讓小朋友/家長把四個角拖到紙的角落，
+// 再透視校正成方正清楚的掃描圖。（Alan：抓不到就重拍或手動框，不要直接用原圖）
+function CornerAdjustModal({ file, onConfirm, onCancel }) {
+  const imgRef  = React.useRef(null);
+  const [imgUrl, setImgUrl] = useQM('');
+  const [ready,  setReady]  = useQM(false);
+  const [busy,   setBusy]   = useQM(false);
+  const [err,    setErr]    = useQM('');
+  // 四角以「比例」存（0~1），跟顯示大小無關
+  const [c, setC] = useQM({ tl: { x: .12, y: .12 }, tr: { x: .88, y: .12 }, br: { x: .88, y: .88 }, bl: { x: .12, y: .88 } });
+  const dragRef = React.useRef(null);
+
+  useQME(() => {
+    const url = URL.createObjectURL(file);
+    setImgUrl(url);
+    return () => { try { URL.revokeObjectURL(url); } catch (e) {} };
+  }, [file]);
+
+  const boxRect = () => {
+    const el = imgRef.current;
+    return el ? el.getBoundingClientRect() : null;
+  };
+  const pointFromEvent = (e) => {
+    const r = boxRect(); if (!r) return null;
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+    return { x: Math.max(0, Math.min(1, (cx - r.left) / r.width)), y: Math.max(0, Math.min(1, (cy - r.top) / r.height)) };
+  };
+  const onDown = (key) => (e) => { e.preventDefault(); dragRef.current = key; };
+  useQME(() => {
+    const move = (e) => {
+      if (!dragRef.current) return;
+      const p = pointFromEvent(e); if (!p) return;
+      setC(prev => ({ ...prev, [dragRef.current]: p }));
+    };
+    const up = () => { dragRef.current = null; };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+    window.addEventListener('touchmove', move, { passive: false }); window.addEventListener('touchend', up);
+    return () => {
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up);
+    };
+  }, []);
+
+  const confirm = async () => {
+    if (busy) return;
+    setBusy(true); setErr('');
+    try {
+      await ensureJscanify();
+      const img = imgRef.current;
+      const nW = img.naturalWidth, nH = img.naturalHeight;
+      const P = (r) => ({ x: Math.round(r.x * nW), y: Math.round(r.y * nH) });
+      const pts = { topLeftCorner: P(c.tl), topRightCorner: P(c.tr), bottomRightCorner: P(c.br), bottomLeftCorner: P(c.bl) };
+      const scanner = new window.jscanify();
+      const blob = await warpCornersToBlob(scanner, img, pts);
+      onConfirm(blob);
+    } catch (e) {
+      setErr('校正失敗，請重拍一張再試。');
+      setBusy(false);
+    }
+  };
+
+  // 顯示用的多邊形點（百分比）
+  const poly = [c.tl, c.tr, c.br, c.bl].map(p => `${(p.x * 100).toFixed(2)},${(p.y * 100).toFixed(2)}`).join(' ');
+
+  return ReactDOM.createPortal(
+    <div className="ca-overlay" onClick={onCancel}>
+      <div className="ca-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="調整紙張邊界">
+        <div className="ca-head">
+          <b>把四個角拖到紙張的角落</b>
+          <button className="ca-x" onClick={onCancel} aria-label="關閉">✕</button>
+        </div>
+        <div className="ca-stage">
+          {imgUrl && (
+            <img ref={imgRef} src={imgUrl} alt="待校正照片" className="ca-img" draggable="false"
+              onLoad={() => setReady(true)}/>
+          )}
+          {ready && (
+            <svg className="ca-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <polygon points={poly} className="ca-poly"/>
+            </svg>
+          )}
+          {ready && ['tl', 'tr', 'br', 'bl'].map(k => (
+            <button key={k} className={`ca-handle ca-${k}`} style={{ left: `${c[k].x * 100}%`, top: `${c[k].y * 100}%` }}
+              onMouseDown={onDown(k)} onTouchStart={onDown(k)} aria-label={`角落 ${k}`}/>
+          ))}
+        </div>
+        {err && <div className="uh-err ca-err">⚠ {err}</div>}
+        <div className="ca-hint">拖動四個白點，把框對準紙張的四個角，再按「校正這張」。</div>
+        <div className="ca-btns">
+          <button className="qm-btn secondary" onClick={onCancel} disabled={busy}>換一張／重拍</button>
+          <button className="qm-btn primary" onClick={confirm} disabled={busy || !ready}>{busy ? '校正中…' : '校正這張 →'}</button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 function UploadHomeworkPlayer({ item, progressKey, onBack }) {
-  const [pending,   setPending]   = useQM([]);   // [{ file, url, outBlob, scanned }] 還沒送出的
+  const [pending,   setPending]   = useQM([]);   // [{ file, url, outBlob, scanned, raw }] 掃描好、待送出
+  const [needsFix,  setNeedsFix]  = useQM([]);   // [{ file, url }] 抓不到邊界、要手動框或移除
+  const [adjusting, setAdjusting] = useQM(null); // 正在手動框四角的那一張
   const [busy,      setBusy]      = useQM(false);
   const [upMsg,     setUpMsg]     = useQM('');   // v266: 上傳進度「2/3」
   const [err,       setErr]       = useQM('');
-  const [scanOn,    setScanOn]    = useQM(true);   // v299: 掃描模式（預設開）
-  const [scanning,  setScanning]  = useQM(false);  // v299: 掃描處理中
+  const [note,      setNote]      = useQM('');   // 一般提示（例如引擎載不動退回原圖）
+  const [scanning,  setScanning]  = useQM(false);  // 掃描處理中
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
 
@@ -5160,38 +5461,60 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     img.src = URL.createObjectURL(file);
   });
 
-  // v299: 掃描模式開 → 每張自動抓邊界/校正/裁切（失敗退回一般縮圖）；關 → 原圖
+  // v301: 掃描是「必須」的——每張都先自動抓邊界校正。
+  // 抓不到 → 進「需要調整」清單（手動框四角或重拍）；引擎真的載不動 → 才退回原圖（不讓學生被我們的網路卡死）。
   const pickFiles = async (e) => {
     const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
     e.target.value = ''; // 同一張可以再選
     if (!files.length) return;
-    setErr('');
-    if (!scanOn) {
-      setPending(prev => [...prev, ...files.map(f => ({ file: f, url: URL.createObjectURL(f), scanned: false }))]);
+    setErr(''); setNote('');
+    setScanning(true);
+    let engineOk = true;
+    try { await ensureJscanify(); } catch (e2) { engineOk = false; }
+    if (!engineOk) {
+      const added = [];
+      for (const f of files) { let b; try { b = await shrink(f); } catch (_) { b = f; } added.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true }); }
+      setPending(prev => [...prev, ...added]);
+      setNote('目前無法自動掃描（可能是網路），已先用原圖收下；等網路好一點可以移除、重拍成掃描版。');
+      setScanning(false);
       return;
     }
-    setScanning(true);
-    const added = [];
+    const ok = [], bad = [];
     for (const f of files) {
-      let outBlob = null, scanned = false;
-      try { outBlob = await scanDocumentToBlob(f); scanned = true; }
-      catch (e2) { try { outBlob = await shrink(f); } catch (e3) { outBlob = f; } } // 偵測不到→一般縮圖
-      added.push({ file: f, outBlob, url: URL.createObjectURL(outBlob), scanned });
+      try {
+        const b = await autoScanBlob(f);
+        ok.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: true });
+      } catch (e2) {
+        if (e2 && e2.code === 'no-contour') bad.push({ file: f, url: URL.createObjectURL(f) });
+        else { let b; try { b = await shrink(f); } catch (_) { b = f; } ok.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true }); }
+      }
     }
-    setPending(prev => [...prev, ...added]);
+    if (ok.length) setPending(prev => [...prev, ...ok]);
+    if (bad.length) setNeedsFix(prev => [...prev, ...bad]);
     setScanning(false);
   };
-  const removePending = (i) => setPending(prev => { URL.revokeObjectURL(prev[i].url); return prev.filter((_, j) => j !== i); });
+  const removePending  = (i) => setPending(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
+  const removeNeedsFix = (i) => setNeedsFix(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
+
+  // 手動框四角完成 → 變成一張掃描好的待送出照片
+  const onAdjustConfirm = (blob) => {
+    const nf = adjusting;
+    setAdjusting(null);
+    if (!nf) return;
+    setNeedsFix(prev => { try { URL.revokeObjectURL(nf.url); } catch (e) {} return prev.filter(x => x !== nf); });
+    setPending(prev => [...prev, { file: nf.file, outBlob: blob, url: URL.createObjectURL(blob), scanned: true }]);
+  };
 
   const submit = async () => {
     if (!u) { setErr('要先登入才能交作業喔！'); return; }
     if (!pending.length || busy) return;
+    if (needsFix.length) { setErr(`還有 ${needsFix.length} 張沒處理好——請按「調整邊界」框好紙張，或先移除，才能送出。`); return; }
     setBusy(true); setErr('');
     try {
       const urls = [];
       for (let i = 0; i < pending.length; i++) {
         setUpMsg(`${i + 1}/${pending.length}`); // v266: 讓學生知道傳到第幾張
-        const blob = pending[i].outBlob || await shrink(pending[i].file); // v299: 已掃描就用掃描後的圖
+        const blob = pending[i].outBlob || await shrink(pending[i].file);
         urls.push(await window.uploadSubmissionPhoto(u.uid, progressKey, blob, i));
       }
       const all = [...submitted, ...urls];
@@ -5199,7 +5522,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         doneCount: 1, score: null, total: 1,
         extra: { files: all, graded: false, submittedAt: Date.now() },
       });
-      pending.forEach(p => URL.revokeObjectURL(p.url));
+      pending.forEach(p => { try { URL.revokeObjectURL(p.url); } catch (e) {} });
       setPending([]);
       if (window.playSound) window.playSound('complete');
     } catch (e) {
@@ -5231,6 +5554,8 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
       } catch (e) {}
     }
   };
+
+  const canSubmit = !busy && !scanning && pending.length > 0 && needsFix.length === 0;
 
   return (
     <div className="qm-intro uh">
@@ -5268,14 +5593,34 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         </div>
       )}
 
+      {/* v301: 抓不到邊界、要手動框或重拍的照片 */}
+      {needsFix.length > 0 && (
+        <div className="uh-block uh-block-fix">
+          <div className="uh-block-title uh-fix-title">這幾張沒抓到紙張邊界（{needsFix.length} 張）</div>
+          <div className="uh-fix-hint">拍清楚一點會更好：紙放平、四個角都入鏡、光線足夠。你也可以自己框四個角。</div>
+          <div className="uh-grid">
+            {needsFix.map((p, i) => (
+              <span key={i} className="uh-thumb uh-thumb-fix">
+                <img src={p.url} alt={`待調整 ${i + 1}`}/>
+                <span className="uh-thumb-warn">需調整</span>
+                <span className="uh-fix-actions">
+                  <button className="uh-fix-btn" onClick={() => setAdjusting(p)}>調整邊界</button>
+                  <button className="uh-fix-btn ghost" onClick={() => removeNeedsFix(i)}>移除</button>
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {pending.length > 0 && (
         <div className="uh-block">
-          <div className="uh-block-title">還沒送出（{pending.length} 張）</div>
+          <div className="uh-block-title">準備送出（{pending.length} 張）</div>
           <div className="uh-grid">
             {pending.map((p, i) => (
               <span key={i} className="uh-thumb uh-thumb-pending">
                 <img src={p.url} alt={`預覽 ${i + 1}`}/>
-                {p.scanned && <span className="uh-thumb-badge">✓ 已掃描</span>}
+                {p.scanned ? <span className="uh-thumb-badge">✓ 已掃描</span> : <span className="uh-thumb-badge raw">原圖</span>}
                 <button className="uh-thumb-del" onClick={() => removePending(i)} aria-label="移除這張">✕</button>
               </span>
             ))}
@@ -5283,24 +5628,25 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         </div>
       )}
 
+      {note && <div className="uh-note">ℹ️ {note}</div>}
       {err && <div className="uh-err">⚠ {err}</div>}
 
-      {/* v299: 掃描模式開關 */}
-      <button className={`uh-scan-toggle${scanOn ? ' on' : ''}`} onClick={() => setScanOn(v => !v)} disabled={busy || scanning}>
-        <span className="uh-scan-dot"/>{scanOn ? '🔳 掃描模式：自動拉正、裁切、增強' : '📷 原圖模式（不校正）'}
-      </button>
       <div className="uh-btns">
         <label className={`qm-btn secondary uh-pick${(busy || scanning) ? ' disabled' : ''}`}>
-          {scanning ? '⏳ 掃描處理中…' : '📷 拍照或選照片'}
+          {scanning ? '⏳ 掃描中…' : '📷 拍照或選照片'}
           <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy || scanning} style={{ display: 'none' }}/>
         </label>
-        <button className="qm-btn primary" onClick={submit} disabled={busy || scanning || pending.length === 0}>
+        <button className="qm-btn primary" onClick={submit} disabled={!canSubmit}>
           {busy ? `上傳中 ${upMsg}…` : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}
         </button>
       </div>
-      <div className="uh-hint">{scanOn ? '掃描模式會自動抓紙張邊界、拉正、裁切成清楚方正的圖；抓不到邊界就用原圖。' : '一次可選好幾張；交出去後還能再補交。'}</div>
+      <div className="uh-hint">📷 拍照後會自動抓紙張邊界、拉正、裁切成清楚方正的掃描圖；抓不到就請你重拍或自己框四個角。</div>
+
+      {adjusting && (
+        <CornerAdjustModal file={adjusting.file} onConfirm={onAdjustConfirm} onCancel={() => setAdjusting(null)}/>
+      )}
     </div>
   );
 }
 
-Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, WeekHero });
+Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, CornerAdjustModal, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekHero });
