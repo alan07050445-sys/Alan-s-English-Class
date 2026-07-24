@@ -301,7 +301,7 @@ function QmDoneNavBtns({ onBack, onBackToTasks, onNextTask, backLabel }) {
       {onBackToTasks ? (
         <button className={'qm-btn ' + (onNextTask ? 'secondary' : 'primary')} onClick={onBackToTasks}>回今天的任務</button>
       ) : (
-        <button className={'qm-btn ' + (onNextTask ? 'secondary' : 'primary')} onClick={onBack}>{backLabel || '← Back'}</button>
+        <button className={'qm-btn ' + (onNextTask ? 'secondary' : 'primary')} onClick={onBack}>{backLabel || '← 返回'}</button>
       )}
     </>
   );
@@ -1697,7 +1697,8 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       const nextScore = score + 1;
       setScore(nextScore);
       if (window.playSound) window.playSound('correct');
-      setTimeout(() => next(nextScore), 650);
+      // v306: 有解說就停下來讓學生讀完再按「下一題」；沒有解說才自動跳
+      if (!current.explain) setTimeout(() => next(nextScore), 650);
     } else {
       wrongsRef.current.push({ q: current.prompt || '(打字題)', answer: current.answer || '' });
       if (window.playSound) window.playSound('wrong');
@@ -1805,7 +1806,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
                 <span>{current.explain}</span>
               </div>
             )}
-            {result === 'correct' ? (
+            {result === 'correct' && !current.explain ? (
               <div className="qm-auto-next">
                 {idx + 1 >= total ? '答對了，自動查看成績…' : '答對了，自動下一題…'}
               </div>
@@ -2037,6 +2038,8 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       setFirstRight(nextFirstRight);
       setPlusOneKey(k => k + 1);
       setLastRight(true);
+      // v306: 有老師寫的解說就停下來讓學生讀完再按「下一題」；沒有解說才自動跳
+      if (q.explain) return;
       setTimeout(() => {
         if (isLast) completeQuiz(nextFirstRight, wrongList);
         else goToNextQuestion();
@@ -2141,7 +2144,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
             {selected === q.correct ? '✓ Correct! 答對了！' : `✗ The answer is: ${q.options[q.correct]}`}
           </div>
           {q.explain && <div className="qm-explain">{q.explain}</div>}
-          {selected === q.correct ? (
+          {selected === q.correct && !q.explain ? (
             <div className="qm-auto-next">答對了，自動下一題…</div>
           ) : (
             <button className="qm-btn primary" onClick={handleNext}>
@@ -2212,6 +2215,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTa
   const [idx, setIdx]           = useQM(0);
   const [sentence, setSentence] = useQM('');
   const [feedback, setFeedback] = useQM('');
+  const [gradeErr, setGradeErr] = useQM(''); // v306: 批改失敗訊息（不計分、可重送）
   const [checking, setChecking] = useQM(false);
   const [scores, setScores]     = useQM([]); // array of star counts (1-5)
   const [done, setDone]         = useQM(false);
@@ -2230,8 +2234,13 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTa
   const submit = async () => {
     if (!sentence.trim() || checking || feedback) return;
     setChecking(true);
-    setFeedback('');
+    setFeedback(''); setGradeErr('');
     const result = await window.checkWriting(current.word, sentence, current.instruction || '', current.zh || '');
+    if (!gradeSucceeded(result)) { // v306: AI 連不上→不計分、不存、留著讓學生再送一次
+      setGradeErr(result || 'AI 批改暫時連不上，請再送一次。');
+      setChecking(false);
+      return;
+    }
     setFeedback(result);
     const stars = extractStars(result);
     setScores(prev => [...prev, stars]);
@@ -2317,9 +2326,12 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTa
         disabled={!!feedback}
       />
       {!feedback ? (
-        <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !sentence.trim()}>
-          {checking ? '批改中…' : '送出批改 →'}
-        </button>
+        <>
+          {gradeErr && <div className="qm-grade-err">⚠ {gradeErr}</div>}
+          <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !sentence.trim()}>
+            {checking ? '批改中…' : gradeErr ? '再送一次 →' : '送出批改 →'}
+          </button>
+        </>
       ) : (
         <>
           <WritingFeedback text={feedback} />
@@ -2396,6 +2408,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
   const [idx, setIdx]         = useQM(0);
   const [answer, setAnswer]   = useQM('');
   const [feedback, setFeedback] = useQM('');
+  const [gradeErr, setGradeErr] = useQM(''); // v306: 批改失敗（不計分、可重送）
   const [checking, setChecking] = useQM(false);
   const [scores, setScores]   = useQM([]);
   const [done, setDone]       = useQM(false);
@@ -2417,10 +2430,15 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
   const submit = async () => {
     if (!answer.trim() || checking || feedback) return;
     setChecking(true);
-    setFeedback('');
+    setFeedback(''); setGradeErr('');
     const result = await window.checkShortAnswer(
       current.question, current.keyPoints || '', passage, answer
     );
+    if (!gradeSucceeded(result)) { // v306: AI 連不上→不計分、不存、可重送
+      setGradeErr(result || 'AI 批改暫時連不上，請再送一次。');
+      setChecking(false);
+      return;
+    }
     setFeedback(result);
     const stars = extractStars(result);
     setScores(prev => [...prev, stars]);
@@ -2506,9 +2524,12 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
       />
 
       {!feedback ? (
-        <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !answer.trim()}>
-          {checking ? '🤖 批改中…' : '送出答案 →'}
-        </button>
+        <>
+          {gradeErr && <div className="qm-grade-err">⚠ {gradeErr}</div>}
+          <button className="qm-btn primary wp-submit" onClick={submit} disabled={checking || !answer.trim()}>
+            {checking ? '🤖 批改中…' : gradeErr ? '再送一次 →' : '送出答案 →'}
+          </button>
+        </>
       ) : (
         <>
           <WritingFeedback text={feedback}/>
@@ -2732,6 +2753,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [selected, setSelected] = useQM(null);
   const [answer, setAnswer]     = useQM('');
   const [feedback, setFeedback] = useQM('');
+  const [grErr,    setGrErr]    = useQM(''); // v306: 分段閱讀簡答批改失敗（不計分、可重送）
   const [checking, setChecking] = useQM(false);
   const [peek, setPeek]         = useQM(false);   // 答題頁展開「回頭看文章」
   const [done, setDone]         = useQM(false);
@@ -3030,7 +3052,13 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       ? segs.map(s => s.text || '').filter(Boolean).join('\n\n')
       : (segs[segIdx].text || '');
     setChecking(true);
+    setGrErr('');
     const result = await window.checkShortAnswer(q.q, q.keyPoints || '', passage, answer);
+    if (!gradeSucceeded(result)) { // v306: AI 連不上→不計分、不存、可重送
+      setGrErr(result || 'AI 批改暫時連不上，請再送一次。');
+      setChecking(false);
+      return;
+    }
     const stars = grExtractStars(result);
     if (stars <= 2) wrongsRef.current.push({ q: q.q, answer: q.keyPoints || '（參考 AI 回饋）' });
     const nres = { ...res, [curGIdx]: { pts: stars >= 3 ? 1 : 0 } };
@@ -3145,9 +3173,12 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               rows={4}
             />
             {!feedback ? (
-              <button className="qm-btn primary wp-submit" onClick={submitShort} disabled={checking || !answer.trim()}>
-                {checking ? '🤖 批改中…' : '送出答案 →'}
-              </button>
+              <>
+                {grErr && <div className="qm-grade-err">⚠ {grErr}</div>}
+                <button className="qm-btn primary wp-submit" onClick={submitShort} disabled={checking || !answer.trim()}>
+                  {checking ? '🤖 批改中…' : grErr ? '再送一次 →' : '送出答案 →'}
+                </button>
+              </>
             ) : (
               <>
                 <WritingFeedback text={feedback}/>
@@ -3877,6 +3908,12 @@ function countStars(text) {
   const filled = (text.match(/[⭐★]/g) || []).length;
   return Math.min(5, Math.max(1, filled));
 }
+// v306: 判斷 AI 批改是不是「真的批改到了」——成功的回饋一定含星等（⭐/★/☆）；
+// 連不上時回的是純中文錯誤字串、沒有星。用來擋掉「把錯誤訊息當分數存進成績」。
+function gradeSucceeded(text) {
+  return typeof text === 'string' && /[⭐★☆]/.test(text);
+}
+window.gradeSucceeded = gradeSucceeded;
 
 /* ══════════════════════════════════════════════════════
    OPINION ESSAY — PLAYER
@@ -3884,6 +3921,7 @@ function countStars(text) {
 function EssayPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [essay,     setEssay]     = useQM('');
   const [feedback,  setFeedback]  = useQM('');
+  const [gradeErr,  setGradeErr]  = useQM(''); // v306: 批改失敗（不計分、可重送）
   const [checking,  setChecking]  = useQM(false);
   const [submitted, setSubmitted] = useQM(false);
   const [activeTab, setActiveTab] = useQM('strengths'); // for detailed feedback tabs
@@ -3896,6 +3934,12 @@ function EssayPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
     if (!essay.trim() || checking) return;
     setChecking(true);
     const result = await window.checkEssay(prompt, essay);
+    if (!gradeSucceeded(result)) { // v306: AI 連不上→不計分、不存、可重送
+      setGradeErr(result || 'AI 批改暫時連不上，請再送一次。');
+      setChecking(false);
+      return;
+    }
+    setGradeErr('');
     setFeedback(result);
     setChecking(false);
     setSubmitted(true);
@@ -3935,9 +3979,10 @@ function EssayPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               disabled={wordCount < 10 || checking}
               style={{opacity: wordCount < 10 ? 0.45 : 1}}
             >
-              {checking ? '🤖 AI 批改中…' : '送出批改 →'}
+              {checking ? '🤖 AI 批改中…' : gradeErr ? '再送一次 →' : '送出批改 →'}
             </button>
           </div>
+          {gradeErr && <div className="qm-grade-err">⚠ {gradeErr}</div>}
           {checking && <div className="essay-checking-bar"><div className="essay-checking-fill"/></div>}
         </>
       )}
@@ -4117,6 +4162,7 @@ function StoryMountainPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [answers,    setAnswers]    = useQM({ intro:'', rising:'', climax:'', falling:'', resolution:'' });
   const [screen,     setScreen]     = useQM('write'); // 'write' | 'review' | 'checking' | 'result'
   const [feedback,   setFeedback]   = useQM('');
+  const [gradeErr,   setGradeErr]   = useQM(''); // v306: 批改失敗（不計分、可重送）
   const [activeTab,  setActiveTab]  = useQM('checklist');
 
   const current  = SM_STAGES[stageIdx];
@@ -4135,6 +4181,12 @@ function StoryMountainPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const submit = async () => {
     setScreen('checking');
     const result = await window.checkStoryMountain(item.smPrompt, item.smPassage, answers);
+    if (!gradeSucceeded(result)) { // v306: AI 連不上→不計分、不存、回到檢視頁可重送
+      setGradeErr(result || 'AI 批改暫時連不上，請再送一次。');
+      setScreen('review');
+      return;
+    }
+    setGradeErr('');
     setFeedback(result);
     saveQuizModeCompletion(progressKey, item, { doneCount: 1, score: countStars(result), total: 5 });
     setScreen('result');
@@ -4173,12 +4225,13 @@ function StoryMountainPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           <div className="sm-review-stage-body">{answers[s.key] || <em style={{color:'var(--ink-muted)'}}>（未填寫）</em>}</div>
         </div>
       ))}
+      {gradeErr && <div className="qm-grade-err">⚠ {gradeErr}</div>}
       <div className="sm-review-btns">
         <button className="qm-btn secondary" onClick={() => { setStageIdx(SM_STAGES.length-1); setScreen('write'); }}>
           ← 修改
         </button>
         <button className="qm-btn primary" onClick={submit}>
-          🤖 送出 AI 批改 →
+          {gradeErr ? '🤖 再送一次 →' : '🤖 送出 AI 批改 →'}
         </button>
       </div>
     </div>
@@ -4488,6 +4541,9 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   };
 
   const handleSubmit = () => {
+    // v306: 還有空格沒填就提醒（沒填的會算錯）——避免小朋友手滑交卷吃全錯
+    const unfilled = total - answeredCount;
+    if (unfilled > 0 && !window.confirm(`還有 ${unfilled} 格沒填（沒填的會算錯），確定交卷嗎？`)) return;
     let correct = 0;
     const wrongList = [];
     blanks.forEach(b => {

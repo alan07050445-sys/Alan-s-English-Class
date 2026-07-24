@@ -1837,12 +1837,24 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
     const gi = segments.findIndex(isSame);
     const rest = segments.filter(s => !isSame(s));
     const insertAt = segments.slice(0, gi).filter(s => !isSame(s)).length;
-    const rebuilt = bands.map((b, i) => ({
-      id: (groupSegs[i] && groupSegs[i].id) || mkId('gs'),
-      text: (groupSegs[i] && groupSegs[i].text) || '',
-      img: { url, ar: cropSeg.img.ar, y0: b[0], y1: b[1] },
-      questions: (groupSegs[i] && groupSegs[i].questions) || [],
-    }));
+    const rebuilt = bands.map((b, i) => {
+      const prev = groupSegs[i];
+      // v306: 裁切重建段落時，保留同一張照片的 OCR 辨識(wordsId/Url)、朗讀區域(readRects)、
+      // 以及已產生的每段 AI 音檔(audioUrl)——座標都是整圖比例，重切後仍然有效，不該整批丟掉。
+      const img = { url, ar: cropSeg.img.ar, y0: b[0], y1: b[1] };
+      if (cropSeg.img.wordsId)  img.wordsId  = cropSeg.img.wordsId;
+      if (cropSeg.img.wordsUrl) img.wordsUrl = cropSeg.img.wordsUrl;
+      const rects = (prev && prev.img && prev.img.readRects) || cropSeg.img.readRects;
+      if (rects) img.readRects = rects;
+      const seg = {
+        id: (prev && prev.id) || mkId('gs'),
+        text: (prev && prev.text) || '',
+        img,
+        questions: (prev && prev.questions) || [],
+      };
+      if (prev && prev.audioUrl) seg.audioUrl = prev.audioUrl;
+      return seg;
+    });
     onChange([...rest.slice(0, insertAt), ...rebuilt, ...rest.slice(insertAt)]);
     setCropSeg(null);
   };

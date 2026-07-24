@@ -680,7 +680,7 @@ function App() {
     setEditorDraft({
       id: newId,
       _isNew: true,
-      type: "quizlet",
+      type: "flashcard", // v306: 原本預設 quizlet（已下架、學生看不到）→ 改成會顯示的單字卡
       title: "",
       zh: "",
       duration: "",

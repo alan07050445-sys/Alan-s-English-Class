@@ -1919,7 +1919,7 @@ function SpotlightTour({ onClose, onEmpty }) {
   const DEFS = [
     { sel: '.tt',           fb: '.wh',        t: '老師派的作業在這裡！', s: '點一條任務就開始，做完會打勾 ✓' },
     { sel: '.qm-blocks',    fb: null,         t: '想自己多練也可以',     s: '單字、文法、字根字首、閱讀寫作，都在這裡' },
-    { sel: '.growth-entry', fb: null,         t: '爸媽看這裡',           s: '每一週的進步，都看得到' },
+    { sel: '.growth-inline', fb: null,        t: '爸媽看這裡',           s: '每一週的進步，都看得到' },
   ];
   // 實際演練：click 站＝只有被圈住的真元素點得動；info 站＝看說明按下一步
   const HDEFS = [
