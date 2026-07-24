@@ -47,7 +47,7 @@
   margin: 4px 0 14px; flex-wrap: wrap;
 }
 .qm-blocks-title {
-  font-family: var(--serif); font-size: 22px; font-weight: 600;
+  font-family: var(--serif); font-size: 25px; font-weight: 700;
   color: var(--ink); margin: 0;
 }
 .qm-blocks-hint {

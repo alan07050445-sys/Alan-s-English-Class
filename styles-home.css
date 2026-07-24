@@ -520,20 +520,47 @@
   background: rgba(251,248,241,.92);
   border-bottom-color: rgba(139,49,32,.12);
 }
+/* ══ v304: 自由練習「大膽色塊卡」——每科整張飽和色卡（Alan：來個大膽的、更高級） ══
+   只在學生視角(.page-lobby，不含編輯模式)套用；空的（這週沒安排）維持安靜淺卡。 */
 .page-lobby .qm-block {
-  background: #ffffff;
+  position: relative;
+  background: linear-gradient(152deg, var(--cat-c) 0%, color-mix(in srgb, var(--cat-c) 66%, #241206) 100%);
+  border: none; color: #fff;
+  border-radius: 20px; padding: 26px 24px;
+  box-shadow: 0 16px 34px -14px color-mix(in srgb, var(--cat-c) 60%, transparent), 0 2px 6px rgba(21,19,14,.1);
 }
-.page-lobby .qm-block::after {
-  content: '';
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 10px;
-  height: 3px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cat-c) 26%, transparent);
-  opacity: .55;
+.page-lobby .qm-block::after { display: none; }
+.page-lobby .qm-block::before {
+  content: ''; position: absolute; top: -40px; right: -30px; width: 150px; height: 150px;
+  border-radius: 50%; background: rgba(255,255,255,.1); pointer-events: none;
 }
+.page-lobby .qm-block:hover:not(.empty) {
+  transform: translateY(-4px); border: none;
+  box-shadow: 0 26px 50px -16px color-mix(in srgb, var(--cat-c) 66%, transparent), 0 2px 6px rgba(21,19,14,.12);
+  filter: brightness(1.05);
+}
+.page-lobby .qm-block:active:not(.empty) { transform: translateY(-1px); }
+.page-lobby .qm-block > * { position: relative; z-index: 1; }
+.page-lobby .qm-block-icon { box-shadow: 0 4px 14px -4px rgba(0,0,0,.35), inset 0 0 0 2px rgba(255,255,255,.55); }
+.page-lobby .qm-block-title {
+  font-family: 'Lora','Noto Serif TC',Georgia,serif; font-size: 23px; font-weight: 700; color: #fff; margin-bottom: 5px;
+}
+.page-lobby .qm-block-title-zh { color: rgba(255,255,255,.82); }
+.page-lobby .qm-block-count { color: rgba(255,255,255,.92); }
+.page-lobby .qm-block-meta { color: rgba(255,255,255,.74); }
+.page-lobby .qm-progress-bar { background: rgba(255,255,255,.28); height: 6px; }
+.page-lobby .qm-progress-fill { background: #fff; }
+.page-lobby .qm-pct { color: #fff; font-weight: 700; }
+.page-lobby .qm-block-arrow { color: rgba(255,255,255,.9); }
+/* 空的（這週沒安排）＝安靜的淺卡，讓有內容的彩色卡跳出來 */
+.page-lobby .qm-block.empty {
+  background: var(--bg-card, #fffdf8); border: 1.5px solid var(--border); color: var(--ink);
+  box-shadow: 0 2px 0 rgba(21,19,14,.04); opacity: 1;
+}
+.page-lobby .qm-block.empty::before { display: none; }
+.page-lobby .qm-block.empty .qm-block-title { font-family: var(--sans); font-size: 19px; font-weight: 800; color: var(--ink-2, #5c554a); }
+.page-lobby .qm-block.empty .qm-block-title-zh { color: var(--cat-c); }
+.page-lobby .qm-block.empty .qm-block-icon { box-shadow: 0 4px 12px -4px rgba(21,19,14,.22), inset 0 0 0 1px rgba(255,255,255,.18); filter: grayscale(.3) opacity(.85); }
 
 .am-overlay {
   padding: 0;

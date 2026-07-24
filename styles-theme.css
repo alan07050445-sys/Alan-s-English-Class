@@ -656,7 +656,7 @@
 /* 面板標題與群組標題改襯線（與 WeekHero/品牌一致），列密度收緊 */
 .tt-title {
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
-  font-size: 19px; font-weight: 700;
+  font-size: 23px; font-weight: 700;
   letter-spacing: .01em;
 }
 .tt-group-name {
