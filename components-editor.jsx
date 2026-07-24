@@ -1445,6 +1445,22 @@ async function grOcrCanvas(worker, cv) {
   return { words, lines };
 }
 
+// v299: OCR 移到背景跑——共用一個「暖」worker（15MB 模型只載一次，不再每次匯入重載）；
+// OCR 前把 canvas 縮到 1200px（座標存 0~1 比例，縮圖不影響定位）＝辨識更快。
+let _grWarmWorkerP = null;
+function grWarmWorker() {
+  if (!_grWarmWorkerP) _grWarmWorkerP = grOcrWorker().catch(e => { _grWarmWorkerP = null; throw e; });
+  return _grWarmWorkerP;
+}
+function grOcrScaled(cv) {
+  const MAX = 1200, k = Math.min(1, MAX / Math.max(cv.width, cv.height));
+  if (k >= 1) return cv;
+  const c2 = document.createElement('canvas');
+  c2.width = Math.round(cv.width * k); c2.height = Math.round(cv.height * k);
+  c2.getContext('2d').drawImage(cv, 0, 0, c2.width, c2.height);
+  return c2;
+}
+
 // 匯入解析——沿用測驗題慣例「第一個選項＝正解」；0–1 個選項欄＝簡答題；
 // 分段閱讀作答時不洗牌，所以匯入當下就把選項打散。
 function grParseImport(text) {
@@ -1582,6 +1598,31 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
   const pdfRef = React.useRef(null);
   const reOcrRef = React.useRef(null);
   const audioRef = React.useRef(null);
+  // v299: OCR 不再卡住匯入——背景跑。canvasCache 留著剛匯入的畫布（避開 Storage CORS）；
+  // segRef 永遠指向最新 segments，背景回填才不會蓋掉老師同時在改的內容。
+  const canvasCache = React.useRef(new Map()); // img.url -> 已解碼 canvas
+  const segRef = React.useRef(segments); segRef.current = segments;
+  const bgBusy = React.useRef(false);
+  const [ocrStatus, setOcrStatus] = useS(''); // 非阻塞的小提示（不 disable 匯入鈕）
+  const queueBgOcr = async () => {
+    if (bgBusy.current) return; // 已有一個背景任務在跑；它會邊跑邊撿新加進來的
+    bgBusy.current = true;
+    let worker = null;
+    try {
+      while (true) {
+        const cur = (segRef.current || []).find(s => s.img && s.img.url && !s.img.wordsId && canvasCache.current.has(s.img.url));
+        if (!cur) break;
+        const left = (segRef.current || []).filter(s => s.img && s.img.url && !s.img.wordsId && canvasCache.current.has(s.img.url)).length;
+        setOcrStatus(`背景辨識單字中…還有 ${left} 張（可繼續編輯）`);
+        if (!worker) { try { worker = await grWarmWorker(); } catch (e) { break; } } // 載不動就跳過，閱讀本身不受影響
+        const cv = canvasCache.current.get(cur.img.url);
+        let wordsId;
+        try { wordsId = await ocrAndSave(worker, grOcrScaled(cv)); } catch (e) {}
+        canvasCache.current.delete(cur.img.url); // 不論成功都移除，避免卡死迴圈
+        if (wordsId) onChange((segRef.current || []).map(s => (s.img && s.img.url === cur.img.url) ? { ...s, img: { ...s.img, wordsId } } : s));
+      }
+    } finally { bgBusy.current = false; setOcrStatus(''); }
+  };
 
   // v290: 取一段的「主文」文字——有框選就只拿主文框內的行；沒框就整個裁切帶
   const grSegMainText = async (s) => {
@@ -1656,25 +1697,18 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
     if (!files.length) return;
     setUpErr('');
     const added = [];
-    let worker = null;
     try {
       for (let i = 0; i < files.length; i++) {
         setUploading(`上傳中 ${i + 1}/${files.length}…`);
         const { blob, ar, cv } = await shrinkPhoto(files[i]);
         const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
-        setUploading(`辨識單字 ${i + 1}/${files.length}…（點字查義用）`);
-        if (!worker) { try { worker = await grOcrWorker(); } catch (e2) { worker = 'fail'; } }
-        const wordsId = worker && worker !== 'fail' ? await ocrAndSave(worker, cv) : undefined;
-        const img = { url, ar, y0: 0, y1: 1 };
-        if (wordsId) img.wordsId = wordsId;
-        added.push({ id: mkId('gs'), text: '', img, questions: [] });
+        canvasCache.current.set(url, cv); // v299: 留著給背景 OCR（避開下載 CORS）
+        added.push({ id: mkId('gs'), text: '', img: { url, ar, y0: 0, y1: 1 }, questions: [] });
       }
-      onChange([...segments, ...added]);
     } catch (err) {
-      if (added.length) onChange([...segments, ...added]);
       setUpErr('上傳失敗：' + ((err && err.message) || err) + '——請確認你是用老師帳號登入。');
     }
-    if (worker && worker !== 'fail') { try { await worker.terminate(); } catch (e2) {} }
+    if (added.length) { onChange([...segRef.current, ...added]); queueBgOcr(); } // 段落立刻出現，OCR 背景跑
     setUploading('');
   };
 
@@ -1703,7 +1737,6 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
       const pdfjs = await loadPdfJs();
       const buf = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument({ data: buf }).promise;
-      let worker = null;
       for (let p = 1; p <= pdf.numPages; p++) {
         setUploading(`轉換第 ${p}/${pdf.numPages} 頁…`);
         const page = await pdf.getPage(p);
@@ -1715,19 +1748,13 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
         const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('頁面轉檔失敗')), 'image/jpeg', 0.85));
         setUploading(`上傳第 ${p}/${pdf.numPages} 頁…`);
         const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
-        setUploading(`辨識單字 ${p}/${pdf.numPages}…（點字查義用）`);
-        if (!worker) { try { worker = await grOcrWorker(); } catch (e2) { worker = 'fail'; } }
-        const wordsId = worker && worker !== 'fail' ? await ocrAndSave(worker, cv) : undefined;
-        const img = { url, ar: cv.height / cv.width, y0: 0, y1: 1 };
-        if (wordsId) img.wordsId = wordsId;
-        added.push({ id: mkId('gs'), text: '', img, questions: [] });
+        canvasCache.current.set(url, cv); // v299: 留著給背景 OCR
+        added.push({ id: mkId('gs'), text: '', img: { url, ar: cv.height / cv.width, y0: 0, y1: 1 }, questions: [] });
       }
-      if (worker && worker !== 'fail') { try { await worker.terminate(); } catch (e2) {} }
-      onChange([...segments, ...added]);
     } catch (err) {
-      if (added.length) onChange([...segments, ...added]);
       setUpErr('PDF 匯入失敗：' + ((err && err.message) || err));
     }
+    if (added.length) { onChange([...segRef.current, ...added]); queueBgOcr(); } // 頁面立刻出現，OCR 背景跑
     setUploading('');
   };
 
@@ -1873,6 +1900,9 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
           </button>
         </div>
       </div>
+      {ocrStatus && (
+        <div style={{fontSize:11.5,color:'#8a6d1c',background:'#fbf3de',border:'1px solid #ead9ae',borderRadius:8,padding:'5px 11px',margin:'6px 0 0',display:'inline-block'}}>⏳ {ocrStatus}</div>
+      )}
       <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={pickPhotos}/>
       <input ref={pdfRef} type="file" accept="application/pdf,.pdf" style={{display:'none'}} onChange={pickPdf}/>
       <input ref={reOcrRef} type="file" accept="image/*" style={{display:'none'}} onChange={pickReOcr}/>
