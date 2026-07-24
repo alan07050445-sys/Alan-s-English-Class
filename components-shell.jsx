@@ -144,7 +144,8 @@ function Header({
 }
 
 /* ───────── Login Screen ───────── */
-function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
+// v296: 舊版 8 段行銷長頁——備份保留（不再渲染；要復原就把 app.jsx 的 window.LoginScreen 換成 window.LoginScreenLegacy）
+function LoginScreenLegacy({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
   const [loading, setLoading] = React.useState(false);
   const [acctOpen, setAcctOpen] = React.useState(false); // v249: 右上帳號下拉
   const [bye, setBye] = React.useState(false);           // v294: 登出確認小提示（淡入淡出）
@@ -2078,4 +2079,52 @@ function SpotlightTour({ onClose, onEmpty }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, LockScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave });
+// v296: 新首頁——單頁品牌封面＋登入（取代舊 8 段長頁）。登入後停在封面顯示「進入課程」。
+function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
+  const [loading, setLoading] = React.useState(false);
+  const [slow, setSlow] = React.useState(false);
+  const enterMode = loggedIn && onBack;   // 已登入且在封面 → 顯示「進入課程」
+  const handleLogin = async () => {
+    setLoading(true);
+    setTimeout(() => { setSlow(true); setLoading(false); }, 12000); // 卡住的備援（unmount 換頁即消失）
+    try { await onLogin(); } catch (e) { console.error(e); setLoading(false); }
+  };
+  return (
+    <div className="login-screen lc-cover">
+      {onBack && !enterMode && <button className="lc-back" onClick={onBack}>← 返回課程</button>}
+      <div className="lc-wm" aria-hidden="true">A</div>
+      <span className="lc-spark lc-s1" aria-hidden="true">✦</span>
+      <span className="lc-spark lc-s2" aria-hidden="true">✦</span>
+      <div className="lc-school">康橋國際學校 · 英文每週練習平台</div>
+      <div className="lc-stack">
+        <div className="lc-mark" aria-hidden="true"><span>A<i>.</i></span></div>
+        <div className="lc-est">EST · 2026</div>
+        <h1 className="lc-word">Alan's English Class</h1>
+        <div className="lc-under" aria-hidden="true"/>
+        <p className="lc-tag">這是 Alan 英文小教室</p>
+        <p className="lc-sub">每週康橋的進度——單字、文法、字根字首、閱讀寫作，都會放在上面，跟著練習。</p>
+        {enterMode ? (
+          <>
+            {userName && <p className="lc-welcome">歡迎回來，{userName} 👋</p>}
+            <button className="lc-cta" onClick={onBack}>進入課程 →</button>
+            {onLogout && <button className="lc-logout" onClick={onLogout}>登出</button>}
+          </>
+        ) : (
+          <>
+            <button className="lc-cta" onClick={handleLogin} disabled={loading}>
+              <span className="lc-gg">G</span> {loading ? '登入中…' : '使用 Google 登入'}
+            </button>
+            <div className="lc-mini">免安裝 · 電腦、平板打開就能用</div>
+            {slow && (
+              <button className="lc-slow" onClick={() => { try { window.signInWithGoogleRedirect && window.signInWithGoogleRedirect(); } catch (e) {} }}>
+                登入卡住了？改用這個方式 →
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave });

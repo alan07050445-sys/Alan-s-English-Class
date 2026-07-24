@@ -1204,13 +1204,16 @@
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  background: #fff;
+  background: linear-gradient(135deg, #fffdf8 0%, #fbf3e6 100%);
   border: 1px solid var(--border, #e5dfc8);
-  border-radius: 18px;
-  padding: 22px 26px;
-  margin-bottom: 14px;
-  box-shadow: var(--shadow-sm);
+  border-radius: 22px;
+  padding: 28px 32px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(58,43,20,.04), 0 10px 30px rgba(58,43,20,.06);
+  animation: wh-in .6s cubic-bezier(.2,.7,.2,1) both;
 }
+@keyframes wh-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wh { animation: none; } }
 .wh::before {
   content: "";
   position: absolute; top: -70px; right: -60px;
@@ -1241,21 +1244,29 @@
 .wh-theme-en { font-family: 'Lora', Georgia, serif; font-style: italic; font-size: 15px; color: var(--ink-2, #5c554a); }
 .wh-date { font-family: var(--mono, monospace); font-size: 12px; color: var(--ink-3, #8a8270); }
 .wh-side { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-.wh-ring-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+.wh-ring-wrap { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
 .wh-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
-.wh-ring-bg { fill: none; stroke: #efe9d8; stroke-width: 6; }
+.wh-ring-bg { fill: none; stroke: #efe9d8; stroke-width: 9; }
 .wh-ring-fill {
-  fill: none; stroke: var(--g-c, #8B3120); stroke-width: 6;
+  fill: none; stroke: var(--g-c, #8B3120); stroke-width: 9;
   stroke-linecap: round;
 }
 .wh-ring-num {
   position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono, monospace); font-size: 14.5px; font-weight: 700;
-  color: var(--g-c, #8B3120);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+}
+.wh-ring-num b {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 31px; font-weight: 700; line-height: 1;
+  color: var(--g-c, #8B3120); font-variant-numeric: tabular-nums;
+}
+.wh-ring-num i {
+  font-family: var(--mono, monospace); font-style: normal;
+  font-size: 9.5px; letter-spacing: .14em; color: var(--ink-3, #8a8270);
 }
 .wh-side-info { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
 .wh-count { font-size: 13.5px; color: var(--ink-2, #5c554a); }
+.wh-count b { font-weight: 800; color: var(--ink, #15130e); }
 .wh-done-msg { font-size: 15px; font-weight: 800; color: #1f7d4f; }
 .wh-cta {
   background: var(--g-c, #8B3120); color: #fff;

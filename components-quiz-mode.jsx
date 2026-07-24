@@ -4453,23 +4453,44 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
   const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
   const weekNum = ((week.label || '').match(/(\d+)\s*$/) || [])[1] || (weekIdx + 1);
   const title = week.themeZh || week.theme || (who ? `${who} 的第 ${weekNum} 週任務` : `第 ${weekNum} 週的練習`);
-  const enTheme = week.themeZh ? week.theme : '';
-  const R = 26, CIRC = 2 * Math.PI * R;
+  let enTheme = week.themeZh ? week.theme : '';
+  // v296: 濾掉跟上方 kicker 重複的英文主題（Alan 資料常填「W16 - 本週進度」之類）
+  if (enTheme && /^\s*W?\d+\s*[-–—]?\s*本週進度\s*$/i.test(enTheme)) enTheme = '';
+  const R = 48, CIRC = 2 * Math.PI * R;   // v296: 進度環放大，更像主角
   const allDone = total > 0 && done >= total;
 
-  // 圓環進度動畫：從 0 畫到目前完成度（回到大廳時重播；reduced-motion 直接定住）
+  // v296: 圓環進度動畫＋數字 count-up（回到大廳時重播；reduced-motion 直接定住）
   const ringRef = React.useRef(null);
+  const pctRef  = React.useRef(null);
+  const doneRef = React.useRef(null);
   useQME(() => {
-    const el = ringRef.current;
-    if (!el) return;
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return;
-    el.style.transition = 'none';
-    el.style.strokeDashoffset = CIRC;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      el.style.transition = 'stroke-dashoffset .9s cubic-bezier(.4,0,.2,1) .15s';
-      el.style.strokeDashoffset = CIRC * (1 - pct / 100);
-    }));
+    const el = ringRef.current;
+    if (el) {
+      if (reduce) { el.style.strokeDashoffset = CIRC * (1 - pct / 100); }
+      else {
+        el.style.transition = 'none';
+        el.style.strokeDashoffset = CIRC;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          el.style.transition = 'stroke-dashoffset 1s cubic-bezier(.3,.7,.2,1) .2s';
+          el.style.strokeDashoffset = CIRC * (1 - pct / 100);
+        }));
+      }
+    }
+    const countUp = (node, target, suffix) => {
+      if (!node) return;
+      if (reduce || !target) { node.textContent = target + (suffix || ''); return; }
+      const dur = 950; let t0 = null;
+      const step = (ts) => {
+        if (!t0) t0 = ts;
+        const p = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        node.textContent = Math.round(target * e) + (suffix || '');
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    };
+    countUp(pctRef.current, pct, '%');
+    countUp(doneRef.current, done, '');
   }, []);
 
   return (
@@ -4498,15 +4519,15 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
         {total > 0 ? (
           <>
             <div className="wh-ring-wrap" role="img" aria-label={`本週完成度 ${pct}%`}>
-              <svg className="wh-ring" viewBox="0 0 64 64">
-                <circle className="wh-ring-bg" cx="32" cy="32" r={R}/>
-                <circle ref={ringRef} className="wh-ring-fill" cx="32" cy="32" r={R}
+              <svg className="wh-ring" viewBox="0 0 110 110">
+                <circle className="wh-ring-bg" cx="55" cy="55" r={R}/>
+                <circle ref={ringRef} className="wh-ring-fill" cx="55" cy="55" r={R}
                   strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - pct / 100)}/>
               </svg>
-              <span className="wh-ring-num">{pct}%</span>
+              <span className="wh-ring-num"><b ref={pctRef}>{pct}%</b><i>完成度</i></span>
             </div>
             <div className="wh-side-info">
-              <span className="wh-count">完成 {done} / {total} 個練習</span>
+              <span className="wh-count">完成 <b ref={doneRef}>{done}</b> / {total} 個練習</span>
               {allDone && <span className="wh-done-msg">🎉 本週練習全部完成！</span>}
               {/* v268: 家長共看畫面——本週平均＋成長報告入口 */}
               {weekAvg != null && onOpenGrowth && (
