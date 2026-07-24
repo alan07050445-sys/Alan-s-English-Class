@@ -189,6 +189,10 @@ function qmScope() {
 }
 function loadQMProg()  { try { return JSON.parse(localStorage.getItem(QM_KEY + qmScope()) || '{}'); } catch(e) { return {}; } }
 function saveQMProg(p) { try { localStorage.setItem(QM_KEY + qmScope(), JSON.stringify(p)); } catch(e) {} }
+// v298: 側欄收合——學生自己控制、記住選擇（per-uid），不自動收
+const QM_SIDEBAR_KEY = 'alans-qm-sidebar-collapsed-v1';
+function loadSidebarCollapsed(){ try { return localStorage.getItem(QM_SIDEBAR_KEY + qmScope()) === '1'; } catch(e){ return false; } }
+function saveSidebarCollapsed(v){ try { localStorage.setItem(QM_SIDEBAR_KEY + qmScope(), v ? '1' : '0'); } catch(e){} }
 
 /* ── 續做（resume）：測驗做到一半離開，下次從同一題接著做 ── */
 const QM_RESUME_KEY = 'alans-qm-resume-v1';
@@ -273,7 +277,7 @@ function qmSyllables(word) {
 function qmShortLabel(item, groupName) {
   const title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
-    const rest = title.slice(String(groupName).length).replace(/^[\s\-–—_·．.。,，]+/, '').trim();
+    const rest = title.slice(String(groupName).length).replace(/^[\s\-–—_·．.。,，?？!！:：;；~～]+/, '').trim();
     if (rest) {
       if (!/[A-Za-z一-鿿]/.test(rest)) {
         const tz = QM_TYPE_ZH[item.type];
@@ -591,6 +595,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [progVersion,  setProgVersion]  = useQM(0);      // bumped after quiz completes → refreshes sidebar scores
   const [copyItem,     setCopyItem]     = useQM(null);   // v294: 「沿用到其他週」的題目
   const [copySel,      setCopySel]      = useQM([]);     // v294: 勾選的目標週 id
+  const [sidebarHidden, setSidebarHidden] = useQM(() => loadSidebarCollapsed()); // v298: 學生自控側欄收合
+  const toggleSidebar = () => setSidebarHidden(v => { const n = !v; saveSidebarCollapsed(n); return n; });
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
   // Edit mode: show ALL items so teacher can see & edit non-quiz types too
@@ -710,13 +716,27 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   }, [initialItemId]);
 
   return (
-    <div className={`qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}`}>
+    <div className={`qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}${sidebarHidden ? ' sidebar-hidden' : ''}`}>
+
+      {/* v298: 側欄收合時，左上角浮出「展開單元列表」小鈕 */}
+      {!editMode && sidebarHidden && (
+        <button className="qm-sidebar-reopen" onClick={toggleSidebar} title="展開單元列表">
+          <window.Icon name="arrow-right" size={14}/> 單元
+        </button>
+      )}
 
       {/* ── Left sidebar ── */}
       <div className="qm-sidebar">
-        <button className="qm-sidebar-back" onClick={onBack}>
-          <window.Icon name="arrow-left" size={14}/> 返回大廳
-        </button>
+        <div className="qm-sidebar-top">
+          <button className="qm-sidebar-back" onClick={onBack}>
+            <window.Icon name="arrow-left" size={14}/> 返回大廳
+          </button>
+          {!editMode && (
+            <button className="qm-sidebar-collapse" onClick={toggleSidebar} title="收合單元列表（專心作答）" aria-label="收合單元列表">
+              <window.Icon name="arrow-left" size={13}/>
+            </button>
+          )}
+        </div>
 
         <div className="qm-sidebar-cat">
           <CatIcon catId={cat.id} className="qm-sidebar-cat-icon"/>
@@ -2524,7 +2544,7 @@ function grNormalizeQ(q) {
 
 /* v277: 段落照片切片——只存裁切範圍 {url, ar, y0, y1}（0~1 高度比例），
    不產生新圖片：CSS 高度=寬×ar×(y1-y0)、img translateY(-y0%) 顯示該帶。 */
-function GrImgCrop({ img, onZoom, className, onWord, onSide }) {
+function GrImgCrop({ img, onZoom, className, onWord, onSide, sideBusy }) {
   const y0 = img.y0 || 0;
   const y1 = img.y1 == null ? 1 : img.y1;
   const band = Math.max(0.02, y1 - y0);
@@ -2559,11 +2579,14 @@ function GrImgCrop({ img, onZoom, className, onWord, onSide }) {
       {(onSide ? (img.readRects || []) : [])
         .filter(r => r.kind === 'side')
         .filter(r => { const cy = r.y + r.h / 2; return cy >= y0 && cy <= y1; })
-        .map((r, i) => (
-          <button key={'sd' + i} className="grd-side-btn" title="聽這一塊"
-            style={{ left: `calc(${Math.min(r.x + r.w, 0.99) * 100}% - 26px)`, top: (((r.y - y0) / band) * 100) + '%' }}
-            onClick={(e) => { e.stopPropagation(); onSide(r); }}>🔊</button>
-        ))}
+        .map((r, i) => {
+          const busy = sideBusy && sideBusy === (r.x.toFixed(4) + ',' + r.y.toFixed(4));
+          return (
+            <button key={'sd' + i} className={'grd-side-btn' + (busy ? ' busy' : '')} title="聽這一塊" disabled={busy}
+              style={{ left: `calc(${Math.min(r.x + r.w, 0.99) * 100}% - 26px)`, top: (((r.y - y0) / band) * 100) + '%' }}
+              onClick={(e) => { e.stopPropagation(); onSide(r); }}>{busy ? '⏳' : '🔊'}</button>
+          );
+        })}
     </div>
   );
 }
@@ -2585,6 +2608,7 @@ function grLineInRect(l, r) {
 
 // v287: OCR 單字檔快取（{words:[{t,x,y,w,h}], lines:[{t,y}]}，座標＝整張圖比例）
 const grWordsCache = {};
+const grSideTtsCache = {}; // v298: 附註文字 → OpenAI mp3 objectURL（真人聲音快取）
 function grFetchWords(key) { // v288: grwords_* → Firestore（不經 CORS）；舊 http URL 盡力 fetch
   if (!key) return Promise.resolve(null);
   if (!grWordsCache[key]) {
@@ -2671,6 +2695,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const topRef    = React.useRef(null);
   const audioRef  = React.useRef(null);   // v289: 課文音檔——掛在翻頁容器外，換段不重置進度
   const segAudioRef = React.useRef(null); // v293: 每段 AI 音檔——同樣要套用朗讀速度
+  const sideAudioRef = React.useRef(null);// v298: 附註 OpenAI 真人聲音播放
+  const [sideBusy, setSideBusy] = useQM(null); // v298: 哪個附註框正在載入語音（顯示 ⏳）
   const speakStopRef = React.useRef(null);// v293: 逐句朗讀的中止函式
 
   // v289: 進答題/綜合題就暫停音檔（讀下一段時從剛才的位置繼續）
@@ -2759,11 +2785,30 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const speechRate = () => Math.max(0.7, Math.min(0.95, readRate));
 
   // v290: 附註（side 框）——學生點照片上的 🔊 單獨聽那一塊
+  // v298: 附註（side 框）也改用 OpenAI 真人聲音——打 Worker /tts 拿 mp3 播放（快取＋載入中⏳），
+  // 失敗才退回瀏覽器語音，所以一定有聲音。
   const speakSideRect = async (img2, rect) => {
     const d = await grFetchWords(img2.wordsId || img2.wordsUrl);
     if (!d) return;
     const t = window.grReadTextFrom(d, 0, 1, rect); // v292: 字層級——附註框也拆得乾淨
-    if (t.trim() && window.speakSentences) window.speakSentences(t, { rate: speechRate() });
+    if (!t.trim()) return;
+    const key = rect.x.toFixed(4) + ',' + rect.y.toFixed(4);
+    if (sideAudioRef.current) { try { sideAudioRef.current.pause(); } catch (e) {} }
+    try {
+      let url = grSideTtsCache[t];
+      if (!url) {
+        setSideBusy(key);
+        const blob = await window.generateTtsAudio(t); // Worker /tts → mp3 Blob
+        url = URL.createObjectURL(blob);
+        grSideTtsCache[t] = url;
+      }
+      const a = sideAudioRef.current || (sideAudioRef.current = new Audio());
+      a.src = url; applyRate(a);
+      a.onloadedmetadata = () => applyRate(a);
+      await a.play();
+    } catch (e) {
+      if (window.speakSentences) window.speakSentences(t, { rate: speechRate() }); // 退回瀏覽器語音
+    } finally { setSideBusy(null); }
   };
 
   // v293: 逐句朗讀——遇標點停頓、放慢語速，比一口氣唸完自然許多
@@ -2984,7 +3029,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       {seg.img && seg.img.url ? (
         <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
           onWord={(w, e) => openWord(w, '', e)}
-          onSide={(r) => speakSideRect(seg.img, r)}/>
+          onSide={(r) => speakSideRect(seg.img, r)} sideBusy={sideBusy}/>
       ) : null}
       {(seg.text || '').trim() ? <div className="gr-seg-text">{renderParas(seg.text)}</div> : null}
     </>
@@ -3176,7 +3221,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       {zoom && (
         <div className="gr-lightbox" onClick={() => setZoom(null)}>
           <div className="gr-lightbox-in">
-            <GrImgCrop img={zoom} onWord={(w, e) => openWord(w, '', e)} onSide={(r) => speakSideRect(zoom, r)}/>
+            <GrImgCrop img={zoom} onWord={(w, e) => openWord(w, '', e)} onSide={(r) => speakSideRect(zoom, r)} sideBusy={sideBusy}/>
             <div className="gr-lightbox-hint">點單字＝查意思 · 點其他地方關閉</div>
           </div>
         </div>
@@ -4873,6 +4918,10 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
 
   const pw = data.perWeek;
   const hasData = data.totalDone > 0;
+  // v298: 數字 count-up（跟 WeekHero 一致的質感）
+  const cuWeek = useCountUp(data.thisWeekAvg || 0, 900, 400);
+  const cuAvg  = useCountUp(data.avgScore   || 0, 900, 520);
+  const cuDone = useCountUp(data.totalDone  || 0, 900, 640);
 
   // ── SVG line chart geometry ──
   // v271: 主軸改「每週平均分數」（家長最在意的成果）；只畫有分數的週
@@ -4910,7 +4959,7 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
             <>
               <div className="growth-stats growth-stats-3">
                 <div className="growth-stat">
-                  <div className="growth-stat-num">{data.thisWeekAvg != null ? data.thisWeekAvg : '—'}<em>分</em></div>
+                  <div className="growth-stat-num">{data.thisWeekAvg != null ? cuWeek : '—'}<em>分</em></div>
                   <div className="growth-stat-label">本週平均</div>
                   {data.delta != null && data.delta !== 0 && (
                     <div className={`growth-stat-delta${data.delta > 0 ? ' up' : ' down'}`}>
@@ -4920,11 +4969,11 @@ function GrowthReport({ weeks, weekOrder, qmProg, categories, studentName, onClo
                   {data.delta === 0 && <div className="growth-stat-delta">與上週持平</div>}
                 </div>
                 <div className="growth-stat">
-                  <div className="growth-stat-num">{data.avgScore != null ? data.avgScore : '—'}<em>分</em></div>
+                  <div className="growth-stat-num">{data.avgScore != null ? cuAvg : '—'}<em>分</em></div>
                   <div className="growth-stat-label">整體平均</div>
                 </div>
                 <div className="growth-stat">
-                  <div className="growth-stat-num">{data.totalDone}<em>項</em></div>
+                  <div className="growth-stat-num">{cuDone}<em>項</em></div>
                   <div className="growth-stat-label">完成練習</div>
                 </div>
               </div>

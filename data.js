@@ -312,9 +312,12 @@ function grReadTextFrom(d, y0, y1, rect) {
     let out = '';
     toks.forEach((t, i) => {
       if (!/[A-Za-z]/.test(t)) {
-        // 純數字 token：夾在正常單字中間才保留（其餘幾乎都是頁碼/編號雜訊）
+        // v298: 純標點雜訊→丟；數字→只丟「孤零零一顆」（多半是頁碼），
+        // 句中／行尾／日期／清單裡的數字都保留給神經語音唸（之前會整個跳過）。
+        if (!/\d/.test(t)) return;                       // 沒字也沒數字＝純標點，丟
         const prev = toks[i - 1] || '', next = toks[i + 1] || '';
-        if (!(/^\d{1,4}[.,!?]?$/.test(t) && /[A-Za-z]/.test(prev) && /[A-Za-z]/.test(next))) return;
+        const isWord = s => /[A-Za-z0-9]/.test(s);
+        if (!isWord(prev) && !isWord(next)) return;      // 前後都不是字/數字＝孤立頁碼，略過
       }
       if (/[A-Za-z]-$/.test(out)) out = out.replace(/-$/, '') + t; // 行尾斷詞接回
       else out += (out ? ' ' : '') + t;

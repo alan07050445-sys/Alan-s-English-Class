@@ -2094,20 +2094,21 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       {onBack && !enterMode && <button className="lc-back" onClick={onBack}>← 返回課程</button>}
       <h1 className="lc-title">Alan's English Class</h1>
       <div className="lc-under2" aria-hidden="true"/>
+      <p className="lc-subtitle">康橋每週進度</p>
       <div className="lc-fan" aria-hidden="true">
-        <div className="lc-card" style={{ '--x': '-201px', '--y': '24px', '--r': '-15deg', '--d': '.62s' }}>
+        <div className="lc-card" style={{ '--x': '-243px', '--y': '30px', '--r': '-15deg', '--d': '.62s' }}>
           <img src="cards/vocab.jpg" alt="" loading="eager"/><div className="lc-ov"/>
           <div className="lc-lab"><div className="lc-k">VOCABULARY</div><div className="lc-zh">單字</div></div>
         </div>
-        <div className="lc-card" style={{ '--x': '-67px', '--y': '-6px', '--r': '-5deg', '--d': '.71s' }}>
+        <div className="lc-card" style={{ '--x': '-82px', '--y': '-8px', '--r': '-5deg', '--d': '.71s' }}>
           <img src="cards/grammar.jpg" alt="" loading="eager"/><div className="lc-ov"/>
           <div className="lc-lab"><div className="lc-k">GRAMMAR</div><div className="lc-zh">文法</div></div>
         </div>
-        <div className="lc-card" style={{ '--x': '67px', '--y': '-6px', '--r': '5deg', '--d': '.8s' }}>
+        <div className="lc-card" style={{ '--x': '82px', '--y': '-8px', '--r': '5deg', '--d': '.8s' }}>
           <img src="cards/word.jpg" alt="" loading="eager"/><div className="lc-ov"/>
           <div className="lc-lab"><div className="lc-k">WORD STUDY</div><div className="lc-zh">字根字首</div></div>
         </div>
-        <div className="lc-card lc-plain" style={{ '--x': '201px', '--y': '24px', '--r': '15deg', '--d': '.89s' }}>
+        <div className="lc-card lc-plain" style={{ '--x': '243px', '--y': '30px', '--r': '15deg', '--d': '.89s' }}>
           <div className="lc-ico" aria-hidden="true">📖</div><div className="lc-ov lc-ov-r"/>
           <div className="lc-lab"><div className="lc-k">READING</div><div className="lc-zh">閱讀寫作</div></div>
         </div>

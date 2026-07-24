@@ -592,37 +592,48 @@
 .lc-under2 { width: 0; height: 2px; z-index: 2; background: linear-gradient(90deg,transparent,var(--g-c,#8B3120),transparent);
   animation: lc-grow .7s ease .95s forwards; }
 @keyframes lc-grow { to { width: 150px; } }
-.lc-fan { position: relative; z-index: 1; width: min(560px, 88vw); height: 238px; margin-top: 34px; }
+.lc-subtitle {
+  position: relative; z-index: 2; margin: 12px 0 0; font-family: var(--mono, monospace);
+  font-size: 13px; letter-spacing: .22em; color: var(--ink-3, #9E8C6E);
+  opacity: 0; animation: lc-fade .7s ease 1.1s forwards;
+}
+.lc-fan { position: relative; z-index: 1; width: min(650px, 92vw); height: 272px; margin-top: 38px; }
 .lc-card {
-  position: absolute; left: 50%; top: 0; width: 154px; height: 206px; margin-left: -77px; border-radius: 18px;
+  position: absolute; left: 50%; top: 0; width: 178px; height: 238px; margin-left: -89px; border-radius: 20px;
   background: var(--cbg, #EFE6D5); border: 3px solid #fff; overflow: hidden; color: #fff;
-  box-shadow: 0 20px 44px -14px rgba(58,43,20,.5), 0 2px 6px rgba(58,43,20,.14);
-  transform: translateX(0) translateY(46px) rotate(0) scale(.72); opacity: 0; transform-origin: 50% 120%;
-  animation: lc-shoot .85s cubic-bezier(.18,.8,.2,1.04) forwards; animation-delay: var(--d);
+  box-shadow: 0 22px 48px -14px rgba(58,43,20,.5), 0 2px 6px rgba(58,43,20,.14);
+  transform: translateX(0) translateY(48px) rotate(0) scale(.72); opacity: 0; transform-origin: 50% 120%;
+  /* 進場：從中央射出成扇形；接著永久輕輕浮動（活的牌組感，貼近參考影片） */
+  animation: lc-shoot .85s cubic-bezier(.18,.8,.2,1.04) var(--d) forwards,
+             lc-float 5s ease-in-out calc(var(--d) + 1s) infinite;
 }
 @keyframes lc-shoot { to { transform: translateX(var(--x)) translateY(var(--y)) rotate(var(--r)) scale(1); opacity: 1; } }
+@keyframes lc-float {
+  0%, 100% { transform: translateX(var(--x)) translateY(var(--y)) rotate(var(--r)) scale(1); }
+  50%      { transform: translateX(var(--x)) translateY(calc(var(--y) - 7px)) rotate(var(--r)) scale(1); }
+}
 .lc-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .lc-ov { position: absolute; inset: 0; background: linear-gradient(to top, rgba(28,18,8,.74) 0%, rgba(28,18,8,.12) 46%, rgba(28,18,8,0) 72%); }
 .lc-ov-r { background: linear-gradient(to top, rgba(28,18,8,.42), transparent 72%); }
-.lc-lab { position: absolute; left: 0; right: 0; bottom: 0; padding: 13px 14px; z-index: 1; }
-.lc-k { font-family: var(--mono, monospace); font-size: 8.5px; letter-spacing: .16em; opacity: .9; }
-.lc-zh { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700; font-size: 21px; line-height: 1.1; margin-top: 1px; text-shadow: 0 1px 8px rgba(0,0,0,.4); }
+.lc-lab { position: absolute; left: 0; right: 0; bottom: 0; padding: 15px 16px; z-index: 1; }
+.lc-k { font-family: var(--mono, monospace); font-size: 9.5px; letter-spacing: .16em; opacity: .9; }
+.lc-zh { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700; font-size: 25px; line-height: 1.1; margin-top: 2px; text-shadow: 0 1px 8px rgba(0,0,0,.4); }
 .lc-plain { background: linear-gradient(155deg, #A85C42, #7A3F2C); }
-.lc-ico { position: absolute; top: 14px; left: 14px; font-size: 26px; z-index: 1; }
-.lc-card:hover { transform: translateX(var(--x)) translateY(calc(var(--y) - 14px)) rotate(var(--r)) scale(1.05); z-index: 9; transition: transform .2s; }
-.lc-cta-wrap { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; margin-top: 44px;
-  opacity: 0; animation: lc-fade .7s ease 1.5s forwards; }
+.lc-ico { position: absolute; top: 16px; left: 16px; font-size: 30px; z-index: 1; }
+.lc-cta-wrap { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; margin-top: 46px;
+  opacity: 0; animation: lc-fade .7s ease 1.6s forwards; }
 @keyframes lc-fade { to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .lc-title, .lc-under2, .lc-card, .lc-cta-wrap { animation-duration: .01s; }
+  .lc-title, .lc-under2, .lc-subtitle, .lc-cta-wrap { animation-duration: .01s; }
+  .lc-card { animation: lc-shoot .01s forwards; }
 }
 /* 手機：整個扇形縮小才不會爆出畫面（學生多用電腦/平板，手機保底能看） */
-@media (max-width: 620px) {
-  .lc-fan { transform: scale(.62); height: 168px; margin-top: 18px; }
-  .lc-cta-wrap { margin-top: 20px; }
+@media (max-width: 640px) {
+  .lc-fan { transform: scale(.6); height: 190px; margin-top: 16px; }
+  .lc-cta-wrap { margin-top: 18px; }
 }
 @media (max-width: 430px) {
-  .lc-fan { transform: scale(.5); height: 130px; }
+  .lc-fan { transform: scale(.48); height: 150px; }
 }
 
 .login-card {
