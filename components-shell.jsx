@@ -2090,39 +2090,46 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
     try { await onLogin(); } catch (e) { console.error(e); setLoading(false); }
   };
   return (
-    <div className="login-screen lc-cover">
+    <div className="login-screen lc-cover lc-hero">
       {onBack && !enterMode && <button className="lc-back" onClick={onBack}>← 返回課程</button>}
-      <div className="lc-wm" aria-hidden="true">A</div>
-      <span className="lc-spark lc-s1" aria-hidden="true">✦</span>
-      <span className="lc-spark lc-s2" aria-hidden="true">✦</span>
-      <div className="lc-school">康橋國際學校 · 英文每週練習平台</div>
-      <div className="lc-stack">
-        <div className="lc-mark" aria-hidden="true"><span>A<i>.</i></span></div>
-        <div className="lc-est">EST · 2026</div>
-        <h1 className="lc-word">Alan's English Class</h1>
-        <div className="lc-under" aria-hidden="true"/>
-        <p className="lc-tag">這是 Alan 英文小教室</p>
-        <p className="lc-sub">每週康橋的進度——單字、文法、字根字首、閱讀寫作，都會放在上面，跟著練習。</p>
-        {enterMode ? (
-          <>
-            {userName && <p className="lc-welcome">歡迎回來，{userName} 👋</p>}
-            <button className="lc-cta" onClick={onBack}>進入課程 →</button>
-            {onLogout && <button className="lc-logout" onClick={onLogout}>登出</button>}
-          </>
-        ) : (
-          <>
-            <button className="lc-cta" onClick={handleLogin} disabled={loading}>
-              <span className="lc-gg">G</span> {loading ? '登入中…' : '使用 Google 登入'}
-            </button>
-            <div className="lc-mini">免安裝 · 電腦、平板打開就能用</div>
-            {slow && (
-              <button className="lc-slow" onClick={() => { try { window.signInWithGoogleRedirect && window.signInWithGoogleRedirect(); } catch (e) {} }}>
-                登入卡住了？改用這個方式 →
-              </button>
-            )}
-          </>
-        )}
+      <h1 className="lc-title">Alan's English Class</h1>
+      <div className="lc-under2" aria-hidden="true"/>
+      <div className="lc-fan" aria-hidden="true">
+        <div className="lc-card" style={{ '--x': '-201px', '--y': '24px', '--r': '-15deg', '--d': '.62s' }}>
+          <img src="cards/vocab.jpg" alt="" loading="eager"/><div className="lc-ov"/>
+          <div className="lc-lab"><div className="lc-k">VOCABULARY</div><div className="lc-zh">單字</div></div>
+        </div>
+        <div className="lc-card" style={{ '--x': '-67px', '--y': '-6px', '--r': '-5deg', '--d': '.71s' }}>
+          <img src="cards/grammar.jpg" alt="" loading="eager"/><div className="lc-ov"/>
+          <div className="lc-lab"><div className="lc-k">GRAMMAR</div><div className="lc-zh">文法</div></div>
+        </div>
+        <div className="lc-card" style={{ '--x': '67px', '--y': '-6px', '--r': '5deg', '--d': '.8s' }}>
+          <img src="cards/word.jpg" alt="" loading="eager"/><div className="lc-ov"/>
+          <div className="lc-lab"><div className="lc-k">WORD STUDY</div><div className="lc-zh">字根字首</div></div>
+        </div>
+        <div className="lc-card lc-plain" style={{ '--x': '201px', '--y': '24px', '--r': '15deg', '--d': '.89s' }}>
+          <div className="lc-ico" aria-hidden="true">📖</div><div className="lc-ov lc-ov-r"/>
+          <div className="lc-lab"><div className="lc-k">READING</div><div className="lc-zh">閱讀寫作</div></div>
+        </div>
       </div>
+      {enterMode ? (
+        <div className="lc-cta-wrap">
+          {userName && <p className="lc-welcome">歡迎回來，{userName} 👋</p>}
+          <button className="lc-cta" onClick={onBack}>進入課程 →</button>
+          {onLogout && <button className="lc-logout" onClick={onLogout}>登出</button>}
+        </div>
+      ) : (
+        <div className="lc-cta-wrap">
+          <button className="lc-cta" onClick={handleLogin} disabled={loading}>
+            <span className="lc-gg">G</span> {loading ? '登入中…' : '使用 Google 登入'}
+          </button>
+          {slow && (
+            <button className="lc-slow" onClick={() => { try { window.signInWithGoogleRedirect && window.signInWithGoogleRedirect(); } catch (e) {} }}>
+              登入卡住了？改用這個方式 →
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

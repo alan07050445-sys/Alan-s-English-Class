@@ -572,6 +572,59 @@
 @media (prefers-reduced-motion: reduce) { .lc-stack > * { animation-duration: .01s; } }
 @media (max-height: 620px) { .lc-school { display: none; } }
 
+/* ══ v297: 封面卡片特效——大標題「趴一下」落定＋四大主題卡片射出成扇形 ══ */
+.lc-hero { flex-direction: column; }
+.lc-title {
+  position: relative; z-index: 2;
+  font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700;
+  font-size: clamp(36px, 7.4vw, 90px); line-height: 1; letter-spacing: .005em;
+  color: var(--ink, #241A12); text-align: center; margin: 0 0 8px; white-space: nowrap;
+  transform: scale(1.3) translateY(-24px); opacity: 0; filter: blur(6px);
+  animation: lc-slam 1s cubic-bezier(.2,.9,.2,1.02) .15s forwards;
+}
+@media (max-width: 720px) { .lc-title { white-space: normal; } }
+@keyframes lc-slam {
+  0%   { transform: scale(1.3) translateY(-24px); opacity: 0; filter: blur(6px); }
+  60%  { opacity: 1; filter: blur(0); }
+  72%  { transform: scale(.985) translateY(3px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; filter: blur(0); }
+}
+.lc-under2 { width: 0; height: 2px; z-index: 2; background: linear-gradient(90deg,transparent,var(--g-c,#8B3120),transparent);
+  animation: lc-grow .7s ease .95s forwards; }
+@keyframes lc-grow { to { width: 150px; } }
+.lc-fan { position: relative; z-index: 1; width: min(560px, 88vw); height: 238px; margin-top: 34px; }
+.lc-card {
+  position: absolute; left: 50%; top: 0; width: 154px; height: 206px; margin-left: -77px; border-radius: 18px;
+  background: var(--cbg, #EFE6D5); border: 3px solid #fff; overflow: hidden; color: #fff;
+  box-shadow: 0 20px 44px -14px rgba(58,43,20,.5), 0 2px 6px rgba(58,43,20,.14);
+  transform: translateX(0) translateY(46px) rotate(0) scale(.72); opacity: 0; transform-origin: 50% 120%;
+  animation: lc-shoot .85s cubic-bezier(.18,.8,.2,1.04) forwards; animation-delay: var(--d);
+}
+@keyframes lc-shoot { to { transform: translateX(var(--x)) translateY(var(--y)) rotate(var(--r)) scale(1); opacity: 1; } }
+.lc-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lc-ov { position: absolute; inset: 0; background: linear-gradient(to top, rgba(28,18,8,.74) 0%, rgba(28,18,8,.12) 46%, rgba(28,18,8,0) 72%); }
+.lc-ov-r { background: linear-gradient(to top, rgba(28,18,8,.42), transparent 72%); }
+.lc-lab { position: absolute; left: 0; right: 0; bottom: 0; padding: 13px 14px; z-index: 1; }
+.lc-k { font-family: var(--mono, monospace); font-size: 8.5px; letter-spacing: .16em; opacity: .9; }
+.lc-zh { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700; font-size: 21px; line-height: 1.1; margin-top: 1px; text-shadow: 0 1px 8px rgba(0,0,0,.4); }
+.lc-plain { background: linear-gradient(155deg, #A85C42, #7A3F2C); }
+.lc-ico { position: absolute; top: 14px; left: 14px; font-size: 26px; z-index: 1; }
+.lc-card:hover { transform: translateX(var(--x)) translateY(calc(var(--y) - 14px)) rotate(var(--r)) scale(1.05); z-index: 9; transition: transform .2s; }
+.lc-cta-wrap { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; margin-top: 44px;
+  opacity: 0; animation: lc-fade .7s ease 1.5s forwards; }
+@keyframes lc-fade { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .lc-title, .lc-under2, .lc-card, .lc-cta-wrap { animation-duration: .01s; }
+}
+/* 手機：整個扇形縮小才不會爆出畫面（學生多用電腦/平板，手機保底能看） */
+@media (max-width: 620px) {
+  .lc-fan { transform: scale(.62); height: 168px; margin-top: 18px; }
+  .lc-cta-wrap { margin-top: 20px; }
+}
+@media (max-width: 430px) {
+  .lc-fan { transform: scale(.5); height: 130px; }
+}
+
 .login-card {
   background: var(--bg-card, #faf7f0);
   border: 1px solid var(--border, #e5dfc8);
