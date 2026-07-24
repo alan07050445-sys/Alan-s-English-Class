@@ -1093,20 +1093,10 @@ function App() {
             weekOrder={weekOrder}
             weekIdx={weekIdx}
             onHome={() => {
-              if (user) {
-                // 已登入：logo = 回門口頁（進入教室／暑假），不是行銷首頁——v254 加泡泡
-                runWave(() => {
-                  setCatView(null);
-                  setOpenCat(null);
-                  setEntered(false);
-                  try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
-                  scrollPageToTop();
-                });
-              } else {
-                setCatView(null);
-                setOpenCat(null);
-                setViewLanding(true);
-              }
+              // v302: 品牌 logo 一律直接回「首頁封面」（Alan 指定）——不再回門口頁
+              setCatView(null);
+              setOpenCat(null);
+              runWave(() => setViewLanding(true));
             }}
             onPrevWeek={goPrevWeek}
             onNextWeek={goNextWeek}
@@ -1271,14 +1261,22 @@ function App() {
                 onAddItem={handleAddItem}
               />
               {!editMode && (
-                <window.GrowthInlineCard
-                  weeks={weeks}
-                  weekOrder={weekOrder}
-                  qmProg={qmProgress}
-                  categories={activeCategories}
-                  isSummer={isSummer}
-                  onOpen={() => setGrowthOpen(true)}
-                />
+                <div className="growth-summary-row">
+                  <window.GrowthInlineCard
+                    weeks={weeks}
+                    weekOrder={weekOrder}
+                    qmProg={qmProgress}
+                    categories={activeCategories}
+                    isSummer={isSummer}
+                    onOpen={() => setGrowthOpen(true)}
+                  />
+                  <window.WeekSummaryTiles
+                    done={totalDone}
+                    total={totalItems}
+                    avg={weekAvgScore}
+                    streak={localStreak.count || (user && userProfile.streak ? userProfile.streak.count : 0)}
+                  />
+                </div>
               )}
             </div>
           )}

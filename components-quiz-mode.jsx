@@ -4665,13 +4665,13 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
               </svg>
               <span className="wh-ring-num"><b ref={pctRef}>{pct}%</b><i>完成度</i></span>
             </div>
+            {/* v302: Hero 改成「進度環＋兩個數字磚」——Alan 喜歡這個乾淨的樣子（不用太複雜） */}
             <div className="wh-side-info">
-              <span className="wh-count">完成 <b ref={doneRef}>{done}</b> / {total} 個練習</span>
-              {allDone && <span className="wh-done-msg">🎉 本週練習全部完成！</span>}
-              {/* v268: 家長共看畫面——本週平均＋成長報告入口 */}
-              {weekAvg != null && onOpenGrowth && (
-                <button className="wh-growth-link" onClick={onOpenGrowth}>本週平均 {weekAvg} 分 · 看成長報告 →</button>
-              )}
+              <div className="wh-stats">
+                <div className="wh-stat"><b ref={doneRef}>{done}</b><i>已完成</i></div>
+                <div className="wh-stat"><b>{total}</b><i>本週練習</i></div>
+              </div>
+              {allDone && <span className="wh-done-msg">🎉 本週全部完成！</span>}
             </div>
           </>
         ) : (
@@ -4781,20 +4781,25 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
   const renderRow = (t, groupName) => {
     const due = dueText(t.dueDate);
     return (
+      // v302: 任務列改成「完成打勾＋百分比徽章＋再練一次」的樣式（Alan 喜歡的圖4）
       <button key={t.id} className={`tt-row${t.done ? ' tt-done' : ''}${groupName ? ' in-group' : ''}`} onClick={() => t.cat && onOpenTask(t.cat, t.id)}>
+        <span className={`tt-check${t.done ? ' on' : ''}`} aria-hidden="true">{t.done ? '✓' : ''}</span>
         {t.it.type === 'upload'
           ? <span className="tt-ic tt-ic-upload" aria-hidden="true">📎</span>
           : <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>}
         <span className="tt-body">
-          <b className="tt-name">{rowLabel(t, groupName)}</b>
+          <b className="tt-name">
+            {rowLabel(t, groupName)}
+            {t.done && t.pct != null && <span className="tt-pct">{t.pct}%</span>}
+          </b>
           <span className="tt-meta">
             {t.it.type === 'upload' ? '上傳作業 · 拍照繳交' : t.cat ? (t.cat.titleZh || t.cat.title) : ''}
-            {due && !t.done ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null}
+            {t.done ? <span> · 已完成</span> : (due ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null)}
           </span>
         </span>
         <span className="tt-state">
           {t.done
-            ? <span className="tt-s-ok">✓ {t.pct != null ? `${t.pct} 分` : '完成'}</span>
+            ? <span className="tt-s-again">再練一次 →</span>
             : t.resumeAt
               ? <span className="tt-s-resume">▶ 繼續 · 第 {t.resumeAt + 1} 題</span>
               : <span className="tt-s-todo">開始 →</span>}
@@ -5225,6 +5230,28 @@ function GrowthInlineCard({ weeks, weekOrder, qmProg, categories, isSummer, onOp
   );
 }
 
+/* v302: 本週摘要——四個數字磚（完成率／本週平均／連續練習／待完成），像 Alan 貼的圖1。
+   放在成長曲線右邊（左曲線右摘要）。 */
+function WeekSummaryTiles({ done, total, avg, streak }) {
+  const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+  const pending = Math.max(0, (total || 0) - (done || 0));
+  const cuPct     = useCountUp(pct, 900, 200);
+  const cuAvg     = useCountUp(avg || 0, 900, 320);
+  const cuStreak  = useCountUp(streak || 0, 900, 440);
+  const cuPending = useCountUp(pending, 900, 560);
+  return (
+    <div className="wk-summary">
+      <div className="wk-sum-title">本週摘要</div>
+      <div className="wk-sum-grid">
+        <div className="wk-tile"><b className="accent">{cuPct}<em>%</em></b><i>完成率</i></div>
+        <div className="wk-tile"><b>{avg != null ? cuAvg : '—'}{avg != null ? <em> 分</em> : null}</b><i>本週平均</i></div>
+        <div className="wk-tile"><b>{cuStreak}<em> 天</em></b><i>連續練習</i></div>
+        <div className="wk-tile"><b>{cuPending}<em> 份</em></b><i>待完成</i></div>
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════
    UPLOAD HOMEWORK — v263「上傳作業」題型
    紙本作業拍照上傳：學生拍照/選圖 → 縮圖預覽 → 送出（自動縮小後傳
@@ -5276,6 +5303,23 @@ function loadImgEl(file) {
     im.src = URL.createObjectURL(file);
   });
 }
+// v302: 掃描前先把大圖縮到工作解析度——手機原圖動輒 12–48MP，直接丟給 OpenCV 會在
+// 主執行緒同步跑好幾秒、整個網站凍住（Alan：掃描太久、網站完全卡住）。縮到 ~1500px
+// 偵測邊界綽綽有餘、速度快幾十倍，輸出品質也夠清楚（本來就縮到 1600 上傳）。
+function downscaleToCanvas(img, maxSide) {
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  const k = Math.min(1, maxSide / Math.max(w, h));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w * k));
+  cv.height = Math.max(1, Math.round(h * k));
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  return cv;
+}
+const withTimeout = (p, ms, msg) => Promise.race([
+  p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg || 'timeout')), ms)),
+]);
+// 讓瀏覽器先畫一格（把「掃描中…」畫出來）再跑同步的重工作
+const nextFrame = () => new Promise(r => setTimeout(r, 0));
 // 依四角算輸出尺寸（保留紙張真實長寬比，不硬套 A4），最長邊上限 1600
 function cornerDims(pts) {
   const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -5309,19 +5353,20 @@ function warpCornersToBlob(scanner, img, pts) {
 async function autoScanBlob(file) {
   const jscanify = await ensureJscanify();  // 載不動 → 這裡就 throw（engine）
   const img = await loadImgEl(file);
+  const src = downscaleToCanvas(img, 1500);  // ★ 先縮小才不會凍住整個網站
+  URL.revokeObjectURL(img.src);
+  await nextFrame();                          // 讓「掃描中…」先畫出來
   const scanner = new jscanify();
-  const cvImg = window.cv.imread(img);
+  const cvImg = window.cv.imread(src);
   let contour = null;
   try { contour = scanner.findPaperContour(cvImg); } catch (e) { contour = null; }
   if (!contour) {
-    cvImg.delete(); URL.revokeObjectURL(img.src);
+    try { cvImg.delete(); } catch (e) {}
     const e = new Error('no-contour'); e.code = 'no-contour'; throw e;
   }
   const pts = scanner.getCornerPoints(contour, cvImg);
-  cvImg.delete();
-  const blob = await warpCornersToBlob(scanner, img, pts);
-  URL.revokeObjectURL(img.src);
-  return blob;
+  try { cvImg.delete(); } catch (e) {}
+  return warpCornersToBlob(scanner, src, pts);  // 用縮小後的 canvas 校正
 }
 
 // v301: 手動框四角——自動抓不到紙張邊界時，讓小朋友/家長把四個角拖到紙的角落，
@@ -5372,13 +5417,15 @@ function CornerAdjustModal({ file, onConfirm, onCancel }) {
     if (busy) return;
     setBusy(true); setErr('');
     try {
-      await ensureJscanify();
+      await withTimeout(ensureJscanify(), 25000, 'engine');
       const img = imgRef.current;
-      const nW = img.naturalWidth, nH = img.naturalHeight;
+      const src = downscaleToCanvas(img, 1500);  // ★ 先縮小才不會凍住
+      await nextFrame();
+      const nW = src.width, nH = src.height;      // 角以比例存，縮圖後同比例成立
       const P = (r) => ({ x: Math.round(r.x * nW), y: Math.round(r.y * nH) });
       const pts = { topLeftCorner: P(c.tl), topRightCorner: P(c.tr), bottomRightCorner: P(c.br), bottomLeftCorner: P(c.bl) };
       const scanner = new window.jscanify();
-      const blob = await warpCornersToBlob(scanner, img, pts);
+      const blob = await warpCornersToBlob(scanner, src, pts);
       onConfirm(blob);
     } catch (e) {
       setErr('校正失敗，請重拍一張再試。');
@@ -5432,6 +5479,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   const [err,       setErr]       = useQM('');
   const [note,      setNote]      = useQM('');   // 一般提示（例如引擎載不動退回原圖）
   const [scanning,  setScanning]  = useQM(false);  // 掃描處理中
+  const [scanMsg,   setScanMsg]   = useQM('');     // v302: 掃描進度文字（讓學生知道在動）
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
 
@@ -5469,20 +5517,27 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     if (!files.length) return;
     setErr(''); setNote('');
     setScanning(true);
+    setScanMsg(window.cv && window.cv.Mat ? '掃描中…' : '準備掃描工具…');
+    await nextFrame(); // 讓「掃描中…」先畫出來，不要卡在按鈕上
+    // v302: 引擎載入設 25 秒上限——載不動就退回原圖，絕不無限卡住
     let engineOk = true;
-    try { await ensureJscanify(); } catch (e2) { engineOk = false; }
+    try { await withTimeout(ensureJscanify(), 25000, 'engine-timeout'); } catch (e2) { engineOk = false; }
     if (!engineOk) {
       const added = [];
       for (const f of files) { let b; try { b = await shrink(f); } catch (_) { b = f; } added.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true }); }
       setPending(prev => [...prev, ...added]);
-      setNote('目前無法自動掃描（可能是網路），已先用原圖收下；等網路好一點可以移除、重拍成掃描版。');
-      setScanning(false);
+      setNote('目前無法自動掃描（可能是網路太慢），已先用原圖收下；等網路好一點可以移除、重拍成掃描版。');
+      setScanning(false); setScanMsg('');
       return;
     }
     const ok = [], bad = [];
-    for (const f of files) {
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      setScanMsg(files.length > 1 ? `掃描中 ${i + 1}/${files.length}…` : '掃描中…');
+      await nextFrame();
       try {
-        const b = await autoScanBlob(f);
+        // v302: 單張掃描也設 20 秒上限（縮圖後其實很快，這只是保險）
+        const b = await withTimeout(autoScanBlob(f), 20000, 'scan-timeout');
         ok.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: true });
       } catch (e2) {
         if (e2 && e2.code === 'no-contour') bad.push({ file: f, url: URL.createObjectURL(f) });
@@ -5491,7 +5546,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     }
     if (ok.length) setPending(prev => [...prev, ...ok]);
     if (bad.length) setNeedsFix(prev => [...prev, ...bad]);
-    setScanning(false);
+    setScanning(false); setScanMsg('');
   };
   const removePending  = (i) => setPending(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
   const removeNeedsFix = (i) => setNeedsFix(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
@@ -5631,9 +5686,12 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
       {note && <div className="uh-note">ℹ️ {note}</div>}
       {err && <div className="uh-err">⚠ {err}</div>}
 
+      {scanning && (
+        <div className="uh-scanning"><span className="uh-scan-spin" aria-hidden="true"/>{scanMsg || '掃描中…'}</div>
+      )}
       <div className="uh-btns">
         <label className={`qm-btn secondary uh-pick${(busy || scanning) ? ' disabled' : ''}`}>
-          {scanning ? '⏳ 掃描中…' : '📷 拍照或選照片'}
+          {scanning ? `⏳ ${scanMsg || '掃描中…'}` : '📷 拍照或選照片'}
           <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy || scanning} style={{ display: 'none' }}/>
         </label>
         <button className="qm-btn primary" onClick={submit} disabled={!canSubmit}>
@@ -5649,4 +5707,4 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, CornerAdjustModal, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekHero });
+Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, CornerAdjustModal, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero });

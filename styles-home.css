@@ -1145,6 +1145,38 @@
   .gi-more { font-size: 12px; }
 }
 
+/* ── v302: 成長區改「左曲線＋右本週摘要」兩欄（Alan：曲線太寬，右邊放摘要） ── */
+.growth-summary-row {
+  display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; align-items: stretch;
+  margin: 18px 0 0;
+}
+.growth-summary-row .growth-inline { margin: 0; height: 100%; }
+@media (max-width: 820px) { .growth-summary-row { grid-template-columns: 1fr; } }
+
+.wk-summary {
+  background: var(--bg-card, #fffdf8); border: 1px solid var(--border, #eadfc6);
+  border-radius: 20px; padding: 20px 22px; display: flex; flex-direction: column;
+  box-shadow: 0 10px 30px -18px rgba(58,43,20,.35), 0 1px 3px rgba(58,43,20,.05);
+}
+.wk-sum-title { font-family: 'Lora','Noto Serif TC',Georgia,serif; font-size: 15px; font-weight: 600; letter-spacing: .04em; color: var(--ink-3, #9b8f76); margin-bottom: 14px; }
+.wk-sum-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+.wk-tile {
+  background: rgba(250,245,234,.7); border: 1px solid var(--border-soft, #efe4cd);
+  border-radius: 15px; padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; gap: 6px;
+}
+.wk-tile b {
+  font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700; font-size: 30px; line-height: 1;
+  color: var(--ink, #2A2018); font-variant-numeric: tabular-nums;
+}
+.wk-tile b.accent { color: var(--g-c, #8B3120); }
+.wk-tile b em { font-style: normal; font-size: 16px; font-weight: 600; color: var(--ink-2, #6E5C43); }
+.wk-tile i { font-style: normal; font-size: 12.5px; color: var(--ink-3, #9b8f76); }
+@media (max-width: 560px) {
+  .wk-summary { padding: 16px 16px; border-radius: 16px; }
+  .wk-tile { padding: 13px 14px; }
+  .wk-tile b { font-size: 26px; }
+}
+
 /* ── Growth report overlay ───────────────────────────────── */
 .growth-overlay {
   position: fixed; inset: 0; z-index: 400;
@@ -1307,9 +1339,21 @@
   font-family: var(--mono, monospace); font-style: normal;
   font-size: 9.5px; letter-spacing: .14em; color: var(--ink-3, #8a8270);
 }
-.wh-side-info { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.wh-side-info { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
 .wh-count { font-size: 13.5px; color: var(--ink-2, #5c554a); }
 .wh-count b { font-weight: 800; color: var(--ink, #15130e); }
+/* v302: 進度環旁的兩個數字磚（像 Alan 喜歡的圖2） */
+.wh-stats { display: flex; gap: 10px; }
+.wh-stat {
+  background: rgba(255,255,255,.62); border: 1px solid var(--border, #ece3cf);
+  border-radius: 15px; padding: 11px 18px; text-align: center; min-width: 70px;
+  box-shadow: 0 1px 2px rgba(58,43,20,.04);
+}
+.wh-stat b {
+  display: block; font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700;
+  font-size: 27px; line-height: 1; color: var(--ink, #2A2018); font-variant-numeric: tabular-nums;
+}
+.wh-stat i { display: block; font-style: normal; margin-top: 6px; font-size: 12px; color: var(--ink-3, #8a8270); }
 .wh-done-msg { font-size: 15px; font-weight: 800; color: #1f7d4f; }
 .wh-cta {
   background: var(--g-c, #8B3120); color: #fff;
@@ -1487,21 +1531,37 @@
 }
 .tt-row + .tt-row { border-top: 1px solid var(--border-soft, #efe9d8); }
 .tt-row:hover { background: #faf7ef; transform: translateX(2px); }
+/* v302: 任務列最左邊的「完成打勾」圓圈——沒完成＝空心圈、完成＝綠底白勾（像圖4） */
+.tt-check {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid var(--border, #d8ceb6); background: transparent;
+  display: grid; place-items: center; font-size: 14px; font-weight: 900; color: #fff;
+  transition: background .18s, border-color .18s;
+}
+.tt-check.on { background: #3f9a5f; border-color: #3f9a5f; box-shadow: 0 2px 6px rgba(63,154,95,.28); }
 .tt-ic { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; }
 .tt-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tt-name { font-size: 15.5px; font-weight: 700; color: var(--ink, #15130e); line-height: 1.4; }
+/* 完成的百分比徽章 */
+.tt-pct {
+  margin-left: 8px; font-size: 12px; font-weight: 800; color: #2e7d46;
+  background: #e7f3ea; border-radius: 999px; padding: 2px 9px; vertical-align: 1px; white-space: nowrap;
+}
 .tt-meta { font-size: 13px; color: var(--ink-3, #8a8270); }
 .tt-late { color: #b3402e; font-weight: 700; }
 .tt-state { flex-shrink: 0; font-size: 14px; font-weight: 800; }
 .tt-s-todo { color: var(--g-c, #8B3120); }
+.tt-s-again { color: var(--g-c, #8B3120); }
 .tt-s-resume {
   color: #9c6a06; background: #faf0d6;
   border-radius: 999px; padding: 5px 12px;
   font-size: 13px;
 }
 .tt-s-ok { color: #2e7d46; }
-.tt-row.tt-done { opacity: .72; }
-.tt-row.tt-done .tt-name { font-weight: 600; color: var(--ink-2, #5c554a); }
+/* 完成的列＝淡淡完成底色（不是變灰） */
+.tt-row.tt-done { background: rgba(63,154,95,.055); }
+.tt-row.tt-done:hover { background: rgba(63,154,95,.1); }
+.tt-row.tt-done .tt-name { font-weight: 700; color: var(--ink-2, #5c554a); }
 .tt-alldone {
   text-align: center; font-size: 15px; font-weight: 800; color: #2e7d46;
   background: #eaf5ec; border-radius: 12px;
