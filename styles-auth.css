@@ -2028,12 +2028,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* v303: 門口頁走跟首頁封面一樣的溫柔精緻底色（Alan：第二頁太單調） */
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(201,168,76,.10), transparent 60%),
-    linear-gradient(180deg, #fbf9f3 0%, #f6f1e6 100%);
+    radial-gradient(900px 560px at 50% -6%, #FBEED8 0%, rgba(251,238,216,0) 60%),
+    radial-gradient(760px 520px at 90% 108%, rgba(200,155,60,.12), transparent 60%),
+    radial-gradient(680px 480px at 6% 92%, rgba(139,49,32,.05), transparent 62%),
+    linear-gradient(180deg, #FBF7EE 0%, #F5EFE2 100%);
   padding: 24px;
 }
-.gs-decor { position: absolute; inset: 0; pointer-events: none; }
+/* 細緻紙感雜訊——跟封面 .lc-cover::before 同一套，讓底色不再是死板的平面 */
+.grade-selector::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  opacity: .28; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+.grade-selector-inner { z-index: 2; }
+.gs-decor { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .gs-blob { position: absolute; border-radius: 50%; }
 .gs-blob-a {
   top: -120px; right: -100px; width: 380px; height: 380px;
@@ -5112,7 +5122,7 @@ button.lldm-spk:active { transform: scale(.92); }
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
   font-weight: 700;
   color: #8B3120;
-  opacity: .05;
+  opacity: .065;
   line-height: 1;
   pointer-events: none;
   user-select: none;

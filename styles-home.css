@@ -500,11 +500,21 @@
 }
 
 /* ═══ v153：遊戲感大廳與滿版地圖 ═══ */
+/* v303: 學習頁走跟首頁封面一樣的溫柔精緻底色——暖色分層漸層＋細緻紙感雜訊
+   （Alan：第三頁太單調、缺質感）。noise 用 fixed multiply 疊在內容底下。 */
 .page-lobby {
+  position: relative;
   min-height: 100vh;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(201,168,76,.10), transparent 60%),
-    linear-gradient(180deg, #fbf9f3 0%, #f6f1e6 100%);
+    radial-gradient(900px 560px at 50% -6%, #FBEED8 0%, rgba(251,238,216,0) 60%),
+    radial-gradient(760px 520px at 90% 108%, rgba(200,155,60,.12), transparent 60%),
+    radial-gradient(680px 480px at 6% 90%, rgba(139,49,32,.05), transparent 62%),
+    linear-gradient(180deg, #FBF7EE 0%, #F5EFE2 100%);
+}
+.page-lobby::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  opacity: .28; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
 }
 .page-lobby .header {
   background: rgba(251,248,241,.92);
@@ -1279,12 +1289,12 @@
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  background: linear-gradient(135deg, #fffdf8 0%, #fbf3e6 100%);
+  background: linear-gradient(135deg, #fffdf8 0%, #fbf1e2 100%);
   border: 1px solid var(--border, #e5dfc8);
-  border-radius: 22px;
-  padding: 28px 32px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(58,43,20,.04), 0 10px 30px rgba(58,43,20,.06);
+  border-radius: 26px;
+  padding: 38px 42px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 2px rgba(58,43,20,.05), 0 18px 44px -18px rgba(58,43,20,.22);
   animation: wh-in .6s cubic-bezier(.2,.7,.2,1) both;
 }
 @keyframes wh-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -1306,10 +1316,10 @@
 }
 .wh-title {
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
-  font-size: clamp(20px, 3vw, 26px);
+  font-size: clamp(25px, 3.8vw, 37px);
   font-weight: 700;
   color: var(--ink, #15130e);
-  line-height: 1.3;
+  line-height: 1.22;
   margin: 0;
 }
 .wh-meta {
@@ -1318,8 +1328,8 @@
 }
 .wh-theme-en { font-family: 'Lora', Georgia, serif; font-style: italic; font-size: 15px; color: var(--ink-2, #5c554a); }
 .wh-date { font-family: var(--mono, monospace); font-size: 12px; color: var(--ink-3, #8a8270); }
-.wh-side { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-.wh-ring-wrap { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
+.wh-side { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
+.wh-ring-wrap { position: relative; width: 128px; height: 128px; flex-shrink: 0; }
 .wh-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
 .wh-ring-bg { fill: none; stroke: #efe9d8; stroke-width: 9; }
 .wh-ring-fill {
@@ -1332,7 +1342,7 @@
 }
 .wh-ring-num b {
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
-  font-size: 31px; font-weight: 700; line-height: 1;
+  font-size: 35px; font-weight: 700; line-height: 1;
   color: var(--g-c, #8B3120); font-variant-numeric: tabular-nums;
 }
 .wh-ring-num i {
@@ -1345,15 +1355,17 @@
 /* v302: 進度環旁的兩個數字磚（像 Alan 喜歡的圖2） */
 .wh-stats { display: flex; gap: 10px; }
 .wh-stat {
-  background: rgba(255,255,255,.62); border: 1px solid var(--border, #ece3cf);
-  border-radius: 15px; padding: 11px 18px; text-align: center; min-width: 70px;
+  background: rgba(255,255,255,.66); border: 1px solid var(--border, #ece3cf);
+  border-radius: 16px; padding: 14px 20px; text-align: center; min-width: 76px;
   box-shadow: 0 1px 2px rgba(58,43,20,.04);
 }
 .wh-stat b {
   display: block; font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700;
-  font-size: 27px; line-height: 1; color: var(--ink, #2A2018); font-variant-numeric: tabular-nums;
+  font-size: 30px; line-height: 1; color: var(--ink, #2A2018); font-variant-numeric: tabular-nums;
 }
-.wh-stat i { display: block; font-style: normal; margin-top: 6px; font-size: 12px; color: var(--ink-3, #8a8270); }
+.wh-stat i { display: block; font-style: normal; margin-top: 7px; font-size: 12.5px; color: var(--ink-3, #8a8270); }
+.wh-kicker { font-size: 12.5px; }
+.wh-theme-en { font-size: 16px; }
 .wh-done-msg { font-size: 15px; font-weight: 800; color: #1f7d4f; }
 .wh-cta {
   background: var(--g-c, #8B3120); color: #fff;
