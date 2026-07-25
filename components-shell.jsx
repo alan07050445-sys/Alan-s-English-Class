@@ -83,9 +83,9 @@ function Header({
             )}
 
             {/* Mistakes button (logged-in students) */}
-            {user && onShowMistakes && !compactLobby && (
+            {user && onShowMistakes && (
               <button
-                className="mk-header-btn"
+                className={'mk-header-btn' + (mistakesCount ? '' : ' dim')}
                 onClick={onShowMistakes}
                 title="我的錯題"
               >
@@ -1391,7 +1391,7 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 }
 
 /* ───────── Grade Selector ───────── */
-function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, summerOnly, onOpenAdmin }) {
+function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, onLogout, summerOnly, onOpenAdmin }) {
   const grades = [
     { id: 'g2', n: 'G2', zh: '二年級' },
     { id: 'g3', n: 'G3', zh: '三年級' },
@@ -1573,9 +1573,14 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <p className="gs-hint">之後隨時可以從右上角的年級標籤切換</p>
           </>
         )}
-        {onOpenGuide && !summerOnly && (
+        {!summerOnly && (onOpenGuide || (who && onLogout)) && (
           <div className="gs-links">
-            <button className="gs-switch gs-landing-link" onClick={onOpenGuide}>新手教學</button>
+            {onOpenGuide && (
+              <button className="gs-switch gs-landing-link" onClick={onOpenGuide}>新手教學</button>
+            )}
+            {who && onLogout && (
+              <button className="gs-switch gs-landing-link" onClick={onLogout}>不是{who}？換帳號</button>
+            )}
           </div>
         )}
       </div>
@@ -1853,7 +1858,7 @@ function SpotlightTour({ onClose, onEmpty }) {
   const DEFS = [
     { sel: '.tt',           fb: '.wh',        t: '老師派的作業在這裡！', s: '點一條任務就開始，做完會打勾 ✓' },
     { sel: '.qm-blocks',    fb: null,         t: '想自己多練也可以',     s: '單字、文法、字根字首、閱讀寫作，都在這裡' },
-    { sel: '.growth-inline', fb: null,        t: '爸媽看這裡',           s: '每一週的進步，都看得到' },
+    { sel: '.growth-inline', fb: '.growth-summary-row', t: '爸媽看這裡',           s: '每一週的進步，都看得到' },
   ];
   // 實際演練：click 站＝只有被圈住的真元素點得動；info 站＝看說明按下一步
   const HDEFS = [
@@ -1883,7 +1888,12 @@ function SpotlightTour({ onClose, onEmpty }) {
 
   // mount 後（DOM 已 commit）才決定有哪些站；大廳空空的（極少見）→ 退回文字版
   React.useEffect(() => {
-    const found = DEFS.filter(d => getEl(d));
+    // 這週沒作業時：.tt 仍會渲染（顯示空狀態），第一站文案會誤導 → 換成指向自由練習
+    const noHw = !document.querySelector('.tt-row') && document.querySelector('.tt-empty');
+    const defs = noHw
+      ? [{ sel: '.qm-blocks', fb: null, t: '這週沒有作業，自己挑一個練吧！', s: '單字、文法、字根字首、閱讀寫作都在這裡' }, ...DEFS.slice(1)]
+      : DEFS;
+    const found = defs.filter(d => getEl(d));
     if (!found.length) { if (onEmpty) onEmpty(); return; }
     setStops(found);
   }, []);

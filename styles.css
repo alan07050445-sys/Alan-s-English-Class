@@ -291,6 +291,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .roster-add-btn:active, .mk-header-btn:active {
   transform: scale(0.96);
 }
+.mk-header-btn.dim { opacity: .45; }
 
 /* 數字等寬 — 進度、分數不跳動 */
 .progress-pill, .qm-score-badge, .rv-play-count, .mk-drill-progress,

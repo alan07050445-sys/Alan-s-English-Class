@@ -410,7 +410,7 @@ function App() {
       .filter(c => c.it
         && !(progress[c.id] || qmProgress[`${weekId}_${c.id}`])
         && window.getQuizItems && window.getQuizItems([c.it]).length > 0)
-      .sort((a, b) => a.due.localeCompare(b.due));
+      .sort((a, b) => a.due.localeCompare(b.due) || ((window.qmTypeRank ? window.qmTypeRank(a.it.type) : 9) - (window.qmTypeRank ? window.qmTypeRank(b.it.type) : 9)));
     if (!candidates.length) return null;
     const cat = activeCategories.find(c => c.id === candidates[0].it._cat);
     return cat ? { cat, itemId: candidates[0].id } : null;
@@ -874,7 +874,7 @@ function App() {
           onBack={(grade || skippedLogin || user) ? () => runWave(() => setViewLanding(false)) : null}
           loggedIn={!!user}
           userName={user ? (_englishName(user.displayName) || user.displayName || null) : null}
-          onLogout={user ? () => signOutWithFarewell(() => setViewLanding(false)) : null}
+          onLogout={user ? () => { if (confirm('要登出嗎？')) signOutWithFarewell(() => setViewLanding(false)); } : null}
         />
       );
     } else if (accessLocked && !isTeacher) {
@@ -927,6 +927,7 @@ function App() {
           }}
           summer={(isTeacher || hasSummerPlan) ? { lib: isTeacher, mine: hasSummerPlan, who: summerWho, prog: doorSummerProg } : null}
           onViewLanding={() => runWave(() => setViewLanding(true))}
+          onLogout={user ? () => { if (confirm('要換帳號嗎？')) signOutWithFarewell(); } : null}
           onOpenGuide={homeGrade ? () => {
             // 門口頁「新手教學」→ 直接進自己的教室跑實境導覽
             // （還沒選過年級的人選完年級本來就會自動看到導覽，不顯示此連結）

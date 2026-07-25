@@ -11,6 +11,15 @@ function _mkShuffle(arr) {
   return a;
 }
 
+// Mistake types that must NOT be flattened into synthetic multiple-choice.
+// (Their "answer" is a spelling / sentence / structure, so a 4-way MC misleads.)
+// Anything NOT listed here — including missing/empty/unknown legacy types whose
+// answer is a real word — is treated as MC-drillable.
+const MK_REVEAL_ONLY = [
+  'spelling', 'syllable-div', 'cloze', 'essay',
+  'story-mountain', 'short-answer', 'writing-practice', 'word-sort'
+];
+
 /* ── Single wrong-question row (answer hidden until tap) ── */
 function MistakeItem({ q }) {
   const [revealed, setRevealed] = useMK(false);
@@ -28,13 +37,41 @@ function MistakeItem({ q }) {
   );
 }
 
+/* ── Reveal-only review row (non-MC types in the drill) ── */
+/* Same reveal pattern as MistakeItem, plus a "我已複習 ✓" button that removes
+   the mistake via the SAME path as the MC branch. */
+function MistakeReview({ q, onReviewed }) {
+  const [revealed, setRevealed] = useMK(false);
+  return (
+    <div className="mk-item">
+      <div className="mk-item-q">{q.q}</div>
+      {q.cat && <span className="mk-item-cat">{q.cat}</span>}
+      <button
+        className={`mk-item-answer${revealed ? ' revealed' : ''}`}
+        onClick={() => setRevealed(r => !r)}
+      >
+        {revealed ? `正解：${q.answer}` : '點擊查看答案'}
+      </button>
+      <button
+        className="mk-next-btn"
+        style={{ marginTop: 8 }}
+        onClick={onReviewed}
+      >
+        我已複習 ✓
+      </button>
+    </div>
+  );
+}
+
 /* ── Drill mode ─────────────────────────────────────────── */
 function MistakesDrill({ questions, user, onClose, onAllCleared }) {
   // Snapshot questions at mount — prevents live Firestore updates from
   // changing the question list mid-drill.
+  // MC-drillable subset only (legacy/unknown types included — see MK_REVEAL_ONLY).
   const [mcQuestions] = useMK(() => {
-    const allAnswers = questions.map(q => q.answer);
-    return _mkShuffle(questions.map(q => {
+    const mcSrc = questions.filter(q => !MK_REVEAL_ONLY.includes(q.type));
+    const allAnswers = mcSrc.map(q => q.answer);
+    return _mkShuffle(mcSrc.map(q => {
       const pool = _mkShuffle(allAnswers.filter(a => a !== q.answer));
       const distractors = pool.slice(0, 3);
       while (distractors.length < 3) distractors.push(distractors[0] || '—');
@@ -42,6 +79,11 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
       return { ...q, options, correct: options.indexOf(q.answer) };
     }));
   });
+
+  // Reveal-only subset — kept unmodified, reviewed & removed one-by-one.
+  const [revealItems, setRevealItems] = useMK(() =>
+    questions.filter(q => MK_REVEAL_ONLY.includes(q.type))
+  );
 
   const [idx, setIdx]         = useMK(0);
   const [selected, setSelected] = useMK(null);
@@ -72,13 +114,121 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
     }
   };
 
+  // Reveal-only "我已複習 ✓" → same removal path as the MC branch; drop locally
+  // so the reveal list (and header mistakes-count on return) updates.
+  const handleReviewed = (q) => {
+    window.playSound('correct');
+    if (user?.uid) {
+      window.removeWrongQuestion(user.uid, q.itemId, q.q, q.answer);
+    }
+    setRevealItems(items => items.filter(it => it !== q));
+  };
+
   useMKE(() => {
     if (done && cleared === mcQuestions.length) {
       window.playSound('complete');
     }
   }, [done]);
 
-  if (done) {
+  // ── 1) Sequential MC drill (while MC-drillable questions remain) ──
+  if (mcQuestions.length > 0 && !done) {
+    return (
+      <div className="mk-overlay">
+        <div className="mk-panel">
+          {/* Header */}
+          <div className="mk-drill-head">
+            <span className="mk-drill-progress">{idx + 1} / {mcQuestions.length}</span>
+            <div className="mk-drill-bar">
+              <div className="mk-drill-bar-fill" style={{width: `${(idx / mcQuestions.length) * 100}%`}}/>
+            </div>
+            <button className="icon-btn" onClick={onClose}><window.Icon name="close" size={16}/></button>
+          </div>
+
+          {/* Question */}
+          <div className="mk-drill-q">
+            <p className="mk-drill-q-text">{current.q}</p>
+            {current.cat && <span className="mk-item-cat">{current.cat}</span>}
+          </div>
+
+          {/* Options */}
+          <div className="mk-drill-options">
+            {current.options.map((opt, i) => {
+              let cls = 'mk-drill-option';
+              if (selected !== null) {
+                if (i === current.correct) cls += ' mk-opt-correct';
+                else if (i === selected)   cls += ' mk-opt-wrong';
+                else                       cls += ' mk-opt-dim';
+              }
+              return (
+                <button
+                  key={i}
+                  className={cls}
+                  onClick={() => handleSelect(i)}
+                  disabled={selected !== null}
+                >
+                  <span className="mk-opt-label">{String.fromCharCode(65 + i)}</span>
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Feedback + Next */}
+          {selected !== null && (
+            <div className="mk-drill-feedback">
+              {selected === current.correct
+                ? <span className="mk-fb-correct">✓ 答對了！已從錯題本移除</span>
+                : <span className="mk-fb-wrong">✗ 正確答案：{current.options[current.correct]}</span>
+              }
+              <button className="mk-next-btn" onClick={handleNext}>
+                {idx < mcQuestions.length - 1
+                  ? '下一題 →'
+                  : (revealItems.length > 0 ? '下一步 →' : '查看結果')}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 2) Reveal-only review section (訂正這些，照原本方式複習) ──
+  if (revealItems.length > 0) {
+    return (
+      <div className="mk-overlay">
+        <div className="mk-panel">
+          <div className="mk-head">
+            <h2 className="mk-title">✍️ 訂正這些</h2>
+            <button className="icon-btn" onClick={onClose}><window.Icon name="close" size={16}/></button>
+          </div>
+
+          <div className="mk-summary">
+            {mcQuestions.length > 0
+              ? <>選擇題答對 <strong>{cleared}</strong> / {mcQuestions.length} 題 · 以下題型請照原本方式複習</>
+              : <>以下題型不適合選擇題，請照原本方式複習後點「我已複習」</>}
+          </div>
+
+          <div className="mk-list">
+            <div className="mk-group">
+              <div className="mk-group-label">訂正這些（照原本方式複習）</div>
+              {revealItems.map((q, i) => (
+                <MistakeReview
+                  key={`${q.itemId}-${i}`}
+                  q={q}
+                  onReviewed={() => handleReviewed(q)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <button className="mk-drill-btn" onClick={onClose}>完成</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 3) MC completion screen (had MC questions, no reveal items left) ──
+  if (mcQuestions.length > 0) {
     const allCleared = cleared === mcQuestions.length;
     return (
       <div className="mk-overlay">
@@ -102,59 +252,13 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
     );
   }
 
+  // ── 4) Nothing to drill (both subsets empty) — simple close ──
   return (
     <div className="mk-overlay">
-      <div className="mk-panel">
-        {/* Header */}
-        <div className="mk-drill-head">
-          <span className="mk-drill-progress">{idx + 1} / {mcQuestions.length}</span>
-          <div className="mk-drill-bar">
-            <div className="mk-drill-bar-fill" style={{width: `${(idx / mcQuestions.length) * 100}%`}}/>
-          </div>
-          <button className="icon-btn" onClick={onClose}><window.Icon name="close" size={16}/></button>
-        </div>
-
-        {/* Question */}
-        <div className="mk-drill-q">
-          <p className="mk-drill-q-text">{current.q}</p>
-          {current.cat && <span className="mk-item-cat">{current.cat}</span>}
-        </div>
-
-        {/* Options */}
-        <div className="mk-drill-options">
-          {current.options.map((opt, i) => {
-            let cls = 'mk-drill-option';
-            if (selected !== null) {
-              if (i === current.correct) cls += ' mk-opt-correct';
-              else if (i === selected)   cls += ' mk-opt-wrong';
-              else                       cls += ' mk-opt-dim';
-            }
-            return (
-              <button
-                key={i}
-                className={cls}
-                onClick={() => handleSelect(i)}
-                disabled={selected !== null}
-              >
-                <span className="mk-opt-label">{String.fromCharCode(65 + i)}</span>
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Feedback + Next */}
-        {selected !== null && (
-          <div className="mk-drill-feedback">
-            {selected === current.correct
-              ? <span className="mk-fb-correct">✓ 答對了！已從錯題本移除</span>
-              : <span className="mk-fb-wrong">✗ 正確答案：{current.options[current.correct]}</span>
-            }
-            <button className="mk-next-btn" onClick={handleNext}>
-              {idx < mcQuestions.length - 1 ? '下一題 →' : '查看結果'}
-            </button>
-          </div>
-        )}
+      <div className="mk-panel mk-panel-center">
+        <div className="mk-complete-icon">🎯</div>
+        <h3 className="mk-complete-title">錯題本清空了！</h3>
+        <button className="mk-drill-btn" onClick={onAllCleared || onClose}>太棒了！</button>
       </div>
     </div>
   );

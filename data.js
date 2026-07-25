@@ -812,27 +812,45 @@ function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress 
   const totalChars = chunks.reduce((n, c) => n + c.t.length, 0) || 1;
   const before = []; let acc = 0; chunks.forEach(c => { before.push(acc); acc += c.t.length; });
   let i = 0, stopped = false, done = false;
+  // v306+: iOS/iPadOS WebKit 幾乎不觸發 onboundary → 逐字亮起來會整段不動。用估時 timer 當後備推進；
+  // 只要真的收到一次 onboundary（boundarySeen=true），就讓真實邊界接手，timer 立刻退讓。
+  let boundarySeen = false, tick = null;
+  const clearTick = () => { if (tick) { clearInterval(tick); tick = null; } };
   const report = (f) => { if (onProgress) { try { onProgress(Math.max(0, Math.min(1, f))); } catch (e) {} } };
   const finish = () => {
     if (done) return; done = true;
+    clearTick();
     if (_activeSpeak === stop) _activeSpeak = null;
     report(1);
     if (onDone) onDone();
   };
-  const stop = () => { stopped = true; try { synth.cancel(); } catch (e) {} finish(); };
+  const stop = () => { stopped = true; clearTick(); try { synth.cancel(); } catch (e) {} finish(); };
   const v = _ttsPickVoice(lang);
   const step = () => {
     if (stopped) return;
     if (i >= chunks.length) { finish(); return; }
     const c = chunks[i];
+    const idx = i; // 給非同步 timer 抓穩目前段落（i 之後會被 onend 遞增）
     const u = new SpeechSynthesisUtterance(c.t);
     u.lang = lang; u.rate = rate; u.pitch = 1;
     if (v) u.voice = v;
-    if (onProgress) u.onboundary = (e) => { report((before[i] + (e.charIndex || 0)) / totalChars); };
-    u.onend = () => { report((before[i] + c.t.length) / totalChars); i += 1; if (!stopped) setTimeout(step, c.pause); };
-    u.onerror = () => { i += 1; if (!stopped) setTimeout(step, c.pause); };
+    if (onProgress) u.onboundary = (e) => { boundarySeen = true; report((before[idx] + (e.charIndex || 0)) / totalChars); };
+    u.onend = () => { clearTick(); report((before[idx] + c.t.length) / totalChars); i += 1; if (!stopped) setTimeout(step, c.pause); };
+    u.onerror = () => { clearTick(); i += 1; if (!stopped) setTimeout(step, c.pause); };
     try { synth.resume(); } catch (e) {}
     synth.speak(u);
+    // 估時後備：onboundary 沒動時，用約 14 字/秒（隨 rate 調整）在本段內線性推進，
+    // 上限剛好是本段結尾 (before[idx]+c.t.length)/totalChars，永遠不會超過。
+    if (onProgress) {
+      clearTick();
+      const startT = Date.now();
+      const estMs = Math.max(1, (c.t.length / (14 * rate)) * 1000);
+      tick = setInterval(() => {
+        if (stopped || boundarySeen) return;
+        const frac = Math.min(1, (Date.now() - startT) / estMs);
+        report((before[idx] + frac * c.t.length) / totalChars);
+      }, 70);
+    }
   };
   _activeSpeak = stop;
   setTimeout(() => { if (!stopped) step(); }, 60);
@@ -1308,7 +1326,7 @@ function collectWrongQuestions(progressItems, weeks, weekOrder) {
       const key = `${wq.q}|||${wq.answer}`;
       if (seen.has(key)) return;
       seen.add(key);
-      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat });
+      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat, type: prog.itemType || '' });
     });
   });
   return result;

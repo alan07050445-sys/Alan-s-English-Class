@@ -305,6 +305,59 @@
   background: #fff7ed;
 }
 
+/* v306+: inline 作業截止日選擇 popover（取代 prompt()）——老師編輯模式限定 */
+.qm-due-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e2ddd9);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+  padding: 12px;
+  width: 220px;
+  text-align: left;
+}
+.qm-due-popover-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #8a817a);
+  margin-bottom: 6px;
+}
+.qm-due-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #e2ddd9);
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.qm-due-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qm-due-actions button {
+  border: 1px solid var(--border, #e2ddd9);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: none;
+}
+.qm-due-save {
+  background: #f97316 !important;
+  border-color: #f97316 !important;
+  color: #fff;
+}
+.qm-due-remove {
+  color: #b23b2e;
+  border-color: #e6b8b1 !important;
+}
+
 /* ── Right quiz area ─────────────────────────────────── */
 .qm-quiz-area {
   flex: 1;
@@ -2478,7 +2531,8 @@
 .qm-result-alt:hover { color: var(--g-c, #8B3120); }
 
 /* v233: 單字卡獨立練習 intro 的完成提示 */
-.qm-intro-fcdone {
+.qm-intro-fcdone,
+.qm-intro-done-hint {
   margin: 4px auto 10px;
   font-size: 13.5px; font-weight: 700;
   color: #2e7d46;
