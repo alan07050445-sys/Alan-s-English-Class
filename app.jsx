@@ -1240,6 +1240,7 @@ function App() {
           onClose={() => runWave(() => setDashOpen(false))}
           weeks={weeks}
           weekOrder={weekOrder}
+          grade={grade}
         />
       )}
 

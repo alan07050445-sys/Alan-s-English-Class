@@ -130,9 +130,10 @@ const CWO_CATS = [
   { id: 'word',    short: '字根' },
   { id: 'reading', short: '閱讀' },
 ];
-function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, selWeekId, setSelWeekId }) {
+function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade, onSelect, selWeekId, setSelWeekId }) {
   // v251: selWeekId 由 TeacherDashboard 統一管理（進學生詳情返回不再重置、預設=今天所在週）
-  const [gradeFilter, setGradeFilter] = useDash('all'); // v237: 年級篩選
+  // v307 (Finding 6): 預設篩選＝目前載入的年級——KPI 平均、燈號只算本年級，跨年級不再假紅字（可切「全部」看全校）
+  const [gradeFilter, setGradeFilter] = useDash(currentGrade || 'all'); // v237: 年級篩選
   const [q, setQ] = useDash('');                         // v237: 學生搜尋
   const [notifyOpen, setNotifyOpen] = useDash(false);    // v294: 家長通知文字視窗
   const [notifyText, setNotifyText] = useDash('');
@@ -171,16 +172,18 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
       r.completed.forEach(x => { if (catMap[x.cat]) { catMap[x.cat].done++; catMap[x.cat].total++; } });
       r.pending.forEach(x => { if (catMap[x.cat]) { catMap[x.cat].total++; } });
       const done = r.completed.length, total = r.totalItems;
-      const status = total === 0 ? 'none' : (done === 0 ? 'red' : (r.completionRate >= 80 ? 'green' : 'yellow'));
-      const cats = (window.CATEGORIES || []).map((c, i) => {
-        const m = catMap[c.titleZh] || { done: 0, total: 0 };
-        const st = m.total === 0 ? 'none' : (m.done === 0 ? 'red' : (m.done >= m.total ? 'green' : 'yellow'));
-        return { short: (CWO_CATS[i] || {}).short || c.titleZh, ...m, st };
-      });
-      // v266: 待批改——這週已交照片但還沒給分的上傳作業數
+      // v266: 待批改——這週已交照片但還沒給分的上傳作業數；v307(F10): 也算「本週有沒有已過期的作業」
       const wk = (weeksFor ? weeksFor(s) : weeks)[selWeekId];
-      let pendingGrade = 0;
+      let pendingGrade = 0, anyPastDue = false;
       if (wk) {
+        const hw = wk.homework || {};
+        const now = Date.now();
+        anyPastDue = Object.keys(hw).some(id => {
+          const dd = hw[id] && hw[id].dueDate;
+          if (!dd) return false;
+          const d = new Date(dd + 'T23:59:59');
+          return !isNaN(d.getTime()) && d.getTime() < now;
+        });
         (window.CATEGORIES || []).forEach(c => ((wk.items || {})[c.id] || []).forEach(it => {
           const its2 = s.items || {};
           const pr = its2[`${selWeekId}_${it.id}`] || its2[it.id] ||
@@ -188,11 +191,18 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
           if (pr && pr.files && pr.files.length && pr.score == null) pendingGrade++;
         }));
       }
+      // v307 (F10): 燈號納入截止日——還沒到期又沒人開始＝中性 wait（不再每週一整面假紅）；過期未完成才紅
+      const status = total === 0 ? 'none' : (done === 0 ? (anyPastDue ? 'red' : 'wait') : (r.completionRate >= 80 ? 'green' : 'yellow'));
+      const cats = (window.CATEGORIES || []).map((c, i) => {
+        const m = catMap[c.titleZh] || { done: 0, total: 0 };
+        const st = m.total === 0 ? 'none' : (m.done === 0 ? (anyPastDue ? 'red' : 'wait') : (m.done >= m.total ? 'green' : 'yellow'));
+        return { short: (CWO_CATS[i] || {}).short || c.titleZh, ...m, st };
+      });
       return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt, late: r.lateCount || 0, pendingGrade };
     });
   }, [students, weeks, weekOrder, selWeekId, weeksFor]);
 
-  const orderRank = { red: 0, yellow: 1, none: 2, green: 3 };
+  const orderRank = { red: 0, yellow: 1, wait: 2, none: 3, green: 4 };
   const sorted = useDashM(() =>
     [...rows].sort((a, b) =>
       (orderRank[a.status] - orderRank[b.status]) || (a.pct - b.pct) || a.name.localeCompare(b.name)
@@ -210,15 +220,19 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
     (!q.trim() || (r.name + ' ' + (r.s.email || '')).toLowerCase().includes(q.trim().toLowerCase()))
   ), [sorted, gradeFilter, q]);
 
+  // v307 (Finding 6):「全部」檢視下，非目前年級的學生（週次沒載入 → 會假裝 0 完成）——列灰掉、不列入平均。
+  // 個人 Gmail（無年級）視為屬於本班，不灰不排除。
+  const isOffGrade = (r) => gradeFilter === 'all' && currentGrade && r.grade && r.grade !== currentGrade;
+
   const sum = useDashM(() => {
     let green = 0, yellow = 0, red = 0, none = 0, sp = 0, n = 0;
     shown.forEach(r => {
       if (r.status === 'green') green++; else if (r.status === 'yellow') yellow++;
       else if (r.status === 'red') red++; else none++;
-      if (r.total > 0) { sp += r.pct; n++; }
+      if (r.total > 0 && !isOffGrade(r)) { sp += r.pct; n++; }
     });
     return { green, yellow, red, none, avgPct: n ? Math.round(sp / n) : 0, items: rows.reduce((m, r) => Math.max(m, r.total), 0) };
-  }, [shown, rows]);
+  }, [shown, rows, gradeFilter, currentGrade]);
 
   const fmtLast = (t) => {
     if (!t) return '—';
@@ -301,10 +315,10 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, onSelect, sel
       ) : (
         <div className="cwo-list">
           {shown.map(r => (
-            <div key={r.s.uid} className={`cwo-row st-${r.status}`} onClick={() => onSelect(r.s)} title="點擊查看詳情與週報">
+            <div key={r.s.uid} className={`cwo-row st-${r.status}${isOffGrade(r) ? ' cwo-off-grade' : ''}`} onClick={() => onSelect(r.s)} title={isOffGrade(r) ? '此學生屬於其他年級，本頁未載入該年級課程，數據僅供參考' : '點擊查看詳情與週報'}>
               <span className={`cwo-light st-${r.status}`}/>
               <div className="cwo-name-wrap">
-                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}{r.late > 0 && <span className="cwo-late" title="截止日之後才完成的項目數">⏰ {r.late} 補交</span>}{r.pendingGrade > 0 && <span className="cwo-grading" title="已交作業照片、等你批改">⏳ {r.pendingGrade} 待批改</span>}</span>
+                <span className="cwo-name">{r.name}{r.grade && <span className="dash-grade">{r.grade.toUpperCase()}</span>}{isOffGrade(r) && <span className="cwo-offgrade-note" title="切到該年級教室才看得到真實進度">· 此年級課程未載入</span>}{r.late > 0 && <span className="cwo-late" title="截止日之後才完成的項目數">⏰ {r.late} 補交</span>}{r.pendingGrade > 0 && <span className="cwo-grading" title="已交作業照片、等你批改">⏳ {r.pendingGrade} 待批改</span>}</span>
                 <span className="cwo-email">{r.s.email || ''}</span>
               </div>
               <div className="cwo-prog">
@@ -683,12 +697,13 @@ function RosterManager() {
 }
 
 /* ── Student list overview ─────────────────────────────── */
-function TeacherDashboard({ onClose, weeks, weekOrder }) {
+function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const [students,       setStudents]      = useDash([]);
   const [selected,       setSelected]      = useDash(null);
   const [refreshKey,     setRefreshKey]    = useDash(0);
   const [allReportOpen,  setAllReportOpen] = useDash(false);
   const [tab,            setTab]           = useDash('overview'); // 'overview' | 'report' | 'roster'
+  const [hotOpen,        setHotOpen]       = useDash(null);       // v307 (F11): 展開哪一列常錯題看「哪些孩子錯」
 
   useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
 
@@ -720,6 +735,16 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
   const [summerMeta, setSummerMeta] = useDash({ students: {} });
   useDashE(() => (window.subscribeSummerMeta ? window.subscribeSummerMeta(setSummerMeta, () => {}) : undefined), []);
   const isSummerData = useSummerScope || appIsSummer;
+
+  // v307 (Finding 6): 目前載入的是哪個年級的週次——用來標示＆預設篩選，避免跨年級假紅字。
+  // grade prop 缺時由 dOrder[0] 前綴推導（gN-…）；G3 週次無前綴 → 預設 g3；暑假模式不套用。
+  const currentGrade = useDashM(() => {
+    if (isSummerData) return null;
+    if (grade) return grade;
+    const m = String(dOrder && dOrder[0] || '').match(/^g(\d)/);
+    return m ? 'g' + m[1] : 'g3';
+  }, [grade, dOrder, isSummerData]);
+
   const weeksForStudent = (s) => {
     if (!isSummerData || !window.filterWeeksForPlan) return dWeeks;
     const plan = (summerMeta.students || {})[String((s && s.email) || '').toLowerCase()] || null;
@@ -735,6 +760,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
           id: it.id,
           progressId: `${wid}_${it.id}`,
           title: it.title || it.id,
+          weekId: wid,        // v307 (F8): 用來把「當前這週」置頂＋標示
           weekLabel: wk.label,
           cat: c.title,
           dueDate: ((wk.homework || {})[it.id] || {}).dueDate || null, // v257: 遲交判定用
@@ -769,6 +795,12 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
 
   // v239: 常錯題只統計「目前範圍」的項目（暑假模式=暑假題庫），不再混到學期舊紀錄
   const currentIds = useDashM(() => new Set(allItems.map(it => it.id)), [allItems]);
+  // v307 (F11): itemId → 單元標題，讓常錯題標出「出自哪個單元」
+  const titleById = useDashM(() => {
+    const m = {};
+    allItems.forEach(it => { m[it.id] = it.title; });
+    return m;
+  }, [allItems]);
   const questionStats = useDashM(() => {
     const map = {};
     students.forEach(s => {
@@ -777,13 +809,15 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         if (!currentIds.has(bare) && !currentIds.has(itemId)) return;
         (prog?.wrongQuestions || []).forEach(w => {
           const key = `${itemId}::${w.q}::${w.answer}`;
-          if (!map[key]) map[key] = { itemId, q: w.q, answer: w.answer, count: 0 };
+          if (!map[key]) map[key] = { itemId, unit: titleById[bare] || titleById[itemId] || '', q: w.q, answer: w.answer, count: 0, students: new Set() };
           map[key].count += 1;
+          map[key].students.add(friendlyName(s));
         });
       });
     });
-    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8);
-  }, [students, currentIds]);
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8)
+      .map(x => ({ ...x, students: Array.from(x.students) }));
+  }, [students, currentIds, titleById]);
 
   // v287: 分段閱讀各段答對率——「哪一段全班最卡」一眼看到（資料來自 progress.grStats）
   const grSegRates = useDashM(() => {
@@ -878,7 +912,12 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
         <main className="tdash-main">
           <header className="tdash-top">
             <div className="tdash-top-title">
-              <h2>{selected ? `${selected.name || '學生'} 的學習紀錄` : cur.label}</h2>
+              <h2>
+                {selected ? `${selected.name || '學生'} 的學習紀錄` : cur.label}
+                {!selected && !isSummerData && currentGrade && (
+                  <span className="tdash-grade-label">目前：{currentGrade.toUpperCase()} 教室</span>
+                )}
+              </h2>
               <span className="tdash-top-meta">
                 {selected ? '個人完成度、分數與錯題' : cur.sub}
               </span>
@@ -918,6 +957,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                 weeks={dWeeks}
                 weekOrder={dOrder}
                 weeksFor={weeksForStudent}
+                currentGrade={currentGrade}
                 onSelect={setSelected}
                 selWeekId={selWeekId}
                 setSelWeekId={setSelWeekId}
@@ -926,14 +966,22 @@ function TeacherDashboard({ onClose, weeks, weekOrder }) {
                 <div className="dash-section-title">全班常錯題 · Most Missed</div>
                 {questionStats.length === 0 ? (
                   <div className="dash-hot-empty">學生完成測驗後，這裡會顯示全班最常錯的題目。</div>
-                ) : questionStats.map((q, i) => (
-                  <div key={`${q.itemId}-${i}`} className="dash-hot-row">
-                    <span className="dash-hot-rank">{i + 1}</span>
-                    <span className="dash-hot-q">{q.q}</span>
-                    <span className="dash-hot-a">{q.answer}</span>
-                    <span className="dash-hot-count">{q.count}x</span>
+                ) : questionStats.map((q, i) => {
+                  const hasKids = q.students && q.students.length > 0;
+                  return (
+                  <div key={`${q.itemId}-${i}`} className="dash-hot-rowwrap">
+                    <div className={`dash-hot-row${hasKids ? ' clickable' : ''}`} onClick={hasKids ? () => setHotOpen(hotOpen === i ? null : i) : undefined}>
+                      <span className="dash-hot-rank">{i + 1}</span>
+                      <span className="dash-hot-q">{q.q}{q.unit && <span className="dash-hot-unit"> · {q.unit}</span>}</span>
+                      <span className="dash-hot-a">{q.answer}</span>
+                      <span className="dash-hot-count">{q.count}x{hasKids && <span className="dash-hot-caret">{hotOpen === i ? ' ⌃' : ' ⌄'}</span>}</span>
+                    </div>
+                    {hotOpen === i && hasKids && (
+                      <div className="dash-hot-students"><b>錯的孩子：</b>{q.students.join('、')}</div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {/* v287: 分段閱讀各段答對率——答對率最低的段落標紅，備課時知道哪段要多講 */}
               {grSegRates.length > 0 && (
@@ -987,19 +1035,40 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
   const [filesOpen, setFilesOpen] = useDash(null); // v263: 展開中的作業照片單元 id
   const [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
   const [commentDraft, setCommentDraft] = useDash({}); // v266: 評語草稿
+  const [growthOpen, setGrowthOpen] = useDash(false);  // v307 (F7): 成長曲線 modal
 
   const its = student.items || {};
-  const done = allItems.filter(it =>
-    (its[it.progressId]?.done) || (its[it.id]?.done) ||
-    Object.keys(its).some(k => k.endsWith('_' + it.id) && its[k]?.done)
-  ).length;
+  const progFor = (it) => {
+    const pk = its[it.progressId] ? it.progressId : (its[it.id] ? it.id : Object.keys(its).find(k => k.endsWith('_' + it.id)));
+    return pk ? its[pk] : null;
+  };
+  const done = allItems.filter(it => progFor(it)?.done).length;
 
-  // Group items by week
+  // v307 (F7): 把老師端 items（score 已是百分比）轉成 computeGrowthData 吃的格式（total 設 100 → score/100*100 保留原百分比）
+  const qmForGrowth = {};
+  Object.entries(its).forEach(([k, p]) => {
+    if (!p || !p.done) return;
+    qmForGrowth[k] = { done: p.done, score: p.score, total: p.score != null ? 100 : (p.total || 1) };
+  });
+  // v307 (F9): 本週有幾件待批改（已交照片、還沒給分）
+  const needsGradingCount = allItems.filter(it => { const p = progFor(it); return !!(p && p.files && p.files.length && p.score == null); }).length;
+
+  // Group items by week (v307 F8: key by weekId; current week pinned first + highlighted)
   const byWeek = {};
   allItems.forEach(it => {
-    if (!byWeek[it.weekLabel]) byWeek[it.weekLabel] = [];
-    byWeek[it.weekLabel].push(it);
+    const wid = it.weekId || it.weekLabel;
+    if (!byWeek[wid]) byWeek[wid] = { label: (weeks[wid] && weeks[wid].label) || it.weekLabel || wid, items: [] };
+    byWeek[wid].items.push(it);
   });
+  const allWids = Object.keys(byWeek); // dOrder 順序＝舊→新
+  const orderedWids = (selWeekId && byWeek[selWeekId])
+    ? [selWeekId, ...allWids.filter(w => w !== selWeekId).reverse()]
+    : [...allWids].reverse();
+  // v307 (F8): 本週摘要
+  const curItems = (byWeek[selWeekId] && byWeek[selWeekId].items) || [];
+  const curDone = curItems.filter(it => progFor(it)?.done).length;
+  const curScored = curItems.map(it => { const p = progFor(it); return (p && p.score != null) ? Math.min(100, p.score) : null; }).filter(s => s != null);
+  const curAvg = curScored.length ? Math.round(curScored.reduce((a, b) => a + b, 0) / curScored.length) : null;
 
   return (
     <>
@@ -1007,9 +1076,16 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
         <button className="dash-back" onClick={onBack} style={{marginBottom:0}}>
           <window.Icon name="arrow-left" size={14}/> Back
         </button>
-        <button className="report-gen-btn" onClick={() => setReportOpen(true)} title="產生學習週報">
-          📋 產生週報
-        </button>
+        <div style={{display:'flex',gap:8}}>
+          {window.GrowthReport && (
+            <button className="report-gen-btn" onClick={() => setGrowthOpen(true)} title="看這位學生的每週分數趨勢">
+              📈 成長曲線
+            </button>
+          )}
+          <button className="report-gen-btn" onClick={() => setReportOpen(true)} title="產生學習週報">
+            📋 產生週報
+          </button>
+        </div>
       </div>
 
       <div className="sdetail-header">
@@ -1023,6 +1099,15 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
         </div>
       </div>
 
+      {/* v307 (F8): 本週摘要——最想看的「這孩子這週怎樣」一開就看到 */}
+      {byWeek[selWeekId] && (
+        <div className="sdetail-thisweek">
+          <span className="sdetail-tw-label">本週 {byWeek[selWeekId].label}</span>
+          <span className="sdetail-tw-stat">完成 {curDone}/{curItems.length}{curAvg != null ? ` · 平均 ${curAvg} 分` : ''}</span>
+          {needsGradingCount > 0 && <span className="sdetail-tw-grade">⏳ {needsGradingCount} 件待批改</span>}
+        </div>
+      )}
+
       {reportOpen && (
         <WeeklyReportModal
           student={student}
@@ -1033,9 +1118,24 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
         />
       )}
 
-      {Object.entries(byWeek).map(([weekLabel, items]) => (
-        <div key={weekLabel} className="sdetail-week">
-          <p className="sdetail-wlabel">{weekLabel}</p>
+      {growthOpen && window.GrowthReport && (
+        <window.GrowthReport
+          weeks={weeks}
+          weekOrder={weekOrder}
+          qmProg={qmForGrowth}
+          categories={window.CATEGORIES}
+          studentName={friendlyName(student)}
+          onClose={() => setGrowthOpen(false)}
+        />
+      )}
+
+      {orderedWids.map(wid => {
+        const wk = byWeek[wid];
+        const items = wk.items;
+        const isCurWeek = wid === selWeekId;
+        return (
+        <div key={wid} className={`sdetail-week${isCurWeek ? ' sdetail-week-cur' : ''}`}>
+          <p className="sdetail-wlabel">{wk.label}{isCurWeek && <span className="sdetail-wcur-tag">本週</span>}</p>
           <div className="sdetail-items">
             {items.map(it => {
               // Fuzzy match: try progressId, bare id, or any key ending in _itemId
@@ -1115,9 +1215,9 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
                       ))}
                     </div>
                   )}
-                  {fOpen && (
-                    /* v263: 作業照片＋打分數（老師可直接寫學生 progress——rules 的 isTeacher 通則） */
-                    <div className="sdetail-files">
+                  {(fOpen || needsGrading) && (
+                    /* v263: 作業照片＋打分數；v307(F9): 待批改的自動展開，不用逐一點開找 */
+                    <div className={`sdetail-files${needsGrading && !fOpen ? ' sdetail-files-auto' : ''}`}>
                       <div className="sdetail-files-grid">
                         {files.map((url, fi) => (
                           <a key={fi} href={url} target="_blank" rel="noreferrer" title="點開看大圖">
@@ -1166,7 +1266,8 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
