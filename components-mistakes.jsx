@@ -72,7 +72,17 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
     const mcSrc = questions.filter(q => !MK_REVEAL_ONLY.includes(q.type));
     const allAnswers = mcSrc.map(q => q.answer);
     return _mkShuffle(mcSrc.map(q => {
-      const pool = _mkShuffle(allAnswers.filter(a => a !== q.answer));
+      // Prefer distractors from SAME category/type siblings, so a grammar
+      // item isn't offered three vocabulary words (a giveaway). Only if
+      // there aren't ≥3 same-category siblings do we top up from the full pool.
+      const sameCat = mcSrc
+        .filter(o => o !== q && o.cat === q.cat && o.type === q.type && o.answer !== q.answer)
+        .map(o => o.answer);
+      let pool = _mkShuffle(sameCat);
+      if (pool.length < 3) {
+        const rest = _mkShuffle(allAnswers.filter(a => a !== q.answer && !pool.includes(a)));
+        pool = pool.concat(rest);
+      }
       const distractors = pool.slice(0, 3);
       while (distractors.length < 3) distractors.push(distractors[0] || '—');
       const options = _mkShuffle([q.answer, ...distractors]);

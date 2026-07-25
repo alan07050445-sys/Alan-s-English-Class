@@ -1849,7 +1849,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
         ) : (
           <>
             <div className={`qm-feedback-banner ${result}`}>
-              {result === 'correct' ? '✓ Correct! 答對了！' : `✗ The answer is: ${current.answer}`}
+              {result === 'correct' ? '✓ Correct! 答對了！' : `✗ 正解：${current.answer}`}
             </div>
             {current.explain && (
               <div className="ta-explain">
@@ -1935,8 +1935,7 @@ function QuickFlashcardReview({ item, onDone }) {
    QUIZ RESULT SCREEN — animated Duolingo-style
 ══════════════════════════════════════════════════════ */
 function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack, onBackToTasks, onNextTask }) {
-  const starCount  = finalPct === 100 ? 3 : finalPct >= 70 ? 2 : finalPct >= 40 ? 1 : 0;
-  const xpGain     = finalPct === 100 ? 100 : 50;
+  const starCount  = starsFromScore(finalPct);
   const msg        = finalPct === 100 ? 'Perfect! 滿分！'
                    : finalPct >= 80   ? 'Excellent! 非常好！'
                    : finalPct >= 60   ? 'Good job! 繼續加油！'
@@ -1944,7 +1943,6 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
 
   const animScore = useCountUp(finalScore, 900, 400);
   const animPct   = useCountUp(finalPct,   900, 400);
-  const animXp    = useCountUp(xpGain,     700, 650);
 
   return (
     <div className="qm-result">
@@ -2149,6 +2147,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
             <div className="qm-player-fill" style={{ width: pct + '%' }}/>
           </div>
         </div>
+        <span className="qm-player-counter">還剩 {uniqueTotal - firstRight} 題</span>
         {/* Live score badge with +1 float */}
         <div className="qm-score-wrap">
           <span className={`qm-score-badge${lastRight === false ? ' shake' : ''}`}>
@@ -2192,7 +2191,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       {selected !== null && (
         <div className="qm-feedback">
           <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
-            {selected === q.correct ? '✓ Correct! 答對了！' : `✗ The answer is: ${q.options[q.correct]}`}
+            {selected === q.correct ? '✓ Correct! 答對了！' : `✗ 正解：${q.options[q.correct]}`}
           </div>
           {q.explain && <div className="qm-explain">{q.explain}</div>}
           {selected === q.correct && !q.explain ? (
@@ -3261,7 +3260,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
             {selected !== null && (
               <div className="qm-feedback">
                 <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
-                  {selected === q.correct ? '✓ Correct! 答對了！' : `✗ The answer is: ${q.options[q.correct]}`}
+                  {selected === q.correct ? '✓ Correct! 答對了！' : `✗ 正解：${q.options[q.correct]}`}
                 </div>
                 {selected === q.correct ? (
                   <div className="qm-auto-next">答對了，自動下一題…</div>

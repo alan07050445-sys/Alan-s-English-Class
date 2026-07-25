@@ -143,8 +143,14 @@
   width: 100%;
 }
 .qm-cat-enter {
-  animation: softSlideIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* v310: fade-only entrance (was softSlideIn, a translateX). ANY transform on this element
+     makes it the containing block for the fixed 「單元列表」pill inside it, pushing the pill
+     down over the question title / 「完成練習」bar (the long-standing overlap bug). A pure
+     opacity fade keeps a smooth entrance with NO transform, so the pill's position:fixed is
+     viewport-relative again — pinned top-left on scroll, never overlapping content. */
+  animation: qmCatFadeIn 0.3s ease both;
 }
+@keyframes qmCatFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .qm-sidebar {
   width: 320px;
@@ -194,6 +200,17 @@
 @keyframes qm-reopen-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
 @media (max-width: 640px) { .qm-sidebar-reopen { top: auto; bottom: 20px; left: 16px; } }
 @media (prefers-reduced-motion: reduce) { .qm-sidebar-reopen { animation: none; } }
+/* v306+ fix: reserve a top band so the fixed 「單元列表」pill (top:74px) never sits
+   on top of the question title / 完成練習 bar when the quiz area is full-width.
+   Only ≥641px (on ≤640px the pill is docked bottom-left, so no top overlap):
+   • 641–768px column layout → pill floats once a unit is selected (has-selection).
+   • ≥769px row layout → pill floats only when the sidebar is collapsed (sidebar-hidden). */
+@media (min-width: 641px) and (max-width: 768px) {
+  .qm-cat-view.has-selection .qm-quiz-area { padding-top: 56px; }
+}
+@media (min-width: 769px) {
+  .qm-cat-view.sidebar-hidden .qm-quiz-area { padding-top: 56px; }
+}
 
 .qm-sidebar-cat {
   display: flex; align-items: center; gap: 12px;
@@ -388,6 +405,9 @@
 .qm-back-btn {
   background: none; border: none; cursor: pointer;
   color: var(--ink-3); padding: 4px; flex-shrink: 0; transition: color 0.1s;
+  /* v306+ fix: ~44px touch target (icon stays the same size, just centered) */
+  min-width: 44px; min-height: 44px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .qm-back-btn:hover { color: var(--ink); }
 .qm-player-bar-wrap { flex: 1; }
@@ -600,31 +620,6 @@
   to   { opacity: 0.25; transform: scale(1); }
 }
 
-/* ── XP row ── */
-.qm-result-xp-row {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  margin-bottom: 20px;
-}
-.qm-result-xp {
-  display: inline-block;
-  font: 700 20px/1 var(--mono);
-  color: #7c3aed;
-  background: #f5f3ff; border: 1.5px solid #ddd6fe;
-  padding: 6px 16px; border-radius: 999px;
-  animation: xp-pop 0.5s cubic-bezier(.36,.07,.19,.97) 0.65s both;
-}
-.qm-result-xp-badge {
-  font-size: 13px; font-weight: 700; font-family: var(--mono);
-  color: #d97706; background: #fffbeb; border: 1.5px solid #fde68a;
-  padding: 4px 10px; border-radius: 999px;
-  animation: xp-pop 0.5s cubic-bezier(.36,.07,.19,.97) 0.9s both;
-}
-@keyframes xp-pop {
-  0%   { transform: scale(0.5) translateY(10px); opacity: 0; }
-  65%  { transform: scale(1.1) translateY(-2px); opacity: 1; }
-  100% { transform: scale(1) translateY(0);       opacity: 1; }
-}
-
 .qm-wrong-list { text-align: left; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg-card); }
 .qm-wrong-title { padding: 12px 18px; font-size: 14.5px; font-family: var(--mono); color: var(--ink-3); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.08em; background: var(--bg); }
 .qm-wrong-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); font-size: 17px; }
@@ -635,6 +630,10 @@
 /* ── Pre-quiz intro screen ───────────────────────────── */
 .qm-intro {
   max-width: 520px; margin: 64px auto; text-align: center; padding: 0 16px;
+  /* v306+ fix: sit content in the optical centre of the available min-height
+     (kills the barren zone below 開始練習 on iPad). Vertical centring only —
+     align-items stays default (stretch) so full-width children keep their width. */
+  display: flex; flex-direction: column; justify-content: center;
 }
 
 /* Short Answer intro with YouTube video — wider layout */
@@ -3073,3 +3072,13 @@
 }
 .grd-side-btn:hover { transform: scale(1.12); }
 .gr-audio-seg { margin-bottom: 14px; }
+
+/* v306+ fix: global reduced-motion safety net — neutralises infinite/decorative
+   animations (tutorialPulse, breathe cues, shimmers, etc.) for users who ask for it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

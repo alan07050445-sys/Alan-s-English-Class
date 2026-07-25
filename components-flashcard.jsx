@@ -17,8 +17,9 @@ function SpeakerBtn({ text, lang = 'en-US', className = "" }) {
       className={"fc-speaker-btn " + className}
       onClick={e => { e.stopPropagation(); speak(text, lang); }}
       title="Listen · 聆聽"
+      aria-label="播放發音"
     >
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
         <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
         <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
@@ -537,7 +538,7 @@ function FlashcardPlayer({ item, onComplete }) {
                 <SpeakerBtn text={card.zh} lang="zh-TW" className="fc-face-speaker fc-face-speaker-dark"/>
                 {card.imageUrl && (
                   <div className="fc-back-img-wrap">
-                    <img src={card.imageUrl} alt={card.zh}/>
+                    <img src={card.imageUrl} alt={card.zh} decoding="async"/>
                   </div>
                 )}
                 <div className="fc-zh">{card.zh}</div>
@@ -547,13 +548,13 @@ function FlashcardPlayer({ item, onComplete }) {
           </div>
 
           <div className="fc-nav">
-            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }} disabled={safeIdx === 0}>← Prev</button>
+            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }} disabled={safeIdx === 0}>← 上一張</button>
             <div className="fc-dots">
               {deck.map((_, i) => (
                 <span key={i} className={"fc-dot" + (i === safeIdx ? " active" : "")} onClick={() => { setCardIdx(i); setFlipped(false); }}/>
               ))}
             </div>
-            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => i + 1); setFlipped(false); }} disabled={safeIdx === deck.length - 1}>Next →</button>
+            <button className="fc-nav-btn" onClick={() => { setCardIdx(i => i + 1); setFlipped(false); }} disabled={safeIdx === deck.length - 1}>下一張 →</button>
           </div>
         </div>
       </div>
@@ -628,7 +629,7 @@ function FlashcardPlayer({ item, onComplete }) {
               title="不熟的字打 ★"
             >★</button>
             {isRetry && <div className="fc-retry-badge mono">再試一次吧 · Try again</div>}
-            {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-learn-img"/>}
+            {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-learn-img" decoding="async"/>}
             <div className="fc-learn-zh">{card.zh}</div>
             <div className="mono" style={{fontSize: 10, color: "var(--ink-muted)", marginTop: 10}}>
               Choose the English word · 選出正確英文單字
@@ -677,7 +678,7 @@ function FlashcardPlayer({ item, onComplete }) {
           <ModeTabs active="test"/>
           <div className="fc-player">
             <div className="fc-test-setup">
-              <div className="serif" style={{fontSize: 28, marginBottom: 4}}>設置你的<em>測驗</em></div>
+              <div className="serif" style={{fontSize: 28, marginBottom: 4}}>設定你的<em>測驗</em></div>
               <div className="mono" style={{fontSize: 10, color: "var(--ink-muted)", marginBottom: 28}}>
                 {cards.length} cards · 看中文，回答英文
               </div>
@@ -754,8 +755,8 @@ function FlashcardPlayer({ item, onComplete }) {
                 ))}
               </div>
               <div style={{display: "flex", gap: 12, marginTop: 20}}>
-                <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setQuestionTypes({}); setTestDone(false); }}>Try Again</button>
-                <button className="btn primary" onClick={() => enterLearn()}>Study More →</button>
+                <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setQuestionTypes({}); setTestDone(false); }}>再試一次</button>
+                <button className="btn primary" onClick={() => enterLearn()}>再多練一點 →</button>
               </div>
             </div>
           </div>
@@ -795,7 +796,7 @@ function FlashcardPlayer({ item, onComplete }) {
                   <div className="fc-test-qrow">
                     <span className="fc-test-num mono">{qi + 1}.</span>
                     <div className="fc-test-term">
-                      {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-test-img"/>}
+                      {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-test-img" decoding="async"/>}
                       <span style={{fontSize: 18, fontFamily: "var(--sans)"}}>{card.zh}</span>
                     </div>
                     <span className="mono" style={{fontSize: 9, color: "var(--ink-faint)", marginLeft: 6}}>
@@ -893,8 +894,8 @@ function FlashcardPlayer({ item, onComplete }) {
                 All {matchTiles.length / 2} pairs matched!
               </div>
               <div style={{display: "flex", gap: 12}}>
-                <button className="btn ghost" onClick={() => enterMatch()}>Play Again</button>
-                <button className="btn primary" onClick={() => enterLearn()}>Study More →</button>
+                <button className="btn ghost" onClick={() => enterMatch()}>再玩一次</button>
+                <button className="btn primary" onClick={() => enterLearn()}>再多練一點 →</button>
               </div>
             </div>
           </div>
@@ -961,8 +962,8 @@ function FlashcardPlayer({ item, onComplete }) {
                 {fillScore} / {fillCards.length} correct · 答對
               </div>
               <div style={{display: "flex", gap: 12}}>
-                <button className="btn ghost" onClick={() => enterFill()}>Try Again</button>
-                <button className="btn primary" onClick={() => enterLearn()}>Study More →</button>
+                <button className="btn ghost" onClick={() => enterFill()}>再試一次</button>
+                <button className="btn primary" onClick={() => enterLearn()}>再多練一點 →</button>
               </div>
             </div>
           </div>

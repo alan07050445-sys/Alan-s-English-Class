@@ -58,6 +58,8 @@
   --ink-soft: #3A372E;
   --ink-muted: #807A6B;
   --ink-faint: #B8B1A0;
+  --ink-2: #5c554a;   /* secondary text — matches the common fallback */
+  --ink-3: #6b6455;   /* muted text — darkened from #8a8270 to pass WCAG on cream */
   --rule: #1A1814;
   --border: #DDD6C4;
   --border-soft: #E8E2D0;

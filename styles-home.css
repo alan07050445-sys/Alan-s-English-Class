@@ -972,7 +972,7 @@
   display: block; font-family: 'Lora','Noto Serif TC',Georgia,serif; font-weight: 700;
   font-size: 30px; line-height: 1; color: var(--ink, #2A2018); font-variant-numeric: tabular-nums;
 }
-.wh-stat i { display: block; font-style: normal; margin-top: 7px; font-size: 12.5px; color: var(--ink-3, #8a8270); }
+.wh-stat i { display: block; font-style: normal; margin-top: 7px; font-size: 12.5px; color: var(--ink-3, #8a8270); white-space: nowrap; }
 .wh-kicker { font-size: 12.5px; }
 .wh-theme-en { font-size: 16px; }
 .wh-done-msg { font-size: 15px; font-weight: 800; color: #1f7d4f; }
@@ -993,6 +993,8 @@
   .wh-side { width: 100%; }
   .wh-side-info { flex: 1; min-width: 0; }
   .wh-cta { white-space: normal; }
+  /* v306: 手機上收窄數字磚內距＋min-width:0，讓兩磚＋進度環不擠壓到標籤換行 */
+  .wh-stat { padding: 12px 12px; min-width: 0; }
   /* header 於 ≤640px 換行後，week-nav 疊在內容上——整個大廳內容讓位 */
   .page-lobby .shell.main-enter { padding-top: 44px; }
 }
