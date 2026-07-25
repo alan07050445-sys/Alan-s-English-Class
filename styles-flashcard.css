@@ -39,14 +39,14 @@
   border: 2px solid #ccc; color: #888;
   flex-shrink: 0; background: transparent;
 }
-.fc-dual-circle.green { border-color: #4caf50; color: #2e7d32; background: #f1f8f2; }
+.fc-dual-circle.green { border-color: #2FA56B; color: #1f7d4f; background: color-mix(in srgb, #2FA56B 10%, transparent); }
 .fc-dual-track {
-  flex: 1; height: 10px; border-radius: 999px;
-  overflow: hidden; display: flex; background: #ddd;
+  flex: 1; height: 8px; border-radius: 999px;
+  overflow: hidden; display: flex; background: var(--border, #e5dfc8);
   min-width: 0;
 }
-.fc-dual-seg-green { background: #4caf50; transition: flex 0.4s; min-width: 0; }
-.fc-dual-seg-gray  { background: #ccc;    transition: flex 0.4s; min-width: 0; }
+.fc-dual-seg-green { background: #2FA56B; transition: flex 0.4s; min-width: 0; }
+.fc-dual-seg-gray  { background: color-mix(in srgb, var(--ink-3, #8a8270) 30%, transparent); transition: flex 0.4s; min-width: 0; }
 
 /* ── Speaker button ── */
 .fc-speaker-btn {
@@ -179,7 +179,7 @@
   position: relative; background: var(--bg-card); cursor: pointer;
 }
 .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) { border-color: var(--ink); background: var(--bg-paper); }
-.fc-choice.correct { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+.fc-choice.correct { background: color-mix(in srgb, #2FA56B 12%, transparent); border-color: #2FA56B; color: #1f7d4f; }
 .fc-choice.wrong   { background: #ffebee; border-color: #f44336; color: #c62828; }
 .fc-choice.dimmed  { opacity: 0.38; }
 .fc-choice-badge { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 16.5px; }
@@ -240,13 +240,13 @@
   gap: 8px; align-items: center;
   padding: 7px 10px; border-radius: 3px; font-size: 15.5px;
 }
-.fc-review-row.ok { background: #f1f8f2; }
+.fc-review-row.ok { background: color-mix(in srgb, #2FA56B 10%, transparent); }
 .fc-review-row.err { background: #fff5f5; }
 .fc-review-icon { font-size: 13px; }
 .fc-review-term { font-family: var(--serif); }
 .fc-review-ans { display: flex; flex-direction: column; gap: 1px; }
 .fc-review-wrong { color: #c62828; text-decoration: line-through; font-size: 13px; }
-.fc-review-correct { color: #2e7d32; font-size: 14.5px; font-weight: 700; }
+.fc-review-correct { color: #1f7d4f; font-size: 14.5px; font-weight: 700; }
 
 /* ── Test setup screen ── */
 .fc-test-setup {
@@ -287,7 +287,7 @@
   background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   transition: transform 0.2s;
 }
-.fc-toggle.on { background: #4caf50; }
+.fc-toggle.on { background: #2FA56B; }
 .fc-toggle.on::after { transform: translateX(20px); }
 
 /* ── Test mode ── */
