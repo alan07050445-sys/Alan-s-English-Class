@@ -377,10 +377,10 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
 /* ── Visual config ───────────────────────────────────── */
 const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
 const CAT_IMG   = {
-  vocab:   'icon-vocab.png',
-  grammar: 'icon-grammar.png',
-  word:    'icon-word.png',
-  reading: 'icon-reading.png',
+  vocab:   'icon-vocab.webp',
+  grammar: 'icon-grammar.webp',
+  word:    'icon-word.webp',
+  reading: 'icon-reading.webp',
 };
 const CAT_BG    = {
   vocab:   'linear-gradient(135deg,#667eea,#764ba2)',

@@ -33,8 +33,6 @@ function Header({
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
-  // Gamification
-  streak, badges, onShowBadges, xp,
   // Mistakes
   mistakesCount, onShowMistakes,
   // Grade
@@ -1392,59 +1390,6 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 
 }
 
-/* ───────── Badges Modal ───────── */
-function BadgesModal({ badges, onClose }) {
-  const BADGES = window.BADGES || {};
-  const ALL_IDS = Object.keys(BADGES);
-  const got = ALL_IDS.filter(id => !!badges?.[id]).length;
-  const total = ALL_IDS.length;
-  const pct = total > 0 ? Math.round(got / total * 100) : 0;
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal bdg-modal" onClick={e => e.stopPropagation()} style={{maxWidth:460}}>
-        <button className="modal-close bdg-close" onClick={onClose}><Icon name="close" size={14}/></button>
-        <div className="bdg-hero">
-          <img src="trophy.png" alt="" className="bdg-hero-img"/>
-          <h3 className="bdg-hero-title">我的成就</h3>
-          <p className="bdg-hero-sub">已解鎖 <strong>{got}</strong> / {total} 個徽章</p>
-          <div className="bdg-progress"><div className="bdg-progress-fill" style={{width: pct + '%'}}/></div>
-        </div>
-        <div className="bdg-grid">
-          {ALL_IDS.map(id => {
-            const b = BADGES[id];
-            const unlocked = !!badges?.[id];
-            return (
-              <div key={id} className={`badge-card${unlocked ? ' unlocked' : ' locked'}`}>
-                <span className="badge-emoji">{unlocked ? b.emoji : '🔒'}</span>
-                <span className="badge-name">{b.name}</span>
-                <span className="badge-desc">{b.desc}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ───────── Badge Unlock Toast ───────── */
-function BadgeToast({ badge, onDone }) {
-  React.useEffect(() => {
-    window.playSound && window.playSound('badge');
-    const t = setTimeout(onDone, 3200);
-    return () => clearTimeout(t);
-  }, []);
-  return (
-    <div className="badge-toast" onClick={onDone}>
-      <span className="badge-toast-emoji">{badge.emoji}</span>
-      <div>
-        <div className="badge-toast-title">成就解鎖！</div>
-        <div className="badge-toast-name">{badge.name} — {badge.desc}</div>
-      </div>
-    </div>
-  );
-}
-
 /* ───────── Grade Selector ───────── */
 function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, summerOnly, onOpenAdmin }) {
   const grades = [
@@ -1628,14 +1573,9 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <p className="gs-hint">之後隨時可以從右上角的年級標籤切換</p>
           </>
         )}
-        {(onViewLanding || onOpenGuide) && (
+        {onOpenGuide && !summerOnly && (
           <div className="gs-links">
-            {onViewLanding && (
-              <button className="gs-switch gs-landing-link" onClick={onViewLanding}>查看網站介紹頁</button>
-            )}
-            {onOpenGuide && !summerOnly && (
-              <button className="gs-switch gs-landing-link" onClick={onOpenGuide}>新手教學</button>
-            )}
+            <button className="gs-switch gs-landing-link" onClick={onOpenGuide}>新手教學</button>
           </div>
         )}
       </div>
@@ -1738,7 +1678,7 @@ function StarBurst({ count = 20, onDone }) {
 }
 
 /* ════ MobileNav — fixed bottom bar (mobile only) ════ */
-function MobileNav({ week, weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBackFromCat, onShowBadges, user }) {
+function MobileNav({ week, weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, onBackFromCat, user }) {
   const atStart = weekIdx <= 0;
   const atEnd   = weekIdx >= (weekOrder?.length || 1) - 1;
   const inCat   = !!catView;
@@ -1759,13 +1699,7 @@ function MobileNav({ week, weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, 
             <span className="mobile-nav-icon">{catView?.id === 'vocab' ? '📚' : catView?.id === 'grammar' ? '✏️' : catView?.id === 'word' ? '🔤' : '📖'}</span>
             <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{catView?.titleZh || catView?.title || ''}</span>
           </button>
-          <div className="mobile-nav-divider"/>
-          {user ? (
-            <button className="mobile-nav-btn" onClick={onShowBadges}>
-              <span className="mobile-nav-icon">🏆</span>
-              <span>Badges</span>
-            </button>
-          ) : <div style={{flex:1}}/>}
+          <div style={{flex:1}}/>
         </>
       ) : (
         <>
@@ -2136,4 +2070,4 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, BadgesModal, BadgeToast, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave });
+Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave });

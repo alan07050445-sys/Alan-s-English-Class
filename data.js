@@ -519,142 +519,11 @@ function saveProgress(prog) {
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(prog)); } catch (e) {}
 }
 
-// ── Companion / Coins / Daily Goal (localStorage — works for guests too) ──
+// ── Companion (localStorage — works for guests too) ──
 const COMPANION_KEY = 'alan-companion';
-const COINS_KEY     = 'alan-coins';
-const DAILY_KEY     = 'alan-daily';
-const DAILY_GOAL    = 3; // 每天完成幾個練習算達標
 
 function loadCompanion() {
   try { const r = localStorage.getItem(COMPANION_KEY); return r ? JSON.parse(r) : null; } catch(e) { return null; }
-}
-function saveCompanion(c) {
-  try { localStorage.setItem(COMPANION_KEY, JSON.stringify({ ...c, createdAt: c.createdAt || Date.now() })); } catch(e) {}
-  return loadCompanion();
-}
-function loadCoins() {
-  try { return parseInt(localStorage.getItem(COINS_KEY) || '0', 10) || 0; } catch(e) { return 0; }
-}
-function addCoins(n) {
-  const next = Math.max(0, loadCoins() + (n || 0));
-  try { localStorage.setItem(COINS_KEY, String(next)); } catch(e) {}
-  return next;
-}
-function _todayStr() { return new Date().toISOString().slice(0, 10); }
-function loadDaily() {
-  try {
-    const d = JSON.parse(localStorage.getItem(DAILY_KEY) || 'null');
-    if (d && d.date === _todayStr()) return { date: d.date, done: d.done || 0, goal: DAILY_GOAL };
-  } catch(e) {}
-  return { date: _todayStr(), done: 0, goal: DAILY_GOAL };
-}
-// 完成一次練習 → 推進每日進度，回傳 { done, goal, justCompleted }
-function bumpDaily(n = 1) {
-  const cur = loadDaily();
-  const before = cur.done;
-  const done = Math.min(cur.goal, before + n);
-  const rec = { date: cur.date, done, goal: cur.goal };
-  try { localStorage.setItem(DAILY_KEY, JSON.stringify(rec)); } catch(e) {}
-  return { ...rec, justCompleted: before < cur.goal && done >= cur.goal };
-}
-
-// ── 商店 / 衣櫥（金幣換造型） ──────────────────────────
-const WARDROBE_KEY = 'alan-wardrobe';
-const SHOP_ITEMS = [
-  { id: 'bow',   name: '蝴蝶結',  price: 20 },
-  { id: 'party', name: '派對帽',  price: 30 },
-  { id: 'grad',  name: '學士帽',  price: 50 },
-  { id: 'cap',   name: '鴨舌帽',  price: 60 },
-  { id: 'wizard',name: '魔法帽',  price: 90 },
-  { id: 'crown', name: '皇冠',    price: 150 },
-];
-function loadWardrobe() {
-  try {
-    const r = JSON.parse(localStorage.getItem(WARDROBE_KEY) || 'null');
-    if (r) return { owned: Array.isArray(r.owned) ? r.owned : [], equipped: r.equipped || null };
-  } catch(e) {}
-  return { owned: [], equipped: null };
-}
-function saveWardrobe(w) {
-  try { localStorage.setItem(WARDROBE_KEY, JSON.stringify(w)); } catch(e) {}
-  return loadWardrobe();
-}
-// 購買：扣金幣、加入衣櫥並自動穿上。回傳 { ok, coins, wardrobe, reason? }
-function buyItem(id) {
-  const item = SHOP_ITEMS.find(i => i.id === id);
-  if (!item) return { ok: false, reason: 'bad-item' };
-  const w = loadWardrobe();
-  if (w.owned.includes(id)) { w.equipped = id; return { ok: true, coins: loadCoins(), wardrobe: saveWardrobe(w) }; }
-  if (loadCoins() < item.price) return { ok: false, reason: 'broke', coins: loadCoins() };
-  const coins = addCoins(-item.price);
-  w.owned = [...w.owned, id];
-  w.equipped = id;
-  return { ok: true, coins, wardrobe: saveWardrobe(w) };
-}
-// 穿上 / 脫下（再點一次同件 = 脫下）
-function equipItem(id) {
-  const w = loadWardrobe();
-  w.equipped = (w.equipped === id) ? null : id;
-  return saveWardrobe(w);
-}
-
-// ── 個人每週任務（localStorage，每週一自動重置） ──────────
-const QUESTS_KEY = 'alan-quests';
-const WEEKLY_QUESTS = [
-  { id: 'q_practice', label: '完成 12 個練習', goal: 12, metric: 'practices',    reward: 40 },
-  { id: 'q_correct',  label: '答對 60 題',     goal: 60, metric: 'correct',      reward: 50 },
-  { id: 'q_daily',    label: '達成 3 次每日目標', goal: 3, metric: 'dailyReached', reward: 60 },
-];
-function _weekKey() {
-  const d = new Date();
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const wk = Math.ceil((((d - jan1) / 86400000) + jan1.getDay() + 1) / 7);
-  return `${d.getFullYear()}-W${wk}`;
-}
-function loadQuests() {
-  let q;
-  try { q = JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null'); } catch(e) {}
-  if (!q || q.weekKey !== _weekKey()) {
-    q = { weekKey: _weekKey(), progress: { practices: 0, correct: 0, dailyReached: 0 }, claimed: [] };
-    try { localStorage.setItem(QUESTS_KEY, JSON.stringify(q)); } catch(e) {}
-  }
-  return q;
-}
-function bumpQuests(delta) {
-  const q = loadQuests();
-  Object.keys(delta || {}).forEach(k => { q.progress[k] = (q.progress[k] || 0) + delta[k]; });
-  try { localStorage.setItem(QUESTS_KEY, JSON.stringify(q)); } catch(e) {}
-  return q;
-}
-function claimQuest(id) {
-  const q = loadQuests();
-  const def = WEEKLY_QUESTS.find(x => x.id === id);
-  if (!def || q.claimed.includes(id)) return { ok: false, quests: q, coins: loadCoins() };
-  if ((q.progress[def.metric] || 0) < def.goal) return { ok: false, quests: q, coins: loadCoins() };
-  const coins = addCoins(def.reward);
-  q.claimed.push(id);
-  try { localStorage.setItem(QUESTS_KEY, JSON.stringify(q)); } catch(e) {}
-  return { ok: true, quests: q, coins, reward: def.reward };
-}
-
-// ── 全班合作目標（Firestore 共享計數；學生貢獻需部署新版 rules） ──
-const _coopDoc = _db.collection('coop').doc('current');
-function subscribeCoop(callback, onError) {
-  return _coopDoc.onSnapshot(
-    snap => callback(snap.exists ? snap.data() : null),
-    err => { if (onError) onError(err); }
-  );
-}
-async function setCoopGoal(goal, reward) { // 老師專用
-  await _coopDoc.set({ goal: Number(goal) || 0, reward: reward || '', weekKey: _weekKey(), count: 0, updatedAt: Date.now() }, { merge: true });
-}
-async function contributeCoop(n) { // 學生每次練習貢獻（失敗靜默）
-  try {
-    await _coopDoc.set({
-      count: firebase.firestore.FieldValue.increment(n || 0),
-      weekKey: _weekKey(),
-    }, { merge: true });
-  } catch(e) { /* 規則未部署或未授權時靜默略過 */ }
 }
 
 // ── Utilities ──────────────────────────────────────────
@@ -1031,18 +900,6 @@ function getLevel(xp) {
   if (xp >= 500)  return { level:3, name:'進步王',   icon:'⚡', next:1000, prevXp:500  };
   if (xp >= 200)  return { level:2, name:'書蟲',     icon:'📚', next:500,  prevXp:200  };
   return           { level:1, name:'新苗',     icon:'🌱', next:200,  prevXp:0    };
-}
-
-async function addXp(uid, amount) {
-  if (!uid || !amount) return { xp: 0 };
-  try {
-    const ref = _db.collection('progress').doc(uid);
-    const snap = await ref.get();
-    const d = snap.exists ? (snap.data() || {}) : {};
-    const newXp = (d.xp || 0) + amount;
-    await ref.set({ xp: newXp }, { merge: true });
-    return { xp: newXp };
-  } catch(e) { return { xp: 0 }; }
 }
 
 async function updateStreak(uid) {
@@ -1684,13 +1541,8 @@ Object.assign(window, {
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,
-  // Companion / Coins / Daily Goal
-  loadCompanion, saveCompanion, loadCoins, addCoins, loadDaily, bumpDaily, DAILY_GOAL,
-  // Shop / Wardrobe
-  SHOP_ITEMS, loadWardrobe, saveWardrobe, buyItem, equipItem,
-  // Quests / Co-op
-  WEEKLY_QUESTS, loadQuests, bumpQuests, claimQuest,
-  subscribeCoop, setCoopGoal, contributeCoop,
+  // Companion
+  loadCompanion,
   // Roster
   subscribeRoster, addRosterStudent, setRosterStudentActive, deleteRosterStudent,
   addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
@@ -1700,7 +1552,7 @@ Object.assign(window, {
   saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes,
   // Streak, Badges & XP
   BADGES, updateStreak, unlockBadge, subscribeUserProfile,
-  getLevel, addXp,
+  getLevel,
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS

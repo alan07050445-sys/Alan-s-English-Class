@@ -120,11 +120,8 @@ function App() {
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
   const [gridCols, setGridCols] = useAppState(getGridCols);
 
-  // ── Gamification state ──────────────────────────────
+  // ── Streak state (badges / XP / coins removed in v307 — no longer shown anywhere) ──
   const [userProfile, setUserProfile] = useAppState({ streak: { count: 0 }, badges: {}, xp: 0 });
-  const [badgesOpen,  setBadgesOpen]  = useAppState(false);
-  const [badgeToast,  setBadgeToast]  = useAppState(null); // { id, ...badgeData }
-  const prevBadgeKeys = useAppRef(null);
   const [starBurst,   setStarBurst]   = useAppState(false);
   const [streakToast, setStreakToast] = useAppState(null); // { count } — shown briefly
 
@@ -140,29 +137,14 @@ function App() {
   const [farewell,        setFarewell]        = useAppState(false); // v301: 登出「期待下次見面」過場（別太突兀）
   const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
 
-  // ── Review state ────────────────────────────────────
-  const [reviewSetupOpen, setReviewSetupOpen] = useAppState(false);
-  const [reviewSession,   setReviewSession]   = useAppState(null); // { questions, startWid, endWid }
-
   // ── Access lock (firestore.rules 部署後，未在名單內 → 鎖定頁) ──
   const [accessLocked, setAccessLocked] = useAppState(false);
 
-  // ── Companion / Coins / Daily goal (gamification) ──
-  const [companion, setCompanion] = useAppState(() => window.loadCompanion());
-  const [coins,     setCoins]     = useAppState(() => window.loadCoins());
-  const [daily,     setDaily]     = useAppState(() => window.loadDaily());
-  const [goalToast, setGoalToast] = useAppState(false);
-  const [wardrobe,  setWardrobe]  = useAppState(() => window.loadWardrobe());
-  const [shopOpen,  setShopOpen]  = useAppState(false);
-  const [profileOpen, setProfileOpen] = useAppState(false);
-  const [bossOpen,  setBossOpen]  = useAppState(false);
-  const [mapOpen,   setMapOpen]   = useAppState(false);
+  // ── Grade-intro / tutorial state ──
   const [intro,     setIntro]     = useAppState(false); // 選年級後開場動畫
   const [tutorialSeen, setTutorialSeen] = useAppState(() => {
     try { return localStorage.getItem('alan-tutorial-done') === '1'; } catch(e) { return false; }
   });
-  const [quests,    setQuests]    = useAppState(() => window.loadQuests());
-  const [coop,      setCoop]      = useAppState(null);
 
   // ── Local streak helpers (works without Firebase login) ─
   const getLocalStreak = () => {
@@ -230,31 +212,16 @@ function App() {
     return unsub;
   }, []);
 
-  // ── Subscribe to streak + badges ───────────────────────
+  // ── Subscribe to streak (for the streak count shown to logged-in students) ──
   useAppEffect(() => {
-    if (!user) { setUserProfile({ streak: { count: 0 }, badges: {} }); prevBadgeKeys.current = null; return; }
-    const unsub = window.subscribeUserProfile(user.uid, (profile) => {
-      setUserProfile(profile);
-      // Detect newly unlocked badges and show toast
-      const newKeys = Object.keys(profile.badges || {});
-      if (prevBadgeKeys.current !== null) {
-        const added = newKeys.filter(k => !prevBadgeKeys.current.includes(k));
-        if (added.length > 0 && window.BADGES[added[0]]) {
-          setBadgeToast({ id: added[0], ...window.BADGES[added[0]] });
-        }
-      }
-      prevBadgeKeys.current = newKeys;
-    });
+    if (!user) { setUserProfile({ streak: { count: 0 }, badges: {} }); return; }
+    const unsub = window.subscribeUserProfile(user.uid, setUserProfile);
     return unsub;
   }, [user?.uid]);
 
   useAppEffect(() => {
     if (!user) return;
-    window.updateStreak(user.uid).then(({ count, isNew }) => {
-      if (!isNew) return;
-      if (count >= 3) window.unlockBadge(user.uid, 'streak_3');
-      if (count >= 7) window.unlockBadge(user.uid, 'streak_7');
-    });
+    window.updateStreak(user.uid);
   }, [user?.uid]);
 
   // v257: 舊的「backfill」已移除——它會把這台電腦全機共用的舊紀錄，
@@ -279,13 +246,6 @@ function App() {
     });
     return unsub;
   }, [user?.uid]);
-
-  // ── Subscribe to class co-op goal (shared Firestore doc) ──
-  useAppEffect(() => {
-    if (!window.subscribeCoop) return;
-    const unsub = window.subscribeCoop(setCoop, () => setCoop(null));
-    return unsub;
-  }, []);
 
   // Always-fresh ref to weeks — prevents stale-closure bugs in CRUD handlers.
   const weeksRef = useAppRef(weeks);
@@ -809,97 +769,16 @@ function App() {
       setTimeout(() => setStreakToast(null), 3200);
     }
 
-    // ── Coins + Daily goal (works without login — guests too) ──
-    const pctLocal = total > 0 ? Math.round(score / total * 100) : 0;
-    const earned = Math.max(3, Math.round((score / Math.max(1, total)) * 10) + (pctLocal === 100 ? 5 : 0));
-    setCoins(window.addCoins(earned));
-    const dres = window.bumpDaily(1);
-    setDaily(dres);
-    if (dres.justCompleted) {
-      window.addCoins(10);                 // 達標獎勵金幣
-      setCoins(window.loadCoins());
-      if (window.playSound) window.playSound('complete');
-      if (window.triggerStarBurst) window.triggerStarBurst();
-      setGoalToast(true);
-      setTimeout(() => setGoalToast(false), 3600);
-    }
-
-    // ── 每週任務進度 + 全班合作貢獻 ──
-    window.bumpQuests({ practices: 1, correct: score });
-    if (dres.justCompleted) window.bumpQuests({ dailyReached: 1 });
-    setQuests(window.loadQuests());
-    window.contributeCoop(score); // 盡力而為，未部署規則時靜默略過
-
     if (!u) return;
-    const pct = total > 0 ? Math.round(score / total * 100) : 0;
-    // Award XP — perfect = 100, otherwise 50
-    const xpGain = pct === 100 ? 100 : 50;
-    const { xp: newXp } = await window.addXp(u.uid, xpGain);
-    // XP milestone badges
-    if (newXp >= 500)  await window.unlockBadge(u.uid, 'xp_500');
-    if (newXp >= 1000) await window.unlockBadge(u.uid, 'xp_1000');
-    if (newXp >= 3000) await window.unlockBadge(u.uid, 'xp_3000');
-    // Update streak
-    const { count, isNew } = await window.updateStreak(u.uid);
+    // Update streak (Firestore — feeds the streak count shown to logged-in students)
+    const { isNew } = await window.updateStreak(u.uid);
     if (isNew) window.playSound('streak');
-    await window.unlockBadge(u.uid, 'first_quiz');
-    // Badge: perfect score
-    if (pct === 100) await window.unlockBadge(u.uid, 'perfect');
+    // Save wrong answers into the mistakes notebook
     if (meta.itemId && window.saveQuizMistakes) {
       await window.saveQuizMistakes(u.uid, u.displayName || '', u.email || '', meta.itemId, wrongList || []);
     }
-    if (meta.allWeekQuizDone) await window.unlockBadge(u.uid, 'scholar');
-    // Badge: streak milestones
-    if (count >= 3)  await window.unlockBadge(u.uid, 'streak_3');
-    if (count >= 7)  await window.unlockBadge(u.uid, 'streak_7');
-    if (count >= 30) await window.unlockBadge(u.uid, 'streak_30');
   };
 
-  // ── Grid renderer ──────────────────────────────────────
-
-  const renderGrid = () => {
-    const cards = [];
-    const openIdx = activeCategories.findIndex(c => c.id === openCat);
-
-    for (let i = 0; i < activeCategories.length; i++) {
-      const cat = activeCategories[i];
-      const items = week.items[cat.id] || [];
-      const doneCount = items.filter(it => progress[it.id]).length;
-
-      cards.push(
-        <window.CategoryCard
-          key={cat.id}
-          cat={cat}
-          items={items}
-          doneCount={doneCount}
-          isOpen={openCat === cat.id}
-          onClick={() => setOpenCat(prev => prev === cat.id ? null : cat.id)}
-        />
-      );
-
-      const isEndOfRow = (i % gridCols === gridCols - 1) || (i === activeCategories.length - 1);
-      const openIsInThisRow = openIdx >= 0 && Math.floor(openIdx / gridCols) === Math.floor(i / gridCols);
-      if (isEndOfRow && openIsInThisRow && openCat) {
-        const openCatObj = activeCategories[openIdx];
-        cards.push(
-          <window.CategoryDetail
-            key={"detail-" + openCat}
-            cat={openCatObj}
-            items={week.items[openCat] || []}
-            progress={progress}
-            onToggleCheck={toggleCheck}
-            editMode={editMode}
-            onAddItem={handleAddItem}
-            onEditItem={handleEditItem}
-            onDeleteItem={handleDeleteItem}
-            onMoveItem={handleMoveItem}
-            onMoveTypeGroup={handleMoveTypeGroup}
-          />
-        );
-      }
-    }
-    return cards;
-  };
 
   // ── Grade selector handler ─────────────────────────────
   // 專屬年級記憶「跟著帳號走」：每個 Google 帳號一把 key（訪客用共用 key）
@@ -1115,9 +994,6 @@ function App() {
             }}
             onShowDashboard={() => setDashOpen(true)}
             streak={localStreak.count > 0 ? localStreak : (user ? userProfile.streak : localStreak)}
-            badges={userProfile.badges}
-            xp={userProfile.xp || 0}
-            onShowBadges={() => setBadgesOpen(true)}
             onEditWeek={() => setWeekEditOpen(true)}
             mistakesCount={mistakesCount}
             onShowMistakes={user ? () => setMistakesOpen(true) : null}
@@ -1293,7 +1169,6 @@ function App() {
               onNextWeek={goNextWeek}
               catView={catView}
               onBackFromCat={() => { setCatView(null); scrollPageToTop(); }}
-              onShowBadges={() => setBadgesOpen(true)}
               user={user}
             />
           )}
@@ -1349,25 +1224,6 @@ function App() {
             <window.SpotlightTour
               onClose={dismissTour}
               onEmpty={() => { setTourOpen(false); setWelcomeOpen(true); }}
-            />
-          )}
-
-          {reviewSetupOpen && (
-            <window.ReviewSetupModal
-              weeks={weeks}
-              weekOrder={weekOrder}
-              onClose={() => setReviewSetupOpen(false)}
-              onStart={(session) => { setReviewSetupOpen(false); setReviewSession(session); }}
-            />
-          )}
-
-          {reviewSession && (
-            <window.ReviewPlayer
-              questions={reviewSession.questions}
-              startWid={reviewSession.startWid}
-              endWid={reviewSession.endWid}
-              user={user}
-              onClose={() => setReviewSession(null)}
             />
           )}
 
