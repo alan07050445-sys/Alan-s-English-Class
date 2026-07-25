@@ -371,18 +371,17 @@ function App() {
     return local;
   }, [qmProgressVersion, weekId, grade, myProgressItems, user?.uid]);
 
+  // v311 (#21): 只計「真的完成」——qmProgress 記錄存在不代表完成（未達 80 分 done 會是 0）；一律看 .done
+  const qmIsDone = (id) => { const p = qmProgress[`${weekId}_${id}`]; return !!(p && p.done); };
   const totalItems = weekQuizItems.length || allItems.length;
   const totalDone = weekQuizItems.length
-    ? weekQuizItems.filter(it => progress[it.id] || qmProgress[`${weekId}_${it.id}`]).length
+    ? weekQuizItems.filter(it => progress[it.id] || qmIsDone(it.id)).length
     : allItems.filter(it => progress[it.id]).length;
 
   const getCategoryProgress = (cat) => {
     const quizItems = window.getQuizItems ? window.getQuizItems((week.items || {})[cat.id] || []) : [];
     if (!quizItems.length) return { total: 0, done: 0 };
-    const done = quizItems.reduce((sum, it) => {
-      const key = `${weekId}_${it.id}`;
-      return sum + ((progress[it.id] || qmProgress[key]) ? 1 : 0);
-    }, 0);
+    const done = quizItems.reduce((sum, it) => sum + ((progress[it.id] || qmIsDone(it.id)) ? 1 : 0), 0);
     return { total: quizItems.length, done };
   };
 
@@ -408,7 +407,7 @@ function App() {
       .filter(id => id !== excludeId)
       .map(id => ({ id, it: byId[id], due: String((hw[id] && hw[id].dueDate) || '9999') }))
       .filter(c => c.it
-        && !(progress[c.id] || qmProgress[`${weekId}_${c.id}`])
+        && !(progress[c.id] || qmIsDone(c.id))
         && window.getQuizItems && window.getQuizItems([c.it]).length > 0)
       .sort((a, b) => a.due.localeCompare(b.due) || ((window.qmTypeRank ? window.qmTypeRank(a.it.type) : 9) - (window.qmTypeRank ? window.qmTypeRank(b.it.type) : 9)));
     if (!candidates.length) return null;

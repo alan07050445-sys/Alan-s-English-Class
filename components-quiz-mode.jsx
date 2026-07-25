@@ -348,17 +348,20 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
   const newPct = localScore != null ? localScore / localTotal : null;
   const oldPct = (old && old.score != null && old.total) ? old.score / old.total : null;
   const keepOld = !!(old && oldPct != null && newPct != null && oldPct > newPct);
+  // v311 (#21): 只有 80 分以上才算「完成」（done）。無分數型（單字卡、上傳作業 score=null）照算完成；
+  // 未達 80 仍把分數/錯題記下來（best-of、「上次 X 分」、老師端看得到），只是 done 留空、不計入完成度/✓。
+  const scorePct = localScore == null ? null : Math.round((localScore / localTotal) * 100);
+  const qualifies = scorePct == null || scorePct >= 80;
   prev[progressKey] = keepOld
     ? { ...old, ts }
-    : { done: doneCount || localTotal, score: localScore, total: localTotal, ts };
+    : { done: qualifies ? (doneCount || localTotal) : 0, score: localScore, total: localTotal, ts };
   saveQMProg(prev);
   if (window._bumpQmProgress) window._bumpQmProgress(); // 大廳（今天的任務）即時刷新——所有題型都會走這裡
 
   const u = window._currentUser;
   if (u && !keepOld && window.saveProgressItem) {
-    const scorePct = localScore == null ? null : Math.round((localScore / localTotal) * 100);
     const payload = {
-      done: ts,
+      done: qualifies ? ts : null,
       score: scorePct,
       total: localTotal,
       itemTitle: item?.title || '',
@@ -496,7 +499,8 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                 {total > 0 ? (
                   <>
                     <div className="qm-block-count">{(() => {
-                      const doneUnits = quizItems.filter(it => qmProg[`${weekId}_${it.id}`]).length;
+                      // v311 (#21): 達 80 才算完成——看 .done，不看紀錄是否存在
+                      const doneUnits = quizItems.filter(it => { const p = qmProg[`${weekId}_${it.id}`]; return p && p.done; }).length;
                       return doneUnits >= quizItems.length ? '本週練習完成 ✓' : `完成 ${doneUnits} / ${quizItems.length}`;
                     })()}</div>
                     <div className="qm-block-progress">
@@ -507,7 +511,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                     </div>
                     {!editMode && (() => {
                       // 接下來要練的單元＋已練平均分（有才顯示）
-                      const nextItem = quizItems.find(it => !qmProg[`${weekId}_${it.id}`]);
+                      const nextItem = quizItems.find(it => { const p = qmProg[`${weekId}_${it.id}`]; return !(p && p.done); });
                       const scored = quizItems
                         .map(it => qmProg[`${weekId}_${it.id}`])
                         .filter(p => p && p.score != null && p.total > 0); // v270: 無分數不列入
@@ -758,7 +762,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         </div>
 
         {!editMode && quizItems.length > 0 && (() => {
-          const doneN = quizItems.filter(it => qmProg[`${weekId}_${it.id}`]).length;
+          const doneN = quizItems.filter(it => { const p = qmProg[`${weekId}_${it.id}`]; return p && p.done; }).length; // v311(#21): 達 80 才算完成
           const pct = Math.round(doneN / quizItems.length * 100);
           return (
             <div className="qm-sidebar-prog" aria-label={`本分類完成 ${doneN} / ${quizItems.length}`}>
@@ -796,7 +800,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const prog     = qmProg[progKey];
             const totalQ   = getItemQuestions(item).length;
             const scorePct = (prog && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null; // 單字卡完成無分數 → 不顯示 %
-            const isDone   = !!prog;
+            const isDone   = !!(prog && prog.done); // v311(#21): 達 80 才算完成（未達 80 仍顯示上次分數，但不打勾）
             const isActive = selectedItem?.id === item.id;
             const isWriting      = item.type === 'writing-practice';
             const isTypeAnswer   = item.type === 'type-answer';
@@ -978,7 +982,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <FlashcardStandaloneIntro
             item={selectedItem}
             cat={cat}
-            done={!!qmProg[`${weekId}_${selectedItem.id}`]}
+            done={(() => { const p = qmProg[`${weekId}_${selectedItem.id}`]; return !!(p && p.done); })()}
             onStart={() => setPhase('quiz')}
           />
         ) : selectedItem?.type === 'flashcard' ? (
@@ -1290,11 +1294,17 @@ function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
   );
 }
 
-/* v306+: 完成過的 intro 顯示「✓ 已完成 · 上次 N 分」提示 */
+/* v306+: 完成過的 intro 顯示「✓ 已完成 · 上次 N 分」；v311(#21/#8): 做過但未達 80 顯示「上次 N 分 · 再拚到 80 分就完成」 */
 function QmIntroDoneHint({ prog }) {
-  if (!prog || !prog.done) return null;
+  if (!prog) return null;
   const pct = (prog.score != null && prog.total) ? Math.round(prog.score / prog.total * 100) : null;
-  return <div className="qm-intro-done-hint">✓ 已完成{pct != null ? ` · 上次 ${pct} 分` : ''}</div>;
+  if (prog.done) {
+    return <div className="qm-intro-done-hint">✓ 已完成{pct != null ? ` · 上次 ${pct} 分` : ''}</div>;
+  }
+  if (pct != null) {
+    return <div className="qm-intro-done-hint tried">上次 {pct} 分 · 再拚到 80 分就完成 ⭐</div>;
+  }
+  return null;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1936,10 +1946,12 @@ function QuickFlashcardReview({ item, onDone }) {
 ══════════════════════════════════════════════════════ */
 function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRestart, onBack, onBackToTasks, onNextTask }) {
   const starCount  = starsFromScore(finalPct);
-  const msg        = finalPct === 100 ? 'Perfect! 滿分！'
-                   : finalPct >= 80   ? 'Excellent! 非常好！'
-                   : finalPct >= 60   ? 'Good job! 繼續加油！'
-                   :                    'Keep practicing! 多練習！';
+  const reached    = finalPct >= 80;  // v311 (#21): 80 分達成任務
+  // v311 (#8): 每個孩子做完都先被肯定「你完成了這一輪」，再誠實顯示達標狀態——低分也不冷。
+  const msg        = finalPct === 100 ? '滿分！一題都沒錯 ⭐'
+                   : finalPct >= 80   ? '很棒，達標了！'
+                   : finalPct >= 60   ? '快到了，再拚一下就達標！'
+                   :                    '做完囉！多看幾次會更熟 💪';
 
   const animScore = useCountUp(finalScore, 900, 400);
   const animPct   = useCountUp(finalPct,   900, 400);
@@ -1967,6 +1979,13 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
         <span className="qm-result-denom"> / {total}</span>
       </div>
       <div className="qm-result-pct">答對率 {animPct}%</div>
+
+      {/* v311 (#8+#21): 達標狀態——80 分達成任務；未達 80 也給暖語＋明確目標，不冷場 */}
+      <div className={`qm-result-goal${reached ? ' reached' : ''}`}>
+        {reached
+          ? '🎉 達成任務！這一項完成了'
+          : `再 ${Math.max(1, 80 - finalPct)} 分就達成任務 ⭐`}
+      </div>
 
       <div className="qm-result-msg">{msg}</div>
 
@@ -2066,7 +2085,8 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     });
     if (window.playSound) window.playSound('complete');
     const finalPctCalc = Math.round(fs / total * 100);
-    if (finalPctCalc >= 70 && window.triggerStarBurst) window.triggerStarBurst();
+    // v311 (#21): 大慶祝對齊「達成任務」門檻 80（未達 80 仍有結果頁的暖語＋目標，不冷場）
+    if (finalPctCalc >= 80 && window.triggerStarBurst) window.triggerStarBurst();
     if (onQuizDone) onQuizDone();
     const allWeekQuizDone = (allQuizItems || []).every(it => prev[`${weekId}_${it.id}`]);
     if (window._onQuizComplete) {
@@ -4870,10 +4890,12 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
     if (getQuizItems([it]).length === 0) return null; // v261: 空單元（0 題）不進任務清單——點進去也沒東西可做
     const prog = (qmProg || {})[`${weekId}_${id}`];
     const done = !!(prog && prog.done);
-    const pct  = (done && prog.total && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null;
+    // v311 (#21/#8): 未達 80 不算完成，但把「上次分數」留著，任務列顯示「再拚到 80」提示
+    const lastPct = (prog && prog.total && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null;
+    const pct  = done ? lastPct : null;
     const resume = !done ? getResume(`${weekId}_${id}`, null) : null;
     const cat = (categories || []).find(c => c.id === it._cat);
-    return { id, it, cat, dueDate: hw[id] && hw[id].dueDate, done, pct, resumeAt: resume ? resume.deckPos : null };
+    return { id, it, cat, dueDate: hw[id] && hw[id].dueDate, done, pct, lastPct, resumeAt: resume ? resume.deckPos : null };
   }).filter(Boolean);
   const doneN = tasks.filter(t => t.done).length;
   const allDone = tasks.length > 0 && doneN === tasks.length;
@@ -4960,7 +4982,11 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
           </b>
           <span className="tt-meta">
             {t.it.type === 'upload' ? '上傳作業 · 拍照繳交' : t.cat ? (t.cat.titleZh || t.cat.title) : ''}
-            {t.done ? <span> · 已完成</span> : (due ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null)}
+            {t.done
+              ? <span> · 已完成</span>
+              : (!t.resumeAt && t.lastPct != null)
+                ? <span className="tt-tried"> · 上次 {t.lastPct} 分，再拚到 80</span>
+                : (due ? <span className={due === '已過期' ? ' tt-late' : ''}> · {due}</span> : null)}
           </span>
         </span>
         <span className="tt-state">
@@ -4968,7 +4994,9 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
             ? <span className="tt-s-again">再練一次 →</span>
             : t.resumeAt
               ? <span className="tt-s-resume">▶ 繼續 · 第 {t.resumeAt + 1} 題</span>
-              : <span className="tt-s-todo">開始 →</span>}
+              : t.lastPct != null
+                ? <span className="tt-s-todo">再拚 80 分 →</span>
+                : <span className="tt-s-todo">開始 →</span>}
         </span>
       </button>
     );
