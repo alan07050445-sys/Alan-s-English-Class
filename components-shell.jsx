@@ -2042,8 +2042,8 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
           <img src="cards/word.jpg" alt="" loading="eager"/><div className="lc-ov"/>
           <div className="lc-lab"><div className="lc-k">WORD STUDY</div><div className="lc-zh">字根字首</div></div>
         </div>
-        <div className="lc-card lc-plain" style={{ '--x': '243px', '--y': '30px', '--r': '15deg', '--d': '.89s' }}>
-          <div className="lc-ico" aria-hidden="true">📖</div><div className="lc-ov lc-ov-r"/>
+        <div className="lc-card" style={{ '--x': '243px', '--y': '30px', '--r': '15deg', '--d': '.89s' }}>
+          <img src="cards/reading.jpg" alt="" loading="eager"/><div className="lc-ov"/>
           <div className="lc-lab"><div className="lc-k">READING</div><div className="lc-zh">閱讀寫作</div></div>
         </div>
       </div>
