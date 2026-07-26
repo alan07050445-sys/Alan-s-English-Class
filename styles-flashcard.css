@@ -1,7 +1,12 @@
 /* styles-flashcard.css — Flashcard Player, Editor & Image Search */
 
 /* ── Mode Tabs ── */
-.fc-wrap { display: flex; flex-direction: column; background: var(--bg); max-width: 640px; margin-left: auto; margin-right: auto; }
+/* v315 (#1): Alan 要「原本的一整個版面」——v310 把卡片加了 margin:auto＋max-width 640，
+   讓它從「撐滿版面」變成「縮到內容寬(~554)置中」＝縮成這樣；又把高度改成 clamp(300,42vh,440)，
+   平板橫式 42vh 只有 ~344px 比圖片(420)還矮＝圖被裁＋大留白＝圖文不平衡。
+   關鍵修法：加回 width:100% 讓它撐滿父層（qm-fc-player-wrap 是 flex，光靠 max-width 撐不開），
+   max-width 收到 760 兼顧桌機不過寬，margin:auto 只在超過 760 時置中。 */
+.fc-wrap { display: flex; flex-direction: column; background: var(--bg); width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
 .fc-mode-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-paper); }
 .fc-tab {
   flex: 1;
@@ -68,7 +73,8 @@
 .fc-face-speaker-dark:hover { color: var(--ink); border-color: var(--ink); background: var(--bg); }
 
 /* ── Reveal card ── */
-.fc-flip-card { width: 100%; min-height: clamp(300px, 42vh, 440px); height: auto; margin-bottom: 28px; cursor: pointer; }
+/* v315 (#1): 卡片加高回接近原本 480，平板橫式(42vh 太矮)不再把背面圖片＋中文裁掉。 */
+.fc-flip-card { width: 100%; min-height: clamp(360px, 58vh, 500px); height: auto; margin-bottom: 28px; cursor: pointer; }
 .fc-flip-inner { width: 100%; height: 100%; min-height: inherit; position: relative; }
 .fc-face {
   position: absolute; inset: 0;
@@ -111,13 +117,14 @@
 }
 
 /* Image on the BACK of card */
+/* v315 (#1): 圖片高度收到 340，讓「圖片＋中文＋例句」在加高後的卡片裡都看得到、不再一頭重＝圖文平衡。 */
 .fc-back-img-wrap {
-  width: 100%; max-height: 420px;
+  width: 100%; max-height: 340px;
   display: flex; justify-content: center;
-  margin-bottom: 18px; flex-shrink: 0; overflow: hidden;
+  margin-bottom: 18px; flex-shrink: 1; min-height: 0; overflow: hidden;
 }
 .fc-back-img-wrap img {
-  max-height: 420px; max-width: 96%;
+  max-height: 340px; max-width: 96%;
   object-fit: contain; border-radius: 6px; opacity: 0.95;
 }
 

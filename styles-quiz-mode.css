@@ -1109,43 +1109,21 @@
   .qm-result-btns .qm-btn { max-width: none; }
 }
 
-/* v313 (#12): iPad 直式專屬版面。iPad 直式多半是 810–834px，會落到桌機版＝320px 側欄把題目區壓到剩一半。
-   這一段把它改成「單元列表變頂部橫向卡條、題目區滿寬在下」，兩者同時看得到，善用平板寬度。 */
+/* v315 (#12 重做): iPad 直式（769–900px，多為 810–834）改「一次一畫面」滿版流程，取代 v314 的頂部橫向卡條。
+   v314 用 .qm-unit-list{flex-direction:row}，但暑假題庫的「學生篩選器」就住在 .qm-unit-list 裡面，
+   會被一起排成橫向而破版（Alan 圖 5 的亂版）；而且側欄寬度被 .page-mission .qm-sidebar{width:360px}
+   壓著沒真的變滿寬。這裡沿用手機版已驗證乾淨的做法：直向堆疊、瀏覽時側欄滿寬、選了單元就收側欄／題目滿版，
+   浮出「單元列表」鈕可回列表（isMobileView 也放寬到 900，JSX 那顆鈕才會出現）。
+   側欄真正變滿寬的關鍵在 styles-theme.css 的 .page-mission .qm-sidebar{width:100%}（媒體查詢放寬到 900）。 */
 @media (min-width: 769px) and (max-width: 900px) {
   .qm-cat-view { flex-direction: column; }
   .qm-sidebar {
-    width: 100%; max-height: none; overflow: visible;
-    border-right: none; border-bottom: 1px solid var(--border);
-    background: transparent;
+    width: 100%; border-right: none; border-bottom: 1px solid var(--border);
   }
-  .qm-sidebar-cat { padding-bottom: 4px; }
-  .qm-sidebar-prog { padding: 0 4px 4px; }
-  /* 單元列表 → 橫向滾動的單元卡條 */
-  .qm-unit-list {
-    display: flex; flex-direction: row; gap: 10px;
-    overflow-x: auto; overflow-y: visible;
-    padding: 12px 4px 14px; -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-  }
-  .qm-unit-row {
-    flex: 0 0 auto; width: 250px; scroll-snap-align: start;
-    flex-direction: column; align-items: stretch; gap: 8px;
-    padding: 14px 16px; border: 1px solid var(--border); border-left: 1px solid var(--border);
-    border-radius: 14px; background: var(--bg-card);
-  }
-  .qm-unit-row:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent, #8B3120) 40%, var(--border, #e5dfc8)); }
-  .qm-unit-row.active {
-    border-color: var(--accent, #8B3120); border-left-color: var(--accent, #8B3120);
-    background: var(--bg); animation: none;
-  }
-  .qm-unit-row-info { width: 100%; min-width: 0; }
-  .qm-unit-add-btn { flex: 0 0 auto; }
-  /* 題目區滿寬在下；橫向卡條永遠看得到，不需要浮動「單元列表」鈕 */
-  .qm-quiz-area { padding: 18px 8px 90px; }
-  .qm-sidebar-reopen { display: none !important; }
-  .qm-cat-view.has-selection .qm-quiz-area,
-  .qm-cat-view.sidebar-hidden .qm-quiz-area { padding-top: 18px; }
-  .qm-cat-view.sidebar-hidden .qm-sidebar { display: block; }
+  .qm-quiz-area { padding: 24px 20px 96px; }
+  /* 選了單元 → 收側欄、題目滿版；沒選 → 只顯示單元列表（避免下方一片空白） */
+  .qm-cat-view.has-selection .qm-sidebar { display: none; }
+  .qm-cat-view:not(.has-selection) .qm-quiz-area { display: none; }
 }
 
 @media (max-width: 560px) {

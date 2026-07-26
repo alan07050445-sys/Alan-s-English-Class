@@ -370,6 +370,16 @@
   .brand-name { font-size: 18px; }
   .header-inner { gap: 16px; }
 }
+/* v315 (#3): iPad 直式(≤900)頭部太擠、頂到邊——收掉裝飾性「EST · 2026」章、再縮間距，
+   讓「品牌｜週次｜書本＋帳號」三欄有呼吸空間（Alan 圈起來的地方）。 */
+@media (max-width: 900px) {
+  .brand-mono { display: none; }
+  .header-inner { gap: 12px; }
+  .brand { gap: 8px; }
+  .brand-name { font-size: 17px; }
+  .header-right { gap: 12px; }
+  .user-name { max-width: 72px; }
+}
 
 /* 年級選擇容器放寬，讓五張卡有呼吸空間 */
 .grade-selector-inner { max-width: 880px !important; width: 100%; }
@@ -471,10 +481,12 @@
 .page-mission .qm-btn.primary {
   box-shadow: 0 12px 24px -14px rgba(21,19,14,.46);
 }
-@media (max-width: 768px) {
+/* v315 (#12): 放寬到 900——涵蓋 iPad 直式(810–834)，讓側欄真的變滿寬（覆蓋 .page-mission .qm-sidebar{width:360px}），
+   配合 styles-quiz-mode.css 的「一次一畫面」直向流程。 */
+@media (max-width: 900px) {
   .page-mission .qm-cat-view {
     margin: 0;
-    padding: 12px 10px 76px;
+    padding: 12px 12px 76px;
   }
   .page-mission .qm-sidebar {
     width: 100%;

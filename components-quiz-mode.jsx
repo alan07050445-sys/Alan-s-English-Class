@@ -630,7 +630,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     // v261: 題庫視角不自動選第一個單元——自動選會連帶展開它的分組，Alan 要「進來時全部收合」
     if (String(weekId || '').startsWith('sl')) return;
     // v306+: 手機直向自由練習——不自動選單元，讓學生落在「單元列表」而不是被鎖在某一個單元
-    if (!initialItemId && window.matchMedia && window.matchMedia('(max-width:768px)').matches) return;
+    // v315: 放寬到 900 涵蓋 iPad 直式（一次一畫面流程，先看單元列表）
+    if (!initialItemId && window.matchMedia && window.matchMedia('(max-width:900px)').matches) return;
     const firstMain = sidebarItems.find(it =>
       explicitMainIds.has(it.id) ||
       homeworkMainIds.has(it.id) ||
@@ -646,7 +647,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const qmProg = useQMM(() => cloudProg || loadQMProg(), [progVersion, cloudProg]);
   const hasSelection = !!selectedItem;
   // v306+: 手機直向時，選了單元後需要一個「回單元列表」出口
-  const isMobileView = !!(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
+  // v315: 放寬到 900——iPad 直式也走一次一畫面，選了單元收側欄後才有鈕可回列表
+  const isMobileView = !!(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:900px)').matches);
 
   // v253: 老師視角（editMode 或 暑假題庫）——側欄依文章分組收合＋題庫學生濾鏡
   const isLibView = String(weekId || '').startsWith('sl');
