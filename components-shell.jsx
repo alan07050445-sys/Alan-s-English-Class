@@ -82,19 +82,8 @@ function Header({
               </div>
             )}
 
-            {/* Mistakes button (logged-in students) */}
-            {user && onShowMistakes && (
-              <button
-                className={'mk-header-btn' + (mistakesCount ? '' : ' dim')}
-                onClick={onShowMistakes}
-                title="我的錯題"
-              >
-                📕
-                {mistakesCount > 0 && (
-                  <span className="mk-header-badge">{mistakesCount}</span>
-                )}
-              </button>
-            )}
+            {/* v319: Alan 選「先移除錯題複習功能」——拿掉 header 的 📕 錯題入口（大廳複習區也一起移除）。
+                錯題仍照常記錄、MistakesPanel 元件保留＝要加回改這裡就好。 */}
 
             {/* Auth area */}
             <div className="header-auth">

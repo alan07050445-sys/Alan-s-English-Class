@@ -1117,32 +1117,9 @@ function App() {
                   onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
                 />
               )}
-              {/* v317 (#8): 把「複習錯題」和「複習標星的字」放在一起＝加強複習區（Alan 要求兩者合一）。 */}
-              {!editMode && (reviewWords.length > 0 || (user && mistakesCount > 0)) && (
-                <div className="review-group">
-                  <div className="review-group-title">📌 加強複習</div>
-                  {user && mistakesCount > 0 && (
-                    <button className="review-card" onClick={() => setMistakesOpen(true)}>
-                      <span className="review-card-star" aria-hidden="true">📕</span>
-                      <span className="review-card-body">
-                        <span className="review-card-title">複習我的錯題</span>
-                        <span className="review-card-sub">收集了 {mistakesCount} 道答錯的題目，重練一次更熟</span>
-                      </span>
-                      <span className="review-card-cta">開始複習 →</span>
-                    </button>
-                  )}
-                  {reviewWords.length > 0 && (
-                    <button className="review-card" onClick={() => setReviewOpen(true)}>
-                      <span className="review-card-star" aria-hidden="true">⭐</span>
-                      <span className="review-card-body">
-                        <span className="review-card-title">複習我標星的字</span>
-                        <span className="review-card-sub">跨週收集了 {reviewWords.length} 個你標記要複習的單字</span>
-                      </span>
-                      <span className="review-card-cta">開始複習 →</span>
-                    </button>
-                  )}
-                </div>
-              )}
+              {/* v319: Alan 選「先移除加強複習功能」——大廳不放複習區、header 也拿掉 📕（見 components-shell）。
+                  錯題資料照常收集、MistakesPanel/ReviewFlashcardModal 元件都留著＝之後想加回很快。
+                  星號複習改由單字卡的「⭐ 星號單字」分頁（v318）提供。 */}
               <window.QuizModeBlocks
                 week={week}
                 weekId={weekId}
