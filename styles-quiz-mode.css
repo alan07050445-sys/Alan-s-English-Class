@@ -1109,6 +1109,45 @@
   .qm-result-btns .qm-btn { max-width: none; }
 }
 
+/* v313 (#12): iPad 直式專屬版面。iPad 直式多半是 810–834px，會落到桌機版＝320px 側欄把題目區壓到剩一半。
+   這一段把它改成「單元列表變頂部橫向卡條、題目區滿寬在下」，兩者同時看得到，善用平板寬度。 */
+@media (min-width: 769px) and (max-width: 900px) {
+  .qm-cat-view { flex-direction: column; }
+  .qm-sidebar {
+    width: 100%; max-height: none; overflow: visible;
+    border-right: none; border-bottom: 1px solid var(--border);
+    background: transparent;
+  }
+  .qm-sidebar-cat { padding-bottom: 4px; }
+  .qm-sidebar-prog { padding: 0 4px 4px; }
+  /* 單元列表 → 橫向滾動的單元卡條 */
+  .qm-unit-list {
+    display: flex; flex-direction: row; gap: 10px;
+    overflow-x: auto; overflow-y: visible;
+    padding: 12px 4px 14px; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .qm-unit-row {
+    flex: 0 0 auto; width: 250px; scroll-snap-align: start;
+    flex-direction: column; align-items: stretch; gap: 8px;
+    padding: 14px 16px; border: 1px solid var(--border); border-left: 1px solid var(--border);
+    border-radius: 14px; background: var(--bg-card);
+  }
+  .qm-unit-row:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent, #8B3120) 40%, var(--border, #e5dfc8)); }
+  .qm-unit-row.active {
+    border-color: var(--accent, #8B3120); border-left-color: var(--accent, #8B3120);
+    background: var(--bg); animation: none;
+  }
+  .qm-unit-row-info { width: 100%; min-width: 0; }
+  .qm-unit-add-btn { flex: 0 0 auto; }
+  /* 題目區滿寬在下；橫向卡條永遠看得到，不需要浮動「單元列表」鈕 */
+  .qm-quiz-area { padding: 18px 8px 90px; }
+  .qm-sidebar-reopen { display: none !important; }
+  .qm-cat-view.has-selection .qm-quiz-area,
+  .qm-cat-view.sidebar-hidden .qm-quiz-area { padding-top: 18px; }
+  .qm-cat-view.sidebar-hidden .qm-sidebar { display: block; }
+}
+
 @media (max-width: 560px) {
   .qm-blocks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
