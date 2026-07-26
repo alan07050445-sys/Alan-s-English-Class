@@ -214,6 +214,52 @@ function fcSaveStars(itemId, set) {
   } catch (e) {}
 }
 
+/* v313 (#3): 跨週收集「學生標星的單字」——大廳「複習」卡用。
+   資料來自 alan-fc-stars（每個單字卡單元存了哪些卡被標星），把散在各週的星號字彙整成一副複習牌。 */
+function collectStarredWords(weeks) {
+  let starMap = {};
+  try { starMap = JSON.parse(localStorage.getItem(fcStarStoreKey()) || '{}'); } catch (e) {}
+  const itemById = {};
+  Object.values(weeks || {}).forEach(w =>
+    Object.values((w && w.items) || {}).forEach(arr =>
+      (arr || []).forEach(it => { if (it && it.type === 'flashcard' && it.id) itemById[it.id] = it; })));
+  const out = [], seen = new Set();
+  Object.entries(starMap).forEach(([itemId, cardIds]) => {
+    const it = itemById[itemId];
+    if (!it || !Array.isArray(it.cards)) return;
+    (cardIds || []).forEach(cid => {
+      const card = it.cards.find(c => c.id === cid);
+      if (!card) return;
+      const key = (card.term || '') + '|' + (card.zh || '');
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ ...card });
+    });
+  });
+  return out;
+}
+
+/* v313 (#3): 複習標星單字的全螢幕視窗——大廳「複習」卡打開，重用 FlashcardPlayer 的四種練習模式 */
+function ReviewFlashcardModal({ words, onClose }) {
+  const item = { id: '__review__', title: '複習 · 我標星的字', cards: words || [] };
+  return (
+    <div className="review-modal">
+      <div className="review-modal-head">
+        <button className="review-modal-close" onClick={onClose} aria-label="完成複習，回大廳">
+          <window.Icon name="close" size={15}/> 完成複習
+        </button>
+        <span className="review-modal-title">⭐ 複習 · {(words || []).length} 個標星的字</span>
+        <span style={{width:96}} aria-hidden="true"/>
+      </div>
+      <div className="review-modal-body">
+        {(words || []).length > 0
+          ? <FlashcardPlayer item={item} onComplete={onClose}/>
+          : <div className="review-modal-empty">目前沒有標星的字。<br/>練單字卡時點一下 ★ 把不熟的字標起來，就會收進這裡複習。</div>}
+      </div>
+    </div>
+  );
+}
+
 /* v274: 配對計時器獨立成小元件——原本每 100ms 重繪整個播放器，
    平板上點擊會被重繪吃掉（又 lag 又點不到離開鈕） */
 function MatchTimer({ startRef }) {
@@ -1591,4 +1637,4 @@ function FillBlankEditor({ questions, onChange }) {
   );
 }
 
-Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, FillBlankPlayer, FillBlankEditor });
+Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, FillBlankPlayer, FillBlankEditor, collectStarredWords, ReviewFlashcardModal });

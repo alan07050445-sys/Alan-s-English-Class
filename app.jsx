@@ -128,6 +128,7 @@ function App() {
   // ── Mistakes state ──────────────────────────────────
   const [mistakesOpen,    setMistakesOpen]    = useAppState(false);
   const [growthOpen,      setGrowthOpen]      = useAppState(false);
+  const [reviewOpen,      setReviewOpen]      = useAppState(false); // v313 (#3): 複習標星單字視窗
   const [welcomeOpen,     setWelcomeOpen]     = useAppState(false); // 文字版（門口頁連結／導覽 fallback）
   const [tourOpen,        setTourOpen]        = useAppState(false); // 實境導覽（大廳聚光燈）
   // v301: 封面／落地頁狀態也記進 sessionStorage——重新整理時停在原本那一頁（Alan 第 9 點）
@@ -384,6 +385,9 @@ function App() {
     const done = quizItems.reduce((sum, it) => sum + ((progress[it.id] || qmIsDone(it.id)) ? 1 : 0), 0);
     return { total: quizItems.length, done };
   };
+
+  // v313 (#3): 跨週收集學生標星的單字——大廳「複習」卡（catView 變動時重算，離開單元後回大廳就更新）
+  const reviewWords = useAppMemo(() => (window.collectStarredWords ? window.collectStarredWords(weeks) : []), [weeks, catView, qmProgressVersion, user?.uid]);
 
   // v268: 本週平均分——WeekHero 給家長掃一眼用
   const weekAvgScore = useAppMemo(() => {
@@ -1120,6 +1124,16 @@ function App() {
                   onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
                 />
               )}
+              {!editMode && reviewWords.length > 0 && (
+                <button className="review-card" onClick={() => setReviewOpen(true)}>
+                  <span className="review-card-star" aria-hidden="true">⭐</span>
+                  <span className="review-card-body">
+                    <span className="review-card-title">複習我標星的字</span>
+                    <span className="review-card-sub">跨週收集了 {reviewWords.length} 個你標記要複習的單字</span>
+                  </span>
+                  <span className="review-card-cta">開始複習 →</span>
+                </button>
+              )}
               <window.QuizModeBlocks
                 week={week}
                 weekId={weekId}
@@ -1217,6 +1231,13 @@ function App() {
               categories={activeCategories}
               studentName={user ? (user.displayName || '') : ''}
               onClose={() => setGrowthOpen(false)}
+            />
+          )}
+
+          {reviewOpen && window.ReviewFlashcardModal && (
+            <window.ReviewFlashcardModal
+              words={reviewWords}
+              onClose={() => setReviewOpen(false)}
             />
           )}
 
