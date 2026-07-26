@@ -72,6 +72,14 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
     const mcSrc = questions.filter(q => !MK_REVEAL_ONLY.includes(q.type));
     const allAnswers = mcSrc.map(q => q.answer);
     return _mkShuffle(mcSrc.map(q => {
+      // v318 (#3): 若有存原題的原始選項 → 直接用（重新洗牌變換位置），才是「原題原選項」的有效複習。
+      // 只有舊資料（沒存 options）才退回下面的「同類湊題」。
+      if (Array.isArray(q.options) && q.options.length >= 2 &&
+          typeof q.correct === 'number' && q.correct >= 0 && q.correct < q.options.length) {
+        const ans = q.options[q.correct];
+        const shuffled = _mkShuffle(q.options);
+        return { ...q, options: shuffled, correct: shuffled.indexOf(ans) };
+      }
       // Prefer distractors from SAME category/type siblings, so a grammar
       // item isn't offered three vocabulary words (a giveaway). Only if
       // there aren't ≥3 same-category siblings do we top up from the full pool.

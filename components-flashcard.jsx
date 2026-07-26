@@ -357,9 +357,11 @@ function FlashcardPlayer({ item, onComplete }) {
 
   const stopMatchTimer = () => { if (matchTimerRef.current) { clearInterval(matchTimerRef.current); matchTimerRef.current = null; } };
 
-  const enterCard = () => { stopMatchTimer(); setMode("card"); setCardIdx(0); setFlipped(false); };
+  // v318 (#1): 「星號單字」＝獨立分頁。進其他分頁一律 setStarOnly(false) 重置＝不會再卡在只剩星號的（Alan 回報的 bug）。
+  const enterCard = () => { stopMatchTimer(); setMode("card"); setStarOnly(false); setCardIdx(0); setFlipped(false); };
+  const enterStarred = () => { stopMatchTimer(); setMode("card"); setStarOnly(true); setCardIdx(0); setFlipped(false); };
 
-  const enterLearn = (flag = starOnly) => { stopMatchTimer();
+  const enterLearn = (flag = false) => { stopMatchTimer(); setStarOnly(false);
     const src = pool(flag);
     setLearnTotal(src.length);
     const order = shuffle([...src]);
@@ -398,7 +400,8 @@ function FlashcardPlayer({ item, onComplete }) {
     setTestSetup(false);
   };
 
-  const enterMatch = (flag = starOnly) => {
+  const enterMatch = (flag = false) => {
+    setStarOnly(false);
     stopMatchTimer();
     let best = null;
     try { best = parseFloat(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
@@ -465,7 +468,8 @@ function FlashcardPlayer({ item, onComplete }) {
     }
   };
 
-  const enterFill = (flag = starOnly) => {
+  const enterFill = (flag = false) => {
+    setStarOnly(false);
     stopMatchTimer();
     const src = pool(flag); // v274: 星號池
     const eligible = src.filter(c => c.example && c.example.trim());
@@ -498,14 +502,21 @@ function FlashcardPlayer({ item, onComplete }) {
     else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
   };
 
-  // v317 (#4/#5): 移除「只練星號」分頁——它會就地把牌組縮成星號的、切回來卡住（Alan 回報），
-  // 且與大廳「複習我標星的字」重複。星號標記本身保留（供大廳跨週複習用）。
+  // v318 (#1): 保留「星號單字」為獨立分頁（Alan 要回來、只改名）——只在有星號時出現；
+  // 點它＝只看星號的單字卡，點其他分頁一律重置回全部（不再卡住）。
   const ModeTabs = ({ active }) => (
     <div className="fc-mode-tabs">
-      <button className={"fc-tab" + (active === "card"  ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
+      <button className={"fc-tab" + (active === "card" && !starOnly ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
       <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => enterLearn()}>📖 學習</button>
       <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={() => enterMatch()}>⚡ 配對</button>
       <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={() => enterFill()}>✏️ 填空</button>
+      {stars.size > 0 && (
+        <button
+          className={"fc-tab fc-star-filter" + (active === "card" && starOnly ? " active" : "")}
+          onClick={enterStarred}
+          title="只複習你打星號的單字"
+        >⭐ 星號單字（{stars.size}）</button>
+      )}
     </div>
   );
 

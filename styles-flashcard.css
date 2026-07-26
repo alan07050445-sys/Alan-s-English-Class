@@ -23,6 +23,8 @@
 }
 .fc-tab:hover { color: var(--ink); }
 .fc-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+/* v318 (#1): 星號單字分頁——用金色點綴，跟一般分頁區隔。 */
+.fc-star-filter.active { color: #B8860B; border-bottom-color: #E8B84B; }
 
 /* ── Player ── */
 .fc-player { padding: 28px; }
@@ -1062,9 +1064,10 @@
    #1 背面圖片＋中文放大到跟「學習」模式一樣大（卡片下方本來就有多餘空間、也比較清楚）；
    #2 填空/選擇的彩色選項間距拉開、與題目距離加大（位置很多、不用擠）。 */
 @media (min-width: 901px) {
-  .fc-flip-card { min-height: clamp(440px, 60vh, 580px); }
-  .fc-back-img-wrap { max-height: 420px; }
-  .fc-back-img-wrap img { max-height: 420px; max-width: min(680px, 96%); }
+  /* v318 (#2): Alan 要背面圖再更大——寬 5→7(×1.4)、高多一分(×1.2)；卡片再加高容納。 */
+  .fc-flip-card { min-height: clamp(460px, 66vh, 660px); }
+  .fc-back-img-wrap { max-height: 500px; }
+  .fc-back-img-wrap img { max-height: 500px; max-width: min(950px, 96%); }
   .fc-zh { font-size: 50px; margin-bottom: 14px; }
   .fc-example { font-size: 19px; max-width: 620px; }
   /* #2 彩色選項不擠 */

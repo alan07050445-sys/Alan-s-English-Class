@@ -953,10 +953,19 @@ async function unlockBadge(uid, badgeId) {
 
 async function saveQuizMistakes(uid, displayName, email, itemId, wrongList) {
   if (!uid || !itemId) return;
-  const wrongQuestions = (wrongList || []).map(q => ({
-    q: String(q.q || '').slice(0, 180),
-    answer: String((q.options || [])[q.correct] || '').slice(0, 120),
-  })).filter(q => q.q);
+  const wrongQuestions = (wrongList || []).map(q => {
+    const o = {
+      q: String(q.q || '').slice(0, 180),
+      answer: String((q.options || [])[q.correct] || '').slice(0, 120),
+    };
+    // v318 (#3): 一併存「原始選項＋正解索引」，錯題重練才能用原題原選項（不再亂湊干擾項）
+    if (Array.isArray(q.options) && q.options.length >= 2 &&
+        typeof q.correct === 'number' && q.correct >= 0 && q.correct < q.options.length) {
+      o.options = q.options.map(x => String(x).slice(0, 120)).slice(0, 6);
+      o.correct = q.correct;
+    }
+    return o;
+  }).filter(q => q.q);
   try {
     const ref = _db.collection('progress').doc(uid);
     await ref.set({
@@ -1326,7 +1335,9 @@ function collectWrongQuestions(progressItems, weeks, weekOrder) {
       const key = `${wq.q}|||${wq.answer}`;
       if (seen.has(key)) return;
       seen.add(key);
-      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat, type: prog.itemType || '' });
+      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat, type: prog.itemType || '',
+        // v318 (#3): 帶出原始選項給重練用（舊資料沒有就 undefined，重練那邊會退回舊做法）
+        ...(Array.isArray(wq.options) && typeof wq.correct === 'number' ? { options: wq.options, correct: wq.correct } : {}) });
     });
   });
   return result;
