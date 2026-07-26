@@ -1105,15 +1105,8 @@ function App() {
                   }}
                 />
               ) : isSummerLib ? (
-                /* 題庫視角：這裡的 homework 是「全部學生任務的總集合」，
-                   長得像學生頁會誤導（也會爆量）→ 換成老師提示 */
-                <div className="tt tt-libhint">
-                  <div className="tt-head"><span className="tt-title">📌 題庫模式</span></div>
-                  <div className="tt-empty">
-                    這裡是暑假題庫的完整內容（所有學生任務的總集合）。
-                    每個學生只會看到你在後台「☀️ 暑假發派」勾給他的任務，不會像這頁全部列出。
-                  </div>
-                </div>
+                /* v317 (#6): Alan 要求移除「📌 題庫模式」說明卡（不必要）。 */
+                null
               ) : (
                 <window.TodayTasks
                   week={week}
@@ -1124,15 +1117,31 @@ function App() {
                   onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
                 />
               )}
-              {!editMode && reviewWords.length > 0 && (
-                <button className="review-card" onClick={() => setReviewOpen(true)}>
-                  <span className="review-card-star" aria-hidden="true">⭐</span>
-                  <span className="review-card-body">
-                    <span className="review-card-title">複習我標星的字</span>
-                    <span className="review-card-sub">跨週收集了 {reviewWords.length} 個你標記要複習的單字</span>
-                  </span>
-                  <span className="review-card-cta">開始複習 →</span>
-                </button>
+              {/* v317 (#8): 把「複習錯題」和「複習標星的字」放在一起＝加強複習區（Alan 要求兩者合一）。 */}
+              {!editMode && (reviewWords.length > 0 || (user && mistakesCount > 0)) && (
+                <div className="review-group">
+                  <div className="review-group-title">📌 加強複習</div>
+                  {user && mistakesCount > 0 && (
+                    <button className="review-card" onClick={() => setMistakesOpen(true)}>
+                      <span className="review-card-star" aria-hidden="true">📕</span>
+                      <span className="review-card-body">
+                        <span className="review-card-title">複習我的錯題</span>
+                        <span className="review-card-sub">收集了 {mistakesCount} 道答錯的題目，重練一次更熟</span>
+                      </span>
+                      <span className="review-card-cta">開始複習 →</span>
+                    </button>
+                  )}
+                  {reviewWords.length > 0 && (
+                    <button className="review-card" onClick={() => setReviewOpen(true)}>
+                      <span className="review-card-star" aria-hidden="true">⭐</span>
+                      <span className="review-card-body">
+                        <span className="review-card-title">複習我標星的字</span>
+                        <span className="review-card-sub">跨週收集了 {reviewWords.length} 個你標記要複習的單字</span>
+                      </span>
+                      <span className="review-card-cta">開始複習 →</span>
+                    </button>
+                  )}
+                </div>
               )}
               <window.QuizModeBlocks
                 week={week}

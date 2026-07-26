@@ -75,7 +75,20 @@
 
 /* ── Reveal card ── */
 /* v315 (#1): 卡片加高回接近原本 480，平板橫式(42vh 太矮)不再把背面圖片＋中文裁掉。 */
-.fc-flip-card { width: 100%; min-height: clamp(360px, 58vh, 500px); height: auto; margin-bottom: 28px; cursor: pointer; }
+.fc-flip-card { position: relative; width: 100%; min-height: clamp(360px, 58vh, 500px); height: auto; margin-bottom: 28px; cursor: pointer; }
+/* v317 (#3): 卡片角落的星號（Quizlet 式，好找）——空心☆＝未標、實心★＝已標。 */
+.fc-card-star {
+  position: absolute; top: 14px; left: 14px; z-index: 6;
+  width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0;
+  font-size: 24px; line-height: 1;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--ink-3); cursor: pointer;
+  transition: transform .14s, color .14s, border-color .14s, background .14s;
+  box-shadow: 0 2px 6px rgba(21,19,14,.08);
+}
+.fc-card-star:hover { border-color: #E8B84B; color: #E8A81E; transform: scale(1.07); }
+.fc-card-star.on { background: #FFF6E0; border-color: #E8B84B; color: #E8A81E; }
 .fc-flip-inner { width: 100%; height: 100%; min-height: inherit; position: relative; }
 .fc-face {
   position: absolute; inset: 0;
@@ -1043,4 +1056,19 @@
   .fc-complete-actions { width: 100%; gap: 12px; }
   .fc-complete-actions .btn,
   .fc-complete-actions .btn.primary { width: 100%; min-width: 0; font-size: 13px; padding: 15px 18px; }
+}
+
+/* v317 桌機版加強（≥901px，不動 Alan 覺得OK的平板/手機）：
+   #1 背面圖片＋中文放大到跟「學習」模式一樣大（卡片下方本來就有多餘空間、也比較清楚）；
+   #2 填空/選擇的彩色選項間距拉開、與題目距離加大（位置很多、不用擠）。 */
+@media (min-width: 901px) {
+  .fc-flip-card { min-height: clamp(440px, 60vh, 580px); }
+  .fc-back-img-wrap { max-height: 420px; }
+  .fc-back-img-wrap img { max-height: 420px; max-width: min(680px, 96%); }
+  .fc-zh { font-size: 50px; margin-bottom: 14px; }
+  .fc-example { font-size: 19px; max-width: 620px; }
+  /* #2 彩色選項不擠 */
+  .fc-fill-choices { gap: 22px; margin-top: 28px; max-width: 940px; margin-left: auto; margin-right: auto; width: 100%; }
+  .fc-fill-btn { padding: 28px 20px; }
+  .fc-fill-sentence { padding: 24px 0 40px; }
 }

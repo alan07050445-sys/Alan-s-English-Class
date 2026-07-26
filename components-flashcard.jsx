@@ -498,29 +498,14 @@ function FlashcardPlayer({ item, onComplete }) {
     else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
   };
 
-  // v274: 只練星號——切換後重進當前模式換卡池
-  const toggleStarOnly = (active) => {
-    if (!starOnly && stars.size === 0) return;
-    const nx = !starOnly;
-    setStarOnly(nx);
-    setCardIdx(0); setFlipped(false);
-    if (active === 'learn') enterLearn(nx);
-    else if (active === 'match') enterMatch(nx);
-    else if (active === 'fill') enterFill(nx);
-  };
+  // v317 (#4/#5): 移除「只練星號」分頁——它會就地把牌組縮成星號的、切回來卡住（Alan 回報），
+  // 且與大廳「複習我標星的字」重複。星號標記本身保留（供大廳跨週複習用）。
   const ModeTabs = ({ active }) => (
     <div className="fc-mode-tabs">
       <button className={"fc-tab" + (active === "card"  ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
       <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => enterLearn()}>📖 學習</button>
       <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={() => enterMatch()}>⚡ 配對</button>
       <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={() => enterFill()}>✏️ 填空</button>
-      {(stars.size > 0 || starOnly) && (
-        <button
-          className={"fc-tab fc-star-filter" + (starOnly ? " active" : "")}
-          onClick={() => toggleStarOnly(active)}
-          title="只練打星號（不熟）的單字"
-        >⭐ 只練星號（{stars.size}）</button>
-      )}
     </div>
   );
 
@@ -544,18 +529,19 @@ function FlashcardPlayer({ item, onComplete }) {
         <div className="fc-player">
           <div className="fc-topbar">
             <span className="mono">{safeIdx + 1} / {deck.length}</span>
-            <button
-              className={"fc-star-btn" + (stars.has(card.id) ? " on" : "")}
-              onClick={() => toggleStar(card.id)}
-              aria-label={stars.has(card.id) ? '取消星號' : '標記為不熟'}
-              title="不熟的字打 ★，之後可以只練星號的"
-            >★</button>
             <div className="fc-progress-bar">
               <div className="fc-progress-fill" style={{width: `${((safeIdx + 1) / deck.length) * 100}%`}}/>
             </div>
           </div>
 
           <div className={"fc-flip-card" + (flipped ? " flipped" : "")} onClick={() => setFlipped(f => !f)}>
+            {/* v317 (#3): 星號改放卡片角落（像 Quizlet，好找）；stopPropagation 才不會翻卡。 */}
+            <button
+              className={"fc-card-star" + (stars.has(card.id) ? " on" : "")}
+              onClick={(e) => { e.stopPropagation(); toggleStar(card.id); }}
+              aria-label={stars.has(card.id) ? '取消星號' : '標記為不熟'}
+              title="不熟的字打星號，大廳可以複習所有標星的字"
+            >{stars.has(card.id) ? '★' : '☆'}</button>
             <div className="fc-flip-inner">
               {/* FRONT — English only */}
               <div
