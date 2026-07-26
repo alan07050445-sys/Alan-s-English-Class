@@ -5414,14 +5414,17 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .sa-compose-cats button:hover { border-color: #8B3120; color: #8B3120; background: #fbf3f0; transform: translateY(-1px); }
 
 /* ═══════════ v254: 上一頁鈕＋Spelling 聽寫＋聽寫編輯器 ═══════════ */
+/* v320 (#1): 用 flex 置中＋line-height:1 讓「← 上一頁」文字在膠囊裡上下左右都置中平衡（原本 inline-block 文字略偏）。 */
 .lobby-back {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   align-self: flex-start;
   border: 1.5px solid #d9cfb6;
   background: #fff;
   font-family: inherit;
   font-size: 14px; font-weight: 700; color: #5c554a;
+  line-height: 1;
   border-radius: 100px;
-  padding: 8px 18px;
+  padding: 11px 20px;
   margin-bottom: 4px;
   cursor: pointer;
   transition: color .15s, border-color .15s, transform .15s;

@@ -1062,7 +1062,7 @@ function App() {
                     try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
                     scrollPageToTop();
                   })}
-                >← 上一頁</button>
+                ><span aria-hidden="true">←</span>上一頁</button>
               )}
               {/* v234: 暑假進出改由門口頁引導（呼吸箭頭＋開學標註），大廳橫幅移除 */}
               {!editMode && (
