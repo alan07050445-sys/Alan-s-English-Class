@@ -4,9 +4,10 @@
 /* v315 (#1): Alan 要「原本的一整個版面」——v310 把卡片加了 margin:auto＋max-width 640，
    讓它從「撐滿版面」變成「縮到內容寬(~554)置中」＝縮成這樣；又把高度改成 clamp(300,42vh,440)，
    平板橫式 42vh 只有 ~344px 比圖片(420)還矮＝圖被裁＋大留白＝圖文不平衡。
-   關鍵修法：加回 width:100% 讓它撐滿父層（qm-fc-player-wrap 是 flex，光靠 max-width 撐不開），
-   max-width 收到 760 兼顧桌機不過寬，margin:auto 只在超過 760 時置中。 */
-.fc-wrap { display: flex; flex-direction: column; background: var(--bg); width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+   關鍵修法：加回 width:100% 讓它撐滿父層（qm-fc-player-wrap 是 flex，光靠 max-width 撐不開），margin:auto 只在超過上限時置中。
+   v316: Alan 說桌機版還是太小、要「幾乎滿版」——max-width 760→1400（平板題目區 ~750 仍在上限內＝不受影響，
+   桌機寬螢幕才會撐大到接近滿版）。 */
+.fc-wrap { display: flex; flex-direction: column; background: var(--bg); width: 100%; max-width: 1400px; margin-left: auto; margin-right: auto; }
 .fc-mode-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-paper); }
 .fc-tab {
   flex: 1;
@@ -132,7 +133,8 @@
 .fc-card-img-wrap { max-height: 280px; margin-bottom: 12px; }
 .fc-card-img-wrap img { max-height: 280px; max-width: min(430px, 88%); object-fit: contain; border-radius: 6px; }
 
-.fc-term { font-size: clamp(52px, 8vw, 84px); line-height: 1.1; letter-spacing: -0.015em; margin-bottom: 10px; }
+/* v316: Alan 覺得英文單字字體太大——上限 84→70、成長速度 8vw→7vw（桌機/平板都小一號、仍清楚大氣）。 */
+.fc-term { font-size: clamp(52px, 7vw, 70px); line-height: 1.1; letter-spacing: -0.015em; margin-bottom: 10px; }
 .fc-flip-hint { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8270; }
 .fc-zh { font-size: 36px; font-weight: 700; margin-bottom: 12px; line-height: 1.25; }
 .fc-example { font-size: 17px; color: var(--ink-muted); max-width: 520px; line-height: 1.6; }
