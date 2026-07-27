@@ -5265,6 +5265,23 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   padding: 5px 12px;
   letter-spacing: .06em;
 }
+/* v323: 文章分組小標（分類底下再依文章分組，跟學生端側欄一致）＋整組一鍵發派 */
+.sa-mx-agroup td {
+  background: #fbf7ec;
+  padding: 4px 12px 4px 22px;
+  border-bottom: 1px solid #f0e9d9;
+}
+.sa-mx-agroup-name { font-size: 12.5px; font-weight: 800; color: #5c4a2e; }
+.sa-mx-agroup-n { font-family: var(--mono, monospace); font-size: 10.5px; color: #b3a98f; margin-left: 8px; }
+.sa-mx-agroup-all {
+  float: right;
+  border: 1px solid #cdbf9c; background: #fff;
+  font-family: inherit; font-size: 11px; font-weight: 700; color: #8B3120;
+  border-radius: 100px; padding: 2px 11px; cursor: pointer;
+  transition: filter .12s, background .12s;
+}
+.sa-mx-agroup-all:hover { background: #fbf3e6; }
+.sa-mx-agroup-all:disabled { opacity: .5; cursor: wait; }
 .sa-mx-cell { text-align: center; width: 58px; }
 .sa-mx-chk {
   width: 26px; height: 26px;

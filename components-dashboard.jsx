@@ -463,6 +463,19 @@ function SummerAdmin() {
     }));
     setBusy(false);
   };
+  // v323: 整組（一篇文章的全部單元）→ 全班一鍵發派／取消
+  const toggleGroup = async (items) => {
+    const ids = (items || []).map(it => it.id);
+    if (!ids.length) return;
+    const everyone = active.length > 0 && active.every(stu => { const s = setOf(stu); return ids.every(id => s.has(id)); });
+    setBusy(true);
+    await Promise.all(active.map(stu => {
+      const cur = setOf(stu);
+      ids.forEach(id => { if (everyone) cur.delete(id); else cur.add(id); });
+      return writePlan(stu, Array.from(cur));
+    }));
+    setBusy(false);
+  };
   const toggleCol = (stu) => {                  // 整欄：這位學生本週 全選／清空
     const cur = setOf(stu);
     writePlan(stu, cur.size >= allIds.length ? [] : allIds.slice());
@@ -544,35 +557,52 @@ function SummerAdmin() {
               </tr>
             </thead>
             <tbody>
-              {groups.map(g => (
-                <React.Fragment key={g.cat.id}>
-                  <tr className="sa-mx-cat"><td colSpan={active.length + 1}>{g.cat.titleZh}</td></tr>
-                  {g.items.map(it => (
-                    <tr key={it.id}>
-                      <td className="sa-mx-unitcol">
-                        <span className="sa-mx-title">{it.title}</span>
-                        {/* v259: 空項目提示——沒有題目的單元就算發派了，學生頁也不會顯示 */}
-                        {window.getQuizItems && window.getQuizItems([it]).length === 0 && (
-                          <span className="sa-mx-empty" title="這個單元還沒有題目，學生頁不會顯示。到題庫點鉛筆補題目。">⚠ 沒有題目</span>
-                        )}
-                        <button className="sa-mx-all" disabled={busy} onClick={() => toggleRow(it.id)} title="這個單元：全班一鍵發派／取消">全班</button>
-                      </td>
-                      {active.map(stu => {
-                        const onIt = setOf(stu).has(it.id);
-                        return (
-                          <td key={stu.email} className="sa-mx-cell">
-                            <button
-                              className={`sa-mx-chk${onIt ? ' on' : ''}`}
-                              onClick={() => toggleCell(stu, it.id)}
-                              aria-label={`${stu.name || stu.email} · ${it.title}${onIt ? '（已發派）' : ''}`}
-                            >{onIt ? '✓' : ''}</button>
+              {/* v323: 每個分類內再「依文章分組」（跟學生端側欄同一套 qmGroupByArticle），
+                  題目多的時候一眼看出哪些單元是同一篇的，好發派；每組還可「整組全班」一次發派整篇。 */}
+              {groups.map(g => {
+                const ags = window.qmGroupByArticle ? window.qmGroupByArticle(g.items) : (g.items || []).map(it => ({ single: it }));
+                const itemRow = (it) => (
+                  <tr key={it.id}>
+                    <td className="sa-mx-unitcol">
+                      <span className="sa-mx-title">{it.title}</span>
+                      {/* v259: 空項目提示——沒有題目的單元就算發派了，學生頁也不會顯示 */}
+                      {window.getQuizItems && window.getQuizItems([it]).length === 0 && (
+                        <span className="sa-mx-empty" title="這個單元還沒有題目，學生頁不會顯示。到題庫點鉛筆補題目。">⚠ 沒有題目</span>
+                      )}
+                      <button className="sa-mx-all" disabled={busy} onClick={() => toggleRow(it.id)} title="這個單元：全班一鍵發派／取消">全班</button>
+                    </td>
+                    {active.map(stu => {
+                      const onIt = setOf(stu).has(it.id);
+                      return (
+                        <td key={stu.email} className="sa-mx-cell">
+                          <button
+                            className={`sa-mx-chk${onIt ? ' on' : ''}`}
+                            onClick={() => toggleCell(stu, it.id)}
+                            aria-label={`${stu.name || stu.email} · ${it.title}${onIt ? '（已發派）' : ''}`}
+                          >{onIt ? '✓' : ''}</button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+                return (
+                  <React.Fragment key={g.cat.id}>
+                    <tr className="sa-mx-cat"><td colSpan={active.length + 1}>{g.cat.titleZh}</td></tr>
+                    {ags.map((ag, agi) => ag.items ? (
+                      <React.Fragment key={ag.key || ('g' + agi)}>
+                        <tr className="sa-mx-agroup">
+                          <td colSpan={active.length + 1}>
+                            <span className="sa-mx-agroup-name">📄 {ag.name || '（未分組）'}</span>
+                            <span className="sa-mx-agroup-n">{ag.items.length} 個單元</span>
+                            <button className="sa-mx-agroup-all" disabled={busy} onClick={() => toggleGroup(ag.items)} title="這一整組（整篇）：全班一鍵發派／取消">整組全班</button>
                           </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
+                        </tr>
+                        {ag.items.map(itemRow)}
+                      </React.Fragment>
+                    ) : itemRow(ag.single))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
