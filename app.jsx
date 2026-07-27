@@ -134,10 +134,9 @@ function App() {
   const [reviewOpen,      setReviewOpen]      = useAppState(false); // v313 (#3): 複習標星單字視窗
   const [welcomeOpen,     setWelcomeOpen]     = useAppState(false); // 文字版（門口頁連結／導覽 fallback）
   const [tourOpen,        setTourOpen]        = useAppState(false); // 實境導覽（大廳聚光燈）
-  // v301: 封面／落地頁狀態也記進 sessionStorage——重新整理時停在原本那一頁（Alan 第 9 點）
-  const [viewLanding,     setViewLanding]     = useAppState(() => {
-    try { return sessionStorage.getItem('alan-view-landing') === '1'; } catch(e) { return false; }
-  });
+  // v325: Alan 要「每次重新載入都回封面頁」（比較直覺）——viewLanding 一律以 true 起始，
+  //       不再從 sessionStorage 還原上次停在哪頁（推翻 v301 的「停在原本那頁」）。
+  const [viewLanding,     setViewLanding]     = useAppState(true);
   const [farewell,        setFarewell]        = useAppState(false); // v301: 登出「期待下次見面」過場（別太突兀）
   const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
 
@@ -476,16 +475,8 @@ function App() {
     setTourOpen(false);
   };
 
-  // v249: 從行銷頁按「開始學習」登入 → 留在首頁（CTA 變「進入課程」）；
-  // 其他情況（重新整理自動恢復登入等）不動──學生日常仍直達門口頁。
-  // v301: 重新整理時停在原本那頁——把封面/落地頁狀態同步到 sessionStorage
-  useAppEffect(() => {
-    try {
-      if (viewLanding) sessionStorage.setItem('alan-view-landing', '1');
-      else sessionStorage.removeItem('alan-view-landing');
-    } catch(e) {}
-  }, [viewLanding]);
-
+  // v249: 從行銷頁按「開始學習」登入 → 留在首頁（CTA 變「進入課程」）。
+  // v325: 不再把 viewLanding 同步進 sessionStorage——每次重新載入一律回封面頁（viewLanding 起始 true）。
   const loginFromLandingRef = useAppRef(false);
   const firstAuthResolveRef = useAppRef(true);
   useAppEffect(() => {
