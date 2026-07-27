@@ -77,6 +77,9 @@ function App() {
   // ── Auth state ──────────────────────────────────────────
   const [user, setUser]           = useAppState(null);
   const [authReady, setAuthReady] = useAppState(false); // show loading until Firebase resolves
+  // v322: 暑假派發清單是否已載入。登入的學生要等它回來才揭曉門口頁，否則載入畫面會在
+  // 暑假資料回來前就淡出→先閃過 G1~G6 選年級畫面(~0.5s)再跳回暑假入口（Alan 回報的 bug）。
+  const [summerMetaReady, setSummerMetaReady] = useAppState(false);
   const [skippedLogin, setSkippedLogin] = useAppState(() => {
     try { return !!sessionStorage.getItem('alan-guest'); } catch(e) { return false; }
   });
@@ -178,8 +181,11 @@ function App() {
   // the .page div to remount and replay its fade-in animation
   const [pageKey, setPageKey] = useAppState(0);
   const loaderStartRef = useAppRef(Date.now());
+  // v322: 揭曉條件＝Firebase 解析完 ＋（老師／或暑假清單已載入）。學生要等暑假清單才不會閃過選年級畫面；
+  // 老師端門口頁本來就是完整版（含年級）＝不用等。summerMetaReady 有 3 秒防呆（見下方）＝永不卡死。
+  const revealReady = authReady && (window.isAdminUser(user) || summerMetaReady);
   useAppEffect(() => {
-    if (authReady) {
+    if (revealReady) {
       const elapsed = Date.now() - loaderStartRef.current;
       const minShow = 1400; // minimum display time so animation always completes
       const waitMs  = Math.max(0, minShow - elapsed);
@@ -189,7 +195,7 @@ function App() {
       const t2 = setTimeout(() => setShowLoader(false), waitMs + 680);     // unmount
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
-  }, [authReady]);
+  }, [revealReady]);
 
   const isTeacher = window.isAdminUser(user);
 
@@ -285,9 +291,19 @@ function App() {
   // ── 暑假 meta（每人一份派發清單；v209 題庫＋個人清單制）────
   const [summerMeta, setSummerMeta] = useAppState({ students: {} });
   useAppEffect(() => {
-    if (!window.subscribeSummerMeta) return;
-    return window.subscribeSummerMeta(setSummerMeta, () => {});
+    if (!window.subscribeSummerMeta) { setSummerMetaReady(true); return; }
+    // v322: 資料回來（或出錯）都標記 ready，載入畫面才知道可以揭曉了
+    return window.subscribeSummerMeta(
+      (m) => { setSummerMeta(m); setSummerMetaReady(true); },
+      () => setSummerMetaReady(true)
+    );
   }, [user?.uid]);
+  // v322: 防呆——暑假清單 3 秒內沒回來也先揭曉（退回一般門口頁），永不卡在載入畫面
+  useAppEffect(() => {
+    if (summerMetaReady) return;
+    const t = setTimeout(() => setSummerMetaReady(true), 3000);
+    return () => clearTimeout(t);
+  }, [summerMetaReady]);
   const isSummer = !!(window.isSummerTrack && window.isSummerTrack(grade));
   const isSummerLib = grade === (window.SUMMER_LIB || 'sl');
   const mySummerPlan = (user && user.email && (summerMeta.students || {})[user.email.toLowerCase()]) || null;
