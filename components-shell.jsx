@@ -1844,10 +1844,16 @@ function WelcomeGuide({ onClose }) {
       真的測驗開始、導覽悄悄退場。（v224: 範例題移除，直接實戰）
    文字版 WelcomeGuide 只當 fallback（大廳空空時）。 */
 function SpotlightTour({ onClose, onEmpty }) {
+  // v324: Alan 指定的 8 站亮燈導覽（照他的順序）——純聚光燈＋說明，走完就結束（不再接「換你操作」）。
   const DEFS = [
-    { sel: '.tt',           fb: '.wh',        t: '老師派的作業在這裡！', s: '點一條任務就開始，做完會打勾 ✓' },
-    { sel: '.qm-blocks',    fb: null,         t: '想自己多練也可以',     s: '單字、文法、字根字首、閱讀寫作，都在這裡' },
-    { sel: '.growth-inline', fb: '.growth-summary-row', t: '爸媽看這裡',           s: '每一週的進步，都看得到' },
+    { sel: '.tt',              fb: '.wh',                 t: '① 老師出的作業在這裡', s: '這週老師派的作業都在這，點一條就開始，做完會打勾 ✓' },
+    { sel: '.qm-blocks',       fb: null,                  t: '② 想自己多練？點這些卡片', s: '作業做完還想練，就點進這些卡片——單字、文法、字根字首、閱讀寫作，自己挑一個練' },
+    { sel: '.growth-inline',   fb: '.growth-summary-row', t: '③ 你的成長曲線', s: '每一週的平均成績都在這，看得到自己的進步' },
+    { sel: '.wh',              fb: null,                  t: '④ 本週完成度', s: '這裡看你完成多少、還有哪些作業沒做完' },
+    { sel: '.week-nav',        fb: '.wh-weeknav',         t: '⑤ 換到不同週', s: '用這裡的箭頭往前、往後，看不同週的作業' },
+    { sel: '.lobby-back',      fb: null,                  t: '⑥ 回大廳', s: '想回到入口（換教室或暑假專區），就點這裡' },
+    { sel: '.user-chip',       fb: '.signin-btn',         t: '⑦ 登出', s: '要登出的話，點你的名字（頭像）就可以' },
+    { sel: '.ll-foot2-contact', fb: '.ll-foot2-btn-line', t: '⑧ 聯絡老師', s: '有問題想找 Alan 老師？從這裡加 LINE 或寄 Email' },
   ];
   // 實際演練：click 站＝只有被圈住的真元素點得動；info 站＝看說明按下一步
   const HDEFS = [
@@ -1860,7 +1866,10 @@ function SpotlightTour({ onClose, onEmpty }) {
   ];
   // ⚠️ 元素一律「用的時候現查」（不能在 render 期間抓一次存起來——
   // .page 以 pageKey remount 時，render 期查到的是即將被拆掉的舊 DOM）
-  const getEl = (d) => document.querySelector(d.sel) || (d.fb ? document.querySelector(d.fb) : null);
+  // v324: 挑「看得見」的那個——mobile 的 .week-nav 是 display:none（但 DOM 還在），
+  // 直接回它會讓聚光燈卡住等不到尺寸；改成沒尺寸就退回 fb（.wh-weeknav）。
+  const pick = (sel) => { const el = sel && document.querySelector(sel); if (!el) return null; const r = el.getBoundingClientRect(); return (r.width || r.height) ? el : null; };
+  const getEl = (d) => pick(d.sel) || pick(d.fb);
   const [stops, setStops] = React.useState([]);
   const [i, setI] = React.useState(0);
   const [phase, setPhase] = React.useState('tour'); // tour → handoff
@@ -1872,17 +1881,15 @@ function SpotlightTour({ onClose, onEmpty }) {
   const last = i === stops.length - 1;
 
   const finish = () => onClose();
-  const next = () => { if (last) setPhase('handoff'); else setI(i + 1); };
+  // v324: Alan 版導覽＝純 8 站亮燈，走完直接結束（不再進「換你操作」handoff 階段）。
+  const next = () => { if (last) finish(); else setI(i + 1); };
   const nextH = () => { if (hi < HDEFS.length - 1) setHi(hi + 1); else finish(); };
 
   // mount 後（DOM 已 commit）才決定有哪些站；大廳空空的（極少見）→ 退回文字版
   React.useEffect(() => {
-    // 這週沒作業時：.tt 仍會渲染（顯示空狀態），第一站文案會誤導 → 換成指向自由練習
-    const noHw = !document.querySelector('.tt-row') && document.querySelector('.tt-empty');
-    const defs = noHw
-      ? [{ sel: '.qm-blocks', fb: null, t: '這週沒有作業，自己挑一個練吧！', s: '單字、文法、字根字首、閱讀寫作都在這裡' }, ...DEFS.slice(1)]
-      : DEFS;
-    const found = defs.filter(d => getEl(d));
+    // v324: 8 站都「現在畫面上真的有」才留下（例如訪客沒有 .user-chip → 退回 .signin-btn；
+    // 某元素完全不存在就跳過那站）。全空（極少見）→ 退回文字版。
+    const found = DEFS.filter(d => getEl(d));
     if (!found.length) { if (onEmpty) onEmpty(); return; }
     setStops(found);
   }, []);
@@ -1994,7 +2001,7 @@ function SpotlightTour({ onClose, onEmpty }) {
             <span className="st-count">{i + 1} / {stops.length}</span>
             <div className="st-title">{s.t}</div>
             <div className="st-sub">{s.s}</div>
-            <button className="st-next" onClick={next}>{last ? '換你操作看看！' : '下一步 →'}</button>
+            <button className="st-next" onClick={next}>{last ? '我知道了 ✓' : '下一步 →'}</button>
           </div>
         </div>
       )}
