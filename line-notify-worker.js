@@ -208,8 +208,20 @@ function isDone(items, wid, itemId) {
 }
 
 // ── 功能B：主引擎 ────────────────────────────────────────
+// 暑假每週結束日（＝該週發派作業的期限）
+const SUMMER_WEEK_END = {
+  SW01: '2026-07-05', SW02: '2026-07-12', SW03: '2026-07-19', SW04: '2026-07-26',
+  SW05: '2026-08-02', SW06: '2026-08-09', SW07: '2026-08-16', SW08: '2026-08-23', SW09: '2026-08-31',
+};
+function summerLibTitle(libWeeks, sw, itemId) {
+  const wk = libWeeks['sl-2026-' + sw] || {};
+  const items = wk.items || {};
+  for (const cat of Object.keys(items)) for (const it of (items[cat] || [])) if (it && it.id === itemId) return it.title || itemId;
+  return itemId;
+}
+
 async function runReminders(env, dryRun) {
-  const R = { ok: true, dryRun: !!dryRun, today: taipeiToday(), homeworkCount: 0, sends: [], skippedNoBind: [], errors: [] };
+  const R = { ok: true, dryRun: !!dryRun, today: taipeiToday(), homeworkCount: 0, summerStudents: 0, sends: [], skippedNoBind: [], errors: [] };
   if (!env.FIREBASE_SA) { R.ok = false; R.errors.push('no_firebase_sa'); return R; }
   if (!env.LINKS) { R.ok = false; R.errors.push('no_kv'); return R; }
   let sa;
@@ -224,6 +236,16 @@ async function runReminders(env, dryRun) {
   const cls = clsDoc && clsDoc.fields ? fsVal({ mapValue: { fields: clsDoc.fields } }) : {};
   const homeworks = buildHomeworkList(cls);
   R.homeworkCount = homeworks.length;
+
+  // 暑假題庫（class/data_summer_lib，取標題）＋ 暑假發派（class/summer_meta）
+  const libDoc = await firestoreGet(project, token, 'class/data_summer_lib');
+  const lib = libDoc && libDoc.fields ? fsVal({ mapValue: { fields: libDoc.fields } }) : {};
+  const libWeeks = lib.weeks || {};
+  const metaDoc = await firestoreGet(project, token, 'class/summer_meta');
+  const meta = metaDoc && metaDoc.fields ? fsVal({ mapValue: { fields: metaDoc.fields } }) : {};
+  const metaByEmail = {};
+  for (const [em, plan] of Object.entries(meta.students || {})) metaByEmail[String(em).toLowerCase()] = plan;
+  R.summerStudents = Object.keys(metaByEmail).length;
 
   // 學生進度（private，需服務帳號）
   const progressDocs = await firestoreList(project, token, 'progress');
@@ -245,14 +267,27 @@ async function runReminders(env, dryRun) {
     }
   }
 
-  // 記錄每份作業「第一次被看到」的日期（＝發布基準）
-  for (const hw of homeworks) { if (!hwseen[hw.key]) hwseen[hw.key] = today; }
-
   for (const st of students) {
+    // 這位學生要追蹤的作業＝學期作業（全班）＋暑假發派給他的單元
+    const todos = homeworks.slice();
+    const plan = metaByEmail[st.email];
+    if (plan && plan.weeks) {
+      for (const sw of Object.keys(plan.weeks)) {
+        const due = SUMMER_WEEK_END[sw];
+        if (!due) continue;
+        const libWid = 'sl-2026-' + sw;
+        for (const itemId of (plan.weeks[sw] || [])) {
+          todos.push({ wid: libWid, itemId, key: libWid + '_' + itemId, title: summerLibTitle(libWeeks, sw, itemId), dueDate: due });
+        }
+      }
+    }
+    // 記錄每份作業「第一次被看到」的日期（＝發布基準）
+    for (const hw of todos) { if (!hwseen[hw.key]) hwseen[hw.key] = today; }
+
     const uids = emailToUids[st.email];
-    if (!uids || !uids.length) { if (homeworks.length) R.skippedNoBind.push(st.name || st.email); continue; }
+    if (!uids || !uids.length) { if (todos.length) R.skippedNoBind.push(st.name || st.email); continue; }
     const lines = [];
-    for (const hw of homeworks) {
+    for (const hw of todos) {
       if (today > hw.dueDate) continue;                // 過期不再提醒
       if (isDone(st.items, hw.wid, hw.itemId)) continue;
       const sent = (hwsent[hw.key] && hwsent[hw.key][st.email]) || [];

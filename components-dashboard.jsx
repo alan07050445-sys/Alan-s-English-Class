@@ -1040,7 +1040,7 @@ function HwRemind() {
 
         {result && (
           <div className="hwr-result">
-            <div className="hwr-meta">今天 {result.today} ｜ 有期限的作業 {result.homeworkCount} 份 ｜ {result.dryRun ? '預覽' : '已發送'} {result.sends.length} 位</div>
+            <div className="hwr-meta">今天 {result.today} ｜ 學期作業 {result.homeworkCount} 份 ｜ 暑假發派 {result.summerStudents || 0} 人 ｜ {result.dryRun ? '預覽' : '已發送'} {result.sends.length} 位</div>
 
             {result.sends.length === 0 ? (
               <div className="roster-hint">目前沒有要提醒的 — 可能大家都完成了、還沒到提醒時間點，或今天的提醒已發過。</div>
