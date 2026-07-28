@@ -173,6 +173,59 @@ export default {
       return json({ ok: false, error: 'line_error', status: res.status, detail }, 502, origin);
     }
 
+    // 發送給指定對象：全班(all) / 某年級(grade) / 個別學生(students)
+    // 全班用 broadcast（含未綁定好友）；年級/個別用 multicast（只發已綁定家長）
+    if (request.method === 'POST' && path === '/push') {
+      if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
+      if (!env.LINKS) return json({ ok: false, error: 'no_kv' }, 500, origin);
+      let body = {};
+      try { body = await request.json(); } catch (e) {}
+      const text = String((body && body.text) || '').trim();
+      if (!text) return json({ ok: false, error: 'empty' }, 400, origin);
+      if (text.length > 4900) return json({ ok: false, error: 'too_long' }, 400, origin);
+
+      const target = body.target || {};
+      const links = JSON.parse((await env.LINKS.get('links')) || '{}');
+      const recipients = new Set();
+
+      if (target.type === 'grade') {
+        const g = String(target.grade || '').toLowerCase();
+        for (const [uid, arr] of Object.entries(links)) {
+          if ((arr || []).some((x) => String(x.grade || '').toLowerCase() === g)) recipients.add(uid);
+        }
+      } else if (target.type === 'students') {
+        const emails = new Set((target.emails || []).map((e) => String(e).toLowerCase()));
+        for (const [uid, arr] of Object.entries(links)) {
+          if ((arr || []).some((x) => emails.has(String(x.email).toLowerCase()))) recipients.add(uid);
+        }
+      } else {
+        for (const uid of Object.keys(links)) recipients.add(uid);
+      }
+
+      const to = [...recipients];
+      if (!to.length) return json({ ok: false, error: 'no_recipients' }, 200, origin);
+
+      // LINE multicast 上限 500 人/次；分批發送
+      let res;
+      for (let i = 0; i < to.length; i += 500) {
+        const batch = to.slice(i, i + 500);
+        try {
+          res = await fetch(LINE_API + '/v2/bot/message/multicast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + env.LINE_TOKEN },
+            body: JSON.stringify({ to: batch, messages: [{ type: 'text', text }] }),
+          });
+        } catch (e) {
+          return json({ ok: false, error: 'network', detail: String(e) }, 502, origin);
+        }
+        if (!res.ok) {
+          const detail = await res.text().catch(() => '');
+          return json({ ok: false, error: 'line_error', status: res.status, detail }, 502, origin);
+        }
+      }
+      return json({ ok: true, count: to.length }, 200, origin);
+    }
+
     // App 同步學生名單到 KV（供 webhook 比對姓名）
     if (request.method === 'POST' && path === '/sync-roster') {
       if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);

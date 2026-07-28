@@ -1633,6 +1633,8 @@ async function _lineCall(path, method, pass, body) {
   }
   return data;
 }
+// 發送給指定對象（target = {type:'all'|'grade'|'students', grade?, emails?}）
+function linePush(target, text, pass) { return _lineCall('/push', 'POST', pass, { target, text: String(text || '') }); }
 // 同步學生名單到 Worker（webhook 比對姓名用）
 function lineSyncRoster(roster, pass) { return _lineCall('/sync-roster', 'POST', pass, { roster: roster || [] }); }
 // 讀家長綁定狀態
@@ -1643,7 +1645,7 @@ function lineUnlink(lineUserId, email, pass) { return _lineCall('/unlink', 'POST
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // LINE 通知
-  LINE_ENDPOINT, lineBroadcast, lineSyncRoster, lineGetLinks, lineUnlink,
+  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,

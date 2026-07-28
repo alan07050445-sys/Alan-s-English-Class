@@ -728,30 +728,50 @@ function RosterManager() {
 
 /* ── LINE 通知（發公告）分頁 ───────────────────────────── */
 function LineNotify() {
-  const [text, setText] = useDash('');
-  const [pass, setPass] = useDash(() => {
+  const [text, setText]     = useDash('');
+  const [pass, setPass]     = useDash(() => {
     try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; }
   });
-  const [busy, setBusy] = useDash(false);
-  const [msg,  setMsg]  = useDash(null); // { type:'ok'|'err', text }
+  const [busy, setBusy]     = useDash(false);
+  const [msg,  setMsg]      = useDash(null);       // { type:'ok'|'err', text }
+  const [target, setTarget] = useDash('all');      // 'all' | 'grade' | 'students'
+  const [grade, setGrade]   = useDash('');         // 選定年級
+  const [picked, setPicked] = useDash([]);         // 選定學生 email
+  const [roster, setRoster] = useDash([]);
+
+  useDashE(() => window.subscribeRoster(setRoster, () => {}), []);
+
+  const activeStudents = roster.filter(s => s.active !== false);
+  const grades = Array.from(new Set(activeStudents.map(s => s.grade).filter(Boolean))).sort();
+
+  const targetLabel = target === 'all' ? '全班（所有好友）'
+    : target === 'grade' ? (grade ? grade.toUpperCase() + ' 年級' : '（尚未選年級）')
+    : (picked.length ? `指定 ${picked.length} 位學生` : '（尚未選學生）');
 
   const send = async () => {
     setMsg(null);
     const t = text.trim();
-    if (!t)          { setMsg({ type: 'err', text: '請先輸入公告內容' }); return; }
-    if (!pass.trim()){ setMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
-    if (!confirm(`確定發送給「全部 LINE 好友」嗎？\n\n${t.slice(0, 80)}${t.length > 80 ? '…' : ''}`)) return;
+    if (!t)                                     { setMsg({ type: 'err', text: '請先輸入公告內容' }); return; }
+    if (!pass.trim())                           { setMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    if (target === 'grade' && !grade)           { setMsg({ type: 'err', text: '請先選一個年級' }); return; }
+    if (target === 'students' && !picked.length){ setMsg({ type: 'err', text: '請先選至少一位學生' }); return; }
+    if (!confirm(`確定發送給「${targetLabel}」嗎？\n\n${t.slice(0, 80)}${t.length > 80 ? '…' : ''}`)) return;
 
     setBusy(true);
     try {
       try { localStorage.setItem('lineAdminPass', pass); } catch (e) {}
-      await window.lineBroadcast(t, pass);
-      setMsg({ type: 'ok', text: '✅ 已送出！加了官方帳號好友的學生都會收到。' });
+      let result;
+      if (target === 'all')        result = await window.lineBroadcast(t, pass);
+      else if (target === 'grade') result = await window.linePush({ type: 'grade', grade }, t, pass);
+      else                         result = await window.linePush({ type: 'students', emails: picked }, t, pass);
+      const n = result && result.count;
+      setMsg({ type: 'ok', text: `✅ 已送出${n ? `給 ${n} 位家長` : ''}！` });
       setText('');
     } catch (e) {
-      const m = e.message === 'unauthorized' ? '管理密碼錯誤，請確認和 Worker 設定的 ADMIN_PASS 一致'
-              : e.message === 'empty'        ? '內容是空的'
-              : e.message === 'too_long'     ? '內容太長了（上限 4900 字）'
+      const m = e.message === 'unauthorized'  ? '管理密碼錯誤，請確認和 Worker 設定的 ADMIN_PASS 一致'
+              : e.message === 'no_recipients' ? '這個對象目前沒有已綁定的家長 — 請先請他們加好友＋回覆姓名綁定'
+              : e.message === 'empty'         ? '內容是空的'
+              : e.message === 'too_long'      ? '內容太長了（上限 4900 字）'
               : 'LINE 發送失敗（' + (e.message || '') + '）' + (e.detail ? '：' + e.detail : '');
       setMsg({ type: 'err', text: '⚠️ ' + m });
     }
@@ -761,6 +781,40 @@ function LineNotify() {
   return (
     <div className="notify-wrap">
       <div className="notify-card">
+        <label className="notify-label">發送對象</label>
+        <div className="notify-target">
+          <button className={target === 'all' ? 'on' : ''} onClick={() => setTarget('all')}>全班</button>
+          <button className={target === 'grade' ? 'on' : ''} onClick={() => setTarget('grade')}>年級</button>
+          <button className={target === 'students' ? 'on' : ''} onClick={() => setTarget('students')}>個別</button>
+        </div>
+
+        {target === 'grade' && (
+          <div className="notify-picker">
+            {grades.length === 0
+              ? <span className="notify-hint">名單裡還沒有年級資料</span>
+              : grades.map(g => (
+                  <button key={g} className={`notify-chip${grade === g ? ' on' : ''}`} onClick={() => setGrade(g)}>{g.toUpperCase()}</button>
+                ))}
+          </div>
+        )}
+        {target === 'students' && (
+          <div className="notify-picker notify-picker-list">
+            {activeStudents.length === 0
+              ? <span className="notify-hint">名單是空的（先到「學生名單」新增）</span>
+              : activeStudents.map(s => {
+                  const on = picked.includes(s.email);
+                  return (
+                    <button
+                      key={s.email}
+                      className={`notify-chip${on ? ' on' : ''}`}
+                      onClick={() => setPicked(on ? picked.filter(e => e !== s.email) : [...picked, s.email])}
+                    >{s.name || s.email}<em>{(s.grade || '').toUpperCase()}</em></button>
+                  );
+                })}
+          </div>
+        )}
+        {target !== 'all' && <div className="notify-hint">年級／個別只會發給「已綁定」的家長（未綁定收不到）。</div>}
+
         <label className="notify-label">公告內容</label>
         <textarea
           className="notify-textarea"
@@ -783,20 +837,20 @@ function LineNotify() {
         <div className="notify-hint">密碼只存在你這台裝置的瀏覽器，不會上傳、也不寫進程式碼。</div>
 
         <button className="notify-send" onClick={send} disabled={busy}>
-          {busy ? '發送中…' : '📢 發送公告給全班'}
+          {busy ? '發送中…' : `📢 發送給${target === 'all' ? '全班' : target === 'grade' ? (grade ? grade.toUpperCase() : '年級') : (picked.length ? picked.length + '位學生' : '個別')}`}
         </button>
 
         {msg && <div className={`notify-msg ${msg.type}`}>{msg.text}</div>}
       </div>
 
       <aside className="notify-side">
-        <h4>怎麼運作？</h4>
+        <h4>三種對象</h4>
         <ol>
-          <li>學生先加「Alan's English Class」官方帳號好友</li>
-          <li>你在這裡打字、按發送</li>
-          <li>所有好友的 LINE 立刻收到訊息</li>
+          <li><b>全班</b>：發給所有加好友的人（含未綁定）</li>
+          <li><b>年級</b>：只發某年級（要已綁定）</li>
+          <li><b>個別</b>：只發選定的學生（要已綁定）</li>
         </ol>
-        <p className="notify-note">還沒加好友的學生收不到 — 可在課堂請他們掃 QR 加入。</p>
+        <p className="notify-note">「年級／個別」靠家長綁定才知道發給誰 → 見「🔗 LINE 綁定」分頁。</p>
       </aside>
     </div>
   );
