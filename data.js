@@ -1641,11 +1641,13 @@ function lineSyncRoster(roster, pass) { return _lineCall('/sync-roster', 'POST',
 function lineGetLinks(pass) { return _lineCall('/links', 'GET', pass); }
 // 解除某筆綁定（email 省略＝整個 LINE 帳號解綁）
 function lineUnlink(lineUserId, email, pass) { return _lineCall('/unlink', 'POST', pass, { lineUserId, email }); }
+// 功能B：手動試跑作業提醒（dry=true 只預覽不發送）
+function lineRunReminders(dry, pass) { return _lineCall('/run-reminders' + (dry ? '?dry=1' : ''), 'POST', pass); }
 
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // LINE 通知
-  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink,
+  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,

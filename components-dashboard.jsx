@@ -984,6 +984,101 @@ function LineLink() {
   );
 }
 
+/* ── 作業自動提醒（功能B）分頁 ─────────────────────────── */
+function HwRemind() {
+  const [pass, setPass]     = useDash(() => { try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; } });
+  const [busy, setBusy]     = useDash(false);
+  const [result, setResult] = useDash(null);
+  const [msg, setMsg]       = useDash(null);
+
+  const run = async (dry) => {
+    const p = pass.trim();
+    if (!p) { setMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    if (!dry && !confirm('確定「立即發送」作業提醒給家長嗎？\n（會真的發 LINE，通常拿來測試或補發）')) return;
+    setBusy(true); setMsg(null); setResult(null);
+    try {
+      try { localStorage.setItem('lineAdminPass', p); } catch (e) {}
+      const R = await window.lineRunReminders(dry, p);
+      setResult(R);
+      setMsg({ type: 'ok', text: dry ? '✅ 試跑完成（未實際發送）' : `✅ 已發送給 ${R.sends.length} 位家長` });
+    } catch (e) {
+      const m = e.message === 'unauthorized' ? '管理密碼錯誤'
+              : e.message === 'no_firebase_sa' ? 'Firebase 服務金鑰還沒設定（見右側步驟）'
+              : String(e.message || '').indexOf('no_access_token') >= 0 ? 'Firebase 金鑰無效或權限不足，請重新產生金鑰'
+              : (e.message || '執行失敗');
+      setMsg({ type: 'err', text: '⚠️ ' + m });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="notify-wrap">
+      <div className="notify-card">
+        <div className="linkbind-head">
+          <div>
+            <b>作業自動提醒</b>
+            <span className="linkbind-summary">每天傍晚 18:00 自動檢查，未完成作業依「新／3天／5天／前1天」提醒家長</span>
+          </div>
+        </div>
+
+        {(!pass.trim()) && (
+          <div className="linkbind-passrow">
+            <input className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）" value={pass} onChange={e => setPass(e.target.value)} />
+          </div>
+        )}
+
+        <div className="hwr-btns">
+          <button className="notify-send hwr-preview" onClick={() => run(true)} disabled={busy}>
+            {busy ? '執行中…' : '🔍 試跑預覽（不發送）'}
+          </button>
+          <button className="notify-send" onClick={() => run(false)} disabled={busy}>
+            📤 立即發送一次
+          </button>
+        </div>
+
+        {msg && <div className={`notify-msg ${msg.type}`}>{msg.text}</div>}
+
+        {result && (
+          <div className="hwr-result">
+            <div className="hwr-meta">今天 {result.today} ｜ 有期限的作業 {result.homeworkCount} 份 ｜ {result.dryRun ? '預覽' : '已發送'} {result.sends.length} 位</div>
+
+            {result.sends.length === 0 ? (
+              <div className="roster-hint">目前沒有要提醒的 — 可能大家都完成了、還沒到提醒時間點，或今天的提醒已發過。</div>
+            ) : (
+              <div className="hwr-list">
+                {result.sends.map(s => (
+                  <div key={s.email} className="hwr-row">
+                    <b>{s.name || s.email}</b>
+                    <ul>{(s.lines || []).map((l, i) => <li key={i}>{l.replace(/^•\s*/, '')}</li>)}</ul>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {result.skippedNoBind && result.skippedNoBind.length > 0 && (
+              <div className="hwr-warn">⚠️ 有作業但家長未綁定（收不到）：{result.skippedNoBind.join('、')}</div>
+            )}
+            {result.errors && result.errors.length > 0 && (
+              <div className="notify-msg err">發送錯誤：{result.errors.join('；')}</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <aside className="notify-side">
+        <h4>提醒排程</h4>
+        <ol>
+          <li>系統第一次看到作業 → 發「新作業」</li>
+          <li>第 3 天未完成 → 提醒</li>
+          <li>第 5 天未完成 → 提醒</li>
+          <li>期限前 1 天 → 「明天到期」</li>
+        </ol>
+        <p className="notify-note">同一孩子今天要提醒的作業會合併成一則。過期就不再提醒。只發給「已綁定」的家長。</p>
+      </aside>
+    </div>
+  );
+}
+
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const [students,       setStudents]      = useDash([]);
@@ -1168,6 +1263,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告' },
     { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態' },
+    { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
@@ -1231,6 +1327,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <LineNotify/>
           ) : tab === 'linelink' ? (
             <LineLink/>
+          ) : tab === 'hwremind' ? (
+            <HwRemind/>
           ) : tab === 'summer' ? (
             <SummerAdmin/>
           ) : selected ? (
