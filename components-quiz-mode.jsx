@@ -1542,7 +1542,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   const showZh  = item.spellShowZh !== false;
 
   const speak = () => {
-    if (current && window.speakText) window.speakText(current.word, { lang: 'en-US', rate: 0.82 });
+    if (current && window.speakText) (window.speakTTS || window.speakText)(current.word, { lang: 'en-US', rate: 0.82 });
   };
   React.useEffect(() => { speak(); }, [idx]); // 每題自動唸一次（進場點擊已是手勢，iOS OK）
   React.useEffect(() => {
@@ -2039,7 +2039,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   useQME(() => {
     const cur = deck[deckPos];
     if (cur?.qtype === 'listening' && screen === 'quiz') {
-      window.speakText(cur.word);
+      (window.speakTTS || window.speakText)(cur.word);
     }
   }, [deckPos, screen]);
 
@@ -2184,7 +2184,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       <div key={deckPos} className="qm-question-area qm-question-swap">
         {q.hint && <div className="qm-question-hint">{q.hint}</div>}
         {q.qtype === 'listening' ? (
-          <button className="qm-listen-btn" onClick={() => window.speakText(q.word)} title="再聽一次">
+          <button className="qm-listen-btn" onClick={() => (window.speakTTS || window.speakText)(q.word)} title="再聽一次">
             <span className="qm-listen-icon">🔊</span>
             <span className="qm-listen-label">點擊重聽 · Tap to replay</span>
           </button>
@@ -2875,7 +2875,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const openWord = (w, ctx, evt) => {
     const word = String(w || '').replace(/^[^A-Za-z'’-]+|[^A-Za-z'’-]+$/g, '');
     if (!word) return;
-    if (window.speakText) window.speakText(word);
+    if (window.speakText) (window.speakTTS || window.speakText)(word);
     let pos = null;
     try {
       const el = evt && (evt.currentTarget || evt.target);
@@ -3404,7 +3404,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           style={dict.pos ? { left: dict.pos.x, top: dict.pos.y, bottom: 'auto', transform: dict.pos.above ? 'translate(-50%, -100%)' : 'translateX(-50%)' } : undefined}>
           <div className="gr-word-pop-head">
             <b>{dict.word}</b>
-            <button className="gr-word-say" onClick={() => window.speakText && window.speakText(dict.word)} title="再聽一次">🔊</button>
+            <button className="gr-word-say" onClick={() => window.speakText && (window.speakTTS || window.speakText)(dict.word)} title="再聽一次">🔊</button>
             <span style={{flex:1}}/>
             <button className="gr-word-x" onClick={() => setDict(null)}>✕</button>
           </div>

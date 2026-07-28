@@ -65,6 +65,10 @@
   flex-shrink: 0;
 }
 .fc-speaker-btn:hover { color: var(--ink); border-color: var(--ink); background: var(--bg-card); }
+/* v326: 產生 OpenAI 真人語音時的載入狀態（脈動一下，表示正在準備聲音） */
+.fc-speaker-btn.loading { cursor: wait; animation: fcSpeakPulse .9s ease-in-out infinite; }
+@keyframes fcSpeakPulse { 0%,100% { opacity: .45; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) { .fc-speaker-btn.loading { animation: none; opacity: .6; } }
 
 /* Speaker on card faces */
 .fc-face-speaker {

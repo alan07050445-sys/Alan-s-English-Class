@@ -6,16 +6,25 @@ const PIXABAY_KEY = "55964296-48988fd7e26a6999ecaff6b95";
 const PEXELS_KEY  = "ddCplPdhHd2AvScvkob1rxUHoz7UEoLk0yETCc6tdBZ3rlhR5Zwsjs4P";
 const RETRY_GAP = 4; // wrong cards reappear after this many cards
 
-/* ── Text-to-speech (delegates to shared window.speakText in data.js) ── */
+/* ── Text-to-speech (v326: 英文用 OpenAI 真人聲音 window.speakTTS；中文自動退回瀏覽器語音) ── */
 function speak(text, lang = 'en-US') {
-  window.speakText(text, { lang });
+  (window.speakTTS || window.speakText)(text, { lang });
 }
 
 function SpeakerBtn({ text, lang = 'en-US', className = "" }) {
+  const [busy, setBusy] = React.useState(false);  // v326: 產生 OpenAI 語音時顯示載入中
+  const onClick = async (e) => {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try { await ((window.speakTTS || window.speakText)(text, { lang })); }
+    catch (err) {}
+    finally { setBusy(false); }
+  };
   return (
     <button
-      className={"fc-speaker-btn " + className}
-      onClick={e => { e.stopPropagation(); speak(text, lang); }}
+      className={"fc-speaker-btn " + className + (busy ? " loading" : "")}
+      onClick={onClick}
       title="Listen · 聆聽"
       aria-label="播放發音"
     >

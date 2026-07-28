@@ -776,6 +776,39 @@ function speakText(text, { rate = 0.85, lang = 'en-US' } = {}) {
   } catch(e) { return false; }
 }
 
+// v326: 全站語音統一用 OpenAI 真人聲音（打 Worker /tts，跟閱讀同一把聲音）。
+// 英文（單字卡、聽寫、查字典…）走這裡：拿 mp3、同一個字只產一次（快取）、共用一個 <audio> 播放；
+// 失敗才退回瀏覽器語音，所以一定有聲音。中文（單字卡背面的中文意思）Worker /tts 是英文聲線→維持瀏覽器語音。
+const _ttsAudioCache = {};   // 英文字串 → objectURL（OpenAI mp3）
+let _ttsAudioEl = null;      // 共用 <audio>
+let _ttsPlayToken = 0;       // 連點時只讓最後一次真的播
+async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  // 中文/非英文 → 瀏覽器語音（Worker /tts 只有英文聲線）
+  if (!/^en/i.test(lang)) { try { speakText(t, { lang, rate }); } catch(e) {} return; }
+  // 先停掉正在講的（瀏覽器＋前一段 mp3），避免兩個聲音疊起來
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e) {}
+  if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch(e) {} }
+  const token = ++_ttsPlayToken;
+  try {
+    let url = _ttsAudioCache[t];
+    if (!url) {
+      const blob = await generateTtsAudio(t);   // Worker /tts → mp3 Blob
+      url = URL.createObjectURL(blob);
+      _ttsAudioCache[t] = url;
+    }
+    if (token !== _ttsPlayToken) return;         // 已被更新的點擊取代
+    const a = _ttsAudioEl || (_ttsAudioEl = new Audio());
+    a.src = url;
+    try { a.playbackRate = 0.92; } catch(e) {}   // 稍慢一點更清楚（單字/聽寫）
+    await a.play();
+  } catch (e) {
+    // OpenAI 語音不可用（Worker 沒 /tts 或斷線）→ 退回瀏覽器語音，確保有聲音
+    try { speakText(t, { lang, rate }); } catch(e2) {}
+  }
+}
+
 // v293: 把一段文字切成「句子／子句」，並為每塊標一個停頓時間（毫秒）——
 // 讓瀏覽器朗讀遇到標點會停一下、更像真人在讀。句末(.!?)停久一點、逗號類短停。
 function grSpeechChunks(text) {
@@ -1585,7 +1618,7 @@ Object.assign(window, {
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS
-  playSound, speakText, speakSentences, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
+  playSound, speakText, speakTTS, speakSentences, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain

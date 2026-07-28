@@ -790,7 +790,7 @@ function LoginScreenLegacy({ onLogin, onSkip, onBack, loggedIn, userName, onLogo
                         className="lldm-spk"
                         title="點我聽 apple 的發音"
                         aria-label="播放 apple 的發音"
-                        onClick={() => window.speakText && window.speakText('apple', { lang: 'en-US' })}
+                        onClick={() => window.speakText && (window.speakTTS || window.speakText)('apple', { lang: 'en-US' })}
                       >🔊</button>
                       <div className="lldm-opts" aria-hidden="true">
                         <span>ant</span>
