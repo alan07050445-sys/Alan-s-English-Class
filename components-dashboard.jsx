@@ -802,6 +802,134 @@ function LineNotify() {
   );
 }
 
+/* ── LINE 綁定管理分頁 ─────────────────────────────────── */
+function LineLink() {
+  const [roster, setRoster] = useDash([]);
+  const [links,  setLinks]  = useDash(null); // { lineUserId: [{email,name,grade}] }
+  const [busy,   setBusy]   = useDash(false);
+  const [msg,    setMsg]    = useDash(null);
+  const [pass,   setPass]   = useDash(() => {
+    try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; }
+  });
+
+  useDashE(() => window.subscribeRoster(setRoster, () => {}), []);
+
+  const load = async (r, p) => {
+    const rr = r || roster;
+    const pp = (p != null ? p : pass).trim();
+    if (!pp) { setMsg({ type: 'err', text: '請先輸入管理密碼（和發公告用的同一組）' }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      try { localStorage.setItem('lineAdminPass', pp); } catch (e) {}
+      await window.lineSyncRoster(rr, pp);        // 先把最新名單推上 Worker
+      const data = await window.lineGetLinks(pp); // 再讀綁定狀態
+      setLinks(data.links || {});
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message === 'unauthorized' ? '⚠️ 管理密碼錯誤' : ('⚠️ 讀取失敗：' + (e.message || '')) });
+    }
+    setBusy(false);
+  };
+
+  // 名單到齊且已有密碼 → 自動同步並讀綁定（只跑一次）
+  useDashE(() => {
+    if (roster.length && pass.trim() && links === null) load(roster, pass);
+  }, [roster]);
+
+  const doUnlink = async (uid, email, name) => {
+    if (!confirm(`確定解除「${name}」的綁定嗎？之後這位家長就收不到與 ${name} 有關的提醒。`)) return;
+    try { await window.lineUnlink(uid, email, pass); await load(); }
+    catch (e) { setMsg({ type: 'err', text: '⚠️ 解除失敗：' + (e.message || '') }); }
+  };
+
+  const boundEmails = new Set();
+  Object.values(links || {}).forEach(arr => (arr || []).forEach(x => boundEmails.add(String(x.email).toLowerCase())));
+  const activeStudents = roster.filter(s => s.active !== false);
+  const unbound = activeStudents.filter(s => !boundEmails.has(String(s.email).toLowerCase()));
+  const linkEntries = Object.entries(links || {});
+
+  return (
+    <div className="notify-wrap">
+      <div className="notify-card">
+        <div className="linkbind-head">
+          <div>
+            <b>家長綁定狀態</b>
+            {links !== null && (
+              <span className="linkbind-summary">
+                {linkEntries.length} 個 LINE 已綁 · {boundEmails.size}/{activeStudents.length} 位學生已連結
+              </span>
+            )}
+          </div>
+          <button className="roster-toggle-btn" onClick={() => load()} disabled={busy}>
+            {busy ? '更新中…' : '↻ 重新整理'}
+          </button>
+        </div>
+
+        {(!pass.trim()) && (
+          <div className="linkbind-passrow">
+            <input
+              className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）"
+              value={pass} onChange={e => setPass(e.target.value)}
+            />
+            <button className="notify-send linkbind-passbtn" onClick={() => load(roster, pass)} disabled={busy}>確認</button>
+          </div>
+        )}
+
+        {msg && <div className={`notify-msg ${msg.type}`}>{msg.text}</div>}
+
+        {links === null ? (
+          !busy && pass.trim() && <div className="roster-hint">載入中…（若一直沒反應，按「重新整理」）</div>
+        ) : (
+          <>
+            {/* 已綁定 */}
+            {linkEntries.length === 0 ? (
+              <div className="dt-empty"><p>還沒有人綁定</p><p className="dt-empty-hint">請家長加官方帳號好友後，回覆孩子姓名即可綁定。</p></div>
+            ) : (
+              <div className="roster-list">
+                {linkEntries.map(([uid, arr]) => (
+                  <div key={uid} className="linkbind-row">
+                    <div className="linkbind-kids">
+                      {(arr || []).map(x => (
+                        <span key={x.email} className="linkbind-kid">
+                          {x.name}<em>{(x.grade || '').toUpperCase()}</em>
+                          <button className="linkbind-x" title="解除綁定" onClick={() => doUnlink(uid, x.email, x.name)}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                    <span className="linkbind-uid" title={uid}>LINE …{String(uid).slice(-6)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 未綁定 */}
+            {unbound.length > 0 && (
+              <div className="linkbind-unbound">
+                <b>尚未綁定（{unbound.length}）</b>
+                <div className="linkbind-unbound-list">
+                  {unbound.map(s => (
+                    <span key={s.email} className="linkbind-chip">{s.name || s.email}<em>{(s.grade || '').toUpperCase()}</em></span>
+                  ))}
+                </div>
+                <p className="linkbind-note">提醒這些孩子的家長：加官方帳號好友 → 回覆孩子姓名即可。</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <aside className="notify-side">
+        <h4>家長怎麼綁定？</h4>
+        <ol>
+          <li>加官方帳號好友 <b>@247igfhl</b></li>
+          <li>直接回覆孩子的姓名（例：王小明）</li>
+          <li>系統自動配對名單、回覆「已綁定」</li>
+        </ol>
+        <p className="notify-note">綁定後才收得到「按年級／個別」通知與作業提醒。名字要和名單一致，配不到會請家長聯絡你。</p>
+      </aside>
+    </div>
+  );
+}
+
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const [students,       setStudents]      = useDash([]);
@@ -985,6 +1113,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題' },
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告' },
+    { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
@@ -1046,6 +1175,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <RosterManager/>
           ) : tab === 'notify' ? (
             <LineNotify/>
+          ) : tab === 'linelink' ? (
+            <LineLink/>
           ) : tab === 'summer' ? (
             <SummerAdmin/>
           ) : selected ? (

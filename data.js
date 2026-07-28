@@ -1619,10 +1619,31 @@ async function lineBroadcast(text, pass) {
   return data;
 }
 
+// 共用的 LINE Worker 呼叫（帶管理密碼）
+async function _lineCall(path, method, pass, body) {
+  const opts = { method, headers: { 'x-admin-pass': pass || '' } };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(LINE_ENDPOINT + path, opts);
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok || !data || !data.ok) {
+    const err = new Error((data && data.error) || ('http_' + res.status));
+    err.detail = data && data.detail;
+    throw err;
+  }
+  return data;
+}
+// 同步學生名單到 Worker（webhook 比對姓名用）
+function lineSyncRoster(roster, pass) { return _lineCall('/sync-roster', 'POST', pass, { roster: roster || [] }); }
+// 讀家長綁定狀態
+function lineGetLinks(pass) { return _lineCall('/links', 'GET', pass); }
+// 解除某筆綁定（email 省略＝整個 LINE 帳號解綁）
+function lineUnlink(lineUserId, email, pass) { return _lineCall('/unlink', 'POST', pass, { lineUserId, email }); }
+
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // LINE 通知
-  LINE_ENDPOINT, lineBroadcast,
+  LINE_ENDPOINT, lineBroadcast, lineSyncRoster, lineGetLinks, lineUnlink,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,
