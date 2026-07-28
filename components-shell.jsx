@@ -97,7 +97,7 @@ function Header({
               )}
               {canEdit && (
                 <button className="dashboard-btn" onClick={onShowDashboard} title="Class Report">
-                  <Icon name="users" size={13}/> Report
+                  <Icon name="users" size={13}/> <span className="db-label">Report</span>
                 </button>
               )}
               {user ? (

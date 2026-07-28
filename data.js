@@ -1598,8 +1598,31 @@ body{background:#ECE4D2;font-family:var(--sans);color:var(--ink);-webkit-font-sm
 </div></body></html>`;
 }
 
+// ── LINE 通知（老師發公告）─────────────────────────────
+// 走「獨立」的 LINE Worker（跟 AI Worker 分開）。管理密碼由老師在後台輸入、
+// 只存在該裝置 localStorage，不寫進這份公開程式碼。
+// ⚠️ 部署 Worker 後，若你取的名字不是 alan-line，把下面網址改成你的。
+const LINE_ENDPOINT = 'https://alan-line.alan07050445.workers.dev';
+async function lineBroadcast(text, pass) {
+  const res = await fetch(LINE_ENDPOINT + '/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass || '' },
+    body: JSON.stringify({ text: String(text || '') }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok || !data || !data.ok) {
+    const err = new Error((data && data.error) || ('http_' + res.status));
+    err.detail = data && data.detail;
+    throw err;
+  }
+  return data;
+}
+
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
+  // LINE 通知
+  LINE_ENDPOINT, lineBroadcast,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,

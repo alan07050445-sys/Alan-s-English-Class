@@ -2428,6 +2428,103 @@
   border-radius: 8px;
   padding: 9px 13px;
 }
+/* ── LINE 通知（發公告）分頁 ─────────────────────────── */
+.notify-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 22px;
+  align-items: start;
+}
+.notify-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--card, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+}
+.notify-label {
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 6px;
+}
+.notify-textarea {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  resize: vertical;
+  min-height: 120px;
+}
+.notify-textarea:focus,
+.notify-pass:focus { outline: none; border-color: var(--ink); }
+.notify-count {
+  align-self: flex-end;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.notify-pass {
+  font-family: var(--sans);
+  font-size: 14.5px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 13px;
+}
+.notify-hint {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+.notify-send {
+  margin-top: 12px;
+  padding: 12px 18px;
+  background: #06c755; /* LINE green */
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--sans);
+  font-size: 15.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.notify-send:hover { filter: brightness(0.94); }
+.notify-send:disabled { opacity: .55; cursor: default; }
+.notify-msg {
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+.notify-msg.ok  { background: rgba(6,199,85,.12); color: #08883d; }
+.notify-msg.err { background: rgba(220,53,69,.10); color: #b02330; }
+.notify-side {
+  font-family: var(--sans);
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  color: var(--ink-muted);
+}
+.notify-side h4 { margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+.notify-side ol { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
+.notify-note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; }
+@media (max-width: 760px) {
+  .notify-wrap { grid-template-columns: 1fr; }
+}
+
 .roster-list { display: flex; flex-direction: column; gap: 6px; }
 .roster-row {
   display: flex;

@@ -923,3 +923,36 @@
 .qm-fcb-text b { font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 16px; color: var(--ink, #15130e); }
 .qm-fcb-text > span { font-size: 12px; color: #8a6d1c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qm-fcb-arrow { flex: none; font-size: 18px; font-weight: 700; color: var(--g-c, #8B3120); }
+
+/* ── v327: 手機版 header 修正（Alan 回報：暑假模式下頂列太擠、溢出畫面）──
+   問題：老師登入後（品牌名＋暑假徽章＋編輯＋Report＋頭像）在窄螢幕塞不下——
+   「暑假」被壓成直排紅塊、Report 與頭像被推出畫面右緣。
+   修正：品牌欄可壓縮、徽章永不折行、Report 於窄螢幕只留圖示、頭像不再帶名字。 */
+.grade-chip { white-space: nowrap; }
+@media (max-width: 560px) {
+  .header-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    height: 56px;
+    padding: 0;
+  }
+  .brand { min-width: 0; gap: 8px; }
+  .brand-name {
+    font-size: 16px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .grade-chip { flex: 0 0 auto; }
+  .header-right { gap: 8px; }
+  .header-auth { gap: 8px; }
+  .dashboard-btn { padding: 7px; gap: 0; }
+  .dashboard-btn .db-label { display: none; }   /* 窄螢幕只留 icon */
+  .user-name { display: none; }                  /* 頭像已足夠、省空間 */
+}
+
+/* ── v327: footer 兩欄在手機上改「上下堆疊」，消掉「使用說明」右側孤立留白（Alan 選 B）── */
+@media (max-width: 560px) {
+  .ll-foot2 { padding-top: 40px; }
+  .ll-foot2-cols { flex-direction: column; gap: 22px; }
+}

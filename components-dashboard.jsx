@@ -726,6 +726,82 @@ function RosterManager() {
   );
 }
 
+/* ── LINE 通知（發公告）分頁 ───────────────────────────── */
+function LineNotify() {
+  const [text, setText] = useDash('');
+  const [pass, setPass] = useDash(() => {
+    try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; }
+  });
+  const [busy, setBusy] = useDash(false);
+  const [msg,  setMsg]  = useDash(null); // { type:'ok'|'err', text }
+
+  const send = async () => {
+    setMsg(null);
+    const t = text.trim();
+    if (!t)          { setMsg({ type: 'err', text: '請先輸入公告內容' }); return; }
+    if (!pass.trim()){ setMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    if (!confirm(`確定發送給「全部 LINE 好友」嗎？\n\n${t.slice(0, 80)}${t.length > 80 ? '…' : ''}`)) return;
+
+    setBusy(true);
+    try {
+      try { localStorage.setItem('lineAdminPass', pass); } catch (e) {}
+      await window.lineBroadcast(t, pass);
+      setMsg({ type: 'ok', text: '✅ 已送出！加了官方帳號好友的學生都會收到。' });
+      setText('');
+    } catch (e) {
+      const m = e.message === 'unauthorized' ? '管理密碼錯誤，請確認和 Worker 設定的 ADMIN_PASS 一致'
+              : e.message === 'empty'        ? '內容是空的'
+              : e.message === 'too_long'     ? '內容太長了（上限 4900 字）'
+              : 'LINE 發送失敗（' + (e.message || '') + '）' + (e.detail ? '：' + e.detail : '');
+      setMsg({ type: 'err', text: '⚠️ ' + m });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="notify-wrap">
+      <div className="notify-card">
+        <label className="notify-label">公告內容</label>
+        <textarea
+          className="notify-textarea"
+          placeholder="例如：這週作業請在週五前完成，有問題隨時問老師 📚"
+          value={text}
+          maxLength={4900}
+          rows={5}
+          onChange={e => setText(e.target.value)}
+        />
+        <div className="notify-count">{text.length} / 4900</div>
+
+        <label className="notify-label">管理密碼</label>
+        <input
+          className="notify-pass"
+          type="password"
+          placeholder="你在 Worker 設定的 ADMIN_PASS"
+          value={pass}
+          onChange={e => setPass(e.target.value)}
+        />
+        <div className="notify-hint">密碼只存在你這台裝置的瀏覽器，不會上傳、也不寫進程式碼。</div>
+
+        <button className="notify-send" onClick={send} disabled={busy}>
+          {busy ? '發送中…' : '📢 發送公告給全班'}
+        </button>
+
+        {msg && <div className={`notify-msg ${msg.type}`}>{msg.text}</div>}
+      </div>
+
+      <aside className="notify-side">
+        <h4>怎麼運作？</h4>
+        <ol>
+          <li>學生先加「Alan's English Class」官方帳號好友</li>
+          <li>你在這裡打字、按發送</li>
+          <li>所有好友的 LINE 立刻收到訊息</li>
+        </ol>
+        <p className="notify-note">還沒加好友的學生收不到 — 可在課堂請他們掃 QR 加入。</p>
+      </aside>
+    </div>
+  );
+}
+
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const [students,       setStudents]      = useDash([]);
@@ -908,6 +984,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const NAV = [
     { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題' },
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
+    { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
@@ -967,6 +1044,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
           <div className="dash-body tdash-content">
           {tab === 'roster' ? (
             <RosterManager/>
+          ) : tab === 'notify' ? (
+            <LineNotify/>
           ) : tab === 'summer' ? (
             <SummerAdmin/>
           ) : selected ? (
