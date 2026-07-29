@@ -966,11 +966,14 @@
   .qm-block-icon { width: 46px; height: 46px; border-radius: 13px; margin-top: 1px; }
   .qm-block-title { font-size: 15.5px; margin-bottom: 3px; }
   .qm-block-title-zh { font-size: 10.5px; white-space: nowrap; margin-bottom: 7px; }
-  .qm-block-count { font-size: 12px; }
-  .qm-pct { font-size: 13px; }
+  .qm-block-count { font-size: 13.5px; }
+  .qm-pct { font-size: 14px; }
   .qm-block-meta { font-size: 11.5px; }
   .qm-block-empty { font-size: 12.5px; white-space: nowrap; }
   .qm-block-arrow { top: 50%; transform: translateY(-50%); width: 30px; height: 30px; font-size: 16px; }
+  /* 「我的暑假練習」標題：柔和一點（降字重＋縮小）＋往下、跟「今天的任務」拉開距離 */
+  .qm-blocks-head-view { margin-top: 26px; }
+  .qm-blocks-title { font-size: 21px; font-weight: 600; letter-spacing: .01em; }
 }
 @media (max-width: 560px) {
   .ll-foot2-top {
