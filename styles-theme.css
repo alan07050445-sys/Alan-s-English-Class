@@ -956,3 +956,29 @@
   .ll-foot2 { padding-top: 40px; }
   .ll-foot2-cols { flex-direction: column; gap: 22px; }
 }
+
+/* ── v332: 手機直式修正（Alan 回報）──────────────────────
+   ① 暑假練習卡片：窄螢幕從 2 欄改「單欄＋橫向」，字不再擠成一團
+   ② footer：聯絡 Alan 老師移到右邊，填滿右側留白 */
+@media (max-width: 480px) {
+  .qm-blocks { grid-template-columns: 1fr; gap: 12px; }
+  .qm-block { flex-direction: row; align-items: flex-start; min-height: 0; gap: 14px; padding: 16px; }
+  .qm-block-icon { margin-top: 2px; }
+  .qm-block-icon { width: 52px; height: 52px; }
+  .qm-block-title { font-size: 18px; margin-bottom: 2px; }
+  .qm-block-title-zh { white-space: nowrap; margin-bottom: 8px; }
+  .qm-block-empty { white-space: nowrap; }
+  .qm-block-arrow { top: 50%; transform: translateY(-50%); }
+}
+@media (max-width: 560px) {
+  .ll-foot2-top {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'brand brand' 'nav contact';
+    gap: 26px 16px;
+    align-items: start;
+  }
+  .ll-foot2-brand   { grid-area: brand; }
+  .ll-foot2-cols    { grid-area: nav; }
+  .ll-foot2-contact { grid-area: contact; }
+  .ll-foot2-btn { width: 100%; justify-content: center; padding: 11px 12px; box-sizing: border-box; font-size: 14.5px; }
+}
