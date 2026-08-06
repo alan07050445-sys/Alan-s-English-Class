@@ -17,9 +17,12 @@ const _storage = firebase.storage();
 const _auth    = firebase.auth();
 const _classDoc = _db.collection('class').doc('data');
 
-// ── 🔑 Teacher email — fill in YOUR Google account email here ──────────
-// Only this account will see the Edit button and Class Report dashboard.
-const ADMIN_EMAILS = ['alan07050445@gmail.com'];
+// ── 🔑 擁有者信箱（v337）──────────────────────────────────────────────
+// 寫死＝永遠是管理者，不會被鎖在外面、也不會被別人移除。
+// 其他老師改存資料庫 admins 集合（後台可增減）——見下方 isAdminUser。
+// ⚠ 提醒：這裡只是「介面判斷」，真正的防線是 firestore.rules / storage.rules。
+const OWNER_EMAILS = ['alan07050445@gmail.com'];
+const ADMIN_EMAILS = OWNER_EMAILS; // 保留舊名稱，避免其他地方引用出錯
 
 const CATEGORIES = [
   {
@@ -682,8 +685,58 @@ function signOutUser() { return _auth.signOut(); }
 
 function subscribeAuth(callback) { return _auth.onAuthStateChanged(callback); }
 
+// ── v337: 管理者判斷（擁有者 ＋ 資料庫 admins 名單）────────────────────
+// ⚠ 這些只是「介面要不要顯示後台」的判斷；真正的權限由 Firestore/Storage
+//   規則在伺服器端強制執行——就算有人竄改前端也拿不到資料。
+let _extraAdmins = new Set();   // 額外管理者（小寫 email），由 subscribeAdminStatus 填入
+
+function _lc(s) { return String(s || '').trim().toLowerCase(); }
+
+function isOwnerUser(user) {
+  return !!(user && user.email && OWNER_EMAILS.includes(_lc(user.email)));
+}
 function isAdminUser(user) {
-  return !!(user && ADMIN_EMAILS.includes(user.email));
+  if (!user || !user.email) return false;
+  const e = _lc(user.email);
+  return OWNER_EMAILS.includes(e) || _extraAdmins.has(e);
+}
+
+// 登入後訂閱「我是不是管理者」——只讀自己那一筆（規則只允許讀自己的）
+function subscribeAdminStatus(user, callback) {
+  const done = (v) => { if (callback) callback(v); };
+  if (!user || !user.email) { _extraAdmins.clear(); done(false); return () => {}; }
+  const e = _lc(user.email);
+  if (OWNER_EMAILS.includes(e)) { done(true); return () => {}; }
+  return _db.collection('admins').doc(e).onSnapshot(
+    snap => { if (snap.exists) _extraAdmins.add(e); else _extraAdmins.delete(e); done(snap.exists); },
+    ()   => { _extraAdmins.delete(e); done(false); }   // 讀不到就當一般使用者
+  );
+}
+
+// ── 管理者名單維護（只有擁有者能用；規則同樣會擋）──────────────────
+function subscribeAdmins(callback, onError) {
+  return _db.collection('admins').onSnapshot(snap => {
+    const list = [];
+    snap.forEach(d => list.push({ email: d.id, ...d.data() }));
+    list.sort((a, b) => String(a.email).localeCompare(String(b.email)));
+    callback(list);
+  }, onError || (() => {}));
+}
+async function addAdmin(email, name) {
+  const id = _lc(email);
+  if (!id || !id.includes('@')) throw new Error('invalid-email');
+  if (OWNER_EMAILS.includes(id)) throw new Error('owner-already');
+  await _db.collection('admins').doc(id).set({
+    email: id,
+    name: String(name || '').trim(),
+    addedBy: (_auth.currentUser && _auth.currentUser.email) || '',
+    addedAt: Date.now(),
+  });
+}
+async function removeAdmin(email) {
+  const id = _lc(email);
+  if (OWNER_EMAILS.includes(id)) throw new Error('cannot-remove-owner');
+  await _db.collection('admins').doc(id).delete();
 }
 
 // ── Per-user Progress in Firestore ────────────────────────────────────
@@ -1698,6 +1751,8 @@ Object.assign(window, {
   addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
   // Auth
   signInWithGoogle, signInWithGoogleRedirect, signOutUser, subscribeAuth, isAdminUser,
+  // v337: 多位老師共管
+  OWNER_EMAILS, isOwnerUser, subscribeAdminStatus, subscribeAdmins, addAdmin, removeAdmin,
   // Per-user progress
   saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes,
   // Streak, Badges & XP

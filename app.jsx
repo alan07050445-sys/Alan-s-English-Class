@@ -76,6 +76,7 @@ const SUMMER_ONLY_DOOR = true;
 function App() {
   // ── Auth state ──────────────────────────────────────────
   const [user, setUser]           = useAppState(null);
+  const [adminVer, setAdminVer]   = useAppState(0); // v337: 管理者狀態解析後觸發重繪
   const [authReady, setAuthReady] = useAppState(false); // show loading until Firebase resolves
   // v322: 暑假派發清單是否已載入。登入的學生要等它回來才揭曉門口頁，否則載入畫面會在
   // 暑假資料回來前就淡出→先閃過 G1~G6 選年級畫面(~0.5s)再跳回暑假入口（Alan 回報的 bug）。
@@ -217,6 +218,13 @@ function App() {
     });
     return unsub;
   }, []);
+
+  // ── v337: 訂閱「我是不是管理者」（擁有者以外的老師存在資料庫 admins 名單）──
+  // 解析完要重新 render，後台入口才會出現；學生讀不到就當一般使用者。
+  useAppEffect(() => {
+    const unsub = window.subscribeAdminStatus(user, () => setAdminVer(v => v + 1));
+    return unsub;
+  }, [user?.email]);
 
   // ── Subscribe to streak (for the streak count shown to logged-in students) ──
   useAppEffect(() => {

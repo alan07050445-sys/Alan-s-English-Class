@@ -3,9 +3,27 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Helper ──────────────────────────────────────────────
+    // v337: 多位老師共管。
+    //   isOwner()   = Alan 本人（寫死，永遠不會被鎖在外面、也不會被別人移除）
+    //   isTeacher() = 擁有者 或 admins 名單裡的老師（名單存資料庫，後台就能增減）
+    function isOwner() {
+      return request.auth != null
+             && request.auth.token.email.lower() == 'alan07050445@gmail.com';
+    }
     function isTeacher() {
       return request.auth != null
-             && request.auth.token.email == 'alan07050445@gmail.com';
+             && (isOwner()
+                 || exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())));
+    }
+
+    // ── 管理者名單 ──────────────────────────────────────────
+    // ⚠ 只有「擁有者」能新增/移除管理者——避免權限擴散（老師無法自己再加老師、
+    //    也無法把別的老師踢掉）。讀取：本人只能讀自己那筆（前端判斷是不是老師用），
+    //    擁有者可讀全部（後台管理畫面用）。
+    match /admins/{adminEmail} {
+      allow read: if isOwner()
+                  || (request.auth != null && request.auth.token.email.lower() == adminEmail);
+      allow write: if isOwner();
     }
 
     // ── 課程內容（G3/G4/G5/G6 都在 class 集合，G2 在 class-g2）──
@@ -104,8 +122,14 @@ service cloud.firestore {
     // 由於 Firestore 規則是 OR 邏輯，那條會「架空」上面 progress 的限制，
     // 讓任何登入的人都能讀到別人的成績與錯題。
     // 改成「預設拒絕讀取、只有老師可寫」，洩漏即關閉。
+    //
+    // ⚠ v337 再修一次：這條原本是 isTeacher()，但因為規則是 OR 邏輯，
+    //   它會「架空」上面 /admins 的擁有者限制——任何老師都能改管理者名單
+    //   （自己加人、把別人踢掉）＝權限擴散。改成 isOwner() 之後：
+    //   已列出的集合（class/roster/progress/暑假…）照原本的老師權限運作，
+    //   未列出的集合則只有擁有者能寫，/admins 也才真正鎖住。
     match /{document=**} {
-      allow write: if isTeacher();
+      allow write: if isOwner();
     }
   }
 }

@@ -1079,6 +1079,116 @@ function HwRemind() {
   );
 }
 
+/* ── 管理者維護（v337）— 只有擁有者看得到 ───────────────── */
+function AdminManager() {
+  const [admins, setAdmins] = useDash([]);
+  const [email, setEmail]   = useDash('');
+  const [name, setName]     = useDash('');
+  const [err, setErr]       = useDash(null);
+  const [ok, setOk]         = useDash(null);
+  const [busy, setBusy]     = useDash(false);
+
+  useDashE(() => window.subscribeAdmins(setAdmins, () => setErr('讀取失敗 — 請確認已在 Firebase Console 發布新版 firestore.rules')), []);
+
+  const owner = (window.OWNER_EMAILS || [])[0] || '';
+
+  const handleAdd = async () => {
+    setErr(null); setOk(null);
+    const e = email.trim().toLowerCase();
+    if (!e.includes('@')) { setErr('請輸入有效的 Google email'); return; }
+    if (!confirm(
+      `確定把「${e}」設為管理者嗎？\n\n` +
+      `他將可以：\n` +
+      `・編輯／刪除所有課程內容\n` +
+      `・看到全班學生的成績、完成度與錯題\n` +
+      `・看到暑假報名的家長資料\n\n` +
+      `請確認這是你信任的老師本人帳號。`
+    )) return;
+    setBusy(true);
+    try {
+      await window.addAdmin(e, name);
+      setEmail(''); setName('');
+      setOk(`已將 ${e} 設為管理者。請他重新整理網頁即可看到後台。`);
+    } catch (ex) {
+      setErr(ex.message === 'invalid-email' ? 'email 格式不正確'
+           : ex.message === 'owner-already' ? '這已經是擁有者帳號了'
+           : '新增失敗：' + (ex.code || ex.message));
+    }
+    setBusy(false);
+  };
+
+  const handleRemove = async (a) => {
+    if (!confirm(`確定移除「${a.email}」的管理者權限嗎？\n他將立刻失去後台與學生資料的存取權。`)) return;
+    setErr(null); setOk(null);
+    try { await window.removeAdmin(a.email); setOk(`已移除 ${a.email}`); }
+    catch (ex) { setErr('移除失敗：' + (ex.code || ex.message)); }
+  };
+
+  return (
+    <div className="notify-wrap">
+      <div className="notify-card">
+        <div className="linkbind-head">
+          <div>
+            <b>管理者（老師帳號）</b>
+            <span className="linkbind-summary">擁有者 1 位 · 其他管理者 {admins.length} 位</span>
+          </div>
+        </div>
+
+        <div className="roster-form">
+          <input className="roster-input" placeholder="老師的 Google email"
+            value={email} onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}/>
+          <input className="roster-input roster-input-name" placeholder="姓名（選填）"
+            value={name} onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}/>
+          <button className="roster-add-btn" onClick={handleAdd} disabled={busy}>＋ 設為管理者</button>
+        </div>
+
+        {err && <div className="notify-msg err">⚠️ {err}</div>}
+        {ok && <div className="notify-msg ok">✅ {ok}</div>}
+
+        <div className="roster-list">
+          <div className="roster-row">
+            <div className="roster-row-info">
+              <span className="roster-row-name">👑 {owner}</span>
+              <span className="roster-row-email">擁有者 — 永久權限，無法被移除</span>
+            </div>
+          </div>
+          {admins.map(a => (
+            <div key={a.email} className="roster-row">
+              <div className="roster-row-info">
+                <span className="roster-row-name">{a.name || '（未填姓名）'}</span>
+                <span className="roster-row-email">{a.email}</span>
+              </div>
+              <button className="roster-del-btn" title="移除管理者" onClick={() => handleRemove(a)}>
+                <window.Icon name="trash" size={13}/>
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="roster-hint">
+          新增後對方<b>重新整理網頁</b>就會看到後台。若他還需要「上傳 PDF／單字卡圖片」，
+          要另外把他的信箱加進 <code>storage.rules</code> 再發布一次（Firebase 平台限制，Storage 讀不到這份名單）。
+        </div>
+      </div>
+
+      <aside className="notify-side">
+        <h4>⚠️ 給管理者權限＝</h4>
+        <ol>
+          <li>編輯／刪除所有課程內容</li>
+          <li>看到全班成績、完成度、錯題</li>
+          <li>看到暑假報名的家長資料</li>
+        </ol>
+        <p className="notify-note">
+          只有你（擁有者）能增減管理者——其他老師無法自己加人、也無法把你移除。
+          離職或不再合作時，記得回來移除。
+        </p>
+      </aside>
+    </div>
+  );
+}
+
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const [students,       setStudents]      = useDash([]);
@@ -1265,6 +1375,9 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態' },
     { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
+    // v337: 只有「擁有者」看得到管理者維護（規則同樣只允許擁有者寫）
+    ...(window.isOwnerUser && window.isOwnerUser(window._currentUser)
+      ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限' }] : []),
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
 
@@ -1329,6 +1442,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <LineLink/>
           ) : tab === 'hwremind' ? (
             <HwRemind/>
+          ) : tab === 'admins' ? (
+            <AdminManager/>
           ) : tab === 'summer' ? (
             <SummerAdmin/>
           ) : selected ? (
