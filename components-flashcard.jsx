@@ -97,7 +97,53 @@ function ImageSearch({ term: initialTerm, onSelect, onClose }) {
   const [searched, setSearched] = useFC(false);
   const [error, setError] = useFC("");
 
+  // v336: 圖庫找不到合適的圖 → 自己上傳／貼上
+  const [mode, setMode]         = useFC("search");  // 'search' | 'upload'
+  const [busy, setBusy]         = useFC(false);
+  const [upErr, setUpErr]       = useFC("");
+  const [dragOver, setDragOver] = useFC(false);
+  const [urlInput, setUrlInput] = useFC("");
+  const fileRef = React.useRef(null);
+
   const PER_PAGE = 12;
+
+  // 收到一個圖片檔（上傳鈕／拖曳／貼上都走這裡）→ 壓縮上傳 → 回傳網址
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!/^image\//.test(file.type || "")) { setUpErr("這不是圖片檔（支援 JPG / PNG / GIF / WebP）"); return; }
+    setBusy(true); setUpErr("");
+    try {
+      const url = await window.uploadFlashcardImage(file);
+      onSelect(url); onClose();
+    } catch (e) {
+      setUpErr(e && e.message ? e.message : "上傳失敗，請再試一次");
+      setBusy(false);
+    }
+  };
+
+  // 貼上圖片網址（右鍵複製圖片網址 → 貼過來）
+  const useImageUrl = () => {
+    const u = urlInput.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) { setUpErr("請貼完整網址（要以 http:// 或 https:// 開頭）"); return; }
+    onSelect(u); onClose();
+  };
+
+  // Cmd/Ctrl+V 直接貼上剪貼簿裡的圖（截圖、複製的圖片都可以）
+  useFC_E(() => {
+    if (mode !== "upload") return;
+    const onPaste = (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (it.type && it.type.indexOf("image") === 0) {
+          const f = it.getAsFile();
+          if (f) { e.preventDefault(); handleFile(f); return; }
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [mode]);
 
   const searchPexels = async (searchQ, pg) => {
     const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQ)}&per_page=${PER_PAGE}&page=${pg}&locale=en-US`;
@@ -152,10 +198,51 @@ function ImageSearch({ term: initialTerm, onSelect, onClose }) {
     <div className="img-search-overlay" onClick={onClose}>
       <div className="img-search-panel" onClick={e => e.stopPropagation()}>
         <div className="img-search-head">
-          <div className="serif" style={{fontSize: 22}}>Search <em>Images</em></div>
+          <div className="serif" style={{fontSize: 22}}>{mode === "upload" ? <>Upload <em>Image</em></> : <>Search <em>Images</em></>}</div>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
+        {/* v336: 圖庫搜尋 ↔ 自己上傳／貼上 */}
+        <div className="img-mode-tabs">
+          <button className={"img-mode-tab" + (mode === "search" ? " on" : "")} onClick={() => setMode("search")}>🔍 圖庫搜尋</button>
+          <button className={"img-mode-tab" + (mode === "upload" ? " on" : "")} onClick={() => { setMode("upload"); setUpErr(""); }}>⬆️ 上傳／貼上</button>
+        </div>
+
+        {mode === "upload" ? (
+          <div className="img-up-wrap">
+            <div
+              className={"img-up-drop" + (dragOver ? " over" : "") + (busy ? " busy" : "")}
+              onClick={() => !busy && fileRef.current && fileRef.current.click()}
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files && e.dataTransfer.files[0]); }}
+            >
+              {busy ? (
+                <><div className="img-up-ico">⏳</div><b>上傳中…</b><span>圖片處理中，請稍候</span></>
+              ) : (
+                <>
+                  <div className="img-up-ico">🖼️</div>
+                  <b>點這裡選擇圖片，或把圖片拖進來</b>
+                  <span>也可以直接按 <kbd>⌘</kbd>+<kbd>V</kbd> 貼上截圖或複製的圖片</span>
+                </>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
+              onChange={e => { handleFile(e.target.files && e.target.files[0]); e.target.value = ""; }}/>
+
+            <div className="img-up-or"><span>或貼上圖片網址</span></div>
+            <div className="img-search-bar">
+              <input className="img-search-input" value={urlInput} placeholder="https://…（在圖片上按右鍵→複製圖片網址）"
+                onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && useImageUrl()}/>
+              <button className="btn primary" style={{flexShrink:0}} onClick={useImageUrl} disabled={busy}>使用</button>
+            </div>
+
+            {upErr && <div className="img-search-status mono" style={{color:"var(--accent)"}}>{upErr}</div>}
+            <div className="img-up-hint">圖片會自動縮圖後存到你的雲端空間，學生就能看到。建議用有版權的自製圖或合法授權圖片。</div>
+          </div>
+        ) : (
+        <>
         {/* Source tabs */}
         <div className="img-source-tabs">
           {SOURCES.map(s => (
@@ -197,6 +284,8 @@ function ImageSearch({ term: initialTerm, onSelect, onClose }) {
             </span>
             <button className="btn ghost" onClick={() => search(q, page + 1)} disabled={!canNext}>Next →</button>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
@@ -1185,7 +1274,7 @@ function FlashcardEditor({ cards, onChange }) {
                     ) : (
                       <button className="fc-img-add" onClick={()=>setImgSearch({cardId:card.id,term:card.term||""})}>
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                        <span className="mono" style={{fontSize:10,marginTop:6,color:"var(--ink-muted)"}}>Search Image</span>
+                        <span className="mono" style={{fontSize:10,marginTop:6,color:"var(--ink-muted)"}}>搜尋／上傳</span>
                       </button>
                     )}
                   </div>

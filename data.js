@@ -483,6 +483,44 @@ async function uploadSubmissionPhoto(uid, progressKey, blob, idx) {
   return ref.getDownloadURL();
 }
 
+// ── v336: 單字卡自訂圖片（老師自己上傳／貼上）──────────────
+// 圖庫找不到合適的圖時用。存到 Storage 的 pdfs/flashcards/（沿用現成規則：
+// 公開可讀、只有老師信箱可寫——不必再去 Firebase Console 改 storage.rules）。
+// ⚠ 顯示走 <img src>，不經 CORS；上傳前先縮圖＋轉 JPEG，學生端載入才快。
+function compressImageBlob(fileOrBlob, maxSide = 900, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(fileOrBlob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff';           // 透明 PNG 轉 JPEG 時底色不要變黑
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      cv.toBlob(b => b ? resolve(b) : reject(new Error('compress-failed')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('圖片讀取失敗')); };
+    img.src = url;
+  });
+}
+
+async function uploadFlashcardImage(fileOrBlob) {
+  if (!fileOrBlob) throw new Error('no-file');
+  if (fileOrBlob.size > 15 * 1024 * 1024) throw new Error('檔案太大（上限 15MB）');
+  let blob;
+  try { blob = await compressImageBlob(fileOrBlob); }
+  catch (e) { throw new Error('這不是有效的圖片檔'); }
+  const rand = Math.random().toString(36).slice(2, 8);
+  const ref = _storage.ref(`pdfs/flashcards/${Date.now()}_${rand}.jpg`);
+  await ref.put(blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=31536000' });
+  return ref.getDownloadURL();
+}
+
 // ── localStorage (initial cache + per-device progress) ─
 
 function loadWeekOrder() {
@@ -1651,6 +1689,8 @@ Object.assign(window, {
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,
+  // v336: 單字卡自訂圖片
+  uploadFlashcardImage, compressImageBlob,
   // Companion
   loadCompanion,
   // Roster
