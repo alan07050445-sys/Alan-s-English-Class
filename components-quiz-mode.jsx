@@ -291,12 +291,42 @@ function qmShortLabel(item, groupName) {
   return title;
 }
 
-/* v266: 完成頁導航——各題型共用：「下一個任務 →」＋「回今天的任務」（沒有任務脈絡時退回 onBack） */
+/* v266: 完成頁導航——各題型共用：「下一個任務 →」＋「回今天的任務」（沒有任務脈絡時退回 onBack）
+   v338: 同一組（同篇文章）做完 → 顯示「接著做：XXX」並倒數自動進入，小朋友不用自己點。
+         倒數期間碰畫面任何地方就取消，想留在成績頁看的孩子不會被拉走。 */
 function QmDoneNavBtns({ onBack, onBackToTasks, onNextTask, backLabel }) {
+  const label   = (onNextTask && onNextTask.label) || '下一個任務 →';
+  const canAuto = !!(onNextTask && onNextTask.auto);
+  const [left, setLeft]       = React.useState(6);
+  const [stopped, setStopped] = React.useState(!canAuto);
+
+  React.useEffect(() => {
+    if (stopped || !canAuto) return;
+    // 碰畫面（點、滑、按鍵）就取消自動接續
+    const cancel = () => setStopped(true);
+    window.addEventListener('pointerdown', cancel, { once: true });
+    window.addEventListener('keydown', cancel, { once: true });
+    window.addEventListener('wheel', cancel, { once: true, passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', cancel);
+      window.removeEventListener('keydown', cancel);
+      window.removeEventListener('wheel', cancel);
+    };
+  }, [stopped, canAuto]);
+
+  React.useEffect(() => {
+    if (stopped || !canAuto) return;
+    if (left <= 0) { onNextTask && onNextTask(); return; }
+    const t = setTimeout(() => setLeft(n => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [left, stopped, canAuto]);
+
   return (
     <>
       {onNextTask ? (
-        <button className="qm-btn primary" onClick={onNextTask}>下一個任務 →</button>
+        <button className="qm-btn primary" onClick={onNextTask}>
+          {label}{!stopped && canAuto ? `（${left}）` : ''}
+        </button>
       ) : null}
       {onBackToTasks ? (
         <button className={'qm-btn ' + (onNextTask ? 'secondary' : 'primary')} onClick={onBackToTasks}>回今天的任務</button>
@@ -653,18 +683,23 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   // v253: 老師視角（editMode 或 暑假題庫）——側欄依文章分組收合＋題庫學生濾鏡
   const isLibView = String(weekId || '').startsWith('sl');
   const groupsView = editMode || isLibView;
+  // ⚠ v338 隱私修正：學生的暑假週次 id 也是 'sl-…' 開頭，isLibView 對學生同樣成立，
+  //   導致「依學生篩選」的名字標籤（其他同學的名字）漏到學生端。
+  //   發派濾鏡＝老師專用，一律另外用身分判斷；分組顯示（groupsView）維持給學生用。
+  const isTeacherView = !!(window.isAdminUser && window.isAdminUser(window._currentUser));
+  const libAdminView = isLibView && isTeacherView;
   const [openGroups, setOpenGroups] = useQM({});
   const [libMeta, setLibMeta] = useQM(null);
   const [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
   useQME(() => {
-    if (!isLibView || !window.subscribeSummerMeta) return;
+    if (!libAdminView || !window.subscribeSummerMeta) return;   // 學生不訂閱＝不會拿到全班發派名單
     return window.subscribeSummerMeta(setLibMeta, () => {});
-  }, [isLibView]);
+  }, [libAdminView]);
   const libSfx = isLibView ? String(weekId).split('-').pop() : null;
   const assignedOf = useQMM(() => {
     // itemId → Set(emails)（只看當前週）
     const m = new Map();
-    if (!isLibView || !libMeta) return m;
+    if (!libAdminView || !libMeta) return m;
     Object.entries(libMeta.students || {}).forEach(([email, plan]) => {
       (((plan || {}).weeks || {})[libSfx] || []).forEach(id => {
         if (!m.has(id)) m.set(id, new Set());
@@ -672,12 +707,12 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
       });
     });
     return m;
-  }, [isLibView, libMeta, libSfx, weekId]);
+  }, [libAdminView, libMeta, libSfx, weekId]);
   const viewItems = useQMM(() => {
-    if (!isLibView || stuFilter === 'all') return sidebarItems;
+    if (!libAdminView || stuFilter === 'all') return sidebarItems;
     if (stuFilter === 'none') return sidebarItems.filter(it => !assignedOf.has(it.id));
     return sidebarItems.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
-  }, [sidebarItems, isLibView, stuFilter, assignedOf]);
+  }, [sidebarItems, libAdminView, stuFilter, assignedOf]);
   const grouped = useQMM(() => (groupsView ? qmGroupByArticle(viewItems) : null), [groupsView, viewItems]);
   useQME(() => {
     // 選中單元時自動展開它所在的組
@@ -686,14 +721,14 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     if (g && !openGroups[g.key]) setOpenGroups(o => ({ ...o, [g.key]: true }));
   }, [selectedItem && selectedItem.id, grouped]);
   const filterStudents = useQMM(() => {
-    if (!isLibView || !libMeta) return [];
+    if (!libAdminView || !libMeta) return [];
     return Object.entries(libMeta.students || {})
       .filter(([, plan]) => Object.values((plan || {}).weeks || {}).some(a => a && a.length))
       .map(([email, plan]) => {
         const m = String((plan || {}).name || '').match(/[A-Za-z]+/);
         return { email, name: m ? m[0] : email.split('@')[0] };
       });
-  }, [isLibView, libMeta]);
+  }, [libAdminView, libMeta]);
   const quizSwapKey = selectedItem ? `${selectedItem.id}-${phase}-${playerKey}` : 'empty';
 
   // v265: intro 的續做資訊（各題型用自己的題數驗證），與「重新開始」＝清紀錄直接進場
@@ -706,11 +741,33 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     setPhase('quiz');
   };
 
+  // v338: 同一組（同一篇文章／老師分的組）做完就接著下一個——小朋友不用回列表自己點。
+  //       只挑「同組、排在後面、還沒完成」的第一個；整組做完就不再接續。
+  const nextInGroup = useQMM(() => {
+    if (editMode || !grouped || !selectedItem) return null;
+    const g = grouped.find(x => x.items && x.items.some(it => it.id === selectedItem.id));
+    if (!g || !g.items) return null;                       // 沒分組的單張卡不接續
+    const idx = g.items.findIndex(it => it.id === selectedItem.id);
+    if (idx < 0) return null;
+    const nx = g.items.slice(idx + 1).find(it => {
+      const p = qmProg[`${weekId}_${it.id}`];
+      return !(p && p.done);
+    });
+    return nx ? { item: nx, groupName: g.name || '' } : null;
+  }, [grouped, selectedItem && selectedItem.id, qmProg, weekId, editMode]);
+
   // v266: 完成頁導航——「回今天的任務」（作業項目）＋「下一個任務 →」（還有未完成作業時）
   const nextTaskTarget = (!editMode && getNextTask && selectedItem && homework && homework[selectedItem.id]) ? getNextTask(selectedItem.id) : null;
-  const onNextTask = (nextTaskTarget && onOpenTask)
-    ? () => onOpenTask(nextTaskTarget.cat, nextTaskTarget.itemId)
-    : null;
+  // 同組接續優先（同一篇文章的練習一氣呵成），沒有才退回原本的「下一個作業」
+  const onNextTask = nextInGroup
+    ? () => selectItem(nextInGroup.item)
+    : ((nextTaskTarget && onOpenTask) ? () => onOpenTask(nextTaskTarget.cat, nextTaskTarget.itemId) : null);
+  // 把「按鈕文字」與「要不要自動接續」掛在 function 上——所有題型都已經在傳 onNextTask，
+  // 這樣不必再改十幾個呼叫點。只有同組接續才自動（一般的下一個作業維持手動）。
+  if (onNextTask && nextInGroup) {
+    onNextTask.label = `接著做：${qmShortLabel(nextInGroup.item, nextInGroup.groupName)} →`;
+    onNextTask.auto = true;
+  }
   const onBackToTasksShared = !editMode && homework && selectedItem && homework[selectedItem.id] ? onBack : null;
 
   // v272: 選中單元後，側欄自動捲到那張卡（從任務點進來時卡可能在列表下方）
@@ -775,7 +832,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         })()}
 
         <div className="qm-unit-list">
-          {isLibView && filterStudents.length > 0 && (
+          {libAdminView && filterStudents.length > 0 && (
             <div className="qm-stufilter" aria-label="依學生篩選">
               <button className={stuFilter === 'all' ? 'on' : ''} onClick={() => setStuFilter('all')}>全部</button>
               <button className={stuFilter === 'none' ? 'on' : ''} onClick={() => setStuFilter('none')}>未發派</button>
@@ -5549,7 +5606,7 @@ function warpCornersToBlob(scanner, img, pts) {
 async function autoScanBlob(file) {
   const jscanify = await ensureJscanify();  // 載不動 → 這裡就 throw（engine）
   const img = await loadImgEl(file);
-  const src = downscaleToCanvas(img, 1500);  // ★ 先縮小才不會凍住整個網站
+  const src = downscaleToCanvas(img, 1200);  // ★ 先縮小才不會凍住整個網站
   URL.revokeObjectURL(img.src);
   await nextFrame();                          // 讓「掃描中…」先畫出來
   const scanner = new jscanify();
@@ -5615,7 +5672,7 @@ function CornerAdjustModal({ file, onConfirm, onCancel }) {
     try {
       await withTimeout(ensureJscanify(), 25000, 'engine');
       const img = imgRef.current;
-      const src = downscaleToCanvas(img, 1500);  // ★ 先縮小才不會凍住
+      const src = downscaleToCanvas(img, 1200);  // ★ 先縮小才不會凍住
       await nextFrame();
       const nW = src.width, nH = src.height;      // 角以比例存，縮圖後同比例成立
       const P = (r) => ({ x: Math.round(r.x * nW), y: Math.round(r.y * nH) });
@@ -5674,10 +5731,14 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   const [upMsg,     setUpMsg]     = useQM('');   // v266: 上傳進度「2/3」
   const [err,       setErr]       = useQM('');
   const [note,      setNote]      = useQM('');   // 一般提示（例如引擎載不動退回原圖）
-  const [scanning,  setScanning]  = useQM(false);  // 掃描處理中
+  const [scanning,  setScanning]  = useQM(false);  // 背景掃描進行中（只用來顯示提示，不擋操作）
   const [scanMsg,   setScanMsg]   = useQM('');     // v302: 掃描進度文字（讓學生知道在動）
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
+  // v338: 背景掃描用——每張照片一個序號，掃完才回頭把那張換成掃描版
+  const seqRef   = React.useRef(0);
+  const queueRef = React.useRef([]);      // 待掃描佇列
+  const runRef   = React.useRef(false);   // 掃描迴圈是否已在跑（避免多次選檔開多個迴圈）
 
   // 已交過的照片與批改結果：聽自己的雲端 progress（老師打完分數會即時看到）
   useQME(() => {
@@ -5705,55 +5766,83 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     img.src = URL.createObjectURL(file);
   });
 
-  // v301: 掃描是「必須」的——每張都先自動抓邊界校正。
-  // 抓不到 → 進「需要調整」清單（手動框四角或重拍）；引擎真的載不動 → 才退回原圖（不讓學生被我們的網路卡死）。
+  // v338: 掃描改成「不阻塞」——照片先收下、馬上看得到也能送出；自動掃描在背景跑，
+  //       成功就把那張換成掃描版。（舊版要先等 OpenCV ~8MB 載完才動得了，手機上會卡很久、
+  //       整頁凍住，還可能因為抓不到邊界就不准送出。Alan 回報：掃描跑超久、網頁卡住。）
   const pickFiles = async (e) => {
     const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
     e.target.value = ''; // 同一張可以再選
     if (!files.length) return;
     setErr(''); setNote('');
+    // ① 先縮圖收下——這步很快，學生立刻看到照片、可以直接送出
+    const added = [];
+    for (const f of files) {
+      let b; try { b = await shrink(f); } catch (_) { b = f; }
+      added.push({ uid: ++seqRef.current, file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true, busy: true });
+    }
+    setPending(prev => [...prev, ...added]);
+    // ② 丟進背景佇列自動掃描（失敗就維持原圖，完全不擋送出）
+    queueRef.current.push(...added);
+    runScanQueue();
+  };
+
+  // 背景掃描迴圈：一次只跑一張，跑完才換下一張，避免手機被塞爆
+  const runScanQueue = async () => {
+    if (runRef.current) return;             // 已經在跑就讓它接著處理佇列
+    runRef.current = true;
     setScanning(true);
-    setScanMsg(window.cv && window.cv.Mat ? '掃描中…' : '準備掃描工具…');
-    await nextFrame(); // 讓「掃描中…」先畫出來，不要卡在按鈕上
-    // v302: 引擎載入設 25 秒上限——載不動就退回原圖，絕不無限卡住
+    setScanMsg(window.cv && window.cv.Mat ? '自動掃描中…' : '正在準備掃描工具…');
+    // 引擎載入上限 15 秒——載不動就整批維持原圖，不再讓學生空等
     let engineOk = true;
-    try { await withTimeout(ensureJscanify(), 25000, 'engine-timeout'); } catch (e2) { engineOk = false; }
+    try { await withTimeout(ensureJscanify(), 15000, 'engine-timeout'); } catch (_) { engineOk = false; }
     if (!engineOk) {
-      const added = [];
-      for (const f of files) { let b; try { b = await shrink(f); } catch (_) { b = f; } added.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true }); }
-      setPending(prev => [...prev, ...added]);
-      setNote('目前無法自動掃描（可能是網路太慢），已先用原圖收下；等網路好一點可以移除、重拍成掃描版。');
-      setScanning(false); setScanMsg('');
+      const rest = queueRef.current.splice(0);
+      setPending(prev => prev.map(p => rest.some(x => x.uid === p.uid) ? { ...p, busy: false } : p));
+      setNote('自動掃描暫時無法使用（可能是網路較慢），已用原圖收下——一樣可以直接送出。');
+      runRef.current = false; setScanning(false); setScanMsg('');
       return;
     }
-    const ok = [], bad = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      setScanMsg(files.length > 1 ? `掃描中 ${i + 1}/${files.length}…` : '掃描中…');
-      await nextFrame();
+    while (queueRef.current.length) {
+      const it = queueRef.current.shift();
+      setScanMsg(queueRef.current.length ? `自動掃描中…（還有 ${queueRef.current.length} 張）` : '自動掃描中…');
+      await nextFrame();                    // 讓畫面先更新，不要整頁凍住
       try {
-        // v302: 單張掃描也設 20 秒上限（縮圖後其實很快，這只是保險）
-        const b = await withTimeout(autoScanBlob(f), 20000, 'scan-timeout');
-        ok.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: true });
+        const b = await withTimeout(autoScanBlob(it.file), 20000, 'scan-timeout');
+        const url = URL.createObjectURL(b);
+        setPending(prev => prev.map(p => {
+          if (p.uid !== it.uid) return p;
+          try { URL.revokeObjectURL(p.url); } catch (_) {}
+          return { ...p, outBlob: b, url, scanned: true, raw: false, busy: false };
+        }));
       } catch (e2) {
-        if (e2 && e2.code === 'no-contour') bad.push({ file: f, url: URL.createObjectURL(f) });
-        else { let b; try { b = await shrink(f); } catch (_) { b = f; } ok.push({ file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true }); }
+        // 抓不到邊界或逾時 → 保留原圖，標記可以手動框（但不強迫、也不擋送出）
+        const noContour = !!(e2 && e2.code === 'no-contour');
+        setPending(prev => prev.map(p => p.uid === it.uid ? { ...p, busy: false, canFix: noContour } : p));
       }
+      await nextFrame();
     }
-    if (ok.length) setPending(prev => [...prev, ...ok]);
-    if (bad.length) setNeedsFix(prev => [...prev, ...bad]);
-    setScanning(false); setScanMsg('');
+    runRef.current = false; setScanning(false); setScanMsg('');
   };
   const removePending  = (i) => setPending(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
   const removeNeedsFix = (i) => setNeedsFix(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
 
   // 手動框四角完成 → 變成一張掃描好的待送出照片
+  // v338: 若是從「待送出」那張點進來調整的（有 uid），就原地換掉，不要多出一張
   const onAdjustConfirm = (blob) => {
     const nf = adjusting;
     setAdjusting(null);
     if (!nf) return;
+    if (nf.uid != null) {
+      const url = URL.createObjectURL(blob);
+      setPending(prev => prev.map(p => {
+        if (p.uid !== nf.uid) return p;
+        try { URL.revokeObjectURL(p.url); } catch (e) {}
+        return { ...p, outBlob: blob, url, scanned: true, raw: false, busy: false, canFix: false };
+      }));
+      return;
+    }
     setNeedsFix(prev => { try { URL.revokeObjectURL(nf.url); } catch (e) {} return prev.filter(x => x !== nf); });
-    setPending(prev => [...prev, { file: nf.file, outBlob: blob, url: URL.createObjectURL(blob), scanned: true }]);
+    setPending(prev => [...prev, { uid: ++seqRef.current, file: nf.file, outBlob: blob, url: URL.createObjectURL(blob), scanned: true }]);
   };
 
   const submit = async () => {
@@ -5806,7 +5895,8 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     }
   };
 
-  const canSubmit = !busy && !scanning && pending.length > 0 && needsFix.length === 0;
+  // v338: 背景掃描不再擋送出——想早點交就交（會用當下這張，掃描完成的會自動是掃描版）
+  const canSubmit = !busy && pending.length > 0 && needsFix.length === 0;
 
   return (
     <div className="qm-intro uh">
@@ -5869,9 +5959,18 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
           <div className="uh-block-title">準備送出（{pending.length} 張）</div>
           <div className="uh-grid">
             {pending.map((p, i) => (
-              <span key={i} className="uh-thumb uh-thumb-pending">
+              <span key={p.uid != null ? p.uid : i} className="uh-thumb uh-thumb-pending">
                 <img src={p.url} alt={`預覽 ${i + 1}`}/>
-                {p.scanned ? <span className="uh-thumb-badge">✓ 已掃描</span> : <span className="uh-thumb-badge raw">原圖</span>}
+                {p.busy
+                  ? <span className="uh-thumb-badge scanning">⏳ 掃描中…</span>
+                  : p.scanned
+                    ? <span className="uh-thumb-badge">✓ 已掃描</span>
+                    : <span className="uh-thumb-badge raw">原圖</span>}
+                {!p.busy && !p.scanned && (
+                  <button className="uh-thumb-fixbtn"
+                    onClick={() => setAdjusting({ uid: p.uid, file: p.file, url: p.url })}
+                  >調整邊界</button>
+                )}
                 <button className="uh-thumb-del" onClick={() => removePending(i)} aria-label="移除這張">✕</button>
               </span>
             ))}
@@ -5886,9 +5985,10 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         <div className="uh-scanning"><span className="uh-scan-spin" aria-hidden="true"/>{scanMsg || '掃描中…'}</div>
       )}
       <div className="uh-btns">
-        <label className={`qm-btn secondary uh-pick${(busy || scanning) ? ' disabled' : ''}`}>
-          {scanning ? `⏳ ${scanMsg || '掃描中…'}` : '📷 拍照或選照片'}
-          <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy || scanning} style={{ display: 'none' }}/>
+        {/* v338: 掃描改背景進行，選照片不再被鎖住（上傳中才鎖） */}
+        <label className={`qm-btn secondary uh-pick${busy ? ' disabled' : ''}`}>
+          📷 拍照或選照片
+          <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy} style={{ display: 'none' }}/>
         </label>
         <button className="qm-btn primary" onClick={submit} disabled={!canSubmit}>
           {busy ? `上傳中 ${upMsg}…` : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}

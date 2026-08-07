@@ -1027,3 +1027,16 @@
   .quiz-q-text { font-size: 19px; line-height: 1.35; }
   .quiz-option, .quiz-option-text { font-size: 16px; }
 }
+
+/* ── v338: 門口頁字級放大（Alan 回報整體看起來太小）────────────────
+   副標「康橋每週進度」、「歡迎回來，○○」與「進入課程 →」按鈕都往上一級。 */
+.lc-subtitle { font-size: 18px !important; letter-spacing: .18em; }
+.lc-welcome  { font-size: 20px; font-weight: 600; }
+.lc-cta      { font-size: 20px; padding: 18px 42px; }
+.google-btn.ll-start-btn { font-size: 20px; padding: 17px 46px; }
+@media (max-width: 640px) {
+  .lc-subtitle { font-size: 16px !important; letter-spacing: .14em; }
+  .lc-welcome  { font-size: 18px; margin: 22px 0 12px; }
+  .lc-cta      { font-size: 18.5px; padding: 16px 36px; }
+  .google-btn.ll-start-btn { font-size: 18.5px; padding: 16px 38px; }
+}

@@ -2677,6 +2677,15 @@
   padding: 2px 7px; border-radius: 100px; letter-spacing: .02em;
 }
 .uh-thumb-badge.raw { background: rgba(154,106,0,.92); }
+/* v338: 背景掃描中的那張——照片已經可以送出，這只是還在加工的提示 */
+.uh-thumb-badge.scanning { background: rgba(60,60,60,.82); }
+.uh-thumb-fixbtn {
+  position: absolute; right: 5px; bottom: 5px; z-index: 2;
+  background: rgba(224,184,74,.96); color: #4a3a00; border: none;
+  font-size: 10px; font-weight: 800; letter-spacing: .02em;
+  padding: 3px 8px; border-radius: 100px; cursor: pointer;
+}
+.uh-thumb-fixbtn:hover { background: #E0B84A; }
 /* v302: 掃描中指示——讓學生清楚看到「在動、沒卡住」 */
 .uh-scanning {
   display: inline-flex; align-items: center; gap: 10px; margin: 16px auto 0;
