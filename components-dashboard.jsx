@@ -644,14 +644,24 @@ function SummerAdmin() {
 
 /* ── Roster management tab (學生名單) ──────────────────── */
 function RosterManager() {
-  const [roster, setRoster]   = useDash([]);
+  const [rosterAll, setRoster] = useDash([]);
   const [email, setEmail]     = useDash('');
   const [name, setName]       = useDash('');
   const [grade, setGrade]     = useDash('g3');
   const [err, setErr]         = useDash(null);
   const [busy, setBusy]       = useDash(false);
+  // v339: 多位老師各帶各的——預設只看自己帶的學生；擁有者可切「全部」
+  const [scope, setScope]     = useDash('mine'); // 'mine' | 'all'
 
   useDashE(() => window.subscribeRoster(setRoster, () => setErr('讀取名單失敗 — 請先到 Firebase Console 部署新版 firestore.rules')), []);
+
+  const myEmail = String((window._currentUser && window._currentUser.email) || '').toLowerCase();
+  const isOwner = !!(window.isOwnerUser && window.isOwnerUser(window._currentUser));
+  const ownerEmail = String((window.OWNER_EMAILS || [])[0] || '').toLowerCase();
+  // 舊資料沒 teacher 欄位 → 視為擁有者(Alan)帶的
+  const teacherOf = (s) => String(s.teacher || ownerEmail).toLowerCase();
+  const roster = scope === 'all' ? rosterAll : rosterAll.filter(s => teacherOf(s) === myEmail);
+  const othersN = rosterAll.length - rosterAll.filter(s => teacherOf(s) === myEmail).length;
 
   const handleAdd = async () => {
     setErr(null);
@@ -666,6 +676,13 @@ function RosterManager() {
 
   return (
     <div className="roster-wrap">
+      {/* v339: 多位老師各帶各的學生——預設只看自己的，需要時才切「全部」 */}
+      {othersN > 0 && (
+        <div className="qm-ownerfilter roster-scope">
+          <button className={scope === 'mine' ? 'on' : ''} onClick={() => setScope('mine')}>我帶的學生</button>
+          <button className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>全部（{rosterAll.length}）</button>
+        </div>
+      )}
       <div className="roster-form">
         <input
           className="roster-input"
@@ -707,6 +724,12 @@ function RosterManager() {
                 <span className="roster-row-name">{s.name || '—'}</span>
                 <span className="roster-row-email">{s.email}</span>
               </div>
+              {/* 看「全部」時標出這位學生是誰帶的 */}
+              {scope === 'all' && teacherOf(s) !== myEmail && (
+                <span className="roster-row-teacher" title={teacherOf(s)}>
+                  {teacherOf(s).split('@')[0]} 帶
+                </span>
+              )}
               <span className="roster-row-grade">{(s.grade || '').toUpperCase()}</span>
               <button
                 className="roster-toggle-btn"
@@ -1191,14 +1214,35 @@ function AdminManager() {
 
 /* ── Student list overview ─────────────────────────────── */
 function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
-  const [students,       setStudents]      = useDash([]);
+  const [students,       setAllStudents]   = useDash([]);
   const [selected,       setSelected]      = useDash(null);
   const [refreshKey,     setRefreshKey]    = useDash(0);
   const [allReportOpen,  setAllReportOpen] = useDash(false);
   const [tab,            setTab]           = useDash('overview'); // 'overview' | 'report' | 'roster'
   const [hotOpen,        setHotOpen]       = useDash(null);       // v307 (F11): 展開哪一列常錯題看「哪些孩子錯」
 
-  useDashE(() => window.subscribeAllStudents(setStudents), [refreshKey]);
+  useDashE(() => window.subscribeAllStudents(setAllStudents), [refreshKey]);
+
+  // v339: 多位老師各帶各的——後台（總覽/成績/常錯題/週報）只看自己帶的學生。
+  // 名單裡沒指定老師的舊資料 → 算擁有者(Alan)的。看得到「全部」的只有擁有者。
+  const [rosterAll, setRosterAll] = useDash([]);
+  const [stuScope, setStuScope]   = useDash('mine'); // 'mine' | 'all'
+  useDashE(() => window.subscribeRoster(setRosterAll, () => {}), []);
+  const myEmailD    = String((window._currentUser && window._currentUser.email) || '').toLowerCase();
+  const isOwnerD    = !!(window.isOwnerUser && window.isOwnerUser(window._currentUser));
+  const ownerEmailD = String((window.OWNER_EMAILS || [])[0] || '').toLowerCase();
+  const myStudentEmails = useDashM(() => new Set(
+    rosterAll.filter(s => String(s.teacher || ownerEmailD).toLowerCase() === myEmailD)
+             .map(s => String(s.email).toLowerCase())
+  ), [rosterAll, myEmailD, ownerEmailD]);
+  const otherStudentsN = useDashM(
+    () => students.filter(s => !myStudentEmails.has(String(s.email || '').toLowerCase())).length,
+    [students, myStudentEmails]
+  );
+  const visibleStudents = useDashM(
+    () => (stuScope === 'all' ? students : students.filter(s => myStudentEmails.has(String(s.email || '').toLowerCase()))),
+    [students, myStudentEmails, stuScope]
+  );
 
   // v251: 範圍切換——「教室（目前年級）」／「☀️ 暑假」，後台自己訂閱暑假題庫，不必出去繞一圈
   const appIsSummer = useDashM(
@@ -1263,9 +1307,9 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   };
   useDashE(() => {
     if (!selected) return;
-    const fresh = students.find(s => s.uid === selected.uid);
+    const fresh = visibleStudents.find(s => s.uid === selected.uid);
     if (fresh && fresh !== selected) setSelected(fresh);
-  }, [students, selected?.uid]);
+  }, [visibleStudents, selected?.uid]);
 
   // Flatten all items across every week (for "X / total" calculation)
   const allItems = useDashM(() => {
@@ -1296,7 +1340,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   }, [allItems]);
   const questionStats = useDashM(() => {
     const map = {};
-    students.forEach(s => {
+    visibleStudents.forEach(s => {
       Object.entries(s.items || {}).forEach(([itemId, prog]) => {
         const bare = itemId.includes('_') ? itemId.slice(itemId.lastIndexOf('_') + 1) : itemId;
         if (!currentIds.has(bare) && !currentIds.has(itemId)) return;
@@ -1310,12 +1354,12 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     });
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8)
       .map(x => ({ ...x, students: Array.from(x.students) }));
-  }, [students, currentIds, titleById]);
+  }, [visibleStudents, currentIds, titleById]);
 
   // v287: 分段閱讀各段答對率——「哪一段全班最卡」一眼看到（資料來自 progress.grStats）
   const grSegRates = useDashM(() => {
     const map = {};
-    students.forEach(s => {
+    visibleStudents.forEach(s => {
       Object.entries(s.items || {}).forEach(([itemId, prog]) => {
         const bare = itemId.includes('_') ? itemId.slice(itemId.lastIndexOf('_') + 1) : itemId;
         if (!currentIds.has(bare) && !currentIds.has(itemId)) return;
@@ -1334,7 +1378,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
       });
     });
     return Object.values(map).filter(m => m.segs.some(st => st && st.total > 0) || m.final.total > 0);
-  }, [students, currentIds]);
+  }, [visibleStudents, currentIds]);
 
   const stats = (s) => {
     const its = s.items || {};
@@ -1427,6 +1471,13 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
                 <button role="tab" aria-selected={scope === 'summer'} className={scope === 'summer' ? 'on' : ''} onClick={() => setScope('summer')}>☀️ 暑假</button>
               </div>
             )}
+            {/* v339: 多位老師各帶各的——預設只看自己帶的學生，需要時才切「全部」 */}
+            {otherStudentsN > 0 && (
+              <div className="tdash-scope" role="tablist" aria-label="學生範圍">
+                <button role="tab" aria-selected={stuScope === 'mine'} className={stuScope === 'mine' ? 'on' : ''} onClick={() => setStuScope('mine')}>我的學生</button>
+                <button role="tab" aria-selected={stuScope === 'all'} className={stuScope === 'all' ? 'on' : ''} onClick={() => setStuScope('all')}>全部</button>
+              </div>
+            )}
             <button className="tdash-close" onClick={onClose} title="關閉後台">
               <window.Icon name="close" size={16}/>
             </button>
@@ -1460,7 +1511,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             /* ── 總覽（v257: 併入原「學習報告」的全班常錯題）── */
             <>
               <ClassWeekOverview
-                students={students}
+                students={visibleStudents}
                 weeks={dWeeks}
                 weekOrder={dOrder}
                 weeksFor={weeksForStudent}
@@ -1522,7 +1573,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
 
         {allReportOpen && (
           <AllClassReportModal
-            students={students}
+            students={visibleStudents}
             weeks={dWeeks}
             weekOrder={dOrder}
             weeksFor={weeksForStudent}

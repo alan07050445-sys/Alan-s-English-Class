@@ -5579,6 +5579,20 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .qm-stufilter button:hover { border-color: #C9A84C; }
 .qm-stufilter button.on { background: #8B3120; border-color: #8B3120; color: #fff; }
 
+/* v339: 多位老師共用題庫——「我的單元／全部」切換 */
+.qm-ownerfilter {
+  display: flex; gap: 4px; margin-bottom: 10px;
+  background: #f3ecdb; border: 1.5px solid #e2d7bd; border-radius: 100px; padding: 3px;
+}
+.qm-ownerfilter button {
+  flex: 1; border: none; background: none;
+  font-family: inherit; font-size: 12.5px; font-weight: 800; color: #7a6a5f;
+  border-radius: 100px; padding: 6px 10px; cursor: pointer; white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.qm-ownerfilter button:hover { color: #4a3f33; }
+.qm-ownerfilter button.on { background: #8B3120; color: #fff; }
+
 .sa-mx-stuwrap { display: flex; align-items: center; justify-content: center; gap: 2px; }
 .sa-mx-add {
   flex: none;
@@ -5970,3 +5984,11 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .dash-grseg-bar i.low { background: #c96a4f; }
 .dash-grseg-rate { flex: 0 0 44px; text-align: right; font-size: 12.5px; font-weight: 700; }
 .dash-grseg-rate.low { color: #b4432a; }
+
+/* v339: 名單分老師——切換列＋「誰帶的」標籤 */
+.roster-scope { max-width: 320px; }
+.roster-row-teacher {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  color: #8a6d1c; background: rgba(230,180,40,.14);
+  border-radius: 100px; padding: 3px 9px; white-space: nowrap;
+}

@@ -691,6 +691,17 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [openGroups, setOpenGroups] = useQM({});
   const [libMeta, setLibMeta] = useQM(null);
   const [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
+
+  // v339: 多位老師共用題庫——側欄可切「我的單元／全部」。
+  // 非擁有者的老師預設只看自己的（不會被別人的題庫洗版），需要沿用時再切「全部」。
+  const myEmail = String((window._currentUser && window._currentUser.email) || '').toLowerCase();
+  const isOwnerTeacher = !!(window.isOwnerUser && window.isOwnerUser(window._currentUser));
+  const ownerOf = (it) => String(it.owner || '').toLowerCase();   // 舊資料沒 owner ＝ 擁有者的
+  const hasOthersItems = useQMM(
+    () => isTeacherView && sidebarItems.some(it => ownerOf(it) !== myEmail),
+    [sidebarItems, myEmail, isTeacherView]
+  );
+  const [ownerFilter, setOwnerFilter] = useQM(isOwnerTeacher ? 'all' : 'mine'); // 'all' | 'mine'
   useQME(() => {
     if (!libAdminView || !window.subscribeSummerMeta) return;   // 學生不訂閱＝不會拿到全班發派名單
     return window.subscribeSummerMeta(setLibMeta, () => {});
@@ -709,10 +720,16 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     return m;
   }, [libAdminView, libMeta, libSfx, weekId]);
   const viewItems = useQMM(() => {
-    if (!libAdminView || stuFilter === 'all') return sidebarItems;
-    if (stuFilter === 'none') return sidebarItems.filter(it => !assignedOf.has(it.id));
-    return sidebarItems.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
-  }, [sidebarItems, libAdminView, stuFilter, assignedOf]);
+    // ① 先套「我的單元／全部」（只在老師端；學生永遠看全部＝老師派給他的）
+    let base = sidebarItems;
+    if (isTeacherView && ownerFilter === 'mine' && myEmail) {
+      base = base.filter(it => ownerOf(it) === myEmail);
+    }
+    // ② 再套暑假發派濾鏡
+    if (!libAdminView || stuFilter === 'all') return base;
+    if (stuFilter === 'none') return base.filter(it => !assignedOf.has(it.id));
+    return base.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
+  }, [sidebarItems, libAdminView, stuFilter, assignedOf, isTeacherView, ownerFilter, myEmail]);
   const grouped = useQMM(() => (groupsView ? qmGroupByArticle(viewItems) : null), [groupsView, viewItems]);
   useQME(() => {
     // 選中單元時自動展開它所在的組
@@ -832,6 +849,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         })()}
 
         <div className="qm-unit-list">
+          {/* v339: 多位老師共用題庫——先選「我的／全部」，列表才不會被別人的單元洗版 */}
+          {isTeacherView && hasOthersItems && (
+            <div className="qm-ownerfilter" aria-label="依建立者篩選">
+              <button className={ownerFilter === 'mine' ? 'on' : ''} onClick={() => setOwnerFilter('mine')}>我的單元</button>
+              <button className={ownerFilter === 'all' ? 'on' : ''} onClick={() => setOwnerFilter('all')}>全部（共用題庫）</button>
+            </div>
+          )}
           {libAdminView && filterStudents.length > 0 && (
             <div className="qm-stufilter" aria-label="依學生篩選">
               <button className={stuFilter === 'all' ? 'on' : ''} onClick={() => setStuFilter('all')}>全部</button>

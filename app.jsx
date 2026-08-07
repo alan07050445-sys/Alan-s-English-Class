@@ -679,6 +679,12 @@ function App() {
   const handleSaveItem = (form) => {
     const { _isNew, ...cleanForm } = form;
     const isNew = !!_isNew;
+    // v339: 多位老師共用題庫——記下是誰建立的，側欄才能「只看我的單元」。
+    // 舊資料沒有 owner，一律視為擁有者(Alan)的。
+    if (isNew && !cleanForm.owner) {
+      const me = window._currentUser && window._currentUser.email;
+      if (me) cleanForm.owner = String(me).toLowerCase();
+    }
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     if (!w[weekId]) {
       w[weekId] = {...week, items: {vocab:[], grammar:[], word:[], reading:[]}};

@@ -233,15 +233,25 @@ function subscribeRoster(callback, onError) {
   });
 }
 
-async function addRosterStudent(email, name, grade) {
+// v339: 多位老師各帶各的學生——記下這位學生是誰帶的（沒填就是目前登入的老師）。
+// 舊資料沒有 teacher 欄位 → 視為擁有者(Alan)的學生。
+async function addRosterStudent(email, name, grade, teacher) {
   const id = String(email || '').trim().toLowerCase();
   if (!id || !id.includes('@')) throw new Error('invalid-email');
+  const owner = String(teacher || (_auth.currentUser && _auth.currentUser.email) || '').toLowerCase();
   await _db.collection('roster').doc(id).set({
     name: (name || '').trim(),
     grade: grade || '',
     active: true,
+    teacher: owner,
     addedAt: Date.now(),
-  });
+  }, { merge: true });   // merge：改年級/改名不會洗掉既有欄位
+}
+
+// 轉移學生給另一位老師（只有擁有者會用到）
+async function setRosterStudentTeacher(email, teacher) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('roster').doc(id).set({ teacher: String(teacher || '').toLowerCase() }, { merge: true });
 }
 
 async function setRosterStudentActive(email, active) {
@@ -1748,6 +1758,7 @@ Object.assign(window, {
   loadCompanion,
   // Roster
   subscribeRoster, addRosterStudent, setRosterStudentActive, deleteRosterStudent,
+  setRosterStudentTeacher,   // v339: 轉移學生給其他老師
   addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard,
   // Auth
   signInWithGoogle, signInWithGoogleRedirect, signOutUser, subscribeAuth, isAdminUser,
