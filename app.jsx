@@ -268,6 +268,9 @@ function App() {
   const weekPickedRef = useAppRef(false);
   const weekOrderRef  = useAppRef(weekOrder);
   useAppEffect(() => { weekOrderRef.current = weekOrder; }, [weekOrder]);
+  // v341: 去補做「之前沒完成的作業」時，記住原本在哪一週——補完返回就回到原來那一週，
+  // 不會被丟在舊的週次（Alan：人在 week7 補 week5 的作業，不該被留在 week5）
+  const returnWeekRef = useAppRef(null);
 
   // ── Firestore real-time subscription (grade-aware) ────
   // Switches between G2 and G3 Firestore collections based on active grade.
@@ -576,8 +579,9 @@ function App() {
     scrollPageToTop();
   }, [grade, weekIdx, catView?.id || '', mainKey, pageKey]);
 
-  const goPrevWeek = () => { setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
-  const goNextWeek = () => { setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
+  // v341: 手動切週 → 清掉「補完要回去的那一週」，免得之後返回時被莫名帶走
+  const goPrevWeek = () => { returnWeekRef.current = null; setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
+  const goNextWeek = () => { returnWeekRef.current = null; setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -1069,7 +1073,11 @@ function App() {
               items={(week.items || {})[catView.id] || []}
               weekId={weekId}
               cloudProg={qmProgress}
-              onBack={() => { setCatView(null); setMainKey(k => k + 1); scrollPageToTop(); }}
+              onBack={() => {
+                // v341: 剛剛是去補做舊週次的作業 → 返回時回到原本那一週
+                if (returnWeekRef.current != null) { setWeekIdx(returnWeekRef.current); returnWeekRef.current = null; }
+                setCatView(null); setMainKey(k => k + 1); scrollPageToTop();
+              }}
               editMode={editMode}
               onAddItem={handleAddItem}
               onEditItem={handleEditItem}
@@ -1158,7 +1166,10 @@ function App() {
                   weekOrder={weekOrder}
                   onOpenPastTask={(wid, cat, itemId) => {
                     const idx = weekOrder.indexOf(wid);
-                    if (idx >= 0) setWeekIdx(idx);
+                    if (idx >= 0 && idx !== weekIdx) {
+                      returnWeekRef.current = weekIdx;   // 記住原本這一週，補完就回來
+                      setWeekIdx(idx);
+                    }
                     setCatView({ ...cat, itemId });
                     scrollPageToTop();
                   }}

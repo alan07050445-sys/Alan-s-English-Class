@@ -1151,7 +1151,15 @@
   border-radius: 14px;
   padding: 12px 14px;
 }
-.tt-past-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 9px; }
+/* v341: 標題＝收合／展開開關（收起來時整張清單都不見） */
+.tt-past-head {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%;
+  background: none; border: none; padding: 0; margin-bottom: 9px;
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+.tt-past.closed .tt-past-head { margin-bottom: 0; }
+.tt-past-chev { flex: none; font-size: 13px; color: #8a6d1c; line-height: 1.5; }
+.tt-past-headtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tt-past-head b { font-size: 15px; color: #8a6d1c; }
 .tt-past-head span { font-size: 12.5px; color: #a08a3f; }
 .tt-past-list { display: flex; flex-direction: column; gap: 6px; }
@@ -1175,11 +1183,6 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tt-past-go { flex: none; font-size: 13px; font-weight: 800; color: #8B3120; white-space: nowrap; }
-.tt-past-more {
-  margin-top: 8px; background: none; border: none; cursor: pointer;
-  font-family: inherit; font-size: 13px; font-weight: 700; color: #8a6d1c;
-  text-decoration: underline; padding: 2px 4px;
-}
 @media (max-width: 480px) {
   .tt-past-head b { font-size: 14px; }
   .tt-past-name { font-size: 13.5px; }

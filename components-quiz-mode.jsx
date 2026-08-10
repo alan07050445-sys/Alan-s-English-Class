@@ -4958,7 +4958,7 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
 ══════════════════════════════════════════════════════ */
 function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, weeks, weekOrder, onOpenPastTask }) {
   const [ttOpen, setTtOpen] = useQM({}); // v267: 分組收合狀態（未動過＝全完成收、未完成開）
-  const [pastOpen, setPastOpen] = useQM(false); // v340: 展開全部「之前沒完成」
+  const [pastOpen, setPastOpen] = useQM(true); // v341: 「之前沒完成」預設展開，點標題可完全收合
 
   // v340: 之前週次還沒完成的作業——週次一往前推，舊作業就從畫面消失，
   // 小朋友會說「作業不見了」。這裡一律列出來，可以直接點回去補做。
@@ -5127,28 +5127,33 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
 
       {/* v340: 之前沒完成的作業——週次往前推也不會「作業不見了」，點一下就回去補做 */}
       {pastDue.length > 0 && (
-        <div className="tt-past">
-          <div className="tt-past-head">
-            <b>⚠️ 之前還有 {pastDue.length} 項作業沒完成</b>
-            <span>補做完才算完成喔！</span>
-          </div>
-          <div className="tt-past-list">
-            {(pastOpen ? pastDue : pastDue.slice(0, 3)).map(t => (
-              <button
-                key={t.key}
-                className="tt-past-row"
-                onClick={() => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)}
-              >
-                <span className="tt-past-wk">{t.weekLabel}</span>
-                <span className="tt-past-name">{t.it.title || t.id}</span>
-                <span className="tt-past-go">補做 →</span>
-              </button>
-            ))}
-          </div>
-          {pastDue.length > 3 && (
-            <button className="tt-past-more" onClick={() => setPastOpen(o => !o)}>
-              {pastOpen ? '收起來' : `看全部 ${pastDue.length} 項`}
-            </button>
+        <div className={'tt-past' + (pastOpen ? '' : ' closed')}>
+          {/* v341: 點標題就完全收合／展開（收起來時整張清單都不見，只留一行提醒） */}
+          <button
+            className="tt-past-head"
+            onClick={() => setPastOpen(o => !o)}
+            aria-expanded={pastOpen}
+          >
+            <span className="tt-past-chev" aria-hidden="true">{pastOpen ? '▾' : '▸'}</span>
+            <span className="tt-past-headtext">
+              <b>⚠️ 之前還有 {pastDue.length} 項作業沒完成</b>
+              <span>{pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'}</span>
+            </span>
+          </button>
+          {pastOpen && (
+            <div className="tt-past-list">
+              {pastDue.map(t => (
+                <button
+                  key={t.key}
+                  className="tt-past-row"
+                  onClick={() => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)}
+                >
+                  <span className="tt-past-wk">{t.weekLabel}</span>
+                  <span className="tt-past-name">{t.it.title || t.id}</span>
+                  <span className="tt-past-go">補做 →</span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}
