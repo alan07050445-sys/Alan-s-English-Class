@@ -1142,6 +1142,49 @@
   padding: 9px 13px; margin: 6px 4px 8px;
 }
 .tt-empty { font-size: 14.5px; color: var(--ink-3, #8a8270); padding: 8px 6px 12px; }
+
+/* v340: 之前沒完成的作業（週次往前推也不會消失） */
+.tt-past {
+  margin: 6px 0 12px;
+  background: rgba(230,180,40,.10);
+  border: 1.5px solid rgba(230,180,40,.45);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.tt-past-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 9px; }
+.tt-past-head b { font-size: 15px; color: #8a6d1c; }
+.tt-past-head span { font-size: 12.5px; color: #a08a3f; }
+.tt-past-list { display: flex; flex-direction: column; gap: 6px; }
+.tt-past-row {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: var(--bg-card, #fff);
+  border: 1px solid rgba(230,180,40,.4);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-family: inherit; text-align: left; cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.tt-past-row:hover { border-color: #C9A84C; transform: translateX(2px); }
+.tt-past-wk {
+  flex: none; font-family: var(--mono, monospace); font-size: 10.5px; font-weight: 700;
+  color: #8a6d1c; background: rgba(230,180,40,.16);
+  border-radius: 100px; padding: 3px 8px; white-space: nowrap;
+}
+.tt-past-name {
+  flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; color: var(--ink, #241A12);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tt-past-go { flex: none; font-size: 13px; font-weight: 800; color: #8B3120; white-space: nowrap; }
+.tt-past-more {
+  margin-top: 8px; background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700; color: #8a6d1c;
+  text-decoration: underline; padding: 2px 4px;
+}
+@media (max-width: 480px) {
+  .tt-past-head b { font-size: 14px; }
+  .tt-past-name { font-size: 13.5px; }
+  .tt-past-go { font-size: 12px; }
+}
 .tt-list { display: flex; flex-direction: column; }
 .tt-row {
   display: flex; align-items: center; gap: 13px;

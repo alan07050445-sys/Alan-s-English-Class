@@ -264,12 +264,17 @@ function App() {
   // Always-fresh ref to weeks — prevents stale-closure bugs in CRUD handlers.
   const weeksRef = useAppRef(weeks);
   useAppEffect(() => { weeksRef.current = weeks; }, [weeks]);
+  // v340: 週次「只在第一次載入時自動跳到本週」，之後保留使用者選的那一週（提前備課不會被彈回）
+  const weekPickedRef = useAppRef(false);
+  const weekOrderRef  = useAppRef(weekOrder);
+  useAppEffect(() => { weekOrderRef.current = weekOrder; }, [weekOrder]);
 
   // ── Firestore real-time subscription (grade-aware) ────
   // Switches between G2 and G3 Firestore collections based on active grade.
   // Also points window.saveWeeks / saveWeekOrder at the right collection.
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
+    weekPickedRef.current = false;   // v340: 換年級/換教室 → 重新自動跳到本週
     window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks });
     window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder });
 
@@ -281,7 +286,19 @@ function App() {
       setAccessLocked(false);
       setWeeks(newWeeks);
       setWeekOrder(newOrder);
-      setWeekIdx(bestWeekIdx(newOrder, newWeeks));
+      // v340: 只在「這個年級第一次載入」時自動跳到本週。
+      // 舊版每次資料更新（連自己存檔都算）都重設 → 提前備課 week7 一存檔就被彈回 week6（Alan 回報）。
+      // 之後的更新一律保留使用者當下看的那一週；只在該週消失時才退回最後一週。
+      if (!weekPickedRef.current) {
+        weekPickedRef.current = true;
+        setWeekIdx(bestWeekIdx(newOrder, newWeeks));
+      } else {
+        setWeekIdx(i => {
+          const curId = weekOrderRef.current[i];
+          const keep  = curId ? newOrder.indexOf(curId) : -1;   // 用「週次 id」定位，順序變動也不會亂跳
+          return keep >= 0 ? keep : Math.min(i, Math.max(0, newOrder.length - 1));
+        });
+      }
       try {
         localStorage.setItem(storageKey, JSON.stringify(newWeeks));
         localStorage.setItem(orderKey,   JSON.stringify(newOrder));
@@ -1136,6 +1153,15 @@ function App() {
                   weekId={weekId}
                   categories={activeCategories}
                   onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
+                  /* v340: 之前週次沒完成的作業也要看得到（不然週次一過就「作業不見了」） */
+                  weeks={weeks}
+                  weekOrder={weekOrder}
+                  onOpenPastTask={(wid, cat, itemId) => {
+                    const idx = weekOrder.indexOf(wid);
+                    if (idx >= 0) setWeekIdx(idx);
+                    setCatView({ ...cat, itemId });
+                    scrollPageToTop();
+                  }}
                 />
               )}
               {/* v319: Alan 選「先移除加強複習功能」——大廳不放複習區、header 也拿掉 📕（見 components-shell）。

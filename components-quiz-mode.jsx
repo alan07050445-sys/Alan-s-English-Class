@@ -4956,8 +4956,40 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
    點一條直達該單元；做到一半顯示「繼續」；完成打勾。
    （老師編輯模式仍用下面的 WeeklyContactBook 來釘作業/寫給家長的話）
 ══════════════════════════════════════════════════════ */
-function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) {
+function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, weeks, weekOrder, onOpenPastTask }) {
   const [ttOpen, setTtOpen] = useQM({}); // v267: 分組收合狀態（未動過＝全完成收、未完成開）
+  const [pastOpen, setPastOpen] = useQM(false); // v340: 展開全部「之前沒完成」
+
+  // v340: 之前週次還沒完成的作業——週次一往前推，舊作業就從畫面消失，
+  // 小朋友會說「作業不見了」。這裡一律列出來，可以直接點回去補做。
+  const pastDue = useQMM(() => {
+    const out = [];
+    if (!weeks || !weekOrder || !weekOrder.length) return out;
+    const curIdx = weekOrder.indexOf(weekId);
+    if (curIdx <= 0) return out;                       // 已經是第一週就沒有「之前」
+    for (let i = 0; i < curIdx; i++) {
+      const wid = weekOrder[i];
+      const w = weeks[wid];
+      if (!w) continue;
+      const whw = w.homework || {};
+      if (!Object.keys(whw).length) continue;
+      const byId = {};
+      (categories || []).forEach(c => ((w.items || {})[c.id] || []).forEach(it => { byId[it.id] = { it, catId: c.id }; }));
+      Object.keys(whw).forEach(id => {
+        const hit = byId[id];
+        if (!hit) return;
+        if (getQuizItems([hit.it]).length === 0) return;      // 空單元不算
+        const p = (qmProg || {})[`${wid}_${id}`];
+        if (p && p.done) return;                              // 已完成就不提醒
+        out.push({
+          key: wid + '_' + id, wid, id, it: hit.it,
+          weekLabel: w.label || wid,
+          cat: (categories || []).find(c => c.id === hit.catId),
+        });
+      });
+    }
+    return out;
+  }, [weeks, weekOrder, weekId, qmProg, categories]);
   const note = week.parentNote || '';
   const hw = week.homework || {};
   const itemById = {};
@@ -5092,6 +5124,35 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask }) 
         {tasks.length > 0 && !allDone && <span className="tt-count">完成 {doneN} / {tasks.length}</span>}
       </div>
       {note && <div className="tt-note">💬 老師的話：{note}</div>}
+
+      {/* v340: 之前沒完成的作業——週次往前推也不會「作業不見了」，點一下就回去補做 */}
+      {pastDue.length > 0 && (
+        <div className="tt-past">
+          <div className="tt-past-head">
+            <b>⚠️ 之前還有 {pastDue.length} 項作業沒完成</b>
+            <span>補做完才算完成喔！</span>
+          </div>
+          <div className="tt-past-list">
+            {(pastOpen ? pastDue : pastDue.slice(0, 3)).map(t => (
+              <button
+                key={t.key}
+                className="tt-past-row"
+                onClick={() => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)}
+              >
+                <span className="tt-past-wk">{t.weekLabel}</span>
+                <span className="tt-past-name">{t.it.title || t.id}</span>
+                <span className="tt-past-go">補做 →</span>
+              </button>
+            ))}
+          </div>
+          {pastDue.length > 3 && (
+            <button className="tt-past-more" onClick={() => setPastOpen(o => !o)}>
+              {pastOpen ? '收起來' : `看全部 ${pastDue.length} 項`}
+            </button>
+          )}
+        </div>
+      )}
+
       {tasks.length === 0 ? (
         <div className="tt-empty">這週老師沒有指定作業——從下面挑一個自由練習吧！</div>
       ) : (
@@ -5534,235 +5595,16 @@ function WeekSummaryTiles({ done, total, avg, streak }) {
    紙本作業拍照上傳：學生拍照/選圖 → 縮圖預覽 → 送出（自動縮小後傳
    Firebase Storage）→ 老師在後台學生詳情看照片、打分數。
 ══════════════════════════════════════════════════════ */
-// v299: 上傳作業「掃描模式」——自動抓紙張邊界＋透視校正＋裁切＋增強對比，
-// 讓小朋友交出來的都是置中、方正、清楚的圖（也方便日後 AI 批改）。
-// OpenCV.js(~3.8MB gzip)＋jscanify 只在學生第一次按掃描時才載入，平時零負擔。
-let _cvPromise = null, _jsPromise = null;
-function ensureOpenCV() {
-  if (window.cv && window.cv.Mat) return Promise.resolve(window.cv);
-  if (_cvPromise) return _cvPromise;
-  _cvPromise = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    // v301: 改用 jsdelivr 的 @techstark/opencv-js——docs.opencv.org 常常載不動/被擋
-    // （就是 Alan「怎麼掃都維持原圖」的元兇：載入失敗→靜默退回原圖）。
-    s.src = 'https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js'; s.async = true;
-    s.onload = () => {
-      const check = () => (window.cv && window.cv.Mat)
-        ? resolve(window.cv)
-        : (window.cv && typeof window.cv.then === 'function'
-            ? window.cv.then(m => { window.cv = m; resolve(m); })
-            : setTimeout(check, 60));
-      check();
-    };
-    s.onerror = () => { _cvPromise = null; reject(new Error('OpenCV 載入失敗')); };
-    document.head.appendChild(s);
-  });
-  return _cvPromise;
-}
-function ensureJscanify() {
-  if (window.jscanify) return Promise.resolve(window.jscanify);
-  if (_jsPromise) return _jsPromise;
-  _jsPromise = ensureOpenCV().then(() => new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/jscanify@1.4.0/src/jscanify.min.js';
-    s.onload = () => res(window.jscanify);
-    s.onerror = () => { _jsPromise = null; rej(new Error('掃描元件載入失敗')); };
-    document.head.appendChild(s);
-  }));
-  return _jsPromise;
-}
-// 載入一張本機圖片成 <img>（自然尺寸）
-function loadImgEl(file) {
-  return new Promise((ok, no) => {
-    const im = new Image();
-    im.onload = () => ok(im);
-    im.onerror = () => no(new Error('圖片讀取失敗'));
-    im.src = URL.createObjectURL(file);
-  });
-}
-// v302: 掃描前先把大圖縮到工作解析度——手機原圖動輒 12–48MP，直接丟給 OpenCV 會在
-// 主執行緒同步跑好幾秒、整個網站凍住（Alan：掃描太久、網站完全卡住）。縮到 ~1500px
-// 偵測邊界綽綽有餘、速度快幾十倍，輸出品質也夠清楚（本來就縮到 1600 上傳）。
-function downscaleToCanvas(img, maxSide) {
-  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-  const k = Math.min(1, maxSide / Math.max(w, h));
-  const cv = document.createElement('canvas');
-  cv.width = Math.max(1, Math.round(w * k));
-  cv.height = Math.max(1, Math.round(h * k));
-  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-  return cv;
-}
-const withTimeout = (p, ms, msg) => Promise.race([
-  p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg || 'timeout')), ms)),
-]);
-// 讓瀏覽器先畫一格（把「掃描中…」畫出來）再跑同步的重工作
-const nextFrame = () => new Promise(r => setTimeout(r, 0));
-// 依四角算輸出尺寸（保留紙張真實長寬比，不硬套 A4），最長邊上限 1600
-function cornerDims(pts) {
-  const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-  const tl = pts.topLeftCorner, tr = pts.topRightCorner, bl = pts.bottomLeftCorner, br = pts.bottomRightCorner;
-  let w = Math.max(200, Math.round((d(tl, tr) + d(bl, br)) / 2));
-  let h = Math.max(200, Math.round((d(tl, bl) + d(tr, br)) / 2));
-  const MAX = 1600, k = Math.min(1, MAX / Math.max(w, h));
-  return { w: Math.round(w * k), h: Math.round(h * k) };
-}
-function enhanceCanvas(canvas) {
-  try {
-    const ctx = canvas.getContext('2d');
-    const d = ctx.getImageData(0, 0, canvas.width, canvas.height), a = d.data, C = 1.22, B = -8;
-    for (let i = 0; i < a.length; i += 4) {
-      a[i]   = Math.max(0, Math.min(255, (a[i]   - 128) * C + 128 + B));
-      a[i+1] = Math.max(0, Math.min(255, (a[i+1] - 128) * C + 128 + B));
-      a[i+2] = Math.max(0, Math.min(255, (a[i+2] - 128) * C + 128 + B));
-    }
-    ctx.putImageData(d, 0, 0);
-  } catch (e) {}
-}
-// 用四角點透視校正 → 增強對比 → JPEG blob
-function warpCornersToBlob(scanner, img, pts) {
-  const { w, h } = cornerDims(pts);
-  const warped = scanner.extractPaper(img, w, h, pts); // canvas
-  enhanceCanvas(warped);
-  return new Promise((ok, no) => warped.toBlob(b => b ? ok(b) : no(new Error('無法輸出')), 'image/jpeg', 0.9));
-}
-// 自動掃描：抓紙張邊界→校正。偵測不到→丟 code:'no-contour'（呼叫端請學生手動框/重拍）；
-// 引擎載入失敗→一般 Error（呼叫端退回原圖，不讓學生被我們的網路卡住）。
-async function autoScanBlob(file) {
-  const jscanify = await ensureJscanify();  // 載不動 → 這裡就 throw（engine）
-  const img = await loadImgEl(file);
-  const src = downscaleToCanvas(img, 1200);  // ★ 先縮小才不會凍住整個網站
-  URL.revokeObjectURL(img.src);
-  await nextFrame();                          // 讓「掃描中…」先畫出來
-  const scanner = new jscanify();
-  const cvImg = window.cv.imread(src);
-  let contour = null;
-  try { contour = scanner.findPaperContour(cvImg); } catch (e) { contour = null; }
-  if (!contour) {
-    try { cvImg.delete(); } catch (e) {}
-    const e = new Error('no-contour'); e.code = 'no-contour'; throw e;
-  }
-  const pts = scanner.getCornerPoints(contour, cvImg);
-  try { cvImg.delete(); } catch (e) {}
-  return warpCornersToBlob(scanner, src, pts);  // 用縮小後的 canvas 校正
-}
-
-// v301: 手動框四角——自動抓不到紙張邊界時，讓小朋友/家長把四個角拖到紙的角落，
-// 再透視校正成方正清楚的掃描圖。（Alan：抓不到就重拍或手動框，不要直接用原圖）
-function CornerAdjustModal({ file, onConfirm, onCancel }) {
-  const imgRef  = React.useRef(null);
-  const [imgUrl, setImgUrl] = useQM('');
-  const [ready,  setReady]  = useQM(false);
-  const [busy,   setBusy]   = useQM(false);
-  const [err,    setErr]    = useQM('');
-  // 四角以「比例」存（0~1），跟顯示大小無關
-  const [c, setC] = useQM({ tl: { x: .12, y: .12 }, tr: { x: .88, y: .12 }, br: { x: .88, y: .88 }, bl: { x: .12, y: .88 } });
-  const dragRef = React.useRef(null);
-
-  useQME(() => {
-    const url = URL.createObjectURL(file);
-    setImgUrl(url);
-    return () => { try { URL.revokeObjectURL(url); } catch (e) {} };
-  }, [file]);
-
-  const boxRect = () => {
-    const el = imgRef.current;
-    return el ? el.getBoundingClientRect() : null;
-  };
-  const pointFromEvent = (e) => {
-    const r = boxRect(); if (!r) return null;
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
-    return { x: Math.max(0, Math.min(1, (cx - r.left) / r.width)), y: Math.max(0, Math.min(1, (cy - r.top) / r.height)) };
-  };
-  const onDown = (key) => (e) => { e.preventDefault(); dragRef.current = key; };
-  useQME(() => {
-    const move = (e) => {
-      if (!dragRef.current) return;
-      const p = pointFromEvent(e); if (!p) return;
-      setC(prev => ({ ...prev, [dragRef.current]: p }));
-    };
-    const up = () => { dragRef.current = null; };
-    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
-    window.addEventListener('touchmove', move, { passive: false }); window.addEventListener('touchend', up);
-    return () => {
-      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
-      window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up);
-    };
-  }, []);
-
-  const confirm = async () => {
-    if (busy) return;
-    setBusy(true); setErr('');
-    try {
-      await withTimeout(ensureJscanify(), 25000, 'engine');
-      const img = imgRef.current;
-      const src = downscaleToCanvas(img, 1200);  // ★ 先縮小才不會凍住
-      await nextFrame();
-      const nW = src.width, nH = src.height;      // 角以比例存，縮圖後同比例成立
-      const P = (r) => ({ x: Math.round(r.x * nW), y: Math.round(r.y * nH) });
-      const pts = { topLeftCorner: P(c.tl), topRightCorner: P(c.tr), bottomRightCorner: P(c.br), bottomLeftCorner: P(c.bl) };
-      const scanner = new window.jscanify();
-      const blob = await warpCornersToBlob(scanner, src, pts);
-      onConfirm(blob);
-    } catch (e) {
-      setErr('校正失敗，請重拍一張再試。');
-      setBusy(false);
-    }
-  };
-
-  // 顯示用的多邊形點（百分比）
-  const poly = [c.tl, c.tr, c.br, c.bl].map(p => `${(p.x * 100).toFixed(2)},${(p.y * 100).toFixed(2)}`).join(' ');
-
-  return ReactDOM.createPortal(
-    <div className="ca-overlay" onClick={onCancel}>
-      <div className="ca-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="調整紙張邊界">
-        <div className="ca-head">
-          <b>把四個角拖到紙張的角落</b>
-          <button className="ca-x" onClick={onCancel} aria-label="關閉">✕</button>
-        </div>
-        <div className="ca-stage">
-          {imgUrl && (
-            <img ref={imgRef} src={imgUrl} alt="待校正照片" className="ca-img" draggable="false"
-              onLoad={() => setReady(true)}/>
-          )}
-          {ready && (
-            <svg className="ca-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polygon points={poly} className="ca-poly"/>
-            </svg>
-          )}
-          {ready && ['tl', 'tr', 'br', 'bl'].map(k => (
-            <button key={k} className={`ca-handle ca-${k}`} style={{ left: `${c[k].x * 100}%`, top: `${c[k].y * 100}%` }}
-              onMouseDown={onDown(k)} onTouchStart={onDown(k)} aria-label={`角落 ${k}`}/>
-          ))}
-        </div>
-        {err && <div className="uh-err ca-err">⚠ {err}</div>}
-        <div className="ca-hint">拖動四個白點，把框對準紙張的四個角，再按「校正這張」。</div>
-        <div className="ca-btns">
-          <button className="qm-btn secondary" onClick={onCancel} disabled={busy}>換一張／重拍</button>
-          <button className="qm-btn primary" onClick={confirm} disabled={busy || !ready}>{busy ? '校正中…' : '校正這張 →'}</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
+// v340: 依 Alan 決定拿掉自動掃描（OpenCV 邊界偵測、手動框四角）——手機上又慢又常出問題。
+// 改成單純拍照/選圖上傳：縮圖後直接送出，穩定就好。
 function UploadHomeworkPlayer({ item, progressKey, onBack }) {
-  const [pending,   setPending]   = useQM([]);   // [{ file, url, outBlob, scanned, raw }] 掃描好、待送出
-  const [needsFix,  setNeedsFix]  = useQM([]);   // [{ file, url }] 抓不到邊界、要手動框或移除
-  const [adjusting, setAdjusting] = useQM(null); // 正在手動框四角的那一張
+  const [pending,   setPending]   = useQM([]);   // [{ uid, file, url, outBlob }] 待送出
   const [busy,      setBusy]      = useQM(false);
   const [upMsg,     setUpMsg]     = useQM('');   // v266: 上傳進度「2/3」
   const [err,       setErr]       = useQM('');
-  const [note,      setNote]      = useQM('');   // 一般提示（例如引擎載不動退回原圖）
-  const [scanning,  setScanning]  = useQM(false);  // 背景掃描進行中（只用來顯示提示，不擋操作）
-  const [scanMsg,   setScanMsg]   = useQM('');     // v302: 掃描進度文字（讓學生知道在動）
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
-  // v338: 背景掃描用——每張照片一個序號，掃完才回頭把那張換成掃描版
-  const seqRef   = React.useRef(0);
-  const queueRef = React.useRef([]);      // 待掃描佇列
-  const runRef   = React.useRef(false);   // 掃描迴圈是否已在跑（避免多次選檔開多個迴圈）
+  const seqRef = React.useRef(0);
 
   // 已交過的照片與批改結果：聽自己的雲端 progress（老師打完分數會即時看到）
   useQME(() => {
@@ -5790,89 +5632,24 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     img.src = URL.createObjectURL(file);
   });
 
-  // v338: 掃描改成「不阻塞」——照片先收下、馬上看得到也能送出；自動掃描在背景跑，
-  //       成功就把那張換成掃描版。（舊版要先等 OpenCV ~8MB 載完才動得了，手機上會卡很久、
-  //       整頁凍住，還可能因為抓不到邊界就不准送出。Alan 回報：掃描跑超久、網頁卡住。）
+  // v340: 單純上傳——選好圖就縮圖收下，沒有掃描、不會卡（Alan 決定拿掉掃描功能）
   const pickFiles = async (e) => {
     const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
     e.target.value = ''; // 同一張可以再選
     if (!files.length) return;
-    setErr(''); setNote('');
-    // ① 先縮圖收下——這步很快，學生立刻看到照片、可以直接送出
+    setErr('');
     const added = [];
     for (const f of files) {
       let b; try { b = await shrink(f); } catch (_) { b = f; }
-      added.push({ uid: ++seqRef.current, file: f, outBlob: b, url: URL.createObjectURL(b), scanned: false, raw: true, busy: true });
+      added.push({ uid: ++seqRef.current, file: f, outBlob: b, url: URL.createObjectURL(b) });
     }
     setPending(prev => [...prev, ...added]);
-    // ② 丟進背景佇列自動掃描（失敗就維持原圖，完全不擋送出）
-    queueRef.current.push(...added);
-    runScanQueue();
   };
-
-  // 背景掃描迴圈：一次只跑一張，跑完才換下一張，避免手機被塞爆
-  const runScanQueue = async () => {
-    if (runRef.current) return;             // 已經在跑就讓它接著處理佇列
-    runRef.current = true;
-    setScanning(true);
-    setScanMsg(window.cv && window.cv.Mat ? '自動掃描中…' : '正在準備掃描工具…');
-    // 引擎載入上限 15 秒——載不動就整批維持原圖，不再讓學生空等
-    let engineOk = true;
-    try { await withTimeout(ensureJscanify(), 15000, 'engine-timeout'); } catch (_) { engineOk = false; }
-    if (!engineOk) {
-      const rest = queueRef.current.splice(0);
-      setPending(prev => prev.map(p => rest.some(x => x.uid === p.uid) ? { ...p, busy: false } : p));
-      setNote('自動掃描暫時無法使用（可能是網路較慢），已用原圖收下——一樣可以直接送出。');
-      runRef.current = false; setScanning(false); setScanMsg('');
-      return;
-    }
-    while (queueRef.current.length) {
-      const it = queueRef.current.shift();
-      setScanMsg(queueRef.current.length ? `自動掃描中…（還有 ${queueRef.current.length} 張）` : '自動掃描中…');
-      await nextFrame();                    // 讓畫面先更新，不要整頁凍住
-      try {
-        const b = await withTimeout(autoScanBlob(it.file), 20000, 'scan-timeout');
-        const url = URL.createObjectURL(b);
-        setPending(prev => prev.map(p => {
-          if (p.uid !== it.uid) return p;
-          try { URL.revokeObjectURL(p.url); } catch (_) {}
-          return { ...p, outBlob: b, url, scanned: true, raw: false, busy: false };
-        }));
-      } catch (e2) {
-        // 抓不到邊界或逾時 → 保留原圖，標記可以手動框（但不強迫、也不擋送出）
-        const noContour = !!(e2 && e2.code === 'no-contour');
-        setPending(prev => prev.map(p => p.uid === it.uid ? { ...p, busy: false, canFix: noContour } : p));
-      }
-      await nextFrame();
-    }
-    runRef.current = false; setScanning(false); setScanMsg('');
-  };
-  const removePending  = (i) => setPending(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
-  const removeNeedsFix = (i) => setNeedsFix(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
-
-  // 手動框四角完成 → 變成一張掃描好的待送出照片
-  // v338: 若是從「待送出」那張點進來調整的（有 uid），就原地換掉，不要多出一張
-  const onAdjustConfirm = (blob) => {
-    const nf = adjusting;
-    setAdjusting(null);
-    if (!nf) return;
-    if (nf.uid != null) {
-      const url = URL.createObjectURL(blob);
-      setPending(prev => prev.map(p => {
-        if (p.uid !== nf.uid) return p;
-        try { URL.revokeObjectURL(p.url); } catch (e) {}
-        return { ...p, outBlob: blob, url, scanned: true, raw: false, busy: false, canFix: false };
-      }));
-      return;
-    }
-    setNeedsFix(prev => { try { URL.revokeObjectURL(nf.url); } catch (e) {} return prev.filter(x => x !== nf); });
-    setPending(prev => [...prev, { uid: ++seqRef.current, file: nf.file, outBlob: blob, url: URL.createObjectURL(blob), scanned: true }]);
-  };
+  const removePending = (i) => setPending(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
 
   const submit = async () => {
     if (!u) { setErr('要先登入才能交作業喔！'); return; }
     if (!pending.length || busy) return;
-    if (needsFix.length) { setErr(`還有 ${needsFix.length} 張沒處理好——請按「調整邊界」框好紙張，或先移除，才能送出。`); return; }
     setBusy(true); setErr('');
     try {
       const urls = [];
@@ -5919,8 +5696,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     }
   };
 
-  // v338: 背景掃描不再擋送出——想早點交就交（會用當下這張，掃描完成的會自動是掃描版）
-  const canSubmit = !busy && pending.length > 0 && needsFix.length === 0;
+  const canSubmit = !busy && pending.length > 0;
 
   return (
     <div className="qm-intro uh">
@@ -5958,26 +5734,6 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         </div>
       )}
 
-      {/* v301: 抓不到邊界、要手動框或重拍的照片 */}
-      {needsFix.length > 0 && (
-        <div className="uh-block uh-block-fix">
-          <div className="uh-block-title uh-fix-title">這幾張沒抓到紙張邊界（{needsFix.length} 張）</div>
-          <div className="uh-fix-hint">拍清楚一點會更好：紙放平、四個角都入鏡、光線足夠。你也可以自己框四個角。</div>
-          <div className="uh-grid">
-            {needsFix.map((p, i) => (
-              <span key={i} className="uh-thumb uh-thumb-fix">
-                <img src={p.url} alt={`待調整 ${i + 1}`}/>
-                <span className="uh-thumb-warn">需調整</span>
-                <span className="uh-fix-actions">
-                  <button className="uh-fix-btn" onClick={() => setAdjusting(p)}>調整邊界</button>
-                  <button className="uh-fix-btn ghost" onClick={() => removeNeedsFix(i)}>移除</button>
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
       {pending.length > 0 && (
         <div className="uh-block">
           <div className="uh-block-title">準備送出（{pending.length} 張）</div>
@@ -5985,16 +5741,6 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
             {pending.map((p, i) => (
               <span key={p.uid != null ? p.uid : i} className="uh-thumb uh-thumb-pending">
                 <img src={p.url} alt={`預覽 ${i + 1}`}/>
-                {p.busy
-                  ? <span className="uh-thumb-badge scanning">⏳ 掃描中…</span>
-                  : p.scanned
-                    ? <span className="uh-thumb-badge">✓ 已掃描</span>
-                    : <span className="uh-thumb-badge raw">原圖</span>}
-                {!p.busy && !p.scanned && (
-                  <button className="uh-thumb-fixbtn"
-                    onClick={() => setAdjusting({ uid: p.uid, file: p.file, url: p.url })}
-                  >調整邊界</button>
-                )}
                 <button className="uh-thumb-del" onClick={() => removePending(i)} aria-label="移除這張">✕</button>
               </span>
             ))}
@@ -6002,14 +5748,9 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
         </div>
       )}
 
-      {note && <div className="uh-note">ℹ️ {note}</div>}
       {err && <div className="uh-err">⚠ {err}</div>}
 
-      {scanning && (
-        <div className="uh-scanning"><span className="uh-scan-spin" aria-hidden="true"/>{scanMsg || '掃描中…'}</div>
-      )}
       <div className="uh-btns">
-        {/* v338: 掃描改背景進行，選照片不再被鎖住（上傳中才鎖） */}
         <label className={`qm-btn secondary uh-pick${busy ? ' disabled' : ''}`}>
           📷 拍照或選照片
           <input type="file" accept="image/*" multiple onChange={pickFiles} disabled={busy} style={{ display: 'none' }}/>
@@ -6018,13 +5759,9 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
           {busy ? `上傳中 ${upMsg}…` : submitted.length > 0 ? '補交這幾張 →' : '送出作業 →'}
         </button>
       </div>
-      <div className="uh-hint">📷 拍照後會自動抓紙張邊界、拉正、裁切成清楚方正的掃描圖；抓不到就請你重拍或自己框四個角。</div>
-
-      {adjusting && (
-        <CornerAdjustModal file={adjusting.file} onConfirm={onAdjustConfirm} onCancel={() => setAdjusting(null)}/>
-      )}
+      <div className="uh-hint">📷 可以一次選多張。拍的時候把紙放平、四個角都入鏡、光線足夠，老師才看得清楚。</div>
     </div>
   );
 }
 
-Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, CornerAdjustModal, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });
+Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });
