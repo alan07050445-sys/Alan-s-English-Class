@@ -1194,6 +1194,51 @@ const SUGGESTED_SHOP = (() => {
   ];
 })();
 
+/* ── v347: 從蝦皮連結批次建立商品 ──────────────────────────
+   蝦皮擋自動抓取（API 403；用真實瀏覽器開也會跳登入牆），所以無法自動找商品。
+   改成：老師自己複製商品連結貼進來，這裡負責把「網址 → 商品名稱」解析出來，
+   價格 ×20 換成星星。一次貼 50 行也沒問題。
+   支援格式（一行一個）：
+     https://shopee.tw/百樂-Juice-果汁筆-i.123.456   45
+     https://shopee.tw/xxx-i.1.2 | 卡皮巴拉玩偶 | 450
+     卡皮巴拉玩偶  450                （沒有連結也可以）  */
+function parseShopLines(text) {
+  const out = [], bad = [];
+  String(text || '').split('\n').forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    // 先抓網址
+    const m = line.match(/https?:\/\/\S+/);
+    const url = m ? m[0] : '';
+    let rest = (m ? line.replace(m[0], '') : line).trim();
+    // 用 | 或 tab 或多個空白切欄位
+    const parts = rest.split(/\s*\|\s*|\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+    // 最後一段若是純數字＝價格
+    let price = null, name = '';
+    if (parts.length) {
+      const last = parts[parts.length - 1].replace(/[,$＄元]/g, '');
+      if (/^\d+(\.\d+)?$/.test(last)) { price = Number(last); parts.pop(); }
+      name = parts.join(' ').trim();
+    }
+    // 沒給名稱 → 從蝦皮網址的 slug 解析（蝦皮網址就含商品名）
+    if (!name && url) name = nameFromShopeeUrl(url);
+    if (!name) { bad.push(line); return; }
+    out.push({ name, url, price });
+  });
+  return { items: out, bad };
+}
+function nameFromShopeeUrl(url) {
+  try {
+    const path = decodeURIComponent(new URL(url).pathname);
+    // 形式1：/商品名稱-i.店號.商品號   → 取 -i. 前面那段
+    let slug = path.replace(/^\//, '').split(/-i\.\d/)[0];
+    // 形式2：/product/店號/商品號 → 沒有名稱可解析
+    if (/^product\/\d+/.test(slug) || /^\d+$/.test(slug)) return '';
+    slug = slug.split('/').pop() || '';
+    return slug.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  } catch (e) { return ''; }
+}
+
 /* ── 商店商品維護（v343）──────────────────────────────── */
 function ShopManager() {
   const [items, setItems] = useDash(null);   // null = 還沒載到
@@ -1202,6 +1247,10 @@ function ShopManager() {
   const [busyId, setBusyId] = useDash(null);
   const fileRef = React.useRef(null);
   const pickFor = React.useRef(null);        // 正在換圖片的商品 id
+  // v347: 批次貼上蝦皮連結
+  const [bulkOpen, setBulkOpen] = useDash(false);
+  const [bulkText, setBulkText] = useDash('');
+  const [bulkTag, setBulkTag]   = useDash('文具');
 
   useDashE(() => window.subscribeShop(
     (list) => setItems(list || (window.SHOP_ITEMS || []).map(x => ({ ...x }))),
@@ -1241,6 +1290,31 @@ function ShopManager() {
     [arr[i], arr[j]] = [arr[j], arr[i]];
     save(arr);
   };
+  // v347: 把貼上的連結批次變成商品
+  const bulkAdd = () => {
+    const { items: parsed, bad } = parseShopLines(bulkText);
+    if (!parsed.length) { setErr('沒有解析到商品——請每行貼一個蝦皮商品連結（後面可加價格）'); return; }
+    const noPrice = parsed.filter(p => p.price == null).length;
+    if (!confirm(
+      `解析到 ${parsed.length} 樣商品，要加入嗎？\n` +
+      `分類：${bulkTag}\n` +
+      (noPrice ? `⚠️ 其中 ${noPrice} 樣沒填價格，星星會先設 0，記得之後補\n` : '') +
+      (bad.length ? `⚠️ 有 ${bad.length} 行看不懂會略過\n` : '')
+    )) return;
+    const add = parsed.map(p => ({
+      id: 'b' + Math.random().toString(36).slice(2, 8),
+      name: p.name,
+      cost: p.price != null ? Math.round(p.price * 20) : 0,   // 星星＝價格×20
+      tag: bulkTag,
+      emoji: '🎁',
+      img: '',
+      url: p.url || '',
+    }));
+    save([...(items || []), ...add]);
+    setBulkText(''); setBulkOpen(false);
+    setOk(`已加入 ${add.length} 樣商品`); setTimeout(() => setOk(null), 2500);
+  };
+
   const pickImage = (id) => { pickFor.current = id; if (fileRef.current) fileRef.current.click(); };
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -1265,10 +1339,45 @@ function ShopManager() {
           <span className="linkbind-summary">學生在「⭐ 星星 → 🛍️ 商店」看到的就是這些</span>
         </div>
         <div className="shopm-head-btns">
+          <button className="roster-toggle-btn" onClick={() => setBulkOpen(o => !o)}>📋 批次貼上蝦皮連結</button>
           <button className="roster-toggle-btn" onClick={loadSuggested}>✨ 載入建議商品（50）</button>
           <button className="roster-add-btn" onClick={add}>＋ 新增商品</button>
         </div>
       </div>
+
+      {/* v347: 批次貼上——蝦皮擋自動抓取，改由老師貼連結，這裡自動解析名稱＋算星星 */}
+      {bulkOpen && (
+        <div className="shopm-bulk">
+          <div className="shopm-bulk-head">
+            <b>📋 批次貼上蝦皮連結</b>
+            <span>在蝦皮商品頁按「分享 → 複製連結」，一行貼一個。後面空兩格再打價格，星星會自動 ×20。</span>
+          </div>
+          <div className="shopm-bulk-row">
+            <label>這批的分類</label>
+            {['文具', '娃娃', '休閒娛樂'].map(t => (
+              <button key={t} className={'notify-chip' + (bulkTag === t ? ' on' : '')} onClick={() => setBulkTag(t)}>{t}</button>
+            ))}
+            <input className="roster-input shopm-bulk-tag" placeholder="或自訂分類"
+              value={bulkTag} onChange={e => setBulkTag(e.target.value)}/>
+          </div>
+          <textarea
+            className="notify-textarea"
+            rows={7}
+            value={bulkText}
+            onChange={e => setBulkText(e.target.value)}
+            placeholder={
+              'https://shopee.tw/百樂-Juice-果汁筆-i.123.456  45\n' +
+              'https://shopee.tw/卡皮巴拉玩偶-i.789.012  450\n' +
+              '卡皮巴拉吊飾  150      ← 沒連結也可以\n' +
+              'https://shopee.tw/xxx-i.1.2 | 自己打名稱 | 380'
+            }
+          />
+          <div className="shopm-bulk-actions">
+            <button className="roster-add-btn" onClick={bulkAdd}>加入商品</button>
+            <button className="roster-toggle-btn" onClick={() => { setBulkText(''); setBulkOpen(false); }}>取消</button>
+          </div>
+        </div>
+      )}
 
       {err && <div className="notify-msg err">⚠️ {err}</div>}
       {ok && <div className="notify-msg ok">✅ {ok}</div>}
