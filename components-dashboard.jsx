@@ -1220,6 +1220,17 @@ function parseShopLines(text) {
       if (/^\d+(\.\d+)?$/.test(last)) { price = Number(last); parts.pop(); }
       name = parts.join(' ').trim();
     }
+    // v347b: 蝦皮「分享」出來的文字是單一空格（例：`【百樂】Juice果汁筆 0.5mm $45 https://…`），
+    // 上面用「兩個以上空白」切不開，價格會被黏進商品名。這裡再撈一次「帶錢字號的數字」。
+    // 只認有 $ / NT$ / 元 標記的，才不會把 0.5mm、30cm 這種規格數字誤當成價格。
+    if (price == null && name) {
+      const money = name.match(/(?:NT\s*\$|＄|\$)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*元/g);
+      if (money && money.length) {
+        const tok = money[money.length - 1];                       // 取最後一個
+        const n = Number(String(tok).replace(/[^\d.]/g, ''));
+        if (n > 0) { price = n; name = name.replace(tok, '').trim().replace(/[\s,·、|-]+$/, ''); }
+      }
+    }
     // 沒給名稱 → 從蝦皮網址的 slug 解析（蝦皮網址就含商品名）
     if (!name && url) name = nameFromShopeeUrl(url);
     if (!name) { bad.push(line); return; }
@@ -1350,7 +1361,10 @@ function ShopManager() {
         <div className="shopm-bulk">
           <div className="shopm-bulk-head">
             <b>📋 批次貼上蝦皮連結</b>
-            <span>在蝦皮商品頁按「分享 → 複製連結」，一行貼一個。後面空兩格再打價格，星星會自動 ×20。</span>
+            <span>
+              在蝦皮商品頁按「分享 → 複製連結」，一行貼一個，星星自動 ×20。
+              <b>直接貼蝦皮分享的整段文字也可以</b>（它本來就含商品名和 $價格），不用自己打。
+            </span>
           </div>
           <div className="shopm-bulk-row">
             <label>這批的分類</label>
@@ -1366,9 +1380,10 @@ function ShopManager() {
             value={bulkText}
             onChange={e => setBulkText(e.target.value)}
             placeholder={
-              'https://shopee.tw/百樂-Juice-果汁筆-i.123.456  45\n' +
-              'https://shopee.tw/卡皮巴拉玩偶-i.789.012  450\n' +
-              '卡皮巴拉吊飾  150      ← 沒連結也可以\n' +
+              '【日本百樂PILOT】Juice果汁筆 0.5mm $45 https://shopee.tw/aaa-i.1.2\n' +
+              '   ↑ 蝦皮分享的整段文字直接貼，名稱和價格都會自動抓出來\n\n' +
+              'https://shopee.tw/卡皮巴拉玩偶-i.789.012  450   ← 網址＋空兩格＋價格\n' +
+              '卡皮巴拉吊飾  150                              ← 沒連結也可以\n' +
               'https://shopee.tw/xxx-i.1.2 | 自己打名稱 | 380'
             }
           />
