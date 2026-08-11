@@ -539,9 +539,11 @@
   grid-template-columns: repeat(4, 1fr);
   grid-auto-rows: 1fr;   /* rows share height equally */
   gap: 10px;
-  /* Fill viewport: leave room for mode-tabs (~49px) + topbar (~52px) + player padding (48px) + header (~110px) */
-  height: calc(100vh - 280px);
-  min-height: 300px;
+  /* v345: 高度改由 MatchFitGrid 實際量測後設定（inline style），這裡只留初次繪製的保底值。
+     舊版寫死 calc(100vh - 280px) + min-height:300px，猜不準就切掉最後一列、
+     iPad 的 Safari 工具列伸縮更會失準。min-height 拿掉，避免反而撐出捲軸。 */
+  height: calc(100dvh - 280px);
+  min-height: 200px;
 }
 .fc-match-tile {
   /* No aspect-ratio — height comes from the grid */
@@ -1099,7 +1101,8 @@
   .fc-learn-term { font-size: 38px; }
   .fc-mode-tabs { overflow-x: auto; }
   .fc-tab { font-size: 12px; padding: 14px 8px; white-space: nowrap; }
-  .fc-match-grid { grid-template-columns: repeat(2, 1fr); height: calc(100vh - 220px); }
+  /* v345: 手機改 3 欄——2 欄時 12 張牌要 6 列、每格太扁；高度一樣由 JS 量測 */
+  .fc-match-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; height: calc(100dvh - 220px); }
   .fc-match-tile { font-size: 17px; }
   .fc-fill-player { padding: 14px 14px 20px; }
   .fc-fill-text { font-size: 26px; }

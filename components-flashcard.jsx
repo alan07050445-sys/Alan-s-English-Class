@@ -371,6 +371,38 @@ function MatchTimer({ startRef }) {
   return <span className="fc-match-timer mono">{t.toFixed(1)}<span style={{fontSize:14}}>s</span></span>;
 }
 
+/* v345: 配對格子「剛好塞滿一畫面」——舊版用 calc(100vh - 280px) 猜高度，
+   猜太少 → 最後一列被切掉、要自己往下捲；iPad/iPhone 的 Safari 工具列會伸縮，
+   100vh 更不準（Alan 回報 iPad 更嚴重）。改成直接量「格子上緣到視窗底部還剩多少」，
+   並在轉向／工具列伸縮／版面位移時重算。 */
+function MatchFitGrid({ children }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const vv = window.visualViewport;                 // iOS 工具列伸縮時這個才準
+      const vh = (vv && vv.height) || window.innerHeight;
+      const top = el.getBoundingClientRect().top;
+      el.style.height = Math.max(200, Math.round(vh - top - 16)) + 'px';
+    };
+    fit();
+    // 圖片載入、分頁列換行都會讓格子上緣位移 → 一併重算
+    let ro = null;
+    try { ro = new ResizeObserver(fit); ro.observe(document.body); } catch (e) {}
+    window.addEventListener('resize', fit);
+    window.addEventListener('orientationchange', fit);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('orientationchange', fit);
+      if (window.visualViewport) window.visualViewport.removeEventListener('resize', fit);
+    };
+  }, []);
+  return <div className="fc-match-grid" ref={ref}>{children}</div>;
+}
+
 function FlashcardPlayer({ item, onComplete }) {
   const cards = item.cards || [];
   const [mode, setMode] = useFC("card");
@@ -1060,7 +1092,7 @@ function FlashcardPlayer({ item, onComplete }) {
               </span>
             )}
           </div>
-          <div className="fc-match-grid">
+          <MatchFitGrid>
             {matchTiles.map(tile => {
               const isMatched  = matchMatched.has(tile.pairId);
               const isSelected = matchSelected === tile.id;
@@ -1082,7 +1114,7 @@ function FlashcardPlayer({ item, onComplete }) {
                 </button>
               );
             })}
-          </div>
+          </MatchFitGrid>
         </div>
       </div>
     );
