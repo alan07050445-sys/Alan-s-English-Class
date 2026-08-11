@@ -77,6 +77,8 @@ function App() {
   // ── Auth state ──────────────────────────────────────────
   const [user, setUser]           = useAppState(null);
   const [adminVer, setAdminVer]   = useAppState(0); // v337: 管理者狀態解析後觸發重繪
+  const [starBalance, setStarBalance] = useAppState(0);     // v342: 集點——我的星星
+  const [starsOpen, setStarsOpen]     = useAppState(false); // v342: 星星／商店面板
   const [authReady, setAuthReady] = useAppState(false); // show loading until Firebase resolves
   // v322: 暑假派發清單是否已載入。登入的學生要等它回來才揭曉門口頁，否則載入畫面會在
   // 暑假資料回來前就淡出→先閃過 G1~G6 選年級畫面(~0.5s)再跳回暑假入口（Alan 回報的 bug）。
@@ -224,6 +226,12 @@ function App() {
   useAppEffect(() => {
     const unsub = window.subscribeAdminStatus(user, () => setAdminVer(v => v + 1));
     return unsub;
+  }, [user?.email]);
+
+  // ── v342: 訂閱自己的星星（老師在後台給/扣，這裡即時更新 header 上的數字）──
+  useAppEffect(() => {
+    if (!user || !user.email || !window.subscribeMyStars) { setStarBalance(0); return; }
+    return window.subscribeMyStars(user.email, (d) => setStarBalance(d.balance || 0), () => setStarBalance(0));
   }, [user?.email]);
 
   // ── Subscribe to streak (for the streak count shown to logged-in students) ──
@@ -1045,6 +1053,8 @@ function App() {
             onShowMistakes={user ? () => setMistakesOpen(true) : null}
             grade={grade}
             compactLobby={!catView && !editMode}
+            starBalance={starBalance}
+            onShowStars={() => setStarsOpen(true)}
             onSwitchGrade={() => runWave(() => {
               try { localStorage.removeItem('alan-grade'); } catch(e) {}
               setGrade(null);
@@ -1265,6 +1275,11 @@ function App() {
               weekOrder={weekOrder}
               onClose={() => setMistakesOpen(false)}
             />
+          )}
+
+          {/* v342: 我的星星 + 商店 */}
+          {starsOpen && user && (
+            <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}/>
           )}
 
           {growthOpen && (

@@ -38,6 +38,7 @@ function Header({
   // Grade
   grade, onSwitchGrade,
   compactLobby,
+  starBalance, onShowStars,   // v342: 集點
 }) {
   const pct = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0;
   const atStart = weekIdx <= 0;
@@ -87,6 +88,13 @@ function Header({
 
             {/* Auth area */}
             <div className="header-auth">
+              {/* v342: 集點——學生看得到自己的星星，點開是紀錄＋商店 */}
+              {user && onShowStars && (
+                <button className="stars-btn" onClick={onShowStars} title="我的星星與商店">
+                  <span className="stars-btn-ico" aria-hidden="true">⭐</span>
+                  <span className="stars-btn-num">{(starBalance || 0).toLocaleString()}</span>
+                </button>
+              )}
               {canEdit && (
                 <button
                   className={"icon-btn " + (editMode ? "active" : "")}
@@ -2076,4 +2084,109 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave });
+/* ══════════════════════════════════════════════════════
+   v342: 我的星星 + 商店（學生端）
+   星星由老師在後台給／扣；商店先放範例商品（娃娃、文具），
+   兌換＝送出申請給老師（老師確認後在後台扣點）。
+══════════════════════════════════════════════════════ */
+const SHOP_ITEMS = [
+  { id:'labubu',   emoji:'🧸', name:'Labubu 公仔',        cost:3000,  tag:'娃娃' },
+  { id:'capy_big', emoji:'🦫', name:'50 公分大卡皮巴拉',  cost:3000,  tag:'娃娃' },
+  { id:'capy_sm',  emoji:'🧸', name:'小卡皮巴拉吊飾',      cost:800,   tag:'娃娃' },
+  { id:'turtle',   emoji:'🐢', name:'烏龜後背包',          cost:5000,  tag:'娃娃' },
+  { id:'beyblade', emoji:'🌀', name:'戰鬥陀螺',            cost:7000,  tag:'玩具' },
+  { id:'watch',    emoji:'⌚', name:'極巨腕戴',            cost:8000,  tag:'玩具' },
+  { id:'pen',      emoji:'🖊️', name:'酷炫中性筆',          cost:300,   tag:'文具' },
+  { id:'pencase',  emoji:'🎒', name:'筆袋',                cost:1200,  tag:'文具' },
+  { id:'notebook', emoji:'📒', name:'筆記本',              cost:500,   tag:'文具' },
+  { id:'sticker',  emoji:'✨', name:'貼紙包',              cost:200,   tag:'文具' },
+  { id:'eraser',   emoji:'🧽', name:'造型橡皮擦',          cost:150,   tag:'文具' },
+  { id:'ruler',    emoji:'📏', name:'尺組',                cost:250,   tag:'文具' },
+];
+
+function StarsPanel({ user, onClose }) {
+  const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
+  const [data, setData] = React.useState({ balance: 0, entries: [] });
+  const [filter, setFilter] = React.useState('全部');
+
+  React.useEffect(() => {
+    if (!user || !user.email || !window.subscribeMyStars) return;
+    return window.subscribeMyStars(user.email, setData, () => {});
+  }, [user && user.email]);
+
+  const bal  = data.balance || 0;
+  const tags = ['全部', ...Array.from(new Set(SHOP_ITEMS.map(i => i.tag)))];
+  const shown = filter === '全部' ? SHOP_ITEMS : SHOP_ITEMS.filter(i => i.tag === filter);
+
+  const redeem = (it) => {
+    if (bal < it.cost) {
+      alert(`還差 ${(it.cost - bal).toLocaleString()} 顆星星才能換「${it.name}」，繼續加油！⭐`);
+      return;
+    }
+    alert(`已記下你想換「${it.name}」（${it.cost.toLocaleString()}🌟）\n\n下次上課跟 Alan 老師說一聲，老師確認後就會幫你扣點、把東西給你 🎁`);
+  };
+
+  return ReactDOM.createPortal(
+    <div className="sp-overlay" onClick={onClose}>
+      <div className="sp-panel" onClick={e => e.stopPropagation()}>
+        <div className="sp-head">
+          <div className="sp-bal">
+            <span className="sp-bal-label">我的星星</span>
+            <span className="sp-bal-num">{bal.toLocaleString()}<em>⭐</em></span>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="關閉"><Icon name="close" size={16}/></button>
+        </div>
+
+        <div className="sp-tabs">
+          <button className={tab === 'me' ? 'on' : ''} onClick={() => setTab('me')}>⭐ 集點紀錄</button>
+          <button className={tab === 'shop' ? 'on' : ''} onClick={() => setTab('shop')}>🛍️ 商店</button>
+        </div>
+
+        {tab === 'me' ? (
+          <div className="sp-body">
+            {data.entries.length === 0 ? (
+              <div className="sp-empty">還沒有集點紀錄——上課認真表現就會拿到星星喔！⭐</div>
+            ) : (
+              <div className="sp-list">
+                {data.entries.map(en => (
+                  <div key={en.id} className={'sp-row' + (en.amount < 0 ? ' minus' : '')}>
+                    <span className="sp-row-date">{en.date}</span>
+                    <span className="sp-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}⭐</span>
+                    <span className="sp-row-note">{en.note || (en.amount < 0 ? '兌換' : '集點')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="sp-body">
+            <div className="sp-filter">
+              {tags.map(t => (
+                <button key={t} className={filter === t ? 'on' : ''} onClick={() => setFilter(t)}>{t}</button>
+              ))}
+            </div>
+            <div className="sp-shop">
+              {shown.map(it => {
+                const ok = bal >= it.cost;
+                return (
+                  <div key={it.id} className={'sp-item' + (ok ? '' : ' locked')}>
+                    <div className="sp-item-img" aria-hidden="true">{it.emoji}</div>
+                    <div className="sp-item-name">{it.name}</div>
+                    <div className="sp-item-cost">{it.cost.toLocaleString()}⭐</div>
+                    <button className="sp-item-btn" onClick={() => redeem(it)}>
+                      {ok ? '兌換' : `還差 ${(it.cost - bal).toLocaleString()}`}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="sp-shop-note">商品會不定期更新。想換的話按「兌換」，下次上課跟老師說一聲就可以囉 🎁</p>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, SHOP_ITEMS });

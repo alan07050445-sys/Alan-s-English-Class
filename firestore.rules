@@ -26,6 +26,14 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // ── v342: 集點（星星）──────────────────────────────────
+    // 只有老師能給/扣星星；學生只能讀自己那一筆（看不到別人的星星數）。
+    match /stars/{studentEmail} {
+      allow read: if isTeacher()
+                  || (request.auth != null && request.auth.token.email.lower() == studentEmail);
+      allow write: if isTeacher();
+    }
+
     // ── 課程內容（G3/G4/G5/G6 都在 class 集合，G2 在 class-g2）──
     // 公開可讀（維持現狀，避免鎖住學生）；只有老師可寫。
     match /class/{docId} {

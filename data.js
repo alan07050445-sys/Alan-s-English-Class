@@ -1699,6 +1699,73 @@ body{background:#ECE4D2;font-family:var(--sans);color:var(--ink);-webkit-font-sm
 </div></body></html>`;
 }
 
+// ── v342: 集點（星星）───────────────────────────────────
+// 取代 Alan 手寫在 Google Doc 的流水帳：stars/{學生email} =
+//   { name, balance, entries: [{ id, date:'YYYY-MM-DD', amount, note, by, at }] }
+// amount 可正可負（上課給星星＝正、兌換商品＝負）。balance 每次寫入時重算，不會累積誤差。
+// 權限：只有老師能寫；學生只能讀自己那一筆（見 firestore.rules）。
+function _starsDoc(email) { return _db.collection('stars').doc(_lc(email)); }
+function _sumEntries(entries) {
+  return (entries || []).reduce((n, e) => n + (Number(e.amount) || 0), 0);
+}
+
+// 學生端：訂閱自己的星星
+function subscribeMyStars(email, callback, onError) {
+  const id = _lc(email);
+  if (!id) { callback({ balance: 0, entries: [] }); return () => {}; }
+  return _starsDoc(id).onSnapshot(snap => {
+    const d = snap.exists ? snap.data() : {};
+    const entries = (d.entries || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    callback({ balance: _sumEntries(d.entries), entries, name: d.name || '' });
+  }, onError || (() => {}));
+}
+
+// 老師端：訂閱全部學生的星星
+function subscribeAllStars(callback, onError) {
+  return _db.collection('stars').onSnapshot(snap => {
+    const out = {};
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      out[doc.id] = { email: doc.id, name: d.name || '', balance: _sumEntries(d.entries), entries: d.entries || [] };
+    });
+    callback(out);
+  }, onError || (() => {}));
+}
+
+// 新增一筆（老師）。amount 可負；date 預設今天
+async function addStarEntry(email, { amount, note, date, name }) {
+  const id = _lc(email);
+  if (!id || !id.includes('@')) throw new Error('invalid-email');
+  const n = Number(amount);
+  if (!n || !isFinite(n)) throw new Error('invalid-amount');
+  const ref = _starsDoc(id);
+  const snap = await ref.get();
+  const cur = snap.exists ? (snap.data() || {}) : {};
+  const entries = (cur.entries || []).concat([{
+    id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6),
+    date: date || new Date().toISOString().slice(0, 10),
+    amount: Math.round(n),
+    note: String(note || '').trim(),
+    by: (_auth.currentUser && _auth.currentUser.email) || '',
+    at: Date.now(),
+  }]);
+  await ref.set({
+    name: name || cur.name || '',
+    entries,
+    balance: _sumEntries(entries),
+    updatedAt: Date.now(),
+  }, { merge: true });
+}
+
+// 刪除一筆（打錯了要修正）
+async function deleteStarEntry(email, entryId) {
+  const ref = _starsDoc(email);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const entries = ((snap.data() || {}).entries || []).filter(e => e.id !== entryId);
+  await ref.set({ entries, balance: _sumEntries(entries), updatedAt: Date.now() }, { merge: true });
+}
+
 // ── LINE 通知（老師發公告）─────────────────────────────
 // 走「獨立」的 LINE Worker（跟 AI Worker 分開）。管理密碼由老師在後台輸入、
 // 只存在該裝置 localStorage，不寫進這份公開程式碼。
@@ -1747,6 +1814,8 @@ function lineRunReminders(dry, pass) { return _lineCall('/run-reminders' + (dry 
 
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
+  // v342: 集點（星星）
+  subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,
   // LINE 通知
   LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,

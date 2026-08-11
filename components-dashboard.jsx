@@ -1007,6 +1007,124 @@ function LineLink() {
   );
 }
 
+/* ── 集點（星星）v342 ──────────────────────────────────── */
+function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
+  const [stars, setStars] = useDash({});
+  const [sel, setSel]     = useDash(null);     // 選中的學生 email
+  const [amount, setAmount] = useDash('');
+  const [note, setNote]     = useDash('');
+  const [date, setDate]     = useDash(() => new Date().toISOString().slice(0, 10));
+  const [err, setErr]       = useDash(null);
+  const [busy, setBusy]     = useDash(false);
+
+  useDashE(() => window.subscribeAllStars(setStars, () => setErr('讀取失敗 — 請先在 Firebase Console 發布新版 firestore.rules')), []);
+
+  // 只列自己帶的學生（跟後台其他分頁一致）
+  const teacherOf = (s) => String(s.teacher || ownerEmail).toLowerCase();
+  const list = (roster || [])
+    .filter(s => s.active !== false)
+    .filter(s => stuScope === 'all' || teacherOf(s) === myEmail);
+
+  const cur = sel ? (stars[String(sel).toLowerCase()] || { balance: 0, entries: [] }) : null;
+  const curStudent = list.find(s => String(s.email).toLowerCase() === String(sel).toLowerCase());
+
+  const add = async (signedAmount) => {
+    setErr(null);
+    const n = Number(signedAmount != null ? signedAmount : amount);
+    if (!sel) { setErr('請先選一位學生'); return; }
+    if (!n || !isFinite(n)) { setErr('請輸入星星數（扣點請加負號，例如 -3000）'); return; }
+    setBusy(true);
+    try {
+      await window.addStarEntry(sel, { amount: n, note, date, name: (curStudent && curStudent.name) || '' });
+      setAmount(''); setNote('');
+    } catch (e) {
+      setErr(e.message === 'invalid-amount' ? '星星數不正確' : '寫入失敗：' + (e.code || e.message));
+    }
+    setBusy(false);
+  };
+
+  const del = async (entry) => {
+    if (!confirm(`確定刪除這筆嗎？\n${entry.date}　${entry.amount > 0 ? '+' : ''}${entry.amount}🌟　${entry.note || ''}`)) return;
+    try { await window.deleteStarEntry(sel, entry.id); }
+    catch (e) { setErr('刪除失敗：' + (e.code || e.message)); }
+  };
+
+  return (
+    <div className="stars-wrap">
+      {/* 左：學生清單（含目前星星數） */}
+      <div className="stars-side">
+        <div className="stars-side-head">學生（{list.length}）</div>
+        {list.length === 0 ? (
+          <div className="roster-hint">名單是空的——先到「學生名單」新增。</div>
+        ) : list.map(s => {
+          const e = String(s.email).toLowerCase();
+          const b = (stars[e] || {}).balance || 0;
+          return (
+            <button key={e} className={'stars-stu' + (String(sel).toLowerCase() === e ? ' on' : '')} onClick={() => setSel(s.email)}>
+              <span className="stars-stu-name">{s.name || s.email}</span>
+              <span className="stars-stu-bal">{b.toLocaleString()}🌟</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 右：選中學生的流水帳 */}
+      <div className="stars-main">
+        {!sel ? (
+          <div className="dt-empty"><p>選一位學生</p><p className="dt-empty-hint">左邊點一下，就能給星星或扣點。</p></div>
+        ) : (
+          <>
+            <div className="stars-bal-card">
+              <span className="stars-bal-name">{(curStudent && curStudent.name) || sel}</span>
+              <span className="stars-bal-num">{(cur.balance || 0).toLocaleString()}<em>🌟</em></span>
+            </div>
+
+            <div className="stars-form">
+              <input className="roster-input stars-in-date" type="date" value={date} onChange={e => setDate(e.target.value)}/>
+              <input
+                className="roster-input stars-in-amt" type="number" placeholder="星星數（扣點用負數）"
+                value={amount} onChange={e => setAmount(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && add()}
+              />
+              <input
+                className="roster-input" placeholder="備註（例：上課集點、期末考 99）"
+                value={note} onChange={e => setNote(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && add()}
+              />
+              <button className="roster-add-btn" onClick={() => add()} disabled={busy}>＋ 記一筆</button>
+            </div>
+            <div className="stars-quick">
+              快速給點：
+              {[100, 300, 500, 800, 1000].map(v => (
+                <button key={v} onClick={() => add(v)} disabled={busy}>+{v}</button>
+              ))}
+            </div>
+
+            {err && <div className="notify-msg err">⚠️ {err}</div>}
+
+            {(cur.entries || []).length === 0 ? (
+              <div className="roster-hint">還沒有紀錄——上面記第一筆吧！</div>
+            ) : (
+              <div className="stars-list">
+                {cur.entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(en => (
+                  <div key={en.id} className={'stars-row' + (en.amount < 0 ? ' minus' : '')}>
+                    <span className="stars-row-date">{en.date}</span>
+                    <span className="stars-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}🌟</span>
+                    <span className="stars-row-note">{en.note || ''}</span>
+                    <button className="roster-del-btn" title="刪除這筆" onClick={() => del(en)}>
+                      <window.Icon name="trash" size={13}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── 作業自動提醒（功能B）分頁 ─────────────────────────── */
 function HwRemind() {
   const [pass, setPass]     = useDash(() => { try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; } });
@@ -1417,6 +1535,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告' },
     { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態' },
+    { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點' },
     { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
     // v337: 只有「擁有者」看得到管理者維護（規則同樣只允許擁有者寫）
@@ -1491,6 +1610,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <LineNotify/>
           ) : tab === 'linelink' ? (
             <LineLink/>
+          ) : tab === 'stars' ? (
+            <StarsManager roster={rosterAll} myEmail={myEmailD} ownerEmail={ownerEmailD} stuScope={stuScope}/>
           ) : tab === 'hwremind' ? (
             <HwRemind/>
           ) : tab === 'admins' ? (
