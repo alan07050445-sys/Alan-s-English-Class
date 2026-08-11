@@ -1125,6 +1125,116 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
   );
 }
 
+/* ── 商店商品維護（v343）──────────────────────────────── */
+function ShopManager() {
+  const [items, setItems] = useDash(null);   // null = 還沒載到
+  const [err, setErr]     = useDash(null);
+  const [ok, setOk]       = useDash(null);
+  const [busyId, setBusyId] = useDash(null);
+  const fileRef = React.useRef(null);
+  const pickFor = React.useRef(null);        // 正在換圖片的商品 id
+
+  useDashE(() => window.subscribeShop(
+    (list) => setItems(list || (window.SHOP_ITEMS || []).map(x => ({ ...x }))),
+    () => setErr('讀取失敗——請確認已發布新版 firestore.rules')
+  ), []);
+
+  const save = async (next) => {
+    setItems(next); setErr(null); setOk(null);
+    try { await window.saveShopItems(next); setOk('已儲存'); setTimeout(() => setOk(null), 1500); }
+    catch (e) { setErr('儲存失敗：' + (e.code || e.message)); }
+  };
+  const upd = (id, patch) => save((items || []).map(x => x.id === id ? { ...x, ...patch } : x));
+  const add = () => save([...(items || []), {
+    id: 'p' + Date.now().toString(36), name: '新商品', cost: 500, tag: '文具', emoji: '🎁', img: '', url: '',
+  }]);
+  const del = (it) => { if (confirm(`確定刪除「${it.name}」？`)) save((items || []).filter(x => x.id !== it.id)); };
+  const move = (it, dir) => {
+    const arr = (items || []).slice();
+    const i = arr.findIndex(x => x.id === it.id), j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    save(arr);
+  };
+  const pickImage = (id) => { pickFor.current = id; if (fileRef.current) fileRef.current.click(); };
+  const onFile = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    const id = pickFor.current;
+    if (!f || !id) return;
+    setBusyId(id); setErr(null);
+    try {
+      const url = await window.uploadFlashcardImage(f);   // 沿用單字卡的圖片上傳（自動縮圖）
+      upd(id, { img: url });
+    } catch (ex) { setErr('圖片上傳失敗：' + (ex.message || '')); }
+    setBusyId(null);
+  };
+
+  if (items === null) return <div className="roster-hint">載入中…</div>;
+
+  return (
+    <div className="shopm-wrap">
+      <div className="shopm-head">
+        <div>
+          <b>兌換商品（{items.length}）</b>
+          <span className="linkbind-summary">學生在「⭐ 星星 → 🛍️ 商店」看到的就是這些</span>
+        </div>
+        <button className="roster-add-btn" onClick={add}>＋ 新增商品</button>
+      </div>
+
+      {err && <div className="notify-msg err">⚠️ {err}</div>}
+      {ok && <div className="notify-msg ok">✅ {ok}</div>}
+
+      <div className="roster-hint">
+        💡 想放蝦皮商品：在蝦皮把商品圖<b>截圖</b>下來，用下面的「換圖片」上傳（最穩、不會變破圖），
+        再把蝦皮商品網址貼到「連結」——學生就能點「看商品 ↗」開蝦皮看細節。
+      </div>
+
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFile}/>
+
+      <div className="shopm-list">
+        {items.map((it, i) => (
+          <div key={it.id} className="shopm-row">
+            <button className="shopm-img" onClick={() => pickImage(it.id)} title="換圖片">
+              {busyId === it.id
+                ? <span className="shopm-img-busy">上傳中…</span>
+                : it.img
+                  ? <img src={it.img} alt={it.name}/>
+                  : <span className="shopm-img-emoji">{it.emoji || '🎁'}</span>}
+              <span className="shopm-img-edit">換圖片</span>
+            </button>
+
+            <div className="shopm-fields">
+              <input className="roster-input" value={it.name} placeholder="商品名稱"
+                onChange={e => setItems(items.map(x => x.id === it.id ? { ...x, name: e.target.value } : x))}
+                onBlur={e => upd(it.id, { name: e.target.value })}/>
+              <div className="shopm-row2">
+                <input className="roster-input shopm-cost" type="number" value={it.cost} placeholder="星星"
+                  onChange={e => setItems(items.map(x => x.id === it.id ? { ...x, cost: e.target.value } : x))}
+                  onBlur={e => upd(it.id, { cost: Math.max(0, Math.round(Number(e.target.value) || 0)) })}/>
+                <input className="roster-input shopm-tag" value={it.tag || ''} placeholder="分類（娃娃/玩具/文具）"
+                  onChange={e => setItems(items.map(x => x.id === it.id ? { ...x, tag: e.target.value } : x))}
+                  onBlur={e => upd(it.id, { tag: e.target.value.trim() })}/>
+              </div>
+              <input className="roster-input" value={it.url || ''} placeholder="蝦皮商品連結（選填，貼上網址）"
+                onChange={e => setItems(items.map(x => x.id === it.id ? { ...x, url: e.target.value } : x))}
+                onBlur={e => upd(it.id, { url: e.target.value.trim() })}/>
+            </div>
+
+            <div className="shopm-tools">
+              <button onClick={() => move(it, -1)} disabled={i === 0} title="上移">↑</button>
+              <button onClick={() => move(it, 1)} disabled={i === items.length - 1} title="下移">↓</button>
+              <button className="roster-del-btn" onClick={() => del(it)} title="刪除">
+                <window.Icon name="trash" size={13}/>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── 作業自動提醒（功能B）分頁 ─────────────────────────── */
 function HwRemind() {
   const [pass, setPass]     = useDash(() => { try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; } });
@@ -1536,6 +1646,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告' },
     { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態' },
     { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點' },
+    { id: 'shop',     ico: '🛍️', label: '商店', sub: '兌換商品維護' },
     { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
     // v337: 只有「擁有者」看得到管理者維護（規則同樣只允許擁有者寫）
@@ -1612,6 +1723,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <LineLink/>
           ) : tab === 'stars' ? (
             <StarsManager roster={rosterAll} myEmail={myEmailD} ownerEmail={ownerEmailD} stuScope={stuScope}/>
+          ) : tab === 'shop' ? (
+            <ShopManager/>
           ) : tab === 'hwremind' ? (
             <HwRemind/>
           ) : tab === 'admins' ? (

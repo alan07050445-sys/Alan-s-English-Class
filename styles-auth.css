@@ -6132,3 +6132,52 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   .sp-shop { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
   .stars-btn { padding: 4px 9px 4px 7px; font-size: 12.5px; }
 }
+
+/* ── v343: 商店商品維護（老師端）───────────────────────── */
+.shopm-wrap { display: flex; flex-direction: column; gap: 12px; }
+.shopm-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.shopm-head b { font-family: var(--sans); font-size: 15px; color: var(--ink); display: block; }
+.shopm-list { display: flex; flex-direction: column; gap: 10px; }
+.shopm-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+}
+.shopm-img {
+  flex: none; width: 92px; height: 92px; position: relative; overflow: hidden;
+  border: 1.5px dashed var(--border); border-radius: 12px; background: var(--bg-card, #fff);
+  display: grid; place-items: center; cursor: pointer; padding: 0;
+}
+.shopm-img:hover { border-color: var(--ink); }
+.shopm-img img { width: 100%; height: 100%; object-fit: cover; }
+.shopm-img-emoji { font-size: 34px; }
+.shopm-img-busy { font-family: var(--sans); font-size: 11.5px; color: var(--ink-muted); }
+.shopm-img-edit {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: rgba(21,19,14,.66); color: #fff;
+  font-family: var(--sans); font-size: 10.5px; font-weight: 700; padding: 3px 0;
+}
+.shopm-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.shopm-row2 { display: flex; gap: 7px; }
+.shopm-cost { flex: 0 0 110px !important; }
+.shopm-tag  { flex: 1; }
+.shopm-tools { flex: none; display: flex; flex-direction: column; gap: 5px; }
+.shopm-tools button {
+  width: 30px; height: 28px; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--bg-card, #fff);
+  cursor: pointer; font-size: 13px; color: var(--ink-muted);
+}
+.shopm-tools button:disabled { opacity: .35; cursor: default; }
+.shopm-tools .roster-del-btn { width: 30px; height: 28px; }
+@media (max-width: 640px) {
+  .shopm-row { flex-wrap: wrap; }
+  .shopm-img { width: 72px; height: 72px; }
+  .shopm-fields { flex: 1 1 100%; order: 3; }
+}
+
+/* v343: 學生端商品卡——真實商品照＋蝦皮連結 */
+.sp-item-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; }
+.sp-item-img { overflow: hidden; }
+.sp-item-link {
+  font-family: var(--sans); font-size: 11.5px; font-weight: 700;
+  color: #8B3120; text-decoration: underline; margin-top: -2px;
+}

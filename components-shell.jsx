@@ -2108,15 +2108,23 @@ function StarsPanel({ user, onClose }) {
   const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
+  const [shopItems, setShopItems] = React.useState(null); // null＝還沒載到／老師沒設定 → 用內建範例
 
   React.useEffect(() => {
     if (!user || !user.email || !window.subscribeMyStars) return;
     return window.subscribeMyStars(user.email, setData, () => {});
   }, [user && user.email]);
 
-  const bal  = data.balance || 0;
-  const tags = ['全部', ...Array.from(new Set(SHOP_ITEMS.map(i => i.tag)))];
-  const shown = filter === '全部' ? SHOP_ITEMS : SHOP_ITEMS.filter(i => i.tag === filter);
+  // v343: 商品改由老師在後台維護（含蝦皮截圖與連結）；還沒設定就先用內建範例
+  React.useEffect(() => {
+    if (!window.subscribeShop) return;
+    return window.subscribeShop(setShopItems, () => {});
+  }, []);
+
+  const bal   = data.balance || 0;
+  const items = (shopItems && shopItems.length) ? shopItems : SHOP_ITEMS;
+  const tags  = ['全部', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
+  const shown = filter === '全部' ? items : items.filter(i => i.tag === filter);
 
   const redeem = (it) => {
     if (bal < it.cost) {
@@ -2167,14 +2175,23 @@ function StarsPanel({ user, onClose }) {
             </div>
             <div className="sp-shop">
               {shown.map(it => {
-                const ok = bal >= it.cost;
+                const ok = bal >= (it.cost || 0);
                 return (
                   <div key={it.id} className={'sp-item' + (ok ? '' : ' locked')}>
-                    <div className="sp-item-img" aria-hidden="true">{it.emoji}</div>
+                    {/* v343: 有上傳圖片就用真實商品照，沒有才退回 emoji */}
+                    <div className="sp-item-img" aria-hidden={!it.img}>
+                      {it.img
+                        ? <img src={it.img} alt={it.name} loading="lazy"/>
+                        : (it.emoji || '🎁')}
+                    </div>
                     <div className="sp-item-name">{it.name}</div>
-                    <div className="sp-item-cost">{it.cost.toLocaleString()}⭐</div>
+                    <div className="sp-item-cost">{Number(it.cost || 0).toLocaleString()}⭐</div>
+                    {it.url && (
+                      <a className="sp-item-link" href={it.url} target="_blank" rel="noopener noreferrer"
+                         onClick={e => e.stopPropagation()}>看商品 ↗</a>
+                    )}
                     <button className="sp-item-btn" onClick={() => redeem(it)}>
-                      {ok ? '兌換' : `還差 ${(it.cost - bal).toLocaleString()}`}
+                      {ok ? '兌換' : `還差 ${((it.cost || 0) - bal).toLocaleString()}`}
                     </button>
                   </div>
                 );

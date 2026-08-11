@@ -1766,6 +1766,22 @@ async function deleteStarEntry(email, entryId) {
   await ref.set({ entries, balance: _sumEntries(entries), updatedAt: Date.now() }, { merge: true });
 }
 
+// ── v343: 商店商品（老師自己維護）────────────────────────
+// 存在 class/shop（class 集合＝公開可讀、只有老師可寫，沿用現成規則不必改）。
+// items: [{ id, name, cost, tag, img, url, emoji }]
+//   img = 上傳後的圖片網址（建議從蝦皮截圖上傳，最穩不會破圖）
+//   url = 蝦皮商品連結（選填，學生可點「看商品」）
+const _shopDoc = _db.collection('class').doc('shop');
+function subscribeShop(callback, onError) {
+  return _shopDoc.onSnapshot(snap => {
+    const d = snap.exists ? (snap.data() || {}) : {};
+    callback(Array.isArray(d.items) ? d.items : null);   // null＝老師還沒設定過（前端用內建範例）
+  }, onError || (() => {}));
+}
+async function saveShopItems(items) {
+  await _shopDoc.set({ items: items || [], updatedAt: Date.now() }, { merge: true });
+}
+
 // ── LINE 通知（老師發公告）─────────────────────────────
 // 走「獨立」的 LINE Worker（跟 AI Worker 分開）。管理密碼由老師在後台輸入、
 // 只存在該裝置 localStorage，不寫進這份公開程式碼。
@@ -1816,6 +1832,8 @@ Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,
+  // v343: 商店商品（老師自己維護）
+  subscribeShop, saveShopItems,
   // LINE 通知
   LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
