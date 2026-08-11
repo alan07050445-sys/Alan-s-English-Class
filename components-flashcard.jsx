@@ -587,6 +587,8 @@ function FlashcardPlayer({ item, onComplete }) {
     const card = fillCards[fillIdx];
     const correct = chosen.id === card.id;
     setFillSelected(chosen.id);
+    // v344: 填空模式本來沒有音效（其他模式都有）——補上答對/答錯提示音
+    if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
     if (correct) setFillScore(s => s + 1);
     if (!correct) return;
     setTimeout(() => {
@@ -1341,6 +1343,8 @@ function FillBlankPlayer({ item, onComplete }) {
     setFBSelected(ch);
     const newAnswers = [...userAnswers, { sentence: q.sentence, answer: q.answer, userAnswer: ch, correct }];
     setUserAnswers(newAnswers);
+    // v344: 填空題型本來也沒有音效——補上答對/答錯提示音
+    if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
     if (correct) setFBScore(s => s + 1);
     if (!correct) return;
     setTimeout(() => {
