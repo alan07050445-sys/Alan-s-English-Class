@@ -6181,3 +6181,6 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   font-family: var(--sans); font-size: 11.5px; font-weight: 700;
   color: #8B3120; text-decoration: underline; margin-top: -2px;
 }
+
+/* v346: 商店維護——標題列按鈕組 */
+.shopm-head-btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

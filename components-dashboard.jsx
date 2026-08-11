@@ -1125,6 +1125,75 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
   );
 }
 
+/* ── v346: 建議商品清單（一鍵載入）────────────────────────
+   ⚠ 價格是「台灣行情的估價」，不是即時報價——蝦皮擋機器人抓取（API 403、
+     搜尋頁是 JS 才渲染），拿不到即時價格與商品網址，所以不編造商品連結。
+     每樣附的是「蝦皮搜尋連結」＝真實有效、永遠不會壞；老師要換成特定商品連結隨時可改。
+   星星 = 估價 NT$ × 20（Alan 訂的換算）。 */
+const SUGGESTED_SHOP = (() => {
+  const S = (name, tag, price, emoji) => ({
+    id: 'sg' + Math.random().toString(36).slice(2, 8),
+    name, tag, emoji, cost: price * 20, img: '',
+    url: 'https://shopee.tw/search?keyword=' + encodeURIComponent(name),
+    _price: price,
+  });
+  return [
+    // ── 文具 20 ──
+    S('三色原子筆', '文具', 35, '🖊️'),
+    S('Pilot Juice 果汁筆', '文具', 45, '🖊️'),
+    S('Pilot G-2 中性筆', '文具', 60, '🖊️'),
+    S('Pilot 魔擦擦擦筆', '文具', 65, '🖊️'),
+    S('Pilot Dr.Grip 自動鉛筆', '文具', 250, '✏️'),
+    S('色鉛筆 36 色組', '文具', 380, '🖍️'),
+    S('雙頭螢光筆 6 色組', '文具', 150, '🖍️'),
+    S('螢光筆 5 色組', '文具', 120, '🖍️'),
+    S('大容量筆袋', '文具', 220, '🎒'),
+    S('卡通造型鉛筆盒', '文具', 160, '📦'),
+    S('雙層鐵製鉛筆盒', '文具', 180, '📦'),
+    S('造型橡皮擦組', '文具', 60, '🧽'),
+    S('蜻蜓 MONO 橡皮擦', '文具', 35, '🧽'),
+    S('A5 方格筆記本', '文具', 90, '📒'),
+    S('貼紙包 50 入', '文具', 80, '✨'),
+    S('修正帶', '文具', 45, '📏'),
+    S('尺規三件組', '文具', 70, '📐'),
+    S('A4 資料夾 5 入', '文具', 100, '🗂️'),
+    S('束口收納袋', '文具', 150, '👝'),
+    S('兒童後背包', '文具', 690, '🎒'),
+    // ── 娃娃 15 ──
+    S('卡皮巴拉玩偶 30cm', '娃娃', 450, '🦫'),
+    S('大卡皮巴拉玩偶 50cm', '娃娃', 890, '🦫'),
+    S('卡皮巴拉吊飾', '娃娃', 150, '🦫'),
+    S('Labubu 公仔', '娃娃', 1200, '🧸'),
+    S('Labubu 吊飾', '娃娃', 680, '🧸'),
+    S('庫洛米 Kuromi 玩偶', '娃娃', 390, '🖤'),
+    S('大耳狗 Cinnamoroll 玩偶', '娃娃', 390, '🐶'),
+    S('Hello Kitty 玩偶', '娃娃', 350, '🎀'),
+    S('美樂蒂 My Melody 玩偶', '娃娃', 380, '🐰'),
+    S('布丁狗 玩偶', '娃娃', 360, '🍮'),
+    S('帕恰狗 玩偶', '娃娃', 350, '🐕'),
+    S('皮卡丘 玩偶', '娃娃', 450, '⚡'),
+    S('角落生物 玩偶', '娃娃', 320, '🐻'),
+    S('史迪奇 玩偶', '娃娃', 420, '💙'),
+    S('玩偶鑰匙圈', '娃娃', 120, '🔑'),
+    // ── 休閒娛樂 15 ──
+    S('LEGO 小盒積木', '休閒娛樂', 399, '🧱'),
+    S('LEGO 城市系列 中盒', '休閒娛樂', 1200, '🧱'),
+    S('LEGO 好朋友系列', '休閒娛樂', 900, '🧱'),
+    S('寶可夢卡牌 補充包', '休閒娛樂', 130, '🃏'),
+    S('寶可夢卡牌 禮盒', '休閒娛樂', 650, '🎁'),
+    S('寶可夢卡冊', '休閒娛樂', 280, '📕'),
+    S('兒童籃球 5 號', '休閒娛樂', 450, '🏀'),
+    S('迷你籃球框組', '休閒娛樂', 580, '🏀'),
+    S('Roblox 點數卡 300 元', '休閒娛樂', 300, '🎮'),
+    S('Roblox 點數卡 800 元', '休閒娛樂', 800, '🎮'),
+    S('戰鬥陀螺', '休閒娛樂', 350, '🌀'),
+    S('三階魔術方塊', '休閒娛樂', 180, '🧩'),
+    S('UNO 紙牌', '休閒娛樂', 150, '🃏'),
+    S('兒童桌遊', '休閒娛樂', 550, '🎲'),
+    S('遙控車', '休閒娛樂', 680, '🚗'),
+  ];
+})();
+
 /* ── 商店商品維護（v343）──────────────────────────────── */
 function ShopManager() {
   const [items, setItems] = useDash(null);   // null = 還沒載到
@@ -1149,6 +1218,22 @@ function ShopManager() {
     id: 'p' + Date.now().toString(36), name: '新商品', cost: 500, tag: '文具', emoji: '🎁', img: '', url: '',
   }]);
   const del = (it) => { if (confirm(`確定刪除「${it.name}」？`)) save((items || []).filter(x => x.id !== it.id)); };
+  // v346: 一鍵載入建議商品（文具20／娃娃15／休閒娛樂15，星星＝估價×20）
+  const loadSuggested = () => {
+    const cur = items || [];
+    const have = new Set(cur.map(x => String(x.name || '').trim()));
+    const add = SUGGESTED_SHOP
+      .filter(x => !have.has(x.name))
+      .map(({ _price, ...rest }) => ({ ...rest, id: 'sg' + Math.random().toString(36).slice(2, 8) }));
+    if (!add.length) { setOk('建議商品都已經在清單裡了'); setTimeout(() => setOk(null), 2000); return; }
+    if (!confirm(
+      `要加入 ${add.length} 樣建議商品嗎？（現有的 ${cur.length} 樣會保留）\n\n` +
+      `・星星＝台灣行情估價 × 20，價格請自行調整\n` +
+      `・連結是「蝦皮搜尋」——點了會搜到該類商品，你可以再換成特定商品網址\n` +
+      `・圖片先用圖示，想放實體照就用「換圖片」上傳蝦皮截圖`
+    )) return;
+    save([...cur, ...add]);
+  };
   const move = (it, dir) => {
     const arr = (items || []).slice();
     const i = arr.findIndex(x => x.id === it.id), j = i + dir;
@@ -1179,7 +1264,10 @@ function ShopManager() {
           <b>兌換商品（{items.length}）</b>
           <span className="linkbind-summary">學生在「⭐ 星星 → 🛍️ 商店」看到的就是這些</span>
         </div>
-        <button className="roster-add-btn" onClick={add}>＋ 新增商品</button>
+        <div className="shopm-head-btns">
+          <button className="roster-toggle-btn" onClick={loadSuggested}>✨ 載入建議商品（50）</button>
+          <button className="roster-add-btn" onClick={add}>＋ 新增商品</button>
+        </div>
       </div>
 
       {err && <div className="notify-msg err">⚠️ {err}</div>}
