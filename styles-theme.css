@@ -609,6 +609,18 @@
   border-color: var(--g-c, #8B3120);
   color: var(--g-c, #8B3120);
 }
+/* v351: 篩選在某位學生底下 → 出的題目會直接指派給他，按鈕改實心提醒 */
+.qm-unit-add-btn.for-student {
+  border-style: solid;
+  border-color: var(--g-c, #8B3120);
+  background: var(--g-c, #8B3120);
+  color: #fff;
+}
+.qm-unit-add-btn.for-student:hover {
+  background: #6f2718;
+  border-color: #6f2718;
+  color: #fff;
+}
 
 /* ═══ v264: 今天的任務——群組階層明確化 ═══════════════════ */
 /* 之前：文章標題(14px)比子項目(15.5px)還小、全部平鋪 → 眼花撩亂。

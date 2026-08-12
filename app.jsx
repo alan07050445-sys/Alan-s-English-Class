@@ -120,6 +120,8 @@ function App() {
   const [editorOpen, setEditorOpen] = useAppState(false);
   const [editorDraft, setEditorDraft] = useAppState(null);
   const [editorCat, setEditorCat] = useAppState(null);
+  // v351: 在「某位學生」的篩選底下按「出新題目」→ 存檔後自動指派給他（不必再去勾一次）
+  const [editorAssign, setEditorAssign] = useAppState(null); // 學生 email 或 null
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
@@ -679,11 +681,12 @@ function App() {
 
   // ── Item CRUD ──────────────────────────────────────────
 
-  const handleAddItem = (catId) => {
+  const handleAddItem = (catId, assignEmail) => {
     // Pre-generate final ID so the PDF storage path is stable before save.
     // Include random suffix to avoid collisions if called rapidly.
     const newId = catId[0] + Date.now() + Math.random().toString(36).slice(2, 6);
     setEditorCat(catId);
+    setEditorAssign(assignEmail || null); // v351: 篩選到某位學生時出的題目 → 存檔後直接指派給他
     setEditorDraft({
       id: newId,
       _isNew: true,
@@ -701,6 +704,7 @@ function App() {
   const handleEditItem = (item) => {
     const catId = Object.keys(week.items).find(k => week.items[k].some(it => it.id === item.id));
     setEditorCat(catId);
+    setEditorAssign(null); // 編輯既有單元不動指派（要改指派用單元列的 👤）
     setEditorDraft({...item});
     setEditorOpen(true);
   };
@@ -725,7 +729,23 @@ function App() {
     setWeeks(w);
     window.saveWeeks(w);
     setEditorOpen(false);
-    showToast(isNew ? "Item added" : "Item saved");
+    // v351: 在某位學生的篩選底下出的新題目 → 直接寫進他的暑假發派清單，
+    //       存完就出現在他的篩選（也就是他的任務）底下，不必再勾一次 👤。
+    let assignedName = '';
+    if (isNew && editorAssign && String(weekId || '').startsWith('sl') && window.saveSummerStudent) {
+      const email = String(editorAssign).toLowerCase();
+      const sfx = window.summerWeekSuffix ? window.summerWeekSuffix(weekId) : String(weekId).split('-').pop();
+      const plan = (summerMeta.students || {})[email] || {};
+      const weeksPlan = { ...(plan.weeks || {}) };
+      const cur = new Set(weeksPlan[sfx] || []);
+      cur.add(cleanForm.id);
+      weeksPlan[sfx] = Array.from(cur);
+      assignedName = _englishName(plan.name || '') || email.split('@')[0];
+      Promise.resolve(window.saveSummerStudent(email, { ...plan, name: plan.name || '', weeks: weeksPlan }))
+        .catch(() => showToast(`已存檔，但指派給 ${assignedName} 失敗——請用單元列的 👤 再試一次`));
+    }
+    setEditorAssign(null);
+    showToast(isNew ? (assignedName ? `已新增並指派給 ${assignedName}` : "Item added") : "Item saved");
   };
 
   const handleMoveItem = (catId, itemId, dir) => {

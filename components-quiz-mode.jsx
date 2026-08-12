@@ -890,11 +890,21 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               ))}
             </div>
           )}
-          {editMode && (
-            <button className="qm-unit-add-btn" onClick={() => onAddItem(cat.id)}>
-              <window.Icon name="plus" size={14}/> 出新題目 · Add item
-            </button>
-          )}
+          {/* v351: 篩選在某位學生底下時，出的新題目直接指派給他——不必存完再去勾 👤 */}
+          {editMode && (() => {
+            const forStu = (libAdminView && stuFilter !== 'all' && stuFilter !== 'none')
+              ? (filterStudents.find(f => f.email === stuFilter) || { email: stuFilter, name: String(stuFilter).split('@')[0] })
+              : null;
+            return (
+              <button
+                className={`qm-unit-add-btn${forStu ? ' for-student' : ''}`}
+                onClick={() => onAddItem(cat.id, forStu ? forStu.email : null)}
+                title={forStu ? `新題目會直接指派給 ${forStu.name}` : '新增一個單元'}
+              >
+                <window.Icon name="plus" size={14}/> {forStu ? `出新題目給 ${forStu.name}` : '出新題目 · Add item'}
+              </button>
+            );
+          })()}
           {viewItems.length === 0 && (
             <div className="qm-unit-empty">
               {editMode
