@@ -5504,15 +5504,21 @@ function GrowthInlineCard({ weeks, weekOrder, qmProg, categories, isSummer, onOp
   const cw = data.scoredWeeks;
   const n = cw.length;
   const cuWeek = useCountUp(data.thisWeekAvg || 0, 900, 250);
-  const hasData = data.totalDone > 0;
 
-  if (!hasData) {
+  // ⚠ v349 修白畫面：舊版用 totalDone > 0 就往下畫圖，但折線畫的是「有分數的週」(scoredWeeks)。
+  //   單字卡與拍照上傳作業「沒有分數」（見 computeGrowthData 的 v270 註解），
+  //   所以只做過這兩種的學生 → totalDone > 0 但 scoredWeeks 是空的 → cw[n-1] 是 undefined
+  //   → 讀 .avg 直接 crash，整個課程頁變白畫面（Alan 回報 Eric、Tayler 打不開）。
+  //   改成以「有沒有分數」決定要不要畫圖。
+  if (n === 0) {
     return (
       <button className="growth-inline growth-inline-empty" onClick={onOpen}>
         <span className="gi-empty-ico">🌱</span>
         <span className="gi-empty-text">
           <b>學習成長</b>
-          <span>{isSummer ? '完成練習後，這裡會畫出這個暑假的成長軌跡' : '完成練習後，這裡會畫出每週的進步軌跡'}</span>
+          <span>{data.totalDone > 0
+            ? '做完有計分的練習（測驗、填空、閱讀…），這裡就會畫出進步軌跡'
+            : (isSummer ? '完成練習後，這裡會畫出這個暑假的成長軌跡' : '完成練習後，這裡會畫出每週的進步軌跡')}</span>
         </span>
         <span className="gi-chev">›</span>
       </button>
