@@ -587,7 +587,8 @@ function SummerAdmin() {
                 );
                 return (
                   <React.Fragment key={g.cat.id}>
-                    <tr className="sa-mx-cat"><td colSpan={active.length + 1}>{g.cat.titleZh}</td></tr>
+                    {/* v352: 往右滑看別的學生時，分類名要跟著釘在左邊（span 才釘得住，td 比畫面寬） */}
+                    <tr className="sa-mx-cat"><td colSpan={active.length + 1}><span className="sa-mx-cat-name">{g.cat.titleZh}</span></td></tr>
                     {ags.map((ag, agi) => ag.items ? (
                       <React.Fragment key={ag.key || ('g' + agi)}>
                         <tr className="sa-mx-agroup">
@@ -1070,8 +1071,9 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
 
       {/* 右：選中學生的流水帳 */}
       <div className="stars-main">
+        {/* v352: 手機上名單在「上面」不是左邊——提示改成不指方向的講法 */}
         {!sel ? (
-          <div className="dt-empty"><p>選一位學生</p><p className="dt-empty-hint">左邊點一下，就能給星星或扣點。</p></div>
+          <div className="dt-empty"><p>選一位學生</p><p className="dt-empty-hint">在名單上點一下，就能給星星或扣點。</p></div>
         ) : (
           <>
             <div className="stars-bal-card">
@@ -1866,6 +1868,13 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
       ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限' }] : []),
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
+
+  // v352: 手機的分頁列是一條可左右滑的膠囊列——換分頁後把目前這顆捲進畫面，
+  //       不然切到後面幾個分頁時看不到自己站在哪裡。
+  useDashE(() => {
+    const el = document.querySelector('.tdash-nav-item.on');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [tab]);
 
   return (
     <div className="dash-overlay tdash">
