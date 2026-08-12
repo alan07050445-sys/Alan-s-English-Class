@@ -1010,6 +1010,17 @@
   padding: 3px 6px; transition: all 0.1s; display: flex; align-items: center;
 }
 .qm-unit-copy-btn:hover { color: var(--accent, #8B3120); border-color: var(--accent, #8B3120); background: var(--bg); }
+/* v350: 單元列的「指派給學生」鈕（右上角小數字＝已指派幾位） */
+.qm-unit-assign-btn {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  cursor: pointer; color: var(--ink-3); font-size: 11px; line-height: 1;
+  padding: 3px 5px; transition: all 0.1s; display: inline-flex; align-items: center; gap: 2px;
+}
+.qm-unit-assign-btn:hover { color: var(--accent, #8B3120); border-color: var(--accent, #8B3120); background: var(--bg); }
+.qm-unit-assign-btn b {
+  font-size: 9.5px; font-weight: 800; color: #fff; background: #8B3120;
+  border-radius: 100px; padding: 1px 4px; min-width: 13px; text-align: center;
+}
 .qm-copy-overlay {
   position: fixed; inset: 0; z-index: 4000;
   background: rgba(38, 28, 14, .5);

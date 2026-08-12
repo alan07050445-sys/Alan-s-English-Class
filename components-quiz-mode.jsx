@@ -691,6 +691,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [openGroups, setOpenGroups] = useQM({});
   const [libMeta, setLibMeta] = useQM(null);
   const [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
+  // v350: 直接在單元列指派學生（不必透過「暑假發派」頁，也不必設成作業）
+  const [assignItem, setAssignItem] = useQM(null);   // 正在指派的單元
+  const [assignRoster, setAssignRoster] = useQM([]); // 全班名單（老師才訂閱）
+  const [assignBusy, setAssignBusy] = useQM(false);
 
   // v339: 多位老師共用題庫——側欄可切「我的單元／全部」。
   // 非擁有者的老師預設只看自己的（不會被別人的題庫洗版），需要沿用時再切「全部」。
@@ -706,6 +710,27 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     if (!libAdminView || !window.subscribeSummerMeta) return;   // 學生不訂閱＝不會拿到全班發派名單
     return window.subscribeSummerMeta(setLibMeta, () => {});
   }, [libAdminView]);
+  // 指派用的全班名單（同樣只有老師訂閱）
+  useQME(() => {
+    if (!libAdminView || !window.subscribeRoster) return;
+    return window.subscribeRoster(setAssignRoster, () => {});
+  }, [libAdminView]);
+
+  // 勾/取消勾一位學生 → 直接改暑假發派清單（單元就會出現在他的篩選底下）
+  const toggleAssign = async (item, stu) => {
+    if (!libSfx || !item) return;
+    const email = String(stu.email || '').toLowerCase();
+    setAssignBusy(true);
+    try {
+      const plan = ((libMeta || {}).students || {})[email] || {};
+      const weeks = { ...(plan.weeks || {}) };
+      const cur = new Set(weeks[libSfx] || []);
+      if (cur.has(item.id)) cur.delete(item.id); else cur.add(item.id);
+      weeks[libSfx] = Array.from(cur);
+      await window.saveSummerStudent(email, { ...plan, name: plan.name || stu.name || '', weeks });
+    } catch (e) { /* 失敗就維持原狀，畫面會跟著 meta 訂閱回復 */ }
+    setAssignBusy(false);
+  };
   const libSfx = isLibView ? String(weekId).split('-').pop() : null;
   const assignedOf = useQMM(() => {
     // itemId → Set(emails)（只看當前週）
@@ -992,6 +1017,17 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                             )}
                           </div>
                         </div>
+                      )}
+                      {/* v350: 直接在單元列指派給學生——不必先去「暑假發派」那頁，
+                          也不必設成作業，單元就會出現在該學生的篩選底下 */}
+                      {libAdminView && (
+                        <button
+                          className="qm-unit-assign-btn"
+                          onClick={(e) => { e.stopPropagation(); setAssignItem(item); }}
+                          title="指派給哪些學生"
+                        >👤{(assignedOf.get(item.id) || new Set()).size > 0 && (
+                          <b>{(assignedOf.get(item.id) || new Set()).size}</b>
+                        )}</button>
                       )}
                       {onCopyToWeeks && (weekChoices || []).length > 0 && (
                         <button
@@ -1295,6 +1331,47 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         )}
         </div>
       </div>
+
+      {/* v350: 指派給哪些學生——直接勾，不必設成作業，單元就會歸到他的篩選底下 */}
+      {assignItem && ReactDOM.createPortal(
+        <div className="qm-copy-overlay" onClick={() => setAssignItem(null)}>
+          <div className="qm-copy-modal" onClick={e => e.stopPropagation()}>
+            <div className="qm-copy-head">
+              <div className="qm-copy-title">指派給哪些學生</div>
+              <button className="qm-copy-x" onClick={() => setAssignItem(null)} aria-label="關閉">
+                <window.Icon name="close" size={16}/>
+              </button>
+            </div>
+            <div className="qm-copy-sub">
+              勾選後，「{assignItem.title}」就會出現在那位學生的清單與篩選底下。
+              <b>不用設成作業也可以</b>——要當作業再另外設截止日。
+            </div>
+            <div className="qm-copy-list">
+              {assignRoster.filter(s => s.active !== false).length === 0 ? (
+                <div className="qm-unit-empty">名單是空的——先到後台「學生名單」新增。</div>
+              ) : assignRoster.filter(s => s.active !== false).map(s => {
+                const email = String(s.email || '').toLowerCase();
+                const on = (assignedOf.get(assignItem.id) || new Set()).has(email);
+                return (
+                  <button key={email} type="button" disabled={assignBusy}
+                    className={'qm-copy-wk' + (on ? ' on' : '')}
+                    onClick={() => toggleAssign(assignItem, s)}>
+                    <span className="qm-copy-wk-check">{on ? '✓' : ''}</span>
+                    <span className="qm-copy-wk-info">
+                      <span className="qm-copy-wk-label">{s.name || email}</span>
+                      {s.grade ? <span className="qm-copy-wk-sub">{String(s.grade).toUpperCase()}</span> : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="qm-copy-actions">
+              <button className="qm-copy-go" onClick={() => setAssignItem(null)}>完成</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* v294: 沿用題目到其他週——勾選目標週，複製一份過去（各週獨立） */}
       {copyItem && ReactDOM.createPortal(
