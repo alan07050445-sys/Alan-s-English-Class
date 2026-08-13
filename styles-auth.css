@@ -6225,6 +6225,12 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 
 /* ── 老師後台（手機）── */
 @media (max-width: 760px) {
+  /* 🔴 捲不動的元兇：手機把 .tdash-shell 轉成直向排列後，.tdash-main 是「直向 flex 項目」，
+     預設 min-height:auto ＝ 不肯縮到比內容矮 → 它整個長到 3000px、.tdash-content 的
+     overflow-y:auto 永遠不會啟動；而外層 .dash-overlay 是 position:fixed 高度只有一個螢幕
+     ＝內容被切在畫面外、完全捲不到（總覽學生列表、學生名單都中）。min-height:0 才准它縮。 */
+  .tdash-main, .tdash-content { min-height: 0; }
+  .tdash-side { flex: none; }        /* 分頁列不要被壓扁 */
   /* 分頁列：原本每個項目被壓縮成「學／生／名／單」一字一行、還吃掉 111px 高。
      改成一列橫向膠囊（不縮、不換行），左右滑動切換。 */
   .tdash-side { padding: 8px 10px; gap: 6px; scrollbar-width: none; }
@@ -6254,6 +6260,7 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   .cwo-row { padding: 10px 12px; gap: 10px; }
   .cwo-name { font-size: 14.5px; }
   .cwo-email { font-size: 10.5px; }
+  .cwo-avg { white-space: nowrap; }   /* 不要斷成「79」＋「分」兩行 */
   .cwo-hint { font-size: 11.5px; margin-top: 10px; }
 
   /* 學生詳情 */
