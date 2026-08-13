@@ -538,6 +538,13 @@ function SummerAdmin() {
   return (
     <div className="sa">
       {err && <div className="sa-err">{err}</div>}
+      {/* v357: 隨時看得到的狀態列——不用猜「題目到底在不在」 */}
+      <div className="sa-status">
+        雲端題庫：<b>{cloudN === null ? '讀取中…' : `${cloudN} 個單元`}</b>
+        <span className="sa-status-sep">·</span>
+        這台裝置的備份：<b>{boot.count} 個單元</b>
+        {boot.count > 0 && <span className="sa-status-src">（題庫 {boot.libCount}／學生端 {boot.meCount}）</span>}
+      </div>
       {/* v355: 雲端題庫比這台裝置的備份少 → 可能被誤蓋了，給一個還原出口 */}
       {canRestore && (
         <div className="sa-restore">
