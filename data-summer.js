@@ -65,6 +65,31 @@ function _libOrder() { return SUMMER_WEEK_SUFFIXES.map(_libWeekId); }
 const _libDoc  = _dbSum.collection('class').doc('data_summer_lib');
 const _metaDoc = _dbSum.collection('class').doc('summer_meta');
 
+/* ── v355：題庫防呆＋備份 ──────────────────────────────────
+   2026-08-13 事故：老師在「本機沒有快取」的裝置（手機）進暑假題庫編輯模式，
+   程式先用 `_libSeed()`（9 個空週）開場，接著任何一次存檔就把雲端整份題庫蓋成空的
+   （saveWeeks 是 merge:true，但 weeks 底下每個「週」物件是整顆被換掉）。87 個單元全沒了。
+   三道防線：
+     ① 開機當下先把本機快取抄一份到記憶體 —— 之後雲端空資料回來覆蓋 localStorage 也救得回
+     ② 只要雲端還沒回來過，一律不准存檔
+     ③ 雲端本來有題目、這次要寫的卻是 0 題 → 直接擋下 */
+const _LIB_KEY    = 'alans-summer-lib-data-v1';
+const _LIB_BAK    = 'alans-summer-lib-backup-v1';
+function _countLibItems(weeks) {
+  return Object.values(weeks || {}).reduce((n, wk) =>
+    n + Object.values((wk || {}).items || {}).reduce((m, arr) => m + ((arr && arr.length) || 0), 0), 0);
+}
+// ① 開機快照（在 app.jsx 訂閱之前就跑完，所以抓得到「被覆蓋前」的那份）
+const _libBoot = (() => {
+  const read = (k) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } };
+  const live = read(_LIB_KEY);
+  const bak  = read(_LIB_BAK);          // 上一次「有題目」的快照（見下方訂閱）
+  const pick = _countLibItems(live) >= _countLibItems((bak || {}).weeks) ? live : (bak || {}).weeks;
+  return { weeks: pick || null, count: _countLibItems(pick), at: (bak || {}).at || null };
+})();
+let _lastLibCount = null;               // 最近一次雲端快照的題數（null＝雲端還沒回來過）
+window.summerLibBoot = () => ({ ..._libBoot, cloudCount: _lastLibCount });
+
 function isSummerTrack(g) { return g === SUMMER_LIB || g === SUMMER_ME; }
 
 // 週 id → SW 後綴（'sl-2026-SW03' → 'SW03'）
@@ -80,6 +105,11 @@ function _subscribeLib(callback, onError) {
       const d = snap.data();
       const w = d.weeks || _libSeed();
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length ? d.weekOrder : _libOrder();
+      // v355: 記住雲端現在有幾題（存檔防呆要用），並把「有題目」的版本另存一份備份
+      _lastLibCount = _countLibItems(w);
+      if (_lastLibCount > 0) {
+        try { localStorage.setItem(_LIB_BAK, JSON.stringify({ at: Date.now(), n: _lastLibCount, weeks: w })); } catch (e) {}
+      }
       callback(w, o);
     } else {
       _libDoc.set({ weeks: _libSeed(), weekOrder: _libOrder() }).catch(() => {});
@@ -160,7 +190,18 @@ function summerApi(t) {
     orderKey,
     subscribe: isLib ? _subscribeLib : _subscribeMySummer,
     // 只有題庫可寫；學生個人頁是唯讀的合成視圖
-    async saveWeeks(weeks)  { if (isLib) await _libDoc.set({ weeks },        { merge: true }); },
+    // v355: 兩道防呆——雲端還沒回來過不准寫；本來有題目卻要寫成 0 題也不准寫
+    async saveWeeks(weeks) {
+      if (!isLib) return;
+      if (_lastLibCount === null) throw new Error('題庫還沒從雲端載入完成，先等一下再存（避免把雲端的題目蓋掉）');
+      const n = _countLibItems(weeks);
+      if (n === 0 && _lastLibCount > 0) {
+        throw new Error(`擋下了一次危險的存檔：這次要寫入的題庫是 0 題，但雲端現在有 ${_lastLibCount} 題。請重新整理後再試。`);
+      }
+      await _libDoc.set({ weeks }, { merge: true });
+    },
+    // 從備份還原整份題庫（restoreSummerLib 用）
+    async forceSaveWeeks(weeks) { if (isLib) await _libDoc.set({ weeks }, { merge: true }); },
     async saveWeekOrder(o)  { if (isLib) await _libDoc.set({ weekOrder: o }, { merge: true }); },
     loadWeeks() {
       try { const r = localStorage.getItem(storageKey); if (r) return JSON.parse(r); } catch (e) {}

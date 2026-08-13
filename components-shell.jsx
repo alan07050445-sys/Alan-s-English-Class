@@ -2197,13 +2197,7 @@ function StarsPanel({ user, onClose }) {
                 );
               })}
             </div>
-            <p className="sp-shop-note">
-              商品會不定期更新。想換的話按「兌換」，下次上課跟老師說一聲就可以囉 🎁
-              {/* v354: 商品圖若來自免費圖庫（Wikimedia／Openverse），這行就是出處標示 */}
-              {shown.some(i => i.imgFrom) && (
-                <><br/><small className="sp-shop-credit">部分商品示意圖來自 Wikimedia Commons 與 Openverse（自由授權）</small></>
-              )}
-            </p>
+            <p className="sp-shop-note">商品會不定期更新。想換的話按「兌換」，下次上課跟老師說一聲就可以囉 🎁</p>
           </div>
         )}
       </div>

@@ -395,6 +395,27 @@ function SummerAdmin() {
       .subscribe((w, o) => setLib({ weeks: w, order: o }), () => setErr('讀取題庫失敗'));
   }, []);
 
+  // v355: 這台裝置開機當下的題庫快照——雲端被寫空時可以從這裡還原
+  const boot = (window.summerLibBoot ? window.summerLibBoot() : { count: 0 });
+  const cloudN = lib.weeks
+    ? Object.values(lib.weeks).reduce((n, wk) => n + Object.values((wk || {}).items || {}).reduce((m, a) => m + ((a && a.length) || 0), 0), 0)
+    : null;
+  const canRestore = boot.count > 0 && cloudN !== null && boot.count > cloudN;
+  const doRestore = async () => {
+    if (!confirm(
+      `要把這台裝置上的題庫備份寫回雲端嗎？\n\n` +
+      `備份：${boot.count} 個單元${boot.at ? `（${new Date(boot.at).toLocaleString('zh-TW')}）` : ''}\n` +
+      `雲端目前：${cloudN} 個單元\n\n` +
+      `會以備份為準覆蓋雲端題庫。發派清單不受影響。`
+    )) return;
+    setBusy(true);
+    try {
+      await window.summerApi(window.SUMMER_LIB || 'sl').forceSaveWeeks(boot.weeks);
+      alert('✅ 已還原。請重新整理看看題目回來了沒。');
+    } catch (e) { alert('還原失敗：' + ((e && e.message) || e)); }
+    setBusy(false);
+  };
+
   const suffixes = window.SUMMER_WEEK_SUFFIXES || [];
   const cats     = window.SUMMER_CATEGORIES || [];
   const active   = roster.filter(st => st.active !== false).slice().sort((a, b) => {
@@ -514,6 +535,21 @@ function SummerAdmin() {
   return (
     <div className="sa">
       {err && <div className="sa-err">{err}</div>}
+      {/* v355: 雲端題庫比這台裝置的備份少 → 可能被誤蓋了，給一個還原出口 */}
+      {canRestore && (
+        <div className="sa-restore">
+          <div>
+            <b>⚠️ 這台裝置上有一份比較完整的題庫備份</b>
+            <span>
+              備份 <b>{boot.count}</b> 個單元{boot.at ? `（${new Date(boot.at).toLocaleDateString('zh-TW')}）` : ''}，
+              雲端目前只有 <b>{cloudN}</b> 個。如果題目是突然不見的，按下面還原。
+            </span>
+          </div>
+          <button className="sa-restore-btn" onClick={doRestore} disabled={busy}>
+            {busy ? '還原中…' : '🩹 還原題庫'}
+          </button>
+        </div>
+      )}
       <div className="sa-hint">
         先到「暑假題庫」出題，再回這裡勾選發派。同一單元發給多位學生時<b>共用同一份內容</b>——題庫改了，所有人同步更新。
       </div>
@@ -1132,222 +1168,6 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
      搜尋頁是 JS 才渲染），拿不到即時價格與商品網址，所以不編造商品連結。
      每樣附的是「蝦皮搜尋連結」＝真實有效、永遠不會壞；老師要換成特定商品連結隨時可改。
    星星 = 估價 NT$ × 20（Alan 訂的換算）。 */
-const SUGGESTED_SHOP = (() => {
-  const S = (name, tag, price, emoji) => ({
-    id: 'sg' + Math.random().toString(36).slice(2, 8),
-    name, tag, emoji, cost: price * 20, img: '',
-    url: 'https://shopee.tw/search?keyword=' + encodeURIComponent(name),
-    _price: price,
-  });
-  return [
-    // ── 文具 20 ──
-    S('三色原子筆', '文具', 35, '🖊️'),
-    S('Pilot Juice 果汁筆', '文具', 45, '🖊️'),
-    S('Pilot G-2 中性筆', '文具', 60, '🖊️'),
-    S('Pilot 魔擦擦擦筆', '文具', 65, '🖊️'),
-    S('Pilot Dr.Grip 自動鉛筆', '文具', 250, '✏️'),
-    S('色鉛筆 36 色組', '文具', 380, '🖍️'),
-    S('雙頭螢光筆 6 色組', '文具', 150, '🖍️'),
-    S('螢光筆 5 色組', '文具', 120, '🖍️'),
-    S('大容量筆袋', '文具', 220, '🎒'),
-    S('卡通造型鉛筆盒', '文具', 160, '📦'),
-    S('雙層鐵製鉛筆盒', '文具', 180, '📦'),
-    S('造型橡皮擦組', '文具', 60, '🧽'),
-    S('蜻蜓 MONO 橡皮擦', '文具', 35, '🧽'),
-    S('A5 方格筆記本', '文具', 90, '📒'),
-    S('貼紙包 50 入', '文具', 80, '✨'),
-    S('修正帶', '文具', 45, '📏'),
-    S('尺規三件組', '文具', 70, '📐'),
-    S('A4 資料夾 5 入', '文具', 100, '🗂️'),
-    S('束口收納袋', '文具', 150, '👝'),
-    S('兒童後背包', '文具', 690, '🎒'),
-    // ── 娃娃 15 ──
-    S('卡皮巴拉玩偶 30cm', '娃娃', 450, '🦫'),
-    S('大卡皮巴拉玩偶 50cm', '娃娃', 890, '🦫'),
-    S('卡皮巴拉吊飾', '娃娃', 150, '🦫'),
-    S('Labubu 公仔', '娃娃', 1200, '🧸'),
-    S('Labubu 吊飾', '娃娃', 680, '🧸'),
-    S('庫洛米 Kuromi 玩偶', '娃娃', 390, '🖤'),
-    S('大耳狗 Cinnamoroll 玩偶', '娃娃', 390, '🐶'),
-    S('Hello Kitty 玩偶', '娃娃', 350, '🎀'),
-    S('美樂蒂 My Melody 玩偶', '娃娃', 380, '🐰'),
-    S('布丁狗 玩偶', '娃娃', 360, '🍮'),
-    S('帕恰狗 玩偶', '娃娃', 350, '🐕'),
-    S('皮卡丘 玩偶', '娃娃', 450, '⚡'),
-    S('角落生物 玩偶', '娃娃', 320, '🐻'),
-    S('史迪奇 玩偶', '娃娃', 420, '💙'),
-    S('玩偶鑰匙圈', '娃娃', 120, '🔑'),
-    // ── 休閒娛樂 15 ──
-    S('LEGO 小盒積木', '休閒娛樂', 399, '🧱'),
-    S('LEGO 城市系列 中盒', '休閒娛樂', 1200, '🧱'),
-    S('LEGO 好朋友系列', '休閒娛樂', 900, '🧱'),
-    S('寶可夢卡牌 補充包', '休閒娛樂', 130, '🃏'),
-    S('寶可夢卡牌 禮盒', '休閒娛樂', 650, '🎁'),
-    S('寶可夢卡冊', '休閒娛樂', 280, '📕'),
-    S('兒童籃球 5 號', '休閒娛樂', 450, '🏀'),
-    S('迷你籃球框組', '休閒娛樂', 580, '🏀'),
-    S('Roblox 點數卡 300 元', '休閒娛樂', 300, '🎮'),
-    S('Roblox 點數卡 800 元', '休閒娛樂', 800, '🎮'),
-    S('戰鬥陀螺', '休閒娛樂', 350, '🌀'),
-    S('三階魔術方塊', '休閒娛樂', 180, '🧩'),
-    S('UNO 紙牌', '休閒娛樂', 150, '🃏'),
-    S('兒童桌遊', '休閒娛樂', 550, '🎲'),
-    S('遙控車', '休閒娛樂', 680, '🚗'),
-  ];
-})();
-
-/* ── v347: 從蝦皮連結批次建立商品 ──────────────────────────
-   蝦皮擋自動抓取（API 403；用真實瀏覽器開也會跳登入牆），所以無法自動找商品。
-   改成：老師自己複製商品連結貼進來，這裡負責把「網址 → 商品名稱」解析出來，
-   價格 ×20 換成星星。一次貼 50 行也沒問題。
-   支援格式（一行一個）：
-     https://shopee.tw/百樂-Juice-果汁筆-i.123.456   45
-     https://shopee.tw/xxx-i.1.2 | 卡皮巴拉玩偶 | 450
-     卡皮巴拉玩偶  450                （沒有連結也可以）  */
-function parseShopLines(text) {
-  const out = [], bad = [];
-  String(text || '').split('\n').forEach(raw => {
-    const line = raw.trim();
-    if (!line) return;
-    // 先抓網址
-    const m = line.match(/https?:\/\/\S+/);
-    const url = m ? m[0] : '';
-    let rest = (m ? line.replace(m[0], '') : line).trim();
-    // 用 | 或 tab 或多個空白切欄位
-    const parts = rest.split(/\s*\|\s*|\t+|\s{2,}/).map(s => s.trim()).filter(Boolean);
-    // 最後一段若是純數字＝價格
-    let price = null, name = '';
-    if (parts.length) {
-      const last = parts[parts.length - 1].replace(/[,$＄元]/g, '');
-      if (/^\d+(\.\d+)?$/.test(last)) { price = Number(last); parts.pop(); }
-      name = parts.join(' ').trim();
-    }
-    // v347b: 蝦皮「分享」出來的文字是單一空格（例：`【百樂】Juice果汁筆 0.5mm $45 https://…`），
-    // 上面用「兩個以上空白」切不開，價格會被黏進商品名。這裡再撈一次「帶錢字號的數字」。
-    // 只認有 $ / NT$ / 元 標記的，才不會把 0.5mm、30cm 這種規格數字誤當成價格。
-    if (price == null && name) {
-      const money = name.match(/(?:NT\s*\$|＄|\$)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*元/g);
-      if (money && money.length) {
-        const tok = money[money.length - 1];                       // 取最後一個
-        const n = Number(String(tok).replace(/[^\d.]/g, ''));
-        if (n > 0) { price = n; name = name.replace(tok, '').trim().replace(/[\s,·、|-]+$/, ''); }
-      }
-    }
-    // 沒給名稱 → 從蝦皮網址的 slug 解析（蝦皮網址就含商品名）
-    if (!name && url) name = nameFromShopeeUrl(url);
-    if (!name) { bad.push(line); return; }
-    out.push({ name, url, price });
-  });
-  return { items: out, bad };
-}
-function nameFromShopeeUrl(url) {
-  try {
-    const path = decodeURIComponent(new URL(url).pathname);
-    // 形式1：/商品名稱-i.店號.商品號   → 取 -i. 前面那段
-    let slug = path.replace(/^\//, '').split(/-i\.\d/)[0];
-    // 形式2：/product/店號/商品號 → 沒有名稱可解析
-    if (/^product\/\d+/.test(slug) || /^\d+$/.test(slug)) return '';
-    slug = slug.split('/').pop() || '';
-    return slug.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
-  } catch (e) { return ''; }
-}
-
-/* ── v354: 商品名 → 圖庫關鍵字 ─────────────────────────────
-   圖庫（Wikimedia／Openverse）以英文檢索效果好非常多，中文幾乎搜不到東西。
-   ⚠️ 卡通角色（Labubu／三麗鷗／寶可夢／LEGO…）是別人的智慧財產，網路上的圖不能直接拿來
-   放在公開網站上；這裡一律對應到「同類型的一般商品」關鍵字（絨毛娃娃、積木、卡牌…），
-   老師要換成別的字也可以在搜尋框直接改。 */
-const SHOP_IMG_KEYWORDS = [
-  // 文具
-  ['三色原子筆', 'ballpoint pen'], ['果汁筆', 'gel pen'], ['中性筆', 'gel pen'],
-  ['擦擦筆', 'erasable pen'], ['自動鉛筆', 'mechanical pencil'], ['原子筆', 'ballpoint pen'],
-  ['色鉛筆', 'colored pencils set'], ['螢光筆', 'highlighter pens'], ['蠟筆', 'crayons'],
-  ['筆袋', 'pencil case'], ['鉛筆盒', 'pencil box'], ['橡皮擦', 'eraser stationery'],
-  ['筆記本', 'notebook stationery'], ['貼紙', 'stickers sheet'], ['修正帶', 'correction tape'],
-  ['尺規', 'ruler set stationery'], ['尺', 'ruler stationery'], ['資料夾', 'file folder'],
-  ['收納袋', 'drawstring pouch bag'], ['後背包', 'school backpack'], ['書包', 'school backpack'],
-  // 娃娃（角色一律用「絨毛娃娃」這類通用字）
-  ['卡皮巴拉', 'capybara plush toy'], ['吊飾', 'plush keychain'], ['鑰匙圈', 'keychain'],
-  ['公仔', 'vinyl figure toy'], ['玩偶', 'plush toy'], ['娃娃', 'plush toy'],
-  // 休閒娛樂
-  ['積木', 'building blocks toy'], ['卡冊', 'trading card binder'], ['卡牌', 'trading cards'],
-  ['點數卡', 'gift card'], ['籃球框', 'basketball hoop'], ['籃球', 'basketball isolated'],
-  ['陀螺', 'spinning top toy'], ['魔術方塊', 'rubiks cube'], ['紙牌', 'playing cards'],
-  ['桌遊', 'board game'], ['遙控車', 'remote control car toy'],
-  // 最後的保底：對不到具體商品就用分類（順序重要，通用字一定放最後）
-  ['文具', 'stationery'], ['玩具', 'toy'], ['休閒娛樂', 'toy'],
-];
-function shopImgQuery(name, tag) {
-  const n = String(name || '');
-  const hit = SHOP_IMG_KEYWORDS.find(([zh]) => n.includes(zh));
-  if (hit) return hit[1];
-  const byTag = SHOP_IMG_KEYWORDS.find(([zh]) => String(tag || '').includes(zh));
-  if (byTag) return byTag[1];
-  // 中文在國外圖庫幾乎搜不到東西——退到英文分類字，老師可自己再改
-  return /[一-鿿]/.test(n) ? 'stationery' : n.trim();
-}
-
-/* ── v354: 從免費圖庫挑一張當商品圖 ───────────────────────
-   蝦皮的圖抓不到（實測：API 403／瀏覽器被判自動化／iframe 被 CSP 擋），
-   所以改到可自由使用的圖庫搜，老師挑一張就好。搜到的東西品質參差
-   （搜「籃球」會出現比賽照片），所以是「挑」不是「自動抓第一張」。 */
-function ShopImagePicker({ item, onPick, onSkip, onClose, queue }) {
-  const [q, setQ]           = useDash(() => shopImgQuery(item.name, item.tag));
-  const [list, setList]     = useDash(null);
-  const [busy, setBusy]     = useDash(false);
-  const [err, setErr]       = useDash(null);
-  const isCJK = /[一-鿿]/.test(q);
-
-  const run = async (kw) => {
-    setBusy(true); setErr(null);
-    try {
-      const r = await window.searchFreeImages(kw, 10);
-      setList(r);
-      if (!r.length) setErr('這個關鍵字沒搜到圖——換個講法試試（英文命中率高很多）');
-    } catch (e) { setErr('搜尋失敗：' + (e.message || '')); setList([]); }
-    setBusy(false);
-  };
-  useDashE(() => { const kw = shopImgQuery(item.name, item.tag); setQ(kw); run(kw); }, [item.id]);
-
-  return (
-    <div className="shopimg-overlay" onClick={onClose}>
-      <div className="shopimg-modal" onClick={e => e.stopPropagation()}>
-        <div className="shopimg-head">
-          <div>
-            <b>幫「{item.name}」找圖片</b>
-            <span>圖片來自 Wikimedia Commons 與 Openverse（可自由使用）{queue ? ` · 還有 ${queue} 樣沒有圖` : ''}</span>
-          </div>
-          <button className="shopimg-x" onClick={onClose} aria-label="關閉">✕</button>
-        </div>
-        <div className="shopimg-search">
-          <input className="roster-input" value={q} onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') run(q); }} placeholder="搜尋關鍵字（建議用英文）"/>
-          <button className="roster-add-btn" onClick={() => run(q)} disabled={busy}>{busy ? '搜尋中…' : '🔍 搜尋'}</button>
-        </div>
-        {isCJK && <div className="shopimg-tip">💡 這兩個圖庫用中文幾乎搜不到東西——把關鍵字改成英文（例如 pencil case、plush toy）結果會好很多。</div>}
-        {err && <div className="notify-msg err">⚠️ {err}</div>}
-        <div className="shopimg-grid">
-          {list === null || busy
-            ? <div className="roster-hint">搜尋中…</div>
-            : list.map(r => (
-              <button key={r.key} className="shopimg-card" onClick={() => onPick(r)} title={r.title}>
-                {/* 載不出來的（來源擋外連／檔案已刪）直接從清單移掉，免得選到壞圖 */}
-                <img src={r.thumb} alt={r.title} loading="lazy"
-                  onError={() => setList(l => (l || []).filter(x => x.key !== r.key))}/>
-                <span className="shopimg-card-t">{r.title || '（無標題）'}</span>
-                <span className="shopimg-card-lic">{r.license} · {r.from}</span>
-              </button>
-            ))}
-        </div>
-        <div className="shopimg-foot">
-          <span>點一張圖就會設定成商品照片</span>
-          {onSkip && <button className="roster-toggle-btn" onClick={onSkip}>跳過這樣 →</button>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── 商店商品維護（v343）──────────────────────────────── */
 function ShopManager() {
   const [items, setItems] = useDash(null);   // null = 還沒載到
@@ -1360,9 +1180,6 @@ function ShopManager() {
   const [bulkOpen, setBulkOpen] = useDash(false);
   const [bulkText, setBulkText] = useDash('');
   const [bulkTag, setBulkTag]   = useDash('文具');
-  // v354: 從免費圖庫找圖（單一商品或「幫沒有圖的逐一挑」）
-  const [pickingId, setPickingId] = useDash(null);
-  const [pickQueue, setPickQueue] = useDash(null);   // 連續挑圖時剩下的 id，null＝只挑這一個
 
   useDashE(() => window.subscribeShop(
     (list) => setItems(list || (window.SHOP_ITEMS || []).map(x => ({ ...x }))),
@@ -1379,22 +1196,6 @@ function ShopManager() {
     id: 'p' + Date.now().toString(36), name: '新商品', cost: 500, tag: '文具', emoji: '🎁', img: '', url: '',
   }]);
   const del = (it) => { if (confirm(`確定刪除「${it.name}」？`)) save((items || []).filter(x => x.id !== it.id)); };
-  // v346: 一鍵載入建議商品（文具20／娃娃15／休閒娛樂15，星星＝估價×20）
-  const loadSuggested = () => {
-    const cur = items || [];
-    const have = new Set(cur.map(x => String(x.name || '').trim()));
-    const add = SUGGESTED_SHOP
-      .filter(x => !have.has(x.name))
-      .map(({ _price, ...rest }) => ({ ...rest, id: 'sg' + Math.random().toString(36).slice(2, 8) }));
-    if (!add.length) { setOk('建議商品都已經在清單裡了'); setTimeout(() => setOk(null), 2000); return; }
-    if (!confirm(
-      `要加入 ${add.length} 樣建議商品嗎？（現有的 ${cur.length} 樣會保留）\n\n` +
-      `・星星＝台灣行情估價 × 20，價格請自行調整\n` +
-      `・連結是「蝦皮搜尋」——點了會搜到該類商品，你可以再換成特定商品網址\n` +
-      `・圖片先用圖示，想放實體照就用「換圖片」上傳蝦皮截圖`
-    )) return;
-    save([...cur, ...add]);
-  };
   const move = (it, dir) => {
     const arr = (items || []).slice();
     const i = arr.findIndex(x => x.id === it.id), j = i + dir;
@@ -1427,24 +1228,6 @@ function ShopManager() {
     setOk(`已加入 ${add.length} 樣商品`); setTimeout(() => setOk(null), 2500);
   };
 
-  // v354: 開始「幫沒有圖的商品逐一挑圖」——一張挑完自動跳下一樣
-  const startFindImages = () => {
-    const empty = (items || []).filter(x => !x.img).map(x => x.id);
-    if (!empty.length) { setOk('每一樣都有圖片了 🎉'); setTimeout(() => setOk(null), 2000); return; }
-    setPickQueue(empty.slice(1));
-    setPickingId(empty[0]);
-  };
-  const nextInQueue = () => {
-    if (!pickQueue || !pickQueue.length) { setPickingId(null); setPickQueue(null); return; }
-    setPickingId(pickQueue[0]);
-    setPickQueue(pickQueue.slice(1));
-  };
-  const applyPicked = (id, r) => {
-    // 存圖片網址＋出處（CC BY 這類授權要標作者，之後要標得出來）
-    upd(id, { img: r.thumb, imgBy: r.author || '', imgLic: r.license || '', imgFrom: r.from || '', imgPage: r.page || '' });
-    if (pickQueue) nextInQueue(); else setPickingId(null);
-  };
-
   const pickImage = (id) => { pickFor.current = id; if (fileRef.current) fileRef.current.click(); };
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -1469,9 +1252,7 @@ function ShopManager() {
           <span className="linkbind-summary">學生在「⭐ 星星 → 🛍️ 商店」看到的就是這些</span>
         </div>
         <div className="shopm-head-btns">
-          <button className="roster-toggle-btn" onClick={startFindImages}>🖼 幫沒有圖的商品找圖</button>
           <button className="roster-toggle-btn" onClick={() => setBulkOpen(o => !o)}>📋 批次貼上蝦皮連結</button>
-          <button className="roster-toggle-btn" onClick={loadSuggested}>✨ 載入建議商品（50）</button>
           <button className="roster-add-btn" onClick={add}>＋ 新增商品</button>
         </div>
       </div>
@@ -1535,8 +1316,6 @@ function ShopManager() {
                   : <span className="shopm-img-emoji">{it.emoji || '🎁'}</span>}
               <span className="shopm-img-edit">換圖片</span>
             </button>
-            {/* v354: 蝦皮的圖抓不到 → 到免費圖庫搜一張 */}
-            <button className="shopm-find" onClick={() => { setPickQueue(null); setPickingId(it.id); }} title="到免費圖庫找圖片">🔍<span>找圖</span></button>
 
             <div className="shopm-fields">
               <input className="roster-input" value={it.name} placeholder="商品名稱"
@@ -1565,21 +1344,6 @@ function ShopManager() {
           </div>
         ))}
       </div>
-
-      {/* v354: 免費圖庫挑圖 */}
-      {pickingId && (() => {
-        const it = (items || []).find(x => x.id === pickingId);
-        if (!it) return null;
-        return (
-          <ShopImagePicker
-            item={it}
-            queue={pickQueue ? pickQueue.length : 0}
-            onPick={(r) => applyPicked(it.id, r)}
-            onSkip={pickQueue ? nextInQueue : null}
-            onClose={() => { setPickingId(null); setPickQueue(null); }}
-          />
-        );
-      })()}
     </div>
   );
 }

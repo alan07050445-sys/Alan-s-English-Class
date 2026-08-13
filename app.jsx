@@ -276,6 +276,9 @@ function App() {
   useAppEffect(() => { weeksRef.current = weeks; }, [weeks]);
   // v340: 週次「只在第一次載入時自動跳到本週」，之後保留使用者選的那一週（提前備課不會被彈回）
   const weekPickedRef = useAppRef(false);
+  // v355: 雲端課程資料回來過了沒。沒回來之前 weeks 是「本機快取或空白預設值」，
+  //       這時候存檔會把雲端整份蓋掉（2026-08-13 暑假題庫 87 個單元就是這樣沒的）。
+  const cloudReadyRef = useAppRef(false);
   const weekOrderRef  = useAppRef(weekOrder);
   useAppEffect(() => { weekOrderRef.current = weekOrder; }, [weekOrder]);
   // v341: 去補做「之前沒完成的作業」時，記住原本在哪一週——補完返回就回到原來那一週，
@@ -295,8 +298,10 @@ function App() {
     const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey });
     const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey });
 
+    cloudReadyRef.current = false;          // v355: 換年級／換教室 → 重新等雲端
     const unsub = subscribeFn((newWeeks, newOrder) => {
       setAccessLocked(false);
+      cloudReadyRef.current = true;
       setWeeks(newWeeks);
       setWeekOrder(newOrder);
       // v340: 只在「這個年級第一次載入」時自動跳到本週。
@@ -343,6 +348,20 @@ function App() {
   }, [summerMetaReady]);
   const isSummer = !!(window.isSummerTrack && window.isSummerTrack(grade));
   const isSummerLib = grade === (window.SUMMER_LIB || 'sl');
+  // v355: 所有課程內容的存檔都走這裡——雲端還沒回來就不准寫，寫失敗要讓老師看得到。
+  //       （以前是直接呼叫 window.saveWeeks，失敗只會靜靜地變成 unhandled rejection。）
+  const saveWeeksSafe = (w) => {
+    if (!cloudReadyRef.current) {
+      alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
+      return false;
+    }
+    try {
+      const p = window.saveWeeks(w);
+      if (p && p.catch) p.catch(e => alert('儲存失敗：' + ((e && e.message) || e)));
+    } catch (e) { alert('儲存失敗：' + ((e && e.message) || e)); }
+    return true;
+  };
+
   const mySummerPlan = (user && user.email && (summerMeta.students || {})[user.email.toLowerCase()]) || null;
   const hasSummerPlan = !!(mySummerPlan && Object.values(mySummerPlan.weeks || {}).some(a => a && a.length));
   // 名單姓名格式是「王騰樂Tayler Wang」→ 抽英文名（Tayler）進標題
@@ -613,7 +632,7 @@ function App() {
     const nextWeeks = { ...weeksRef.current, [id]: newWeek };
     setWeeks(nextWeeks);
     setWeekOrder(nextOrder);
-    window.saveWeeks(nextWeeks);
+    saveWeeksSafe(nextWeeks);
     window.saveWeekOrder(nextOrder);
     setWeekIdx(nextOrder.indexOf(id));
     setOpenCat(null);
@@ -635,13 +654,13 @@ function App() {
       delete w[oldId];
       const nextOrder = weekOrder.map(id => id === oldId ? newId : id);
       setWeeks(w); setWeekOrder(nextOrder);
-      window.saveWeeks(w); window.saveWeekOrder(nextOrder);
+      saveWeeksSafe(w); window.saveWeekOrder(nextOrder);
       setWeekIdx(nextOrder.indexOf(newId));
     } else {
       // Update in-place (no ID change)
       w[newId] = { ...w[newId], label: form.label || form.id, dateRange: form.dateRange || '', theme: form.theme || '', themeZh: form.themeZh || '' };
       setWeeks(w);
-      window.saveWeeks(w);
+      saveWeeksSafe(w);
     }
     setWeekEditOpen(false);
     showToast("已儲存 ✓");
@@ -654,7 +673,7 @@ function App() {
     const nextOrder = weekOrder.filter(id => id !== weekId);
     setWeeks(nextWeeks);
     setWeekOrder(nextOrder);
-    window.saveWeeks(nextWeeks);
+    saveWeeksSafe(nextWeeks);
     window.saveWeekOrder(nextOrder);
     setWeekIdx(i => Math.max(0, i - 1));
     setOpenCat(null);
@@ -727,7 +746,7 @@ function App() {
       ? [...list, cleanForm]
       : list.map(it => it.id === cleanForm.id ? cleanForm : it);
     setWeeks(w);
-    window.saveWeeks(w);
+    saveWeeksSafe(w);
     setEditorOpen(false);
     // v351: 在某位學生的篩選底下出的新題目 → 直接寫進他的暑假發派清單，
     //       存完就出現在他的篩選（也就是他的任務）底下，不必再勾一次 👤。
@@ -757,7 +776,7 @@ function App() {
     if (i < 0 || j < 0 || j >= list.length) return;
     [list[i], list[j]] = [list[j], list[i]];
     setWeeks(w);
-    window.saveWeeks(w);
+    saveWeeksSafe(w);
   };
 
   const handleMoveTypeGroup = (catId, type, dir) => {
@@ -774,7 +793,7 @@ function App() {
     list.forEach(it => { (byType[it.type] = byType[it.type] || []).push(it); });
     w[weekId].items[catId] = seenTypes.flatMap(t => byType[t] || []);
     setWeeks(w);
-    window.saveWeeks(w);
+    saveWeeksSafe(w);
   };
 
   const handleDeleteItem = (itemId) => {
@@ -783,7 +802,7 @@ function App() {
       w[weekId].items[k] = w[weekId].items[k].filter(it => it.id !== itemId);
     });
     setWeeks(w);
-    window.saveWeeks(w);
+    saveWeeksSafe(w);
     setEditorOpen(false);
     showToast("Item deleted");
   };
@@ -797,7 +816,7 @@ function App() {
     if (hwData) w[weekId].homework[itemId] = hwData;
     else delete w[weekId].homework[itemId];
     setWeeks(w);
-    window.saveWeeks(w);
+    saveWeeksSafe(w);
     showToast(hwData ? "設定作業 ✓" : "取消作業");
   };
 
@@ -821,7 +840,7 @@ function App() {
     });
     if (!copied) { showToast('沒有可沿用的週'); return; }
     setWeeks(w);
-    window.saveWeeks(w);
+    saveWeeksSafe(w);
     showToast(`已沿用到 ${copied} 週 ✓`);
   };
 
@@ -1177,7 +1196,7 @@ function App() {
                     if (!w[weekId]) return;
                     w[weekId] = { ...w[weekId], ...patch };
                     setWeeks(w);
-                    window.saveWeeks(w);
+                    saveWeeksSafe(w);
                   }}
                 />
               ) : isSummerLib ? (
@@ -1220,7 +1239,7 @@ function App() {
                   if (!w[weekId]) return;
                   w[weekId] = { ...w[weekId], ...patch };
                   setWeeks(w);
-                  window.saveWeeks(w);
+                  saveWeeksSafe(w);
                 }}
                 onAddItem={handleAddItem}
               />
