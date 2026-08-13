@@ -209,6 +209,7 @@ function subscribeToClassData(callback, onError) {
       const order = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
         ? d.weekOrder
         : (Object.keys(savedWeeks).length > 0 ? Object.keys(savedWeeks).sort() : DEFAULT_WEEK_ORDER.slice());
+      noteCloudWeeks('g3', cleanWeeks(savedWeeks));   // v359
       callback(cleanWeeks(savedWeeks), order);
     } else {
       callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice());
@@ -265,6 +266,7 @@ async function deleteRosterStudent(email) {
 }
 
 async function saveWeeks(weeks) {
+  guardWeekSave('g3', weeks);                      // v359: 不准把有題目的蓋成空的
   await _classDoc.set({ weeks }, { merge: true });
 }
 
@@ -1882,3 +1884,25 @@ window.gradeFromEmail = function (email) {
   return (g >= 2 && g <= 6) ? ('g' + g) : null;
 };
 
+
+/* ── v359: 課程內容存檔防呆（G2–G6 沿用暑假題庫那套）─────────
+   2026-08-13 暑假題庫被空白預設值蓋掉 87 個單元。學期各年級是一模一樣的寫法：
+   loadWeeks() 讀不到本機快取就回 SEED_WEEKS，在雲端快照回來前存檔就會整份蓋掉。
+   app.jsx 的 saveWeeksSafe 已經擋住「還沒載入就存」，這裡再加第二道：
+   雲端本來有題目、這次卻要寫 0 題 → 直接拒絕。 */
+const _cloudWeekCount = {};      // 年級 → 最近一次雲端快照的題數
+function _countWeekItems(weeks) {
+  return Object.values(weeks || {}).reduce((n, wk) =>
+    n + Object.values((wk || {}).items || {}).reduce((m, arr) => m + ((arr && arr.length) || 0), 0), 0);
+}
+function noteCloudWeeks(key, weeks) { _cloudWeekCount[key] = _countWeekItems(weeks); }
+function guardWeekSave(key, weeks) {
+  const last = _cloudWeekCount[key];
+  if (last === undefined) throw new Error('課程內容還沒從雲端載入完成，先等一下再存（避免把雲端的題目蓋掉）');
+  const n = _countWeekItems(weeks);
+  if (n === 0 && last > 0) {
+    throw new Error(`擋下了一次危險的存檔：這次要寫入的是 0 題，但雲端現在有 ${last} 題。請重新整理後再試。`);
+  }
+  return n;
+}
+Object.assign(window, { noteCloudWeeks, guardWeekSave, countWeekItems: _countWeekItems });

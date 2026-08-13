@@ -640,6 +640,7 @@ function subscribeToClassDataG2(callback, onError) {
       const w = d.weeks || G2_SEED_WEEKS;
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
         ? d.weekOrder : Object.keys(w).sort();
+      window.noteCloudWeeks && window.noteCloudWeeks('g2', w);   // v359
       callback(w, o);
     } else {
       // First open — no existing data, safe to seed fresh
@@ -652,7 +653,7 @@ function subscribeToClassDataG2(callback, onError) {
   });
 }
 
-async function saveWeeksG2(weeks) { await _classDocG2.set({ weeks },        { merge: true }); }
+async function saveWeeksG2(weeks) { window.guardWeekSave && window.guardWeekSave('g2', weeks); await _classDocG2.set({ weeks },        { merge: true }); }
 async function saveWeekOrderG2(o) { await _classDocG2.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG2() {

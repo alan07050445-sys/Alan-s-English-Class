@@ -320,6 +320,10 @@ function App() {
       try {
         localStorage.setItem(storageKey, JSON.stringify(newWeeks));
         localStorage.setItem(orderKey,   JSON.stringify(newOrder));
+        // v359: 每個年級也留一份「有題目」的備份。萬一雲端again被寫空，
+        //       這份不會被空資料覆蓋，還救得回來（暑假題庫就是靠這招救回 51 個單元）。
+        const n = window.countWeekItems ? window.countWeekItems(newWeeks) : 0;
+        if (n > 0) localStorage.setItem(storageKey + ':bak', JSON.stringify({ at: Date.now(), n, weeks: newWeeks }));
       } catch(e) {}
     }, (err) => {
       // permission-denied → 名單外或未登入（rules 部署後才會發生）

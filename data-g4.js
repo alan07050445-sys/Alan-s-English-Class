@@ -81,6 +81,7 @@ function subscribeToClassDataG4(callback, onError) {
       const w = d.weeks || G4_SEED_WEEKS;
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
         ? d.weekOrder : Object.keys(w).sort();
+      window.noteCloudWeeks && window.noteCloudWeeks('g4', w);   // v359
       callback(w, o);
     } else {
       _classDocG4.set({ _version: G4_DATA_VERSION, weeks: G4_SEED_WEEKS, weekOrder: G4_DEFAULT_WEEK_ORDER }).catch(() => {});
@@ -116,7 +117,7 @@ function _mergeG4WithSeed(existing, seed) {
 }
 
 /* ─── Save / Load ────────────────────────────────────────────────────────── */
-async function saveWeeksG4(weeks)    { await _classDocG4.set({ weeks },        { merge: true }); }
+async function saveWeeksG4(weeks)    { window.guardWeekSave && window.guardWeekSave('g4', weeks); await _classDocG4.set({ weeks },        { merge: true }); }
 async function saveWeekOrderG4(o)    { await _classDocG4.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG4() {

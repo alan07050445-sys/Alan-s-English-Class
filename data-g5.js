@@ -81,6 +81,7 @@ function subscribeToClassDataG5(callback, onError) {
       const w = d.weeks || G5_SEED_WEEKS;
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
         ? d.weekOrder : Object.keys(w).sort();
+      window.noteCloudWeeks && window.noteCloudWeeks('g5', w);   // v359
       callback(w, o);
     } else {
       _classDocG5.set({ _version: G5_DATA_VERSION, weeks: G5_SEED_WEEKS, weekOrder: G5_DEFAULT_WEEK_ORDER }).catch(() => {});
@@ -116,7 +117,7 @@ function _mergeG5WithSeed(existing, seed) {
 }
 
 /* ─── Save / Load ────────────────────────────────────────────────────────── */
-async function saveWeeksG5(weeks)    { await _classDocG5.set({ weeks },        { merge: true }); }
+async function saveWeeksG5(weeks)    { window.guardWeekSave && window.guardWeekSave('g5', weeks); await _classDocG5.set({ weeks },        { merge: true }); }
 async function saveWeekOrderG5(o)    { await _classDocG5.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG5() {

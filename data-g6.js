@@ -81,6 +81,7 @@ function subscribeToClassDataG6(callback, onError) {
       const w = d.weeks || G6_SEED_WEEKS;
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
         ? d.weekOrder : Object.keys(w).sort();
+      window.noteCloudWeeks && window.noteCloudWeeks('g6', w);   // v359
       callback(w, o);
     } else {
       _classDocG6.set({ _version: G6_DATA_VERSION, weeks: G6_SEED_WEEKS, weekOrder: G6_DEFAULT_WEEK_ORDER }).catch(() => {});
@@ -116,7 +117,7 @@ function _mergeG6WithSeed(existing, seed) {
 }
 
 /* ─── Save / Load ────────────────────────────────────────────────────────── */
-async function saveWeeksG6(weeks)    { await _classDocG6.set({ weeks },        { merge: true }); }
+async function saveWeeksG6(weeks)    { window.guardWeekSave && window.guardWeekSave('g6', weeks); await _classDocG6.set({ weeks },        { merge: true }); }
 async function saveWeekOrderG6(o)    { await _classDocG6.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG6() {
