@@ -1252,6 +1252,102 @@ function nameFromShopeeUrl(url) {
   } catch (e) { return ''; }
 }
 
+/* ── v354: 商品名 → 圖庫關鍵字 ─────────────────────────────
+   圖庫（Wikimedia／Openverse）以英文檢索效果好非常多，中文幾乎搜不到東西。
+   ⚠️ 卡通角色（Labubu／三麗鷗／寶可夢／LEGO…）是別人的智慧財產，網路上的圖不能直接拿來
+   放在公開網站上；這裡一律對應到「同類型的一般商品」關鍵字（絨毛娃娃、積木、卡牌…），
+   老師要換成別的字也可以在搜尋框直接改。 */
+const SHOP_IMG_KEYWORDS = [
+  // 文具
+  ['三色原子筆', 'ballpoint pen'], ['果汁筆', 'gel pen'], ['中性筆', 'gel pen'],
+  ['擦擦筆', 'erasable pen'], ['自動鉛筆', 'mechanical pencil'], ['原子筆', 'ballpoint pen'],
+  ['色鉛筆', 'colored pencils set'], ['螢光筆', 'highlighter pens'], ['蠟筆', 'crayons'],
+  ['筆袋', 'pencil case'], ['鉛筆盒', 'pencil box'], ['橡皮擦', 'eraser stationery'],
+  ['筆記本', 'notebook stationery'], ['貼紙', 'stickers sheet'], ['修正帶', 'correction tape'],
+  ['尺規', 'ruler set stationery'], ['尺', 'ruler stationery'], ['資料夾', 'file folder'],
+  ['收納袋', 'drawstring pouch bag'], ['後背包', 'school backpack'], ['書包', 'school backpack'],
+  // 娃娃（角色一律用「絨毛娃娃」這類通用字）
+  ['卡皮巴拉', 'capybara plush toy'], ['吊飾', 'plush keychain'], ['鑰匙圈', 'keychain'],
+  ['公仔', 'vinyl figure toy'], ['玩偶', 'plush toy'], ['娃娃', 'plush toy'],
+  // 休閒娛樂
+  ['積木', 'building blocks toy'], ['卡冊', 'trading card binder'], ['卡牌', 'trading cards'],
+  ['點數卡', 'gift card'], ['籃球框', 'basketball hoop'], ['籃球', 'basketball isolated'],
+  ['陀螺', 'spinning top toy'], ['魔術方塊', 'rubiks cube'], ['紙牌', 'playing cards'],
+  ['桌遊', 'board game'], ['遙控車', 'remote control car toy'],
+  // 最後的保底：對不到具體商品就用分類（順序重要，通用字一定放最後）
+  ['文具', 'stationery'], ['玩具', 'toy'], ['休閒娛樂', 'toy'],
+];
+function shopImgQuery(name, tag) {
+  const n = String(name || '');
+  const hit = SHOP_IMG_KEYWORDS.find(([zh]) => n.includes(zh));
+  if (hit) return hit[1];
+  const byTag = SHOP_IMG_KEYWORDS.find(([zh]) => String(tag || '').includes(zh));
+  if (byTag) return byTag[1];
+  // 中文在國外圖庫幾乎搜不到東西——退到英文分類字，老師可自己再改
+  return /[一-鿿]/.test(n) ? 'stationery' : n.trim();
+}
+
+/* ── v354: 從免費圖庫挑一張當商品圖 ───────────────────────
+   蝦皮的圖抓不到（實測：API 403／瀏覽器被判自動化／iframe 被 CSP 擋），
+   所以改到可自由使用的圖庫搜，老師挑一張就好。搜到的東西品質參差
+   （搜「籃球」會出現比賽照片），所以是「挑」不是「自動抓第一張」。 */
+function ShopImagePicker({ item, onPick, onSkip, onClose, queue }) {
+  const [q, setQ]           = useDash(() => shopImgQuery(item.name, item.tag));
+  const [list, setList]     = useDash(null);
+  const [busy, setBusy]     = useDash(false);
+  const [err, setErr]       = useDash(null);
+  const isCJK = /[一-鿿]/.test(q);
+
+  const run = async (kw) => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await window.searchFreeImages(kw, 10);
+      setList(r);
+      if (!r.length) setErr('這個關鍵字沒搜到圖——換個講法試試（英文命中率高很多）');
+    } catch (e) { setErr('搜尋失敗：' + (e.message || '')); setList([]); }
+    setBusy(false);
+  };
+  useDashE(() => { const kw = shopImgQuery(item.name, item.tag); setQ(kw); run(kw); }, [item.id]);
+
+  return (
+    <div className="shopimg-overlay" onClick={onClose}>
+      <div className="shopimg-modal" onClick={e => e.stopPropagation()}>
+        <div className="shopimg-head">
+          <div>
+            <b>幫「{item.name}」找圖片</b>
+            <span>圖片來自 Wikimedia Commons 與 Openverse（可自由使用）{queue ? ` · 還有 ${queue} 樣沒有圖` : ''}</span>
+          </div>
+          <button className="shopimg-x" onClick={onClose} aria-label="關閉">✕</button>
+        </div>
+        <div className="shopimg-search">
+          <input className="roster-input" value={q} onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') run(q); }} placeholder="搜尋關鍵字（建議用英文）"/>
+          <button className="roster-add-btn" onClick={() => run(q)} disabled={busy}>{busy ? '搜尋中…' : '🔍 搜尋'}</button>
+        </div>
+        {isCJK && <div className="shopimg-tip">💡 這兩個圖庫用中文幾乎搜不到東西——把關鍵字改成英文（例如 pencil case、plush toy）結果會好很多。</div>}
+        {err && <div className="notify-msg err">⚠️ {err}</div>}
+        <div className="shopimg-grid">
+          {list === null || busy
+            ? <div className="roster-hint">搜尋中…</div>
+            : list.map(r => (
+              <button key={r.key} className="shopimg-card" onClick={() => onPick(r)} title={r.title}>
+                {/* 載不出來的（來源擋外連／檔案已刪）直接從清單移掉，免得選到壞圖 */}
+                <img src={r.thumb} alt={r.title} loading="lazy"
+                  onError={() => setList(l => (l || []).filter(x => x.key !== r.key))}/>
+                <span className="shopimg-card-t">{r.title || '（無標題）'}</span>
+                <span className="shopimg-card-lic">{r.license} · {r.from}</span>
+              </button>
+            ))}
+        </div>
+        <div className="shopimg-foot">
+          <span>點一張圖就會設定成商品照片</span>
+          {onSkip && <button className="roster-toggle-btn" onClick={onSkip}>跳過這樣 →</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── 商店商品維護（v343）──────────────────────────────── */
 function ShopManager() {
   const [items, setItems] = useDash(null);   // null = 還沒載到
@@ -1264,6 +1360,9 @@ function ShopManager() {
   const [bulkOpen, setBulkOpen] = useDash(false);
   const [bulkText, setBulkText] = useDash('');
   const [bulkTag, setBulkTag]   = useDash('文具');
+  // v354: 從免費圖庫找圖（單一商品或「幫沒有圖的逐一挑」）
+  const [pickingId, setPickingId] = useDash(null);
+  const [pickQueue, setPickQueue] = useDash(null);   // 連續挑圖時剩下的 id，null＝只挑這一個
 
   useDashE(() => window.subscribeShop(
     (list) => setItems(list || (window.SHOP_ITEMS || []).map(x => ({ ...x }))),
@@ -1328,6 +1427,24 @@ function ShopManager() {
     setOk(`已加入 ${add.length} 樣商品`); setTimeout(() => setOk(null), 2500);
   };
 
+  // v354: 開始「幫沒有圖的商品逐一挑圖」——一張挑完自動跳下一樣
+  const startFindImages = () => {
+    const empty = (items || []).filter(x => !x.img).map(x => x.id);
+    if (!empty.length) { setOk('每一樣都有圖片了 🎉'); setTimeout(() => setOk(null), 2000); return; }
+    setPickQueue(empty.slice(1));
+    setPickingId(empty[0]);
+  };
+  const nextInQueue = () => {
+    if (!pickQueue || !pickQueue.length) { setPickingId(null); setPickQueue(null); return; }
+    setPickingId(pickQueue[0]);
+    setPickQueue(pickQueue.slice(1));
+  };
+  const applyPicked = (id, r) => {
+    // 存圖片網址＋出處（CC BY 這類授權要標作者，之後要標得出來）
+    upd(id, { img: r.thumb, imgBy: r.author || '', imgLic: r.license || '', imgFrom: r.from || '', imgPage: r.page || '' });
+    if (pickQueue) nextInQueue(); else setPickingId(null);
+  };
+
   const pickImage = (id) => { pickFor.current = id; if (fileRef.current) fileRef.current.click(); };
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0];
@@ -1352,6 +1469,7 @@ function ShopManager() {
           <span className="linkbind-summary">學生在「⭐ 星星 → 🛍️ 商店」看到的就是這些</span>
         </div>
         <div className="shopm-head-btns">
+          <button className="roster-toggle-btn" onClick={startFindImages}>🖼 幫沒有圖的商品找圖</button>
           <button className="roster-toggle-btn" onClick={() => setBulkOpen(o => !o)}>📋 批次貼上蝦皮連結</button>
           <button className="roster-toggle-btn" onClick={loadSuggested}>✨ 載入建議商品（50）</button>
           <button className="roster-add-btn" onClick={add}>＋ 新增商品</button>
@@ -1417,6 +1535,8 @@ function ShopManager() {
                   : <span className="shopm-img-emoji">{it.emoji || '🎁'}</span>}
               <span className="shopm-img-edit">換圖片</span>
             </button>
+            {/* v354: 蝦皮的圖抓不到 → 到免費圖庫搜一張 */}
+            <button className="shopm-find" onClick={() => { setPickQueue(null); setPickingId(it.id); }} title="到免費圖庫找圖片">🔍<span>找圖</span></button>
 
             <div className="shopm-fields">
               <input className="roster-input" value={it.name} placeholder="商品名稱"
@@ -1445,6 +1565,21 @@ function ShopManager() {
           </div>
         ))}
       </div>
+
+      {/* v354: 免費圖庫挑圖 */}
+      {pickingId && (() => {
+        const it = (items || []).find(x => x.id === pickingId);
+        if (!it) return null;
+        return (
+          <ShopImagePicker
+            item={it}
+            queue={pickQueue ? pickQueue.length : 0}
+            onPick={(r) => applyPicked(it.id, r)}
+            onSkip={pickQueue ? nextInQueue : null}
+            onClose={() => { setPickingId(null); setPickQueue(null); }}
+          />
+        );
+      })()}
     </div>
   );
 }

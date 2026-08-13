@@ -6326,3 +6326,67 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   .cwo-stat-num { font-size: 23px; }
   .sdetail-name { font-size: 18px; }
 }
+
+/* ═══ v354：商店「到免費圖庫找圖」 ═══════════════════════════════ */
+.shopm-find {
+  flex: none; width: 62px; height: 62px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 1px dashed #d9cfb6; border-radius: 12px; background: #fff;
+  font-family: inherit; font-size: 17px; color: var(--ink-2, #5c554a); cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.shopm-find span { font-size: 10.5px; font-weight: 700; }
+.shopm-find:hover { border-color: #8B3120; background: #fbf3f0; color: #8B3120; }
+
+.shopimg-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(21,19,14,.55);
+  display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+.shopimg-modal {
+  width: min(760px, 100%); max-height: 88vh; display: flex; flex-direction: column; min-height: 0;
+  background: var(--bg, #f6f1e6); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(21,19,14,.5);
+}
+.shopimg-head {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 16px 12px; background: #fbf9f3; border-bottom: 1px solid var(--border, #e5dfc8);
+}
+.shopimg-head b { display: block; font-family: var(--sans); font-size: 15px; color: var(--ink, #15130e); }
+.shopimg-head span { display: block; font-size: 11.5px; color: var(--ink-3, #8a8270); margin-top: 2px; }
+.shopimg-x {
+  margin-left: auto; flex: none; width: 30px; height: 30px; border-radius: 9px;
+  border: 1px solid var(--border, #e5dfc8); background: none; cursor: pointer; color: var(--ink-2, #5c554a);
+}
+.shopimg-search { display: flex; gap: 8px; padding: 12px 16px 8px; }
+.shopimg-search .roster-input { flex: 1; }
+.shopimg-grid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;
+  padding: 8px 16px 16px;
+}
+.shopimg-card {
+  display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 12px; background: #fff;
+  font-family: inherit; text-align: left; cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.shopimg-card:hover { border-color: #8B3120; transform: translateY(-2px); }
+.shopimg-card img { width: 100%; height: 104px; object-fit: contain; background: #faf7f0; border-radius: 8px; }
+.shopimg-card-t { font-size: 11px; color: var(--ink, #15130e); line-height: 1.3; max-height: 29px; overflow: hidden; }
+.shopimg-card-lic { font-family: var(--mono, monospace); font-size: 9.5px; color: var(--ink-3, #8a8270); }
+.shopimg-foot {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-top: 1px solid var(--border, #e5dfc8); background: #fbf9f3;
+  font-size: 12px; color: var(--ink-3, #8a8270);
+}
+.shopimg-foot button { margin-left: auto; }
+@media (max-width: 760px) {
+  .shopimg-overlay { padding: 0; }
+  .shopimg-modal { width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
+  .shopimg-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .shopimg-card img { height: 84px; }
+  .shopm-find { width: 54px; height: 54px; }
+}
+.sp-shop-credit { font-size: 11px; color: var(--ink-3, #8a8270); opacity: .85; }
+.shopimg-tip { margin: 0 16px 8px; padding: 7px 10px; border-radius: 9px; background: #fdf6e3; border: 1px solid rgba(201,168,76,.5); font-size: 11.5px; color: #8a6d1c; line-height: 1.5; }

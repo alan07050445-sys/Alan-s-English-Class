@@ -1881,3 +1881,58 @@ window.gradeFromEmail = function (email) {
   const g = LE_GRADE_BASE - parseInt(m[1], 10);
   return (g >= 2 && g <= 6) ? ('g' + g) : null;
 };
+
+/* ── v354: 免費圖庫搜圖（商店商品圖）──────────────────────
+   蝦皮抓不到圖（商品 API 403、瀏覽器被判定自動化、iframe 被 CSP 擋——實測過別再試），
+   所以改成到「可自由使用」的圖庫找：
+     · Wikimedia Commons — 免金鑰、支援 CORS、允許外連，回傳授權與作者
+     · Openverse       — 只取 CC0／公共領域（用了不必標示出處）
+   回傳統一格式，老師在後台從搜尋結果挑一張，存的是圖片網址。 */
+async function searchFreeImages(query, limit) {
+  const q = String(query || '').trim();
+  if (!q) return [];
+  const n = Math.min(Math.max(limit || 8, 1), 20);
+  const stripTags = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+  const commons = (async () => {
+    const u = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*' +
+      '&generator=search&gsrnamespace=6&gsrlimit=' + n +
+      '&gsrsearch=' + encodeURIComponent('filetype:bitmap ' + q) +
+      '&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=420';
+    const j = await (await fetch(u)).json();
+    return Object.values((j.query || {}).pages || {}).map(p => {
+      const ii = (p.imageinfo || [])[0] || {};
+      const em = ii.extmetadata || {};
+      return {
+        key: 'c' + p.pageid,
+        thumb: ii.thumburl || '',
+        title: String(p.title || '').replace(/^File:/, '').replace(/\.(jpg|jpeg|png|gif|webp)$/i, ''),
+        license: stripTags((em.LicenseShortName || {}).value) || '—',
+        author: stripTags((em.Artist || {}).value).slice(0, 60),
+        page: ii.descriptionurl || '',
+        from: 'Wikimedia Commons',
+      };
+    }).filter(x => x.thumb);
+  })();
+
+  const openverse = (async () => {
+    const j = await (await fetch('https://api.openverse.org/v1/images/?page_size=' + n +
+      '&license=cc0,pdm&q=' + encodeURIComponent(q))).json();
+    return (j.results || []).map(x => ({
+      key: 'o' + x.id,
+      thumb: x.thumbnail || x.url || '',
+      title: String(x.title || '').slice(0, 60),
+      license: String(x.license || '').toUpperCase(),
+      author: String(x.creator || '').slice(0, 60),
+      page: x.foreign_landing_url || '',
+      from: 'Openverse',
+    })).filter(x => x.thumb);
+  })();
+
+  const [a, b] = await Promise.all([commons.catch(() => []), openverse.catch(() => [])]);
+  // 兩邊交錯，才不會整頁都是同一個來源
+  const out = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) out.push(a[i]); if (b[i]) out.push(b[i]); }
+  return out;
+}
+window.searchFreeImages = searchFreeImages;
