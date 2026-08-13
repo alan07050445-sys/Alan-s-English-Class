@@ -400,18 +400,21 @@ function SummerAdmin() {
   const cloudN = lib.weeks
     ? Object.values(lib.weeks).reduce((n, wk) => n + Object.values((wk || {}).items || {}).reduce((m, a) => m + ((a && a.length) || 0), 0), 0)
     : null;
-  const canRestore = boot.count > 0 && cloudN !== null && boot.count > cloudN;
+  // v356: 這台裝置能補回幾個「雲端沒有的」單元（老師機／學生機都算，可以一台一台累積）
+  const merged = (lib.weeks && window.mergeSummerLibFromBoot) ? window.mergeSummerLibFromBoot(lib.weeks) : { added: 0 };
+  const canRestore = merged.added > 0;
   const doRestore = async () => {
     if (!confirm(
-      `要把這台裝置上的題庫備份寫回雲端嗎？\n\n` +
-      `備份：${boot.count} 個單元${boot.at ? `（${new Date(boot.at).toLocaleString('zh-TW')}）` : ''}\n` +
-      `雲端目前：${cloudN} 個單元\n\n` +
-      `會以備份為準覆蓋雲端題庫。發派清單不受影響。`
+      `這台裝置上找到 ${merged.added} 個雲端沒有的單元，要加回題庫嗎？\n\n` +
+      `雲端目前：${cloudN} 個單元 → 還原後：${cloudN + merged.added} 個\n` +
+      (boot.meCount > 0 ? `（其中 ${boot.meCount} 個來自這台裝置的學生帳號快取）\n` : '') +
+      `\n只會「新增」缺少的單元，不會刪掉雲端已經有的。發派清單不受影響。\n` +
+      `可以在不同裝置重複做，一台一台把內容補齊。`
     )) return;
     setBusy(true);
     try {
-      await window.summerApi(window.SUMMER_LIB || 'sl').forceSaveWeeks(boot.weeks);
-      alert('✅ 已還原。請重新整理看看題目回來了沒。');
+      await window.summerApi(window.SUMMER_LIB || 'sl').forceSaveWeeks(merged.weeks);
+      alert(`✅ 已加回 ${merged.added} 個單元。請重新整理看看。`);
     } catch (e) { alert('還原失敗：' + ((e && e.message) || e)); }
     setBusy(false);
   };
@@ -539,14 +542,14 @@ function SummerAdmin() {
       {canRestore && (
         <div className="sa-restore">
           <div>
-            <b>⚠️ 這台裝置上有一份比較完整的題庫備份</b>
+            <b>🩹 這台裝置可以補回 {merged.added} 個題庫裡沒有的單元</b>
             <span>
-              備份 <b>{boot.count}</b> 個單元{boot.at ? `（${new Date(boot.at).toLocaleDateString('zh-TW')}）` : ''}，
-              雲端目前只有 <b>{cloudN}</b> 個。如果題目是突然不見的，按下面還原。
+              雲端目前 <b>{cloudN}</b> 個單元{boot.at ? `，本機快取時間 ${new Date(boot.at).toLocaleString('zh-TW')}` : ''}。
+              只會新增缺少的，不會刪掉現有的——可以到不同裝置重複按，一台一台把內容補齊。
             </span>
           </div>
           <button className="sa-restore-btn" onClick={doRestore} disabled={busy}>
-            {busy ? '還原中…' : '🩹 還原題庫'}
+            {busy ? '還原中…' : `🩹 加回 ${merged.added} 個單元`}
           </button>
         </div>
       )}

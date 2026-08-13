@@ -75,20 +75,51 @@ const _metaDoc = _dbSum.collection('class').doc('summer_meta');
      ③ 雲端本來有題目、這次要寫的卻是 0 題 → 直接擋下 */
 const _LIB_KEY    = 'alans-summer-lib-data-v1';
 const _LIB_BAK    = 'alans-summer-lib-backup-v1';
+const _ME_KEY     = 'alans-summer-me-data-v1';     // v356: 學生裝置上的快取（他被指派到的單元，內容完整）
+const _ME_BAK     = 'alans-summer-me-backup-v1';
 function _countLibItems(weeks) {
   return Object.values(weeks || {}).reduce((n, wk) =>
     n + Object.values((wk || {}).items || {}).reduce((m, arr) => m + ((arr && arr.length) || 0), 0), 0);
 }
 // ① 開機快照（在 app.jsx 訂閱之前就跑完，所以抓得到「被覆蓋前」的那份）
+//    v356: 學生端的快取也一起抄——題庫被寫空後，學生裝置上的那份是唯一還活著的內容。
 const _libBoot = (() => {
   const read = (k) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } };
-  const live = read(_LIB_KEY);
-  const bak  = read(_LIB_BAK);          // 上一次「有題目」的快照（見下方訂閱）
-  const pick = _countLibItems(live) >= _countLibItems((bak || {}).weeks) ? live : (bak || {}).weeks;
-  return { weeks: pick || null, count: _countLibItems(pick), at: (bak || {}).at || null };
+  const best = (...cands) => cands.reduce((a, b) => (_countLibItems(b) > _countLibItems(a) ? b : a), null);
+  const libBak = read(_LIB_BAK) || {};
+  const meBak  = read(_ME_BAK)  || {};
+  const lib = best(read(_LIB_KEY), libBak.weeks);
+  const me  = best(read(_ME_KEY),  meBak.weeks);
+  const all = [lib, me].filter(w => _countLibItems(w) > 0);
+  return {
+    weeks: best(lib, me) || null,          // 單一來源（相容舊呼叫）
+    sources: all,                          // 兩邊都要，還原時合併
+    count: all.reduce((n, w) => n + _countLibItems(w), 0),
+    libCount: _countLibItems(lib), meCount: _countLibItems(me),
+    at: libBak.at || meBak.at || null,
+  };
 })();
 let _lastLibCount = null;               // 最近一次雲端快照的題數（null＝雲端還沒回來過）
 window.summerLibBoot = () => ({ ..._libBoot, cloudCount: _lastLibCount });
+
+/* v356: 把開機快照裡「雲端沒有的單元」合併回題庫（只加不刪，可以一台一台裝置累積） */
+function mergeSummerLibFromBoot(cloudWeeks) {
+  const out = JSON.parse(JSON.stringify(cloudWeeks || {}));
+  let added = 0;
+  (_libBoot.sources || []).forEach(src => {
+    Object.entries(src || {}).forEach(([wid, wk]) => {
+      if (!out[wid]) out[wid] = { ...wk, items: {} };
+      if (!out[wid].items) out[wid].items = {};
+      Object.entries((wk || {}).items || {}).forEach(([cat, arr]) => {
+        const list = out[wid].items[cat] || (out[wid].items[cat] = []);
+        const have = new Set(list.map(x => x && x.id));
+        (arr || []).forEach(it => { if (it && it.id && !have.has(it.id)) { list.push(it); have.add(it.id); added++; } });
+      });
+    });
+  });
+  return { weeks: out, added };
+}
+window.mergeSummerLibFromBoot = mergeSummerLibFromBoot;
 
 function isSummerTrack(g) { return g === SUMMER_LIB || g === SUMMER_ME; }
 
@@ -173,7 +204,12 @@ function _subscribeMySummer(callback, onError) {
   let libWeeks = null, libOrder = null, plan = undefined;
   const emit = () => {
     if (!libWeeks || plan === undefined) return;
-    callback(_filterWeeksForPlan(libWeeks, libOrder, plan), libOrder.slice());
+    const mine = _filterWeeksForPlan(libWeeks, libOrder, plan);
+    // v356: 學生裝置上也留一份「有題目」的備份——題庫萬一again被寫空，這是唯一的內容來源
+    if (_countLibItems(mine) > 0) {
+      try { localStorage.setItem(_ME_BAK, JSON.stringify({ at: Date.now(), n: _countLibItems(mine), weeks: mine })); } catch (e) {}
+    }
+    callback(mine, libOrder.slice());
   };
   const unsubLib = _subscribeLib((w, o) => { libWeeks = w; libOrder = o; emit(); }, onError);
   const unsubMeta = subscribeSummerMeta(m => { plan = (m.students || {})[email] || null; emit(); }, onError);
