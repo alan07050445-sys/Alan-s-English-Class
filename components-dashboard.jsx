@@ -395,6 +395,11 @@ function SummerAdmin() {
       .subscribe((w, o) => setLib({ weeks: w, order: o }), () => setErr('讀取題庫失敗'));
   }, []);
 
+  // v358: 存檔紀錄（誰／什麼時候／幾題）——這次事故查不出是誰寫的，以後查得到
+  const [audit, setAudit] = useDash([]);
+  const [auditOpen, setAuditOpen] = useDash(false);
+  useDashE(() => (window.subscribeSummerLibAudit ? window.subscribeSummerLibAudit(setAudit, () => {}) : undefined), []);
+
   // v355: 這台裝置開機當下的題庫快照——雲端被寫空時可以從這裡還原
   const boot = (window.summerLibBoot ? window.summerLibBoot() : { count: 0 });
   const cloudN = lib.weeks
@@ -544,7 +549,26 @@ function SummerAdmin() {
         <span className="sa-status-sep">·</span>
         這台裝置的備份：<b>{boot.count} 個單元</b>
         {boot.count > 0 && <span className="sa-status-src">（題庫 {boot.libCount}／學生端 {boot.meCount}）</span>}
+        {audit.length > 0 && (
+          <button className="sa-status-log" onClick={() => setAuditOpen(o => !o)}>
+            最後存檔：{audit[0].by} · {new Date(audit[0].at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {audit[0].n} 題 {auditOpen ? '▴' : '▾'}
+          </button>
+        )}
       </div>
+      {auditOpen && (
+        <div className="sa-auditlog">
+          <div className="sa-auditlog-head">最近的存檔紀錄（誰、什麼時候、存完剩幾題）</div>
+          {audit.map((a, i) => (
+            <div key={i} className={'sa-auditlog-row' + (a.n === 0 ? ' danger' : '')}>
+              <span>{new Date(a.at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              <b>{a.by}</b>
+              <span>{a.dev || ''}</span>
+              <span>{a.kind === 'restore' ? '還原' : '存檔'}</span>
+              <span>{a.n} 題</span>
+            </div>
+          ))}
+        </div>
+      )}
       {/* v355: 雲端題庫比這台裝置的備份少 → 可能被誤蓋了，給一個還原出口 */}
       {canRestore && (
         <div className="sa-restore">

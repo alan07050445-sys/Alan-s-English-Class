@@ -6352,3 +6352,26 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .sa-status b { color: var(--ink, #15130e); }
 .sa-status-sep { color: #cfc6ae; }
 .sa-status-src { font-family: var(--mono, monospace); font-size: 11px; color: var(--ink-3, #8a8270); }
+/* v358：題庫存檔紀錄 */
+.sa-status-log {
+  margin-left: auto; border: 1px solid var(--border, #e5dfc8); background: #fff; border-radius: 8px;
+  font-family: inherit; font-size: 11.5px; color: var(--ink-2, #5c554a); padding: 4px 9px; cursor: pointer;
+}
+.sa-status-log:hover { border-color: #8B3120; color: #8B3120; }
+.sa-auditlog {
+  margin: -6px 0 12px; padding: 10px 12px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 10px; background: #fff;
+}
+.sa-auditlog-head { font-family: var(--sans); font-size: 11.5px; font-weight: 800; color: var(--ink-3, #8a8270); margin-bottom: 6px; }
+.sa-auditlog-row {
+  display: grid; grid-template-columns: 108px 1fr 72px 48px 56px; gap: 8px; align-items: center;
+  font-family: var(--mono, monospace); font-size: 11.5px; color: var(--ink-2, #5c554a);
+  padding: 4px 0; border-top: 1px solid #f3efe3;
+}
+.sa-auditlog-row b { font-family: var(--sans); color: var(--ink, #15130e); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-auditlog-row.danger { color: #b23c27; background: #fdf1ee; border-radius: 6px; }
+@media (max-width: 760px) {
+  .sa-status-log { margin-left: 0; }
+  .sa-auditlog-row { grid-template-columns: 92px 1fr 44px; }
+  .sa-auditlog-row span:nth-child(4) { display: none; }
+}

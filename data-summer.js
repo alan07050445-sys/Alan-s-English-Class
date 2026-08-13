@@ -102,6 +102,32 @@ const _libBoot = (() => {
 let _lastLibCount = null;               // 最近一次雲端快照的題數（null＝雲端還沒回來過）
 window.summerLibBoot = () => ({ ..._libBoot, cloudCount: _lastLibCount });
 
+/* ── v358: 存檔留下「誰、什麼時候、幾題」 ──────────────────
+   2026-08-13 事故當下沒辦法查是誰寫的——Firestore 文件本身不記錄修改者，
+   而且多老師共管之後，任何一位老師都可能踩到。以後每次存檔都留紀錄。
+   ⚠ class/* 是公開可讀的，所以只存 email 的 @ 前面那段，不放完整信箱。 */
+const _auditDoc = _dbSum.collection('class').doc('data_summer_lib_audit');
+function _who() {
+  const e = String((window._currentUser && window._currentUser.email) || '').toLowerCase();
+  return e ? e.split('@')[0] : '（未登入）';
+}
+function _stamp(n) { return { updatedBy: _who(), updatedAt: Date.now(), itemCount: n }; }
+function _libLog(n, kind) {
+  try {
+    const dev = (typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) ? '手機/平板' : '電腦';
+    _auditDoc.set({
+      log: firebase.firestore.FieldValue.arrayUnion({ at: Date.now(), by: _who(), n, kind, dev }),
+    }, { merge: true }).catch(() => {});
+  } catch (e) {}
+}
+function subscribeSummerLibAudit(cb, onError) {
+  return _auditDoc.onSnapshot(s => {
+    const l = (s.exists ? (s.data() || {}).log : null) || [];
+    cb(l.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 12));
+  }, onError || (() => {}));
+}
+window.subscribeSummerLibAudit = subscribeSummerLibAudit;
+
 /* v356: 把開機快照裡「雲端沒有的單元」合併回題庫（只加不刪，可以一台一台裝置累積） */
 function mergeSummerLibFromBoot(cloudWeeks) {
   const out = JSON.parse(JSON.stringify(cloudWeeks || {}));
@@ -234,10 +260,16 @@ function summerApi(t) {
       if (n === 0 && _lastLibCount > 0) {
         throw new Error(`擋下了一次危險的存檔：這次要寫入的題庫是 0 題，但雲端現在有 ${_lastLibCount} 題。請重新整理後再試。`);
       }
-      await _libDoc.set({ weeks }, { merge: true });
+      await _libDoc.set({ weeks, ..._stamp(n) }, { merge: true });
+      _libLog(n, 'save');
     },
     // 從備份還原整份題庫（restoreSummerLib 用）
-    async forceSaveWeeks(weeks) { if (isLib) await _libDoc.set({ weeks }, { merge: true }); },
+    async forceSaveWeeks(weeks) {
+      if (!isLib) return;
+      const n = _countLibItems(weeks);
+      await _libDoc.set({ weeks, ..._stamp(n) }, { merge: true });
+      _libLog(n, 'restore');
+    },
     async saveWeekOrder(o)  { if (isLib) await _libDoc.set({ weekOrder: o }, { merge: true }); },
     loadWeeks() {
       try { const r = localStorage.getItem(storageKey); if (r) return JSON.parse(r); } catch (e) {}
