@@ -122,6 +122,8 @@ function App() {
   const [editorCat, setEditorCat] = useAppState(null);
   // v351: 在「某位學生」的篩選底下按「出新題目」→ 存檔後自動指派給他（不必再去勾一次）
   const [editorAssign, setEditorAssign] = useAppState(null); // 學生 email 或 null
+  // v360: 新增單元存檔後，自動打開「指派給哪些學生」讓老師一次勾多人
+  const [assignAfterSave, setAssignAfterSave] = useAppState(null);
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
@@ -613,8 +615,11 @@ function App() {
   }, [grade, weekIdx, catView?.id || '', mainKey, pageKey]);
 
   // v341: 手動切週 → 清掉「補完要回去的那一週」，免得之後返回時被莫名帶走
-  const goPrevWeek = () => { returnWeekRef.current = null; setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
-  const goNextWeek = () => { returnWeekRef.current = null; setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); setCatView(null); scrollPageToTop(); };
+  // v360: 在練習頁換週次 → 留在同一個分類，只換成那一週的單元（原本會被踢回大廳）。
+  //       itemId 清掉＝不要去開上一週的那個單元。
+  const keepCatOnWeekChange = () => setCatView(c => (c ? { ...c, itemId: null } : null));
+  const goPrevWeek = () => { returnWeekRef.current = null; setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
+  const goNextWeek = () => { returnWeekRef.current = null; setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -768,7 +773,24 @@ function App() {
         .catch(() => showToast(`已存檔，但指派給 ${assignedName} 失敗——請用單元列的 👤 再試一次`));
     }
     setEditorAssign(null);
+    // v360: 新出的單元在暑假題庫 → 直接把「指派給哪些學生」打開，一次勾多人
+    if (isNew && String(weekId || '').startsWith('sl') && window.isAdminUser && window.isAdminUser(window._currentUser)) {
+      setAssignAfterSave(cleanForm.id);
+    }
     showToast(isNew ? (assignedName ? `已新增並指派給 ${assignedName}` : "Item added") : "Item saved");
+  };
+
+  // v360: 依「完整的 id 順序」重排單元——群組內互換、整組上下移都走這裡。
+  //       只接受「完整排列」（跟現有清單同一組 id），避免篩選中的畫面把沒列到的單元弄丟。
+  const handleReorderItems = (catId, orderedIds) => {
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    const list = w[weekId]?.items?.[catId];
+    if (!list || !Array.isArray(orderedIds)) return;
+    const byId = new Map(list.map(it => [it.id, it]));
+    if (orderedIds.length !== list.length || orderedIds.some(id => !byId.has(id))) return; // 不是完整排列＝不動
+    w[weekId].items[catId] = orderedIds.map(id => byId.get(id));
+    setWeeks(w);
+    saveWeeksSafe(w);
   };
 
   const handleMoveItem = (catId, itemId, dir) => {
@@ -1121,6 +1143,7 @@ function App() {
           <div key={weekId} className={slideDir ? `week-slide-${slideDir}` : ''}>
           {catView ? (
             <window.QuizModeCategoryView
+              key={`${catView.id}-${weekId}`}   /* v360: 換週次時重新掛載，才會吃到新那一週的單元 */
               cat={catView}
               initialItemId={catView.itemId || null}
               items={(week.items || {})[catView.id] || []}
@@ -1136,6 +1159,9 @@ function App() {
               onEditItem={handleEditItem}
               onDeleteItem={handleDeleteItem}
               onMoveItem={(itemId, dir) => handleMoveItem(catView.id, itemId, dir)}
+              onReorderItems={(ids) => handleReorderItems(catView.id, ids)}
+              openAssignFor={assignAfterSave}
+              onAssignOpened={() => setAssignAfterSave(null)}
               weekChoices={weekOrder.filter(id => id !== weekId).map(id => ({
                 id,
                 label: (weeks[id] && (weeks[id].label || weeks[id].id)) || id,

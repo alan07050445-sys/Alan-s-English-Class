@@ -621,7 +621,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -756,6 +756,45 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     return base.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
   }, [sidebarItems, libAdminView, stuFilter, assignedOf, isTeacherView, ownerFilter, myEmail]);
   const grouped = useQMM(() => (groupsView ? qmGroupByArticle(viewItems) : null), [groupsView, viewItems]);
+
+  /* ── v360: 排序（群組內互換單元／整組上下移）──────────────
+     一律以「完整清單的 id 排列」送回去，即使畫面正在依學生篩選，也不會弄丟沒列到的單元。 */
+  const fullIds = () => (sidebarItems || []).map(it => it.id);
+  const swapItems = (idA, idB) => {
+    if (!onReorderItems || !idA || !idB) return;
+    const ids = fullIds();
+    const i = ids.indexOf(idA), j = ids.indexOf(idB);
+    if (i < 0 || j < 0) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    onReorderItems(ids);
+  };
+  // 把 blockIds 整塊搬到 anchorId 的前面／後面
+  const moveBlock = (blockIds, anchorId, placeAfter) => {
+    if (!onReorderItems || !blockIds.length || !anchorId) return;
+    const block = new Set(blockIds);
+    const rest = fullIds().filter(id => !block.has(id));
+    let at = rest.indexOf(anchorId);
+    if (at < 0) return;
+    if (placeAfter) at += 1;
+    onReorderItems([...rest.slice(0, at), ...blockIds, ...rest.slice(at)]);
+  };
+  const entryIds = (g) => (g.items ? g.items.map(x => x.id) : [g.single.id]);
+  const moveGroup = (gi, dir) => {
+    if (!grouped) return;
+    const target = grouped[gi + dir];
+    if (!target) return;
+    const tIds = entryIds(target);
+    moveBlock(entryIds(grouped[gi]), dir < 0 ? tIds[0] : tIds[tIds.length - 1], dir > 0);
+  };
+
+  // v360: 新增單元存檔後，自動打開「指派給哪些學生」——一次可以勾多位
+  useQME(() => {
+    if (!openAssignFor || !libAdminView) return;
+    const it = (sidebarItems || []).find(x => x.id === openAssignFor);
+    if (!it) return;
+    setAssignItem(it);
+    if (onAssignOpened) onAssignOpened();
+  }, [openAssignFor, sidebarItems.length, libAdminView]);
   useQME(() => {
     // 選中單元時自動展開它所在的組
     if (!grouped || !selectedItem) return;
@@ -913,7 +952,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             </div>
           )}
           {(() => {
-            const renderUnitRow = (item, groupName) => {
+            const renderUnitRow = (item, groupName, gctx) => {
             const progKey  = `${weekId}_${item.id}`;
             const prog     = qmProg[progKey];
             const totalQ   = getItemQuestions(item).length;
@@ -979,18 +1018,24 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 <div style={{display:'flex',gap:'4px',alignItems:'center',flexShrink:0,position:'relative'}}>
                   {editMode ? (
                     <>
+                      {/* v360: 在群組底下時，▲▼＝跟「同一組的上下那個單元」互換
+                          （例：單字卡 ↔ 填空）；沒分組才用原本的整份清單上下移 */}
                       <div className="qm-unit-move-btns">
                         <button
                           className="qm-unit-move-btn"
-                          onClick={(e) => { e.stopPropagation(); onMoveItem && onMoveItem(item.id, -1); }}
-                          title="Move up"
-                          disabled={sidebarItems.indexOf(item) === 0}
+                          onClick={(e) => { e.stopPropagation();
+                            if (gctx) swapItems(item.id, gctx.list[gctx.idx - 1].id);
+                            else if (onMoveItem) onMoveItem(item.id, -1); }}
+                          title={gctx ? '跟上面那個單元交換' : 'Move up'}
+                          disabled={gctx ? gctx.idx === 0 : sidebarItems.indexOf(item) === 0}
                         >▲</button>
                         <button
                           className="qm-unit-move-btn"
-                          onClick={(e) => { e.stopPropagation(); onMoveItem && onMoveItem(item.id, 1); }}
-                          title="Move down"
-                          disabled={sidebarItems.indexOf(item) === sidebarItems.length - 1}
+                          onClick={(e) => { e.stopPropagation();
+                            if (gctx) swapItems(item.id, gctx.list[gctx.idx + 1].id);
+                            else if (onMoveItem) onMoveItem(item.id, 1); }}
+                          title={gctx ? '跟下面那個單元交換' : 'Move down'}
+                          disabled={gctx ? gctx.idx === gctx.list.length - 1 : sidebarItems.indexOf(item) === sidebarItems.length - 1}
                         >▼</button>
                       </div>
                       <button
@@ -1069,16 +1114,32 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             if (!grouped) return viewItems.map(it => renderUnitRow(it));
             return grouped.map((g, gi) => g.items ? (
               <div className={`qm-ugroup${openGroups[g.key] ? ' open' : ''}`} key={g.key || gi}>
-                <button
-                  className="qm-ugroup-head"
-                  onClick={() => setOpenGroups(o => ({ ...o, [g.key]: !o[g.key] }))}
-                  aria-expanded={!!openGroups[g.key]}
-                >
-                  <span className="qm-ugroup-chev">{openGroups[g.key] ? '▾' : '▸'}</span>
-                  <span className="qm-ugroup-name">{g.name}</span>
-                  <span className="qm-ugroup-count">{g.items.length}</span>
-                </button>
-                {openGroups[g.key] ? (editMode ? g.items : [...g.items].sort((a, b) => qmTypeRank(a.type) - qmTypeRank(b.type))).map(it => renderUnitRow(it, g.name)) : null}
+                <div className="qm-ugroup-headrow">
+                  <button
+                    className="qm-ugroup-head"
+                    onClick={() => setOpenGroups(o => ({ ...o, [g.key]: !o[g.key] }))}
+                    aria-expanded={!!openGroups[g.key]}
+                  >
+                    <span className="qm-ugroup-chev">{openGroups[g.key] ? '▾' : '▸'}</span>
+                    <span className="qm-ugroup-name">{g.name}</span>
+                    <span className="qm-ugroup-count">{g.items.length}</span>
+                  </button>
+                  {/* v360: 整組上下移（例：Unit 17 移到 Unit 18 上面） */}
+                  {editMode && onReorderItems && (
+                    <div className="qm-ugroup-move">
+                      <button className="qm-unit-move-btn" title="整組往上移"
+                        onClick={(e) => { e.stopPropagation(); moveGroup(gi, -1); }}
+                        disabled={gi === 0}>▲</button>
+                      <button className="qm-unit-move-btn" title="整組往下移"
+                        onClick={(e) => { e.stopPropagation(); moveGroup(gi, 1); }}
+                        disabled={gi === grouped.length - 1}>▼</button>
+                    </div>
+                  )}
+                </div>
+                {openGroups[g.key]
+                  ? (editMode ? g.items : [...g.items].sort((a, b) => qmTypeRank(a.type) - qmTypeRank(b.type)))
+                      .map((it, ii, arr) => renderUnitRow(it, g.name, editMode ? { list: arr, idx: ii } : null))
+                  : null}
               </div>
             ) : renderUnitRow(g.single));
           })()}
