@@ -1906,3 +1906,108 @@ function guardWeekSave(key, weeks) {
   return n;
 }
 Object.assign(window, { noteCloudWeeks, guardWeekSave, countWeekItems: _countWeekItems });
+
+/* ═══════════ v361: 完成練習自動集點 ═══════════════════════════
+   Alan 訂的規則（老師／管理者不計）：
+     · 單字卡：「學習模式」和「填空模式」都跑完 → +10
+     · 填空(fillblank/cloze)：80 分以上 +10；滿分 +15
+     · 簡答(short-answer)：平均 3 顆星以上 +10；4 顆以上 +20
+     · 本週作業「全部完成且每一項都有達標」的額外獎金：
+         ≤5 個 +10／超過 5 個 +15／超過 8 個 +20
+   ⚠ 刻意「用進度算出來」而不是存一份星星數：
+     ① 學生沒有 stars/ 的寫入權限（規則只開放老師），不必改 rules
+     ② 分數改了、老師刪了某筆成績，星星自動跟著對，不會有一份對不起來的舊帳
+     ③ 學生無法自己灌星星（沒有可寫的計數器） */
+const AUTO_STAR_RULES = {
+  flashcard: '學習＋填空模式都完成 +10',
+  fillblank: '80 分 +10／100 分 +15',
+  'short-answer': '平均 3 星 +10／4 星 +20',
+  bonus: '本週作業全部達標：+10（超過 5 個 +15、超過 8 個 +20）',
+};
+// 分數取百分比。⚠ 兩種來源格式不同，一定要講清楚是哪一種：
+//   學生端 qmProgress → { score, total } 是「分數/總分」（例 4/5 星）
+//   老師端 progress.items → { score } 已經是 0–100 的百分比、total 是原始總分
+function autoStarPct(prog, cloudShape) {
+  if (!prog || prog.score == null) return null;
+  if (cloudShape) return Math.round(Number(prog.score));
+  if (!prog.total) return null;
+  return Math.round(prog.score / prog.total * 100);
+}
+// 這一項「有沒有達到應有的分數」——作業獎金要求每一項都達標
+function autoStarItemOk(item, prog, cloudShape) {
+  if (!prog) return false;
+  const type = (item && item.type) || prog.itemType || '';
+  const pct = autoStarPct(prog, cloudShape);
+  if (type === 'flashcard') return !!(prog.modes && prog.modes.learn && prog.modes.fill);
+  if (type === 'short-answer') return pct != null && pct >= 60;     // 5 星制的 3 星
+  if (pct == null) return !!prog.done;                              // 上傳作業等沒有分數的
+  return pct >= 80;
+}
+function autoStarsForItem(item, prog, cloudShape) {
+  if (!prog) return 0;
+  const type = (item && item.type) || prog.itemType || '';
+  const pct = autoStarPct(prog, cloudShape);
+  if (type === 'flashcard') return (prog.modes && prog.modes.learn && prog.modes.fill) ? 10 : 0;
+  if (type === 'short-answer') { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
+  if (type === 'fillblank' || type === 'cloze') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
+  return 0;
+}
+// weeks/weekOrder＝這位學生看得到的週次（暑假要先用 filterWeeksForPlan 過濾）
+// progItems＝進度 map；opts.cloudShape=true 代表直接吃 progress 文件的 items
+function computeAutoStars(weeks, weekOrder, progItems, opts) {
+  const cloudShape = !!(opts && opts.cloudShape);
+  const entries = [];
+  let total = 0;
+  const getProg = (wid, id) => {
+    const its = progItems || {};
+    return its[`${wid}_${id}`] || its[id] ||
+           its[Object.keys(its).find(k => k.endsWith('_' + id)) || ''] || null;
+  };
+  const dateOf = (prog) => {
+    const t = Number((prog && (prog.ts || prog.done)) || 0);
+    return t > 1e11 ? new Date(t).toISOString().slice(0, 10) : '';
+  };
+  (weekOrder && weekOrder.length ? weekOrder : Object.keys(weeks || {})).forEach(wid => {
+    const wk = (weeks || {})[wid];
+    if (!wk) return;
+    const all = [];
+    Object.values(wk.items || {}).forEach(arr => (arr || []).forEach(it => all.push(it)));
+    all.forEach(it => {
+      const prog = getProg(wid, it.id);
+      const n = autoStarsForItem(it, prog, cloudShape);
+      if (n > 0) {
+        total += n;
+        entries.push({ id: `auto:${wid}_${it.id}`, auto: true, date: dateOf(prog),
+                       amount: n, note: `完成「${it.title || it.id}」` });
+      }
+    });
+    // 本週作業獎金：有設作業（暑假＝發派即作業）才算，而且每一項都要達標
+    const hwIds = Object.keys(wk.homework || {});
+    const hwItems = all.filter(it => hwIds.indexOf(it.id) >= 0);
+    if (hwItems.length > 0 && hwItems.every(it => autoStarItemOk(it, getProg(wid, it.id), cloudShape))) {
+      const bonus = hwItems.length > 8 ? 20 : (hwItems.length > 5 ? 15 : 10);
+      total += bonus;
+      entries.push({ id: `auto:bonus_${wid}`, auto: true, date: '',
+                     amount: bonus, note: `${wk.label || wid} 作業全部完成 🎉` });
+    }
+  });
+  return { total, entries };
+}
+Object.assign(window, { computeAutoStars, autoStarsForItem, autoStarItemOk, AUTO_STAR_RULES });
+
+/* 單字卡「學習／填空」模式完成 → 記在該單元的進度底下（雲端＋本機） */
+async function markFlashcardMode(uid, displayName, email, progressKey, mode) {
+  if (!uid || !progressKey || !mode) return;
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    const profileFields = { updatedAt: Date.now() };
+    if (displayName && displayName.trim()) profileFields.name  = displayName.trim();
+    if (email      && email.trim())        profileFields.email = email.trim();
+    await ref.set(profileFields, { merge: true });
+    await ref.update({
+      [`items.${progressKey}.modes.${mode}`]: true,
+      [`items.${progressKey}.itemType`]: 'flashcard',
+    });
+  } catch (e) { console.warn('markFlashcardMode:', e); }
+}
+window.markFlashcardMode = markFlashcardMode;

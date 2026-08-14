@@ -403,7 +403,7 @@ function MatchFitGrid({ children }) {
   return <div className="fc-match-grid" ref={ref}>{children}</div>;
 }
 
-function FlashcardPlayer({ item, onComplete }) {
+function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const cards = item.cards || [];
   const [mode, setMode] = useFC("card");
 
@@ -633,6 +633,14 @@ function FlashcardPlayer({ item, onComplete }) {
     if (next >= fillCards.length) { setFillDone(true); }
     else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
   };
+
+  /* v361: 「學習」與「填空」跑完各通知一次——集點用（兩個模式都完成才給星星） */
+  useFC_E(() => {
+    if (mode === "learn" && learnTotal > 0 && learnQueue.length === 0 && onModeDone) onModeDone("learn");
+  }, [mode, learnQueue.length, learnTotal]);
+  useFC_E(() => {
+    if (mode === "fill" && fillDone && onModeDone) onModeDone("fill");
+  }, [mode, fillDone]);
 
   // v318 (#1): 保留「星號單字」為獨立分頁（Alan 要回來、只改名）——只在有星號時出現；
   // 點它＝只看星號的單字卡，點其他分頁一律重置回全部（不再卡住）。

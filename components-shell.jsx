@@ -2104,7 +2104,7 @@ const SHOP_ITEMS = [
   { id:'ruler',    emoji:'📏', name:'尺組',                cost:250,   tag:'文具' },
 ];
 
-function StarsPanel({ user, onClose }) {
+function StarsPanel({ user, onClose, weeks, weekOrder, progItems }) {
   const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
@@ -2121,7 +2121,12 @@ function StarsPanel({ user, onClose }) {
     return window.subscribeShop(setShopItems, () => {});
   }, []);
 
-  const bal   = data.balance || 0;
+  // v361: 完成練習自動集點——跟老師後台用同一個函式，兩邊數字一定一致
+  const auto = React.useMemo(
+    () => (window.computeAutoStars ? window.computeAutoStars(weeks || {}, weekOrder || [], progItems || {}) : { total: 0, entries: [] }),
+    [weeks, weekOrder, progItems]
+  );
+  const bal   = (data.balance || 0) + auto.total;   // v361: 手動 + 自動
   const items = (shopItems && shopItems.length) ? shopItems : SHOP_ITEMS;
   const tags  = ['全部', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
   const shown = filter === '全部' ? items : items.filter(i => i.tag === filter);
@@ -2152,15 +2157,18 @@ function StarsPanel({ user, onClose }) {
 
         {tab === 'me' ? (
           <div className="sp-body">
-            {data.entries.length === 0 ? (
-              <div className="sp-empty">還沒有集點紀錄——上課認真表現就會拿到星星喔！⭐</div>
+            {(data.entries.length + auto.entries.length) === 0 ? (
+              <div className="sp-empty">還沒有集點紀錄——上課認真表現、把練習做完就會拿到星星喔！⭐</div>
             ) : (
               <div className="sp-list">
-                {data.entries.map(en => (
-                  <div key={en.id} className={'sp-row' + (en.amount < 0 ? ' minus' : '')}>
-                    <span className="sp-row-date">{en.date}</span>
+                {/* v361: 老師手動記的 + 完成練習自動給的，一起依日期排 */}
+                {[...data.entries, ...auto.entries]
+                  .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+                  .map(en => (
+                  <div key={en.id} className={'sp-row' + (en.amount < 0 ? ' minus' : '') + (en.auto ? ' auto' : '')}>
+                    <span className="sp-row-date">{en.date || '—'}</span>
                     <span className="sp-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}⭐</span>
-                    <span className="sp-row-note">{en.note || (en.amount < 0 ? '兌換' : '集點')}</span>
+                    <span className="sp-row-note">{en.auto ? '⚡ ' : ''}{en.note || (en.amount < 0 ? '兌換' : '集點')}</span>
                   </div>
                 ))}
               </div>

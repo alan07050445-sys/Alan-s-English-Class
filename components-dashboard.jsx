@@ -1079,7 +1079,7 @@ function LineLink() {
 }
 
 /* ── 集點（星星）v342 ──────────────────────────────────── */
-function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
+function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFor, weekOrder }) {
   const [stars, setStars] = useDash({});
   const [sel, setSel]     = useDash(null);     // 選中的學生 email
   const [amount, setAmount] = useDash('');
@@ -1096,7 +1096,24 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
     .filter(s => s.active !== false)
     .filter(s => stuScope === 'all' || teacherOf(s) === myEmail);
 
+  // v361: 自動集點（完成練習給的星星）——跟學生端用同一個函式算，兩邊數字才會一致
+  const autoOf = useDashM(() => {
+    const m = {};
+    if (!window.computeAutoStars) return m;
+    (students || []).forEach(st => {
+      const em = String(st.email || '').toLowerCase();
+      if (!em) return;
+      const wk = weeksFor ? weeksFor(st) : null;
+      if (!wk) return;
+      m[em] = window.computeAutoStars(wk, weekOrder, st.items || {}, { cloudShape: true });
+    });
+    return m;
+  }, [students, weeksFor, weekOrder]);
+  const autoTotal = (email) => ((autoOf[String(email || '').toLowerCase()] || {}).total || 0);
+  const balanceOf = (email) => (((stars[String(email || '').toLowerCase()] || {}).balance) || 0) + autoTotal(email);
+
   const cur = sel ? (stars[String(sel).toLowerCase()] || { balance: 0, entries: [] }) : null;
+  const curAuto = sel ? (autoOf[String(sel).toLowerCase()] || { total: 0, entries: [] }) : { total: 0, entries: [] };
   const curStudent = list.find(s => String(s.email).toLowerCase() === String(sel).toLowerCase());
 
   const add = async (signedAmount) => {
@@ -1129,7 +1146,7 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
           <div className="roster-hint">名單是空的——先到「學生名單」新增。</div>
         ) : list.map(s => {
           const e = String(s.email).toLowerCase();
-          const b = (stars[e] || {}).balance || 0;
+          const b = balanceOf(e);
           return (
             <button key={e} className={'stars-stu' + (String(sel).toLowerCase() === e ? ' on' : '')} onClick={() => setSel(s.email)}>
               <span className="stars-stu-name">{s.name || s.email}</span>
@@ -1148,8 +1165,28 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope }) {
           <>
             <div className="stars-bal-card">
               <span className="stars-bal-name">{(curStudent && curStudent.name) || sel}</span>
-              <span className="stars-bal-num">{(cur.balance || 0).toLocaleString()}<em>🌟</em></span>
+              <span className="stars-bal-num">{((cur.balance || 0) + curAuto.total).toLocaleString()}<em>🌟</em></span>
+              {/* v361: 拆給老師看——哪些是你手動記的、哪些是完成練習自動給的 */}
+              {curAuto.total > 0 && (
+                <span className="stars-bal-split">
+                  手動 {(cur.balance || 0).toLocaleString()} ＋ 自動 {curAuto.total.toLocaleString()}
+                </span>
+              )}
             </div>
+            {curAuto.entries.length > 0 && (
+              <details className="stars-auto">
+                <summary>⚡ 自動集點 {curAuto.total.toLocaleString()}🌟（{curAuto.entries.length} 筆·完成練習給的）</summary>
+                <div className="stars-list">
+                  {curAuto.entries.map(en => (
+                    <div key={en.id} className="stars-row">
+                      <span className="stars-row-date">{en.date || '—'}</span>
+                      <span className="stars-row-amt">+{en.amount}⭐</span>
+                      <span className="stars-row-note">{en.note}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
 
             <div className="stars-form">
               <input className="roster-input stars-in-date" type="date" value={date} onChange={e => setDate(e.target.value)}/>
@@ -1876,7 +1913,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
           ) : tab === 'linelink' ? (
             <LineLink/>
           ) : tab === 'stars' ? (
-            <StarsManager roster={rosterAll} myEmail={myEmailD} ownerEmail={ownerEmailD} stuScope={stuScope}/>
+            <StarsManager roster={rosterAll} myEmail={myEmailD} ownerEmail={ownerEmailD} stuScope={stuScope}
+              students={students} weeksFor={weeksForStudent} weekOrder={dOrder}/>
           ) : tab === 'shop' ? (
             <ShopManager/>
           ) : tab === 'hwremind' ? (

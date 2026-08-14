@@ -442,10 +442,15 @@ function App() {
     // v255: 併入雲端成績（跨裝置一致），同一單元取「較好的一次」
     const pctOf = (p) => (p && p.score != null && p.total) ? p.score / p.total : (p && p.done ? -1 : -2);
     Object.entries(myProgressItems || {}).forEach(([key, fp]) => {
-      if (!fp || !fp.done) return;
-      const remote = { done: 1, score: fp.score != null ? fp.score : null, total: fp.score != null ? 100 : (fp.total || 1), ts: fp.done };
+      if (!fp) return;
+      // v361: 沒達 80 分（done 是空的）但有分數的也要併進來——短答 3 顆星就是這種，集點要用；
+      //       單字卡的 modes（學習/填空跑完沒）也要跟著過來，換裝置才不會漏算。
+      if (!fp.done && fp.score == null && !fp.modes) return;
+      const remote = { done: fp.done ? 1 : 0, score: fp.score != null ? fp.score : null, total: fp.score != null ? 100 : (fp.total || 1), ts: fp.done || 0 };
       const cur = local[key];
-      if (!cur || pctOf(remote) > pctOf(cur)) local[key] = remote;
+      const modes = { ...((cur && cur.modes) || {}), ...(fp.modes || {}) };
+      const base = (!cur || pctOf(remote) > pctOf(cur)) ? remote : cur;
+      local[key] = Object.keys(modes).length ? { ...base, modes } : base;
     });
     return local;
   }, [qmProgressVersion, weekId, grade, myProgressItems, user?.uid]);
@@ -1348,7 +1353,8 @@ function App() {
 
           {/* v342: 我的星星 + 商店 */}
           {starsOpen && user && (
-            <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}/>
+            <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}
+              weeks={weeks} weekOrder={weekOrder} progItems={qmProgress}/>
           )}
 
           {growthOpen && (

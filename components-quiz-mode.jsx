@@ -407,6 +407,23 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
   return prev;
 }
 
+
+/* v361: 單字卡「學習／填空」模式完成 → 記進度（集點用：兩個都完成才 +10 星） */
+function markFlashcardModeLocal(progressKey, mode) {
+  if (!progressKey || !mode) return;
+  const u = window._currentUser;
+  if (window.isAdminUser && window.isAdminUser(u)) return;   // 老師／管理者不計點
+  const prev = loadQMProg();
+  const cur  = prev[progressKey] || {};
+  if (cur.modes && cur.modes[mode]) return;                  // 已經記過就不重複寫
+  prev[progressKey] = { ...cur, modes: { ...(cur.modes || {}), [mode]: true } };
+  saveQMProg(prev);
+  if (window._bumpQmProgress) window._bumpQmProgress();
+  if (u && window.markFlashcardMode) {
+    window.markFlashcardMode(u.uid, u.displayName || '', u.email || '', progressKey, mode);
+  }
+}
+
 /* ── Visual config ───────────────────────────────────── */
 const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
 const CAT_IMG   = {
@@ -1383,6 +1400,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             <window.FlashcardPlayer
               item={flashItem}
               onComplete={() => setPhase('quiz')}
+              onModeDone={(m) => markFlashcardModeLocal(`${weekId}_${flashItem.id}`, m)}
             />
           </div>
         ) : (
@@ -1520,7 +1538,7 @@ function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
         <span className="qm-fc-player-title">{item.title}</span>
         <button className="qm-fc-start-btn" onClick={finish}>✓ 完成練習{isHomework ? ' · 回今天的任務' : ''}</button>
       </div>
-      <window.FlashcardPlayer item={item}/>
+      <window.FlashcardPlayer item={item} onModeDone={(m) => markFlashcardModeLocal(progressKey, m)}/>
     </div>
   );
 }
