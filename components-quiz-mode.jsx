@@ -1791,7 +1791,20 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   const speak = () => {
     if (current && window.speakText) (window.speakTTS || window.speakText)(current.word, { lang: 'en-US', rate: 0.82 });
   };
-  React.useEffect(() => { speak(); }, [idx]); // 每題自動唸一次（進場點擊已是手勢，iOS OK）
+  React.useEffect(() => { speak(); }, [idx]); // 每題自動唸一次
+  // v363: 先把整份的發音抓下來放快取——播放時就不必等網路，
+  //       iOS 才不會因為「await 之後已離開使用者手勢」而擋掉播放（Elroy 回報聽寫沒聲音）
+  React.useEffect(() => {
+    if (window.prefetchTts) window.prefetchTts(words.map(w => w && w.word));
+  }, [item.id]);
+  // v363: 還是聽不到 → 改用裝置內建語音（iPhone/iPad 側邊靜音開關會讓 mp3 沒聲音，內建語音不受影響）
+  const [ttsMode, setTtsModeS] = useQM(() => (window.getTtsMode ? window.getTtsMode() : 'auto'));
+  const switchVoice = () => {
+    const nx = ttsMode === 'browser' ? 'auto' : 'browser';
+    if (window.setTtsMode) window.setTtsMode(nx);
+    setTtsModeS(nx);
+    setTimeout(speak, 60);
+  };
   React.useEffect(() => {
     if (result === null && inputRef.current) inputRef.current.focus();
   }, [idx, result]);
@@ -1894,6 +1907,10 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
         <button type="button" className="sp-speak" onClick={speak} aria-label="再聽一次發音">
           <span className="sp-speak-ic">🔊</span>
           <span className="sp-speak-lbl">再聽一次</span>
+        </button>
+        {/* v363: 聽不到的出口——多半是 iPhone/iPad 側邊靜音開關，換成內建語音就會有聲音 */}
+        <button type="button" className="sp-voice-alt" onClick={switchVoice}>
+          {ttsMode === 'browser' ? '目前用裝置內建語音 · 換回原本的聲音' : '還是聽不到？換一種聲音試試'}
         </button>
         {showZh && current?.zh && <div className="sp-zh">{current.zh}</div>}
       </div>

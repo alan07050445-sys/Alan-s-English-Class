@@ -887,24 +887,88 @@ function speakText(text, { rate = 0.85, lang = 'en-US' } = {}) {
 const _ttsAudioCache = {};   // 英文字串 → objectURL（OpenAI mp3）
 let _ttsAudioEl = null;      // 共用 <audio>
 let _ttsPlayToken = 0;       // 連點時只讓最後一次真的播
+let _ttsUnlocked = false;    // v363: iOS 需要「在使用者手勢裡播過一次」才准之後自動播
+
+/* v363: 聽寫在 iPad/iPhone 沒聲音的兩個原因，這裡處理第一個 ──
+   speakTTS 是先 await 抓 mp3 才 play()，await 之後就離開了「使用者手勢」的視窗，
+   iOS 會擋掉 play()（NotAllowedError）。每個聽寫單字都不一樣＝每次都要現抓＝每次都被擋。
+   解法：第一次任何點擊/觸控時，用同一個 <audio> 播一段無聲音檔把它解鎖，
+   之後同一個元素就可以程式化播放了。 */
+function _silentWavUrl() {
+  const rate = 8000, n = 800;                   // 0.1 秒無聲
+  const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function unlockTtsAudio() {
+  if (_ttsUnlocked) return;
+  try {
+    const a = _ttsAudioEl || (_ttsAudioEl = new Audio());
+    a.playsInline = true;
+    a.src = _silentWavUrl();
+    const p = a.play();
+    if (p && p.then) p.then(() => { _ttsUnlocked = true; }).catch(() => {});
+    else _ttsUnlocked = true;
+    // 順便解鎖瀏覽器語音（iOS 第一次 speak 也要在手勢裡）
+    if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0; window.speechSynthesis.speak(u);
+    }
+  } catch (e) {}
+}
+try {
+  ['pointerdown', 'touchend', 'click', 'keydown'].forEach(ev =>
+    window.addEventListener(ev, unlockTtsAudio, { capture: true, passive: true }));
+} catch (e) {}
+
+/* v363: 第二個原因 —— iPhone/iPad 側邊的靜音開關會把 <audio> 靜音，
+   但「瀏覽器內建語音」不受靜音開關影響。所以給一個開關：學生按「還是聽不到？」
+   就切成內建語音，記在這台裝置上。 */
+const TTS_MODE_KEY = 'alan-tts-mode';
+function getTtsMode() { try { return localStorage.getItem(TTS_MODE_KEY) || 'auto'; } catch (e) { return 'auto'; } }
+function setTtsMode(m) { try { localStorage.setItem(TTS_MODE_KEY, m); } catch (e) {} }
+
+// 先把音檔抓好放快取——之後播放就不必等網路（也就不會掉出手勢視窗）
+const _ttsPending = {};      // 同一個字同時被預抓＋被點播時，只跟 Worker 要一次
+function _ttsFetchOnce(t) {
+  if (_ttsAudioCache[t]) return Promise.resolve(_ttsAudioCache[t]);
+  if (!_ttsPending[t]) {
+    _ttsPending[t] = generateTtsAudio(t)
+      .then(blob => { const u = URL.createObjectURL(blob); _ttsAudioCache[t] = u; delete _ttsPending[t]; return u; })
+      .catch(e => { delete _ttsPending[t]; throw e; });
+  }
+  return _ttsPending[t];
+}
+async function prefetchTts(texts) {
+  const list = (Array.isArray(texts) ? texts : [texts]).map(x => String(x || '').trim()).filter(Boolean);
+  for (const t of list) {
+    if (_ttsAudioCache[t]) continue;
+    try { await _ttsFetchOnce(t); }
+    catch (e) { return; }   // Worker 不通就不用再試了
+  }
+}
+
 async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
   const t = String(text || '').trim();
   if (!t) return;
   // 中文/非英文 → 瀏覽器語音（Worker /tts 只有英文聲線）
   if (!/^en/i.test(lang)) { try { speakText(t, { lang, rate }); } catch(e) {} return; }
+  // v363: 學生自己選了「內建語音」（多半是因為 iPhone 靜音開關）
+  if (getTtsMode() === 'browser') { try { speakText(t, { lang, rate }); } catch(e) {} return; }
   // 先停掉正在講的（瀏覽器＋前一段 mp3），避免兩個聲音疊起來
   try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e) {}
   if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch(e) {} }
   const token = ++_ttsPlayToken;
   try {
     let url = _ttsAudioCache[t];
-    if (!url) {
-      const blob = await generateTtsAudio(t);   // Worker /tts → mp3 Blob
-      url = URL.createObjectURL(blob);
-      _ttsAudioCache[t] = url;
-    }
+    if (!url) url = await _ttsFetchOnce(t);     // Worker /tts → mp3（同字只抓一次）
     if (token !== _ttsPlayToken) return;         // 已被更新的點擊取代
     const a = _ttsAudioEl || (_ttsAudioEl = new Audio());
+    a.playsInline = true;
     a.src = url;
     try { a.playbackRate = 0.92; } catch(e) {}   // 稍慢一點更清楚（單字/聽寫）
     await a.play();
@@ -1863,7 +1927,7 @@ Object.assign(window, {
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS
-  playSound, speakText, speakTTS, speakSentences, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
+  playSound, speakText, speakTTS, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
