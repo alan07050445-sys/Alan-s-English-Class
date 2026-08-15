@@ -6389,3 +6389,106 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .stars-auto summary { font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: #8a6d1c; cursor: pointer; }
 .stars-auto .stars-list { margin-top: 8px; max-height: 32vh; }
 .sp-row.auto .sp-row-amt, .stars-auto .stars-row-amt { color: #8a6d1c; }
+
+/* ═══ v362：每日簽到 ═══════════════════════════════════════════ */
+.ci-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(21,19,14,.5);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: dash-fade-in .2s ease;
+}
+.ci-panel {
+  position: relative;
+  width: min(680px, 100%); max-height: 90vh; overflow-y: auto;
+  background: linear-gradient(168deg, #FBF6EA 0%, #F7EFDD 100%);
+  border: 1.5px solid #e2d7bd; border-radius: 22px;
+  padding: 26px 26px 22px;
+  box-shadow: 0 28px 70px -24px rgba(21,19,14,.5);
+}
+.ci-x {
+  position: absolute; top: 14px; right: 14px;
+  width: 32px; height: 32px; border-radius: 10px;
+  border: 1px solid var(--border, #e5dfc8); background: #fff; cursor: pointer;
+  color: var(--ink-2, #5c554a); display: flex; align-items: center; justify-content: center;
+}
+.ci-head { text-align: center; margin-bottom: 18px; }
+.ci-kicker { font-family: var(--mono, monospace); font-size: 10.5px; letter-spacing: .22em; color: #b3a274; }
+.ci-title { font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 30px; font-weight: 700; margin: 6px 0 4px; color: var(--ink, #15130e); }
+.ci-sub { font-size: 13.5px; color: var(--ink-2, #5c554a); margin: 0; }
+.ci-sub b { color: var(--g-c, #8B3120); font-size: 16px; }
+
+.ci-rail { position: relative; margin: 26px 6px 34px; }
+.ci-rail-line { height: 5px; background: #eadfc4; border-radius: 4px; overflow: hidden; }
+.ci-rail-line i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #C9862B, #E0B84A); transition: width .5s cubic-bezier(.22,1,.36,1); }
+.ci-rail-marks { position: relative; height: 0; }
+.ci-mark { position: absolute; top: -12px; transform: translateX(-50%); text-align: center; }
+.ci-mark-dot { display: block; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2.5px solid #dcd0b0; margin: 0 auto; }
+.ci-mark.on .ci-mark-dot { background: #C9862B; border-color: #C9862B; box-shadow: 0 0 0 4px rgba(201,134,43,.18); }
+.ci-mark-lab { display: block; margin-top: 5px; font-size: 10.5px; color: var(--ink-3, #8a8270); white-space: nowrap; }
+.ci-mark-lab em { font-style: normal; display: block; font-family: var(--mono, monospace); font-weight: 700; color: #a8842f; }
+.ci-mark.on .ci-mark-lab { color: var(--ink, #15130e); }
+
+.ci-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; }
+.ci-cell {
+  position: relative; aspect-ratio: 1 / 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  background: #fff; border: 1px solid #e8dfc8; border-radius: 12px;
+}
+.ci-cell-n { position: absolute; top: 4px; left: 6px; font-family: var(--mono, monospace); font-size: 9.5px; color: #bdb098; }
+.ci-cell-ico { font-size: 17px; line-height: 1; }
+.ci-cell-amt { font-family: var(--mono, monospace); font-size: 10px; font-weight: 700; color: #a8842f; }
+.ci-cell.bonus { background: #FDF6E3; border-color: rgba(201,168,76,.6); }
+.ci-cell.done { background: #F2F7F1; border-color: #bcd8bd; }
+.ci-cell.done .ci-cell-ico { color: #2f7d4f; font-weight: 800; }
+.ci-cell.done .ci-cell-amt { color: #6a9a72; }
+.ci-cell.today {
+  border-color: var(--g-c, #8B3120); border-width: 2px;
+  box-shadow: 0 0 0 4px rgba(139,49,32,.1);
+  animation: ciPulse 1.8s ease-in-out infinite;
+}
+@keyframes ciPulse { 0%,100% { box-shadow: 0 0 0 4px rgba(139,49,32,.1); } 50% { box-shadow: 0 0 0 7px rgba(139,49,32,.05); } }
+
+.ci-foot { display: flex; align-items: center; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+.ci-foot-info { flex: 1; min-width: 190px; font-size: 13px; color: var(--ink-2, #5c554a); }
+.ci-foot-info b { color: var(--ink, #15130e); font-family: var(--mono, monospace); }
+.ci-foot-hint { display: block; font-size: 11.5px; color: var(--ink-3, #8a8270); margin-top: 3px; }
+.ci-btn {
+  flex: none; border: none; border-radius: 100px; cursor: pointer;
+  background: var(--g-c, #8B3120); color: #fff;
+  font-family: inherit; font-size: 15px; font-weight: 800; padding: 13px 28px;
+  box-shadow: 0 10px 24px -10px rgba(139,49,32,.7);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.ci-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.ci-btn:disabled { cursor: default; }
+.ci-btn.done { background: #eae2cd; color: #8a8270; box-shadow: none; }
+.ci-err { margin-top: 10px; font-size: 12.5px; color: #b23c27; text-align: center; }
+.ci-burst {
+  position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%);
+  font-family: var(--mono, monospace); font-size: 30px; font-weight: 800; color: #C9862B;
+  pointer-events: none; animation: ciBurst 1.1s ease-out forwards;
+}
+@keyframes ciBurst { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.8); } 25% { opacity: 1; transform: translate(-50%, -6px) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -46px) scale(1); } }
+
+@media (max-width: 640px) {
+  .ci-overlay { padding: 0; align-items: stretch; }
+  .ci-panel { width: 100%; max-height: 100%; border-radius: 0; padding: 20px 14px 16px; }
+  .ci-title { font-size: 24px; }
+  .ci-grid { gap: 5px; }
+  .ci-cell-ico { font-size: 14px; }
+  .ci-cell-amt { font-size: 9px; }
+  .ci-mark-lab { font-size: 9.5px; }
+  .ci-btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .ci-cell.today { animation: none; } }
+/* v362：header 的簽到小按鈕 */
+.checkin-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border, #e5dfc8); background: #fff; border-radius: 100px;
+  padding: 5px 11px; cursor: pointer; font-family: inherit; font-size: 14px;
+  transition: border-color .15s, transform .15s;
+}
+.checkin-btn:hover { border-color: var(--g-c, #8B3120); transform: translateY(-1px); }
+.checkin-btn-num { font-family: var(--mono, monospace); font-size: 12px; font-weight: 700; color: var(--ink-2, #5c554a); }
+.checkin-btn-dot { position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: #d6533c; border: 2px solid #fff; }
+.checkin-btn.done { opacity: .78; }

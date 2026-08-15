@@ -146,6 +146,9 @@ function App() {
   const [viewLanding,     setViewLanding]     = useAppState(true);
   const [farewell,        setFarewell]        = useAppState(false); // v301: 登出「期待下次見面」過場（別太突兀）
   const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
+  // v362: 每日簽到
+  const [myCheckin, setMyCheckin] = useAppState(null);
+  const [checkinOpen, setCheckinOpen] = useAppState(false);
 
   // ── Access lock (firestore.rules 部署後，未在名單內 → 鎖定頁) ──
   const [accessLocked, setAccessLocked] = useAppState(false);
@@ -260,8 +263,10 @@ function App() {
   useAppEffect(() => {
     setProgress({});
     setMyProgressItems({});
+    setMyCheckin(null);
     if (!user) return;
-    const unsub = window.subscribeMyProgress(user.uid, (firestoreItems) => {
+    const unsub = window.subscribeMyProgress(user.uid, (firestoreItems, checkin) => {
+      setMyCheckin(checkin || null);   // v362
       // Convert Firestore format { itemId: {done, score?, time?} } → app format { itemId: timestamp }
       const appProgress = {};
       Object.entries(firestoreItems).forEach(([id, val]) => {
@@ -354,6 +359,25 @@ function App() {
   }, [summerMetaReady]);
   const isSummer = !!(window.isSummerTrack && window.isSummerTrack(grade));
   const isSummerLib = grade === (window.SUMMER_LIB || 'sl');
+
+  // v362: 每天第一次進到課程頁 → 自動打開簽到（領完或關掉，當天就不再跳）
+  useAppEffect(() => {
+    if (!user || viewLanding || !entered) return;
+    if (window.isAdminUser && window.isAdminUser(user)) return;   // 老師不用簽到
+    if (!window.computeCheckin) return;
+    const info = window.computeCheckin(myCheckin);
+    if (info.signedToday) return;
+    const key = 'alan-checkin-popped:' + user.uid;
+    const today = window.checkinToday();
+    try { if (localStorage.getItem(key) === today) return; } catch (e) {}
+    // 真的跳出來的當下才記「今天跳過了」——中途離開頁面的話下次進來還會跳
+    const t = setTimeout(() => {
+      try { localStorage.setItem(key, today); } catch (e) {}
+      setCheckinOpen(true);
+    }, 900);   // 讓頁面先畫出來再跳
+    return () => clearTimeout(t);
+  }, [user?.uid, viewLanding, entered, myCheckin]);
+
   // v355: 所有課程內容的存檔都走這裡——雲端還沒回來就不准寫，寫失敗要讓老師看得到。
   //       （以前是直接呼叫 window.saveWeeks，失敗只會靜靜地變成 unhandled rejection。）
   const saveWeeksSafe = (w) => {
@@ -1124,6 +1148,9 @@ function App() {
             grade={grade}
             compactLobby={!catView && !editMode}
             starBalance={starBalance}
+            onShowCheckin={user && !(window.isAdminUser && window.isAdminUser(user)) ? () => setCheckinOpen(true) : null}
+            checkinDone={!!(window.computeCheckin && window.computeCheckin(myCheckin).signedToday)}
+            checkinStreak={(window.computeCheckin ? window.computeCheckin(myCheckin).streak : 0)}
             onShowStars={() => setStarsOpen(true)}
             onSwitchGrade={() => runWave(() => {
               try { localStorage.removeItem('alan-grade'); } catch(e) {}
@@ -1354,7 +1381,10 @@ function App() {
           {/* v342: 我的星星 + 商店 */}
           {starsOpen && user && (
             <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}
-              weeks={weeks} weekOrder={weekOrder} progItems={qmProgress}/>
+              weeks={weeks} weekOrder={weekOrder} progItems={qmProgress} checkin={myCheckin}/>
+          )}
+          {checkinOpen && window.CheckinPanel && (
+            <window.CheckinPanel user={user} checkin={myCheckin} onClose={() => setCheckinOpen(false)}/>
           )}
 
           {growthOpen && (

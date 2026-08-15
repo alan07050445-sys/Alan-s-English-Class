@@ -1105,7 +1105,10 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
       if (!em) return;
       const wk = weeksFor ? weeksFor(st) : null;
       if (!wk) return;
-      m[em] = window.computeAutoStars(wk, weekOrder, st.items || {}, { cloudShape: true });
+      const a = window.computeAutoStars(wk, weekOrder, st.items || {}, { cloudShape: true });
+      // v362: 每日簽到
+      const c = window.computeCheckin ? window.computeCheckin(st.checkin) : { total: 0, entries: [] };
+      m[em] = { total: a.total + c.total, entries: [...a.entries, ...c.entries] };
     });
     return m;
   }, [students, weeksFor, weekOrder]);

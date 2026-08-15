@@ -29,6 +29,7 @@ function Icon({ name, size = 16 }) {
 /* ───────── Header ───────── */
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
+  onShowCheckin, checkinDone, checkinStreak,
   canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek,
   progress,
   // Auth props
@@ -93,6 +94,15 @@ function Header({
                 <button className="stars-btn" onClick={onShowStars} title="我的星星與商店">
                   <span className="stars-btn-ico" aria-hidden="true">⭐</span>
                   <span className="stars-btn-num">{(starBalance || 0).toLocaleString()}</span>
+                </button>
+              )}
+              {/* v362: 每日簽到——沒簽到會有紅點提醒 */}
+              {user && onShowCheckin && (
+                <button className={'checkin-btn' + (checkinDone ? ' done' : '')} onClick={onShowCheckin}
+                  title={checkinDone ? '今天已簽到' : '今天還沒簽到！'}>
+                  <span aria-hidden="true">📅</span>
+                  {checkinStreak > 0 && <span className="checkin-btn-num">{checkinStreak}</span>}
+                  {!checkinDone && <span className="checkin-btn-dot" aria-hidden="true"/>}
                 </button>
               )}
               {canEdit && (
@@ -2104,7 +2114,106 @@ const SHOP_ITEMS = [
   { id:'ruler',    emoji:'📏', name:'尺組',                cost:250,   tag:'文具' },
 ];
 
-function StarsPanel({ user, onClose, weeks, weekOrder, progItems }) {
+
+/* ── v362: 每日簽到 ───────────────────────────────────────
+   Alan 指定的規則：每天 +5；一輪 28 天內累積 7/14/21/28 天各再 +10/20/30/40；
+   整輪一天不漏再 +50 全勤獎。視覺沿用站上的暖色卡片風（不是參考圖那種鮮黃色）。 */
+function CheckinPanel({ user, checkin, onClose, onDone }) {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr]   = React.useState(null);
+  const [burst, setBurst] = React.useState(0);
+  // v362: 樂觀更新——按下去就先當作簽到了，不必等雲端快照繞回來（離線也看得到反應）
+  const [justSigned, setJustSigned] = React.useState(false);
+  const info = React.useMemo(() => {
+    if (!window.computeCheckin) return { days: 0, streak: 0, signedToday: false, total: 0, cycleDay: 0, cycleDates: [] };
+    const base = { ...(checkin || {}) };
+    if (justSigned) base.dates = { ...(base.dates || {}), [window.checkinToday()]: true };
+    return window.computeCheckin(base);
+  }, [checkin, justSigned]);
+  const CYCLE = window.CHECKIN_CYCLE || 28;
+  const MILES = window.CHECKIN_MILESTONES || [[7,10],[14,20],[21,30],[28,40]];
+  const milestoneAt = (n) => (MILES.find(m => m[0] === n) || [])[1] || 0;
+
+  const doCheckIn = async () => {
+    if (!user || info.signedToday || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await window.checkInToday(user.uid, user.displayName || '', user.email || '');
+      setJustSigned(true);
+      setBurst(b => b + 1);
+      if (window.playSound) window.playSound('complete');
+      if (onDone) onDone();
+    } catch (e) {
+      setErr('簽到失敗，請檢查網路後再試一次');
+    }
+    setBusy(false);
+  };
+
+  // 這一輪的 28 格：已簽到的打勾，今天那一格可以按
+  const cells = [];
+  for (let i = 1; i <= CYCLE; i++) {
+    const bonus = milestoneAt(i);
+    const done  = i <= info.cycleDay;
+    const isToday = info.signedToday ? i === info.cycleDay : i === info.cycleDay + 1;
+    cells.push({ i, bonus, done, isToday });
+  }
+
+  return ReactDOM.createPortal(
+    <div className="ci-overlay" onClick={onClose}>
+      <div className="ci-panel" onClick={e => e.stopPropagation()}>
+        <button className="ci-x" onClick={onClose} aria-label="關閉"><Icon name="close" size={16}/></button>
+
+        <div className="ci-head">
+          <div className="ci-kicker">DAILY CHECK-IN</div>
+          <h2 className="ci-title">每日簽到</h2>
+          <p className="ci-sub">
+            {info.streak > 0
+              ? <>已經連續 <b>{info.streak}</b> 天沒斷過{info.streak >= 3 ? '，很厲害！' : '，繼續保持'}</>
+              : '今天簽到，開始累積連續天數吧'}
+          </p>
+        </div>
+
+        {/* 里程碑進度條 */}
+        <div className="ci-rail">
+          <div className="ci-rail-line"><i style={{ width: Math.min(100, (info.cycleDay / CYCLE) * 100) + '%' }}/></div>
+          <div className="ci-rail-marks">
+            {MILES.map(([need, bonus]) => (
+              <div key={need} className={'ci-mark' + (info.cycleDay >= need ? ' on' : '')} style={{ left: (need / CYCLE) * 100 + '%' }}>
+                <span className="ci-mark-dot"/>
+                <span className="ci-mark-lab">{need} 天<em>+{bonus}</em></span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="ci-grid">
+          {cells.map(c => (
+            <div key={c.i} className={'ci-cell' + (c.done ? ' done' : '') + (c.isToday ? ' today' : '') + (c.bonus ? ' bonus' : '')}>
+              <span className="ci-cell-n">{c.i}</span>
+              <span className="ci-cell-ico">{c.done ? '✓' : (c.bonus ? '🎁' : '⭐')}</span>
+              <span className="ci-cell-amt">+{c.bonus ? c.bonus + (window.CHECKIN_DAILY || 5) : (window.CHECKIN_DAILY || 5)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="ci-foot">
+          <div className="ci-foot-info">
+            共簽到 <b>{info.days}</b> 天 · 已累積 <b>{info.total.toLocaleString()}</b>⭐
+            <span className="ci-foot-hint">整輪 28 天一天都沒漏，再加 50⭐ 全勤獎 🏅</span>
+          </div>
+          <button className={'ci-btn' + (info.signedToday ? ' done' : '')} onClick={doCheckIn} disabled={info.signedToday || busy || !user}>
+            {info.signedToday ? '✓ 今天已簽到' : (busy ? '簽到中…' : `簽到領 ${window.CHECKIN_DAILY || 5}⭐`)}
+          </button>
+        </div>
+        {err && <div className="ci-err">{err}</div>}
+        {burst > 0 && <div className="ci-burst" key={burst}>+{window.CHECKIN_DAILY || 5}⭐</div>}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
   const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
@@ -2122,10 +2231,12 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems }) {
   }, []);
 
   // v361: 完成練習自動集點——跟老師後台用同一個函式，兩邊數字一定一致
-  const auto = React.useMemo(
-    () => (window.computeAutoStars ? window.computeAutoStars(weeks || {}, weekOrder || [], progItems || {}) : { total: 0, entries: [] }),
-    [weeks, weekOrder, progItems]
-  );
+  const auto = React.useMemo(() => {
+    const a = window.computeAutoStars ? window.computeAutoStars(weeks || {}, weekOrder || [], progItems || {}) : { total: 0, entries: [] };
+    // v362: 每日簽到的星星也算進來
+    const c = window.computeCheckin ? window.computeCheckin(checkin) : { total: 0, entries: [] };
+    return { total: a.total + c.total, entries: [...a.entries, ...c.entries] };
+  }, [weeks, weekOrder, progItems, checkin]);
   const bal   = (data.balance || 0) + auto.total;   // v361: 手動 + 自動
   const items = (shopItems && shopItems.length) ? shopItems : SHOP_ITEMS;
   const tags  = ['全部', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
@@ -2214,4 +2325,4 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, SHOP_ITEMS });
+Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

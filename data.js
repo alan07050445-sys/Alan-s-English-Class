@@ -778,7 +778,8 @@ async function saveProgressItem(uid, displayName, email, itemId, data) {
 // Subscribe to this user's own Firestore progress
 function subscribeMyProgress(uid, callback) {
   return _db.collection('progress').doc(uid).onSnapshot(snap => {
-    callback(snap.exists ? (snap.data()?.items || {}) : {});
+    const d = snap.exists ? (snap.data() || {}) : {};
+    callback(d.items || {}, d.checkin || null);   // v362: 第二個參數＝每日簽到紀錄
   });
 }
 
@@ -797,6 +798,7 @@ function subscribeAllStudents(callback) {
         xp: d.xp || 0,
         streak: d.streak || { count: 0 },
         badges: d.badges || {},
+        checkin: d.checkin || null,   // v362
       });
     });
     all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -2011,3 +2013,91 @@ async function markFlashcardMode(uid, displayName, email, progressKey, mode) {
   } catch (e) { console.warn('markFlashcardMode:', e); }
 }
 window.markFlashcardMode = markFlashcardMode;
+
+/* ═══════════ v362: 每日簽到 ═══════════════════════════════════
+   規則（Alan 訂的）：每天簽到 +5；每一輪 28 天裡累積到 7/14/21/28 天
+   各再給 +10/+20/+30/+40；整輪 28 天「一天都沒斷」再加 +50 全勤獎。
+   存在學生自己的 progress 文件底下（規則本來就允許本人寫），
+   星星一樣是「算出來的」，跟 v361 自動集點同一套邏輯，不另外存一份數字。 */
+const CHECKIN_DAILY      = 5;
+const CHECKIN_CYCLE      = 28;
+const CHECKIN_MILESTONES = [[7, 10], [14, 20], [21, 30], [28, 40]];
+const CHECKIN_PERFECT    = 50;
+
+function checkinToday(d) {
+  const x = d || new Date();
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+function _ciDayNum(s) { const [y, m, d] = String(s).split('-').map(Number); return Math.floor(Date.UTC(y, m - 1, d) / 86400000); }
+
+async function checkInToday(uid, displayName, email) {
+  if (!uid) throw new Error('not-signed-in');
+  const date = checkinToday();
+  const ref = _db.collection('progress').doc(uid);
+  const profile = { updatedAt: Date.now() };
+  if (displayName && displayName.trim()) profile.name  = displayName.trim();
+  if (email      && email.trim())        profile.email = email.trim();
+  await ref.set(profile, { merge: true });
+  await ref.update({ [`checkin.dates.${date}`]: true, 'checkin.last': date });
+  return date;
+}
+
+// 回傳 { days, streak, cycleDay, cycleDates, signedToday, total, entries }
+function computeCheckin(checkin) {
+  const map = (checkin && checkin.dates) || {};
+  const dates = Object.keys(map).filter(k => map[k]).sort();
+  const days  = dates.length;
+  const today = checkinToday();
+  const signedToday = !!map[today];
+
+  // 目前連續幾天（以今天或昨天為結尾才算「還在連續中」）
+  let streak = 0;
+  if (days) {
+    const last = dates[days - 1];
+    const gap = _ciDayNum(today) - _ciDayNum(last);
+    if (gap <= 1) {
+      streak = 1;
+      for (let i = days - 1; i > 0; i--) {
+        if (_ciDayNum(dates[i]) - _ciDayNum(dates[i - 1]) === 1) streak++; else break;
+      }
+    }
+  }
+
+  const entries = [];
+  let total = 0;
+  if (days > 0) {
+    total += days * CHECKIN_DAILY;
+    entries.push({ id: 'chk:daily', auto: true, date: dates[days - 1],
+                   amount: days * CHECKIN_DAILY, note: `每日簽到 ${days} 天` });
+  }
+  // 一輪 28 天結算一次
+  const cycleCount = Math.ceil(days / CHECKIN_CYCLE) || 0;
+  for (let c = 0; c < cycleCount; c++) {
+    const chunk = dates.slice(c * CHECKIN_CYCLE, (c + 1) * CHECKIN_CYCLE);
+    CHECKIN_MILESTONES.forEach(([need, bonus]) => {
+      if (chunk.length >= need) {
+        total += bonus;
+        entries.push({ id: `chk:${c}:${need}`, auto: true, date: chunk[need - 1],
+                       amount: bonus, note: `簽到累積 ${need} 天獎勵` });
+      }
+    });
+    if (chunk.length === CHECKIN_CYCLE) {
+      const perfect = chunk.every((d, i) => i === 0 || _ciDayNum(d) - _ciDayNum(chunk[i - 1]) === 1);
+      if (perfect) {
+        total += CHECKIN_PERFECT;
+        entries.push({ id: `chk:${c}:perfect`, auto: true, date: chunk[CHECKIN_CYCLE - 1],
+                       amount: CHECKIN_PERFECT, note: `28 天全勤獎 🏅` });
+      }
+    }
+  }
+  const cycleStart = Math.floor(Math.max(0, days - (signedToday ? 1 : 0)) / CHECKIN_CYCLE) * CHECKIN_CYCLE;
+  return {
+    days, streak, signedToday, total, entries,
+    cycleDates: dates.slice(cycleStart, cycleStart + CHECKIN_CYCLE),
+    cycleDay: days - cycleStart,     // 這一輪已經簽到幾天（1–28）
+  };
+}
+Object.assign(window, {
+  checkInToday, computeCheckin, checkinToday,
+  CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
+});
