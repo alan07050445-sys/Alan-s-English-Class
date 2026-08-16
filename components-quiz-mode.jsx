@@ -638,7 +638,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -773,6 +773,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     return base.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
   }, [sidebarItems, libAdminView, stuFilter, assignedOf, isTeacherView, ownerFilter, myEmail]);
   const grouped = useQMM(() => (groupsView ? qmGroupByArticle(viewItems) : null), [groupsView, viewItems]);
+  /* v364: 分段閱讀可以綁「單字」分類的單字卡，而且可以設成「必須先練完學習模式」。
+     這裡算出「擋住現在這篇文章的那份單字卡」——null＝沒擋（沒綁、沒設必須、或已經練完）。 */
+  const fcGate = useQMM(() => {
+    const it = selectedItem;
+    if (!it || isTeacherView) return null;                       // 老師不擋
+    if (it.type !== 'guided-reading' || !it.linkedFcRequired || !it.linkedFlashcardId) return null;
+    const pool = (weekAllItems && weekAllItems.length) ? weekAllItems : (items || []);
+    const fc = pool.find(x => x.id === it.linkedFlashcardId && x.type === 'flashcard' && (x.cards || []).length > 0);
+    if (!fc) return null;                                        // 綁的卡被刪了就不要卡住學生
+    const p = qmProg[`${weekId}_${fc.id}`];
+    return (p && p.modes && p.modes.learn) ? null : fc;          // 學習模式跑完就放行
+  }, [selectedItem && selectedItem.id, qmProg, weekAllItems, items, weekId, isTeacherView]);
+
 
   /* ── v360: 排序（群組內互換單元／整組上下移）──────────────
      一律以「完整清單的 id 排列」送回去，即使畫面正在依學生篩選，也不會弄丟沒列到的單元。 */
@@ -947,6 +960,12 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             </div>
           )}
           {/* v351: 篩選在某位學生底下時，出的新題目直接指派給他——不必存完再去勾 👤 */}
+          {editMode && onAutoLinkFlashcards && (viewItems || []).some(it => it.type === 'guided-reading') && (
+            <button className="qm-autolink-btn" onClick={onAutoLinkFlashcards}
+              title="依單元名稱（Unit 21、Unit 22…）把文章跟同名的單字卡自動綁在一起">
+              ⚡ 自動配對單字卡（依 Unit 名稱）
+            </button>
+          )}
           {editMode && (() => {
             const forStu = (libAdminView && stuFilter !== 'all' && stuFilter !== 'none')
               ? (filterStudents.find(f => f.email === stuFilter) || { email: stuFilter, name: String(stuFilter).split('@')[0] })
@@ -1251,6 +1270,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             onNextTask={onNextTask}
             item={selectedItem}
             catItems={items || []}
+            linkPool={weekAllItems || items || []}
             progressKey={`${weekId}_${selectedItem.id}`}
             onBack={() => setPhase('intro')}
           />
@@ -1258,6 +1278,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <WritingPracticeIntro
             item={selectedItem}
             catItems={items || []}
+            linkPool={weekAllItems || items || []}
             onStart={() => setPhase('quiz')}
           />
         ) : selectedItem?.type === 'short-answer' && phase === 'quiz' ? (
@@ -1369,6 +1390,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             resumeAt={resumeFor(it => grTotalQ(it))}
             onRestart={restartFresh}
             catItems={items || []}
+            linkPool={weekAllItems || items || []}
+            blockedBy={fcGate}
             onFlashcards={(fi) => { setFlashItem(fi); setPhase('flashcards'); }}
           />
         ) : selectedItem?.type === 'essay' && phase === 'intro' ? (
@@ -1384,6 +1407,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             cat={cat}
             questions={getItemQuestions(selectedItem)}
             catItems={items || []}
+            linkPool={weekAllItems || items || []}
             onFlashcards={(fi) => { setFlashItem(fi); setPhase('flashcards'); }}
             onStartQuiz={() => setPhase('quiz')}
             resumeAt={(getResume(`${weekId}_${selectedItem.id}`, getItemQuestions(selectedItem).length) || {}).deckPos || null}
@@ -1393,8 +1417,12 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <div className="qm-fc-player-wrap">
             <div className="qm-fc-player-bar">
               <span className="qm-fc-player-title">{flashItem.title}</span>
-              <button className="qm-fc-start-btn" onClick={() => setPhase('quiz')}>
-                {selectedItem?.type === 'guided-reading' ? '開始閱讀 →' : '開始測驗 →'}
+              <button className="qm-fc-start-btn" onClick={() => setPhase('quiz')}
+                disabled={!!fcGate && flashItem && fcGate.id === flashItem.id}
+                title={fcGate ? '完成「📖 學習」模式後就會解鎖' : undefined}>
+                {(!!fcGate && flashItem && fcGate.id === flashItem.id)
+                  ? '🔒 完成「學習」模式後解鎖'
+                  : (selectedItem?.type === 'guided-reading' ? '開始閱讀 →' : '開始測驗 →')}
               </button>
             </div>
             <window.FlashcardPlayer
@@ -2980,7 +3008,7 @@ function grFetchWords(key) { // v288: grwords_* → Firestore（不經 CORS）�
   return grWordsCache[key];
 }
 
-function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFlashcards }) {
+function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, linkPool, onFlashcards, blockedBy }) {
   const segs = grSegs(item);
   const finalN = grFinalQs(item).length;
   const total = grTotalQ(item);
@@ -2988,8 +3016,10 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFl
   useQME(() => { grPreloadImgs(item); }, [item && item.id]); // 停在說明頁時就先抓圖
   // v286: 綁定單字卡——先練文章單字再開始讀（Alan 要的流程）
   const linkedFc = item.linkedFlashcardId
-    ? (catItems || []).find(it => it.id === item.linkedFlashcardId && it.type === 'flashcard' && (it.cards || []).length > 0)
+    ? ((linkPool && linkPool.length ? linkPool : (catItems || []))
+        .find(it => it.id === item.linkedFlashcardId && it.type === 'flashcard' && (it.cards || []).length > 0))
     : null;
+  const must = !!blockedBy;   // v364: 設了「必須」而且還沒把學習模式跑完
   return (
     <div className="qm-intro">
       <div className="qm-intro-icon">📖</div>
@@ -3003,8 +3033,9 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFl
       </div>
       <div className="qm-intro-btns">
         {linkedFc && onFlashcards ? (
-          <div className="qm-intro-fc-group">
-            <button className="qm-fcb" onClick={() => onFlashcards(linkedFc)}>
+          <div className={'qm-intro-fc-group' + (must ? ' must' : '')}>
+            {must && <div className="qm-fcb-must">先把單字練熟再讀文章 · 完成「📖 學習」就會解鎖</div>}
+            <button className={'qm-fcb' + (must ? ' must' : '')} onClick={() => onFlashcards(linkedFc)}>
               <span className="qm-fcb-ico" aria-hidden="true">🃏</span>
               <span className="qm-fcb-text">
                 <b>先練習本文章單字</b>
@@ -3014,8 +3045,9 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, onFl
             </button>
           </div>
         ) : null}
-        <button className="qm-btn primary" onClick={onStart}>
-          {resumeAt ? `▶ 繼續上一次 · 從第 ${resumeAt + 1} 題 →` : '開始閱讀 · Start →'}
+        <button className="qm-btn primary" onClick={onStart} disabled={must}
+          title={must ? '先完成上面的單字卡（學習模式）才能開始讀' : undefined}>
+          {must ? '🔒 先練完單字卡才能開始' : (resumeAt ? `▶ 繼續上一次 · 從第 ${resumeAt + 1} 題 →` : '開始閱讀 · Start →')}
         </button>
         {resumeAt && onRestart ? (
           <button className="qm-btn secondary" onClick={onRestart}>↻ 重新開始</button>

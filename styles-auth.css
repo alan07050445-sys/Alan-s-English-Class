@@ -6500,3 +6500,16 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   text-decoration: underline; text-underline-offset: 3px;
 }
 .sp-voice-alt:hover { color: var(--g-c, #8B3120); }
+/* v364：分段閱讀綁定單字卡（必修／選修） */
+.gr-fc-must { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; padding: 9px 11px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 10px; background: #fdf6e3; cursor: pointer; }
+.gr-fc-must input { margin-top: 2px; flex: none; }
+.gr-fc-must span { font-size: 12.5px; line-height: 1.6; color: var(--ink-2, #5c554a); }
+.qm-autolink-btn { display: block; width: 100%; margin: 0 0 8px; padding: 9px 12px;
+  border: 1px dashed rgba(201,168,76,.7); border-radius: 10px; background: #fdf6e3;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; color: #8a6d1c; cursor: pointer; }
+.qm-autolink-btn:hover { background: #f9edd2; border-color: #C9A84C; }
+.qm-intro-fc-group.must { border: 1.5px solid #C9A84C; border-radius: 14px; padding: 10px; background: #fffdf6; }
+.qm-fcb-must { font-size: 12px; font-weight: 700; color: #8a6d1c; margin-bottom: 8px; text-align: center; }
+.qm-btn.primary:disabled { opacity: .55; cursor: not-allowed; }
+.qm-fc-start-btn:disabled { opacity: .55; cursor: not-allowed; }

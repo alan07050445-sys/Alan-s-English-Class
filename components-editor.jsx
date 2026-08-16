@@ -20,7 +20,7 @@ const TYPE_OPTIONS = [
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
-function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete }) {
+function EditorModal({ open, draft, weekId, catItems, weekItems, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
 
   useE(() => { setForm(draft); }, [draft]);
@@ -206,8 +206,11 @@ function EditorModal({ open, draft, weekId, catItems, onClose, onSave, onDelete 
             <GuidedReadingEditor
               itemId={form.id}
               catItems={catItems || []}
+              weekItems={weekItems || []}
               linkedFlashcardId={form.linkedFlashcardId || ''}
               onChangeLinked={v => update("linkedFlashcardId", v || undefined)}
+              linkedFcRequired={!!form.linkedFcRequired}
+              onChangeRequired={v => update("linkedFcRequired", v || undefined)}
               audioUrl={form.grAudioUrl || ''}
               onChangeAudio={v => update("grAudioUrl", v || undefined)}
               segments={form.grSegments || []}
@@ -1579,8 +1582,10 @@ function GrQuestionsEditor({ qs, onChange, impOpen, onToggleImp, impText, onImpT
 /* ── GuidedReadingEditor 分段閱讀（v276；v277 照片＋裁切；v278 PDF；v281 綜合題）──
    段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
    grFinal = 全部讀完後的整篇綜合題（同題目格式）；img 只存裁切範圍，不產生新圖檔 */
-function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLinked, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
-  const fcOptions = (catItems || []).filter(it => it.type === 'flashcard' && (it.cards || []).length > 0);
+function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, onChangeLinked, linkedFcRequired, onChangeRequired, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
+  // v364: 單字卡多半在「單字」分類，只找同分類會找不到 → 改看整週所有分類
+  const fcOptions = (((weekItems && weekItems.length) ? weekItems : (catItems || []))
+    .filter(it => it.type === 'flashcard' && (it.cards || []).length > 0));
   const [pasting, setPasting] = useS(false);
   const [pasteText, setPasteText] = useS('');
   const [uploading, setUploading] = useS('');
@@ -1889,7 +1894,15 @@ function GuidedReadingEditor({ itemId, catItems, linkedFlashcardId, onChangeLink
               <option key={fc.id} value={fc.id}>{fc.title}（{(fc.cards || []).length} 張）</option>
             ))}
           </select>
-          <div className="field-help">綁定後，學生的開始頁會多一張金色「先練習本文章單字」卡——練完（或跳過）才開始讀。</div>
+          <div className="field-help">綁定後，學生的開始頁會多一張金色「先練習本文章單字」卡。</div>
+          {/* v364: 必修／選修 */}
+          {linkedFlashcardId && (
+            <label className="gr-fc-must">
+              <input type="checkbox" checked={!!linkedFcRequired}
+                onChange={e => onChangeRequired(e.target.checked)}/>
+              <span><b>必須先練完才能開始讀</b>——沒把單字卡的「📖 學習」模式跑完，「開始閱讀」會鎖住。不勾＝可以直接跳過去讀。</span>
+            </label>
+          )}
         </div>
       )}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,gap:6,flexWrap:'wrap'}}>

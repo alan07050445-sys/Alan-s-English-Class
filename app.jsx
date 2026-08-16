@@ -459,6 +459,13 @@ function App() {
     return cats.flatMap(c => window.getQuizItems((week.items || {})[c.id] || []));
   }, [week, grade]);
 
+  // v364: 整週「所有分類」的單元——閱讀理解要綁「單字」分類的單字卡，
+  //        原本只看同一個分類，所以綁定選單在閱讀理解裡根本不會出現。
+  const weekAllItems = useAppMemo(
+    () => Object.values((week && week.items) || {}).flat(),
+    [week]
+  );
+
   const qmProgress = useAppMemo(() => {
     // v257: 改讀「這個帳號自己的」本機紀錄（loadQMProg 內建帳號隔離）
     let local = {};
@@ -820,6 +827,48 @@ function App() {
     w[weekId].items[catId] = orderedIds.map(id => byId.get(id));
     setWeeks(w);
     saveWeeksSafe(w);
+  };
+
+  // v364: 依單元名稱（Unit 21、Unit 22…）自動把文章跟同名的單字卡配對，一次配完整個分類
+  const unitKeyOf = (it) => {
+    const m = String((it && (it.group || it.title)) || '').match(/unit\s*0*(\d+)/i);
+    return m ? 'u' + m[1] : null;
+  };
+  const handleAutoLinkFlashcards = (catId) => {
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    const wk = w[weekId];
+    if (!wk) return;
+    const all = Object.values(wk.items || {}).flat();
+    const fcByKey = new Map();
+    all.filter(it => it.type === 'flashcard' && (it.cards || []).length > 0).forEach(f => {
+      const k = unitKeyOf(f);
+      if (k && !fcByKey.has(k)) fcByKey.set(k, f);
+    });
+    // ⚠ 只靠 Unit 編號配對會出事：實際資料裡「Unit 21 食物鏈」的文章會配到「Unit 21 固體液體」
+    //   的單字卡（兩套教材都用 Unit 編號）。所以一律先把配對結果攤開來讓老師確認再寫。
+    const pairs = [], miss = [];
+    (wk.items[catId] || []).forEach(it => {
+      if (it.type !== 'guided-reading') return;
+      const k = unitKeyOf(it);
+      const fc = k ? fcByKey.get(k) : null;
+      if (!fc) { miss.push(it.title || it.id); return; }
+      if (it.linkedFlashcardId === fc.id) return;      // 已經是這張了
+      pairs.push({ it, fc });
+    });
+    if (!pairs.length) {
+      showToast(miss.length ? '找不到同編號的單字卡（單元名稱要含 Unit 數字）' : '都已經配對好了');
+      return;
+    }
+    const lines = pairs.map(p => `・${p.it.title || p.it.id}\n    → ${p.fc.title || p.fc.id}`).join('\n');
+    if (!confirm(
+      `依 Unit 編號找到 ${pairs.length} 組配對，請先確認主題對不對：\n\n${lines}\n\n` +
+      (miss.length ? `（${miss.length} 篇沒有 Unit 編號，會略過）\n\n` : '') +
+      `⚠️ 編號一樣不代表內容一樣——不對的話按取消，改用每篇自己選。\n確定要綁定嗎？`
+    )) return;
+    pairs.forEach(p => { p.it.linkedFlashcardId = p.fc.id; });
+    setWeeks(w);
+    saveWeeksSafe(w);
+    showToast(`已配對 ${pairs.length} 篇文章`);
   };
 
   const handleMoveItem = (catId, itemId, dir) => {
@@ -1192,6 +1241,8 @@ function App() {
               onDeleteItem={handleDeleteItem}
               onMoveItem={(itemId, dir) => handleMoveItem(catView.id, itemId, dir)}
               onReorderItems={(ids) => handleReorderItems(catView.id, ids)}
+              weekAllItems={weekAllItems}
+              onAutoLinkFlashcards={() => handleAutoLinkFlashcards(catView.id)}
               openAssignFor={assignAfterSave}
               onAssignOpened={() => setAssignAfterSave(null)}
               weekChoices={weekOrder.filter(id => id !== weekId).map(id => ({
@@ -1347,6 +1398,7 @@ function App() {
             draft={editorDraft}
             weekId={weekId}
             catItems={editorCat ? (week.items[editorCat] || []) : []}
+            weekItems={weekAllItems}
             onClose={() => setEditorOpen(false)}
             onSave={handleSaveItem}
             onDelete={handleDeleteItem}
