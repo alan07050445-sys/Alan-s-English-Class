@@ -6378,7 +6378,10 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 
 /* v360：群組整組上下移（按鈕跟收合標題並排，不能包在 button 裡） */
 .qm-ugroup-headrow { display: flex; align-items: stretch; gap: 6px; }
-.qm-ugroup-headrow .qm-ugroup-head { flex: 1; min-width: 0; }
+/* v370: 標題吃剩下的寬度，右邊的工具鈕一律不准被壓縮
+   （Alan 回報側欄變窄時 📎 被擠成 17px、按不到） */
+.qm-ugroup-headrow > * { flex: none; }
+.qm-ugroup-headrow .qm-ugroup-head { flex: 1 1 auto; min-width: 0; }
 .qm-ugroup.open .qm-ugroup-headrow { margin-bottom: 6px; }
 .qm-ugroup.open .qm-ugroup-headrow .qm-ugroup-head { margin-bottom: 0; }
 .qm-ugroup-move { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
