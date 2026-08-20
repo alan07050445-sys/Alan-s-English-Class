@@ -871,6 +871,24 @@ function App() {
     showToast(`已配對 ${pairs.length} 篇文章`);
   };
 
+  // v367: 群組層級的參考資料——一個群組（例：Grandma and the great gourd）最上面
+  //        可以掛文章的 YouTube／檔案／說明，底下的選擇題、手寫題、reading skill 共用。
+  //        存在 week.groupRes，key = `分類::群組名`（同名群組可能同時存在不同分類）。
+  const groupResKey = (catId, group) => `${catId}::${String(group || '').trim()}`;
+  const handleSaveGroupRes = (catId, group, patch) => {
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    const wk = w[weekId];
+    if (!wk) return;
+    if (!wk.groupRes) wk.groupRes = {};
+    const k = groupResKey(catId, group);
+    const next = { ...(wk.groupRes[k] || {}), ...patch };
+    // 三個欄位都空了就整筆刪掉，不要留空殼
+    if (!next.yt && !next.fileUrl && !String(next.note || '').trim()) delete wk.groupRes[k];
+    else wk.groupRes[k] = next;
+    setWeeks(w);
+    saveWeeksSafe(w);
+  };
+
   const handleMoveItem = (catId, itemId, dir) => {
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     const list = w[weekId]?.items?.[catId];
@@ -1243,6 +1261,8 @@ function App() {
               onReorderItems={(ids) => handleReorderItems(catView.id, ids)}
               weekAllItems={weekAllItems}
               onAutoLinkFlashcards={() => handleAutoLinkFlashcards(catView.id)}
+              groupRes={(week && week.groupRes) || {}}
+              onSaveGroupRes={(g, patch) => handleSaveGroupRes(catView.id, g, patch)}
               openAssignFor={assignAfterSave}
               onAssignOpened={() => setAssignAfterSave(null)}
               weekChoices={weekOrder.filter(id => id !== weekId).map(id => ({

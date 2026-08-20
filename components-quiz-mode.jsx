@@ -643,7 +643,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -717,6 +717,9 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [assignItem, setAssignItem] = useQM(null);   // 正在指派的單元
   const [assignRoster, setAssignRoster] = useQM([]); // 全班名單（老師才訂閱）
   const [assignBusy, setAssignBusy] = useQM(false);
+  // v367: 群組參考資料（影片／課文檔案／說明）
+  const [resView, setResView] = useQM(null);   // 學生看的
+  const [resEdit, setResEdit] = useQM(null);   // 老師編輯的
 
   // v339: 多位老師共用題庫——側欄可切「我的單元／全部」。
   // 非擁有者的老師預設只看自己的（不會被別人的題庫洗版），需要沿用時再切「全部」。
@@ -1166,6 +1169,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                     <span className="qm-ugroup-name">{g.name}</span>
                     <span className="qm-ugroup-count">{g.items.length}</span>
                   </button>
+                  {/* v367: 這個群組的參考資料（文章影片／課文檔案） */}
+                  {editMode && onSaveGroupRes && (
+                    <button className="qm-ugroup-res" title="這個群組的參考資料（影片／課文）"
+                      onClick={(e) => { e.stopPropagation(); setResEdit(g.name); }}>
+                      📎{(groupRes || {})[`${cat.id}::${g.name}`] ? <i/> : null}
+                    </button>
+                  )}
                   {/* v360: 整組上下移（例：Unit 17 移到 Unit 18 上面） */}
                   {editMode && onReorderItems && (
                     <div className="qm-ugroup-move">
@@ -1178,6 +1188,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                     </div>
                   )}
                 </div>
+                {openGroups[g.key] && (groupRes || {})[`${cat.id}::${g.name}`] ? (
+                  <button className="qm-gres-card" onClick={() => setResView(g.name)}>
+                    <span className="qm-gres-ic">{(groupRes[`${cat.id}::${g.name}`].yt) ? '📺' : '📄'}</span>
+                    <span className="qm-gres-tx">
+                      <b>參考資料</b>
+                      <span>{[groupRes[`${cat.id}::${g.name}`].yt ? '影片' : null,
+                              groupRes[`${cat.id}::${g.name}`].fileUrl ? '課文檔案' : null,
+                              groupRes[`${cat.id}::${g.name}`].note ? '老師的話' : null].filter(Boolean).join(' · ') || '點開來看'}</span>
+                    </span>
+                    <span className="qm-gres-go">→</span>
+                  </button>
+                ) : null}
                 {openGroups[g.key]
                   ? (editMode ? g.items : [...g.items].sort((a, b) => qmTypeRank(a.type) - qmTypeRank(b.type)))
                       .map((it, ii, arr) => renderUnitRow(it, g.name, editMode ? { list: arr, idx: ii } : null))
@@ -1471,6 +1493,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
       </div>
 
       {/* v350: 指派給哪些學生——直接勾，不必設成作業，單元就會歸到他的篩選底下 */}
+      {resView && (groupRes || {})[`${cat.id}::${resView}`] && (
+        <GroupResViewer name={resView} res={groupRes[`${cat.id}::${resView}`]} onClose={() => setResView(null)}/>
+      )}
+      {resEdit && (
+        <GroupResEditor
+          name={resEdit}
+          res={(groupRes || {})[`${cat.id}::${resEdit}`] || {}}
+          weekId={weekId}
+          onSave={(patch) => onSaveGroupRes && onSaveGroupRes(resEdit, patch)}
+          onClose={() => setResEdit(null)}
+        />
+      )}
       {assignItem && ReactDOM.createPortal(
         <div className="qm-copy-overlay" onClick={() => setAssignItem(null)}>
           <div className="qm-copy-modal" onClick={e => e.stopPropagation()}>
@@ -6194,38 +6228,156 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
           ))}
         </svg>
 
-        <div className="dm-col dm-col-l">
-          {pairs.map(p => (
-            <button key={p.id} data-dm-l={p.id} type="button"
-              className={'dm-chip dm-word'
-                + (links[p.id] ? ' linked' : '')
-                + (sel && sel.side === 'L' && sel.id === p.id ? ' sel' : '')
-                + (wrongFlash && wrongFlash.l === p.id ? ' wrong' : '')}
-              style={links[p.id] ? { '--dm-c': DM_HUES[Object.keys(links).indexOf(p.id) % DM_HUES.length] } : undefined}
-              onClick={() => pick('L', p.id)}>
-              <span className="dm-dot"/>
-              <span className="dm-txt">{p.word}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="dm-col dm-col-r">
-          {rights.map(p => (
-            <button key={p.id} data-dm-r={p.id} type="button"
-              className={'dm-chip dm-def'
-                + (links[p.id] ? ' linked' : '')
-                + (sel && sel.side === 'R' && sel.id === p.id ? ' sel' : '')
-                + (wrongFlash && wrongFlash.r === p.id ? ' wrong' : '')}
-              style={links[p.id] ? { '--dm-c': DM_HUES[Object.keys(links).indexOf(p.id) % DM_HUES.length] } : undefined}
-              onClick={() => pick('R', p.id)}>
-              <span className="dm-txt">{p.def}</span>
-              <span className="dm-dot"/>
-            </button>
-          ))}
-        </div>
+        {/* v368: 左右各自放進同一個 grid 的同一列 → 兩邊的格子高度一致、行對行對齊，
+            連線才會是漂亮的水平曲線。點一律朝向中間：左欄在右緣、右欄在左緣。 */}
+        {pairs.map((p, i) => (
+          <button key={'L' + p.id} data-dm-l={p.id} type="button"
+            style={{ gridColumn: 1, gridRow: i + 1,
+              ...(links[p.id] ? { '--dm-c': DM_HUES[Object.keys(links).indexOf(p.id) % DM_HUES.length] } : null) }}
+            className={'dm-chip dm-word'
+              + (links[p.id] ? ' linked' : '')
+              + (sel && sel.side === 'L' && sel.id === p.id ? ' sel' : '')
+              + (wrongFlash && wrongFlash.l === p.id ? ' wrong' : '')}
+            onClick={() => pick('L', p.id)}>
+            <span className="dm-txt">{p.word}</span>
+            <span className="dm-dot"/>
+          </button>
+        ))}
+        {rights.map((p, i) => (
+          <button key={'R' + p.id} data-dm-r={p.id} type="button"
+            style={{ gridColumn: 2, gridRow: i + 1,
+              ...(links[p.id] ? { '--dm-c': DM_HUES[Object.keys(links).indexOf(p.id) % DM_HUES.length] } : null) }}
+            className={'dm-chip dm-def'
+              + (links[p.id] ? ' linked' : '')
+              + (sel && sel.side === 'R' && sel.id === p.id ? ' sel' : '')
+              + (wrongFlash && wrongFlash.r === p.id ? ' wrong' : '')}
+            onClick={() => pick('R', p.id)}>
+            <span className="dm-dot"/>
+            <span className="dm-txt">{p.def}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-Object.assign(window, { DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });
+/* ══════════════════════════════════════════════════════════════
+   v367: 群組參考資料（文章影片／檔案／說明）
+   一個群組（例：Grandma and the great gourd）底下可能有選擇題、手寫題、
+   reading skill 分析……讓老師在群組最上面掛一次文章來源，全部共用。
+   ══════════════════════════════════════════════════════════════ */
+function GroupResViewer({ name, res, onClose }) {
+  const embed = res.yt && window.toYouTubeEmbed ? window.toYouTubeEmbed(res.yt) : '';
+  return ReactDOM.createPortal(
+    <div className="gres-overlay" onClick={onClose}>
+      <div className="gres-modal" onClick={e => e.stopPropagation()}>
+        <div className="gres-head">
+          <div>
+            <span className="gres-kicker">參考資料</span>
+            <b>{name}</b>
+          </div>
+          <button className="gres-x" onClick={onClose} aria-label="關閉">
+            <window.Icon name="close" size={16}/>
+          </button>
+        </div>
+        <div className="gres-body">
+          {embed ? (
+            <div className="gres-video">
+              <iframe src={embed} frameBorder="0" allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"/>
+            </div>
+          ) : null}
+          {res.note ? <div className="gres-note">{res.note}</div> : null}
+          {res.fileUrl ? (
+            <a className="gres-file" href={res.fileUrl} target="_blank" rel="noopener noreferrer">
+              <span>📄</span><span>{res.fileName || '開啟課文檔案'}</span><span className="gres-file-go">↗</span>
+            </a>
+          ) : null}
+          {!embed && !res.note && !res.fileUrl && <div className="qm-unit-empty">老師還沒放參考資料。</div>}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function GroupResEditor({ name, res, weekId, onSave, onClose }) {
+  const [yt, setYt]     = useQM(res.yt || '');
+  const [note, setNote] = useQM(res.note || '');
+  const [fileUrl, setFileUrl]   = useQM(res.fileUrl || '');
+  const [fileName, setFileName] = useQM(res.fileName || '');
+  const [busy, setBusy] = useQM(false);
+  const [err, setErr]   = useQM('');
+  const fileRef = React.useRef(null);
+
+  const pick = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    setBusy(true); setErr('');
+    try {
+      const key = 'group_' + String(name).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40) + '_' + Date.now();
+      const url = await window.uploadPdfToStorage(weekId, key, f);
+      setFileUrl(url); setFileName(f.name);
+    } catch (ex) { setErr('上傳失敗：' + ((ex && ex.message) || '')); }
+    setBusy(false);
+  };
+
+  const save = () => {
+    const v = String(yt).trim();
+    if (v && window.toYouTubeEmbed && !window.toYouTubeEmbed(v)) {
+      setErr('這個 YouTube 連結看不懂——貼影片網址（youtube.com/watch?v=… 或 youtu.be/…）');
+      return;
+    }
+    onSave({ yt: v, note: String(note).trim(), fileUrl, fileName });
+    onClose();
+  };
+
+  return ReactDOM.createPortal(
+    <div className="gres-overlay" onClick={onClose}>
+      <div className="gres-modal" onClick={e => e.stopPropagation()}>
+        <div className="gres-head">
+          <div>
+            <span className="gres-kicker">這個群組的參考資料</span>
+            <b>{name}</b>
+          </div>
+          <button className="gres-x" onClick={onClose} aria-label="關閉">
+            <window.Icon name="close" size={16}/>
+          </button>
+        </div>
+        <div className="gres-body gres-edit">
+          <label className="gres-lab">📺 YouTube 影片連結</label>
+          <input className="gres-in" value={yt} onChange={e => { setYt(e.target.value); setErr(''); }}
+            placeholder="https://www.youtube.com/watch?v=…（留空＝沒有影片）"/>
+
+          <label className="gres-lab">📄 課文檔案（PDF／圖片）</label>
+          {fileUrl ? (
+            <div className="gres-filerow">
+              <a href={fileUrl} target="_blank" rel="noopener noreferrer">{fileName || '已上傳的檔案'}</a>
+              <button className="gres-btn ghost" onClick={() => { setFileUrl(''); setFileName(''); }}>移除</button>
+            </div>
+          ) : (
+            <button className="gres-btn" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>
+              {busy ? '上傳中…' : '⬆ 選擇檔案上傳'}
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={pick}/>
+
+          <label className="gres-lab">📝 給學生的說明（選填）</label>
+          <textarea className="gres-in gres-ta" rows={3} value={note} onChange={e => setNote(e.target.value)}
+            placeholder="例：先看影片，再回答下面的題目。不懂的單字可以先做上面的單字卡。"/>
+
+          {err && <div className="notify-msg err">⚠️ {err}</div>}
+          <div className="gres-actions">
+            <button className="gres-btn primary" onClick={save} disabled={busy}>儲存</button>
+            <button className="gres-btn ghost" onClick={onClose}>取消</button>
+          </div>
+          <div className="gres-help">存好之後，這個群組最上面會出現一張「參考資料」卡，學生點開就能看影片或課文。</div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+Object.assign(window, { GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });

@@ -3171,53 +3171,60 @@
   }
 }
 
-/* ═══════════ v365：配對連線（Definition Match）═══════════ */
+/* ═══════════ v365：配對連線（Definition Match）═══════════
+   v368（Alan 回饋）：左右拉開、行對行對齊、圓點一律朝中間 */
 .dm-hint {
   text-align: center; font-family: var(--sans); font-size: 13.5px; color: var(--ink-3, #8a8270);
-  margin: 6px 0 18px; letter-spacing: .01em;
+  margin: 6px 0 22px; letter-spacing: .01em;
 }
+/* 兩欄放在同一個 grid，第 i 列的左右格子共用同一列高 → 一定對齊 */
 .dm-wrap {
-  position: relative; display: grid; grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
-  gap: 46px; max-width: 900px; margin: 0 auto; padding: 4px 6px 24px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  column-gap: clamp(72px, 13vw, 168px);
+  row-gap: 14px;
+  align-items: stretch;
+  max-width: 1060px; margin: 0 auto; padding: 4px 10px 28px;
 }
 .dm-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .dm-line {
-  fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .85;
-  stroke-dasharray: 1000; stroke-dashoffset: 1000;
+  fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .9;
+  stroke-dasharray: 1200; stroke-dashoffset: 1200;
   animation: dmDraw .55s cubic-bezier(.22,1,.36,1) forwards;
-  filter: drop-shadow(0 1px 2px rgba(21,19,14,.18));
+  filter: drop-shadow(0 1px 2px rgba(21,19,14,.16));
 }
 @keyframes dmDraw { to { stroke-dashoffset: 0; } }
 
-.dm-col { display: flex; flex-direction: column; gap: 12px; }
 .dm-chip {
-  position: relative; display: flex; align-items: center; gap: 10px;
-  width: 100%; min-height: 54px; padding: 12px 14px;
+  position: relative; display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 58px; padding: 12px 16px;
   background: var(--bg-card, #faf7f0);
   border: 1.5px solid var(--border, #e5dfc8); border-radius: 14px;
   font-family: inherit; text-align: left; cursor: pointer;
   transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease;
 }
-.dm-chip:hover { border-color: #C9A84C; transform: translateY(-1px); }
+.dm-chip:hover { border-color: #C9A84C; }
 .dm-txt { flex: 1; min-width: 0; }
+.dm-word { justify-content: flex-end; }          /* 單字靠右，貼近中間的連線 */
 .dm-word .dm-txt {
+  flex: 0 1 auto; text-align: right;
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
-  font-size: 19px; font-weight: 700; color: var(--ink, #15130e); letter-spacing: .01em;
+  font-size: 20px; font-weight: 700; color: var(--ink, #15130e); letter-spacing: .01em;
 }
 .dm-def .dm-txt { font-size: 14px; line-height: 1.5; color: var(--ink-2, #5c554a); }
+/* 圓點永遠朝向中間：左欄在最右、右欄在最左（JSX 的順序已經排好） */
 .dm-dot {
-  flex: none; width: 11px; height: 11px; border-radius: 50%;
+  flex: none; width: 12px; height: 12px; border-radius: 50%;
   background: #fff; border: 2px solid var(--border, #d9cfb6);
   transition: background .16s, border-color .16s, transform .16s;
 }
-.dm-col-l .dm-chip { flex-direction: row-reverse; }   /* 圓點靠右（朝向連線） */
-.dm-col-l .dm-txt { text-align: right; }
 
 .dm-chip.sel {
   border-color: var(--g-c, #8B3120); background: #fff;
   box-shadow: 0 0 0 3px rgba(139,49,32,.13), 0 8px 20px -12px rgba(139,49,32,.5);
 }
-.dm-chip.sel .dm-dot { background: var(--g-c, #8B3120); border-color: var(--g-c, #8B3120); transform: scale(1.25); }
+.dm-chip.sel .dm-dot { background: var(--g-c, #8B3120); border-color: var(--g-c, #8B3120); transform: scale(1.3); }
 
 .dm-chip.linked {
   border-color: var(--dm-c, #2E7D5B); background: #fff; cursor: default;
@@ -3245,10 +3252,12 @@
 .dm-review-row b { flex: none; min-width: 116px; font-family: 'Lora', Georgia, serif; color: var(--ink, #15130e); }
 .dm-review-row span { color: var(--ink-2, #5c554a); line-height: 1.5; }
 
-@media (max-width: 700px) {
-  .dm-wrap { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 22px; padding: 4px 2px 20px; }
-  .dm-chip { min-height: 48px; padding: 10px 11px; gap: 8px; border-radius: 12px; }
+@media (max-width: 760px) {
+  .dm-wrap { column-gap: 46px; row-gap: 10px; padding: 4px 4px 20px;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); }
+  .dm-chip { min-height: 50px; padding: 10px 12px; gap: 9px; border-radius: 12px; }
   .dm-word .dm-txt { font-size: 16px; }
   .dm-def .dm-txt { font-size: 12.5px; line-height: 1.45; }
   .dm-hint { font-size: 12.5px; margin-bottom: 14px; }
+  .dm-dot { width: 10px; height: 10px; }
 }
