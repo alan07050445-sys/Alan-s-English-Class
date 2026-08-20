@@ -5324,7 +5324,20 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
     const k = manual ? `m:${manual.toLowerCase()}` : (keyOf(t.it.title) || `_${t.id}`);
     (byKey[k] = byKey[k] || []).push(t);
   });
-  const sortRows = (a, b) => (a.done - b.done) || (qmTypeRank(a.it.type) - qmTypeRank(b.it.type)) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')); // v273: 組內按學習順序
+  // v371: 組內順序＝「先分類、再題型」。
+  //   原本只看題型，於是閱讀理解的『測驗』(quiz rank 1) 會插到單字的配對連線(1.5)、填空(2) 前面
+  //   ——Alan 要的是「單字全部做完才進閱讀理解」。分類順序就用 CATEGORIES 的順序
+  //   （單字 → 文法 → 字根 → 閱讀理解）。
+  //   另外拿掉「做完的排後面」：這是一條學習路徑，做完就跳位會讓順序一直變；
+  //   完成的那列本來就有綠勾＋淺綠底，不必再靠位置區分。
+  const catRank = (t) => {
+    const i = (categories || []).findIndex(c => c.id === (t.cat && t.cat.id));
+    return i < 0 ? 99 : i;
+  };
+  const sortRows = (a, b) =>
+    (catRank(a) - catRank(b)) ||
+    (qmTypeRank(a.it.type) - qmTypeRank(b.it.type)) ||
+    String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
   const entries = Object.values(byKey).map(group => {
     group.sort(sortRows);
     const manualName = String(group[0].it.group || '').trim(); // v254
