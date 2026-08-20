@@ -6513,3 +6513,17 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .qm-fcb-must { font-size: 12px; font-weight: 700; color: #8a6d1c; margin-bottom: 8px; text-align: center; }
 .qm-btn.primary:disabled { opacity: .55; cursor: not-allowed; }
 .qm-fc-start-btn:disabled { opacity: .55; cursor: not-allowed; }
+/* v365：配對連線編輯器 */
+.dme-list { display: flex; flex-direction: column; gap: 6px; }
+.dme-row { display: flex; align-items: center; gap: 6px; }
+.dme-n { flex: none; width: 20px; text-align: right; font-family: var(--mono, monospace); font-size: 11px; color: var(--ink-3, #8a8270); }
+.dme-in { padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 6px;
+  background: var(--bg, #f6f1e6); color: var(--ink, #15130e); font-family: inherit; font-size: 13px; }
+.dme-word { flex: 0 0 30%; font-weight: 700; }
+.dme-def { flex: 1; min-width: 0; }
+.dme-link { flex: none; font-size: 12px; opacity: .5; }
+.dme-tools { flex: none; display: flex; gap: 2px; }
+.dme-tools button { width: 22px; height: 26px; border: 1px solid var(--border, #e5dfc8); background: #fff;
+  border-radius: 5px; cursor: pointer; font-size: 10px; color: var(--ink-2, #5c554a); }
+.dme-tools button:disabled { opacity: .35; cursor: default; }
+.dme-tools .dme-del { color: #b23c27; }

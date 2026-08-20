@@ -3170,3 +3170,85 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ═══════════ v365：配對連線（Definition Match）═══════════ */
+.dm-hint {
+  text-align: center; font-family: var(--sans); font-size: 13.5px; color: var(--ink-3, #8a8270);
+  margin: 6px 0 18px; letter-spacing: .01em;
+}
+.dm-wrap {
+  position: relative; display: grid; grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  gap: 46px; max-width: 900px; margin: 0 auto; padding: 4px 6px 24px;
+}
+.dm-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.dm-line {
+  fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .85;
+  stroke-dasharray: 1000; stroke-dashoffset: 1000;
+  animation: dmDraw .55s cubic-bezier(.22,1,.36,1) forwards;
+  filter: drop-shadow(0 1px 2px rgba(21,19,14,.18));
+}
+@keyframes dmDraw { to { stroke-dashoffset: 0; } }
+
+.dm-col { display: flex; flex-direction: column; gap: 12px; }
+.dm-chip {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 54px; padding: 12px 14px;
+  background: var(--bg-card, #faf7f0);
+  border: 1.5px solid var(--border, #e5dfc8); border-radius: 14px;
+  font-family: inherit; text-align: left; cursor: pointer;
+  transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.dm-chip:hover { border-color: #C9A84C; transform: translateY(-1px); }
+.dm-txt { flex: 1; min-width: 0; }
+.dm-word .dm-txt {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 19px; font-weight: 700; color: var(--ink, #15130e); letter-spacing: .01em;
+}
+.dm-def .dm-txt { font-size: 14px; line-height: 1.5; color: var(--ink-2, #5c554a); }
+.dm-dot {
+  flex: none; width: 11px; height: 11px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--border, #d9cfb6);
+  transition: background .16s, border-color .16s, transform .16s;
+}
+.dm-col-l .dm-chip { flex-direction: row-reverse; }   /* 圓點靠右（朝向連線） */
+.dm-col-l .dm-txt { text-align: right; }
+
+.dm-chip.sel {
+  border-color: var(--g-c, #8B3120); background: #fff;
+  box-shadow: 0 0 0 3px rgba(139,49,32,.13), 0 8px 20px -12px rgba(139,49,32,.5);
+}
+.dm-chip.sel .dm-dot { background: var(--g-c, #8B3120); border-color: var(--g-c, #8B3120); transform: scale(1.25); }
+
+.dm-chip.linked {
+  border-color: var(--dm-c, #2E7D5B); background: #fff; cursor: default;
+  box-shadow: 0 2px 10px -6px var(--dm-c, #2E7D5B);
+}
+.dm-chip.linked:hover { transform: none; }
+.dm-chip.linked .dm-dot { background: var(--dm-c, #2E7D5B); border-color: var(--dm-c, #2E7D5B); }
+.dm-chip.linked .dm-txt { color: var(--ink, #15130e); }
+
+.dm-chip.wrong { border-color: #D6533C; background: #fdf1ee; animation: dmShake .42s; }
+@keyframes dmShake {
+  0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dm-line { animation: none; stroke-dashoffset: 0; }
+  .dm-chip.wrong { animation: none; }
+}
+
+.dm-review { margin: 18px auto 0; max-width: 560px; text-align: left;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 12px; background: var(--bg-card, #faf7f0); padding: 12px 14px; }
+.dm-review-head { font-family: var(--sans); font-size: 12px; font-weight: 800; color: var(--ink-3, #8a8270); margin-bottom: 8px; }
+.dm-review-row { display: flex; gap: 10px; padding: 6px 0; border-top: 1px solid #f0ebdd; font-size: 13.5px; }
+.dm-review-row:first-of-type { border-top: none; }
+.dm-review-row b { flex: none; min-width: 116px; font-family: 'Lora', Georgia, serif; color: var(--ink, #15130e); }
+.dm-review-row span { color: var(--ink-2, #5c554a); line-height: 1.5; }
+
+@media (max-width: 700px) {
+  .dm-wrap { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 22px; padding: 4px 2px 20px; }
+  .dm-chip { min-height: 48px; padding: 10px 11px; gap: 8px; border-radius: 12px; }
+  .dm-word .dm-txt { font-size: 16px; }
+  .dm-def .dm-txt { font-size: 12.5px; line-height: 1.45; }
+  .dm-hint { font-size: 12.5px; margin-bottom: 14px; }
+}

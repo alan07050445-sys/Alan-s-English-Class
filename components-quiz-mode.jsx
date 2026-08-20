@@ -151,6 +151,7 @@ function getQuizItems(items) {
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
     (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
+    (item.type === 'def-match'        && (item.defPairs || []).filter(p => p && p.word && p.def).length >= 2) ||
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
     (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
     (item.type === 'cloze'            && (item.passage || '').includes('[')) ||
@@ -237,18 +238,21 @@ const QM_TYPE_ZH = {
   cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
   'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山',
   'writing-practice': '造句', upload: '上傳作業', 'guided-reading': '分段閱讀',
+  'def-match': '配對連線',
 };
 const QM_TYPE_ICO = {
   flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
   'type-answer': '⌨', 'short-answer': '📖', cloze: '📝', 'circle-answer': '⭕',
   'syllable-div': '✂️', 'word-sort': '🗂', essay: '✍', 'story-mountain': '🏔',
   'writing-practice': '✍', upload: '📎', 'guided-reading': '📖',
+  'def-match': '🔗',
 };
 /* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
    任務清單與學生側欄都按這個順序排；老師編輯模式維持原始順序 */
 const QM_TYPE_ORDER = {
   flashcard: 0,
   'vocab-quiz': 1, quiz: 1,
+  'def-match': 1.5,
   fillblank: 2, cloze: 3, 'guided-reading': 3, 'circle-answer': 4,
   spelling: 5, 'type-answer': 5, 'syllable-div': 5, 'word-sort': 5,
   'short-answer': 6, 'writing-practice': 6,
@@ -351,6 +355,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'short-answer') return (item.saQuestions || []).length;
   if (item.type === 'syllable-div') return (item.sdWords || []).length;
   if (item.type === 'word-sort')    return (item.sortWords || []).length;
+  if (item.type === 'def-match')   return (item.defPairs || []).filter(p => p && p.word && p.def).length;
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
@@ -1312,6 +1317,21 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             onStart={() => setPhase('quiz')}
             resumeAt={resumeFor(it => (it.sdWords || []).length)}
             onRestart={restartFresh}
+          />
+        ) : selectedItem?.type === 'def-match' && phase === 'quiz' ? (
+          <DefMatchPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'def-match' && phase === 'intro' ? (
+          <DefMatchIntro
+            item={selectedItem}
+            prog={qmProg[`${weekId}_${selectedItem.id}`]}
+            onStart={() => setPhase('quiz')}
           />
         ) : selectedItem?.type === 'word-sort' && phase === 'quiz' ? (
           <WordSortPlayer
@@ -5990,4 +6010,221 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   );
 }
 
-Object.assign(window, { SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });
+/* ══════════════════════════════════════════════════════════════
+   v365: 配對連線（Definition Match）
+   左邊單字、右邊解釋（打亂），小朋友點一邊再點另一邊就會連起來。
+   · 點左再點右、點右再點左都可以（小朋友不用記順序）
+   · 連對＝線鎖起來、兩邊變成完成樣式；連錯＝紅色抖一下，那個字記一次錯
+   · 分數＝第一次就連對的題數（跟其他題型一致）
+   線是 SVG 疊在上面畫的，位置用 getBoundingClientRect 量，
+   換方向／捲動／視窗變大都會重算。
+   ══════════════════════════════════════════════════════════════ */
+const DM_HUES = ['#8B3120', '#2E7D5B', '#2E6F9E', '#8A5FA8', '#B07A16', '#B0466B'];
+
+function DefMatchIntro({ item, prog, onStart }) {
+  const pairs = (item.defPairs || []).filter(p => p && p.word && p.def);
+  const done = prog && prog.done;
+  const pct = (prog && prog.score != null && prog.total) ? Math.round(prog.score / prog.total * 100) : null;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">🔗</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{pairs.length} 組配對</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>👆</span><span>點左邊的單字，再點右邊它的意思，就會連起來</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>連對了線會留著；連錯會抖一下，可以再試</span></div>
+        <div className="qm-intro-rule-row"><span>⭐</span><span>第一次就連對的才算分，全部連完就結束</span></div>
+      </div>
+      {done && pct != null && <div className="qm-intro-done">✓ 上次 {pct} 分</div>}
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始配對 · Start →</button>
+      </div>
+    </div>
+  );
+}
+
+function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const pairs = useQMM(
+    () => (item.defPairs || []).filter(p => p && p.word && p.def)
+      .map((p, i) => ({ ...p, id: p.id || ('dm' + i) })),
+    [item.id]
+  );
+  const rights = useQMM(() => shuffleArr(pairs.slice()), [item.id]);
+
+  const [sel, setSel]       = useQM(null);          // { side:'L'|'R', id }
+  const [links, setLinks]   = useQM({});            // pairId → true（已連對）
+  const [wrongFlash, setWrongFlash] = useQM(null);  // { l, r }
+  const [firstTry, setFirstTry] = useQM({});        // pairId → true 代表第一次就對
+  const [done, setDone]     = useQM(false);
+  const missedRef = React.useRef(new Set());
+  const wrapRef = React.useRef(null);
+  const [lines, setLines] = useQM([]);              // 畫線用的座標
+  const [tick, setTick] = useQM(0);                 // 觸發重算
+
+  const total = pairs.length;
+  const linkedN = Object.keys(links).length;
+
+  // 量位置畫線
+  const measure = () => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const base = wrap.getBoundingClientRect();
+    const out = [];
+    Object.keys(links).forEach((pid, i) => {
+      const l = wrap.querySelector(`[data-dm-l="${pid}"]`);
+      const r = wrap.querySelector(`[data-dm-r="${pid}"]`);
+      if (!l || !r) return;
+      const a = l.getBoundingClientRect(), b = r.getBoundingClientRect();
+      out.push({
+        pid,
+        x1: a.right - base.left, y1: a.top - base.top + a.height / 2,
+        x2: b.left - base.left,  y2: b.top - base.top + b.height / 2,
+        color: DM_HUES[Object.keys(links).indexOf(pid) % DM_HUES.length],
+        good: !!firstTry[pid],
+      });
+    });
+    setLines(out);
+  };
+  useQME(() => { measure(); }, [links, tick]);
+  useQME(() => {
+    const on = () => setTick(t => t + 1);
+    window.addEventListener('resize', on);
+    const ro = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(on) : null;
+    if (ro && wrapRef.current) ro.observe(wrapRef.current);
+    return () => { window.removeEventListener('resize', on); if (ro) ro.disconnect(); };
+  }, []);
+
+  const finish = (linkMap) => {
+    const correct = Object.keys(linkMap).filter(pid => firstTry[pid]).length;
+    const wrongList = pairs.filter(p => !firstTry[p.id])
+      .map(p => ({ q: p.word, answer: p.def }));
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total, wrongQuestions: wrongList });
+    if (window.playSound) window.playSound(correct === total ? 'complete' : 'correct');
+    setDone(true);
+  };
+
+  const tryConnect = (lid, rid) => {
+    if (links[lid]) return;
+    if (lid === rid) {                                  // 連對了
+      const wasFirst = !missedRef.current.has(lid);
+      const nf = { ...firstTry, [lid]: wasFirst };
+      const nl = { ...links, [lid]: true };
+      setFirstTry(nf); setLinks(nl); setSel(null);
+      if (window.playSound) window.playSound('correct');
+      if (Object.keys(nl).length === total) {
+        // 用最新的 firstTry 算分（setState 是非同步的，這裡直接用 nf）
+        setTimeout(() => {
+          const correct = Object.keys(nl).filter(pid => nf[pid]).length;
+          const wrongList = pairs.filter(p => !nf[p.id]).map(p => ({ q: p.word, answer: p.def }));
+          saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total, wrongQuestions: wrongList });
+          if (window.playSound) window.playSound(correct === total ? 'complete' : 'correct');
+          setDone(true);
+        }, 420);
+      }
+    } else {                                            // 連錯
+      missedRef.current.add(lid);
+      setWrongFlash({ l: lid, r: rid });
+      if (window.playSound) window.playSound('wrong');
+      setTimeout(() => { setWrongFlash(null); setSel(null); }, 620);
+    }
+  };
+
+  const pick = (side, id) => {
+    if (done || wrongFlash) return;
+    if (links[id]) return;                              // 已完成的不能再點
+    if (!sel) { setSel({ side, id }); return; }
+    if (sel.side === side) { setSel({ side, id }); return; }   // 同一邊＝改選
+    if (side === 'R') tryConnect(sel.id, id);
+    else              tryConnect(id, sel.id);
+  };
+
+  if (done) {
+    const correct = Object.keys(links).filter(pid => firstTry[pid]).length;
+    const pct = Math.round(correct / total * 100);
+    const emoji = pct === 100 ? '🏆' : pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪';
+    return (
+      <div className="qm-result">
+        <div className="qm-result-emoji">{emoji}</div>
+        <div className="qm-result-cat-title">{item.title}</div>
+        <div className="qm-result-score">
+          <span className="qm-result-num">{correct}</span>
+          <span className="qm-result-denom"> / {total}</span>
+        </div>
+        <div className="qm-result-pct">一次就連對 {pct}%</div>
+        {correct < total && (
+          <div className="dm-review">
+            <div className="dm-review-head">再看一次這幾組</div>
+            {pairs.filter(p => !firstTry[p.id]).map(p => (
+              <div key={p.id} className="dm-review-row"><b>{p.word}</b><span>{p.def}</span></div>
+            ))}
+          </div>
+        )}
+        <div className="qm-result-btns">
+          <button className="qm-btn secondary" onClick={() => {
+            missedRef.current = new Set();
+            setLinks({}); setFirstTry({}); setSel(null); setDone(false); setTick(t => t + 1);
+          }}>再試一次</button>
+          <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="qm-player-shell">
+      <div className="qm-player-head">
+        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="qm-player-bar-wrap">
+          <div className="qm-player-bar">
+            <div className="qm-player-fill" style={{ width: (linkedN / total * 100) + '%' }}/>
+          </div>
+        </div>
+        <span className="qm-player-counter">{linkedN} / {total}</span>
+      </div>
+
+      <div className="dm-hint">把左邊的單字，連到右邊正確的意思</div>
+
+      <div className="dm-wrap" ref={wrapRef}>
+        <svg className="dm-svg" aria-hidden="true">
+          {lines.map(ln => (
+            <path key={ln.pid}
+              d={`M ${ln.x1} ${ln.y1} C ${ln.x1 + Math.max(28, (ln.x2 - ln.x1) * 0.42)} ${ln.y1}, ${ln.x2 - Math.max(28, (ln.x2 - ln.x1) * 0.42)} ${ln.y2}, ${ln.x2} ${ln.y2}`}
+              className="dm-line" style={{ stroke: ln.color }}/>
+          ))}
+        </svg>
+
+        <div className="dm-col dm-col-l">
+          {pairs.map(p => (
+            <button key={p.id} data-dm-l={p.id} type="button"
+              className={'dm-chip dm-word'
+                + (links[p.id] ? ' linked' : '')
+                + (sel && sel.side === 'L' && sel.id === p.id ? ' sel' : '')
+                + (wrongFlash && wrongFlash.l === p.id ? ' wrong' : '')}
+              style={links[p.id] ? { '--dm-c': DM_HUES[Object.keys(links).indexOf(p.id) % DM_HUES.length] } : undefined}
+              onClick={() => pick('L', p.id)}>
+              <span className="dm-dot"/>
+              <span className="dm-txt">{p.word}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="dm-col dm-col-r">
+          {rights.map(p => (
+            <button key={p.id} data-dm-r={p.id} type="button"
+              className={'dm-chip dm-def'
+                + (links[p.id] ? ' linked' : '')
+                + (sel && sel.side === 'R' && sel.id === p.id ? ' sel' : '')
+                + (wrongFlash && wrongFlash.r === p.id ? ' wrong' : '')}
+              style={links[p.id] ? { '--dm-c': DM_HUES[Object.keys(links).indexOf(p.id) % DM_HUES.length] } : undefined}
+              onClick={() => pick('R', p.id)}>
+              <span className="dm-txt">{p.def}</span>
+              <span className="dm-dot"/>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });

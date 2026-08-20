@@ -17,6 +17,7 @@ const TYPE_OPTIONS = [
   { id: "story-mountain",   label: "Story Mountain",   hint: "🏔 故事山脈 — 逐步填寫 Introduction → Rising Action → Climax → Falling Action → Resolution，AI 批改結構與文法（10 分制）" },
   { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
   { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
+  { id: "def-match",        label: "配對連線 🔗",       hint: "🔗 配對連線 — 左邊單字、右邊解釋（自動打亂），學生點一點連起來，系統自動批改" },
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
@@ -52,7 +53,7 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, onClose, onSave
     // v261: 點到編輯器外面「不再」直接關閉——出到一半的題目會全部不見（Alan 踩過）。
     // 要離開請按右上 ✕ 或 Cancel。
     <div className="modal-backdrop">
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -231,6 +232,11 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, onClose, onSave
             <SyllableDivEditor
               words={form.sdWords || []}
               onChangeWords={ws => update("sdWords", ws)}
+            />
+          ) : form.type === "def-match" ? (
+            <DefMatchEditor
+              pairs={form.defPairs || []}
+              onChangePairs={ps => update("defPairs", ps)}
             />
           ) : form.type === "word-sort" ? (
             <WordSortEditor
@@ -2390,6 +2396,105 @@ function GrCropModal({ url, group, onCancel, onConfirm }) {
 }
 
 /* ── SyllableDivEditor ── */
+/* v365: 配對連線編輯器——一行一組「單字 [Tab] 解釋」，跟聽寫一樣可以從 Excel 直接貼 */
+function DefMatchEditor({ pairs, onChangePairs }) {
+  const [importing, setImporting] = useS(false);
+  const [importText, setImportText] = useS('');
+  const [importErr, setImportErr] = useS('');
+
+  const add = () => onChangePairs([...pairs, { id: 'dm' + Date.now(), word: '', def: '' }]);
+  const del = (id) => onChangePairs(pairs.filter(p => p.id !== id));
+  const upd = (id, field, val) => onChangePairs(pairs.map(p => p.id === id ? { ...p, [field]: val } : p));
+  const move = (id, dir) => {
+    const i = pairs.findIndex(p => p.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= pairs.length) return;
+    const arr = pairs.slice(); [arr[i], arr[j]] = [arr[j], arr[i]];
+    onChangePairs(arr);
+  };
+
+  const doImport = () => {
+    const parsed = [];
+    importText.split('\n').map(l => l.trim()).filter(Boolean).forEach((line, i) => {
+      // 支援 Tab、逗號、破折號、冒號分隔（Excel 貼上多半是 Tab）
+      const m = line.split('\t');
+      let word = '', def = '';
+      if (m.length >= 2) { word = m[0].trim(); def = m.slice(1).join(' ').trim(); }
+      else {
+        const m2 = line.match(/^(.+?)\s*[:：\-–—]\s*(.+)$/);
+        if (m2) { word = m2[1].trim(); def = m2[2].trim(); }
+      }
+      if (word && def) parsed.push({ id: 'dm' + Date.now() + i, word, def });
+    });
+    if (!parsed.length) { setImportErr('沒有解析到資料——一行一組，中間用 Tab（或冒號、破折號）隔開'); return; }
+    onChangePairs([...pairs, ...parsed]);
+    setImportText(''); setImporting(false); setImportErr('');
+  };
+
+  const bad = pairs.filter(p => !p.word || !p.def).length;
+
+  return (
+    <div className="field">
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <label className="field-label" style={{margin:0}}>配對組數（{pairs.length}）</label>
+        <div style={{display:'flex',gap:6}}>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}}
+            onClick={() => { setImporting(v => !v); setImportErr(''); }}>
+            {importing ? '✕ 取消' : '⬇ 貼上匯入'}
+          </button>
+          <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={add}>+ Add</button>
+        </div>
+      </div>
+
+      {importing && (
+        <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper,#f9f7f2)'}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
+            從 Excel / Google Sheets 複製貼上：<br/>
+            <code style={{background:'rgba(0,0,0,0.06)',padding:'1px 5px',borderRadius:2}}>單字 [Tab] 解釋</code>
+            <span style={{display:'block',marginTop:4,color:'var(--ink-faint)'}}>
+              也可以打 <code>producer: an organism that makes its own food</code>（冒號或破折號隔開）
+            </span>
+          </div>
+          <textarea
+            value={importText}
+            onChange={e => { setImportText(e.target.value); setImportErr(''); }}
+            rows={6}
+            placeholder={'producer\tan organism that makes its own food\nconsumer\tan animal that eats other living things\npredator\tan animal that hunts other animals\nprey\tan animal that is hunted for food'}
+            style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',
+              color:'var(--ink)',borderRadius:2,fontSize:12,fontFamily:'var(--mono)',resize:'vertical',
+              boxSizing:'border-box',lineHeight:1.6}}
+          />
+          {importErr && <div style={{color:'#dc2626',fontSize:12,marginTop:4}}>{importErr}</div>}
+          <button className="btn primary" style={{marginTop:8,fontSize:12}} onClick={doImport}>加入清單</button>
+        </div>
+      )}
+
+      {pairs.length === 0 ? (
+        <div className="field-help">還沒有配對——按「+ Add」一組一組打，或用「⬇ 貼上匯入」整批貼進來。至少要 2 組。</div>
+      ) : (
+        <div className="dme-list">
+          {pairs.map((p, i) => (
+            <div key={p.id} className="dme-row">
+              <span className="dme-n">{i + 1}</span>
+              <input className="dme-in dme-word" value={p.word} placeholder="單字 word"
+                onChange={e => upd(p.id, 'word', e.target.value)}/>
+              <span className="dme-link">🔗</span>
+              <input className="dme-in dme-def" value={p.def} placeholder="解釋 definition"
+                onChange={e => upd(p.id, 'def', e.target.value)}/>
+              <div className="dme-tools">
+                <button onClick={() => move(p.id, -1)} disabled={i === 0} title="上移">▲</button>
+                <button onClick={() => move(p.id, 1)} disabled={i === pairs.length - 1} title="下移">▼</button>
+                <button className="dme-del" onClick={() => del(p.id)} title="刪除">✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {bad > 0 && <div className="field-help" style={{color:'#b23c27'}}>⚠️ 有 {bad} 組還沒填完，沒填完的不會出現在題目裡。</div>}
+      <div className="field-help">學生看到的右邊解釋會自動打亂順序，不用自己排。</div>
+    </div>
+  );
+}
+
 function SyllableDivEditor({ words, onChangeWords }) {
   const [importing, setImporting] = useS(false);
   const [importText, setImportText] = useS('');

@@ -1987,6 +1987,7 @@ Object.assign(window, { noteCloudWeeks, guardWeekSave, countWeekItems: _countWee
 const AUTO_STAR_RULES = {
   flashcard: '學習＋填空模式都完成 +10',
   fillblank: '80 分 +10／100 分 +15',
+  'def-match': '比照填空：80 分 +10／100 分 +15',
   'short-answer': '平均 3 星 +10／4 星 +20',
   bonus: '本週作業全部達標：+10（超過 5 個 +15、超過 8 個 +20）',
 };
@@ -2015,7 +2016,7 @@ function autoStarsForItem(item, prog, cloudShape) {
   const pct = autoStarPct(prog, cloudShape);
   if (type === 'flashcard') return (prog.modes && prog.modes.learn && prog.modes.fill) ? 10 : 0;
   if (type === 'short-answer') { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
-  if (type === 'fillblank' || type === 'cloze') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
+  if (type === 'fillblank' || type === 'cloze' || type === 'def-match') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
   return 0;
 }
 // weeks/weekOrder＝這位學生看得到的週次（暑假要先用 filterWeeksForPlan 過濾）
