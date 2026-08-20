@@ -3173,6 +3173,7 @@
 
 /* ═══════════ v365：配對連線（Definition Match）═══════════
    v368（Alan 回饋）：左右拉開、行對行對齊、圓點一律朝中間 */
+.dm-shell { max-width: 1180px; }   /* 配對連線要比一般題型寬，左右才拉得開 */
 .dm-hint {
   text-align: center; font-family: var(--sans); font-size: 13.5px; color: var(--ink-3, #8a8270);
   margin: 6px 0 22px; letter-spacing: .01em;
@@ -3181,11 +3182,11 @@
 .dm-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  column-gap: clamp(72px, 13vw, 168px);
+  grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr);   /* 左邊只放單字，寬度讓給解釋 */
+  column-gap: clamp(96px, 16vw, 220px);
   row-gap: 14px;
   align-items: stretch;
-  max-width: 1060px; margin: 0 auto; padding: 4px 10px 28px;
+  max-width: 1180px; margin: 0 auto; padding: 4px 10px 28px;
 }
 .dm-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .dm-line {
@@ -3212,7 +3213,7 @@
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
   font-size: 20px; font-weight: 700; color: var(--ink, #15130e); letter-spacing: .01em;
 }
-.dm-def .dm-txt { font-size: 14px; line-height: 1.5; color: var(--ink-2, #5c554a); }
+.dm-def .dm-txt { font-size: 16.5px; line-height: 1.5; color: var(--ink-2, #5c554a); }
 /* 圓點永遠朝向中間：左欄在最右、右欄在最左（JSX 的順序已經排好） */
 .dm-dot {
   flex: none; width: 12px; height: 12px; border-radius: 50%;
@@ -3254,10 +3255,10 @@
 
 @media (max-width: 760px) {
   .dm-wrap { column-gap: 46px; row-gap: 10px; padding: 4px 4px 20px;
-    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); }
+    grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); }
   .dm-chip { min-height: 50px; padding: 10px 12px; gap: 9px; border-radius: 12px; }
   .dm-word .dm-txt { font-size: 16px; }
-  .dm-def .dm-txt { font-size: 12.5px; line-height: 1.45; }
+  .dm-def .dm-txt { font-size: 14px; line-height: 1.45; }
   .dm-hint { font-size: 12.5px; margin-bottom: 14px; }
   .dm-dot { width: 10px; height: 10px; }
 }

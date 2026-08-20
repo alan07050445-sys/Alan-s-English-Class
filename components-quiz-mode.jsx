@@ -6206,7 +6206,7 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   }
 
   return (
-    <div className="qm-player-shell">
+    <div className="qm-player-shell dm-shell">
       <div className="qm-player-head">
         <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
