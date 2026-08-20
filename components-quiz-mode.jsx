@@ -1013,7 +1013,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isCircle       = item.type === 'circle-answer';
             const isFlashcard    = item.type === 'flashcard';
             const isUpload       = item.type === 'upload'; // v263
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || isUpload || (isFlashcard && (item.cards || []).length > 0);
+            const isDefMatch     = item.type === 'def-match'; // v366
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
@@ -1049,7 +1050,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
