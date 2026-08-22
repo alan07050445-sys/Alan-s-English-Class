@@ -488,10 +488,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const stopMatchTimer = () => { if (matchTimerRef.current) { clearInterval(matchTimerRef.current); matchTimerRef.current = null; } };
 
   // v318 (#1): 「星號單字」＝獨立分頁。進其他分頁一律 setStarOnly(false) 重置＝不會再卡在只剩星號的（Alan 回報的 bug）。
-  const enterCard = () => { stopMatchTimer(); setMode("card"); setStarOnly(false); setCardIdx(0); setFlipped(false); };
-  const enterStarred = () => { stopMatchTimer(); setMode("card"); setStarOnly(true); setCardIdx(0); setFlipped(false); };
+  const enterCard = () => { stopMatchTimer(); setMode("card"); setCardIdx(0); setFlipped(false); };
 
-  const enterLearn = (flag = false) => { stopMatchTimer(); setStarOnly(false);
+  const enterLearn = (flag = starOnly) => { stopMatchTimer();
     const src = pool(flag);
     setLearnTotal(src.length);
     const order = shuffle([...src]);
@@ -530,8 +529,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     setTestSetup(false);
   };
 
-  const enterMatch = (flag = false) => {
-    setStarOnly(false);
+  const enterMatch = (flag = starOnly) => {
     stopMatchTimer();
     let best = null;
     try { best = parseFloat(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
@@ -598,8 +596,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     }
   };
 
-  const enterFill = (flag = false) => {
-    setStarOnly(false);
+  const enterFill = (flag = starOnly) => {
     stopMatchTimer();
     const src = pool(flag); // v274: 星號池
     const eligible = src.filter(c => c.example && c.example.trim());
@@ -634,6 +631,20 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
   };
 
+  /* v372(#1): 單字卡模式用鍵盤 ← → 換卡、空白鍵翻卡（學生要求，不用一直點按鈕） */
+  useFC_E(() => {
+    if (mode !== 'card') return;
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); setCardIdx(i => Math.min(i + 1, pool().length - 1)); setFlipped(false); }
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setFlipped(f => !f); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode]);
+
   /* v361: 「學習」與「填空」跑完各通知一次——集點用（兩個模式都完成才給星星） */
   useFC_E(() => {
     if (mode === "learn" && learnTotal > 0 && learnQueue.length === 0 && onModeDone) onModeDone("learn");
@@ -642,20 +653,31 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     if (mode === "fill" && fillDone && onModeDone) onModeDone("fill");
   }, [mode, fillDone]);
 
+  /* v372(#3): ⭐ 改成「篩選開關」——亮著時，學習／測驗／配對只出星號單字；
+     再按一次熄掉就回到全部。以前它是獨立分頁、切到別的模式就被重置。 */
+  const toggleStarOnly = () => {
+    const nx = !starOnly;
+    setStarOnly(nx);
+    if (mode === 'learn') enterLearn(nx);
+    else if (mode === 'fill') enterFill(nx);
+    else if (mode === 'match') enterMatch(nx);
+    else { setCardIdx(0); setFlipped(false); }
+  };
+
   // v318 (#1): 保留「星號單字」為獨立分頁（Alan 要回來、只改名）——只在有星號時出現；
   // 點它＝只看星號的單字卡，點其他分頁一律重置回全部（不再卡住）。
   const ModeTabs = ({ active }) => (
     <div className="fc-mode-tabs">
-      <button className={"fc-tab" + (active === "card" && !starOnly ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
+      <button className={"fc-tab" + (active === "card" ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
       <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => enterLearn()}>📖 學習</button>
       <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={() => enterMatch()}>⚡ 配對</button>
-      <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={() => enterFill()}>✏️ 填空</button>
+      <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={() => enterFill()}>📝 測驗</button>
       {stars.size > 0 && (
         <button
-          className={"fc-tab fc-star-filter" + (active === "card" && starOnly ? " active" : "")}
-          onClick={enterStarred}
-          title="只複習你打星號的單字"
-        >⭐ 星號單字（{stars.size}）</button>
+          className={"fc-tab fc-star-filter" + (starOnly ? " active" : "")}
+          onClick={toggleStarOnly}
+          title={starOnly ? '目前只練星號單字——再按一次回到全部' : '只練你打星號的單字（學習／測驗／配對都會跟著只出這些）'}
+        >⭐ 星號單字（{stars.size}）{starOnly ? ' ✓' : ''}</button>
       )}
     </div>
   );
@@ -1175,6 +1197,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
               <div className="fc-fill-text fc-fill-zh">{card.zh}</div>
             )}
           </div>
+          <div className="fc-fill-label">選擇答案</div>
           <div className="fc-fill-choices">
             {fillChoices.map((ch, i) => {
               let cls = "fc-fill-btn";

@@ -1609,7 +1609,15 @@ function FlashcardStandaloneIntro({ item, cat, done, onStart }) {
 }
 
 function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
+  /* v372(#2): 要「學習」和「測驗」兩個模式都跑完，才能按「完成練習」（也才拿得到星星）。
+     已經做過的從進度讀回來，換裝置或重新進來不用重做。 */
+  const [modes, setModes] = useQM(() => {
+    try { return ((loadQMProg()[progressKey] || {}).modes) || {}; } catch (e) { return {}; }
+  });
+  const needLearn = !modes.learn, needTest = !modes.fill;
+  const ready = !needLearn && !needTest;
   const finish = () => {
+    if (!ready) return;
     const n = (item.cards || []).length || 1;
     saveQuizModeCompletion(progressKey, item, { doneCount: n, score: null, total: n });
     if (window.playSound) window.playSound('complete');
@@ -1619,9 +1627,18 @@ function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
     <div className="qm-fc-player-wrap">
       <div className="qm-fc-player-bar">
         <span className="qm-fc-player-title">{item.title}</span>
-        <button className="qm-fc-start-btn" onClick={finish}>✓ 完成練習{isHomework ? ' · 回今天的任務' : ''}</button>
+        {!ready && (
+          <span className="qm-fc-need">
+            還要完成：{[needLearn ? '📖 學習' : null, needTest ? '📝 測驗' : null].filter(Boolean).join('、')}
+          </span>
+        )}
+        <button className="qm-fc-start-btn" onClick={finish} disabled={!ready}
+          title={ready ? undefined : '學習和測驗兩個模式都跑完才能完成'}>
+          {ready ? `✓ 完成練習${isHomework ? ' · 回今天的任務' : ''}` : '🔒 完成練習'}
+        </button>
       </div>
-      <window.FlashcardPlayer item={item} onModeDone={(m) => markFlashcardModeLocal(progressKey, m)}/>
+      <window.FlashcardPlayer item={item}
+        onModeDone={(m) => { markFlashcardModeLocal(progressKey, m); setModes(o => ({ ...o, [m]: true })); }}/>
     </div>
   );
 }
@@ -6077,7 +6094,9 @@ function DefMatchIntro({ item, prog, onStart }) {
     <div className="qm-intro">
       <div className="qm-intro-icon">🔗</div>
       <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{pairs.length} 組配對</div>
+      <div className="qm-intro-meta">
+        {pairs.length} 組配對{pairs.length > 10 ? ` · 分 ${Math.ceil(pairs.length / 10)} 回合，一次連 ${Math.ceil(pairs.length / Math.ceil(pairs.length / 10))} 組` : ''}
+      </div>
       <div className="qm-intro-rules">
         <div className="qm-intro-rule-row"><span>👆</span><span>點左邊的單字，再點右邊它的意思，就會連起來</span></div>
         <div className="qm-intro-rule-row"><span>✅</span><span>連對了線會留著；連錯會抖一下，可以再試</span></div>
@@ -6092,12 +6111,27 @@ function DefMatchIntro({ item, prog, onStart }) {
 }
 
 function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
-  const pairs = useQMM(
+  const allPairs = useQMM(
     () => (item.defPairs || []).filter(p => p && p.word && p.def)
       .map((p, i) => ({ ...p, id: p.id || ('dm' + i) })),
     [item.id]
   );
-  const rights = useQMM(() => shuffleArr(pairs.slice()), [item.id]);
+  /* v372(#4): 一次連 20 組太難也太長——超過 10 組就自動平均切成幾輪
+     （20 → 2 輪各 10；13 → 2 輪 7/6；25 → 3 輪 9/8/8）。分數累計、一輪一輪過。 */
+  const rounds = useQMM(() => {
+    const n = allPairs.length;
+    if (n <= 10) return [allPairs];
+    const k = Math.ceil(n / 10);                 // 輪數
+    const size = Math.ceil(n / k);               // 每輪最多幾組
+    const shuffled = shuffleArr(allPairs.slice());
+    const out = [];
+    for (let i = 0; i < n; i += size) out.push(shuffled.slice(i, i + size));
+    return out;
+  }, [item.id, allPairs]);
+  const [roundIdx, setRoundIdx] = useQM(0);
+  const [bank, setBank] = useQM({ correct: 0, wrong: [] });   // 已完成回合的累計
+  const pairs = rounds[Math.min(roundIdx, rounds.length - 1)] || [];
+  const rights = useQMM(() => shuffleArr(pairs.slice()), [item.id, roundIdx]);
 
   const [sel, setSel]       = useQM(null);          // { side:'L'|'R', id }
   const [links, setLinks]   = useQM({});            // pairId → true（已連對）
@@ -6164,8 +6198,19 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
         setTimeout(() => {
           const correct = Object.keys(nl).filter(pid => nf[pid]).length;
           const wrongList = pairs.filter(p => !nf[p.id]).map(p => ({ q: p.word, answer: p.def }));
-          saveQuizModeCompletion(progressKey, item, { doneCount: total, score: correct, total, wrongQuestions: wrongList });
-          if (window.playSound) window.playSound(correct === total ? 'complete' : 'correct');
+          const accC = bank.correct + correct;
+          const accW = bank.wrong.concat(wrongList);
+          if (roundIdx < rounds.length - 1) {          // v372(#4): 還有下一輪
+            setBank({ correct: accC, wrong: accW });
+            missedRef.current = new Set();
+            setLinks({}); setFirstTry({}); setSel(null);
+            setRoundIdx(roundIdx + 1);
+            if (window.playSound) window.playSound('correct');
+            return;
+          }
+          const grand = allPairs.length;
+          saveQuizModeCompletion(progressKey, item, { doneCount: grand, score: accC, total: grand, wrongQuestions: accW });
+          if (window.playSound) window.playSound(accC === grand ? 'complete' : 'correct');
           setDone(true);
         }, 420);
       }
@@ -6187,8 +6232,9 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   };
 
   if (done) {
-    const correct = Object.keys(links).filter(pid => firstTry[pid]).length;
-    const pct = Math.round(correct / total * 100);
+    const correct = bank.correct + Object.keys(links).filter(pid => firstTry[pid]).length;
+    const grand = allPairs.length;
+    const pct = Math.round(correct / grand * 100);
     const emoji = pct === 100 ? '🏆' : pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪';
     return (
       <div className="qm-result">
@@ -6196,21 +6242,25 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
         <div className="qm-result-cat-title">{item.title}</div>
         <div className="qm-result-score">
           <span className="qm-result-num">{correct}</span>
-          <span className="qm-result-denom"> / {total}</span>
+          <span className="qm-result-denom"> / {grand}</span>
         </div>
         <div className="qm-result-pct">一次就連對 {pct}%</div>
-        {correct < total && (
-          <div className="dm-review">
-            <div className="dm-review-head">再看一次這幾組</div>
-            {pairs.filter(p => !firstTry[p.id]).map(p => (
-              <div key={p.id} className="dm-review-row"><b>{p.word}</b><span>{p.def}</span></div>
-            ))}
-          </div>
-        )}
+        {correct < grand && (() => {
+          const missed = bank.wrong.concat(pairs.filter(p => !firstTry[p.id]).map(p => ({ q: p.word, answer: p.def })));
+          return (
+            <div className="dm-review">
+              <div className="dm-review-head">再看一次這幾組</div>
+              {missed.map((m, i) => (
+                <div key={i} className="dm-review-row"><b>{m.q}</b><span>{m.answer}</span></div>
+              ))}
+            </div>
+          );
+        })()}
         <div className="qm-result-btns">
           <button className="qm-btn secondary" onClick={() => {
             missedRef.current = new Set();
-            setLinks({}); setFirstTry({}); setSel(null); setDone(false); setTick(t => t + 1);
+            setLinks({}); setFirstTry({}); setSel(null); setDone(false);
+            setRoundIdx(0); setBank({ correct: 0, wrong: [] }); setTick(t => t + 1);
           }}>再試一次</button>
           <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
         </div>
@@ -6224,10 +6274,12 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
         <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
-            <div className="qm-player-fill" style={{ width: (linkedN / total * 100) + '%' }}/>
+            <div className="qm-player-fill" style={{ width: ((bank.correct + linkedN) / Math.max(1, allPairs.length) * 100) + '%' }}/>
           </div>
         </div>
-        <span className="qm-player-counter">{linkedN} / {total}</span>
+        <span className="qm-player-counter">
+          {rounds.length > 1 ? `第 ${roundIdx + 1}/${rounds.length} 組 · ` : ''}{linkedN} / {total}
+        </span>
       </div>
 
       <div className="dm-hint">把左邊的單字，連到右邊正確的意思</div>

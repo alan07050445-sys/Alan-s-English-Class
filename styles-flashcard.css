@@ -627,9 +627,10 @@
 /* ══════════════════════════════════════════════════════
    FILL-IN-BLANK MODE (Wordwall-style)
 ══════════════════════════════════════════════════════ */
+/* v372(#2)：測驗模式整體放大（Alan：原本太小） */
 .fc-fill-player {
   display: flex; flex-direction: column;
-  min-height: 420px; padding: 20px 28px 28px;
+  min-height: 560px; padding: 26px 34px 34px;
 }
 .fc-fill-topbar {
   display: flex; justify-content: space-between;
@@ -645,12 +646,12 @@
   border-radius: 4px; margin-bottom: 16px;
 }
 .fc-fill-text {
-  font-size: 36px; font-weight: 700; line-height: 1.4;
+  font-size: 44px; font-weight: 700; line-height: 1.35;
   color: var(--ink); font-family: var(--sans);
-  max-width: 680px;
+  max-width: 880px;
 }
 .fc-fill-zh {
-  font-size: 50px; letter-spacing: 0.02em;
+  font-size: 60px; letter-spacing: 0.02em;
 }
 .fc-fill-blank {
   display: inline-block;
@@ -661,11 +662,11 @@
 }
 .fc-fill-choices {
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: 12px; margin-top: 8px;
+  gap: 16px; margin-top: 8px;
 }
 .fc-fill-btn {
-  padding: 24px 18px; border-radius: 8px; border: none;
-  font-size: 24px; font-weight: 700; font-family: var(--sans);
+  padding: 30px 22px; border-radius: 10px; border: none;
+  font-size: 28px; font-weight: 700; font-family: var(--sans);
   color: #fff; text-align: center; cursor: pointer;
   transition: all 0.15s; box-shadow: 0 4px 0 rgba(0,0,0,0.18);
 }
@@ -1133,4 +1134,16 @@
   .fc-fill-choices { gap: 22px; margin-top: 28px; max-width: 940px; margin-left: auto; margin-right: auto; width: 100%; }
   .fc-fill-btn { padding: 28px 20px; }
   .fc-fill-sentence { padding: 24px 0 40px; }
+}
+
+/* v372(#2)：測驗模式的小標（仿學習單／Quizlet 的「選擇答案」） */
+.fc-fill-label {
+  font-family: var(--sans); font-size: 13px; font-weight: 800; letter-spacing: .06em;
+  color: var(--ink-muted, #8a8270); margin: 4px 0 10px;
+}
+@media (max-width: 768px) {
+  .fc-fill-player { min-height: 440px; padding: 18px 16px 22px; }
+  .fc-fill-choices { gap: 10px; }
+  .fc-fill-btn { padding: 18px 12px; }
+  .fc-fill-label { font-size: 11.5px; }
 }

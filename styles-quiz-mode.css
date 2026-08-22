@@ -3337,3 +3337,8 @@
   .gres-overlay { padding: 0; }
   .gres-modal { width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
 }
+/* v372(#2)：單字卡完成前的提示（學習＋測驗都跑完才解鎖） */
+.qm-fc-need { font-family: var(--sans); font-size: 12px; color: #8a6d1c; background: #fdf6e3;
+  border: 1px solid rgba(201,168,76,.55); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.qm-fc-start-btn:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 700px) { .qm-fc-need { font-size: 11px; padding: 3px 8px; } }

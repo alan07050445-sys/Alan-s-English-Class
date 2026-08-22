@@ -5404,7 +5404,11 @@ button.lldm-spk:active { transform: scale(.92); }
 .sa-wchip.on { border-color: #8B3120; background: #fbf3f0; }
 .sa-wchip.on b { color: #8B3120; }
 
-.sa-mx-wrap { overflow-x: auto; border: 1px solid #e2d7bd; border-radius: 14px; background: #fff; }
+/* v372(#5)：發派矩陣往下捲時，最上面那排學生名字要跟著（Alan：捲下去就不知道在哪一欄）。
+   thead 本來就 position:sticky，但 .sa-mx-wrap 只有 overflow-x、垂直不是捲動容器，
+   所以黏不住。給它一個高度上限＝變成垂直捲動容器，表頭才會固定。 */
+.sa-mx-wrap { overflow: auto; max-height: calc(100vh - 260px); border: 1px solid #e2d7bd; border-radius: 14px; background: #fff; }
+@media (max-width: 760px) { .sa-mx-wrap { max-height: calc(100vh - 210px); } }
 .sa-mx { border-collapse: collapse; width: 100%; min-width: 640px; }
 .sa-mx th, .sa-mx td { border-bottom: 1px solid #f0e9d9; padding: 0; }
 .sa-mx thead th { position: sticky; top: 0; background: #faf7ef; z-index: 2; border-bottom: 1.5px solid #e2d7bd; }
