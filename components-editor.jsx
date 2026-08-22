@@ -21,7 +21,7 @@ const TYPE_OPTIONS = [
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
-function EditorModal({ open, draft, weekId, catItems, weekItems, onClose, onSave, onDelete }) {
+function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
 
   useE(() => { setForm(draft); }, [draft]);
@@ -103,11 +103,17 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, onClose, onSave
               list="qm-group-datalist"
             />
             <datalist id="qm-group-datalist">
-              {Array.from(new Set((catItems || []).map(it => String(it.group || '').trim()).filter(Boolean))).map(g => (
-                <option key={g} value={g}/>
-              ))}
+              {/* v374(#5): 在某位學生的篩選底下出題時，只列他有的那幾組（groupOptions）；
+                  沒有傳進來才退回「整個分類的所有分組」 */}
+              {(groupOptions && groupOptions.length
+                ? groupOptions
+                : Array.from(new Set((catItems || []).map(it => String(it.group || '').trim()).filter(Boolean)))
+              ).map(g => <option key={g} value={g}/>)}
             </datalist>
-            <div className="field-help">學生任務清單與題庫側欄會依這個名字分組；留空＝依標題自動歸戶。</div>
+            <div className="field-help">
+              學生任務清單與題庫側欄會依這個名字分組；留空＝依標題自動歸戶。
+              {groupOptions && groupOptions.length ? `（目前只列出這位學生的 ${groupOptions.length} 組）` : ''}
+            </div>
           </div>
 
           <div className="field">

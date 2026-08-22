@@ -410,6 +410,8 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   // v274: 星號標記＋「只練星號」
   const [stars, setStars] = useFC(() => fcLoadStars(item.id));
   const [starOnly, setStarOnly] = useFC(false);
+  const [scopeStar, setScopeStar] = useFC(false);   // v374: 這一輪是不是「只練星號」——只練星號不算完成
+  const [testCards, setTestCards] = useFC([]);      // v374: 這一輪測驗實際要考的字
   const toggleStar = (cardId) => setStars(prev => {
     const nx = new Set(prev);
     if (nx.has(cardId)) nx.delete(cardId); else nx.add(cardId);
@@ -488,7 +490,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const stopMatchTimer = () => { if (matchTimerRef.current) { clearInterval(matchTimerRef.current); matchTimerRef.current = null; } };
 
   // v318 (#1): 「星號單字」＝獨立分頁。進其他分頁一律 setStarOnly(false) 重置＝不會再卡在只剩星號的（Alan 回報的 bug）。
-  const enterCard = () => { stopMatchTimer(); setMode("card"); setCardIdx(0); setFlipped(false); };
+  const enterCard = () => { stopMatchTimer(); setStarOnly(false); setMode("card"); setCardIdx(0); setFlipped(false); };
 
   const enterLearn = (flag = starOnly) => { stopMatchTimer();
     const src = pool(flag);
@@ -502,8 +504,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     setMode("learn");
   };
 
-  const enterTest = () => {
+  const enterTest = (onlyStar = false) => {
     stopMatchTimer();
+    setScopeStar(onlyStar);
     setTestSetup(true);
     setTestAnswers({});
     setTypedAnswers({});
@@ -512,18 +515,20 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   };
 
   const startTest = () => {
+    // v374(#3)(#4): 依剛才選的範圍決定要考哪些字（干擾選項仍從全部單字挑，才不會變簡單）
+    const src = pool(scopeStar);
     const tc = {};
     const qt = {};
     if (testType === "both") {
-      // Shuffle cards and alternate: first half → choice, second half → written
-      const shuffled = shuffle([...cards]);
+      const shuffled = shuffle([...src]);
       const half = Math.ceil(shuffled.length / 2);
       shuffled.forEach((card, i) => { qt[card.id] = i < half ? "choice" : "written"; });
     }
-    cards.forEach(card => {
+    src.forEach(card => {
       tc[card.id] = makeChoices(card, cards);
       if (testType !== "both") qt[card.id] = testType;
     });
+    setTestCards(src);
     setTestChoices(tc);
     setQuestionTypes(qt);
     setTestSetup(false);
@@ -647,40 +652,70 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
 
   /* v361: 「學習」與「填空」跑完各通知一次——集點用（兩個模式都完成才給星星） */
   useFC_E(() => {
-    if (mode === "learn" && learnTotal > 0 && learnQueue.length === 0 && onModeDone) onModeDone("learn");
-  }, [mode, learnQueue.length, learnTotal]);
+    // v374(#4): 只練星號那一輪不算完成（避免用 2 個字就把整份刷掉）
+    if (mode === "learn" && learnTotal > 0 && learnQueue.length === 0 && !scopeStar && onModeDone) onModeDone("learn");
+  }, [mode, learnQueue.length, learnTotal, scopeStar]);
   useFC_E(() => {
     if (mode === "fill" && fillDone && onModeDone) onModeDone("fill");
   }, [mode, fillDone]);
 
-  /* v372(#3): ⭐ 改成「篩選開關」——亮著時，學習／測驗／配對只出星號單字；
-     再按一次熄掉就回到全部。以前它是獨立分頁、切到別的模式就被重置。 */
-  const toggleStarOnly = () => {
-    const nx = !starOnly;
-    setStarOnly(nx);
-    if (mode === 'learn') enterLearn(nx);
-    else if (mode === 'fill') enterFill(nx);
-    else if (mode === 'match') enterMatch(nx);
-    else { setCardIdx(0); setFlipped(false); }
+  /* v374(#3)：改成「進學習／測驗時先問要練哪些」——有星號單字才問，沒有就直接開始。
+     （v372 的「⭐ 當開關、預設帶進所有模式」Alan 說不要。⭐ 分頁回到只看星號卡片。） */
+  const [pendingMode, setPendingMode] = useFC(null);   // 'learn' | 'test'
+  const askScope = (target) => {
+    if (stars.size === 0) { startScoped(target, false); return; }
+    setPendingMode(target);
+    setMode('scope');
   };
+  const startScoped = (target, onlyStar) => {
+    setPendingMode(null);
+    setScopeStar(onlyStar);
+    if (target === 'learn') enterLearn(onlyStar);
+    else enterTest(onlyStar);
+  };
+  const enterStarred = () => { stopMatchTimer(); setMode("card"); setStarOnly(true); setCardIdx(0); setFlipped(false); };
 
   // v318 (#1): 保留「星號單字」為獨立分頁（Alan 要回來、只改名）——只在有星號時出現；
   // 點它＝只看星號的單字卡，點其他分頁一律重置回全部（不再卡住）。
   const ModeTabs = ({ active }) => (
     <div className="fc-mode-tabs">
       <button className={"fc-tab" + (active === "card" ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
-      <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => enterLearn()}>📖 學習</button>
+      <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => askScope('learn')}>📖 學習</button>
       <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={() => enterMatch()}>⚡ 配對</button>
-      <button className={"fc-tab" + (active === "test"  ? " active" : "")} onClick={enterTest}>📝 測驗</button>
+      <button className={"fc-tab" + (active === "test"  ? " active" : "")} onClick={() => askScope('test')}>📝 測驗</button>
       {stars.size > 0 && (
         <button
-          className={"fc-tab fc-star-filter" + (starOnly ? " active" : "")}
-          onClick={toggleStarOnly}
-          title={starOnly ? '目前只練星號單字——再按一次回到全部' : '只練你打星號的單字（學習／測驗／配對都會跟著只出這些）'}
-        >⭐ 星號單字（{stars.size}）{starOnly ? ' ✓' : ''}</button>
+          className={"fc-tab fc-star-filter" + (active === "card" && starOnly ? " active" : "")}
+          onClick={enterStarred}
+          title="只看你打星號的單字卡"
+        >⭐ 星號單字（{stars.size}）</button>
       )}
     </div>
   );
+
+  /* v374(#3)：範圍選擇畫面——有星號單字時，進學習／測驗前先問要練哪些 */
+  if (mode === 'scope') {
+    const target = pendingMode === 'test' ? '測驗' : '學習';
+    return (
+      <div className="fc-wrap">
+        <ModeTabs active={pendingMode}/>
+        <div className="fc-player">
+          <div className="fc-scope">
+            <div className="fc-scope-title serif">{target}哪些單字？</div>
+            <div className="fc-scope-sub mono">你標了 {stars.size} 個星號單字</div>
+            <button className="fc-scope-btn" onClick={() => startScoped(pendingMode, false)}>
+              <b>全部 {cards.length} 個</b>
+              <span>完整跑一輪才算完成，也才拿得到星星</span>
+            </button>
+            <button className="fc-scope-btn ghost" onClick={() => startScoped(pendingMode, true)}>
+              <b>只練星號的 {stars.size} 個</b>
+              <span>快速複習不熟的字 · 這一輪不計入完成</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (cards.length === 0) {
     return (
@@ -885,7 +920,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             <div className="fc-test-setup">
               <div className="serif" style={{fontSize: 28, marginBottom: 4}}>設定你的<em>測驗</em></div>
               <div className="mono" style={{fontSize: 10, color: "var(--ink-muted)", marginBottom: 28}}>
-                {cards.length} cards · 看中文，回答英文
+                {pool(scopeStar).length} cards · 看中文，回答英文
               </div>
               <div className="fc-setup-options">
                 <label className="fc-setup-row">
@@ -912,9 +947,12 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       );
     }
 
+    // v374: 這一輪實際要考的字（沒設過＝全部，相容從學習完成頁直接進來的舊路徑）
+    const tCards = (testCards && testCards.length) ? testCards : cards;
+
     /* Results screen */
     if (testDone) {
-      const results = cards.map(card => {
+      const results = tCards.map(card => {
         const qType = questionTypes[card.id] || "choice";
         let correct = true;
         let userAnswer = "";
@@ -934,7 +972,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       });
 
       const correctCount = results.filter(r => r.correct).length;
-      const pct = Math.round((correctCount / cards.length) * 100);
+      const pct = Math.round((correctCount / tCards.length) * 100);
       return (
         <div className="fc-wrap">
           <ModeTabs active="test"/>
@@ -945,7 +983,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 {pct}<span style={{fontSize: 24}}>%</span>
               </div>
               <div className="mono" style={{color: "var(--ink-muted)", marginBottom: 20}}>
-                {correctCount} / {cards.length} correct · 答對
+                {correctCount} / {tCards.length} correct · 答對
               </div>
               <div className="fc-review-list">
                 {results.map(({card, correct, userAnswer}) => (
@@ -971,7 +1009,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
 
     /* Test questions */
     const answeredCards = new Set(
-      cards.filter(card => {
+      tCards.filter(card => {
         const qType = questionTypes[card.id] || "choice";
         if (qType === "choice") return !!testAnswers[card.id];
         return !!(typedAnswers[card.id] || "").trim();
@@ -983,14 +1021,14 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
         <ModeTabs active="test"/>
         <div className="fc-player">
           <div className="fc-topbar">
-            <span className="mono">{answeredCards.size} / {cards.length} answered</span>
+            <span className="mono">{answeredCards.size} / {tCards.length} answered</span>
             <div className="fc-progress-bar">
-              <div className="fc-progress-fill" style={{width: `${(answeredCards.size / cards.length) * 100}%`}}/>
+              <div className="fc-progress-fill" style={{width: `${(answeredCards.size / tCards.length) * 100}%`}}/>
             </div>
           </div>
 
           <div className="fc-test-list">
-            {cards.map((card, qi) => {
+            {tCards.map((card, qi) => {
               const qType     = questionTypes[card.id] || "choice";
               const choices   = testChoices[card.id] || [];
               const selectedId = testAnswers[card.id];
@@ -1001,9 +1039,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                    定義在上、圖片靠右、選項是 2×2 的大方框 */
                 <div key={card.id} className="fc-test-q">
                   <div className="fc-test-qhead">
+                    {/* v374: 這裡不能放發音鍵——唸出來就是答案了（Alan 回報） */}
                     <span className="fc-test-qlabel">{qType === "choice" ? "定義" : "定義 · 手寫"}</span>
-                    <SpeakerBtn text={card.term} lang="en-US" className="fc-test-say"/>
-                    <span className="fc-test-qnum mono">{qi + 1} / {cards.length}</span>
+                    <span className="fc-test-qnum mono">{qi + 1} / {tCards.length}</span>
                   </div>
                   <div className="fc-test-prompt">
                     <div className="fc-test-zh">{card.zh}</div>
@@ -1043,8 +1081,18 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
           <div className="fc-test-foot">
             <button
               className="btn primary"
-              disabled={answeredCards.size < cards.length}
-              onClick={() => { setTestDone(true); if (onModeDone) onModeDone('test'); if (onComplete) onComplete(); }}
+              disabled={answeredCards.size < tCards.length}
+              onClick={() => {
+                setTestDone(true);
+                // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
+                //           手寫題不列入完成條件，但全部答完可以另外加分
+                if (!scopeStar && onModeDone) {
+                  onModeDone('test');
+                  const written = tCards.filter(c => (questionTypes[c.id] || 'choice') === 'written');
+                  if (written.length && written.every(c => (typedAnswers[c.id] || '').trim())) onModeDone('written');
+                }
+                if (onComplete) onComplete();
+              }}
             >
               Submit · 交卷 ({answeredCards.size}/{cards.length})
             </button>

@@ -124,6 +124,7 @@ function App() {
   const [editorAssign, setEditorAssign] = useAppState(null); // 學生 email 或 null
   // v360: 新增單元存檔後，自動打開「指派給哪些學生」讓老師一次勾多人
   const [assignAfterSave, setAssignAfterSave] = useAppState(null);
+  const [editorGroups, setEditorGroups] = useAppState(null);   // v374(#5): 新增時要提供哪些分組選項
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
@@ -745,12 +746,15 @@ function App() {
 
   // ── Item CRUD ──────────────────────────────────────────
 
-  const handleAddItem = (catId, assignEmail) => {
+  const handleAddItem = (catId, assignEmail, groupOptions) => {
     // Pre-generate final ID so the PDF storage path is stable before save.
     // Include random suffix to avoid collisions if called rapidly.
     const newId = catId[0] + Date.now() + Math.random().toString(36).slice(2, 6);
     setEditorCat(catId);
     setEditorAssign(assignEmail || null); // v351: 篩選到某位學生時出的題目 → 存檔後直接指派給他
+    // v374(#5): 分組選單只列「目前畫面上看得到的」分組——在某位學生底下出題時，
+    //           就只會出現他有的那幾組，不用從全班所有分組裡面找
+    setEditorGroups(Array.isArray(groupOptions) ? groupOptions : null);
     setEditorDraft({
       id: newId,
       _isNew: true,
@@ -769,6 +773,7 @@ function App() {
     const catId = Object.keys(week.items).find(k => week.items[k].some(it => it.id === item.id));
     setEditorCat(catId);
     setEditorAssign(null); // 編輯既有單元不動指派（要改指派用單元列的 👤）
+    setEditorGroups(null); // 編輯既有單元＝列出整個分類的分組（不限縮）
     setEditorDraft({...item});
     setEditorOpen(true);
   };
@@ -1419,6 +1424,7 @@ function App() {
             weekId={weekId}
             catItems={editorCat ? (week.items[editorCat] || []) : []}
             weekItems={weekAllItems}
+            groupOptions={editorGroups}
             onClose={() => setEditorOpen(false)}
             onSave={handleSaveItem}
             onDelete={handleDeleteItem}

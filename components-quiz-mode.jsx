@@ -981,7 +981,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             return (
               <button
                 className={`qm-unit-add-btn${forStu ? ' for-student' : ''}`}
-                onClick={() => onAddItem(cat.id, forStu ? forStu.email : null)}
+                onClick={() => onAddItem(cat.id, forStu ? forStu.email : null,
+                  Array.from(new Set((viewItems || []).map(it => String(it.group || '').trim()).filter(Boolean))))}
                 title={forStu ? `新題目會直接指派給 ${forStu.name}` : '新增一個單元'}
               >
                 <window.Icon name="plus" size={14}/> {forStu ? `出新題目給 ${forStu.name}` : '出新題目 · Add item'}
