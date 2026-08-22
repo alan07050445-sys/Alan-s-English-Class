@@ -318,31 +318,45 @@
 .fc-toggle.on { background: #2FA56B; }
 .fc-toggle.on::after { transform: translateX(20px); }
 
-/* ── Test mode ── */
-.fc-test-list { display: flex; flex-direction: column; gap: 28px; margin-bottom: 20px; }
-.fc-test-qrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.fc-test-num { color: var(--ink-muted); font-size: 13px; min-width: 22px; }
-.fc-test-term { display: flex; align-items: center; gap: 10px; }
-.fc-test-term .serif { font-size: 22px; }
-.fc-test-img { height: 44px; width: auto; object-fit: contain; border-radius: 2px; }
-.fc-test-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 32px; }
-.fc-test-choice {
-  padding: 12px; border: 1.5px solid var(--border);
-  font-size: 16.5px; font-family: var(--sans); border-radius: 3px;
-  text-align: center; transition: all 0.15s; background: var(--bg-card); cursor: pointer;
+/* ── Test mode ──
+   v373：改成「一題一張大卡片」（Alan 指定照參考圖的大小），原本一整頁小列表太難作答 */
+.fc-test-list { display: flex; flex-direction: column; gap: 22px; margin-bottom: 20px; }
+.fc-test-q {
+  background: var(--bg-card, #faf7f0);
+  border: 1.5px solid var(--border, #e5dfc8);
+  border-radius: 16px; padding: 22px 26px 26px;
+  box-shadow: 0 1px 2px rgba(21,19,14,.04), 0 10px 26px -18px rgba(21,19,14,.28);
 }
-.fc-test-choice:hover { border-color: var(--ink); }
+.fc-test-qhead { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.fc-test-qlabel { font-family: var(--sans); font-size: 12.5px; font-weight: 800;
+  letter-spacing: .08em; color: var(--ink-muted, #8a8270); }
+.fc-test-say { flex: none; }
+.fc-test-qnum { margin-left: auto; font-size: 12px; color: var(--ink-muted, #8a8270); }
+.fc-test-prompt { display: flex; align-items: flex-start; gap: 18px; min-height: 92px; margin-bottom: 20px; }
+.fc-test-zh {
+  flex: 1; min-width: 0;
+  font-family: var(--sans); font-size: 38px; font-weight: 800; line-height: 1.25;
+  color: var(--ink, #15130e); letter-spacing: .01em;
+}
+.fc-test-img { flex: none; width: 104px; height: 104px; object-fit: cover; border-radius: 10px; }
+.fc-test-label { font-family: var(--sans); font-size: 12.5px; font-weight: 800;
+  letter-spacing: .06em; color: var(--ink-muted, #8a8270); margin-bottom: 10px; }
+.fc-test-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fc-test-choice {
+  padding: 20px 18px; border: 1.5px solid var(--border, #e5dfc8);
+  font-size: 19px; font-family: var(--sans); font-weight: 600; border-radius: 12px;
+  text-align: left; transition: all 0.15s; background: #fff; cursor: pointer;
+}
+.fc-test-choice:hover { border-color: #C9A84C; transform: translateY(-1px); }
 .fc-test-choice.selected { background: var(--ink); color: var(--bg-paper); border-color: var(--ink); }
 
 /* Written answer input */
-.fc-test-written {
-  margin-left: 32px; margin-top: 8px;
-}
+.fc-test-written { margin-top: 2px; }
 .fc-written-input {
-  width: 100%; border: 1.5px solid var(--border);
-  background: var(--bg-paper); color: var(--ink);
-  padding: 11px 14px; font-size: 16.5px; font-family: var(--sans);
-  border-radius: 3px; outline: none; transition: border-color 0.15s;
+  width: 100%; box-sizing: border-box; border: 1.5px solid var(--border);
+  background: #fff; color: var(--ink);
+  padding: 16px 18px; font-size: 19px; font-family: var(--sans);
+  border-radius: 12px; outline: none; transition: border-color 0.15s;
 }
 .fc-written-input:focus { border-color: var(--ink); }
 .fc-written-input::placeholder { color: var(--ink-faint); }
@@ -1146,4 +1160,15 @@
   .fc-fill-choices { gap: 10px; }
   .fc-fill-btn { padding: 18px 12px; }
   .fc-fill-label { font-size: 11.5px; }
+}
+
+/* v373：測驗大卡片的手機尺寸 */
+@media (max-width: 768px) {
+  .fc-test-q { padding: 16px 15px 18px; border-radius: 13px; }
+  .fc-test-prompt { min-height: 64px; gap: 12px; margin-bottom: 14px; }
+  .fc-test-zh { font-size: 26px; }
+  .fc-test-img { width: 72px; height: 72px; }
+  .fc-test-choices { gap: 9px; }
+  .fc-test-choice { padding: 15px 13px; font-size: 16px; border-radius: 10px; }
+  .fc-written-input { padding: 13px 14px; font-size: 16px; }
 }

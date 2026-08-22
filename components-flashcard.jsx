@@ -671,7 +671,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       <button className={"fc-tab" + (active === "card" ? " active" : "")} onClick={enterCard}>🃏 單字卡</button>
       <button className={"fc-tab" + (active === "learn" ? " active" : "")} onClick={() => enterLearn()}>📖 學習</button>
       <button className={"fc-tab" + (active === "match" ? " active" : "")} onClick={() => enterMatch()}>⚡ 配對</button>
-      <button className={"fc-tab" + (active === "fill"  ? " active" : "")} onClick={() => enterFill()}>📝 測驗</button>
+      <button className={"fc-tab" + (active === "test"  ? " active" : "")} onClick={enterTest}>📝 測驗</button>
       {stars.size > 0 && (
         <button
           className={"fc-tab fc-star-filter" + (starOnly ? " active" : "")}
@@ -997,36 +997,43 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
               const typedVal  = typedAnswers[card.id] || "";
 
               return (
+                /* v373: 一題一張大卡片（Alan 指定「照參考圖的大小」）——
+                   定義在上、圖片靠右、選項是 2×2 的大方框 */
                 <div key={card.id} className="fc-test-q">
-                  <div className="fc-test-qrow">
-                    <span className="fc-test-num mono">{qi + 1}.</span>
-                    <div className="fc-test-term">
-                      {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-test-img" decoding="async"/>}
-                      <span style={{fontSize: 18, fontFamily: "var(--sans)"}}>{card.zh}</span>
-                    </div>
-                    <span className="mono" style={{fontSize: 9, color: "var(--ink-faint)", marginLeft: 6}}>
-                      {qType === "choice" ? "選擇" : "手寫"}
-                    </span>
+                  <div className="fc-test-qhead">
+                    <span className="fc-test-qlabel">{qType === "choice" ? "定義" : "定義 · 手寫"}</span>
+                    <SpeakerBtn text={card.term} lang="en-US" className="fc-test-say"/>
+                    <span className="fc-test-qnum mono">{qi + 1} / {cards.length}</span>
+                  </div>
+                  <div className="fc-test-prompt">
+                    <div className="fc-test-zh">{card.zh}</div>
+                    {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-test-img" decoding="async"/>}
                   </div>
                   {qType === "choice" && (
-                    <div className="fc-test-choices">
-                      {choices.map((ch, ci) => (
-                        <button key={ci}
-                          className={"fc-test-choice" + (selectedId === ch.id ? " selected" : "")}
-                          onClick={() => setTestAnswers(prev => ({...prev, [card.id]: ch.id}))}
-                        >{ch.term}</button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="fc-test-label">選擇答案</div>
+                      <div className="fc-test-choices">
+                        {choices.map((ch, ci) => (
+                          <button key={ci}
+                            className={"fc-test-choice" + (selectedId === ch.id ? " selected" : "")}
+                            onClick={() => setTestAnswers(prev => ({...prev, [card.id]: ch.id}))}
+                          >{ch.term}</button>
+                        ))}
+                      </div>
+                    </>
                   )}
                   {qType === "written" && (
-                    <div className="fc-test-written">
-                      <input
-                        className="fc-written-input"
-                        value={typedVal}
-                        onChange={e => setTypedAnswers(prev => ({...prev, [card.id]: e.target.value}))}
-                        placeholder="Type the English word · 在此輸入英文單字"
-                      />
-                    </div>
+                    <>
+                      <div className="fc-test-label">打出英文單字</div>
+                      <div className="fc-test-written">
+                        <input
+                          className="fc-written-input"
+                          value={typedVal}
+                          onChange={e => setTypedAnswers(prev => ({...prev, [card.id]: e.target.value}))}
+                          placeholder="Type the English word · 在此輸入英文單字"
+                        />
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -1037,7 +1044,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             <button
               className="btn primary"
               disabled={answeredCards.size < cards.length}
-              onClick={() => { setTestDone(true); if (onComplete) onComplete(); }}
+              onClick={() => { setTestDone(true); if (onModeDone) onModeDone('test'); if (onComplete) onComplete(); }}
             >
               Submit · 交卷 ({answeredCards.size}/{cards.length})
             </button>

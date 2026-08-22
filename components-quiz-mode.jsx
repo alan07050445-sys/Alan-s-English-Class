@@ -1614,7 +1614,8 @@ function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
   const [modes, setModes] = useQM(() => {
     try { return ((loadQMProg()[progressKey] || {}).modes) || {}; } catch (e) { return {}; }
   });
-  const needLearn = !modes.learn, needTest = !modes.fill;
+  // v373: 測驗＝真正的 test 模式（v372 一度誤指到填空）；舊的 fill 紀錄仍然算數，不讓昨天做過的白做
+  const needLearn = !modes.learn, needTest = !(modes.test || modes.fill);
   const ready = !needLearn && !needTest;
   const finish = () => {
     if (!ready) return;

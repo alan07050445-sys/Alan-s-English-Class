@@ -1985,7 +1985,7 @@ Object.assign(window, { noteCloudWeeks, guardWeekSave, countWeekItems: _countWee
      ② 分數改了、老師刪了某筆成績，星星自動跟著對，不會有一份對不起來的舊帳
      ③ 學生無法自己灌星星（沒有可寫的計數器） */
 const AUTO_STAR_RULES = {
-  flashcard: '學習＋填空模式都完成 +10',
+  flashcard: '學習＋測驗模式都完成 +10',
   fillblank: '80 分 +10／100 分 +15',
   'def-match': '比照填空：80 分 +10／100 分 +15',
   'short-answer': '平均 3 星 +10／4 星 +20',
@@ -2005,7 +2005,7 @@ function autoStarItemOk(item, prog, cloudShape) {
   if (!prog) return false;
   const type = (item && item.type) || prog.itemType || '';
   const pct = autoStarPct(prog, cloudShape);
-  if (type === 'flashcard') return !!(prog.modes && prog.modes.learn && prog.modes.fill);
+  if (type === 'flashcard') return !!(prog.modes && prog.modes.learn && (prog.modes.test || prog.modes.fill));
   if (type === 'short-answer') return pct != null && pct >= 60;     // 5 星制的 3 星
   if (pct == null) return !!prog.done;                              // 上傳作業等沒有分數的
   return pct >= 80;
@@ -2014,7 +2014,7 @@ function autoStarsForItem(item, prog, cloudShape) {
   if (!prog) return 0;
   const type = (item && item.type) || prog.itemType || '';
   const pct = autoStarPct(prog, cloudShape);
-  if (type === 'flashcard') return (prog.modes && prog.modes.learn && prog.modes.fill) ? 10 : 0;
+  if (type === 'flashcard') return (prog.modes && prog.modes.learn && (prog.modes.test || prog.modes.fill)) ? 10 : 0;
   if (type === 'short-answer') { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
   if (type === 'fillblank' || type === 'cloze' || type === 'def-match') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
   return 0;
