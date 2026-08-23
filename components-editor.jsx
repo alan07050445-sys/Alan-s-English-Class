@@ -554,6 +554,113 @@ function Footer({ onOpenGuide }) {
 }
 
 /* ───── Week Modal ───── */
+/* ══════════════════════════════════════════════════════════════
+   v377：一鍵建立一整個學期的週次（Alan：8/31 開學、連續 20 週到寒假）
+   一週一週手動開太慢，而且 dateRange 要打成 bestWeekIdx 讀得懂的格式
+   （"Aug 31 – Sep 6"）才會自動跳到「這一週」。這裡統一產生。
+   ⚠ 只會「補上不存在的」週次，已經有的一律不動（不覆蓋任何內容）。
+   ══════════════════════════════════════════════════════════════ */
+const TERM_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* 依「開學日 + 第幾週」算出這一週的 id／名稱／日期範圍 */
+function termWeekPlan(startISO, count, prefix, tag) {
+  const out = [];
+  const [y, m, d] = String(startISO || '').split('-').map(Number);
+  if (!y || !m || !d) return out;
+  const base = new Date(y, m - 1, d);
+  for (let i = 0; i < count; i++) {
+    const s = new Date(base.getTime()); s.setDate(base.getDate() + i * 7);
+    const e = new Date(s.getTime());    e.setDate(s.getDate() + 6);
+    const nn = String(i + 1).padStart(2, '0');
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    out.push({
+      id: `${prefix}${y}${tag}-W${nn}`,
+      label: `Week ${i + 1}`,
+      dateRange: `${TERM_MON[s.getMonth()]} ${s.getDate()} – ${TERM_MON[e.getMonth()]} ${e.getDate()}`,
+      zhRange: `${s.getMonth() + 1}/${s.getDate()}–${e.getMonth() + 1}/${e.getDate()}`,
+      /* ⚠ 一定要存真正的日期：週次 id 只有「學期開始的年份」（2026F），
+         但第 19、20 週其實是 2027 年 1 月——只靠 id 推年份會把它算成 2026/1，
+         變成「已經過去的一週」，一進來就跳到第 20 週。 */
+      startISO: iso(s), endISO: iso(e),
+      n: i + 1,
+    });
+  }
+  return out;
+}
+
+function TermSetupModal({ open, existingIds, gradeLabel, prefix, categories, onClose, onCreate }) {
+  const [start, setStart] = useS('2026-08-31');
+  const [count, setCount] = useS(20);
+  const [tag, setTag]     = useS('F');     // F = 上學期(Fall)，S = 下學期(Spring)
+  useE(() => { if (open) { setStart('2026-08-31'); setCount(20); setTag('F'); } }, [open]);
+  if (!open) return null;
+
+  const plan = termWeekPlan(start, Math.max(1, Math.min(40, +count || 0)), prefix || '', tag);
+  const have = new Set(existingIds || []);
+  const fresh = plan.filter(p => !have.has(p.id));
+  const dup   = plan.length - fresh.length;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>建立<em>一整個學期</em>的週次 · {gradeLabel}</h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+
+        <div className="modal-body">
+          <div className="term-row">
+            <div className="field">
+              <label className="field-label">開學日（第 1 週的星期一）</label>
+              <input type="date" value={start} onChange={e => setStart(e.target.value)}/>
+            </div>
+            <div className="field">
+              <label className="field-label">總共幾週</label>
+              <input type="number" min="1" max="40" value={count} onChange={e => setCount(e.target.value)}/>
+            </div>
+            <div className="field">
+              <label className="field-label">學期</label>
+              <select value={tag} onChange={e => setTag(e.target.value)}>
+                <option value="F">上學期（秋）</option>
+                <option value="S">下學期（春）</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="field-help" style={{ marginBottom: 10 }}>
+            會建立 <b>{plan.length}</b> 週
+            {dup > 0 && <> · 其中 <b>{dup}</b> 週已經存在（<b>不會動到</b>，只補上缺的 {fresh.length} 週）</>}
+            {plan.length > 0 && <> · {plan[0].zhRange} 到 {plan[plan.length - 1].zhRange}</>}
+          </div>
+
+          <div className="term-preview">
+            {plan.map(p => (
+              <div key={p.id} className={'term-chip' + (have.has(p.id) ? ' dup' : '')}>
+                <b>第 {p.n} 週</b>
+                <span>{p.zhRange}</span>
+                {have.has(p.id) && <em>已存在</em>}
+              </div>
+            ))}
+          </div>
+
+          <div className="field-help" style={{ marginTop: 12 }}>
+            💡 週次先開好、內容慢慢補就好——<b>還沒放東西的週次，學生端不會看到</b>，
+            所以不會出現一整排空白。（老師模式看得到全部。）
+          </div>
+        </div>
+
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={fresh.length === 0}
+            onClick={() => onCreate(fresh, categories)}>
+            {fresh.length === 0 ? '沒有需要新增的週次' : `建立 ${fresh.length} 週 →`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
   // editWeek = { id, label, dateRange, theme, themeZh } for editing existing week
   const isEdit = !!editWeek;
@@ -3181,4 +3288,4 @@ function ClozeEditor({ passage, onChangePassage }) {
   );
 }
 
-Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal });
+Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan });

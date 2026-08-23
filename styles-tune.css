@@ -447,3 +447,46 @@
   .fc-zh                     { font-size: 24px; margin-bottom: 6px; }
   .fc-example                { font-size: 14px; }
 }
+
+/* ══ v377：一鍵建立一整個學期 ══ */
+.banner-btn.term { background: #2E4F7E; border-color: #2E4F7E; color: #fff; font-weight: 700; }
+.banner-btn.term:hover { background: #24406a; }
+.term-row { display: grid; grid-template-columns: 1.2fr .7fr .9fr; gap: 12px; margin-bottom: 6px; }
+.term-row input, .term-row select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border, #e5dfc8);
+  border-radius: 8px; font-family: inherit; font-size: 16px; background: #fff;
+}
+.term-preview {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 7px; max-height: 260px; overflow-y: auto;
+  padding: 12px; border: 1px solid var(--border, #e5dfc8); border-radius: 12px;
+  background: var(--bg-paper, #fbf8f1);
+}
+.term-chip {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 8px 10px; border-radius: 9px; background: #fff;
+  border: 1px solid var(--border-soft, #e8e2d0); font-size: 13px;
+}
+.term-chip b { font-size: 14.5px; color: var(--ink, #15130e); }
+.term-chip span { color: var(--ink-3, #8a8270); font-family: var(--mono); font-size: 12.5px; }
+.term-chip.dup { background: #f4f1e8; opacity: .62; }
+.term-chip em { font-style: normal; font-size: 11.5px; color: #a8823a; }
+@media (max-width: 640px) {
+  .term-row { grid-template-columns: 1fr; }
+  .term-preview { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); max-height: 200px; }
+}
+
+/* ══ v377：整個年級還沒有內容時的空狀態（學生端） ══ */
+.week-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; padding: 56px 20px; min-height: 320px;
+}
+.week-empty-ico   { font-size: 52px; }
+.week-empty-title { font-family: var(--serif); font-size: 28px; font-weight: 600; color: var(--ink, #15130e); }
+.week-empty-sub   { font-family: var(--sans); font-size: 17px; color: var(--ink-3, #8a8270); margin-bottom: 8px; }
+@media (max-width: 768px) {
+  .week-empty { padding: 34px 16px; min-height: 0; }
+  .week-empty-ico { font-size: 40px; }
+  .week-empty-title { font-size: 22px; }
+  .week-empty-sub { font-size: 15.5px; }
+}

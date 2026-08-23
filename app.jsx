@@ -38,10 +38,24 @@ function parseDateRange(str, year) {
   if (!start) return null;
   const end = parse(parts[1], start.getMonth());
   if (!end) return null;
+  // v377: 跨年的一週（例 "Dec 28 – Jan 3"）結束日要算成隔年，否則 end < start 永遠對不上
+  if (end < start) end.setFullYear(end.getFullYear() + 1);
   return { start, end };
 }
 
 // Find the best weekIdx: today within dateRange → latest past week → last week.
+/* v377: 週次上有真正的日期（startISO/endISO）就用它——最準。
+   舊的週次沒有這兩個欄位，才退回去解析 dateRange 文字。 */
+function weekRangeOf(w, id, today) {
+  if (w && w.startISO && w.endISO) {
+    const a = new Date(w.startISO + 'T00:00:00'), b = new Date(w.endISO + 'T23:59:59');
+    if (!isNaN(a) && !isNaN(b)) return { start: a, end: b };
+  }
+  if (!w || !w.dateRange) return null;
+  const m = String(id).match(/(\d{4})/);
+  return parseDateRange(w.dateRange, (m ? +m[1] : 0) || today.getFullYear());
+}
+
 function bestWeekIdx(order, weeks) {
   if (!order || order.length === 0) return 0;
   const today = new Date();
@@ -50,28 +64,34 @@ function bestWeekIdx(order, weeks) {
   for (let i = 0; i < order.length; i++) {
     const w = weeks[order[i]];
     if (!w || !w.dateRange) continue;
-    const year = parseInt(order[i]) || today.getFullYear();
-    const range = parseDateRange(w.dateRange, year);
+    const range = weekRangeOf(w, order[i], today);
     if (!range) continue;
     range.end.setHours(23, 59, 59, 999);
     if (today >= range.start && today <= range.end) return i;
   }
 
   // No exact match — latest week whose start is on or before today
-  let best = -1;
+  let best = -1, anyRange = false;
   for (let i = 0; i < order.length; i++) {
     const w = weeks[order[i]];
     if (!w || !w.dateRange) continue;
-    const year = parseInt(order[i]) || today.getFullYear();
-    const range = parseDateRange(w.dateRange, year);
-    if (range && range.start <= today) best = i;
+    const range = weekRangeOf(w, order[i], today);
+    if (!range) continue;
+    anyRange = true;
+    if (range.start <= today) best = i;
   }
-  return best >= 0 ? best : Math.max(0, order.length - 1);
+  if (best >= 0) return best;
+  // v377: 整個學期都還沒開始（例：8/23 看 8/31 開學的課表）→ 停在第 1 週，
+  //       不要跳到第 20 週。沒有任何日期資訊時才維持舊行為（停最後一週）。
+  return anyRange ? 0 : Math.max(0, order.length - 1);
 }
 
-// ☀️ 暑假限定模式：有暑假任務的學生，門口頁只顯示暑假入口（怕誤點學期教室）。
-// 開學時把這個改成 false 就恢復（或叫 Claude 改）。老師、沒有暑假任務的帳號不受影響。
-const SUMMER_ONLY_DOOR = true;
+/* ☀️ 暑假限定模式：有暑假任務的學生，門口頁只顯示暑假入口（怕誤點學期教室）。
+   v377: 本來是寫死 true、要記得手動改成 false——8/31 開學那天忘了改，
+   暑假的學生就進不去新學期的教室。改成「開學日一到自動失效」。
+   要提前或延後，改下面這個日期就好（月份是 0 起算：7 = 8 月）。 */
+const TERM_START = new Date(2026, 7, 31);      // 2026-08-31 開學
+const SUMMER_ONLY_DOOR = new Date() < TERM_START;
 
 function App() {
   // ── Auth state ──────────────────────────────────────────
@@ -126,6 +146,7 @@ function App() {
   const [assignAfterSave, setAssignAfterSave] = useAppState(null);
   const [editorGroups, setEditorGroups] = useAppState(null);   // v374(#5): 新增時要提供哪些分組選項
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
+  const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -213,6 +234,20 @@ function App() {
 
   const isTeacher = window.isAdminUser(user);
 
+  /* v377（Alan：#1 清掉空的）：還沒放內容的週次，學生端不顯示。
+     這樣才能「先把一整個學期 20 週開好、內容慢慢補」而不會讓學生看到一排空白。
+     ⚠ 老師（含編輯模式）拿到的一律是完整的 weekOrder ＝ 老師端行為完全沒變。 */
+  const weekHasContent = (w) => {
+    if (!w || !w.items) return false;
+    return Object.keys(w.items).some(k => Array.isArray(w.items[k]) && w.items[k].length > 0);
+  };
+  const isTeacherRef = useAppRef(isTeacher);
+  useAppEffect(() => { isTeacherRef.current = isTeacher; }, [isTeacher]);
+  const viewOrder = useAppMemo(
+    () => (isTeacher ? weekOrder : weekOrder.filter(id => weekHasContent(weeks[id]))),
+    [weekOrder, weeks, isTeacher]
+  );
+
   // ── Category view state (quiz mode navigation) ──────
   const [catView, setCatView] = useAppState(null); // null = main blocks, { cat } = inside a category
 
@@ -291,8 +326,8 @@ function App() {
   // v355: 雲端課程資料回來過了沒。沒回來之前 weeks 是「本機快取或空白預設值」，
   //       這時候存檔會把雲端整份蓋掉（2026-08-13 暑假題庫 87 個單元就是這樣沒的）。
   const cloudReadyRef = useAppRef(false);
-  const weekOrderRef  = useAppRef(weekOrder);
-  useAppEffect(() => { weekOrderRef.current = weekOrder; }, [weekOrder]);
+  const weekOrderRef  = useAppRef(viewOrder);
+  useAppEffect(() => { weekOrderRef.current = viewOrder; }, [viewOrder]);
   // v341: 去補做「之前沒完成的作業」時，記住原本在哪一週——補完返回就回到原來那一週，
   // 不會被丟在舊的週次（Alan：人在 week7 補 week5 的作業，不該被留在 week5）
   const returnWeekRef = useAppRef(null);
@@ -321,7 +356,13 @@ function App() {
       // 之後的更新一律保留使用者當下看的那一週；只在該週消失時才退回最後一週。
       if (!weekPickedRef.current) {
         weekPickedRef.current = true;
-        setWeekIdx(bestWeekIdx(newOrder, newWeeks));
+        const pickOrder = isTeacherRef.current
+          ? newOrder
+          : newOrder.filter(id => {
+              const w = newWeeks[id];
+              return w && w.items && Object.keys(w.items).some(k => Array.isArray(w.items[k]) && w.items[k].length > 0);
+            });
+        setWeekIdx(bestWeekIdx(pickOrder, newWeeks));
       } else {
         setWeekIdx(i => {
           const curId = weekOrderRef.current[i];
@@ -433,12 +474,22 @@ function App() {
 
   // Clamp weekIdx if the order shrinks (also handles empty weekOrder gracefully)
   useAppEffect(() => {
-    if (weekOrder.length === 0 || weekIdx >= weekOrder.length) {
-      setWeekIdx(Math.max(0, weekOrder.length - 1));
+    if (viewOrder.length === 0 || weekIdx >= viewOrder.length) {
+      setWeekIdx(Math.max(0, viewOrder.length - 1));
     }
-  }, [weekOrder, weekIdx]);
+  }, [viewOrder, weekIdx]);
 
-  const weekId = weekOrder[weekIdx] || weekOrder[0] || "";
+  const weekId = viewOrder[weekIdx] || viewOrder[0] || "";
+  /* v377: 可見週次清單變動時（例：老師身分確認後從「只看有內容的」變成「全部」、
+     或某一週剛被放進內容），用「週次 id」把位置定回去，不要莫名跳到別週。 */
+  const lastWeekIdRef = useAppRef('');
+  useAppEffect(() => { if (weekId) lastWeekIdRef.current = weekId; }, [weekId]);
+  useAppEffect(() => {
+    const id = lastWeekIdRef.current;
+    if (!id || viewOrder.length === 0) return;
+    const i = viewOrder.indexOf(id);
+    if (i >= 0 && i !== weekIdx) setWeekIdx(i);
+  }, [viewOrder]);
   const week = weeks[weekId] || {
     id: weekId, label: weekId || "—", dateRange: "—", theme: "—", themeZh: "", items: {vocab:[], grammar:[], word:[], reading:[]}
   };
@@ -660,7 +711,7 @@ function App() {
   //       itemId 清掉＝不要去開上一週的那個單元。
   const keepCatOnWeekChange = () => setCatView(c => (c ? { ...c, itemId: null } : null));
   const goPrevWeek = () => { returnWeekRef.current = null; setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
-  const goNextWeek = () => { returnWeekRef.current = null; setSlideDir('left');  setWeekIdx(i => Math.min(weekOrder.length - 1, i + 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
+  const goNextWeek = () => { returnWeekRef.current = null; setSlideDir('left');  setWeekIdx(i => Math.min(viewOrder.length - 1, i + 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -688,6 +739,38 @@ function App() {
     setOpenCat(null);
     setWeekModalOpen(false);
     showToast("Week added");
+  };
+
+  /* v377: 一鍵建立一整個學期的週次。
+     ⚠ 只補上「還不存在」的 id，已經有的完全不碰（不會覆蓋任何現有內容）。 */
+  const handleCreateTerm = (list, cats) => {
+    if (!list || !list.length) { setTermOpen(false); return; }
+    const emptyItems = () => {
+      const o = {};
+      (cats || []).forEach(c => { o[c.id] = []; });
+      if (!Object.keys(o).length) { o.vocab = []; o.grammar = []; o.word = []; o.reading = []; }
+      return o;
+    };
+    const nextWeeks = { ...weeksRef.current };
+    const added = [];
+    list.forEach(p => {
+      if (nextWeeks[p.id]) return;                     // 已存在＝跳過
+      nextWeeks[p.id] = {
+        id: p.id, label: p.label, dateRange: p.dateRange,
+        startISO: p.startISO, endISO: p.endISO,   // 真實日期＝「這一週」判斷才會準
+        theme: '', themeZh: '', subtitle: '', subtitleZh: '',
+        items: emptyItems(),
+      };
+      added.push(p.id);
+    });
+    if (!added.length) { setTermOpen(false); return; }
+    const nextOrder = [...weekOrder, ...added].sort();
+    setWeeks(nextWeeks);
+    setWeekOrder(nextOrder);
+    saveWeeksSafe(nextWeeks);
+    window.saveWeekOrder(nextOrder);
+    setTermOpen(false);
+    showToast(`已建立 ${added.length} 週 · 內容還沒放的週次學生看不到`);
   };
 
   // Edit existing week (label, dateRange, theme) — or rename its ID
@@ -1193,7 +1276,7 @@ function App() {
         <div key={pageKey} className={`page${!catView && !editMode ? ' page-lobby' : ''}${catView && !editMode ? ' page-mission' : ''}${isSummer ? ' page-summer' : ''}`}>
           <window.Header
             week={week}
-            weekOrder={weekOrder}
+            weekOrder={viewOrder}
             weekIdx={weekIdx}
             onHome={() => {
               // v302: 品牌 logo 一律直接回「首頁封面」（Alan 指定）——不再回門口頁
@@ -1207,6 +1290,7 @@ function App() {
             editMode={editMode}
             onToggleEdit={() => setEditMode(e => !e)}
             onAddWeek={() => setWeekModalOpen(true)}
+            onTermSetup={window.isSummerTrack && window.isSummerTrack(grade) ? null : () => setTermOpen(true)}
             onDeleteWeek={handleDeleteWeek}
             progress={{done: totalDone, total: totalItems}}
             user={user}
@@ -1302,11 +1386,11 @@ function App() {
                 ><span aria-hidden="true">←</span>上一頁</button>
               )}
               {/* v234: 暑假進出改由門口頁引導（呼吸箭頭＋開學標註），大廳橫幅移除 */}
-              {!editMode && (
+              {!editMode && (isTeacher || viewOrder.length > 0) && (
                 <window.WeekHero
                   week={week}
                   weekIdx={weekIdx}
-                  weekOrder={weekOrder}
+                  weekOrder={viewOrder}
                   done={totalDone}
                   total={totalItems}
                   who={isSummer && !isSummerLib ? summerWho : null}
@@ -1344,7 +1428,7 @@ function App() {
               ) : isSummerLib ? (
                 /* v317 (#6): Alan 要求移除「📌 題庫模式」說明卡（不必要）。 */
                 null
-              ) : (
+              ) : (!isTeacher && viewOrder.length === 0) ? null : (
                 <window.TodayTasks
                   week={week}
                   allItems={allItems}
@@ -1354,9 +1438,9 @@ function App() {
                   onOpenTask={(cat, itemId) => { setCatView({ ...cat, itemId }); scrollPageToTop(); }}
                   /* v340: 之前週次沒完成的作業也要看得到（不然週次一過就「作業不見了」） */
                   weeks={weeks}
-                  weekOrder={weekOrder}
+                  weekOrder={viewOrder}
                   onOpenPastTask={(wid, cat, itemId) => {
-                    const idx = weekOrder.indexOf(wid);
+                    const idx = viewOrder.indexOf(wid);
                     if (idx >= 0 && idx !== weekIdx) {
                       returnWeekRef.current = weekIdx;   // 記住原本這一週，補完就回來
                       setWeekIdx(idx);
@@ -1369,6 +1453,15 @@ function App() {
               {/* v319: Alan 選「先移除加強複習功能」——大廳不放複習區、header 也拿掉 📕（見 components-shell）。
                   錯題資料照常收集、MistakesPanel/ReviewFlashcardModal 元件都留著＝之後想加回很快。
                   星號複習改由單字卡的「⭐ 星號單字」分頁（v318）提供。 */}
+              {(!isTeacher && viewOrder.length === 0) ? (
+                /* v377: 這個年級一週內容都還沒有 → 講清楚，不要顯示一排空白週次 */
+                <div className="week-empty">
+                  <div className="week-empty-ico">📚</div>
+                  <div className="week-empty-title">老師正在準備這個年級的內容</div>
+                  <div className="week-empty-sub">課程一放上來，這裡就會出現本週要練的東西。</div>
+                  <button className="qm-btn secondary" onClick={() => runWave(() => setViewLanding(true))}>← 回首頁</button>
+                </div>
+              ) : (
               <window.QuizModeBlocks
                 week={week}
                 weekId={weekId}
@@ -1385,11 +1478,12 @@ function App() {
                 }}
                 onAddItem={handleAddItem}
               />
-              {!editMode && (
+              )}
+              {!editMode && viewOrder.length > 0 && (
                 <div className="growth-summary-row">
                   <window.GrowthInlineCard
                     weeks={weeks}
-                    weekOrder={weekOrder}
+                    weekOrder={viewOrder}
                     qmProg={qmProgress}
                     categories={activeCategories}
                     isSummer={isSummer}
@@ -1413,7 +1507,7 @@ function App() {
             <window.MobileNav
               week={week}
               weekIdx={weekIdx}
-              weekOrder={weekOrder}
+              weekOrder={viewOrder}
               onPrevWeek={goPrevWeek}
               onNextWeek={goNextWeek}
               catView={catView}
@@ -1440,6 +1534,15 @@ function App() {
             onClose={() => setWeekModalOpen(false)}
             onSave={handleAddWeek}
           />
+          <window.TermSetupModal
+            open={termOpen}
+            existingIds={weekOrder}
+            gradeLabel={_gradeOf(grade, { g2: '二年級', g4: '四年級', g5: '五年級', g6: '六年級', g3: '三年級', summer: '暑假' })}
+            prefix={_gradeOf(grade, { g2: 'g2-', g4: 'g4-', g5: 'g5-', g6: 'g6-', g3: '', summer: 'sl-' })}
+            categories={activeCategories}
+            onClose={() => setTermOpen(false)}
+            onCreate={handleCreateTerm}
+          />
           <window.WeekModal
             open={weekEditOpen}
             existingIds={weekOrder}
@@ -1455,7 +1558,7 @@ function App() {
               user={user}
               progressItems={myProgressItems}
               weeks={weeks}
-              weekOrder={weekOrder}
+              weekOrder={viewOrder}
               onClose={() => setMistakesOpen(false)}
             />
           )}
@@ -1463,7 +1566,7 @@ function App() {
           {/* v342: 我的星星 + 商店 */}
           {starsOpen && user && (
             <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}
-              weeks={weeks} weekOrder={weekOrder} progItems={qmProgress} checkin={myCheckin}/>
+              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin}/>
           )}
           {checkinOpen && window.CheckinPanel && (
             <window.CheckinPanel user={user} checkin={myCheckin} onClose={() => setCheckinOpen(false)}/>
@@ -1472,7 +1575,7 @@ function App() {
           {growthOpen && (
             <window.GrowthReport
               weeks={weeks}
-              weekOrder={weekOrder}
+              weekOrder={viewOrder}
               qmProg={qmProgress}
               categories={activeCategories}
               studentName={user ? (user.displayName || '') : ''}
