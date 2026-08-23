@@ -1,0 +1,237 @@
+/* styles-tune.css — v375（#5 手機／平板瘦身、#6 桌機小字放大）
+   ⚠ 這個檔一定要在 index.html 的最後載入：裡面的選擇器跟原本的規則同權重，
+     靠「後蓋前」生效，所以幾乎不需要 !important。
+   分成三段：
+     A. 桌機（≥1025px）：Alan 說「很多小字太小，要大蠻多的」→ 10~13.5px 的字統一往上抬。
+     B. 平板／手機（≤1024px、≤768px）：按鈕與標題太肥、間距太大 → 一直往下滑。這裡瘦身。
+     C. 做題目的畫面（player）在小螢幕的專用瘦身——最常被抱怨的地方。 */
+
+/* ══════════════════════════════════════════════════════════
+   A. 桌機：小字放大
+   ══════════════════════════════════════════════════════════ */
+@media (min-width: 1025px) {
+
+  /* ── 首頁／週次／單元列表 ── */
+  .qm-week-eyebrow      { font-size: 16px; }
+  .qm-block-title-zh    { font-size: 15.5px; }
+  .qm-block-count       { font-size: 15px; }
+  .qm-block-meta        { font-size: 15px; }
+  .qm-mission-badge     { font-size: 14.5px; }
+  .qm-unit-score-badge  { font-size: 15px; }
+  .qm-hw-badge          { font-size: 15px; }
+  .qm-type-badge        { font-size: 14px; }
+  .qm-sidebar-prog-lbl  { font-size: 14.5px; }
+  .qm-placeholder-sub   { font-size: 16px; }
+  .qm-due-popover-label { font-size: 15px; }
+  .qm-due-actions button{ font-size: 15px; }
+
+  /* ── 做題目 ── */
+  .qm-player-counter    { font-size: 16px; }
+  .qm-question-hint     { font-size: 16px; }
+  .qm-opt-letter        { font-size: 16px; }
+  .qm-word-chips button { font-size: 16px; }
+  .qm-fc-start-btn span { font-size: 15px; }
+  .qm-fc-tap            { font-size: 16px; }
+  .qm-writing-head small{ font-size: 15px; }
+  .wf-verdict-val       { font-size: 16px; }
+  .wf-examples-title    { font-size: 15.5px; }
+  .sd-legend            { font-size: 16px; }
+  .sd-answer-label      { font-size: 16px; }
+  .ws-pool-label        { font-size: 15.5px; }
+  .ws-drop-hint         { font-size: 15px; }
+  .circle-classify-label{ font-size: 15.5px; }
+  .ca-hint              { font-size: 15.5px; }
+  .dm-hint              { font-size: 16.5px; }
+  .essay-detail-tab     { font-size: 15px; }
+  .sm-tab               { font-size: 15px; }
+
+  /* ── 分段閱讀 ── */
+  .gr-seg-label     { font-size: 14.5px; }
+  .gr-past-chip     { font-size: 15px; }
+  .gr-q-count       { font-size: 15px; }
+  .gr-done-note     { font-size: 16px; }
+  .gr-lightbox-hint { font-size: 15px; }
+  .gr-peek-btn      { font-size: 15px; }
+  .gr-tap-hint      { font-size: 15px; }
+  .gr-rate-cap      { font-size: 15px; }
+  .gr-rate-btn      { font-size: 15px; }
+
+  /* ── 上傳作業 ── */
+  .uh-hint      { font-size: 15.5px; }
+  .uh-note      { font-size: 16px; }
+  .uh-fix-hint  { font-size: 15px; }
+  .uh-fix-btn   { font-size: 14.5px; }
+  .uh-thumb-del { font-size: 14px; }
+
+  /* ── 群組參考資料 ── */
+  .gres-kicker         { font-size: 13px; }
+  .gres-edit .gres-lab { font-size: 15px; }
+  .gres-filerow        { font-size: 16px; }
+  .gres-help           { font-size: 14.5px; }
+  .qm-gres-tx span     { font-size: 14.5px; }
+
+  /* ── 單字卡 ── */
+  .fc-tab              { font-size: 15px; }
+  .fc-flip-hint        { font-size: 14.5px; }
+  .fc-nav-btn          { font-size: 15.5px; }
+  .fc-dual-circle      { font-size: 15.5px; }
+  .fc-complete-actions .btn,
+  .fc-complete-actions .btn.primary { font-size: 15.5px; }
+  .fc-review-icon      { font-size: 16px; }
+  .fc-review-wrong     { font-size: 15.5px; }
+  .fc-setup-desc       { font-size: 15.5px; }
+  .fc-test-qlabel      { font-size: 15px; }
+  .fc-test-qnum        { font-size: 15px; }
+  .fc-test-label       { font-size: 15.5px; }
+  .fc-fill-label       { font-size: 15.5px; }
+  .fc-scope-sub        { font-size: 14.5px; }
+  .fc-scope-btn span   { font-size: 15px; }
+  .fc-match-best-badge { font-size: 15.5px; }
+  .fc-card-empty       { font-size: 15.5px; }
+  .fc-gc-label         { font-size: 14px; }
+  .fc-gc-btn           { font-size: 14.5px; }
+  .fc-gc-btn.ghost     { font-size: 13.5px; }
+  .fc-answer-icon      { font-size: 13.5px; }
+  .fc-answer-yours     { font-size: 13.5px; }
+  .fc-lb-rank          { font-size: 14px; }
+  .fc-lb-num           { font-size: 15.5px; }
+
+  /* ── 舊版測驗／週次卡 ── */
+  .quiz-q-num       { font-size: 15.5px; }
+  .quiz-q-mark      { font-size: 15.5px; }
+  .quiz-option-letter { font-size: 15.5px; }
+  .quiz-result-label  { font-size: 15.5px; }
+  .quiz-explain-label { font-size: 15.5px; }
+  .section-head .meta { font-size: 15px; }
+  .cat-num          { font-size: 14.5px; }
+  .cat-count        { font-size: 14px; }
+  .cat-chip         { font-size: 13.5px; }
+  .item-type        { font-size: 14.5px; }
+  .item-meta        { font-size: 15.5px; }
+  .item-action      { font-size: 15.5px; }
+  .week-nav .label  { font-size: 14.5px; }
+  .hero-eyebrow     { font-size: 14px; }
+  .field-label      { font-size: 14px; }
+  .field-help       { font-size: 15px; }
+  .btn              { font-size: 14.5px; }
+  .toast            { font-size: 15px; }
+
+  /* ── 第二段：14~17px 這一層也往上抬一級。
+        Alan 說「要大蠻多的」，只把 10~13px 拉到 15px 還是偏小，
+        所以學生會看的那些欄位再加一級（老師後台不動，那裡欄位多、放大會擠）。 ── */
+  .qm-unit-row-title   { font-size: 18.5px; }
+  .qm-unit-row-meta    { font-size: 16px; }
+  .qm-unit-row-status  { font-size: 18px; }
+  .qm-sidebar-cat-name { font-size: 18.5px; }
+  .qm-sidebar-back     { font-size: 16.5px; }
+  .qm-sidebar-prog-lbl { font-size: 15px; }
+  .qm-block-title      { font-size: 25px; }
+  .qm-intro-meta       { font-size: 18px; }
+  .qm-intro-rule-row   { font-size: 18.5px; }
+  .qm-opt-text         { font-size: 20.5px; }
+  .qm-feedback-banner  { font-size: 19px; }
+  .qm-explain          { font-size: 18px; }
+  .qm-auto-next        { font-size: 16px; }
+  .qm-result-msg       { font-size: 19px; }
+  .qm-result-goal      { font-size: 18px; }
+  .qm-wrong-title      { font-size: 16px; }
+  .qm-wrong-q, .qm-wrong-a { font-size: 17px; }
+  .qm-task-title       { font-size: 18.5px; }
+  .qm-task-sub         { font-size: 16px; }
+
+  .fc-tab              { font-size: 17px; }
+  .fc-topbar .mono     { font-size: 16.5px; }
+  .fc-choice           { font-size: 21px; }
+  .fc-test-choice      { font-size: 20px; }
+  .fc-review-term, .fc-review-ans { font-size: 17px; }
+  .fc-setup-label      { font-size: 18px; }
+  .fc-scope-btn b      { font-size: 19px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   B. 平板／手機：整體瘦身（少滑一點）
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  /* 進場說明頁：上下 64px 的留白＋60px 的 emoji，在 iPad 直式一定要往下滑才看得到按鈕 */
+  .qm-intro          { margin: 22px auto; padding: 0 14px; }
+  .qm-intro-icon     { font-size: 40px; margin-bottom: 10px; }
+  .qm-intro-title    { font-size: 27px; margin-bottom: 6px; }
+  .qm-intro-rules    { gap: 7px; padding: 13px 15px; margin-bottom: 18px; }
+  .qm-intro-btns     { margin-top: 4px; }
+
+  /* 做題目 */
+  .qm-player-head    { margin-bottom: 18px; gap: 10px; }
+  .qm-question-area  { margin-bottom: 18px; }
+  .qm-feedback       { margin-top: 14px; gap: 9px; }
+  .qm-options        { gap: 9px; }
+  .qm-option         { padding: 14px 15px; gap: 12px; }
+  .qm-btn            { padding: 13px 22px; font-size: 16.5px; }
+
+  /* 結果頁 */
+  .qm-result         { margin: 18px auto; padding-bottom: 34px; }
+}
+
+@media (max-width: 768px) {
+  .qm-intro          { margin: 14px auto; }
+  .qm-intro-icon     { font-size: 34px; margin-bottom: 8px; }
+  .qm-intro-title    { font-size: 23px; }
+  .qm-intro-meta     { margin-bottom: 12px; }
+  .qm-intro-rules    { gap: 6px; padding: 11px 13px; margin-bottom: 14px; }
+
+  .qm-player-head    { margin-bottom: 14px; }
+  .qm-question-area  { margin-bottom: 14px; }
+  .qm-option         { padding: 12px 13px; }
+  .qm-btn            { padding: 12px 18px; font-size: 16px; }
+  .qm-result         { margin: 12px auto; padding-bottom: 28px; }
+}
+
+/* ── 單元列表（左邊那一欄）：手機上光是標題列就吃掉 178px，
+      可視區只剩不到 3 列 → 一直滑。這裡把外框瘦身、列高壓低、可視高度拉高。 ── */
+@media (max-width: 768px) {
+  .qm-sidebar        { max-height: 62vh; }
+  .qm-sidebar-cat    { padding: 10px 16px; gap: 10px; }
+  .qm-sidebar-prog   { padding: 8px 14px 9px; }
+  .qm-unit-list      { padding: 4px 8px; }
+  .qm-unit-row       { padding: 10px 14px; margin-bottom: 2px; }
+  .qm-unit-row-title { margin-bottom: 1px; }
+
+  /* 分類大卡 */
+  .qm-block          { padding: 14px 16px; }
+  .qm-block-head     { gap: 12px; }
+}
+
+/* ── 單字卡：測驗是「一頁列出全部題目」，選項在手機變成一欄＝一題就 380px，
+      10 個字要滑快 4000px。改回 2×2（英文單字很短，放得下）並壓縮卡片留白。 ── */
+@media (max-width: 560px) {
+  .fc-test-choices { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fc-test-choice  { padding: 13px 10px; font-size: 15.5px; text-align: center; }
+  .fc-test-q       { padding: 13px 12px 15px; }
+  .fc-test-list    { gap: 14px; }
+  .fc-test-prompt  { min-height: 0; margin-bottom: 11px; }
+  .fc-test-zh      { font-size: 23px; }
+  .fc-test-qhead   { margin-bottom: 9px; }
+  .fc-test-label   { margin-bottom: 7px; }
+
+  /* 學習模式：一題一頁，選項壓低一點才不用滑 */
+  .fc-learn-q { padding: 10px 0 14px; }
+  .fc-learn-zh { font-size: 30px; }
+  .fc-choice  { padding: 15px 12px; font-size: 17px; border-radius: 11px; }
+  .fc-choices { gap: 8px; }
+  .fc-player  { padding: 12px; }
+  .fc-tab     { padding: 11px 8px; font-size: 12.5px; }
+}
+
+/* ── 按鈕在手機／平板不用那麼肥（Alan：「按鈕文字都太大了」）
+      仍然保留 44px 以上的觸控高度，只是不再一顆佔掉半個螢幕。 ── */
+@media (max-width: 768px) {
+  .qm-intro-btns .qm-btn.primary { padding: 15px 32px; font-size: 17px; min-width: 210px; }
+  .qm-result-btns .qm-btn        { padding: 12px 16px; font-size: 15.5px; }
+  .qm-result-btns                { gap: 9px; margin-bottom: 18px; }
+  .qm-fc-player-bar              { gap: 9px; padding-bottom: 12px; margin-bottom: 12px; }
+  .qm-fc-start-btn               { padding: 13px 16px; }
+  .fc-complete                   { min-height: 0; padding: 26px 12px; }
+  .fc-complete-actions .btn      { padding: 12px 16px; }
+  .fc-test-foot                  { padding-top: 12px; }
+  .fc-topbar                     { margin-bottom: 12px; }
+  .qm-wrong-list                 { margin-top: 14px; }
+}

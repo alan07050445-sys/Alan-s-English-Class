@@ -1,0 +1,174 @@
+/* styles-fx.css — v375
+   ① 吉祥物 Claudius（像素風）：走路、跳、轉圈、翻滾、打瞌睡、答對比讚
+   ② 完成特效：彩帶
+   兩個都是「疊在最上面但不擋操作」的裝飾層——z-index 刻意壓在 mobile-nav(90) 之下，
+   彈窗（400↑）永遠蓋得過吉祥物。 */
+
+/* ══════════ 吉祥物 ══════════ */
+.mx-layer {
+  position: fixed; left: 0; right: 0; bottom: 14px;
+  height: 0; z-index: 60; pointer-events: none;
+}
+.mx-slot { position: absolute; left: 0; bottom: 0; will-change: transform; }
+
+.mx-body {
+  pointer-events: auto; cursor: pointer;
+  transform: scaleX(var(--mx-dir, 1));
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  filter: drop-shadow(0 3px 4px rgba(21, 19, 14, .22));
+}
+.mx-svg { display: block; transform-origin: 50% 92%; }
+
+/* 眼睛偶爾眨一下 */
+.mx-eye { transform-origin: center; animation: mxBlink 5.4s infinite; }
+@keyframes mxBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(.12); }
+}
+
+/* ── 待機：輕輕呼吸 ── */
+.act-idle  .mx-svg { animation: mxBreathe 2.8s ease-in-out infinite; }
+@keyframes mxBreathe {
+  0%, 100% { transform: translateY(0)    scaleY(1); }
+  50%      { transform: translateY(-.6px) scaleY(1.02); }
+}
+
+/* ── 走路：身體上下晃、前後腳輪流抬 ── */
+.act-walk .mx-svg   { animation: mxWalkBob .34s ease-in-out infinite; }
+.act-walk .mx-leg-a { animation: mxStep    .34s ease-in-out infinite; }
+.act-walk .mx-leg-c { animation: mxStep    .34s ease-in-out infinite .17s; }
+.act-walk .mx-leg-b { animation: mxStep    .68s ease-in-out infinite; }
+@keyframes mxWalkBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.42px); } }
+@keyframes mxStep    { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.72px); } }
+
+/* ── 跳 ── */
+.act-jump .mx-svg { animation: mxJump .95s cubic-bezier(.3, .9, .4, 1); }
+@keyframes mxJump {
+  0%   { transform: translateY(0)    scaleY(1); }
+  18%  { transform: translateY(1px)  scaleY(.82) scaleX(1.1); }
+  45%  { transform: translateY(-13px) scaleY(1.1) scaleX(.94); }
+  70%  { transform: translateY(0)    scaleY(.9)  scaleX(1.06); }
+  100% { transform: translateY(0)    scaleY(1); }
+}
+
+/* ── 轉圈 ── */
+.act-spin .mx-svg { animation: mxSpin .92s cubic-bezier(.4, 0, .3, 1); }
+@keyframes mxSpin {
+  0%   { transform: rotate(0)      translateY(0); }
+  50%  { transform: rotate(180deg) translateY(-8px); }
+  100% { transform: rotate(360deg) translateY(0); }
+}
+
+/* ── 跳舞：左右扭 ── */
+.act-dance .mx-svg   { animation: mxDance .42s ease-in-out infinite; }
+.act-dance .mx-leg-a { animation: mxStep  .42s ease-in-out infinite; }
+.act-dance .mx-leg-c { animation: mxStep  .42s ease-in-out infinite .21s; }
+@keyframes mxDance {
+  0%, 100% { transform: rotate(-9deg)  translateY(0); }
+  50%      { transform: rotate(9deg)   translateY(-3px); }
+}
+
+/* ── 翻滾（移動比較快的那種） ── */
+.act-roll .mx-svg { animation: mxRoll .52s linear infinite; transform-origin: 50% 50%; }
+@keyframes mxRoll { to { transform: rotate(360deg); } }
+
+/* ── 從畫面下面探頭 ── */
+.act-peek .mx-svg { animation: mxPeek 1.65s ease-in-out; }
+@keyframes mxPeek {
+  0%   { transform: translateY(120%); }
+  22%  { transform: translateY(0); }
+  32%  { transform: translateY(0) rotate(-10deg); }
+  48%  { transform: translateY(0) rotate(10deg); }
+  62%  { transform: translateY(0) rotate(0); }
+  100% { transform: translateY(120%); }
+}
+
+/* ── 打瞌睡：整隻壓扁一點、慢慢起伏 ── */
+.act-sleep .mx-svg { animation: mxSleep 2.1s ease-in-out infinite; }
+@keyframes mxSleep {
+  0%, 100% { transform: translateY(2px) scaleY(.86) scaleX(1.06); }
+  50%      { transform: translateY(1px) scaleY(.92) scaleX(1.02); }
+}
+
+/* ── 發呆／思考：左右歪頭 ── */
+.act-think .mx-svg { animation: mxThink 2.2s ease-in-out infinite; }
+@keyframes mxThink {
+  0%, 100% { transform: rotate(-7deg); }
+  50%      { transform: rotate(7deg); }
+}
+
+/* ── 慶祝：連跳 ── */
+.act-cheer .mx-svg { animation: mxCheer .42s cubic-bezier(.3, .9, .4, 1) 5; }
+@keyframes mxCheer {
+  0%   { transform: translateY(0)     scaleY(.86) scaleX(1.1); }
+  50%  { transform: translateY(-18px) scaleY(1.12) scaleX(.92) rotate(8deg); }
+  100% { transform: translateY(0)     scaleY(1)   scaleX(1); }
+}
+
+/* ── 答錯：抖一下 ── */
+.act-oops .mx-svg { animation: mxOops .5s ease-in-out; }
+@keyframes mxOops {
+  0%, 100% { transform: translateX(0)    rotate(0); }
+  20%      { transform: translateX(-4px) rotate(-8deg); }
+  50%      { transform: translateX(4px)  rotate(8deg); }
+  80%      { transform: translateX(-2px) rotate(-4deg); }
+}
+
+/* ── 對話泡泡 ── */
+.mx-bubble {
+  position: absolute; bottom: calc(100% + 9px); left: 22px;
+  transform: translateX(-50%);
+  max-width: 190px; width: max-content;
+  padding: 7px 11px; border-radius: 13px;
+  background: #fffdf6; border: 1.5px solid #e2d9bf;
+  box-shadow: 0 6px 18px -8px rgba(21, 19, 14, .34);
+  font-family: var(--sans, "Nunito", sans-serif);
+  font-size: 14px; font-weight: 700; line-height: 1.35;
+  color: var(--ink, #15130e); text-align: center;
+  white-space: normal; word-break: break-word;
+  animation: mxPop .26s cubic-bezier(.22, 1.4, .4, 1) both;
+  pointer-events: none;
+}
+.mx-bubble::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  margin-left: -5px; border: 6px solid transparent;
+  border-top-color: #fffdf6;
+  filter: drop-shadow(0 1px 0 #e2d9bf);
+}
+@keyframes mxPop {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(.86); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)   scale(1); }
+}
+
+/* 手機：讓開底部導覽列（60px）＋瀏海安全區 */
+@media (max-width: 768px) {
+  .mx-layer { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+  .mx-bubble { max-width: 150px; font-size: 13px; padding: 6px 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mx-svg, .mx-eye, .mx-leg { animation: none !important; }
+  .mx-bubble { animation: none; }
+}
+
+/* ══════════ 彩帶 ══════════ */
+.fx-confetti {
+  position: fixed; inset: 0; overflow: hidden;
+  pointer-events: none; z-index: 9991;
+}
+.fx-cfp {
+  position: absolute; top: -24px; display: block;
+  will-change: transform, opacity;
+  animation-name: fxFall;
+  animation-timing-function: cubic-bezier(.35, .2, .6, 1);
+  animation-fill-mode: both;
+}
+@keyframes fxFall {
+  0%   { transform: translate3d(0, 0, 0) rotate(0); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate3d(var(--fx-drift, 0px), 102vh, 0) rotate(var(--fx-spin, 360deg)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-confetti { display: none; }
+}

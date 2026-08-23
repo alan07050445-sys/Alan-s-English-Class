@@ -1082,6 +1082,15 @@ function playSound(type) {
     else if (type === 'complete'){ tone(523,0,.2); tone(659,.1,.2); tone(784,.2,.2); tone(1047,.32,.35,'sine',.3); }
     else if (type === 'badge')   { tone(880,0,.1); tone(1100,.08,.1); tone(1320,.18,.25); }
     else if (type === 'streak')  { tone(440,0,.12); tone(554,.1,.12); tone(659,.22,.22); }
+    /* v375(#7): 練習完成的「大」音效——比 complete 長、有收尾和弦，配彩帶用 */
+    else if (type === 'fanfare') {
+      [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.085, .22, 'triangle', .22));
+      tone(1319, .36, .5, 'triangle', .24);
+      tone(1047, .36, .55, 'sine', .16);
+      tone(784,  .36, .6,  'sine', .12);
+      tone(2093, .52, .35, 'sine', .09);
+    }
+    else if (type === 'pop')     { tone(660,0,.07,'triangle',.18); tone(990,.05,.09,'triangle',.14); }
   } catch(e) { /* AudioContext may be blocked on first interaction */ }
 }
 

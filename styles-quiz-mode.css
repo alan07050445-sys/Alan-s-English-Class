@@ -3342,3 +3342,95 @@
   border: 1px solid rgba(201,168,76,.55); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
 .qm-fc-start-btn:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 700px) { .qm-fc-need { font-size: 11px; padding: 3px 8px; } }
+
+/* ═══════════════════════════════════════════════════════════════
+   v375 — Alan 的 8 點回饋
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── #4：「還要完成：📝 測驗」太小看不到 → 放大成一顆明顯的提示膠囊 ── */
+.qm-fc-need {
+  font-size: 17px; font-weight: 800; letter-spacing: .01em;
+  color: #7a5c0f; background: #fdf3d8;
+  border: 2px solid rgba(201, 168, 76, .8);
+  border-radius: 999px; padding: 9px 18px;
+  box-shadow: 0 2px 0 rgba(201, 168, 76, .25);
+  animation: fcNeedPulse 2.4s ease-in-out infinite;
+}
+@keyframes fcNeedPulse {
+  0%, 100% { box-shadow: 0 2px 0 rgba(201,168,76,.25), 0 0 0 0    rgba(201,168,76,.42); }
+  55%      { box-shadow: 0 2px 0 rgba(201,168,76,.25), 0 0 0 7px  rgba(201,168,76,0); }
+}
+@media (prefers-reduced-motion: reduce) { .qm-fc-need { animation: none; } }
+@media (max-width: 700px) { .qm-fc-need { font-size: 15px; padding: 8px 14px; white-space: normal; } }
+
+/* ── #2 / #3：配對連線改成「交卷才對答案」 ── */
+.dm-wrap.graded .dm-chip { cursor: default; }
+.dm-wrap.graded .dm-chip:hover { background: none; }
+
+/* 交卷前：連好的線只是「我的答案」，不透露對錯 */
+.dm-chip.linked .dm-txt { color: var(--ink, #15130e); }        /* 不再變淡＝還沒判分 */
+.dm-chip.linked { cursor: pointer; }                            /* 可以再點一次拆掉 */
+
+/* 交卷後：綠色＝對、紅色＝錯 */
+.dm-line.bad { stroke-dasharray: 7 5; animation: none; stroke-dashoffset: 0; }
+.dm-chip.ok  .dm-dot { background: #2E7D5B; border-color: #2E7D5B; }
+.dm-chip.bad .dm-dot { background: #fdece8; border-color: #D6533C; }
+.dm-chip.bad .dm-txt { color: #A8331F; }
+.dm-mark {
+  flex: none; width: 28px; height: 28px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 900; line-height: 1;
+}
+.dm-mark.ok  { color: #1f6b4b; background: #e2f2ea; }
+.dm-mark.bad { color: #C0341E; background: #fbe4de; }
+/* 右欄的 ✓/✗ 要貼著文字，不要被 flex:1 推到最右邊（離很遠反而看不出在講哪一列） */
+.dm-wrap.graded .dm-def .dm-txt { flex: 0 1 auto; }
+
+/* 交卷列 */
+.dm-foot {
+  position: sticky; bottom: 0; z-index: 70;   /* 要蓋過吉祥物（z-index 60），不然按鈕會被牠站住 */
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 14px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+  margin-top: 4px;
+  background: linear-gradient(to top, var(--bg, #f4f0e7) 62%, rgba(244, 240, 231, 0));
+}
+/* .qm-btn.primary 全站是 width:100% 的方塊按鈕——這裡要的是置中的膠囊 */
+.dm-submit.qm-btn.primary {
+  width: auto; min-width: 280px; max-width: 460px;
+  border-radius: 999px; font-size: 18px; font-weight: 800; padding: 15px 42px;
+  letter-spacing: .02em;
+}
+.dm-submit:disabled { opacity: .5; cursor: not-allowed; }
+.dm-foot-score {
+  font-family: var(--sans); font-size: 19px; font-weight: 800; color: #A8331F;
+}
+.dm-foot-score.perfect { color: #1f6b4b; }
+
+/* 成績頁的「連錯的地方」——Alan 說要大一點 */
+.dm-review {
+  margin: 22px auto 0; max-width: 680px; text-align: left;
+  border: 2px solid #f0c9bd; border-radius: 16px; background: #fff8f5; padding: 18px 20px;
+}
+.dm-review-head {
+  font-family: var(--sans); font-size: 17px; font-weight: 800; color: #A8331F;
+  margin-bottom: 12px; letter-spacing: .01em;
+}
+.dm-review-row {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 12px 0; border-top: 1px solid #f6dfd7; font-size: 20px; line-height: 1.5;
+}
+.dm-review-row b {
+  flex: none; min-width: 0; font-family: 'Lora', Georgia, serif;
+  font-size: 24px; font-weight: 700; color: var(--ink, #15130e);
+}
+.dm-review-eq { flex: none; color: #c9a08f; font-weight: 700; }
+.dm-review-row span { color: var(--ink, #15130e); }
+@media (max-width: 700px) {
+  .dm-review { padding: 14px 15px; border-radius: 13px; }
+  .dm-review-row { font-size: 17px; padding: 10px 0; gap: 8px; }
+  .dm-review-row b { font-size: 20px; }
+  .dm-review-head { font-size: 15px; }
+  .dm-submit.qm-btn.primary { min-width: 0; width: 100%; max-width: none; font-size: 16.5px; padding: 14px 18px; }
+  .dm-foot-score { font-size: 16.5px; text-align: center; }
+  .dm-mark { width: 24px; height: 24px; font-size: 15px; }
+}

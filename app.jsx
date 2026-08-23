@@ -183,6 +183,10 @@ function App() {
   const [localStreak, setLocalStreak] = useAppState(() => getLocalStreak());
   window.triggerStarBurst = () => setStarBurst(true);
 
+  /* v375(#8): 吉祥物只在「已登入的學習畫面」出現——登入頁是家長第一眼看到的地方，
+     維持乾淨。components-fx.jsx 每秒讀一次這個旗標。 */
+  useAppEffect(() => { window.__mxAllow = !!user; }, [user]);
+
   // ── Loading screen state ────────────────────────────
   // showLoader stays true until auth resolves + 480ms (fade-out animation time)
   const [showLoader,  setShowLoader]  = useAppState(true);
@@ -1506,6 +1510,10 @@ function App() {
           grade={grade}
         />
       )}
+
+      {/* v375(#7): ⭐ 慶祝動畫——本來 starBurst 這個 state 從來沒被畫出來，
+          所以全站的 triggerStarBurst() 其實什麼都沒發生。補上。 */}
+      {starBurst && <window.StarBurst onDone={() => setStarBurst(false)}/>}
 
       {/* LoadingScreen is always the LAST child of this Fragment.
           Keeping it in the same tree position prevents unmount/remount
