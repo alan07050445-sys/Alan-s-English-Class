@@ -235,3 +235,215 @@
   .fc-topbar                     { margin-bottom: 12px; }
   .qm-wrong-list                 { margin-top: 14px; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   C. v376 —「一次看一張」的練習畫面剛好塞滿一螢幕
+   Alan 回報：iPad 做「學習」時圖片把四個選項擠到畫面外，每一題都要往下滑。
+   高度由 JS 量好寫成 .fc-player 的 inline height（components-flashcard.jsx 的
+   useFitHeight，沿用 v345 配對格子那一套），這裡只負責把剩下的空間分給圖片。
+   ══════════════════════════════════════════════════════════ */
+.fc-p-card, .fc-p-learn {
+  display: flex; flex-direction: column;
+  /* ⚠ 不能用 overflow:hidden——手機橫式高度真的不夠時會把「下一張／選項」直接切掉、
+     而且按不到。改成需要時自己捲，塞得下就完全不會出現捲軸。 */
+  overflow-x: hidden; overflow-y: auto;
+}
+
+/* ── 單字卡（翻卡）── */
+.fc-p-card > .fc-topbar { flex: none; }
+.fc-p-card > .fc-nav    { flex: none; }
+.fc-p-card > .fc-flip-card {
+  flex: 1 1 auto; min-height: 230px; height: auto; margin-bottom: 14px;
+}
+.fc-p-card .fc-face          { overflow: hidden; }
+.fc-p-card .fc-back-img-wrap { flex: 1 1 auto; min-height: 0; max-height: none; margin-bottom: 12px; }
+.fc-p-card .fc-back-img-wrap img { max-height: 100%; }
+
+/* ── 學習 ── */
+.fc-p-learn > .fc-dual-bar { flex: none; margin-bottom: 12px; }
+/* 四個選項一律 2×2（原本手機是一欄，光選項就吃掉 300px，圖片只剩一點點） */
+.fc-p-learn > .fc-choices  { flex: none; grid-template-columns: 1fr 1fr; }
+.fc-choice, .fc-test-choice { overflow-wrap: anywhere; hyphens: auto; }
+.fc-p-learn > .fc-learn-q  { flex: 1 1 auto; min-height: 0; justify-content: center; padding: 4px 0 12px; }
+.fc-p-learn .fc-learn-img  { flex: 1 1 auto; min-height: 130px; max-height: none; margin-bottom: 12px; }
+
+/* 手機直式：先把選項與中文壓小，把高度讓給圖片 */
+@media (max-width: 560px) {
+  .fc-p-learn > .fc-dual-bar { margin-bottom: 8px; }
+  .fc-p-learn > .fc-learn-q  { padding: 2px 0 8px; }
+  .fc-p-learn .fc-learn-img  { margin-bottom: 8px; }
+  .fc-p-learn .fc-learn-zh   { font-size: 27px; line-height: 1.15; margin-bottom: 2px; }
+  .fc-p-learn .fc-learn-q > .mono { display: none; }   /* 選項就在下面，不用再提示一次 */
+  .fc-p-learn > .fc-choices  { gap: 7px; }
+  .fc-p-learn .fc-choice     { padding: 12px 8px; font-size: 16px; border-radius: 11px; }
+}
+.fc-p-learn .fc-learn-zh,
+.fc-p-learn .fc-retry-badge,
+.fc-p-learn .fc-learn-q > .mono { flex: none; }
+
+/* 寬又矮（iPad 橫式、筆電）：圖片放左邊、題目＋選項放右邊
+   → 不用縮圖也塞得下，圖片反而比原本更大 */
+@media (min-width: 820px) and (max-height: 950px) {
+  .fc-p-learn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 38px;
+    align-items: stretch;   /* ⚠ 不能用 center：那樣格子高度會變成「由內容決定」，
+                               圖片就不會縮，會壓到上下的東西 */
+  }
+  /* 進度條收到右欄上面 → 左欄（圖片）可以用滿整個高度，圖片比原本 400px 還大 */
+  .fc-p-learn > .fc-dual-bar { grid-column: 2; grid-row: 1; margin-bottom: 14px; }
+  /* ★ 星號原本釘在 .fc-learn-q 右上角；分成左右欄之後那裡變成畫面正中間（壓在圖片上）
+     → 改成釘在整個 player 的右上角 */
+  .fc-p-learn                { position: relative; }
+  .fc-p-learn > .fc-learn-q  { grid-column: 1; grid-row: 1 / -1; padding: 0; min-height: 0; position: static; }
+  .fc-p-learn .fc-star-btn-corner { top: 2px; right: 2px; }
+  .fc-p-learn > .fc-choices  { grid-column: 2; grid-row: 2; align-content: center; min-height: 0; }
+  .fc-p-learn .fc-learn-img  { max-width: 100%; margin-bottom: 10px; }
+  .fc-p-learn .fc-learn-zh   { font-size: 44px; margin-bottom: 2px; }
+}
+
+/* iPad 直式（561–900）：原本四個選項被壓成一欄＝多吃 150px，改回 2×2；
+   中文題目 52px 在這個寬度也沒被縮過。 */
+@media (min-width: 561px) and (max-width: 900px) {
+  .fc-choices      { grid-template-columns: 1fr 1fr; }
+  .fc-test-choices { grid-template-columns: 1fr 1fr; }
+  .fc-learn-zh     { font-size: 40px; }
+  .fc-choice       { padding: 16px 12px; font-size: 18px; }
+  .fc-test-choice  { padding: 15px 12px; font-size: 17px; }
+  /* 測驗是「一頁列出全部題目」的考卷——沒辦法不捲，但一題可以少吃 80px */
+  .fc-test-q       { padding: 15px 16px 17px; }
+  .fc-test-prompt  { min-height: 0; margin-bottom: 12px; }
+  .fc-test-zh      { font-size: 28px; }
+  .fc-test-list    { gap: 16px; }
+  .fc-test-qhead   { margin-bottom: 10px; }
+  .fc-test-label   { margin-bottom: 8px; }
+}
+
+/* ── 其他「被固定高度撐出捲軸」的地方 ── */
+/* 說明頁的 520px 地板：螢幕不夠高時拿掉（styles-theme.css 的 .page-mission .qm-intro） */
+@media (max-height: 920px) {
+  .page-mission .qm-intro { min-height: 0; }      /* 520px 的地板會把說明頁撐出捲軸 */
+}
+/* 內容區底部留白：手機的底部導覽列只有 60px，卻留了 84–96px；平板根本沒有導覽列 */
+@media (max-width: 768px) { .qm-quiz-area { padding-bottom: 72px; } }
+@media (min-width: 769px) and (max-width: 900px) { .qm-quiz-area { padding-bottom: 56px; } }
+
+/* 769–1024（iPad）：題目大字沒被縮過，一題就吃掉大半個畫面 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .qm-question-text { font-size: 42px; }
+  .ta-prompt        { font-size: 44px; }
+  .wp-word          { font-size: 38px; }
+}
+
+
+
+
+/* ── ⚠ 關鍵：iPad 橫式是「寬 1180 但只有 760 高」——照寬度做的瘦身完全沒作用。
+      所以同一套瘦身也要用「螢幕高度」再下一次。 ── */
+/* (a) 間距瘦身：矮螢幕一律套用（不動字級，桌機的大字保留） */
+@media (max-height: 920px) {
+  .qm-player-head    { margin-bottom: 12px; gap: 10px; }
+  .qm-question-area  { margin-bottom: 14px; }
+  .qm-question-hint  { margin-bottom: 8px; }
+  .qm-options        { gap: 9px; }
+  .qm-option         { padding: 13px 18px; gap: 12px; }
+  .qm-result         { margin: 16px auto; padding-bottom: 28px; }
+  .ta-prompt         { margin: 4px 0 20px; }
+}
+/* (a2) 說明頁在矮螢幕也要瘦身——但只在平板以上。
+       手機（≤768）已經有自己更緊的一套（見上面 B 段），不要被這裡蓋回去。 */
+@media (max-height: 920px) and (min-width: 769px) {
+  .qm-intro       { margin: 18px auto; }
+  .qm-intro-icon  { font-size: 38px; margin-bottom: 10px; }
+  .qm-intro-rules { gap: 7px; padding: 12px 15px; margin-bottom: 16px; }
+  .qm-intro-meta  { margin-bottom: 14px; }
+}
+/* (b) 字級也縮小：只在「矮而且不夠寬」時（iPad 橫式 1180×760、小筆電）——
+      桌機 1440×860 這種寬螢幕放得下，就別把 v375 剛放大的字又縮回去。 */
+@media (max-height: 920px) and (max-width: 1300px) {
+  .qm-question-hint  { font-size: 14px; }
+  .qm-question-text  { font-size: 36px; line-height: 1.2; }
+  .qm-opt-letter     { width: 32px; height: 32px; font-size: 15px; }
+  .qm-opt-text       { font-size: 19px; }
+  .ta-prompt         { font-size: 40px; }
+  .ta-input          { padding: 14px 20px; font-size: 23px; }
+  .qm-result-num     { font-size: 60px; }
+  .qm-result-msg     { font-size: 19px; margin-bottom: 18px; }
+  .qm-intro-title    { font-size: 27px; }
+  .sp-speak          { padding: 11px 22px; margin: 6px auto 4px; }
+  .sp-speak-ic       { font-size: 24px; }
+}
+
+/* 手機：題目字 36px 會斷成 4 行（130px）——答完之後多出的回饋區就一定超出畫面 */
+@media (max-width: 560px) {
+  .qm-question-text { font-size: 28px; }
+  .qm-option        { padding: 11px 12px; }
+  .qm-opt-text      { font-size: 17px; }
+  .qm-opt-letter    { width: 30px; height: 30px; font-size: 13px; }
+}
+
+/* ── 答完之後才出現的回饋區（✓正解／解說／下一題）會再多推 175px，
+      矮螢幕上小朋友每答一題都要往下捲才找得到「下一題」→ 一起瘦身。 ── */
+@media (max-height: 920px) {
+  .qm-feedback        { margin-top: 10px; gap: 8px; }
+  /* ⚠ 不要給 .qm-explain 加 max-height＋內捲軸：那是老師寫的解說，藏起來小朋友不會去找 */
+  .qm-feedback-banner { padding: 11px 16px; font-size: 18px; }
+  .qm-feedback .qm-btn.primary { padding: 12px 22px; }
+  .qm-auto-next       { font-size: 15px; }
+  .dm-wrap            { padding-bottom: 14px; }
+}
+
+/* ══ 最矮的畫面放最後：max-height 560/480 是 920 的子集，
+      要排在 920 那一段後面才不會被蓋掉。 ══ */
+/* 手機橫式／很矮的視窗：連外框（分頁列、完成練習列、內距）都要壓，
+   不然光是這些就吃掉 245px，390px 高的畫面根本不夠放題目 */
+@media (max-height: 560px) {
+  .fc-tab              { padding: 8px 6px; font-size: 12px; }
+  .fc-player           { padding: 8px 12px; }
+  .qm-fc-player-bar    { padding-bottom: 8px; margin-bottom: 8px; }
+  .qm-fc-need          { font-size: 13px; padding: 5px 10px; }
+  .qm-fc-start-btn     { padding: 9px 14px; }
+  .qm-quiz-area        { padding-top: 12px; padding-bottom: 16px; }
+  .fc-topbar           { margin-bottom: 8px; }
+  .fc-p-learn > .fc-dual-bar { margin-bottom: 6px; }
+  .qm-question-text { font-size: 30px; }
+  .ta-prompt        { font-size: 32px; }
+  .qm-intro-icon    { font-size: 28px; margin-bottom: 6px; }
+  .qm-intro-title   { font-size: 21px; }
+  .qm-intro-rules   { padding: 9px 12px; margin-bottom: 10px; }
+  .qm-player-head   { margin-bottom: 10px; }
+  .qm-question-area { margin-bottom: 10px; }
+  /* ⚠ 要用同樣的 .fc-p-learn 前綴，不然會被上面兩欄版面的 (0,2,0) 蓋掉
+     （iPhone Pro Max 橫式 932×430 兩個條件都成立） */
+  .fc-p-learn .fc-learn-zh { font-size: 26px; margin-bottom: 0; }
+  .fc-learn-zh      { font-size: 26px; }
+  .fc-choice        { padding: 11px 10px; font-size: 16px; }
+  .fc-choices       { grid-template-columns: 1fr 1fr; }
+  .fc-match-grid    { min-height: 0; }   /* 200px 的地板在 390px 高的畫面會把格子擠出去 */
+}
+/* 手機橫著拿只有 390px 高——選項改成 2×2、提示行拿掉，才塞得下一整題 */
+@media (max-height: 480px) {
+  .qm-options       { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .qm-option        { padding: 9px 12px; }
+  .qm-opt-text      { font-size: 16px; }
+  .qm-opt-letter    { width: 26px; height: 26px; font-size: 12px; }
+  .qm-question-text { font-size: 24px; }
+  .qm-question-hint { display: none; }
+  .qm-player-head   { margin-bottom: 8px; }
+  .qm-question-area { margin-bottom: 8px; }
+  .qm-feedback      { margin-top: 8px; gap: 6px; }
+  .qm-feedback-banner { padding: 8px 14px; font-size: 15.5px; }
+  .qm-explain       { font-size: 15px; }
+  .qm-feedback .qm-btn.primary { padding: 9px 18px; font-size: 15.5px; }
+  /* 手機橫式只有 ~215px 可用：卡片／圖片的最小高度要再讓一步，
+     不然「上一張／下一張」「四個選項」會被擠出可視範圍 */
+  .fc-p-card > .fc-flip-card { min-height: 120px; margin-bottom: 8px; }
+  .fc-p-card > .fc-topbar    { margin-bottom: 6px; }
+  .fc-p-learn .fc-learn-img  { min-height: 60px; margin-bottom: 6px; }
+  .fc-p-learn > .fc-dual-bar { margin-bottom: 6px; }
+  .fc-term                   { font-size: 30px; }
+  .fc-zh                     { font-size: 24px; margin-bottom: 6px; }
+  .fc-example                { font-size: 14px; }
+}

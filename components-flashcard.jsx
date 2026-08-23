@@ -377,17 +377,52 @@ function MatchTimer({ startRef }) {
    並在轉向／工具列伸縮／版面位移時重算。 */
 function MatchFitGrid({ children }) {
   const ref = React.useRef(null);
+  useFitHeight(ref, true, 200);   // v376: 跟單字卡／學習共用同一套（原本沒扣外層 padding，會多出一截）
+  return <div className="fc-match-grid" ref={ref}>{children}</div>;
+}
+
+/* v376（Alan：iPad 做練習要一直往下滑）：把 v345 配對格子的做法變成共用的。
+   「一次看一張」的模式（單字卡／學習）改成「量出上緣到視窗底部還剩多少 → 設成高度」，
+   剩下的空間由 CSS flex 分給圖片。為什麼不用 100dvh 算：
+   上面有多少東西（站台 header、完成練習列、分頁列）會隨頁面與裝置變，
+   而且 iPad Safari 的工具列會伸縮——量的才準。 */
+function _fcScrollHost(el) {
+  let n = el.parentElement;
+  while (n && n !== document.documentElement) {
+    const o = getComputedStyle(n).overflowY;
+    if (o === 'auto' || o === 'scroll') return n;
+    n = n.parentElement;
+  }
+  return document.documentElement;
+}
+function useFitHeight(ref, enabled, min) {
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (!enabled) { el.style.height = ''; return; }
     const fit = () => {
       const vv = window.visualViewport;                 // iOS 工具列伸縮時這個才準
       const vh = (vv && vv.height) || window.innerHeight;
+      // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
+      const floor = Math.min(min || 320, Math.round(vh * 0.55));
       const top = el.getBoundingClientRect().top;
-      el.style.height = Math.max(200, Math.round(vh - top - 16)) + 'px';
+      const h = Math.max(floor, Math.round(vh - top - 10));
+      if (el.style.height !== h + 'px') el.style.height = h + 'px';
+      /* 外層通常還有 padding-bottom（例：.qm-quiz-area 手機是 84px）——
+         光算「上緣到視窗底」還是會多出那一截，所以量一次剩下的溢出再扣掉。 */
+      const host = _fcScrollHost(el);
+      const over = host === document.documentElement
+        ? document.documentElement.scrollHeight - vh
+        : host.scrollHeight - host.clientHeight;
+      if (over > 1) {
+        const h2 = Math.max(floor, h - over) + 'px';
+        if (el.style.height !== h2) el.style.height = h2;
+      }
     };
     fit();
-    // 圖片載入、分頁列換行都會讓格子上緣位移 → 一併重算
+    /* 圖片還沒載完、字體還沒換好、轉向剛結束時量到的都可能不準 → 多補幾次 */
+    const raf = requestAnimationFrame(fit);
+    const t1 = setTimeout(fit, 150), t2 = setTimeout(fit, 600), t3 = setTimeout(fit, 1500);
     let ro = null;
     try { ro = new ResizeObserver(fit); ro.observe(document.body); } catch (e) {}
     window.addEventListener('resize', fit);
@@ -395,17 +430,22 @@ function MatchFitGrid({ children }) {
     if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
     return () => {
       if (ro) ro.disconnect();
+      cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
       window.removeEventListener('resize', fit);
       window.removeEventListener('orientationchange', fit);
       if (window.visualViewport) window.visualViewport.removeEventListener('resize', fit);
     };
-  }, []);
-  return <div className="fc-match-grid" ref={ref}>{children}</div>;
+  }, [enabled]);
 }
 
 function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const cards = item.cards || [];
   const [mode, setMode] = useFC("card");
+
+  // v376: 單字卡／學習兩個模式撐滿一畫面就好（見 useFitHeight）
+  const cardFitRef  = React.useRef(null);
+  const learnFitRef = React.useRef(null);
+  useFitHeight(cardFitRef,  mode === 'card',  360);
 
   // v274: 星號標記＋「只練星號」
   const [stars, setStars] = useFC(() => fcLoadStars(item.id));
@@ -450,6 +490,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
 
   // Learn mode — queue-based spaced repetition
   const [learnQueue, setLearnQueue] = useFC([]); // [{card, isRetry}]
+  /* v376: 「作答中」才量高度——按「再練一次」會重新掛一個 .fc-player，
+     只看 mode 的話 enabled 沒變、效果不會重跑，新的那個就會沒有高度。 */
+  useFitHeight(learnFitRef, mode === 'learn' && learnQueue.length > 0, 340);
   const [correctIds, setCorrectIds] = useFC(new Set());
   const [learnChoice, setLearnChoice] = useFC(null); // chosen card id
   const [learnChoices, setLearnChoices] = useFC([]);
@@ -734,7 +777,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     return (
       <div className="fc-wrap">
         <ModeTabs active="card"/>
-        <div className="fc-player">
+        <div className="fc-player fc-p-card" ref={cardFitRef}>
           <div className="fc-topbar">
             <span className="mono">{safeIdx + 1} / {deck.length}</span>
             <div className="fc-progress-bar">
@@ -858,7 +901,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     return (
       <div className="fc-wrap">
         <ModeTabs active="learn"/>
-        <div className="fc-player">
+        <div className="fc-player fc-p-learn" ref={learnFitRef}>
           <DualProgressBar correct={correctIds.size} total={learnTotal}/>
 
           <div className="fc-learn-q">

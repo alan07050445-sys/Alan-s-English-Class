@@ -145,6 +145,9 @@
 @media (max-width: 768px) {
   .mx-layer { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
   .mx-bubble { max-width: 150px; font-size: 13px; padding: 6px 9px; }
+  /* 手機畫面小，吉祥物也跟著小一點才不會擋到東西 */
+  .mx-svg { width: 34px; height: 30px; }
+  .mx-bubble { left: 17px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

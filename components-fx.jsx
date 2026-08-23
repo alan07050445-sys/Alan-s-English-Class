@@ -68,12 +68,20 @@ function MascotLayer() {
   };
 
   /* app.jsx 會把 window.__mxAllow 設成「有沒有登入」——沒登入（門口／登入頁）就不出來。
-     沒有這個旗標時（例如測試頁）預設出來。 */
-  const [allowed, setAllowed] = useFx(window.__mxAllow !== false);
+     沒有這個旗標時（例如測試頁）預設出來。
+     v376：小螢幕（手機／小平板）在「正在作答」的畫面也讓開——那裡每一格都是要點的，
+     牠站上去會擋住。大螢幕有空間，照常出來玩。 */
+  const BUSY_SEL = '.fc-p-learn, .fc-p-card, .fc-match-grid, .fc-test-list, .qm-options, .dm-wrap, .cloze-passage, .circle-question-list, .ws-player';
+  const okNow = () => {
+    if (window.__mxAllow === false) return false;
+    if (window.innerWidth >= 900) return true;
+    return !document.querySelector(BUSY_SEL);
+  };
+  const [allowed, setAllowed] = useFx(okNow());
   useFxE(() => {
     try { reduce.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
     const t = setTimeout(() => setAlive(true), 2500);
-    const iv = setInterval(() => setAllowed(window.__mxAllow !== false), 1000);
+    const iv = setInterval(() => setAllowed(okNow()), 1000);
     return () => { clearTimeout(t); clearInterval(iv); };
   }, []);
 
