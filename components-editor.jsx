@@ -595,10 +595,10 @@ function Footer({ onOpenGuide }) {
    ══════════════════════════════════════════════════════════════ */
 const QS_KINDS = [
   { id: 'flashcard', zh: '單字卡',   note: '翻卡片記單字（含學習與測驗模式）', always: true },
-  { id: 'def-match', zh: '配對連線', note: '左邊英文、右邊中文，連連看' },
+  { id: 'def-match', zh: '配對連線', note: '左邊英文、右邊解釋，連連看' },
   { id: 'spelling',  zh: '聽寫',     note: '聽發音把單字拼出來' },
-  { id: 'quiz',      zh: '選擇題',   note: '看中文選英文（需要 4 個字以上）' },
-  { id: 'fillblank', zh: '填空',     note: '用例句挖空（只有寫了例句的字才會出題）' },
+  { id: 'quiz',      zh: '選擇題',   note: '看中文選英文' },
+  { id: 'fillblank', zh: '填空',     note: '情境句子挖空＋中文解說' },
 ];
 
 /* 一行一個字：英文 [Tab | ｜ | 逗號 | " - "] 中文 [同樣分隔] 例句 */
@@ -627,8 +627,15 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
   const [title, setTitle] = useS('');
   const [cat, setCat]     = useS(defaultCat || 'vocab');
   const [picked, setPicked] = useS({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true });
+  /* v379：AI 出題。Alan 的配對連線是「英文單字 → 英文定義」、填空是「情境例句＋中文解說」，
+     不是單字表就能生出來的東西——他本來都貼給 ChatGPT 再匯入。
+     出完先進「校稿」畫面，每一格都可以改，確認了才寫進週次。 */
+  const [useAI, setUseAI]   = useS(true);
+  const [busy, setBusy]     = useS(0);       // 0=沒在跑，否則是已完成的字數
+  const [aiErr, setAiErr]   = useS('');
+  const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
   useE(() => {
-    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab');
+    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setAiErr(''); setBusy(0); setUseAI(true);
       setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true }); }
   }, [open]);
   if (!open) return null;
@@ -636,15 +643,80 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
   const words = qsParseWords(text);
   const withZh = words.filter(w => w.zh);
   const withEx = words.filter(w => qsBlank(w.example, w.term));
+  /* ⚠ 開了 AI 就不需要自己先寫中文／例句——句子和定義都是 AI 出的。
+     沒開 AI 才需要：配對要有中文、填空要有例句。 */
   const canDo = {
     flashcard: words.length >= 1,
-    'def-match': withZh.length >= 2,
+    'def-match': (useAI ? words.length : withZh.length) >= 2,
     spelling: words.length >= 1,
-    quiz: withZh.length >= 2,
-    fillblank: withEx.length >= 2,
+    quiz: (useAI ? words.length : withZh.length) >= 2,
+    fillblank: (useAI ? words.length : withEx.length) >= 2,
   };
   const chosen = QS_KINDS.filter(k => picked[k.id] && canDo[k.id]);
   const ready = title.trim() && words.length >= 1 && chosen.length >= 1;
+  const wantAI = useAI && (picked['def-match'] || picked.fillblank);
+
+  const runAI = async () => {
+    setAiErr(''); setBusy(0.0001);
+    try {
+      const r = await window.aiMakeVocabExercises(words, {
+        hint: title.trim(),
+        onProgress: (done) => setBusy(done),
+      });
+      setRows(r);
+    } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
+    setBusy(0);
+  };
+  const updRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r));
+
+  /* ── 第 2 步：AI 出完了，逐題校稿 ── */
+  if (rows) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal wide" onClick={e => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>校稿 · <em>{title}</em></h3>
+            <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          </div>
+          <div className="modal-body">
+            <div className="field-help" style={{ marginBottom: 10 }}>
+              AI 出好了 <b>{rows.length}</b> 個字。<b>每一格都可以直接改</b>，確認沒問題再建立。
+              空白的欄位會自動跳過那一題。
+            </div>
+            <div className="qs-proof">
+              {rows.map((r, i) => (
+                <div key={i} className="qs-proof-row">
+                  <div className="qs-proof-w">
+                    <input value={r.word} onChange={e => updRow(i, 'word', e.target.value)}/>
+                    <input className="qs-proof-zhin" value={r.zh} placeholder="中文意思"
+                      onChange={e => updRow(i, 'zh', e.target.value)}/>
+                  </div>
+                  <div className="qs-proof-f">
+                    <label>英文定義（配對連線用）</label>
+                    <textarea rows={2} value={r.def} onChange={e => updRow(i, 'def', e.target.value)}/>
+                    <label>情境例句（填空用，空格請留 <code>___</code>）</label>
+                    <textarea rows={2} value={r.sentence} onChange={e => updRow(i, 'sentence', e.target.value)}/>
+                    <div className="qs-proof-2">
+                      <div><label>答案</label><input value={r.answer} onChange={e => updRow(i, 'answer', e.target.value)}/></div>
+                      <div><label>中文解說</label><textarea rows={2} value={r.explain} onChange={e => updRow(i, 'explain', e.target.value)}/></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="modal-foot">
+            <button className="btn ghost" onClick={() => setRows(null)}>← 回上一步</button>
+            <button className="btn ghost" onClick={runAI} disabled={!!busy}>{busy ? '重新出題中…' : '↻ 重新出一次'}</button>
+            <button className="btn primary"
+              onClick={() => onCreate({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id), ai: rows })}>
+              建立 {chosen.length} 個練習 →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -699,14 +771,30 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
               </div>
             </div>
           </div>
+
+          <label className={'qs-ai' + (useAI ? ' on' : '')}>
+            <input type="checkbox" checked={useAI} onChange={e => setUseAI(e.target.checked)}/>
+            <span className="qs-ai-t">✨ 用 AI 出題（配對連線的<b>英文定義</b>、填空的<b>情境例句＋中文解說</b>）</span>
+            <span className="qs-ai-n">
+              出完會先讓你逐題校稿再建立。不勾的話：配對＝單字對中文、填空＝把你貼的例句挖空。
+            </span>
+          </label>
+          {aiErr && <div className="notify-msg err" style={{ marginTop: 8 }}>⚠️ {aiErr}</div>}
         </div>
 
         <div className="modal-foot">
           <button className="btn ghost" onClick={onClose}>取消</button>
-          <button className="btn primary" disabled={!ready}
-            onClick={() => onCreate({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id) })}>
-            {ready ? `建立 ${chosen.length} 個練習（${words.length} 個字）→` : '先貼單字並取個名字'}
-          </button>
+          {wantAI ? (
+            <button className="btn primary" disabled={!ready || !!busy} onClick={runAI}>
+              {busy ? `AI 出題中… ${Math.floor(busy)}/${words.length}`
+                    : ready ? `✨ AI 出題（${words.length} 個字）→` : '先貼單字並取個名字'}
+            </button>
+          ) : (
+            <button className="btn primary" disabled={!ready}
+              onClick={() => onCreate({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id) })}>
+              {ready ? `建立 ${chosen.length} 個練習（${words.length} 個字）→` : '先貼單字並取個名字'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -714,7 +802,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
 }
 
 /* 真正產生各個單元的資料。抽出來是為了好測。 */
-function qsBuildItems({ words, title, kinds }) {
+function qsBuildItems({ words, title, kinds, ai }) {
+  const aiOf = (term) => (ai || []).find(r => r.term === term) || null;
   const rnd = () => Math.random().toString(36).slice(2, 6);
   const stamp = Date.now();
   const out = [];
@@ -723,21 +812,35 @@ function qsBuildItems({ words, title, kinds }) {
 
   if (kinds.indexOf('flashcard') >= 0) {
     out.push({ ...base, id: fcId, type: 'flashcard', title,
-      cards: words.map((w, i) => ({ id: 'c' + stamp + i + rnd(), term: w.term, zh: w.zh || '', example: w.example || '' })) });
+      cards: words.map((w, i) => {
+        const a = aiOf(w.term);
+        return { id: 'c' + stamp + i + rnd(), term: w.term, zh: w.zh || (a && a.zh) || '',
+                 example: w.example || ((a && a.sentence) ? a.sentence.replace('___', w.term) : '') };
+      }) });
   }
   if (kinds.indexOf('def-match') >= 0) {
-    out.push({ ...base, id: 'qs' + stamp + 'dm', type: 'def-match', title, linkedFlashcardId: fcId,
-      defPairs: words.filter(w => w.zh).map((w, i) => ({ id: 'p' + stamp + i + rnd(), word: w.term, def: w.zh })) });
+    // 有 AI 出的英文定義就用它（Alan 的風格），沒有才退回「單字 → 中文」
+    const pairs = words.map((w, i) => {
+      const a = aiOf(w.term);
+      const def = (a && a.def) || w.zh;
+      return def ? { id: 'p' + stamp + i + rnd(), word: (a && a.word) || w.term, def } : null;
+    }).filter(Boolean);
+    if (pairs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'dm', type: 'def-match', title, linkedFlashcardId: fcId, defPairs: pairs });
   }
   if (kinds.indexOf('fillblank') >= 0) {
     const qs = words.map((w, i) => {
-      const sentence = qsBlank(w.example, w.term);
-      return sentence ? { id: 'q' + stamp + i + rnd(), sentence, answer: w.term, explain: w.zh ? `${w.term} = ${w.zh}` : '' } : null;
+      const a = aiOf(w.term);
+      // AI 的情境例句優先；沒有才把老師貼的例句挖空
+      const sentence = (a && a.sentence && a.sentence.indexOf('___') >= 0) ? a.sentence : qsBlank(w.example, w.term);
+      if (!sentence) return null;
+      const answer  = (a && a.answer) || w.term;
+      const explain = (a && a.explain) || (w.zh ? `${w.term} = ${w.zh}` : '');
+      return { id: 'q' + stamp + i + rnd(), sentence, answer, explain };
     }).filter(Boolean);
     if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'fb', type: 'fillblank', title, linkedFlashcardId: fcId, questions: qs });
   }
   if (kinds.indexOf('quiz') >= 0) {
-    const pool = words.filter(w => w.zh);
+    const pool = words.map(w => ({ ...w, zh: w.zh || ((aiOf(w.term) || {}).zh || '') })).filter(w => w.zh);
     const qs = pool.map((w, i) => {
       const others = pool.filter(x => x.term !== w.term).map(x => x.term);
       // 洗牌後取 3 個當誘答
@@ -750,7 +853,7 @@ function qsBuildItems({ words, title, kinds }) {
   }
   if (kinds.indexOf('spelling') >= 0) {
     out.push({ ...base, id: 'qs' + stamp + 'sp', type: 'spelling', title, linkedFlashcardId: fcId,
-      spellWords: words.map((w, i) => ({ id: 'sp' + stamp + i + rnd(), word: w.term, zh: w.zh || '' })) });
+      spellWords: words.map((w, i) => ({ id: 'sp' + stamp + i + rnd(), word: w.term, zh: w.zh || ((aiOf(w.term) || {}).zh || '') })) });
   }
   return out;
 }

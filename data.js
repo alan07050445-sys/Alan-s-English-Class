@@ -1290,6 +1290,85 @@ English: Write one improved sentence using or answering "${word}" correctly. Kee
   } catch(e) { return '網路錯誤，請再試一次。'; }
 }
 
+// ── v379: AI 出題（配對連線的英文定義／填空的情境例句＋中文解說）────────────
+// Alan 本來的做法是把單字貼給 ChatGPT、拿回來再匯入。
+// alan-ai-proxy 這個 Worker 本來就是「通用的 Anthropic 代理」（收 system+messages 原樣轉送），
+// 所以不用重新部署，直接換一組 prompt 就能在網站裡出題。
+const AI_VOCAB_SYS =
+`You write English exercises for Taiwanese elementary-school students (grades 2-6, CEFR A1-A2).
+Output ONLY a JSON array. No prose, no markdown, no code fences.
+
+For each target word output:
+{"word":"<word> (<pos.>)","zh":"<Traditional Chinese meaning>","def":"<definition>","sentence":"<context sentence with ___>","answer":"<the word as it fills the blank>","explain":"<Traditional Chinese explanation>"}
+
+RULES
+- zh: the Traditional Chinese meaning of the word, 2-8 characters, no explanation (e.g. 遺產／移民／訪問).
+- def: a kid-friendly ENGLISH definition, 5-14 words, no ending punctuation, and it must NOT contain the target word or any form of it.
+- sentence: ONE natural sentence, 12-22 words, with exactly one ___ where the word goes. The rest of the sentence must give enough clues to work the answer out. Never let the target word appear anywhere else in the sentence.
+- answer: the exact surface form that fills the blank (may be inflected, e.g. plural or past tense).
+- explain: Traditional Chinese, 20-45 characters. Copy the clue phrase from YOUR OWN sentence (not from the definition), say in Chinese what that clue means, then give the answer. Never output the literal characters "…" or "..." — always write the real reasoning.
+  GOOD: 「old photos and stories from our grandparents」是家族一代一代留下來的東西，所以是 heritage（文化遺產）。
+  GOOD: 「asked her many questions」是訪問別人的動作，所以是 interview（訪問）。
+  BAD:  「something valuable passed down」表示…，所以是 heritage（文化遺產）。
+  BAD:  quoting the definition instead of a phrase from the sentence.
+- Keep every other word simple. Use the student's own world (school, family, food, animals, festivals).
+- Return the words in the same order they were given, one object per word.`;
+
+function _aiStripFence(t) {
+  const s = String(t || '').trim();
+  const m = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return (m ? m[1] : s).trim();
+}
+
+/* words: [{ term, zh }]（zh 只是給 AI 當語意提示，可省略）
+   回傳 [{ word, def, sentence, answer, explain }]，順序與輸入相同。 */
+async function aiMakeVocabExercises(words, { onProgress, chunk = 10, hint = '' } = {}) {
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  if (!list.length) return [];
+  const out = [];
+  for (let i = 0; i < list.length; i += chunk) {
+    const part = list.slice(i, i + chunk);
+    const userMsg =
+      (hint ? `Context / topic: ${hint}\n` : '') +
+      'Target words:\n' +
+      part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`).join('\n');
+    let parsed = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      try {
+        const res = await fetch(AI_WRITING_ENDPOINT, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5', max_tokens: 4000,
+            system: AI_VOCAB_SYS,
+            messages: [{ role: 'user', content: userMsg }],
+          }),
+        });
+        const data = await res.json();
+        const txt = data?.content?.[0]?.text || data?.text || '';
+        const arr = JSON.parse(_aiStripFence(txt));
+        if (Array.isArray(arr)) parsed = arr;
+      } catch (e) { /* 再試一次；兩次都失敗就丟錯誤 */ }
+    }
+    if (!parsed) throw new Error('AI 出題失敗（回傳格式看不懂），請再試一次。');
+    // 用輸入的順序對回去，AI 少給或多給都不會錯位
+    part.forEach((w, k) => {
+      const r = parsed[k] || {};
+      out.push({
+        term: w.term,
+        zh: w.zh || String(r.zh || '').trim(),   // 老師自己寫的中文優先，沒寫才用 AI 的
+        word: String(r.word || w.term).trim(),
+        def: String(r.def || '').trim(),
+        sentence: String(r.sentence || '').trim(),
+        answer: String(r.answer || w.term).trim(),
+        explain: String(r.explain || '').trim(),
+      });
+    });
+    if (onProgress) onProgress(Math.min(i + chunk, list.length), list.length);
+  }
+  return out;
+}
+
 // ── AI Short Answer Grading ───────────────────────────────────────────────
 async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   if (!studentAnswer?.trim()) return '請先寫下你的答案。';
@@ -1937,6 +2016,7 @@ Object.assign(window, {
   COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText, speakTTS, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
+  aiMakeVocabExercises,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
