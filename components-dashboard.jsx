@@ -1827,18 +1827,20 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   // v236: 專業後台外殼——側欄導覽 + 頂列，內容元件不變
   // v257: 「學習報告」分頁與總覽重複（同樣是學生×完成度×平均分）——合併：
   // 總覽＝紅黃綠燈＋全班常錯題；個人成績細節在學生詳情、家長版在週報。
+  /* v377（Alan：「太多沒什麼用的功能、也很亂」）：一個都不刪，只分成
+     「每天會用的」和「偶爾設定一次的」兩區——8 個平起平坐的分頁很難掃。 */
   const NAV = [
-    { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題' },
-    { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理' },
-    { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告' },
-    { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態' },
-    { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點' },
-    { id: 'shop',     ico: '🛍️', label: '商店', sub: '兌換商品維護' },
-    { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程' },
-    { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單' },
+    { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題', sec: '每天用' },
+    { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理',     sec: '每天用' },
+    { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點', sec: '每天用' },
+    { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告',    sec: '每天用' },
+    { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程', sec: '設定一次' },
+    { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態', sec: '設定一次' },
+    { id: 'shop',     ico: '🛍️', label: '商店', sub: '兌換商品維護',     sec: '設定一次' },
+    { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單', sec: '設定一次' },
     // v337: 只有「擁有者」看得到管理者維護（規則同樣只允許擁有者寫）
     ...(window.isOwnerUser && window.isOwnerUser(window._currentUser)
-      ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限' }] : []),
+      ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限', sec: '設定一次' }] : []),
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
 
@@ -1858,15 +1860,17 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <span className="tdash-brand-t">老師後台<em>Admin Console</em></span>
           </div>
           <nav className="tdash-nav">
-            {NAV.map(n => (
+            {NAV.map((n, i) => (
+              <React.Fragment key={n.id}>
+              {(i === 0 || NAV[i - 1].sec !== n.sec) && <div className="tdash-nav-sec">{n.sec}</div>}
               <button
-                key={n.id}
                 className={`tdash-nav-item${tab === n.id ? ' on' : ''}`}
                 onClick={() => { setTab(n.id); setSelected(null); }}
               >
                 <span className="tdash-nav-ico">{n.ico}</span>
                 <span className="tdash-nav-txt">{n.label}<em>{n.sub}</em></span>
               </button>
+              </React.Fragment>
             ))}
           </nav>
           <div className="tdash-side-foot">

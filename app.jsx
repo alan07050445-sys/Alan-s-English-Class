@@ -147,6 +147,7 @@ function App() {
   const [editorGroups, setEditorGroups] = useAppState(null);   // v374(#5): 新增時要提供哪些分組選項
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
+  const [quickSetOpen, setQuickSetOpen] = useAppState(false); // v377: 貼單字→一次建立整套
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -833,6 +834,23 @@ function App() {
 
   // ── Item CRUD ──────────────────────────────────────────
 
+  /* v377③: 貼一次單字 → 一次建立整套練習（單字卡／配對連線／聽寫／選擇題／填空）
+     全部掛同一個 group，並綁到那份單字卡上，學生端會自動排成一組。 */
+  const handleQuickSet = ({ words, title, cat, kinds }) => {
+    const items = window.qsBuildItems({ words, title, kinds });
+    if (!items.length) { setQuickSetOpen(false); return; }
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) { showToast('請先選一個週次'); return; }
+    if (!w[weekId].items) w[weekId].items = {};
+    if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
+    w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+    setWeeks(w);
+    saveWeeksSafe(w);
+    setQuickSetOpen(false);
+    setOpenCat(cat);
+    showToast(`已建立 ${items.length} 個練習 · ${words.length} 個單字`);
+  };
+
   const handleAddItem = (catId, assignEmail, groupOptions) => {
     // Pre-generate final ID so the PDF storage path is stable before save.
     // Include random suffix to avoid collisions if called rapidly.
@@ -1291,6 +1309,7 @@ function App() {
             onToggleEdit={() => setEditMode(e => !e)}
             onAddWeek={() => setWeekModalOpen(true)}
             onTermSetup={window.isSummerTrack && window.isSummerTrack(grade) ? null : () => setTermOpen(true)}
+            onQuickSet={() => setQuickSetOpen(true)}
             onDeleteWeek={handleDeleteWeek}
             progress={{done: totalDone, total: totalItems}}
             user={user}
@@ -1533,6 +1552,13 @@ function App() {
             existingIds={weekOrder}
             onClose={() => setWeekModalOpen(false)}
             onSave={handleAddWeek}
+          />
+          <window.QuickSetModal
+            open={quickSetOpen}
+            categories={activeCategories}
+            defaultCat={openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab'}
+            onClose={() => setQuickSetOpen(false)}
+            onCreate={handleQuickSet}
           />
           <window.TermSetupModal
             open={termOpen}

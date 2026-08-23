@@ -2,6 +2,19 @@
 
 const { useState: useS, useEffect: useE } = React;
 
+/* v377（Alan：「太多 item、太多沒什麼用的功能、也很亂」）
+   拉了線上真實資料來看：248 個單元裡，單字卡 72／填空 53／選擇題 28／聽寫 23
+   ＝ 這 4 種就佔 71%；其餘 12 種加起來只有 14 次，「圈出答案」一次都沒用過。
+   → 一個都不刪（之後想用還在），但把常用的 4 種放最上面，其餘收進「更多題型」。
+   zh = 中文名（原本清單一半英文一半中文，掃過去認不出來）。 */
+const TYPE_COMMON = ['flashcard', 'fillblank', 'quiz', 'spelling'];
+const TYPE_ZH = {
+  flashcard: '單字卡', fillblank: '填空', quiz: '選擇題', spelling: '聽寫',
+  'writing-practice': 'AI 造句批改', 'type-answer': '打答案', 'guided-reading': '分段閱讀',
+  upload: '上傳作業', 'short-answer': '閱讀簡答', cloze: '段落填空', 'def-match': '配對連線',
+  essay: '意見文寫作', 'syllable-div': '切音節', 'word-sort': '分類排序',
+  'story-mountain': '故事山脈', 'circle-answer': '圈出答案',
+};
 const TYPE_OPTIONS = [
   { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },
   { id: "flashcard", label: "Flashcard",  hint: "自製單字卡組 — 支援圖片搜尋、匯入、三種練習模式" },
@@ -23,8 +36,13 @@ const TYPE_OPTIONS = [
 
 function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
+  const [moreTypes, setMoreTypes] = useS(false);
 
   useE(() => { setForm(draft); }, [draft]);
+  // 編輯既有單元、而且它不是那 4 種常用題型 → 直接把「更多題型」展開，不然會找不到自己
+  useE(() => {
+    if (draft && draft.type && TYPE_COMMON.indexOf(draft.type) < 0) setMoreTypes(true);
+  }, [draft && draft.type]);
 
   if (!open || !form) return null;
 
@@ -61,18 +79,32 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
 
         <div className="modal-body">
           <div className="field">
-            <label className="field-label">Resource Type · 類型</label>
+            <label className="field-label">題型</label>
             <div className="type-picker">
-              {TYPE_OPTIONS.map(opt => (
-                <button
-                  key={opt.id}
-                  className={form.type === opt.id ? "active" : ""}
-                  onClick={() => update("type", opt.id)}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {TYPE_OPTIONS.filter(o => TYPE_COMMON.indexOf(o.id) >= 0)
+                .sort((a, b) => TYPE_COMMON.indexOf(a.id) - TYPE_COMMON.indexOf(b.id))
+                .map(opt => (
+                  <button key={opt.id}
+                    className={'tp-big' + (form.type === opt.id ? " active" : "")}
+                    onClick={() => update("type", opt.id)}>
+                    {TYPE_ZH[opt.id] || opt.label}
+                  </button>
+                ))}
             </div>
+            <button type="button" className="tp-more-toggle" onClick={() => setMoreTypes(v => !v)}>
+              {moreTypes ? '▾ 收起其他題型' : '▸ 更多題型（12 種）'}
+            </button>
+            {moreTypes && (
+              <div className="type-picker tp-more">
+                {TYPE_OPTIONS.filter(o => TYPE_COMMON.indexOf(o.id) < 0).map(opt => (
+                  <button key={opt.id}
+                    className={form.type === opt.id ? "active" : ""}
+                    onClick={() => update("type", opt.id)}>
+                    {TYPE_ZH[opt.id] || opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="field-help">{meta.hint}</div>
           </div>
 
@@ -554,6 +586,175 @@ function Footer({ onOpenGuide }) {
 }
 
 /* ───── Week Modal ───── */
+/* ══════════════════════════════════════════════════════════════
+   v377 ③：貼一次單字 → 一次做出整套練習
+   為什麼要有這個：線上資料顯示 72 份單字卡、881 張卡，而且有 76 個單元是
+   「綁在單字卡上的」——Alan 實際的做法就是「一份單字，再配上填空／聽寫／測驗」，
+   但現在得一個一個手動建。這裡把它變成一次完成。
+   同時也讓別的老師不用搞懂 16 種題型，只要會貼單字就能開一個班。
+   ══════════════════════════════════════════════════════════════ */
+const QS_KINDS = [
+  { id: 'flashcard', zh: '單字卡',   note: '翻卡片記單字（含學習與測驗模式）', always: true },
+  { id: 'def-match', zh: '配對連線', note: '左邊英文、右邊中文，連連看' },
+  { id: 'spelling',  zh: '聽寫',     note: '聽發音把單字拼出來' },
+  { id: 'quiz',      zh: '選擇題',   note: '看中文選英文（需要 4 個字以上）' },
+  { id: 'fillblank', zh: '填空',     note: '用例句挖空（只有寫了例句的字才會出題）' },
+];
+
+/* 一行一個字：英文 [Tab | ｜ | 逗號 | " - "] 中文 [同樣分隔] 例句 */
+function qsParseWords(text) {
+  return String(text || '').split('\n').map(l => l.trim()).filter(Boolean).map((line, i) => {
+    const cols = (line.includes('\t') ? line.split('\t')
+      : line.includes('|') ? line.split('|')
+      : /\s+-\s+/.test(line) ? line.split(/\s+-\s+/)
+      : line.includes(',') ? line.split(',')
+      : [line]).map(c => c.trim().replace(/^["']|["']$/g, ''));
+    return { term: cols[0] || '', zh: cols[1] || '', example: cols[2] || '', _i: i };
+  }).filter(w => w.term);
+}
+
+/* 把例句裡的那個單字挖成空格（認得 -s/-ed/-ing 等字尾變化） */
+function qsBlank(example, term) {
+  const t = String(term || '').trim();
+  if (!t || !example) return '';
+  const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('\\b' + esc + '(s|es|ed|ing|d)?\\b', 'i');
+  return re.test(example) ? example.replace(re, '_____') : '';
+}
+
+function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, onCreate }) {
+  const [text, setText]   = useS('');
+  const [title, setTitle] = useS('');
+  const [cat, setCat]     = useS(defaultCat || 'vocab');
+  const [picked, setPicked] = useS({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true });
+  useE(() => {
+    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab');
+      setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true }); }
+  }, [open]);
+  if (!open) return null;
+
+  const words = qsParseWords(text);
+  const withZh = words.filter(w => w.zh);
+  const withEx = words.filter(w => qsBlank(w.example, w.term));
+  const canDo = {
+    flashcard: words.length >= 1,
+    'def-match': withZh.length >= 2,
+    spelling: words.length >= 1,
+    quiz: withZh.length >= 2,
+    fillblank: withEx.length >= 2,
+  };
+  const chosen = QS_KINDS.filter(k => picked[k.id] && canDo[k.id]);
+  const ready = title.trim() && words.length >= 1 && chosen.length >= 1;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>貼一次單字，<em>一次建立整套練習</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+
+        <div className="modal-body">
+          <div className="qs-grid">
+            <div>
+              <div className="field">
+                <label className="field-label">單字清單</label>
+                <textarea className="qs-ta" rows={11} value={text} onChange={e => setText(e.target.value)}
+                  placeholder={"一行一個字：英文 - 中文 - 例句（中文、例句可省略）\n也可以直接從 Excel／Google 試算表整段貼過來\n\npharaoh - 法老 - The pharaoh ruled ancient Egypt.\npyramid - 金字塔 - They built a huge pyramid.\ntomb - 墳墓"}/>
+                <div className="field-help">
+                  分隔符號 Tab／<code>|</code>／逗號／<code> - </code> 都吃。
+                  目前 <b>{words.length}</b> 個字（有中文 {withZh.length}、有例句 {withEx.length}）。
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="field">
+                <label className="field-label">這一組叫什麼</label>
+                <input value={title} onChange={e => setTitle(e.target.value)}
+                  placeholder="例：Unit 5 · Ancient Egypt"/>
+                <div className="field-help">所有練習都會用這個名字，並自動歸成同一組。</div>
+              </div>
+              <div className="field">
+                <label className="field-label">放在哪一類</label>
+                <select className="qs-sel" value={cat} onChange={e => setCat(e.target.value)}>
+                  {(categories || []).map(c => <option key={c.id} value={c.id}>{c.zh || c.titleZh || c.title || c.id}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field-label">要建立哪些練習</label>
+                <div className="qs-kinds">
+                  {QS_KINDS.map(k => {
+                    const ok = canDo[k.id];
+                    return (
+                      <label key={k.id} className={'qs-kind' + (picked[k.id] && ok ? ' on' : '') + (ok ? '' : ' off')}>
+                        <input type="checkbox" disabled={!ok} checked={!!picked[k.id] && ok}
+                          onChange={e => setPicked(p => ({ ...p, [k.id]: e.target.checked }))}/>
+                        <span className="qs-kind-zh">{k.zh}</span>
+                        <span className="qs-kind-note">{ok ? k.note : '資料不夠：' + k.note}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={!ready}
+            onClick={() => onCreate({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id) })}>
+            {ready ? `建立 ${chosen.length} 個練習（${words.length} 個字）→` : '先貼單字並取個名字'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 真正產生各個單元的資料。抽出來是為了好測。 */
+function qsBuildItems({ words, title, kinds }) {
+  const rnd = () => Math.random().toString(36).slice(2, 6);
+  const stamp = Date.now();
+  const out = [];
+  const fcId = 'qs' + stamp + 'fc';
+  const base = { group: title, zh: '', duration: '' };
+
+  if (kinds.indexOf('flashcard') >= 0) {
+    out.push({ ...base, id: fcId, type: 'flashcard', title,
+      cards: words.map((w, i) => ({ id: 'c' + stamp + i + rnd(), term: w.term, zh: w.zh || '', example: w.example || '' })) });
+  }
+  if (kinds.indexOf('def-match') >= 0) {
+    out.push({ ...base, id: 'qs' + stamp + 'dm', type: 'def-match', title, linkedFlashcardId: fcId,
+      defPairs: words.filter(w => w.zh).map((w, i) => ({ id: 'p' + stamp + i + rnd(), word: w.term, def: w.zh })) });
+  }
+  if (kinds.indexOf('fillblank') >= 0) {
+    const qs = words.map((w, i) => {
+      const sentence = qsBlank(w.example, w.term);
+      return sentence ? { id: 'q' + stamp + i + rnd(), sentence, answer: w.term, explain: w.zh ? `${w.term} = ${w.zh}` : '' } : null;
+    }).filter(Boolean);
+    if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'fb', type: 'fillblank', title, linkedFlashcardId: fcId, questions: qs });
+  }
+  if (kinds.indexOf('quiz') >= 0) {
+    const pool = words.filter(w => w.zh);
+    const qs = pool.map((w, i) => {
+      const others = pool.filter(x => x.term !== w.term).map(x => x.term);
+      // 洗牌後取 3 個當誘答
+      for (let j = others.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); const t = others[j]; others[j] = others[k]; others[k] = t; }
+      const opts = [w.term].concat(others.slice(0, 3));
+      if (opts.length < 2) return null;
+      return { id: 'q' + stamp + i + rnd(), q: `「${w.zh}」的英文是哪一個？`, options: opts, answer: 0, explain: w.example || '' };
+    }).filter(Boolean);
+    if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'qz', type: 'quiz', title, linkedFlashcardId: fcId, questions: qs });
+  }
+  if (kinds.indexOf('spelling') >= 0) {
+    out.push({ ...base, id: 'qs' + stamp + 'sp', type: 'spelling', title, linkedFlashcardId: fcId,
+      spellWords: words.map((w, i) => ({ id: 'sp' + stamp + i + rnd(), word: w.term, zh: w.zh || '' })) });
+  }
+  return out;
+}
+
 /* ══════════════════════════════════════════════════════════════
    v377：一鍵建立一整個學期的週次（Alan：8/31 開學、連續 20 週到寒假）
    一週一週手動開太慢，而且 dateRange 要打成 bestWeekIdx 讀得懂的格式
@@ -3288,4 +3489,4 @@ function ClozeEditor({ passage, onChangePassage }) {
   );
 }
 
-Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan });
+Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank });
