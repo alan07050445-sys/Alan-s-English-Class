@@ -11,7 +11,7 @@ const TYPE_COMMON = ['flashcard', 'fillblank', 'quiz', 'spelling'];
 const TYPE_ZH = {
   flashcard: '單字卡', fillblank: '填空', quiz: '選擇題', spelling: '聽寫',
   'writing-practice': 'AI 造句批改', 'type-answer': '打答案', 'guided-reading': '分段閱讀',
-  upload: '上傳作業', 'short-answer': '閱讀簡答', cloze: '段落填空', 'def-match': '配對連線',
+  upload: '上傳作業', 'short-answer': '閱讀簡答', cloze: '段落填空', 'def-match': '配對連線', lesson: '教學卡',
   essay: '意見文寫作', 'syllable-div': '切音節', 'word-sort': '分類排序',
   'story-mountain': '故事山脈', 'circle-answer': '圈出答案',
 };
@@ -31,6 +31,7 @@ const TYPE_OPTIONS = [
   { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
   { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
   { id: "def-match",        label: "配對連線 🔗",       hint: "🔗 配對連線 — 左邊單字、右邊解釋（自動打亂），學生點一點連起來，系統自動批改" },
+  { id: "lesson",           label: "教學卡 📘",        hint: "📘 教學卡 — 單元開頭的「先教再練」：這是什麼／什麼時候用／形式表／常見錯誤／老師示範／小試身手" },
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
@@ -315,6 +316,39 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
               onChangePassage={v => update("smPassage", v)}
               onChangeHints={h => update("smHints", h)}
             />
+          ) : form.type === "lesson" ? (
+            /* v383: 教學卡。前兩欄常改，其餘用 JSON 一次editing（老師很少動，動了也看得懂）。 */
+            <>
+              <div className="field">
+                <label className="field-label">一句話說明（學生第一眼看到的）</label>
+                <input value={form.lead || ''} onChange={e => update('lead', e.target.value)}
+                  placeholder="例：學現在簡單式，說出每天做的事和事實。"/>
+              </div>
+              <div className="field">
+                <label className="field-label">最後鼓勵的話</label>
+                <input value={form.outro || ''} onChange={e => update('outro', e.target.value)}
+                  placeholder="例：太好了！接下來用練習把它練熟。"/>
+              </div>
+              <div className="field">
+                <label className="field-label">內容（什麼時候用／形式表／提示詞／常見錯誤／示範題／小試身手）</label>
+                <textarea rows={16} style={{ fontFamily: 'var(--mono, monospace)', fontSize: 13, lineHeight: 1.8 }}
+                  value={JSON.stringify({
+                    uses: form.uses || [], forms: form.forms || [], clues: form.clues || [],
+                    mistakes: form.mistakes || [], examples: form.examples || [], check: form.check || [],
+                  }, null, 2)}
+                  onChange={e => {
+                    try {
+                      const o = JSON.parse(e.target.value);
+                      setForm(prev => ({ ...prev, ...o }));
+                    } catch (err) { /* 打到一半還不是合法 JSON——先不動，不會存壞 */ }
+                  }}/>
+                <div className="field-help">
+                  格式不對時不會存進去（畫面上的字照樣可以繼續打）。<br/>
+                  <code>uses</code> 什麼時候用 · <code>forms</code> 形式表 · <code>clues</code> 提示詞 ·
+                  <code>mistakes</code> 常見錯誤 · <code>examples</code> 老師示範 · <code>check</code> 小試身手（answer 是選項的序號，0 開始）
+                </div>
+              </div>
+            </>
           ) : form.type === "note" ? (
             <div className="field">
               <label className="field-label">Notes Body · 筆記內容</label>
@@ -632,28 +666,40 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
   const [tense, setTense]   = useS(defaultTense || 't1');
   const [aG, setAG]         = useS(3);
   const [bC, setBC]         = useS(5);
+  const [wantLesson, setWantLesson] = useS(true);   // v383: 單元開頭的教學卡
+  const [wantCheck, setWantCheck]   = useS(true);   // v383: 單元最後的驗收
   const [busy, setBusy]     = useS(null);    // { done, total, label }
   const [err, setErr]       = useS('');
   const [res, setRes]       = useS(null);    // { A:[[…]], B:[…] }
   const [tab, setTab]       = useS(0);       // 校稿頁：看第幾個單元
 
-  useE(() => { if (open) { setTense(defaultTense || 't1'); setAG(3); setBC(5); setBusy(null); setErr(''); setRes(null); setTab(0); } }, [open]);
+  useE(() => { if (open) { setTense(defaultTense || 't1'); setAG(3); setBC(5); setBusy(null); setErr(''); setRes(null); setTab(0);
+    setWantLesson(true); setWantCheck(true); } }, [open]);
   if (!open) return null;
 
   const meta = T[tense] || {};
+  const totalUnits = (wantLesson ? 1 : 0) + (+aG) + (+bC) + (wantCheck ? 1 : 0);
   const run = async () => {
-    setErr(''); setBusy({ done: 0, total: aG + bC, label: '準備中' });
+    setErr('');
+    let done = 0;
+    const tick = (label) => { done++; setBusy({ done, total: totalUnits, label }); };
+    setBusy({ done: 0, total: totalUnits, label: '準備中' });
     try {
-      const r = await window.aiMakeGrammarSet({
-        tense, aGroups: +aG, bCount: +bC,
-        onProgress: (done, total, label) => setBusy({ done, total, label }),
+      let lesson = null;
+      if (wantLesson) { lesson = await window.aiMakeLesson({ tense }); tick('教學卡'); }
+      const r = await window.aiMakeGrammarSet({          // 驗收＝多出一組，最後改名
+        tense, aGroups: (+aG) + (wantCheck ? 1 : 0), bCount: +bC,
+        onProgress: (_d, _t, label) => tick(label),
       });
-      setRes(r); setTab(0);
+      const check = wantCheck ? r.A.pop() : null;
+      setRes({ lesson, A: r.A, B: r.B, check }); setTab(0);
     } catch (e) { setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
     setBusy(null);
   };
 
   const updA = (g, i, k, v) => setRes(r => ({ ...r, A: r.A.map((grp, gi) => gi !== g ? grp : grp.map((x, xi) => xi !== i ? x : { ...x, [k]: v })) }));
+  const updC = (i, k, v) => setRes(r => ({ ...r, check: r.check.map((x, xi) => xi !== i ? x : { ...x, [k]: v }) }));
+  const updAny = (cur, i, k, v) => (cur.kind === 'C' ? updC(i, k, v) : updA(cur.i, i, k, v));
   const updB = (i, k, v) => setRes(r => ({ ...r, B: r.B.map((x, xi) => xi !== i ? x : { ...x, [k]: v }) }));
 
   /* ── 第 1 步：設定 ── */
@@ -691,8 +737,18 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
                 <div className="field-help">一篇 5–8 個空＝一個單元</div>
               </div>
             </div>
-            <div className="field-help" style={{ marginTop: 4 }}>
-              會建立 <b>{aG + bC}</b> 個單元。出完先讓你逐題校稿，確認了才寫進題庫。
+            <div className="gr-extra">
+              <label className={wantLesson ? 'on' : ''}>
+                <input type="checkbox" checked={wantLesson} onChange={e => setWantLesson(e.target.checked)}/>
+                <span><b>📘 教學卡（放最前面）</b>這是什麼／什麼時候用／形式表／常見錯誤／老師示範／小試身手</span>
+              </label>
+              <label className={wantCheck ? 'on' : ''}>
+                <input type="checkbox" checked={wantCheck} onChange={e => setWantCheck(e.target.checked)}/>
+                <span><b>🏁 驗收（放最後面）</b>再 10 題混合練習，80 分才算過關</span>
+              </label>
+            </div>
+            <div className="field-help" style={{ marginTop: 10 }}>
+              會建立 <b>{totalUnits}</b> 個單元，順序是「先教 → 再練 → 最後驗收」。出完先讓你逐題校稿，確認了才寫進題庫。
               AI 出的題目一定要看過——語意、介系詞、時間提示都可能有小問題。
             </div>
             {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
@@ -706,7 +762,7 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
           <div className="modal-foot">
             <button className="btn ghost" onClick={onClose}>取消</button>
             <button className="btn primary" disabled={!!busy} onClick={run}>
-              {busy ? '出題中…' : `✨ 開始出題（${aG + bC} 個單元）→`}
+              {busy ? '出題中…' : `✨ 開始出題（${totalUnits} 個單元）→`}
             </button>
           </div>
         </div>
@@ -715,8 +771,10 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
   }
 
   /* ── 第 2 步：校稿 ── */
-  const units = res.A.map((g, i) => ({ kind: 'A', i, n: g.length, name: `單句填空 ${i + 1}` }))
-    .concat(res.B.map((b, i) => ({ kind: 'B', i, n: window.grCountBlanks(b.passage), name: `短文 ${i + 1}` })));
+  const units = (res.lesson ? [{ kind: 'L', i: 0, n: (res.lesson.check || []).length, name: '📘 教學卡' }] : [])
+    .concat(res.A.map((g, i) => ({ kind: 'A', i, n: g.length, name: `單句填空 ${i + 1}` })))
+    .concat(res.B.map((b, i) => ({ kind: 'B', i, n: window.grCountBlanks(b.passage), name: `短文 ${i + 1}` })))
+    .concat(res.check ? [{ kind: 'C', i: 0, n: res.check.length, name: '🏁 驗收' }] : []);
   const cur = units[Math.min(tab, units.length - 1)];
 
   return (
@@ -735,18 +793,43 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
             ))}
           </div>
 
-          {cur.kind === 'A' ? (
+          {cur.kind === 'L' ? (
             <div className="gr-proof">
-              {res.A[cur.i].map((x, i) => {
+              <div className="field-help" style={{ marginBottom: 10 }}>
+                這是學生按進單元第一眼看到的教學頁。文字都可以直接改；空白的區塊不會顯示。
+              </div>
+              <div className="field">
+                <label className="field-label">一句話說明</label>
+                <input value={res.lesson.lead || ''} onChange={e => setRes(r => ({ ...r, lesson: { ...r.lesson, lead: e.target.value } }))}/>
+              </div>
+              <div className="field">
+                <label className="field-label">最後鼓勵的話</label>
+                <input value={res.lesson.outro || ''} onChange={e => setRes(r => ({ ...r, lesson: { ...r.lesson, outro: e.target.value } }))}/>
+              </div>
+              <div className="field">
+                <label className="field-label">其餘內容（什麼時候用／形式表／提示詞／常見錯誤／示範題／小試身手）</label>
+                <textarea className="gr-passage" rows={14}
+                  value={JSON.stringify({ uses: res.lesson.uses, forms: res.lesson.forms, clues: res.lesson.clues,
+                    mistakes: res.lesson.mistakes, examples: res.lesson.examples, check: res.lesson.check }, null, 2)}
+                  onChange={e => {
+                    try { const o = JSON.parse(e.target.value); setRes(r => ({ ...r, lesson: { ...r.lesson, ...o } })); }
+                    catch (err) { /* 打到一半還不是合法 JSON——先不動 */ }
+                  }}/>
+                <div className="field-help">改壞了也不要緊：格式不對就不會存進去，回上一步重出一次即可。</div>
+              </div>
+            </div>
+          ) : (cur.kind === 'A' || cur.kind === 'C') ? (
+            <div className="gr-proof">
+              {(cur.kind === 'C' ? res.check : res.A[cur.i]).map((x, i) => {
                 const ok = window.grValidA(x);
                 return (
                   <div key={i} className={'gr-q' + (ok ? '' : ' bad')}>
                     <span className="gr-q-n">{i + 1}</span>
                     <div className="gr-q-f">
-                      <textarea rows={2} value={x.prompt} onChange={e => updA(cur.i, i, 'prompt', e.target.value)}/>
+                      <textarea rows={2} value={x.prompt} onChange={e => updAny(cur, i, 'prompt', e.target.value)}/>
                       <div className="gr-q-2">
-                        <div><label>答案</label><input value={x.answer} onChange={e => updA(cur.i, i, 'answer', e.target.value)}/></div>
-                        <div><label>中文解說</label><input value={x.explain} onChange={e => updA(cur.i, i, 'explain', e.target.value)}/></div>
+                        <div><label>答案</label><input value={x.answer} onChange={e => updAny(cur, i, 'answer', e.target.value)}/></div>
+                        <div><label>中文解說</label><input value={x.explain} onChange={e => updAny(cur, i, 'explain', e.target.value)}/></div>
                       </div>
                       {!ok && <div className="gr-warn">⚠ 這題不符合規則：一句只能一個 ________、句尾要有 (原形動詞)、答案不能含 already/never/not 這類詞</div>}
                     </div>
@@ -776,7 +859,7 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
         </div>
         <div className="modal-foot">
           <button className="btn ghost" onClick={() => setRes(null)}>← 重新設定</button>
-          <button className="btn primary" onClick={() => onCreate({ tense, zh: meta.zh, A: res.A, B: res.B })}>
+          <button className="btn primary" onClick={() => onCreate({ tense, zh: meta.zh, lesson: res.lesson, A: res.A, B: res.B, check: res.check })}>
             建立 {units.length} 個單元 →
           </button>
         </div>
@@ -786,23 +869,37 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
 }
 
 /* 把校稿完的結果變成真正的單元（Type A → type-answer；Type B → cloze） */
-function grBuildItems({ tense, zh, A, B }) {
+function grBuildItems({ tense, zh, lesson, A, B, check }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const out = [];
+  if (lesson) {
+    out.push({ id: 'gr' + stamp + 'ls' + rnd(), type: 'lesson', group: zh,
+      title: `${zh} · 先看這裡`, zh: '這是什麼、怎麼用、常見錯誤、小試身手',
+      order: 0,
+      lead: lesson.lead || '', uses: lesson.uses || [], forms: lesson.forms || [],
+      clues: lesson.clues || [], mistakes: lesson.mistakes || [],
+      examples: lesson.examples || [], check: lesson.check || [], outro: lesson.outro || '' });
+  }
   (A || []).forEach((grp, g) => {
     const items = (grp || []).filter(x => x.prompt && x.answer);
     if (!items.length) return;
     out.push({
-      id: 'gr' + stamp + 'a' + g + rnd(), type: 'type-answer', group: zh,
+      id: 'gr' + stamp + 'a' + g + rnd(), type: 'type-answer', group: zh, order: 1 + g / 100,
       title: `${zh} · 單句填空 ${g + 1}`, zh: `${items.length} 題 · 看句子打出正確的動詞形式`,
       pairs: items.map((x, i) => ({ id: 'p' + stamp + g + i + rnd(), prompt: x.prompt, answer: x.answer, explain: x.explain || '' })),
     });
   });
+  if (check && check.length) {
+    out.push({ id: 'gr' + stamp + 'ck' + rnd(), type: 'type-answer', group: zh, order: 9,
+      title: `${zh} · 🏁 驗收`, zh: `${check.length} 題混合 · 80 分過關`,
+      pairs: check.filter(x => x.prompt && x.answer).map((x, i) => ({
+        id: 'p' + stamp + 'c' + i + rnd(), prompt: x.prompt, answer: x.answer, explain: x.explain || '' })) });
+  }
   (B || []).forEach((p, i) => {
     if (!p || !p.passage) return;
     out.push({
-      id: 'gr' + stamp + 'b' + i + rnd(), type: 'cloze', group: zh,
+      id: 'gr' + stamp + 'b' + i + rnd(), type: 'cloze', group: zh, order: 2 + i / 100,
       title: `${zh} · 短文填空 ${i + 1}${p.title ? `（${p.title}）` : ''}`,
       zh: `${window.grCountBlanks(p.passage)} 個空格 · 讀短文填動詞`,
       passage: p.passage,

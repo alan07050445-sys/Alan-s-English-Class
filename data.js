@@ -1606,6 +1606,64 @@ async function aiMakeGrammarSet({ tense, aGroups = 3, bCount = 5, onProgress } =
   }
   return { A, B };
 }
+/* v383: 產生單元開頭的「教學卡」。
+   刻意做成通用的（topic 可以是任何主題，不只文法），之後單字單元也能用同一套。 */
+const _LS_SYS = `You write the teaching page that comes BEFORE the practice, for Taiwanese
+elementary students (Grade 4-6, CEFR A1-A2). Explanations in Traditional Chinese, examples in English.
+Output ONLY valid JSON. No prose, no markdown fences.
+
+{"lead":"","uses":[{"zh":"","en":"","enZh":""}],"forms":[{"subj":"","form":"","eg":""}],
+ "clues":[""],"mistakes":[{"bad":"","good":"","why":""}],
+ "examples":[{"q":"","a":"","why":""}],"check":[{"q":"","options":["",""],"answer":0,"why":""}],
+ "outro":""}
+
+RULES
+- lead: ONE sentence in Traditional Chinese, ≤40 characters, saying what this is for. No jargon.
+- uses: 3-4 items. zh = when you use it (Traditional Chinese, ≤20 chars). en = one short English example
+  sentence showing it. enZh = the Chinese meaning of that sentence.
+- forms: 2-4 rows of the pattern table. subj = the subject group (e.g. "He / She / It"),
+  form = what happens to the verb in Traditional Chinese (e.g. "動詞 + s / es"), eg = one English example.
+- clues: 4-6 English signal words/phrases that tell you it is this pattern.
+- mistakes: 2-3 of the mistakes Taiwanese kids actually make. bad = the wrong English sentence,
+  good = the corrected one, why = Traditional Chinese, ≤35 characters.
+- examples: 2-3 WORKED examples. q = a question in the same format as the drills
+  (a full sentence with ________ and the base verb in parentheses at the end).
+  a = the answer. why = Traditional Chinese reasoning, ≤40 characters.
+- check: 3 quick multiple-choice questions. q = a full sentence with ________ .
+  options = 2-3 short choices (just the verb forms). answer = the INDEX of the correct one (0-based).
+  why = Traditional Chinese, ≤40 characters, explaining the answer.
+- outro: ONE encouraging sentence in Traditional Chinese telling them what to practise next.
+- Everything must be simple enough for a 10-year-old. Use school, family, food, animals, sport.`;
+
+async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
+  const T = tense && GR_TENSES[tense];
+  const user = T
+    ? `Topic: ${T.en}（${T.zh}）\nThe student must learn:\n${T.must}\nMust avoid:\n${T.avoid}`
+    : `Topic: ${topic}\n${notes ? `Teacher notes: ${notes}` : ''}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(AI_WRITING_ENDPOINT, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 2600, system: _LS_SYS, messages: [{ role: 'user', content: user }] }),
+      });
+      const data = await res.json();
+      const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+      if (o && (o.lead || o.uses)) {
+        // answer 有時會回文字而不是索引 → 修回索引；超出範圍就丟掉那一題
+        o.check = (o.check || []).map(c => {
+          if (!c || !Array.isArray(c.options)) return null;
+          let a = c.answer;
+          if (typeof a === 'string') a = c.options.findIndex(x => String(x).trim() === a.trim());
+          if (typeof a !== 'number' || a < 0 || a >= c.options.length) return null;
+          return { ...c, answer: a };
+        }).filter(Boolean);
+        return o;
+      }
+    } catch (e) { /* 再試一次 */ }
+  }
+  throw new Error('教學卡產生失敗，請再試一次。');
+}
+
 function grCountBlanks(passage) {
   return (String(passage || '').match(/\[[^\]]+\]/g) || []).length;
 }
@@ -2257,7 +2315,7 @@ Object.assign(window, {
   COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText, speakTTS, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
-  aiMakeVocabExercises, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage,
+  aiMakeVocabExercises, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
@@ -2350,6 +2408,7 @@ function autoStarsForItem(item, prog, cloudShape) {
     return 10 + (m.written ? 20 : 0);   // v374: 測驗的手寫題全部答完再加 20
   }
   if (type === 'short-answer') { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
+  if (type === 'lesson') return 5;   // v383: 教學卡讀完就給，重點是讓他先看
   if (type === 'fillblank' || type === 'cloze' || type === 'def-match') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
   return 0;
 }

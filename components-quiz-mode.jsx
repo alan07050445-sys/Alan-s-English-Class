@@ -141,6 +141,7 @@ function grTotalQ(item) {
 // All quiz-able items in a category
 function getQuizItems(items) {
   return (items || []).filter(item =>
+    (item.type === 'lesson') ||   // v383: 教學卡＝讀完＋小試身手，也是一件要完成的事
     (item.type === 'flashcard'        && (item.cards || []).length >= 1) || // v233: 單字卡也是可完成的練習
     (item.type === 'vocab-quiz'       && (item.words || []).length >= 2) ||
     (item.type === 'fillblank'        && (item.questions || []).length >= 2) ||
@@ -233,7 +234,7 @@ function StarMastery({ pct, size = 13 }) {
 /* v272: 題型中文名＋短名——任務清單、側欄、作答頁三處用同一套稱呼，
    學生點「聽寫」進去，看到的每一層都叫「聽寫」 */
 const QM_TYPE_ZH = {
-  flashcard: '單字卡', spelling: '聽寫', fillblank: '填空', quiz: '測驗',
+  lesson: '教學', flashcard: '單字卡', spelling: '聽寫', fillblank: '填空', quiz: '測驗',
   'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
   cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
   'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山',
@@ -241,7 +242,7 @@ const QM_TYPE_ZH = {
   'def-match': '配對連線',
 };
 const QM_TYPE_ICO = {
-  flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
+  lesson: '📘', flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
   'type-answer': '⌨', 'short-answer': '📖', cloze: '📝', 'circle-answer': '⭕',
   'syllable-div': '✂️', 'word-sort': '🗂', essay: '✍', 'story-mountain': '🏔',
   'writing-practice': '✍', upload: '📎', 'guided-reading': '📖',
@@ -250,6 +251,7 @@ const QM_TYPE_ICO = {
 /* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
    任務清單與學生側欄都按這個順序排；老師編輯模式維持原始順序 */
 const QM_TYPE_ORDER = {
+  lesson: -1,        // v383: 先教再練——教學卡一定排在最前面
   flashcard: 0,
   'vocab-quiz': 1, quiz: 1,
   'def-match': 1.5,
@@ -260,6 +262,10 @@ const QM_TYPE_ORDER = {
   upload: 8,
 };
 const qmTypeRank = (t) => (QM_TYPE_ORDER[t] !== undefined ? QM_TYPE_ORDER[t] : 9);
+/* v383: 單元可以自己指定順序（item.order）——同一組裡「先教 → 單句 → 短文 → 驗收」
+   沒辦法只靠題型排（type-answer 的預設順位在 cloze 後面，驗收又跟單句同型別）。
+   沒寫 order 的單元一律沿用題型預設，舊資料完全不受影響。 */
+const qmItemRank = (it) => (it && typeof it.order === 'number' ? it.order : qmTypeRank(it && it.type));
 
 /* v274: 粗略音節拆解——「子音+母音群」切塊、多子音群首字歸前節
    （adapt→a·dapt、happen→hap·pen、survive→sur·vi·ve）。教學提示用，非嚴格音節。 */
@@ -349,6 +355,7 @@ function getTodayInputValue(offsetDays = 0) {
 
 function getQuizItemTotal(item) {
   if (!item) return 0;
+  if (item.type === 'lesson')       return Math.max(1, (item.check || []).length);
   if (item.type === 'flashcard')    return (item.cards || []).length;
   if (item.type === 'type-answer')  return (item.pairs || []).length;
   if (item.type === 'spelling')     return (item.spellWords || []).length; // v254
@@ -1202,7 +1209,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                   </button>
                 ) : null}
                 {openGroups[g.key]
-                  ? (editMode ? g.items : [...g.items].sort((a, b) => qmTypeRank(a.type) - qmTypeRank(b.type)))
+                  ? (editMode ? g.items : [...g.items].sort((a, b) => qmItemRank(a) - qmItemRank(b)))
                       .map((it, ii, arr) => renderUnitRow(it, g.name, editMode ? { list: arr, idx: ii } : null))
                   : null}
               </div>
@@ -1341,6 +1348,16 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             onStart={() => setPhase('quiz')}
             resumeAt={resumeFor(it => (it.sdWords || []).length)}
             onRestart={restartFresh}
+          />
+        ) : selectedItem?.type === 'lesson' ? (
+          /* v383: 教學卡沒有 intro／quiz 兩段——本身就是一步一步走的畫面 */
+          <LessonPlayer
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
           />
         ) : selectedItem?.type === 'def-match' && phase === 'quiz' ? (
           <DefMatchPlayer
@@ -5388,7 +5405,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
   };
   const sortRows = (a, b) =>
     (catRank(a) - catRank(b)) ||
-    (qmTypeRank(a.it.type) - qmTypeRank(b.it.type)) ||
+    (qmItemRank(a.it) - qmItemRank(b.it)) ||
     String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
   const entries = Object.values(byKey).map(group => {
     group.sort(sortRows);
@@ -6124,6 +6141,197 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
    改成藍／紫／靛的中性色盤（綠＝對、紅＝錯留給交卷後用）。 */
 const DM_HUES = ['#2E4F7E', '#7A4FA8', '#1F7A8C', '#4C5BA8', '#5E6B7A', '#8A4F7A'];
 
+/* ══════════════════════════════════════════════════════════════
+   v383：教學卡（lesson）——每個單元開頭的「先教，再練」
+   Alan：「每一個文法前面都要有完成教學以及指引，可以先用文字，再用簡單題目當作範例」。
+   刻意做成通用型別（不只文法），任何單元都能掛一張。
+
+   一張教學卡分四步，學生一步一步走完才算讀完：
+     ① 這是什麼／什麼時候用   ② 長什麼樣子（形式表＋提示詞）
+     ③ 看老師示範（有答案、有解說的範例題）  ④ 小試身手（即時回饋，答完才算完成）
+   ══════════════════════════════════════════════════════════════ */
+function LessonPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const uses     = (item.uses || []).filter(u => u && (u.zh || u.en));
+  const forms    = (item.forms || []).filter(f => f && f.subj);
+  const clues    = (item.clues || []).filter(Boolean);
+  const mistakes = (item.mistakes || []).filter(m => m && m.good);
+  const examples = (item.examples || []).filter(e => e && e.q);
+  const checks   = (item.check || []).filter(c => c && c.q && (c.options || []).length >= 2);
+
+  const steps = ['intro', 'form', examples.length ? 'demo' : null, checks.length ? 'check' : null, 'done'].filter(Boolean);
+  const [si, setSi] = useQM(0);
+  const step = steps[Math.min(si, steps.length - 1)];
+
+  const [shown, setShown] = useQM({});     // 範例題：按了才顯示答案
+  const [picked, setPicked] = useQM({});   // 小試身手：選了哪個
+  const answered = checks.filter((_, i) => picked[i] !== undefined).length;
+  const rightN   = checks.filter((c, i) => picked[i] === c.answer).length;
+
+  const go = (d) => { setSi(i => Math.max(0, Math.min(steps.length - 1, i + d))); scrollToTopSoon(); };
+  const scrollToTopSoon = () => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {} };
+
+  const finish = () => {
+    const n = Math.max(1, checks.length);
+    saveQuizModeCompletion(progressKey, item, { doneCount: n, score: checks.length ? rightN : null, total: n });
+    fireCelebration(checks.length ? Math.round(rightN / checks.length * 100) : null);
+  };
+  useQME(() => { if (step === 'done') finish(); }, [step]);
+
+  return (
+    <div className="ls-wrap">
+      <div className="ls-head">
+        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="ls-steps">
+          {steps.map((s, i) => (
+            <span key={s} className={'ls-dot' + (i === si ? ' on' : '') + (i < si ? ' done' : '')}/>
+          ))}
+        </div>
+        <span className="ls-step-n">{si + 1} / {steps.length}</span>
+      </div>
+
+      {step === 'intro' && (
+        <div className="ls-card ls-enter">
+          <div className="ls-kicker">先搞懂這是什麼</div>
+          <h2 className="ls-title">{item.title}</h2>
+          {item.lead && <p className="ls-lead">{item.lead}</p>}
+          {uses.length > 0 && (
+            <>
+              <div className="ls-sub">什麼時候用？</div>
+              <div className="ls-uses">
+                {uses.map((u, i) => (
+                  <div key={i} className="ls-use">
+                    <span className="ls-use-n">{i + 1}</span>
+                    <div>
+                      <b>{u.zh}</b>
+                      {u.en && <div className="ls-use-eg">{u.en}{u.enZh ? <em> — {u.enZh}</em> : null}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {step === 'form' && (
+        <div className="ls-card ls-enter">
+          <div className="ls-kicker">長什麼樣子</div>
+          {forms.length > 0 && (
+            <div className="ls-forms">
+              {forms.map((f, i) => (
+                <div key={i} className="ls-form">
+                  <div className="ls-form-subj">{f.subj}</div>
+                  <div className="ls-form-arrow">→</div>
+                  <div className="ls-form-body">
+                    <b>{f.form}</b>
+                    {f.eg && <div className="ls-form-eg">{f.eg}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {clues.length > 0 && (
+            <>
+              <div className="ls-sub">看到這些字，就知道是它</div>
+              <div className="ls-clues">{clues.map((c, i) => <span key={i}>{c}</span>)}</div>
+            </>
+          )}
+          {mistakes.length > 0 && (
+            <>
+              <div className="ls-sub">最容易錯的地方</div>
+              {mistakes.map((m, i) => (
+                <div key={i} className="ls-mis">
+                  {m.bad && <div className="ls-mis-bad">✗ {m.bad}</div>}
+                  <div className="ls-mis-good">✓ {m.good}</div>
+                  {m.why && <div className="ls-mis-why">{m.why}</div>}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {step === 'demo' && (
+        <div className="ls-card ls-enter">
+          <div className="ls-kicker">看老師示範</div>
+          <div className="ls-sub" style={{ marginTop: 0 }}>先自己想想看，再點開答案</div>
+          {examples.map((e, i) => (
+            <div key={i} className="ls-demo">
+              <div className="ls-demo-q">{e.q}</div>
+              {shown[i] ? (
+                <div className="ls-demo-a">
+                  <b>{e.a}</b>
+                  {e.why && <span>{e.why}</span>}
+                </div>
+              ) : (
+                <button className="ls-reveal" onClick={() => setShown(o => ({ ...o, [i]: true }))}>看答案</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {step === 'check' && (
+        <div className="ls-card ls-enter">
+          <div className="ls-kicker">小試身手</div>
+          <div className="ls-sub" style={{ marginTop: 0 }}>{answered} / {checks.length} 題 · 答錯沒關係，會告訴你為什麼</div>
+          {checks.map((c, i) => (
+            <div key={i} className="ls-check">
+              <div className="ls-check-q">{c.q}</div>
+              <div className="ls-check-opts">
+                {c.options.map((o, oi) => {
+                  let cls = 'ls-opt';
+                  if (picked[i] !== undefined) {
+                    if (oi === c.answer) cls += ' ok';
+                    else if (oi === picked[i]) cls += ' no';
+                    else cls += ' dim';
+                  }
+                  return (
+                    <button key={oi} className={cls} disabled={picked[i] !== undefined}
+                      onClick={() => {
+                        setPicked(p => ({ ...p, [i]: oi }));
+                        if (window.playSound) window.playSound(oi === c.answer ? 'correct' : 'wrong');
+                      }}>{o}</button>
+                  );
+                })}
+              </div>
+              {picked[i] !== undefined && c.why && (
+                <div className={'ls-check-why' + (picked[i] === c.answer ? ' ok' : '')}>{c.why}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {step === 'done' && (
+        <div className="ls-card ls-enter ls-done">
+          <div className="ls-done-ico">{checks.length && rightN === checks.length ? '🎉' : '✅'}</div>
+          <h2 className="ls-title">讀完了！</h2>
+          {checks.length > 0 && <div className="ls-done-score">小試身手 {rightN} / {checks.length}</div>}
+          <p className="ls-lead">{item.outro || '接下來就用練習把它練熟——先從單句填空開始。'}</p>
+          <div className="qm-result-btns">
+            <button className="qm-btn secondary" onClick={() => { setSi(0); setShown({}); setPicked({}); }}>再看一次</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="開始練習 →"/>
+          </div>
+        </div>
+      )}
+
+      {step !== 'done' && (
+        <div className="ls-foot">
+          <button className="qm-btn secondary" disabled={si === 0} onClick={() => go(-1)}>← 上一步</button>
+          <button className="qm-btn primary"
+            disabled={step === 'check' && answered < checks.length}
+            onClick={() => go(1)}>
+            {step === 'check'
+              ? (answered < checks.length ? `還有 ${checks.length - answered} 題沒作答` : '完成 →')
+              : '下一步 →'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DefMatchIntro({ item, prog, onStart }) {
   const pairs = (item.defPairs || []).filter(p => p && p.word && p.def);
   const done = prog && prog.done;
@@ -6544,4 +6752,4 @@ function GroupResEditor({ name, res, weekId, onSave, onClose }) {
   );
 }
 
-Object.assign(window, { GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, QM_TYPE_ORDER, qmGroupByArticle });
+Object.assign(window, { LessonPlayer, GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, qmItemRank, QM_TYPE_ORDER, qmGroupByArticle });
