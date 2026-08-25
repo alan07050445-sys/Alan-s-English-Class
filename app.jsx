@@ -10,6 +10,11 @@ const _subscribeG3       = window.subscribeToClassData;
 
 // ── Grade helper: resolve grade-specific functions ─────────────────────────
 // 暑假班表（s1–s6）也走這裡：map.summer 可以是值，或 (trackId) => 值 的函式
+/* ⚠⚠ 約定：summer / grammar 這兩格如果放的是「函式」，會被當成**工廠**，
+   在這裡直接以 `fn(g)` 呼叫、拿回傳值當結果（暑假那條就是靠這個依 track 取 API）。
+   所以要傳「API 函式本身」時，一定要包成 `() => 那個函式`。
+   v383 的災情就是這樣來的：`grammar: window.saveWeekOrderGR` 在接線當下就被呼叫，
+   把 weekOrder 寫成字串 'gr'，訂閱也沒接上 → 老師建立的內容從來沒進雲端。 */
 function _gradeOf(g, { g2, g4, g5, g6, g3, summer, grammar }) {
   // v381: 五大時態核心題庫是獨立的一條 track（跟暑假一樣），不屬於任何年級
   if (grammar !== undefined && window.isGrammarTrack && window.isGrammarTrack(g)) {
@@ -354,10 +359,10 @@ function App() {
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
     weekPickedRef.current = false;   // v340: 換年級/換教室 → 重新自動跳到本週
-    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks, grammar: window.saveWeeksGR });
-    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder, grammar: window.saveWeekOrderGR });
+    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks, grammar: () => window.saveWeeksGR });
+    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder, grammar: () => window.saveWeekOrderGR });
 
-    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe, grammar: window.subscribeToClassDataGR });
+    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe, grammar: () => window.subscribeToClassDataGR });
     const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey, grammar: window.GR_STORAGE_KEY });
     const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey, grammar: window.GR_ORDER_KEY });
 

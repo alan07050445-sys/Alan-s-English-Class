@@ -9,11 +9,49 @@ const { useState: useFx, useEffect: useFxE, useRef: useFxR } = React;
 /* ── 像素風吉祥物 ────────────────────────────────────────────
    9×8 的格子：頭上兩個小角、兩顆方眼睛、三隻腳。
    腳分成三塊，走路時左右腳輪流抬起來。 */
-function ClaudeMascot({ size = 46 }) {
+/* v384: 帽子——用「完成幾個練習」解鎖，純像素方塊，不破壞方方正正的樣子 */
+const MX_HATS = [
+  { need: 0,  id: 'none' },
+  { need: 3,  id: 'party', zh: '派對帽' },
+  { need: 10, id: 'grad',  zh: '畢業帽' },
+  { need: 25, id: 'crown', zh: '皇冠' },
+];
+function mxHatFor(doneCount) {
+  let best = MX_HATS[0];
+  MX_HATS.forEach(h => { if (doneCount >= h.need) best = h; });
+  return best.id;
+}
+function MxHat({ id }) {
+  if (id === 'party') return (
+    <g className="mx-hat">
+      <rect x="4" y="-2" width="1" height="1" fill="#E8C86A"/>
+      <rect x="3" y="-1" width="3" height="1" fill="#D6533C"/>
+    </g>
+  );
+  if (id === 'grad') return (
+    <g className="mx-hat">
+      <rect x="2" y="-2" width="5" height="1" fill="#1A1A1A"/>
+      <rect x="3" y="-1" width="3" height="1" fill="#1A1A1A"/>
+      <rect x="6" y="-2" width="1" height="2" fill="#C9A84C"/>
+    </g>
+  );
+  if (id === 'crown') return (
+    <g className="mx-hat">
+      <rect x="2" y="-2" width="1" height="1" fill="#E8C86A"/>
+      <rect x="4" y="-2" width="1" height="1" fill="#E8C86A"/>
+      <rect x="6" y="-2" width="1" height="1" fill="#E8C86A"/>
+      <rect x="2" y="-1" width="5" height="1" fill="#E8C86A"/>
+    </g>
+  );
+  return null;
+}
+
+function ClaudeMascot({ size = 46, hat = 'none' }) {
   const CLAY = '#C1785A', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 8 / 9} viewBox="0 0 9 8"
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
       shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat}/>
       <g className="mx-torso">
         {/* 頭上的兩個小角 */}
         <rect x="1" y="0" width="1" height="1" fill={CLAY}/>
@@ -33,7 +71,7 @@ function ClaudeMascot({ size = 46 }) {
 
 /* ── 台詞（鼓勵為主，偶爾耍笨；不嘲諷小孩）────────────────── */
 const MX_LINES = {
-  hello:   ['嗨！我陪你唸書 📚', '今天也要加油喔！', '我又出現了 👀', '你在唸什麼？我也想學'],
+  hello:   ['嗨！我陪你唸書 📚', '今天也要加油喔！', '我又出現了 👀', '你在唸什麼？我也想學', '長按我可以幫我取名字 ✏️'],
   correct: ['答對了 🎉', '好強！', '就是這個！', '欸你很可以耶 😎', '再來再來！'],
   wrong:   ['沒關係，再試一次 💪', '差一點點！', '我剛剛也選錯 😅', '深呼吸，再看一次'],
   win:     ['全部做完啦 🎊', '太神啦！', '今天的你超棒 ⭐', '我要放鞭炮了 🎆'],
@@ -42,6 +80,16 @@ const MX_LINES = {
   sleep:   ['💤', '呼…呼…', '睡一下下就好'],
 };
 const mxPick = (k) => { const a = MX_LINES[k] || MX_LINES.idle; return a[Math.floor(Math.random() * a.length)]; };
+const MX_NAME_KEY = 'alan-mx-name';
+function mxGetName() { try { return localStorage.getItem(MX_NAME_KEY) || ''; } catch (e) { return ''; } }
+function mxSetName(n) { try { localStorage.setItem(MX_NAME_KEY, String(n || '').slice(0, 8)); } catch (e) {} }
+/* 完成幾個練習了？（決定戴哪頂帽子）——直接讀現成的進度，不另外存一份 */
+function mxDoneCount() {
+  try {
+    const p = window.loadQMProg ? window.loadQMProg() : {};
+    return Object.keys(p).filter(k => p[k] && p[k].done).length;
+  } catch (e) { return 0; }
+}
 
 /* 純走位／搞笑的動作（不含答題反應）*/
 const MX_ACTS = ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think'];
@@ -54,6 +102,10 @@ function MascotLayer() {
   const [act,    setAct]    = useFx('idle');
   const [moveMs, setMoveMs] = useFx(0);
   const [bubble, setBubble] = useFx('');
+  const [hat, setHat]     = useFx('none');       // v384: 完成越多，帽子越好
+  const [name, setName]   = useFx(mxGetName());
+  const [menu, setMenu]   = useFx(false);        // 長按叫出來的小選單
+  const [drag, setDrag]   = useFx(null);         // 拖著走時的 {x,y}
   const timers  = useFxR([]);
   const bubbleT = useFxR(null);
   const reduce  = useFxR(false);
@@ -78,6 +130,14 @@ function MascotLayer() {
     return !document.querySelector(BUSY_SEL);
   };
   const [allowed, setAllowed] = useFx(okNow());
+  useFxE(() => {
+    const sync = () => setHat(mxHatFor(mxDoneCount()));
+    sync();
+    window.__mxSyncHat = sync;      // 完成練習時立刻對一次（見下面攔 playSound 的地方）
+    const iv = setInterval(sync, 4000);
+    return () => { clearInterval(iv); if (window.__mxSyncHat === sync) window.__mxSyncHat = null; };
+  }, []);
+
   useFxE(() => {
     try { reduce.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
     const t = setTimeout(() => setAlive(true), 2500);
@@ -135,7 +195,10 @@ function MascotLayer() {
       try {
         if (type === 'correct' && Math.random() < 0.45) { setAct('jump');  say(mxPick('correct'), 1600); later(() => setAct('idle'), 1000); }
         else if (type === 'wrong' && Math.random() < 0.45) { setAct('oops'); say(mxPick('wrong'), 1900); later(() => setAct('idle'), 900); }
-        else if (type === 'complete' || type === 'fanfare') { setAct('cheer'); say(mxPick('win'), 3000); later(() => setAct('idle'), 2200); }
+        else if (type === 'complete' || type === 'fanfare') {
+          setAct('cheer'); say(mxPick('win'), 3000); later(() => setAct('idle'), 2200);
+          later(() => { if (window.__mxSyncHat) window.__mxSyncHat(); }, 400);   // 剛完成一項 → 看看帽子要不要升級
+        }
       } catch (e) {}
     };
     patched.__mx = true;
@@ -156,12 +219,40 @@ function MascotLayer() {
   const pressT = useFxR(null);
   const longRef = useFxR(false);
   const bodyRef = useFxR(null);
-  const onDown = () => {
-    longRef.current = false;
-    pressT.current = setTimeout(() => { longRef.current = true; setHidden(true); }, 750);
+  const startRef = useFxR(null);
+  const movedRef = useFxR(false);
+  const onDown = (e) => {
+    longRef.current = false; movedRef.current = false;
+    startRef.current = { x: e.clientX, y: e.clientY };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    // 長按＝叫出小選單（取名字／去睡覺）
+    pressT.current = setTimeout(() => { if (!movedRef.current) { longRef.current = true; setMenu(true); } }, 650);
+  };
+  /* v384: 拖著走。小朋友最愛的就是這個，而且完全不吵——放開會掉回地上彈一下。 */
+  const onMove = (e) => {
+    if (!startRef.current) return;
+    const dx = e.clientX - startRef.current.x, dy = e.clientY - startRef.current.y;
+    if (!movedRef.current && Math.abs(dx) + Math.abs(dy) < 8) return;
+    movedRef.current = true;
+    clearTimeout(pressT.current);
+    setDrag({ x: e.clientX, y: e.clientY });
+  };
+  const endDrag = () => {
+    if (!movedRef.current) return;
+    const d = drag;
+    setDrag(null);
+    if (d) {
+      const maxX = Math.max(20, (window.innerWidth || 360) - 130);
+      setX(Math.max(0, Math.min(maxX, Math.round(d.x - 23))));
+      setMoveMs(0);
+    }
+    setAct('land'); later(() => setAct('idle'), 620);
+    if (window.playSound) window.playSound('pop');
   };
   const onUp = (e) => {
     clearTimeout(pressT.current);
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) {}
+    if (movedRef.current) { endDrag(); return; }
     if (longRef.current) return;
     const el = bodyRef.current;
     if (el && e && e.clientX != null) {
@@ -181,14 +272,32 @@ function MascotLayer() {
 
   if (!alive || hidden || !allowed) return null;
 
+  const slotStyle = drag
+    ? { transform: 'none', transition: 'none', left: (drag.x - 23) + 'px', bottom: 'auto',
+        top: (drag.y - 20) + 'px', position: 'fixed' }
+    : { transform: `translateX(${x}px)`, transition: moveMs ? `transform ${moveMs}ms linear` : 'none' };
+
   return (
-    <div className="mx-layer">
-      <div className="mx-slot" style={{ transform: `translateX(${x}px)`, transition: moveMs ? `transform ${moveMs}ms linear` : 'none' }}>
-        {bubble && <div className="mx-bubble">{bubble}</div>}
+    <div className={'mx-layer' + (drag ? ' dragging' : '')}>
+      <div className="mx-slot" style={slotStyle}>
+        {bubble && !menu && <div className="mx-bubble">{bubble}</div>}
+        {menu && (
+          <div className="mx-menu" onPointerDown={e => e.stopPropagation()}>
+            <div className="mx-menu-name">{name || '還沒有名字'}</div>
+            <button onClick={() => {
+              const n = window.prompt('幫牠取個名字（最多 8 個字）', name || '');
+              if (n !== null) { mxSetName(n.trim()); setName(n.trim()); say(n.trim() ? `我叫 ${n.trim()}！` : '好吧，我沒有名字', 2600); }
+              setMenu(false);
+            }}>✏️ 取名字</button>
+            <button onClick={() => { setMenu(false); setHidden(true); }}>💤 先去睡覺</button>
+            <button className="mx-menu-x" onClick={() => setMenu(false)}>取消</button>
+          </div>
+        )}
         <div ref={bodyRef} className={'mx-body act-' + act} style={{ '--mx-dir': dir }}
-          onPointerDown={onDown} onPointerUp={onUp} onPointerLeave={() => clearTimeout(pressT.current)}
-          role="img" aria-label="吉祥物">
-          <ClaudeMascot/>
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
+          onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
+          role="img" aria-label={name ? `吉祥物 ${name}` : '吉祥物'}>
+          <ClaudeMascot hat={hat}/>
         </div>
       </div>
     </div>

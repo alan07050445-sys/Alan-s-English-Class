@@ -8,17 +8,24 @@
 .mx-layer {
   position: fixed; left: 0; right: 0; bottom: 14px;
   height: 0; z-index: 60; pointer-events: none;
+  /* v384（Alan：iPad 與手機要等比縮放）：一個變數帶著整隻＋對話泡泡一起縮，
+     不再用「≤768px 就跳成 34px」那種硬斷點。
+     390px→32 · 820px→38 · 1024px→47 · ≥1090px→50 */
+  --mx-w: clamp(32px, 4.6vw, 50px);
 }
+.mx-layer.dragging .mx-body { cursor: grabbing; }
 .mx-slot { position: absolute; left: 0; bottom: 0; will-change: transform; }
 
 .mx-body {
   pointer-events: auto; cursor: pointer;
   transform: scaleX(var(--mx-dir, 1));
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  /* v384: 要能用手指拖著走 → 不能讓瀏覽器把觸控解讀成捲動。
+     牠只有 32~50px，擋住的捲動區域很小。 */
+  touch-action: none;
   filter: drop-shadow(0 3px 4px rgba(21, 19, 14, .22));
 }
-.mx-svg { display: block; transform-origin: 50% 92%; }
+.mx-svg { display: block; transform-origin: 50% 92%; width: var(--mx-w); height: calc(var(--mx-w) * 10 / 9); }
 
 /* 眼睛偶爾眨一下 */
 .mx-eye { transform-origin: center; animation: mxBlink 5.4s infinite; }
@@ -86,6 +93,7 @@
 
 /* ── 打瞌睡：整隻壓扁一點、慢慢起伏 ── */
 .act-sleep .mx-svg { animation: mxSleep 2.1s ease-in-out infinite; }
+.act-sleep .mx-eye { animation: none; transform: scaleY(.14); }
 @keyframes mxSleep {
   0%, 100% { transform: translateY(2px) scaleY(.86) scaleX(1.06); }
   50%      { transform: translateY(1px) scaleY(.92) scaleX(1.02); }
@@ -106,6 +114,14 @@
   100% { transform: translateY(0)     scaleY(1)   scaleX(1); }
 }
 
+/* ── 被丟開之後掉回地上（v384 拖著走） ── */
+.act-land .mx-svg { animation: mxLand .6s cubic-bezier(.3, .9, .4, 1); }
+@keyframes mxLand {
+  0%   { transform: translateY(-16px) scaleY(1.08) scaleX(.94); }
+  55%  { transform: translateY(0)     scaleY(.82)  scaleX(1.12); }
+  100% { transform: translateY(0)     scaleY(1)    scaleX(1); }
+}
+
 /* ── 答錯：抖一下 ── */
 .act-oops .mx-svg { animation: mxOops .5s ease-in-out; }
 @keyframes mxOops {
@@ -117,14 +133,14 @@
 
 /* ── 對話泡泡 ── */
 .mx-bubble {
-  position: absolute; bottom: calc(100% + 9px); left: 22px;
+  position: absolute; bottom: calc(100% + 9px); left: calc(var(--mx-w) / 2);
   transform: translateX(-50%);
-  max-width: 190px; width: max-content;
+  max-width: min(190px, 42vw); width: max-content;
   padding: 7px 11px; border-radius: 13px;
   background: #fffdf6; border: 1.5px solid #e2d9bf;
   box-shadow: 0 6px 18px -8px rgba(21, 19, 14, .34);
   font-family: var(--sans, "Nunito", sans-serif);
-  font-size: 14px; font-weight: 700; line-height: 1.35;
+  font-size: clamp(12.5px, 1.2vw, 14px); font-weight: 700; line-height: 1.35;
   color: var(--ink, #15130e); text-align: center;
   white-space: normal; word-break: break-word;
   animation: mxPop .26s cubic-bezier(.22, 1.4, .4, 1) both;
@@ -144,10 +160,7 @@
 /* 手機：讓開底部導覽列（60px）＋瀏海安全區 */
 @media (max-width: 768px) {
   .mx-layer { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
-  .mx-bubble { max-width: 150px; font-size: 13px; padding: 6px 9px; }
-  /* 手機畫面小，吉祥物也跟著小一點才不會擋到東西 */
-  .mx-svg { width: 34px; height: 30px; }
-  .mx-bubble { left: 17px; }
+  .mx-bubble { padding: 6px 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -175,3 +188,30 @@
 @media (prefers-reduced-motion: reduce) {
   .fx-confetti { display: none; }
 }
+
+/* ══ v384：長按叫出來的小選單（取名字／去睡覺） ══ */
+.mx-menu {
+  position: absolute; bottom: calc(100% + 10px); left: calc(var(--mx-w) / 2);
+  transform: translateX(-50%); pointer-events: auto;
+  display: flex; flex-direction: column; gap: 2px; min-width: 132px;
+  padding: 8px; border-radius: 13px;
+  background: #fffdf6; border: 1.5px solid #e2d9bf;
+  box-shadow: 0 8px 22px -10px rgba(21, 19, 14, .38);
+  animation: mxPop .2s cubic-bezier(.22, 1.4, .4, 1) both;
+}
+.mx-menu-name {
+  font-family: var(--sans); font-size: 12.5px; font-weight: 800; color: var(--ink-3, #8a8270);
+  padding: 2px 8px 5px; border-bottom: 1px solid #efe7d2; margin-bottom: 3px; text-align: center;
+}
+.mx-menu button {
+  background: none; border: none; cursor: pointer; text-align: left;
+  padding: 8px 10px; border-radius: 8px;
+  font-family: var(--sans); font-size: 14.5px; font-weight: 700; color: var(--ink, #15130e);
+}
+.mx-menu button:hover { background: #f4efe1; }
+.mx-menu .mx-menu-x { color: var(--ink-3, #8a8270); font-weight: 600; font-size: 13.5px; }
+
+/* 帽子跟著身體一起動（跟 torso 同一個群組外面，所以要自己套動畫） */
+.act-walk  .mx-hat { animation: mxWalkBob .34s ease-in-out infinite; }
+.act-dance .mx-hat { animation: mxDance .42s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mx-hat { animation: none !important; } }

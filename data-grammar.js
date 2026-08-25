@@ -52,6 +52,11 @@ const GR_SEED_WEEKS = {
 };
 
 /* ─── Firestore subscribe ────────────────────────────────────────────────── */
+/* 只有老師能寫 class/*。學生載入時如果也去「補寫」文件，每次都會吃一個
+   permission-denied（雖然被 catch 掉，但會一直重試）。所以修復只讓老師做。 */
+function _grCanWrite() {
+  try { return !!(window.isAdminUser && window.isAdminUser(window._currentUser)); } catch (e) { return false; }
+}
 function subscribeToClassDataGR(callback, onError) {
   return _classDocGR.onSnapshot(snap => {
     if (snap.exists) {
@@ -60,16 +65,19 @@ function subscribeToClassDataGR(callback, onError) {
         const merged = _mergeGRWithSeed(d.weeks || {}, GR_SEED_WEEKS);
         const mergedOrder = Array.isArray(d.weekOrder) && d.weekOrder.length > 0
           ? d.weekOrder : GR_DEFAULT_WEEK_ORDER.slice();
-        _classDocGR.set({ _version: GR_DATA_VERSION, weeks: merged, weekOrder: mergedOrder }, { merge: true }).catch(() => {});
+        if (_grCanWrite()) _classDocGR.set({ _version: GR_DATA_VERSION, weeks: merged, weekOrder: mergedOrder }, { merge: true }).catch(() => {});
+        window.noteCloudWeeks && window.noteCloudWeeks('gr', merged);   // ⚠ 這裡漏掉的話第一次存檔會被 guard 擋下
         callback(merged, mergedOrder);
         return;
       }
       const w = d.weeks || GR_SEED_WEEKS;
+      // ⚠ 曾經被寫成字串 'gr'（v383 的 bug）→ 一定要 isArray 判斷，壞掉就退回預設
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length > 0 ? d.weekOrder : Object.keys(w).sort();
       window.noteCloudWeeks && window.noteCloudWeeks('gr', w);   // v359 防呆
       callback(w, o);
     } else {
-      _classDocGR.set({ _version: GR_DATA_VERSION, weeks: GR_SEED_WEEKS, weekOrder: GR_DEFAULT_WEEK_ORDER }).catch(() => {});
+      if (_grCanWrite()) _classDocGR.set({ _version: GR_DATA_VERSION, weeks: GR_SEED_WEEKS, weekOrder: GR_DEFAULT_WEEK_ORDER }).catch(() => {});
+      window.noteCloudWeeks && window.noteCloudWeeks('gr', GR_SEED_WEEKS);
       callback(GR_SEED_WEEKS, GR_DEFAULT_WEEK_ORDER.slice());
     }
   }, err => {
