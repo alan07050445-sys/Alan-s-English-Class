@@ -153,6 +153,7 @@ function App() {
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
   const [quickSetOpen, setQuickSetOpen] = useAppState(false); // v377: 貼單字→一次建立整套
   const [qsRoster, setQsRoster] = useAppState([]);            // v380: 指派用的學生名單
+  const [grGenOpen, setGrGenOpen] = useAppState(false);       // v382: 五大時態出題
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -898,6 +899,26 @@ function App() {
     showToast(`已建立 ${items.length} 個練習 · ${merged.length} 個單字${assignedNote}`);
   };
 
+  /* v382: 時態出題完成 → 建立成多個單元（Type A→type-answer、Type B→cloze），
+     全部丟進「該時態」那個分類底下，並掛同一個 group。 */
+  const handleGrammarCreate = (payload) => {
+    const items = window.grBuildItems(payload);
+    if (!items.length) { setGrGenOpen(false); return; }
+    const cat = payload.tense;                       // 分類 id 就是 t1~t5
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) { showToast('找不到題庫週次'); return; }
+    if (!w[weekId].items) w[weekId].items = {};
+    if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
+    w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+    setWeeks(w);
+    saveWeeksSafe(w);
+    setGrGenOpen(false);
+    setOpenCat(cat);
+    const nA = items.filter(i => i.type === 'type-answer').length;
+    const nB = items.filter(i => i.type === 'cloze').length;
+    showToast(`已建立 ${items.length} 個單元 · 單句 ${nA} 組、短文 ${nB} 篇`);
+  };
+
   const handleAddItem = (catId, assignEmail, groupOptions) => {
     // Pre-generate final ID so the PDF storage path is stable before save.
     // Include random suffix to avoid collisions if called rapidly.
@@ -1357,6 +1378,7 @@ function App() {
             onAddWeek={() => setWeekModalOpen(true)}
             onTermSetup={(window.isSummerTrack && window.isSummerTrack(grade)) || (window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setTermOpen(true)}
             onQuickSet={() => setQuickSetOpen(true)}
+            onGrammarGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? () => setGrGenOpen(true) : null}
             onDeleteWeek={handleDeleteWeek}
             progress={{done: totalDone, total: totalItems}}
             user={user}
@@ -1599,6 +1621,12 @@ function App() {
             existingIds={weekOrder}
             onClose={() => setWeekModalOpen(false)}
             onSave={handleAddWeek}
+          />
+          <window.GrammarGenModal
+            open={grGenOpen}
+            defaultTense={openCat && /^t[1-5]$/.test(openCat) ? openCat : 't1'}
+            onClose={() => setGrGenOpen(false)}
+            onCreate={handleGrammarCreate}
           />
           <window.QuickSetModal
             open={quickSetOpen}

@@ -30,7 +30,7 @@ function Icon({ name, size = 16 }) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek, onTermSetup, onQuickSet,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek, onTermSetup, onQuickSet, onGrammarGen,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -138,6 +138,9 @@ function Header({
           <div className="shell edit-banner-inner">
             <span>● Teacher Edit Mode</span>
             <div className="edit-banner-tools">
+              {onGrammarGen && (
+                <button className="banner-btn gr" onClick={onGrammarGen}>✨ 出時態題目</button>
+              )}
               {onQuickSet && (
                 <button className="banner-btn quick" onClick={onQuickSet}>⚡ 貼單字 · 一次建立整套</button>
               )}

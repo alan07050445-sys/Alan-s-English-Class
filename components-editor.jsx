@@ -622,6 +622,195 @@ function qsBlank(example, term) {
   return re.test(example) ? example.replace(re, '_____') : '';
 }
 
+/* ══════════════════════════════════════════════════════════════
+   v382：五大時態核心題庫的出題工具
+   一次出一個時態：Type A 幾組×10 題 + Type B 幾篇短文 → 校稿 → 建立成多個單元。
+   Type A → type-answer（打字作答）；Type B → cloze（[答案](原形)）。
+   ══════════════════════════════════════════════════════════════ */
+function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
+  const T = window.GR_TENSES || {};
+  const [tense, setTense]   = useS(defaultTense || 't1');
+  const [aG, setAG]         = useS(3);
+  const [bC, setBC]         = useS(5);
+  const [busy, setBusy]     = useS(null);    // { done, total, label }
+  const [err, setErr]       = useS('');
+  const [res, setRes]       = useS(null);    // { A:[[…]], B:[…] }
+  const [tab, setTab]       = useS(0);       // 校稿頁：看第幾個單元
+
+  useE(() => { if (open) { setTense(defaultTense || 't1'); setAG(3); setBC(5); setBusy(null); setErr(''); setRes(null); setTab(0); } }, [open]);
+  if (!open) return null;
+
+  const meta = T[tense] || {};
+  const run = async () => {
+    setErr(''); setBusy({ done: 0, total: aG + bC, label: '準備中' });
+    try {
+      const r = await window.aiMakeGrammarSet({
+        tense, aGroups: +aG, bCount: +bC,
+        onProgress: (done, total, label) => setBusy({ done, total, label }),
+      });
+      setRes(r); setTab(0);
+    } catch (e) { setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
+    setBusy(null);
+  };
+
+  const updA = (g, i, k, v) => setRes(r => ({ ...r, A: r.A.map((grp, gi) => gi !== g ? grp : grp.map((x, xi) => xi !== i ? x : { ...x, [k]: v })) }));
+  const updB = (i, k, v) => setRes(r => ({ ...r, B: r.B.map((x, xi) => xi !== i ? x : { ...x, [k]: v }) }));
+
+  /* ── 第 1 步：設定 ── */
+  if (!res) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>出<em>時態題目</em></h3>
+            <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          </div>
+          <div className="modal-body">
+            <div className="field">
+              <label className="field-label">哪一個時態</label>
+              <div className="gr-tense-pick">
+                {Object.keys(T).map(k => (
+                  <button key={k} className={tense === k ? 'active' : ''} onClick={() => setTense(k)}>{T[k].zh}</button>
+                ))}
+              </div>
+              <div className="field-help">{meta.en}</div>
+            </div>
+            <div className="gr-num-row">
+              <div className="field">
+                <label className="field-label">單句填空</label>
+                <select value={aG} onChange={e => setAG(+e.target.value)}>
+                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} 組 · 共 {n*10} 題</option>)}
+                </select>
+                <div className="field-help">一組 10 題＝一個單元</div>
+              </div>
+              <div className="field">
+                <label className="field-label">短文填空</label>
+                <select value={bC} onChange={e => setBC(+e.target.value)}>
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} 篇</option>)}
+                </select>
+                <div className="field-help">一篇 5–8 個空＝一個單元</div>
+              </div>
+            </div>
+            <div className="field-help" style={{ marginTop: 4 }}>
+              會建立 <b>{aG + bC}</b> 個單元。出完先讓你逐題校稿，確認了才寫進題庫。
+              AI 出的題目一定要看過——語意、介系詞、時間提示都可能有小問題。
+            </div>
+            {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
+            {busy && (
+              <div className="gr-busy">
+                <div className="gr-busy-bar"><i style={{ width: (busy.done / busy.total * 100) + '%' }}/></div>
+                <span>出題中… {busy.done}/{busy.total} · {busy.label}</span>
+              </div>
+            )}
+          </div>
+          <div className="modal-foot">
+            <button className="btn ghost" onClick={onClose}>取消</button>
+            <button className="btn primary" disabled={!!busy} onClick={run}>
+              {busy ? '出題中…' : `✨ 開始出題（${aG + bC} 個單元）→`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── 第 2 步：校稿 ── */
+  const units = res.A.map((g, i) => ({ kind: 'A', i, n: g.length, name: `單句填空 ${i + 1}` }))
+    .concat(res.B.map((b, i) => ({ kind: 'B', i, n: window.grCountBlanks(b.passage), name: `短文 ${i + 1}` })));
+  const cur = units[Math.min(tab, units.length - 1)];
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>校稿 · <em>{meta.zh}</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+        <div className="modal-body">
+          <div className="gr-tabs">
+            {units.map((u, i) => (
+              <button key={i} className={i === tab ? 'active' : ''} onClick={() => setTab(i)}>
+                {u.name}<em>{u.n}</em>
+              </button>
+            ))}
+          </div>
+
+          {cur.kind === 'A' ? (
+            <div className="gr-proof">
+              {res.A[cur.i].map((x, i) => {
+                const ok = window.grValidA(x);
+                return (
+                  <div key={i} className={'gr-q' + (ok ? '' : ' bad')}>
+                    <span className="gr-q-n">{i + 1}</span>
+                    <div className="gr-q-f">
+                      <textarea rows={2} value={x.prompt} onChange={e => updA(cur.i, i, 'prompt', e.target.value)}/>
+                      <div className="gr-q-2">
+                        <div><label>答案</label><input value={x.answer} onChange={e => updA(cur.i, i, 'answer', e.target.value)}/></div>
+                        <div><label>中文解說</label><input value={x.explain} onChange={e => updA(cur.i, i, 'explain', e.target.value)}/></div>
+                      </div>
+                      {!ok && <div className="gr-warn">⚠ 這題不符合規則：一句只能一個 ________、句尾要有 (原形動詞)、答案不能含 already/never/not 這類詞</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="gr-proof">
+              <div className="field">
+                <label className="field-label">標題</label>
+                <input value={res.B[cur.i].title} onChange={e => updB(cur.i, 'title', e.target.value)}/>
+              </div>
+              <div className="field">
+                <label className="field-label">
+                  短文（空格寫成 <code>[答案](原形動詞)</code>，括號會顯示在空格旁邊當提示）
+                </label>
+                <textarea className="gr-passage" rows={11} value={res.B[cur.i].passage}
+                  onChange={e => updB(cur.i, 'passage', e.target.value)}/>
+                <div className="field-help">
+                  目前 <b>{window.grCountBlanks(res.B[cur.i].passage)}</b> 個空格
+                  {window.grValidB(res.B[cur.i]) ? ' ✓' : ' ⚠ 建議 5–8 個，且 [ ] 裡不要包含 already／never 這類副詞'}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={() => setRes(null)}>← 重新設定</button>
+          <button className="btn primary" onClick={() => onCreate({ tense, zh: meta.zh, A: res.A, B: res.B })}>
+            建立 {units.length} 個單元 →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 把校稿完的結果變成真正的單元（Type A → type-answer；Type B → cloze） */
+function grBuildItems({ tense, zh, A, B }) {
+  const stamp = Date.now();
+  const rnd = () => Math.random().toString(36).slice(2, 5);
+  const out = [];
+  (A || []).forEach((grp, g) => {
+    const items = (grp || []).filter(x => x.prompt && x.answer);
+    if (!items.length) return;
+    out.push({
+      id: 'gr' + stamp + 'a' + g + rnd(), type: 'type-answer', group: zh,
+      title: `${zh} · 單句填空 ${g + 1}`, zh: `${items.length} 題 · 看句子打出正確的動詞形式`,
+      pairs: items.map((x, i) => ({ id: 'p' + stamp + g + i + rnd(), prompt: x.prompt, answer: x.answer, explain: x.explain || '' })),
+    });
+  });
+  (B || []).forEach((p, i) => {
+    if (!p || !p.passage) return;
+    out.push({
+      id: 'gr' + stamp + 'b' + i + rnd(), type: 'cloze', group: zh,
+      title: `${zh} · 短文填空 ${i + 1}${p.title ? `（${p.title}）` : ''}`,
+      zh: `${window.grCountBlanks(p.passage)} 個空格 · 讀短文填動詞`,
+      passage: p.passage,
+    });
+  });
+  return out;
+}
+
 function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, onClose, onCreate }) {
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
@@ -3641,4 +3830,4 @@ function ClozeEditor({ passage, onChangePassage }) {
   );
 }
 
-Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank });
+Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems });

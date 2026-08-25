@@ -1369,6 +1369,247 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 10, hint = '' }
   return out;
 }
 
+// ── v382: AI 出時態題目（五大時態核心題庫）────────────────────────────────
+// Type A 單句填空 → type-answer（打字作答，大小寫不計、拼字與形式要對）
+// Type B 短文填空 → cloze（passage 用 [答案](原形) 標記，括號會顯示成空格旁的提示）
+const GR_TENSES = {
+  t1: {
+    zh: '現在簡單式', en: 'Simple Present Tense',
+    must: `I/You/We/They + base form. He/She/It + -s or -es. consonant+y -> -ies. have -> has. do -> does. be: am/is/are.
+Negatives: do not / does not + base form. Questions: Do / Does + subject + base form.
+Meaning: habits, routines, schedules, facts and general truths.
+Frequency adverbs: always, usually, often, sometimes, never.
+Time clues: every day, on Mondays, once a week, after dinner.`,
+    avoid: `Do not use past or future time clues. Do not use continuous forms.`,
+  },
+  t2: {
+    zh: '過去簡單式', en: 'Simple Past Tense',
+    must: `Regular verbs + -ed. Verbs ending in e + -d. consonant+y -> -ied. short vowel + single consonant -> double the consonant + -ed.
+Common irregular verbs. be: was / were.
+Negatives: did not + base form. Questions: Did + subject + base form.
+Meaning: actions finished in the past.
+Time clues: yesterday, last night, last week, two days ago, in 2025.`,
+    avoid: `Do not use present perfect. Every item must have a clear finished-past time clue or context.`,
+  },
+  t3: {
+    zh: '未來簡單式', en: 'Simple Future Tense',
+    must: `will + base form. will be. Negatives: will not / won't + base form. Questions: Will + subject + base form.
+Meaning: predictions, promises, sudden decisions, future events.
+Time clues: tomorrow, next week, soon, later, in the future, one day.`,
+    avoid: `NEVER use "be going to" anywhere — the student would not know which form the site wants. Only "will".`,
+  },
+  t4: {
+    zh: '現在進行式', en: 'Present Progressive Tense',
+    must: `am / is / are + V-ing. Normal verbs + -ing. Verbs ending in e -> drop e + -ing. short vowel + single consonant -> double the consonant + -ing. -ie -> -ying.
+Negatives: am not / is not / are not + V-ing. Questions: Am / Is / Are + subject + V-ing.
+Meaning: happening right now.
+Time clues: now, right now, at the moment, Look!, Listen!`,
+    avoid: `NEVER use stative verbs that do not take the progressive: know, believe, understand, need, like, want, hate.`,
+  },
+  t5: {
+    zh: '現在完成式', en: 'Present Perfect Tense',
+    must: `have / has + past participle. Regular and common irregular past participles. He/She/It + has. I/You/We/They + have.
+Negatives: have not / has not + past participle. Questions: Have / Has + subject + past participle.
+Meaning: finished but connected to now, life experience, state continuing from past until now.
+Time clues: already, just, yet, ever, never, since, for.`,
+    avoid: `NEVER use a finished past time such as yesterday, last week, two days ago, this morning, just now, today.
+The answer must be the WHOLE verb phrase in one blank, e.g. "have finished" / "has left".
+Do not use "have gone to" (it means the person is still away) — use "have been to" for experience.
+NEVER use the present perfect CONTINUOUS (have/has been + V-ing) — that is a different tense and is not in this unit.
+Do not mix past-tense verbs into the same sentence or passage.`,
+  },
+};
+
+const _GR_SYS = (t, kind, n) => {
+  const T = GR_TENSES[t];
+  return `You write grammar drills for Taiwanese elementary students (Grade 4-6, CEFR A1-A2).
+Questions in English. Explanations in Traditional Chinese.
+Output ONLY valid JSON. No prose, no markdown fences.
+
+TARGET TENSE: ${T.en}（${T.zh}）
+The student must practise:
+${T.must}
+HARD AVOID:
+${T.avoid}
+
+UNIVERSAL RULES
+- Every blank has EXACTLY ONE correct answer. Never write a sentence where two forms both work.
+- Give enough time clues / context that the tense is unambiguous.
+- Sentences must be complete and grammatical apart from the blank — check prepositions, articles and objects (e.g. "go to the supermarket", not "go the supermarket").
+- Use Taiwanese elementary school life, family, food, animals, sports, science, travel.
+- Vary the subject, verb and situation every time. Do NOT just swap names.
+
+⚠⚠ THE SITE HAS ONE INPUT BOX PER BLANK. THIS IS THE MOST IMPORTANT RULE.
+- EXACTLY ONE blank per sentence. Never two blanks in the same sentence.
+- The answer may ONLY contain verb forms built from the base verb in the parentheses
+  (plus a required auxiliary such as have/has/will/am/is/are).
+- The answer must NEVER contain an adverb or a negative word.
+  already / just / never / ever / yet / always / usually / not — these stay as ordinary
+  words inside the sentence, OUTSIDE the blank. The student cannot guess them from "(finish)".
+- For NEGATIVE items: write the auxiliary and "not" in the sentence, blank only the main verb.
+    GOOD: \`Kevin does not ________ video games on school nights. (play)\`  → play
+    BAD:  \`Kevin ________ video games on school nights. (not play)\`
+- For QUESTION items: blank only the auxiliary at the start.
+    GOOD: \`________ your sister like animals? (do)\`  → Does
+    BAD:  \`________ you ________ a panda before? (see)\`
+- Correct placement of adverbs:
+    GOOD: \`I ________ my homework already. (finish)\`  → have finished
+    BAD:  \`I ________ my homework. (finish)\` with answer "have already finished"
+${kind === 'A' ? `
+OUTPUT (${n} items):
+{"items":[{"prompt":"<full sentence with ________ and the base verb in parentheses at the end>","answer":"<exact word(s) filling the blank>","explain":"<Traditional Chinese, 15-40 characters, say why>"}]}
+- prompt format exactly like: \`Eric ________ his teeth before breakfast every morning. (brush)\`
+  — 8 underscores, one space before the parentheses, base verb last.
+- answer is only what goes in the blank (may be more than one word, e.g. "will visit", "have finished").
+- Across the ${n} items, cover the full range listed above: different subjects, -s/-es/-ies, irregular forms, be-verbs, at least one negative and at least one question.`
+: `
+OUTPUT (${n} passage${n > 1 ? 's' : ''}):
+{"items":[{"title":"<short English title>","passage":"<the passage>"}]}
+- Each passage is ONE connected story of 80-130 words about a single situation. NOT unrelated sentences.
+- Mark a blank like this: \`Lydia usually [wakes](wake) up at 6:30.\`  → [answer](base form)
+- ⚠ EXACTLY 5 to 8 blanks per passage. COUNT THEM before you answer. Most verbs must stay as complete words so the story reads naturally.
+- Every blank must be in the target tense. The WHOLE passage stays in that tense — never mix in past-tense verbs.
+- ⚠ Inside [ ] put ONLY verb forms built from the base form in ( ). Adverbs stay outside the brackets:
+    GOOD: \`We have already [finished](finish) the project.\`
+    BAD:  \`We [have already finished](finish) the project.\`
+    BAD:  \`Tom [has never been](be) to the zoo.\`  → write \`Tom has never [been](be) to the zoo.\``}`;
+};
+
+async function _grCall(system, user, maxTokens) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(AI_WRITING_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000, system, messages: [{ role: 'user', content: user }] }),
+      });
+      const data = await res.json();
+      const arr = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+      if (arr && Array.isArray(arr.items)) return arr.items;
+    } catch (e) { /* 再試一次 */ }
+  }
+  throw new Error('AI 出題失敗（回傳格式看不懂），請再試一次。');
+}
+
+/* ⚠ 只靠 prompt 講不動——模型很愛出「____ never ____」這種兩個空格的題目
+   （那是課本的寫法，但這裡只有一個輸入框），也很愛把 never/just/already
+   包進答案裡（學生看到「(see)」根本猜不到要加 never）。
+   所以改成「程式驗，不合格就丟掉重生」，不靠模型自律。 */
+const _GR_ADV = /\b(already|just|never|ever|yet|not|always|usually|often|sometimes|n't)\b/i;
+/* 結構對了不代表內容對。這些是實測反覆出現、但不在 Alan 規格裡的東西。 */
+const _GR_BAN = {
+  t1: [/\bwill\b/i, /\b(am|is|are)\s+\w+ing\b/i, /\bhave\s+\w+ed\b/i],
+  t2: [/\bwill\b/i, /\b(have|has)\s+/i, /\b(am|is|are)\s+\w+ing\b/i],
+  t3: [/\bgoing\s+to\b/i, /\b(have|has)\s+/i],
+  t4: [/\bwill\b/i, /\b(have|has)\s+/i,
+       /\b(know|believe|understand|need|like|want|hate|belong|own)\b/i],
+  // 現在完成進行式 (have been + V-ing) 不在規格裡；have gone 語意是「人還沒回來」，
+  // 跟「經驗」的 have been 混在一起小朋友一定亂 → 一律不收
+  t5: [/\bbeen\s+\w+ing\b/i, /\b(gone)\b/i, /\bwill\b/i],
+};
+function _grTenseOk(tense, x) {
+  const hay = `${x.prompt || ''} ${x.answer || ''}`;
+  if ((_GR_BAN[tense] || []).some(re => re.test(x.answer || ''))) return false;
+  if (/\s(to|in|on|at|for|with|of)$/i.test(String(x.answer || '').trim())) return false;  // 答案不該以介系詞結尾
+  if (tense === 't5' && /\b(yesterday|last (night|week|month|year)|ago|this morning|just now)\b/i.test(hay)) return false;
+  if (tense === 't2' && /\b(tomorrow|next (week|month|year)|already|yet|since)\b/i.test(hay)) return false;
+  return true;
+}
+function _grValidA(x) {
+  if (!x || !x.prompt || !x.answer) return false;
+  const blanks = (x.prompt.match(/_{3,}/g) || []).length;
+  if (blanks !== 1) return false;                       // 一句只能一個空格
+  if (!/\([^)]+\)\s*$/.test(x.prompt)) return false;    // 句尾要有 (原形動詞)
+  if (_GR_ADV.test(x.answer)) return false;             // 答案不可以含副詞／否定
+  if (/[?？]/.test(x.answer)) return false;
+  const w = x.answer.trim().split(/\s+/).length;
+  return w >= 1 && w <= 3;
+}
+/* 模型很愛把 never/already/just 包進 [ ] 裡（例 `[has never camped](camp)`），
+   學生看到「(camp)」根本不知道要打 never。重生幾次也照樣犯，所以直接程式修：
+   把助動詞＋副詞挪到空格外面，空格裡只留動詞本身 → `has never [camped](camp)`。
+   這樣「空格＝剛好缺的那一塊」，學生看得到的就是他要補的。 */
+function _grFixPassage(passage) {
+  let out = String(passage || '').replace(/\[([^\]]+)\]\(([^)]*)\)/g, (whole, inner, base) => {
+    if (!_GR_ADV.test(inner)) return whole;
+    const parts = inner.trim().split(/\s+/);
+    if (parts.length < 2) return whole;
+    const verb = parts[parts.length - 1];
+    const prefix = parts.slice(0, -1).join(' ');
+    return prefix + ' [' + verb + '](' + base + ')';
+  });
+  /* 挖太多空（規格是 5–8）也很常見——與其重生，不如把多的那幾個還原成完整的字，
+     文章反而更自然（規格本來就要求「不是所有動詞都挖空」）。從後面開始還原。 */
+  const MAX = 8;
+  let n = (out.match(/\[[^\]]+\]\([^)]*\)/g) || []).length;
+  while (n > MAX) {
+    out = out.replace(/\[([^\]]+)\]\(([^)]*)\)(?![\s\S]*\[[^\]]+\]\([^)]*\))/, '$1');
+    const m = (out.match(/\[[^\]]+\]\([^)]*\)/g) || []).length;
+    if (m === n) break;                 // 保險：沒減少就停，不要無限迴圈
+    n = m;
+  }
+  return out;
+}
+
+function _grValidB(p) {
+  if (!p || !p.passage) return false;
+  const n = grCountBlanks(p.passage);
+  if (n < 5 || n > 8) return false;
+  const pairs = p.passage.match(/\[([^\]]+)\]\(([^)]*)\)/g) || [];
+  if (pairs.length !== n) return false;                 // 每個 [ ] 後面都要有 ( )
+  return pairs.every(m => {
+    const inner = m.slice(1, m.indexOf(']'));
+    if (_GR_ADV.test(inner) || /[?？]/.test(inner)) return false;
+    return inner.trim().split(/\s+/).length <= 3;
+  });
+}
+
+/* 產生一個時態的整套題目。
+   typeA: 幾「組」×10 題；typeB: 幾篇短文。回傳 { A:[[10題],[10題],…], B:[篇,…] } */
+async function aiMakeGrammarSet({ tense, aGroups = 3, bCount = 5, onProgress } = {}) {
+  if (!GR_TENSES[tense]) throw new Error('不認得這個時態');
+  const total = aGroups + bCount;
+  let done = 0;
+  const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+  const A = [];
+  for (let g = 0; g < aGroups; g++) {
+    const keep = [];
+    for (let round = 0; round < 4 && keep.length < 10; round++) {
+      const seen = A.flat().concat(keep).map(x => x.answer).join(', ');
+      const items = await _grCall(_GR_SYS(tense, 'A', 12),
+        `Generate 12 items.${seen ? ` Do NOT reuse these answers: ${seen}.` : ''}`, 3400);
+      items.map(x => ({
+        prompt: String(x.prompt || '').trim(),
+        answer: String(x.answer || '').trim(),
+        explain: String(x.explain || '').trim(),
+      })).forEach(x => { if (keep.length < 10 && _grValidA(x) && _grTenseOk(tense, x)) keep.push(x); });
+    }
+    A.push(keep);
+    bump(`單句填空 ${g + 1}/${aGroups}`);
+  }
+  const B = [];
+  for (let i = 0; i < bCount; i++) {
+    let best = null;
+    for (let round = 0; round < 4 && !best; round++) {
+      const seen = B.map(x => x.title).join(', ');
+      const items = await _grCall(_GR_SYS(tense, 'B', 1),
+        `Generate 1 passage.${seen ? ` Use a different situation from: ${seen}.` : ''}`, 2000);
+      const p = items[0] || {};
+      const cand = { title: String(p.title || '').trim(), passage: _grFixPassage(String(p.passage || '').trim()) };
+      const blanksOk = (cand.passage.match(/\[([^\]]+)\]/g) || [])
+        .every(m => _grTenseOk(tense, { prompt: cand.passage, answer: m.slice(1, -1) }));
+      if (_grValidB(cand) && blanksOk) best = cand;
+      else if (round === 3) best = cand;      // 四次都不合格就先收下，讓老師在校稿頁改
+    }
+    B.push(best);
+    bump(`短文填空 ${i + 1}/${bCount}`);
+  }
+  return { A, B };
+}
+function grCountBlanks(passage) {
+  return (String(passage || '').match(/\[[^\]]+\]/g) || []).length;
+}
+
 // ── AI Short Answer Grading ───────────────────────────────────────────────
 async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   if (!studentAnswer?.trim()) return '請先寫下你的答案。';
@@ -2016,7 +2257,7 @@ Object.assign(window, {
   COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText, speakTTS, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
-  aiMakeVocabExercises,
+  aiMakeVocabExercises, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage,
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
