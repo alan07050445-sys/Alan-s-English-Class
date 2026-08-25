@@ -9,30 +9,21 @@ const { useState: useFx, useEffect: useFxE, useRef: useFxR } = React;
 /* ── 像素風吉祥物 ────────────────────────────────────────────
    9×8 的格子：頭上兩個小角、兩顆方眼睛、三隻腳。
    腳分成三塊，走路時左右腳輪流抬起來。 */
-/* v384: 帽子——用「完成幾個練習」解鎖，純像素方塊，不破壞方方正正的樣子 */
+/* v385（Alan）：帽子不再「自動解鎖」，改成商店裡用星星買的東西。
+   有沒有買到＝看老師在集點裡扣過哪一筆（app.jsx 算好放在 window.__mxHats）。 */
 const MX_HATS = [
-  { need: 0,  id: 'none' },
-  { need: 3,  id: 'party', zh: '派對帽' },
-  { need: 10, id: 'grad',  zh: '畢業帽' },
-  { need: 25, id: 'crown', zh: '皇冠' },
+  { id: 'party', zh: '派對帽', cost: 500 },
+  { id: 'crown', zh: '皇冠',   cost: 1000 },
 ];
-function mxHatFor(doneCount) {
-  let best = MX_HATS[0];
-  MX_HATS.forEach(h => { if (doneCount >= h.need) best = h; });
-  return best.id;
-}
+const MX_HAT_KEY = 'alan-mx-hat';
+function mxOwnedHats() { return (window.__mxHats || []).filter(h => MX_HATS.some(x => x.id === h)); }
+function mxGetHat() { try { return localStorage.getItem(MX_HAT_KEY) || ''; } catch (e) { return ''; } }
+function mxSetHat(h) { try { localStorage.setItem(MX_HAT_KEY, h || ''); } catch (e) {} }
 function MxHat({ id }) {
   if (id === 'party') return (
     <g className="mx-hat">
       <rect x="4" y="-2" width="1" height="1" fill="#E8C86A"/>
       <rect x="3" y="-1" width="3" height="1" fill="#D6533C"/>
-    </g>
-  );
-  if (id === 'grad') return (
-    <g className="mx-hat">
-      <rect x="2" y="-2" width="5" height="1" fill="#1A1A1A"/>
-      <rect x="3" y="-1" width="3" height="1" fill="#1A1A1A"/>
-      <rect x="6" y="-2" width="1" height="2" fill="#C9A84C"/>
     </g>
   );
   if (id === 'crown') return (
@@ -83,13 +74,7 @@ const mxPick = (k) => { const a = MX_LINES[k] || MX_LINES.idle; return a[Math.fl
 const MX_NAME_KEY = 'alan-mx-name';
 function mxGetName() { try { return localStorage.getItem(MX_NAME_KEY) || ''; } catch (e) { return ''; } }
 function mxSetName(n) { try { localStorage.setItem(MX_NAME_KEY, String(n || '').slice(0, 8)); } catch (e) {} }
-/* 完成幾個練習了？（決定戴哪頂帽子）——直接讀現成的進度，不另外存一份 */
-function mxDoneCount() {
-  try {
-    const p = window.loadQMProg ? window.loadQMProg() : {};
-    return Object.keys(p).filter(k => p[k] && p[k].done).length;
-  } catch (e) { return 0; }
-}
+
 
 /* 純走位／搞笑的動作（不含答題反應）*/
 const MX_ACTS = ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think'];
@@ -130,12 +115,17 @@ function MascotLayer() {
     return !document.querySelector(BUSY_SEL);
   };
   const [allowed, setAllowed] = useFx(okNow());
+  const [owned, setOwned] = useFx([]);
   useFxE(() => {
-    const sync = () => setHat(mxHatFor(mxDoneCount()));
+    const sync = () => {
+      const own = mxOwnedHats();
+      setOwned(own);
+      const want = mxGetHat();
+      setHat(own.indexOf(want) >= 0 ? want : (own[0] || 'none'));   // 買了就自動戴上
+    };
     sync();
-    window.__mxSyncHat = sync;      // 完成練習時立刻對一次（見下面攔 playSound 的地方）
     const iv = setInterval(sync, 4000);
-    return () => { clearInterval(iv); if (window.__mxSyncHat === sync) window.__mxSyncHat = null; };
+    return () => clearInterval(iv);
   }, []);
 
   useFxE(() => {
@@ -197,7 +187,6 @@ function MascotLayer() {
         else if (type === 'wrong' && Math.random() < 0.45) { setAct('oops'); say(mxPick('wrong'), 1900); later(() => setAct('idle'), 900); }
         else if (type === 'complete' || type === 'fanfare') {
           setAct('cheer'); say(mxPick('win'), 3000); later(() => setAct('idle'), 2200);
-          later(() => { if (window.__mxSyncHat) window.__mxSyncHat(); }, 400);   // 剛完成一項 → 看看帽子要不要升級
         }
       } catch (e) {}
     };
@@ -221,8 +210,9 @@ function MascotLayer() {
   const bodyRef = useFxR(null);
   const startRef = useFxR(null);
   const movedRef = useFxR(false);
+  const pressedRef = useFxR(false);      // ⚠ 一定要有：不然放開之後滑鼠只是「移過去」也會被當成拖曳
   const onDown = (e) => {
-    longRef.current = false; movedRef.current = false;
+    longRef.current = false; movedRef.current = false; pressedRef.current = true;
     startRef.current = { x: e.clientX, y: e.clientY };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
     // 長按＝叫出小選單（取名字／去睡覺）
@@ -230,7 +220,7 @@ function MascotLayer() {
   };
   /* v384: 拖著走。小朋友最愛的就是這個，而且完全不吵——放開會掉回地上彈一下。 */
   const onMove = (e) => {
-    if (!startRef.current) return;
+    if (!pressedRef.current || !startRef.current) return;   // 沒按著就不理它
     const dx = e.clientX - startRef.current.x, dy = e.clientY - startRef.current.y;
     if (!movedRef.current && Math.abs(dx) + Math.abs(dy) < 8) return;
     movedRef.current = true;
@@ -238,6 +228,8 @@ function MascotLayer() {
     setDrag({ x: e.clientX, y: e.clientY });
   };
   const endDrag = () => {
+    pressedRef.current = false;
+    startRef.current = null;
     if (!movedRef.current) return;
     const d = drag;
     setDrag(null);
@@ -252,7 +244,9 @@ function MascotLayer() {
   const onUp = (e) => {
     clearTimeout(pressT.current);
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) {}
-    if (movedRef.current) { endDrag(); return; }
+    const wasDrag = movedRef.current;
+    pressedRef.current = false; startRef.current = null;
+    if (wasDrag) { endDrag(); return; }
     if (longRef.current) return;
     const el = bodyRef.current;
     if (el && e && e.clientX != null) {
@@ -289,6 +283,16 @@ function MascotLayer() {
               if (n !== null) { mxSetName(n.trim()); setName(n.trim()); say(n.trim() ? `我叫 ${n.trim()}！` : '好吧，我沒有名字', 2600); }
               setMenu(false);
             }}>✏️ 取名字</button>
+            {owned.length > 0 && (
+              <button onClick={() => {
+                const cycle = ['none'].concat(owned);
+                const next = cycle[(cycle.indexOf(hat) + 1) % cycle.length];
+                setHat(next); mxSetHat(next === 'none' ? '' : next);
+                const zh = (MX_HATS.find(h => h.id === next) || {}).zh;
+                say(next === 'none' ? '帽子先收起來' : `戴上${zh}了！`, 2200);
+                setMenu(false);
+              }}>🎩 換帽子</button>
+            )}
             <button onClick={() => { setMenu(false); setHidden(true); }}>💤 先去睡覺</button>
             <button className="mx-menu-x" onClick={() => setMenu(false)}>取消</button>
           </div>

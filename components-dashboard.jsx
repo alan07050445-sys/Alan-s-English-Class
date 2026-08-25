@@ -1134,6 +1134,19 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
     setBusy(false);
   };
 
+  /* v385: 吉祥物帽子是虛擬商品——扣點的註記必須含帽子名稱，學生端才認得出來買到了。
+     所以給老師一鍵按鈕，不用自己打字（打錯就不會生效）。 */
+  const buyHat = async (zh, cost) => {
+    if (!sel) { setErr('請先選一位學生'); return; }
+    if (!confirm(`確定幫這位學生扣 ${cost} 顆星星，換「${zh}」嗎？`)) return;
+    setBusy(true);
+    try {
+      await window.addStarEntry(sel, { amount: -cost, note: `兌換：${zh}`, date,
+        name: (curStudent && curStudent.name) || '' });
+    } catch (e) { setErr('寫入失敗：' + (e.code || e.message)); }
+    setBusy(false);
+  };
+
   const del = async (entry) => {
     if (!confirm(`確定刪除這筆嗎？\n${entry.date}　${entry.amount > 0 ? '+' : ''}${entry.amount}🌟　${entry.note || ''}`)) return;
     try { await window.deleteStarEntry(sel, entry.id); }
@@ -1210,6 +1223,12 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
               {[100, 300, 500, 800, 1000].map(v => (
                 <button key={v} onClick={() => add(v)} disabled={busy}>+{v}</button>
               ))}
+            </div>
+            <div className="stars-quick stars-quick-hat">
+              兌換吉祥物帽子：
+              <button onClick={() => buyHat('派對帽', 500)}  disabled={busy}>🎉 派對帽 −500</button>
+              <button onClick={() => buyHat('皇冠', 1000)} disabled={busy}>👑 皇冠 −1000</button>
+              <span>扣了之後學生的吉祥物就會戴上（長按吉祥物可以換）</span>
             </div>
 
             {err && <div className="notify-msg err">⚠️ {err}</div>}

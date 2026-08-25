@@ -2127,6 +2127,10 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
    兌換＝送出申請給老師（老師確認後在後台扣點）。
 ══════════════════════════════════════════════════════ */
 const SHOP_ITEMS = [
+  /* v385: 吉祥物的帽子＝虛擬商品。老師在後台扣點的那一筆就是「買到了」的憑證，
+     app.jsx 會從星星紀錄算出擁有哪幾頂（見 window.__mxHats）。 */
+  { id:'hat_party', emoji:'🎉', name:'吉祥物的派對帽', cost:500,  tag:'吉祥物', virtual:true },
+  { id:'hat_crown', emoji:'👑', name:'吉祥物的皇冠',   cost:1000, tag:'吉祥物', virtual:true },
   { id:'labubu',   emoji:'🧸', name:'Labubu 公仔',        cost:3000,  tag:'娃娃' },
   { id:'capy_big', emoji:'🦫', name:'50 公分大卡皮巴拉',  cost:3000,  tag:'娃娃' },
   { id:'capy_sm',  emoji:'🧸', name:'小卡皮巴拉吊飾',      cost:800,   tag:'娃娃' },
@@ -2274,7 +2278,9 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
       alert(`還差 ${(it.cost - bal).toLocaleString()} 顆星星才能換「${it.name}」，繼續加油！⭐`);
       return;
     }
-    alert(`已記下你想換「${it.name}」（${it.cost.toLocaleString()}🌟）\n\n下次上課跟 Alan 老師說一聲，老師確認後就會幫你扣點、把東西給你 🎁`);
+    alert(it.virtual
+      ? `已記下你想換「${it.name}」（${it.cost.toLocaleString()}🌟）\n\n跟 Alan 老師說一聲，老師扣點之後，你的吉祥物就會戴上它 🎩\n（長按吉祥物可以換帽子）`
+      : `已記下你想換「${it.name}」（${it.cost.toLocaleString()}🌟）\n\n下次上課跟 Alan 老師說一聲，老師確認後就會幫你扣點、把東西給你 🎁`);
   };
 
   return ReactDOM.createPortal(

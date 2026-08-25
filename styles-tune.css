@@ -761,3 +761,8 @@
 .gr-extra input { width: 18px; height: 18px; accent-color: #2E7D5B; margin-top: 2px; }
 .gr-extra b { display: block; font-family: var(--sans); font-size: 15.5px; color: var(--ink, #15130e); margin-bottom: 2px; }
 .gr-extra span { font-family: var(--sans); font-size: 13.5px; color: var(--ink-3, #8a8270); line-height: 1.5; }
+
+/* ══ v385：老師後台的「兌換吉祥物帽子」快速鍵 ══ */
+.stars-quick-hat { margin-top: 6px; flex-wrap: wrap; }
+.stars-quick-hat button { border-color: #C9A84C !important; color: #7a5c0f !important; }
+.stars-quick-hat span { font-size: 12.5px; color: var(--ink-3, #8a8270); }

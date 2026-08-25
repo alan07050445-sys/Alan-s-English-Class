@@ -298,8 +298,20 @@ function App() {
 
   // ── v342: 訂閱自己的星星（老師在後台給/扣，這裡即時更新 header 上的數字）──
   useAppEffect(() => {
-    if (!user || !user.email || !window.subscribeMyStars) { setStarBalance(0); return; }
-    return window.subscribeMyStars(user.email, (d) => setStarBalance(d.balance || 0), () => setStarBalance(0));
+    if (!user || !user.email || !window.subscribeMyStars) { setStarBalance(0); window.__mxHats = []; return; }
+    return window.subscribeMyStars(user.email, (d) => {
+      setStarBalance(d.balance || 0);
+      /* v385: 吉祥物的帽子＝虛擬商品。老師扣點的那一筆就是憑證——
+         從紀錄裡找「扣點 + 註記提到帽子名稱」的項目，算出擁有哪幾頂。 */
+      const owned = [];
+      (d.entries || []).forEach(en => {
+        if (!en || (en.amount || 0) >= 0) return;
+        const note = String(en.note || '');
+        if (/派對帽|hat_party/i.test(note) && owned.indexOf('party') < 0) owned.push('party');
+        if (/皇冠|hat_crown/i.test(note)   && owned.indexOf('crown') < 0) owned.push('crown');
+      });
+      window.__mxHats = owned;
+    }, () => { setStarBalance(0); window.__mxHats = []; });
   }, [user?.email]);
 
   // ── Subscribe to streak (for the streak count shown to logged-in students) ──
