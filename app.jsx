@@ -148,6 +148,7 @@ function App() {
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
   const [quickSetOpen, setQuickSetOpen] = useAppState(false); // v377: 貼單字→一次建立整套
+  const [qsRoster, setQsRoster] = useAppState([]);            // v380: 指派用的學生名單
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -234,6 +235,15 @@ function App() {
   }, [revealReady]);
 
   const isTeacher = window.isAdminUser(user);
+
+  // v380: 指派名單只有老師需要，學生不要多打一次 Firestore
+  useAppEffect(() => {
+    if (!isTeacher || !window.subscribeRoster) return;
+    return window.subscribeRoster(list => setQsRoster(
+      (list || []).filter(r => r && r.email && r.active !== false)
+        .map(r => ({ email: String(r.email).toLowerCase(), name: r.name || r.email }))
+    ));
+  }, [isTeacher]);
 
   /* v377（Alan：#1 清掉空的）：還沒放內容的週次，學生端不顯示。
      這樣才能「先把一整個學期 20 週開好、內容慢慢補」而不會讓學生看到一排空白。
@@ -390,6 +400,8 @@ function App() {
 
   // ── 暑假 meta（每人一份派發清單；v209 題庫＋個人清單制）────
   const [summerMeta, setSummerMeta] = useAppState({ students: {} });
+  const summerMetaRef = useAppRef(summerMeta);
+  useAppEffect(() => { summerMetaRef.current = summerMeta; }, [summerMeta]);
   useAppEffect(() => {
     if (!window.subscribeSummerMeta) { setSummerMetaReady(true); return; }
     // v322: 資料回來（或出錯）都標記 ready，載入畫面才知道可以揭曉了
@@ -836,7 +848,7 @@ function App() {
 
   /* v377③: 貼一次單字 → 一次建立整套練習（單字卡／配對連線／聽寫／選擇題／填空）
      全部掛同一個 group，並綁到那份單字卡上，學生端會自動排成一組。 */
-  const handleQuickSet = ({ words, title, cat, kinds, ai }) => {
+  const handleQuickSet = ({ words, title, cat, kinds, ai, assign }) => {
     // 校稿時改過的中文要回填（老師沒貼中文、AI 補的那種）
     const merged = (words || []).map(w => {
       const a = (ai || []).find(r => r.term === w.term);
@@ -849,11 +861,36 @@ function App() {
     if (!w[weekId].items) w[weekId].items = {};
     if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
     w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+
+    /* v380: 整組一次指派——不用建好之後再一份一份設。
+       學期＝整組設成本週作業（同一個截止日）；暑假題庫＝寫進每位學生的派發清單。 */
+    let assignedNote = '';
+    if (assign && assign.dueDate) {
+      if (!w[weekId].homework) w[weekId].homework = {};
+      items.forEach(it => { w[weekId].homework[it.id] = { dueDate: assign.dueDate }; });
+      assignedNote = ` · 已設為作業（${assign.dueDate} 到期）`;
+    }
     setWeeks(w);
     saveWeeksSafe(w);
+
+    if (assign && assign.students && assign.students.length && window.saveSummerStudent) {
+      const suffix = String(weekId).split('-').pop();     // 例 sl-2026-SW08 → SW08
+      const metaNow = (summerMetaRef.current && summerMetaRef.current.students) || {};
+      Promise.all(assign.students.map(email => {
+        const key = String(email).toLowerCase();
+        const prev = metaNow[key] || { name: '', weeks: {} };
+        const weeksMap = { ...(prev.weeks || {}) };
+        const have = Array.isArray(weeksMap[suffix]) ? weeksMap[suffix] : [];
+        weeksMap[suffix] = have.concat(items.map(it => it.id).filter(id => have.indexOf(id) < 0));
+        return window.saveSummerStudent(key, { ...prev, weeks: weeksMap });
+      })).then(() => showToast(`已指派給 ${assign.students.length} 位學生`))
+        .catch(() => showToast('指派失敗，請到後台再指派一次'));
+      assignedNote = ` · 指派中…`;
+    }
+
     setQuickSetOpen(false);
     setOpenCat(cat);
-    showToast(`已建立 ${items.length} 個練習 · ${merged.length} 個單字`);
+    showToast(`已建立 ${items.length} 個練習 · ${merged.length} 個單字${assignedNote}`);
   };
 
   const handleAddItem = (catId, assignEmail, groupOptions) => {
@@ -1561,6 +1598,8 @@ function App() {
           <window.QuickSetModal
             open={quickSetOpen}
             categories={activeCategories}
+            perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
+            roster={qsRoster}
             defaultCat={openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab'}
             onClose={() => setQuickSetOpen(false)}
             onCreate={handleQuickSet}

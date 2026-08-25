@@ -622,7 +622,7 @@ function qsBlank(example, term) {
   return re.test(example) ? example.replace(re, '_____') : '';
 }
 
-function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, onCreate }) {
+function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, onClose, onCreate }) {
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
   const [cat, setCat]     = useS(defaultCat || 'vocab');
@@ -634,8 +634,17 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
   const [busy, setBusy]     = useS(0);       // 0=沒在跑，否則是已完成的字數
   const [aiErr, setAiErr]   = useS('');
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
+  /* v380（Alan：「不用一整包要一份一份指定」）：建立的同時就指派出去。
+     學期＝整組設為本週作業（含截止日）；暑假題庫＝勾選要給哪些學生。 */
+  const [assign, setAssign] = useS(true);
+  const [due, setDue]       = useS('');
+  const [who, setWho]       = useS([]);       // 只有 perStudent 模式用得到
   useE(() => {
     if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setAiErr(''); setBusy(0); setUseAI(true);
+      setAssign(true); setWho([]);
+      // 預設截止日＝這個週日（大部分作業都是一週）
+      const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+      setDue(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
       setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true }); }
   }, [open]);
   if (!open) return null;
@@ -668,6 +677,46 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
     setBusy(0);
   };
   const updRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r));
+  const payload = (extra) => ({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id),
+    assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null, ...extra });
+
+  /* ⚠ 不要寫成 `const AssignBox = () => …` 再用 <AssignBox/> 那種寫法：
+     那樣每次重繪都是一個新的元件型別，React 會把整段拆掉重掛，
+     勾第二個學生時第一個已經被換成新的 DOM 節點＝點不到（實測踩過）。
+     這裡是「回傳 JSX 的普通函式」，等同直接內嵌。 */
+  const assignBox = () => (
+    <div className={'qs-assign' + (assign ? ' on' : '')}>
+      <label className="qs-assign-head">
+        <input type="checkbox" checked={assign} onChange={e => setAssign(e.target.checked)}/>
+        <span>建立後<b>整組直接指派</b>（{chosen.length} 個練習一次派出去，不用一份一份設）</span>
+      </label>
+      {assign && (perStudent ? (
+        <div className="qs-who">
+          <div className="qs-who-bar">
+            <span>指派給（{who.length}/{(roster || []).length}）</span>
+            <button type="button" onClick={() => setWho((roster || []).map(r => r.email))}>全選</button>
+            <button type="button" onClick={() => setWho([])}>全不選</button>
+          </div>
+          <div className="qs-who-list">
+            {(roster || []).map(r => (
+              <label key={r.email} className={'qs-who-item' + (who.indexOf(r.email) >= 0 ? ' on' : '')}>
+                <input type="checkbox" checked={who.indexOf(r.email) >= 0}
+                  onChange={e => setWho(w => e.target.checked ? w.concat(r.email) : w.filter(x => x !== r.email))}/>
+                {r.name || r.email}
+              </label>
+            ))}
+            {!(roster || []).length && <span className="qs-who-empty">名單還沒載入</span>}
+          </div>
+        </div>
+      ) : (
+        <div className="qs-due">
+          <label>截止日</label>
+          <input type="date" value={due} onChange={e => setDue(e.target.value)}/>
+          <span className="qs-due-n">整組會出現在學生的「今天的任務」</span>
+        </div>
+      ))}
+    </div>
+  );
 
   /* ── 第 2 步：AI 出完了，逐題校稿 ── */
   if (rows) {
@@ -683,7 +732,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
               AI 出好了 <b>{rows.length}</b> 個字。<b>每一格都可以直接改</b>，確認沒問題再建立。
               空白的欄位會自動跳過那一題。
             </div>
-            <div className="qs-proof">
+            {assignBox()}
+            <div className="qs-proof" style={{ marginTop: 12 }}>
               {rows.map((r, i) => (
                 <div key={i} className="qs-proof-row">
                   <div className="qs-proof-w">
@@ -708,9 +758,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
           <div className="modal-foot">
             <button className="btn ghost" onClick={() => setRows(null)}>← 回上一步</button>
             <button className="btn ghost" onClick={runAI} disabled={!!busy}>{busy ? '重新出題中…' : '↻ 重新出一次'}</button>
-            <button className="btn primary"
-              onClick={() => onCreate({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id), ai: rows })}>
-              建立 {chosen.length} 個練習 →
+            <button className="btn primary" onClick={() => onCreate(payload({ ai: rows }))}>
+              建立 {chosen.length} 個練習{assign ? '並指派' : ''} →
             </button>
           </div>
         </div>
@@ -780,6 +829,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
             </span>
           </label>
           {aiErr && <div className="notify-msg err" style={{ marginTop: 8 }}>⚠️ {aiErr}</div>}
+          {!wantAI && assignBox()}
         </div>
 
         <div className="modal-foot">
@@ -790,9 +840,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, onClose, 
                     : ready ? `✨ AI 出題（${words.length} 個字）→` : '先貼單字並取個名字'}
             </button>
           ) : (
-            <button className="btn primary" disabled={!ready}
-              onClick={() => onCreate({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id) })}>
-              {ready ? `建立 ${chosen.length} 個練習（${words.length} 個字）→` : '先貼單字並取個名字'}
+            <button className="btn primary" disabled={!ready} onClick={() => onCreate(payload())}>
+              {ready ? `建立 ${chosen.length} 個練習${assign ? '並指派' : ''} →` : '先貼單字並取個名字'}
             </button>
           )}
         </div>

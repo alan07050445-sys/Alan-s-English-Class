@@ -581,3 +581,21 @@
   width: 100%; margin-top: 6px; padding: 6px 9px; font-size: 14px;
   border: 1px solid var(--border, #e5dfc8); border-radius: 7px; background: #fff; font-family: inherit;
 }
+
+/* ══ v380：建立時整組一次指派 ══ */
+.qs-assign { margin-top: 14px; padding: 12px 14px; border: 1.5px solid var(--border, #e5dfc8); border-radius: 12px; background: #fff; }
+.qs-assign.on { border-color: #2E4F7E; background: #f4f7fb; }
+.qs-assign-head { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: var(--sans); font-size: 15px; color: var(--ink, #15130e); }
+.qs-assign-head input { width: 18px; height: 18px; accent-color: #2E4F7E; flex: none; }
+.qs-due { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.qs-due label { font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink-3, #8a8270); }
+.qs-due input { padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 8px; font-family: inherit; font-size: 15px; }
+.qs-due-n { font-size: 13px; color: var(--ink-3, #8a8270); }
+.qs-who { margin-top: 10px; }
+.qs-who-bar { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-3, #8a8270); margin-bottom: 7px; }
+.qs-who-bar button { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 700; color: #2E4F7E; padding: 0; }
+.qs-who-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow-y: auto; }
+.qs-who-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--border, #e5dfc8); border-radius: 999px; background: #fff; font-size: 14px; cursor: pointer; }
+.qs-who-item input { width: 15px; height: 15px; accent-color: #2E4F7E; }
+.qs-who-item.on { border-color: #2E4F7E; background: #eaf1f9; font-weight: 700; }
+.qs-who-empty { font-size: 13px; color: var(--ink-3, #8a8270); }
