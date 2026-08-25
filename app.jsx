@@ -10,7 +10,11 @@ const _subscribeG3       = window.subscribeToClassData;
 
 // ── Grade helper: resolve grade-specific functions ─────────────────────────
 // 暑假班表（s1–s6）也走這裡：map.summer 可以是值，或 (trackId) => 值 的函式
-function _gradeOf(g, { g2, g4, g5, g6, g3, summer }) {
+function _gradeOf(g, { g2, g4, g5, g6, g3, summer, grammar }) {
+  // v381: 五大時態核心題庫是獨立的一條 track（跟暑假一樣），不屬於任何年級
+  if (grammar !== undefined && window.isGrammarTrack && window.isGrammarTrack(g)) {
+    return typeof grammar === 'function' ? grammar(g) : grammar;
+  }
   if (summer !== undefined && window.isSummerTrack && window.isSummerTrack(g)) {
     return typeof summer === 'function' ? summer(g) : summer;
   }
@@ -121,17 +125,17 @@ function App() {
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks() });
+    return _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks(), grammar: window.loadWeeksGR() });
   });
   const [weekOrder, setWeekOrder] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder() });
+    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
   });
   const [progress, setProgress] = useAppState(() => window.loadProgress());
   const [qmProgressVersion, setQmProgressVersion] = useAppState(0);
   const [weekIdx, setWeekIdx] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder() });
+    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
     const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g4: window.loadWeeksG4(),     g5: window.loadWeeksG5(),     g6: window.loadWeeksG6(),     g3: window.loadWeeks(),     summer: (t) => window.summerApi(t).loadWeeks() });
     return bestWeekIdx(ord, wks);
   });
@@ -349,12 +353,12 @@ function App() {
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
     weekPickedRef.current = false;   // v340: 換年級/換教室 → 重新自動跳到本週
-    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks });
-    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder });
+    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks, grammar: window.saveWeeksGR });
+    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder, grammar: window.saveWeekOrderGR });
 
-    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe });
-    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey });
-    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey });
+    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe, grammar: window.subscribeToClassDataGR });
+    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey, grammar: window.GR_STORAGE_KEY });
+    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey, grammar: window.GR_ORDER_KEY });
 
     cloudReadyRef.current = false;          // v355: 換年級／換教室 → 重新等雲端
     const unsub = subscribeFn((newWeeks, newOrder) => {
@@ -515,6 +519,7 @@ function App() {
     g6: window.CATEGORIES_G6 || _CATS_G3,
     g3: _CATS_G3,
     summer: window.SUMMER_CATEGORIES || _CATS_G3,
+    grammar: window.CATEGORIES_GR || _CATS_G3,
   });
 
   const allItems = useAppMemo(() => {
@@ -1157,8 +1162,8 @@ function App() {
   const applyGradeData = (g) => {
     // Immediately load the correct grade's data so the page never
     // flashes the previous grade's content while Firestore syncs.
-    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks() });
-    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder() });
+    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks(), grammar: window.loadWeeksGR() });
+    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
     try { localStorage.setItem('alan-grade', g); } catch(e) {}
     setGrade(g);
     setWeeks(newWeeks);
@@ -1350,7 +1355,7 @@ function App() {
             editMode={editMode}
             onToggleEdit={() => setEditMode(e => !e)}
             onAddWeek={() => setWeekModalOpen(true)}
-            onTermSetup={window.isSummerTrack && window.isSummerTrack(grade) ? null : () => setTermOpen(true)}
+            onTermSetup={(window.isSummerTrack && window.isSummerTrack(grade)) || (window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setTermOpen(true)}
             onQuickSet={() => setQuickSetOpen(true)}
             onDeleteWeek={handleDeleteWeek}
             progress={{done: totalDone, total: totalItems}}
@@ -1607,8 +1612,8 @@ function App() {
           <window.TermSetupModal
             open={termOpen}
             existingIds={weekOrder}
-            gradeLabel={_gradeOf(grade, { g2: '二年級', g4: '四年級', g5: '五年級', g6: '六年級', g3: '三年級', summer: '暑假' })}
-            prefix={_gradeOf(grade, { g2: 'g2-', g4: 'g4-', g5: 'g5-', g6: 'g6-', g3: '', summer: 'sl-' })}
+            gradeLabel={_gradeOf(grade, { g2: '二年級', g4: '四年級', g5: '五年級', g6: '六年級', g3: '三年級', summer: '暑假', grammar: '文法核心' })}
+            prefix={_gradeOf(grade, { g2: 'g2-', g4: 'g4-', g5: 'g5-', g6: 'g6-', g3: '', summer: 'sl-', grammar: 'gr-' })}
             categories={activeCategories}
             onClose={() => setTermOpen(false)}
             onCreate={handleCreateTerm}

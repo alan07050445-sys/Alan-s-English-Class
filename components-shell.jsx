@@ -1561,6 +1561,24 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <span className="gs-card-cta gs-card-cta-brand">{ringScope && ringScope.done > 0 && ringScope.done < ringScope.total ? '繼續 →' : '進入 →'}</span>
           </button>
         )}
+        {/* v381: 五大時態核心題庫——不是每週更換的作業，是一定要練熟的常設題庫。
+            放在年級入口上面，因為它跨年級共用。 */}
+        {/* ⚠ 題庫還沒放內容之前只給老師看得到（onOpenAdmin 只有老師會拿到）——
+            免得學生點進去是空的。內容進去之後把 onOpenAdmin && 拿掉即可對全體開放。 */}
+        {!summerOnly && onOpenAdmin && (
+          <button className="gs-card gs-card-gr" onClick={() => onSelect(window.GRAMMAR_TRACK || 'gr')}>
+            <span className="gs-card-ico gs-card-ico-gr" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 12h10"/><path d="M9 17h6"/>
+              </svg>
+            </span>
+            <span className="gs-card-text">
+              <b>五大時態 · 核心題庫</b>
+              <span>現在／過去／未來／進行／完成 — 練到熟為止，不隨週次更換</span>
+            </span>
+            <span className="gs-card-cta">進入 →</span>
+          </button>
+        )}
         {summerOnly ? null : doorMode ? (
           <>
             <button className="gs-card gs-card-room" onClick={() => onSelect(home.id)}>

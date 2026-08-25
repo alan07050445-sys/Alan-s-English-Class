@@ -599,3 +599,8 @@
 .qs-who-item input { width: 15px; height: 15px; accent-color: #2E4F7E; }
 .qs-who-item.on { border-color: #2E4F7E; background: #eaf1f9; font-weight: 700; }
 .qs-who-empty { font-size: 13px; color: var(--ink-3, #8a8270); }
+
+/* ══ v381：五大時態核心題庫的門口卡 ══ */
+.gs-card-gr { border-color: #cfd8e6; }
+.gs-card-gr:hover { border-color: #2E4F7E; }
+.gs-card-ico-gr { background: #eef2f8; color: #2E4F7E; }
