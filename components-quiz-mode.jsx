@@ -2483,9 +2483,12 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     const onKey = (e) => {
       if (screen !== 'quiz') return;
       const t = e.target;
-      // v390: 也要擋 BUTTON——鍵盤 Tab 到「下一題 →」按 Enter 時，
-      // 原生 onClick 已經觸發一次 handleNext，這裡不能再觸發第二次（會直接跳掉一題）
-      if (t && t.closest && t.closest('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]')) return;
+      /* v390 修正：本來把「所有按鍵 × 所有按鈕」全擋掉，結果是
+         「用滑鼠點了選項之後，1~4 與 Enter 全部失效」——因為瀏覽器會把焦點留在
+         那顆 .qm-option 按鈕上。真正要防的只有「Enter/空白鍵落在按鈕上時，
+         原生 click 已經觸發過一次」這一種雙重觸發，所以只擋這一種。 */
+      if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if ((e.key === 'Enter' || e.key === ' ') && t && t.closest && t.closest('button, a[href], [role="button"]')) return;
       const cur = deck[deckPos];
       if (!cur || !cur.options) return;
       const letterMap = { a: 0, b: 1, c: 2, d: 3 };
@@ -3597,9 +3600,12 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   // 鍵盤：文章頁 Enter＝完成閱讀；答題頁 1–4 選選項、Enter 下一題
   useQME(() => {
     const onKey = (e) => {
-      // v390: 同上——擋掉聚焦在按鈕/連結/表單元素上的 Enter，避免雙重觸發
+      /* v390 修正：同上——本來擋掉「所有按鍵 × 所有按鈕」，
+         會讓學生用滑鼠點過選項之後 1~4 全部失效。只擋 Enter/空白鍵的雙重觸發。 */
       const t = e.target;
-      if (done || (t && t.closest && t.closest('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]'))) return;
+      if (done) return;
+      if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if ((e.key === 'Enter' || e.key === ' ') && t && t.closest && t.closest('button, a[href], [role="button"]')) return;
       if (mode === 'read') { if (e.key === 'Enter') finishReading(); return; }
       if (mode === 'final-intro') { if (e.key === 'Enter') startFinal(); return; }
       if (qIdx >= curQs.length) return;

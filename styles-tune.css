@@ -1285,7 +1285,11 @@ html, body { font-synthesis-style: none; }
 
   /* 新增：需要「看得見的邊界」時用這個（白底 3.52、米底 3.10，都過 3:1）。
      原本的 --border #DDD6C4 對白底只有 1.27，等於沒有邊界。 */
-  --border-strong: #8F8878;
+  --border-em: #8F8878;   /* v390 修正：本來叫 --border-strong，但那個名字
+                              styles-quiz-mode.css:2312/2352 已經在用、而且全站從來沒定義過
+                              ——等於那兩處的 border shorthand 一直是無效的（根本沒畫框）。
+                              一旦定義就會憑空多出邊框、把 circle-answer 的按鈕撐大。
+                              所以改用新名字，不要動到既有的 --border-strong。 */
 
   /* 焦點環就用品牌磚紅，不另外發明顏色：
      對 --bg-paper #FBF8F1 是 7.74、對 --bg #F4F0E7 是 7.22、對白是 8.21。 */
@@ -1402,47 +1406,11 @@ summary:focus-visible,
 }
 
 
-/* ───────────────────────────────────────────────────────────────────────────
-   (E) 還原被 styles.css:288 的 `border-radius: 6px` 壓扁的圓角
-   那條規則長這樣：
-     button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
-     { outline: 2px solid var(--accent-soft); outline-offset: 2px; border-radius: 6px; }
-   權重 (0,1,1)，會蓋掉 .icon-btn 的 50%、.btn 的 999px、.qm-block 的 18px……
-   → 使用者一按 Tab，按鈕造型就「跳」一次（圓形變圓角方形）。
-   因為本輪不改其他檔案，只能用 (0,2,0) 逐一還原。
-   ⚠ 下面每一個數字都是去原檔查過的**實際值**，不是猜的：
-       .icon-btn      styles.css:178          50%
-       .modal-close   styles-part2.css:522    50%
-       .qm-back-btn   （原本沒有 radius，是 44px 的圓形圖示鈕）→ 50%
-       .btn           styles-part2.css:596    999px   ← 原稿寫 12px 是錯的
-       .qm-btn        styles-quiz-mode.css:555 10px
-       .qm-block      styles-theme.css:91     18px    ← 它是 <button>，會被打到
-       .qm-option     styles-theme.css:200    14px    ← 原稿寫 12px 是舊值
-       .fc-choice     styles-flashcard.css:208 14px
-       .fc-test-choice styles-flashcard.css:349 12px  ← 原稿寫 14px 是錯的
-       .stars-btn     styles-auth.css:6057    100px   ← 原稿寫 12px 是錯的
-       .checkin-btn   styles-auth.css:6494    100px   ← 原稿寫 12px 是錯的
-       .focus-btn     styles-tune.css（v389） 12px
-       .fs-btn        styles-tune.css（v388） 10px
-       .notify-chip   styles-auth.css:2528    100px
-       .notify-send   styles-auth.css:2540    10px
-       .cwo-notify    styles-auth.css:4370    10px
-       .nt-line       styles-auth.css:4405    100px
-       .sp-item-btn   styles-auth.css:6122    100px
-   （最乾淨的做法其實是直接刪掉 styles.css:288 那一行 `border-radius: 6px;`，
-     刪掉之後底下這一整段就可以整組拿掉。本輪不改其他檔，先這樣擋著。）
-   ─────────────────────────────────────────────────────────────────────────── */
-.icon-btn:focus-visible,
-.modal-close:focus-visible,
-.qm-back-btn:focus-visible{ border-radius: 50%; }
-
-.btn:focus-visible,
-.stars-btn:focus-visible,
-.checkin-btn:focus-visible,
-.notify-chip:focus-visible,
-.nt-line:focus-visible,
-.sp-item-btn:focus-visible{ border-radius: 100px; }
-
+/* v390 修正：這裡本來列了 15 條 :focus-visible 的圓角還原，
+   是為了抵銷 styles.css:288 的 `border-radius: 6px`。
+   那一行已經在這一版直接移除（outline 本來就會跟著元素自己的圓角走），
+   所以這些還原規則不但多餘，反而會製造新的不一致
+   （例如 .qm-block 本體是 20px，還原規則寫 18px → 一 Tab 就跳形狀）。整段拿掉。 */
 .qm-block:focus-visible{ border-radius: 18px; }
 .qm-option:focus-visible,
 .fc-choice:focus-visible{ border-radius: 14px; }
@@ -1583,7 +1551,7 @@ summary:focus-visible,
 .sp-item.locked .sp-item-btn{
   background: var(--border-soft);
   color: var(--ink-2);
-  border: 1.5px solid var(--border-strong);
+  border: 1.5px solid var(--border-em);
 }
 
 /* LINE 綠 #06C755 配白字只有 2.26 → 壓深成 #067D3A（白字 5.25）。
@@ -1600,15 +1568,15 @@ summary:focus-visible,
 /* 配對題的小圓點：原 #cfc6ae 對底色只有 1.70，
    而它是「這裡可以點」的唯一指示 → 換成過 3:1 的 --border-strong。
    .dm-chip.sel / .linked / .wrong / .ok 底下的 .dm-dot 權重比較高，狀態色不受影響。 */
-.dm-dot{ border-color: var(--border-strong); }
+.dm-dot{ border-color: var(--border-em); }
 
 /* 選項與輸入框的邊界：原本的 --border #DDD6C4 對白底只有 1.27，
    等於「看起來沒有框」。換成 --border-strong（3.52）。
    權重刻意保持最低（0,1,0 / 0,0,1），任何 class 層級的狀態色都贏得過它，
    所以 .qm-option.correct / .fc-choice.wrong / :hover 的邊框顏色都不受影響。 */
 .qm-option,
-.fc-choice{ border-color: var(--border-strong); }
-input, textarea, select{ border-color: var(--border-strong); }
+.fc-choice{ border-color: var(--border-em); }
+input, textarea, select{ border-color: var(--border-em); }
 
 /* ───── v390 區塊 3 / 5 ───── */
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1661,7 +1629,7 @@ input, textarea, select{ border-color: var(--border-strong); }
      註：--border-strong 目前全站沒有定義（只有兩處在用），這裡照抄基底以求一致；
         要不要補上這個變數是 css-2 的事，我不在這裡偷改顏色。 */
   .circle-label-option:hover:not(.selected):not(.correct):not(.wrong):not(.answer) {
-    border-color: var(--border-strong);
+    border-color: var(--border-em);
     background: var(--bg);
     color: var(--ink);
   }
@@ -2440,3 +2408,58 @@ input, textarea, select{ border-color: var(--border-strong); }
    標題短的那幾列（例如「Unit 1 填空 / 4 題」）會變成置中，跟清單的左對齊軸線打架。
    實測 computed textAlign 確實是 center，所以這一條是必要的。 */
 .qm-unit-row { text-align: left; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v390 修正批：對抗式覆核抓到的回歸
+   （agent 產出的東西不能照單全收——這一批全部是覆核指出、我再驗證後修掉的）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ① .qm-explain 被寫成「無媒體查詢」→ 同時蓋掉 v375 桌機的 18px
+   與 v376 手機橫式的 15px。手機橫式最嚴重：行高 1.65→1.8、又多了 15px 左內縮，
+   三行的解說會變四行（約 +48px），而那正是 390px 高、已經要塞 2x2 選項的畫面。 */
+@media (min-width: 1025px) { .qm-explain { font-size: 18px; } }
+@media (max-height: 480px) {
+  .qm-explain { font-size: 15px; line-height: 1.6; border-left: none; padding-left: 2px; }
+}
+
+/* ② 答對／答錯的選項右邊留 48px 給勾叉，註解宣稱「只加寬度不加高度」——不對。
+   把文字框變窄正是變高的方式：1180x760 上 .qm-option 右內距 18→48，
+   文字少 30px，長句選項（v381~v383 的時態題庫就是整句）會多折一行。 */
+@media (max-height: 920px) {
+  .qm-option.correct, .qm-option.wrong { padding-right: 34px; }
+}
+
+/* ③ ≤768 把 .qm-quiz-area 的底部留白歸零、改由 .page 補 68px，
+   但算式漏算了自己新加的那 68px → 641–768px（iPad mini 直式 744、iPad 768）
+   反而多出 33px 的捲動。既有的 72px 本來就涵蓋這一段，還原它。 */
+@media (max-width: 768px) {
+  .qm-quiz-area { padding-bottom: 72px; }
+  .page { padding-bottom: 0; }
+}
+
+/* ④ .fc-nav-btn 釘成 flex:0 0 auto 之後（我為了修「被壓成直排」加的），
+   兩顆鈕在窄螢幕會各佔滿 93px，留給圓點的寬度從約 226px 掉到約 132px
+   → 20 張卡的圓點列從 3 排變 4 排、40 張從 5 排變 8 排，
+   而 .fc-p-card 是 JS 固定高度且 .fc-face 是 overflow:hidden ＝ 例句會被切掉。
+   → 窄螢幕改用較小的內距把寬度還給圓點列，同時保留不折行、不被壓扁。 */
+@media (max-width: 560px) {
+  .fc-nav-btn { padding-left: 10px; padding-right: 10px; }
+  /* 光縮內距還不夠：實測 390px、20 張卡時圓點欄只剩 86px 寬 → 疊成 244px 高、
+     卡片內部開始捲動。改成讓圓點自己獨佔一整列（寬度從 86 變約 326），
+     並且最多兩排就好——上面的「1 / 20」本來就已經在報位置了。 */
+  .fc-nav  { flex-wrap: wrap; row-gap: 8px; }
+  .fc-dots { order: 3; flex: 1 0 100%; max-height: 68px; overflow: hidden; }
+}
+
+/* ⑤ 頁首觸控目標那條把 .icon-btn 一起套了 min-height:40，
+   但它本體是 36x36 的正圓（styles.css:174）→ 變成 36x40 的橢圓，
+   而且桌機也中。改成 40x40，圓形維持。 */
+.icon-btn { width: 40px; height: 40px; }
+
+/* ⑥ 觸控裝置的 hover 還原用的是 var(--border)，但同一批把靜止態
+   改成了較深的 --border-em → 學生最後點過的那一顆反而框最淡，
+   而且會一直維持到點別的地方。還原色要跟靜止態一致。 */
+@media (hover: none) {
+  .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim),
+  .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) { border-color: var(--border-em); }
+}
