@@ -1228,6 +1228,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 
       {/* ── Right: intro / flashcards / quiz / placeholder ── */}
       <div className="qm-quiz-area">
+        {/* v389: 專心模式——只有「真的在做某一個練習」時才出現（不是在看清單） */}
+        {selectedItem && !editMode && <window.FocusBtn/>}
         {/* v272: 題型章——學生點「聽寫」進來，第一眼就看到「🔊 聽寫」確認沒點錯 */}
         {selectedItem && !editMode && phase === 'intro' && QM_TYPE_ZH[selectedItem.type] && (
           <div className="qm-type-chip">{QM_TYPE_ICO[selectedItem.type] || ''} {QM_TYPE_ZH[selectedItem.type]}</div>

@@ -256,8 +256,11 @@
   flex: 1 1 auto; min-height: 230px; height: auto; margin-bottom: 14px;
 }
 .fc-p-card .fc-face          { overflow: hidden; }
-.fc-p-card .fc-back-img-wrap { flex: 1 1 auto; min-height: 0; max-height: none; margin-bottom: 12px; }
-.fc-p-card .fc-back-img-wrap img { max-height: 100%; }
+/* ⚠ v389：這裡本來是 flex:1 1 auto + max-height:none（＝圖片會伸縮去填滿版面）。
+   Alan 明確要「圖片固定住，不要再跟著伸縮」→ 真正生效的規則在本檔最後面的
+   v388/v389 區塊（flex:0 0 auto + 固定 max-height，靠後蓋前）。
+   這裡只留下 margin，不要再寫 flex/max-height，免得兩邊打架。 */
+.fc-p-card .fc-back-img-wrap { margin-bottom: 12px; }
 
 /* ── 學習 ── */
 .fc-p-learn > .fc-dual-bar { flex: none; margin-bottom: 12px; }
@@ -889,17 +892,16 @@
    本來是 flex:1 1 auto + max-height:100%，容器高度一變、圖片就跟著縮放，
    翻卡（背面才有圖）也會把版面撐長。固定住之後，翻卡前後的高度一樣。 */
 .fc-p-card .fc-back-img-wrap {
-  flex: 0 0 auto; max-height: 240px;
+  flex: 0 0 auto; max-height: 330px;
 }
-.fc-p-card .fc-back-img-wrap img { max-height: 240px; }
-.fc-p-learn .fc-learn-img { flex: 0 0 auto; max-height: 260px; }
+.fc-p-card .fc-back-img-wrap img { max-height: 330px; }
+.fc-p-learn .fc-learn-img { flex: 0 0 auto; max-height: 340px; }
 
-/* ③ 平板（含 iPad 橫式 1180、iPad Pro 1194/1366）：側欄瘦身。
-   360px 在 1180 寬的 iPad 上佔掉 31%，內容只剩 672px＝Alan 說的「很擁擠」。 */
+/* ③ 平板：側欄寬度維持原本的 360px（v388 一度縮成 250px，Alan 說改回來）。
+   擁擠的問題改用「練習時收起上方列」解決（.focus-btn），不動側欄。 */
 @media (min-width: 901px) and (max-width: 1366px) {
-  .page-mission .qm-sidebar { width: 250px; }
-  .fc-p-card .fc-back-img-wrap, .fc-p-card .fc-back-img-wrap img { max-height: 210px; }
-  .fc-p-learn .fc-learn-img { max-height: 220px; }
+  .fc-p-card .fc-back-img-wrap, .fc-p-card .fc-back-img-wrap img { max-height: 300px; }
+  .fc-p-learn .fc-learn-img { max-height: 310px; }
 }
 
 /* ④ 留白瘦身：只要「不是很高的螢幕」都套（平板橫式 760–834、13" 筆電 900）。
@@ -924,6 +926,35 @@
   .fc-player { padding: 12px 16px; }
   .fc-topbar { margin-bottom: 9px; }
   .fc-p-card > .fc-flip-card { margin-bottom: 8px; min-height: 170px; }
-  .fc-p-card .fc-back-img-wrap, .fc-p-card .fc-back-img-wrap img { max-height: 185px; }
-  .fc-p-learn .fc-learn-img { max-height: 195px; }
+  .fc-p-card .fc-back-img-wrap, .fc-p-card .fc-back-img-wrap img { max-height: 260px; }
+  .fc-p-learn .fc-learn-img { max-height: 270px; }
+}
+
+
+/* ══ v389：練習時收起上方列（Alan：「Alan English Class 暑假那一列也要可以縮起來，
+   只有在做練習的時候」）。圖片改回大張之後高度更吃緊，這 72px 就是讓出來的空間。 ══ */
+.focus-btn {
+  position: fixed; top: 12px; right: 14px; z-index: 60;
+  width: 38px; height: 38px; border-radius: 12px; font-size: 16px; line-height: 1;
+  color: var(--ink-2, #5c554a); background: rgba(255,255,255,.92);
+  border: 1px solid var(--border, #DDD6C4);
+  box-shadow: 0 6px 18px -8px rgba(21,19,14,.35);
+  transition: all .15s ease;
+}
+.focus-btn:hover { color: var(--ink); border-color: #C9A84C; transform: translateY(-1px); }
+.focus-btn.on {
+  background: var(--accent, #8B3120); color: #fbf8f1; border-color: var(--accent, #8B3120);
+}
+/* 收起上方列——header 是 sticky，直接不顯示就好 */
+html.focus-on .header { display: none; }
+/* header 原本佔 72px，收起後把那塊高度還給內容 */
+html.focus-on .page-mission .qm-cat-view  { min-height: 100vh; }
+html.focus-on .page-mission .qm-quiz-area { min-height: calc(100vh - 54px); }
+/* 收起上方列多出來的 72px 就拿來把圖片放大——按鈕是使用者自己按的，
+   跟「捲動時自己伸縮」是兩回事（那個才是 Alan 不要的）。 */
+html.focus-on .fc-p-card .fc-back-img-wrap,
+html.focus-on .fc-p-card .fc-back-img-wrap img { max-height: 330px; }
+html.focus-on .fc-p-learn .fc-learn-img { max-height: 340px; }
+@media (max-width: 900px) {
+  .focus-btn { top: 8px; right: 10px; width: 34px; height: 34px; }
 }

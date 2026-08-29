@@ -91,6 +91,46 @@ function FullscreenBtn() {
   );
 }
 
+/* v389（Alan：「上方列的 Alan English Class 暑假那一列也要可以縮起來，
+   但我覺得可以用一個全螢幕的 button，只有在做練習的時候可以縮起來」）
+   ── 專心模式 ──
+   只在「正在做某一個練習」時才掛出來（由 QuizModeCategoryView 決定），
+   按下去把整條 header 收起來，把那 72px 讓給題目與圖片。
+   順便試一次全螢幕（成功更好，失敗也無所謂——收起上方列本身就有效果）。
+   ⚠ 收起／展開不會改變視窗大小，useFitHeight 不會自己重算 →
+      一定要補一個 resize 事件，卡片才會用新的可用高度重新量。 */
+function FocusBtn() {
+  const [on, setOn] = React.useState(false);
+
+  // 離開練習（元件卸載）一定要還原，不然回到清單頁會沒有 header
+  React.useEffect(() => () => {
+    document.documentElement.classList.remove('focus-on');
+    window.dispatchEvent(new Event('resize'));
+  }, []);
+
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    document.documentElement.classList.toggle('focus-on', next);
+    try {
+      const el = document.documentElement;
+      if (next && !document.fullscreenElement && el.requestFullscreen && document.fullscreenEnabled) {
+        el.requestFullscreen().catch(() => {});
+      } else if (!next && document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch (e) { /* 全螢幕失敗不影響收起上方列 */ }
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+  };
+
+  return (
+    <button className={'focus-btn' + (on ? ' on' : '')} onClick={toggle}
+      title={on ? '顯示上方列' : '收起上方列，專心練習'} aria-label="專心模式">
+      {on ? '\u2921' : '\u26F6'}
+    </button>
+  );
+}
+
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
@@ -2427,4 +2467,4 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
   );
 }
 
-Object.assign(window, { FullscreenBtn, Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+Object.assign(window, { FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
