@@ -77,7 +77,7 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
       <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match" || form.type === "reading-skill") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
         <div className="modal-body">
@@ -719,7 +719,7 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
         <div className="modal" onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>出<em>時態題目</em></h3>
-            <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+            <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
           </div>
           <div className="modal-body">
             <div className="field">
@@ -792,7 +792,7 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
       <div className="modal wide" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>校稿 · <em>{meta.zh}</em></h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
         <div className="modal-body">
           <div className="gr-tabs">
@@ -1021,7 +1021,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
         <div className="modal wide" onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>校稿 · <em>{title}</em></h3>
-            <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+            <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
           </div>
           <div className="modal-body">
             <div className="field-help" style={{ marginBottom: 10 }}>
@@ -1068,7 +1068,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
       <div className="modal wide" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>貼一次單字，<em>一次建立整套練習</em></h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
         <div className="modal-body">
@@ -1254,7 +1254,7 @@ function TermSetupModal({ open, existingIds, gradeLabel, prefix, categories, onC
       <div className="modal wide" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>建立<em>一整個學期</em>的週次 · {gradeLabel}</h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
         <div className="modal-body">
@@ -1352,7 +1352,7 @@ function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isEdit ? 'Edit' : 'Add'} <em>{isEdit ? 'week' : 'new week'}</em></h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
         <div className="modal-body">
@@ -1633,7 +1633,7 @@ Object.assign(window, {
       <div className="modal wide" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>Export <em>data</em></h3>
-          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
         </div>
 
         <div className="modal-body">
@@ -4186,7 +4186,7 @@ function RsBlockEditor({ block, onChange, onDelete }) {
       <div className="rc-block-head">
         <b>{RS_ZH[kind] || kind}</b>
         <span className="rc-block-n">{chips.length} 張卡</span>
-        {onDelete && <button type="button" className="rc-x" onClick={onDelete} title="刪掉這個技巧">✕</button>}
+        {onDelete && <button type="button" className="rc-x" aria-label="刪除這個技巧" onClick={onDelete} title="刪掉這個技巧">✕</button>}
       </div>
 
       {bad && (
@@ -4409,7 +4409,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
         <div className="modal wide" onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>📖 出閱讀理解 <em>貼文字稿，一次出選擇題＋簡答＋閱讀技巧</em></h3>
-            <button className="modal-close" onClick={onClose}>✕</button>
+            <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
           </div>
           <div className="modal-body">
             <div className="rc-two">
@@ -4513,7 +4513,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
       <div className="modal wide" onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>📖 校稿 · {title} <em>改完再建立——這是題庫，學生每次看到的都是這一份</em></h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="gr-tabs">

@@ -282,10 +282,13 @@ img { display: block; max-width: 100%; }
 }
 
 /* 鍵盤導覽 focus ring — 一致且不干擾滑鼠操作 */
+/* ⚠ v390：這裡本來還有一行 `border-radius: 6px`——那會在「被鍵盤選到的當下」
+   把元素的形狀改掉（膠囊鈕變成小圓角方塊），是視覺上的錯誤。
+   outline 本來就會自己跟著元素的圓角走，不需要也不應該在這裡指定圓角。
+   拿掉之後每個元素都保有自己原本的形狀。 */
 button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
   outline: 2px solid var(--accent-soft);
   outline-offset: 2px;
-  border-radius: 6px;
 }
 
 /* 按鈕按下的一致觸感 */

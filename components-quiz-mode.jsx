@@ -1046,11 +1046,15 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               return diff > 0 ? `📌 ${diff}天` : diff === 0 ? '📌 今天到期' : diff >= -7 ? '📌 已過期' : '已結束'; // v266
             })() : null;
 
+            // v390: 學生端整列改成 <button>，鍵盤才進得去（老師端維持 div——裡面有巢狀按鈕）
+            const RowTag = editMode ? 'div' : 'button';
+
             return (
-              <div
+              <RowTag
                 key={item.id}
                 className={`qm-unit-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}${!hasQuiz && !editMode ? ' disabled' : ''}`}
                 onClick={() => (hasQuiz || editMode) && selectItem(item)}
+                {...(editMode ? {} : { type: 'button', disabled: !hasQuiz })}
               >
                 <div className="qm-unit-row-info">
                   <div className="qm-unit-row-title">
@@ -1169,7 +1173,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                     </span>
                   )}
                 </div>
-              </div>
+              </RowTag>
             );
           };
             if (!grouped) return viewItems.map(it => renderUnitRow(it));
@@ -2027,7 +2031,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{width: pct + '%'}}/>
@@ -2064,7 +2068,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
         </span>
       </div>
 
-      <div className="qm-feedback" style={{marginTop: result ? 8 : 0}}>
+      <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true" style={{marginTop: result ? 8 : 0}}>
         {result === null ? (
           <button className="qm-btn primary" onClick={check} disabled={!input.trim()}>
             確認 · Check →
@@ -2221,7 +2225,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{width: pct + '%'}}/>
@@ -2251,7 +2255,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
         )}
       </div>
 
-      <div className="qm-feedback" style={{marginTop: result ? 8 : 0}}>
+      <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true" style={{marginTop: result ? 8 : 0}}>
         {result === null ? (
           <button className="qm-btn primary" onClick={check} disabled={!input.trim()}>
             確認 · Check →
@@ -2479,7 +2483,9 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     const onKey = (e) => {
       if (screen !== 'quiz') return;
       const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // v390: 也要擋 BUTTON——鍵盤 Tab 到「下一題 →」按 Enter 時，
+      // 原生 onClick 已經觸發一次 handleNext，這裡不能再觸發第二次（會直接跳掉一題）
+      if (t && t.closest && t.closest('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]')) return;
       const cur = deck[deckPos];
       if (!cur || !cur.options) return;
       const letterMap = { a: 0, b: 1, c: 2, d: 3 };
@@ -2590,7 +2596,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack} title="Back to units">
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack} title="Back to units">
           <window.Icon name="close" size={16}/>
         </button>
         <div className="qm-player-bar-wrap">
@@ -2642,7 +2648,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       </div>
 
       {selected !== null && (
-        <div className="qm-feedback">
+        <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true">
           <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
             {selected === q.correct ? '✓ Correct! 答對了！' : `✗ 正解：${q.options[q.correct]}`}
           </div>
@@ -2812,7 +2818,7 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTa
         <div className="wp-progress-fill" style={{width: `${(idx / total) * 100}%`}}/>
       </div>
       <div className="wp-header">
-        <button className="wp-back" onClick={onBack}>←</button>
+        <button className="wp-back" aria-label="上一步" onClick={onBack}>←</button>
         <span className="wp-counter">{idx + 1} / {total}</span>
         <span className="wp-avg">{scores.length > 0 ? `avg ${avgDisplay}★` : ''}</span>
       </div>
@@ -3013,7 +3019,7 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
         <div className="wp-progress-fill" style={{width:`${(idx/total)*100}%`}}/>
       </div>
       <div className="wp-header">
-        <button className="wp-back" onClick={onBack}>←</button>
+        <button className="wp-back" aria-label="上一步" onClick={onBack}>←</button>
         <span className="wp-counter">{idx+1} / {total}</span>
         </div>
       {/* v386: 只有明確勾「學生看得到文章」才顯示——舊單元的 passage 一向只給 AI 批改用 */}
@@ -3591,7 +3597,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   // 鍵盤：文章頁 Enter＝完成閱讀；答題頁 1–4 選選項、Enter 下一題
   useQME(() => {
     const onKey = (e) => {
-      if (done || (e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) return;
+      // v390: 同上——擋掉聚焦在按鈕/連結/表單元素上的 Enter，避免雙重觸發
+      const t = e.target;
+      if (done || (t && t.closest && t.closest('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]'))) return;
       if (mode === 'read') { if (e.key === 'Enter') finishReading(); return; }
       if (mode === 'final-intro') { if (e.key === 'Enter') startFinal(); return; }
       if (qIdx >= curQs.length) return;
@@ -3729,7 +3737,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               })}
             </div>
             {selected !== null && (
-              <div className="qm-feedback">
+              <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true">
                 <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
                   {selected === q.correct ? '✓ Correct! 答對了！' : `✗ 正解：${q.options[q.correct]}`}
                 </div>
@@ -3752,7 +3760,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         <div className="wp-progress-fill" style={{width:`${total ? (answered/total)*100 : 0}%`}}/>
       </div>
       <div className="wp-header">
-        <button className="wp-back" onClick={onBack}>←</button>
+        <button className="wp-back" aria-label="上一步" onClick={onBack}>←</button>
         <span className="wp-counter">
           {mode === 'final' || mode === 'final-intro' ? '📚 綜合練習 · ' : (segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : '')}
           {total ? `${answered} / ${total} 題` : ''}
@@ -4042,7 +4050,7 @@ function SyllableDivPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{width: pct + '%'}}/>
@@ -6206,7 +6214,7 @@ function LessonPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) 
   return (
     <div className="ls-wrap">
       <div className="ls-head">
-        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="ls-steps">
           {steps.map((s, i) => (
             <span key={s} className={'ls-dot' + (i === si ? ' on' : '') + (i < si ? ' done' : '')}/>
@@ -6570,7 +6578,7 @@ function DefMatchPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   return (
     <div className="qm-player-shell dm-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{ width: ((bank.correct + linkedN) / Math.max(1, allPairs.length) * 100) + '%' }}/>
@@ -7037,7 +7045,7 @@ function ReadingSkillPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
     return (
       <div className="qm-player-shell rs-shell">
         <div className="qm-player-head">
-          <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+          <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         </div>
         <div className="rs-empty">這個單元還沒有題目，請老師補上。</div>
       </div>
@@ -7172,7 +7180,7 @@ function ReadingSkillPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
   return (
     <div className="qm-player-shell rs-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{ width: ((beforeN + lockedN) / Math.max(1, totalChips) * 100) + '%' }}/>

@@ -719,7 +719,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.key === 'ArrowLeft')  { e.preventDefault(); setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); setCardIdx(i => Math.min(i + 1, pool().length - 1)); setFlipped(false); }
-      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setFlipped(f => !f); }
+      else if (e.key === ' ' || e.key === 'Enter') { if (t && t.closest && t.closest('input, textarea, button, a[href], [contenteditable="true"]')) return; e.preventDefault(); setFlipped(f => !f); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -817,7 +817,14 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             </div>
           </div>
 
-          <div className={"fc-flip-card" + (flipped ? " flipped" : "")} onClick={() => setFlipped(f => !f)}>
+          <div
+            className={"fc-flip-card" + (flipped ? " flipped" : "")}
+            onClick={() => setFlipped(f => !f)}
+            role="button"
+            tabIndex={0}
+            aria-pressed={flipped}
+            aria-label={flipped ? '看正面' : '翻到背面'}
+          >
             {/* v317 (#3): 星號改放卡片角落（像 Quizlet，好找）；stopPropagation 才不會翻卡。 */}
             <button
               className={"fc-card-star" + (stars.has(card.id) ? " on" : "")}
@@ -998,20 +1005,20 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 {pool(scopeStar).length} cards · 看中文，回答英文
               </div>
               <div className="fc-setup-options">
-                <label className="fc-setup-row">
+                <div className="fc-setup-row">
                   <div>
                     <div className="fc-setup-label">選擇題 Multiple Choice</div>
                     <div className="fc-setup-desc">看中文定義，從四個英文選項選出正確答案</div>
                   </div>
-                  <div className={"fc-toggle" + (hasChoice ? " on" : "")} onClick={toggleChoice}/>
-                </label>
-                <label className="fc-setup-row">
+                  <button type="button" role="switch" aria-checked={hasChoice} aria-label="選擇題" className={"fc-toggle" + (hasChoice ? " on" : "")} onClick={toggleChoice}/>
+                </div>
+                <div className="fc-setup-row">
                   <div>
                     <div className="fc-setup-label">手寫題 Written</div>
                     <div className="fc-setup-desc">看中文定義，自己打出正確英文單字</div>
                   </div>
-                  <div className={"fc-toggle" + (hasWritten ? " on" : "")} onClick={toggleWritten}/>
-                </label>
+                  <button type="button" role="switch" aria-checked={hasWritten} aria-label="手寫題" className={"fc-toggle" + (hasWritten ? " on" : "")} onClick={toggleWritten}/>
+                </div>
               </div>
               <button className="btn primary" style={{width: "100%", padding: 14, fontSize: 13}} onClick={startTest}>
                 開始測驗 · Start Test

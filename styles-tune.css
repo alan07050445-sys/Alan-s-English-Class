@@ -958,3 +958,1485 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 340px; }
 @media (max-width: 900px) {
   .focus-btn { top: 8px; right: 10px; width: 34px; height: 34px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v390：全站介面專業化（8 面向稽核 → 5 段實作）
+   稽核面向：字體階層／間距版面／色彩對比／鍵盤無障礙／觸控人體工學／
+             狀態與文案／題型一致性／產品標竿
+   ⚠ 五條禁區（useFitHeight 文件座標、單字卡圖片固定大小、專心模式、
+      v375 桌機字級、iPad 橫式 1180x760 零溢出）已在稽核與實作階段全程避開，
+      並在套用後於 5 個尺寸實測驗證。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ───── v390 區塊 1 / 5 ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   css-1 ── 設計 token 與排版階層（type scale / 字體堆疊 / 行高字距）
+   append 到 styles-tune.css 檔尾。styles-tune.css 是 index.html 最後一個載入的
+   CSS（index.html:33），所以下面全部靠「後蓋前」生效，沒有用到任何 !important。
+
+   ⚠ 本段刻意不碰：.fc-*（useFitHeight 文件座標量測）、單字卡圖片固定大小、
+     html.focus-on 專心模式、v375 桌機放大層、v376 平板瘦身層。
+     所有會改變高度的規則方向都是「變矮」，不會影響 iPad 橫式 1180×760 的溢出 0。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────
+   (A) 設計 token —— 只定義，不套用
+   目前全站量到 54 種 font-size、25 種 border-radius，有 token 但沒在用。
+   這裡先把「唯一一組」建立起來，後面 css-2~css-5 與未來新功能才有東西可用。
+   ⚠ --radius-* / --sp-* / --shadow-* 本段一律不套用（歸 css-5）。
+   ─────────────────────────────────────────────────────────────── */
+:root{
+  /* 字級階梯（10 級） */
+  --fs-micro:   11px;
+  --fs-label:   12.5px;
+  --fs-meta:    14px;
+  --fs-body-sm: 15.5px;
+  --fs-body:    17px;                    /* ＝ styles.css 的 body font-size，階梯的錨點 */
+  --fs-lead:    19px;
+  --fs-h3:      22px;
+  --fs-h2:      27px;
+  --fs-h1:      clamp(28px, 4vw, 40px);
+  --fs-display: clamp(30px, 6.5vw, 52px);
+
+  /* 行高：display 給超大字，title 給 22–32px 的標題（中文用 1.1 會黏在一起，
+     所以標題級一律用 1.25，不要拿 --lh-display 去套標題） */
+  --lh-display: 1.1;
+  --lh-title:   1.25;
+  --lh-lead:    1.45;
+  --lh-body:    1.75;
+  --lh-meta:    1.5;
+  --lh-flat:    1;
+
+  /* 字距：負值只能給「確定是拉丁字母」的元素，漢字用負字距會黏住 */
+  --ls-display: -0.02em;
+  --ls-title:   -0.01em;
+  --ls-body:    0;
+  --ls-label:   0.08em;
+  --ls-label-l: 0.14em;
+
+  /* 字重語意 —— Nunito 只載入 400;500;600;700;800（index.html:20），
+     所以沒有 900。全站寫 900 的地方本來就被瀏覽器降成 800 了。 */
+  --fw-body: 400;
+  --fw-med:  600;
+  --fw-bold: 700;
+  --fw-max:  800;
+
+  /* 間距：4px 級距 ＋ 六個確實在用的半階 */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-8: 32px; --sp-10: 40px; --sp-12: 48px; --sp-16: 64px;
+  --sp-h3: 6px; --sp-h5: 10px; --sp-h7: 14px; --sp-h9: 18px; --sp-h11: 22px;
+
+  /* 圓角 */
+  --radius-xs: 6px; --radius-sm: 10px; --radius-md: 14px;
+  --radius-lg: 20px; --radius-pill: 999px;
+
+  /* ⚠ --shadow-lg 沒有補在這裡。原始指示說「styles-theme.css:20-21 只有 sm/md，
+     要補一階 lg」——實際去看 styles-theme.css:22 已經有 --shadow-lg，而且
+     styles-home.css:813、styles-auth.css:1042/1361/1496/2957 共 5 處正在用它。
+     在這裡重新定義（數值還不一樣：.05/.18 vs 現行 .06/.22）會靜靜地把上線中的
+     5 個陰影變淡。要調整請直接改 styles-theme.css，不要在覆寫層偷換。 */
+
+  /* 內容量測寬度 */
+  --measure-narrow: 520px;
+  --measure:        860px;
+  --measure-wide:   1080px;
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (B) 字體堆疊補上中文後援 —— 本段影響最大、風險最低的一項
+   styles.css:71-73 三個 token 完全沒有 CJK 字體，Windows / Android 上
+   漢字會掉到系統預設（常常是難看的細明體）。
+   順序很重要：拉丁字母仍然先被 Lora / Nunito / JetBrains Mono 吃掉，
+   只有這三套沒有的漢字才會落到後面的 CJK 字體。
+   Noto Serif TC 已經在 index.html:20 載入（600;700;900），先前完全沒被用到。
+   ⚠ Noto Serif TC 沒有 400 字重，serif 400 的漢字會被瀏覽器選成 600（略粗），
+     這仍然比掉到系統預設好很多。CJK 是全形等寬，換字體不會改變斷行位置，
+     所以 .qm-question-text 在 iPad 橫式的排版不會變（禁區 #5 安全）。
+   ─────────────────────────────────────────────────────────────── */
+:root{
+  --serif: "Lora", "Noto Serif TC", Georgia, serif;
+  --sans:  "Nunito", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC",
+           "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+  --mono:  "JetBrains Mono", "SF Mono", Menlo,
+           "PingFang TC", "Microsoft JhengHei", monospace;
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (C) 禁止瀏覽器「合成斜體」
+   全站有 27 處 font-style:italic。用 Lora 的那些是真斜體（index.html:20 有載入
+   ital,wght@1,400;1,500），沒問題；但用 Nunito / JetBrains Mono 的那幾處
+   （.qm-explain、.wf-val.meaning、.editable-input::placeholder、
+   styles-quiz-mode.css:233）沒有 ital 軸，瀏覽器是把字「機器切歪」，
+   中文被斜切之後特別難看也難讀。
+   ⚠ 只關 style，不要加 font-synthesis-weight —— JetBrains Mono 只載入 400;500，
+     關掉 weight 合成會讓全站寫 700 的等寬字突然變細（另案評估）。
+   font-synthesis-style 是繼承屬性，寫在 html 就整站生效；舊瀏覽器忽略它，無害。
+   ─────────────────────────────────────────────────────────────── */
+html, body { font-synthesis-style: none; }
+
+
+/* ───────────────────────────────────────────────────────────────
+   (D) .qm-explain —— 答錯後的解說，是學生最該讀的一段字
+   現況：styles-quiz-mode.css:551 是 italic（Nunito 假斜體，中文被切歪），
+   而 styles-theme.css:1010（@media max-width:480）縮到 14.5px ——
+   小朋友最需要讀的字反而是整個畫面最小的。
+   ⚠ 不可以加 max-height ＋ 內捲軸：styles-tune.css:394 已經寫明原因
+     （老師寫的解說藏起來小朋友不會去找）。顏色不歸本段管（css-2）。
+   ─────────────────────────────────────────────────────────────── */
+.qm-explain{
+  font-style: normal;
+  font-size: var(--fs-body);
+  line-height: 1.8;
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+}
+/* 手機：14.5px → 16px。左側線改 10px 內縮，少吃 2px 寬度、降低多斷一行的機會。
+   （對應的高度補償寫在下面 (H) 的手機統一層裡，一起處理。） */
+@media (max-width: 480px){
+  .qm-explain{ font-size: 16px; line-height: 1.75; padding-left: 10px; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (E) 中文被塞進等寬字 ＋ 全大寫 ＋ 0.08em 字距的幾個元素
+   JetBrains Mono 沒有漢字 → 一句話中途換字體、基線會跳。
+   text-transform:uppercase 對漢字是無效操作，只會把混在裡面的英文變全大寫。
+   ⚠ .qm-sidebar-cat-zh 在 styles-theme.css:525 有 font-size:11px !important，
+     這裡只改 font-family / letter-spacing / text-transform，不碰它的 font-size。
+   ⚠ .qm-block-title-zh 在 styles-theme.css:124 已經是 var(--sans)，
+     所以只要拿掉字距與全大寫就好。
+   ─────────────────────────────────────────────────────────────── */
+.qm-block-count{
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;   /* 「12 / 20 題」的數字不要跳動 */
+}
+.qm-wrong-title{
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: var(--fw-bold);
+}
+.qm-sidebar-cat-zh{
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.qm-block-title-zh{
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* 題型提示是中英混排（例：Choose the English word · 選出正確英文單字），
+   維持全大寫的標籤感，但字體換成 sans，漢字才不會掉出等寬字。 */
+.qm-question-hint{
+  font-family: var(--sans);
+  letter-spacing: 0.04em;
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (F) 顯示級字的行高與字距
+   全站 125 條 ≥24px 的規則在繼承 body 的 1.58 —— 大字用內文行高會太鬆。
+   ⚠ 原始指示列的清單裡，有一半是「已經設好了、再套會變糟」的，逐一查過後排除：
+       .hero-title        styles.css:197  已是 line-height .95 / ls -.02em
+       .quiz-result-score styles-quiz.css:132 已是 line-height 1 / ls -.02em
+       .stat-value        styles.css:229  已是 line-height 1
+       → 這三個套 --lh-display(1.1) 會讓它們「變高」，方向錯了，全部排除。
+       .footer-mark / .sm-score-num → grep 過所有 .jsx，只存在於 CSS，是死 class，排除。
+       .fc-gc-heading     在 .fc-fill-player 裡（components-flashcard.jsx:1610-1613），
+                          屬於 .fc-* 禁區 #1，排除。
+   剩下這兩個是真的還在繼承 1.58 的標題。用 --lh-title(1.25) 而不是
+   --lh-display(1.1)：它們的內容常常是中文，1.1 會讓漢字上下黏在一起。 */
+.quiz-result-message,
+.modal-head h3 { line-height: var(--lh-title); }
+
+/* 字距同理，只留「確定是拉丁字母／數字」的兩個。
+   ⚠ .qm-question-text 排除：components-quiz-mode.jsx:68 的題型
+     `q: word.zh`（選出英文單字）題幹整句都是中文，負字距會把漢字擠在一起。
+   ⚠ .ta-prompt 排除：styles-quiz-mode.css:1334 刻意設了正字距 +0.01em
+     （拼字題要一個字母一個字母看），不應該反向覆寫。 */
+.wp-word,
+.qm-result-num { letter-spacing: var(--ls-display); }
+
+/* 純英文的小標籤（內容是 "Classify:"），加字距才有標籤感 */
+.circle-classify-label { letter-spacing: var(--ls-label); }
+
+
+/* ───────────────────────────────────────────────────────────────
+   (G) v383 教學卡（.ls-*）沒有被納入 v375 的桌機放大層
+   說明文字在 27 吋螢幕上還停在 14.5px。
+   已確認 .ls-wrap（components-quiz-mode.jsx:6207）是獨立的教學卡畫面，
+   不在 useFitHeight 的量測範圍、也不是「一個畫面要裝得下」的練習播放器，
+   本來就會捲，所以字級長高幾 px 沒有版面風險。
+   ─────────────────────────────────────────────────────────────── */
+@media (min-width: 1025px){
+  .ls-lead        { font-size: var(--fs-lead); }      /* 18   → 19   */
+  .ls-use-eg      { font-size: var(--fs-body); }      /* 16.5 → 17   */
+  .ls-form-eg     { font-size: var(--fs-body); }      /* 16   → 17   */
+  .ls-mis-why     { font-size: var(--fs-body-sm); }   /* 14.5 → 15.5 */
+  .ls-demo-a span { font-size: var(--fs-body-sm); }   /* 14.5 → 15.5 */
+  .ls-check-why   { font-size: var(--fs-body-sm); }   /* 14.5 → 15.5 */
+  .ls-mis-good,
+  .ls-mis-bad     { font-size: var(--fs-body); }      /* 16.5 → 17   */
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (H) 修「以視窗高度瘦身的那一層漏到手機」
+   styles-tune.css:368 / 392 的 max-height:920 是 v376 為 iPad 橫式（1180×760）寫的，
+   但手機直式的高度也一起命中了 —— 結果同一代兩支手機字級不一樣，
+   而且**螢幕大的那支字反而小**（因為它高度 >920 反而躲掉了瘦身層）。
+   實際量到的差異（都在 ≤480 寬的情況下）：
+       選擇器              iPhone 14 Pro 393×844   iPhone 15 Plus 430×932
+       .ta-prompt              40px                    32px
+       .ta-input               14px 20px / 20px        18px 16px / 20px
+       .qm-intro-title         27px                    23px
+       .qm-result-msg          19px                    22px
+       .qm-feedback-banner     18px, pad 11/16         15px, pad 15/20
+       .qm-auto-next           15px                    14px
+       .sp-speak-ic            24px                    30px
+       .qm-feedback            mt10 / gap8             mt20 / gap12
+
+   ⚠ 原始指示給的媒體查詢是 `max-width:768 + min-height:561 + max-height:920`，
+     但那個上界 920 正好把「出問題的那一半手機」(932 / 956) 排除在外，
+     兩支手機還是不一致 —— 修不到問題。改成用**寬度**框住手機直式：
+       max-width:560  → 專案既有的手機斷點，同時把 iPad mini 直式 744×1133 擋在外面
+                        （驗收清單裡的 744×1133 不會被縮成手機字級）
+       min-height:561 → 避開已經寫好的 max-height:560 / 480 兩層（手機橫式）
+     手機橫式寬度都 >560，不會誤中。
+
+   取值原則：一律取兩支手機中**較小**的那個，方向只會讓元素變矮，
+   所以 390×844「答錯後下一題要在一個畫面內」不可能因此變糟。
+   ⚠ 不寫 .qm-question-text / .qm-opt-text / .qm-opt-letter ——
+     styles-tune.css:383 的 @media (max-width:560px) 已經處理，重寫會蓋掉它。
+   ⚠ .qm-result-num 沒列進來：查過兩支手機都是 60px，本來就一致，不需要動。
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 560px) and (min-height: 561px){
+  .ta-prompt          { font-size: 32px; }
+  .ta-input           { padding: 14px 16px; font-size: 20px; }
+  .qm-intro-title     { font-size: 23px; }
+  .qm-result-msg      { font-size: var(--fs-lead); }          /* 19px */
+  .qm-feedback-banner { font-size: var(--fs-body-sm); padding: 11px 16px; }
+  .qm-auto-next       { font-size: var(--fs-meta); }          /* 14px */
+  .sp-speak-ic        { font-size: 24px; }
+  /* 上面 (D) 把解說字從 14.5 放大到 16px、行高 1.65→1.75，
+     一段兩行大約多 8px；這裡把回饋區的外距與間隙收緊補回來
+     （margin 20→8 省 12px、三個子元素 gap 12→6 省 12px），淨值仍是變矮。 */
+  .qm-feedback        { margin-top: 8px; gap: 6px; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (I) 兩個「誠實化」的小修
+   ─────────────────────────────────────────────────────────────── */
+/* 原本寫 font-weight:900，但 Nunito 只載入到 800（index.html:20），
+   瀏覽器本來就是渲染成 800。改成 800 只是讓 code 不再說謊，畫面不變。 */
+.stars-bal-num, .sp-bal-num { font-weight: var(--fw-max); }
+
+/* 家長綁定代碼：是要被人眼「逐字念出來」的字串，原本卻是 10.5px。
+   而且 JetBrains Mono 只載入 400;500，原本的 700 是瀏覽器合成的假粗體
+   （筆畫糊在一起，更難念）→ 改成真的有載入的 500。
+   字體維持 var(--mono)（代碼就該用等寬），現在 --mono 也有 CJK 後援了。
+   位置在家長端的綁定卡片，跟練習畫面無關，長高幾 px 沒有風險。 */
+.linkbind-kid em{
+  font-weight: 500;
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───── v390 區塊 2 / 5 ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   [css-2] 焦點樣式、對比度與色盲輔助
+   ---------------------------------------------------------------------------
+   為什麼要有這一段：
+   ① 全站只有 6 條 :focus-visible，而且還被 7 條 `.xxx:focus{outline:none}` 打死
+      → 只用鍵盤的人（含有些用觸控筆／輔具的孩子）完全看不到「我現在在哪裡」。
+   ② --ink-muted / --ink-faint 兩個核心 token 低於 WCAG AA，一次影響 150 條規則。
+   ③ 答對／答錯目前只靠紅綠色相區分，紅綠色盲模擬後兩者互相對比只有 1.16:1
+      ——等於「完全分不出來」。單字卡（.fc-choice-badge）早就有 ✓/✗ 了，
+      這裡只是把測驗模式補上同一套做法。
+   本段只寫「顏色」與「焦點」，不寫尺寸、不寫 :hover、不寫 :active。
+   ⚠ 全段沒有任何 100vh/dvh、沒有 ResizeObserver 相關、沒有動到單字卡圖片的
+     flex／max-height、沒有動到 html.focus-on、沒有動到字級 → 五條禁區都沒碰。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (A) 顏色 token
+   前兩個是「重新定義 styles.css:59-60 既有的 token」，所以不用改任何一條
+   使用它們的規則，150 條一次修好。
+   後面幾個是新增的，css-4 會直接消費 --ok / --no 這一組。
+   數值都實際算過（相對亮度公式，四捨五入到小數第二位）。
+   ─────────────────────────────────────────────────────────────────────────── */
+:root{
+  /* 原 #807A6B：白底 4.27 / 紙底 4.03 / 米底 3.76 —— 三個底色都不到 4.5。
+     壓到 #6F6959 之後：白 5.47 / 紙 5.15 / 米 4.81，三個都過 AA。 */
+  --ink-muted: #6F6959;
+
+  /* 原 #B8B1A0：白底只有 2.14，拿來當文字幾乎是「看得到但讀不到」。
+     壓到 #8F8878 之後白底 3.52 —— 過「非文字 UI 元件」的 3:1，
+     但仍然不夠當正文，所以真正是文字的地方見 (B) 改指 --ink-3。 */
+  --ink-faint: #8F8878;
+
+  /* 新增：需要「看得見的邊界」時用這個（白底 3.52、米底 3.10，都過 3:1）。
+     原本的 --border #DDD6C4 對白底只有 1.27，等於沒有邊界。 */
+  --border-strong: #8F8878;
+
+  /* 焦點環就用品牌磚紅，不另外發明顏色：
+     對 --bg-paper #FBF8F1 是 7.74、對 --bg #F4F0E7 是 7.22、對白是 8.21。 */
+  --focus-ring: #8B3120;
+  --focus-halo: #FBF8F1;
+
+  /* 答對／答錯的唯一真相（css-4 也吃這一組，名稱與值請勿更動）。
+     刻意選「暖色紙感家族的深色版」，不是冷色系 Tailwind 綠紅：
+     白字對 --ok 6.44、白字對 --no 6.65；深字對各自的淺底 5.69 / 5.81。 */
+  --ok:#1F6B4B; --ok-bg:#EAF3EE; --ok-ink:#1F6B4B;
+  --no:#A8331F; --no-bg:#FDECE8; --no-ink:#A8331F;
+
+  /* 警告／金色的文字版（原本的 #e65100、#f57f17、#a07800 都不到 4.5） */
+  --warn-ink:#8A4B00; --warn-bg:#FFF3E0;   /* 8A4B00 on FFF3E0 = 6.20 */
+  --gold-text:#8A6D1C;                     /* on #fff8e1 = 4.61、on #fff = 4.90 */
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (B) --ink-faint 壓深後仍不足以當「正文」，把真的是文字的地方改指 --ink-3
+   （#6b6455，白底 5.87 / 紙底 5.53 / 米底 5.16）。
+   placeholder 尤其重要：那是輸入框唯一的說明文字。
+   ⚠ 原稿列了 .wj-node-theme，但 grep 過所有 .jsx 之後它只存在於
+     styles-home.css:680，畫面上不會出現（死規則），所以這裡不列它。
+   ─────────────────────────────────────────────────────────────────────────── */
+.editable-input::placeholder,
+.fc-written-input::placeholder,
+.fc-name-input::placeholder,
+.fc-name-count,
+.fc-lb-empty,
+.img-source-sub{ color: var(--ink-3); }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (C) 統一焦點環
+   原本的 6 條完全漏掉 textarea（全站 51 個）、summary、contenteditable，
+   而且 styles.css:288 那條只有 2px + --accent-soft（比較淡）。
+   這裡一次補齊。[tabindex] / [role=...] 是屬性選擇器不是自創 class，
+   目前 .jsx 只用到 role="tab"，其餘幾個是給未來的自訂控制項留的保險，
+   沒有元素命中就完全沒有成本。
+   ⚠ 這裡**故意不寫 border-radius**：outline 會自動貼合元素自己的圓角。
+     （被 styles.css:288 壓扁的問題在 (E) 處理。）
+   ─────────────────────────────────────────────────────────────────────────── */
+a[href]:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[contenteditable="true"]:focus-visible{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* 深底按鈕（背景是 --ink #15130E 或 LINE 綠）上面，磚紅環只有 2.26:1 → 看不見。
+   補一圈內側紙色細環（#FBF8F1 對 --ink 是 17.5:1）。
+   ⚠ box-shadow 是整條覆蓋的，所以本來有投影的元素要把原本的投影一起寫回來，
+     不然按鈕會在 Tab 到的瞬間「浮起來的感覺」不見。 */
+.btn.primary:focus-visible,
+.icon-btn.active:focus-visible,
+.sp-item-btn:focus-visible,
+.notify-send:focus-visible,
+.cwo-notify:focus-visible,
+.nt-line:focus-visible,
+.notify-chip.on:focus-visible{
+  box-shadow: inset 0 0 0 2px var(--focus-halo);
+}
+/* .qm-btn.primary 原本有 0 3px 10px 的投影 → 保留 */
+.qm-btn.primary:focus-visible{
+  box-shadow: inset 0 0 0 2px var(--focus-halo), 0 3px 10px rgba(21,19,14,.22);
+}
+/* .focus-btn.on（專心模式開啟時）背景是 --accent，跟環同色 → 也要補內環，
+   並保留 v389 原本的 0 6px 18px -8px 投影。 */
+.focus-btn.on:focus-visible{
+  box-shadow: inset 0 0 0 2px var(--focus-halo), 0 6px 18px -8px rgba(21,19,14,.35);
+}
+
+/* 系統開了「更高對比」就把環換成純黑（對任何底色都是最強的） */
+@media (prefers-contrast: more){
+  :root{ --focus-ring: #15130E; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (D) 壓過 7 條會殺死焦點環的 `.xxx:focus{outline:none}`
+   它們的權重是 (0,2,0)，比元素層級的 `input:focus-visible` (0,1,1) 高，
+   所以 (C) 贏不了它們 → 必須用同樣是 (0,2,0) 的 class 選擇器，
+   再靠「styles-tune.css 最後載入」後蓋前。
+   對應原檔：
+     styles-quiz-mode.css:1898 .essay-input       ← 意見寫作，孩子每週都會用
+     styles-quiz-mode.css:2113 .sm-textarea
+     styles-auth.css:2294 .report-note-input
+     styles-auth.css:2466 .notify-textarea（與 .notify-pass 同一條）
+     styles-auth.css:2467 .notify-pass
+     styles-auth.css:4354 .cwo-search             ← 老師端搜尋框
+     styles-auth.css:4402 .nt-text
+   ⚠ 原稿還列了 .sa-track-name（styles-auth.css:3477），但 grep 過所有 .jsx
+     之後那個 class 從來沒有被 render 出來（死規則），所以不列。
+   ─────────────────────────────────────────────────────────────────────────── */
+.essay-input:focus-visible,
+.sm-textarea:focus-visible,
+.report-note-input:focus-visible,
+.notify-textarea:focus-visible,
+.notify-pass:focus-visible,
+.cwo-search:focus-visible,
+.nt-text:focus-visible{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (E) 還原被 styles.css:288 的 `border-radius: 6px` 壓扁的圓角
+   那條規則長這樣：
+     button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
+     { outline: 2px solid var(--accent-soft); outline-offset: 2px; border-radius: 6px; }
+   權重 (0,1,1)，會蓋掉 .icon-btn 的 50%、.btn 的 999px、.qm-block 的 18px……
+   → 使用者一按 Tab，按鈕造型就「跳」一次（圓形變圓角方形）。
+   因為本輪不改其他檔案，只能用 (0,2,0) 逐一還原。
+   ⚠ 下面每一個數字都是去原檔查過的**實際值**，不是猜的：
+       .icon-btn      styles.css:178          50%
+       .modal-close   styles-part2.css:522    50%
+       .qm-back-btn   （原本沒有 radius，是 44px 的圓形圖示鈕）→ 50%
+       .btn           styles-part2.css:596    999px   ← 原稿寫 12px 是錯的
+       .qm-btn        styles-quiz-mode.css:555 10px
+       .qm-block      styles-theme.css:91     18px    ← 它是 <button>，會被打到
+       .qm-option     styles-theme.css:200    14px    ← 原稿寫 12px 是舊值
+       .fc-choice     styles-flashcard.css:208 14px
+       .fc-test-choice styles-flashcard.css:349 12px  ← 原稿寫 14px 是錯的
+       .stars-btn     styles-auth.css:6057    100px   ← 原稿寫 12px 是錯的
+       .checkin-btn   styles-auth.css:6494    100px   ← 原稿寫 12px 是錯的
+       .focus-btn     styles-tune.css（v389） 12px
+       .fs-btn        styles-tune.css（v388） 10px
+       .notify-chip   styles-auth.css:2528    100px
+       .notify-send   styles-auth.css:2540    10px
+       .cwo-notify    styles-auth.css:4370    10px
+       .nt-line       styles-auth.css:4405    100px
+       .sp-item-btn   styles-auth.css:6122    100px
+   （最乾淨的做法其實是直接刪掉 styles.css:288 那一行 `border-radius: 6px;`，
+     刪掉之後底下這一整段就可以整組拿掉。本輪不改其他檔，先這樣擋著。）
+   ─────────────────────────────────────────────────────────────────────────── */
+.icon-btn:focus-visible,
+.modal-close:focus-visible,
+.qm-back-btn:focus-visible{ border-radius: 50%; }
+
+.btn:focus-visible,
+.stars-btn:focus-visible,
+.checkin-btn:focus-visible,
+.notify-chip:focus-visible,
+.nt-line:focus-visible,
+.sp-item-btn:focus-visible{ border-radius: 100px; }
+
+.qm-block:focus-visible{ border-radius: 18px; }
+.qm-option:focus-visible,
+.fc-choice:focus-visible{ border-radius: 14px; }
+.fc-test-choice:focus-visible,
+.focus-btn:focus-visible{ border-radius: 12px; }
+.qm-btn:focus-visible,
+.fs-btn:focus-visible,
+.notify-send:focus-visible,
+.cwo-notify:focus-visible{ border-radius: 10px; }
+
+/* 小螢幕上這幾個 class 的圓角本來就比較小（既有的瘦身規則），
+   上面 (0,2,0) 的還原值會贏過媒體查詢裡 (0,1,0) 的值 → 要跟著補回去，
+   不然反而變成「小螢幕 Tab 到會變更圓」。斷點沿用檔案裡既有的 768 / 560。 */
+@media (max-width: 768px){
+  .fc-test-choice:focus-visible{ border-radius: 10px; }   /* styles-flashcard.css:1174 */
+}
+@media (max-width: 560px){
+  .fc-choice:focus-visible{ border-radius: 11px; }        /* styles-tune.css（v375/v376） */
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (F) 大廳四大分類卡：鍵盤操作的第一站
+   既有的焦點環是 rgba(139,49,32,.28)（styles-quiz-mode.css:86），
+   混色後對比只有 1.61:1 —— 幾乎等於沒有。換成不透明的 --focus-ring。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-block:focus-visible{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-color: var(--ink);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (G) 色盲輔助：測驗選項加上「形狀」標記
+   目前答對／答錯只有色相差異（#16a34a vs #dc2626），
+   紅綠色盲模擬後兩者互相對比只有 1.16:1 → 對紅綠色盲的孩子是「完全一樣」。
+   單字卡的學習模式早就用 .fc-choice-badge 放了 ✓/✗，這裡等於把
+   「已經做對的事」補回測驗模式，兩邊的語彙也統一了。
+   ⚠ 只加「寬度」（padding-right）不加高度，所以 iPad 橫式 1180x760
+     「一個畫面裝得下」的驗收（禁區 #5）完全不受影響。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-option{ position: relative; }
+.qm-option.correct,
+.qm-option.wrong{ padding-right: 48px; }
+.qm-option.correct::after,
+.qm-option.wrong::after{
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  font-size: 20px; font-weight: var(--fw-max, 800); line-height: 1;
+  pointer-events: none;
+}
+.qm-option.correct::after{ content: '✓'; color: var(--ok); }
+.qm-option.wrong::after  { content: '✗'; color: var(--no); }
+/* 第三個線索：錯的那一個左邊那條 5px 粗邊改成虛線（形狀 ≠ 顏色） */
+.qm-option.wrong{ border-left-style: dashed; }
+
+/* 手機橫著拿的時候選項是 2×2 的格子（styles-tune.css 的 max-height:480 那一層），
+   48px 的右留白在半寬的格子裡會逼文字折行 → 折行就會長高，那才會踩到禁區 #5。
+   所以這一層把符號縮小、右留白收窄。斷點沿用既有的 max-height:480。 */
+@media (max-height: 480px){
+  .qm-option.correct,
+  .qm-option.wrong{ padding-right: 32px; }
+  .qm-option.correct::after,
+  .qm-option.wrong::after{ right: 10px; font-size: 16px; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (H) 選項與回饋橫幅的狀態色
+   （只有 .qm-option 與 .qm-feedback-banner 歸這一段；其他題型的
+     correct/wrong 歸 css-4，它會消費上面 (A) 定義的 --ok / --no。）
+   ⚠⚠ .qm-option.correct 原本帶 `animation: opt-bounce`、
+       .qm-option.wrong 原本帶 `animation: opt-shake`
+       → 這裡**只寫顏色屬性，一個 animation 都不寫**，
+         不然彈跳／搖晃的回饋動畫會被整條清掉（孩子最有感的地方）。
+   ⚠ styles-theme.css:219/222 的 .qm-option.correct .qm-opt-letter 有寫 border-color，
+     所以這裡也要一起改，不然圓徽會留一圈舊的螢光綠／正紅邊。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-option.correct{ border-color: var(--ok); background: var(--ok-bg); }
+.qm-option.wrong  { border-color: var(--no); background: var(--no-bg); }
+.qm-option.correct .qm-opt-letter{ background: var(--ok); border-color: var(--ok); color: #fff; }
+.qm-option.wrong   .qm-opt-letter{ background: var(--no); border-color: var(--no); color: #fff; }
+
+/* 回饋橫幅原本是 border: 1px solid #bbf7d0 的簡寫 → 這裡只換 border-color，
+   1px solid 保留，盒子尺寸完全不變。 */
+.qm-feedback-banner.correct{ background: var(--ok-bg); color: var(--ok-ink); border-color: var(--ok); }
+.qm-feedback-banner.wrong  { background: var(--no-bg); color: var(--no-ink); border-color: var(--no); }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (I) 答完題之後「沒被選到」的選項
+   目前 opacity:0.35 → 文字掉到 2.27:1，可是那些干擾選項也是複習內容
+   （「為什麼 B 不對」本來就是要看的）。放寬到 .62 → 5.17:1。
+   有了 (G) 的 ✓/✗ 之後，視覺焦點靠「符號」而不是靠「把別人變糊」，兩者互補。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-option.dim{ opacity: .62; }
+.fc-choice.dimmed{ opacity: .62; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (J) 分類色當「文字色」用的時候全部不到 4.5:1
+   （--c-grammar #E0507A 3.75、--c-word #2E8FD0 3.53、--c-reading #2FA56B 3.13）
+   但 --c-* 還要當卡片頂條與 icon 的底色／陰影，壓深會讓整體變濁 →
+   不動 --c-*，另開一組「只給文字用」的 --cat-t。
+   theme 是用 nth-of-type 指派的（styles-theme.css:98-101、518），
+   照抄同樣的選擇器就會贏（同權重 + tune 最後載入）。
+   新色都對白卡底過 AA：紫 6.65 / 桃紅 5.10 / 藍 5.39 / 綠 5.11。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-blocks .qm-block{ --cat-t: var(--ink); }
+.qm-blocks .qm-block:nth-of-type(1){ --cat-t:#5B49C0; }   /* vocab   */
+.qm-blocks .qm-block:nth-of-type(2){ --cat-t:#C23C63; }   /* grammar */
+.qm-blocks .qm-block:nth-of-type(3){ --cat-t:#1E6FA8; }   /* word    */
+.qm-blocks .qm-block:nth-of-type(4){ --cat-t:#1F7D50; }   /* reading */
+/* v207：暑假班表只有 3 個分類，第 3 張其實是「閱讀理解」→ 沿用綠色，
+   跟 styles-theme.css:518 同一個寫法。 */
+.qm-blocks .qm-block:nth-of-type(3):last-child{ --cat-t:#1F7D50; }
+
+.qm-block-title-zh,
+.qm-pct{ color: var(--cat-t, var(--ink)); }
+/* 順便讓進度條對軌道（--border-soft #E8E2D0）過 3:1：
+   原本用 --cat-c 最低只有 2.4，換 --cat-t 之後最低 3.94。 */
+.qm-progress-fill{ background: var(--cat-t, var(--cat-c)); }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (K) 其餘單點對比修正 —— 全部只改顏色，border-width 一律不動，盒子尺寸不變
+   ⚠ 原稿列的 .xp-pill 只存在於 styles-auth.css:353，grep 過所有 .jsx
+     都沒有 render（死規則），所以不列。
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* 原 #e65100 on #fff3e0 = 3.46 → --warn-ink 6.20 */
+.fc-retry-badge{ color: var(--warn-ink); }
+
+/* 商店買不起的品項：原本 --border on --ink-muted 只有 2.95，
+   而且它**不是真的 disabled**（按下去會跳「星星不夠」的提示），
+   所以不能用「淡到看不見」來表達，要用「明顯是次要按鈕」來表達。
+   選擇器跟 styles-auth.css:6122 完全一樣（0,3,0），靠後載入贏。 */
+.sp-item.locked .sp-item-btn{
+  background: var(--border-soft);
+  color: var(--ink-2);
+  border: 1.5px solid var(--border-strong);
+}
+
+/* LINE 綠 #06C755 配白字只有 2.26 → 壓深成 #067D3A（白字 5.25）。
+   仍然是「一眼認得出來的 LINE 綠」，只是深一階。 */
+.notify-chip.on,
+.notify-send,
+.cwo-notify,
+.nt-line{ background:#067D3A; border-color:#067D3A; }
+
+/* 金色系文字：原 #f57f17 / #e65100 都不到 4.5 → --gold-text（on #fff8e1 = 4.61） */
+.fc-match-best-badge,
+.cloze-score-badge.ok{ color: var(--gold-text); }
+
+/* 配對題的小圓點：原 #cfc6ae 對底色只有 1.70，
+   而它是「這裡可以點」的唯一指示 → 換成過 3:1 的 --border-strong。
+   .dm-chip.sel / .linked / .wrong / .ok 底下的 .dm-dot 權重比較高，狀態色不受影響。 */
+.dm-dot{ border-color: var(--border-strong); }
+
+/* 選項與輸入框的邊界：原本的 --border #DDD6C4 對白底只有 1.27，
+   等於「看起來沒有框」。換成 --border-strong（3.52）。
+   權重刻意保持最低（0,1,0 / 0,0,1），任何 class 層級的狀態色都贏得過它，
+   所以 .qm-option.correct / .fc-choice.wrong / :hover 的邊框顏色都不受影響。 */
+.qm-option,
+.fc-choice{ border-color: var(--border-strong); }
+input, textarea, select{ border-color: var(--border-strong); }
+
+/* ───── v390 區塊 3 / 5 ───── */
+/* ══════════════════════════════════════════════════════════════════════════
+   v390 · 觸控目標與行動／平板人體工學（css-3）
+   ─────────────────────────────────────────────────────────────────────────
+   這一段只處理「手指」的事：觸控裝置的 hover 還原、命中區補到 44px、
+   按下去的即時回饋、底部導覽列的 safe-area。
+   不寫顏色、不寫字級、不寫 :focus（那三件事分別是 css-2 / css-1 / css-2 的）。
+
+   ⚠ 五條禁區都確認過沒有碰到：
+     #1 useFitHeight：沒有動 .fc-dot 的「垂直」padding、沒有動 .fc-tab 在
+        max-height:560 以外的尺寸、沒有用 100vh/dvh、沒有加 ResizeObserver。
+     #2 單字卡圖片固定大小：完全沒碰 .fc-back-img-wrap / .fc-learn-img。
+     #3 專心模式：沒碰 html.focus-on。
+     #4 桌機字級／平板瘦身：沒有任何 font-size。
+     #5 iPad 橫式 1180×760 溢出 0：新增的高度只發生在
+        max-height:560（手機橫式，760 打不到）與 max-width:768（1180 打不到）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 觸控最小命中尺寸。定成變數是為了以後要調（例如低年級班要 48）只改一個地方 */
+  --tap: 44px;
+}
+
+/* ══ (A)【最高優先】觸控裝置的 sticky hover 還原 ═══════════════════════════
+   iOS/iPadOS 沒有滑鼠，:hover 會「停在最後點到的元素」直到點別處。
+   全站 290 條 :hover 只有 6 條擋在 @media (hover:hover) 裡。
+
+   最嚴重的是 styles-quiz-mode.css:2360 把
+     .circle-label-option:hover:not(:disabled)  和  .circle-label-option.selected
+   寫成同一條（都是黑底白字）→ 學生在 iPad 點了 A 再改點 B，A 看起來還是「已選取」，
+   同時兩個都黑底 = 作答回饋錯誤，不是美觀問題。
+
+   @media (hover: none) 只命中「沒有滑鼠的裝置」，桌機完全不受影響。
+
+   ⚠ 權重（這一段最容易寫錯的地方，我把原始碼一條一條對過）：
+     還原規則的權重必須 ≥ 原規則，光靠 tune 最後載入是不夠的。
+     原規則權重：
+       .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed)          = (0,5,0)
+       .fc-match-tile:hover:not(.matched):not(.selected):not(.wrong)    = (0,5,0)
+       .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) = (0,6,0)
+       .page-mission .qm-unit-row:hover                                  = (0,3,0)
+     所以下面每一條都補到「跟原規則一模一樣長」或更長。
+   ⚠ 還原的值都是我去讀「基底規則」抄回來的，不是猜的，也不是 inherit
+     （用 background: inherit 會抓到父層的底色，是錯的）。 */
+@media (hover: none) {
+
+  /* 圈選題：還原成 styles-quiz-mode.css:2350 的基底。
+     .selected/.correct/.wrong/.answer 四個狀態都排除，狀態樣式一律保留。
+     註：--border-strong 目前全站沒有定義（只有兩處在用），這裡照抄基底以求一致；
+        要不要補上這個變數是 css-2 的事，我不在這裡偷改顏色。 */
+  .circle-label-option:hover:not(.selected):not(.correct):not(.wrong):not(.answer) {
+    border-color: var(--border-strong);
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  /* 上一張／下一張：hover 是「墨色實心」，停住的話看起來像被按住 */
+  .fc-nav-btn:hover:not(:disabled) { background: transparent; color: inherit; }
+
+  /* 「開始練習」鈕：基底是白底墨字（styles-quiz-mode.css:903），
+     hover 會翻成墨底紙字 —— 原稿寫 background: transparent 是錯的，會變透明。 */
+  .qm-fc-start-btn:hover {
+    transform: none;
+    background: var(--bg-card);
+    color: var(--ink);
+  }
+
+  /* 大廳的四張科目卡。
+     :not(:active) 是刻意留的 —— styles-quiz-mode.css:88 已經有
+     .qm-block:active:not(.empty) 的按壓回饋(0,3,0)，我這條若不排除 :active
+     權重(0,3,0)又比較後面，會把那個既有回饋蓋掉。
+     還原值：border-color 來自 quiz-mode:72、box-shadow 來自 theme:96（都是 token）。 */
+  .qm-block:hover:not(.empty):not(:active) {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border);
+  }
+
+  /* 選擇題選項：權重要補到 (0,6,0) 才贏得過 quiz-mode:480 */
+  .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) {
+    transform: none;
+    background: var(--bg-card);
+    border-color: var(--border);
+  }
+
+  /* 單字卡三種選項格子。原稿的 .fc-choice:hover 只有 (0,2,0)，
+     打不過 styles-flashcard.css:211 的 (0,5,0) —— 這裡補齊。 */
+  .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) {
+    border-color: var(--border);
+    background: var(--bg-card);
+  }
+  /* .selected 一定要排除，否則 hover 停住時會把「已選取的黑底」還原掉（反效果） */
+  .fc-test-choice:hover:not(.selected) {
+    transform: none;
+    border-color: var(--border, #e5dfc8);
+  }
+  .fc-match-tile:hover:not(.matched):not(.selected):not(.wrong) {
+    transform: none;
+    border-color: var(--border);
+    /* = styles-flashcard.css:575 的基底陰影；css-5 若調整基底陰影，這裡要同步 */
+    box-shadow: 0 2px 8px rgba(21,19,14,0.07);
+  }
+
+  /* 單元列表：styles-theme.css:429 有 .page-mission .qm-unit-row:hover (0,3,0)，
+     只寫 .qm-unit-row:hover (0,2,0) 會輸，所以兩條一起列。
+     只還原 transform，不動底色 —— 底色是 css-2 的地盤，而且 .active 有自己
+     很強的樣式（墨色翻轉／橘框），殘留的淺灰底不會被誤認成「已選取」。 */
+  .qm-unit-row:hover,
+  .page-mission .qm-unit-row:hover { transform: none; }
+
+  /* ── 補充：同一個 bug 類型、同樣在我負責的選擇器清單裡的幾個。
+        這裡刻意「只還原 transform／透明底」，不碰任何顏色，
+        才不會跟 css-2 的配色決定打架。 ── */
+  .rs-chip:hover:not(:disabled):not(.sel)  { transform: none; }  /* 停住的浮起 = 看起來像已選 */
+  .rs-mini:hover:not(.on)                  { transform: none; }
+  .qm-read-btn:hover                       { transform: none; }
+  .fc-star-btn:hover                       { transform: none; }  /* 停在 scale(1.15) 很明顯 */
+  /* 文章可點單字：點完查完字，那個字會一直亮著茶色底（基底本來沒有底色）。
+     :not(:active) 保留 styles-quiz-mode.css:3028 既有的按壓閃一下。 */
+  .grd-tword:hover:not(:active)            { background: transparent; }
+}
+
+
+/* ══ (B) 停用雙擊縮放 ══════════════════════════════════════════════════════
+   學生連點兩題（答完馬上按下一題）會觸發 iOS 雙擊放大，之後要自己捏回來。
+   ⚠ 用白名單，不能寫 button{touch-action:manipulation} 之類的全域選擇器：
+     會誤傷 .ca-handle（圖片標註拖曳，styles-quiz-mode.css:2766，已設 touch-action:none）
+     與 .mx-body（吉祥物拖曳，v385 才剛修好「滑鼠只是移過去就被拖走」）。 */
+.fc-choice, .fc-test-choice, .fc-match-tile, .fc-tab, .fc-dot, .fc-nav-btn,
+.qm-option, .qm-block, .qm-btn, .qm-unit-row, .mk-drill-option,
+.circle-label-option, .rs-chip, .rs-mini, .grd-tword, .grd-word,
+.qm-back-btn, .modal-close { touch-action: manipulation; }
+
+
+/* ══ (C) 文章可點單字（閱讀理解的核心互動）═════════════════════════════════
+   .grd-tword 是 <span>，長按會被 iOS 的文字選取＋放大鏡搶走；
+   低年級學生按壓時間長，真機上高頻失敗。
+   inline 元素的「垂直」padding 會接收點擊但不會撐開行框 → 版面完全不變，
+   命中高度從 ~31.5px 變成 ~45px。
+   background-clip: content-box 讓 hover/active 的底色仍然只畫在文字上，
+   不會因為 padding 變成一大塊。 */
+.grd-tword {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  padding: 7px 1px;
+  margin: 0 -1px;          /* 把水平 padding 抵銷掉，字距不變 */
+  background-clip: content-box;
+}
+
+
+/* ══ (D) 照片段落的可點單字框 ══════════════════════════════════════════════
+   .grd-word 的尺寸完全由 OCR 字框的百分比決定（padding:0），實際只有 15~20px 高。
+   用 ::after 只往「垂直」方向擴張，不偷鄰字的水平空間。
+   ⚠ 基底已經是 position: absolute（styles-quiz-mode.css:3041）——
+     原稿寫的 .grd-word{position:relative} 會直接把 OCR 定位整個弄壞，這裡不能加。
+     absolute 元素本來就是自己 ::after 的包含塊，不需要再宣告 position。
+   （.grd-hlbox 已設 pointer-events:none，不會互搶。） */
+.grd-word::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: -9px; bottom: -9px;
+}
+
+
+/* ══ (E) 命中區補到 44px ═══════════════════════════════════════════════════
+   原則沿用本專案既有慣例：「圖示大小不變，只把命中框補滿」
+   （見 styles-quiz-mode.css:405 的 .qm-back-btn 註解、styles-flashcard.css:62
+     的 .fc-speaker-btn — 兩個都是 width:34 + min-width:44 的寫法）。 */
+
+/* 星號鈕：JSX 裡只有一個用法，而且是 .fc-star-btn-corner（絕對定位在卡片角落），
+   所以放大到 44 對版面零影響，也不在 useFitHeight 的量測鏈上。 */
+.fc-star-btn { padding: 0; width: var(--tap); height: var(--tap); display: grid; place-items: center; }
+.fc-star-btn-corner { top: 4px; right: 4px; }   /* 原 8px；鈕變大要往角落收，字才不會被壓到 */
+/* 註：styles-tune.css:304 的 .fc-p-learn .fc-star-btn-corner{top:2px;right:2px} 權重較高，
+   學習模式維持原本更貼角的位置，這是刻意的、不要動。 */
+
+/* 主題鈕在 .fc-fill-topbar（填空測驗的頂列）裡，不是 useFitHeight 管的
+   .fc-p-card / .fc-p-learn，放大 12px 只會讓那一列變高，不影響禁區 #1。 */
+.fc-theme-btn { min-width: var(--tap); min-height: var(--tap); box-sizing: border-box; }
+.fc-theme-picker { top: 50px; }   /* 跟著按鈕變大往下移，原 38px 會跟鈕重疊 */
+
+/* 關閉鈕：保持 32px 圓形外觀，用 ::after 把命中撐到 44。
+   .modal 是 overflow-y:auto，但 .modal-head 有 28/32px 內距，-6px 不會被裁掉。 */
+.modal-close { position: relative; }
+.modal-close::after { content: ''; position: absolute; inset: -6px; }
+
+/* 上傳縮圖的刪除鈕：22px 太小，放到 32px（.uh-thumb 是 96px + overflow:hidden，塞得下）。
+   ⚠ 放大會提高「想看大圖卻誤刪」的機率 → 建議搭配刪除前二次確認（JSX，另案）。
+   gap 從 10 → 16，是為了不讓相鄰縮圖的刪除鈕落在同一個指腹範圍內。 */
+.uh-thumb-del { width: 32px; height: 32px; font-size: 14px; border: 2px solid #fff; }
+.uh-grid { gap: 16px; }
+
+/* 錯題本「下一題」：原本 8px 上下內距只有 ~41px */
+.mk-next-btn {
+  min-height: var(--tap); box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* 「看原文」小鈕：閱讀模式那一列很擠，用 ::after 補命中＝零版面成本 */
+.gr-peek-btn { position: relative; }
+.gr-peek-btn::after { content: ''; position: absolute; inset: -6px; }
+
+.rs-mini { width: var(--tap); height: var(--tap); }   /* 40 → 44 */
+.qm-read-btn { padding: 10px 18px; }                  /* 8px 上下 → 10px */
+
+/* 圈選題選項：7px → 9px 上下內距（15.5px 字約 41–44px 高），
+   gap 8 → 10 讓相鄰選項不會同時進到指腹範圍。 */
+.circle-label-option { padding: 9px 16px; }
+.circle-label-options { gap: 10px; }
+
+/* 老師端的每列小工具鈕：28 → 36。
+   36 是不「額外」撐開 .fc-card-row-head 的上限 —— 該列已經有 36px 的 .fc-row-thumb，
+   所以有縮圖的列本來就是 60px；改完之後所有列一致變成 60px（沒縮圖的從 52 長到 60）。
+   這是老師端的編輯清單，不在學生的練習畫面裡。 */
+.fc-row-tools { gap: 6px; }
+.fc-row-tools button { width: 36px; height: 36px; }
+
+/* 卡片頁碼小圓點：只加「水平」內距 —— 垂直 padding 是 useFitHeight 量測鏈的一部分（禁區 #1），
+   一格也不能動。中心距 26px → 32px，高度完全不變。
+   註：整條點列會比現在寬一點點（每顆 +6px），.fc-dots 本來就 flex-wrap，
+       只有在單元字數很多（>30 張）時才可能多折一行。 */
+.fc-dot { padding-left: 10px; padding-right: 10px; }
+.fc-dots { gap: 4px; }
+
+
+/* ══ (F) 手機橫式的主分頁列 ════════════════════════════════════════════════
+   styles-tune.css:406 的 max-height:560 那層把 .fc-tab 壓到 8px 內距＝只有 35px 高。
+   max-height:560 不會命中 iPad 橫式的 760 → 不觸碰禁區 #5。
+   只加到 10px（12px 字 ×1.58 + 20 = 39px，只多吃 4px）：那一層的註解自己寫了
+   「光是這些外框就吃掉 245px」，推到 44 會讓 390px 高的畫面又要捲。 */
+@media (max-height: 560px) {
+  .fc-tab { padding: 10px 6px; }
+}
+
+
+/* ══ (G) 底部導覽列的 safe-area 地雷 ＋ 641–768px 內容被蓋住 ════════════════
+   兩個既有問題：
+   ① .mobile-nav 在 ≤768 才顯示，但幫它讓位的 .page{padding-bottom:68px}
+      （styles-part2.css:751）只寫在 ≤640 → 641–768px（小平板／手機橫式視窗）
+      內容會被導覽列蓋住。
+   ② .mobile-nav 是 height:60px + padding-bottom:env(safe-area-inset-bottom)，
+      在 border-box 下 padding 是「往內吃」，有 home indicator 的機型會把圖示往上擠。
+   讓位統一交給 .page 負責，.qm-quiz-area 那份就拿掉（不然 ≤640 會多出 68px 空白）。
+   .qm-cat-view 在 ≤768 是 flex-direction:column、高度自然撐開，
+   .qm-quiz-area 不是獨立捲動容器，所以 .page 的 padding 真的救得到底部內容。
+
+   目前 index.html 沒有 viewport-fit=cover，env() 一律回傳 0px，
+   所以 ≤640 完全零視覺變化（68px = 68px），這是預防性修正。
+   ⚠ 不要順手加 viewport-fit=cover。 */
+@media (max-width: 768px) {
+  .mobile-nav { height: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .page       { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 8px); }
+  .qm-quiz-area { padding-bottom: 0; }
+}
+
+
+/* ══ (H) 按下去的即時回饋 ══════════════════════════════════════════════════
+   全站 290 條 :hover 只對 27 條 :active。觸控沒有 hover，按下那一瞬間畫面
+   毫無變化 → 兒童的第一反應是「沒按到」而重複點擊（重複作答、重複計分）。
+
+   ⚠ 權重：這一段必須排在 (A) 後面，而且每一條都要 ≥ (A) 裡對應的還原規則，
+     否則按下去會被 transform:none 蓋掉。逐條對過：
+       .fc-choice     active(0,5,0) = hover 還原(0,5,0)，在後面 → 贏
+       .fc-match-tile active(0,5,0) = 還原(0,5,0) → 贏
+       .qm-option     active(0,6,0) = 還原(0,6,0) → 贏（所以多帶了 :not(:disabled)）
+       .rs-chip       active(0,4,0) = 還原(0,4,0) → 贏
+       .rs-mini       active(0,3,0) = 還原(0,3,0) → 贏（所以多帶了 :not(:disabled)） */
+.fc-tab:active,
+.fc-choice:active:not(.correct):not(.wrong):not(.dimmed),
+.fc-test-choice:active:not(.selected),
+.fc-match-tile:active:not(.matched):not(.selected):not(.wrong),
+.fc-nav-btn:active:not(:disabled),
+.fc-star-btn:active,
+.gr-peek-btn:active,
+.qm-read-btn:active,
+.rs-chip:active:not(:disabled):not(.locked),
+.rs-mini:active:not(:disabled),
+.qm-option:active:not(:disabled):not(.correct):not(.wrong):not(.dim) { transform: scale(.96); }
+
+/* 會暈的人：改成變淡，不要縮放。
+   ⚠ 選擇器必須跟上面一字不差（權重相同才蓋得掉），不能只寫 .qm-option:active。 */
+@media (prefers-reduced-motion: reduce) {
+  .fc-tab:active,
+  .fc-choice:active:not(.correct):not(.wrong):not(.dimmed),
+  .fc-test-choice:active:not(.selected),
+  .fc-match-tile:active:not(.matched):not(.selected):not(.wrong),
+  .fc-nav-btn:active:not(:disabled),
+  .fc-star-btn:active,
+  .gr-peek-btn:active,
+  .qm-read-btn:active,
+  .rs-chip:active:not(:disabled):not(.locked),
+  .rs-mini:active:not(:disabled),
+  .qm-option:active:not(:disabled):not(.correct):not(.wrong):not(.dim) { transform: none; opacity: .7; }
+}
+
+/* ───── v390 區塊 4 / 5 ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   css-4：題型播放器與練習頁的視覺一致性
+   目標：16 個題型連續作答時，骨架不要每換一題就換一次。
+   ⚠ 本段假設 css-1 已定義 --measure / --measure-wide / --measure-narrow /
+     --radius-pill / --fs-meta / --fw-bold，css-2 已定義 --ok / --ok-bg / --ok-ink /
+     --no / --no-bg / --no-ink。這裡「只消費、不定義」，但每個 var() 都寫了 fallback，
+     萬一 css-1/css-2 沒進版，畫面也不會壞（fallback 用的就是專案現有的值）。
+   ⚠ 本段不寫任何 :hover / :active（那是 css-3 的範圍），
+     也不碰 .qm-option / .qm-feedback-banner（css-2 的範圍）。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (A) 練習頁跟 header 對齊
+   header 住在 .shell（max-width:1280px; margin:0 auto; padding:0 40px），
+   但 .page-mission .qm-cat-view 沒有 max-width → 1920px 螢幕上品牌在 x=360、
+   側欄卻在 x=24，差 336px。這裡把練習頁放進同一個量尺。
+
+   ⚠⚠ 只能用 padding-inline，不可以寫 padding 簡寫。
+      styles-tune.css 前面有兩層 @media (min-width:901px) and (max-height:950px)
+      與 @media (max-height:860px) and (min-width:901px) 在調
+      .page-mission .qm-cat-view 的「垂直」內距，那是 iPad 橫式一畫面裝得下的關鍵。
+      我的規則排在後面、權重相同，寫簡寫就會把垂直值一起蓋掉 → 直接破壞禁區 #5。
+   ─────────────────────────────────────────────────────────────────────────── */
+.page-mission .qm-cat-view {
+  max-width: 1280px;          /* 跟 .shell 同一個量尺 */
+  margin-inline: auto;
+}
+
+/* 桌機的 40px 水平內距（＝.shell 的 padding）。
+   ⚠ 這裡故意「不是」原案的 @media (min-width:1025px)。原因是禁區 #5：
+     iPad 橫式 1180×760 目前的水平內距只有 12px（來自上面那兩層矮螢幕規則），
+     改成 40px 會讓作答欄從 776px 縮到 720px，題目大字很可能多斷一行 → 又要捲。
+     用「min-width:1367px，或 1025px 以上且螢幕夠高」當條件之後：
+       • 1920×1080 桌機 → 套用（這就是回報的那台）
+       • 1440×900 筆電 → 套用；作答欄 1440-80-360-20=980 > .qm-player-shell 的 860 上限
+         ＝內容一點都沒變窄，不可能多出捲動
+       • 1367px 以上任何寬度都符合上面那條算式，所以「加了內距不會讓內容變窄」
+       • 1180×760（iPad 橫式）與 1366×768（小筆電）→ 不套用，維持現狀 0 溢出
+     1366 是專案既有斷點（見 styles-tune.css 的 min-width:901 and max-width:1366）。 */
+@media (min-width: 1367px),
+       (min-width: 1025px) and (min-height: 951px) {
+  .page-mission .qm-cat-view { padding-inline: 40px; }
+}
+/* ≤900 / ≤640 直接對齊 .shell 在 styles-part2.css 的 20px / 14px */
+@media (max-width: 900px) { .page-mission .qm-cat-view { padding-inline: 20px; } }
+@media (max-width: 640px) { .page-mission .qm-cat-view { padding-inline: 14px; } }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (B) ≤900px 練習頁必定多出約 35px 捲動
+   算式（全站 box-sizing: border-box）：
+     .page-mission .qm-cat-view  min-height: calc(100vh - 72px)   ← header
+     ≤900 時它的內距是 12px 12px 76px ＝ 上下共 88px（styles-theme.css:487）
+     → 內容區真正可用高度 = 100vh - 72 - 88 = 100vh - 160
+     但 .page-mission .qm-quiz-area 的 min-height 還停在 calc(100vh - 126px)
+     → 硬撐出 34~35px 的捲動。
+   這一條只動 ≤900 分支，完全不碰桌機／iPad 橫式路徑（禁區 #5 不受影響）。
+   取 161（比 160 再少 1px）留一格安全邊，避免 header 底線 1px 造成 off-by-one。
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .page-mission .qm-quiz-area { min-height: calc(100vh - 161px); }
+  /* 專心模式（v389）header 收起來，只剩 cat-view 自己的 88px 內距 */
+  html.focus-on .page-mission .qm-quiz-area { min-height: calc(100vh - 88px); }
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (C) 統一「單欄作答內容」的欄寬
+   同一個角色現在有 7 種 max-width（440/520/640/680/720/780/860），
+   而 .wp-player / .ws-player / .circle-player / .cloze-player 根本沒有 max-width，
+   在 1440px 視窗會撐到約 1376px → 每換一題整個骨架就跳一次寬度。
+   ⚠ 不碰：.qm-player-shell（860，已經對）、.qm-fc-wrap（單字卡容器，寬度一變就會
+     觸發 useFitHeight 重算 → 禁區 #1）、.dm-shell（1180，配對連線需要橫向空間）。
+   ─────────────────────────────────────────────────────────────────────────── */
+/* 一般單欄：造句／重組／作文／短文摘要／教學卡 */
+.wp-player,
+.ws-player,
+.essay-player,
+.sm-player,
+.ls-wrap {
+  max-width: var(--measure, 720px);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* 需要長行的：圈選／克漏字／文法／閱讀技巧 */
+.circle-player,
+.cloze-player,
+.gr-player,
+.rs-shell {
+  max-width: var(--measure-wide, 1080px);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* 說明頁／結果頁／上傳作業：短欄，讀起來才不會一行太長 */
+.qm-intro  { max-width: var(--measure-narrow, 640px); }
+.qm-result { max-width: var(--measure-narrow, 640px); }
+.uh        { max-width: var(--measure-narrow, 640px); }
+.sm-review,
+.sm-result { max-width: var(--measure, 720px); }
+/* 註：.qm-intro.sa-intro-wide（760，有 YouTube）與 .gr-page-intro .qm-intro（640）
+   權重比上面高，會保留原值——那是刻意的，不要為了「統一」去 !important 掉。 */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (D) 進度條規格
+   現在有 4 種（8px / 3px / 2px / 5px、三種轉場時間）。
+   以 .qm-player-bar（8px、radius 4px、0.3s；也是最新題型採用的那一種）為唯一實作。
+   ⚠⚠ .fc-progress-bar / .fc-progress-fill（flashcard 那一套）**刻意不動**，
+      原因：它在 useFitHeight 的量測範圍內，高度一變就會讓單字卡／學習／配對格子
+      重新算高 → 禁區 #1。視覺上不一致是已知的、可接受的代價。
+   ─────────────────────────────────────────────────────────────────────────── */
+.wp-progress-bar  { height: 8px; border-radius: 4px; background: var(--border); }
+.wp-progress-fill { border-radius: 4px; transition: width .3s ease; }
+/* 教學卡的步驟點是 flex:1 的長條，一樣吃這個規格 */
+.ls-dot { height: 8px; border-radius: 4px; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (E) 答對／答錯的顏色：8 種綠、6 種紅收斂成一組語意色
+   收掉的綠：#16a34a #22c55e #15803d #2e7d32 #2E7D5B #9bcba5 #166534
+   收掉的紅：#dc2626 #ef4444 #f44336 #D6533C #991b1b
+   ⚠ 只寫顏色屬性，不重寫任何 animation / text-decoration / opacity
+     （sd-pulse、dmShake、line-through、.wrong-cut 的 .55 透明度都原樣保留）。
+   ⚠ .qm-option 與 .qm-feedback-banner 不在這裡（css-2 的範圍）。
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* 拼寫輸入（原本 #22c55e/#f0fdf4/#166534、#ef4444/#fef2f2/#991b1b）
+   背景一起換，不然邊框是新綠、底色還是舊綠 */
+.ta-input.correct { border-color: var(--ok, #2E7D5B); color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); }
+.ta-input.wrong   { border-color: var(--no, #D6533C); color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); }
+
+/* 克漏字：填空結果（原本沒有 border，所以這裡改成寫 background，border-color 留著
+   是為了萬一之後加了框也對得起來） */
+.cloze-blank-result.correct { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); border-color: var(--ok, #2E7D5B); }
+.cloze-blank-result.wrong   { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+
+/* 克漏字：分數藥丸（.ok 是黃色「還可以」，不屬於對／錯語意，維持原樣） */
+.cloze-score-badge.great { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); border-color: var(--ok, #2E7D5B); }
+.cloze-score-badge.low   { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+
+/* 句子重組：結果 chip。.missing 跟 .wrong 本來就是同一組紅（#991b1b/#fef2f2/#fca5a5），
+   一起收，不然「漏掉的」跟「放錯的」會變兩種紅 */
+.ws-word-chip.result.correct { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); border-color: var(--ok, #2E7D5B); }
+.ws-word-chip.result.wrong,
+.ws-word-chip.result.missing { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+
+/* 斷句：斜線符號。
+   ⚠ 原案寫 background，但 .sd-gap-slash 是一個「／」文字字元（position:relative、
+     font-size 1.6~1.8rem），給它 background 會變成一塊色塊 → 這裡用 color。
+     font-size / animation / text-decoration 都不重寫。 */
+.sd-gap.done.correct   .sd-gap-slash { color: var(--ok, #2E7D5B); }
+.sd-gap.done.missed    .sd-gap-slash { color: var(--no, #D6533C); }
+.sd-gap.done.wrong-cut .sd-gap-slash { color: var(--no, #D6533C); }
+/* 斷句圖例（.missed 也一起收，不然圖例會出現兩種紅） */
+.sd-leg.correct   { color: var(--ok-ink, #1f6b4b); }
+.sd-leg.missed    { color: var(--no-ink, #A8331F); }
+.sd-leg.wrong-cut { color: var(--no-ink, #A8331F); }
+
+/* 圈選：整題的外框 */
+.circle-question.correct { border-color: var(--ok, #2E7D5B); }
+.circle-question.wrong   { border-color: var(--no, #D6533C); }
+
+/* 配對連線：
+   ⚠ 原案寫 .dm-chip{background/border-color}，但 v371 是 Alan 指定的「模仿學習單」，
+     .dm-chip 本來就是 background:none; border:none（不要卡片框）。
+     幫它加底色＝把那個刻意的決定改掉，所以這裡改成上真正在著色的那兩個子元素：
+     圓點（.dm-dot）與文字（.dm-txt）。border-color 對 .dm-chip 也是無效的（border:none）。
+   ⚠ .dm-chip.linked .dm-dot 用的是 var(--dm-c)（JSX 依連線顏色注入），交卷前不判對錯，
+     不能收成 --ok，維持原樣。 */
+.dm-chip.ok    .dm-dot { background: var(--ok, #2E7D5B);    border-color: var(--ok, #2E7D5B); }
+.dm-chip.bad   .dm-dot { background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+.dm-chip.wrong .dm-dot { background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+.dm-chip.bad   .dm-txt { color: var(--no-ink, #A8331F); }
+/* 交卷後的 ✓ / ✗ 小方塊（同一個元件的對錯標記，一起收才不會出現第三種綠） */
+.dm-mark.ok  { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); }
+.dm-mark.bad { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); }
+
+/* 教學卡的隨堂小測（原本就住在 styles-tune.css，這裡靠後蓋前收成 token） */
+.ls-opt.ok { background: var(--ok-bg, #eaf3ee); color: var(--ok-ink, #1f6b4b); border-color: var(--ok, #2E7D5B); }
+.ls-opt.no { background: var(--no-bg, #fdece8); color: var(--no-ink, #A8331F); border-color: var(--no, #D6533C); }
+
+/* 註：.wf-verdict.correct/.incorrect 雖然還在 styles-quiz-mode.css:820-822，
+   但 grep 過所有 .jsx 都找不到任何 wf- 的 className ＝ 已經是死碼，
+   而且原案寫的 .wf-verdict.wrong 這個 class 根本不存在（只有 .incorrect）。
+   → 刻意不寫，避免對死掉的選擇器製造「已經統一了」的錯覺。 */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (F) .qm-intro-done：全站唯一沒有 CSS 的 intro 徽章
+   JSX 用了兩次（配對連線 components-quiz-mode.jsx:6377、閱讀技巧 6886 的
+   「✓ 上次 N 分」），但三個 CSS 檔都沒有規則 → 線上是一行沒有底色、沒有內距的裸文字，
+   跟其他 11 個 intro 的綠色藥丸完全不一樣。
+   照 .qm-intro-done-hint（styles-quiz-mode.css:2612）的外觀補，
+   順手把 -hint / -fcdone 一起收成 token，三個才會真的長一樣。
+   （.qm-intro 是 flex column，margin-inline:auto 會讓它縮成內容寬度並置中） */
+.qm-intro-done {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: var(--radius-pill, 999px);
+  background: var(--ok-bg, #eaf3ee); color: var(--ok-ink, #1f6b4b);
+  font-size: var(--fs-meta, 13.5px); font-weight: var(--fw-bold, 700);
+  margin: 0 auto 14px;
+}
+.qm-intro-done-hint,
+.qm-intro-fcdone {
+  background: var(--ok-bg, #eaf3ee); color: var(--ok-ink, #1f6b4b);
+  border-radius: var(--radius-pill, 999px);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (G) 沒有頭部的播放器，至少讓內距與重心一致
+   （加返回鍵要改 JSX，不在這一段的範圍）
+   ─────────────────────────────────────────────────────────────────────────── */
+.wp-header,
+.circle-topbar,
+.cloze-topbar { margin-bottom: 16px; }
+
+.ws-player,
+.essay-player,
+.sm-player { padding-top: 8px; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (H) 題目區與選項區差 4px 沒對齊
+   .qm-question-area 有 padding: 0 4px，.qm-options 沒有 → 題目文字比選項卡片內縮 4px。
+   ⚠ 只寫 padding-inline，因為 styles-tune.css 有五處在調 .qm-question-area 的
+     margin-bottom（矮螢幕瘦身），垂直方向一律不碰。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-question-area { padding-inline: 0; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (I) 側欄單元列文字左右不對稱 3.5px
+   .page-mission .qm-unit-row 四邊內距都是 14px，但左邊有 5px 的分類強調色條、
+   右邊只有 1.5px 的框 → 文字左緣 19px、右緣 15.5px。
+   把左內距改成 10.5px：5 + 10.5 = 15.5 = 1.5 + 14。只動水平，不動列高。
+   ─────────────────────────────────────────────────────────────────────────── */
+.page-mission .qm-unit-row { padding-left: 10.5px; }
+
+/* ───── v390 區塊 5 / 5 ───── */
+/* ══════════════════════════════════════════════════════════════════════
+   css-5：狀態（空／載入／錯誤）與質感打磨
+   ──────────────────────────────────────────────────────────────────────
+   這一段負責三件事：
+   (1) 把大廳六張卡的「內文左軸」拉成同一條垂直線（原本 82→58→58→62→64→62 鋸齒）
+   (2) 把區塊之間的垂直節奏從 14/18/22/28/66 五種收成兩級
+   (3) 陰影分三階、空狀態有形狀、過場只有兩種速度
+
+   ⚠ 所有 token 都寫成 var(--x, 後備值) 的形式。
+      理由：--sp-* / --radius-* 由 css-1 定義在 :root。萬一 css-1 那段還沒併進來
+      （或順序被調動），後備值讓這一段自己也能正確運作，而且一旦 css-1 存在，
+      它的值一定贏（後備值只在變數未定義時才生效）——不會反過來蓋掉 css-1。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 本段新增的 token（間距節奏與過場速度） ───────────────────────── */
+:root{
+  /* 區塊之間只有兩個間距：一般 24px、大段落 40px */
+  --section-gap:    24px;
+  --section-gap-lg: 40px;
+  /* 過場只有兩檔：hover/顏色類用 fast，陰影/形狀類用 base */
+  --t-fast: .15s;
+  --t-base: .25s;
+  --ease:   cubic-bezier(.4, 0, .2, 1);
+}
+
+
+/* ══ (A) 大廳卡片：內距與圓角收斂成兩級 ═══════════════════════════════
+   原本六張卡的水平內距是 42/18/18/22/24/22 六種、圓角 26/14/18/20/20 五種，
+   內文距視窗左緣在 58~82px 之間跳動（落差 24px）——這是「不專業」最直接的來源。
+   統一之後：.shell gutter 40px + 卡片內距 24px = 內文左軸一律落在 64px。   */
+
+/* 大卡（本週總覽／學習成長／本週摘要）：四邊 24px、大圓角
+   ⚠ .wh 刻意保留較高的垂直內距（32px）：它是大廳的主角卡，裡面有 110px 的
+     進度環，壓到 24px 會擠。驗收條件是「左緣對齊」，水平仍是 24px → 軸線一樣是 64。 */
+.wh{
+  padding: var(--sp-8, 32px) var(--sp-6, 24px);
+  border-radius: var(--radius-lg, 20px);
+}
+.growth-inline,
+.wk-summary{
+  padding: var(--sp-6, 24px);
+  border-radius: var(--radius-lg, 20px);
+}
+
+/* 分類卡：跟大卡同一級（原本 24px 22px / 圓角 18px） */
+.qm-block{
+  padding: var(--sp-6, 24px);
+  border-radius: var(--radius-lg, 20px);
+}
+
+/* 橫條型（本週聯絡簿的開合列、今天的任務）：矮一階的內距 + 中圓角
+   水平仍是 24px，左軸才會跟卡片對齊。 */
+.cb-bar,
+.tt{
+  padding: var(--sp-4, 16px) var(--sp-6, 24px);
+  border-radius: var(--radius-md, 14px);
+}
+/* 聯絡簿展開時上下兩塊要接成一體——圓角必須跟著 --radius-md 走，
+   否則 .cb-bar 變圓、下面的 .cb-body 還是寫死 14px，接縫會歪。 */
+.cb.open .cb-bar{ border-radius: var(--radius-md, 14px) var(--radius-md, 14px) 0 0; }
+.cb-body        { border-radius: 0 0 var(--radius-md, 14px) var(--radius-md, 14px); }
+
+/* ⚠⚠ 手機值一定要補回來。
+   .qm-block 的內距原本被四個檔案分四層斷點覆寫
+   （styles-theme.css:312 ≤760、styles-quiz-mode.css:1158 / styles-theme.css:328 ≤560、
+     styles-theme.css:977 ≤480、styles-tune.css:199 ≤768）。
+   上面那條沒有媒體查詢又排在最後，會把它們**全部**蓋掉 → 375px 上分類卡會突然變胖。
+   斷點用 768（不是規格書寫的 760）：styles-tune.css:199 既有的就是 768，
+   用 768 才不會在 761–768 這段留下一條 24px 的縫。 */
+@media (max-width: 768px){
+  .qm-block{ padding: var(--sp-4, 16px); }
+}
+@media (max-width: 480px){
+  .qm-block{ padding: var(--sp-4, 16px) var(--sp-3, 12px); }
+}
+
+/* 同理，.wh（styles-home.css:992 ≤640）、.growth-inline / .wk-summary
+   （styles-home.css:762/794 ≤560）、.tt（styles-home.css:1240 ≤640）
+   的手機瘦身也會被上面蓋掉，一起補回來。
+   三者統一用 640 這個斷點（跟 .shell 的手機 gutter 同一條線），
+   節奏才會一致：gutter 16 + 內距 16 = 手機上的內文左軸 32px。 */
+@media (max-width: 640px){
+  .wh,
+  .growth-inline,
+  .wk-summary{
+    padding: var(--sp-4, 16px);
+    border-radius: var(--radius-md, 14px);
+  }
+  .tt,
+  .cb-bar{ padding: var(--sp-3, 12px) var(--sp-4, 16px); }
+}
+
+
+/* ══ (B) 大廳區塊的垂直節奏 ══════════════════════════════════════════
+   原本是 14/18/22/28/66 五種，最大落差 4.7 倍。其中 66px 是
+   .qm-blocks 的 padding-bottom:48px 假裝成容器內距造成的。
+   一律改用 margin-bottom（不混 margin-top），避免 margin 疊加算不清。   */
+.cb  { margin: 0 0 var(--section-gap); }   /* 本週聯絡簿（老師編輯模式） */
+.wh  { margin: 0 0 var(--section-gap); }   /* 本週總覽 */
+.tt  { margin: 0 0 var(--section-gap); }   /* 今天的任務 */
+
+/* 分類卡區塊的下緣：唯一保留的「大段落」間距，用來跟成長區分段 */
+.qm-blocks{ padding-bottom: var(--section-gap-lg); }
+
+/* 成長區原本是 margin-top:18px；上面已經由 .qm-blocks 的 40px 負責距離，
+   這裡歸零、改用 margin-bottom 收尾（下面接 footer）。 */
+.growth-summary-row{ margin: 0 0 var(--section-gap); }
+/* .growth-inline 在 .growth-summary-row 裡本來就是 margin:0（styles-home.css:772），
+   但它單獨出現（非兩欄版）時原本帶 margin-top:18px → 一起歸零。 */
+.growth-inline{ margin: 0 0 var(--section-gap); }
+.growth-summary-row .growth-inline{ margin: 0; }
+
+/* 註：規格書列的 .wj-wrap 與 .home-more-head 在 .jsx 裡完全沒有被使用
+   （只剩 styles-home.css 的殘留規則），依「不存在就略過」原則不寫。 */
+
+
+/* ══ (C) .shell 的 gutter 級距 ═══════════════════════════════════════
+   原本 40/20/14。≤640 時 gutter 只有 14px，卻比卡片內距 16px 還小 →
+   內容看起來貼著螢幕邊（內距倒掛）。改成 40/24/16，永遠 gutter ≥ 卡片內距。
+   用 padding-inline 而不是 padding：styles.css:100 的 `padding: 0 40px` 已經把
+   上下設成 0，只覆寫左右才不會動到 .page-lobby .shell.main-enter 的 padding-top:44px。
+   斷點沿用 styles-part2.css 既有的 900 / 640。                          */
+@media (max-width: 900px){ .shell{ padding-inline: var(--sp-6, 24px); } }
+@media (max-width: 640px){ .shell{ padding-inline: var(--sp-4, 16px); } }
+
+
+/* ══ (D) Footer 上方留白 ═════════════════════════════════════════════
+   ⚠ 規格書寫的 `.footer` 是**死 CSS**：styles-part2.css:409 還留著，但全站
+     .jsx 沒有任何地方用它。真正的 app 版 footer 是 <footer className="ll-foot2 app-foot2">
+     （components-editor.jsx:599），所以只改 .app-foot2。
+   ⚠ 不動 .ll-foot2 本身：那是行銷首頁的 footer（scroll-snap 終點），版面刻意寬鬆。
+   原本 margin-top:84px（styles-auth.css:5951）+ padding-top:54px = 138px，
+   是全站最大區塊間距的 3 倍多；改成 48+32 = 80px。
+   ⚠ 只覆寫 margin-top / padding-top，**不能**用 padding 簡寫——
+     .ll-foot2 的 `padding: 54px 6vw 0` 那個 6vw 左右內距是版面骨架，寫簡寫會把它清掉。 */
+.app-foot2{
+  margin-top:  var(--sp-12, 48px);
+  padding-top: var(--sp-8, 32px);
+}
+@media (max-width: 640px){
+  .app-foot2{
+    margin-top:  var(--sp-8, 32px);
+    padding-top: var(--sp-6, 24px);
+  }
+}
+
+
+/* ══ (E) 陰影三階 ═══════════════════════════════════════════════════
+   規則：sm = 平放在紙上的內容卡；md = 需要一點層級的主角卡；lg = 浮在遮罩上的彈窗。
+   --shadow-sm / --shadow-md / --shadow-lg 已定義在 styles-theme.css:20-22。
+   原本這些卡各自手寫了 5 種不同的 box-shadow（0 2px 0 / 0 6px 18px -12px /
+   0 8px 22px / 0 10px 30px -18px / 0 18px 44px -18px），色溫和擴散都不一致。   */
+.qm-block,
+.cb-bar,
+.tt,
+.wk-summary,
+.growth-inline{ box-shadow: var(--shadow-sm); }
+
+.wh{ box-shadow: var(--shadow-md); }
+
+/* .modal 是老師端所有彈窗的殼；.gres-modal 是文法測驗結果彈窗。
+   規格書列的 .modal-panel / .modal-card / .growth-overlay-panel / .mk-drill
+   在 .jsx 與 .css 裡都不存在 → 依規則略過，不猜名字。 */
+.modal,
+.gres-modal{ box-shadow: var(--shadow-lg); }
+
+/* .cb.open .cb-bar{box-shadow:none}（styles-home.css:13）與
+   .growth-inline:hover 的加重陰影，特異度都比上面高，會照常生效——刻意不動。 */
+
+
+/* ══ (F) 空狀態 ═════════════════════════════════════════════════════
+   目標是「沒有東西的時候也要看起來是有設計的」，但只套在**真的是裸文字、
+   而且是獨立區塊**的空狀態上。逐一檢查後只有 .cb-empty 符合：
+
+   · .fc-lb-empty  → 是排行榜格子裡的 inline <span>「—」（components-flashcard.jsx:1702），
+                     不是空狀態容器；而且 .fc-* 屬於禁區 #1/#2，不寫 padding/margin/radius。→ 略過
+   · .mk-empty     → styles-mistakes.css:179 已經有完整設計（浮動插圖＋大標＋副標，
+                     還是 flex:1 撐滿），套虛線框會打壞它。→ 略過
+   · .qm-block.empty → 那是一張完整的分類卡（icon + 文字 + 箭頭的 flex 列），
+                     不是空盒子；改成 display:grid + 虛線框會把卡片版面拆掉。
+                     → 只拿掉陰影（停用的卡不該浮起來），其餘不動。
+   · .rv-empty / .uh-empty → 全專案不存在。→ 略過                        */
+.cb-empty{
+  display: grid; place-items: center; gap: var(--sp-2, 8px);
+  min-height: 96px;
+  margin: 6px;                                  /* 對齊 .cb-body 的 6px 內距 */
+  padding: var(--sp-6, 24px);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md, 14px);
+  background: var(--bg-paper);
+  color: var(--ink-3);
+  font-size: var(--fs-body-sm, 14.5px);
+  text-align: center;
+}
+/* 停用（本週沒安排）的分類卡：維持 opacity 0.62 的既有處理，但不要有陰影，
+   才不會看起來像可以按。 */
+.qm-block.empty{ box-shadow: none; }
+
+
+/* ══ (G) 過場節奏 ═══════════════════════════════════════════════════
+   全站轉場散在 .12s ~ .4s。統一成 fast / base 兩檔。
+
+   ⚠ .qm-block（styles-quiz-mode.css:76）與 .growth-inline（styles-home.css:734）
+     的 transition 裡**含 transform**，而且它們有 hover 位移。
+     用 transition 簡寫會把 transform 那段洗掉 → hover 變成瞬間跳動（明顯的退步），
+     而且也違反「不要在這裡寫 transform 的 transition」（會跟 css-3 打架）。
+     解法：這兩個只改「速度與曲線」，完全不碰 transition-property 清單。 */
+.qm-block,
+.growth-inline{
+  transition-duration: var(--t-fast);
+  transition-timing-function: var(--ease);
+}
+
+/* 其餘沒有 transform hover 的，可以安全地寫完整清單 */
+.cb-bar,
+.tt,
+.wk-summary,
+.modal,
+.toast{
+  transition: box-shadow var(--t-base) var(--ease),
+              border-color var(--t-fast) var(--ease);
+}
+
+/* reduced-motion 的退路。
+   styles.css:44 與 styles-theme.css:363 已經處理掉 .qm-block / .qm-option，
+   這裡把本段新加的其餘元素補齊。 */
+@media (prefers-reduced-motion: reduce){
+  .qm-block,
+  .cb-bar,
+  .tt,
+  .wk-summary,
+  .growth-inline,
+  .modal,
+  .toast{ transition: none; }
+}
+
+
+/* ══ (H) 圓角的最後收斂（純視覺，不改盒子尺寸） ═══════════════════════
+   ⚠ 不對 .fc-* 的任何元素寫 border-radius / padding / margin（禁區 #1、#2）。  */
+
+/* 練習按鈕：原本 10px → 走 --radius-sm（同一個值，改成 token 讓之後只要調一處） */
+.qm-btn{ border-radius: var(--radius-sm, 10px); }
+
+/* 圓形圖示鈕：原本寫 border-radius:50%，換成 pill token。
+   在 32×32 / 36×36 的正方形上兩者視覺完全一樣，純粹是把硬編碼換成 token。 */
+.modal-close,
+.icon-btn{ border-radius: var(--radius-pill, 999px); }
+
+/* 選項卡：quiz-mode 12px、theme 14px 兩種 → 統一走 --radius-md */
+.qm-option{ border-radius: var(--radius-md, 14px); }
+
+/* ⚠ 刻意**不**改 .btn。
+   規格書要求 .btn 走 --radius-sm，但 .btn 目前是 border-radius:999px 的膠囊
+   （styles-part2.css:589，配 mono 字體 + 全大寫 + 0.18em 字距），
+   是刻意的排版語言、全站 120 處在用。改成 10px 直角等於換掉一種按鈕型別，
+   超出「質感打磨」的範圍，而且會跟旁邊的 .modal-close 圓鈕失衡。→ 維持原狀。 */
+
+/* ══ v390 修正：實測 40 張單字卡時發現的兩個破版 ══
+   稽核建議「所有可點目標放大到 44px」，方向對，但套到 .fc-dot 上是錯的：
+   圓點是「第幾張」的指示器，數量等於卡片數。一張一張加寬之後，
+   40 張的圓點列從 2 排變 3 排、把例句擠出卡片外，
+   而且 .fc-nav 是 space-between，中間變寬就把兩顆「上一張／下一張」壓成直排文字。
+   → 圓點的水平內距改回原本的 6px（本來就有 padding:12px 6px＝20x32px，觸控已經夠用），
+     另外把導航鍵鎖住不准被壓縮（這是本來就有的隱患，只是被放大的圓點照出來）。 */
+.fc-dot { padding-left: 6px; padding-right: 6px; }
+.fc-nav-btn { flex: 0 0 auto; white-space: nowrap; }
+.fc-dots { flex: 1 1 auto; min-width: 0; }
+
+/* ══ v390 補：頁首控制項的觸控目標 ══
+   稽核的觸控面向漏了 header——實測手機上這一排全部不到 40px：
+   集點 31、簽到 34、頭像 32、全螢幕 34、年級章 25、站名 16。
+   這排每一頁都在，小朋友手指粗，誤觸成本高。
+   ⚠ header-inner 在手機只有 56px 高，所以取 40px（不是 44）——
+     44 會把這排塞得沒有呼吸空間，40 已經足夠好按又不撐破版面。
+   站名是文字連結，只加垂直內距擴大可點範圍，視覺高度不變。 */
+.stars-btn, .checkin-btn, .user-chip, .fs-btn, .grade-chip,
+.icon-btn, .dashboard-btn, .signin-btn {
+  min-height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+}
+.brand-home { padding-top: 8px; padding-bottom: 8px; }
+
+/* ══ v390 補：單元列改成 <button> 之後要把瀏覽器預設的置中拿掉 ══
+   v390 把學生端的 .qm-unit-row 從 <div> 換成 <button>（為了鍵盤可以走到），
+   但 <button> 的 text-align 預設是 center，會繼承到標題與副標 →
+   標題短的那幾列（例如「Unit 1 填空 / 4 題」）會變成置中，跟清單的左對齊軸線打架。
+   實測 computed textAlign 確實是 center，所以這一條是必要的。 */
+.qm-unit-row { text-align: left; }

@@ -5,7 +5,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 /* ───────── Icons ───────── */
 function Icon({ name, size = 16 }) {
   const s = size;
-  const stroke = { stroke: "currentColor", strokeWidth: 1.5, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" };
+  const stroke = { stroke: "currentColor", strokeWidth: 1.5, fill: "none", strokeLinecap: "round", strokeLinejoin: "round", 'aria-hidden': 'true', focusable: 'false' };
   switch (name) {
     case "arrow-right":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M5 12h14M13 5l7 7-7 7" /></svg>;
     case "arrow-left":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M19 12H5M11 5l-7 7 7 7" /></svg>;
@@ -18,7 +18,7 @@ function Icon({ name, size = 16 }) {
     case "external":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M14 4h6v6M20 4L10 14M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5" /></svg>;
     case "close":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M6 6l12 12M18 6L6 18" /></svg>;
     case "lock":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><rect x="4" y="11" width="16" height="10" rx="1" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>;
-    case "play":return <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z" /></svg>;
+    case "play":return <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7L8 5z" /></svg>;
     case "download":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>;
     case "users":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>;
     case "list":return <svg width={s} height={s} viewBox="0 0 24 24" {...stroke}><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></svg>;
@@ -124,7 +124,7 @@ function FocusBtn() {
   };
 
   return (
-    <button className={'focus-btn' + (on ? ' on' : '')} onClick={toggle}
+    <button className={'focus-btn' + (on ? ' on' : '')} onClick={toggle} aria-pressed={on}
       title={on ? '顯示上方列' : '收起上方列，專心練習'} aria-label="專心模式">
       {on ? '\u2921' : '\u26F6'}
     </button>
@@ -158,10 +158,10 @@ function Header({
           <div className="brand">
             <span className="brand-mono">EST · 2026</span>
             {onHome
-              ? <button className="brand-name brand-home" onClick={onHome} title="回首頁">Alan<em>'s</em> English Class</button>
+              ? <button className="brand-name brand-home" onClick={onHome} title="回首頁" aria-label="回首頁">Alan<em>'s</em> English Class</button>
               : <span className="brand-name">Alan<em>'s</em> English Class</span>}
             {grade && (
-              <button className="grade-chip" onClick={onSwitchGrade} title="Switch grade">
+              <button className="grade-chip" onClick={onSwitchGrade} title="Switch grade" aria-label="切換年級">
                 {window.isSummerTrack && window.isSummerTrack(grade) ? '☀️ 暑假' : grade.toUpperCase()}
               </button>
             )}
@@ -197,7 +197,8 @@ function Header({
               <FullscreenBtn/>
               {/* v342: 集點——學生看得到自己的星星，點開是紀錄＋商店 */}
               {user && onShowStars && (
-                <button className="stars-btn" onClick={onShowStars} title="我的星星與商店">
+                <button className="stars-btn" onClick={onShowStars} title="我的星星與商店"
+                  aria-label={`我的星星與商店，目前 ${(starBalance || 0).toLocaleString()} 顆`}>
                   <span className="stars-btn-ico" aria-hidden="true">⭐</span>
                   <span className="stars-btn-num">{(starBalance || 0).toLocaleString()}</span>
                 </button>
@@ -205,7 +206,8 @@ function Header({
               {/* v362: 每日簽到——沒簽到會有紅點提醒 */}
               {user && onShowCheckin && (
                 <button className={'checkin-btn' + (checkinDone ? ' done' : '')} onClick={onShowCheckin}
-                  title={checkinDone ? '今天已簽到' : '今天還沒簽到！'}>
+                  title={checkinDone ? '今天已簽到' : '今天還沒簽到！'}
+                  aria-label={checkinDone ? `今天已簽到，連續 ${checkinStreak} 天` : '今天還沒簽到'}>
                   <span aria-hidden="true">📅</span>
                   {checkinStreak > 0 && <span className="checkin-btn-num">{checkinStreak}</span>}
                   {!checkinDone && <span className="checkin-btn-dot" aria-hidden="true"/>}
@@ -215,23 +217,25 @@ function Header({
                 <button
                   className={"icon-btn " + (editMode ? "active" : "")}
                   onClick={onToggleEdit}
-                  title={editMode ? "Exit edit mode" : "Teacher edit mode"}>
+                  title={editMode ? "Exit edit mode" : "Teacher edit mode"}
+                  aria-pressed={!!editMode}
+                  aria-label={editMode ? "離開老師編輯模式" : "進入老師編輯模式"}>
                   <Icon name={editMode ? "lock" : "edit"} size={14}/>
                 </button>
               )}
               {canEdit && (
-                <button className="dashboard-btn" onClick={onShowDashboard} title="Class Report">
+                <button className="dashboard-btn" onClick={onShowDashboard} title="Class Report" aria-label="班級學習報表">
                   <Icon name="users" size={13}/> <span className="db-label">Report</span>
                 </button>
               )}
               {user ? (
-                <div className="user-chip" onClick={onLogout} title={`Sign out — ${user.email}`}>
+                <button type="button" className="user-chip" onClick={onLogout} aria-label={`登出 ${user.email}`}>
                   {user.photoURL
                     ? <img src={user.photoURL} className="user-avatar" referrerPolicy="no-referrer" alt=""/>
                     : <span className="user-initials">{(user.displayName || user.email || '?')[0].toUpperCase()}</span>
                   }
                   <span className="user-name">{firstName}</span>
-                </div>
+                </button>
               ) : (
                 <button className="signin-btn" onClick={onLogin}>登入</button>
               )}
@@ -808,10 +812,9 @@ function LoginScreenLegacy({ onLogin, onSkip, onBack, loggedIn, userName, onLogo
             </div>
             <div className="ll-hero-art">
               {/* v241: 文具風直向卡片（RosyPosy 單字本質感）——hover/點按展開 */}
-              <div className="ll-hcards" role="list" aria-label="四大學習項目">
+              <div className="ll-hcards" aria-label="四大學習項目">
                 {cats.map(c => (
                   <div
-                    role="listitem"
                     key={c.key}
                     className={`ll-hc${expCat === c.key ? ' exp' : ''}`}
                     style={{ '--cc': `var(--c-${c.key})` }}
