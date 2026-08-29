@@ -159,6 +159,7 @@ function App() {
   const [quickSetOpen, setQuickSetOpen] = useAppState(false); // v377: 貼單字→一次建立整套
   const [qsRoster, setQsRoster] = useAppState([]);            // v380: 指派用的學生名單
   const [grGenOpen, setGrGenOpen] = useAppState(false);       // v382: 五大時態出題
+  const [rcGenOpen, setRcGenOpen] = useAppState(false);       // v386: 貼文字稿→出閱讀理解
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -918,6 +919,51 @@ function App() {
 
   /* v382: 時態出題完成 → 建立成多個單元（Type A→type-answer、Type B→cloze），
      全部丟進「該時態」那個分類底下，並掛同一個 group。 */
+  /* v386: 閱讀理解出題完成 → 建立 1~3 個單元（選擇題 / 閱讀技巧 / 閱讀簡答），
+     全部掛同一個 group（＝文章標題），順序交給 QM_TYPE_ORDER 排。
+     指派的兩條路跟 handleQuickSet 一樣：學期年級用 week.homework，暑假用 summer_meta。 */
+  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, assign }) => {
+    const items = window.rcBuildItems({ title, passage, mcq, sa, blocks });
+    if (!items.length) { showToast('沒有可以建立的題目'); return; }
+    // 蓋上作者：後台「只看我的」會依 owner 篩，沒蓋的話老師看不到自己剛生的單元
+    const me = (user && user.email || '').toLowerCase();
+    if (me) items.forEach(it => { it.owner = me; });
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) { showToast('請先選一個週次'); return; }
+    if (!w[weekId].items) w[weekId].items = {};
+    if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
+    w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+
+    let note = '';
+    if (assign && assign.dueDate) {
+      if (!w[weekId].homework) w[weekId].homework = {};
+      items.forEach(it => { w[weekId].homework[it.id] = { dueDate: assign.dueDate }; });
+      note = ` · 已設為作業（${assign.dueDate} 到期）`;
+    }
+    setWeeks(w);
+    saveWeeksSafe(w);
+
+    if (assign && assign.students && assign.students.length && window.saveSummerStudent) {
+      const suffix = String(weekId).split('-').pop();
+      const metaNow = (summerMetaRef.current && summerMetaRef.current.students) || {};
+      Promise.all(assign.students.map(email => {
+        const key = String(email).toLowerCase();
+        const prev = metaNow[key] || { name: '', weeks: {} };
+        const weeksMap = { ...(prev.weeks || {}) };
+        const have = Array.isArray(weeksMap[suffix]) ? weeksMap[suffix] : [];
+        weeksMap[suffix] = have.concat(items.map(it => it.id).filter(id => have.indexOf(id) < 0));
+        return window.saveSummerStudent(key, { ...prev, weeks: weeksMap });
+      })).then(() => showToast(`已指派給 ${assign.students.length} 位學生`))
+        .catch(() => showToast('指派失敗，請到後台再指派一次'));
+      note = ' · 指派中…';
+    }
+
+    setRcGenOpen(false);
+    setOpenCat(cat);
+    const names = items.map(it => ({ quiz: '選擇題', 'reading-skill': '閱讀技巧', 'short-answer': '閱讀簡答' })[it.type] || it.type).join('、');
+    showToast(`已建立 ${items.length} 個單元 · ${names}${note}`);
+  };
+
   const handleGrammarCreate = (payload) => {
     const items = window.grBuildItems(payload);
     if (!items.length) { setGrGenOpen(false); return; }
@@ -1396,6 +1442,7 @@ function App() {
             onTermSetup={(window.isSummerTrack && window.isSummerTrack(grade)) || (window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setTermOpen(true)}
             onQuickSet={() => setQuickSetOpen(true)}
             onGrammarGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? () => setGrGenOpen(true) : null}
+            onReadingGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setRcGenOpen(true)}
             onDeleteWeek={handleDeleteWeek}
             progress={{done: totalDone, total: totalItems}}
             user={user}
@@ -1644,6 +1691,15 @@ function App() {
             defaultTense={openCat && /^t[1-5]$/.test(openCat) ? openCat : 't1'}
             onClose={() => setGrGenOpen(false)}
             onCreate={handleGrammarCreate}
+          />
+          <window.ReadingGenModal
+            open={rcGenOpen}
+            categories={activeCategories}
+            perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
+            roster={qsRoster}
+            defaultCat={openCat || (activeCategories.find(c => c.id === 'reading') ? 'reading' : (activeCategories[0] && activeCategories[0].id)) || 'reading'}
+            onClose={() => setRcGenOpen(false)}
+            onCreate={handleReadingCreate}
           />
           <window.QuickSetModal
             open={quickSetOpen}

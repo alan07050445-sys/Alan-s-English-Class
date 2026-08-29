@@ -17,7 +17,8 @@ function _mkShuffle(arr) {
 // answer is a real word — is treated as MC-drillable.
 const MK_REVEAL_ONLY = [
   'spelling', 'syllable-div', 'cloze', 'essay',
-  'story-mountain', 'short-answer', 'writing-practice', 'word-sort'
+  'story-mountain', 'short-answer', 'writing-practice', 'word-sort',
+  'reading-skill'   // v386: 答案是「該放哪一格」，做成四選一會誤導
 ];
 
 /* ── Single wrong-question row (answer hidden until tap) ── */

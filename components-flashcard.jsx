@@ -400,40 +400,72 @@ function useFitHeight(ref, enabled, min) {
     const el = ref.current;
     if (!el) return;
     if (!enabled) { el.style.height = ''; return; }
-    const fit = () => {
-      const vv = window.visualViewport;                 // iOS 工具列伸縮時這個才準
-      const vh = (vv && vv.height) || window.innerHeight;
+
+    /* ⚠⚠ v387（Alan：「單字卡會因為我上下滑動變大變小」）——這裡踩過的坑寫清楚，不要再改回去：
+       舊版拿 `getBoundingClientRect().top` 當基準。那是「相對視窗」的座標，
+       捲一下就變 → 算出來的高度跟著變 → 卡片肉眼可見地忽大忽小。
+       還有兩個推手讓它一直重算：
+         ① ResizeObserver 盯著 document.body：卡片一改高度 → body 高度變 →
+            又觸發量測 → 又改高度＝自己餵自己的迴圈（桌機的抖動主要來自這個）。
+         ② 手機／平板捲動時網址列會收合，visualViewport 的 resize 就噴事件 →
+            每捲一下重算一次（手機的抖動來自這個）。
+       現在的做法：
+         · 基準改成「文件座標」(top + 捲動量) → 不管捲到哪，量到的都一樣。
+         · 只有「真的換版面」才重算（寬度變了，或高度變超過 80px ＝轉向），
+           網址列那種幾十 px 的伸縮一律忽略。
+         · 拿掉 body 的 ResizeObserver，改用進場後的幾次補量（圖片/字體載入）。
+       結果＝進來量一次就固定住，捲動不會再改變大小。 */
+    let lastW = 0, lastH = 0, measured = false;
+
+    const apply = () => {
+      const vv = window.visualViewport;
+      const vh = Math.round((vv && vv.height) || window.innerHeight);
+      const vw = Math.round(window.innerWidth);
+      // 網址列伸縮＝高度小幅變動，不是換版面 → 不重算（這就是捲動會抖的元凶）
+      if (measured && vw === lastW && Math.abs(vh - lastH) < 80) return;
+      lastW = vw; lastH = vh; measured = true;
+
+      const host = _fcScrollHost(el);
+      el.style.height = '';                     // 先還原，才量得到自然位置
+      const rect = el.getBoundingClientRect();
+      // 「這一塊在畫面上從哪裡開始」——換算成不受捲動影響的值
+      let top;
+      if (host === document.documentElement) {
+        top = rect.top + (window.scrollY || window.pageYOffset || 0);
+      } else {
+        const hb = host.getBoundingClientRect();
+        top = hb.top + (rect.top - hb.top + host.scrollTop);
+      }
       // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
       const floor = Math.min(min || 320, Math.round(vh * 0.55));
-      const top = el.getBoundingClientRect().top;
       const h = Math.max(floor, Math.round(vh - top - 10));
-      if (el.style.height !== h + 'px') el.style.height = h + 'px';
+      el.style.height = h + 'px';
+
       /* 外層通常還有 padding-bottom（例：.qm-quiz-area 手機是 84px）——
          光算「上緣到視窗底」還是會多出那一截，所以量一次剩下的溢出再扣掉。 */
-      const host = _fcScrollHost(el);
       const over = host === document.documentElement
         ? document.documentElement.scrollHeight - vh
         : host.scrollHeight - host.clientHeight;
-      if (over > 1) {
-        const h2 = Math.max(floor, h - over) + 'px';
-        if (el.style.height !== h2) el.style.height = h2;
-      }
+      if (over > 1) el.style.height = Math.max(floor, h - over) + 'px';
     };
-    fit();
-    /* 圖片還沒載完、字體還沒換好、轉向剛結束時量到的都可能不準 → 多補幾次 */
-    const raf = requestAnimationFrame(fit);
-    const t1 = setTimeout(fit, 150), t2 = setTimeout(fit, 600), t3 = setTimeout(fit, 1500);
-    let ro = null;
-    try { ro = new ResizeObserver(fit); ro.observe(document.body); } catch (e) {}
-    window.addEventListener('resize', fit);
-    window.addEventListener('orientationchange', fit);
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+
+    // 真的換版面才重量：轉向／改視窗大小
+    const relayout = () => { measured = false; apply(); };
+
+    apply();
+    /* 圖片還沒載完、字體還沒換好時量到的可能不準 → 進場後補量幾次。
+       這幾次會強制重量（measured=false），之後就固定住。 */
+    const raf = requestAnimationFrame(relayout);
+    const t1 = setTimeout(relayout, 150), t2 = setTimeout(relayout, 600), t3 = setTimeout(relayout, 1500);
+    window.addEventListener('resize', relayout);
+    window.addEventListener('orientationchange', relayout);
+    // visualViewport 的 resize 走 apply（不是 relayout）＝網址列伸縮會被上面的門檻擋掉
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', apply);
     return () => {
-      if (ro) ro.disconnect();
       cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-      window.removeEventListener('resize', fit);
-      window.removeEventListener('orientationchange', fit);
-      if (window.visualViewport) window.visualViewport.removeEventListener('resize', fit);
+      window.removeEventListener('resize', relayout);
+      window.removeEventListener('orientationchange', relayout);
+      if (window.visualViewport) window.visualViewport.removeEventListener('resize', apply);
     };
   }, [enabled]);
 }

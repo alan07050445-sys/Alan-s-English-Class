@@ -3434,3 +3434,293 @@
   .dm-foot-score { font-size: 16.5px; text-align: center; }
   .dm-mark { width: 24px; height: 24px; font-size: 15px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   v386 閱讀技巧 reading-skill（.rs-*）
+   四種技巧共用「卡片 → 格子」，所以 .rs-chip / .rs-zone 只寫一套，
+   各技巧只換版面（兩欄／因果列／編號列／Venn 圖）。
+   配色沿用站上的暖色紙感：磚紅 #8B3120、苔綠 #4A5A3E、金 #C9A84C。
+   ══════════════════════════════════════════════════════════════════════ */
+.rs-shell { max-width: 1060px; }
+.rs-empty { text-align: center; padding: 60px 20px; color: var(--ink-3, #6b6455); font-size: 16px; }
+
+/* ── 上方四個技巧的小圓點 ── */
+.rs-steps { display: flex; justify-content: center; gap: 10px; margin: 2px 0 14px; }
+.rs-step {
+  width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
+  font-size: 16px; background: #fff; border: 1.5px solid var(--border-soft, #E8E2D0);
+  opacity: .5; transition: all .18s ease;
+}
+.rs-step.past { opacity: .85; background: rgba(74,90,62,.1); border-color: rgba(74,90,62,.3); }
+.rs-step.on {
+  opacity: 1; transform: scale(1.14);
+  background: #fff; border-color: var(--accent, #8B3120);
+  box-shadow: 0 0 0 4px rgba(139,49,32,.12);
+}
+
+/* ── 標題列 ── */
+.rs-head {
+  display: flex; align-items: center; gap: 12px;
+  max-width: 900px; margin: 0 auto 16px; padding: 0 6px;
+}
+.rs-head-main { flex: 1; min-width: 0; }
+.rs-head-en {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 25px; font-weight: 700; color: var(--ink, #15130e); letter-spacing: .005em;
+}
+.rs-head-zh { font-size: 14.5px; color: var(--ink-3, #6b6455); margin-top: 3px; }
+.rs-head-btns { display: flex; gap: 8px; flex: none; }
+.rs-mini {
+  width: 40px; height: 40px; border-radius: 12px; font-size: 17px;
+  background: #fff; border: 1.5px solid var(--border-soft, #E8E2D0);
+  transition: all .16s ease;
+}
+.rs-mini:hover { border-color: var(--border, #DDD6C4); transform: translateY(-1px); }
+.rs-mini.on { background: rgba(201,168,76,.18); border-color: #C9A84C; }
+
+/* ── 卡片（四種技巧共用）── */
+.rs-chip {
+  display: inline-flex; align-items: flex-start; gap: 7px;
+  max-width: 100%; padding: 10px 14px;
+  background: var(--bg-card, #fff); border: 1.5px solid var(--border, #DDD6C4);
+  border-radius: 13px; text-align: left; cursor: pointer;
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 15.5px; line-height: 1.42; color: var(--ink, #15130e);
+  box-shadow: 0 1px 0 rgba(21,19,14,.03), 0 6px 14px -10px rgba(21,19,14,.22);
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease;
+}
+.rs-chip:hover:not(:disabled) { transform: translateY(-2px); border-color: #C9A84C; }
+.rs-chip.sel {
+  border-color: var(--accent, #8B3120); background: #fff;
+  box-shadow: 0 0 0 4px rgba(139,49,32,.14), 0 8px 18px -10px rgba(21,19,14,.3);
+  transform: translateY(-2px);
+}
+.rs-chip.locked {
+  cursor: default; background: rgba(74,90,62,.09);
+  border-color: rgba(74,90,62,.42); box-shadow: none; opacity: 1;
+}
+.rs-chip.bad { border-color: #B84A3A; background: rgba(184,74,58,.08); }
+.rs-chip-tick { color: #4A5A3E; font-weight: 800; flex: none; line-height: 1.42; }
+.rs-chip-tx { min-width: 0; }
+
+/* ── 格子（通用）── */
+.rs-zone {
+  display: flex; flex-direction: column; gap: 9px;
+  min-height: 118px; padding: 12px 13px 14px;
+  border: 2px dashed var(--border, #DDD6C4); border-radius: 16px;
+  background: rgba(255,255,255,.5); cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.rs-zone.drop { border-style: solid; border-color: #C9A84C; background: rgba(201,168,76,.09); }
+.rs-zone.has { border-style: solid; }
+.rs-zone-head {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--sans); font-size: 14px; font-weight: 800;
+  color: var(--ink-2, #5c554a); letter-spacing: .01em;
+}
+.rs-zone-ico { font-size: 16px; }
+.rs-zone-body { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.rs-zone-ph { font-size: 13px; color: var(--ink-faint, #B8B1A0); font-family: var(--sans); }
+
+/* ── 問題與解決：兩欄 ── */
+.rs-zones.rs-two {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  max-width: 900px; margin: 0 auto;
+}
+.rs-ps-problem { border-color: rgba(184,90,69,.4); background: rgba(184,90,69,.05); }
+.rs-ps-problem .rs-zone-head { color: #8B3120; }
+.rs-ps-solution { border-color: rgba(74,90,62,.4); background: rgba(74,90,62,.05); }
+.rs-ps-solution .rs-zone-head { color: #3C4C32; }
+
+/* ── 因果關係：Cause → [ Effect ] ── */
+.rs-ce { display: flex; flex-direction: column; gap: 12px; max-width: 940px; margin: 0 auto; }
+.rs-ce-row {
+  display: grid; grid-template-columns: minmax(0,1fr) 34px minmax(0,1fr);
+  align-items: center; gap: 4px;
+}
+.rs-ce-cause {
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(201,168,76,.1); border: 1.5px solid rgba(201,168,76,.42);
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 15.5px; line-height: 1.42;
+}
+.rs-ce-tag {
+  display: block; font-family: var(--sans); font-size: 11px; font-weight: 800;
+  letter-spacing: .09em; text-transform: uppercase; color: #8a7433; margin-bottom: 3px;
+}
+.rs-ce-arrow { text-align: center; font-size: 21px; color: var(--ink-faint, #B8B1A0); }
+.rs-ce-slot, .rs-seq-slot {
+  display: flex; align-items: center; min-height: 62px; padding: 8px 10px;
+  border: 2px dashed var(--border, #DDD6C4); border-radius: 14px;
+  background: rgba(255,255,255,.5); cursor: pointer;
+  transition: border-color .16s ease, background .16s ease;
+}
+.rs-ce-slot.drop, .rs-seq-slot.drop { border-style: solid; border-color: #C9A84C; background: rgba(201,168,76,.09); }
+.rs-ce-slot.has, .rs-seq-slot.has { border-style: solid; }
+
+/* ── 事件排序：1 2 3 … ── */
+.rs-seq { display: flex; flex-direction: column; gap: 10px; max-width: 780px; margin: 0 auto; }
+.rs-seq-row { display: grid; grid-template-columns: 44px minmax(0,1fr); align-items: center; gap: 12px; }
+.rs-seq-n {
+  width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center;
+  background: rgba(62,74,110,.1); border: 1.5px solid rgba(62,74,110,.32);
+  font-family: 'Lora', Georgia, serif; font-size: 18px; font-weight: 700; color: #3E4A6E;
+}
+
+/* ── 比較對照：Venn 圖 ──
+   svg 用 preserveAspectRatio="none" 跟著容器拉伸，卡片再多圈圈都包得住。
+   ry 給到 64（超出可視範圍）是故意的：讓「腰身」在整個內容高度都夠寬，
+   卡片才不會頂到弧線外面。 */
+.rs-venn { position: relative; max-width: 980px; margin: 0 auto; padding: 4px 0; }
+.rs-venn-art { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.rs-venn-art ellipse { fill-opacity: .07; stroke-width: .55; vector-effect: non-scaling-stroke; }
+.rs-venn-l { fill: #3E6B8B; stroke: #3E6B8B; }
+.rs-venn-r { fill: #B87A2E; stroke: #B87A2E; }
+.rs-venn-grid {
+  position: relative; display: grid;
+  grid-template-columns: 1fr 0.92fr 1fr;
+  padding: 30px 0 34px;
+  min-height: 236px;          /* 還沒放卡片時也要看得出是兩個圈，不然會壓成兩條線 */
+}
+.rs-venn .rs-zone { border: none; background: none; min-height: 130px; }
+.rs-venn .rs-zone.drop { background: rgba(201,168,76,.12); border-radius: 20px; }
+.rs-v-l { padding-left: 7%; padding-right: 10px; }
+.rs-v-r { padding-right: 7%; padding-left: 10px; }
+.rs-v-b { padding-left: 6px; padding-right: 6px; }
+.rs-v-l .rs-zone-head { color: #2F5471; }
+.rs-v-b .rs-zone-head { color: #5E4070; justify-content: center; }
+.rs-v-r .rs-zone-head { color: #8A5A1E; }
+.rs-v-b .rs-zone-body { align-items: center; text-align: center; }
+.rs-v-l .rs-chip { border-color: rgba(62,107,139,.42); }
+.rs-v-b .rs-chip { border-color: rgba(94,64,112,.42); }
+.rs-v-r .rs-chip { border-color: rgba(184,122,46,.45); }
+.rs-venn .rs-chip.locked { border-color: rgba(74,90,62,.42); }
+
+/* ── 下面的置物區 ── */
+.rs-tray-wrap { max-width: 940px; margin: 20px auto 0; }
+.rs-tray-lab {
+  font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: .04em;
+  color: var(--ink-3, #6b6455); text-align: center; margin-bottom: 9px;
+}
+.rs-tray {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  min-height: 64px; padding: 13px; border-radius: 18px;
+  background: rgba(21,19,14,.035); border: 1.5px solid var(--border-soft, #E8E2D0);
+}
+.rs-tray-empty { color: var(--ink-faint, #B8B1A0); font-size: 13.5px; align-self: center; }
+
+/* ── 回饋 ── */
+.rs-fb {
+  max-width: 900px; margin: 16px auto 0; padding: 12px 16px; border-radius: 14px;
+  font-size: 15px; line-height: 1.55;
+}
+.rs-fb.bad { background: rgba(184,74,58,.08); border: 1.5px solid rgba(184,74,58,.3); color: #7A2A1E; }
+.rs-fb.good { background: rgba(74,90,62,.1); border: 1.5px solid rgba(74,90,62,.34); color: #35452B; text-align: center; font-weight: 700; }
+.rs-fb-hints { margin: 8px 0 0; padding-left: 20px; font-size: 14px; }
+.rs-fb-hints li { margin-top: 4px; }
+.rs-fb-hints b { font-family: 'Lora', Georgia, serif; }
+
+.rs-foot { display: flex; justify-content: center; gap: 12px; margin: 20px 0 8px; flex-wrap: wrap; }
+/* .qm-btn 本體是 width:100% → 在這裡會撐滿一整條，跟 .ls-foot 一樣要收回來 */
+.rs-foot .qm-btn { width: auto; flex: 0 1 auto; min-width: 190px; max-width: 320px; }
+
+/* ── 再看一次文章 ── */
+.rs-pass-back {
+  position: fixed; inset: 0; z-index: 90; background: rgba(21,19,14,.42);
+  display: grid; place-items: center; padding: 20px; backdrop-filter: blur(2px);
+}
+.rs-pass {
+  width: min(760px, 100%); max-height: 82vh; display: flex; flex-direction: column;
+  background: var(--bg-paper, #FBF8F1); border-radius: 20px; overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(21,19,14,.45);
+}
+.rs-pass-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 15px 18px; border-bottom: 1.5px solid var(--border-soft, #E8E2D0);
+  font-weight: 800; font-size: 16px;
+}
+.rs-pass-x { font-size: 19px; color: var(--ink-3, #6b6455); padding: 0 4px; }
+.rs-pass-body {
+  padding: 18px 22px 26px; overflow-y: auto; white-space: pre-wrap;
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 16.5px; line-height: 1.78;
+}
+
+/* ── 成績頁的錯題列 ── */
+.rs-review { max-width: 640px; margin: 20px auto 0; text-align: left; }
+.rs-review-head { font-size: 14px; font-weight: 800; color: #8B3120; margin-bottom: 9px; }
+.rs-review-row {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 9px 12px; border-radius: 11px; background: rgba(184,74,58,.06);
+  margin-bottom: 7px; font-size: 14.5px;
+}
+.rs-review-row b { font-family: 'Lora', Georgia, serif; font-weight: 600; }
+.rs-review-eq { color: var(--ink-faint, #B8B1A0); }
+
+/* ── intro ── */
+.rs-intro-list { max-width: 460px; margin: 16px auto 4px; display: flex; flex-direction: column; gap: 8px; }
+.rs-intro-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 13px;
+  background: #fff; border: 1.5px solid var(--border-soft, #E8E2D0); border-radius: 13px;
+  text-align: left;
+}
+.rs-intro-n {
+  width: 22px; height: 22px; border-radius: 7px; flex: none; display: grid; place-items: center;
+  background: rgba(139,49,32,.1); color: #8B3120; font-size: 12px; font-weight: 800;
+}
+.rs-intro-ico { font-size: 17px; flex: none; }
+.rs-intro-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rs-intro-txt b { font-family: 'Lora', Georgia, serif; font-size: 15px; }
+.rs-intro-txt em { font-style: normal; font-size: 12.5px; color: var(--ink-3, #6b6455); }
+.rs-intro-cnt { font-size: 12.5px; color: var(--ink-faint, #B8B1A0); flex: none; }
+
+/* ── 放錯的時候抖一下（兩個 class 輪流換，同一塊連錯兩次也會再播一次）── */
+@keyframes rsShake {
+  0%,100% { transform: translateX(0); }
+  18% { transform: translateX(-7px); } 38% { transform: translateX(6px); }
+  58% { transform: translateX(-4px); } 78% { transform: translateX(3px); }
+}
+.rs-board.k0, .rs-board.k1 { animation: rsShake .42s ease; }
+
+/* ── 手機／平板 ──
+   v376 學到的：iPad 橫式是「寬 1180、只有 760 高」，只照寬度瘦身會不夠。 */
+@media (max-width: 780px) {
+  .rs-head-en { font-size: 21px; }
+  .rs-zones.rs-two { grid-template-columns: 1fr; gap: 12px; }
+  .rs-ce-row { grid-template-columns: 1fr; gap: 2px; }
+  .rs-ce-arrow { transform: rotate(90deg); font-size: 18px; }
+  .rs-seq-row { grid-template-columns: 36px minmax(0,1fr); gap: 9px; }
+  .rs-seq-n { width: 34px; height: 34px; font-size: 16px; border-radius: 11px; }
+  .rs-chip { font-size: 14.5px; padding: 9px 12px; }
+  /* Venn 圖在窄螢幕會擠成一條 → 收起圈圈，改成三張彩色卡（意思一樣，讀得懂） */
+  .rs-venn-art { display: none; }
+  .rs-venn-grid { grid-template-columns: 1fr; padding: 0; gap: 12px; }
+  .rs-venn .rs-zone { border: 2px dashed var(--border, #DDD6C4); background: rgba(255,255,255,.5); min-height: 92px; padding: 12px 13px 14px; }
+  .rs-v-l, .rs-v-b, .rs-v-r { padding-left: 13px; padding-right: 13px; }
+  .rs-v-l { border-color: rgba(62,107,139,.45) !important; background: rgba(62,107,139,.05) !important; }
+  .rs-v-b { border-color: rgba(94,64,112,.45) !important; background: rgba(94,64,112,.05) !important; }
+  .rs-v-r { border-color: rgba(184,122,46,.48) !important; background: rgba(184,122,46,.05) !important; }
+  .rs-v-b .rs-zone-head, .rs-v-b .rs-zone-body { justify-content: flex-start; align-items: flex-start; text-align: left; }
+}
+@media (max-height: 780px) and (min-width: 781px) {
+  .rs-steps { margin: 0 0 8px; }
+  .rs-step { width: 28px; height: 28px; border-radius: 9px; font-size: 14px; }
+  .rs-head { margin-bottom: 10px; }
+  .rs-head-en { font-size: 21px; }
+  .rs-zone { min-height: 96px; padding: 10px 11px 12px; }
+  .rs-venn-grid { padding: 20px 0 22px; }
+  .rs-tray-wrap { margin-top: 13px; }
+  .rs-tray { min-height: 54px; padding: 10px; }
+  .rs-foot { margin: 13px 0 6px; }
+  .rs-fb { margin-top: 11px; padding: 9px 14px; font-size: 14px; }
+}
+
+/* v386: 共用的「看文章」按鈕（選擇題／閱讀簡答用；閱讀技巧用 .rs-mini 的小圖示版） */
+.qm-read-row { display: flex; justify-content: center; margin: 8px 0 14px; }
+.qm-read-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 18px; border-radius: 999px;
+  background: #fff; border: 1.5px solid var(--border, #DDD6C4);
+  font-family: var(--sans); font-size: 13.5px; font-weight: 700; color: var(--ink-2, #5c554a);
+  box-shadow: 0 1px 0 rgba(21,19,14,.03), 0 6px 14px -10px rgba(21,19,14,.22);
+  transition: all .15s ease;
+}
+.qm-read-btn:hover { border-color: #C9A84C; transform: translateY(-1px); }

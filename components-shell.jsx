@@ -27,10 +27,74 @@ function Icon({ name, size = 16 }) {
 }
 
 /* ───────── Header ───────── */
+/* v388（Alan：「我想要在用我的網頁的時候可以設定調整成全螢幕，不然上面的網址很礙眼」）
+   ⚠ 平台差異很大，所以做成「能全螢幕就全螢幕，不能就教他加到主畫面」：
+     · Chrome / Edge / Safari(Mac) / iPadOS Safari 16.4+ → Fullscreen API 可用
+     · iPhone Safari 完全不支援元素全螢幕 → 只能靠 PWA（manifest 已經是 standalone）
+   已經在主畫面 App 模式下開啟時，本來就沒有網址列 → 這顆鈕直接不顯示。 */
+function FullscreenBtn() {
+  const [on, setOn] = React.useState(false);
+  const [tip, setTip] = React.useState('');
+  const el = () => document.documentElement;
+  // 有方法還不夠——iframe 內嵌或被政策擋住時 fullscreenEnabled 會是 false
+  const can = !!(el().requestFullscreen || el().webkitRequestFullscreen)
+    && (document.fullscreenEnabled !== false) && (document.webkitFullscreenEnabled !== false);
+  const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+    || window.navigator.standalone === true;
+
+  React.useEffect(() => {
+    const sync = () => setOn(!!(document.fullscreenElement || document.webkitFullscreenElement));
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      document.removeEventListener('webkitfullscreenchange', sync);
+    };
+  }, []);
+
+  if (standalone) return null;   // 已經是 App 模式，沒有網址列可以擋
+
+  const toggle = async () => {
+    if (!can) {
+      setTip('這台裝置的瀏覽器不支援全螢幕。請用分享選單的「加入主畫面」，開起來就沒有網址列了。');
+      setTimeout(() => setTip(''), 6000);
+      return;
+    }
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen());
+      } else {
+        await (el().requestFullscreen ? el().requestFullscreen() : el().webkitRequestFullscreen());
+        /* ⚠ 有些環境（內嵌瀏覽器、部分平板）requestFullscreen 會「乖乖 resolve 但什麼都沒發生」——
+           不補這一段的話，學生按了沒反應也不知道為什麼。實測過就是這種情況。 */
+        setTimeout(() => {
+          if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
+            setTip('這台裝置擋住了全螢幕。請用分享選單的「加入主畫面」，開起來就沒有網址列了。');
+            setTimeout(() => setTip(''), 6000);
+          }
+        }, 400);
+      }
+    } catch (e) {
+      setTip('全螢幕被瀏覽器擋住了。可以改用「加入主畫面」。');
+      setTimeout(() => setTip(''), 6000);
+    }
+  };
+
+  return (
+    <>
+      <button className={'fs-btn' + (on ? ' on' : '')} onClick={toggle}
+        title={on ? '離開全螢幕' : '全螢幕（把上面的網址列收起來）'} aria-label="全螢幕">
+        {on ? '⛶' : '⛶'}
+      </button>
+      {tip && <div className="fs-tip">{tip}</div>}
+    </>
+  );
+}
+
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek, onTermSetup, onQuickSet, onGrammarGen,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -89,6 +153,8 @@ function Header({
 
             {/* Auth area */}
             <div className="header-auth">
+              {/* v388: 全螢幕——放最前面，學生老師都用得到 */}
+              <FullscreenBtn/>
               {/* v342: 集點——學生看得到自己的星星，點開是紀錄＋商店 */}
               {user && onShowStars && (
                 <button className="stars-btn" onClick={onShowStars} title="我的星星與商店">
@@ -140,6 +206,9 @@ function Header({
             <div className="edit-banner-tools">
               {onGrammarGen && (
                 <button className="banner-btn gr" onClick={onGrammarGen}>✨ 出時態題目</button>
+              )}
+              {onReadingGen && (
+                <button className="banner-btn rc" onClick={onReadingGen}>📖 出閱讀理解</button>
               )}
               {onQuickSet && (
                 <button className="banner-btn quick" onClick={onQuickSet}>⚡ 貼單字 · 一次建立整套</button>
@@ -2358,4 +2427,4 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
   );
 }
 
-Object.assign(window, { Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+Object.assign(window, { FullscreenBtn, Icon, Header, Hero, LoginScreen, LoginScreenLegacy, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

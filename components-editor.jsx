@@ -12,6 +12,7 @@ const TYPE_ZH = {
   flashcard: '單字卡', fillblank: '填空', quiz: '選擇題', spelling: '聽寫',
   'writing-practice': 'AI 造句批改', 'type-answer': '打答案', 'guided-reading': '分段閱讀',
   upload: '上傳作業', 'short-answer': '閱讀簡答', cloze: '段落填空', 'def-match': '配對連線', lesson: '教學卡',
+  'reading-skill': '閱讀技巧',
   essay: '意見文寫作', 'syllable-div': '切音節', 'word-sort': '分類排序',
   'story-mountain': '故事山脈', 'circle-answer': '圈出答案',
 };
@@ -32,6 +33,7 @@ const TYPE_OPTIONS = [
   { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
   { id: "def-match",        label: "配對連線 🔗",       hint: "🔗 配對連線 — 左邊單字、右邊解釋（自動打亂），學生點一點連起來，系統自動批改" },
   { id: "lesson",           label: "教學卡 📘",        hint: "📘 教學卡 — 單元開頭的「先教再練」：這是什麼／什麼時候用／形式表／常見錯誤／老師示範／小試身手" },
+  { id: "reading-skill",    label: "閱讀技巧 🔍",       hint: "🔍 閱讀技巧 — 學校會考的 Cause & Effect／Problem & Solution／Sequencing／Compare & Contrast（Venn 圖）。點一下卡片、再點格子放進去，自動批改。" },
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
@@ -72,7 +74,7 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
     // v261: 點到編輯器外面「不再」直接關閉——出到一半的題目會全部不見（Alan 踩過）。
     // 要離開請按右上 ✕ 或 Cancel。
     <div className="modal-backdrop">
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match" || form.type === "reading-skill") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -316,7 +318,15 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
               onChangePassage={v => update("smPassage", v)}
               onChangeHints={h => update("smHints", h)}
             />
-          ) : form.type === "lesson" ? (
+          ) : form.type === "reading-skill" ? (
+        /* v386: 閱讀技巧。跟 ReadingGenModal 的校稿頁用同一組 RsBlockEditor，兩邊一定一致。 */
+        <ReadingSkillEditor
+          passage={form.rsPassage || ''}
+          blocks={form.rsBlocks || []}
+          onChangePassage={v => update('rsPassage', v)}
+          onChangeBlocks={b => update('rsBlocks', b)}
+        />
+      ) : form.type === "lesson" ? (
             /* v383: 教學卡。前兩欄常改，其餘用 JSON 一次editing（老師很少動，動了也看得懂）。 */
             <>
               <div className="field">
@@ -2218,6 +2228,30 @@ function grOcrScaled(cv) {
   return c2;
 }
 
+/* v387（Alan：「分段閱讀上傳 PDF 太久了」）——記憶體那一半的修法。
+   原本 srcCache 存的是「整張已解碼的畫布」：1600×2264 × 4 bytes ＝ 一頁 14.5MB，
+   20 頁就 290MB，40 頁 580MB。iPad 上會 GC 抖動、畫布被系統回收、甚至整頁掛掉，
+   而且越後面的頁越慢——這正是「太久」的體感來源之一。
+   改成存壓好的 JPEG blob（一頁約 0.5MB，少 24 倍），
+   背景 OCR 要用的時候再解碼，而且直接解到 1200px（OCR 本來就只吃這個大小）。 */
+async function grDecodeScaled(blob, MAX) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('圖片解碼失敗'));
+      i.src = url;
+    });
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    const k = Math.min(1, (MAX || 1200) / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  } finally { URL.revokeObjectURL(url); }
+}
+
 // 匯入解析——沿用測驗題慣例「第一個選項＝正解」；0–1 個選項欄＝簡答題；
 // 分段閱讀作答時不洗牌，所以匯入當下就把選項打散。
 function grParseImport(text) {
@@ -2349,6 +2383,9 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
   const [uploading, setUploading] = useS('');
   const [upErr, setUpErr] = useS('');
   const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
+  const [bulkOpen, setBulkOpen] = useS(false);   // v387: 一次匯入所有段落的題目
+  const [bulkText, setBulkText] = useS('');
+  const [bulkReplace, setBulkReplace] = useS(false);
   const [impSeg, setImpSeg] = useS(null);   // 哪個匯入面板打開（段索引 | 'final'）
   const [impText, setImpText] = useS('');
   const [reOcrSeg, setReOcrSeg] = useS(null); // v288: 等老師重選原始檔辨識的段落
@@ -2359,7 +2396,7 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
   const audioRef = React.useRef(null);
   // v299: OCR 不再卡住匯入——背景跑。canvasCache 留著剛匯入的畫布（避開 Storage CORS）；
   // segRef 永遠指向最新 segments，背景回填才不會蓋掉老師同時在改的內容。
-  const canvasCache = React.useRef(new Map()); // img.url -> 已解碼 canvas
+  const canvasCache = React.useRef(new Map()); // v387: img.url -> 壓好的 JPEG blob（本來存整張畫布，太吃記憶體）
   const segRef = React.useRef(segments); segRef.current = segments;
   const bgBusy = React.useRef(false);
   const [ocrStatus, setOcrStatus] = useS(''); // 非阻塞的小提示（不 disable 匯入鈕）
@@ -2374,16 +2411,64 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
         const left = (segRef.current || []).filter(s => s.img && s.img.url && !s.img.wordsId && canvasCache.current.has(s.img.url)).length;
         setOcrStatus(`背景辨識單字中…還有 ${left} 張（可繼續編輯）`);
         if (!worker) { try { worker = await grWarmWorker(); } catch (e) { break; } } // 載不動就跳過，閱讀本身不受影響
-        const cv = canvasCache.current.get(cur.img.url);
+        const src = canvasCache.current.get(cur.img.url);
         let wordsId;
-        try { wordsId = await ocrAndSave(worker, grOcrScaled(cv)); } catch (e) {}
+        try {
+          // v387: 快取存的是 blob → 現解碼成 OCR 要的大小（1200px）；舊路徑若還是畫布也照吃
+          const cv = (src && src.getContext) ? grOcrScaled(src) : await grDecodeScaled(src, 1200);
+          wordsId = await ocrAndSave(worker, cv);
+        } catch (e) {}
         canvasCache.current.delete(cur.img.url); // 不論成功都移除，避免卡死迴圈
         if (wordsId) onChange((segRef.current || []).map(s => (s.img && s.img.url === cur.img.url) ? { ...s, img: { ...s.img, wordsId } } : s));
       }
     } finally { bgBusy.current = false; setOcrStatus(''); }
   };
 
-  // v290: 取一段的「主文」文字——有框選就只拿主文框內的行；沒框就整個裁切帶
+  /* v387（Alan：「12 頁我就要上傳 12 次題目，想用匯入的方式一次搞定」）
+   ── 一次匯入所有段落的題目 ──
+   行格式在原本的基礎上，最前面多一欄「段號」：
+       段號 [Tab] 題目 [Tab] 正解 [Tab] 其他選項…
+   段號寫 0 / final / 綜合 ＝ 放到「整篇綜合題」。
+   選擇題／簡答的判斷、第一個選項＝正解、匯入時打散、補滿 4 格——
+   全部沿用 grParseImport 的規則（同一套，不另立門戶）。 */
+function grParseBulk(text, segCount) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/\r/g, '')).filter(l => l.trim());
+  const errs = [], bySeg = {}, finalAdds = [];
+  let total = 0;
+  lines.forEach((line, li) => {
+    const cols = line.split('\t').map(c => c.trim());
+    const tag = (cols[0] || '').trim();
+    const q = cols[1] || '';
+    if (!tag) { errs.push(`第 ${li + 1} 行：最前面要先寫段號`); return; }
+    if (!q) { errs.push(`第 ${li + 1} 行：沒有題目文字`); return; }
+    const isFinal = /^(0|final|綜合|整篇)$/i.test(tag);
+    let idx = -1;
+    if (!isFinal) {
+      const m = tag.match(/\d+/);                       // 「第3段」「P3」「3.」都吃
+      if (!m) { errs.push(`第 ${li + 1} 行：看不懂段號「${tag}」`); return; }
+      idx = parseInt(m[0], 10) - 1;
+      if (idx < 0 || idx >= segCount) { errs.push(`第 ${li + 1} 行：沒有第 ${m[0]} 段（目前只有 ${segCount} 段）`); return; }
+    }
+    const rest = cols.slice(2).filter(Boolean);
+    let item;
+    if (rest.length >= 2) {
+      const options = rest.slice(0, 4);
+      const correctText = options[0];
+      for (let i = options.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [options[i], options[j]] = [options[j], options[i]]; }
+      const answer = options.indexOf(correctText);
+      while (options.length < 4) options.push('');
+      item = { id: grMkId('gq'), kind: 'mc', q, options, answer };
+    } else {
+      item = { id: grMkId('gq'), kind: 'short', q, keyPoints: rest[0] || '' };
+    }
+    total++;
+    if (isFinal) finalAdds.push(item);
+    else (bySeg[idx] = bySeg[idx] || []).push(item);
+  });
+  return { errs, bySeg, finalAdds, total };
+}
+
+// v290: 取一段的「主文」文字——有框選就只拿主文框內的行；沒框就整個裁切帶
   const grSegMainText = async (s) => {
     if ((s.text || '').trim()) return s.text.trim();
     if (!s.img || !s.img.wordsId) return '';
@@ -2459,9 +2544,9 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
     try {
       for (let i = 0; i < files.length; i++) {
         setUploading(`上傳中 ${i + 1}/${files.length}…`);
-        const { blob, ar, cv } = await shrinkPhoto(files[i]);
+        const { blob, ar } = await shrinkPhoto(files[i]);
         const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
-        canvasCache.current.set(url, cv); // v299: 留著給背景 OCR（避開下載 CORS）
+        canvasCache.current.set(url, blob); // v299/v387: 留著給背景 OCR（避開下載 CORS）；存 blob 不存畫布
         added.push({ id: mkId('gs'), text: '', img: { url, ar, y0: 0, y1: 1 }, questions: [] });
       }
     } catch (err) {
@@ -2491,28 +2576,54 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
     if (!file) return;
     setUpErr('');
     const added = [];
+    const pageErrs = [];
     try {
       setUploading('讀取 PDF…');
       const pdfjs = await loadPdfJs();
       const buf = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument({ data: buf }).promise;
-      for (let p = 1; p <= pdf.numPages; p++) {
-        setUploading(`轉換第 ${p}/${pdf.numPages} 頁…`);
-        const page = await pdf.getPage(p);
-        const vp1 = page.getViewport({ scale: 1 });
-        const vp = page.getViewport({ scale: Math.min(3, 1600 / vp1.width) });
-        const cv = document.createElement('canvas');
-        cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
-        await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
-        const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('頁面轉檔失敗')), 'image/jpeg', 0.85));
-        setUploading(`上傳第 ${p}/${pdf.numPages} 頁…`);
-        const url = await window.uploadReadingPhoto(itemId || 'gr', blob);
-        canvasCache.current.set(url, cv); // v299: 留著給背景 OCR
-        added.push({ id: mkId('gs'), text: '', img: { url, ar: cv.height / cv.width, y0: 0, y1: 1 }, questions: [] });
+      const N = pdf.numPages;
+      /* v387（Alan：「上傳 PDF 太久了」）——原本是「算圖→上傳→算圖→上傳」整條都是序列的，
+         而上傳（含 getDownloadURL 那一趟）才是最花時間的一段，網路等待期間 CPU 完全閒著。
+         改成「一次算 3 頁 → 這 3 頁同時上傳 → 再算下 3 頁」。
+         為什麼是分批而不是全開：全部一起丟會同時佔住記憶體與頻寬，
+         而且錯誤處理很難寫對；分批的順序天然是對的（組內再依頁碼排一次）。
+         單一頁失敗不再讓整份匯入前功盡棄——記下來，其他頁照樣建立。 */
+      const LIMIT = 3;
+      for (let start = 1; start <= N; start += LIMIT) {
+        const group = [];
+        for (let p = start; p < start + LIMIT && p <= N; p++) {
+          setUploading(`轉換第 ${p}/${N} 頁…`);
+          const page = await pdf.getPage(p);
+          const vp1 = page.getViewport({ scale: 1 });
+          // v387: 1600 → 1400。OCR 本來就只吃 1200px，1600 純粹是多算多傳；
+          //       1400 仍比 OCR 需要的大，學生放大看也還夠清楚。
+          const vp = page.getViewport({ scale: Math.min(3, 1400 / vp1.width) });
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+          await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+          const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('頁面轉檔失敗')), 'image/jpeg', 0.85));
+          const ar = cv.height / cv.width;
+          cv.width = cv.height = 0;                 // 立刻把這張畫布的記憶體還回去
+          try { page.cleanup(); } catch (e2) {}     // pdf.js 也會留著解碼後的影像
+          group.push({ p, blob, ar });
+        }
+        const last = Math.min(start + LIMIT - 1, N);
+        setUploading(`上傳第 ${start}${last > start ? '–' + last : ''}/${N} 頁…`);
+        const done = await Promise.all(group.map(async (g) => {
+          try {
+            const url = await window.uploadReadingPhoto(itemId || 'gr', g.blob);
+            canvasCache.current.set(url, g.blob);   // v387: 存 blob 給背景 OCR
+            return { p: g.p, seg: { id: mkId('gs'), text: '', img: { url, ar: g.ar, y0: 0, y1: 1 }, questions: [] } };
+          } catch (err) { pageErrs.push(g.p); return null; }
+        }));
+        done.filter(Boolean).sort((a, b) => a.p - b.p).forEach(r => added.push(r.seg));
       }
+      try { pdf.destroy(); } catch (e2) {}
     } catch (err) {
       setUpErr('PDF 匯入失敗：' + ((err && err.message) || err));
     }
+    if (pageErrs.length) setUpErr(`第 ${pageErrs.join('、')} 頁上傳失敗（其餘 ${added.length} 頁已建立），可以再匯入一次補這幾頁。`);
     if (added.length) { onChange([...segRef.current, ...added]); queueBgOcr(); } // 頁面立刻出現，OCR 背景跑
     setUploading('');
   };
@@ -2627,6 +2738,21 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
   };
   const addSeg = () => onChange([...segments, { id: mkId('gs'), text: '', questions: [] }]);
 
+  // v387: 一次匯入所有段落的題目
+  const bulk = bulkOpen ? grParseBulk(bulkText, segments.length) : { errs: [], bySeg: {}, finalAdds: [], total: 0 };
+  const doBulk = () => {
+    if (bulk.errs.length || !bulk.total) return;
+    onChange(segments.map((s, i) => {
+      const adds = bulk.bySeg[i];
+      if (!adds) return bulkReplace ? { ...s, questions: [] } : s;
+      return { ...s, questions: (bulkReplace ? [] : (s.questions || [])).concat(adds) };
+    }));
+    if (bulk.finalAdds.length || bulkReplace) {
+      onChangeFinal((bulkReplace ? [] : (finalQs || [])).concat(bulk.finalAdds));
+    }
+    setBulkText(''); setBulkOpen(false); setBulkReplace(false);
+  };
+
   const pasteChunks = pasteText.split(/\n\s*\n+/).map(t => t.trim()).filter(Boolean);
   const doPaste = () => {
     if (!pasteChunks.length) return;
@@ -2677,8 +2803,52 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
           <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
             {pasting ? '✕ 取消' : '⬇ 貼文字'}
           </button>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} disabled={!segments.length}
+            onClick={() => setBulkOpen(v => !v)}
+            title="12 頁不用開 12 次——一次把每一頁的題目都貼進來">
+            {bulkOpen ? '✕ 取消' : '📋 一次匯入所有題目'}
+          </button>
         </div>
       </div>
+      {/* v387: 一次把 12 頁的題目全部貼進來，不用一段一段開 */}
+      {bulkOpen && (
+        <div style={{border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',margin:'0 0 10px',background:'var(--bg-paper,#FBF8F1)'}}>
+          <div style={{fontSize:11.5,lineHeight:1.75,color:'var(--ink-2,#5c554a)',marginBottom:7}}>
+            一行一題，最前面多寫一個<b>段號</b>（就是下面每段標題的「第 N 段」）：<br/>
+            <code>段號 [Tab] 題目 [Tab] 正解 [Tab] 其他選項…</code>（選擇題，第一個＝正解，最多 4 個，匯入時自動打散）<br/>
+            <code>段號 [Tab] 題目 [Tab] 答案要點</code>（簡答題——選項欄只有 0–1 個就算簡答）<br/>
+            段號寫 <code>0</code> 或 <code>綜合</code> ＝ 放到最後的整篇綜合題。可以直接從 Excel／Google 試算表整段複製貼上。
+          </div>
+          <textarea rows={7} value={bulkText} onChange={e => setBulkText(e.target.value)}
+            placeholder={'1\tWhere did the wolves live?\tOn an island\tIn a city\tIn a cave\n1\tWhy did the pups get on the raft?\tThey were curious / it looked strange\n2\tWhat happened to the deer?\tThere were too many\tThey all died\tThey left\n0\tWhat is the main idea of the whole story?\tnature needs balance / wolves keep the deer in check'}
+            style={{width:'100%',fontFamily:'var(--mono,monospace)',fontSize:12,lineHeight:1.6,padding:'8px 10px',
+              border:'1px solid var(--border)',background:'#fff',color:'var(--ink)',borderRadius:8,resize:'vertical',boxSizing:'border-box'}}/>
+          {bulk.errs.length > 0 && (
+            <div style={{fontSize:11.5,color:'#dc2626',whiteSpace:'pre-wrap',marginTop:6}}>
+              {bulk.errs.slice(0, 6).join('\n')}{bulk.errs.length > 6 ? `\n…還有 ${bulk.errs.length - 6} 個問題` : ''}
+            </div>
+          )}
+          <div style={{display:'flex',alignItems:'center',gap:10,marginTop:8,flexWrap:'wrap'}}>
+            <span style={{fontSize:11.5,color:'var(--ink-3,#6b6455)'}}>
+              {bulk.total
+                ? Object.keys(bulk.bySeg).sort((a,b)=>a-b).map(i => `第${+i+1}段 ${bulk.bySeg[i].length}題`)
+                    .concat(bulk.finalAdds.length ? [`綜合 ${bulk.finalAdds.length}題`] : []).join(' · ')
+                : '貼上之後這裡會顯示每一段會拿到幾題'}
+            </span>
+            <label style={{fontSize:11.5,display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}>
+              <input type="checkbox" checked={bulkReplace} onChange={e => setBulkReplace(e.target.checked)}/>
+              覆蓋原本的題目（不勾＝加在後面）
+            </label>
+            <span style={{flex:1}}/>
+            <button className="btn ghost" style={{fontSize:12,padding:'5px 12px'}}
+              onClick={() => { setBulkText(''); setBulkOpen(false); }}>取消</button>
+            <button className="btn primary" style={{fontSize:12,padding:'5px 14px'}}
+              onClick={doBulk} disabled={!bulk.total || bulk.errs.length > 0}>
+              匯入{bulk.total ? `（共 ${bulk.total} 題）` : ''}
+            </button>
+          </div>
+        </div>
+      )}
       {ocrStatus && (
         <div style={{fontSize:11.5,color:'#8a6d1c',background:'#fbf3de',border:'1px solid #ead9ae',borderRadius:8,padding:'5px 11px',margin:'6px 0 0',display:'inline-block'}}>⏳ {ocrStatus}</div>
       )}
@@ -3927,4 +4097,540 @@ function ClozeEditor({ passage, onChangePassage }) {
   );
 }
 
-Object.assign(window, { EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems });
+/* ══════════════════════════════════════════════════════════════════════════
+   v386: 閱讀技巧的編輯器（reading-skill）
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠ 這一組 RsBlockEditor 同時被兩個地方用：
+     ① EditorModal 的 reading-skill 分支（老師事後想改）
+     ② ReadingGenModal 的校稿頁（AI 出完先看過再建立）
+   只寫一份，兩邊行為一定一致（v382 的教訓：校稿頁跟編輯器長不一樣＝老師會困惑）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const RS_ZH = {
+  'problem-solution': '🧩 問題與解決 Problem & Solution',
+  'cause-effect':     '⚡ 因果關係 Cause & Effect',
+  'sequence':         '🔢 事件排序 Sequencing',
+  'compare-contrast': '⚖️ 比較對照 Compare & Contrast',
+};
+
+function rsBlankBlock(kind) {
+  const mk = () => (window.rcNewChip ? window.rcNewChip() : { id: 'rc' + Math.random().toString(36).slice(2, 8), text: '', zone: '', why: '' });
+  const id = window.rcNewBlockId ? window.rcNewBlockId() : 'rb' + Math.random().toString(36).slice(2, 8);
+  if (kind === 'problem-solution') {
+    return { id, kind, zones: [{ id: 'problem', label: 'Problem 問題', ico: '⚠️' }, { id: 'solution', label: 'Solution 解決方法', ico: '💡' }],
+      chips: [{ ...mk(), zone: 'problem' }, { ...mk(), zone: 'problem' }, { ...mk(), zone: 'solution' }, { ...mk(), zone: 'solution' }] };
+  }
+  if (kind === 'cause-effect') {
+    return window.rcRepairBlock({ id, kind, zones: [{ id: 'c0', label: '', ico: '⚡' }, { id: 'c1', label: '', ico: '⚡' }, { id: 'c2', label: '', ico: '⚡' }],
+      chips: [mk(), mk(), mk()] });
+  }
+  if (kind === 'sequence') {
+    return window.rcResequence({ id, kind, zones: [], chips: [mk(), mk(), mk(), mk(), mk()] });
+  }
+  // ⚠ 至少 6 張，不然老師把空白格全部填完，這一塊還是紅的（rcValidBlock 要求 6–9）
+  return { id, kind, leftLabel: '', rightLabel: '',
+    zones: [{ id: 'left', label: '', ico: '🔵' }, { id: 'both', label: '兩邊都有 Both', ico: '🟣' }, { id: 'right', label: '', ico: '🟠' }],
+    chips: [{ ...mk(), zone: 'left' }, { ...mk(), zone: 'left' }, { ...mk(), zone: 'both' },
+            { ...mk(), zone: 'both' }, { ...mk(), zone: 'right' }, { ...mk(), zone: 'right' }] };
+}
+
+function RsBlockEditor({ block, onChange, onDelete }) {
+  if (!block) return null;
+  const kind = block.kind;
+  const chips = block.chips || [];
+  const zones = block.zones || [];
+  const bad = !window.rcValidBlock(block);
+
+  const setChip = (i, k, v) => onChange({ ...block, chips: chips.map((c, j) => j === i ? { ...c, [k]: v } : c) });
+  const setZone = (i, v) => onChange({ ...block, zones: zones.map((z, j) => j === i ? { ...z, label: v } : z) });
+  const addChip = () => {
+    const nc = window.rcNewChip();
+    const next = { ...block, chips: chips.concat([{ ...nc, zone: kind === 'problem-solution' ? 'problem' : kind === 'compare-contrast' ? 'left' : '' }]) };
+    if (kind === 'cause-effect') next.zones = zones.concat([{ id: 'c' + zones.length, label: '', ico: '⚡' }]);
+    onChange(window.rcRepairBlock(next));
+  };
+  const delChip = (i) => onChange(window.rcFilterChips(block, (_c, j) => j !== i));
+  const move = (i, d) => {
+    const j = i + d; if (j < 0 || j >= chips.length) return;
+    const arr = chips.slice(); const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    const next = { ...block, chips: arr };
+    if (kind === 'cause-effect') {
+      const zs = zones.slice(); const tz = zs[i]; zs[i] = zs[j]; zs[j] = tz; next.zones = zs;
+    }
+    onChange(window.rcRepairBlock(next));
+  };
+  const setSide = (side, v) => {
+    const zid = side === 'left' ? 'left' : 'right';
+    onChange({
+      ...block, [side + 'Label']: v,
+      zones: zones.map(z => z.id === zid ? { ...z, label: v } : z),
+    });
+  };
+
+  const zoneSel = (i, c) => (
+    <select className="rc-z" value={c.zone || ''} onChange={e => setChip(i, 'zone', e.target.value)}>
+      {kind === 'problem-solution' ? (
+        <><option value="problem">⚠️ Problem</option><option value="solution">💡 Solution</option></>
+      ) : (
+        <>
+          <option value="left">🔵 只有 {block.leftLabel || '左邊'}</option>
+          <option value="both">🟣 兩邊都有</option>
+          <option value="right">🟠 只有 {block.rightLabel || '右邊'}</option>
+        </>
+      )}
+    </select>
+  );
+
+  return (
+    <div className={'rc-block' + (bad ? ' bad' : '')}>
+      <div className="rc-block-head">
+        <b>{RS_ZH[kind] || kind}</b>
+        <span className="rc-block-n">{chips.length} 張卡</span>
+        {onDelete && <button type="button" className="rc-x" onClick={onDelete} title="刪掉這個技巧">✕</button>}
+      </div>
+
+      {bad && (
+        <div className="rc-warn">
+          ⚠ 這一塊還不能用：
+          {kind === 'problem-solution' && '需要 4–8 張卡，Problem 與 Solution 各至少 2 張，文字不可重複或空白。'}
+          {kind === 'cause-effect' && '需要 3–5 組，每組的 Cause 與 Effect 都要填、而且不可重複。'}
+          {kind === 'sequence' && '需要 5–8 個事件，文字不可重複或空白。'}
+          {kind === 'compare-contrast' && '需要 6–9 張卡（左≥2、右≥2、兩邊都有≥1），兩邊的標題都要填。'}
+        </div>
+      )}
+
+      {kind === 'compare-contrast' && (
+        <div className="rc-two">
+          <label className="rc-lab">🔵 左邊是什麼
+            <input value={block.leftLabel || ''} onChange={e => setSide('left', e.target.value)} placeholder="After the wolves left"/>
+          </label>
+          <label className="rc-lab">🟠 右邊是什麼
+            <input value={block.rightLabel || ''} onChange={e => setSide('right', e.target.value)} placeholder="After the wolves returned"/>
+          </label>
+        </div>
+      )}
+
+      {kind === 'cause-effect' ? (
+        chips.map((c, i) => (
+          <div key={c.id} className="rc-row rc-row-ce">
+            <span className="rc-n">{i + 1}</span>
+            <div className="rc-row-f">
+              <input className="rc-in" value={(zones[i] && zones[i].label) || ''} onChange={e => setZone(i, e.target.value)} placeholder="Cause（原因）例：The wolves left the island."/>
+              <input className="rc-in" value={c.text} onChange={e => setChip(i, 'text', e.target.value)} placeholder="Effect（結果）例：There were too many deer."/>
+              <input className="rc-in rc-why" value={c.why || ''} onChange={e => setChip(i, 'why', e.target.value)} placeholder="中文提示（選填）——放錯時給學生看"/>
+            </div>
+            <div className="rc-ud">
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0}>▲</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === chips.length - 1}>▼</button>
+              <button type="button" className="rc-x" onClick={() => delChip(i)}>✕</button>
+            </div>
+          </div>
+        ))
+      ) : kind === 'sequence' ? (
+        chips.map((c, i) => (
+          <div key={c.id} className="rc-row">
+            <span className="rc-n">{i + 1}</span>
+            <div className="rc-row-f">
+              <input className="rc-in" value={c.text} onChange={e => setChip(i, 'text', e.target.value)} placeholder={`第 ${i + 1} 件發生的事`}/>
+            </div>
+            <div className="rc-ud">
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0}>▲</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === chips.length - 1}>▼</button>
+              <button type="button" className="rc-x" onClick={() => delChip(i)}>✕</button>
+            </div>
+          </div>
+        ))
+      ) : (
+        chips.map((c, i) => (
+          <div key={c.id} className="rc-row">
+            <span className="rc-n">{i + 1}</span>
+            <div className="rc-row-f">
+              <input className="rc-in" value={c.text} onChange={e => setChip(i, 'text', e.target.value)} placeholder="一句話的卡片內容（英文）"/>
+              <div className="rc-row-2">
+                {zoneSel(i, c)}
+                <input className="rc-in rc-why" value={c.why || ''} onChange={e => setChip(i, 'why', e.target.value)} placeholder="中文提示（選填）"/>
+              </div>
+            </div>
+            <div className="rc-ud">
+              <button type="button" className="rc-x" onClick={() => delChip(i)}>✕</button>
+            </div>
+          </div>
+        ))
+      )}
+
+      <button type="button" className="rc-add" onClick={addChip}>＋ 新增一{kind === 'cause-effect' ? '組' : '張'}</button>
+      {kind === 'sequence' && <div className="rc-note">上面的順序＝正確答案。學生看到的是打亂的。</div>}
+    </div>
+  );
+}
+
+/* EditorModal 用的整段：文章 + 幾個技巧 */
+function ReadingSkillEditor({ passage, blocks, onChangePassage, onChangeBlocks }) {
+  const list = blocks || [];
+  const [addKind, setAddKind] = useS('problem-solution');
+  return (
+    <>
+      <div className="field">
+        <label className="field-label">📖 文章／文字稿（選填）</label>
+        <textarea rows={5} value={passage || ''} onChange={e => onChangePassage(e.target.value)}
+          placeholder="貼上文章，學生在練習時可以按 📖 再看一次。不貼也可以。"/>
+        <div className="field-help">學生點右上角的 📖 就能叫出來對照，不用退出去重讀。</div>
+      </div>
+      {list.map((b, i) => (
+        <RsBlockEditor key={b.id || i} block={b}
+          onChange={nb => onChangeBlocks(list.map((x, j) => j === i ? nb : x))}
+          onDelete={() => onChangeBlocks(list.filter((_, j) => j !== i))}/>
+      ))}
+      <div className="rc-addblock">
+        <select value={addKind} onChange={e => setAddKind(e.target.value)}>
+          {Object.keys(RS_ZH).map(k => <option key={k} value={k}>{RS_ZH[k]}</option>)}
+        </select>
+        <button type="button" className="btn ghost" onClick={() => onChangeBlocks(list.concat([rsBlankBlock(addKind)]))}>＋ 加一種技巧</button>
+      </div>
+    </>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v386: 📖 出閱讀理解 —— 貼文字稿，一次生「選擇題＋閱讀簡答＋閱讀技巧」
+   流程沿用 v382 出時態題目那一套：設定 → 出題（進度條）→ 分頁校稿 → 建立。
+   ══════════════════════════════════════════════════════════════════════════ */
+/* 校稿頁的紅框、擋按鈕、以及 rcBuildItems 的過濾，全部用這一個判斷——
+   三個地方各寫一套的話，一定會出現「畫面說可以、建立時被丟掉」。 */
+function rcMcqOk(q) {
+  if (!q || !String(q.q || '').trim()) return false;
+  const o = (q.options || []).map(x => String(x || '').trim());
+  if (o.length !== 4 || o.some(x => !x)) return false;
+  if (new Set(o.map(x => x.toLowerCase())).size !== 4) return false;   // 選項重複 → 播放時 indexOf 會判錯
+  return q.answer >= 0 && q.answer < 4;
+}
+
+function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onClose, onCreate }) {
+  const SK = window.RC_SKILLS || {};
+  const [title, setTitle]   = useS('');
+  const [text, setText]     = useS('');
+  const [cat, setCat]       = useS(defaultCat || 'reading');
+  const [grade, setGrade]   = useS('g4');
+  const [nMcq, setNMcq]     = useS(10);
+  const [nSa, setNSa]       = useS(5);
+  const [skills, setSkills] = useS({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
+  const [keepPassage, setKeepPassage] = useS(true);
+  const [busy, setBusy]     = useS(null);     // { done, total, label }
+  const [err, setErr]       = useS('');
+  const [res, setRes]       = useS(null);     // { mcq, sa, blocks }
+  const [tab, setTab]       = useS(0);
+  const [assign, setAssign] = useS(true);
+  const [due, setDue]       = useS('');
+  const [who, setWho]       = useS([]);
+
+  useE(() => {
+    if (!open) return;
+    setTitle(''); setText(''); setCat(defaultCat || 'reading'); setGrade('g4');
+    setNMcq(10); setNSa(5); setKeepPassage(true);
+    setSkills({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
+    setBusy(null); setErr(''); setRes(null); setTab(0); setAssign(true); setWho([]);
+    const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+    setDue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  }, [open]);
+  if (!open) return null;
+
+  const kinds = Object.keys(SK).filter(k => skills[k]);
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const ready = title.trim() && words >= 40 && (nMcq > 0 || nSa > 0 || kinds.length > 0);
+
+  const run = async () => {
+    setErr('');
+    setBusy({ done: 0, total: Math.ceil(nMcq / 5) + (nSa ? 1 : 0) + kinds.length, label: '讀文章中' });
+    try {
+      const r = await window.aiMakeReadingSet({
+        passage: text, title: title.trim(), grade, mcq: nMcq, sa: nSa, skills: kinds,
+        onProgress: (done, total, label) => setBusy({ done, total, label }),
+      });
+      setRes(r); setTab(0);
+    } catch (e) { setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
+    setBusy(null);
+  };
+
+  const updMcq = (i, k, v) => setRes(r => ({ ...r, mcq: r.mcq.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+  const updOpt = (i, oi, v) => setRes(r => ({ ...r, mcq: r.mcq.map((x, j) => j === i ? { ...x, options: x.options.map((o, k) => k === oi ? v : o) } : x) }));
+  const delMcq = (i) => setRes(r => { const n = r.mcq.filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, mcq: n }; });
+  const updSa  = (i, k, v) => setRes(r => ({ ...r, sa: r.sa.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+  const delSa  = (i) => setRes(r => { const n = r.sa.filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, sa: n }; });
+  const updBlk = (i, nb) => setRes(r => ({ ...r, blocks: r.blocks.map((x, j) => j === i ? nb : x) }));
+  const delBlk = (i) => setRes(r => ({ ...r, blocks: r.blocks.filter((_, j) => j !== i) }));
+
+  /* ⚠ 不要寫成 const AssignBox = () => … 再 <AssignBox/>（v380 踩過）：
+     每次重繪都是新的元件型別，React 會整段拆掉重掛，勾第二個學生時第一個就點不到。 */
+  const assignBox = () => (
+    <div className={'qs-assign' + (assign ? ' on' : '')}>
+      <label className="qs-assign-head">
+        <input type="checkbox" checked={assign} onChange={e => setAssign(e.target.checked)}/>
+        <span>建立後<b>整組直接指派</b>（這篇文章的練習一次派出去）</span>
+      </label>
+      {assign && (perStudent ? (
+        <div className="qs-who">
+          <div className="qs-who-bar">
+            <span>指派給（{who.length}/{(roster || []).length}）</span>
+            <button type="button" onClick={() => setWho((roster || []).map(r => r.email))}>全選</button>
+            <button type="button" onClick={() => setWho([])}>全不選</button>
+          </div>
+          <div className="qs-who-list">
+            {(roster || []).map(r => (
+              <label key={r.email} className={'qs-who-item' + (who.indexOf(r.email) >= 0 ? ' on' : '')}>
+                <input type="checkbox" checked={who.indexOf(r.email) >= 0}
+                  onChange={e => setWho(w => e.target.checked ? w.concat(r.email) : w.filter(x => x !== r.email))}/>
+                {r.name || r.email}
+              </label>
+            ))}
+            {!(roster || []).length && <span className="qs-who-empty">名單還沒載入</span>}
+          </div>
+        </div>
+      ) : (
+        <div className="qs-due">
+          <label>截止日</label>
+          <input type="date" value={due} onChange={e => setDue(e.target.value)}/>
+          <span className="qs-due-n">整組會出現在學生的「今天的任務」</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const payload = () => ({
+    title: title.trim(), cat, passage: keepPassage ? text.trim() : '',
+    mcq: res.mcq, sa: res.sa, blocks: res.blocks,
+    assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
+  });
+
+  // ───────────────────────── 設定畫面 ─────────────────────────
+  if (!res) {
+    return (
+      /* v261 的教訓：出到一半點到背景會全部不見。出題中／校稿中一律不讓背景關閉。 */
+      <div className="modal-backdrop" onClick={() => { if (!busy) onClose(); }}>
+        <div className="modal wide" onClick={e => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>📖 出閱讀理解 <em>貼文字稿，一次出選擇題＋簡答＋閱讀技巧</em></h3>
+            <button className="modal-close" onClick={onClose}>✕</button>
+          </div>
+          <div className="modal-body">
+            <div className="rc-two">
+              <label className="rc-lab">文章標題（會變成這一組的名字）
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="例：Wolf Island"/>
+              </label>
+              <label className="rc-lab">放到哪個分類
+                <select value={cat} onChange={e => setCat(e.target.value)}>
+                  {(categories || []).map(c => <option key={c.id} value={c.id}>{c.label || c.name || c.id}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="field">
+              <label className="field-label">📄 文章／影片文字稿</label>
+              <textarea className="rc-ta" rows={9} value={text} onChange={e => setText(e.target.value)}
+                placeholder={'把整篇文章或 YouTube 逐字稿貼進來（英文）。\n有時間碼（0:04 之類）也沒關係，AI 會自己忽略。'}/>
+              <div className="field-help">
+                目前 <b>{words}</b> 個字{words > 0 && words < 40 ? '（太短了，至少要 40 字）' : ''}。
+                AI 只會考文章裡有的東西，不會自己加料。
+              </div>
+            </div>
+
+            <div className="rc-two">
+              <label className="rc-lab">學生年級（決定用字難度）
+                <select value={grade} onChange={e => setGrade(e.target.value)}>
+                  <option value="g2">G2 二年級</option><option value="g3">G3 三年級</option>
+                  <option value="g4">G4 四年級</option><option value="g5">G5 五年級</option>
+                  <option value="g6">G6 六年級</option>
+                </select>
+              </label>
+              <label className="rc-lab">📝 選擇題
+                <select value={nMcq} onChange={e => setNMcq(+e.target.value)}>
+                  <option value={0}>不要</option><option value={5}>5 題</option>
+                  <option value={10}>10 題</option><option value={15}>15 題</option><option value={20}>20 題</option>
+                </select>
+              </label>
+              <label className="rc-lab">📖 閱讀簡答（AI 批改）
+                <select value={nSa} onChange={e => setNSa(+e.target.value)}>
+                  <option value={0}>不要</option><option value={3}>3 題</option>
+                  <option value={5}>5 題</option><option value={8}>8 題</option><option value={10}>10 題</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="field">
+              <label className="field-label">🔍 閱讀技巧 Reading Skills（學校會考的那幾種）</label>
+              <div className="rc-skills">
+                {Object.keys(SK).map(k => (
+                  <label key={k} className={'rc-skill' + (skills[k] ? ' on' : '')}>
+                    <input type="checkbox" checked={!!skills[k]} onChange={e => setSkills(s => ({ ...s, [k]: e.target.checked }))}/>
+                    <span className="rc-skill-ico">{SK[k].ico}</span>
+                    <span className="rc-skill-tx"><b>{SK[k].en}</b><em>{SK[k].zh}</em></span>
+                  </label>
+                ))}
+              </div>
+              <div className="field-help">勾起來的會合成<b>一個</b>「閱讀技巧」單元，學生一步一步走完。</div>
+            </div>
+
+            <label className="rc-check">
+              <input type="checkbox" checked={keepPassage} onChange={e => setKeepPassage(e.target.checked)}/>
+              <span>把文章一起存進去（學生練習時可以按 📖 再看一次）</span>
+            </label>
+
+            {assignBox()}
+
+            {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
+            {busy && (
+              <div className="gr-busy">
+                <div className="gr-busy-bar"><i style={{ width: (busy.done / Math.max(1, busy.total) * 100) + '%' }}/></div>
+                <span>出題中… {busy.done}/{busy.total} · {busy.label}</span>
+              </div>
+            )}
+          </div>
+          <div className="modal-foot">
+            <button className="btn ghost" onClick={onClose} disabled={!!busy}>取消</button>
+            <button className="btn primary" onClick={run} disabled={!ready || !!busy}>
+              {busy ? '出題中…' : `✨ 開始出題（${(nMcq ? 1 : 0) + (nSa ? 1 : 0) + (kinds.length ? 1 : 0)} 個單元）`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────── 校稿畫面 ─────────────────────────
+  const tabs = []
+    .concat(res.mcq.length ? [{ k: 'mcq', name: '📝 選擇題', n: res.mcq.length }] : [])
+    .concat(res.sa.length ? [{ k: 'sa', name: '📖 閱讀簡答', n: res.sa.length }] : [])
+    .concat(res.blocks.map((b, i) => ({ k: 'b', i, name: (window.RC_SKILLS[b.kind] || {}).ico + ' ' + (window.RC_SKILLS[b.kind] || {}).zh, n: (b.chips || []).length })));
+  const cur = tabs[Math.min(tab, Math.max(0, tabs.length - 1))];
+  const nUnits = (res.mcq.length ? 1 : 0) + (res.sa.length ? 1 : 0) + (res.blocks.length ? 1 : 0);
+  /* ⚠ 以前紅色的題目會被 rcBuildItems 靜靜濾掉——老師按了「建立 3 個單元」，
+     結果少了 4 題也不會知道。改成擋住按鈕、直接說是哪一頁有問題。 */
+  const badTabs = tabs.filter(t => t.k === 'mcq' ? res.mcq.some(q => !rcMcqOk(q))
+    : t.k === 'sa' ? res.sa.some(q => !String(q.question || '').trim() || !String(q.keyPoints || '').trim())
+    : !window.rcValidBlock(res.blocks[t.i]));
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>📖 校稿 · {title} <em>改完再建立——這是題庫，學生每次看到的都是這一份</em></h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="gr-tabs">
+            {tabs.map((t, i) => (
+              <button key={i} className={i === tab ? 'active' : ''} onClick={() => setTab(i)}>{t.name}<em>{t.n}</em></button>
+            ))}
+          </div>
+
+          <div className="gr-proof">
+            {!cur ? <div className="rc-note">這次什麼都沒生出來，回上一步再試一次。</div>
+              : cur.k === 'mcq' ? res.mcq.map((q, i) => {
+                const opts = (q.options || []).map(o => String(o || '').trim());
+                const bad = !rcMcqOk(q);
+                return (
+                  <div key={q.id || i} className={'rc-q' + (bad ? ' bad' : '')}>
+                    <div className="rc-q-head">
+                      <span className="rc-n">{i + 1}</span>
+                      <span className="rc-skilltag">{q.skill || 'detail'}</span>
+                      <button type="button" className="rc-x" onClick={() => delMcq(i)}>✕</button>
+                    </div>
+                    <textarea className="rc-in" rows={2} value={q.q} onChange={e => updMcq(i, 'q', e.target.value)} placeholder="題目（英文）"/>
+                    {opts.map((o, oi) => (
+                      <label key={oi} className={'rc-opt' + (q.answer === oi ? ' on' : '')}>
+                        <input type="radio" checked={q.answer === oi} onChange={() => updMcq(i, 'answer', oi)}/>
+                        <span className="rc-opt-l">{'ABCD'[oi]}</span>
+                        <input className="rc-in" value={q.options[oi]} onChange={e => updOpt(i, oi, e.target.value)}/>
+                      </label>
+                    ))}
+                    <input className="rc-in rc-why" value={q.explain || ''} onChange={e => updMcq(i, 'explain', e.target.value)} placeholder="中文解說（答完會給學生看）"/>
+                    {bad && <div className="rc-warn">⚠ 題目、四個選項都要填，選項不可重複，而且要選一個正確答案。</div>}
+                  </div>
+                );
+              })
+              : cur.k === 'sa' ? res.sa.map((q, i) => (
+                <div key={q.id || i} className={'rc-q' + (!q.question.trim() || !q.keyPoints.trim() ? ' bad' : '')}>
+                  <div className="rc-q-head">
+                    <span className="rc-n">{i + 1}</span>
+                    <button type="button" className="rc-x" onClick={() => delSa(i)}>✕</button>
+                  </div>
+                  <textarea className="rc-in" rows={2} value={q.question} onChange={e => updSa(i, 'question', e.target.value)} placeholder="問題（英文）"/>
+                  <input className="rc-in" value={q.keyPoints} onChange={e => updSa(i, 'keyPoints', e.target.value)} placeholder="答案要點，用 / 分隔——AI 依這個決定給幾顆星"/>
+                </div>
+              ))
+              : <RsBlockEditor block={res.blocks[cur.i]} onChange={nb => updBlk(cur.i, nb)} onDelete={() => { delBlk(cur.i); setTab(0); }}/>}
+          </div>
+
+          {badTabs.length > 0 && (
+            <div className="rc-warn" style={{ marginTop: 12 }}>
+              ⚠ 這幾頁還有紅色的題目要改完才能建立：{badTabs.map(t => t.name).join('、')}
+              （不想改就按該題的 ✕ 刪掉）
+            </div>
+          )}
+          {assignBox()}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={() => setRes(null)}>← 重新設定</button>
+          <button className="btn primary" onClick={() => onCreate(payload())} disabled={!nUnits || badTabs.length > 0}>
+            建立 {nUnits} 個單元{assign ? '並指派' : ''} →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 把校稿完的東西變成週次裡的單元。
+   order 不特別指定，讓 QM_TYPE_ORDER 的預設順序生效：
+   選擇題(1) → 閱讀技巧(3.5) → 閱讀簡答(6)，剛好就是「先讀懂 → 練技巧 → 自己寫」。 */
+function rcBuildItems({ title, passage, mcq, sa, blocks }) {
+  const stamp = Date.now();
+  const rnd = () => Math.random().toString(36).slice(2, 5);
+  const out = [];
+  const g = title;
+  const good = (mcq || []).filter(rcMcqOk);
+  if (good.length) {
+    out.push({
+      id: 'rc' + stamp + 'qz' + rnd(), type: 'quiz', group: g,
+      title: `${g} · 選擇題`, zh: `${good.length} 題 · 讀完文章選出正確答案`,
+      shuffle: true,
+      passage: passage || '',          // v386: 學生在選擇題畫面按 📖 就能看文章
+      questions: good.map((q, i) => ({
+        id: 'q' + stamp + i + rnd(),
+        q: String(q.q).trim(),
+        options: q.options.map(o => String(o).trim()),
+        answer: q.answer,
+        explain: String(q.explain || '').trim(),
+      })),
+    });
+  }
+  const useBlocks = (blocks || []).filter(b => b && (b.chips || []).filter(c => c && String(c.text || '').trim()).length >= 2);
+  if (useBlocks.length) {
+    // ⚠ 一定要走 rcFilterChips：因果題的 zones 要跟著卡片一起丟，不然答案會錯位
+    const clean = useBlocks.map(b => window.rcFilterChips(
+      { ...b, chips: (b.chips || []).map(c => ({ ...c, text: String((c && c.text) || '').trim() })) },
+      c => !!c.text));
+    const nChips = clean.reduce((n, b) => n + b.chips.length, 0);
+    out.push({
+      id: 'rc' + stamp + 'rs' + rnd(), type: 'reading-skill', group: g,
+      title: `${g} · 閱讀技巧`, zh: `${clean.length} 種技巧 · ${nChips} 張卡片`,
+      rsPassage: passage || '', rsBlocks: clean,
+    });
+  }
+  const goodSa = (sa || []).filter(q => q && String(q.question || '').trim());
+  if (goodSa.length) {
+    out.push({
+      id: 'rc' + stamp + 'sa' + rnd(), type: 'short-answer', group: g,
+      title: `${g} · 閱讀簡答`, zh: `${goodSa.length} 題 · 自己寫出答案，AI 批改`,
+      passage: passage || '',
+      saShowPassage: !!passage,        // v386: 有貼文章就讓學生看得到（舊單元的 passage 一向只給 AI）
+      saQuestions: goodSa.map((q, i) => ({
+        id: 'sa' + stamp + i + rnd(),
+        question: String(q.question).trim(),
+        keyPoints: String(q.keyPoints || '').trim(),
+      })),
+    });
+  }
+  return out;
+}
+
+Object.assign(window, { ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems });

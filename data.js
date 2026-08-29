@@ -14,6 +14,9 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const _db      = firebase.firestore();
 const _storage = firebase.storage();
+/* v387: 預設重試上限是 600 秒——一頁遇到爛網路就會把整個 PDF 匯入卡住十分鐘、
+   而且畫面上什麼都不會說。縮到 90 秒，寧可快點報錯讓老師重來。 */
+try { _storage.setMaxUploadRetryTime(90000); _storage.setMaxOperationRetryTime(60000); } catch (e) {}
 const _auth    = firebase.auth();
 const _classDoc = _db.collection('class').doc('data');
 
@@ -1668,6 +1671,432 @@ function grCountBlanks(passage) {
   return (String(passage || '').match(/\[[^\]]+\]/g) || []).length;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v386: AI 出閱讀理解題（貼文字稿 → 選擇題 + 閱讀簡答 + 閱讀技巧）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 的用法：學校老師除了考文意理解的選擇題與 short answer，還會考
+   reading skill（Cause & Effect／Problem & Solution／Sequencing／
+   Compare & Contrast）。這裡一次把三種都生出來，題數與要哪幾個技巧都由老師勾。
+
+   ⚠ 沿用 v382 學到的：AI 出題「光靠 prompt 講不動，要程式驗＋能修就修」。
+   每一種都有 _rcValid* 驗、修得掉的就修（例：answer 回文字而不是索引、
+   選項有重複、排序題事件數量超過），修不掉才重生；最後一輪還是不合格就先收下，
+   讓老師在校稿頁改（絕不整批丟掉、讓老師白等）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const RC_SKILLS = {
+  'problem-solution': { zh: '問題與解決', ico: '🧩', en: 'Problem & Solution' },
+  'cause-effect':     { zh: '因果關係',   ico: '⚡', en: 'Cause & Effect' },
+  'sequence':         { zh: '事件排序',   ico: '🔢', en: 'Sequencing' },
+  'compare-contrast': { zh: '比較對照',   ico: '⚖️', en: 'Compare & Contrast' },
+};
+
+const RC_GRADES = {
+  g2: 'Grade 2 (age 8, CEFR pre-A1). Very short sentences, only the most common words.',
+  g3: 'Grade 3 (age 9, CEFR A1). Short sentences, everyday words.',
+  g4: 'Grade 4 (age 10, CEFR A1-A2).',
+  g5: 'Grade 5 (age 11, CEFR A2).',
+  g6: 'Grade 6 (age 12, CEFR A2). May include one inference question that needs two facts joined together.',
+};
+
+function _rcId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function _rcTxt(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+
+/* AI 常常把 answer 回成選項文字而不是索引（aiMakeLesson 也踩過）→ 修回索引 */
+function _rcFixAnswerIdx(q) {
+  if (!q || !Array.isArray(q.options)) return null;
+  let a = q.answer;
+  if (typeof a === 'string') {
+    const t = _rcTxt(a);
+    let i = q.options.findIndex(x => _rcTxt(x).toLowerCase() === t.toLowerCase());
+    if (i < 0 && /^[0-3]$/.test(t)) i = +t;                                   // 回 "2" 這種數字字串
+    // 也可能回 "A" / "B" / "(C)" 這種
+    if (i < 0 && /^[（(]?[A-Da-d][）)．.]?$/.test(t)) i = t.toUpperCase().charCodeAt(t.search(/[A-Da-d]/i)) - 65;
+    a = i;
+  }
+  if (typeof a !== 'number' || !(a >= 0) || a >= q.options.length) return null;
+  return { ...q, answer: a };
+}
+
+function _rcValidMcq(q) {
+  if (!q || !_rcTxt(q.q)) return false;
+  const opts = (q.options || []).map(_rcTxt);
+  if (opts.length !== 4 || opts.some(o => !o)) return false;
+  // 選項重複＝送分題；大小寫不同也算重複
+  const seen = new Set(opts.map(o => o.toLowerCase()));
+  if (seen.size !== 4) return false;
+  if (opts.some(o => /^(all|none) of the above/i.test(o))) return false;
+  if (typeof q.answer !== 'number' || q.answer < 0 || q.answer > 3) return false;
+  if (!_rcTxt(q.explain)) return false;
+  if (/…|\.\.\./.test(q.explain)) return false;   // v379 踩過：模型把範本的「…」抄進輸出
+  return true;
+}
+
+function _rcValidSa(q) {
+  if (!q || !_rcTxt(q.question) || !_rcTxt(q.keyPoints)) return false;
+  if (/^(is|are|was|were|do|does|did|can|will|has|have)\b/i.test(_rcTxt(q.question))) return false; // yes/no 題不適合簡答
+  return true;
+}
+
+const _RC_SYS_BASE =
+`You write English reading exercises for Taiwanese elementary-school students, based on a passage the teacher gives you.
+Output ONLY valid JSON. No prose, no markdown, no code fences.
+Everything you write must be answerable from the passage ALONE. Never use outside knowledge.
+Never write the literal characters "..." or the Chinese ellipsis - always write the real wording.`;
+
+function _RC_SYS_MCQ(gradeNote, n) {
+  return _RC_SYS_BASE + '\n\n' +
+`Student level: ${gradeNote}
+
+Return: {"items":[{"q":"","options":["","","",""],"answer":0,"explain":"","skill":"detail"}]}
+Generate ${n} items.
+
+RULES
+- q: ONE English question about the passage, 6-18 words. Answerable from the passage alone.
+- options: EXACTLY 4 short English choices, similar length, all plausible. Exactly ONE is correct.
+  The three wrong ones must be wrong because of the passage, not because they are silly.
+  Never use "All of the above" or "None of the above".
+- answer: the 0-BASED INDEX (0,1,2,3) of the correct option. A number, never the text.
+- explain: Traditional Chinese, 20-45 characters. Quote the English clue phrase from the passage
+  inside the Chinese quotation marks, then say what it means, then give the answer.
+  GOOD: 「the deer ate too much grass and leaves」說鹿把草和樹葉都吃光了，所以島上的食物變少。
+  GOOD: 「the wolves left the healthy deer alone」說狼只吃虛弱的鹿，所以鹿群反而變健康。
+  BAD:  文章有提到相關內容，所以選 B。
+  BAD:  quoting nothing from the passage.
+- skill: one of "main-idea", "detail", "vocabulary", "inference", "sequence", "cause-effect".
+- Mix the skills: at least one "main-idea", at least one "vocabulary" (a word used in the passage,
+  asked in context), at least one "inference". The rest can be "detail".
+- Keep every word simple enough for the student level above.`;
+}
+
+function _RC_SYS_SA(gradeNote, n) {
+  return _RC_SYS_BASE + '\n\n' +
+`Student level: ${gradeNote}
+
+Return: {"items":[{"question":"","keyPoints":""}]}
+Generate ${n} items.
+
+RULES
+- question: ONE open English question about the passage, 6-16 words, needing a 1-3 sentence answer.
+  It must NOT be answerable with yes or no, so never start with Is/Are/Was/Were/Do/Does/Did/Can/Will/Has/Have.
+  Start with What / Why / How / Who / Where / Describe / Explain.
+- keyPoints: what a full-credit answer must contain, in ENGLISH, 2-4 points separated by " / ".
+  These are marking points for the teacher's AI grader, not a model answer paragraph.
+  Example: "wolves left the island / no one hunted the deer / too many deer ate the plants"
+- Ask about different parts of the passage - do not ask two questions about the same sentence.`;
+}
+
+function _RC_SYS_SKILL(kind, gradeNote) {
+  const head = _RC_SYS_BASE + '\n\nStudent level: ' + gradeNote + '\n\n';
+  if (kind === 'problem-solution') {
+    return head +
+`Task: Problem & Solution. The student will drop each card into either the Problem box or the Solution box.
+
+Return: {"items":[{"text":"","zone":"problem","why":""}]}
+
+RULES
+- Write 4 or 6 cards in total, HALF "problem" and HALF "solution".
+- text: ONE short English sentence from the story, 5-14 words, in the student's own reading level.
+  A "problem" card states something that went wrong in the passage.
+  A "solution" card states what fixed it or made it better.
+- Every card must clearly belong to one box only. If a card could go in either, rewrite it.
+- Do NOT start a card with "The problem is" or "The solution is" - that gives the answer away.
+- why: Traditional Chinese, 15-35 characters, saying how you can tell which box it goes in.`;
+  }
+  if (kind === 'cause-effect') {
+    return head +
+`Task: Cause & Effect. The student sees the causes and drops the matching effect next to each one.
+
+Return: {"items":[{"cause":"","effect":"","why":""}]}
+
+RULES
+- Write exactly 4 pairs, taken from different parts of the passage.
+- cause: ONE short English sentence, 4-12 words, describing something that happened.
+- effect: ONE short English sentence, 4-12 words, describing what it made happen.
+- The 4 effects must be clearly different from each other. A student must not be able to
+  match an effect to the wrong cause and still be right.
+- Never put the words "because", "so", "cause" or "effect" inside cause or effect.
+- why: Traditional Chinese, 15-35 characters, explaining the link.`;
+  }
+  if (kind === 'sequence') {
+    return head +
+`Task: Sequencing. The student puts the events back into the order they happened in the passage.
+
+Return: {"items":[{"text":""}]}
+
+RULES
+- Write 6 or 7 events, IN THE CORRECT ORDER (first event first).
+- text: ONE short English sentence, 5-14 words, describing one clear event from the passage.
+- The events must spread across the WHOLE passage - beginning, middle and end.
+- Each event must be findable in the passage. Do not invent events.
+- Do NOT number the events and do NOT use ordering words (first, then, next, finally, after that)
+  inside the text - that would give the order away.`;
+  }
+  return head +
+`Task: Compare & Contrast (a Venn diagram). The student drops each card into "only A", "both", or "only B".
+
+Return: {"leftLabel":"","rightLabel":"","items":[{"text":"","zone":"left","why":""}]}
+
+RULES
+- leftLabel / rightLabel: the two things being compared, as short English labels, 2-6 words each,
+  taken from the passage (for example two time periods, two characters, or two places).
+- Write 6 to 8 cards in total: at least 2 with zone "left", at least 2 with zone "right",
+  and at least 2 with zone "both".
+- zone: exactly one of "left", "right", "both".
+- text: ONE short English phrase or sentence, 3-12 words, that is true of that side.
+- A "both" card must be true of BOTH sides. A "left" card must be true of the left side and
+  FALSE of the right side (and the same for right) - never ambiguous.
+- Do not repeat the label wording inside the card text.
+- why: Traditional Chinese, 15-35 characters.`;
+}
+
+/* 一次呼叫（沿用 _grCall 的兩次重試 + 剝 code fence），但這裡有些回傳不是 {items:[]}
+   而是帶額外欄位的物件（比較對照要 leftLabel/rightLabel），所以回整個物件。 */
+async function _rcCall(system, user, maxTokens) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(AI_WRITING_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000,
+          system, messages: [{ role: 'user', content: user }],
+        }),
+      });
+      const data = await res.json();
+      const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+      if (o && typeof o === 'object') return o;
+    } catch (e) { /* 再試一次 */ }
+  }
+  throw new Error('AI 出題失敗（回傳格式看不懂），請再試一次。');
+}
+
+function _rcUser(passage, title, extra) {
+  return (title ? 'Title: ' + title + '\n\n' : '') +
+    'Passage:\n"""\n' + String(passage || '').trim() + '\n"""' +
+    (extra ? '\n\n' + extra : '');
+}
+
+/* ── 把 AI 回來的東西整理成「卡片 → 區塊」的統一結構 ──────────────────────
+   四種技巧在畫面上長得不一樣，但底下都是同一件事：把卡片放到正確的格子裡。
+   統一成 { kind, zones:[{id,label,ico}], chips:[{id,text,zone,why}] } 之後，
+   播放器只要寫一套、四種都能用（＝ bug 面積只有四分之一）。 */
+function _rcBlockFrom(kind, o) {
+  const id = _rcId('rb');
+  const items = Array.isArray(o && o.items) ? o.items : [];
+  if (kind === 'problem-solution') {
+    const chips = items.map(x => ({
+      id: _rcId('rc'), text: _rcTxt(x && x.text),
+      zone: (x && x.zone) === 'solution' ? 'solution' : 'problem', why: _rcTxt(x && x.why),
+    })).filter(c => c.text);
+    return { id, kind, zones: [
+      { id: 'problem',  label: 'Problem 問題',      ico: '⚠️' },
+      { id: 'solution', label: 'Solution 解決方法', ico: '💡' },
+    ], chips };
+  }
+  if (kind === 'cause-effect') {
+    const pairs = items.map(x => ({ cause: _rcTxt(x && x.cause), effect: _rcTxt(x && x.effect), why: _rcTxt(x && x.why) }))
+      .filter(p => p.cause && p.effect);
+    return {
+      id, kind,
+      zones: pairs.map((p, i) => ({ id: 'c' + i, label: p.cause, ico: '⚡' })),
+      chips: pairs.map((p, i) => ({ id: _rcId('rc'), text: p.effect, zone: 'c' + i, why: p.why })),
+    };
+  }
+  if (kind === 'sequence') {
+    const evs = items.map(x => _rcTxt(x && (x.text || x))).filter(Boolean);
+    return rcResequence({ id, kind, zones: [], chips: evs.map(t => ({ id: _rcId('rc'), text: t, zone: '', why: '' })) });
+  }
+  const chips = items.map(x => {
+    const z = String((x && x.zone) || '').toLowerCase();
+    return {
+      id: _rcId('rc'), text: _rcTxt(x && x.text),
+      zone: z === 'both' ? 'both' : z === 'right' ? 'right' : 'left', why: _rcTxt(x && x.why),
+    };
+  }).filter(c => c.text);
+  const L = _rcTxt(o && o.leftLabel) || 'A';
+  const R = _rcTxt(o && o.rightLabel) || 'B';
+  return { id, kind, leftLabel: L, rightLabel: R, zones: [
+    { id: 'left',  label: L,        ico: '🔵' },
+    { id: 'both',  label: '兩邊都有 Both', ico: '🟣' },
+    { id: 'right', label: R,        ico: '🟠' },
+  ], chips };
+}
+
+/* 排序題：chips 的順序＝正確答案，zone 只是 s0,s1,… 的位子。
+   老師在校稿頁按 ▲▼ 換順序之後，重新蓋一次 zone 與格子標籤。 */
+function rcResequence(block) {
+  const chips = (block.chips || []).map((c, i) => ({ ...c, zone: 's' + i }));
+  return { ...block, chips, zones: chips.map((c, i) => ({ id: 's' + i, label: String(i + 1), ico: '' })) };
+}
+
+/* 因果題：老師改了某一格的 cause 文字之後不用重算，zone id 不動。
+   但如果他刪了一組，zones 與 chips 會對不起來 → 這裡重建一次。 */
+function rcRepairBlock(block) {
+  if (!block) return block;
+  if (block.kind === 'sequence') return rcResequence(block);
+  if (block.kind === 'cause-effect') {
+    const chips = (block.chips || []).map((c, i) => ({ ...c, zone: 'c' + i }));
+    const zones = chips.map((c, i) => {
+      const old = (block.zones || [])[i];
+      return { id: 'c' + i, label: (old && old.label) || '', ico: '⚡' };
+    });
+    return { ...block, chips, zones };
+  }
+  const ids = new Set((block.zones || []).map(z => z.id));
+  const fb = (block.zones || [])[0];
+  return { ...block, chips: (block.chips || []).map(c => ids.has(c.zone) ? c : { ...c, zone: fb ? fb.id : '' }) };
+}
+
+/* ⚠⚠ 因果題的 zones 與 chips 是「同一列的兩半」，位置對位置。
+   只濾掉 chips（例如空白的、重複的）而不濾 zones，rcRepairBlock 會照位置重配 →
+   CAUSE-B 會被配到 EFFECT-C，答案錯掉而且畫面上看不出來。
+   凡是要丟掉卡片，一律走這個函式，不要自己 filter。 */
+function rcFilterChips(block, keep) {
+  if (!block) return block;
+  const chips = block.chips || [];
+  const idx = chips.map((c, i) => (keep(c, i) ? i : -1)).filter(i => i >= 0);
+  const next = { ...block, chips: idx.map(i => chips[i]) };
+  if (block.kind === 'cause-effect') next.zones = idx.map(i => (block.zones || [])[i]).filter(Boolean);
+  return rcRepairBlock(next);
+}
+
+function rcValidBlock(block) {
+  if (!block || !Array.isArray(block.chips)) return false;
+  const chips = block.chips.filter(c => c && _rcTxt(c.text));
+  if (chips.length !== (block.chips || []).length) return false;
+  const lower = chips.map(c => c.text.toLowerCase());
+  if (new Set(lower).size !== lower.length) return false;        // 卡片重複＝一定有一格放不進去
+  const count = (z) => chips.filter(c => c.zone === z).length;
+  if (block.kind === 'problem-solution') {
+    return chips.length >= 4 && chips.length <= 8 && count('problem') >= 2 && count('solution') >= 2;
+  }
+  if (block.kind === 'cause-effect') {
+    if (chips.length < 3 || chips.length > 5) return false;
+    const zs = block.zones || [];
+    if (zs.length !== chips.length) return false;
+    if (zs.some(z => !_rcTxt(z.label))) return false;
+    if (new Set(zs.map(z => _rcTxt(z.label).toLowerCase())).size !== zs.length) return false;
+    return new Set(chips.map(c => c.zone)).size === chips.length;  // 一格一張，不能兩張同格
+  }
+  if (block.kind === 'sequence') return chips.length >= 5 && chips.length <= 8;
+  return chips.length >= 6 && chips.length <= 9
+    && count('left') >= 2 && count('right') >= 2 && count('both') >= 1
+    && !!_rcTxt(block.leftLabel) && !!_rcTxt(block.rightLabel);   // !! ＝ 一定回 boolean，不要回字串
+}
+
+/* 修得掉的就修，不要為了小事重生一整輪（v382 學到的） */
+function rcFixBlock(block) {
+  if (!block) return block;
+  let b = rcRepairBlock(block);
+  // 卡片文字空白或重複 → 只留第一張（連同 zones 一起丟，見 rcFilterChips 的警告）
+  const seen = new Set();
+  b = rcFilterChips(b, (c) => {
+    const k = _rcTxt(c && c.text).toLowerCase();
+    if (!k || seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  if (b.kind === 'sequence') b = rcFilterChips(b, (_c, i) => i < 8);   // 挖太多從後面砍（前面才是主線）
+  if (b.kind === 'cause-effect' && b.chips.length > 5) b = rcFilterChips(b, (_c, i) => i < 5);
+  if (b.kind === 'problem-solution' && b.chips.length > 8) b = rcFilterChips(b, (_c, i) => i < 8);
+  if (b.kind === 'compare-contrast' && b.chips.length > 9) b = rcFilterChips(b, (_c, i) => i < 9);
+  return b;
+}
+
+/* ── 主要入口 ────────────────────────────────────────────────────────────
+   opts: { passage, title, grade:'g2'..'g6', mcq:0|5|10|15|20, sa:0|3|5|8|10,
+           skills:['problem-solution',…], onProgress(done,total,label) }
+   回傳 { mcq:[…], sa:[…], blocks:[…] }（blocks 已是最終結構，可直接存） */
+async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, sa = 5, skills = [], onProgress } = {}) {
+  const text = String(passage || '').trim();
+  if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字），請貼完整的文字稿。');
+  const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
+  const nMcq = Math.max(0, +mcq || 0);
+  const nSa = Math.max(0, +sa || 0);
+  const kinds = (skills || []).filter(k => RC_SKILLS[k]);
+
+  if (!nMcq && !nSa && !kinds.length) throw new Error('至少要勾一種：選擇題、閱讀簡答，或閱讀技巧。');
+
+  const CHUNK = 5;
+  const mcqRounds = Math.ceil(nMcq / CHUNK);
+  const total = mcqRounds + (nSa ? 1 : 0) + kinds.length;
+  let done = 0;
+  const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+
+  // ── 選擇題：每 5 題一批，多要 2 題當備料，驗不過的丟掉 ──
+  const mcqOut = [];
+  for (let r = 0; r < mcqRounds; r++) {
+    const want = Math.min(CHUNK, nMcq - mcqOut.length);
+    for (let round = 0; round < 3 && mcqOut.length < (r + 1) * CHUNK && mcqOut.length < nMcq; round++) {
+      const asked = mcqOut.map(q => q.q).join(' | ');
+      /* ⚠ 這裡一定要各自 try：本來一次連線失敗就會把前面已經生好、驗過的題目
+         全部丟掉，老師等了半天回到設定頁。改成這一輪算了、繼續下一輪。 */
+      let o = null;
+      try {
+        o = await _rcCall(_RC_SYS_MCQ(gradeNote, want + 2),
+          _rcUser(text, title, asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : ''), 3200);
+      } catch (e) { continue; }
+      (o.items || []).forEach(raw => {
+        if (mcqOut.length >= nMcq) return;
+        const q = _rcFixAnswerIdx({
+          q: _rcTxt(raw && raw.q),
+          options: (raw && raw.options || []).map(_rcTxt).slice(0, 4),
+          answer: raw && raw.answer,
+          explain: _rcTxt(raw && raw.explain),
+          skill: _rcTxt(raw && raw.skill) || 'detail',
+        });
+        if (q && _rcValidMcq(q) && !mcqOut.some(e => e.q.toLowerCase() === q.q.toLowerCase())) {
+          mcqOut.push({ id: _rcId('rq'), ...q });
+        }
+      });
+    }
+    bump('選擇題 ' + Math.min(mcqOut.length, nMcq) + '/' + nMcq);
+  }
+
+  // ── 閱讀簡答 ──
+  const saOut = [];
+  if (nSa) {
+    for (let round = 0; round < 3 && saOut.length < nSa; round++) {
+      const asked = saOut.map(q => q.question).join(' | ');
+      let o = null;
+      try {
+        o = await _rcCall(_RC_SYS_SA(gradeNote, nSa - saOut.length + 1),
+          _rcUser(text, title, asked ? 'Do NOT repeat these questions:\n' + asked : ''), 2200);
+      } catch (e) { continue; }
+      (o.items || []).forEach(raw => {
+        if (saOut.length >= nSa) return;
+        const q = { question: _rcTxt(raw && raw.question), keyPoints: _rcTxt(raw && raw.keyPoints) };
+        if (_rcValidSa(q) && !saOut.some(e => e.question.toLowerCase() === q.question.toLowerCase())) {
+          saOut.push({ id: _rcId('sa'), ...q });
+        }
+      });
+    }
+    bump('閱讀簡答 ' + saOut.length + '/' + nSa);
+  }
+
+  // ── 閱讀技巧 ──
+  const blocks = [];
+  for (const kind of kinds) {
+    let best = null;
+    for (let round = 0; round < 3 && !best; round++) {
+      let cand = null;
+      try {
+        const o = await _rcCall(_RC_SYS_SKILL(kind, gradeNote), _rcUser(text, title,
+          round ? 'Your last try did not follow the card-count rules. Follow them exactly this time.' : ''), 2200);
+        cand = rcFixBlock(_rcBlockFrom(kind, o));
+      } catch (e) { cand = null; }
+      if (cand && rcValidBlock(cand)) best = cand;
+      else if (round === 2 && cand) best = cand;   // 三次都不合格就先收下，讓老師在校稿頁改
+    }
+    if (best) blocks.push(best);
+    bump(RC_SKILLS[kind].zh);
+  }
+
+  if (!mcqOut.length && !saOut.length && !blocks.length) throw new Error('AI 這次什麼都沒生出來，請再試一次。');
+  return { mcq: mcqOut, sa: saOut, blocks };
+}
+
+
 // ── AI Short Answer Grading ───────────────────────────────────────────────
 async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   if (!studentAnswer?.trim()) return '請先寫下你的答案。';
@@ -2316,6 +2745,8 @@ Object.assign(window, {
   // Sound & TTS
   playSound, speakText, speakTTS, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
+  // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
+  aiMakeReadingSet, RC_SKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain
@@ -2376,6 +2807,8 @@ const AUTO_STAR_RULES = {
   flashcard: '學習＋測驗（選擇題）完成 +10；測驗的手寫題也全部答完再 +20',
   fillblank: '80 分 +10／100 分 +15',
   'def-match': '比照填空：80 分 +10／100 分 +15',
+  'reading-skill': '比照填空：80 分 +10／100 分 +15',
+  lesson: '教學卡讀完 +5',
   'short-answer': '平均 3 星 +10／4 星 +20',
   bonus: '本週作業全部達標：+10（超過 5 個 +15、超過 8 個 +20）',
 };
@@ -2409,7 +2842,7 @@ function autoStarsForItem(item, prog, cloudShape) {
   }
   if (type === 'short-answer') { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
   if (type === 'lesson') return 5;   // v383: 教學卡讀完就給，重點是讓他先看
-  if (type === 'fillblank' || type === 'cloze' || type === 'def-match') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
+  if (type === 'fillblank' || type === 'cloze' || type === 'def-match' || type === 'reading-skill') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
   return 0;
 }
 // weeks/weekOrder＝這位學生看得到的週次（暑假要先用 filterWeeksForPlan 過濾）
