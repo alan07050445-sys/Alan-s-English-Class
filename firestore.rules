@@ -28,16 +28,40 @@ service cloud.firestore {
 
     // ── v342: 集點（星星）──────────────────────────────────
     // 只有老師能給/扣星星；學生只能讀自己那一筆（看不到別人的星星數）。
+    //
+    // v392 資安：加「單筆文件的 entries 上限」。
+    //   原因：admins 名單裡的任何協同老師都能無上限給星星，而 v385 開始星星
+    //   可以在商店換東西（帽子 500／1000 星），等於可以無限發行點數。
+    //   「多老師開放」是既定方向，先把爆量的上界訂出來。
+    //   ⚠ 上限故意訂 1000 而不是 500：這次無法用匿名 curl 讀 stars（規則本來就擋，
+    //     403），沒辦法確認現有資料的 entries 長度。訂太低會讓「已經累積很多筆」的
+    //     學生再也加不了星星。1000 筆＝1000 次手動加減，足夠寬，也仍然擋得住濫發。
+    //   ⚠ 用 `!('entries' in ...)` 開頭：addStarEntry/deleteStarEntry 都是 merge 寫入，
+    //     萬一將來有只寫 name 的路徑、而該文件又還沒有 entries 欄位，
+    //     直接讀 .size() 會在規則裡丟錯 → 變成「安靜地存不進去」。
     match /stars/{studentEmail} {
       allow read: if isTeacher()
                   || (request.auth != null && request.auth.token.email.lower() == studentEmail);
-      allow write: if isTeacher();
+      allow write: if isTeacher()
+                   && (!('entries' in request.resource.data)
+                       || request.resource.data.entries.size() <= 1000);
     }
 
     // ── 課程內容（G3/G4/G5/G6 都在 class 集合，G2 在 class-g2）──
     // 公開可讀（維持現狀，避免鎖住學生）；只有老師可寫。
+    //
+    // ⚠ v392 資安（critical，實測過）：class/summer_meta 不是課程內容，是「暑假派發清單」，
+    //   結構為 students.{email} = { name, weeks }（data-summer.js 的 _metaDoc）。
+    //   在 allow read: if true 之下，完全未登入、只帶公開 apiKey 就能下載：
+    //     curl '.../documents/class/summer_meta?key=AIza...'  → HTTP 200、62,674 bytes
+    //   內含 12 個 email（11 個是 @stu.kcislk.ntpc.edu.tw 的學號信箱）＋真實姓名
+    //   ＋每人每週完成的題目清單＝11 位未成年學生的個資公開外洩。
+    //   已逐份掃過 31 個公開 class 文件，這是唯一含個資的一份，所以只挑它出來擋，
+    //   其他課程內容維持公開（不會鎖住學生）。
+    //   已確認唯一的讀取點 data-summer.js:184/241 subscribeSummerMeta 只在學生登入後才呼叫，
+    //   沒有任何未登入路徑會讀它。
     match /class/{docId} {
-      allow read: if true;
+      allow read: if docId != 'summer_meta' || request.auth != null;
       allow write: if isTeacher();
     }
     match /class-g2/{docId} {

@@ -6,7 +6,7 @@
 <title>Alan's English Class — Weekly</title>
 
 <!-- PWA / Home Screen Icon -->
-<link rel="manifest" href="manifest.json?v=391"/>
+<link rel="manifest" href="manifest.json?v=392"/>
 <link rel="icon" type="image/svg+xml" href="icon.svg"/>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
@@ -17,20 +17,27 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet"/>
+<!-- 字型瘦身：Noto Serif TC 原本要 600/700/900 三個字重，光這一家就佔掉這張 CSS 的 80%
+     （324 條 @font-face，整張 418KB）。全站掃過，跟 Noto Serif TC 同一條規則的 font-weight
+     幾乎清一色是 700（43 條 700、3 條 600、0 條 900），所以只留 700，CSS 降到約 170KB。
+     那 3 條 600 的拉丁字仍由 Lora 600 負責，只有中文字改用 700，肉眼幾乎看不出差別。
+     ⚠ 這條 link 必須保持「阻塞式」載入，不可以改成 media="print" onload 的非阻塞寫法：
+     styles-tune.css 有一整組靠字級算出來的高度規則，FOUT 造成的版面跳動會破壞
+     「iPad 橫式 1180×760 一個畫面裝得下」的保證。 -->
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet"/>
 
-<link rel="stylesheet" href="styles.css?v=391"/>
-<link rel="stylesheet" href="styles-part2.css?v=391"/>
-<link rel="stylesheet" href="styles-quiz.css?v=391"/>
-<link rel="stylesheet" href="styles-flashcard.css?v=391"/>
-<link rel="stylesheet" href="styles-auth.css?v=391"/>
-<link rel="stylesheet" href="styles-quiz-mode.css?v=391"/>
-<link rel="stylesheet" href="styles-mistakes.css?v=391"/>
-<link rel="stylesheet" href="styles-home.css?v=391"/>
-<link rel="stylesheet" href="styles-theme.css?v=391"/>
-<link rel="stylesheet" href="styles-fx.css?v=391"/>
+<link rel="stylesheet" href="styles.css?v=392"/>
+<link rel="stylesheet" href="styles-part2.css?v=392"/>
+<link rel="stylesheet" href="styles-quiz.css?v=392"/>
+<link rel="stylesheet" href="styles-flashcard.css?v=392"/>
+<link rel="stylesheet" href="styles-auth.css?v=392"/>
+<link rel="stylesheet" href="styles-quiz-mode.css?v=392"/>
+<link rel="stylesheet" href="styles-mistakes.css?v=392"/>
+<link rel="stylesheet" href="styles-home.css?v=392"/>
+<link rel="stylesheet" href="styles-theme.css?v=392"/>
+<link rel="stylesheet" href="styles-fx.css?v=392"/>
 <!-- styles-tune.css 一定要放最後：手機/平板瘦身＋桌機小字放大，靠載入順序覆蓋前面的規則 -->
-<link rel="stylesheet" href="styles-tune.css?v=391"/>
+<link rel="stylesheet" href="styles-tune.css?v=392"/>
 <style>
   /* Boot splash — shown while Babel transpiles the JSX (removed by React on mount) */
   #__boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f6f1e6;z-index:9999}
@@ -58,8 +65,10 @@
 </template>
 <div id="root"><div id="__boot"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><g transform="translate(100 100)"><circle r="58" fill="none" stroke="#1a1a1a" stroke-width="2"/><text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="78" fill="#1a1a1a">A</text></g><text x="100" y="176" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="9" letter-spacing="2" fill="#8a8270">ALAN'S ENGLISH CLASS</text></svg></div></div>
 
-<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<!-- React / React-DOM 補上 SRI（本來只有 crossorigin，是漏掉不是刻意；babel 那行早就有了）。
+     雜湊用 sha384 對 unpkg 上 18.3.1 的 production build 實算出來的。 -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <!-- Firebase compat SDK (must load before data.js) -->
@@ -68,28 +77,53 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-<script src="data.js?v=391"></script>
-<script src="data-g2.js?v=391"></script>
-<script src="data-g4.js?v=391"></script>
-<script src="data-g5.js?v=391"></script>
-<script src="data-g6.js?v=391"></script>
-<script src="data-summer.js?v=391"></script>
-<script src="data-grammar.js?v=391"></script>
-<script type="text/babel" src="components-shell.jsx?v=391"></script>
-<script type="text/babel" src="components-quiz.jsx?v=391"></script>
-<script type="text/babel" src="components-flashcard.jsx?v=391"></script>
-<script type="text/babel" src="components-editor.jsx?v=391"></script>
-<script type="text/babel" src="components-quiz-mode.jsx?v=391"></script>
-<script type="text/babel" src="components-dashboard.jsx?v=391"></script>
-<script type="text/babel" src="components-mistakes.jsx?v=391"></script>
-<script type="text/babel" src="app.jsx?v=391"></script>
-<script type="text/babel" src="components-fx.jsx?v=391"></script>
+<script src="data.js?v=392"></script>
+<script src="data-g2.js?v=392"></script>
+<script src="data-g4.js?v=392"></script>
+<script src="data-g5.js?v=392"></script>
+<script src="data-g6.js?v=392"></script>
+<script src="data-summer.js?v=392"></script>
+<script src="data-grammar.js?v=392"></script>
+<!-- ⚡ 載入速度最大的一刀：叫 Babel 只做 JSX 轉換，不要降轉到 ES5。
+     @babel/standalone 對沒帶 data-presets 的 text/babel tag，預設是 presets:['react','env']
+     ＋ class-properties / object-rest-spread / flow-strip-types ＋ sourceMaps:'inline'，
+     targets 又是空的 ＝ 全部降轉到 ES5 並內嵌一大包 base64 sourcemap。
+     實測轉譯這 9 個檔（同一支 babel.min.js，M2 / node 22）：
+        預設（react+env）                6050ms／4,609,804 bytes
+        presets=react                    1397ms／3,962,296 bytes
+        presets=react + block-scoping    1460ms／3,957,523 bytes  ← 本檔採用
+     瀏覽器端「畫面真的出來」的時間（本機同一台、各跑數次）：改前 3661／2989ms，
+     改後 1537／997／998ms，大約快 3 倍。省下來的全是 Babel 佔住主執行緒的時間。
+     安全性：全站只用到 optional chaining（142 處）與 async/await（59 處），沒有 class、
+     decorator、private field、TS/Flow 型別、import/export；這兩種語法 Safari 13.4 /
+     Chrome 80（2020）以上都原生支援，學生用的裝置遠比這新。
+
+     ⚠ 為什麼 data-plugins 不是空字串，而是留下 transform-block-scoping 這一個：
+     這 9 個檔轉譯完是「9 個獨立 <script> 掛在同一個全域範圍」。preset-env 本來會把
+     頂層的 const/let 全部變成 var，而 var 允許重複宣告，所以底下這組既有的撞名一直被蓋住：
+        components-quiz.jsx:3       const { useMemo:  useQM } = React;
+        components-quiz-mode.jsx:3  const { useState: useQM } = React;
+     一旦頂層維持 const，第二個檔就會丟
+     「SyntaxError: Identifier 'useQM' has already been declared」，整個 app 直接掛掉
+     （已在瀏覽器實測撞到）。transform-block-scoping 把 const/let 還原成 var，
+     等於完整保留 v391 的作用域行為，實測只多 63ms（1397ms → 1460ms），
+     跟原本的 6050ms 相比仍然是 4 倍以上的改善。
+     ＊真正的根治是把 components-quiz.jsx 的 useQM 改名，那要動 .jsx，另外排。 -->
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-shell.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-quiz.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-flashcard.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-editor.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-quiz-mode.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-dashboard.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-mistakes.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="app.jsx?v=392"></script>
+<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-fx.jsx?v=392"></script>
 
 <script>
   // Register Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=391').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=392').catch(() => {});
     });
   }
 </script>

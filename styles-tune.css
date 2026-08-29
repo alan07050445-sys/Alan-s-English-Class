@@ -2407,7 +2407,10 @@ input, textarea, select{ border-color: var(--border-em); }
    但 <button> 的 text-align 預設是 center，會繼承到標題與副標 →
    標題短的那幾列（例如「Unit 1 填空 / 4 題」）會變成置中，跟清單的左對齊軸線打架。
    實測 computed textAlign 確實是 center，所以這一條是必要的。 */
-.qm-unit-row { text-align: left; }
+.qm-unit-row { text-align: left; width: 100%; }
+/* ⚠ width:100% 跟 text-align 一樣重要：<button> 在 display:block 的容器裡是
+   「縮到剛好包住內容」，不像 <div> 會自動撐滿 →
+   實測 358px 的側邊欄裡，四張卡變成 192/186/176/167 四種寬度（Alan 說「太醜」）。 */
 
 /* ══════════════════════════════════════════════════════════════════════════
    v390 修正批：對抗式覆核抓到的回歸
@@ -2463,3 +2466,96 @@ input, textarea, select{ border-color: var(--border-em); }
   .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim),
   .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) { border-color: var(--border-em); }
 }
+
+/* ══ (v392) 全站順暢：modal 出口永遠在、overlay 不要拖著底下那頁一起捲 ═════════ */
+
+/* (D) Modal 的標題列與按鈕列改成 sticky。
+   styles-part2.css:497 的 .modal 本身就是捲動容器（max-height:90vh + overflow-y:auto），
+   而 .modal-head(:508) 與 .modal-foot(:584) 都沒有釘住。出一份 20 題的 quiz 時
+   表單遠超過 90vh：要按儲存得一路捲到最底、要按 ✕ 得一路捲回最頂，
+   而編輯器又刻意沒有「點背景關閉」（components-editor.jsx:75 說明：避免出到一半的題目消失）
+   ＝ 一個出口都不剩。釘住之後兩個出口隨時都在。 */
+.modal { position: relative; }
+.modal-head {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg-paper);   /* 必須不透明，否則會透出下方捲動中的內容 */
+}
+.modal-foot {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--bg-paper);
+}
+/* z-index 只需要 2：查過 .modal.wide 與 modal 內各題型的內嵌工具列，
+   styles-part2.css 裡 .modal-body 底下沒有任何自己的 z-index（該檔僅有的三個
+   z-index 是 .modal-backdrop 100、.toast 200、.mobile-nav 90，都在 modal 外面）。 */
+
+/* (E) 所有 overlay／面板加 overscroll-behavior: contain。
+   全站 overlay 都是 position:fixed 蓋在可捲動的頁面上，而全 repo 找不到任何
+   body 捲動鎖定 → 在 iPad/iPhone 上手指滑到底還繼續滑，捲動會外溢到底下那一頁，
+   關掉 modal 之後畫面已經跑到別的地方（錯題本與老師後台最明顯）。
+   ⚠ 刻意用純 CSS，不用 position:fixed 鎖 body——那會跟 html.focus-on 專心模式打架。 */
+.modal, .modal-backdrop,
+.mk-overlay, .mk-panel,
+.dash-overlay, .sp-overlay, .growth-overlay {
+  overscroll-behavior: contain;
+}
+/* 上面那組多半只是「不捲動的殼」，真正在捲的是殼裡面那一層；
+   捲動外溢是從最內層的捲動容器往外傳的，所以要釘在真的有 overflow-y:auto 的元素上。 */
+.mk-list, .mk-drill-options,          /* styles-mistakes.css:95 / :254 —— 錯題本 */
+.dash-body, .tdash-content,           /* styles-auth.css:1638 / :4273 —— 老師後台 */
+.sp-body, .stars-list,                /* styles-auth.css:6093 / :6038 —— 星星／商店 */
+.growth-body,                         /* styles-home.css:832 —— 成長報告 */
+.review-modal-body {                  /* styles-quiz-mode.css:642 —— 檢討視窗 */
+  overscroll-behavior: contain;
+}
+
+/* (F) 數字跳動動畫的 reduced-motion 退路：
+   查過這個檔只有一個自訂 @keyframes（:669 lsEnter），而它在 :671 已經被
+   @media (prefers-reduced-motion: reduce) 關掉了；.growth-summary-row(:2228) 這邊
+   沒有任何自訂動畫，:2348 的區塊也已經把 .growth-inline 的 transition 收掉。
+   → 這一項不需要新增規則。（useCountUp 的 JS 部分在 components-quiz-mode.jsx，不歸這裡。） */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v392：Alan 看了 v391 之後的四點回饋
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ② 大螢幕右半邊太空（Alan 圖2）
+   實測 1920x1080：.shell 被 max-width:1280px 夾住 → 左右各空 320px（整整 33% 的螢幕沒用到），
+   而練習卡片只有 611px 寬。練習頁不像文章需要限制行寬——它就是要把卡片與圖片放大。
+   ⚠ 只放寬「練習頁」；大廳與其他頁維持 1280（那些是資訊密度高的頁，太寬反而難讀）。 */
+@media (min-width: 1500px) {
+  .page-mission .shell { max-width: 1600px; }
+}
+@media (min-width: 1800px) {
+  .page-mission .shell { max-width: 1760px; }
+}
+
+/* ④ 圖片再大一點、留白再少一點（Alan 圖3 是他要的比例）
+   v389 定的 330px 是在「還沒放寬 shell」的前提下訂的；卡片變寬之後，
+   同樣的圖看起來就偏小、上下留白偏多。桌機拉到 420，平板 360。
+   ⚠ 仍然是固定值（flex:0 0 auto），不會跟著捲動伸縮——那是 Alan 明確要求的。 */
+@media (min-width: 1025px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 420px; }
+  .fc-p-learn .fc-learn-img { max-height: 430px; }
+}
+/* 1080 高的桌機放到 420 會多出約 39px → 這一段把圖片與卡片內距各收一點，
+   讓「圖片盡量大」與「一個畫面裝得下」同時成立。 */
+@media (min-width: 1025px) and (max-height: 1100px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 390px; }
+  .fc-p-learn .fc-learn-img { max-height: 400px; }
+  .fc-player { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (min-width: 901px) and (max-width: 1024px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 360px; }
+  .fc-p-learn .fc-learn-img { max-height: 370px; }
+}
+/* 專心模式再多給一些（上方列收起來就是為了換這個空間） */
+html.focus-on .fc-p-card .fc-back-img-wrap,
+html.focus-on .fc-p-card .fc-back-img-wrap img { max-height: 460px; }
+html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
+
+/* 卡片內的上下留白收緊——Alan：「不要留白太多」 */
+.fc-p-card .fc-face { justify-content: center; }
+.fc-p-card > .fc-flip-card { min-height: 0; }

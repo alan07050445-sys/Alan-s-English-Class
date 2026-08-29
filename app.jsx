@@ -98,9 +98,15 @@ function bestWeekIdx(order, weeks) {
 /* ☀️ 暑假限定模式：有暑假任務的學生，門口頁只顯示暑假入口（怕誤點學期教室）。
    v377: 本來是寫死 true、要記得手動改成 false——8/31 開學那天忘了改，
    暑假的學生就進不去新學期的教室。改成「開學日一到自動失效」。
-   要提前或延後，改下面這個日期就好（月份是 0 起算：7 = 8 月）。 */
+   要提前或延後，改下面這個日期就好（月份是 0 起算：7 = 8 月）。
+   ⚠ v392: 這個日期每學期都要「手動」改一次。理想做法是搬到 Firestore 的設定值
+   （老師端 forTeacher 後台就能改，不用等我改程式再 deploy）——先記在這裡。 */
 const TERM_START = new Date(2026, 7, 31);      // 2026-08-31 開學
-const SUMMER_ONLY_DOOR = new Date() < TERM_START;
+/* v392: 本來這裡是 `const SUMMER_ONLY_DOOR = new Date() < TERM_START;`——模組頂層常數，
+   只在 JS 首次執行時算一次。但 manifest 是 standalone，學生把 app 加到主畫面後
+   多半只是「切出去再切回來」（背景喚醒），不會重新執行模組：8/30 晚上開著、
+   8/31 早上切回來的人，門口頁仍停在暑假限定，進不去新學期教室。
+   → 改成在 render 時才算（見 App 裡的 summerOnlyDoor / nowTick）。 */
 
 function App() {
   // ── Auth state ──────────────────────────────────────────
@@ -125,6 +131,18 @@ function App() {
   const [entered, setEntered] = useAppState(() => {
     try { return sessionStorage.getItem('alan-entered') === '1'; } catch(e) { return false; }
   });
+
+  /* v392: 「現在幾點」的心跳。app 加到主畫面後常常是背景喚醒（不重新執行 JS），
+     所以每次畫面重新可見就 +1，逼所有「跟今天日期有關」的判斷重算一次。 */
+  const [nowTick, setNowTick] = useAppState(0);
+  useAppEffect(() => {
+    const on = () => { if (!document.hidden) setNowTick(t => t + 1); };
+    document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
+  /* 開學日一到，門口頁就要自動從「暑假限定」變回「看得到年級教室」——
+     不能靠使用者自己重新整理（v377 那次災情就是這樣發生的）。 */
+  const summerOnlyDoor = useAppMemo(() => new Date() < TERM_START, [nowTick]);
 
   // ── Content state ───────────────────────────────────────
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
@@ -219,7 +237,16 @@ function App() {
 
   /* v375(#8): 吉祥物只在「已登入的學習畫面」出現——登入頁是家長第一眼看到的地方，
      維持乾淨。components-fx.jsx 每秒讀一次這個旗標。 */
-  useAppEffect(() => { window.__mxAllow = !!user; }, [user]);
+  /* v392: 老師端預設不要吉祥物——編輯器與後台儀表板都是「在工作」的畫面（而且一定是大螢幕），
+     有隻東西走來走去只會擋住表格與按鈕。
+     ⚠ deps 一定要帶 adminVer：「擁有者以外的老師」是非同步從 admins 名單解析出來的，
+       不帶就會停在「還不知道我是老師」的舊值，吉祥物照樣冒出來。
+     逃生門：Alan 自己想看的時候 localStorage.setItem('alan-mx-teacher','1') 再重整。 */
+  useAppEffect(() => {
+    let escape = false;
+    try { escape = localStorage.getItem('alan-mx-teacher') === '1'; } catch(e) {}
+    window.__mxAllow = !!user && (!window.isAdminUser(user) || escape);
+  }, [user, adminVer]);
 
   // ── Loading screen state ────────────────────────────
   // showLoader stays true until auth resolves + 480ms (fade-out animation time)
@@ -235,7 +262,16 @@ function App() {
   useAppEffect(() => {
     if (revealReady) {
       const elapsed = Date.now() - loaderStartRef.current;
-      const minShow = 1400; // minimum display time so animation always completes
+      /* v392: 本來是 1400ms（＋680ms 淡出）＝就算 Firebase 100ms 就回來，
+         也一定要在載入畫面前坐滿 2,080ms；加上 Babel 轉譯，最順的情況也要
+         2.8 秒才看得到內容。等資料是有意義的等待，湊時間不是。
+         先試 500ms，但實際把 .ls-screen 定格看過（styles-auth.css:431~477）：
+         校名 .ls-name 是 0.45s 延遲 + 0.9s 動畫，500ms 時字距還開著、透明度才一半，
+         這時候開始淡出＝明顯被砍斷。800ms 時校名已經完全收攏、實心，
+         淡出看起來是「收掉」而不是「被切掉」→ 取 800。
+         代價：底線 .ls-underline（0.9s 起跑、1.8s 才畫完）改成在淡出期間畫，
+         幾乎看不到——它是裝飾，換 900ms 的等待值得。 */
+      const minShow = 800;
       const waitMs  = Math.max(0, minShow - elapsed);
       // 開始淡出的同時 bump pageKey → 讓門口頁／首頁在載入畫面底下先掛載的
       // 進場動畫重新播放（否則動畫早在 loader 蓋住時就跑完了，使用者看不到）
@@ -1370,7 +1406,7 @@ function App() {
           onSelect={(g) => runWave(() => handleSelectGrade(g))}
           homeGrade={homeGrade}
           who={user ? _englishName(user.displayName) : null}
-          summerOnly={SUMMER_ONLY_DOOR && !isTeacher && hasSummerPlan}
+          summerOnly={summerOnlyDoor && !isTeacher && hasSummerPlan}
           onOpenAdmin={isTeacher ? () => setDashOpen(true) : null}
           onChangeGrade={(g) => {
             // 換年級 → 回門口頁（教室卡換成新年級），不直接進教室（太突兀）

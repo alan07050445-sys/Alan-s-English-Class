@@ -41,6 +41,16 @@
   50%      { transform: translateY(-.6px) scaleY(1.02); }
 }
 
+/* ── 點頭（v392）：連對 5 題才出現的「我看到了」──
+   取代以前每題 45% 機率的 jump（位移 13px ＋ 對話泡泡）。
+   最多只走 3px、0.55 秒就結束，看得到但不會把視線從題目拉走。 */
+.act-nod .mx-svg { animation: mxNod .55s ease-in-out; }
+@keyframes mxNod {
+  0%, 100% { transform: translateY(0)     scaleY(1); }
+  35%      { transform: translateY(3px)   scaleY(.95); }
+  70%      { transform: translateY(-1px)  scaleY(1.02); }
+}
+
 /* ── 走路：身體上下晃、前後腳輪流抬 ── */
 .act-walk .mx-svg   { animation: mxWalkBob .34s ease-in-out infinite; }
 .act-walk .mx-leg-a { animation: mxStep    .34s ease-in-out infinite; }

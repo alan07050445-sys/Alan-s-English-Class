@@ -1211,7 +1211,10 @@ function subscribeUserProfile(uid, callback) {
 // the AI API key private. It should accept { word, sentence } and return
 // { feedback: "..." } or plain text.
 const AI_WRITING_ENDPOINT = 'https://alan-ai-proxy.alan07050445.workers.dev';
-const ANTHROPIC_API_KEY = ''; // Key is stored in Cloudflare Worker env var  // browser-only fallback; safer to use the endpoint above.
+// ⚠ v392 刪掉：這裡原本還留著一個前端金鑰常數，以及「繞過 Worker 直接打
+// Anthropic 官方端點」的 fallback。金鑰放在前端等於公開（歷史版本真的貼過四把，
+// 現在還留在公開的 git 歷史裡），留著那段就是下次不小心再貼一把的坑。
+// 現在只有一條路：全部走上面這個 Worker 代理；沒有端點就退回本機的規則式回饋。
 
 async function checkWriting(word, sentence, instruction = '', zhHint = '') {
   if (!sentence || !sentence.trim()) return '請先寫一個英文句子。';
@@ -1263,7 +1266,9 @@ English: Write one improved sentence using or answering "${word}" correctly. Kee
 
   if (endpoint) {
     try {
-      const res = await fetch(endpoint, {
+      // fetchT：加 60 秒逾時。原本是裸 fetch，Worker 收下請求但不回應時 promise 永遠 pending，
+      // 學生端的「批改中…」就會一直轉圈轉不完。
+      const res = await fetchT(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -1275,28 +1280,26 @@ English: Write one improved sentence using or answering "${word}" correctly. Kee
       });
       const data = await res.json().catch(() => null);
       return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
-    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+    } catch(e) {
+      if (e && e.name === 'AbortError') return 'AI 批改太久沒有回應，請再試一次。';
+      return 'AI 批改服務暫時連不上，請稍後再試。';
+    }
   }
-  if (!ANTHROPIC_API_KEY) return localWritingFeedback(word, sentence);
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5', max_tokens: 700,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
-    const data = await res.json();
-    return data.content?.[0]?.text || '批改失敗，請再試一次。';
-  } catch(e) { return '網路錯誤，請再試一次。'; }
+  // 沒有端點時退回本機的規則式回饋（行為與以前相同）
+  return localWritingFeedback(word, sentence);
 }
 
 // ── v379: AI 出題（配對連線的英文定義／填空的情境例句＋中文解說）────────────
 // Alan 本來的做法是把單字貼給 ChatGPT、拿回來再匯入。
 // alan-ai-proxy 這個 Worker 本來就是「通用的 Anthropic 代理」（收 system+messages 原樣轉送），
 // 所以不用重新部署，直接換一組 prompt 就能在網站裡出題。
+/* 所有 system prompt 共用的一行：叫模型不要輸出換行與縮排。
+   實測同一組 10 個單字，未加時 output_tokens 883/1196（含 83 個換行），
+   加了之後 866/882（0 個換行）——依 176 tok/s 換算約省 1.9 秒。
+   ⚠ _aiStripFence 仍然保留，因為模型偶爾還是會加 code fence。 */
+const _AI_MINIFY =
+  "Output the JSON MINIFIED on a single line: no newlines, no indentation, no spaces after ':' or ','. Do not wrap it in a code fence.";
+
 const AI_VOCAB_SYS =
 `You write English exercises for Taiwanese elementary-school students (grades 2-6, CEFR A1-A2).
 Output ONLY a JSON array. No prose, no markdown, no code fences.
@@ -1315,7 +1318,8 @@ RULES
   BAD:  「something valuable passed down」表示…，所以是 heritage（文化遺產）。
   BAD:  quoting the definition instead of a phrase from the sentence.
 - Keep every other word simple. Use the student's own world (school, family, food, animals, festivals).
-- Return the words in the same order they were given, one object per word.`;
+- Return the words in the same order they were given, one object per word.
+${_AI_MINIFY}`;
 
 function _aiStripFence(t) {
   const s = String(t || '').trim();
@@ -1323,37 +1327,137 @@ function _aiStripFence(t) {
   return (m ? m[1] : s).trim();
 }
 
+/* ── v392: AI 呼叫的三個共用小工具 ──────────────────────────────────────
+   為什麼要加：出一套時態題原本要 118 秒，老師在校稿頁前面乾等。
+   量出來的延遲公式是 latency ≈ 1.4s + output_tokens / 176 ——
+   幾乎全部是「吐字時間」，跟 prompt 長短、max_tokens 都無關。
+   所以只有兩條路能快：把請求拆小、以及把請求同時送出去。 */
+
+/* pMap：有上限的平行 map。單一請求失敗只讓那一格變 null，不會拖垮整批
+   （呼叫端本來就要驗證＋補不足，null 就當成「這一發沒中」）。
+   端點是 HTTP/2，實測 30 個請求同時打全部成功、沒有被限流；
+   瀏覽器對 HTTP/2 也沒有「每網域 6 條連線」的限制，所以平行在前端真的會生效。 */
+async function pMap(list, fn, limit = 8) {
+  const out = new Array(list.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < list.length) {
+      const k = i++;
+      try { out[k] = await fn(list[k], k); } catch (e) { out[k] = null; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+  return out;
+}
+
+/* fetchT：帶逾時的 fetch。原本全站的 AI fetch 都沒有 timeout，
+   Worker 收下請求卻不回應時 promise 永遠 pending → UI 的 busy 狀態永遠不解除。
+   逾時會丟 AbortError，呼叫端據此給「太久沒有回應」的文案。 */
+function fetchT(url, opts, ms = 60000) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  return fetch(url, { ...opts, signal: c.signal }).finally(() => clearTimeout(t));
+}
+
+/* _aiBackoff：重試之間的等待。原本是 catch 完立刻重試、不看 status，
+   兩次會在 100ms 內燒光，等於沒有重試。改成 400→1200→3000ms 各加 0–300ms 隨機
+   （加隨機是為了避免平行的十幾個請求同時醒來、又一起撞上去）。 */
+const _AI_BACKOFF = [400, 1200, 3000];
+const _aiSleep = (ms) => new Promise(r => setTimeout(r, ms));
+/* 只有「連線／逾時例外」或「429 / 500 / 529」才值得等一下再試；
+   400 那種是我們自己的格式錯誤，等再久也一樣，直接進下一輪。 */
+function _aiShouldBackoff(status) { return status === 429 || status === 500 || status === 529; }
+
+/* _aiAsk：全站 AI 呼叫的單一入口（逾時＋退避重試都在這裡）。
+   pick(json) 把回傳整理成呼叫端要的東西；回 null／undefined 或丟例外
+   就當「這一發沒中」，換下一輪（格式錯誤不等待，直接重打）。
+   三次都沒中才丟錯，錯誤物件上帶 .timeout 讓 UI 能給不同文案。 */
+async function _aiAsk(body, pick, timeoutMs) {
+  let timedOut = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let wait = false;
+    try {
+      const res = await fetchT(AI_WRITING_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }, timeoutMs || 60000);
+      try {
+        const data = await res.json();
+        const got = pick(data);
+        if (got != null) return got;
+      } catch (e) { /* 不是 JSON、或格式不符 → 立刻換下一輪，等待也沒用 */ }
+      wait = !res.ok && _aiShouldBackoff(res.status);   // 只有 429/500/529 值得等
+    } catch (e) {
+      if (e && e.name === 'AbortError') timedOut = true;
+      wait = true;                                      // 連線失敗／逾時 → 退避後再試
+    }
+    if (wait && attempt < _AI_BACKOFF.length - 1) {
+      await _aiSleep(_AI_BACKOFF[attempt] + Math.floor(Math.random() * 300));
+    }
+  }
+  const err = new Error(timedOut
+    ? 'AI 太久沒有回應，請再試一次。'
+    : 'AI 出題失敗（回傳格式看不懂），請再試一次。');
+  err.timeout = timedOut;
+  throw err;
+}
+
 /* words: [{ term, zh }]（zh 只是給 AI 當語意提示，可省略）
    回傳 [{ word, def, sentence, answer, explain }]，順序與輸入相同。 */
-async function aiMakeVocabExercises(words, { onProgress, chunk = 10, hint = '' } = {}) {
+/* v392: 改成「先切成一堆小請求，再一次平行送出去」。
+   chunk 從 10 縮成 2：延遲幾乎全是吐字時間（≈ output_tokens / 176），
+   所以每個請求要吐的字變少＝每個請求本身就變快；再加上全部同時跑，
+   20 個單字實測從 20.8 秒降到 3 秒上下。
+   ⚠ 對回輸入順序的方式完全沒變（part.forEach((w,k) => parsed[k]），
+   校稿頁看到的欄位、順序、中文解說都跟以前一樣。 */
+async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '' } = {}) {
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (!list.length) return [];
-  const out = [];
-  for (let i = 0; i < list.length; i += chunk) {
-    const part = list.slice(i, i + chunk);
+  const size = Math.max(1, +chunk || 1);
+  const parts = [];
+  for (let i = 0; i < list.length; i += size) parts.push(list.slice(i, i + size));
+
+  let doneWords = 0;
+  let timedOut = false;
+  const packs = await pMap(parts, async (part) => {
     const userMsg =
       (hint ? `Context / topic: ${hint}\n` : '') +
       'Target words:\n' +
       part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`).join('\n');
-    let parsed = null;
-    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-      try {
-        const res = await fetch(AI_WRITING_ENDPOINT, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5', max_tokens: 4000,
-            system: AI_VOCAB_SYS,
-            messages: [{ role: 'user', content: userMsg }],
-          }),
-        });
-        const data = await res.json();
+    try {
+      /* max_tokens 700：chunk=2 時實測用量遠低於此，留約 1.6 倍餘裕當保險絲。
+         ⚠ 不要再往下砍——一旦 stop_reason 變成 max_tokens，JSON 會被截斷、
+         解析直接失敗然後整批重試，反而更慢。chunk 被呼叫端調大時按比例放寬。 */
+      const arr = await _aiAsk({
+        model: 'claude-haiku-4-5', max_tokens: Math.max(700, part.length * 350),
+        system: AI_VOCAB_SYS,
+        messages: [{ role: 'user', content: userMsg }],
+      }, (data) => {
         const txt = data?.content?.[0]?.text || data?.text || '';
-        const arr = JSON.parse(_aiStripFence(txt));
-        if (Array.isArray(arr)) parsed = arr;
-      } catch (e) { /* 再試一次；兩次都失敗就丟錯誤 */ }
+        const a = JSON.parse(_aiStripFence(txt));
+        return Array.isArray(a) ? a : null;
+      });
+      return arr;
+    } catch (e) {
+      if (e && e.timeout) timedOut = true;
+      throw e;
+    } finally {
+      // 進度語意不變：仍然是「已完成幾個字 / 總共幾個字」，只是 chunk 變小、回報變密
+      doneWords += part.length;
+      if (onProgress) onProgress(Math.min(doneWords, list.length), list.length);
     }
-    if (!parsed) throw new Error('AI 出題失敗（回傳格式看不懂），請再試一次。');
+  }, 10);
+
+  if (packs.some(p => !p)) {
+    throw new Error(timedOut
+      ? 'AI 太久沒有回應，請再試一次。'
+      : 'AI 出題失敗（回傳格式看不懂），請再試一次。');
+  }
+
+  const out = [];
+  parts.forEach((part, pi) => {
+    const parsed = packs[pi] || [];
     // 用輸入的順序對回去，AI 少給或多給都不會錯位
     part.forEach((w, k) => {
       const r = parsed[k] || {};
@@ -1367,8 +1471,7 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 10, hint = '' }
         explain: String(r.explain || '').trim(),
       });
     });
-    if (onProgress) onProgress(Math.min(i + chunk, list.length), list.length);
-  }
+  });
   return out;
 }
 
@@ -1475,23 +1578,21 @@ OUTPUT (${n} passage${n > 1 ? 's' : ''}):
 - ⚠ Inside [ ] put ONLY verb forms built from the base form in ( ). Adverbs stay outside the brackets:
     GOOD: \`We have already [finished](finish) the project.\`
     BAD:  \`We [have already finished](finish) the project.\`
-    BAD:  \`Tom [has never been](be) to the zoo.\`  → write \`Tom has never [been](be) to the zoo.\``}`;
+    BAD:  \`Tom [has never been](be) to the zoo.\`  → write \`Tom has never [been](be) to the zoo.\``}
+
+${_AI_MINIFY}`;
 };
 
+/* v392: 改走 _aiAsk（60 秒逾時＋429/500/529 才退避的三次重試）。
+   原本是 catch 後立刻重試、不看 status，兩次會在 100ms 內燒光＝形同沒有重試。 */
 async function _grCall(system, user, maxTokens) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(AI_WRITING_ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000, system, messages: [{ role: 'user', content: user }] }),
-      });
-      const data = await res.json();
+  return _aiAsk(
+    { model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000, system, messages: [{ role: 'user', content: user }] },
+    (data) => {
       const arr = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
-      if (arr && Array.isArray(arr.items)) return arr.items;
-    } catch (e) { /* 再試一次 */ }
-  }
-  throw new Error('AI 出題失敗（回傳格式看不懂），請再試一次。');
+      return (arr && Array.isArray(arr.items)) ? arr.items : null;
+    }
+  );
 }
 
 /* ⚠ 只靠 prompt 講不動——模型很愛出「____ never ____」這種兩個空格的題目
@@ -1567,46 +1668,135 @@ function _grValidB(p) {
   });
 }
 
+/* v392: 平行請求要用的「主題種子」。
+   原本是「把前面出過的答案塞進 prompt 叫它不要重複」的鏈式脈絡，
+   一旦改平行就沒有前一題可以參考了。補救方式（實測有效）：
+   給每個平行請求不同的主題，回來後在程式端 dedupe。
+   實測 9 個平行 A 請求拿到 47 題有效、unique 也是 47（0 重複）。 */
+const _GR_SEEDS = ['school life', 'family', 'food and cooking', 'animals', 'sports',
+  'the weekend', 'the classroom', 'pets', 'travel', 'festivals', 'the night market', 'hobbies'];
+
+/* 超額生成的倍率＝實測通過率的倒數（第一波就一次把量做足，不要一輪一輪補）。
+   實測：t1 四批都 12/12（幾乎全過）；t5 只有 8/12、3/12、4/12、6/12，
+   B 短文 t5 更只有 2/5。其餘三個時態沒實測，取中間值。 */
+const _GR_OVER = { t1: 1.2, t2: 1.6, t3: 1.6, t4: 1.6, t5: 2.5 };
+const _GR_MAX_WAVE = 12;   // 一波最多 12 個請求（A、B 各自算）
+
 /* 產生一個時態的整套題目。
-   typeA: 幾「組」×10 題；typeB: 幾篇短文。回傳 { A:[[10題],[10題],…], B:[篇,…] } */
+   typeA: 幾「組」×10 題；typeB: 幾篇短文。回傳 { A:[[10題],[10題],…], B:[篇,…] }
+
+   v392 改法：原本是「外層 group、內層重生 round」兩層循序 for，組與組之間也排隊，
+   t5 四組 A + 五篇 B 實測要 118.6 秒。現在改成
+   「超額生成 → 全部平行送 → 驗過的丟進同一個池子 → 依組切 10 題 → 不夠才發第二波」，
+   預期同一組設定約 15 秒。
+   ⚠ 驗證器（_grValidA / _grTenseOk / _grValidB / _grFixPassage）與判斷順序
+     完全沒有動，是 v382 用血換來的規則。 */
 async function aiMakeGrammarSet({ tense, aGroups = 3, bCount = 5, onProgress } = {}) {
   if (!GR_TENSES[tense]) throw new Error('不認得這個時態');
   const total = aGroups + bCount;
-  let done = 0;
-  const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
-  const A = [];
-  for (let g = 0; g < aGroups; g++) {
-    const keep = [];
-    for (let round = 0; round < 4 && keep.length < 10; round++) {
-      const seen = A.flat().concat(keep).map(x => x.answer).join(', ');
-      const items = await _grCall(_GR_SYS(tense, 'A', 12),
-        `Generate 12 items.${seen ? ` Do NOT reuse these answers: ${seen}.` : ''}`, 3400);
-      items.map(x => ({
-        prompt: String(x.prompt || '').trim(),
-        answer: String(x.answer || '').trim(),
-        explain: String(x.explain || '').trim(),
-      })).forEach(x => { if (keep.length < 10 && _grValidA(x) && _grTenseOk(tense, x)) keep.push(x); });
-    }
-    A.push(keep);
-    bump(`單句填空 ${g + 1}/${aGroups}`);
+  const over = _GR_OVER[tense] || 1.6;
+  const needA = aGroups * 10;
+  if (needA <= 0 && bCount <= 0) return { A: [], B: [] };   // 什麼都沒勾＝不用打任何請求
+
+  const poolA = [], seenA = new Set();      // 驗過的 A 題（池子）
+  const poolB = [], seenB = new Set();      // 驗過的 B 短文
+  const rejB = [];                          // 沒驗過的 B：最後不夠時先收下讓老師校稿（別丟掉）
+  let timedOut = false;
+
+  /* 進度：對外仍然是「已完成幾個單元 / 共幾個單元」，總次數也還是 aGroups+bCount，
+     components-editor.jsx 的進度條不用動。差別只是現在由池子的存量換算出來。 */
+  let units = 0;
+  const emit = (n, label) => { while (units < n) { units++; if (onProgress) onProgress(units, total, label); } };
+  const sync = () => {
+    const aU = Math.min(aGroups, Math.floor(poolA.length / 10));
+    const bU = Math.min(bCount, poolB.length);
+    emit(aU + bU, `單句填空 ${aU}/${aGroups}、短文填空 ${bU}/${bCount}`);
+  };
+
+  const takeA = (items) => {
+    (items || []).map(x => ({
+      prompt: String(x.prompt || '').trim(),
+      answer: String(x.answer || '').trim(),
+      explain: String(x.explain || '').trim(),
+    })).forEach(x => {
+      const key = x.prompt.toLowerCase().replace(/\s+/g, ' ');
+      if (!key || seenA.has(key)) return;                     // 平行來的重複題目在這裡擋掉
+      if (!_grValidA(x) || !_grTenseOk(tense, x)) return;      // ⚠ 驗證邏輯與 v382 完全相同
+      seenA.add(key); poolA.push(x);
+    });
+  };
+  const takeB = (items) => {
+    const p = (items || [])[0] || {};
+    const cand = { title: String(p.title || '').trim(), passage: _grFixPassage(String(p.passage || '').trim()) };
+    const key = (cand.title + '|' + cand.passage.slice(0, 60)).toLowerCase();
+    if (seenB.has(key)) return;
+    seenB.add(key);
+    const blanksOk = (cand.passage.match(/\[([^\]]+)\]/g) || [])
+      .every(m => _grTenseOk(tense, { prompt: cand.passage, answer: m.slice(1, -1) }));
+    if (_grValidB(cand) && blanksOk) poolB.push(cand);
+    else rejB.push(cand);                                     // 不合格的留著當備胎，不整批丟掉
+  };
+
+  // 一波：把 A 與 B 的請求算成一個陣列，一次全部平行送出去
+  let seed = 0;
+  const runWave = async (nA, nB) => {
+    const jobs = [];
+    for (let i = 0; i < nA; i++) jobs.push('A');
+    for (let i = 0; i < nB; i++) jobs.push('B');
+    if (!jobs.length) return;
+    await pMap(jobs, async (kind) => {
+      const topic = _GR_SEEDS[seed++ % _GR_SEEDS.length];
+      try {
+        if (kind === 'A') {
+          // max_tokens 2600：12 題（含中文解說）實測用不到這麼多，留餘裕避免 JSON 被截斷
+          takeA(await _grCall(_GR_SYS(tense, 'A', 12),
+            `Generate 12 items. Set them in this topic area: ${topic}. Vary the subject and verb in every item.`, 2600));
+        } else {
+          // max_tokens 900：一篇 80–130 字的短文加標題，900 已經很寬鬆
+          takeB(await _grCall(_GR_SYS(tense, 'B', 1),
+            `Generate 1 passage about: ${topic}.`, 900));
+        }
+      } catch (e) {
+        if (e && e.timeout) timedOut = true;
+        throw e;                       // pMap 會把這一格記成 null，其他請求照跑
+      } finally { sync(); }
+      return true;
+    }, Math.min(jobs.length, 24));
+  };
+
+  const waveSize = (miss, per) => (miss <= 0 ? 0
+    : Math.max(1, Math.min(_GR_MAX_WAVE, Math.ceil(Math.ceil(miss / per) * over))));
+
+  for (let wave = 0; wave < 3; wave++) {
+    const missA = needA - poolA.length;
+    const missB = bCount - poolB.length;
+    if (wave > 0 && missA <= 0 && missB <= 0) break;
+    const before = poolA.length + poolB.length;
+    await runWave(waveSize(missA, 12), waveSize(missB, 1));
+    // 一整波下來池子完全沒長（例如整段網路斷了）＝再打也是白打
+    if (wave > 0 && poolA.length + poolB.length === before) break;
   }
+
+  if (!poolA.length && !poolB.length && !rejB.length) {
+    throw new Error(timedOut ? 'AI 太久沒有回應，請再試一次。' : 'AI 出題失敗（回傳格式看不懂），請再試一次。');
+  }
+
+  /* 池子依組切成每組 10 題。
+     ⚠ 池子不夠時要「輪流發牌」而不是前面切滿、後面留空組——
+     components-editor.jsx 是拿最後一組當「驗收」（r.A.pop()），
+     照順序切會讓驗收剛好變成那個空的。以前一組一組出的時候，
+     湊不滿是每組都少一點，這裡維持同樣的手感。 */
+  const A = Array.from({ length: aGroups }, () => []);
+  if (poolA.length >= needA) {
+    for (let g = 0; g < aGroups; g++) A[g] = poolA.slice(g * 10, g * 10 + 10);
+  } else {
+    poolA.forEach((x, i) => A[i % aGroups].push(x));
+  }
+  // 短文：先用驗過的，不夠再用備胎（＝原本「最後一輪還是不合格就先收下」的行為）
   const B = [];
-  for (let i = 0; i < bCount; i++) {
-    let best = null;
-    for (let round = 0; round < 4 && !best; round++) {
-      const seen = B.map(x => x.title).join(', ');
-      const items = await _grCall(_GR_SYS(tense, 'B', 1),
-        `Generate 1 passage.${seen ? ` Use a different situation from: ${seen}.` : ''}`, 2000);
-      const p = items[0] || {};
-      const cand = { title: String(p.title || '').trim(), passage: _grFixPassage(String(p.passage || '').trim()) };
-      const blanksOk = (cand.passage.match(/\[([^\]]+)\]/g) || [])
-        .every(m => _grTenseOk(tense, { prompt: cand.passage, answer: m.slice(1, -1) }));
-      if (_grValidB(cand) && blanksOk) best = cand;
-      else if (round === 3) best = cand;      // 四次都不合格就先收下，讓老師在校稿頁改
-    }
-    B.push(best);
-    bump(`短文填空 ${i + 1}/${bCount}`);
-  }
+  for (let i = 0; i < bCount; i++) B.push(poolB[i] || rejB[i - poolB.length] || { title: '', passage: '' });
+
+  emit(total, '完成');
   return { A, B };
 }
 /* v383: 產生單元開頭的「教學卡」。
@@ -1636,22 +1826,21 @@ RULES
   options = 2-3 short choices (just the verb forms). answer = the INDEX of the correct one (0-based).
   why = Traditional Chinese, ≤40 characters, explaining the answer.
 - outro: ONE encouraging sentence in Traditional Chinese telling them what to practise next.
-- Everything must be simple enough for a 10-year-old. Use school, family, food, animals, sport.`;
+- Everything must be simple enough for a 10-year-old. Use school, family, food, animals, sport.
+${_AI_MINIFY}`;
 
 async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
   const T = tense && GR_TENSES[tense];
   const user = T
     ? `Topic: ${T.en}（${T.zh}）\nThe student must learn:\n${T.must}\nMust avoid:\n${T.avoid}`
     : `Topic: ${topic}\n${notes ? `Teacher notes: ${notes}` : ''}`;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(AI_WRITING_ENDPOINT, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 2600, system: _LS_SYS, messages: [{ role: 'user', content: user }] }),
-      });
-      const data = await res.json();
-      const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
-      if (o && (o.lead || o.uses)) {
+  // v392: 改走 _aiAsk（60 秒逾時＋退避重試）。原本是裸 fetch、失敗立刻重試一次。
+  try {
+    return await _aiAsk(
+      { model: 'claude-haiku-4-5', max_tokens: 2600, system: _LS_SYS, messages: [{ role: 'user', content: user }] },
+      (data) => {
+        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+        if (!o || !(o.lead || o.uses)) return null;
         // answer 有時會回文字而不是索引 → 修回索引；超出範圍就丟掉那一題
         o.check = (o.check || []).map(c => {
           if (!c || !Array.isArray(c.options)) return null;
@@ -1662,9 +1851,10 @@ async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
         }).filter(Boolean);
         return o;
       }
-    } catch (e) { /* 再試一次 */ }
+    );
+  } catch (e) {
+    throw new Error(e && e.timeout ? '教學卡太久沒有回應，請再試一次。' : '教學卡產生失敗，請再試一次。');
   }
-  throw new Error('教學卡產生失敗，請再試一次。');
 }
 
 function grCountBlanks(passage) {
@@ -1742,7 +1932,8 @@ const _RC_SYS_BASE =
 `You write English reading exercises for Taiwanese elementary-school students, based on a passage the teacher gives you.
 Output ONLY valid JSON. No prose, no markdown, no code fences.
 Everything you write must be answerable from the passage ALONE. Never use outside knowledge.
-Never write the literal characters "..." or the Chinese ellipsis - always write the real wording.`;
+Never write the literal characters "..." or the Chinese ellipsis - always write the real wording.
+${_AI_MINIFY}`;
 
 function _RC_SYS_MCQ(gradeNote, n) {
   return _RC_SYS_BASE + '\n\n' +
@@ -1850,25 +2041,17 @@ RULES
 - why: Traditional Chinese, 15-35 characters.`;
 }
 
-/* 一次呼叫（沿用 _grCall 的兩次重試 + 剝 code fence），但這裡有些回傳不是 {items:[]}
-   而是帶額外欄位的物件（比較對照要 leftLabel/rightLabel），所以回整個物件。 */
+/* 一次呼叫（沿用 _grCall 的重試 + 剝 code fence），但這裡有些回傳不是 {items:[]}
+   而是帶額外欄位的物件（比較對照要 leftLabel/rightLabel），所以回整個物件。
+   v392: 同樣改走 _aiAsk（60 秒逾時＋只對 429/500/529 退避的三次重試）。 */
 async function _rcCall(system, user, maxTokens) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(AI_WRITING_ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000,
-          system, messages: [{ role: 'user', content: user }],
-        }),
-      });
-      const data = await res.json();
+  return _aiAsk(
+    { model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000, system, messages: [{ role: 'user', content: user }] },
+    (data) => {
       const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
-      if (o && typeof o === 'object') return o;
-    } catch (e) { /* 再試一次 */ }
-  }
-  throw new Error('AI 出題失敗（回傳格式看不懂），請再試一次。');
+      return (o && typeof o === 'object') ? o : null;
+    }
+  );
 }
 
 function _rcUser(passage, title, extra) {
@@ -2023,35 +2206,52 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
   let done = 0;
   const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
 
-  // ── 選擇題：每 5 題一批，多要 2 題當備料，驗不過的丟掉 ──
+  /* ── 選擇題：每 5 題一批，多要 2 題當備料，驗不過的丟掉 ──
+     v392: 原本是「一輪等一輪」的兩層 for。改成一次把該打的輪次全部平行送出，
+     回來後用完全相同的驗證／去重邏輯收題；不夠再發第二、三波
+     （第二波之後會把已出過的題目塞進 prompt，因為同一篇文章平行問很容易撞題）。 */
   const mcqOut = [];
-  for (let r = 0; r < mcqRounds; r++) {
-    const want = Math.min(CHUNK, nMcq - mcqOut.length);
-    for (let round = 0; round < 3 && mcqOut.length < (r + 1) * CHUNK && mcqOut.length < nMcq; round++) {
-      const asked = mcqOut.map(q => q.q).join(' | ');
+  const absorbMcq = (o) => {
+    ((o && o.items) || []).forEach(raw => {
+      if (mcqOut.length >= nMcq) return;
+      const q = _rcFixAnswerIdx({
+        q: _rcTxt(raw && raw.q),
+        options: (raw && raw.options || []).map(_rcTxt).slice(0, 4),
+        answer: raw && raw.answer,
+        explain: _rcTxt(raw && raw.explain),
+        skill: _rcTxt(raw && raw.skill) || 'detail',
+      });
+      if (q && _rcValidMcq(q) && !mcqOut.some(e => e.q.toLowerCase() === q.q.toLowerCase())) {
+        mcqOut.push({ id: _rcId('rq'), ...q });
+      }
+    });
+  };
+  // 進度仍然是「每一輪回報一次」，總次數不變（mcqRounds 次），只是改由已收題數換算
+  let mcqDone = 0;
+  const mcqTick = () => {
+    const r = Math.min(mcqRounds, Math.ceil(mcqOut.length / CHUNK));
+    while (mcqDone < r) { mcqDone++; bump('選擇題 ' + Math.min(mcqOut.length, nMcq) + '/' + nMcq); }
+  };
+  for (let wave = 0; wave < 3 && mcqOut.length < nMcq; wave++) {
+    const need = nMcq - mcqOut.length;
+    const reqs = Math.min(mcqRounds, Math.ceil(need / CHUNK));
+    const want = Math.min(CHUNK, need);
+    const asked = mcqOut.map(q => q.q).join(' | ');      // 這一波共用同一份「已出過的題目」
+    const before = mcqOut.length;
+    await pMap(new Array(reqs).fill(0), async () => {
       /* ⚠ 這裡一定要各自 try：本來一次連線失敗就會把前面已經生好、驗過的題目
-         全部丟掉，老師等了半天回到設定頁。改成這一輪算了、繼續下一輪。 */
+         全部丟掉，老師等了半天回到設定頁。改成這一發算了、其他照跑。 */
       let o = null;
       try {
         o = await _rcCall(_RC_SYS_MCQ(gradeNote, want + 2),
           _rcUser(text, title, asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : ''), 3200);
-      } catch (e) { continue; }
-      (o.items || []).forEach(raw => {
-        if (mcqOut.length >= nMcq) return;
-        const q = _rcFixAnswerIdx({
-          q: _rcTxt(raw && raw.q),
-          options: (raw && raw.options || []).map(_rcTxt).slice(0, 4),
-          answer: raw && raw.answer,
-          explain: _rcTxt(raw && raw.explain),
-          skill: _rcTxt(raw && raw.skill) || 'detail',
-        });
-        if (q && _rcValidMcq(q) && !mcqOut.some(e => e.q.toLowerCase() === q.q.toLowerCase())) {
-          mcqOut.push({ id: _rcId('rq'), ...q });
-        }
-      });
-    }
-    bump('選擇題 ' + Math.min(mcqOut.length, nMcq) + '/' + nMcq);
+      } catch (e) { return null; }
+      absorbMcq(o); mcqTick();
+      return true;
+    }, Math.min(reqs, 12));
+    if (mcqOut.length === before) break;                 // 一整波都沒收到新題＝再打也是白打
   }
+  while (mcqDone < mcqRounds) { mcqDone++; bump('選擇題 ' + Math.min(mcqOut.length, nMcq) + '/' + nMcq); }
 
   // ── 閱讀簡答 ──
   const saOut = [];
@@ -2075,8 +2275,9 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
   }
 
   // ── 閱讀技巧 ──
-  const blocks = [];
-  for (const kind of kinds) {
+  /* v392: 四種技巧彼此完全獨立，改成平行跑（每一種內部的三輪重試邏輯原封不動）。
+     ⚠ pMap 回傳的陣列是照索引對位的，所以 blocks 的順序仍然＝老師勾選的順序。 */
+  const blocks = (await pMap(kinds, async (kind) => {
     let best = null;
     for (let round = 0; round < 3 && !best; round++) {
       let cand = null;
@@ -2088,9 +2289,9 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
       if (cand && rcValidBlock(cand)) best = cand;
       else if (round === 2 && cand) best = cand;   // 三次都不合格就先收下，讓老師在校稿頁改
     }
-    if (best) blocks.push(best);
     bump(RC_SKILLS[kind].zh);
-  }
+    return best;
+  }, 4)).filter(Boolean);
 
   if (!mcqOut.length && !saOut.length && !blocks.length) throw new Error('AI 這次什麼都沒生出來，請再試一次。');
   return { mcq: mcqOut, sa: saOut, blocks };
@@ -2147,7 +2348,8 @@ English: Write a complete improved answer in simple English. Use the passage/key
 
   if (endpoint) {
     try {
-      const res = await fetch(endpoint, {
+      // v392: fetchT 加 60 秒逾時——原本是裸 fetch，Worker 不回應時「批改中…」會永遠轉圈
+      const res = await fetchT(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -2159,7 +2361,10 @@ English: Write a complete improved answer in simple English. Use the passage/key
       });
       const data = await res.json().catch(() => null);
       return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
-    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+    } catch(e) {
+      if (e && e.name === 'AbortError') return 'AI 批改太久沒有回應，請再試一次。';
+      return 'AI 批改服務暫時連不上，請稍後再試。';
+    }
   }
   return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
 }
@@ -2211,7 +2416,8 @@ English: Write a better version of the essay keeping the student's main idea whe
 
   if (endpoint) {
     try {
-      const res = await fetch(endpoint, {
+      // v392: fetchT 加 60 秒逾時——原本是裸 fetch，Worker 不回應時「批改中…」會永遠轉圈
+      const res = await fetchT(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -2223,7 +2429,10 @@ English: Write a better version of the essay keeping the student's main idea whe
       });
       const data = await res.json().catch(() => null);
       return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
-    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+    } catch(e) {
+      if (e && e.name === 'AbortError') return 'AI 批改太久沒有回應，請再試一次。';
+      return 'AI 批改服務暫時連不上，請稍後再試。';
+    }
   }
   return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
 }
@@ -2302,7 +2511,8 @@ English: Write a better full Story Mountain version keeping the student's main i
 
   if (endpoint) {
     try {
-      const res = await fetch(endpoint, {
+      // v392: fetchT 加 60 秒逾時——原本是裸 fetch，Worker 不回應時「批改中…」會永遠轉圈
+      const res = await fetchT(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -2314,7 +2524,10 @@ English: Write a better full Story Mountain version keeping the student's main i
       });
       const data = await res.json().catch(() => null);
       return data?.content?.[0]?.text || data?.feedback || data?.text || '批改完成，但回傳格式不符。';
-    } catch(e) { return 'AI 批改服務暫時連不上，請稍後再試。'; }
+    } catch(e) {
+      if (e && e.name === 'AbortError') return 'AI 批改太久沒有回應，請再試一次。';
+      return 'AI 批改服務暫時連不上，請稍後再試。';
+    }
   }
   return '請設定 AI 批改端點（AI_WRITING_ENDPOINT）。';
 }
@@ -2387,11 +2600,31 @@ function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
   const week = weeks[targetWeekId];
   const its = student.items || {};
 
-  const getProgress = (itemId) => {
-    const pk = `${targetWeekId}_${itemId}`;
-    return its[pk] || its[itemId] ||
-      its[Object.keys(its).find(k => k.endsWith('_' + itemId)) || ''] || null;
+  /* v392: 「後綴 → 紀錄」的索引，讓最後那層 fallback 從 O(n) 變 O(1)。
+     原本每一個沒對上的項目都要 Object.keys(its).find(k => k.endsWith('_'+itemId)) 掃一次，
+     學生的 items 累積四十週之後就是上千個 key，而老師後台每一次重繪都會重跑一遍。
+     ⚠ 一定要「用到才建」：前兩層命中時原本根本不會去掃，
+       無條件先建索引反而會讓正常資料變慢（實測慢 20 倍以上）。 */
+  let bySuffix = null;
+  const suffixIndex = () => {
+    if (bySuffix) return bySuffix;
+    bySuffix = {};
+    Object.keys(its).forEach(k => {
+      /* 每一個「底線之後的尾巴」都建索引，等價於原本的 k.endsWith('_' + itemId)
+         （週次 id 或項目 id 自己含底線時也不會漏掉）。
+         同一個尾巴只留第一個 key，跟原本 Object.keys(...).find 取第一個的行為相同。 */
+      for (let p = k.indexOf('_'); p >= 0; p = k.indexOf('_', p + 1)) {
+        const b = k.slice(p + 1);
+        if (!(b in bySuffix)) bySuffix[b] = its[k];
+      }
+    });
+    return bySuffix;
   };
+
+  /* ⚠ 優先序必須維持 progressId > 裸 itemId > 後綴，順序寫錯會讓
+     「週次改過 id」的舊資料成績消失。 */
+  const getProgress = (itemId) =>
+    its[`${targetWeekId}_${itemId}`] || its[itemId] || suffixIndex()[itemId] || null;
 
   const completed = [], pending = [];
   let allWrongQ = [];
@@ -2481,7 +2714,9 @@ function formatReportAsText(report, studentName) {
 
 // Render a report object into a polished, mobile-first HTML page (for parents, share via LINE).
 function buildReportHTML(report, studentName, teacherNote) {
-  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  // ⚠ 單引號也要跳脫：這段 HTML 是用 window.open('') + document.write 渲染的
+  //   （繼承 opener 來源），插進 attr='…' 裡的字串若沒跳脫就能跳出屬性。
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const name = esc(studentName || '學生');
   const weekLine = esc(`${report.weekLabel || ''}${report.dateRange ? ' · ' + report.dateRange : ''}`);
   const avg = report.avgScore;
@@ -2490,7 +2725,10 @@ function buildReportHTML(report, studentName, teacherNote) {
   const off = hasScore ? Math.round(circ * (1 - Math.max(0, Math.min(100, avg)) / 100)) : circ;
   const compN = report.completed.length, totN = report.totalItems;
   const rate = report.completionRate;
-  const streakN = (report.streak && report.streak.count) || 0;
+  /* ⚠ streak 來自學生自己可寫的 progress/{uid}，count 若被塞成字串，
+     「|| 0」是攔不住的（字串 truthy），而下面直接把它插進 HTML＝老師開週報時
+     會在自己的 session 下執行。一律先 Number() 轉數字。 */
+  const streakN = Number(report.streak && report.streak.count) || 0;
 
   const cm = {};
   report.completed.forEach(c => { if (c.score == null) return; (cm[c.cat] = cm[c.cat] || { s: 0, n: 0 }); cm[c.cat].s += c.score; cm[c.cat].n++; });

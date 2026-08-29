@@ -452,6 +452,17 @@ function useFitHeight(ref, enabled, min) {
     // 真的換版面才重量：轉向／改視窗大小
     const relayout = () => { measured = false; apply(); };
 
+    /* ⚠ v392：圖片是「晚一點才載完」的——載完之後內容才變成最終高度。
+       v389 為了止住抖動改成「只有真的換版面才重算」，副作用就是
+       這種「載入後才長高」的情況沒有人再去量一次 → 卡片高度停在舊值、
+       內容溢出、學生就得捲（Alan 回報 iPad 一直有捲動問題，這是最可能的原因）。
+       解法：只針對「這一塊裡面的圖片」掛 load 事件，載完重量一次。
+       這跟被拿掉的 ResizeObserver(document.body) 不一樣——
+       它不會因為「卡片自己改高度」而再次觸發，所以不會形成迴圈。 */
+    const imgs = Array.from(el.querySelectorAll('img'));
+    const onImg = () => relayout();
+    imgs.forEach(im => { if (!im.complete) im.addEventListener('load', onImg, { once: true }); });
+
     apply();
     /* 圖片還沒載完、字體還沒換好時量到的可能不準 → 進場後補量幾次。
        這幾次會強制重量（measured=false），之後就固定住。 */
@@ -465,6 +476,7 @@ function useFitHeight(ref, enabled, min) {
       cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
       window.removeEventListener('resize', relayout);
       window.removeEventListener('orientationchange', relayout);
+      imgs.forEach(im => im.removeEventListener('load', onImg));
       if (window.visualViewport) window.visualViewport.removeEventListener('resize', apply);
     };
   }, [enabled]);
@@ -502,7 +514,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.key === 'Enter') {
-        const nx = document.querySelector('.fc-fill-next-row .btn'); // v274: 填空答錯後 Enter＝下一題
+        // v274: 填空答錯後 Enter＝下一題
+        // v392: 學習模式答完也有「下一題」了，Enter 一起支援（不然兩個模式的鍵盤操作不一致）
+        const nx = document.querySelector('.fc-fill-next-row .btn, .fc-learn-next-row .btn');
         if (nx) nx.click();
         return;
       }
@@ -559,15 +573,25 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const [fillScore, setFillScore] = useFC(0);
   const [fillDone, setFillDone] = useFC(false);
 
-  // Cleanup timer on unmount
-  useFC_E(() => () => { if (matchTimerRef.current) clearInterval(matchTimerRef.current); }, []);
+  /* v392: 「自動跳下一題」的 setTimeout 統一用一個 ref 管理。
+     以前 learn／fill 兩處都是裸 setTimeout：學生在延遲期間按返回或切分頁，
+     timer 還是會跑完 → 寫進度、放特效、甚至連跳兩題。
+     現在只要在「按鈕 onClick」「切模式」「unmount」三個入口都先 clearAuto() 就不會了。 */
+  const autoRef = React.useRef(null);
+  const clearAuto = () => { if (autoRef.current) { clearTimeout(autoRef.current); autoRef.current = null; } };
+
+  // Cleanup timer on unmount（v392: 連自動跳題的 timer 一起清）
+  useFC_E(() => () => {
+    if (matchTimerRef.current) clearInterval(matchTimerRef.current);
+    if (autoRef.current) clearTimeout(autoRef.current);
+  }, []);
 
   const stopMatchTimer = () => { if (matchTimerRef.current) { clearInterval(matchTimerRef.current); matchTimerRef.current = null; } };
 
   // v318 (#1): 「星號單字」＝獨立分頁。進其他分頁一律 setStarOnly(false) 重置＝不會再卡在只剩星號的（Alan 回報的 bug）。
-  const enterCard = () => { stopMatchTimer(); setStarOnly(false); setMode("card"); setCardIdx(0); setFlipped(false); };
+  const enterCard = () => { stopMatchTimer(); clearAuto(); setStarOnly(false); setMode("card"); setCardIdx(0); setFlipped(false); };
 
-  const enterLearn = (flag = starOnly) => { stopMatchTimer();
+  const enterLearn = (flag = starOnly) => { stopMatchTimer(); clearAuto();
     const src = pool(flag);
     setLearnTotal(src.length);
     const order = shuffle([...src]);
@@ -580,7 +604,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   };
 
   const enterTest = (onlyStar = false) => {
-    stopMatchTimer();
+    stopMatchTimer(); clearAuto();
     setScopeStar(onlyStar);
     setTestSetup(true);
     setTestAnswers({});
@@ -610,7 +634,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   };
 
   const enterMatch = (flag = starOnly) => {
-    stopMatchTimer();
+    stopMatchTimer(); clearAuto();
     let best = null;
     try { best = parseFloat(localStorage.getItem('fc-match-' + item.id)) || null; } catch {}
     setMatchBest(best);
@@ -677,7 +701,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   };
 
   const enterFill = (flag = starOnly) => {
-    stopMatchTimer();
+    stopMatchTimer(); clearAuto();
     const src = pool(flag); // v274: 星號池
     const eligible = src.filter(c => c.example && c.example.trim());
     const fillPool = eligible.length >= 2 ? eligible : src;
@@ -700,12 +724,15 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
     if (correct) setFillScore(s => s + 1);
     if (!correct) return;
-    setTimeout(() => {
+    // v392: 650ms → 1000ms（對齊全站統一節奏），並改成 ref 管理，才清得掉
+    autoRef.current = setTimeout(() => {
+      autoRef.current = null;
       goNextFill();
-    }, 650);
+    }, 1000);
   };
 
   const goNextFill = () => {
+    clearAuto(); // v392: 學生自己按「下一題」時先收掉自動跳的 timer，避免連跳兩題
     const next = fillIdx + 1;
     if (next >= fillCards.length) { setFillDone(true); }
     else { setFillIdx(next); setFillChoices(makeChoices(fillCards[next], cards)); setFillSelected(null); }
@@ -738,6 +765,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
      （v372 的「⭐ 當開關、預設帶進所有模式」Alan 說不要。⭐ 分頁回到只看星號卡片。） */
   const [pendingMode, setPendingMode] = useFC(null);   // 'learn' | 'test'
   const askScope = (target) => {
+    clearAuto(); // v392: 從 learn/fill 中途切分頁時，先把待跑的自動跳題 timer 收掉
     if (stars.size === 0) { startScoped(target, false); return; }
     setPendingMode(target);
     setMode('scope');
@@ -748,7 +776,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     if (target === 'learn') enterLearn(onlyStar);
     else enterTest(onlyStar);
   };
-  const enterStarred = () => { stopMatchTimer(); setMode("card"); setStarOnly(true); setCardIdx(0); setFlipped(false); };
+  const enterStarred = () => { stopMatchTimer(); clearAuto(); setMode("card"); setStarOnly(true); setCardIdx(0); setFlipped(false); };
 
   // v318 (#1): 保留「星號單字」為獨立分頁（Alan 要回來、只改名）——只在有星號時出現；
   // 點它＝只看星號的單字卡，點其他分頁一律重置回全部（不再卡住）。
@@ -914,27 +942,43 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
 
     const { card, isRetry } = learnQueue[0];
 
+    // 這一題答了沒？答對了沒？（給回饋區與「下一題」按鈕用）
+    const answeredCorrect = learnChoice === card.id;
+
+    /* v392: 原本 learnQueue 重排邏輯是寫在 setTimeout 裡的，答對答錯共用一條 timer。
+       現在原封不動抽成 goNextLearn()——RETRY_GAP 與 correctIds 的寫入時機完全沒動，
+       只是改成「由誰觸發」：答對＝1 秒後自動或學生自己按，答錯＝一定要學生自己按。 */
+    const goNextLearn = (wasCorrect) => {
+      clearAuto(); // 學生自己按「下一題」時先收掉待跑的 timer，否則會連跳兩題（v375 踩過的坑）
+      const rest = learnQueue.slice(1);
+      let newQueue;
+      if (wasCorrect) {
+        newQueue = rest;
+        setCorrectIds(prev => new Set([...prev, card.id]));
+      } else {
+        newQueue = [...rest];
+        const insertPos = Math.min(RETRY_GAP, newQueue.length);
+        newQueue.splice(insertPos, 0, { card, isRetry: true });
+      }
+      setLearnQueue(newQueue);
+      if (newQueue.length > 0) setLearnChoices(makeChoices(newQueue[0].card, cards));
+      setLearnChoice(null);
+    };
+
     const handleLearnChoice = (chosen) => {
       if (learnChoice) return;
       setLearnChoice(chosen.id);
       const correct = chosen.id === card.id;
       if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
 
-      setTimeout(() => {
-        const rest = learnQueue.slice(1);
-        let newQueue;
-        if (correct) {
-          newQueue = rest;
-          setCorrectIds(prev => new Set([...prev, card.id]));
-        } else {
-          newQueue = [...rest];
-          const insertPos = Math.min(RETRY_GAP, newQueue.length);
-          newQueue.splice(insertPos, 0, { card, isRetry: true });
-        }
-        setLearnQueue(newQueue);
-        if (newQueue.length > 0) setLearnChoices(makeChoices(newQueue[0].card, cards));
-        setLearnChoice(null);
-      }, correct ? 700 : 1200);
+      /* v392（全站唯一「答錯也自動跳」的地方，改掉）：
+         答錯 → 完全不排 timer，停在原地把正確答案show出來，等學生自己按「下一題」。
+         答對 → 還是自動跳，但 700ms 提到 1000ms 對齊全站節奏；同時也給按鈕讓快的學生先走。 */
+      if (!correct) return;
+      autoRef.current = setTimeout(() => {
+        autoRef.current = null;
+        goNextLearn(true);
+      }, 1000);
     };
 
     return (
@@ -974,6 +1018,37 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 </button>
               );
             })}
+
+            {/* v392: 答完的回饋區。答錯時這裡是唯一的出口（不再 1.2 秒自動跳），
+                一定要先看到正確的英文＋中文，按了「下一題」才換題。
+                ⚠ 為什麼放在 .fc-choices 裡面而不是它下面：iPad 橫式（styles-tune.css
+                的 min-width:820 and max-height:950）會把 .fc-p-learn 變成 2×2 grid，
+                而且每個子元素都有指定 grid-column/row；多一個沒被指定位置的子元素會被
+                自動塞到第三列，把「一個畫面裝得下」（禁區 #4）弄壞。放在選項格子裡面
+                跨滿兩欄，四種版面（手機直式／平板／桌機／iPad 橫式）都不會跑掉。
+                樣式一律寫成 inline——styles-*.css 這次不歸我改。 */}
+            {learnChoice && (
+              <div className="fc-learn-next-row" style={{
+                gridColumn: "1 / -1", display: "flex", alignItems: "center",
+                justifyContent: "space-between", flexWrap: "wrap", gap: 10,
+                marginTop: 2, padding: "10px 12px", borderRadius: 12,
+                /* 顏色用全站「答對／答錯的唯一真相」那一組（styles-tune.css 的 --ok / --no），
+                   不要自己調色，對比度是驗算過的 */
+                border: "2px solid " + (answeredCorrect ? "var(--ok)" : "var(--no)"),
+                background: answeredCorrect ? "var(--ok-bg)" : "var(--no-bg)"
+              }}>
+                <div style={{display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8, minWidth: 0}}>
+                  <span className="mono" style={{fontSize: 10, color: answeredCorrect ? "var(--ok-ink)" : "var(--no-ink)"}}>
+                    {answeredCorrect ? '答對了' : '正確答案'}
+                  </span>
+                  <b style={{fontSize: 20, lineHeight: 1.15, overflowWrap: "anywhere",
+                             color: answeredCorrect ? "var(--ok-ink)" : "var(--no-ink)"}}>{card.term}</b>
+                  <span style={{fontSize: 14, color: "var(--ink-muted)", overflowWrap: "anywhere"}}>{card.zh}</span>
+                </div>
+                <button className="btn primary" style={{flex: "0 0 auto"}}
+                  onClick={() => goNextLearn(answeredCorrect)}>下一題 →</button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1352,7 +1427,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
               );
             })}
           </div>
-          {fillSelected && fillSelected !== card.id && (
+          {/* v392: 本來只有答錯才出現「下一題」，答對只能等 timer。
+              改成兩種情況都給出口——快的學生不必等，慢的也不會被催。 */}
+          {fillSelected && (
             <div className="fc-fill-next-row">
               <button className="btn primary" onClick={goNextFill}>下一題 →</button>
             </div>
@@ -1490,342 +1567,12 @@ function FlashcardEditor({ cards, onChange }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════
-   STANDALONE FILL-IN-BLANK PLAYER
-══════════════════════════════════════════════════════ */
-function FillBlankPlayer({ item, onComplete }) {
-  const questions = item.questions || [];
-  const [theme, setTheme] = useFC(item.theme || "classic");
-  const [idx, setIdx] = useFC(0);
-  const [choices, setFBChoices] = useFC([]);
-  const [selected, setFBSelected] = useFC(null);
-  const [score, setFBScore] = useFC(0);
-  const [showTheme, setShowTheme] = useFC(false);
-
-  // screen: 'play' | 'complete' | 'name-entry' | 'leaderboard' | 'show-answers'
-  const [screen, setScreen] = useFC('play');
-  const [elapsed, setElapsed] = useFC(0);
-  const [userAnswers, setUserAnswers] = useFC([]); // [{sentence, answer, userAnswer, correct}]
-  const [playerName, setPlayerName] = useFC('');
-  const [leaderboard, setLeaderboard] = useFC([]);
-  const [submitting, setSubmitting] = useFC(false);
-  const [submitted, setSubmitted] = useFC(false); // Bug fix: track if already submitted this round
-
-  const startTimeRef = React.useRef(null);
-  const lbUnsubRef = React.useRef(null);
-
-  const makeFBChoices = (qi) => {
-    const q = questions[qi];
-    const others = questions.filter((_, i) => i !== qi).map(o => o.answer).filter(Boolean);
-    return shuffle([...shuffle(others).slice(0, Math.min(3, others.length)), q.answer]);
-  };
-
-  useFC_E(() => {
-    if (questions.length > 0) {
-      setFBChoices(makeFBChoices(0));
-      startTimeRef.current = Date.now();
-    }
-  }, []);
-
-  // Subscribe to leaderboard whenever we're on a post-game screen
-  useFC_E(() => {
-    if (screen === 'complete' || screen === 'name-entry' || screen === 'leaderboard') {
-      if (lbUnsubRef.current) lbUnsubRef.current();
-      lbUnsubRef.current = window.subscribeLeaderboard(item.id, setLeaderboard);
-    }
-    return () => { if (lbUnsubRef.current) { lbUnsubRef.current(); lbUnsubRef.current = null; } };
-  }, [screen]);
-
-  const handleFBChoice = (ch) => {
-    if (selected) return;
-    const q = questions[idx];
-    const correct = ch === q.answer;
-    setFBSelected(ch);
-    const newAnswers = [...userAnswers, { sentence: q.sentence, answer: q.answer, userAnswer: ch, correct }];
-    setUserAnswers(newAnswers);
-    // v344: 填空題型本來也沒有音效——補上答對/答錯提示音
-    if (window.playSound) window.playSound(correct ? 'correct' : 'wrong');
-    if (correct) setFBScore(s => s + 1);
-    if (!correct) return;
-    setTimeout(() => {
-      goNextFB();
-    }, 650);
-  };
-
-  const goNextFB = () => {
-    const next = idx + 1;
-    if (next >= questions.length) {
-      const t = Math.round((Date.now() - (startTimeRef.current || Date.now())) / 100) / 10;
-      setElapsed(t);
-      setScreen('complete');
-      if (onComplete) onComplete();
-    } else {
-      setIdx(next); setFBChoices(makeFBChoices(next)); setFBSelected(null);
-    }
-  };
-
-  const handleSubmitName = async () => {
-    const name = playerName.trim().slice(0, 16);
-    if (!name || submitting) return;
-    setSubmitting(true);
-    try {
-      await window.addLeaderboardEntry(item.id, {
-        name, score, total: questions.length, time: elapsed, ts: Date.now(),
-      });
-      setSubmitted(true);
-      // Save score to Firestore if user is logged in
-      const _u = window._currentUser;
-      if (_u && window.saveProgressItem) {
-        const pct = questions.length > 0 ? Math.round(score / questions.length * 100) : 0;
-        window.saveProgressItem(_u.uid, _u.displayName || '', _u.email || '', item.id, {
-          done: Date.now(), score: pct, time: elapsed,
-        });
-      }
-    } catch(e) { console.error('Leaderboard error:', e); }
-    setSubmitting(false);
-    setScreen('leaderboard');
-  };
-
-  const handleDelete = async (rawIdx) => {
-    try { await window.deleteLeaderboardEntry(item.id, rawIdx); } catch(e) { console.error(e); }
-  };
-
-  const restart = () => {
-    setIdx(0); setFBSelected(null); setFBScore(0);
-    setUserAnswers([]); setElapsed(0); setPlayerName('');
-    setSubmitted(false); setSubmitting(false);
-    setScreen('play');
-    setFBChoices(makeFBChoices(0));
-    startTimeRef.current = Date.now();
-  };
-
-  if (questions.length === 0) {
-    return <div className="fc-empty mono">No questions yet · 尚未新增題目</div>;
-  }
-
-  const themeColors = (THEMES[theme] || THEMES.classic).colors;
-  const wrapCls = "fc-wrap fc-theme-" + theme;
-
-  // ── GAME COMPLETE ──────────────────────────────────────
-  if (screen === 'complete') {
-    const elInt = Math.floor(elapsed);
-    const elDec = Math.round((elapsed - elInt) * 10);
-    const pct = Math.round((score / questions.length) * 100);
-    const emoji = pct >= 80 ? "🎉" : pct >= 60 ? "👍" : "💪";
-    return (
-      <div className={wrapCls}>
-        <div className="fc-fill-player fc-gc-bg">
-          <div className="fc-gc-card">
-            <div className="fc-gc-emoji">{emoji}</div>
-            <div className="fc-gc-heading serif-i">Game Complete</div>
-            <div className="fc-gc-rule"/>
-            <div className="fc-gc-stats">
-              <div className="fc-gc-stat">
-                <div className="fc-gc-label mono">Score</div>
-                <div className="fc-gc-value serif">{score}<span className="fc-gc-sub">/{questions.length}</span></div>
-              </div>
-              <div className="fc-gc-stat-sep"/>
-              <div className="fc-gc-stat">
-                <div className="fc-gc-label mono">Time</div>
-                <div className="fc-gc-value serif">{elInt}<span className="fc-gc-sub">.{elDec}s</span></div>
-              </div>
-            </div>
-            <div className="fc-gc-rule"/>
-            <div className="fc-gc-actions">
-              <button className="fc-gc-btn accent"
-                onClick={() => submitted ? setScreen('leaderboard') : setScreen('name-entry')}>
-                Leaderboard
-              </button>
-              <button className="fc-gc-btn" onClick={() => setScreen('show-answers')}>Show answers</button>
-              <button className="fc-gc-btn muted" onClick={restart}>Start again</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── NAME ENTRY ─────────────────────────────────────────
-  if (screen === 'name-entry') {
-    return (
-      <div className={wrapCls}>
-        <div className="fc-fill-player fc-gc-bg">
-          <div className="fc-gc-card">
-            <div className="fc-gc-heading serif-i">Enter your name</div>
-            <div className="fc-gc-sub-heading mono">排行榜名稱 · max 16 chars</div>
-            <div className="fc-gc-rule"/>
-            <input
-              className="fc-name-input"
-              maxLength={16}
-              placeholder="Your name · 你的名字"
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSubmitName()}
-              autoFocus
-            />
-            <div className="fc-name-count mono">{playerName.length} / 16</div>
-            <div className="fc-gc-rule"/>
-            <div className="fc-gc-actions">
-              <button className="fc-gc-btn accent" onClick={handleSubmitName}
-                disabled={!playerName.trim() || submitting}>
-                {submitting ? 'Saving…' : 'Submit →'}
-              </button>
-              <button className="fc-gc-btn muted" onClick={() => setScreen('leaderboard')}>Skip</button>
-              <button className="fc-gc-btn ghost" onClick={() => setScreen('complete')}>← Back</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── LEADERBOARD ────────────────────────────────────────
-  if (screen === 'leaderboard') {
-    const indexed = leaderboard.map((e, i) => ({ ...e, _rawIdx: i }));
-    indexed.sort((a, b) => b.score - a.score || a.time - b.time);
-    const top10 = indexed.slice(0, 10);
-    const rankLabel = i => i === 0 ? '1st' : i === 1 ? '2nd' : i === 2 ? '3rd' : `${i+1}th`;
-
-    return (
-      <div className={wrapCls}>
-        <div className="fc-fill-player fc-lb-bg">
-          <div className="fc-lb-head">
-            <div>
-              <div className="fc-lb-title serif-i">Leaderboard</div>
-              <div className="mono" style={{color:"var(--ink-muted)", marginTop:2}}>排行榜 · Top 10</div>
-            </div>
-            <button className="fc-lb-back" onClick={() => setScreen('complete')}>← Back</button>
-          </div>
-          <div className="fc-lb-rule"/>
-          <div className="fc-lb-cols mono">
-            <span>Rank</span><span>Name</span><span>Score</span><span>Time</span><span></span>
-          </div>
-          <div className="fc-lb-rule"/>
-          {Array.from({length: 10}).map((_, i) => {
-            const e = top10[i];
-            return (
-              <div key={i} className={"fc-lb-row" + (i === 0 && e ? " gold" : i === 1 && e ? " silver" : i === 2 && e ? " bronze" : "")}>
-                <span className="fc-lb-rank mono">{rankLabel(i)}</span>
-                <span className="fc-lb-name">{e ? e.name : <span className="fc-lb-empty">—</span>}</span>
-                <span className="fc-lb-num mono">{e ? `${e.score}/${e.total}` : <span className="fc-lb-empty">—</span>}</span>
-                <span className="fc-lb-num mono">{e ? `${e.time}s` : <span className="fc-lb-empty">—</span>}</span>
-                <span className="fc-lb-del">
-                  {e && (
-                    <button className="fc-lb-trash" onClick={() => handleDelete(e._rawIdx)} title="Delete">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                      </svg>
-                    </button>
-                  )}
-                </span>
-              </div>
-            );
-          })}
-          <div className="fc-lb-rule"/>
-          <div className="fc-lb-footer">
-            <button className="fc-lb-back" onClick={restart}>Start again</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── SHOW ANSWERS ───────────────────────────────────────
-  if (screen === 'show-answers') {
-    return (
-      <div className={wrapCls}>
-        <div className="fc-fill-player fc-lb-bg">
-          <div className="fc-lb-head">
-            <div>
-              <div className="fc-lb-title serif-i">Answers</div>
-              <div className="mono" style={{color:"var(--ink-muted)", marginTop:2}}>解答 · {userAnswers.filter(a=>a.correct).length}/{userAnswers.length} correct</div>
-            </div>
-            <button className="fc-lb-back" onClick={() => setScreen('complete')}>← Back</button>
-          </div>
-          <div className="fc-lb-rule"/>
-          <div className="fc-answers-list">
-            {userAnswers.map((ua, i) => (
-              <div key={i} className={"fc-answer-row " + (ua.correct ? 'correct' : 'wrong')}>
-                <span className="fc-answer-icon mono">{ua.correct ? '✓' : '✗'}</span>
-                <div className="fc-answer-body">
-                  <div className="fc-answer-sentence">
-                    {ua.sentence.split('___').map((part, pi) =>
-                      pi === 0
-                        ? <span key={pi}>{part}<strong className="fc-answer-word">{ua.answer}</strong></span>
-                        : <span key={pi}>{part}</span>
-                    )}
-                  </div>
-                  {!ua.correct && (
-                    <div className="fc-answer-yours mono">你的答案 · <em>{ua.userAnswer}</em></div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── PLAY ───────────────────────────────────────────────
-  const q = questions[idx];
-  const parts = q.sentence.split('___');
-  const blankLen = Math.max(6, (q.answer || "").length);
-
-  return (
-    <div className={wrapCls}>
-      <div className="fc-fill-player">
-        <div className="fc-fill-topbar">
-          <span className="mono">{idx + 1} / {questions.length}</span>
-          <div style={{display:"flex", alignItems:"center", gap:8, position:"relative"}}>
-            <span className="mono">✓ {score}</span>
-            <button className="fc-theme-btn" onClick={() => setShowTheme(v => !v)} title="更換主題 · Change theme">🎨</button>
-            {showTheme && (
-              <div className="fc-theme-picker">
-                {Object.entries(THEMES).map(([key, t]) => (
-                  <button key={key} className={"fc-theme-opt" + (theme === key ? " active" : "")}
-                    onClick={() => { setTheme(key); setShowTheme(false); }}>
-                    <div className="fc-theme-dots">
-                      {t.colors.map((c, i) => <span key={i} style={{background: c}}/>)}
-                    </div>
-                    <span>{t.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="fc-fill-sentence">
-          <div className="fc-fill-text">
-            {parts[0]}<span className="fc-fill-blank">{"_".repeat(blankLen)}</span>{parts.slice(1).join('___')}
-          </div>
-        </div>
-        <div className="fc-fill-choices">
-          {choices.map((ch, i) => {
-            let cls = "fc-fill-btn";
-            if (selected) {
-              if (ch === q.answer) cls += " correct";
-              else if (ch === selected) cls += " wrong";
-              else cls += " dimmed";
-            }
-            return (
-              <button key={i} className={cls}
-                style={!selected ? {background: themeColors[i % 4]} : undefined}
-                onClick={() => handleFBChoice(ch)}>
-                {ch}
-              </button>
-            );
-          })}
-        </div>
-        {selected && selected !== q.answer && (
-          <div className="fc-fill-next-row">
-            <button className="btn primary" onClick={goNextFB}>下一題 →</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+/* v392: 這裡本來有一個 FillBlankPlayer（約 335 行）——已整段刪除。
+   它是 dead code：全專案沒有任何地方 render <FillBlankPlayer> 或 window.FillBlankPlayer，
+   現行的 fillblank item 走的是 components-quiz-mode.jsx 的 QuizModePlayer。
+   而且它本身還是舊寫法（答對才排 setTimeout、答錯回饋沒有 render q.explain，
+   儘管下面的 FillBlankEditor 有讓老師輸入解說）——留著只會被誤當成現役程式碼去改。
+   ⚠ 下面的 FillBlankEditor 是不同的東西（老師端出題用），有在用，不要刪。 */
 
 /* ══════════════════════════════════════════════════════
    STANDALONE FILL-IN-BLANK EDITOR
@@ -1936,4 +1683,5 @@ function FillBlankEditor({ questions, onChange }) {
   );
 }
 
-Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, FillBlankPlayer, FillBlankEditor, collectStarredWords, ReviewFlashcardModal });
+// v392: 移除 FillBlankPlayer（dead code，見上面 FillBlankEditor 前的說明）
+Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, FillBlankEditor, collectStarredWords, ReviewFlashcardModal });

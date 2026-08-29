@@ -2,6 +2,56 @@
 
 const { useState: useQM, useMemo: useQMM, useEffect: useQME } = React;
 
+/* ══════════════════════════════════════════════════════
+   v392：作答節奏統一（所有逐題型 Player 共用）
+
+   為什麼要統一：本來延遲值有 650 / 700 / 900 / 1200 / 2800ms 五種，
+   而且同樣是選擇題，type:'quiz' 有解說完全不自動跳、type:'fillblank' 卻 2.8 秒就跳，
+   學生無從得知「為什麼有時候會自己跳、有時候要按」。新規則只有四條：
+     1. 答對、沒解說 → 1000ms 自動跳。
+        （原本 650ms 幾乎看不見：光是 .qm-feedback 的 feedback-rise 進場就 280ms，
+          加上下一題 questionSwap 260ms，學生實際只看到約 0.37 秒的綠色回饋。）
+     2. 答對、有解說 → 4000ms，且點畫面／按鍵就取消倒數。
+        （v375 Alan 指定的 2800ms 由這條取代：實測 138 條 explain 長度中位數 50、
+          最長 77 字元且全是整句英文，沒有一條能在 2.8 秒讀完。）
+     3. 答對一律「同時」給一顆「下一題 →」按鈕——iPad 沒有鍵盤，
+        原本只靠 Enter 快捷等於沒有出口。
+     4. 最後一題不自動跳、答錯永遠不自動跳。
+
+   ⚠ v375 踩過的坑：只要「答對也給按鈕」，就一定要在
+   「按鈕 onClick」「鍵盤 Enter」「onBack」「unmount」四個入口都清 timer，
+   少一個都會連跳兩題（或人已離開畫面，彩帶還在放）。
+══════════════════════════════════════════════════════ */
+const QM_AUTO_MS_PLAIN   = 1000; // 答對、沒有解說
+const QM_AUTO_MS_EXPLAIN = 4000; // 答對、有解說（可被點畫面取消）
+// 答錯的題目往後第幾題再考一次（對齊 components-flashcard.jsx 的 RETRY_GAP）
+const QM_RETRY_GAP = 4;
+
+/* 自動跳下一題：一定回傳「可取消」的 timer，並在 unmount 自動清掉。
+   （沒有這層保護時，學生答對後 650ms 內按返回，timer 仍會跑完 → 人已回到單元列表，
+     彩帶和 fanfare 卻在那裡放。） */
+function useAutoNext() {
+  const ref = React.useRef(null);
+  const clearAuto = React.useCallback(() => {
+    if (ref.current) { clearTimeout(ref.current); ref.current = null; }
+  }, []);
+  const scheduleAuto = React.useCallback((fn, ms) => {
+    clearAuto();
+    if (!ms) return;
+    ref.current = setTimeout(() => { ref.current = null; fn(); }, ms);
+  }, [clearAuto]);
+  useQME(() => () => clearAuto(), []);
+  return { scheduleAuto, clearAuto };
+}
+
+/* 答對後的提示文字。kind: 'plain'（1 秒後自動跳）／'explain'（4 秒，讀完可自己按）／
+   其他（最後一題等不自動跳的情況）＝不顯示。按鈕永遠另外給，不靠這行。 */
+function QmAutoHint({ kind }) {
+  if (kind === 'plain')   return <div className="qm-auto-next">答對了，自動下一題…</div>;
+  if (kind === 'explain') return <div className="qm-auto-next">看完按下一題 →</div>;
+  return null;
+}
+
 /* ── Count-up animation hook ─────────────────────────── */
 function useCountUp(target, duration, delay) {
   duration = duration || 900;
@@ -203,13 +253,20 @@ function saveSidebarCollapsed(v){ try { localStorage.setItem(QM_SIDEBAR_KEY + qm
 /* ── 續做（resume）：測驗做到一半離開，下次從同一題接著做 ── */
 const QM_RESUME_KEY = 'alans-qm-resume-v1';
 function loadResumeMap() { try { return JSON.parse(localStorage.getItem(QM_RESUME_KEY + qmScope()) || '{}'); } catch(e) { return {}; } }
-function getResume(progressKey, questionCount) {
-  const r = loadResumeMap()[progressKey];
+/* v392: 從「已經讀好的一張表」裡取續做紀錄。
+   大廳（TodayTasks）一次要問十幾份作業，本來每一份都各跑一次 getResume
+   ＝ 每次重繪都做「作業數 × 一次同步 localStorage 讀取＋JSON.parse」。
+   驗證條件與 getResume 完全一致，只是 map 由呼叫端提供。 */
+function resumeFromMap(map, progressKey, questionCount) {
+  const r = map && map[progressKey];
   if (!r || !r.deck || r.deckPos == null) return null;
   if (r.deckPos < 1 || r.deckPos >= r.deck.length) return null;
   if (questionCount != null && r.uniqueTotal !== questionCount) return null; // 老師改過題目 → 作廢
   if (Date.now() - (r.ts || 0) > 7 * 24 * 60 * 60 * 1000) return null;       // 一週後過期
   return r;
+}
+function getResume(progressKey, questionCount) {
+  return resumeFromMap(loadResumeMap(), progressKey, questionCount);
 }
 function saveResume(progressKey, data) {
   try { const m = loadResumeMap(); m[progressKey] = { ...data, ts: Date.now() }; localStorage.setItem(QM_RESUME_KEY + qmScope(), JSON.stringify(m)); } catch(e) {}
@@ -1920,11 +1977,15 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   const [redoTry, setRedoTry] = useQM(0);   // 訂正又拼錯的搖晃動畫 key
   const wrongsRef = React.useRef(rz && Array.isArray(rz.wrongs) ? rz.wrongs.slice() : []);
   const inputRef  = React.useRef(null);
+  // v392: 本來是裸 setTimeout，答對後 650ms 內按返回，timer 照樣跑完 → 學生已回到單元列表，
+  //       彩帶和 fanfare 卻在那裡放。改成可取消的 timer（unmount 自動清）。
+  const { scheduleAuto, clearAuto } = useAutoNext();
 
   const total   = words.length;
   const current = words[idx];
   const pct     = Math.round(idx / total * 100);
   const showZh  = item.spellShowZh !== false;
+  const isLast  = idx + 1 >= total;
 
   const speak = () => {
     if (current && window.speakText) (window.speakTTS || window.speakText)(current.word, { lang: 'en-US', rate: 0.82 });
@@ -1969,7 +2030,10 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
       const nextScore = score + 1;
       setScore(nextScore);
       if (window.playSound) window.playSound('correct');
-      setTimeout(() => next(nextScore), 650);
+      /* v392: 統一節奏——聽寫沒有解說欄位，所以固定 1 秒；
+         最後一題一律不自動跳，停在「✓ 答對了！」由學生自己按「查看成績 →」
+         （原本 650ms 就閃到結果頁，等於「答對了」沒看到，彩帶還會跟答對音效撞在一起）。 */
+      if (!isLast) scheduleAuto(() => next(nextScore), QM_AUTO_MS_PLAIN);
     } else {
       wrongsRef.current.push({ q: '🔊 聽寫' + (current.zh ? '：' + current.zh : ''), answer: current.word });
       if (window.playSound) window.playSound('wrong');
@@ -1979,6 +2043,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   };
 
   const next = (scoreOverride = null) => {
+    clearAuto(); // v392: 手動前進也要清 timer，否則會連跳兩題
     const finalScoreBase = typeof scoreOverride === 'number' ? scoreOverride : score;
     if (idx + 1 >= total) {
       clearResume(progressKey); // v265: 做完 → 清掉續做紀錄
@@ -2004,7 +2069,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   const handleKey = (e) => {
     if (e.key === 'Enter') {
       if (result === null || redo) check();
-      else if (result === 'wrong') next();
+      else next(); // v392: next() 自己會清 timer（四個入口之一：鍵盤 Enter）
     }
   };
 
@@ -2031,7 +2096,8 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        {/* v392: 返回是四個「必須清 timer」的入口之一——否則人已回到單元列表，彩帶還在放 */}
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={() => { clearAuto(); onBack(); }}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{width: pct + '%'}}/>
@@ -2091,7 +2157,15 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
             <button className="qm-result-alt sp-skip" onClick={() => next()}>先跳過這題 →</button>
           </>
         ) : (
-          <div className="qm-feedback-banner correct">✓ Correct! 答對了！</div>
+          <>
+            <div className="qm-feedback-banner correct">✓ Correct! 答對了！</div>
+            {/* v392: 答對一律給按鈕——iPad 沒有鍵盤，本來只有 Enter 快捷等於沒有出口。
+                按下去先清 timer 再前進，快的學生不必等那 1 秒。 */}
+            <QmAutoHint kind={isLast ? null : 'plain'} />
+            <button className="qm-btn primary" onClick={() => next()}>
+              {isLast ? '查看成績 →' : '下一題 →'}
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -2145,10 +2219,13 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   const [screen,   setScreen]   = useQM('play'); // 'play' | 'done'
   const inputRef = React.useRef(null);
   const wrongsRef = React.useRef(rz && Array.isArray(rz.wrongs) ? rz.wrongs.slice() : []); // v258: 錯題記錄（老師端＋錯題本）
+  // v392: 同 SpellingPlayer——本來是裸 setTimeout，答對後按返回會在單元列表放彩帶
+  const { scheduleAuto, clearAuto } = useAutoNext();
 
   const total   = pairs.length;
   const current = pairs[idx];
   const pct     = Math.round(idx / total * 100);
+  const isLast  = idx + 1 >= total;
 
   React.useEffect(() => {
     if (result === null && inputRef.current) inputRef.current.focus();
@@ -2162,8 +2239,9 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       const nextScore = score + 1;
       setScore(nextScore);
       if (window.playSound) window.playSound('correct');
-      // v306: 有解說就停下來讓學生讀完再按「下一題」；沒有解說才自動跳
-      if (!current.explain) setTimeout(() => next(nextScore), 650);
+      /* v392: 統一節奏——沒解說 1 秒、有解說 4 秒（點回饋區就取消倒數）；
+         最後一題一律不自動跳。取代 v306 的「有解說就完全不跳」。 */
+      if (!isLast) scheduleAuto(() => next(nextScore), current.explain ? QM_AUTO_MS_EXPLAIN : QM_AUTO_MS_PLAIN);
     } else {
       wrongsRef.current.push({ q: current.prompt || '(打字題)', answer: current.answer || '' });
       if (window.playSound) window.playSound('wrong');
@@ -2171,6 +2249,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   };
 
   const next = (scoreOverride = null) => {
+    clearAuto(); // v392: 手動前進也要清 timer，否則會連跳兩題
     const finalScoreBase = typeof scoreOverride === 'number' ? scoreOverride : score;
     if (idx + 1 >= total) {
       clearResume(progressKey); // v265
@@ -2195,7 +2274,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   const handleKey = (e) => {
     if (e.key === 'Enter') {
       if (result === null) check();
-      else if (result === 'wrong') next();
+      else next(); // v392: next() 自己會清 timer（四個入口之一：鍵盤 Enter）
     }
   };
 
@@ -2225,7 +2304,8 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        {/* v392: 返回是四個「必須清 timer」的入口之一——否則人已回到單元列表，彩帶還在放 */}
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={() => { clearAuto(); onBack(); }}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{width: pct + '%'}}/>
@@ -2255,7 +2335,10 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
         )}
       </div>
 
-      <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true" style={{marginTop: result ? 8 : 0}}>
+      {/* v392: 讀解說被打斷是最惱人的——碰到回饋區（或在裡面按鍵）就取消倒數，剩下自己按 */}
+      <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true"
+           style={{marginTop: result ? 8 : 0}}
+           onPointerDown={clearAuto} onKeyDown={clearAuto}>
         {result === null ? (
           <button className="qm-btn primary" onClick={check} disabled={!input.trim()}>
             確認 · Check →
@@ -2271,15 +2354,12 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
                 <span>{current.explain}</span>
               </div>
             )}
-            {result === 'correct' && !current.explain ? (
-              <div className="qm-auto-next">
-                {idx + 1 >= total ? '答對了，自動查看成績…' : '答對了，自動下一題…'}
-              </div>
-            ) : (
-              <button className="qm-btn primary" onClick={() => next()}>
-                {idx + 1 >= total ? '查看成績 →' : '下一題 →'}
-              </button>
-            )}
+            {/* v392: 答對也一律給按鈕（本來只有一行「自動下一題…」，iPad 上沒有任何出口）；
+                答錯永遠不自動跳，只給按鈕。 */}
+            <QmAutoHint kind={result !== 'correct' || isLast ? null : (current.explain ? 'explain' : 'plain')} />
+            <button className="qm-btn primary" onClick={() => next()}>
+              {isLast ? '查看成績 →' : '下一題 →'}
+            </button>
           </>
         )}
       </div>
@@ -2333,7 +2413,10 @@ function QuickFlashcardReview({ item, onDone }) {
       {/* Next button — only visible after flip */}
       {flipped && (
         <div style={{textAlign:'center'}}>
-          <button className="qm-btn primary" style={{width:'auto',minWidth:160}} onClick={next}>
+          {/* v392: onClick={next} 會把 React 的 SyntheticEvent 當第一個參數傳進 next()。
+              這裡的 next 目前不吃參數所以沒事，但同一個坑在音節切割題已經炸過一次，
+              全檔統一寫成 () => next()。 */}
+          <button className="qm-btn primary" style={{width:'auto',minWidth:160}} onClick={() => next()}>
             {isLast ? '完成！開始測驗 →' : '下一張 →'}
           </button>
         </div>
@@ -2438,7 +2521,8 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
 }
 
 function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItems, onBack, onQuizDone, onBackToTasks, onNextTask }) {
-  // Adaptive deck: wrong questions are reinserted 3 positions later
+  // Adaptive deck: wrong questions are reinserted QM_RETRY_GAP (4) positions later
+  // （v392: 註解本來寫 3，實際 splice 是 +4——現在統一走同一個常數，不會再對不上）
   const uniqueTotal = questions.length;
   // 有做到一半的紀錄 → 從那一題接著做（deck 含補考題、對錯數都還原）
   const resume = useQMM(() => getResume(progressKey, questions.length), []);
@@ -2450,12 +2534,10 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   const [wrongList,  setWrongList] = useQM(() => resume ? (resume.wrongList || []) : []);
   const [plusOneKey, setPlusOneKey]= useQM(0);
   const [lastRight,  setLastRight] = useQM(null);
-  /* v375(#1): 填空答對要自動跳下一題。學生若自己先按「下一題」，這個 timer 一定要取消，
-     否則會一口氣跳兩題。 */
-  const autoTimer = React.useRef(null);
-  const clearAuto = () => { if (autoTimer.current) { clearTimeout(autoTimer.current); autoTimer.current = null; } };
-  useQME(() => () => clearAuto(), []);
-  const autoOnExplain = !!item && item.type === 'fillblank';
+  /* v375(#1) → v392: 改用共用的 useAutoNext。
+     原本的 autoOnExplain（只有 type:'fillblank' 才自動跳）已刪除——
+     同樣是選擇題卻一個會自己跳、一個要按，學生根本猜不到規則。現在兩者一模一樣。 */
+  const { scheduleAuto, clearAuto } = useAutoNext();
 
   const q      = deck[deckPos];
   const total  = uniqueTotal;
@@ -2542,17 +2624,10 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       setFirstRight(nextFirstRight);
       setPlusOneKey(k => k + 1);
       setLastRight(true);
-      /* v306: 有老師寫的解說就停下來讓學生讀完再按「下一題」。
-         v375(#1)（Alan 指定）：「填空」答對了一律自動跳下一題——解說照樣出現，
-         只是多留幾秒讓他讀完；想快的話還是可以直接按「下一題 →」。 */
-      const autoMs = q.explain ? (autoOnExplain ? 2800 : 0) : 650;
-      if (!autoMs) return;
-      clearAuto();
-      autoTimer.current = setTimeout(() => {
-        autoTimer.current = null;
-        if (isLast) completeQuiz(nextFirstRight, wrongList);
-        else goToNextQuestion();
-      }, autoMs);
+      /* v392: 統一節奏——沒解說 1 秒、有解說 4 秒（碰到回饋區就取消倒數）；
+         最後一題一律不自動跳，停在「✓ 答對了！」讓學生自己按「查看成績 →」，
+         結果頁的彩帶才不會跟答對音效撞在一起。 */
+      if (!isLast) scheduleAuto(goToNextQuestion, q.explain ? QM_AUTO_MS_EXPLAIN : QM_AUTO_MS_PLAIN);
       return;
     }
 
@@ -2560,7 +2635,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     setWrongList(nextWrongList);
     setDeck(prev => {
       const next = [...prev];
-      next.splice(Math.min(deckPos + 4, next.length), 0, {...q, _retry: true});
+      next.splice(Math.min(deckPos + QM_RETRY_GAP, next.length), 0, {...q, _retry: true});
       return next;
     });
     setLastRight(false);
@@ -2599,7 +2674,8 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack} title="Back to units">
+        {/* v392: 返回一定要清 timer，否則人已回到單元列表，自動跳題還在背景跑 */}
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={() => { clearAuto(); onBack(); }} title="Back to units">
           <window.Icon name="close" size={16}/>
         </button>
         <div className="qm-player-bar-wrap">
@@ -2651,23 +2727,19 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       </div>
 
       {selected !== null && (
-        <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true">
+        /* v392: 碰到回饋區（或在裡面按鍵）就取消倒數——解說最長 77 個字元，
+           讀到一半被跳走比不自動跳還糟 */
+        <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true"
+             onPointerDown={clearAuto} onKeyDown={clearAuto}>
           <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
             {selected === q.correct ? '✓ Correct! 答對了！' : `✗ 正解：${q.options[q.correct]}`}
           </div>
           {q.explain && <div className="qm-explain">{q.explain}</div>}
-          {selected === q.correct && !q.explain ? (
-            <div className="qm-auto-next">答對了，自動下一題…</div>
-          ) : (
-            <React.Fragment>
-              {selected === q.correct && q.explain && autoOnExplain && (
-                <div className="qm-auto-next">答對了，看完解說就自動{isLast ? '查看成績' : '下一題'}…</div>
-              )}
-              <button className="qm-btn primary" onClick={handleNext}>
-                {isLast ? '查看成績 →' : '下一題 →'}
-              </button>
-            </React.Fragment>
-          )}
+          {/* v392: 答對也一律給按鈕（本來只有一行「自動下一題…」，iPad 沒鍵盤就只能乾等） */}
+          <QmAutoHint kind={selected !== q.correct || isLast ? null : (q.explain ? 'explain' : 'plain')} />
+          <button className="qm-btn primary" onClick={handleNext}>
+            {isLast ? '查看成績 →' : '下一題 →'}
+          </button>
         </div>
       )}
     </div>
@@ -2852,7 +2924,9 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTa
       ) : (
         <>
           <WritingFeedback text={feedback} />
-          <button className="qm-btn primary wp-next" onClick={next}>
+          {/* v392: 全檔統一 () => next()——onClick={next} 會把 SyntheticEvent 當參數傳進去，
+              這裡的 next 雖然不吃參數，但同一個坑在音節切割題炸過（見檔頭 v392 說明） */}
+          <button className="qm-btn primary wp-next" onClick={() => next()}>
             {idx + 1 >= total ? '完成 ✦' : '下一題 →'}
           </button>
         </>
@@ -3053,7 +3127,9 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
       ) : (
         <>
           <WritingFeedback text={feedback}/>
-          <button className="qm-btn primary wp-next" onClick={next}>
+          {/* v392: 全檔統一 () => next()——onClick={next} 會把 SyntheticEvent 當參數傳進去，
+              這裡的 next 雖然不吃參數，但同一個坑在音節切割題炸過（見檔頭 v392 說明） */}
+          <button className="qm-btn primary wp-next" onClick={() => next()}>
             {idx+1 >= total ? '完成 ✦' : '下一題 →'}
           </button>
         </>
@@ -3296,7 +3372,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const photoModel = useQMM(() => grWeightWords(readWords), [readWords]);
   const activeModel = wordModel.count ? wordModel : photoModel;
   const wrongsRef = React.useRef([]);
-  const autoRef   = React.useRef(null);
+  // v392: 自動跳題改用共用的 useAutoNext（原本的 autoRef 由 hook 內部保管，unmount 也會自己清）
+  const { scheduleAuto, clearAuto } = useAutoNext();
   const topRef    = React.useRef(null);
   const audioRef  = React.useRef(null);   // v289: 課文音檔——掛在翻頁容器外，換段不重置進度
   const segAudioRef = React.useRef(null); // v293: 每段 AI 音檔——同樣要套用朗讀速度
@@ -3468,7 +3545,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       wrongsRef.current = Array.isArray(r.gr.wrongs) ? r.gr.wrongs : [];
     }
     return () => {
-      clearTimeout(autoRef.current);
+      clearAuto(); // v392
       if (speakStopRef.current) { try { speakStopRef.current(); } catch (e) {} speakStopRef.current = null; }
       try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
     };
@@ -3487,6 +3564,10 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const curGIdx = mode === 'final' ? segTotal + qIdx : gIdxOf(segIdx, qIdx);
   const answered = Object.keys(res).length;
   const score = Object.values(res).reduce((s, r) => s + (r.pts || 0), 0);
+  /* v392: 這一題答完就直接進結果頁嗎？（＝按鈕寫「完成 ✦」的那一題）
+     最後一題一律不自動跳，讓學生自己按。 */
+  const isLastQ = qIdx + 1 >= curQs.length
+    && (mode === 'final' || (segIdx + 1 >= segs.length && !finalQs.length));
 
   const resetQState = () => { setSelected(null); setAnswer(''); setFeedback(''); setPeek(false); };
 
@@ -3536,7 +3617,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   };
 
   const advance = (nres) => {
-    clearTimeout(autoRef.current);
+    clearAuto(); // v392: 手動前進（按鈕／Enter）也要清 timer，否則會連跳兩題
     resetQState();
     if (qIdx + 1 < curQs.length) { setQIdx(qIdx + 1); return; }
     if (mode === 'final') { finish(nres); return; }
@@ -3570,7 +3651,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     const nres = { ...res, [curGIdx]: { pts: ok ? 1 : 0 } };
     setRes(nres);
     persist(nres);
-    if (ok) autoRef.current = setTimeout(() => advance(nres), 900);
+    /* v392: 統一節奏——原本固定 900ms 且不管有沒有解說。
+       改成沒解說 1 秒、有解說 4 秒（碰到回饋區就取消）；最後一題不自動跳。 */
+    if (ok && !isLastQ) scheduleAuto(() => advance(nres), q.explain ? QM_AUTO_MS_EXPLAIN : QM_AUTO_MS_PLAIN);
   };
 
   const submitShort = async () => {
@@ -3743,15 +3826,21 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               })}
             </div>
             {selected !== null && (
-              <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true">
+              /* v392: 碰到回饋區就取消倒數，學生才讀得完解說 */
+              <div className="qm-feedback" role="status" aria-live="polite" aria-atomic="true"
+                   onPointerDown={clearAuto} onKeyDown={clearAuto}>
                 <div className={`qm-feedback-banner ${selected === q.correct ? 'correct' : 'wrong'}`}>
                   {selected === q.correct ? '✓ Correct! 答對了！' : `✗ 正解：${q.options[q.correct]}`}
                 </div>
-                {selected === q.correct ? (
-                  <div className="qm-auto-next">答對了，自動下一題…</div>
-                ) : (
-                  <button className="qm-btn primary" onClick={() => advance(res)}>下一題 →</button>
-                )}
+                {/* v392(D): 分段閱讀本來從頭到尾沒 render 過 explain——grNormalizeQ 用 {...q} 展開，
+                    解說其實一直都在，只是沒地方顯示。現有題庫沒有解說欄位，這行等於 no-op，
+                    但老師之後填的解說就有地方出現了（class 沿用既有的 .qm-explain）。 */}
+                {q.explain && <div className="qm-explain">{q.explain}</div>}
+                {/* v392: 答對也一律給按鈕，答錯永遠不自動跳 */}
+                <QmAutoHint kind={selected !== q.correct || isLastQ ? null : (q.explain ? 'explain' : 'plain')} />
+                <button className="qm-btn primary" onClick={() => advance(res)}>
+                  {isLastQ ? '完成 ✦' : '下一題 →'}
+                </button>
               </div>
             )}
           </>
@@ -3766,7 +3855,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         <div className="wp-progress-fill" style={{width:`${total ? (answered/total)*100 : 0}%`}}/>
       </div>
       <div className="wp-header">
-        <button className="wp-back" aria-label="上一步" onClick={onBack}>←</button>
+        {/* v392: 返回是四個「必須清 timer」的入口之一——不清的話學生已經離開，
+            自動跳題還會在背景跑完（分段閱讀甚至可能直接記成完成） */}
+        <button className="wp-back" aria-label="上一步" onClick={() => { clearAuto(); onBack(); }}>←</button>
         <span className="wp-counter">
           {mode === 'final' || mode === 'final-intro' ? '📚 綜合練習 · ' : (segs.length > 1 ? `第 ${segIdx + 1} / ${segs.length} 段 · ` : '')}
           {total ? `${answered} / ${total} 題` : ''}
@@ -3954,10 +4045,14 @@ function SyllableDivPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
   const [submitted, setSubmitted] = useQM(false);
   const [scores,    setScores]    = useQM(rz ? rz.scores.slice() : []); // true/false per word
   const [done,      setDone]      = useQM(false);
+  // v392: 本來是裸 setTimeout——切對最後一個字後 650ms 內按返回，
+  //       timer 仍會跑完 saveQuizModeCompletion，學生人已在單元列表
+  const { scheduleAuto, clearAuto } = useAutoNext();
 
   const total   = words.length;
   const current = words[idx];
   const pct     = Math.round(idx / total * 100);
+  const isLast  = idx + 1 >= total;
 
   if (!total) return (
     <div className="wp-empty">
@@ -3985,15 +4080,21 @@ function SyllableDivPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
     setScores(nextScores);
     if (window.playSound) window.playSound(isCorrect ? 'correct' : 'wrong');
     setSubmitted(true);
-    if (isCorrect) {
+    if (isCorrect && !isLast) {
       // v258: 把最新的 scores 一起帶過去——setTimeout 裡的 next 是舊 render 的閉包，
       // 直接讀 state 會少算剛答對的最後一題（滿分被存成少一題）
-      setTimeout(() => next(nextScores), 650);
+      // v392: 改成可取消的 1 秒；最後一個字不自動跳，停在「✓ 切對了！」讓學生自己按
+      scheduleAuto(() => next(nextScores), QM_AUTO_MS_PLAIN);
     }
   };
 
   const next = (scoresOverride = null) => {
-    const s = scoresOverride || scores;
+    clearAuto(); // v392: 手動前進也要清 timer，否則會連跳兩題
+    /* ⚠ scoresOverride 只接受陣列。這裡曾經因為 onClick={next} 把 React 的 SyntheticEvent
+       傳進來（event 是 truthy），s 變成 event 物件 → s.filter is not a function 直接 crash，
+       非最後一題時則把 event 存進 localStorage、整份續做進度靜默存不了。
+       全檔的按鈕都已改成 onClick={() => next()}，這裡再擋一層保險。 */
+    const s = Array.isArray(scoresOverride) ? scoresOverride : scores;
     if (idx + 1 >= total) {
       clearResume(progressKey); // v265
       const correct = s.filter(Boolean).length;
@@ -4056,7 +4157,8 @@ function SyllableDivPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
   return (
     <div className="qm-player-shell">
       <div className="qm-player-head">
-        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        {/* v392: 返回是四個「必須清 timer」的入口之一——否則人已回到單元列表，彩帶還在放 */}
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={() => { clearAuto(); onBack(); }}><window.Icon name="close" size={16}/></button>
         <div className="qm-player-bar-wrap">
           <div className="qm-player-bar">
             <div className="qm-player-fill" style={{width: pct + '%'}}/>
@@ -4132,15 +4234,13 @@ function SyllableDivPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
                 <span className="sd-answer-val">{current.answer}</span>
               </div>
             )}
-            {isWordCorrect ? (
-              <div className="qm-auto-next">
-                {idx + 1 >= total ? '切對了，自動查看成績…' : '切對了，自動下一個…'}
-              </div>
-            ) : (
-              <button className="qm-btn primary" onClick={next}>
-                {idx + 1 >= total ? '查看成績 →' : '下一個 →'}
-              </button>
-            )}
+            {/* v392: 切對也一律給按鈕（本來只有一行「自動查看成績…」，完全沒有出口）。
+                ⚠ onClick 一定要寫 () => next()——直接寫 onClick={next} 會把 SyntheticEvent
+                當成 scoresOverride 傳進去，最後一題答錯按「查看成績」就會 TypeError 當掉。 */}
+            {isWordCorrect && !isLast && <div className="qm-auto-next">切對了，自動下一個…</div>}
+            <button className="qm-btn primary" onClick={() => next()}>
+              {isLast ? '查看成績 →' : '下一個 →'}
+            </button>
           </>
         )}
       </div>
@@ -5372,26 +5472,94 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
   }, [weeks, weekOrder, weekId, qmProg, categories]);
   const note = week.parentNote || '';
   const hw = week.homework || {};
-  const itemById = {};
-  (allItems || []).forEach(it => { itemById[it.id] = it; });
+  /* v392: 大廳的重繪成本——本來 itemById、tasks.map、分組、排序全部裸寫在 render body，
+     而且每一張作業卡都各呼叫一次 getResume（＝一次同步 localStorage 讀取＋JSON.parse），
+     一次重繪就是「作業數 × 一次同步讀取」。app.jsx 的 qmProgressVersion／星星訂閱／
+     簽到訂閱任何一個推播都會重繪大廳，十幾份作業就會明顯卡頓。
+     這裡改成：續做表一次讀好，tasks→分組→排序整段包進 useMemo（結果與改前完全一致）。
+     （getResume 內含「一週後過期」的時間判斷，改成 memo 後會凍結在 memo 建立那一刻——
+       實務上沒差，沒有人會停在大廳一整週。） */
+  const resumeMap = useQMM(() => loadResumeMap(), [qmProg, weekId]);
+  const { tasks, flat } = useQMM(() => {
+    const itemById = {};
+    (allItems || []).forEach(it => { itemById[it.id] = it; });
+    const tasks = Object.keys(hw).map(id => {
+      const it = itemById[id];
+      if (!it) return null;
+      if (getQuizItems([it]).length === 0) return null; // v261: 空單元（0 題）不進任務清單——點進去也沒東西可做
+      const prog = (qmProg || {})[`${weekId}_${id}`];
+      const done = !!(prog && prog.done);
+      // v311 (#21/#8): 未達 80 不算完成，但把「上次分數」留著，任務列顯示「再拚到 80」提示
+      const lastPct = (prog && prog.total && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null;
+      const pct  = done ? lastPct : null;
+      const resume = !done ? resumeFromMap(resumeMap, `${weekId}_${id}`, null) : null;
+      const cat = (categories || []).find(c => c.id === it._cat);
+      return { id, it, cat, dueDate: hw[id] && hw[id].dueDate, done, pct, lastPct, resumeAt: resume ? resume.deckPos : null };
+    }).filter(Boolean);
+
+    // ── v235: 依「文章／主題」分組——同一篇文章的題目收在同一個標題下 ──
+    // 沒有資料欄位可用，所以用標題歸戶：去掉題型字眼與編號後相同 → 同一篇
+    const TYPE_WORDS = /(單字卡|單字聽寫|聽寫|拼字|單字練習|手寫練習|選擇題|簡答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|spelling)/gi;
+    const SEP_TRIM = /[\s\-–—_·．.。,，()（）0-9０-９]+$/;
+    const keyOf = (t) => String(t || '').toLowerCase().replace(TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
+    const lcpOf = (arr) => {
+      let pfx = arr[0] || '';
+      for (const str of arr.slice(1)) {
+        let i = 0;
+        while (i < pfx.length && i < str.length && pfx[i] === str[i]) i++;
+        pfx = pfx.slice(0, i);
+      }
+      return pfx;
+    };
+    const byKey = {};
+    tasks.forEach(t => {
+      const manual = String(t.it.group || '').trim(); // v254: 老師手動分組優先
+      const k = manual ? `m:${manual.toLowerCase()}` : (keyOf(t.it.title) || `_${t.id}`);
+      (byKey[k] = byKey[k] || []).push(t);
+    });
+    // v371: 組內順序＝「先分類、再題型」。
+    //   原本只看題型，於是閱讀理解的『測驗』(quiz rank 1) 會插到單字的配對連線(1.5)、填空(2) 前面
+    //   ——Alan 要的是「單字全部做完才進閱讀理解」。分類順序就用 CATEGORIES 的順序
+    //   （單字 → 文法 → 字根 → 閱讀理解）。
+    //   另外拿掉「做完的排後面」：這是一條學習路徑，做完就跳位會讓順序一直變；
+    //   完成的那列本來就有綠勾＋淺綠底，不必再靠位置區分。
+    const catRank = (t) => {
+      const i = (categories || []).findIndex(c => c.id === (t.cat && t.cat.id));
+      return i < 0 ? 99 : i;
+    };
+    const sortRows = (a, b) =>
+      (catRank(a) - catRank(b)) ||
+      (qmItemRank(a.it) - qmItemRank(b.it)) ||
+      String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
+    const entries = Object.values(byKey).map(group => {
+      group.sort(sortRows);
+      const manualName = String(group[0].it.group || '').trim(); // v254
+      if (manualName) return { group: true, name: manualName, tasks: group };
+      if (group.length < 2) return { group: false, tasks: group };
+      let name = lcpOf(group.map(t => t.it.title)).replace(TYPE_WORDS, '').replace(SEP_TRIM, '').trim();
+      if (name.length < 2) name = '';
+      return name ? { group: true, name, tasks: group } : { group: false, tasks: group };
+    });
+    // 攤平非分組的（各自一列）；排序：未完成的組在前、依最早到期
+    const flat = [];
+    entries.forEach(e => {
+      if (e.group) flat.push(e);
+      else e.tasks.forEach(t => flat.push({ group: false, name: null, tasks: [t] }));
+    });
+    flat.sort((a, b) => {
+      const ad = a.tasks.every(t => t.done) ? 1 : 0, bd = b.tasks.every(t => t.done) ? 1 : 0;
+      if (ad !== bd) return ad - bd;
+      const adu = String((a.tasks.find(t => !t.done) || a.tasks[0]).dueDate || '9999');
+      const bdu = String((b.tasks.find(t => !t.done) || b.tasks[0]).dueDate || '9999');
+      return adu.localeCompare(bdu);
+    });
+    return { tasks, flat };
+  }, [hw, allItems, qmProg, weekId, categories, resumeMap]);
   const dueText = (d) => {
     if (!d) return null;
     const diff = Math.ceil((new Date(d + 'T00:00:00') - new Date()) / 86400000);
     return diff > 1 ? `${diff} 天後到期` : diff === 1 ? '明天到期' : diff === 0 ? '今天到期' : diff >= -7 ? '已過期' : '已結束'; // v266: 過期 7 天以上＝已結束（灰色）
   };
-  const tasks = Object.keys(hw).map(id => {
-    const it = itemById[id];
-    if (!it) return null;
-    if (getQuizItems([it]).length === 0) return null; // v261: 空單元（0 題）不進任務清單——點進去也沒東西可做
-    const prog = (qmProg || {})[`${weekId}_${id}`];
-    const done = !!(prog && prog.done);
-    // v311 (#21/#8): 未達 80 不算完成，但把「上次分數」留著，任務列顯示「再拚到 80」提示
-    const lastPct = (prog && prog.total && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null;
-    const pct  = done ? lastPct : null;
-    const resume = !done ? getResume(`${weekId}_${id}`, null) : null;
-    const cat = (categories || []).find(c => c.id === it._cat);
-    return { id, it, cat, dueDate: hw[id] && hw[id].dueDate, done, pct, lastPct, resumeAt: resume ? resume.deckPos : null };
-  }).filter(Boolean);
   const doneN = tasks.filter(t => t.done).length;
   const allDone = tasks.length > 0 && doneN === tasks.length;
 
@@ -5413,62 +5581,6 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
   const celeScores = tasks.filter(t => t.pct != null).map(t => t.pct);
   const celeAvg = celeScores.length ? Math.round(celeScores.reduce((a, b) => a + b, 0) / celeScores.length) : null;
 
-  // ── v235: 依「文章／主題」分組——同一篇文章的題目收在同一個標題下 ──
-  // 沒有資料欄位可用，所以用標題歸戶：去掉題型字眼與編號後相同 → 同一篇
-  const TYPE_WORDS = /(單字卡|單字聽寫|聽寫|拼字|單字練習|手寫練習|選擇題|簡答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|spelling)/gi;
-  const SEP_TRIM = /[\s\-–—_·．.。,，()（）0-9０-９]+$/;
-  const keyOf = (t) => String(t || '').toLowerCase().replace(TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
-  const lcpOf = (arr) => {
-    let pfx = arr[0] || '';
-    for (const str of arr.slice(1)) {
-      let i = 0;
-      while (i < pfx.length && i < str.length && pfx[i] === str[i]) i++;
-      pfx = pfx.slice(0, i);
-    }
-    return pfx;
-  };
-  const byKey = {};
-  tasks.forEach(t => {
-    const manual = String(t.it.group || '').trim(); // v254: 老師手動分組優先
-    const k = manual ? `m:${manual.toLowerCase()}` : (keyOf(t.it.title) || `_${t.id}`);
-    (byKey[k] = byKey[k] || []).push(t);
-  });
-  // v371: 組內順序＝「先分類、再題型」。
-  //   原本只看題型，於是閱讀理解的『測驗』(quiz rank 1) 會插到單字的配對連線(1.5)、填空(2) 前面
-  //   ——Alan 要的是「單字全部做完才進閱讀理解」。分類順序就用 CATEGORIES 的順序
-  //   （單字 → 文法 → 字根 → 閱讀理解）。
-  //   另外拿掉「做完的排後面」：這是一條學習路徑，做完就跳位會讓順序一直變；
-  //   完成的那列本來就有綠勾＋淺綠底，不必再靠位置區分。
-  const catRank = (t) => {
-    const i = (categories || []).findIndex(c => c.id === (t.cat && t.cat.id));
-    return i < 0 ? 99 : i;
-  };
-  const sortRows = (a, b) =>
-    (catRank(a) - catRank(b)) ||
-    (qmItemRank(a.it) - qmItemRank(b.it)) ||
-    String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999'));
-  const entries = Object.values(byKey).map(group => {
-    group.sort(sortRows);
-    const manualName = String(group[0].it.group || '').trim(); // v254
-    if (manualName) return { group: true, name: manualName, tasks: group };
-    if (group.length < 2) return { group: false, tasks: group };
-    let name = lcpOf(group.map(t => t.it.title)).replace(TYPE_WORDS, '').replace(SEP_TRIM, '').trim();
-    if (name.length < 2) name = '';
-    return name ? { group: true, name, tasks: group } : { group: false, tasks: group };
-  });
-  // 攤平非分組的（各自一列）；排序：未完成的組在前、依最早到期
-  const flat = [];
-  entries.forEach(e => {
-    if (e.group) flat.push(e);
-    else e.tasks.forEach(t => flat.push({ group: false, name: null, tasks: [t] }));
-  });
-  flat.sort((a, b) => {
-    const ad = a.tasks.every(t => t.done) ? 1 : 0, bd = b.tasks.every(t => t.done) ? 1 : 0;
-    if (ad !== bd) return ad - bd;
-    const adu = String((a.tasks.find(t => !t.done) || a.tasks[0]).dueDate || '9999');
-    const bdu = String((b.tasks.find(t => !t.done) || b.tasks[0]).dueDate || '9999');
-    return adu.localeCompare(bdu);
-  });
 
   // v272: 改用共用的 qmShortLabel——任務清單與側欄稱呼一致
   const rowLabel = (t, groupName) => groupName ? qmShortLabel(t.it, groupName) : t.it.title;
