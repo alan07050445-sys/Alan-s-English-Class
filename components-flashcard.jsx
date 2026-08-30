@@ -525,9 +525,32 @@ function FcImageZoom({ src, alt, onClose }) {
       onCloseRef.current();
     };
     document.addEventListener('keydown', onKey, true);   // true = capture，比既有的 bubble 監聽先跑
-    if (closeRef.current) closeRef.current.focus();      // 鍵盤／輔助工具：焦點先進燈箱
+    /* ⚠ v395（Alan：「打開之後題目會往上或往下滑，而且每次位置不一致」）
+       兩個原因，兩個都要修：
+       ① focus() 預設會把目標捲進視野——燈箱是 fixed，但瀏覽器仍會捲背後那一頁，
+          所以每次打開，底下的題目就被推走一段，看起來位置都不一樣。
+          → 用 focus({ preventScroll: true })。
+       ② 背景沒有鎖住捲動，手指在暗底上滑動會連帶把底下的頁面捲掉。
+          → 開燈箱時把 body 鎖住，關掉時原樣還原（含捲動位置）。 */
+    const sy = window.scrollY || window.pageYOffset || 0;
+    const prev = { pos: document.body.style.position, top: document.body.style.top,
+                   width: document.body.style.width, overflow: document.body.style.overflow };
+    document.body.style.position = 'fixed';
+    document.body.style.top = (-sy) + 'px';
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    if (closeRef.current) {
+      try { closeRef.current.focus({ preventScroll: true }); }
+      catch (e2) { closeRef.current.focus(); }
+    }
     return () => {
       _fcZoomOpen = false;
+      // 還原背景捲動（含原本的位置，不然關掉會跳回最上面）
+      document.body.style.position = prev.pos;
+      document.body.style.top = prev.top;
+      document.body.style.width = prev.width;
+      document.body.style.overflow = prev.overflow;
+      window.scrollTo(0, sy);
       document.removeEventListener('keydown', onKey, true);
     };
   }, []);

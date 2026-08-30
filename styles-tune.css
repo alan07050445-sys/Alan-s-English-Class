@@ -3097,3 +3097,51 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
 .mistakes-btn:hover { background: rgba(139,49,32,.15); }
 .mistakes-btn-num { font-family: var(--sans); font-size: 12.5px; font-weight: 800; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v395 ④：轉場的小卡頓（Alan：「都會小卡頓，要順暢、有質感、又快一點」）
+   ──────────────────────────────────────────────────────────────────────────
+   查到一件意外的事：.qm-quiz-swap 與 .qm-question-swap 引用的
+   `questionSwap`、`optionRise` 這兩組 keyframes **整個專案都沒有定義**
+   （grep 全部 11 個 css 檔都找不到）。引用不存在的 keyframes ＝ 動畫不會跑，
+   所以換題其實是「直接跳掉」——沒有過場，配上 React 重繪的一瞬空檔，
+   看起來就是「卡一下」。
+
+   這裡把它們補上，而且只用 transform / opacity（GPU 合成，不觸發 layout／paint），
+   時間壓短（0.20~0.22s）＝ 有過場但不拖，符合「有效率又不失質感」。 */
+@keyframes questionSwap {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes optionRise {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.qm-quiz-swap     { animation-duration: .22s; }
+.qm-question-swap { animation-duration: .20s; }
+
+/* 選項逐一浮上來——間隔很小（30ms），是「有層次」而不是「等它跑完」 */
+.qm-options-swap .qm-option { animation-duration: .22s; }
+.qm-options-swap .qm-option:nth-child(2) { animation-delay: .03s; }
+.qm-options-swap .qm-option:nth-child(3) { animation-delay: .06s; }
+.qm-options-swap .qm-option:nth-child(4) { animation-delay: .09s; }
+
+/* 翻卡再快一點（0.18 → 0.15），並提示瀏覽器先把圖層準備好，
+   避免第一幀才開始合成造成的那一下頓。 */
+.fc-p-card .fc-face { transition-duration: .15s; }
+.fc-flip-card { will-change: auto; }
+.fc-flip-card:hover, .fc-flip-card:active { will-change: transform; }
+
+/* 換頁淡入：0.55s 對小朋友來說太久，而且它純 opacity、縮短沒有任何風險 */
+.page { animation-duration: .28s; }
+
+/* ⚠ will-change 不能一直掛著（會一直佔著合成層、反而更耗）——
+   只在真的要動的那一刻給。這裡用 :has 判斷「正在換題」的容器。 */
+.qm-quiz-area:has(.qm-quiz-swap) { will-change: contents; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qm-quiz-swap, .qm-question-swap, .qm-options-swap .qm-option, .page {
+    animation: none !important;
+  }
+  .fc-p-card .fc-face { transition-duration: .01s; }
+}
