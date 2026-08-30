@@ -65,6 +65,23 @@ function weekRangeOf(w, id, today) {
   return parseDateRange(w.dateRange, (m ? +m[1] : 0) || today.getFullYear());
 }
 
+/* 學生端「看得到的週次」＝有內容 且 沒被封存。
+   v377（Alan：#1 清掉空的）：還沒放內容的週次學生端不顯示——這樣才能
+   「先把一整個學期 20 週開好、內容慢慢補」而不會讓學生看到一排空白。
+   v398：再加上「已封存」。
+   這個判斷原本抄在三個地方（雲端第一次載入、切年級、viewOrder），
+   加了封存旗標之後三處只要有一處沒跟上，weekIdx 就會指到別週
+   （weekIdx 是 viewOrder 的索引，不是 weekOrder 的）——所以集中成一個函式。
+   老師（含編輯模式）一律拿到完整清單，行為完全沒變。 */
+function visibleWeekOrder(isTeacher, order, weeks) {
+  if (isTeacher) return order || [];
+  return (order || []).filter(id => {
+    const w = weeks && weeks[id];
+    if (!w || w.archived) return false;
+    return !!w.items && Object.keys(w.items).some(k => Array.isArray(w.items[k]) && w.items[k].length > 0);
+  });
+}
+
 function bestWeekIdx(order, weeks) {
   if (!order || order.length === 0) return 0;
   const today = new Date();
@@ -174,6 +191,10 @@ function App() {
   const [editorGroups, setEditorGroups] = useAppState(null);   // v374(#5): 新增時要提供哪些分組選項
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
+  /* v398：匯出備份。ExportModal 早就寫好了（components-editor.jsx），
+     但從 UI 沒有任何入口進得去＝等於不存在。期末整理的第一步就是「先備份」，
+     所以把它接回編輯列。 */
+  const [exportOpen, setExportOpen] = useAppState(false);
   const [quickSetOpen, setQuickSetOpen] = useAppState(false); // v377: 貼單字→一次建立整套
   const [qsRoster, setQsRoster] = useAppState([]);            // v380: 指派用的學生名單
   const [grGenOpen, setGrGenOpen] = useAppState(false);       // v382: 五大時態出題
@@ -292,17 +313,15 @@ function App() {
     ));
   }, [isTeacher]);
 
-  /* v377（Alan：#1 清掉空的）：還沒放內容的週次，學生端不顯示。
-     這樣才能「先把一整個學期 20 週開好、內容慢慢補」而不會讓學生看到一排空白。
-     ⚠ 老師（含編輯模式）拿到的一律是完整的 weekOrder ＝ 老師端行為完全沒變。 */
-  const weekHasContent = (w) => {
-    if (!w || !w.items) return false;
-    return Object.keys(w.items).some(k => Array.isArray(w.items[k]) && w.items[k].length > 0);
-  };
   const isTeacherRef = useAppRef(isTeacher);
   useAppEffect(() => { isTeacherRef.current = isTeacher; }, [isTeacher]);
+  /* v398：封存（＝學期結束後把舊內容藏起來，但一個字都不刪）。
+     開學整理的第三步「最後才隱藏」就是靠這個旗標——weeks[id].archived = true。
+     資料照樣留在 Firestore（隨時可以按「取消封存」放回來），只是學生端看不到。
+     ⚠ 刻意不用「刪除這一週」來達成：刪除是把 weeks[id] 整包移除，救不回來。 */
+  const weekArchived = (w) => !!(w && w.archived);
   const viewOrder = useAppMemo(
-    () => (isTeacher ? weekOrder : weekOrder.filter(id => weekHasContent(weeks[id]))),
+    () => visibleWeekOrder(isTeacher, weekOrder, weeks),
     [weekOrder, weeks, isTeacher]
   );
 
@@ -426,13 +445,7 @@ function App() {
       // 之後的更新一律保留使用者當下看的那一週；只在該週消失時才退回最後一週。
       if (!weekPickedRef.current) {
         weekPickedRef.current = true;
-        const pickOrder = isTeacherRef.current
-          ? newOrder
-          : newOrder.filter(id => {
-              const w = newWeeks[id];
-              return w && w.items && Object.keys(w.items).some(k => Array.isArray(w.items[k]) && w.items[k].length > 0);
-            });
-        setWeekIdx(bestWeekIdx(pickOrder, newWeeks));
+        setWeekIdx(bestWeekIdx(visibleWeekOrder(isTeacherRef.current, newOrder, newWeeks), newWeeks));
       } else {
         setWeekIdx(i => {
           const curId = weekOrderRef.current[i];
@@ -872,6 +885,21 @@ function App() {
     showToast("已儲存 ✓");
   };
 
+  /* v398：封存／取消封存這一週。跟 Delete 的差別是「只加一個旗標」——
+     items、成績、作業全部原封不動留著，按第二次就整週回到學生端。 */
+  const handleArchiveWeek = () => {
+    const w = { ...weeksRef.current };
+    const cur = w[weekId];
+    if (!cur) return;
+    const next = !cur.archived;
+    if (next && !confirm(`要把「${cur.label || weekId}」封存嗎？\n\n學生端會看不到這一週（內容不會被刪除，隨時可以取消封存）。`)) return;
+    w[weekId] = { ...cur, archived: next };
+    if (!next) delete w[weekId].archived;   // 取消封存就把旗標清乾淨，不留 false
+    setWeeks(w);
+    if (!saveWeeksSafe(w)) return;
+    showToast(next ? '已封存 · 學生看不到這一週 📦' : '已取消封存 · 學生看得到了 ✓');
+  };
+
   const handleDeleteWeek = () => {
     if (weekOrder.length <= 1) { showToast("Can't delete the last week"); return; }
     const nextWeeks = { ...weeksRef.current };
@@ -1288,7 +1316,9 @@ function App() {
     setGrade(g);
     setWeeks(newWeeks);
     setWeekOrder(newOrder);
-    setWeekIdx(bestWeekIdx(newOrder, newWeeks));
+    /* v398：這裡本來一律用完整的 newOrder 算，但 weekIdx 是 viewOrder 的索引——
+       學生的 viewOrder 會少掉「沒內容」與「已封存」的那幾週，索引就對不上了。 */
+    setWeekIdx(bestWeekIdx(visibleWeekOrder(isTeacherRef.current, newOrder, newWeeks), newWeeks));
     setOpenCat('vocab');
     setCatView(null);
     setPageKey(k => k + 1); // force .page remount → replay fade-in
@@ -1480,6 +1510,9 @@ function App() {
             onGrammarGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? () => setGrGenOpen(true) : null}
             onReadingGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setRcGenOpen(true)}
             onDeleteWeek={handleDeleteWeek}
+            onArchiveWeek={handleArchiveWeek}
+            onExport={() => setExportOpen(true)}
+            weekArchived={weekArchived(weeks[weekId])}
             progress={{done: totalDone, total: totalItems}}
             user={user}
             onLogin={() => window.signInWithGoogle()}
@@ -1754,6 +1787,13 @@ function App() {
             categories={activeCategories}
             onClose={() => setTermOpen(false)}
             onCreate={handleCreateTerm}
+          />
+          <window.ExportModal
+            open={exportOpen}
+            weeks={weeks}
+            weekOrder={weekOrder}
+            onClose={() => setExportOpen(false)}
+            showToast={showToast}
           />
           <window.WeekModal
             open={weekEditOpen}

@@ -134,7 +134,7 @@ function FocusBtn() {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -258,6 +258,8 @@ function Header({
         <div className="edit-banner">
           <div className="shell edit-banner-inner">
             <span>● Teacher Edit Mode</span>
+            {/* v398：封存中的週次，老師端一定要一眼看得出來——不然會以為學生也看得到 */}
+            {weekArchived && <span className="edit-banner-archived">📦 這一週已封存 · 學生看不到</span>}
             <div className="edit-banner-tools">
               {onGrammarGen && (
                 <button className="banner-btn gr" onClick={onGrammarGen}>✨ 出時態題目</button>
@@ -272,6 +274,18 @@ function Header({
                 <button className="banner-btn term" onClick={onTermSetup}>📅 建立一整個學期</button>
               )}
               <button className="banner-btn" onClick={onAddWeek}><Icon name="plus" size={12}/> New Week</button>
+              {/* v398：把 ExportModal 接回來——期末整理的第一步是「先備份」，
+                  在這之前 UI 完全沒有備份的入口。 */}
+              {onExport && (
+                <button className="banner-btn" onClick={onExport}>💾 匯出備份</button>
+              )}
+              {/* v398：期末整理用的「封存」——內容一個字都不刪，只是學生端看不到。
+                  刻意排在 Delete 前面：要藏舊學期時，正確答案永遠是這一顆。 */}
+              {onArchiveWeek && (
+                <button className="banner-btn arch" onClick={onArchiveWeek}>
+                  {weekArchived ? '↩ 取消封存' : '📦 封存這一週'}
+                </button>
+              )}
               <button className="banner-btn danger" onClick={onDeleteWeek}><Icon name="trash" size={12}/> Delete this Week</button>
               <button className="banner-btn" onClick={onToggleEdit}>Done editing →</button>
             </div>

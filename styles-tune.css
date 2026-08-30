@@ -3174,6 +3174,24 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .page { animation-duration: .45s; }                /* v396 是 .28s */
 .fc-p-card .fc-face { transition-duration: .18s; } /* v396 是 .15s */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v398 ①②：Alan 實際看過 v397 之後的微調——「有點太快，稍微放慢」
+   ──────────────────────────────────────────────────────────────────────────
+   v397 為了解卡頓一次縮太多。卡頓的真正原因是 blur/陰影（已在上面修掉，保留），
+   時間本身可以放回來一些：
+     · 泡泡紗幕 1.05s → 1.3s（原始 1.75s 的 74%）
+     · 泡泡上升 .78s → .95s（跟著紗幕等比例放慢，維持「泡泡先到、紗幕再收」的節奏）
+     · 換頁淡入 .45s → .55s（Alan 指定） */
+.pw-veil { animation-duration: 1.3s !important; }
+.pwb     { animation-duration: .95s !important; }
+.page    { animation-duration: .55s; }
+
+/* ══ v398 ⑦(b)：「← 上一頁」跟卡片之間的上下留白改成對稱（Alan 二選一選 b）══
+   實測 1440x900（未捲動）：頁首底線 y=65、按鈕 65→104、下面那張週卡 y=108。
+   ＝ 按鈕上面 0px、下面只有 4px，整顆黏在分隔線上，所以看起來「偏上」。
+   改成上下各 10px：按鈕本身不變，但視覺上就落在頁首底線與卡片的正中間。 */
+.lobby-back { margin-top: 10px; margin-bottom: 10px; }
+
 /* ══ v397 ③：翻到圖片面按「下一張」會先閃出下一張的圖片面 ══
    原因：.fc-face 兩面都掛 `transition: opacity .18s`。按下一張時
    cardIdx 與 flipped 同時更新——正在淡出的那一面在這 180ms 內
@@ -3206,4 +3224,22 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-p-learn .fc-learn-q     { margin-bottom: 10px; }
   .fc-p-learn .fc-learn-img   { margin-bottom: 10px; }
   .fc-p-learn .fc-choices     { margin-top: 4px; row-gap: 10px; }
+}
+
+
+/* ══ v398：期末整理用的「封存」按鈕與狀態標 ══
+   顏色刻意選琥珀色：跟 .danger（紅／刪除）明顯不同，因為封存是可逆的、刪除不是。 */
+.banner-btn.arch {
+  background: #8a6d1f; border-color: #8a6d1f; color: #fff; font-weight: 700;
+}
+.banner-btn.arch:hover { background: #705818; border-color: #705818; }
+.edit-banner-archived {
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: rgba(255, 214, 120, .18);
+  border: 1px solid rgba(255, 214, 120, .55);
+  color: #ffd678;
+  font-size: 12px; font-weight: 700;
+  white-space: nowrap;
 }

@@ -745,18 +745,33 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     /* v397（Alan：「捲下去點比較下面的單元，題目頁應該自動幫我捲上去」）
        側邊欄很長，捲到下面點一個單元時，右邊已經換成新題目了，
        但畫面還停在原本的捲動位置 → 學生要自己捲回去才看得到題目。
-       等 React 把新內容畫上去（下一幀）再捲，不然會捲到舊版面的高度。 */
-    requestAnimationFrame(() => {
+       v398（Alan：「還不夠頂端，大概只到 8/10」）：v397 只捲到「題目區的上緣」，
+       上面的頁首那一段還留在畫面外。改成真的回到整頁最頂端（scrollY = 0），
+       跟 app.jsx 的 scrollPageToTop 同一個標準。
+       順便拿掉 requestAnimationFrame——v397 要等下一幀是因為它得先量「上緣在哪」，
+       現在目標是絕對的 0，不必量任何東西，而 rAF 在被遮住／背景的分頁根本不會觸發。 */
+    (() => {
       try {
         const area = document.querySelector('.qm-quiz-area');
         if (area && area.scrollTop) area.scrollTop = 0;
-        const top = area ? area.getBoundingClientRect().top + window.scrollY : 0;
-        // 題目區的上緣若已經被捲到畫面上方，就把它帶回視野（留 12px 呼吸）
-        if (window.scrollY > top - 12) {
-          window.scrollTo({ top: Math.max(0, top - 12), behavior: 'smooth' });
-        }
+        if (window.scrollY <= 0) return;
+        /* 收尾硬補一次的理由（實測）：
+           1) 有些環境 behavior:'smooth' 根本不生效（測試瀏覽器就是，scrollTo 完全不動）；
+           2) 新題目畫上去後版面高度會變，smooth 有時會停在半路。
+           但使用者若在這半秒內自己動了滾輪／手指／方向鍵，就不要跟他搶。 */
+        let userMoved = false;
+        const cancel = () => { userMoved = true; };
+        const evs = ['wheel', 'touchmove', 'keydown'];
+        evs.forEach(ev => window.addEventListener(ev, cancel, { passive: true }));
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+        setTimeout(() => {
+          try {
+            if (!userMoved && window.scrollY > 0) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+          } catch (e) {}
+          evs.forEach(ev => window.removeEventListener(ev, cancel));
+        }, 480);
       } catch (e) {}
-    });
+    })();
   };
 
   useQME(() => {

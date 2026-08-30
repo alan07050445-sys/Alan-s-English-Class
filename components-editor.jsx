@@ -1425,10 +1425,13 @@ function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
 
 /* ───── Export Modal ───── */
 function ExportModal({ open, weeks, weekOrder, onClose, showToast }) {
-  const [mode, setMode] = useS("dataJs");
+  /* v398：預設改成 Raw JSON。這顆的用途是「期末備份」，而 data.js (legacy) 那個
+     格式裡的 CATEGORIES／helper 是寫死的舊版樣板，拿去覆蓋現在的 data.js 會壞。
+     備份要的是純資料，所以一打開就停在 JSON。 */
+  const [mode, setMode] = useS("json");
   const [copied, setCopied] = useS(false);
 
-  useE(() => { if (open) { setMode("dataJs"); setCopied(false); } }, [open]);
+  useE(() => { if (open) { setMode("json"); setCopied(false); } }, [open]);
 
   if (!open) return null;
 
