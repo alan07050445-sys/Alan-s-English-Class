@@ -2558,7 +2558,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 
 /* 卡片內的上下留白收緊——Alan：「不要留白太多」 */
 .fc-p-card .fc-face { justify-content: center; }
-.fc-p-card > .fc-flip-card { min-height: 0; }
+/* v395：這行 v393 加的 min-height:0 是崩壞的第二個原因——
+   .fc-flip-card 裡面兩張 face 都是絕對定位，本身沒有內容高度，
+   把地板拿掉之後只要 flex 分不到空間就會塌成一條。地板要留著。 */
+.fc-p-card > .fc-flip-card { min-height: 220px; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    v393 ①：白色框框在捲的真正原因與修法（Alan：「不是圖片在卷 是白色框框在卷」）
@@ -2696,8 +2699,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
    跟「測驗」模式一樣（Alan 說只有測驗沒問題，就是因為測驗沒有固定高度）。
    ⚠ 這條同時解掉 v376 註解裡擔心的事：框框會長不會裁，
      「下一張／選項」永遠不會被切掉，也永遠按得到。 */
-.fc-p-card, .fc-p-learn { overflow: visible; }
-.fc-match-grid { overflow: visible; }
+/* v395：v394 為了「框框不要捲」把 overflow 改成 visible，
+   但容器是固定高度，內容一多就會直接溢出到卡片外面（看起來像壞掉）。
+   改回 auto 當安全網——真正的解法是讓內容縮得下（圖片已經是 flex 可縮）。 */
+.fc-p-card, .fc-p-learn { overflow-x: hidden; overflow-y: auto; }
 
 /* ══ v394：手機與平板直式的圖片上限（之前漏掉的一整塊）══
    v393 的矮螢幕圖片上限都寫成 `min-width: 901px` 才生效 →

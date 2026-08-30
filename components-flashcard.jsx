@@ -447,14 +447,20 @@ function useFitHeight(ref, enabled, min) {
          用了 useFitHeight 的那三個（單字卡 553／學習 603／配對 380）。
          改成 minHeight：畫面有空間時照樣撐滿一整屏（v376 的目的保留），
          內容真的比較高時就讓框框長出去、由頁面捲，框框本身永遠不捲。 */
-      el.style.minHeight = h + 'px';
+      /* ⚠⚠ v395：v394 曾把這裡改成 minHeight，想解決「白框自己捲」——結果整張卡片垮掉。
+         原因：.fc-face 是 position:absolute; inset:0（styles-flashcard.css:99），
+         所以 .fc-flip-card 的「內容高度」是 0，父層必須有**確定的高度**才撐得出來。
+         min-height 在內容比它高的時候就不是確定高度 → 翻卡區塌成一條、字掉到卡片外面
+         （Alan 的 iPad／iPhone／電腦三張截圖都是這個樣子）。
+         → 一定要用 height。捲動的問題改用「讓內容縮得下」來解，不能靠放寬容器。 */
+      el.style.height = h + 'px';
 
       /* 外層通常還有 padding-bottom（例：.qm-quiz-area 手機是 84px）——
          光算「上緣到視窗底」還是會多出那一截，所以量一次剩下的溢出再扣掉。 */
       const over = host === document.documentElement
         ? document.documentElement.scrollHeight - vh
         : host.scrollHeight - host.clientHeight;
-      if (over > 1) el.style.minHeight = Math.max(floor, h - over) + 'px';
+      if (over > 1) el.style.height = Math.max(floor, h - over) + 'px';
     };
 
     // 真的換版面才重量：轉向／改視窗大小
