@@ -399,7 +399,7 @@ function useFitHeight(ref, enabled, min) {
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (!enabled) { el.style.height = ''; return; }
+    if (!enabled) { el.style.minHeight = ''; el.style.height = ''; return; }
 
     /* ⚠⚠ v387（Alan：「單字卡會因為我上下滑動變大變小」）——這裡踩過的坑寫清楚，不要再改回去：
        舊版拿 `getBoundingClientRect().top` 當基準。那是「相對視窗」的座標，
@@ -426,7 +426,7 @@ function useFitHeight(ref, enabled, min) {
       lastW = vw; lastH = vh; measured = true;
 
       const host = _fcScrollHost(el);
-      el.style.height = '';                     // 先還原，才量得到自然位置
+      el.style.minHeight = ''; el.style.height = '';   // 先還原，才量得到自然位置
       const rect = el.getBoundingClientRect();
       // 「這一塊在畫面上從哪裡開始」——換算成不受捲動影響的值
       let top;
@@ -439,14 +439,22 @@ function useFitHeight(ref, enabled, min) {
       // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
       const floor = Math.min(min || 320, Math.round(vh * 0.55));
       const h = Math.max(floor, Math.round(vh - top - 10));
-      el.style.height = h + 'px';
+      /* ⚠⚠ v394：這裡本來設的是 height（固定高度）。
+         那正是 Alan 回報「白色框框在捲」的根因：
+         .fc-p-card / .fc-p-learn 有 overflow-y:auto，一旦內容比這個固定高度高，
+         框框就自己捲起來。而「測驗」模式沒有用 useFitHeight ＝ 沒有固定高度 ＝
+         框框跟著內容長，所以他說只有測驗不會捲——三個會捲的正好就是
+         用了 useFitHeight 的那三個（單字卡 553／學習 603／配對 380）。
+         改成 minHeight：畫面有空間時照樣撐滿一整屏（v376 的目的保留），
+         內容真的比較高時就讓框框長出去、由頁面捲，框框本身永遠不捲。 */
+      el.style.minHeight = h + 'px';
 
       /* 外層通常還有 padding-bottom（例：.qm-quiz-area 手機是 84px）——
          光算「上緣到視窗底」還是會多出那一截，所以量一次剩下的溢出再扣掉。 */
       const over = host === document.documentElement
         ? document.documentElement.scrollHeight - vh
         : host.scrollHeight - host.clientHeight;
-      if (over > 1) el.style.height = Math.max(floor, h - over) + 'px';
+      if (over > 1) el.style.minHeight = Math.max(floor, h - over) + 'px';
     };
 
     // 真的換版面才重量：轉向／改視窗大小

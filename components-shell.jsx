@@ -195,6 +195,17 @@ function Header({
             <div className="header-auth">
               {/* v388: 全螢幕——放最前面，學生老師都用得到 */}
               <FullscreenBtn/>
+              {/* v394: 錯題本入口——v319 把 📕 拿掉之後，app.jsx 仍然一直傳 onShowMistakes，
+                  但 Header 沒有任何地方會呼叫它 ＝ mistakesOpen 永遠是 false ＝
+                  學生答錯的題目一直在收集、卻永遠打不開來複習。把入口加回來。
+                  有錯題才顯示，沒有錯題不佔位置。 */}
+              {user && onShowMistakes && mistakesCount > 0 && (
+                <button className="mistakes-btn" onClick={onShowMistakes}
+                  title={`錯題本 · ${mistakesCount} 題等你複習`} aria-label="錯題本">
+                  <span aria-hidden="true">📕</span>
+                  <span className="mistakes-btn-num">{mistakesCount}</span>
+                </button>
+              )}
               {/* v342: 集點——學生看得到自己的星星，點開是紀錄＋商店 */}
               {user && onShowStars && (
                 <button className="stars-btn" onClick={onShowStars} title="我的星星與商店"

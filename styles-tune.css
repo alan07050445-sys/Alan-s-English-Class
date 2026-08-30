@@ -2689,3 +2689,406 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 1800px) {
   .page-mission .qm-cat-view { max-width: 1760px; }
 }
+
+/* ══ v394：白色框框永遠不自己捲 ══
+   配合 useFitHeight 從 height 改成 min-height：框框現在會跟著內容長，
+   所以不再需要（也不可以）讓它自己捲——內容變長就讓整頁捲，
+   跟「測驗」模式一樣（Alan 說只有測驗沒問題，就是因為測驗沒有固定高度）。
+   ⚠ 這條同時解掉 v376 註解裡擔心的事：框框會長不會裁，
+     「下一張／選項」永遠不會被切掉，也永遠按得到。 */
+.fc-p-card, .fc-p-learn { overflow: visible; }
+.fc-match-grid { overflow: visible; }
+
+/* ══ v394：手機與平板直式的圖片上限（之前漏掉的一整塊）══
+   v393 的矮螢幕圖片上限都寫成 `min-width: 901px` 才生效 →
+   手機（375~430）與 iPad 直式（744~820）通通落在條件外，還在用 330px 的基底值。
+   裝置矩陣實測：iPhone 13 單字卡整頁要捲 128px、iPad 直式 111px，就是這樣來的。
+   ⚠ 用 px 不用 vh：手機瀏覽器的網址列會伸縮，vh 會跟著跳（v376 踩過）。 */
+@media (max-width: 900px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 240px; }
+  .fc-p-learn .fc-learn-img { max-height: 250px; }
+}
+@media (max-width: 560px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 200px; }
+  .fc-p-learn .fc-learn-img { max-height: 210px; }
+}
+/* 手機橫式（高度只有 390~430）圖片再收一次，不然一張圖就吃掉整個畫面 */
+@media (max-height: 480px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 150px; }
+  .fc-p-learn .fc-learn-img { max-height: 160px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v395：動畫流暢度稽核（只改動畫，完全不動版面尺寸／資料／計分）
+   ───────────────────────────────────────────────────────────────────────────
+   量到的事實（工具：把全站 11 個樣式檔的 @keyframes 逐一解析出「動了哪些屬性」，
+   再對回用到它的選擇器）：
+     · 209 條 animation 宣告、17 個無限迴圈動畫。
+     · 其中只有 3 個無限動畫在動「會觸發 layout」的屬性，而且都在同一個地方：
+       essay-progress（動 width）＝ AI 批改等待條。
+     · 沒有任何一個 scroll 監聽器（全站 0 個），所以捲動本身不是問題來源。
+     · 88/209 條在 reduced-motion 區塊內，48 條完全沒被任何 reduced-motion 蓋到。
+
+   ⚠ 禁區全部沒碰：useFitHeight／.fc-p-card／.fc-p-learn 的高度、
+     ResizeObserver、html.focus-on、任何 props/資料形狀。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ── ① AI 批改等待條：animation 動 width → 改成 transform ────────────────
+   styles-quiz-mode.css:1917 的 @keyframes essay-progress 是 `from{width:5%}
+   to{width:90%}`，掛在 .essay-checking-fill（:1915）與 .sm-checking-fill（:2124），
+   而且是 `2.5s infinite alternate`。
+
+   為什麼這是全站最該修的一條：
+     · width 不是合成屬性 → 每一幀都要重新 layout + paint。
+     · 它出現的時機正好是「AI 正在批改」——那段時間主執行緒本來就在等
+       fetch 回來、回來之後要一次算完批改結果並重繪整個回饋區。
+       等待幾秒＝幾百幀的無謂 layout，剛好卡在最需要順的時候。
+     · 它是無限迴圈，不會自己停。
+
+   改法：寬度固定 100%，改用 transform: scaleX() 縮放。scaleX 只走合成層，
+   0 次 layout、0 次 paint。
+   為什麼安全：
+     · .essay-checking-bar（:1908）與 .sm-checking-bar（:2126）都是
+       overflow:hidden + 固定高度的軌道，fill 是裡面唯一的子元素，
+       沒有任何東西的位置依賴它的寬度。
+     · JSX 是 <div className="essay-checking-fill"/>，沒有 inline style，
+       所以純 CSS 就能完整接管（全站的「真.進度條」是 style={{width:pct+'%'}}
+       由 JS 寫進去的，那些不能這樣改，見報告）。
+     · transform-origin 設 left，起點與原本的 width 一樣是從左邊長出來。
+     · 唯一的視覺差：border-radius:2px 的左右圓角會被水平壓扁。
+       這是一條高 3~4px 的實心色條，而且外框自己就是 radius:2px + overflow:hidden，
+       肉眼看不出來。 */
+.essay-checking-fill,
+.sm-checking-fill {
+  width: 100%;
+  transform-origin: left center;
+  animation: qmCheckGlide 2.5s ease-in-out infinite alternate;
+}
+@keyframes qmCheckGlide {
+  from { transform: scaleX(.05); }
+  to   { transform: scaleX(.90); }
+}
+
+
+/* ── ② .qm-btn：非 primary 沒有過場、而且全部按下去都沒有回饋 ────────
+   ⚠ 先寫下一個「用 grep 會查錯、要去瀏覽器查 CSSOM 才會發現」的事實：
+     .qm-btn 的 transition 一共有三條規則，分散在三個檔案，
+     grep 只搜 `^.qm-btn` 會漏掉後兩條（它們掛在 .qm-btn.primary 上）：
+       styles-quiz-mode.css:553  .qm-btn         { transition: opacity .15s }
+       styles-quiz-mode.css:558  .qm-btn.primary { transition: opacity .15s, transform .1s, box-shadow .15s }
+       styles-theme.css:923      .qm-btn.primary { transition: background .15s, transform .12s <彈性曲線>, box-shadow .15s }
+     所以 primary 的過場其實一直是完整的，最後由 styles-theme.css 那條勝出。
+
+   真正的兩個缺口是：
+     ① 非 primary（.secondary 等）只有 `opacity .15s`，
+        但 styles-quiz-mode.css:576 的 .qm-btn.secondary:hover 改的是
+        border-color + color → 這兩個是硬跳的。
+     ② 按下去（:active）全部都沒有回饋。primary 雖然有
+        `.qm-btn.primary:active { transform: translateY(0) }`（:564），
+        但那只是「把 hover 浮起來的 1px 收回去」；iPad 沒有 hover，
+        所以在平板上按 primary 的位移是 0 → 完全沒有「我按到了」的訊號。
+        .qm-btn 是全站按最多次的控制項（開始練習／下一題／完成／再試一次），
+        小朋友沒看到反應就會重複點。
+        本檔案 (H) 段（:1839）已經幫 11 種元素補過 :active scale(.96)，
+        當時漏掉 .qm-btn——這裡照同一套語彙補上。
+
+   權重逐條對過，並且已在瀏覽器實測 computed style 確認：
+     .qm-btn（我這條，0,1,0）→ 只贏過 quiz-mode 的 .qm-btn，
+       非 primary 實測得到 opacity/transform/box-shadow/border-color/color ✓
+       primary 實測仍是 styles-theme 的那條（0,2,0 贏我）——那條本來就比較好，
+       刻意讓它繼續贏，不去搶。
+     .qm-btn.primary:active           (0,3,0)
+     .qm-btn.primary:active:not(:disabled) (0,4,0) → 贏 ✓（實測確認）
+     .qm-btn:active:not(:disabled)    (0,2,0)，非 primary 沒有對手 ✓
+   transform 只在 :active 那一瞬間存在，而且 .qm-btn.primary:hover 本來就有
+   transform，所以「按鈕變成 fixed 子孫的包含塊」這個風險本來就已存在且無害
+   （.qm-btn 裡面只有文字）。 */
+.qm-btn {
+  transition: opacity   var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              transform  .13s                var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              box-shadow var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              border-color var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              color      var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1));
+}
+.qm-btn:active:not(:disabled),
+.qm-btn.primary:active:not(:disabled) { transform: scale(.97); }
+
+
+/* ── ③ 圈選題選項：完全沒有 transition ──────────────────────────────
+   styles-quiz-mode.css:2350 的 .circle-label-option 沒有任何 transition，
+   但 :2359 / :2365 / :2371 會改 border-color、background、color
+   （hover／選取／對／錯四種狀態）——選下去是硬跳的，沒有「被選到」的過程感。
+   這三個都是 paint-only 屬性，加 transition 不會造成 layout。
+   :active 的縮放沿用 (H) 段的 scale(.96)。 */
+.circle-label-option {
+  transition: background   var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              border-color var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              color        var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              transform    .12s                var(--ease, cubic-bezier(.4, 0, .2, 1));
+}
+.circle-label-option:active:not(:disabled) { transform: scale(.96); }
+
+
+/* ── ④ 斷句題的分隔線：hover 動 width / top / bottom → 改成 scale ────
+   styles-quiz-mode.css:1491：
+     transition: background .12s, width .12s, top .12s, bottom .12s;
+   hover 時 width 1.5px→2.5px、top/bottom 22%→14%（:1496）。
+   四個屬性全都要 layout，而斷句題一句話裡有十幾個 gap，滑鼠掃過去就是連續 relayout。
+
+   數學上完全等價的 transform：
+     寬 1.5 → 2.5     = scaleX(1.6667)
+     高 56% → 72%     = scaleY(1.2857)   （22/22 與 14/14 都對稱於中心）
+   基底本來就有 translateX(-50%)，把 scale 接在後面即可；
+   transform 由右往左套用＝先 scale（以自身中心為原點）再位移，
+   而 translateX 的百分比是以「未變形的 border-box 寬度 1.5px」計算，
+   所以中心點分毫不動，位置與原本一模一樣。
+   權重 (0,3,0) 與原規則相同，本檔在後面 → 贏。 */
+.sd-gap-line {
+  transition: background var(--t-fast, .12s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              transform  .12s                var(--ease, cubic-bezier(.4, 0, .2, 1));
+}
+.sd-gap:hover:not(:disabled) .sd-gap-line {
+  width: 1.5px; top: 22%; bottom: 22%;          /* 還原成基底值，改由 transform 表現 */
+  transform: translateX(-50%) scale(1.6667, 1.2857);
+}
+
+
+/* ── ⑤ 兩個小地方的回饋補齊 ─────────────────────────────────────────
+   · .modal-close（styles-part2.css:519）：:hover 改 background，沒有 transition。
+   · .grd-word（styles-quiz-mode.css:3040）：照片上的隱形字框，
+     :active 會亮金色但沒有 transition。這裡刻意用「按下瞬間硬跳、放開才淡出」
+     的寫法——按下的回饋必須是 0ms（加了 transition 反而變遲鈍），
+     淡出才需要時間。:active 自己蓋掉 transition 就做得到。 */
+.modal-close { transition: background var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)); }
+.grd-word    { transition: background .22s var(--ease, cubic-bezier(.4, 0, .2, 1)); }
+.grd-word:active { transition: none; }
+
+
+/* ── ⑥ 換頁動畫 0.55s → 0.34s ──────────────────────────────────────
+   .page 在 app.jsx:1461 是 key={pageKey} → 每一次換頁都重掛、重播，
+   是全站重複次數最高的動畫。
+
+   ⚠ 這裡有一個「看程式碼會看錯」的陷阱，是實際在瀏覽器裡查 CSSOM 才確定的：
+     .page 有兩條 animation 規則，
+       styles.css:39      .page { animation: pageEnter 0.5s ... both; }   ← 沒有生效
+       styles-auth.css:488 .page { animation: page-enter 0.55s ease forwards; } ← 真正生效
+     styles-auth.css 排在 styles.css 後面（index.html:29 vs :33），權重相同 → 後者贏。
+     所以線上真正跑的是 styles-auth.css:484 的 @keyframes page-enter，
+     內容是 `from{opacity:0} to{opacity:1}`——純淡入、0.55 秒。
+
+   這代表兩件事：
+     ① 每次換頁要等 0.55 秒內容才完全看得清楚，對小朋友就是「按了沒反應」。
+        0.34s 一樣有淡入的柔和感，但不再拖。
+     ② 真正生效的那條「完全沒有 transform」，只有 opacity ——
+        所以這個改動對版面是 0 影響，跟 useFitHeight 用
+        getBoundingClientRect().top 量高度那件事完全無關
+        （會污染量測的 translateY 來自 pageEnter，而 pageEnter 根本沒生效）。
+        沒有動到 useFitHeight 一個字，也沒有改變任何元素的算繪高度。
+
+   只改 animation-duration（不寫 shorthand）＝ 不管將來哪一條規則勝出，
+   都只調速度、不會意外把別人的 keyframes 或 fill-mode 換掉。 */
+.page { animation-duration: .34s; }
+
+
+/* ── ⑦ reduced-motion 補漏 ────────────────────────────────────────
+   稽核結果：209 條 animation 有 48 條完全沒被任何 reduced-motion 區塊蓋到。
+   扣掉登入頁行銷動畫（.ll-* / .lldm-* / .ls-*，那些多數自己包在
+   prefers-reduced-motion: no-preference 裡）之後，學生真的會遇到的有這幾條。
+
+   ⚠ 有 fill-mode 的動畫不能無腦寫 animation:none——那會把「動畫跑完的樣子」
+     一起拿掉。逐條處理：
+       .qm-result-star  基底是 opacity:0 + `both` → 直接 none 會變成星星消失，
+                        所以要補 opacity:1。
+       .qm-plus-one     基底是 forwards、結尾 opacity:0 → 直接 none 會讓「+1」
+                        永遠留在畫面上，所以換成一條只有 opacity 的動畫。
+       其餘三條沒有 fill-mode，安全。
+   ⚠ 刻意不碰 .fc-match-tile.matched（styles-flashcard.css:621）：
+     它是 forwards 且結尾 opacity:0，配對成功的方塊靠它消失。
+     它動的是 transform + opacity（合成屬性，本來就不卡），
+     為了 reduced-motion 去改它反而可能弄壞配對遊戲，不值得。 */
+@media (prefers-reduced-motion: reduce) {
+  /* 等待條：不再跑動，改成靜止的半滿（旁邊有「AI 正在批改…」的文字說明狀態） */
+  .essay-checking-fill,
+  .sm-checking-fill { animation: none; transform: scaleX(.4); }
+  .sm-checking-icon { animation: none; }                       /* styles-quiz-mode.css:2120 */
+  .qm-result-star   { animation: none; opacity: 1; }           /* styles-quiz-mode.css:656  */
+  .sd-gap.done.missed .sd-gap-slash { animation: none; }       /* styles-quiz-mode.css:1521 */
+  .rs-board.k0, .rs-board.k1        { animation: none; }       /* styles-quiz-mode.css:3681 */
+  .qm-plus-one { animation: qmPlusOneFadeRM .75s linear forwards; }
+  /* 本段新加的回饋也一起收斂（跟 (H) 段同一套：不縮放，改變淡） */
+  .qm-btn, .circle-label-option, .sd-gap-line, .grd-word, .modal-close { transition: none; }
+  .qm-btn:active:not(:disabled),
+  .qm-btn.primary:active:not(:disabled),
+  .circle-label-option:active:not(:disabled) { transform: none; opacity: .7; }
+  .sd-gap:hover:not(:disabled) .sd-gap-line { transform: translateX(-50%); }
+}
+@keyframes qmPlusOneFadeRM {
+  0%, 60% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v395：全站廣度稽核（每一頁，不是只有練習頁）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 的抱怨是「不要只有第三頁，是每一頁都要完全使用」。這一段把登入頁、門口頁、
+   大廳、練習頁、暑假頁、老師後台、編輯器、錯題本走過一輪之後，只挑出
+   「被蓋住／被裁切／小到按不到」這三類「確定是壞的、而且純 CSS 就能修」的問題。
+   需要動 JSX 的（死路、標籤不一致、重複的數字、看不到的入口）一律寫在報告裡，不在這裡改。
+   ⚠ 這一段刻意完全不碰 .fc-p-card / .fc-p-learn 的高度、不碰 html.focus-on、
+     不碰 1180×760 iPad 橫式練習畫面的任何規則。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── (1)【最嚴重】手機上「單元列表」鈕整顆被底部導覽列蓋住 ──────────────
+   .qm-sidebar-reopen 在 ≤640 是 fixed、bottom:20px、z-index:60
+   （styles-quiz-mode.css:189 與 :201）；
+   .mobile-nav 是 fixed、bottom:0、height:60px、z-index:90（styles-part2.css:760）。
+   兩者一定同時出現——MobileNav 在 catView 時渲染（app.jsx:1707），
+   展開鈕也只在 .qm-cat-view 裡（components-quiz-mode.jsx:981）——
+   所以這顆鈕整個落在導覽列那 60px 帶狀區內，又排在它下面 ＝ 看不到也按不到。
+   而手機直向一旦選了單元，側欄被 .qm-cat-view.has-selection .qm-sidebar{display:none}
+   收掉（styles-quiz-mode.css:1107），這顆鈕就是「回到單元列表」的唯一出口
+   ＝ 小朋友點進一個單元之後卡在裡面出不去。
+   ⚠ 只改 ≤640：641–768 這顆是 top:74px，本來就沒被蓋到。 */
+@media (max-width: 640px) {
+  .qm-sidebar-reopen {
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 14px);
+    z-index: 95;   /* 只要高過 .mobile-nav 的 90；仍遠低於 .modal-backdrop 的 100 */
+  }
+}
+
+/* ── (2) 老師端「每一個」彈窗在手機上左右各被裁掉 32px ─────────────────
+   .modal-backdrop 是 display:grid + place-items:center + padding:40px，
+   而且這條沒有任何斷點（styles-part2.css:488）→ 可用寬度＝100vw−80px；
+   .modal 在 ≤640 卻要 width:calc(100vw−16px)（styles-part2.css:727）。
+   grid item 比 track 寬 64px，置中之後左右各溢出 32px：出題、建立整個學期、
+   建立週次、匯出…老師端每一個彈窗的內容都被切掉兩邊。
+   背景內距縮到 8px 之後 100vw−16px 剛好等於 track，兩邊正好對上。 */
+@media (max-width: 640px) {
+  .modal-backdrop { padding: 8px; }
+}
+
+/* ── (3) 彈窗的按鈕列不會換行 ─────────────────────────────────────────
+   .modal-foot 是 flex + justify-content:space-between、沒有 flex-wrap
+   （styles-part2.css:584；上面 v392 那段只補了 sticky，沒補換行）。
+   「← 回上一步／↻ 重新出一次／建立 N 個練習並指派 →」這種三顆鈕的頁腳
+   在 375px 一定排不下。塞得下時這條完全不生效，塞不下才換行。 */
+.modal-foot { flex-wrap: wrap; row-gap: 10px; }
+
+/* ── (4) 彈窗主要按鈕 37px → 44px ─────────────────────────────────────
+   .btn 是 font-size:11px + padding:12px 22px ≈ 37px 高（styles-part2.css:589），
+   而它是老師端所有「儲存／取消／建立」的按鈕。
+   ⚠ 一定要限定在 .modal-foot 底下：.btn 也用在 components-flashcard.jsx 的
+     學生練習畫面（「下一題 →」「再多練一點 →」…），那些在 .fc-p-card /
+     .fc-p-learn 裡面，高度是 v394 明訂不能動的。
+     .modal-foot 全 repo 只出現在 components-editor.jsx（老師端彈窗頁腳），
+     改它百分之百碰不到練習畫面。 */
+.modal-foot .btn { min-height: 44px; }
+
+/* ── (5) 手機上唯一的換週鈕只有 32px ──────────────────────────────────
+   ≤640 時 header 的 .week-nav 被整個隱藏（styles-theme.css:548），
+   換週只剩大廳 hero 裡的 .wh-weeknav，而它是 32×32（styles-theme.css:556）。
+   這是手機上唯一的換週入口，補到 40px——跟 v390 幫 header 那排訂的標準一致
+   （那邊選 40 不選 44 的理由同樣適用：這排在一個矮的列裡）。 */
+@media (max-width: 640px) {
+  .wh-weeknav button { width: 40px; height: 40px; font-size: 20px; }
+}
+
+/* ── (6) 成長報告的三個數字磚在手機被擠成三欄 ─────────────────────────
+   styles-home.css:888 在 ≤560 想把 .growth-stats 改成兩欄，但
+   .growth-stats-3 帶著 !important（styles-theme.css:793）→ 兩欄那條永遠輸。
+   375px 上每一欄只剩約 100px，而第一個磚裡的「▲ 較上週 +6 分」有 9 個字，
+   一定爆出去。三個磚排兩欄會落單一個，所以維持三欄，
+   改成把內距與字級收一階，讓三欄真的排得下。 */
+@media (max-width: 560px) {
+  .growth-stats-3 { gap: 7px; }
+  .growth-stats-3 .growth-stat { padding: 13px 5px; }
+  .growth-stats-3 .growth-stat-num { font-size: 23px; }
+  .growth-stats-3 .growth-stat-num em { font-size: 11px; }
+  .growth-stats-3 .growth-stat-label { font-size: 11.5px; }
+  .growth-stats-3 .growth-stat-delta { font-size: 10.5px; line-height: 1.35; }
+}
+
+/* ── (7) 老師後台：學生詳情的「返回」是一條沒有內距的 13px 文字 ─────────
+   .dash-back 是 padding:0 + font-size:13px（styles-auth.css:1917）≈ 18px 高，
+   而它是「學生詳情 → 班級總覽」的唯一出口。改成跟大廳 .lobby-back 同一款膠囊：
+   一眼看得出是按鈕，手指也點得到。 */
+.dash-back {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--border, #e5dfc8);
+  border-radius: 100px;
+  background: var(--bg-card, #fff);
+  font-size: 14px;
+}
+.dash-back:hover { border-color: #8B3120; }
+
+/* ── (8) 老師後台：一整排 18–28px 的控制項 ───────────────────────────
+   iPad 上老師是用手指點的。以下每一顆都查過原始尺寸，而且都在「會換行的 flex 列」
+   或表格格子裡——加高只會讓那一列變高，不會把版面擠壞。
+   發派矩陣的勾選格是全站老師最常按的一顆，單獨拉到 34×34
+   （.sa-mx-cell 有 58px 寬、≤760 也還有 50px，34 放得下；
+     .sa-mx-chk 靠 .sa-mx-cell 的 text-align:center 置中，改寬高不影響置中）。 */
+.sa-mx-chk { width: 34px; height: 34px; }        /* 原 26×26 */
+.sa-mx-add { width: 30px; height: 30px; }        /* 原 22×22 */
+.sa-mx-all,
+.sa-mx-agroup-all { min-height: 32px; }          /* 原 ≈24px（11px 字 + 2~3px 內距） */
+.linkbind-x { width: 28px; height: 28px; }       /* 原 18×18，而且是「解除家長綁定」這種不可逆動作 */
+.roster-del-btn { width: 34px; height: 34px; }   /* 原 28×28，名單與集點紀錄共用 */
+.stars-quick button,
+.roster-toggle-btn,
+.cwo-fchip,
+.cwo-export,
+.cwo-notify,
+.report-gen-btn { min-height: 36px; }            /* 原 ≈25–30px */
+.notify-chip { min-height: 40px; }               /* 原 ≈32px，而且是在 168px 高的小捲動框裡選人 */
+
+/* ── (9) 錯題本：兩個主要按鈕都不到 44px ─────────────────────────────
+   .mk-item-answer（點一下才顯示答案，錯題本的主要互動）約 30px、
+   .mk-next-btn（下一題）約 38px（styles-mistakes.css:141 / :333）。
+   ⚠ 順帶記錄：錯題本目前在正式站上「沒有任何入口」——v319 拿掉 header 的 📕
+     之後，app.jsx:1495 仍把 onShowMistakes 傳給 Header，但 Header 裡沒有任何
+     按鈕用它（components-shell.jsx:191 的註解就是講這件事）。
+     這兩條是為了「之後把入口加回來時就已經是對的」。 */
+.mk-item-answer { min-height: 44px; }
+.mk-next-btn { min-height: 44px; }
+
+/* ── (10) 大廳「之前還有 N 項作業沒完成」那幾列約 40px ────────────────
+   .tt-past-row 是 padding:9px 12px（styles-home.css:1166），
+   而它是把落後的作業撿回來補做的唯一入口。 */
+.tt-past-row { min-height: 44px; }
+
+/* ── (11) 門口頁的說明句在手機只有 12px ──────────────────────────────
+   .gs-card-text > span 在 ≤560 被縮到 12px（styles-auth.css:5831）。
+   那一句正是「老師專用 · 出題後到後台發派給學生」「每週跟著學校進度練」
+   這種決定「我該點哪一張卡」的關鍵句，二到六年級讀 12px 中文太吃力。
+   那個 span 在 .gs-card-text{flex:1;min-width:0} 裡，放大只會換行，不會把卡片擠壞。 */
+@media (max-width: 560px) {
+  .gs-card-text > span { font-size: 13.5px; }
+}
+
+/* ══ v394：手機底部留白被算了兩次 ══
+   styles-theme.css:487 給 .page-mission .qm-cat-view 的內距是 12px 12px 76px
+   （76px 是替底部導覽列讓位），而 v392 又給 .qm-quiz-area 加了 padding-bottom:72px。
+   兩個加起來 148px，但底部導覽列只有 60px → 多出來的就是實測到的那 128px 溢出
+   （iPhone 13／15 Pro Max／iPad mini 直式全部剛好都是 128，因為它是固定值而不是比例）。
+   → 讓位只留一份：quiz-area 保留 72px，cat-view 的底部收掉。 */
+@media (max-width: 900px) {
+  .page-mission .qm-cat-view { padding-bottom: 8px; }
+}
+
+/* v394：錯題本入口（v319 拿掉之後就再也打不開了）——沿用簽到鈕的形狀 */
+.mistakes-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 40px; padding: 5px 11px; border-radius: 999px;
+  background: rgba(139,49,32,.08); border: 1px solid rgba(139,49,32,.2);
+  color: var(--accent, #8B3120); font-size: 15px; line-height: 1;
+  box-sizing: border-box; transition: all .15s ease;
+}
+.mistakes-btn:hover { background: rgba(139,49,32,.15); }
+.mistakes-btn-num { font-family: var(--sans); font-size: 12.5px; font-weight: 800; }

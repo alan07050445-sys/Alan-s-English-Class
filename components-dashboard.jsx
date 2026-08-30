@@ -1012,7 +1012,9 @@ function LineLink() {
           </button>
         </div>
 
-        {(!pass.trim()) && (
+        {/* v394: 本來是「有密碼就不顯示輸入框」——密碼存錯時會變成
+            只看到「管理密碼錯誤」卻沒有地方可以改，是死路。改成一律顯示。 */}
+        {(true) && (
           <div className="linkbind-passrow">
             <input
               className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）"
@@ -1478,7 +1480,9 @@ function HwRemind() {
           </div>
         </div>
 
-        {(!pass.trim()) && (
+        {/* v394: 本來是「有密碼就不顯示輸入框」——密碼存錯時會變成
+            只看到「管理密碼錯誤」卻沒有地方可以改，是死路。改成一律顯示。 */}
+        {(true) && (
           <div className="linkbind-passrow">
             <input className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）" value={pass} onChange={e => setPass(e.target.value)} />
           </div>

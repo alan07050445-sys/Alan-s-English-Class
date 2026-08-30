@@ -176,6 +176,17 @@
 @media (prefers-reduced-motion: reduce) {
   .mx-svg, .mx-eye, .mx-leg { animation: none !important; }
   .mx-bubble { animation: none; }
+  /* v395 稽核補漏 ①：.mx-menu（v384 才加的長按小選單，:210）跑的是同一支 mxPop，
+     但當時漏了掛進這個區塊——「其他動畫都停了、只有選單還會彈」是最刺眼的那種漏。 */
+  .mx-menu { animation: none; }
+  /* v395 稽核補漏 ②：走路的位移不是 CSS animation，是 components-fx.jsx:386
+     用 inline style 寫進來的 `transition: transform ${moveMs}ms linear`
+     （最長可到十幾秒）——上面那條 animation:none 蓋不到它。
+     JS 端目前是「reduce.current 為真就永遠不抽 walk/roll」，所以正常情況下
+     本來就不會動；但 reduce.current 只在 mount 時讀一次
+     （components-fx.jsx:186），使用者中途才打開「減少動態」時 JS 不會知道，
+     這條 CSS 是那個縫隙的保險。moveMs 為 0 時 inline 本來就是 none，不會衝突。 */
+  .mx-slot { transition: none !important; }
 }
 
 /* ══════════ 彩帶 ══════════ */
