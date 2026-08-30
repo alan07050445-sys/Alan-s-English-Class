@@ -3145,3 +3145,65 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   }
   .fc-p-card .fc-face { transition-duration: .01s; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v397 ①：字母泡泡轉場——順暢＋加速（Alan：會卡頓）
+   ──────────────────────────────────────────────────────────────────────────
+   泡泡本身動的是 transform/opacity（沒問題），卡頓來自「每一顆的長相太貴」：
+   36 顆同時在動，每顆都有 radial-gradient 背景 + inset 與外陰影兩層 box-shadow，
+   而且 ::after 的反光還掛了 filter: blur(1px)——blur 是每幀重繪、36 顆一起就掉幀。
+   修法：
+     · 拿掉 blur，改用「本來就柔邊」的 radial-gradient 反光（看起來一樣，成本 0）
+     · 每顆提升成自己的合成層（translateZ + will-change），動的時候不再重繪
+     · 陰影簡化成一層
+     · 整體時間縮短：veil 1.75s → 1.05s、泡泡上升也同步變快 */
+.pwb {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  box-shadow: 0 6px 16px rgba(60, 45, 30, .12);   /* 原本 inset + 外陰影兩層 */
+}
+.pwb::after {
+  filter: none;                                    /* ⚠ 這是卡頓的主因 */
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.55) 55%, rgba(255,255,255,0) 100%);
+}
+.pw-veil { animation-duration: 1.05s !important; } /* 原 1.75s */
+.pwb { animation-duration: .78s !important; }      /* 原 0.9~1.35s，統一收短 */
+
+/* ② 換頁淡入與翻卡——Alan 指定的數值（我上一版收得太緊） */
+.page { animation-duration: .45s; }                /* v396 是 .28s */
+.fc-p-card .fc-face { transition-duration: .18s; } /* v396 是 .15s */
+
+/* ══ v397 ③：翻到圖片面按「下一張」會先閃出下一張的圖片面 ══
+   原因：.fc-face 兩面都掛 `transition: opacity .18s`。按下一張時
+   cardIdx 與 flipped 同時更新——正在淡出的那一面在這 180ms 內
+   顯示的已經是**新卡片**的內容，所以看起來就是「先閃一下下一張的背面」。
+   修法：要收起來的那一面「立刻消失」，只有要出現的那一面才淡入。
+   翻卡看起來也更俐落（不會兩面疊在一起半透明）。 */
+.fc-flip-card:not(.flipped) .fc-back { transition-duration: 0s; }
+.fc-flip-card.flipped .fc-front     { transition-duration: 0s; }
+
+/* ══ v397 ④：單字卡留白太多、圖片要更大（Alan 圖2）══
+   實測 1920x1080：翻卡面 679px 高，圖片被 max-height:390 夾住，
+   結果圖片上方空 85px、中文下方空 129px ＝ 214px 完全沒用到。
+   圖片本來就是 flex:1 1 auto（會自己長大到可用空間），
+   真正卡住它的是那個上限值——放寬即可，容器高度仍由 useFitHeight 控制，不會溢出。 */
+@media (min-width: 1025px) and (max-height: 1100px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 560px; }
+  .fc-p-learn .fc-learn-img { max-height: 480px; }
+  .fc-p-card .fc-face { padding: 18px 24px; }   /* 32px 內距在大螢幕上太鬆 */
+}
+@media (min-width: 1025px) and (min-height: 1101px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 640px; }
+  .fc-p-learn .fc-learn-img { max-height: 560px; }
+}
+
+/* ══ v397 ⑤：學習模式的四個選項往上移（Alan 圖4）══
+   圖片與選項之間的留白偏大，把題目區整體往上收，選項就跟著上來。 */
+@media (min-width: 1025px) {
+  .fc-p-learn .fc-learn-q     { margin-bottom: 10px; }
+  .fc-p-learn .fc-learn-img   { margin-bottom: 10px; }
+  .fc-p-learn .fc-choices     { margin-top: 4px; row-gap: 10px; }
+}

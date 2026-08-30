@@ -742,6 +742,21 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     setPhase('intro');
     setFlashItem(null);
     setPlayerKey(k => k + 1);
+    /* v397（Alan：「捲下去點比較下面的單元，題目頁應該自動幫我捲上去」）
+       側邊欄很長，捲到下面點一個單元時，右邊已經換成新題目了，
+       但畫面還停在原本的捲動位置 → 學生要自己捲回去才看得到題目。
+       等 React 把新內容畫上去（下一幀）再捲，不然會捲到舊版面的高度。 */
+    requestAnimationFrame(() => {
+      try {
+        const area = document.querySelector('.qm-quiz-area');
+        if (area && area.scrollTop) area.scrollTop = 0;
+        const top = area ? area.getBoundingClientRect().top + window.scrollY : 0;
+        // 題目區的上緣若已經被捲到畫面上方，就把它帶回視野（留 12px 呼吸）
+        if (window.scrollY > top - 12) {
+          window.scrollTo({ top: Math.max(0, top - 12), behavior: 'smooth' });
+        }
+      } catch (e) {}
+    });
   };
 
   useQME(() => {

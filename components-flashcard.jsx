@@ -439,6 +439,9 @@ function useFitHeight(ref, enabled, min) {
       // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
       const floor = Math.min(min || 320, Math.round(vh * 0.55));
       const h = Math.max(floor, Math.round(vh - top - 10));
+      // 差不到 8px 就不要動——避免進場那幾次補量被看成「卡片自己在跳」
+      const curH = parseFloat(el.style.height) || 0;
+      if (curH && Math.abs(curH - h) < 8) return;
       /* ⚠⚠ v394：這裡本來設的是 height（固定高度）。
          那正是 Alan 回報「白色框框在捲」的根因：
          .fc-p-card / .fc-p-learn 有 overflow-y:auto，一旦內容比這個固定高度高，
@@ -480,14 +483,21 @@ function useFitHeight(ref, enabled, min) {
     apply();
     /* 圖片還沒載完、字體還沒換好時量到的可能不準 → 進場後補量幾次。
        這幾次會強制重量（measured=false），之後就固定住。 */
+    /* ⚠ v397（Alan：「還是有捲動改變容器大小的問題，但只有一開始的 1、2 秒」）
+       就是這幾個補量。原本是 rAF + 150 + 600 + 1500ms，每一次都強制重量一次，
+       所以進頁面後的頭 1.5 秒內只要畫面有任何變化，卡片就會被看到「跳一下」。
+       兩個改法：
+         ① 拿掉 1500ms 那一次——圖片現在有自己的 load 監聽會重量，不需要再猜。
+         ② 只有「新高度和現在差 8px 以上」才真的套用；差幾 px 的微調肉眼看不出來，
+            但套下去就是一次可見的跳動。 */
     const raf = requestAnimationFrame(relayout);
-    const t1 = setTimeout(relayout, 150), t2 = setTimeout(relayout, 600), t3 = setTimeout(relayout, 1500);
+    const t1 = setTimeout(relayout, 150), t2 = setTimeout(relayout, 600), t3 = null;
     window.addEventListener('resize', relayout);
     window.addEventListener('orientationchange', relayout);
     // visualViewport 的 resize 走 apply（不是 relayout）＝網址列伸縮會被上面的門檻擋掉
     if (window.visualViewport) window.visualViewport.addEventListener('resize', apply);
     return () => {
-      cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+      cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); if (t3) clearTimeout(t3);
       window.removeEventListener('resize', relayout);
       window.removeEventListener('orientationchange', relayout);
       imgs.forEach(im => im.removeEventListener('load', onImg));
