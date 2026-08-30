@@ -482,9 +482,70 @@ function useFitHeight(ref, enabled, min) {
   }, [enabled]);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v394：測驗模式「點小圖看大圖」燈箱（Alan：iPad 上題目旁邊那張圖太小看不清楚）
+   ──────────────────────────────────────────────────────────────────────────
+   結構照 styles-quiz-mode.css 的 .rs-pass-back / .rs-pass：暗底 fixed 蓋滿 + 置中面板。
+   關閉方式三種：點暗底、按 Esc、按 ✕。
+
+   ⚠ 這個元件只負責「看圖」：不碰任何作答／計分／進度的 state，也不會換題。
+   ⚠ 本檔案有兩個既有的鍵盤監聽（document 的 1~4 作答／Enter 下一題、
+      單字卡模式 window 的 ← → 空白鍵翻卡）。燈箱開著時按 Esc／Enter／空白鍵
+      不可以順手把題目答掉，所以用下面這個模組層級旗標讓那兩個監聽先讓路
+      （比把 state 傳進去乾淨，也不用改它們的 deps）。 */
+let _fcZoomOpen = false;   // v394: 圖片燈箱是否開著
+
+function FcImageZoom({ src, alt, onClose }) {
+  const closeRef = React.useRef(null);
+  /* onClose 每次 render 都是新函式；用 ref 帶進 effect，effect 才能只跑一次
+     （否則每次父層 re-render 都會重新搶焦點）。 */
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useFC_E(() => {
+    _fcZoomOpen = true;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();   // capture 階段就攔下來，事件不會再往下傳給任何作答監聽
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKey, true);   // true = capture，比既有的 bubble 監聽先跑
+    if (closeRef.current) closeRef.current.focus();      // 鍵盤／輔助工具：焦點先進燈箱
+    return () => {
+      _fcZoomOpen = false;
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, []);
+
+  return (
+    <div className="fc-zoom-back" role="dialog" aria-modal="true" aria-label="放大圖片"
+         onClick={() => onCloseRef.current()}>
+      {/* 點面板本身不關（只有點暗底才關） */}
+      <div className="fc-zoom-panel" onClick={e => e.stopPropagation()}>
+        <button ref={closeRef} className="fc-zoom-x" onClick={() => onCloseRef.current()} aria-label="關閉放大圖片">✕</button>
+        <img className="fc-zoom-img" src={src} alt={alt || ""} decoding="async"/>
+        {alt && <div className="fc-zoom-cap">{alt}</div>}
+      </div>
+    </div>
+  );
+}
+
 function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const cards = item.cards || [];
   const [mode, setMode] = useFC("card");
+
+  /* v393：一進單元就把整份發音先抓好。
+     實測（TTS 診斷）：Worker 每次都重新合成，一個字要等 0.9~2.3 秒，
+     而且以前只有「聽寫」與「配對」會預抓，單字卡完全沒有 →
+     學生每按一次小喇叭都在等。現在配合 data.js 的三層快取
+     （記憶體 → Cache API → Worker），第二次之後幾乎是 0ms。
+     ⚠ 這個 effect 一定要放在所有 hook 的中間、不能放在任何 early return 之後。 */
+  React.useEffect(() => {
+    if (!window.prefetchTts) return;
+    const words = (item.cards || []).map(c => c && c.term).filter(Boolean);
+    if (words.length) { try { window.prefetchTts(words); } catch (e) {} }
+  }, [item.id]);
 
   // v376: 單字卡／學習兩個模式撐滿一畫面就好（見 useFitHeight）
   const cardFitRef  = React.useRef(null);
@@ -511,6 +572,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   // v234: 學習模式鍵盤作答——1~4 選英文單字
   React.useEffect(() => {
     const onKey = (e) => {
+      if (_fcZoomOpen) return;   // v394: 圖片燈箱開著時一律不作答（按 Enter 只是要關燈箱）
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.key === 'Enter') {
@@ -551,6 +613,11 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const [testAnswers, setTestAnswers] = useFC({}); // cardId → chosen card id
   const [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
   const [testDone, setTestDone] = useFC(false);
+  /* v394: 只是「現在放大顯示哪張圖」的畫面狀態（{src, alt}｜null）——
+     不進任何作答資料、不影響 answeredCards／交卷條件。 */
+  const [zoomImg, setZoomImg] = useFC(null);
+  // v394: 切換模式時順手收掉燈箱，避免離開測驗又回來時它還開著
+  useFC_E(() => { setZoomImg(null); }, [mode]);
 
   // Match mode
   const [matchTiles, setMatchTiles] = useFC([]);
@@ -742,6 +809,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   useFC_E(() => {
     if (mode !== 'card') return;
     const onKey = (e) => {
+      if (_fcZoomOpen) return;   // v394: 圖片燈箱開著時不換卡／不翻卡
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.key === 'ArrowLeft')  { e.preventDefault(); setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }
@@ -1202,7 +1270,22 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                   </div>
                   <div className="fc-test-prompt">
                     <div className="fc-test-zh">{card.zh}</div>
-                    {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-test-img" decoding="async"/>}
+                    {/* v394: 圖片可以點開放大。刻意「不」外包一層 <button>——
+                        包起來會多一個 flex 子元素、版面與圖片尺寸都可能跑掉；
+                        直接讓這張 <img> 變成可用鍵盤操作的按鈕，DOM 結構與尺寸完全不變。 */}
+                    {card.imageUrl && (
+                      <img src={card.imageUrl} alt={card.zh} className="fc-test-img fc-img-zoomable" decoding="async"
+                        role="button" tabIndex={0}
+                        aria-label={"放大圖片：" + card.zh}
+                        title="點一下看大圖"
+                        onClick={(e) => { e.stopPropagation(); setZoomImg({ src: card.imageUrl, alt: card.zh }); }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          // 不能讓 Enter／空白鍵傳出去（全站鍵盤作答監聽會收到）
+                          e.preventDefault(); e.stopPropagation();
+                          setZoomImg({ src: card.imageUrl, alt: card.zh });
+                        }}/>
+                    )}
                   </div>
                   {qType === "choice" && (
                     <>
@@ -1255,6 +1338,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             </button>
           </div>
         </div>
+        {/* v394: 放大圖片的燈箱。放在 .fc-player 外面（still 在 .fc-wrap 內），
+            position:fixed → 不佔版面、不會影響任何題目卡片的高度。 */}
+        {zoomImg && <FcImageZoom src={zoomImg.src} alt={zoomImg.alt} onClose={() => setZoomImg(null)}/>}
       </div>
     );
   }

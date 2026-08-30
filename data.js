@@ -887,10 +887,78 @@ function speakText(text, { rate = 0.85, lang = 'en-US' } = {}) {
 // v326: 全站語音統一用 OpenAI 真人聲音（打 Worker /tts，跟閱讀同一把聲音）。
 // 英文（單字卡、聽寫、查字典…）走這裡：拿 mp3、同一個字只產一次（快取）、共用一個 <audio> 播放；
 // 失敗才退回瀏覽器語音，所以一定有聲音。中文（單字卡背面的中文意思）Worker /tts 是英文聲線→維持瀏覽器語音。
+/* v393: 「小喇叭按下去要等 1~2 秒」的實測與修法 ───────────────────────────
+   量到的數字（Cloudflare Worker /tts，同一台機器）：
+     · 冷啟動（跟 Worker 要 mp3）………… 1300 ~ 2300 ms（幾乎全是 Worker 在等 OpenAI 生成）
+     · Cache API 讀出來轉 objectURL …… 0.3 ~ 1.2 ms
+     · 換 src 到真的出聲 ……………………… 約 10 ms
+     · 同一個 src 重播（不換 src）………… 0.8 ms
+   而且 Worker「沒有」快取：同一個字連問三次回來的 mp3 大小都不一樣
+   （34316 / 23564 / 41996 bytes）＝每次都重新生成一遍。所以要快只能靠前端存起來。
+   本來只有記憶體快取，重新整理就全沒了，等於每天上課第一次都要等 1~2 秒。
+   改成三層：記憶體 → Cache API（存在裝置上，重新整理／換版本都還在）→ 才跟 Worker 要。 */
 const _ttsAudioCache = {};   // 英文字串 → objectURL（OpenAI mp3）
+const _ttsMemOrder = [];     // 記憶體快取的插入順序（滿了從最舊的開始丟）
+const TTS_MEM_MAX = 150;     // 記憶體最多留幾個 objectURL（不設限的話整天下來會一直長）
+const TTS_CACHE_NAME = 'alan-tts-v1';  // ⚠ 故意不叫 alans-english-*，sw.js 的 activate 才不會連它一起刪
+const TTS_CACHE_MAX = 300;   // 裝置上最多留幾個字（實測一個字約 20~47KB → 上限約 9MB）
 let _ttsAudioEl = null;      // 共用 <audio>
 let _ttsPlayToken = 0;       // 連點時只讓最後一次真的播
 let _ttsUnlocked = false;    // v363: iOS 需要「在使用者手勢裡播過一次」才准之後自動播
+
+// 記憶體快取寫入；超過上限就丟掉最舊的，順便把 objectURL 收回來（不收會漏記憶體）
+function _ttsMemPut(t, url) {
+  if (!_ttsAudioCache[t]) _ttsMemOrder.push(t);
+  _ttsAudioCache[t] = url;
+  while (_ttsMemOrder.length > TTS_MEM_MAX) {
+    const old = _ttsMemOrder.shift();
+    const u = _ttsAudioCache[old];
+    // 正在播的那個不能收，收掉聲音會斷在一半
+    if (u && !(_ttsAudioEl && _ttsAudioEl.src === u)) { try { URL.revokeObjectURL(u); } catch (e) {} }
+    delete _ttsAudioCache[old];
+  }
+}
+
+/* Cache API 這層：key 用一個假的網址（Worker /tts 是 POST，POST 沒辦法當快取的 key，
+   所以自己編一個 GET 網址當代號）。存的是 mp3 blob 本身。 */
+function _ttsCacheKey(t) { return 'https://tts.local/v1/' + encodeURIComponent(t); }
+let _ttsCachePromise = null;
+function _ttsCache() {
+  if (_ttsCachePromise) return _ttsCachePromise;
+  _ttsCachePromise = (async () => {
+    // 非 https（或很舊的瀏覽器）沒有 caches，整層就當作不存在，行為退回成原本的樣子
+    try { return (window.caches && window.isSecureContext) ? await caches.open(TTS_CACHE_NAME) : null; }
+    catch (e) { return null; }
+  })();
+  return _ttsCachePromise;
+}
+async function _ttsCacheGet(t) {
+  try {
+    const c = await _ttsCache(); if (!c) return null;
+    const hit = await c.match(_ttsCacheKey(t)); if (!hit) return null;
+    const blob = await hit.blob();
+    if (!blob || !blob.size) return null;
+    return URL.createObjectURL(blob);
+  } catch (e) { return null; }
+}
+let _ttsCacheWrites = 0;
+async function _ttsCachePut(t, blob) {
+  try {
+    const c = await _ttsCache(); if (!c) return;
+    await c.put(new Request(_ttsCacheKey(t)), new Response(blob, { headers: { 'content-type': 'audio/mpeg' } }));
+    if (++_ttsCacheWrites % 20 === 0) _ttsCacheTrim();   // 每 20 次才盤點一次，不要每次播放都去列全部 key
+  } catch (e) {}
+}
+/* 上限管理：Cache API 的 keys() 回傳的是「寫進去的先後順序」，超過就從最舊的開始刪。
+   音檔內容永遠不會變（同一個字就是同一個發音），所以不需要過期時間；
+   真的要整批換掉時把 TTS_CACHE_NAME 的 v1 往上加就好。 */
+async function _ttsCacheTrim() {
+  try {
+    const c = await _ttsCache(); if (!c) return;
+    const keys = await c.keys();
+    for (let i = 0; i < keys.length - TTS_CACHE_MAX; i++) await c.delete(keys[i]);
+  } catch (e) {}
+}
 
 /* v363: 聽寫在 iPad/iPhone 沒聲音的兩個原因，這裡處理第一個 ──
    speakTTS 是先 await 抓 mp3 才 play()，await 之後就離開了「使用者手勢」的視窗，
@@ -940,19 +1008,45 @@ const _ttsPending = {};      // 同一個字同時被預抓＋被點播時，只
 function _ttsFetchOnce(t) {
   if (_ttsAudioCache[t]) return Promise.resolve(_ttsAudioCache[t]);
   if (!_ttsPending[t]) {
-    _ttsPending[t] = generateTtsAudio(t)
-      .then(blob => { const u = URL.createObjectURL(blob); _ttsAudioCache[t] = u; delete _ttsPending[t]; return u; })
+    _ttsPending[t] = (async () => {
+      const hit = await _ttsCacheGet(t);          // 先問裝置上的快取：命中約 1ms，等於免費
+      if (hit) { _ttsMemPut(t, hit); return hit; }
+      const blob = await generateTtsAudio(t);     // 真的沒有才跟 Worker 要（實測 1.3~2.3 秒）
+      const u = URL.createObjectURL(blob);
+      _ttsMemPut(t, u);
+      _ttsCachePut(t, blob);                      // 背景寫進裝置，不擋這次播放
+      return u;
+    })()
+      .then(u => { delete _ttsPending[t]; return u; })
       .catch(e => { delete _ttsPending[t]; throw e; });
   }
   return _ttsPending[t];
 }
+
+/* 先把音檔抓好放快取——之後播放就不必等網路（也就不會掉出手勢視窗）。
+   v393 兩個改動：
+   ① 本來是一個一個 await，20 個字要排隊 20 × 1.5 秒 ≈ 30 秒才暖完；
+      改成一次 4 個並行，同一份大約 7 秒就好了。
+   ② 本來只要有一個字失敗就整批放棄（return），一次網路抖動就讓整份都是冷的。
+      改成只有「Worker 根本沒有 /tts」才整批停手，其餘失敗就跳過那個字繼續。 */
+const TTS_PREFETCH_PARALLEL = 4;
 async function prefetchTts(texts) {
-  const list = (Array.isArray(texts) ? texts : [texts]).map(x => String(x || '').trim()).filter(Boolean);
-  for (const t of list) {
-    if (_ttsAudioCache[t]) continue;
-    try { await _ttsFetchOnce(t); }
-    catch (e) { return; }   // Worker 不通就不用再試了
-  }
+  const seen = {};
+  const list = (Array.isArray(texts) ? texts : [texts])
+    .map(x => String(x || '').trim())
+    .filter(t => t && !_ttsAudioCache[t] && !seen[t] && (seen[t] = 1));
+  if (!list.length) return;
+  let i = 0, dead = false;
+  const worker = async () => {
+    while (!dead) {
+      const t = list[i++];
+      if (t === undefined) return;
+      try { await _ttsFetchOnce(t); }
+      catch (e) { if (String(e && e.message) === 'tts-missing') dead = true; }
+    }
+  };
+  const n = Math.min(TTS_PREFETCH_PARALLEL, list.length);
+  await Promise.all(Array.from({ length: n }, worker));
 }
 
 async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
@@ -968,14 +1062,30 @@ async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
   const token = ++_ttsPlayToken;
   try {
     let url = _ttsAudioCache[t];
-    if (!url) url = await _ttsFetchOnce(t);     // Worker /tts → mp3（同字只抓一次）
+    /* ⚠ v363 保命符：記憶體裡已經有音檔時「絕對不能 await」——await 之後就離開了
+       iOS 的使用者手勢視窗，play() 會被擋掉（iPad 學生完全沒聲音）。
+       所以命中時這裡一路同步走到下面的 a.play()，跟點擊在同一拍。 */
+    if (!url) url = await _ttsFetchOnce(t);     // 沒有才去拿（記憶體→裝置快取→Worker）
     if (token !== _ttsPlayToken) return;         // 已被更新的點擊取代
     const a = _ttsAudioEl || (_ttsAudioEl = new Audio());
     a.playsInline = true;
-    a.src = url;
+    a.preload = 'auto';
+    /* v393: 同一個字再按一次時不要重設 src。換 src 會重跑一次 load（實測約 10ms，
+       而且會把已經解碼好的音檔丟掉）；沿用已載好的只要 0.8ms，按下去幾乎是立刻出聲。 */
+    if (a.src !== url) {
+      a.src = url;
+      // Safari 換完 src 會把 playbackRate 重設成 1，載好之後再設一次才會真的變慢
+      a.onloadedmetadata = () => { try { a.playbackRate = 0.92; } catch (e) {} };
+    } else {
+      try { a.currentTime = 0; } catch (e) {}
+    }
     try { a.playbackRate = 0.92; } catch(e) {}   // 稍慢一點更清楚（單字/聽寫）
     await a.play();
   } catch (e) {
+    /* v393: 連點時前一次的 play() 會被新的一次中斷，丟出 AbortError——那是正常的，
+       不能因此又用瀏覽器語音講一次，否則兩個聲音會疊在一起。 */
+    if (e && e.name === 'AbortError') return;
+    if (token !== _ttsPlayToken) return;
     // OpenAI 語音不可用（Worker 沒 /tts 或斷線）→ 退回瀏覽器語音，確保有聲音
     try { speakText(t, { lang, rate }); } catch(e2) {}
   }

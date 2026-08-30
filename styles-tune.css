@@ -2559,3 +2559,133 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 /* 卡片內的上下留白收緊——Alan：「不要留白太多」 */
 .fc-p-card .fc-face { justify-content: center; }
 .fc-p-card > .fc-flip-card { min-height: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v393 ①：白色框框在捲的真正原因與修法（Alan：「不是圖片在卷 是白色框框在卷」）
+   ──────────────────────────────────────────────────────────────────────────
+   .fc-p-card 有 overflow-y:auto（v376 刻意的——高度真的不夠時寧可捲，
+   也不要用 overflow:hidden 把「下一張」按鈕切掉、變成按不到）。
+   但 v388/v389 為了修「圖片跟著捲動忽大忽小」把圖片改成完全固定
+   （flex:0 0 auto + 固定 max-height）之後，圖片與文字就再也不會讓步 →
+   空間不夠時內容一定溢出 → 白色框框自己捲起來，而且捲完字和圖還是一樣大。
+
+   🔑 關鍵：當初會「忽大忽小」，是因為**容器高度**在捲動時一直被重算
+   （useFitHeight 用相對視窗的座標）。那個根因已經在 v389 修掉了——
+   容器現在是穩定的。容器穩定之後，讓圖片「可以縮」就不會再有伸縮抖動，
+   因為它縮放的依據（容器高度）不再變動。
+
+   所以這裡把圖片改回「可以縮，但有上限」：
+     · max-height = 上限（有空間時就用到這麼大，維持 Alan 要的大圖）
+     · flex: 1 1 auto + min-height: 0 = 空間不夠時自己讓步，讓內容塞得下
+   結果：不再有捲軸，圖片也不會在捲動時變化。 */
+.fc-p-card .fc-back-img-wrap { flex: 1 1 auto; min-height: 0; }
+.fc-p-card .fc-back-img-wrap img { height: 100%; object-fit: contain; }
+.fc-p-learn .fc-learn-img { flex: 1 1 auto; min-height: 0; object-fit: contain; }
+
+/* 例句與中文也要能讓一點，才不會為了它們把圖片擠爆 */
+.fc-p-card .fc-example { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+
+/* ② 作答畫面填滿右半邊（Alan：「右邊留白還是太多」）
+   .fc-player 沒有 max-width，但 .fc-flip-card 之類的內層有；
+   在放寬 shell 之後右側就空了一塊。讓卡片吃滿可用寬度（仍留一點呼吸）。 */
+@media (min-width: 1500px) {
+  .fc-player, .fc-p-card, .fc-p-learn { max-width: none; }
+  .fc-p-card > .fc-flip-card, .fc-p-card .fc-face { max-width: none; }
+  .qm-player-shell { max-width: 1180px; }
+}
+
+/* v393 ②：矮螢幕上把空間讓給圖片（Alan：圖片要大、又不要捲）
+   實測 iPad 橫式 1180x760：卡片只有 517px 高，翻面那一格 384px，
+   其中 64px 是 .fc-face 的內距、62px 中文、17px 例句 → 圖片只剩 215px。
+   兩個願望在這個高度會互相牴觸，所以把「比較不重要的」讓出來給圖片：
+     · 內距 32→14（省 36px）
+     · 例句在矮螢幕收起來（單字卡背面的重點是圖 + 中文；例句在「學習」模式看得到）
+   桌機／高螢幕完全不受影響。 */
+@media (max-height: 900px) {
+  .fc-p-card .fc-face { padding: 14px 18px; }
+  .fc-p-card .fc-example { display: none; }
+  .fc-p-card .fc-zh { margin-top: 4px; }
+}
+/* 更矮的（手機橫式）連中文都要收一點行高，但不隱藏——那是題目本身 */
+@media (max-height: 560px) {
+  .fc-p-card .fc-face { padding: 10px 14px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v394：測驗模式「點小圖看大圖」燈箱
+   （對應 components-flashcard.jsx 的 FcImageZoom 與 .fc-img-zoomable）
+   ──────────────────────────────────────────────────────────────────────────
+   結構照 styles-quiz-mode.css 的 .rs-pass-back / .rs-pass：
+   暗底 position:fixed 蓋滿 + 置中的紙色面板 + 圓角 + 柔和陰影。
+   ⚠ 這一段只新增 class，完全不覆寫 .fc-test-img 既有的尺寸
+     （styles-flashcard.css 的 104px / 手機 72px），
+     也不改任何會影響 useFitHeight 量到的高度的東西。 */
+
+/* 可以點的小圖：只加游標與鍵盤焦點框，尺寸一律不碰 */
+.fc-img-zoomable {
+  cursor: zoom-in;
+  touch-action: manipulation;              /* iPad：點一下就開，不要等雙擊縮放 */
+  -webkit-tap-highlight-color: transparent;
+}
+.fc-img-zoomable:focus-visible { outline: 3px solid #8B3120; outline-offset: 3px; }
+
+.fc-zoom-back {
+  position: fixed; inset: 0; z-index: 320;  /* 圖庫搜尋的 overlay 是 300，要蓋在它之上 */
+  background: rgba(21, 19, 14, .62);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  display: grid; place-items: center; padding: 22px;
+  overscroll-behavior: contain;
+  animation: fcZoomFade .14s ease-out;
+}
+@keyframes fcZoomFade { from { opacity: 0; } to { opacity: 1; } }
+
+.fc-zoom-panel {
+  position: relative;
+  display: flex; flex-direction: column; gap: 10px;
+  max-width: min(880px, 100%); max-height: 88vh;
+  padding: 14px;
+  background: var(--bg-paper, #FBF8F1);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -20px rgba(21, 19, 14, .55);
+}
+.fc-zoom-img {
+  display: block; width: auto; height: auto;
+  max-width: 100%; max-height: calc(88vh - 100px);
+  object-fit: contain;                      /* 小圖是 cover 裁切過的，放大要看完整張 */
+  border-radius: 12px;
+}
+.fc-zoom-cap {
+  text-align: center;
+  font-family: var(--sans, system-ui, sans-serif); font-weight: 800; font-size: 17px;
+  color: var(--ink, #15130E);
+}
+.fc-zoom-x {
+  position: absolute; top: -13px; right: -13px;
+  width: 40px; height: 40px; border-radius: 999px;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--border, #E5DFC8);
+  background: var(--bg-paper, #FBF8F1);
+  color: #8B3120; font-size: 17px; font-weight: 800; line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -6px rgba(21, 19, 14, .45);
+}
+.fc-zoom-x:hover { background: #8B3120; color: #FBF8F1; border-color: #8B3120; }
+.fc-zoom-x:focus-visible { outline: 3px solid #8B3120; outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .fc-zoom-back  { padding: 16px; }
+  .fc-zoom-panel { padding: 10px; border-radius: 16px; gap: 8px; }
+  .fc-zoom-img   { max-height: calc(88vh - 86px); }
+  .fc-zoom-cap   { font-size: 15px; }
+  .fc-zoom-x     { top: -11px; right: -11px; width: 36px; height: 36px; font-size: 16px; }
+}
+
+/* v393 ③：右邊留白的真正元凶是 .qm-cat-view 自己的 max-width:1280
+   （上一版只放寬了 .shell，但內層還被 1280 夾住 → 1920 上作答區右邊仍空 280px）。
+   兩層一起放寬才有效。 */
+@media (min-width: 1500px) {
+  .page-mission .qm-cat-view { max-width: 1600px; }
+}
+@media (min-width: 1800px) {
+  .page-mission .qm-cat-view { max-width: 1760px; }
+}
