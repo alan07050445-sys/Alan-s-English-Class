@@ -15,10 +15,40 @@ const MX_HATS = [
   { id: 'party', zh: '派對帽', cost: 500 },
   { id: 'crown', zh: '皇冠',   cost: 1000 },
 ];
+/* ══ v404（Alan：「我讓小寵物去休息，其他人的帳號也跟著休息——我都用同一台電腦」）══
+   吉祥物的四樣設定（帽子／名字／休息到哪天／挑了哪一隻）本來全部存在
+   localStorage 的固定 key ＝ **跟著這台電腦走，不跟著帳號走**。
+   Alan 一台電腦要登老師與學生好幾個帳號，他讓夥伴去休息，全部人都跟著不見。
+   改成每個帳號一把 key，寫法照抄 app.jsx 的 homeGradeKey()
+   （'alan-home-grade:' + uid，那裡的註解就寫著「共用電腦的手足各自獨立」）。
+   ⚠ 沒登入時退回原本的公用 key——訪客本來就沒有帳號可以掛。
+   ⚠ window._currentUser 是 app.jsx 在 subscribeAuth 裡設的；登入前是 null，
+     所以下面每一個 get/set 都要「當下」算 key，不能在模組載入時算好存起來。 */
+function mxUid() {
+  try { return (window._currentUser && window._currentUser.uid) || ''; } catch (e) { return ''; }
+}
+function mxKey(base) { const uid = mxUid(); return uid ? base + ':' + uid : base; }
+/* 一次性搬家：舊的公用值搬給「更新後第一個登入的帳號」，然後把公用 key 刪掉，
+   後面的帳號就是全新的。刻意**不搬 alan-mx-off（休息）**——那正是 Alan 回報的問題，
+   誰的休息都不該跟著別人走，所以一律清掉、大家醒著。 */
+function mxMigrateOnce() {
+  try {
+    const uid = mxUid();
+    if (!uid) return;
+    localStorage.removeItem('alan-mx-off');          // 舊的公用「休息」直接作廢
+    ['alan-mx-hat', 'alan-mx-name', 'alan-mx-pet'].forEach(base => {
+      const old = localStorage.getItem(base);
+      if (old == null) return;
+      if (localStorage.getItem(base + ':' + uid) == null) localStorage.setItem(base + ':' + uid, old);
+      localStorage.removeItem(base);
+    });
+  } catch (e) {}
+}
+
 const MX_HAT_KEY = 'alan-mx-hat';
 function mxOwnedHats() { return (window.__mxHats || []).filter(h => MX_HATS.some(x => x.id === h)); }
-function mxGetHat() { try { return localStorage.getItem(MX_HAT_KEY) || ''; } catch (e) { return ''; } }
-function mxSetHat(h) { try { localStorage.setItem(MX_HAT_KEY, h || ''); } catch (e) {} }
+function mxGetHat() { try { return localStorage.getItem(mxKey(MX_HAT_KEY)) || ''; } catch (e) { return ''; } }
+function mxSetHat(h) { try { localStorage.setItem(mxKey(MX_HAT_KEY), h || ''); } catch (e) {} }
 function MxHat({ id }) {
   if (id === 'party') return (
     <g className="mx-hat">
@@ -231,8 +261,8 @@ const mxPick = (k, pet) => {
   return s;
 };
 const MX_NAME_KEY = 'alan-mx-name';
-function mxGetName() { try { return localStorage.getItem(MX_NAME_KEY) || ''; } catch (e) { return ''; } }
-function mxSetName(n) { try { localStorage.setItem(MX_NAME_KEY, String(n || '').slice(0, 8)); } catch (e) {} }
+function mxGetName() { try { return localStorage.getItem(mxKey(MX_NAME_KEY)) || ''; } catch (e) { return ''; } }
+function mxSetName(n) { try { localStorage.setItem(mxKey(MX_NAME_KEY), String(n || '').slice(0, 8)); } catch (e) {} }
 
 /* v392（E）：「先去睡覺」以前只是一個 useState，重新整理就跑回來了——
    對想安靜的孩子等於這個功能不存在。存的值是「睡到哪一天」的 YYYY-MM-DD，
@@ -242,8 +272,8 @@ function mxDay(plus) {              // 跟 app.jsx 同一套算法：new Date().
   try { return new Date(Date.now() + (plus || 0) * 86400000).toISOString().slice(0, 10); }
   catch (e) { return ''; }
 }
-function mxGetOff() { try { return localStorage.getItem(MX_OFF_KEY) || ''; } catch (e) { return ''; } }
-function mxSetOff(d) { try { localStorage.setItem(MX_OFF_KEY, d || ''); } catch (e) {} }
+function mxGetOff() { try { return localStorage.getItem(mxKey(MX_OFF_KEY)) || ''; } catch (e) { return ''; } }
+function mxSetOff(d) { try { if (d) localStorage.setItem(mxKey(MX_OFF_KEY), d); else localStorage.removeItem(mxKey(MX_OFF_KEY)); } catch (e) {} }
 
 
 /* 純走位／搞笑的動作（不含答題反應）——所有夥伴共用的底牌 */
@@ -299,11 +329,11 @@ const MX_PETS = [
 const MX_PET_KEY = 'alan-mx-pet';
 function mxGetPet() {
   try {
-    const id = localStorage.getItem(MX_PET_KEY);
+    const id = localStorage.getItem(mxKey(MX_PET_KEY));
     return MX_PETS.some(p => p.id === id) ? id : MX_PETS[0].id;   // 認不得就回預設，不會變成空白
   } catch (e) { return MX_PETS[0].id; }
 }
-function mxSetPet(id) { try { localStorage.setItem(MX_PET_KEY, id || ''); } catch (e) {} }
+function mxSetPet(id) { try { localStorage.setItem(mxKey(MX_PET_KEY), id || ''); } catch (e) {} }
 function mxPetOf(id) { return MX_PETS.find(p => p.id === id) || MX_PETS[0]; }
 
 /* 招牌動作要停留多久（毫秒）。走位類的不在這裡，時間是照距離算的。 */
@@ -400,10 +430,30 @@ function MascotLayer() {
     return () => clearInterval(iv);
   }, []);
 
+  /* v404：登入／換帳號時，把「這個帳號自己的」設定重讀一次。
+     ⚠ 這幾個 useState 的初始值是在 mount 當下算的，那時 Firebase 還沒解析完、
+       window._currentUser 還是 null ＝ 讀到的是訪客那一份。不補這一段的話，
+       登入後看到的仍然是訪客的夥伴／名字／休息狀態。
+     ⚠ 掛在本來就有的每秒 tick 上，不另外開 timer。 */
+  /* 初值刻意用 null（不是 mxUid()）：頁面載入時帳號可能「已經」解析好了，
+     若初值就等於當下的 uid，下面的 syncAccount 會判定「沒變」→ 一次性搬家永遠不會跑。
+     用 null 保證第一次一定會執行一遍（重讀同樣的值是無害的）。 */
+  const uidRef = useFxR(null);
   useFxE(() => {
     try { reduce.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
     const t = setTimeout(() => setAlive(true), 2500);
-    const tick = () => { setAllowed(okNow()); setShown(canShow()); };
+    const syncAccount = () => {
+      const u = mxUid();
+      if (u === uidRef.current) return;
+      uidRef.current = u;
+      mxMigrateOnce();                       // 舊的公用設定搬給第一個登入的帳號（只做一次）
+      setHidden(mxGetOff() >= mxDay(0));
+      setName(mxGetName());
+      setPetId(mxGetPet());
+      // 帽子有自己的 4 秒同步（要跟星星商店對帳），這裡不重複處理
+    };
+    syncAccount();
+    const tick = () => { syncAccount(); setAllowed(okNow()); setShown(canShow()); };
     const iv = setInterval(tick, 1000);
     /* v392（F-2）：切回分頁時立刻同步，不然要等最多 1 秒才醒過來 */
     document.addEventListener('visibilitychange', tick);
@@ -617,7 +667,26 @@ function MascotLayer() {
 
   /* v392（A）：作答時不再整隻消失（那本身就是一個變化），只是安靜下來；
      真正不畫的只有「沒登入」與「分頁切走」——後者順便讓 CSS 無限循環動畫全停。 */
-  if (!alive || hidden || !shown) return null;
+  if (!alive || !shown) return null;
+
+  /* v404（Alan：「不小心按到休息一天，就沒辦法叫回來了」）：
+     休息中不再是「整隻消失」——那等於把唯一的入口（長按牠）一起弄不見，
+     只能等到隔天或自己去清 localStorage。
+     改成留一顆很安靜的 💤 小鈕在原地：不會走動、不說話、透明度只有 0.45
+     （「安靜」的目的完全保留），但點一下就能把夥伴叫回來。 */
+  if (hidden) {
+    return (
+      <div className="mx-layer">
+        <button className="mx-wake" title="把夥伴叫回來" aria-label="把夥伴叫回來"
+          onClick={() => {
+            mxSetOff('');                 // 清掉「休息到哪一天」
+            setHidden(false);
+            greetedRef.current = false;   // 讓牠回來時重新打一次招呼
+            if (window.playSound) window.playSound('pop');
+          }}>💤</button>
+      </div>
+    );
+  }
 
   const slotStyle = drag
     ? { transform: 'none', transition: 'none', left: (drag.x - 23) + 'px', bottom: 'auto',
@@ -661,8 +730,10 @@ function MascotLayer() {
             <button onClick={() => { setMenu(false); setPetPick(true); }}>🐾 換夥伴</button>
             {/* v392（E）：以前叫「先去睡覺」，但重新整理就跑回來了，文案跟行為對不上。
                 現在存「睡到哪一天」，文案也改成看得懂的樣子。 */}
+            {/* v404：文案補上「隨時叫得回來」——按之前就知道這件事不是不可逆的 */}
             <button onClick={() => { setMenu(false); mxSetOff(mxDay(0)); setHidden(true); }}>💤 休息一下（今天）</button>
             <button onClick={() => { setMenu(false); mxSetOff(mxDay(1)); setHidden(true); }}>😴 明天也不要</button>
+            <div className="mx-menu-hint">睡著後點角落的 💤 就能叫回來</div>
             <button className="mx-menu-x" onClick={() => setMenu(false)}>取消</button>
           </div>
         )}

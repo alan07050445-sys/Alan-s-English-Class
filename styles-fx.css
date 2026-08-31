@@ -355,3 +355,30 @@
   .mx-torso, .mx-leaf { animation: none !important; }
   .mx-pets { animation: none; }
 }
+
+/* ══ v404：休息中的「叫回來」小鈕 ══
+   以前休息＝整隻不畫，連唯一的入口（長按牠）也一起不見，只能等隔天。
+   現在留一顆很安靜的 💤：不動、不說話、透明度 0.45，但點得到。
+   位置刻意跟吉祥物平常站的地方一樣（左下），才找得到。 */
+.mx-wake {
+  position: absolute; left: 14px; bottom: 0;
+  pointer-events: auto; cursor: pointer;
+  width: 34px; height: 34px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid #e2d9bf; border-radius: 50%;
+  background: #fffdf6;
+  font-size: 15px; line-height: 1;
+  opacity: .45;
+  box-shadow: 0 4px 10px -6px rgba(21, 19, 14, .4);
+  transition: opacity .18s, transform .18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.mx-wake:hover, .mx-wake:focus-visible { opacity: 1; transform: scale(1.08); }
+.mx-wake:active { transform: scale(.94); }
+
+/* 長按選單裡的小提示（告訴你睡著之後叫得回來） */
+.mx-menu-hint {
+  padding: 5px 10px 2px;
+  font-family: var(--sans); font-size: 11.5px; line-height: 1.4;
+  color: var(--ink-3, #8a8270); text-align: center;
+}
