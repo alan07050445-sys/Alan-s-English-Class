@@ -491,13 +491,19 @@ function App() {
   const summerMetaRef = useAppRef(summerMeta);
   useAppEffect(() => { summerMetaRef.current = summerMeta; }, [summerMeta]);
   useAppEffect(() => {
-    if (!window.subscribeSummerMeta) { setSummerMetaReady(true); return; }
+    /* v399：沒登入就不要去讀 class/summer_meta。
+       這份文件（暑假派發清單）含 11 位學生的真名與學校信箱，安全規則發布後
+       已經改成「要登入才能讀」——未登入還去訂閱只會固定拿到 permission-denied，
+       白打一次 Firestore、還在每個訪客的 console 留一行紅字。
+       ⚠ 一定要順手 setSummerMetaReady(true)：載入畫面的揭曉條件等的就是它，
+         不設的話訪客要等 3 秒的防呆逾時才看得到首頁。 */
+    if (!user || !window.subscribeSummerMeta) { setSummerMetaReady(true); return; }
     // v322: 資料回來（或出錯）都標記 ready，載入畫面才知道可以揭曉了
     return window.subscribeSummerMeta(
       (m) => { setSummerMeta(m); setSummerMetaReady(true); },
       () => setSummerMetaReady(true)
     );
-  }, [user?.uid]);
+  }, [user?.uid]);   // user 從 null→有值時會重跑，登入後才真的去訂閱
   // v322: 防呆——暑假清單 3 秒內沒回來也先揭曉（退回一般門口頁），永不卡在載入畫面
   useAppEffect(() => {
     if (summerMetaReady) return;
