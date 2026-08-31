@@ -428,6 +428,7 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
     { id: 'g6', n: 'G6', zh: '六年級' },
   ];
   const home = grades.find(g => g.id === homeGrade) || null;
+  const [stashOpen, setStashOpen] = React.useState(false);   // v402: 其他題庫抽屜（預設收起來）
   /* v399：lockedGrade ＝ 這個人的年級是學號算出來的，不給改。
      鎖定時 showAll 永遠是 false，「改選其他年級」那顆也不會出現。 */
   const [showAll, setShowAll] = React.useState(!home); // 有專屬年級 → 門口模式；否則完整選單
@@ -491,6 +492,46 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
     return () => { root.removeEventListener('mousemove', onMove); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
+  /* v402：收進抽屜的卡片。維持原本的顯示條件，只是改成先收集起來再一起畫。 */
+  const stashCards = [];
+  const stashNames = [];
+  if (summer && summer.lib) {
+    stashNames.push('暑假題庫');
+    stashCards.push(
+      <button key="lib" className="gs-card gs-card-lib" onClick={() => onSelect(window.SUMMER_LIB || 'sl')}>
+                <span className="gs-card-ico gs-card-ico-lib" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5V6.5A2.5 2.5 0 016.5 4H20v13H6.5A2.5 2.5 0 004 19.5z"/>
+                    <path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/>
+                    <path d="M9 8.5h7M9 12h4.5"/>
+                  </svg>
+                </span>
+                <span className="gs-card-text">
+                  <b>暑假題庫</b>
+                  <span>老師專用 · 出題後到後台發派給學生</span>
+                </span>
+                <span className="gs-card-cta">進入 →</span>
+              </button>
+    );
+  }
+  if (!summerOnly && onOpenAdmin) {
+    stashNames.push('五大時態');
+    stashCards.push(
+      <button key="gr" className="gs-card gs-card-gr" onClick={() => onSelect(window.GRAMMAR_TRACK || 'gr')}>
+                <span className="gs-card-ico gs-card-ico-gr" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 12h10"/><path d="M9 17h6"/>
+                  </svg>
+                </span>
+                <span className="gs-card-text">
+                  <b>五大時態 · 核心題庫</b>
+                  <span>現在／過去／未來／進行／完成 — 練到熟為止，不隨週次更換</span>
+                </span>
+                <span className="gs-card-cta">進入 →</span>
+              </button>
+    );
+  }
+
   return (
     <div className="grade-selector">
       <div className="gs-decor" aria-hidden="true">
@@ -530,23 +571,6 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <span className="gs-card-cta">進入 →</span>
           </button>
         )}
-        {/* v261: 暑假期間題庫是老師的主要工作區——排在後台正下方、用暑假金黃主題 */}
-        {summer && summer.lib && (
-          <button className="gs-card gs-card-lib" onClick={() => onSelect(window.SUMMER_LIB || 'sl')}>
-            <span className="gs-card-ico gs-card-ico-lib" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5V6.5A2.5 2.5 0 016.5 4H20v13H6.5A2.5 2.5 0 004 19.5z"/>
-                <path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/>
-                <path d="M9 8.5h7M9 12h4.5"/>
-              </svg>
-            </span>
-            <span className="gs-card-text">
-              <b>暑假題庫</b>
-              <span>老師專用 · 出題後到後台發派給學生</span>
-            </span>
-            <span className="gs-card-cta">進入 →</span>
-          </button>
-        )}
         {summer && summer.mine && (
           <button className="gs-card gs-card-summer" onClick={() => onSelect(window.SUMMER_ME || 'sme')}>
             {ringScope ? (
@@ -576,24 +600,6 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
               </span>
             </span>
             <span className="gs-card-cta gs-card-cta-brand">{ringScope && ringScope.done > 0 && ringScope.done < ringScope.total ? '繼續 →' : '進入 →'}</span>
-          </button>
-        )}
-        {/* v381: 五大時態核心題庫——不是每週更換的作業，是一定要練熟的常設題庫。
-            放在年級入口上面，因為它跨年級共用。 */}
-        {/* ⚠ 題庫還沒放內容之前只給老師看得到（onOpenAdmin 只有老師會拿到）——
-            免得學生點進去是空的。內容進去之後把 onOpenAdmin && 拿掉即可對全體開放。 */}
-        {!summerOnly && onOpenAdmin && (
-          <button className="gs-card gs-card-gr" onClick={() => onSelect(window.GRAMMAR_TRACK || 'gr')}>
-            <span className="gs-card-ico gs-card-ico-gr" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 12h10"/><path d="M9 17h6"/>
-              </svg>
-            </span>
-            <span className="gs-card-text">
-              <b>五大時態 · 核心題庫</b>
-              <span>現在／過去／未來／進行／完成 — 練到熟為止，不隨週次更換</span>
-            </span>
-            <span className="gs-card-cta">進入 →</span>
           </button>
         )}
         {summerOnly ? null : doorMode ? (
@@ -628,6 +634,22 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             「回到主頁」＝回到首頁封面；onViewLanding 這個 prop 其實 app.jsx 一直都有傳，
             但從來沒有被畫出來（寫好卻沒有呼叫點的死 prop）。
             換帳號排最後：它是唯一「會把人踢出去」的動作，放在最右邊最不容易誤觸。 */}
+        {/* ══ v402（Alan：開學了，這兩個暫時用不到，收起來）══
+            暑假題庫與五大時態核心題庫都是「常設工作區」，不是每天要用的東西。
+            開學後它們卡在教室卡上面，等於每天都要先跳過兩張大卡才看到今天要進的教室。
+            改成收在一條細細的抽屜裡、預設關著，需要時點開——卡片本身完全沒改，
+            只是換了位置與預設狀態。（兩張都只有老師拿得到，學生端看不見這一條。） */}
+        {stashCards.length > 0 && (
+          <div className={'gs-stash' + (stashOpen ? ' open' : '')}>
+            <button className="gs-stash-bar" onClick={() => setStashOpen(o => !o)}
+              aria-expanded={stashOpen}>
+              <span className="gs-stash-ico" aria-hidden="true">🗄</span>
+              <span className="gs-stash-lbl">其他題庫<em>{stashNames.join(' · ')}</em></span>
+              <span className="gs-stash-caret" aria-hidden="true">{stashOpen ? '收起 ▴' : '展開 ▾'}</span>
+            </button>
+            {stashOpen && <div className="gs-stash-body">{stashCards}</div>}
+          </div>
+        )}
         {!summerOnly && (onOpenGuide || onViewLanding || (who && onLogout)) && (
           <div className="gs-links">
             {onOpenGuide && (

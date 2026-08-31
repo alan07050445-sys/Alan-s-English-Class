@@ -22,58 +22,65 @@ function mxSetHat(h) { try { localStorage.setItem(MX_HAT_KEY, h || ''); } catch 
 function MxHat({ id }) {
   if (id === 'party') return (
     <g className="mx-hat">
-      <rect x="4" y="-2" width="1" height="1" fill="#E8C86A"/>
-      <rect x="3" y="-1" width="3" height="1" fill="#D6533C"/>
+      <rect x="8" y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="6" y="-2" width="6" height="2" fill="#D6533C"/>
     </g>
   );
   if (id === 'crown') return (
     <g className="mx-hat">
-      <rect x="2" y="-2" width="1" height="1" fill="#E8C86A"/>
-      <rect x="4" y="-2" width="1" height="1" fill="#E8C86A"/>
-      <rect x="6" y="-2" width="1" height="1" fill="#E8C86A"/>
-      <rect x="2" y="-1" width="5" height="1" fill="#E8C86A"/>
+      <rect x="4"  y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="8"  y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="12" y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="4"  y="-2" width="10" height="2" fill="#E8C86A"/>
     </g>
   );
   return null;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   v401：夥伴圖鑑（Alan：想讓小朋友自己選，而且每一隻要有符合個性的專屬動作）
+   夥伴圖鑑（v401 建立；v402 全部重畫）
    ──────────────────────────────────────────────────────────────────────────
-   ⚠ 全部都畫在同一個 9×10 的網格上（viewBox "0 -2 9 10"），而且一定要有
-     .mx-torso（身體＋兩顆 .mx-eye）與 .mx-leg-a/b/c 三個群組——
-     走路／跳／轉圈／翻滾／打瞌睡那十幾支 CSS 動畫全都掛在這些 class 上，
-     照著這個骨架畫，新夥伴不用寫半行動畫就會動。
-   ⚠ .mx-prop-* 是「招牌動作才出現的小道具」（筆電、書）：平常 opacity:0，
-     只有身上掛著對應的 act- class 時才顯示（見 styles-fx.css）。
+   v402（Alan：「新的幾隻畫素太低、不夠清楚」）：網格從 9×10 加倍成 **18×20**。
+   · Claudius 的每一格照 1:1 放大成 2×2 ——**畫出來跟以前一模一樣**，
+     一格仍然是 5.5px（--mx-w 50px ÷ 9），所以「像素的顆粒感」沒有變。
+   · 多出來的解析度全部給新夥伴：喙、葉子、火苗的收邊這些以前只能用 1 格
+     （＝5.5px 的一塊色）硬擠的細節，現在可以用半格畫，看起來才是「同一種畫風
+     的另一隻」，而不是更粗糙的版本。
+   ⚠ 骨架不變：一定要有 .mx-torso（身體＋兩顆 .mx-eye）與 .mx-leg-a/b/c，
+     走路／跳／轉圈／翻滾／打瞌睡那十幾支 CSS 動畫全都掛在這些 class 上。
+   ⚠ viewBox 一律 "0 -4 18 20"（比例仍是 9:10，.mx-svg 的寬高算法不用改）。
+     y −4~0 是帽子的地盤，所以頭上的裝飾（葉子、耳羽、火苗尖端）都從 y0 開始。
+   ⚠ 改網格要連 styles-fx.css 裡「掛在 <g> 上」的動畫一起加倍
+     （mxStep／mxType／mxRead／mxLeaf ——它們的 px 是 SVG 使用者單位；
+      掛在 .mx-svg 上的那些是真的 CSS px，不能動）。
    ⚠ 這幾隻是照 Alan 喜歡的方向（火／貓頭鷹／石頭／幼苗這種通用形象）另外畫的，
      不是把別家產品的角色搬過來——配色也換成本站的紙感色票，跟整體才搭。 */
 
-/* ① Claudius —— 原本那隻，永遠是預設 */
+/* ① Claudius —— 原本那隻，永遠是預設（座標全部 ×2，外觀完全沒變） */
 function ClaudeMascot({ size = 46, hat = 'none' }) {
   const CLAY = '#C1785A', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
       <MxHat id={hat}/>
       <g className="mx-torso">
         {/* 頭上的兩個小角 */}
-        <rect x="1" y="0" width="1" height="1" fill={CLAY}/>
-        <rect x="7" y="0" width="1" height="1" fill={CLAY}/>
+        <rect x="2" y="0" width="2" height="2" fill={CLAY}/>
+        <rect x="14" y="0" width="2" height="2" fill={CLAY}/>
         {/* 身體（維持參考圖的平塗，不加陰影，才像素風） */}
-        <rect x="0" y="1" width="9" height="5" fill={CLAY}/>
+        <rect x="0" y="2" width="18" height="10" fill={CLAY}/>
         {/* 眼睛（會眨） */}
-        <rect className="mx-eye" x="1" y="2" width="2" height="2" fill={EYE}/>
-        <rect className="mx-eye" x="6" y="2" width="2" height="2" fill={EYE}/>
+        <rect className="mx-eye" x="2" y="4" width="4" height="4" fill={EYE}/>
+        <rect className="mx-eye" x="12" y="4" width="4" height="4" fill={EYE}/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="0" y="6" width="2" height="2" fill={CLAY}/></g>
-      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={CLAY}/></g>
-      <g className="mx-leg mx-leg-c"><rect x="7" y="6" width="2" height="2" fill={CLAY}/></g>
+      <g className="mx-leg mx-leg-a"><rect x="0" y="12" width="4" height="4" fill={CLAY}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="6" y="12" width="6" height="4" fill={CLAY}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="14" y="12" width="4" height="4" fill={CLAY}/></g>
       {/* 招牌動作：打電腦（Alan 指定）——小筆電擋在腳前面，看起來就像坐在桌子後面 */}
       <g className="mx-prop mx-prop-type">
-        <rect x="1" y="5" width="7" height="2" fill="#4A443A"/>
-        <rect x="2" y="5" width="5" height="1" fill="#9FD8BC"/>
-        <rect x="0" y="7" width="9" height="1" fill="#6B6355"/>
+        <rect x="2" y="9" width="14" height="5" fill="#4A443A"/>
+        <rect x="3" y="10" width="12" height="3" fill="#9FD8BC"/>
+        <rect x="0" y="14" width="18" height="2" fill="#6B6355"/>
       </g>
     </svg>
   );
@@ -81,59 +88,66 @@ function ClaudeMascot({ size = 46, hat = 'none' }) {
 
 /* ② 咕咕（貓頭鷹）—— 眼睛大、愛看書，走得少想得多 */
 function OwlMascot({ size = 46, hat = 'none' }) {
-  const BODY = '#A9713F', DARK = '#6E4522', RING = '#FBF6EA', BEAK = '#E8A33C', EYE = '#1A1A1A';
+  const BODY = '#A9713F', DARK = '#7A4E27', RING = '#FBF6EA', BEAK = '#E8A33C',
+        BELLY = '#E4C79B', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
       <MxHat id={hat}/>
       <g className="mx-torso">
         {/* 耳羽 */}
-        <rect x="1" y="0" width="1" height="1" fill={DARK}/>
-        <rect x="7" y="0" width="1" height="1" fill={DARK}/>
-        <rect x="0" y="1" width="9" height="5" fill={BODY}/>
-        <rect x="3" y="5" width="3" height="1" fill="#E4C79B"/>
-        {/* 眼盤：刻意留出最外面那一欄與最下面那一列的棕色，
-            不然白色會漲到邊界，整顆頭看起來像兩塊白布不像貓頭鷹（第一版就是這樣） */}
-        <rect x="1" y="2" width="3" height="3" fill={RING}/>
-        <rect x="5" y="2" width="3" height="3" fill={RING}/>
-        <rect className="mx-eye" x="1" y="2" width="2" height="2" fill={EYE}/>
-        <rect className="mx-eye" x="6" y="2" width="2" height="2" fill={EYE}/>
-        <rect x="4" y="3" width="1" height="2" fill={BEAK}/>
+        <rect x="2" y="0" width="3" height="2" fill={DARK}/>
+        <rect x="13" y="0" width="3" height="2" fill={DARK}/>
+        {/* 頭身：兩側各縮一格，剪影才是圓的而不是一塊方磚 */}
+        <rect x="1" y="2" width="16" height="2" fill={BODY}/>
+        <rect x="0" y="4" width="18" height="6" fill={BODY}/>
+        <rect x="1" y="10" width="16" height="2" fill={BODY}/>
+        <rect x="5" y="9" width="8" height="3" fill={BELLY}/>
+        {/* 眼盤：外圈留一格白，瞳孔才不會黏在棕色上 */}
+        <rect x="2" y="3" width="6" height="6" fill={RING}/>
+        <rect x="10" y="3" width="6" height="6" fill={RING}/>
+        <rect className="mx-eye" x="3" y="4" width="4" height="4" fill={EYE}/>
+        <rect className="mx-eye" x="11" y="4" width="4" height="4" fill={EYE}/>
+        {/* 喙：舊版只有 1 格（一塊色），現在收成上寬下窄的小三角 */}
+        <rect x="8" y="6" width="2" height="2" fill={BEAK}/>
+        <rect x="8" y="8" width="1" height="1" fill={BEAK}/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="1" y="6" width="2" height="2" fill={BEAK}/></g>
+      <g className="mx-leg mx-leg-a"><rect x="3" y="12" width="4" height="3" fill={BEAK}/></g>
       <g className="mx-leg mx-leg-b"/>
-      <g className="mx-leg mx-leg-c"><rect x="6" y="6" width="2" height="2" fill={BEAK}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="11" y="12" width="4" height="3" fill={BEAK}/></g>
       {/* 招牌動作：看書 */}
       <g className="mx-prop mx-prop-read">
-        <rect x="1" y="5" width="7" height="3" fill="#8B3120"/>
-        <rect x="1" y="5" width="3" height="2" fill="#FBF6EA"/>
-        <rect x="5" y="5" width="3" height="2" fill="#FBF6EA"/>
+        <rect x="2" y="10" width="14" height="6" fill="#8B3120"/>
+        <rect x="3" y="10" width="6" height="4" fill="#FBF6EA"/>
+        <rect x="10" y="10" width="6" height="4" fill="#FBF6EA"/>
+        <rect x="4" y="11" width="4" height="1" fill="#D8CBB0"/>
+        <rect x="11" y="11" width="4" height="1" fill="#D8CBB0"/>
       </g>
     </svg>
   );
 }
 
-/* ③ 小焰（火苗）—— 靜不下來，跑得比誰都快 */
+/* ③ 小焰（火苗）—— 靜不下來，跑超快 */
 function FlameMascot({ size = 46, hat = 'none' }) {
   const OUT = '#D6533C', MID = '#E8873C', IN = '#F2C14E', EYE = '#3A1B12';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
       <MxHat id={hat}/>
       <g className="mx-torso">
-        {/* 火苗的外形靠「1→3→5→7 一格一格變寬」做出來——
-            第一版只收一列，看起來就是一塊橘色方磚，完全不像火 */}
-        <rect x="4" y="-1" width="1" height="1" fill={IN}/>
-        <rect x="3" y="0" width="3" height="1" fill={MID}/>
-        <rect x="2" y="1" width="5" height="1" fill={OUT}/>
-        <rect x="1" y="2" width="7" height="4" fill={OUT}/>
-        <rect x="3" y="4" width="3" height="2" fill={MID}/>
-        <rect className="mx-eye" x="2" y="3" width="2" height="2" fill={EYE}/>
-        <rect className="mx-eye" x="5" y="3" width="2" height="2" fill={EYE}/>
+        {/* 2→6→10→14→16 一層一層變寬，收邊才像火不像方塊 */}
+        <rect x="8" y="0" width="2" height="2" fill={IN}/>
+        <rect x="6" y="2" width="6" height="2" fill={IN}/>
+        <rect x="4" y="4" width="10" height="2" fill={MID}/>
+        <rect x="2" y="6" width="14" height="2" fill={OUT}/>
+        <rect x="1" y="8" width="16" height="4" fill={OUT}/>
+        <rect x="6" y="9" width="6" height="3" fill={MID}/>
+        <rect className="mx-eye" x="4" y="7" width="4" height="4" fill={EYE}/>
+        <rect className="mx-eye" x="10" y="7" width="4" height="4" fill={EYE}/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="1" y="6" width="2" height="2" fill={MID}/></g>
-      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={IN}/></g>
-      <g className="mx-leg mx-leg-c"><rect x="6" y="6" width="2" height="2" fill={MID}/></g>
+      <g className="mx-leg mx-leg-a"><rect x="1" y="12" width="4" height="3" fill={MID}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="6" y="12" width="6" height="4" fill={IN}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="13" y="12" width="4" height="3" fill={MID}/></g>
     </svg>
   );
 }
@@ -142,21 +156,23 @@ function FlameMascot({ size = 46, hat = 'none' }) {
 function RockMascot({ size = 46, hat = 'none' }) {
   const ROCK = '#9A9384', DARK = '#6E695D', LIGHT = '#C4BDAC', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
       <MxHat id={hat}/>
       <g className="mx-torso">
-        <rect x="2" y="0" width="5" height="1" fill={LIGHT}/>
-        <rect x="1" y="1" width="7" height="5" fill={ROCK}/>
-        <rect x="6" y="4" width="1" height="1" fill={DARK}/>
-        <rect x="2" y="1" width="1" height="1" fill={LIGHT}/>
-        <rect className="mx-eye" x="2" y="2" width="2" height="2" fill={EYE}/>
-        <rect className="mx-eye" x="5" y="2" width="2" height="2" fill={EYE}/>
-        <rect x="4" y="4" width="1" height="1" fill={DARK}/>
+        {/* 上緣切一角、左右各縮一格＝石頭的不規則感 */}
+        <rect x="5" y="0" width="9" height="2" fill={LIGHT}/>
+        <rect x="2" y="2" width="14" height="2" fill={ROCK}/>
+        <rect x="1" y="4" width="16" height="8" fill={ROCK}/>
+        <rect x="6" y="2" width="4" height="1" fill={LIGHT}/>
+        <rect x="13" y="9" width="2" height="2" fill={DARK}/>
+        <rect className="mx-eye" x="3" y="5" width="4" height="4" fill={EYE}/>
+        <rect className="mx-eye" x="11" y="5" width="4" height="4" fill={EYE}/>
+        <rect x="8" y="10" width="2" height="1" fill={DARK}/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="1" y="6" width="2" height="2" fill={DARK}/></g>
-      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={ROCK}/></g>
-      <g className="mx-leg mx-leg-c"><rect x="6" y="6" width="2" height="2" fill={DARK}/></g>
+      <g className="mx-leg mx-leg-a"><rect x="2" y="12" width="4" height="3" fill={DARK}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" fill={ROCK}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="12" y="12" width="4" height="3" fill={DARK}/></g>
     </svg>
   );
 }
@@ -165,24 +181,28 @@ function RockMascot({ size = 46, hat = 'none' }) {
 function SproutMascot({ size = 46, hat = 'none' }) {
   const SEED = '#D8C79B', DEEP = '#B99F6B', LEAF = '#6FA85A', STEM = '#4E7A3F', EYE = '#3A3222';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
       <MxHat id={hat}/>
+      {/* 葉子從 y0 開始長，帽子（y−4~0）才不會壓在葉子上 */}
       <g className="mx-leaf">
-        <rect x="4" y="0" width="1" height="1" fill={STEM}/>
-        <rect x="2" y="-1" width="2" height="1" fill={LEAF}/>
-        <rect x="5" y="-1" width="2" height="1" fill={LEAF}/>
+        <rect x="8" y="0" width="2" height="2" fill={STEM}/>
+        <rect x="4" y="0" width="4" height="2" fill={LEAF}/>
+        <rect x="3" y="1" width="1" height="1" fill={LEAF}/>
+        <rect x="10" y="0" width="4" height="2" fill={LEAF}/>
+        <rect x="14" y="1" width="1" height="1" fill={LEAF}/>
       </g>
       <g className="mx-torso">
-        <rect x="0" y="1" width="9" height="5" fill={SEED}/>
-        <rect x="0" y="5" width="9" height="1" fill={DEEP}/>
-        <rect className="mx-eye" x="1" y="2" width="2" height="2" fill={EYE}/>
-        <rect className="mx-eye" x="6" y="2" width="2" height="2" fill={EYE}/>
-        <rect x="4" y="4" width="1" height="1" fill={DEEP}/>
+        <rect x="1" y="2" width="16" height="2" fill={SEED}/>
+        <rect x="0" y="4" width="18" height="8" fill={SEED}/>
+        <rect x="0" y="10" width="18" height="2" fill={DEEP}/>
+        <rect className="mx-eye" x="3" y="5" width="4" height="4" fill={EYE}/>
+        <rect className="mx-eye" x="11" y="5" width="4" height="4" fill={EYE}/>
+        <rect x="8" y="8" width="2" height="1" fill={DEEP}/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="0" y="6" width="2" height="2" fill={DEEP}/></g>
-      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={DEEP}/></g>
-      <g className="mx-leg mx-leg-c"><rect x="7" y="6" width="2" height="2" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-a"><rect x="0" y="12" width="4" height="4" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="14" y="12" width="4" height="4" fill={DEEP}/></g>
     </svg>
   );
 }
@@ -741,7 +761,9 @@ function FxLayer() {
   );
 }
 
-Object.assign(window, { ClaudeMascot, OwlMascot, FlameMascot, RockMascot, SproutMascot, MX_PETS, MascotLayer, FxLayer, ConfettiBurst });
+/* v402：mxGetPet／mxPetOf 給 app.jsx 的登出過場用（要畫「現在這一隻」跟你說再見）*/
+Object.assign(window, { ClaudeMascot, OwlMascot, FlameMascot, RockMascot, SproutMascot,
+  MX_PETS, mxGetPet, mxPetOf, MascotLayer, FxLayer, ConfettiBurst });
 
 /* 自己掛載——不動 App 的樹，任何頁面都在 */
 (function mountFx() {

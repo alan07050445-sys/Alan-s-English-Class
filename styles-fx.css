@@ -57,7 +57,8 @@
 .act-walk .mx-leg-c { animation: mxStep    .34s ease-in-out infinite .17s; }
 .act-walk .mx-leg-b { animation: mxStep    .68s ease-in-out infinite; }
 @keyframes mxWalkBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.42px); } }
-@keyframes mxStep    { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.72px); } }
+/* v402：網格 9→18 之後，掛在 <g> 上的位移是「使用者單位」，要跟著加倍才等寬 */
+@keyframes mxStep    { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.44px); } }
 
 /* ── 跳 ── */
 .act-jump .mx-svg { animation: mxJump .95s cubic-bezier(.3, .9, .4, 1); }
@@ -258,15 +259,15 @@
 .act-type .mx-hat   { animation: mxType .16s ease-in-out infinite; }
 @keyframes mxType {
   0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(.34px); }
+  50%      { transform: translateY(.68px); }
 }
 
 /* ── 咕咕招牌：看書 —— 頭慢慢往下再抬起來（一行一行讀） */
 .act-read .mx-torso { animation: mxRead 2.6s ease-in-out infinite; }
 @keyframes mxRead {
   0%, 100% { transform: translateY(0)    rotate(0deg); }
-  45%      { transform: translateY(.5px) rotate(-3deg); }
-  55%      { transform: translateY(.5px) rotate(3deg); }
+  45%      { transform: translateY(1px) rotate(-3deg); }
+  55%      { transform: translateY(1px) rotate(3deg); }
 }
 
 /* ── 小焰招牌：衝刺 —— 走位由 JS 負責（速度 300px/s），這裡只加拉長的殘影感 */
@@ -297,7 +298,7 @@
 }
 @keyframes mxLeaf {
   0%       { transform: translateY(0)   scale(1); }
-  35%, 78% { transform: translateY(-1px) scale(1.35); }
+  35%, 78% { transform: translateY(-2px) scale(1.35); }
   100%     { transform: translateY(0)   scale(1); }
 }
 .mx-leaf { transform-origin: 50% 100%; }

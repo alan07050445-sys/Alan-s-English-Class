@@ -299,12 +299,19 @@ function App() {
          淡出看起來是「收掉」而不是「被切掉」→ 取 800。
          代價：底線 .ls-underline（0.9s 起跑、1.8s 才畫完）改成在淡出期間畫，
          幾乎看不到——它是裝飾，換 900ms 的等待值得。 */
-      const minShow = 800;
+      /* v402（Alan：登入再快一點）：800 → 460。
+         單純砍 minShow 會把品牌動畫切斷，所以是「連 .ls-* 的進場動畫一起壓縮」：
+         logo .7s→.45s、est .7s/.15s→.45s/.1s、校名 .9s/.45s→.6s/.22s（820ms 收完）。
+         460ms 時校名走完的比例（用同一條 cubic-bezier 前傾曲線）跟舊版 800ms 時
+         幾乎一樣，所以看起來還是「收掉」不是「被切掉」。
+         淡出也從 680 → 400（CSS 的 ls-out 一起改成 .38s）。
+         合計每次進站少等約 620ms。 */
+      const minShow = 460;
       const waitMs  = Math.max(0, minShow - elapsed);
       // 開始淡出的同時 bump pageKey → 讓門口頁／首頁在載入畫面底下先掛載的
       // 進場動畫重新播放（否則動畫早在 loader 蓋住時就跑完了，使用者看不到）
       const t1 = setTimeout(() => { setLoaderFading(true); setPageKey(k => k + 1); }, waitMs); // fade-out
-      const t2 = setTimeout(() => setShowLoader(false), waitMs + 680);     // unmount
+      const t2 = setTimeout(() => setShowLoader(false), waitMs + 400);     // unmount
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
   }, [revealReady]);
@@ -768,8 +775,11 @@ function App() {
     setTimeout(() => { wavingRef.current = false; }, 1850);
   };
 
-  // v301: 登出時先淡出一個「👋 期待下次見面」的過場，約 1 秒後才真的登出——
-  // 比「按下去畫面瞬間跳掉」有質感許多。所有登出入口都走這裡。
+  /* v301: 登出時先淡出一個「期待下次見面」的過場，才真的登出——
+     比「按下去畫面瞬間跳掉」有質感許多。所有登出入口都走這裡。
+     v402（Alan：登入登出想再快一點）：1050+620 → 700+360，整段從約 1.67 秒收到
+     約 1.06 秒。過場本身（.app-farewell 0.7s 淡入、夥伴 1.4s 揮手）在 700ms 時
+     已經完全顯形、手也揮到一半，看得出來是「在跟你道別」而不是被切掉。 */
   const farewellRef = useAppRef(false);
   const signOutWithFarewell = (cleanup) => {
     if (farewellRef.current) return;
@@ -782,8 +792,8 @@ function App() {
       setSkippedLogin(false);
       if (cleanup) { try { cleanup(); } catch(e) {} }
       // 稍留一下讓封面在紗幕底下先掛載，再淡開過場
-      setTimeout(() => { setFarewell(false); farewellRef.current = false; }, 620);
-    }, 1050);
+      setTimeout(() => { setFarewell(false); farewellRef.current = false; }, 360);
+    }, 700);
   };
 
   const scrollPageToTop = () => {
@@ -1526,7 +1536,18 @@ function App() {
       {farewell && (
         <div className="app-farewell" role="status" aria-live="polite">
           <div className="app-farewell-in">
-            <div className="app-farewell-wave" aria-hidden="true">👋</div>
+            {/* v402（Alan）：原本是一隻 👋 emoji，改成「小朋友自己挑的那隻夥伴」
+                來道別。components-fx.jsx 比 app.jsx 晚載入，但這裡是執行時才畫，
+                所以拿得到；真的拿不到（例如特效層掛掉）就退回原本的 👋。 */}
+            <div className="app-farewell-wave" aria-hidden="true">
+              {(() => {
+                try {
+                  const P = window.mxPetOf && window.mxPetOf(window.mxGetPet());
+                  if (P && P.art) { const Art = P.art; return <Art size={66}/>; }
+                } catch (e) {}
+                return '👋';
+              })()}
+            </div>
             <div className="app-farewell-title">期待下次見面</div>
             <div className="app-farewell-sub">正在登出…</div>
           </div>

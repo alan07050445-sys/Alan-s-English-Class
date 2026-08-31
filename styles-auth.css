@@ -394,7 +394,7 @@
   z-index: 9999;
 }
 .ls-screen.ls-fading {
-  animation: ls-out 0.65s ease forwards;
+  animation: ls-out 0.38s ease forwards;   /* v402: 0.65 → 0.38（JS 端的 unmount 也一起改成 400ms）*/
   pointer-events: none;
 }
 .ls-glow {
@@ -439,7 +439,7 @@
   margin-bottom: -2px;
   filter: drop-shadow(0 10px 22px rgba(21,19,14,.14));
   opacity: 0;
-  animation: ls-logo-in 0.7s cubic-bezier(.22,.68,0,1.2) forwards;
+  animation: ls-logo-in 0.45s cubic-bezier(.22,.68,0,1.2) forwards;   /* v402: 進站加速 */
 }
 @keyframes ls-logo-in { from { opacity: 0; transform: translateY(12px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .ls-logo { animation: ls-logo-in 0.5s ease forwards; } }
@@ -448,14 +448,16 @@
   font-size: 11px; letter-spacing: 0.26em;
   border: 1px solid var(--ink); padding: 5px 9px; line-height: 1;
   opacity: 0;
-  animation: ls-fade-up 0.7s cubic-bezier(.22,.68,0,1.2) 0.15s forwards;
+  animation: ls-fade-up 0.45s cubic-bezier(.22,.68,0,1.2) 0.1s forwards;   /* v402: 進站加速 */
 }
 .ls-name {
   font-family: var(--serif);
   font-size: clamp(28px, 5vw, 42px);
   line-height: 1; letter-spacing: -0.015em;
   opacity: 0;
-  animation: ls-name-in 0.9s cubic-bezier(.22,.68,0,1.1) 0.45s forwards; /* 字距收攏的電影感 */
+  /* v402: 0.9s/0.45s → 0.6s/0.22s。字距收攏的電影感保留，只是整段提前收完
+     （820ms），載入畫面才有辦法從 800ms 提早到 460ms 而不會看起來被切斷。 */
+  animation: ls-name-in 0.6s cubic-bezier(.22,.68,0,1.1) 0.22s forwards;
 }
 @keyframes ls-name-in {
   from { opacity: 0; transform: translateY(10px); letter-spacing: 0.08em; }
@@ -468,8 +470,8 @@
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 10'%3E%3Cpath d='M3 7 Q 40 3 85 5 T 160 5 T 217 6' fill='none' stroke='%23B85A45' stroke-width='3.4' stroke-linecap='round' opacity='.85'/%3E%3C/svg%3E") center / 100% auto no-repeat;
   margin-top: -2px;
   clip-path: inset(-30% 100% -30% 0);
-  animation: ls-draw 0.9s cubic-bezier(.6, .05, .3, 1) 0.9s forwards,
-             ls-ink 2s ease-in-out 2s infinite;
+  animation: ls-draw 0.6s cubic-bezier(.6, .05, .3, 1) 0.5s forwards,
+             ls-ink 2s ease-in-out 1.3s infinite;   /* v402: 跟著整段提前 */
 }
 @keyframes ls-draw { to { clip-path: inset(-30% 0 -30% 0); } }
 @keyframes ls-ink { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }

@@ -3258,3 +3258,55 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 761px) {
   .grade-sel-cards { grid-template-columns: repeat(6, 1fr); }
 }
+
+/* ══ v402 ①：門口頁「其他題庫」抽屜（Alan：開學了，暫時用不到，收起來）══
+   暑假題庫與五大時態本來是兩張跟教室卡一樣大的卡，卡在教室卡上面——
+   等於每天都要先跳過兩張大卡才看到今天要進的教室。
+   收成一條 40px 的細抽屜、預設關著，卡片本身完全沒改（點開就是原本那兩張）。
+   只有老師拿得到這兩張，所以學生端根本不會出現這一條。 */
+.gs-stash {
+  width: 100%; max-width: 560px; margin: 10px auto 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.gs-stash-bar {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 9px 14px;
+  border: 1.5px dashed var(--border, #ddd3b8);
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, background .15s;
+}
+.gs-stash-bar:hover { border-color: #C1785A; background: rgba(193, 120, 90, .05); }
+.gs-stash.open .gs-stash-bar { border-style: solid; background: rgba(193, 120, 90, .05); }
+.gs-stash-ico { font-size: 15px; line-height: 1; flex: none; opacity: .8; }
+.gs-stash-lbl {
+  flex: 1; min-width: 0; text-align: left;
+  font-size: 13.5px; font-weight: 800; color: var(--ink-2, #6b6355);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gs-stash-lbl em {
+  font-style: normal; font-weight: 600; font-size: 12px;
+  color: var(--ink-3, #8a8270); margin-left: 8px;
+}
+.gs-stash-caret {
+  flex: none; font-size: 11.5px; font-weight: 700;
+  color: var(--ink-3, #8a8270); letter-spacing: .04em;
+}
+.gs-stash-body { display: flex; flex-direction: column; gap: 8px; }
+/* 抽屜裡的卡片小一號——它們是「偶爾才用」的東西，不該跟今天的教室卡搶份量 */
+.gs-stash-body .gs-card { padding: 12px 14px; }
+@media (prefers-reduced-motion: no-preference) {
+  .gs-stash-body { animation: gs-stash-in .22s cubic-bezier(.22, 1, .36, 1) both; }
+  @keyframes gs-stash-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+}
+@media (max-width: 560px) { .gs-stash-lbl em { display: none; } }
+
+/* ══ v402 ③：登出過場改成「你的夥伴」跟你說再見（原本是 👋 emoji）══
+   牠是小朋友自己挑的夥伴，由牠來道別比一隻通用的手掌親切得多。 */
+.app-farewell-wave .mx-svg {
+  width: 88px; height: calc(88px * 10 / 9);   /* 原本那顆 👋 是 52px 的字，太小的話畫面會空 */
+  display: block; margin: 0 auto;
+  filter: drop-shadow(0 4px 6px rgba(21, 19, 14, .22));
+}
