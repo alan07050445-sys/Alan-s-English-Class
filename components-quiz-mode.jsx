@@ -669,8 +669,18 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
   );
 }
 
-/* ── v253: 標題歸戶（與 TodayTasks v235 同法）——老師題庫側欄「依文章分組」用 ── */
-const QM_TYPE_WORDS = /(單字卡|單字聽寫|聽寫|拼字|單字練習|手寫練習|選擇題|簡答題|短答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|short answer|spelling)/gi;
+/* ── v253: 標題歸戶（與 TodayTasks v235 同法）——側欄「依文章分組」用 ── */
+/* 歸戶的作法：把標題裡的「題型字」拿掉，剩下的就是「這是哪一篇文章」。
+   ⚠ v403：這份清單原本停在早期的幾種題型，後來新增的（配對連線、克漏字、圈選、
+     音節切分、故事山、分段閱讀、閱讀技巧、上傳作業、教學卡…）一個都沒補進來。
+     結果就是：同一篇文章的「配對」被算成另一篇，自己落單在群組外面
+     （Alan 圖片裡那一列孤零零的 "Living in the desert - we…" 就是它）。
+     這裡照 QM_TYPE_ZH 的每一種題型補齊。
+   ⚠ 順序很重要：長的要排在短的前面。全域取代是由左往右試，
+     「配對」若排在「配對連線」前面，就會先吃掉「配對」、留下沒人認得的「連線」。
+   ⚠ 拿掉之後只剩不到 3 個字的標題會被 qmGroupByArticle 判成「單張卡」平鋪，
+     所以就算某個標題整個被吃光也不會亂分組。 */
+const QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
 function qmGroupByArticle(items) {
   const keyOf = (t) => String(t || '').toLowerCase().replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
   // v254: 老師手動分組（item.group）優先；沒設才用標題自動歸戶
@@ -804,7 +814,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
 
   // v253: 老師視角（editMode 或 暑假題庫）——側欄依文章分組收合＋題庫學生濾鏡
   const isLibView = String(weekId || '').startsWith('sl');
-  const groupsView = editMode || isLibView;
+  /* v403（Alan：「開學課程怎麼沒有 group 的功能？都要跟暑假一樣」）：
+     分組本來只在「編輯模式」或「暑假題庫（sl-…）」才打開，學期的週次是攤平的一長串——
+     同一篇文章的五個練習標題一模一樣（"Living in the desert - week1…" 被截斷五次），
+     學生根本分不出哪個是單字卡、哪個是聽寫。
+     打開之後學期週次一次拿到暑假那邊本來就有的三件事：
+       ① 側欄依文章收合成一組，組內用短標題（單字卡／配對／練習1／聽寫）
+       ② 做完一個自動接同組的下一個（nextInGroup 也是靠 grouped 才算得出來）
+       ③ 每一組可以掛「參考資料」（影片／課文檔案／老師的話）——groupRes 本來就一直傳進來了
+     ⚠ 分組本身完全不看身分：群組標頭裡的老師專用鈕（📎 參考資料、整組上下移）
+       各自有 editMode 的判斷，學生看不到。
+     ⚠ 沒有共同前綴、或同組只有 1 個的項目仍然是「單張卡」平鋪（qmGroupByArticle 的規則），
+       所以只有一兩個項目的分類看起來跟以前一樣。 */
+  const groupsView = true;
   // ⚠ v338 隱私修正：學生的暑假週次 id 也是 'sl-…' 開頭，isLibView 對學生同樣成立，
   //   導致「依學生篩選」的名字標籤（其他同學的名字）漏到學生端。
   //   發派濾鏡＝老師專用，一律另外用身分判斷；分組顯示（groupsView）維持給學生用。
@@ -5546,7 +5568,13 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
 
     // ── v235: 依「文章／主題」分組——同一篇文章的題目收在同一個標題下 ──
     // 沒有資料欄位可用，所以用標題歸戶：去掉題型字眼與編號後相同 → 同一篇
-    const TYPE_WORDS = /(單字卡|單字聽寫|聽寫|拼字|單字練習|手寫練習|選擇題|簡答題|填空題|填空|造句|練習|測驗|單字|文法|閱讀|quiz|flashcards?|test|spelling)/gi;
+    /* v403：這裡本來自己抄了一份題型字清單，跟上面 qmGroupByArticle 用的
+       QM_TYPE_WORDS 是同一件事——兩份就會走鐘，實際上也真的走鐘了
+       （兩份都漏掉「配對」等新題型，側欄與任務清單各自把配對踢出群組）。
+       改成共用同一份，以後補題型只要改一個地方。
+       ⚠ 這是 /g 的正則，但只拿來 .replace（replace 會自己重設 lastIndex），
+         不會有跨次呼叫的狀態問題；千萬不要改用 .test()。 */
+    const TYPE_WORDS = QM_TYPE_WORDS;
     const SEP_TRIM = /[\s\-–—_·．.。,，()（）0-9０-９]+$/;
     const keyOf = (t) => String(t || '').toLowerCase().replace(TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
     const lcpOf = (arr) => {
