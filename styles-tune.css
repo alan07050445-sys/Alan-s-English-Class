@@ -3243,3 +3243,18 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   font-size: 12px; font-weight: 700;
   white-space: nowrap;
 }
+
+/* ══ v399：年級章「綁定版」——它現在是一個標籤，不是按鈕 ══
+   學生的年級由學號綁定之後就不能自己換班，所以那顆章不再是 <button>。
+   游標與 hover 一起拿掉，不然看起來還是可以點（點了卻沒事＝更糟的體驗）。 */
+.grade-chip-fixed { cursor: default; }
+.grade-chip-fixed:hover { opacity: 1; }
+
+/* ══ v399：年級卡從 5 張變 6 張（新增 G1）══
+   格線本來是 repeat(auto-fit, minmax(140px, 1fr))：容器 860 − 左右內距 40 − 5 道 14px 間隙
+   ＝ 每張只剩 125px < 140，auto-fit 於是只排得下 5 欄 → 第 6 張 G6 自己孤零零一列。
+   桌機直接指定 6 欄（125px 放得下大字號的年級章，實測過），
+   ≤760px 本來就是 3 欄＝剛好兩列，都不會有落單的那一張。 */
+@media (min-width: 761px) {
+  .grade-sel-cards { grid-template-columns: repeat(6, 1fr); }
+}

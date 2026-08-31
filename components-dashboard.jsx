@@ -211,7 +211,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade,
   // v237: 年級篩選 + 搜尋（KPI 跟著篩選後的名單計算）
   const gradeChips = useDashM(() => {
     const present = new Set(rows.map(r => r.grade).filter(Boolean));
-    const chips = ['all', ...['g2', 'g3', 'g4', 'g5', 'g6'].filter(g => present.has(g))];
+    const chips = ['all', ...['g1', 'g2', 'g3', 'g4', 'g5', 'g6'].filter(g => present.has(g))];
     if (rows.some(r => !r.grade)) chips.push('other');
     return chips;
   }, [rows]);
@@ -775,7 +775,7 @@ function RosterManager() {
           onKeyDown={e => e.key === 'Enter' && handleAdd()}
         />
         <select className="roster-input roster-input-grade" value={grade} onChange={e => setGrade(e.target.value)}>
-          {['g2','g3','g4','g5','g6'].map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
+          {['g1','g2','g3','g4','g5','g6'].map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
         </select>
         <button className="roster-add-btn" onClick={handleAdd} disabled={busy}>＋ 新增</button>
       </div>

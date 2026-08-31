@@ -160,10 +160,15 @@ function Header({
             {onHome
               ? <button className="brand-name brand-home" onClick={onHome} title="回首頁" aria-label="回首頁">Alan<em>'s</em> English Class</button>
               : <span className="brand-name">Alan<em>'s</em> English Class</span>}
-            {grade && (
-              <button className="grade-chip" onClick={onSwitchGrade} title="Switch grade" aria-label="切換年級">
-                {window.isSummerTrack && window.isSummerTrack(grade) ? '☀️ 暑假' : grade.toUpperCase()}
-              </button>
+            {/* v399：年級由學號綁定的學生拿不到 onSwitchGrade——那就不該是一顆按鈕
+                （點了沒反應比看起來不能點更糟），改成純標籤。老師端完全沒變。 */}
+            {grade && (onSwitchGrade
+              ? <button className="grade-chip" onClick={onSwitchGrade} title="Switch grade" aria-label="切換年級">
+                  {window.isSummerTrack && window.isSummerTrack(grade) ? '☀️ 暑假' : grade.toUpperCase()}
+                </button>
+              : <span className="grade-chip grade-chip-fixed" aria-label={`年級 ${grade.toUpperCase()}`}>
+                  {window.isSummerTrack && window.isSummerTrack(grade) ? '☀️ 暑假' : grade.toUpperCase()}
+                </span>
             )}
           </div>
           <div className="week-nav">
@@ -413,8 +418,9 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 }
 
 /* ───────── Grade Selector ───────── */
-function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, onLogout, summerOnly, onOpenAdmin }) {
+function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, onLogout, summerOnly, onOpenAdmin, lockedGrade }) {
   const grades = [
+    { id: 'g1', n: 'G1', zh: '一年級' },
     { id: 'g2', n: 'G2', zh: '二年級' },
     { id: 'g3', n: 'G3', zh: '三年級' },
     { id: 'g4', n: 'G4', zh: '四年級' },
@@ -422,8 +428,10 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
     { id: 'g6', n: 'G6', zh: '六年級' },
   ];
   const home = grades.find(g => g.id === homeGrade) || null;
+  /* v399：lockedGrade ＝ 這個人的年級是學號算出來的，不給改。
+     鎖定時 showAll 永遠是 false，「改選其他年級」那顆也不會出現。 */
   const [showAll, setShowAll] = React.useState(!home); // 有專屬年級 → 門口模式；否則完整選單
-  const doorMode = home && !showAll;
+  const doorMode = home && (lockedGrade || !showAll);
 
   // v257: 時段問候＋今天日期＋暑假第幾週
   const hourNow = new Date().getHours();
@@ -598,7 +606,10 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
               </span>
               <span className="gs-card-cta gs-card-cta-brand">進入 →</span>
             </button>
-            <button className="gs-switch" onClick={() => setShowAll(true)}>不是{home.zh}了嗎？改選其他年級</button>
+            {/* v399：年級綁學號之後，學生不再有「改選其他年級」（老師端照舊） */}
+            {!lockedGrade && (
+              <button className="gs-switch" onClick={() => setShowAll(true)}>不是{home.zh}了嗎？改選其他年級</button>
+            )}
           </>
         ) : (
           <>
@@ -613,10 +624,17 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
             <p className="gs-hint">之後隨時可以從右上角的年級標籤切換</p>
           </>
         )}
-        {!summerOnly && (onOpenGuide || (who && onLogout)) && (
+        {/* v399（Alan 指定）：門口頁底下就這三條——新手教學／回到主頁／換帳號。
+            「回到主頁」＝回到首頁封面；onViewLanding 這個 prop 其實 app.jsx 一直都有傳，
+            但從來沒有被畫出來（寫好卻沒有呼叫點的死 prop）。
+            換帳號排最後：它是唯一「會把人踢出去」的動作，放在最右邊最不容易誤觸。 */}
+        {!summerOnly && (onOpenGuide || onViewLanding || (who && onLogout)) && (
           <div className="gs-links">
             {onOpenGuide && (
               <button className="gs-switch gs-landing-link" onClick={onOpenGuide}>新手教學</button>
+            )}
+            {onViewLanding && (
+              <button className="gs-switch gs-landing-link" onClick={onViewLanding}>回到主頁</button>
             )}
             {who && onLogout && (
               <button className="gs-switch gs-landing-link" onClick={onLogout}>不是{who}？換帳號</button>

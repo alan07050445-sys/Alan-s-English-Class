@@ -1992,6 +1992,7 @@ const RC_SKILLS = {
 };
 
 const RC_GRADES = {
+  g1: 'Grade 1 (age 7, CEFR pre-A1). Three-to-five word sentences, only the most basic sight words.',
   g2: 'Grade 2 (age 8, CEFR pre-A1). Very short sentences, only the most common words.',
   g3: 'Grade 3 (age 9, CEFR A1). Short sentences, everyday words.',
   g4: 'Grade 4 (age 10, CEFR A1-A2).',
@@ -3107,14 +3108,17 @@ Object.assign(window, {
 
 /* ── 學校帳號自動分年級（v237）──
    康橋學號 email：le<NN>...@stu.kcislk...  年級 = LE_GRADE_BASE − NN
-   2026 學年 base=16：le13→G3、le12→G4、le11→G5、le10→G6
-   ⚠️ 每年開學要 +1（2027 學年改成 17）——非學校帳號回傳 null，不自動分類 */
+   2026 學年 base=16：le15→G1、le14→G2、le13→G3、le12→G4、le11→G5、le10→G6
+   ⚠️ 每年開學要 +1（2027 學年改成 17）——非學校帳號回傳 null，不自動分類
+   v399（開學）：學生端的年級改成「由這裡綁定、不能自己選」（app.jsx 的 boundGrade），
+   所以這個函式現在是學生看到哪一班的唯一依據——算錯就是進錯教室。
+   下限也從 2 放到 1，因為 v399 開了 G1 課程軌（le15 以前會回 null）。 */
 const LE_GRADE_BASE = 16;
 window.gradeFromEmail = function (email) {
   const m = String(email || '').toLowerCase().match(/^le(\d{2})/);
   if (!m) return null;
   const g = LE_GRADE_BASE - parseInt(m[1], 10);
-  return (g >= 2 && g <= 6) ? ('g' + g) : null;
+  return (g >= 1 && g <= 6) ? ('g' + g) : null;
 };
 
 

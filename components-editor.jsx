@@ -4439,7 +4439,8 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
             <div className="rc-two">
               <label className="rc-lab">學生年級（決定用字難度）
                 <select value={grade} onChange={e => setGrade(e.target.value)}>
-                  <option value="g2">G2 二年級</option><option value="g3">G3 三年級</option>
+                  <option value="g1">G1 一年級</option><option value="g2">G2 二年級</option>
+                  <option value="g3">G3 三年級</option>
                   <option value="g4">G4 四年級</option><option value="g5">G5 五年級</option>
                   <option value="g6">G6 六年級</option>
                 </select>

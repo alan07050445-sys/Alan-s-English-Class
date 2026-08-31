@@ -15,7 +15,7 @@ const _subscribeG3       = window.subscribeToClassData;
    所以要傳「API 函式本身」時，一定要包成 `() => 那個函式`。
    v383 的災情就是這樣來的：`grammar: window.saveWeekOrderGR` 在接線當下就被呼叫，
    把 weekOrder 寫成字串 'gr'，訂閱也沒接上 → 老師建立的內容從來沒進雲端。 */
-function _gradeOf(g, { g2, g4, g5, g6, g3, summer, grammar }) {
+function _gradeOf(g, { g1, g2, g4, g5, g6, g3, summer, grammar }) {
   // v381: 五大時態核心題庫是獨立的一條 track（跟暑假一樣），不屬於任何年級
   if (grammar !== undefined && window.isGrammarTrack && window.isGrammarTrack(g)) {
     return typeof grammar === 'function' ? grammar(g) : grammar;
@@ -23,6 +23,7 @@ function _gradeOf(g, { g2, g4, g5, g6, g3, summer, grammar }) {
   if (summer !== undefined && window.isSummerTrack && window.isSummerTrack(g)) {
     return typeof summer === 'function' ? summer(g) : summer;
   }
+  if (g === 'g1' && g1 !== undefined) return g1;   // v399: 新增一年級
   if (g === 'g2') return g2;
   if (g === 'g4' && g4 !== undefined) return g4;
   if (g === 'g5') return g5;
@@ -165,18 +166,18 @@ function App() {
   // Seed from localStorage cache; Firestore subscription overwrites shortly after mount.
   const [weeks, setWeeks] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks(), grammar: window.loadWeeksGR() });
+    return _gradeOf(g, { g1: window.loadWeeksG1(), g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks(), grammar: window.loadWeeksGR() });
   });
   const [weekOrder, setWeekOrder] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    return _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
+    return _gradeOf(g, { g1: window.loadWeekOrderG1(), g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
   });
   const [progress, setProgress] = useAppState(() => window.loadProgress());
   const [qmProgressVersion, setQmProgressVersion] = useAppState(0);
   const [weekIdx, setWeekIdx] = useAppState(() => {
     const g = (() => { try { return localStorage.getItem('alan-grade'); } catch(e) { return null; } })();
-    const ord = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
-    const wks = _gradeOf(g, { g2: window.loadWeeksG2(),     g4: window.loadWeeksG4(),     g5: window.loadWeeksG5(),     g6: window.loadWeeksG6(),     g3: window.loadWeeks(),     summer: (t) => window.summerApi(t).loadWeeks() });
+    const ord = _gradeOf(g, { g1: window.loadWeekOrderG1(), g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
+    const wks = _gradeOf(g, { g1: window.loadWeeksG1(), g2: window.loadWeeksG2(),     g4: window.loadWeeksG4(),     g5: window.loadWeeksG5(),     g6: window.loadWeeksG6(),     g3: window.loadWeeks(),     summer: (t) => window.summerApi(t).loadWeeks() });
     return bestWeekIdx(ord, wks);
   });
   const [openCat, setOpenCat] = useAppState("vocab");
@@ -263,11 +264,17 @@ function App() {
      ⚠ deps 一定要帶 adminVer：「擁有者以外的老師」是非同步從 admins 名單解析出來的，
        不帶就會停在「還不知道我是老師」的舊值，吉祥物照樣冒出來。
      逃生門：Alan 自己想看的時候 localStorage.setItem('alan-mx-teacher','1') 再重整。 */
+  /* v399（Alan：「我的吉祥物消失了」）：v392 是「老師端一律不出現」，
+     但 Alan 用同一個帳號也會用學生的畫面看內容——對他來說就是整隻不見了。
+     真正該讓開的只有「在工作的畫面」：編輯模式與老師後台（表格、按鈕密集）。
+     一般的學習畫面（大廳／練習）跟學生看到的一樣，牠就該在。
+     逃生門保留：localStorage.setItem('alan-mx-teacher','1') ＝ 連工作畫面也要牠。 */
   useAppEffect(() => {
     let escape = false;
     try { escape = localStorage.getItem('alan-mx-teacher') === '1'; } catch(e) {}
-    window.__mxAllow = !!user && (!window.isAdminUser(user) || escape);
-  }, [user, adminVer]);
+    const teacherWorking = window.isAdminUser(user) && (editMode || dashOpen) && !escape;
+    window.__mxAllow = !!user && !teacherWorking;
+  }, [user, adminVer, editMode, dashOpen]);
 
   // ── Loading screen state ────────────────────────────
   // showLoader stays true until auth resolves + 480ms (fade-out animation time)
@@ -303,6 +310,15 @@ function App() {
   }, [revealReady]);
 
   const isTeacher = window.isAdminUser(user);
+
+  /* ── v399（開學）：學生的年級改成「由學號綁定」，不能自己選 ──────────────
+     康橋學號信箱 leNN…→ gradeFromEmail 直接算出年級（le15→G1 … le10→G6）。
+     · 老師不綁：要能巡所有年級（門口頁的年級選單、右上角年級章都照舊）。
+     · 非學校帳號（自己的 Gmail 等）算不出年級 → 維持「自己選一次」，
+       不然沒有學校信箱的人會被鎖在門外。
+     ⚠ 這個值一旦有，就是唯一真相——去年自己選過、存在 localStorage 的舊年級不能贏
+       （le13 去年是 G2、今年就是 G3，開學當天要自己跳過去）。 */
+  const boundGrade = (!isTeacher && user) ? window.gradeFromEmail(user.email) : null;
 
   // v380: 指派名單只有老師需要，學生不要多打一次 Firestore
   useAppEffect(() => {
@@ -427,12 +443,12 @@ function App() {
   useAppEffect(() => {
     if (!grade) return; // wait until grade is chosen
     weekPickedRef.current = false;   // v340: 換年級/換教室 → 重新自動跳到本週
-    window.saveWeeks     = _gradeOf(grade, { g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks, grammar: () => window.saveWeeksGR });
-    window.saveWeekOrder = _gradeOf(grade, { g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder, grammar: () => window.saveWeekOrderGR });
+    window.saveWeeks     = _gradeOf(grade, { g1: window.saveWeeksG1, g2: window.saveWeeksG2,     g4: window.saveWeeksG4,     g5: window.saveWeeksG5,     g6: window.saveWeeksG6,     g3: _saveWeeksG3,     summer: (t) => window.summerApi(t).saveWeeks, grammar: () => window.saveWeeksGR });
+    window.saveWeekOrder = _gradeOf(grade, { g1: window.saveWeekOrderG1, g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder, grammar: () => window.saveWeekOrderGR });
 
-    const subscribeFn = _gradeOf(grade, { g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe, grammar: () => window.subscribeToClassDataGR });
-    const storageKey  = _gradeOf(grade, { g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey, grammar: window.GR_STORAGE_KEY });
-    const orderKey    = _gradeOf(grade, { g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey, grammar: window.GR_ORDER_KEY });
+    const subscribeFn = _gradeOf(grade, { g1: window.subscribeToClassDataG1, g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe, grammar: () => window.subscribeToClassDataGR });
+    const storageKey  = _gradeOf(grade, { g1: 'alans-english-g1-data-v1', g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey, grammar: window.GR_STORAGE_KEY });
+    const orderKey    = _gradeOf(grade, { g1: 'alans-english-g1-order-v1', g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey, grammar: window.GR_ORDER_KEY });
 
     cloudReadyRef.current = false;          // v355: 換年級／換教室 → 重新等雲端
     const unsub = subscribeFn((newWeeks, newOrder) => {
@@ -581,6 +597,7 @@ function App() {
 
   // Active categories — switches between grade definitions on grade change
   const activeCategories = _gradeOf(grade, {
+    g1: window.CATEGORIES_G1 || _CATS_G3,
     g2: window.CATEGORIES_G2 || _CATS_G3,
     g4: window.CATEGORIES_G4 || _CATS_G3,
     g5: window.CATEGORIES_G5 || _CATS_G3,
@@ -1310,8 +1327,8 @@ function App() {
   const applyGradeData = (g) => {
     // Immediately load the correct grade's data so the page never
     // flashes the previous grade's content while Firestore syncs.
-    const newWeeks = _gradeOf(g, { g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks(), grammar: window.loadWeeksGR() });
-    const newOrder = _gradeOf(g, { g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
+    const newWeeks = _gradeOf(g, { g1: window.loadWeeksG1(), g2: window.loadWeeksG2(), g4: window.loadWeeksG4(), g5: window.loadWeeksG5(), g6: window.loadWeeksG6(), g3: window.loadWeeks(), summer: (t) => window.summerApi(t).loadWeeks(), grammar: window.loadWeeksGR() });
+    const newOrder = _gradeOf(g, { g1: window.loadWeekOrderG1(), g2: window.loadWeekOrderG2(), g4: window.loadWeekOrderG4(), g5: window.loadWeekOrderG5(), g6: window.loadWeekOrderG6(), g3: window.loadWeekOrder(), summer: (t) => window.summerApi(t).loadWeekOrder(), grammar: window.loadWeekOrderGR() });
     try { localStorage.setItem('alan-grade', g); } catch(e) {}
     setGrade(g);
     setWeeks(newWeeks);
@@ -1326,12 +1343,29 @@ function App() {
   };
 
   const handleSelectGrade = (g) => {
-    applyGradeData(g);
+    /* v399: 有綁定就一律以綁定為準（防呆——正常情況下畫面上根本不會出現別的年級）。
+       只擋「年級教室」與「暑假」這兩種；五大時態（gr）是跨年級的常設題庫，不屬於任何一班，
+       之後對學生開放時不能被綁定擋在門外。 */
+    const gradeLike = /^g\d$/.test(g) || !!(window.isSummerTrack && window.isSummerTrack(g));
+    const target = (boundGrade && gradeLike) ? boundGrade : g;
+    applyGradeData(target);
     // 記住這個帳號的專屬年級（暑假/題庫不算）；標記本 session 已進入
-    if (/^g\d$/.test(g)) { try { localStorage.setItem(homeGradeKey(), g); } catch(e) {} }
+    if (/^g\d$/.test(target)) { try { localStorage.setItem(homeGradeKey(), target); } catch(e) {} }
     setEntered(true);
     try { sessionStorage.setItem('alan-entered', '1'); } catch(e) {}
   };
+
+  /* v399：把「現在在哪一班」拉回綁定的年級。會走到這裡的三種情況：
+     ① 升年級（去年選過 G2、今年學號算出來是 G3）
+     ② 暑假結束還停在 ☀️ 暑假 track
+     ③ 有人手動改了 localStorage
+     applyGradeData 會把 grade 設成 boundGrade，effect 再跑一次就相等、自然停住。 */
+  useAppEffect(() => {
+    if (!boundGrade) return;
+    try { localStorage.setItem(homeGradeKey(), boundGrade); } catch(e) {}
+    if (grade && grade !== boundGrade
+        && !(window.isGrammarTrack && window.isGrammarTrack(grade))) applyGradeData(boundGrade);
+  }, [boundGrade, grade]);
 
   // ── 帳號切換（登入／登出／換人）→ 回門口頁、載入「這個帳號」的年級 ──
   const prevUidRef = useAppRef(undefined);
@@ -1344,7 +1378,7 @@ function App() {
     setEntered(false);
     try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
     setCatView(null);
-    const hg = readHomeGrade() || (user ? window.gradeFromEmail(user.email) : null);
+    const hg = (user && !window.isAdminUser(user) && window.gradeFromEmail(user.email)) || readHomeGrade() || (user ? window.gradeFromEmail(user.email) : null);
     if (hg && /^g\d$/.test(hg)) {
       applyGradeData(hg);       // 有自己的年級 → 門口頁顯示「進入 Gx 教室」
     } else {
@@ -1429,7 +1463,7 @@ function App() {
       // 門口頁：第一次選年級；之後每次開啟顯示「進入教室／暑假專區」
       // 年級記憶跟著帳號走（共用電腦的手足各自獨立）
       // 學校帳號（leNN…）自動判定年級 → 新同學第一次登入就直接看到自己的教室卡
-      const homeGrade = readHomeGrade() || (user ? window.gradeFromEmail(user.email) : null);
+      const homeGrade = boundGrade || readHomeGrade() || (user ? window.gradeFromEmail(user.email) : null);
       appContent = (
         <window.GradeSelector
           key={pageKey}
@@ -1446,7 +1480,13 @@ function App() {
             setEntered(false);
             try { sessionStorage.removeItem('alan-entered'); } catch(e) {}
           }}
-          summer={(isTeacher || hasSummerPlan) ? { lib: isTeacher, mine: hasSummerPlan, who: summerWho, prog: doorSummerProg } : null}
+          /* v399（開學）：暑假入口從學生端收起來——開學後門口頁只留自己的教室。
+             老師端保留「暑假題庫」（要回去看／改暑假的內容）。
+             ⚠ 只是不顯示入口，暑假的資料完全沒動。 */
+          summer={isTeacher ? { lib: true, mine: hasSummerPlan, who: summerWho, prog: doorSummerProg }
+                : (summerOnlyDoor && hasSummerPlan) ? { lib: false, mine: true, who: summerWho, prog: doorSummerProg }
+                : null}
+          lockedGrade={!!boundGrade}
           onViewLanding={() => runWave(() => setViewLanding(true))}
           onLogout={user ? () => { if (confirm('要換帳號嗎？')) signOutWithFarewell(); } : null}
           onOpenGuide={homeGrade ? () => {
@@ -1533,7 +1573,8 @@ function App() {
             checkinDone={!!(window.computeCheckin && window.computeCheckin(myCheckin).signedToday)}
             checkinStreak={(window.computeCheckin ? window.computeCheckin(myCheckin).streak : 0)}
             onShowStars={() => setStarsOpen(true)}
-            onSwitchGrade={() => runWave(() => {
+            /* v399：年級由學號綁定的學生，右上角的年級章只是一個標籤，不能點去換班。 */
+            onSwitchGrade={boundGrade ? null : () => runWave(() => {
               try { localStorage.removeItem('alan-grade'); } catch(e) {}
               setGrade(null);
               setCatView(null);
@@ -1782,8 +1823,8 @@ function App() {
           <window.TermSetupModal
             open={termOpen}
             existingIds={weekOrder}
-            gradeLabel={_gradeOf(grade, { g2: '二年級', g4: '四年級', g5: '五年級', g6: '六年級', g3: '三年級', summer: '暑假', grammar: '文法核心' })}
-            prefix={_gradeOf(grade, { g2: 'g2-', g4: 'g4-', g5: 'g5-', g6: 'g6-', g3: '', summer: 'sl-', grammar: 'gr-' })}
+            gradeLabel={_gradeOf(grade, { g1: '一年級', g2: '二年級', g4: '四年級', g5: '五年級', g6: '六年級', g3: '三年級', summer: '暑假', grammar: '文法核心' })}
+            prefix={_gradeOf(grade, { g1: 'g1-', g2: 'g2-', g4: 'g4-', g5: 'g5-', g6: 'g6-', g3: '', summer: 'sl-', grammar: 'gr-' })}
             categories={activeCategories}
             onClose={() => setTermOpen(false)}
             onCreate={handleCreateTerm}
