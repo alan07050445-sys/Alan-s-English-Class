@@ -5472,15 +5472,32 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
 
   // v340: 之前週次還沒完成的作業——週次一往前推，舊作業就從畫面消失，
   // 小朋友會說「作業不見了」。這裡一律列出來，可以直接點回去補做。
+  /* v400（Alan 開學第一天回報）：新學期第 1 週，卻還在催「上學期 Week 16 的 2 項作業」。
+     原本只要是排在前面的週次就一律往回撈，於是跨過了學期的界線。兩道防線：
+     ① 封存過的週次不撈——v398 的「📦 封存」本來就是「這個學期已經退場」的意思。
+        （老師端特別明顯：老師的 viewOrder 是完整清單、看得到封存的週次，
+          所以圖 1 那個畫面只有老師會遇到；學生的 viewOrder 已經濾掉封存的了。）
+     ② 不跨學期：週次 id 是「學期代碼-W週數」（2026-W16 → 2026、2026F-W01 → 2026F、
+        g4-2026F-W03 → g4-2026F）。學期代碼不同就是上一個學期，不催。
+        ⚠ 兩邊 id 只要有一個解析不出學期代碼就不套用這條——寧可多提醒，
+          也不要把「這學期真的還沒做完的作業」默默藏起來（那才是 v340 當初要修的 bug）。 */
+  const termKeyOf = (id) => {
+    const m = String(id || '').match(/^(.*)-W\d{1,3}$/i);
+    return m ? m[1] : null;
+  };
   const pastDue = useQMM(() => {
     const out = [];
     if (!weeks || !weekOrder || !weekOrder.length) return out;
     const curIdx = weekOrder.indexOf(weekId);
     if (curIdx <= 0) return out;                       // 已經是第一週就沒有「之前」
+    const curTerm = termKeyOf(weekId);
     for (let i = 0; i < curIdx; i++) {
       const wid = weekOrder[i];
       const w = weeks[wid];
       if (!w) continue;
+      if (w.archived) continue;                        // v400 ①：封存＝已退場的學期
+      const wTerm = termKeyOf(wid);                    // v400 ②：不跨學期
+      if (curTerm && wTerm && wTerm !== curTerm) continue;
       const whw = w.homework || {};
       if (!Object.keys(whw).length) continue;
       const byId = {};

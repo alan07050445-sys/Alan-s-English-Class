@@ -37,6 +37,19 @@ function MxHat({ id }) {
   return null;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v401：夥伴圖鑑（Alan：想讓小朋友自己選，而且每一隻要有符合個性的專屬動作）
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠ 全部都畫在同一個 9×10 的網格上（viewBox "0 -2 9 10"），而且一定要有
+     .mx-torso（身體＋兩顆 .mx-eye）與 .mx-leg-a/b/c 三個群組——
+     走路／跳／轉圈／翻滾／打瞌睡那十幾支 CSS 動畫全都掛在這些 class 上，
+     照著這個骨架畫，新夥伴不用寫半行動畫就會動。
+   ⚠ .mx-prop-* 是「招牌動作才出現的小道具」（筆電、書）：平常 opacity:0，
+     只有身上掛著對應的 act- class 時才顯示（見 styles-fx.css）。
+   ⚠ 這幾隻是照 Alan 喜歡的方向（火／貓頭鷹／石頭／幼苗這種通用形象）另外畫的，
+     不是把別家產品的角色搬過來——配色也換成本站的紙感色票，跟整體才搭。 */
+
+/* ① Claudius —— 原本那隻，永遠是預設 */
 function ClaudeMascot({ size = 46, hat = 'none' }) {
   const CLAY = '#C1785A', EYE = '#1A1A1A';
   return (
@@ -56,6 +69,120 @@ function ClaudeMascot({ size = 46, hat = 'none' }) {
       <g className="mx-leg mx-leg-a"><rect x="0" y="6" width="2" height="2" fill={CLAY}/></g>
       <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={CLAY}/></g>
       <g className="mx-leg mx-leg-c"><rect x="7" y="6" width="2" height="2" fill={CLAY}/></g>
+      {/* 招牌動作：打電腦（Alan 指定）——小筆電擋在腳前面，看起來就像坐在桌子後面 */}
+      <g className="mx-prop mx-prop-type">
+        <rect x="1" y="5" width="7" height="2" fill="#4A443A"/>
+        <rect x="2" y="5" width="5" height="1" fill="#9FD8BC"/>
+        <rect x="0" y="7" width="9" height="1" fill="#6B6355"/>
+      </g>
+    </svg>
+  );
+}
+
+/* ② 咕咕（貓頭鷹）—— 眼睛大、愛看書，走得少想得多 */
+function OwlMascot({ size = 46, hat = 'none' }) {
+  const BODY = '#A9713F', DARK = '#6E4522', RING = '#FBF6EA', BEAK = '#E8A33C', EYE = '#1A1A1A';
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat}/>
+      <g className="mx-torso">
+        {/* 耳羽 */}
+        <rect x="1" y="0" width="1" height="1" fill={DARK}/>
+        <rect x="7" y="0" width="1" height="1" fill={DARK}/>
+        <rect x="0" y="1" width="9" height="5" fill={BODY}/>
+        <rect x="3" y="5" width="3" height="1" fill="#E4C79B"/>
+        {/* 眼盤：刻意留出最外面那一欄與最下面那一列的棕色，
+            不然白色會漲到邊界，整顆頭看起來像兩塊白布不像貓頭鷹（第一版就是這樣） */}
+        <rect x="1" y="2" width="3" height="3" fill={RING}/>
+        <rect x="5" y="2" width="3" height="3" fill={RING}/>
+        <rect className="mx-eye" x="1" y="2" width="2" height="2" fill={EYE}/>
+        <rect className="mx-eye" x="6" y="2" width="2" height="2" fill={EYE}/>
+        <rect x="4" y="3" width="1" height="2" fill={BEAK}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="1" y="6" width="2" height="2" fill={BEAK}/></g>
+      <g className="mx-leg mx-leg-b"/>
+      <g className="mx-leg mx-leg-c"><rect x="6" y="6" width="2" height="2" fill={BEAK}/></g>
+      {/* 招牌動作：看書 */}
+      <g className="mx-prop mx-prop-read">
+        <rect x="1" y="5" width="7" height="3" fill="#8B3120"/>
+        <rect x="1" y="5" width="3" height="2" fill="#FBF6EA"/>
+        <rect x="5" y="5" width="3" height="2" fill="#FBF6EA"/>
+      </g>
+    </svg>
+  );
+}
+
+/* ③ 小焰（火苗）—— 靜不下來，跑得比誰都快 */
+function FlameMascot({ size = 46, hat = 'none' }) {
+  const OUT = '#D6533C', MID = '#E8873C', IN = '#F2C14E', EYE = '#3A1B12';
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat}/>
+      <g className="mx-torso">
+        {/* 火苗的外形靠「1→3→5→7 一格一格變寬」做出來——
+            第一版只收一列，看起來就是一塊橘色方磚，完全不像火 */}
+        <rect x="4" y="-1" width="1" height="1" fill={IN}/>
+        <rect x="3" y="0" width="3" height="1" fill={MID}/>
+        <rect x="2" y="1" width="5" height="1" fill={OUT}/>
+        <rect x="1" y="2" width="7" height="4" fill={OUT}/>
+        <rect x="3" y="4" width="3" height="2" fill={MID}/>
+        <rect className="mx-eye" x="2" y="3" width="2" height="2" fill={EYE}/>
+        <rect className="mx-eye" x="5" y="3" width="2" height="2" fill={EYE}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="1" y="6" width="2" height="2" fill={MID}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={IN}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="6" y="6" width="2" height="2" fill={MID}/></g>
+    </svg>
+  );
+}
+
+/* ④ 阿石（小石頭）—— 慢吞吞，最愛裝成路邊一顆普通的石頭 */
+function RockMascot({ size = 46, hat = 'none' }) {
+  const ROCK = '#9A9384', DARK = '#6E695D', LIGHT = '#C4BDAC', EYE = '#1A1A1A';
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat}/>
+      <g className="mx-torso">
+        <rect x="2" y="0" width="5" height="1" fill={LIGHT}/>
+        <rect x="1" y="1" width="7" height="5" fill={ROCK}/>
+        <rect x="6" y="4" width="1" height="1" fill={DARK}/>
+        <rect x="2" y="1" width="1" height="1" fill={LIGHT}/>
+        <rect className="mx-eye" x="2" y="2" width="2" height="2" fill={EYE}/>
+        <rect className="mx-eye" x="5" y="2" width="2" height="2" fill={EYE}/>
+        <rect x="4" y="4" width="1" height="1" fill={DARK}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="1" y="6" width="2" height="2" fill={DARK}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={ROCK}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="6" y="6" width="2" height="2" fill={DARK}/></g>
+    </svg>
+  );
+}
+
+/* ⑤ 小芽（幼苗）—— 好奇寶寶，開心的時候會長高一點點 */
+function SproutMascot({ size = 46, hat = 'none' }) {
+  const SEED = '#D8C79B', DEEP = '#B99F6B', LEAF = '#6FA85A', STEM = '#4E7A3F', EYE = '#3A3222';
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -2 9 10"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat}/>
+      <g className="mx-leaf">
+        <rect x="4" y="0" width="1" height="1" fill={STEM}/>
+        <rect x="2" y="-1" width="2" height="1" fill={LEAF}/>
+        <rect x="5" y="-1" width="2" height="1" fill={LEAF}/>
+      </g>
+      <g className="mx-torso">
+        <rect x="0" y="1" width="9" height="5" fill={SEED}/>
+        <rect x="0" y="5" width="9" height="1" fill={DEEP}/>
+        <rect className="mx-eye" x="1" y="2" width="2" height="2" fill={EYE}/>
+        <rect className="mx-eye" x="6" y="2" width="2" height="2" fill={EYE}/>
+        <rect x="4" y="4" width="1" height="1" fill={DEEP}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="0" y="6" width="2" height="2" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="3" y="6" width="3" height="2" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="7" y="6" width="2" height="2" fill={DEEP}/></g>
     </svg>
   );
 }
@@ -74,8 +201,10 @@ const MX_LINES = {
    「我在散步 🚶」連講兩次會讓人以為壞掉。抽到跟上一句一樣就重抽「一次」——
    只重抽一次，桶裡只有 3 句時才不會變成死迴圈。台詞內容一個字都沒改。 */
 const lastSaid = {};
-const mxPick = (k) => {
-  const a = MX_LINES[k] || MX_LINES.idle;
+/* v401：第二個參數是「現在是哪一隻夥伴」。牠自己有寫這一類的台詞就用牠的，
+   沒寫就退回共用的那組（correct/wrong/win/tap 全部共用，不必每隻都重寫一遍）。 */
+const mxPick = (k, pet) => {
+  const a = (pet && pet.lines && pet.lines[k]) || MX_LINES[k] || MX_LINES.idle;
   let s = a[Math.floor(Math.random() * a.length)];
   if (s === lastSaid[k]) s = a[Math.floor(Math.random() * a.length)];
   lastSaid[k] = s;
@@ -97,8 +226,68 @@ function mxGetOff() { try { return localStorage.getItem(MX_OFF_KEY) || ''; } cat
 function mxSetOff(d) { try { localStorage.setItem(MX_OFF_KEY, d || ''); } catch (e) {} }
 
 
-/* 純走位／搞笑的動作（不含答題反應）*/
+/* 純走位／搞笑的動作（不含答題反應）——所有夥伴共用的底牌 */
 const MX_ACTS = ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think'];
+
+/* ══ v401：夥伴名冊 ══════════════════════════════════════════════════════
+   acts ＝ 這一隻平常會做的事（權重就是「同一個動作寫幾次」，故意不用另一套資料結構）。
+   sig  ＝ 招牌動作，只有牠會做；點牠的時候一定先做這一個（不然小朋友發現不了）。
+   ⚠ 加新夥伴只要往這個陣列裡加一筆，MascotLayer 完全不用改。
+   ⚠ 移動類的動作（走位）只有 walk / roll / dash 三種，寫在別的名字不會位移。 */
+const MX_MOVE_ACTS = ['walk', 'roll', 'dash'];
+const MX_PETS = [
+  {
+    id: 'clay', zh: 'Claudius', tip: '陪你唸書的老夥伴',
+    art: ClaudeMascot, sig: 'type', sigZh: '打電腦',
+    acts: ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think', 'type', 'type'],
+    lines: { idle: ['我在散步 🚶', '這裡風景不錯', '要不要摸摸我', '我在數格子 1、2、3…'],
+             sig:  ['我在寫程式（假的）💻', '叩叩叩…好忙好忙', '我幫你把答案存起來了（沒有）'] },
+  },
+  {
+    id: 'owl', zh: '咕咕', tip: '眼睛很大，想的比走的多',
+    art: OwlMascot, sig: 'read', sigZh: '看書',
+    acts: ['walk', 'walk', 'jump', 'peek', 'think', 'think', 'read', 'read', 'read', 'sleep', 'spin'],
+    lines: { hello: ['咕…咕…📖', '我剛剛在看書', '嗨，一起唸書吧'],
+             idle:  ['這一頁我看三遍了', '書裡面有答案喔', '咕咕。'],
+             sig:   ['讀到好看的地方了 📖', '這句我記起來了', '再一頁就好…'] },
+  },
+  {
+    id: 'flame', zh: '小焰', tip: '靜不下來，跑超快',
+    art: FlameMascot, sig: 'dash', sigZh: '衝刺',
+    acts: ['walk', 'walk', 'dash', 'dash', 'dash', 'jump', 'jump', 'spin', 'dance', 'roll', 'peek'],
+    lines: { hello: ['咻——！🔥', '我來了我來了', '要比賽跑步嗎'],
+             idle:  ['坐不住啦', '好想跑', '我很燙喔（其實不會）'],
+             sig:   ['咻咻咻！🔥', '你追不到我～', '再一圈！'] },
+  },
+  {
+    id: 'rock', zh: '阿石', tip: '慢吞吞，最愛裝石頭',
+    art: RockMascot, sig: 'hide', sigZh: '裝石頭',
+    acts: ['roll', 'roll', 'walk', 'hide', 'hide', 'hide', 'sleep', 'sleep', 'think', 'peek', 'jump'],
+    lines: { hello: ['……（是一顆石頭）', '嗨，我醒了', '慢慢來就好'],
+             idle:  ['我在原地想事情', '好穩。', '滾一下比較快'],
+             sig:   ['我是石頭。', '……（假裝沒看到）', '噓，別說出去'] },
+  },
+  {
+    id: 'sprout', zh: '小芽', tip: '好奇寶寶，開心就會長高',
+    art: SproutMascot, sig: 'grow', sigZh: '長高',
+    acts: ['walk', 'walk', 'peek', 'peek', 'grow', 'grow', 'think', 'dance', 'sleep', 'jump'],
+    lines: { hello: ['我今天又長高了 🌱', '嗨嗨！', '陽光好舒服'],
+             idle:  ['再長一點點…', '你有澆水嗎', '葉子癢癢的'],
+             sig:   ['長高了！🌱', '我又冒新葉子了', '再一公分就好'] },
+  },
+];
+const MX_PET_KEY = 'alan-mx-pet';
+function mxGetPet() {
+  try {
+    const id = localStorage.getItem(MX_PET_KEY);
+    return MX_PETS.some(p => p.id === id) ? id : MX_PETS[0].id;   // 認不得就回預設，不會變成空白
+  } catch (e) { return MX_PETS[0].id; }
+}
+function mxSetPet(id) { try { localStorage.setItem(MX_PET_KEY, id || ''); } catch (e) {} }
+function mxPetOf(id) { return MX_PETS.find(p => p.id === id) || MX_PETS[0]; }
+
+/* 招牌動作要停留多久（毫秒）。走位類的不在這裡，時間是照距離算的。 */
+const MX_SIG_HOLD = { type: 2800, read: 3000, hide: 2600, grow: 1900 };
 
 function MascotLayer() {
   const [alive,  setAlive]  = useFx(false);   // 進站 2.5 秒後才出來，不跟載入畫面搶
@@ -111,7 +300,9 @@ function MascotLayer() {
   const [bubble, setBubble] = useFx('');
   const [hat, setHat]     = useFx('none');       // v384: 完成越多，帽子越好
   const [name, setName]   = useFx(mxGetName());
+  const [petId, setPetId] = useFx(mxGetPet);     // v401: 現在陪你的是哪一隻
   const [menu, setMenu]   = useFx(false);        // 長按叫出來的小選單
+  const [petPick, setPetPick] = useFx(false);    // v401: 夥伴圖鑑（從小選單打開）
   const [drag, setDrag]   = useFx(null);         // 拖著走時的 {x,y}
   const timers  = useFxR([]);
   const bubbleT = useFxR(null);
@@ -136,6 +327,13 @@ function MascotLayer() {
     timers.current.push(t);
     return t;
   };
+
+  const pet = mxPetOf(petId);
+  const Art = pet.art;
+  /* window.mascotCheer 與攔 playSound 的那兩個 effect 不會因為換夥伴而重建
+     （deps 沒有 petId），直接引用 pet 會抓到換之前的舊值 → 用 ref 帶著走。 */
+  const petRef = useFxR(pet);
+  useFxE(() => { petRef.current = pet; }, [petId]);
 
   const say = (text, ms) => {
     setBubble(text);
@@ -237,32 +435,39 @@ function MascotLayer() {
         later(doAct, 3000);
         return;
       }
+      /* v401：動作池改成「這一隻自己的」——每隻夥伴的個性就是靠這個池子的比重表現的
+         （阿石大量 hide/sleep、小焰大量 dash、咕咕大量 read/think）。 */
+      const pool = pet.acts && pet.acts.length ? pet.acts : MX_ACTS;
       const pick = reduce.current
         ? (Math.random() < 0.5 ? 'think' : 'sleep')            // 減少動態＝只做原地的小動作
-        : MX_ACTS[Math.floor(Math.random() * MX_ACTS.length)];
+        : pool[Math.floor(Math.random() * pool.length)];
 
-      if (pick === 'walk' || pick === 'roll') {
+      if (MX_MOVE_ACTS.indexOf(pick) >= 0) {
         const target = Math.round(Math.random() * maxX());
         const dist   = Math.abs(target - x);
         if (dist < 30) { setAct('idle'); later(doAct, 1200); return; }
-        const speed  = pick === 'roll' ? 190 : 62;             // px / 秒
+        const speed  = pick === 'roll' ? 190 : pick === 'dash' ? 300 : 62;   // px / 秒
         const ms     = Math.round(dist / speed * 1000);
         setDir(target > x ? 1 : -1);
         setMoveMs(ms);
         setX(target);
         setAct(pick);
-        if (Math.random() < 0.08) say(mxPick('idle'));   // v392（D）：0.25 → 0.08
+        if (Math.random() < 0.08) say(mxPick(pick === pet.sig ? 'sig' : 'idle', pet));   // v392（D）：0.25 → 0.08
         later(() => { setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms + 120);
         return;
       }
 
-      const HOLD = { jump: 1000, spin: 950, dance: 2000, peek: 1700, sleep: 4200, think: 2200 };
+      const HOLD = Object.assign({ jump: 1000, spin: 950, dance: 2000, peek: 1700, sleep: 4200, think: 2200 }, MX_SIG_HOLD);
       setAct(pick);
       /* v392（D）：泡泡是文字（font-weight:700、最寬 190px），比動作更會搶走視線。
          實測 1180px 是 4.50 泡泡/分鐘、390px 是 6.01 → 出現率腰斬。
          睡覺以前是「無條件講一句」，也改成一半機率。 */
-      if (pick === 'sleep') { if (Math.random() < 0.5) say(mxPick('sleep'), 3800); }
-      else if (Math.random() < 0.15) say(mxPick('idle'));   // v392（D）：0.45 → 0.15
+      if (pick === 'sleep') { if (Math.random() < 0.5) say(mxPick('sleep', pet), 3800); }
+      /* v401：招牌動作的泡泡機率拉高到 40%——它一個 session 才出現幾次，
+         而且「牠在做什麼」要靠這句話才看得懂（打電腦、看書、裝石頭）。
+         其他動作維持 v392 調低後的 15%，整體泡泡量不會回到當初被嫌吵的程度。 */
+      else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxPick('sig', pet)); }
+      else if (Math.random() < 0.15) say(mxPick('idle', pet));   // v392（D）：0.45 → 0.15
       later(() => { setAct('idle'); later(doAct, 1200 + Math.random() * 3000); }, HOLD[pick] || 1200);
     };
 
@@ -270,11 +475,14 @@ function MascotLayer() {
        來回切換——以前每重跑一次就再說一次 hello，學生做完一個練習回到清單，
        700ms 後就被重新打招呼。A 做完之後切換更頻繁，所以這條必須跟 A 一起做。 */
     const first = later(() => {
-      if (!greetedRef.current) { greetedRef.current = true; say(mxPick('hello')); }
+      if (!greetedRef.current) { greetedRef.current = true; say(mxPick('hello', pet)); }
       later(doAct, 1600);
     }, 700);
     return () => { stopped = true; clearTimeout(first); clearAll(); };
-  }, [alive, hidden, shown, allowed]);
+    /* v401：deps 一定要帶 petId——換夥伴時這個 effect 不重建的話，doAct 的閉包
+       抓到的還是「上一隻」的動作池與台詞。實測：從小焰換成咕咕之後，
+       咕咕還在做 roll（翻滾是小焰池子裡的，咕咕沒有）。 */
+  }, [alive, hidden, shown, allowed, petId]);
 
   /* 答題反應——攔 playSound，全站不用改任何一行就有反應 */
   useFxE(() => {
@@ -298,7 +506,7 @@ function MascotLayer() {
         else if (type === 'wrong') { runRef.current = 0; }   // 答錯＝連勝歸零，完全不反應
         else if (type === 'complete' || type === 'fanfare') {
           // 做完了本來就該有大慶祝——這條維持不動
-          setAct('cheer'); say(mxPick('win'), 3000); later(() => setAct('idle'), 2200);
+          setAct('cheer'); say(mxPick('win', petRef.current), 3000); later(() => setAct('idle'), 2200);
         }
       } catch (e) {}
     };
@@ -311,7 +519,7 @@ function MascotLayer() {
   useFxE(() => {
     window.mascotSay = (t) => say(String(t || ''), 2600);
     window.mascotDo  = (a) => { setAct(a); later(() => setAct('idle'), 1600); };
-    window.mascotCheer = () => { setAct('cheer'); say(mxPick('win'), 3000); later(() => setAct('idle'), 2200); };
+    window.mascotCheer = () => { setAct('cheer'); say(mxPick('win', petRef.current), 3000); later(() => setAct('idle'), 2200); };
   }, []);
 
   /* 點一下＝耍寶；長按＝去睡覺（這次不再出現）。
@@ -369,9 +577,20 @@ function MascotLayer() {
       const hit = under && under.closest && under.closest('button, a, input, select, textarea, label, [role="button"]');
       if (hit) { hit.click(); return; }     // 腳下是按鈕 → 這一下算按鈕的，不耍寶
     }
+    /* v401：點一下有 45% 直接做招牌動作。招牌動作在自動循環裡幾分鐘才輪到一次，
+       小朋友不會等那麼久——「點牠就會表演」才是他們發現這件事的方式。
+       ⚠ 走位類的招牌（小焰的 dash）不能在這裡做：這裡不設定 moveMs/x，
+         套上去只會原地抽動，所以那一隻退回一般把戲。 */
+    const sigOk = !reduce.current && pet.sig && MX_MOVE_ACTS.indexOf(pet.sig) < 0;
+    if (sigOk && Math.random() < 0.45) {
+      setAct(pet.sig); say(mxPick('sig', pet), 2400);
+      if (window.playSound) window.playSound('match');
+      later(() => setAct('idle'), MX_SIG_HOLD[pet.sig] || 1600);
+      return;
+    }
     const tricks = reduce.current ? ['think'] : ['jump', 'spin', 'dance', 'roll'];
     const t = tricks[Math.floor(Math.random() * tricks.length)];
-    setAct(t); say(mxPick('tap'), 2000);
+    setAct(t); say(mxPick('tap', pet), 2000);
     if (window.playSound) window.playSound('match');
     later(() => setAct('idle'), t === 'dance' ? 2000 : 1000);
   };
@@ -388,7 +607,18 @@ function MascotLayer() {
   return (
     <div className={'mx-layer' + (drag ? ' dragging' : '')}>
       <div ref={slotRef} className="mx-slot" style={slotStyle}>
-        {bubble && !menu && <div className="mx-bubble">{bubble}</div>}
+        {bubble && !menu && !petPick && <div className="mx-bubble">{bubble}</div>}
+        <div ref={bodyRef} className={'mx-body act-' + act} style={{ '--mx-dir': dir }}
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
+          onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
+          role="img" aria-label={`吉祥物 ${name || pet.zh}`}>
+          <Art hat={hat}/>
+        </div>
+      </div>
+      {/* v401：選單與圖鑑改掛在 .mx-layer 底下（不再是 .mx-slot 的小孩）。
+          .mx-slot 會跟著吉祥物左右移動，選單本來是「以牠為中心」展開的——
+          牠走到最左邊時，230px 寬的圖鑑會有 75px 掉到畫面外（實測 375px 手機：left = -75）。
+          掛在滿版的 .mx-layer 上、水平置中，不管牠站在哪裡都完整看得到。 */}
         {menu && (
           <div className="mx-menu" onPointerDown={e => e.stopPropagation()}>
             <div className="mx-menu-name">{name || '還沒有名字'}</div>
@@ -407,6 +637,8 @@ function MascotLayer() {
                 setMenu(false);
               }}>🎩 換帽子</button>
             )}
+            {/* v401：換夥伴——名冊做成一張小圖鑑，點頭像就換 */}
+            <button onClick={() => { setMenu(false); setPetPick(true); }}>🐾 換夥伴</button>
             {/* v392（E）：以前叫「先去睡覺」，但重新整理就跑回來了，文案跟行為對不上。
                 現在存「睡到哪一天」，文案也改成看得懂的樣子。 */}
             <button onClick={() => { setMenu(false); mxSetOff(mxDay(0)); setHidden(true); }}>💤 休息一下（今天）</button>
@@ -414,13 +646,35 @@ function MascotLayer() {
             <button className="mx-menu-x" onClick={() => setMenu(false)}>取消</button>
           </div>
         )}
-        <div ref={bodyRef} className={'mx-body act-' + act} style={{ '--mx-dir': dir }}
-          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
-          onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
-          role="img" aria-label={name ? `吉祥物 ${name}` : '吉祥物'}>
-          <ClaudeMascot hat={hat}/>
-        </div>
-      </div>
+        {petPick && (
+          <div className="mx-pets" onPointerDown={e => e.stopPropagation()}>
+            <div className="mx-menu-name">選一個夥伴陪你</div>
+            {MX_PETS.map(p => {
+              const PArt = p.art;
+              return (
+                <button key={p.id} className={'mx-pet-row' + (p.id === petId ? ' on' : '')}
+                  onClick={() => {
+                    mxSetPet(p.id); setPetId(p.id); setPetPick(false);
+                    setAct('idle');
+                    /* 換完立刻打一次招呼＋做一次招牌動作，小朋友才知道換成功了、
+                       也順便看到這一隻會什麼。走位類的招牌一樣不能在這裡放（見上面）。 */
+                    say(mxPick('hello', p), 2600);
+                    if (MX_MOVE_ACTS.indexOf(p.sig) < 0 && !reduce.current) {
+                      later(() => { setAct(p.sig); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
+                    }
+                    if (window.playSound) window.playSound('pop');
+                  }}>
+                  <span className="mx-pet-ico"><PArt size={30}/></span>
+                  <span className="mx-pet-txt">
+                    <b>{p.zh}{p.id === petId && <em> · 現在</em>}</b>
+                    <span>{p.tip} · 會{p.sigZh}</span>
+                  </span>
+                </button>
+              );
+            })}
+            <button className="mx-menu-x" onClick={() => setPetPick(false)}>關起來</button>
+          </div>
+        )}
     </div>
   );
 }
@@ -487,7 +741,7 @@ function FxLayer() {
   );
 }
 
-Object.assign(window, { ClaudeMascot, MascotLayer, FxLayer, ConfettiBurst });
+Object.assign(window, { ClaudeMascot, OwlMascot, FlameMascot, RockMascot, SproutMascot, MX_PETS, MascotLayer, FxLayer, ConfettiBurst });
 
 /* 自己掛載——不動 App 的樹，任何頁面都在 */
 (function mountFx() {
