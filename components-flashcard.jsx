@@ -438,10 +438,8 @@ function useFitHeight(ref, enabled, min) {
       }
       // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
       const floor = Math.min(min || 320, Math.round(vh * 0.55));
-      const h = Math.max(floor, Math.round(vh - top - 10));
-      // 差不到 8px 就不要動——避免進場那幾次補量被看成「卡片自己在跳」
+      let h = Math.max(floor, Math.round(vh - top - 10));
       const curH = parseFloat(el.style.height) || 0;
-      if (curH && Math.abs(curH - h) < 8) return;
       /* ⚠⚠ v394：這裡本來設的是 height（固定高度）。
          那正是 Alan 回報「白色框框在捲」的根因：
          .fc-p-card / .fc-p-learn 有 overflow-y:auto，一旦內容比這個固定高度高，
@@ -458,12 +456,27 @@ function useFitHeight(ref, enabled, min) {
          → 一定要用 height。捲動的問題改用「讓內容縮得下」來解，不能靠放寬容器。 */
       el.style.height = h + 'px';
 
-      /* 外層通常還有 padding-bottom（例：.qm-quiz-area 手機是 84px）——
-         光算「上緣到視窗底」還是會多出那一截，所以量一次剩下的溢出再扣掉。 */
-      const over = host === document.documentElement
-        ? document.documentElement.scrollHeight - vh
-        : host.scrollHeight - host.clientHeight;
-      if (over > 1) el.style.height = Math.max(floor, h - over) + 'px';
+      /* 外層通常還有 padding-bottom（例：.qm-quiz-area 桌機 32px、手機 84px）——
+         光算「上緣到視窗底」還是會多出那一截，所以量一次剩下的溢出再扣掉。
+         ⚠⚠ v405（Alan：「flashcard 還是會跟著捲動」）：這裡本來只看「捲動容器」的溢出。
+            但 .qm-quiz-area 自己就是 overflow-y:auto ＝ 它被 _fcScrollHost 當成捲動容器，
+            而它其實是「跟著內容一起長高」的（scrollHeight === clientHeight）→ 量到的溢出永遠是 0，
+            它那 32px 的 padding-bottom 從來沒被扣掉，於是整頁多出 20~30px 可以捲。
+            實測 1440×900：卡片底 890、視窗 900，但 .qm-quiz-area 到 922 → 頁面可捲 22px。
+            改成「容器溢出」與「整頁溢出」取大的那個；扣完可能又冒出一點點，最多修兩輪。 */
+      for (let i = 0; i < 2; i++) {
+        const overHost = host === document.documentElement ? 0 : (host.scrollHeight - host.clientHeight);
+        const overDoc  = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const over = Math.max(overHost, overDoc);
+        if (over <= 1) break;
+        h = Math.max(floor, h - over);
+        el.style.height = h + 'px';
+      }
+
+      /* 差不到 8px 就維持原值——避免進場那幾次補量被看成「卡片自己在跳」。
+         ⚠ 這個比較一定要放在「扣完溢出」之後：先比再扣的話，每次重量都會先跳回
+           未扣的值再扣回來，等於自己製造抖動（v405 之前就是先比再扣）。 */
+      if (curH && Math.abs(curH - h) < 8) el.style.height = curH + 'px';
     };
 
     // 真的換版面才重量：轉向／改視窗大小
@@ -706,6 +719,12 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const enterCard = () => { stopMatchTimer(); clearAuto(); setStarOnly(false); setMode("card"); setCardIdx(0); setFlipped(false); };
 
   const enterLearn = (flag = starOnly) => { stopMatchTimer(); clearAuto();
+    /* v405：這一輪的範圍旗標也要跟著更新。
+       以前只有 enterTest／startScoped 會設 scopeStar，但結果頁的
+       「再多練一點 →」「Practice Again」是直接呼叫 enterLearn()——
+       學生只要在測驗時選過一次「只練星號」，scopeStar 就一直是 true，
+       之後練整份也不算完成（Alan 回報的「都測完了卻沒顯示完成練習」）。 */
+    setScopeStar(flag);
     const src = pool(flag);
     setLearnTotal(src.length);
     const order = shuffle([...src]);
@@ -728,8 +747,12 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   };
 
   const startTest = () => {
-    // v374(#3)(#4): 依剛才選的範圍決定要考哪些字（干擾選項仍從全部單字挑，才不會變簡單）
-    const src = pool(scopeStar);
+    /* v374(#3)(#4): 依剛才選的範圍決定要考哪些字（干擾選項仍從全部單字挑，才不會變簡單）
+       v405（Alan：「測驗竟然跟 flashcard 順序一樣，小朋友都可以背答案」）：
+       這裡本來直接用 pool() 的原始順序 ＝ 跟單字卡的排列一模一樣，
+       小朋友翻幾次卡就記得「第 3 張是 desert」，考試等於在背位置。
+       學習模式本來就有 shuffle（enterLearn），測驗漏掉了——補上，每一輪都重新洗。 */
+    const src = shuffle(pool(scopeStar));
     const tc = {};
     const qt = {};
     if (testType === "both") {
@@ -868,10 +891,14 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   }, [mode]);
 
   /* v361: 「學習」與「填空」跑完各通知一次——集點用（兩個模式都完成才給星星） */
+  /* v374(#4) 的規則不變：只練星號那一輪不算完成（避免用 2 個字就把整份刷掉）。
+     v405 改判斷方式：本來看 scopeStar 這個旗標，但旗標會殘留（見 enterLearn 的註解）。
+     改成看「這一輪實際練了幾張 vs 整份有幾張」——這是當下算出來的事實，不會過期。
+     ⚠ 全部單字都被加星號時 learnTotal === cards.length，照樣算完成（他確實練完整份了）。 */
+  const fullRound = (n) => n > 0 && n >= cards.length;
   useFC_E(() => {
-    // v374(#4): 只練星號那一輪不算完成（避免用 2 個字就把整份刷掉）
-    if (mode === "learn" && learnTotal > 0 && learnQueue.length === 0 && !scopeStar && onModeDone) onModeDone("learn");
-  }, [mode, learnQueue.length, learnTotal, scopeStar]);
+    if (mode === "learn" && learnQueue.length === 0 && fullRound(learnTotal) && onModeDone) onModeDone("learn");
+  }, [mode, learnQueue.length, learnTotal, cards.length]);
   useFC_E(() => {
     if (mode === "fill" && fillDone && onModeDone) onModeDone("fill");
   }, [mode, fillDone]);
@@ -1373,7 +1400,8 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 setTestDone(true);
                 // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
                 //           手寫題不列入完成條件，但全部答完可以另外加分
-                if (!scopeStar && onModeDone) {
+                // v405: 同上——用「這一輪實際考了幾張」判斷，不看會殘留的 scopeStar
+                if (fullRound(tCards.length) && onModeDone) {
                   onModeDone('test');
                   const written = tCards.filter(c => (questionTypes[c.id] || 'choice') === 'written');
                   if (written.length && written.every(c => (typedAnswers[c.id] || '').trim())) onModeDone('written');
@@ -1381,7 +1409,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 if (onComplete) onComplete();
               }}
             >
-              Submit · 交卷 ({answeredCards.size}/{cards.length})
+              {/* v405: 分母本來寫死 cards.length，但這一輪可能只考星號的幾張，
+                  會出現「3/8」卻已經可以交卷的矛盾。改成這一輪真正的張數。 */}
+              Submit · 交卷 ({answeredCards.size}/{tCards.length})
             </button>
           </div>
         </div>

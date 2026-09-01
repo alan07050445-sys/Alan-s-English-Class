@@ -1049,9 +1049,21 @@ async function prefetchTts(texts) {
   await Promise.all(Array.from({ length: n }, worker));
 }
 
+/* v405（Alan：「小朋友會喜歡玩喇叭，一直重複按會卡頓」）：
+   `_ttsSpeaking` ＝ 現在正在唸哪一個字。**同一個字還在唸的時候，再按就直接忽略**，
+   不會把它從頭切掉重播（那個「切掉重播」就是聽起來卡卡的原因）。
+   ⚠ 只擋「同一個字」：換一張卡、下一題、朗讀新的段落都是不同的字，
+     照樣立刻打斷前一個——不然翻到下一張還要等上一個字唸完才有聲音。
+   ⚠ 另外把這個函式改成「唸完才 resolve」。HTMLMediaElement.play() 是
+     「開始播就 resolve」，所以 SpeakerBtn 的 busy 幾乎立刻解除、按鈕根本沒鎖到。
+     全站呼叫 speakTTS 的地方都是射後不理，只有 SpeakerBtn 會 await，改這個很安全。 */
+let _ttsSpeaking = '';
+function ttsIsSpeaking(word) { return word ? _ttsSpeaking === String(word).trim() : !!_ttsSpeaking; }
+
 async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
   const t = String(text || '').trim();
   if (!t) return;
+  if (_ttsSpeaking === t) return;          // 同一個字還在唸 → 這一下不理它
   // 中文/非英文 → 瀏覽器語音（Worker /tts 只有英文聲線）
   if (!/^en/i.test(lang)) { try { speakText(t, { lang, rate }); } catch(e) {} return; }
   // v363: 學生自己選了「內建語音」（多半是因為 iPhone 靜音開關）
@@ -1060,6 +1072,7 @@ async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
   try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e) {}
   if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch(e) {} }
   const token = ++_ttsPlayToken;
+  _ttsSpeaking = t;                        // 從「開始去拿音檔」就算在唸了（連點時不會排隊送出多次）
   try {
     let url = _ttsAudioCache[t];
     /* ⚠ v363 保命符：記憶體裡已經有音檔時「絕對不能 await」——await 之後就離開了
@@ -1081,7 +1094,23 @@ async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
     }
     try { a.playbackRate = 0.92; } catch(e) {}   // 稍慢一點更清楚（單字/聽寫）
     await a.play();
+    /* 等它真的唸完（或被下一個字打斷）才 resolve。
+       pause 也要算完成——被新的一次打斷時，舊的那個 await 不能永遠卡著。 */
+    await new Promise(res => {
+      const done = () => {
+        a.removeEventListener('ended', done);
+        a.removeEventListener('pause', done);
+        a.removeEventListener('error', done);
+        if (token === _ttsPlayToken) _ttsSpeaking = '';
+        res();
+      };
+      a.addEventListener('ended', done);
+      a.addEventListener('pause', done);
+      a.addEventListener('error', done);
+    });
   } catch (e) {
+    // ⚠ 任何失敗都要把「正在唸」解掉，否則那個字之後永遠按不出聲音
+    if (token === _ttsPlayToken) _ttsSpeaking = '';
     /* v393: 連點時前一次的 play() 會被新的一次中斷，丟出 AbortError——那是正常的，
        不能因此又用瀏覽器語音講一次，否則兩個聲音會疊在一起。 */
     if (e && e.name === 'AbortError') return;
@@ -3092,7 +3121,7 @@ Object.assign(window, {
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS
-  playSound, speakText, speakTTS, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
+  playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
   aiMakeReadingSet, RC_SKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
