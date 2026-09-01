@@ -3310,3 +3310,36 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   display: block; margin: 0 auto;
   filter: drop-shadow(0 4px 6px rgba(21, 19, 14, .22));
 }
+
+/* ══ v406：一鍵出單字的「短文填空」校稿區 ══
+   沿用 .qs-proof 那一套紙感卡片；驗證結果用綠／琥珀兩種語氣，
+   老師掃一眼就知道這篇能不能直接用。 */
+.qs-story {
+  margin-top: 12px; padding: 12px 14px;
+  border: 1.5px solid var(--border, #e5dfc8); border-radius: 12px;
+  background: var(--bg-card, #fffdf6);
+}
+.qs-story-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.qs-story-head b { font-size: 14px; }
+.qs-story-n { font-size: 12px; color: var(--ink-3, #8a8270); font-weight: 700; }
+.qs-story-n.warn { color: #8a6d1f; }
+.qs-story-lab {
+  display: block; margin: 8px 0 4px;
+  font-size: 12px; font-weight: 700; color: var(--ink-3, #8a8270);
+}
+.qs-story-lab code {
+  font-family: var(--mono, monospace); font-size: 11.5px;
+  background: #f4efe1; padding: 1px 5px; border-radius: 4px;
+}
+.qs-story input, .qs-story textarea {
+  width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.6;
+  padding: 8px 10px; border: 1.5px solid var(--border, #e5dfc8); border-radius: 8px;
+  background: #fff; color: var(--ink, #15130e);
+}
+.qs-story textarea { resize: vertical; }
+.qs-story-warn, .qs-story-ok {
+  margin-top: 8px; padding: 7px 10px; border-radius: 8px;
+  font-size: 12.5px; font-weight: 700; line-height: 1.5;
+}
+.qs-story-warn { background: rgba(232, 200, 106, .18); border: 1px solid rgba(180, 140, 30, .4); color: #6b5310; }
+.qs-story-ok   { background: rgba(46, 125, 91, .10);  border: 1px solid rgba(46, 125, 91, .30);  color: #2E7D5B; }

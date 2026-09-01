@@ -969,13 +969,13 @@ function App() {
 
   /* v377③: 貼一次單字 → 一次建立整套練習（單字卡／配對連線／聽寫／選擇題／填空）
      全部掛同一個 group，並綁到那份單字卡上，學生端會自動排成一組。 */
-  const handleQuickSet = ({ words, title, cat, kinds, ai, assign }) => {
+  const handleQuickSet = ({ words, title, cat, kinds, ai, story, assign }) => {
     // 校稿時改過的中文要回填（老師沒貼中文、AI 補的那種）
     const merged = (words || []).map(w => {
       const a = (ai || []).find(r => r.term === w.term);
       return (!w.zh && a && a.zh) ? { ...w, zh: a.zh } : w;
     });
-    const items = window.qsBuildItems({ words: merged, title, kinds, ai });
+    const items = window.qsBuildItems({ words: merged, title, kinds, ai, story });   // v406: story = 短文填空
     if (!items.length) { setQuickSetOpen(false); return; }
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     if (!w[weekId]) { showToast('請先選一個週次'); return; }

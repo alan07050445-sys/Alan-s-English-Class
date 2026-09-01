@@ -1460,6 +1460,93 @@ RULES
 - Return the words in the same order they were given, one object per word.
 ${_AI_MINIFY}`;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v406：一鍵出單字再多一種——「短文填空」（Alan 給的學校作業 Part B 就長這樣）
+   ──────────────────────────────────────────────────────────────────────────
+   一篇小故事，把這一課的每個單字各挖一個空格，學生讀上下文把字填回去。
+   輸出的 passage 直接就是 cloze 題型吃的格式：`[answer]` 是空格，
+   後面可以再接 `(提示)`——跟老師紙本上的 `______(ing)` 一模一樣
+   （components-quiz-mode.jsx 的 parseClozePassage / ClozePlayer 已經支援）。 */
+const AI_STORY_SYS =
+`You write ONE short cloze story for Taiwanese elementary-school students (grades 2-6, CEFR A1-A2).
+Output ONLY a JSON object. No prose, no markdown, no code fences.
+
+{"title":"<2-5 words>","passage":"<the story>"}
+
+RULES
+- The story must use EVERY target word exactly once, and nothing else may be bracketed.
+- Wrap each target word in square brackets where it belongs: [word]
+- If the word needs a different form, put the exact form the student types inside the brackets
+  and the ending as a hint right after: [soaring](ing)  [attracts](s)  [trapped](ed)
+- Never let a target word appear anywhere outside its own brackets (no giveaways).
+- 70-140 words, 4-8 sentences, one connected story with a beginning and an end.
+- Every OTHER word must be simple, everyday vocabulary a 3rd grader knows.
+- Give enough context around each blank that a child can work the answer out.
+- title: a short story title, no ending punctuation.
+${_AI_MINIFY}`;
+
+/* 空格 → { answer, hint }。跟 parseClozePassage 同一條規則，這裡只是為了做檢查。 */
+function storyBlanks(passage) {
+  const out = [];
+  const re = /\[([^\]]+)\](?:\(([^)]*)\))?/g;
+  let m;
+  while ((m = re.exec(String(passage || '')))) out.push({ answer: m[1].trim(), hint: (m[2] || '').trim() });
+  return out;
+}
+/* ⚠ AI 生出來的東西一律用程式驗一次（這個專案吃過虧）：
+   哪些字沒被用到、哪些空格根本不是這一課的字、有沒有在括號外面洩答案。 */
+function storyCheck(passage, words) {
+  const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
+  const blanks = storyBlanks(passage);
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+  /* 變化形要算成同一個字：soar→soaring、attract→attracts、feather→feathers、
+     trap→trapping（重複子音）、carry→carries。
+     用「其中一個是另一個的開頭、而且只差 ≤4 個字母」判斷，
+     比一條一條寫規則穩（trapping 用去尾綴會變成 trapp，對不回 trap）。 */
+  const same = (a, b) => {
+    const x = norm(a), y = norm(b);
+    if (!x || !y) return false;
+    if (x === y) return true;
+    const [lo, hi] = x.length <= y.length ? [x, y] : [y, x];
+    if (hi.startsWith(lo) && hi.length - lo.length <= 4) return true;
+    // carry / carries：字尾 y 變 i
+    if (lo.endsWith('y') && hi.startsWith(lo.slice(0, -1) + 'i') && hi.length - lo.length <= 4) return true;
+    return false;
+  };
+  const used = [], missing = [];
+  terms.forEach(t => {
+    const hit = blanks.some(b => same(b.answer, t));
+    (hit ? used : missing).push(t);
+  });
+  const extra = blanks.filter(b => !terms.some(t => same(b.answer, t))).map(b => b.answer);
+  // 括號外面直接出現目標字＝答案被洩漏
+  const bare = String(passage || '').replace(/\[[^\]]*\](?:\([^)]*\))?/g, ' ');
+  const leaked = terms.filter(t => new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(bare));
+  return { blanks: blanks.length, used, missing, extra, leaked };
+}
+
+async function aiMakeVocabStory(words, { hint = '' } = {}) {
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
+  const userMsg =
+    (hint ? `Story topic / lesson title: ${hint}\n` : '') +
+    'Target words (use each exactly once):\n' +
+    list.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
+  /* max_tokens：一篇 140 字的故事約 250 token，留兩倍餘裕。
+     ⚠ 不要砍太低——被 max_tokens 截斷的話 JSON 會壞掉，整批重試反而更慢。 */
+  const r = await _aiAsk({
+    model: 'claude-haiku-4-5', max_tokens: 900,
+    system: AI_STORY_SYS,
+    messages: [{ role: 'user', content: userMsg }],
+  }, (data) => {
+    const txt = data?.content?.[0]?.text || data?.text || '';
+    const o = JSON.parse(_aiStripFence(txt));
+    return (o && typeof o.passage === 'string' && o.passage.indexOf('[') >= 0) ? o : null;
+  });
+  const passage = String(r.passage || '').trim();
+  return { title: String(r.title || '').trim(), passage, check: storyCheck(passage, list) };
+}
+
 function _aiStripFence(t) {
   const s = String(t || '').trim();
   const m = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -3122,7 +3209,7 @@ Object.assign(window, {
   COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
-  aiMakeVocabExercises, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
+  aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
   aiMakeReadingSet, RC_SKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義

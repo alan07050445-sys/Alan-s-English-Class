@@ -419,6 +419,11 @@ function useFitHeight(ref, enabled, min) {
 
     const apply = () => {
       const vv = window.visualViewport;
+      /* ⚠⚠ v406（Alan：「我放大圖片，卡片反而跟著變小」——iPad 與桌機都有）：
+         雙指放大時 visualViewport.height 會大幅變小（那是「看得到的範圍」，不是版面變了），
+         而這個函式就掛在 visualViewport 的 resize 上 → 一放大就把卡片重算成很矮的高度，
+         等於「越想看清楚，東西越小」。放大中一律不重算，維持放大前的樣子。 */
+      if (vv && vv.scale > 1.01) return;
       const vh = Math.round((vv && vv.height) || window.innerHeight);
       const vw = Math.round(window.innerWidth);
       // 網址列伸縮＝高度小幅變動，不是換版面 → 不重算（這就是捲動會抖的元凶）
@@ -880,6 +885,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     if (mode !== 'card') return;
     const onKey = (e) => {
       if (_fcZoomOpen) return;   // v394: 圖片燈箱開著時不換卡／不翻卡
+      if (_fcZoomOpen) return;   // v406: 大圖開著時，空白／方向鍵只給燈箱用，不要在背後翻卡
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       if (e.key === 'ArrowLeft')  { e.preventDefault(); setCardIdx(i => Math.max(0, i - 1)); setFlipped(false); }
@@ -1028,9 +1034,23 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 }}
               >
                 <SpeakerBtn text={card.zh} lang="zh-TW" className="fc-face-speaker fc-face-speaker-dark"/>
+                {/* v406（Alan：「我放大圖片反而跟著變小」）：卡片是「撐滿一個畫面」的，
+                    所以不管怎麼縮放，圖片都不會變大——真正想要的是「點圖看大圖」。
+                    測驗模式 v394 就有這個燈箱了，單字卡背面補上同一套。
+                    ⚠ 一定要 stopPropagation：不然點圖會被外層當成「翻卡」。 */}
                 {card.imageUrl && (
                   <div className="fc-back-img-wrap">
-                    <img src={card.imageUrl} alt={card.zh} decoding="async"/>
+                    <img src={card.imageUrl} alt={card.zh} decoding="async"
+                      className="fc-img-zoomable"
+                      role="button" tabIndex={flipped ? 0 : -1}
+                      aria-label={"放大圖片：" + card.zh}
+                      title="點一下看大圖"
+                      onClick={(e) => { e.stopPropagation(); setZoomImg({ src: card.imageUrl, alt: card.zh }); }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault(); e.stopPropagation();
+                        setZoomImg({ src: card.imageUrl, alt: card.zh });
+                      }}/>
                   </div>
                 )}
                 <div className="fc-zh">{card.zh}</div>
@@ -1049,6 +1069,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             <button className="fc-nav-btn" onClick={() => { setCardIdx(i => i + 1); setFlipped(false); }} disabled={safeIdx === deck.length - 1}>下一張 →</button>
           </div>
         </div>
+        {/* v406: 單字卡背面的圖片點開的大圖（跟測驗模式同一個元件）。
+            放在 .fc-player 外面＝position:fixed，不佔版面、不影響卡片高度。 */}
+        {zoomImg && <FcImageZoom src={zoomImg.src} alt={zoomImg.alt} onClose={() => setZoomImg(null)}/>}
       </div>
     );
   }

@@ -643,6 +643,9 @@ const QS_KINDS = [
   { id: 'spelling',  zh: '聽寫',     note: '聽發音把單字拼出來' },
   { id: 'quiz',      zh: '選擇題',   note: '看中文選英文' },
   { id: 'fillblank', zh: '填空',     note: '情境句子挖空＋中文解說' },
+  /* v406（Alan：學校作業右半邊的 Part B 就長這樣）：一篇小故事，
+     把這一課的每個單字各挖一格，學生讀上下文填回去。只有開 AI 才生得出來。 */
+  { id: 'story',     zh: '短文填空', note: '一篇小故事，每個單字各挖一格（像作業紙的 Part B）', ai: true },
 ];
 
 /* 一行一個字：英文 [Tab | ｜ | 逗號 | " - "] 中文 [同樣分隔] 例句 */
@@ -922,7 +925,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
   const [cat, setCat]     = useS(defaultCat || 'vocab');
-  const [picked, setPicked] = useS({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true });
+  const [picked, setPicked] = useS({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true, story: true });
   /* v379：AI 出題。Alan 的配對連線是「英文單字 → 英文定義」、填空是「情境例句＋中文解說」，
      不是單字表就能生出來的東西——他本來都貼給 ChatGPT 再匯入。
      出完先進「校稿」畫面，每一格都可以改，確認了才寫進週次。 */
@@ -930,18 +933,19 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [busy, setBusy]     = useS(0);       // 0=沒在跑，否則是已完成的字數
   const [aiErr, setAiErr]   = useS('');
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
+  const [story, setStory]   = useS(null);    // v406: AI 出的短文填空（校稿中一起改）
   /* v380（Alan：「不用一整包要一份一份指定」）：建立的同時就指派出去。
      學期＝整組設為本週作業（含截止日）；暑假題庫＝勾選要給哪些學生。 */
   const [assign, setAssign] = useS(true);
   const [due, setDue]       = useS('');
   const [who, setWho]       = useS([]);       // 只有 perStudent 模式用得到
   useE(() => {
-    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setAiErr(''); setBusy(0); setUseAI(true);
+    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
       setDue(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
-      setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true }); }
+      setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true, story: true }); }
   }, [open]);
   if (!open) return null;
 
@@ -956,24 +960,32 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
     spelling: words.length >= 1,
     quiz: (useAI ? words.length : withZh.length) >= 2,
     fillblank: (useAI ? words.length : withEx.length) >= 2,
+    // v406: 短文填空一定要 AI（要寫一整篇故事），而且太少字寫不成故事
+    story: useAI && words.length >= 3,
   };
   const chosen = QS_KINDS.filter(k => picked[k.id] && canDo[k.id]);
   const ready = title.trim() && words.length >= 1 && chosen.length >= 1;
-  const wantAI = useAI && (picked['def-match'] || picked.fillblank);
+  const wantAI = useAI && (picked['def-match'] || picked.fillblank || picked.story);
 
   const runAI = async () => {
     setAiErr(''); setBusy(0.0001);
     try {
-      const r = await window.aiMakeVocabExercises(words, {
-        hint: title.trim(),
-        onProgress: (done) => setBusy(done),
-      });
+      /* v406：單字題目與短文同時送出去（兩個獨立請求）。
+         AI 的延遲幾乎全是「吐字時間」，並行送出總時間就是比較慢的那一個，
+         不是兩個相加。短文失敗不影響單字題目——它只是少一個練習。 */
+      const [r, st] = await Promise.all([
+        window.aiMakeVocabExercises(words, { hint: title.trim(), onProgress: (done) => setBusy(done) }),
+        (picked.story && canDo.story && window.aiMakeVocabStory)
+          ? window.aiMakeVocabStory(words, { hint: title.trim() }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       setRows(r);
+      setStory(st);
     } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
     setBusy(0);
   };
   const updRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const payload = (extra) => ({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id),
+  const payload = (extra) => ({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id), story,
     assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null, ...extra });
 
   /* ⚠ 不要寫成 `const AssignBox = () => …` 再用 <AssignBox/> 那種寫法：
@@ -1029,6 +1041,44 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
               空白的欄位會自動跳過那一題。
             </div>
             {assignBox()}
+            {/* v406：短文填空的校稿。AI 生出來的東西一律用程式驗一次再讓老師看
+                （這個專案吃過「AI 說有就當作有」的虧）——漏字／挖錯字／答案寫在
+                括號外面都直接標出來，老師改完就能用。 */}
+            {picked.story && canDo.story && (
+              <div className="qs-story">
+                <div className="qs-story-head">
+                  <b>📖 短文填空</b>
+                  {story ? <span className="qs-story-n">{(story.check || {}).blanks || 0} 個空格</span>
+                         : <span className="qs-story-n warn">這次沒生出來（其他練習不受影響）</span>}
+                </div>
+                {story && (
+                  <>
+                    <label className="qs-story-lab">標題</label>
+                    <input value={story.title || ''}
+                      onChange={e => setStory(s2 => ({ ...s2, title: e.target.value }))}/>
+                    <label className="qs-story-lab">
+                      短文（<code>[答案]</code> 是空格，後面可以加 <code>(提示)</code>，
+                      例：<code>[soaring](ing)</code>）
+                    </label>
+                    <textarea rows={8} value={story.passage || ''}
+                      onChange={e => setStory(s2 => ({
+                        ...s2, passage: e.target.value,
+                        check: window.storyCheck ? window.storyCheck(e.target.value, words) : s2.check,
+                      }))}/>
+                    {(() => {
+                      const c = story.check || {};
+                      const bad = [];
+                      if ((c.missing || []).length) bad.push(`漏了：${c.missing.join('、')}`);
+                      if ((c.extra || []).length)   bad.push(`挖到不是這一課的字：${c.extra.join('、')}`);
+                      if ((c.leaked || []).length)  bad.push(`答案出現在括號外面：${c.leaked.join('、')}`);
+                      return bad.length
+                        ? <div className="qs-story-warn">⚠ {bad.join('；')}</div>
+                        : <div className="qs-story-ok">✓ 每個單字都各挖了一格，沒有洩漏答案</div>;
+                    })()}
+                  </>
+                )}
+              </div>
+            )}
             <div className="qs-proof" style={{ marginTop: 12 }}>
               {rows.map((r, i) => (
                 <div key={i} className="qs-proof-row">
@@ -1147,7 +1197,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
 }
 
 /* 真正產生各個單元的資料。抽出來是為了好測。 */
-function qsBuildItems({ words, title, kinds, ai }) {
+function qsBuildItems({ words, title, kinds, ai, story }) {
   const aiOf = (term) => (ai || []).find(r => r.term === term) || null;
   const rnd = () => Math.random().toString(36).slice(2, 6);
   const stamp = Date.now();
@@ -1195,6 +1245,14 @@ function qsBuildItems({ words, title, kinds, ai }) {
       return { id: 'q' + stamp + i + rnd(), q: `「${w.zh}」的英文是哪一個？`, options: opts, answer: 0, explain: w.example || '' };
     }).filter(Boolean);
     if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'qz', type: 'quiz', title, linkedFlashcardId: fcId, questions: qs });
+  }
+  /* v406: 短文填空 → cloze 題型。passage 裡的 [答案](提示) 就是空格，
+     格式跟 components-quiz-mode.jsx 的 parseClozePassage 完全一致。 */
+  if (kinds.indexOf('story') >= 0 && story && String(story.passage || '').indexOf('[') >= 0) {
+    const nBlank = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
+    out.push({ ...base, id: 'qs' + stamp + 'st', type: 'cloze', title: `${title} · 短文填空`,
+      zh: `${nBlank} 個空格 · 讀短文把單字填回去`,
+      linkedFlashcardId: fcId, passage: story.passage });
   }
   if (kinds.indexOf('spelling') >= 0) {
     out.push({ ...base, id: 'qs' + stamp + 'sp', type: 'spelling', title, linkedFlashcardId: fcId,
