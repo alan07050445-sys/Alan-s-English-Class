@@ -5227,6 +5227,10 @@ function ClozeIntro({ item, onStart, prog }) {
       <div className="qm-intro-meta">{blankCount} blanks · 段落填空</div>
       <div className="qm-intro-rules">
         <div className="qm-intro-rule-row"><span>📖</span><span>閱讀整段文章，在空格中填入正確答案</span></div>
+        {/* v408: 有 word bank 的話，開始之前就先講——不然學生會以為要自己想 */}
+        {(item.wordBank || []).length >= 2 && (
+          <div className="qm-intro-rule-row"><span>🔤</span><span>上面有 <b>Word Bank</b>，{(item.wordBank || []).length} 個字可以選，點一下就填進空格</span></div>
+        )}
         <div className="qm-intro-rule-row"><span>💡</span><span>括號內是原形提示，填入正確的動詞變化</span></div>
         <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫，拼對就算對</span></div>
       </div>
@@ -5256,6 +5260,47 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const inputRefs = React.useRef({});
 
   const handleInput = (num, val) => setInputs(prev => ({...prev, [num]: val}));
+
+  /* ══ v408：Word Bank（Alan：「頭上要給 word bank，這樣小朋友才知道有什麼單字可以填入」）══
+     ⚠ 只有 item.wordBank 真的有東西才出現。文法時態的克漏字沒有這個欄位——
+     那種題目把答案列出來就等於送分，所以絕對不能「沒有就自動從答案生一份」。
+     順序每次進來都重洗：word bank 的位置本身不可以變成第幾格的提示。 */
+  const bank = useQMM(() => {
+    const list = (item.wordBank || []).map(w => String(w || '').trim()).filter(Boolean);
+    if (list.length < 2) return [];
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }, [item.id]);
+
+  /* 這一格填的是不是這個字（含變化形）。變化形的判斷直接用 data.js 那份白名單，
+     跟出題時挖空格用的是同一套規則，兩邊才不會各自走鐘。 */
+  const bankNorm = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+  const bankSame = (base, typed) => {
+    const a = bankNorm(base), b = bankNorm(typed);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return !!(window.storyHint && window.storyHint(base, typed));
+  };
+  /* 點一下就填進空格——iPad 上這比叫二年級生自己打字實際得多。
+     目標格的規則（兩種用法都要成立）：
+       · 正在打的那一格是空的（或根本沒在打任何一格）→ 填第一個空的
+       · 正在打的那一格已經有字 → 換成新的（小朋友自己點進去要改）
+     ⚠ 填完一定要把游標移到「下一個空格」。小朋友是一個字一個字連著點的，
+        如果游標留在剛填好的那一格，第二個字就會把第一個字蓋掉（實測過）。 */
+  const putBankWord = (w) => {
+    if (submitted) return;
+    const active = blanks.find(b => inputRefs.current[b.num] === document.activeElement);
+    const target = (active && (inputs[active.num] || '').trim())
+      ? active
+      : (blanks.find(b => !(inputs[b.num] || '').trim()) || active || blanks[0]);
+    if (!target) return;
+    handleInput(target.num, w);
+    const next = blanks.find(b => b.num !== target.num && !(inputs[b.num] || '').trim());
+    const el = inputRefs.current[(next || target).num];
+    if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch (e) {} }
+    if (window.playSound) window.playSound('tap');
+  };
 
   const handleKeyDown = (e, num) => {
     if (e.key === 'Enter' || e.key === 'Tab') {
@@ -5357,6 +5402,34 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
             </span>
         }
       </div>
+
+      {bank.length > 0 && (
+        <div className="cloze-bank">
+          <div className="cloze-bank-head">
+            <span className="cloze-bank-lab">🔤 Word Bank</span>
+            {!submitted && <span className="cloze-bank-hint">點一下就填進空格 · 空格後面的 (ing)、(s) 要自己改成正確的形式</span>}
+          </div>
+          <div className="cloze-bank-words">
+            {bank.map((w, i) => {
+              const used = blanks.some(b => bankSame(w, inputs[b.num]));
+              return (
+                <button key={w + i} type="button"
+                  className={'cloze-bank-w' + (used ? ' used' : '')}
+                  /* ⚠ 一定要擋掉 mousedown 的預設行為：不然點按鈕會先把輸入框的
+                     焦點搶走，document.activeElement 變成按鈕本身，
+                     「填進正在打的那一格」就永遠找不到目標。 */
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => putBankWord(w)}
+                  disabled={submitted}
+                  aria-label={(used ? '已使用：' : '填入：') + w}
+                  title={submitted ? '' : '點一下填進空格'}>
+                  {w}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="cloze-passage">
         {renderPassage()}

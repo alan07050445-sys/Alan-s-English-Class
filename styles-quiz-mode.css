@@ -2440,6 +2440,40 @@
 .cloze-score-badge.ok    { background: #fff8e1; border-color: #ffb300; color: #e65100; }
 .cloze-score-badge.low   { background: #ffebee; border-color: #f44336; color: #c62828; }
 
+/* ══ v408：Word Bank（Alan：「頭上要給 word bank，這樣小朋友才知道有什麼單字可以填入」）══
+   位置在文章正上方、跟著一起捲——像作業紙一樣，抬頭就看得到。
+   ⚠ 只有 item.wordBank 有東西的克漏字才會 render 這一塊（文法時態的不會）。 */
+.cloze-bank {
+  padding: 14px 32px 12px;
+  border-bottom: 1px dashed var(--border);
+  background: var(--bg-paper, #FBF8F1);
+}
+.cloze-bank-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 9px;
+}
+.cloze-bank-lab {
+  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  letter-spacing: .04em; color: var(--ink-2, #5c554a);
+}
+.cloze-bank-hint { font-size: 11.5px; line-height: 1.5; color: var(--ink-3, #8a8270); }
+.cloze-bank-words { display: flex; flex-wrap: wrap; gap: 7px; }
+.cloze-bank-w {
+  font-family: var(--sans); font-size: 15.5px; font-weight: 700;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--border, #e5dfc8); background: #fff; color: var(--ink, #15130e);
+  transition: background .14s ease, border-color .14s ease, color .14s ease, opacity .14s ease;
+  /* 二年級生的手指：44px 是可以放心點的最小值 */
+  min-height: 36px;
+}
+.cloze-bank-w:hover:not(:disabled):not(.used) { background: #f4efe1; border-color: var(--ink-3, #8a8270); }
+.cloze-bank-w:active:not(:disabled) { transform: translateY(1px); }
+/* 已經填進某一格了 —— 淡掉但還是點得到（填錯格可以再點一次換地方） */
+.cloze-bank-w.used {
+  opacity: .42; text-decoration: line-through;
+  background: var(--bg-paper, #FBF8F1); color: var(--ink-3, #8a8270);
+}
+.cloze-bank-w:disabled { cursor: default; }
+
 .cloze-passage {
   flex: 1;
   padding: 28px 32px;
@@ -2517,6 +2551,9 @@
   .cloze-input { width: 72px; font-size: 16.5px; }
   .cloze-topbar { padding: 14px 16px 12px; }
   .cloze-footer { padding: 16px; }
+  /* v408: 手機上字多一點會排到三四行，所以邊距收一點、字略小，但按鈕高度不動 */
+  .cloze-bank { padding: 12px 16px 10px; }
+  .cloze-bank-w { font-size: 14.5px; padding: 6px 12px; }
 }
 
 /* ══ v207 — 暑假班表：複製本週工具列（老師編輯模式） ══════ */

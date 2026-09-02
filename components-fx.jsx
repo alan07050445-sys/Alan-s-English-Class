@@ -215,8 +215,12 @@ function SproutMascot({ size = 46, hat = 'none' }) {
       shapeRendering="crispEdges" aria-hidden="true">
       <MxHat id={hat}/>
       {/* 葉子從 y0 開始長，帽子（y−4~0）才不會壓在葉子上 */}
+      {/* v408：莖獨立成一組。長高的時候葉子會往上移 5 個單位，
+          本來沒有東西接住它 → 葉子整片飄在半空、跟身體斷開（實測 --mx-w 120px 時斷了 27px）。
+          莖從腳下往上拉長把中間補起來，看起來才是「莖抽高、葉子被頂上去」。
+          ⚠ 要畫在葉子前面（葉子蓋在莖上），不然莖的頂端會壓在葉片中間。 */}
+      <g className="mx-stem"><rect x="8" y="0" width="2" height="2" fill={STEM}/></g>
       <g className="mx-leaf">
-        <rect x="8" y="0" width="2" height="2" fill={STEM}/>
         <rect x="4" y="0" width="4" height="2" fill={LEAF}/>
         <rect x="3" y="1" width="1" height="1" fill={LEAF}/>
         <rect x="10" y="0" width="4" height="2" fill={LEAF}/>
@@ -725,7 +729,12 @@ function MascotLayer() {
   return (
     <div className={'mx-layer' + (drag ? ' dragging' : '')}>
       <div ref={slotRef} className="mx-slot" style={slotStyle}>
-        {bubble && !menu && !petPick && <div className="mx-bubble">{bubble}</div>}
+        {/* v408（Alan：「小芽長高的時候葉子會被他講話給遮住，沒看到」）：
+            泡泡是釘在「沒有變形之前」的頭頂上——.mx-slot 的高度不會因為 scaleY 變高，
+            所以小芽一抽高，頭跟葉子就鑽到泡泡底下去了。
+            ⚠ 只有長高這個動作會把身體變高，所以只有它需要讓位。 */}
+        {bubble && !menu && !petPick &&
+          <div className={'mx-bubble' + (act === 'grow' ? ' mx-bubble-high' : '')}>{bubble}</div>}
         {/* v407：多一個 pet-<id>——同一個動作要能「這一隻做得不一樣」
             （阿石滾得慢、走得重；小焰衝刺時身後有速度線）。 */}
         <div ref={bodyRef} className={'mx-body pet-' + petId + ' act-' + act} style={{ '--mx-dir': dir }}

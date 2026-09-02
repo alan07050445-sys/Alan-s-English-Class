@@ -304,6 +304,8 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
             <ClozeEditor
               passage={form.passage || ''}
               onChangePassage={v => update("passage", v)}
+              wordBank={form.wordBank || []}
+              onChangeWordBank={v => update("wordBank", (v && v.length) ? v : undefined)}
             />
           ) : form.type === "circle-answer" ? (
             <CircleAnswerEditor
@@ -1280,9 +1282,15 @@ function qsBuildItems({ words, title, kinds, ai, story }) {
      格式跟 components-quiz-mode.jsx 的 parseClozePassage 完全一致。 */
   if (kinds.indexOf('story') >= 0 && story && String(story.passage || '').indexOf('[') >= 0) {
     const nBlank = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
+    /* v408（Alan：「頭上要給 word bank，這樣小朋友才知道有什麼單字可以填入」）
+       ⚠ 存的是老師輸入的「原形」，不是文章裡的變化形——作業紙上的 word bank 就是原形，
+       空格後面的 (ing)/(s) 才是叫學生自己變出正確形式的地方。
+       只有這裡（一鍵出單字的短文填空）會寫 wordBank；文法時態的克漏字沒有這個欄位，
+       所以它們不會突然冒出一排答案把時態送分掉。 */
     out.push({ ...base, id: 'qs' + stamp + 'st', type: 'cloze', title: `${title} · 短文填空`,
       zh: `${nBlank} 個空格 · 讀短文把單字填回去`,
-      linkedFlashcardId: fcId, passage: story.passage });
+      linkedFlashcardId: fcId, passage: story.passage,
+      wordBank: words.map(w => String(w.term || '').trim()).filter(Boolean) });
   }
   if (kinds.indexOf('spelling') >= 0) {
     out.push({ ...base, id: 'qs' + stamp + 'sp', type: 'spelling', title, linkedFlashcardId: fcId,
@@ -4222,7 +4230,7 @@ function CircleAnswerEditor({ questions, instruction, labels, onChangeQuestions,
 }
 
 /* ── ClozeEditor ── */
-function ClozeEditor({ passage, onChangePassage }) {
+function ClozeEditor({ passage, onChangePassage, wordBank, onChangeWordBank }) {
   const [importing,    setImporting]    = useS(false);
   const [importPassage, setImportPassage] = useS('');
   const [importAnswers, setImportAnswers] = useS('');
@@ -4356,6 +4364,33 @@ function ClozeEditor({ passage, onChangePassage }) {
             ⚠ 尚未偵測到空格，請用 [答案] 標記，或使用上方 Import
           </div>
         ) : null}
+      </div>
+
+      {/* v408（Alan：「頭上要給 word bank，這樣小朋友才知道有什麼單字可以填入」）
+          一鍵出單字的短文填空會自動帶進來；這個欄位是給「舊的單元」與「自己出的克漏字」補用的。
+          ⚠ 留白＝完全不顯示 word bank——文法時態的克漏字如果列出答案就等於送分，
+          所以一定要是「老師主動填才有」，不是預設打開。 */}
+      <div className="field">
+        <label className="field-label">🔤 Word Bank（選填）</label>
+        <input
+          value={(wordBank || []).join(', ')}
+          onChange={e => onChangeWordBank(
+            e.target.value.split(/[,、\n\t]+/).map(x => x.trim()).filter(Boolean))}
+          placeholder="soar, prey, shade, feather, attract, distract, brittle, trap"
+          style={{width:'100%', fontFamily:'var(--sans)', fontSize:14, padding:'9px 11px',
+            border:'1px solid var(--border)', background:'var(--bg)', color:'var(--ink)',
+            borderRadius:2, boxSizing:'border-box'}}
+        />
+        <div className="field-help" style={{marginTop:6}}>
+          填了之後，學生的作答畫面最上面會出現一排單字（<b>點一下就填進空格</b>，順序每次都會打散）。
+          <b>寫原形就好</b>——像作業紙一樣，空格後面的 <code>(ing)</code>、<code>(s)</code> 才是要學生自己變化的地方。
+          {(wordBank || []).length > 0 && blankCount > 0 && (wordBank || []).length !== blankCount && (
+            <><br/><span style={{color:'var(--accent)'}}>
+              ⚠ Word Bank 有 {(wordBank || []).length} 個字、文章有 {blankCount} 個空格——
+              數量不同不會壞掉（有些字可能挖了兩格），只是確認一下是不是你要的。
+            </span></>
+          )}
+        </div>
       </div>
     </div>
   );
