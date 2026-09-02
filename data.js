@@ -1493,58 +1493,223 @@ function storyBlanks(passage) {
   while ((m = re.exec(String(passage || '')))) out.push({ answer: m[1].trim(), hint: (m[2] || '').trim() });
   return out;
 }
+
+const _storyNorm = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+
+/* 字尾提示——作業紙上的 ______(ing) 就是這個。
+   ⚠ 只有「認得出來的變化」才給提示；認不出來就不給。
+   寧可沒提示，也不要給一個錯的提示害小朋友填錯。
+   這個函式同時被當成「這兩個字是不是同一個字的變化形」的白名單用（見 _storyIsForm）。 */
+function _storyHint(term, form) {
+  const t = _storyNorm(term), f = _storyNorm(form);
+  if (!t || !f || f === t) return '';
+  if (f === t + 's')   return 's';
+  if (f === t + 'es')  return 'es';
+  if (f === t + 'ed')  return 'ed';
+  if (f === t + 'd')   return 'd';
+  if (f === t + 'ing') return 'ing';
+  if (f === t + 'er')  return 'er';
+  if (f === t + 'est') return 'est';
+  if (f === t + 'ly')  return 'ly';
+  if (t.endsWith('y')) {                                    // carry → carries / carried
+    const y = t.slice(0, -1);
+    if (f === y + 'ies') return 'ies';
+    if (f === y + 'ied') return 'ied';
+    if (f === y + 'ier') return 'ier';
+  }
+  if (t.endsWith('e')) {                                    // shade → shading
+    const e = t.slice(0, -1);
+    if (f === e + 'ing') return 'ing';
+  }
+  const dbl = t + t.slice(-1);                              // trap → trapping / trapped
+  if (f === dbl + 'ing') return 'ing';
+  if (f === dbl + 'ed')  return 'ed';
+  if (f === dbl + 'er')  return 'er';
+  return '';
+}
+/* 嚴格版的「同一個字」：本尊，或上面列得出來的變化形。
+   找「文章裡哪一個字要挖掉」時一定要用這個版本——寬鬆版會把 trapeze 當成 trap。 */
+function _storyIsForm(term, token) {
+  const t = _storyNorm(term), f = _storyNorm(token);
+  if (!t || !f) return false;
+  return f === t || _storyHint(term, token) !== '';
+}
+/* 寬鬆版：只用來「檢查有沒有用到」，允許沒列到的變化形（漏判比誤判傷害大）。 */
+function _storySame(a, b) {
+  const x = _storyNorm(a), y = _storyNorm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [lo, hi] = x.length <= y.length ? [x, y] : [y, x];
+  if (hi.startsWith(lo) && hi.length - lo.length <= 4) return true;
+  if (lo.endsWith('y') && hi.startsWith(lo.slice(0, -1) + 'i') && hi.length - lo.length <= 4) return true;
+  return false;
+}
+
 /* ⚠ AI 生出來的東西一律用程式驗一次（這個專案吃過虧）：
    哪些字沒被用到、哪些空格根本不是這一課的字、有沒有在括號外面洩答案。 */
 function storyCheck(passage, words) {
   const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
   const blanks = storyBlanks(passage);
-  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
-  /* 變化形要算成同一個字：soar→soaring、attract→attracts、feather→feathers、
-     trap→trapping（重複子音）、carry→carries。
-     用「其中一個是另一個的開頭、而且只差 ≤4 個字母」判斷，
-     比一條一條寫規則穩（trapping 用去尾綴會變成 trapp，對不回 trap）。 */
-  const same = (a, b) => {
-    const x = norm(a), y = norm(b);
-    if (!x || !y) return false;
-    if (x === y) return true;
-    const [lo, hi] = x.length <= y.length ? [x, y] : [y, x];
-    if (hi.startsWith(lo) && hi.length - lo.length <= 4) return true;
-    // carry / carries：字尾 y 變 i
-    if (lo.endsWith('y') && hi.startsWith(lo.slice(0, -1) + 'i') && hi.length - lo.length <= 4) return true;
-    return false;
-  };
   const used = [], missing = [];
   terms.forEach(t => {
-    const hit = blanks.some(b => same(b.answer, t));
-    (hit ? used : missing).push(t);
+    (blanks.some(b => _storySame(b.answer, t)) ? used : missing).push(t);
   });
-  const extra = blanks.filter(b => !terms.some(t => same(b.answer, t))).map(b => b.answer);
+  const extra = blanks.filter(b => !terms.some(t => _storySame(b.answer, t))).map(b => b.answer);
   // 括號外面直接出現目標字＝答案被洩漏
   const bare = String(passage || '').replace(/\[[^\]]*\](?:\([^)]*\))?/g, ' ');
   const leaked = terms.filter(t => new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(bare));
   return { blanks: blanks.length, used, missing, extra, leaked };
 }
+/* 分數越低越好——多輪重生時用來挑「最不糟的那一篇」 */
+function _storyScore(c) {
+  return (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length;
+}
 
-async function aiMakeVocabStory(words, { hint = '' } = {}) {
+/* ══════════════════════════════════════════════════════════════════════════
+   v407（Alan：「這個新增題型我要百分之百能夠成功」）
+   ──────────────────────────────────────────────────────────────────────────
+   v406 只驗不修：驗到問題就把琥珀色警告丟給老師，等於把 AI 的失誤變成老師的工。
+   這一版改成三層，只有全部落空才會讓老師看到問題：
+     ① 程式修（storyFix）——修得掉的一律當場修好，不重打 AI：
+        · 挖到不是這一課的字 → 把括號拆掉，文字本身不動
+        · 目標字寫在括號外面 → 直接挖成空格
+          （這一步同時解決「漏了這個字」與「答案被洩漏」——
+           AI 最常見的失誤就是「字有寫進去、只是忘了加括號」）
+     ② 重生（最多 3 輪）——把「這次哪裡不合格」原原本本寫進下一輪的 prompt
+     ③ 保底（rescue）——還漏的字，直接把「填空題」那一份現成的例句接到故事後面。
+        填空題本來就跟短文同一批平行生成，所以這一步不用多等 AI。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const _STORY_MAX_BLANK = 3;   // 同一個字最多挖幾格（避免整篇被同一個字洗版）
+
+/* 找出「不在任何括號裡」的第一個目標字（含變化形）。回傳 {i, form} 或 null。 */
+function _storyFindBare(passage, term, from) {
+  const p = String(passage || '');
+  // 先算出所有「受保護」的區間：[答案] 與緊接著的 (提示) 都不能動
+  const guard = [];
+  const gre = /\[[^\]]*\](?:\([^)]*\))?/g;
+  let g;
+  while ((g = gre.exec(p))) guard.push([g.index, g.index + g[0].length]);
+  const inGuard = (i) => guard.some(([a, b]) => i >= a && i < b);
+  const wre = /[A-Za-z]+/g;
+  let m;
+  wre.lastIndex = from || 0;
+  while ((m = wre.exec(p))) {
+    if (inGuard(m.index)) continue;
+    if (_storyIsForm(term, m[0])) return { i: m.index, form: m[0] };
+  }
+  return null;
+}
+
+/* 程式修補。回傳 { passage, check, notes }——notes 是給老師看的「我幫你改了什麼」。 */
+function storyFix(passage, words) {
+  const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
+  let p = String(passage || '').trim();
+  const notes = [];
+
+  // ① 不是這一課的字被挖走 → 拆掉括號與提示，句子本身完全不動
+  const dropped = [];
+  p = p.replace(/\[([^\]]+)\](?:\([^)]*\))?/g, (m, a) => {
+    if (terms.some(t => _storySame(a, t))) return m;
+    dropped.push(a.trim());
+    return a;
+  });
+  if (dropped.length) notes.push(`拆掉不該挖的空格：${dropped.join('、')}`);
+
+  // ② 目標字出現在括號外面 → 就地挖成空格（順便把字尾提示補上）
+  const wrapped = [];
+  terms.forEach(t => {
+    for (let n = 0; n < _STORY_MAX_BLANK; n++) {
+      if (storyBlanks(p).filter(b => _storySame(b.answer, t)).length >= _STORY_MAX_BLANK) break;
+      const hit = _storyFindBare(p, t);
+      if (!hit) break;
+      const h = _storyHint(t, hit.form);
+      p = p.slice(0, hit.i) + '[' + hit.form + ']' + (h ? '(' + h + ')' : '') + p.slice(hit.i + hit.form.length);
+      wrapped.push(hit.form);
+    }
+  });
+  if (wrapped.length) notes.push(`補挖成空格：${wrapped.join('、')}`);
+
+  return { passage: p, check: storyCheck(p, terms), notes };
+}
+
+/* ③ 保底：把「填空題」現成的例句接到故事後面，一個漏掉的字一句。
+   ex 的形狀就是 aiMakeVocabExercises 的輸出（{ term, sentence:'… ___ …', answer }）。 */
+function _storyRescue(passage, missing, ex) {
+  if (!Array.isArray(ex) || !ex.length || !missing.length) return { passage, added: [] };
+  let out = String(passage || '').replace(/\s+$/, '');
+  const added = [];
+  missing.forEach(t => {
+    const e = ex.find(x => x && (_storySame(x.term, t) || _storySame(x.answer, t)));
+    const sent = e && String(e.sentence || '').trim();
+    if (!sent || !/_{2,}|___/.test(sent)) return;
+    const ans = String(e.answer || t).trim();
+    const h = _storyHint(t, ans);
+    const s = sent.replace(/_+/, '[' + ans + ']' + (h ? '(' + h + ')' : ''));
+    if (s.indexOf('[') < 0) return;
+    out += ' ' + s;
+    added.push(t);
+  });
+  return { passage: out, added };
+}
+
+async function aiMakeVocabStory(words, { hint = '', rescue = null, rounds = 3 } = {}) {
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
-  const userMsg =
+  const head =
     (hint ? `Story topic / lesson title: ${hint}\n` : '') +
     'Target words (use each exactly once):\n' +
     list.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
-  /* max_tokens：一篇 140 字的故事約 250 token，留兩倍餘裕。
-     ⚠ 不要砍太低——被 max_tokens 截斷的話 JSON 會壞掉，整批重試反而更慢。 */
-  const r = await _aiAsk({
-    model: 'claude-haiku-4-5', max_tokens: 900,
-    system: AI_STORY_SYS,
-    messages: [{ role: 'user', content: userMsg }],
-  }, (data) => {
-    const txt = data?.content?.[0]?.text || data?.text || '';
-    const o = JSON.parse(_aiStripFence(txt));
-    return (o && typeof o.passage === 'string' && o.passage.indexOf('[') >= 0) ? o : null;
-  });
-  const passage = String(r.passage || '').trim();
-  return { title: String(r.title || '').trim(), passage, check: storyCheck(passage, list) };
+
+  let best = null, lastErr = null, note = '';
+  for (let round = 0; round < Math.max(1, rounds); round++) {
+    let r = null;
+    try {
+      /* max_tokens：一篇 140 字的故事約 250 token，留兩倍餘裕。
+         ⚠ 不要砍太低——被 max_tokens 截斷的話 JSON 會壞掉，整批重試反而更慢。 */
+      r = await _aiAsk({
+        model: 'claude-haiku-4-5', max_tokens: 900,
+        system: AI_STORY_SYS,
+        messages: [{ role: 'user', content: head + note }],
+      }, (data) => {
+        const txt = data?.content?.[0]?.text || data?.text || '';
+        const o = JSON.parse(_aiStripFence(txt));
+        return (o && typeof o.passage === 'string' && o.passage.indexOf('[') >= 0) ? o : null;
+      });
+    } catch (e) { lastErr = e; continue; }
+
+    const fixed = storyFix(r.passage, list);
+    const cand = {
+      title: String(r.title || '').trim(),
+      passage: fixed.passage, check: fixed.check, fixes: fixed.notes, rounds: round + 1,
+    };
+    if (!_storyScore(cand.check)) return cand;                       // 完全乾淨，收工
+    if (!best || _storyScore(cand.check) < _storyScore(best.check)) best = cand;
+
+    /* 下一輪把「這次哪裡不合格」原原本本告訴它。
+       泛泛地說「請再試一次」沒有用（v382 學到的），要指名道姓。 */
+    const c = cand.check;
+    note = '\n\nYour previous attempt was rejected. Fix exactly these problems:\n' +
+      (c.missing.length ? `- These target words were never used: ${c.missing.join(', ')}\n` : '') +
+      (c.leaked.length  ? `- These target words appear OUTSIDE their brackets, which gives the answer away: ${c.leaked.join(', ')}\n` : '') +
+      (c.extra.length   ? `- You bracketed words that are not targets: ${c.extra.join(', ')}\n` : '') +
+      'Write a NEW story that uses every target word exactly once, each one inside brackets.';
+  }
+
+  if (!best) throw lastErr || new Error('AI 這次沒有生出短文，請再試一次。');
+
+  // ③ 還漏字 → 用「填空題」那一份現成的例句補上（不用再等 AI）
+  if (best.check.missing.length && rescue) {
+    let ex = null;
+    try { ex = await Promise.resolve(typeof rescue === 'function' ? rescue() : rescue); } catch (e) { ex = null; }
+    const pat = _storyRescue(best.passage, best.check.missing, ex);
+    if (pat.added.length) {
+      const again = storyFix(pat.passage, list);
+      best = { ...best, passage: again.passage, check: again.check,
+               fixes: (best.fixes || []).concat(again.notes, [`用填空題的例句補上：${pat.added.join('、')}`]) };
+    }
+  }
+  return best;
 }
 
 function _aiStripFence(t) {
@@ -2525,6 +2690,208 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
 }
 
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v407：分段閱讀「每一段自動出題」
+   （Alan：「分段閱讀我希望我匯入圖片或是文字或是檔案，能夠根據每一段自動生成題目
+     …先從 reading comprehension 出題就好…最後統整可以配合 reading skill 也很好，
+     但不能亂出，要真的符合文章」）
+   ──────────────────────────────────────────────────────────────────────────
+   跟 v386 的「📖 出閱讀理解」差在哪：那個是一整篇一次出；這個是「一段一題組」，
+   而且題目只能問這一段裡寫的事——學生讀完一小段馬上答，問到後面的內容就是壞題。
+
+   ⚠「不能亂出，要真的符合文章」不是靠 prompt 拜託，是靠程式驗（rcGroundedMcq /
+   rcGroundedSa / rcGroundedBlock）。做法是利用 v386 就定下的規矩：
+   選擇題的 explain 一定要「把文章裡的英文線索抄在「」裡面」。
+   有那條規矩，就可以反過來檢查那句線索到底在不在這一段文章裡——
+   在＝這題真的是從文章來的；不在＝AI 自己編的，丟掉重出。
+   照片辨識出來的文字本來就會有幾個字母是錯的，所以比對是「實詞重疊率」而不是全等。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const _rcFlat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/* explain 裡「」（或引號）括起來的那句英文線索 */
+function _rcClue(explain) {
+  const m = String(explain || '').match(/[「『"“]([^」』"”]{4,200})[」』"”]/);
+  return m ? m[1] : '';
+}
+/* 這句話在不在文章裡。先試整串（去掉標點大小寫之後），不中再看
+   「實詞（3 個字母以上）的重疊率」——AI 抄線索時常常會漏一兩個虛詞或換個時態。
+   （照片段落的 OCR 錯字不用擔心：文章本身就是那些錯字，AI 是從那份文字抄的，
+     所以錯字會一模一樣地對上。） */
+function _rcInPassage(passage, phrase) {
+  const t = _rcFlat(passage), p = _rcFlat(phrase);
+  if (!p || !t) return false;
+  if (t.indexOf(p) >= 0) return true;
+  const ws = p.split(' ').filter(w => w.length > 2);
+  if (ws.length < 2) return false;
+  return ws.filter(w => t.indexOf(w) >= 0).length / ws.length >= 0.8;
+}
+/* 選擇題：線索句一定要在文章裡（這是主要的關卡），正解則只擋「整個不沾邊」的捏造。
+   為什麼正解要放寬：正解本來就常常是改寫過的短句——文章寫
+   「stay in the air for hours」，正解寫「It can fly for a long time」，
+   一個字都對不上但完全正確。抓太緊會把好題目一起丟掉。
+   ⚠ 正解這一關用「整字」比對，不是子字串：不然 with 會被 without 收下、
+   gold 會被 golden 收下，等於沒擋。 */
+function rcGroundedMcq(passage, q) {
+  const clue = _rcClue(q && q.explain);
+  if (!clue) return false;                       // 沒引用文章＝沒辦法證明它有根據
+  if (!_rcInPassage(passage, clue)) return false;
+  const words = new Set(_rcFlat(passage).split(' '));
+  const ws = _rcFlat((q.options || [])[q.answer]).split(' ').filter(w => w.length > 2);
+  if (!ws.length) return true;
+  return ws.filter(w => words.has(w)).length / ws.length >= 0.4;
+}
+/* 簡答題：答案要點是改寫過的評分點，所以只要求「一半以上」找得到出處 */
+function rcGroundedSa(passage, q) {
+  const pts = String((q && q.keyPoints) || '').split('/').map(x => x.trim()).filter(Boolean);
+  if (!pts.length) return false;
+  return pts.filter(x => _rcInPassage(passage, x)).length >= Math.ceil(pts.length / 2);
+}
+/* 閱讀技巧：每一張卡片都要在文章裡找得到，找不到的整張丟掉
+   （⚠ 一定要走 rcFilterChips——因果題的 zones 要跟卡片一起丟，不然答案會錯位） */
+function rcGroundedBlock(passage, block) {
+  if (!block) return block;
+  return rcFilterChips(block, (c) => _rcInPassage(passage, c && c.text));
+}
+
+/* 選擇題轉成分段閱讀吃的格式。分段閱讀作答時不洗牌，所以在這裡就先打散
+   （跟 grParseImport 的規矩一致）。 */
+function _grQFromMcq(q) {
+  const opts = (q.options || []).slice(0, 4);
+  const correct = opts[q.answer];
+  for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+  while (opts.length < 4) opts.push('');
+  return { id: _rcId('gq'), kind: 'mc', q: q.q, options: opts, answer: opts.indexOf(correct), explain: q.explain || '' };
+}
+const _grQFromSa = (q) => ({ id: _rcId('gq'), kind: 'short', q: q.question, keyPoints: q.keyPoints || '' });
+
+/* 一段（或整篇）出一組題。mcq / sa 兩種同時送出，驗不過的重來一輪。 */
+async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where }) {
+  const out = { mcq: [], sa: [], dropped: 0 };
+  for (let round = 0; round < 2; round++) {
+    const needM = mcq - out.mcq.length, needS = sa - out.sa.length;
+    if (needM <= 0 && needS <= 0) break;
+    const jobs = [];
+    if (needM > 0) jobs.push(['mcq', _RC_SYS_MCQ(gradeNote, needM + 1), 2800]);
+    if (needS > 0) jobs.push(['sa',  _RC_SYS_SA(gradeNote,  needS + 1), 1800]);
+    const asked = out.mcq.map(q => q.q).concat(out.sa.map(q => q.question)).join(' | ');
+    const extra = where +
+      (asked ? '\n\nDo NOT repeat or rephrase these questions:\n' + asked : '') +
+      (round ? '\n\nYour last try asked about things that are NOT written in the passage above. ' +
+               'Every question, every correct option and every clue you quote must appear in that passage.' : '');
+    /* ⚠ 各自 try：一發連線失敗不該把同一段已經收到的題目一起丟掉 */
+    const got = await pMap(jobs, async ([k, sys, mx]) => {
+      try { return [k, await _rcCall(sys, _rcUser(text, title, extra), mx)]; } catch (e) { return [k, null]; }
+    }, 2);
+    got.forEach(([k, o]) => {
+      if (!o) return;
+      ((o.items) || []).forEach(raw => {
+        if (k === 'mcq') {
+          if (out.mcq.length >= mcq) return;
+          const q = _rcFixAnswerIdx({
+            q: _rcTxt(raw && raw.q),
+            options: ((raw && raw.options) || []).map(_rcTxt).slice(0, 4),
+            answer: raw && raw.answer,
+            explain: _rcTxt(raw && raw.explain),
+            skill: _rcTxt(raw && raw.skill) || 'detail',
+          });
+          if (!q || !_rcValidMcq(q)) { out.dropped++; return; }
+          if (!rcGroundedMcq(text, q)) { out.dropped++; return; }        // ← 不能亂出
+          if (out.mcq.some(e => e.q.toLowerCase() === q.q.toLowerCase())) return;
+          out.mcq.push(q);
+        } else {
+          if (out.sa.length >= sa) return;
+          const q = { question: _rcTxt(raw && raw.question), keyPoints: _rcTxt(raw && raw.keyPoints) };
+          if (!_rcValidSa(q)) { out.dropped++; return; }
+          if (!rcGroundedSa(text, q)) { out.dropped++; return; }         // ← 不能亂出
+          if (out.sa.some(e => e.question.toLowerCase() === q.question.toLowerCase())) return;
+          out.sa.push(q);
+        }
+      });
+    });
+  }
+  return out;
+}
+
+/* ── 主要入口 ────────────────────────────────────────────────────────────
+   segments: [{ i, text }]（i ＝ 第幾段，用來對回編輯器的段落）
+   回傳 { bySeg:{ [i]: [題目…] }, final:[題目…], blocks:[…], skipped:[i…], dropped, made } */
+async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
+  perMcq = 2, perSa = 1, finalMcq = 3, finalSa = 1, skills = [], onProgress } = {}) {
+  const all = (segments || []).map((s, k) => ({
+    i: (s && s.i != null) ? s.i : k,
+    text: String((s && s.text) || '').replace(/\s+/g, ' ').trim(),
+  }));
+  /* 12 個英文字以下出不了一題像樣的題目（標題頁、圖說、只有一句的段落都在這裡被擋掉）。
+     擋掉的段號會回報給老師，不是默默跳過。 */
+  const segs = all.filter(s => s.text.split(' ').filter(Boolean).length >= 12);
+  const skipped = all.filter(s => segs.indexOf(s) < 0).map(s => s.i);
+  if (!segs.length) throw new Error('沒有一段有足夠的文字可以出題——照片段落要先按「🔍 辨識單字」，或直接把文字貼進段落裡。');
+
+  const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
+  const nMcq = Math.max(0, +perMcq || 0), nSa = Math.max(0, +perSa || 0);
+  const fMcq = Math.max(0, +finalMcq || 0), fSa = Math.max(0, +finalSa || 0);
+  const kinds = (skills || []).filter(k => RC_SKILLS[k]);
+  if (!nMcq && !nSa && !fMcq && !fSa && !kinds.length) throw new Error('至少要選一種題目。');
+
+  const wantFinal = !!(fMcq || fSa);
+  const total = (nMcq || nSa ? segs.length : 0) + (wantFinal ? 1 : 0) + kinds.length;
+  let done = 0;
+  const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+
+  const full = segs.map(s => s.text).join('\n\n');
+  let dropped = 0;
+
+  // ── 每一段（平行跑，一次最多 6 段；再多就開始排隊等 Worker） ──
+  const bySeg = {};
+  if (nMcq || nSa) {
+    await pMap(segs, async (seg) => {
+      const where = `The passage above is paragraph ${seg.i + 1} of ${all.length} of a longer article. ` +
+        'Ask ONLY about what is written in THIS paragraph. The student has not read the later paragraphs yet.';
+      const r = await _rcOneChunk(seg.text, { title, gradeNote, mcq: nMcq, sa: nSa, where });
+      dropped += r.dropped;
+      const qs = r.mcq.map(_grQFromMcq).concat(r.sa.map(_grQFromSa));
+      if (qs.length) bySeg[seg.i] = qs;
+      bump(`第 ${seg.i + 1} 段（${qs.length} 題）`);
+    }, 6);
+  }
+
+  // ── 整篇綜合 ──
+  let final = [];
+  if (wantFinal) {
+    const r = await _rcOneChunk(full, { title, gradeNote, mcq: fMcq, sa: fSa,
+      where: 'The passage above is the WHOLE article. Ask about the article as a whole - ' +
+             'the main idea, how the parts connect, and what it all adds up to. ' +
+             'Do not ask about one small detail that sits in a single paragraph.' });
+    dropped += r.dropped;
+    final = r.mcq.map(_grQFromMcq).concat(r.sa.map(_grQFromSa));
+    bump(`整篇綜合（${final.length} 題）`);
+  }
+
+  /* ── 閱讀技巧（選填）──
+     卡片直接沿用 v386 那一套（_RC_SYS_SKILL ＋ rcFixBlock ＋ rcValidBlock），
+     只是多加一層「每張卡片都要在文章裡找得到」。
+     ⚠ 這一層可能把卡片數量刷到不合格（例：比較對照剩 4 張）——
+     那就重生，寧可少一種技巧，也不要出一份跟文章對不上的。 */
+  const blocks = kinds.length ? (await pMap(kinds, async (kind) => {
+    let best = null;
+    for (let round = 0; round < 3 && !best; round++) {
+      try {
+        const o = await _rcCall(_RC_SYS_SKILL(kind, gradeNote), _rcUser(full, title,
+          round ? 'Your last try used sentences that are not in the passage. Every card must come from the passage above.' : ''), 2200);
+        const cand = rcGroundedBlock(full, rcFixBlock(_rcBlockFrom(kind, o)));
+        if (cand && rcValidBlock(cand)) best = cand;
+      } catch (e) { /* 這一輪算了，還有兩輪 */ }
+    }
+    bump(RC_SKILLS[kind].zh);
+    return best;                       // 三輪都對不上文章＝這一種不要，不硬湊
+  }, 4)).filter(Boolean) : [];
+
+  const made = Object.keys(bySeg).reduce((n, k) => n + bySeg[k].length, 0) + final.length;
+  if (!made && !blocks.length) throw new Error('AI 這次沒有出到符合文章的題目，請再試一次。');
+  return { bySeg, final, blocks, passage: full, skipped, dropped, made, segCount: segs.length };
+}
+
+
 // ── AI Short Answer Grading ───────────────────────────────────────────────
 async function checkShortAnswer(question, keyPoints, passage, studentAnswer) {
   if (!studentAnswer?.trim()) return '請先寫下你的答案。';
@@ -3209,9 +3576,9 @@ Object.assign(window, {
   COMPANION_LINES, pickLine,
   // Sound & TTS
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
-  aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
+  aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
-  aiMakeReadingSet, RC_SKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
+  aiMakeReadingSet, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, RC_SKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain

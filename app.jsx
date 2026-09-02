@@ -1112,7 +1112,10 @@ function App() {
   };
 
   const handleSaveItem = (form) => {
-    const { _isNew, ...cleanForm } = form;
+    /* v407：__side ＝「順便一起建立的別種單元」。目前只有一個來源——
+       分段閱讀的 🤖 AI 自動出題勾了「閱讀技巧」，而閱讀技巧是另一個 type，
+       塞不進 grSegments/grFinal。⚠ 一定要在這裡解構掉，不然會被存進 Firestore。 */
+    const { _isNew, __side, ...cleanForm } = form;
     const isNew = !!_isNew;
     // v339: 多位老師共用題庫——記下是誰建立的，側欄才能「只看我的單元」。
     // 舊資料沒有 owner，一律視為擁有者(Alan)的。
@@ -1125,9 +1128,15 @@ function App() {
       w[weekId] = {...week, items: {vocab:[], grammar:[], word:[], reading:[]}};
     }
     const list = w[weekId].items[editorCat] || [];
-    w[weekId].items[editorCat] = isNew
+    const saved = isNew
       ? [...list, cleanForm]
       : list.map(it => it.id === cleanForm.id ? cleanForm : it);
+    /* 附帶單元接在本體後面，owner 跟著本體走（側欄的「只看我的單元」才篩得到）。
+       id 撞到就不加——重複 id 會讓側欄與作答進度整個對不上。 */
+    const side = (Array.isArray(__side) ? __side : []).filter(x => x && x.id && x.type)
+      .filter(x => !saved.some(it => it.id === x.id))
+      .map(x => (cleanForm.owner && !x.owner) ? { ...x, owner: cleanForm.owner } : x);
+    w[weekId].items[editorCat] = saved.concat(side);
     setWeeks(w);
     saveWeeksSafe(w);
     setEditorOpen(false);
@@ -1151,7 +1160,10 @@ function App() {
     if (isNew && String(weekId || '').startsWith('sl') && window.isAdminUser && window.isAdminUser(window._currentUser)) {
       setAssignAfterSave(cleanForm.id);
     }
-    showToast(isNew ? (assignedName ? `已新增並指派給 ${assignedName}` : "Item added") : "Item saved");
+    const nSide = side.length;   // 用真的加進去的數量，不是 __side 的長度（重存時會被去重擋掉）
+    showToast(nSide
+      ? `已存檔，另外建立了 ${nSide} 個附帶單元`
+      : (isNew ? (assignedName ? `已新增並指派給 ${assignedName}` : "Item added") : "Item saved"));
   };
 
   // v360: 依「完整的 id 順序」重排單元——群組內互換、整組上下移都走這裡。

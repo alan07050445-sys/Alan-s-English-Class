@@ -283,18 +283,24 @@ const MX_ACTS = ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek'
    acts ＝ 這一隻平常會做的事（權重就是「同一個動作寫幾次」，故意不用另一套資料結構）。
    sig  ＝ 招牌動作，只有牠會做；點牠的時候一定先做這一個（不然小朋友發現不了）。
    ⚠ 加新夥伴只要往這個陣列裡加一筆，MascotLayer 完全不用改。
-   ⚠ 移動類的動作（走位）只有 walk / roll / dash 三種，寫在別的名字不會位移。 */
+   ⚠ 移動類的動作（走位）只有 walk / roll / dash 三種，寫在別的名字不會位移。
+   speed ＝ 走位速度的倍率（v407）。Alan 回報「阿石沒有走很慢、小焰沒有跑很快」——
+   原因是速度只看「動作」不看「是誰」：阿石的池子裡有兩個 roll（190px/s），
+   比誰都快；小焰的 dash 是 300px/s，只有走路的 4.8 倍，在 1000px 寬的畫面上
+   跑完要 3.3 秒，看起來就只是「走比較快」。個性要靠這個倍率才表現得出來。 */
 const MX_MOVE_ACTS = ['walk', 'roll', 'dash'];
+/* 每種走位的基礎速度（px / 秒），再乘上該夥伴的 speed。 */
+const MX_BASE_SPEED = { walk: 62, roll: 190, dash: 620 };
 const MX_PETS = [
   {
-    id: 'clay', zh: 'Claudius', tip: '陪你唸書的老夥伴',
+    id: 'clay', speed: 1, zh: 'Claudius', tip: '陪你唸書的老夥伴',
     art: ClaudeMascot, sig: 'type', sigZh: '打電腦',
     acts: ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think', 'type', 'type'],
     lines: { idle: ['我在散步 🚶', '這裡風景不錯', '要不要摸摸我', '我在數格子 1、2、3…'],
              sig:  ['我在寫程式（假的）💻', '叩叩叩…好忙好忙', '我幫你把答案存起來了（沒有）'] },
   },
   {
-    id: 'owl', zh: '咕咕', tip: '眼睛很大，想的比走的多',
+    id: 'owl', speed: 0.85, zh: '咕咕', tip: '眼睛很大，想的比走的多',
     art: OwlMascot, sig: 'read', sigZh: '看書',
     acts: ['walk', 'walk', 'jump', 'peek', 'think', 'think', 'read', 'read', 'read', 'sleep', 'spin'],
     lines: { hello: ['咕…咕…📖', '我剛剛在看書', '嗨，一起唸書吧'],
@@ -302,7 +308,7 @@ const MX_PETS = [
              sig:   ['讀到好看的地方了 📖', '這句我記起來了', '再一頁就好…'] },
   },
   {
-    id: 'flame', zh: '小焰', tip: '靜不下來，跑超快',
+    id: 'flame', speed: 1.15, zh: '小焰', tip: '靜不下來，跑超快',
     art: FlameMascot, sig: 'dash', sigZh: '衝刺',
     acts: ['walk', 'walk', 'dash', 'dash', 'dash', 'jump', 'jump', 'spin', 'dance', 'roll', 'peek'],
     lines: { hello: ['咻——！🔥', '我來了我來了', '要比賽跑步嗎'],
@@ -310,15 +316,17 @@ const MX_PETS = [
              sig:   ['咻咻咻！🔥', '你追不到我～', '再一圈！'] },
   },
   {
-    id: 'rock', zh: '阿石', tip: '慢吞吞，最愛裝石頭',
+    id: 'rock', speed: 0.38, zh: '阿石', tip: '慢吞吞，最愛裝石頭',
     art: RockMascot, sig: 'hide', sigZh: '裝石頭',
-    acts: ['roll', 'roll', 'walk', 'hide', 'hide', 'hide', 'sleep', 'sleep', 'think', 'peek', 'jump'],
+    /* v407：本來有兩個 roll。roll 的基礎速度是走路的 3 倍，所以「慢吞吞的阿石」
+       實際上是全場移動最快的一隻——Alan 看到的就是這個。留一個 roll 當笑點就好。 */
+    acts: ['roll', 'walk', 'walk', 'hide', 'hide', 'hide', 'sleep', 'sleep', 'think', 'peek', 'jump'],
     lines: { hello: ['……（是一顆石頭）', '嗨，我醒了', '慢慢來就好'],
              idle:  ['我在原地想事情', '好穩。', '滾一下比較快'],
              sig:   ['我是石頭。', '……（假裝沒看到）', '噓，別說出去'] },
   },
   {
-    id: 'sprout', zh: '小芽', tip: '好奇寶寶，開心就會長高',
+    id: 'sprout', speed: 1, zh: '小芽', tip: '好奇寶寶，開心就會長高',
     art: SproutMascot, sig: 'grow', sigZh: '長高',
     acts: ['walk', 'walk', 'peek', 'peek', 'grow', 'grow', 'think', 'dance', 'sleep', 'jump'],
     lines: { hello: ['我今天又長高了 🌱', '嗨嗨！', '陽光好舒服'],
@@ -337,7 +345,7 @@ function mxSetPet(id) { try { localStorage.setItem(mxKey(MX_PET_KEY), id || '');
 function mxPetOf(id) { return MX_PETS.find(p => p.id === id) || MX_PETS[0]; }
 
 /* 招牌動作要停留多久（毫秒）。走位類的不在這裡，時間是照距離算的。 */
-const MX_SIG_HOLD = { type: 2800, read: 3000, hide: 2600, grow: 1900 };
+const MX_SIG_HOLD = { type: 2800, read: 3000, hide: 2600, grow: 2600 };
 
 function MascotLayer() {
   const [alive,  setAlive]  = useFx(false);   // 進站 2.5 秒後才出來，不跟載入畫面搶
@@ -513,16 +521,37 @@ function MascotLayer() {
         : pool[Math.floor(Math.random() * pool.length)];
 
       if (MX_MOVE_ACTS.indexOf(pick) >= 0) {
-        const target = Math.round(Math.random() * maxX());
+        const W = maxX();
+        /* v407：衝刺一定跑「離自己最遠的那一端」。原本落點是隨機的，
+           一半以上的衝刺只跑不到畫面的 1/3，再快也看不出來是在衝——
+           小朋友看到的是「牠走得比較急」，不是「牠跑很快」。 */
+        const target = pick === 'dash' ? (x > W / 2 ? 0 : W) : Math.round(Math.random() * W);
         const dist   = Math.abs(target - x);
         if (dist < 30) { setAct('idle'); later(doAct, 1200); return; }
-        const speed  = pick === 'roll' ? 190 : pick === 'dash' ? 300 : 62;   // px / 秒
-        const ms     = Math.round(dist / speed * 1000);
+        // v407: 速度＝這個動作的基礎速度 × 這一隻的倍率（阿石 0.4、小焰 1.15）
+        const speed  = (MX_BASE_SPEED[pick] || 62) * (pet.speed || 1);   // px / 秒
+        const ms     = Math.max(200, Math.round(dist / speed * 1000));
         setDir(target > x ? 1 : -1);
         setMoveMs(ms);
         setX(target);
         setAct(pick);
         if (Math.random() < 0.08) say(mxPick(pick === pet.sig ? 'sig' : 'idle', pet));   // v392（D）：0.25 → 0.08
+        /* v407：衝刺改成「衝到底 → 煞車 → 再衝回來」。
+           速度是比較出來的：中間那 0.36 秒的煞車停格就是參考點，
+           有它才看得出牠剛剛橫越了整個畫面，沒有它只是一路滑過去。 */
+        if (pick === 'dash') {
+          const back = target === 0 ? W : 0;
+          const ms2  = Math.max(200, Math.round(Math.abs(back - target) / speed * 1000));
+          later(() => {
+            setMoveMs(0); setAct('skid');                       // 煞車：原地滑一下、腳往前撐
+            later(() => {
+              setDir(back > target ? 1 : -1);
+              setMoveMs(ms2); setX(back); setAct('dash');
+              later(() => { setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms2 + 120);
+            }, 360);
+          }, ms + 60);
+          return;
+        }
         later(() => { setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms + 120);
         return;
       }
@@ -697,11 +726,16 @@ function MascotLayer() {
     <div className={'mx-layer' + (drag ? ' dragging' : '')}>
       <div ref={slotRef} className="mx-slot" style={slotStyle}>
         {bubble && !menu && !petPick && <div className="mx-bubble">{bubble}</div>}
-        <div ref={bodyRef} className={'mx-body act-' + act} style={{ '--mx-dir': dir }}
+        {/* v407：多一個 pet-<id>——同一個動作要能「這一隻做得不一樣」
+            （阿石滾得慢、走得重；小焰衝刺時身後有速度線）。 */}
+        <div ref={bodyRef} className={'mx-body pet-' + petId + ' act-' + act} style={{ '--mx-dir': dir }}
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
           onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
           role="img" aria-label={`吉祥物 ${name || pet.zh}`}>
           <Art hat={hat}/>
+          {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
+              永遠留在「牠的身後」，不用另外算方向。 */}
+          <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
         </div>
       </div>
       {/* v401：選單與圖鑑改掛在 .mx-layer 底下（不再是 .mx-slot 的小孩）。

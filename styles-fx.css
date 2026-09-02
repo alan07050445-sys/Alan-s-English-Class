@@ -17,6 +17,7 @@
 .mx-slot { position: absolute; left: 0; bottom: 0; will-change: transform; }
 
 .mx-body {
+  position: relative;   /* v407: .mx-trail 與長高的 ✨ 用它當定位基準 */
   pointer-events: auto; cursor: pointer;
   transform: scaleX(var(--mx-dir, 1));
   -webkit-tap-highlight-color: transparent;
@@ -270,13 +271,78 @@
   55%      { transform: translateY(1px) rotate(3deg); }
 }
 
-/* ── 小焰招牌：衝刺 —— 走位由 JS 負責（速度 300px/s），這裡只加拉長的殘影感 */
-.act-dash .mx-svg { animation: mxDash .18s ease-in-out infinite; }
+/* ── 小焰招牌：衝刺（v407 大改）───────────────────────────────────────────
+   Alan 回報「小焰沒有跑很快」。原因有三個，三個都在這一版處理掉：
+     ① 速度只有 300px/s ＝ 走路的 4.8 倍 → 提到 620×1.15 ≒ 713px/s（11.5 倍）。
+     ② 落點是隨機的，一半以上的衝刺跑不到畫面的 1/3 → 改成一定跑到最遠的那一端。
+     ③ 動畫只有 scaleX(1.08)，等於沒有「在衝」的樣子 → 身體前傾、擺動加快，
+        而且身後拉出速度線（.mx-trail），有參考物才看得出速度。
+   ①②在 components-fx.jsx，③在這裡。 */
+.act-dash .mx-svg { animation: mxDash .13s ease-in-out infinite; }
 @keyframes mxDash {
-  0%, 100% { transform: translateY(0)     scaleX(1)    scaleY(1); }
-  50%      { transform: translateY(-.5px) scaleX(1.08) scaleY(.94); }
+  /* rotate 正值＝往前傾（transform-origin 在腳底 50% 92%）。
+     .mx-body 有 scaleX(--mx-dir)，往左跑時整個鏡射，所以永遠是「往前」傾。 */
+  0%, 100% { transform: translateY(-.6px)  rotate(10deg) scaleX(1.14) scaleY(.9); }
+  50%      { transform: translateY(-1.6px) rotate(13deg) scaleX(1.2)  scaleY(.86); }
 }
-.act-dash .mx-leg { animation: mxStep .18s ease-in-out infinite; }
+.act-dash .mx-leg { animation: mxStep .13s ease-in-out infinite; }
+
+/* 煞車（v407）：衝到底之後停 0.36 秒再折返。這個停格就是速度的參考點——
+   有它才看得出「牠剛剛橫越了整個畫面」，沒有它只是一路滑過去。 */
+.act-skid .mx-svg { animation: mxSkid .36s cubic-bezier(.2, .9, .3, 1) both; }
+@keyframes mxSkid {
+  0%   { transform: translateY(-1px)  rotate(11deg)  scaleX(1.18) scaleY(.88); }
+  45%  { transform: translateY(1.4px) rotate(-13deg) scaleX(1.14) scaleY(.9); }
+  100% { transform: translateY(0)     rotate(0deg)   scaleX(1)    scaleY(1); }
+}
+
+/* 速度線。掛在 .mx-body 裡面 → 跟著 scaleX(--mx-dir) 一起翻面，
+   永遠留在牠的身後，不用在 JS 裡算方向。平常 opacity:0，不影響任何其他動作。 */
+.mx-trail { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.mx-trail i {
+  position: absolute; right: 100%; height: 2px; border-radius: 2px;
+  transform-origin: 100% 50%;
+  background: linear-gradient(to left, var(--mx-trail-c, rgba(255, 138, 60, .9)), rgba(255, 138, 60, 0));
+}
+.mx-trail i:nth-child(1) { top: 28%; width: 26px; margin-right: 2px; }
+.mx-trail i:nth-child(2) { top: 52%; width: 40px; margin-right: 4px; }
+.mx-trail i:nth-child(3) { top: 74%; width: 20px; margin-right: 1px; }
+.act-dash .mx-trail { opacity: 1; }
+.act-dash .mx-trail i:nth-child(1) { animation: mxTrail .34s linear infinite; }
+.act-dash .mx-trail i:nth-child(2) { animation: mxTrail .28s linear infinite .07s; }
+.act-dash .mx-trail i:nth-child(3) { animation: mxTrail .40s linear infinite .14s; }
+/* 起點刻意只往前 4px：再多就會壓到身體上（實測 10px 時線的右緣越過身體左緣 8px），
+   看起來像穿過牠、而不是從牠身後拉出來。 */
+@keyframes mxTrail {
+  0%   { opacity: 0; transform: translateX(4px)   scaleX(.4); }
+  35%  { opacity: 1; transform: translateX(-2px)  scaleX(1); }
+  100% { opacity: 0; transform: translateX(-20px) scaleX(1.35); }
+}
+/* 煞車時速度線散掉＝揚起的塵土 */
+.act-skid .mx-trail { opacity: 1; }
+.act-skid .mx-trail i { animation: mxSkidPuff .36s ease-out both; }
+@keyframes mxSkidPuff {
+  0%   { opacity: .9; transform: translateX(0)    scaleX(1); }
+  100% { opacity: 0;  transform: translateX(-22px) scaleX(1.7); }
+}
+
+/* ── 阿石：慢（v407）──────────────────────────────────────────────────
+   Alan 回報「小石頭沒有走很慢」。真正的原因是速度只看動作、不看是誰：
+   阿石的動作池裡有兩個 roll（190px/s），比走路快 3 倍，牠反而是全場最快的。
+   JS 那邊已經給牠 speed:0.4（走 25px/s、滾 76px/s）；動畫也要跟著慢，
+   不然會變成「腳步很急但人幾乎不動」的鬼畜感。 */
+.pet-rock.act-roll .mx-svg { animation-duration: 1.6s; }
+.pet-rock.act-walk .mx-svg   { animation: mxLumber 1.1s ease-in-out infinite; }
+.pet-rock.act-walk .mx-leg-a { animation-duration: 1.1s; }
+.pet-rock.act-walk .mx-leg-c { animation-duration: 1.1s; animation-delay: .55s; }
+.pet-rock.act-walk .mx-leg-b { animation-duration: 2.2s; }
+/* 一步一步把重心從左搖到右＝很重的東西在挪動 */
+@keyframes mxLumber {
+  0%, 100% { transform: translateY(0)     rotate(-2.6deg) scaleY(1); }
+  25%      { transform: translateY(-.5px) rotate(0deg)    scaleY(1.015); }
+  50%      { transform: translateY(0)     rotate(2.6deg)  scaleY(.99); }
+  75%      { transform: translateY(-.5px) rotate(0deg)    scaleY(1.015); }
+}
 
 /* ── 阿石招牌：裝石頭 —— 縮成一團、閉眼、完全不動（路過看不出來是活的）
    結束時彈回來，所以只跑一次、用 both 停在最後一格。 */
@@ -288,18 +354,42 @@
   100%     { transform: translateY(0)     scaleY(1)   scaleX(1); }
 }
 
-/* ── 小芽招牌：長高 —— 整隻往上抽一下，葉子跟著張開 */
-.act-grow .mx-svg  { animation: mxGrow 1.9s cubic-bezier(.3, .9, .4, 1) both; }
-.act-grow .mx-leaf { animation: mxLeaf 1.9s cubic-bezier(.3, .9, .4, 1) both; }
+/* ── 小芽招牌：長高（v407 大改）───────────────────────────────────────
+   Alan 回報「小樹苗沒有真的長高」。量一下就知道為什麼：
+   身體高度是 --mx-w × 10/9（手機 36px、桌機 56px），舊的 scaleY(1.12)
+   只長 4.3~6.7px，而且 translateY 只有 0.35px ——肉眼幾乎分不出來。
+   改成有前搖的三段：先蹲下蓄力 → 一口氣抽高到 1.52 → 停在 1.38 讓人看得到，
+   最後才縮回去。transform-origin 是腳底（50% 92%），長出來的高度全部往上跑，
+   桌機約 +21px、手機約 +13px，一眼就看得出來牠長高了。 */
+.act-grow .mx-svg  { animation: mxGrow 2.6s cubic-bezier(.22, 1.1, .36, 1) both; }
+.act-grow .mx-leaf { animation: mxLeaf 2.6s cubic-bezier(.22, 1.1, .36, 1) both; }
 @keyframes mxGrow {
-  0%       { transform: translateY(0)      scaleY(1); }
-  35%, 78% { transform: translateY(-.35px) scaleY(1.12); }
-  100%     { transform: translateY(0)      scaleY(1); }
+  0%       { transform: translateY(0) scaleY(1)    scaleX(1); }
+  13%      { transform: translateY(0) scaleY(.86)  scaleX(1.1); }   /* 蹲下蓄力 */
+  33%      { transform: translateY(0) scaleY(1.52) scaleX(.9); }    /* 一口氣抽高 */
+  43%      { transform: translateY(0) scaleY(1.3)  scaleX(1.03); }  /* 回彈一下 */
+  53%, 82% { transform: translateY(0) scaleY(1.38) scaleX(.97); }   /* 停住，讓人看到 */
+  100%     { transform: translateY(0) scaleY(1)    scaleX(1); }
 }
+/* 葉子在 <g> 上 → 位移吃的是 SVG 使用者單位（viewBox 18×20），跟 .mx-svg 的 px 不同一套 */
 @keyframes mxLeaf {
-  0%       { transform: translateY(0)   scale(1); }
-  35%, 78% { transform: translateY(-2px) scale(1.35); }
-  100%     { transform: translateY(0)   scale(1); }
+  0%       { transform: translateY(0)    scale(1)    rotate(0deg); }
+  13%      { transform: translateY(.6px) scale(.85)  rotate(0deg); }
+  33%      { transform: translateY(-5px) scale(1.75) rotate(-8deg); }
+  53%, 82% { transform: translateY(-4px) scale(1.6)  rotate(4deg); }
+  100%     { transform: translateY(0)    scale(1)    rotate(0deg); }
+}
+/* 抽高的那一下頭頂冒一顆 ✨——動作本身是灰階的，一點顏色才會被注意到 */
+.act-grow::after {
+  content: '✨'; position: absolute; left: 50%; bottom: 100%;
+  font-size: calc(var(--mx-w) * .42); line-height: 1; pointer-events: none;
+  animation: mxSparkle 2.6s ease-out both;
+}
+@keyframes mxSparkle {
+  0%, 13% { opacity: 0;  transform: translate(-50%, 6px)  scale(.4); }
+  36%     { opacity: 1;  transform: translate(-50%, -4px) scale(1); }
+  72%     { opacity: .9; transform: translate(-50%, -7px) scale(1.05); }
+  100%    { opacity: 0;  transform: translate(-50%, -12px) scale(.7); }
 }
 .mx-leaf { transform-origin: 50% 100%; }
 
@@ -354,6 +444,9 @@
      （不然「打電腦」會變成一隻站著發呆的傢伙）。 */
   .mx-torso, .mx-leaf { animation: none !important; }
   .mx-pets { animation: none; }
+  /* v407: 衝刺的速度線與長高的 ✨ 也照同一個標準關掉（純裝飾，關了不影響任何功能） */
+  .mx-trail, .mx-trail i { animation: none !important; opacity: 0 !important; }
+  .act-grow::after { animation: none !important; opacity: 0; }
 }
 
 /* ══ v404：休息中的「叫回來」小鈕 ══

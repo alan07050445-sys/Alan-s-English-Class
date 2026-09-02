@@ -247,6 +247,11 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
           ) : form.type === "guided-reading" ? (
             <GuidedReadingEditor
               itemId={form.id}
+              itemTitle={form.title || ''}
+              itemGroup={form.group || ''}
+              /* v407：AI 出題若順便做了「閱讀技巧」，它是另一個型別的單元、
+                 塞不進分段閱讀的資料結構 → 掛在 __side，存檔時由 app.jsx 一起建立。 */
+              onSideItems={items => update("__side", items)}
               catItems={catItems || []}
               weekItems={weekItems || []}
               linkedFlashcardId={form.linkedFlashcardId || ''}
@@ -934,13 +939,14 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [aiErr, setAiErr]   = useS('');
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
   const [story, setStory]   = useS(null);    // v406: AI 出的短文填空（校稿中一起改）
+  const [reStory, setReStory] = useS(false); // v407: 校稿頁單獨重生短文（不用整組重出）
   /* v380（Alan：「不用一整包要一份一份指定」）：建立的同時就指派出去。
      學期＝整組設為本週作業（含截止日）；暑假題庫＝勾選要給哪些學生。 */
   const [assign, setAssign] = useS(true);
   const [due, setDue]       = useS('');
   const [who, setWho]       = useS([]);       // 只有 perStudent 模式用得到
   useE(() => {
-    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setAiErr(''); setBusy(0); setUseAI(true);
+    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
@@ -972,13 +978,14 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
     try {
       /* v406：單字題目與短文同時送出去（兩個獨立請求）。
          AI 的延遲幾乎全是「吐字時間」，並行送出總時間就是比較慢的那一個，
-         不是兩個相加。短文失敗不影響單字題目——它只是少一個練習。 */
-      const [r, st] = await Promise.all([
-        window.aiMakeVocabExercises(words, { hint: title.trim(), onProgress: (done) => setBusy(done) }),
-        (picked.story && canDo.story && window.aiMakeVocabStory)
-          ? window.aiMakeVocabStory(words, { hint: title.trim() }).catch(() => null)
-          : Promise.resolve(null),
-      ]);
+         不是兩個相加。短文失敗不影響單字題目——它只是少一個練習。
+         v407：短文的第三層保底要用到「填空題」的例句，所以把同一個 promise
+         當 rescue 傳進去——它只在真的漏字時才會 await，並行完全沒被打斷。 */
+      const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), onProgress: (done) => setBusy(done) });
+      const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
+        ? window.aiMakeVocabStory(words, { hint: title.trim(), rescue: () => exP }).catch(() => null)
+        : Promise.resolve(null);
+      const [r, st] = await Promise.all([exP, stP]);
       setRows(r);
       setStory(st);
     } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
@@ -1049,8 +1056,27 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                 <div className="qs-story-head">
                   <b>📖 短文填空</b>
                   {story ? <span className="qs-story-n">{(story.check || {}).blanks || 0} 個空格</span>
-                         : <span className="qs-story-n warn">這次沒生出來（其他練習不受影響）</span>}
+                         : <span className="qs-story-n warn">這次沒生出來</span>}
+                  <span style={{flex:1}}/>
+                  {/* v407（Alan：「這個新增題型我要百分之百能夠成功」）：
+                      前面已經有三層（程式修 → 最多重生 3 輪 → 用填空題例句保底），
+                      這顆是最後的人工開關——真的很不滿意就再來一次，不用整組重出。 */}
+                  <button type="button" className="qs-story-re" disabled={!!reStory}
+                    onClick={async () => {
+                      setReStory(true);
+                      try {
+                        const st2 = await window.aiMakeVocabStory(words, { hint: title.trim(), rescue: () => rows });
+                        if (st2) setStory(st2);
+                      } catch (e) { /* 失敗就維持原本那一篇，不要把老師手上的東西弄不見 */ }
+                      setReStory(false);
+                    }}>{reStory ? '生成中…' : '🔁 換一篇'}</button>
                 </div>
+                {!story && (
+                  <div className="qs-story-warn">
+                    ⚠ 這次沒生出來（其他 {chosen.length - 1} 個練習不受影響）——按右上角的
+                    <b> 🔁 換一篇 </b>再試一次，或直接建立、之後再補。
+                  </div>
+                )}
                 {story && (
                   <>
                     <label className="qs-story-lab">標題</label>
@@ -1075,6 +1101,10 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                         ? <div className="qs-story-warn">⚠ {bad.join('；')}</div>
                         : <div className="qs-story-ok">✓ 每個單字都各挖了一格，沒有洩漏答案</div>;
                     })()}
+                    {/* v407：程式自動修過的地方要講出來，老師才知道這篇被動過哪裡 */}
+                    {(story.fixes || []).length > 0 && (
+                      <div className="qs-story-fix">🔧 已自動修好：{story.fixes.join('；')}</div>
+                    )}
                   </>
                 )}
               </div>
@@ -2435,7 +2465,7 @@ function GrQuestionsEditor({ qs, onChange, impOpen, onToggleImp, impText, onImpT
 /* ── GuidedReadingEditor 分段閱讀（v276；v277 照片＋裁切；v278 PDF；v281 綜合題）──
    段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
    grFinal = 全部讀完後的整篇綜合題（同題目格式）；img 只存裁切範圍，不產生新圖檔 */
-function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, onChangeLinked, linkedFcRequired, onChangeRequired, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
+function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catItems, weekItems, linkedFlashcardId, onChangeLinked, linkedFcRequired, onChangeRequired, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
   // v364: 單字卡多半在「單字」分類，只找同分類會找不到 → 改看整週所有分類
   const fcOptions = (((weekItems && weekItems.length) ? weekItems : (catItems || []))
     .filter(it => it.type === 'flashcard' && (it.cards || []).length > 0));
@@ -2444,6 +2474,18 @@ function GuidedReadingEditor({ itemId, catItems, weekItems, linkedFlashcardId, o
   const [uploading, setUploading] = useS('');
   const [upErr, setUpErr] = useS('');
   const [cropSeg, setCropSeg] = useS(null); // 開啟裁切視窗的段落
+  /* v407（Alan：「能夠根據每一段自動生成題目」）——AI 自動出題的設定 */
+  const [aiOpen,  setAiOpen]  = useS(false);
+  const [aiGrade, setAiGrade] = useS('g4');
+  const [aiPerM,  setAiPerM]  = useS(2);   // 每段幾題選擇
+  const [aiPerS,  setAiPerS]  = useS(1);   // 每段幾題簡答
+  const [aiFinM,  setAiFinM]  = useS(3);   // 整篇綜合幾題選擇
+  const [aiFinS,  setAiFinS]  = useS(1);   // 整篇綜合幾題簡答
+  const [aiSkills, setAiSkills] = useS([]);
+  const [aiReplace, setAiReplace] = useS(false);
+  const [aiRun,   setAiRun]   = useS('');  // 進度文字（空字串＝沒在跑）
+  const [aiErr,   setAiErr]   = useS('');
+  const [aiInfo,  setAiInfo]  = useS('');  // 跑完的回報（出了幾題、跳過哪幾段、擋掉幾題）
   const [bulkOpen, setBulkOpen] = useS(false);   // v387: 一次匯入所有段落的題目
   const [bulkText, setBulkText] = useS('');
   const [bulkReplace, setBulkReplace] = useS(false);
@@ -2565,6 +2607,70 @@ function grParseBulk(text, segCount) {
         : 'AI 朗讀產生失敗：' + msg);
     }
     setUploading('');
+  };
+
+
+  /* ══ v407：AI 依「每一段」自動出題 ═══════════════════════════════════════
+     Alan：「分段閱讀我希望我匯入圖片或是文字或是檔案，能夠根據每一段自動生成題目。
+             先從 reading comprehension 出題就好。最後統整…配合 reading skill 也很好，
+             但不能亂出，要真的符合文章」
+
+     文字從哪裡來：直接用 grSegMainText——貼的文字就用文字，照片就用 OCR 的結果
+     （跟「AI 產生朗讀」同一條路，所以照片段落只要背景辨識跑完就有文字，
+       不用再多做一次 OCR）。還沒有文字的段落會被跳過，而且會明確報段號。
+
+     「不能亂出」是 data.js 那邊用程式擋的（rcGroundedMcq / rcGroundedSa /
+     rcGroundedBlock：AI 引用的線索句必須真的在文章裡）——這裡只負責把
+     「擋掉了幾題」誠實回報，不要讓老師以為每次都剛好出滿。 */
+  const AI_SKILL_LIST = Object.keys(window.RC_SKILLS || {});
+  const runAiQuestions = async () => {
+    setAiErr(''); setAiInfo(''); setAiRun('讀取每一段的文字…');
+    try {
+      const list = segRef.current || [];
+      const texts = [];
+      for (let i = 0; i < list.length; i++) {
+        let t = '';
+        try { t = await grSegMainText(list[i]); } catch (e) { t = ''; }
+        texts.push({ i, text: t });
+      }
+      const r = await window.aiMakeGuidedQuestions({
+        segments: texts, title: itemTitle || '', grade: aiGrade,
+        perMcq: aiPerM, perSa: aiPerS, finalMcq: aiFinM, finalSa: aiFinS, skills: aiSkills,
+        onProgress: (d, tot, label) => setAiRun(`出題中 ${d}/${tot}${label ? ' · ' + label : ''}`),
+      });
+
+      // 寫回段落（segRef 永遠是最新的——老師在等待時可能又改了東西）
+      onChange((segRef.current || []).map((sg, i) => {
+        const adds = r.bySeg[i];
+        if (!adds) return aiReplace ? { ...sg, questions: [] } : sg;
+        return { ...sg, questions: (aiReplace ? [] : (sg.questions || [])).concat(adds) };
+      }));
+      if (r.final.length || aiReplace) onChangeFinal((aiReplace ? [] : (finalQs || [])).concat(r.final));
+
+      /* 閱讀技巧是另一個型別的單元，塞不進分段閱讀 → 交給 EditorModal 掛在 __side，
+         存檔時跟這一份分段閱讀一起建立（同一週、同一個分組）。 */
+      if (r.blocks.length && onSideItems) {
+        const nChips = r.blocks.reduce((n, b) => n + (b.chips || []).length, 0);
+        onSideItems([{
+          id: 'gr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'rs',
+          type: 'reading-skill', group: itemGroup || undefined,
+          title: (itemTitle || '分段閱讀') + ' · 閱讀技巧',
+          zh: `${r.blocks.length} 種技巧 · ${nChips} 張卡片`,
+          rsPassage: r.passage || '', rsBlocks: r.blocks,
+        }]);
+      }
+
+      const bits = [`出了 ${r.made} 題`];
+      if (r.blocks.length) bits.push(`另外做了一份「閱讀技巧」單元（${r.blocks.length} 種，存檔時一起建立）`);
+      if (aiSkills.length && !r.blocks.length) bits.push('閱讀技巧這次對不上文章，沒有硬做（寧可不出）');
+      if (r.skipped.length) bits.push(`第 ${r.skipped.map(i => i + 1).join('、')} 段字太少或還沒辨識出文字，已跳過`);
+      if (r.dropped) bits.push(`另有 ${r.dropped} 題因為「文章裡找不到根據」被程式擋掉`);
+      setAiInfo(bits.join('；') + '。題目都在下面，可以直接改。');
+      setAiOpen(false);
+    } catch (e) {
+      setAiErr(String((e && e.message) || e));
+    }
+    setAiRun('');
   };
 
   const mkId = grMkId;
@@ -2864,6 +2970,13 @@ function grParseBulk(text, segCount) {
           <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => setPasting(v => !v)}>
             {pasting ? '✕ 取消' : '⬇ 貼文字'}
           </button>
+          {/* v407：AI 依每一段自動出題（Alan 要的「匯入完就自動生題目」） */}
+          <button className="btn ghost gr-ai-btn" style={{fontSize:11,padding:'5px 10px'}}
+            disabled={!segments.length || !!aiRun}
+            onClick={() => { setAiErr(''); setAiOpen(v => !v); }}
+            title="每一段各出幾題閱讀理解，最後再出一組整篇綜合題">
+            {aiRun || (aiOpen ? '✕ 取消' : '🤖 AI 自動出題')}
+          </button>
           <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} disabled={!segments.length}
             onClick={() => setBulkOpen(v => !v)}
             title="12 頁不用開 12 次——一次把每一頁的題目都貼進來">
@@ -2871,6 +2984,96 @@ function grParseBulk(text, segCount) {
           </button>
         </div>
       </div>
+
+      {/* v407：AI 自動出題的設定面板 ────────────────────────────────────
+          刻意跟「📋 一次匯入所有題目」長得一樣（同一種紙感卡片、同一個位置），
+          因為它們做的是同一件事，只是一個用貼的、一個用生的。 */}
+      {aiOpen && (
+        <div className="gr-ai-panel">
+          <div className="gr-ai-note">
+            每一段各出幾題<b>閱讀理解</b>，最後再出一組<b>整篇綜合題</b>。
+            題目只會問「那一段裡寫的事」——學生還沒讀到後面，問後面就是壞題。<br/>
+            AI 出完會由<b>程式再驗一次</b>：它引用的線索句必須真的在文章裡，
+            對不上的整題丟掉重出（<b>不會硬湊題數</b>，最後會告訴你擋掉幾題）。
+          </div>
+          <div className="gr-ai-grid">
+            <label>學生程度
+              <select value={aiGrade} onChange={e => setAiGrade(e.target.value)}>
+                {['g1','g2','g3','g4','g5','g6'].map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
+              </select>
+            </label>
+            <label>每段 · 選擇題
+              <select value={aiPerM} onChange={e => setAiPerM(+e.target.value)}>
+                {[0,1,2,3].map(n => <option key={n} value={n}>{n} 題</option>)}
+              </select>
+            </label>
+            <label>每段 · 簡答題
+              <select value={aiPerS} onChange={e => setAiPerS(+e.target.value)}>
+                {[0,1,2].map(n => <option key={n} value={n}>{n} 題</option>)}
+              </select>
+            </label>
+            <label>整篇綜合 · 選擇題
+              <select value={aiFinM} onChange={e => setAiFinM(+e.target.value)}>
+                {[0,2,3,5].map(n => <option key={n} value={n}>{n} 題</option>)}
+              </select>
+            </label>
+            <label>整篇綜合 · 簡答題
+              <select value={aiFinS} onChange={e => setAiFinS(+e.target.value)}>
+                {[0,1,2].map(n => <option key={n} value={n}>{n} 題</option>)}
+              </select>
+            </label>
+          </div>
+          {/* 「最後統整…配合 reading skill 也很好，但不能亂出」——所以預設不勾，
+              而且對不上文章的那一種會整個不做，不會硬生一份出來。 */}
+          <div className="gr-ai-skills">
+            <div className="gr-ai-skills-head">
+              🔍 讀完整篇之後，順便做一份「閱讀技巧」單元（選填）
+            </div>
+            <div className="gr-ai-chips">
+              {AI_SKILL_LIST.map(k => {
+                const sk = (window.RC_SKILLS || {})[k] || {};
+                const on = aiSkills.indexOf(k) >= 0;
+                return (
+                  <button key={k} type="button" className={'gr-ai-chip' + (on ? ' on' : '')}
+                    onClick={() => setAiSkills(v => on ? v.filter(x => x !== k) : v.concat(k))}>
+                    {sk.ico} {sk.zh}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="gr-ai-hint">
+              勾起來的會合成<b>一個</b>「閱讀技巧」單元，跟這份分段閱讀一起建立（同一週、同一組）。
+              卡片一張一張比對過文章，找不到出處的整張丟掉；某一種三輪都對不上就<b>不做那一種</b>。
+            </div>
+          </div>
+          <label className="gr-ai-rep">
+            <input type="checkbox" checked={aiReplace} onChange={e => setAiReplace(e.target.checked)}/>
+            <span>蓋掉原本的題目（不勾＝加在原本的後面）</span>
+          </label>
+          {aiErr && <div className="gr-ai-err">{aiErr}</div>}
+          <div className="gr-ai-foot">
+            <span className="gr-ai-sum">
+              {segments.length} 段 · 預計 {segments.length * (aiPerM + aiPerS) + aiFinM + aiFinS} 題
+              {aiSkills.length ? ` ＋ ${aiSkills.length} 種閱讀技巧` : ''}
+            </span>
+            <span style={{flex:1}}/>
+            <button className="btn ghost" style={{fontSize:12,padding:'5px 12px'}}
+              onClick={() => setAiOpen(false)} disabled={!!aiRun}>取消</button>
+            <button className="btn primary" style={{fontSize:12,padding:'5px 14px'}}
+              onClick={runAiQuestions}
+              disabled={!!aiRun || (!aiPerM && !aiPerS && !aiFinM && !aiFinS && !aiSkills.length)}>
+              {aiRun || '🤖 開始出題'}
+            </button>
+          </div>
+        </div>
+      )}
+      {aiInfo && !aiOpen && (
+        <div className="gr-ai-done">
+          ✓ {aiInfo}
+          <button type="button" onClick={() => setAiInfo('')} aria-label="關閉">✕</button>
+        </div>
+      )}
+      {aiErr && !aiOpen && <div className="gr-ai-err">{aiErr}</div>}
       {/* v387: 一次把 12 頁的題目全部貼進來，不用一段一段開 */}
       {bulkOpen && (
         <div style={{border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',margin:'0 0 10px',background:'var(--bg-paper,#FBF8F1)'}}>
