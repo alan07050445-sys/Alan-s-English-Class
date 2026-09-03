@@ -130,7 +130,7 @@ function App() {
   // ── Auth state ──────────────────────────────────────────
   const [user, setUser]           = useAppState(null);
   const [adminVer, setAdminVer]   = useAppState(0); // v337: 管理者狀態解析後觸發重繪
-  const [starBalance, setStarBalance] = useAppState(0);     // v342: 集點——我的星星
+  const [starBalance, setStarBalance] = useAppState(0);     // v342: 集點——老師手動給/扣的那些
   const [starsOpen, setStarsOpen]     = useAppState(false); // v342: 星星／商店面板
   const [authReady, setAuthReady] = useAppState(false); // show loading until Firebase resolves
   // v322: 暑假派發清單是否已載入。登入的學生要等它回來才揭曉門口頁，否則載入畫面會在
@@ -653,10 +653,27 @@ function App() {
       const cur = local[key];
       const modes = { ...((cur && cur.modes) || {}), ...(fp.modes || {}) };
       const base = (!cur || pctOf(remote) > pctOf(cur)) ? remote : cur;
-      local[key] = Object.keys(modes).length ? { ...base, modes } : base;
+      /* v409：型別與標題一定要帶過來。它們是「這一筆是什麼」的描述，跟挑哪一邊的分數無關，
+         而本機那份（loadQMProg）從來只存 done/score/total/ts，根本沒有這兩個欄位。
+         沒有 itemType，computeAutoStars 就認不出「以前教室賺的」那些紀錄
+         ——暑假的星星就是這樣不見的。 */
+      const meta = {};
+      if (fp.itemType)  meta.itemType  = fp.itemType;
+      if (fp.itemTitle) meta.itemTitle = fp.itemTitle;
+      local[key] = { ...base, ...(Object.keys(modes).length ? { modes } : {}), ...meta };
     });
     return local;
   }, [qmProgressVersion, weekId, grade, myProgressItems, user?.uid]);
+
+  /* v409：右上角那顆 ⭐ 本來只顯示 stars/{email}.balance ＝「老師手動給的」，
+     完全沒有把 v361 的自動集點與 v362 的每日簽到算進去——所以 header 的數字一直
+     比面板裡的小一大截（點開才會變多）。兩邊改用同一組函式算，不可能再對不起來。 */
+  const autoStarTotal = useAppMemo(() => {
+    if (!user) return 0;
+    const a = window.computeAutoStars ? window.computeAutoStars(weeks, viewOrder, qmProgress) : { total: 0 };
+    const c = window.computeCheckin   ? window.computeCheckin(myCheckin) : { total: 0 };
+    return (a.total || 0) + (c.total || 0);
+  }, [user, weeks, viewOrder, qmProgress, myCheckin]);
 
   // v311 (#21): 只計「真的完成」——qmProgress 記錄存在不代表完成（未達 80 分 done 會是 0）；一律看 .done
   const qmIsDone = (id) => { const p = qmProgress[`${weekId}_${id}`]; return !!(p && p.done); };
@@ -1607,7 +1624,7 @@ function App() {
             onShowMistakes={user ? () => setMistakesOpen(true) : null}
             grade={grade}
             compactLobby={!catView && !editMode}
-            starBalance={starBalance}
+            starBalance={starBalance + autoStarTotal}
             onShowCheckin={user && !(window.isAdminUser && window.isAdminUser(user)) ? () => setCheckinOpen(true) : null}
             checkinDone={!!(window.computeCheckin && window.computeCheckin(myCheckin).signedToday)}
             checkinStreak={(window.computeCheckin ? window.computeCheckin(myCheckin).streak : 0)}

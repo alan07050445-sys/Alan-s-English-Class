@@ -3686,11 +3686,15 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
   const cloudShape = !!(opts && opts.cloudShape);
   const entries = [];
   let total = 0;
-  const getProg = (wid, id) => {
-    const its = progItems || {};
-    return its[`${wid}_${id}`] || its[id] ||
-           its[Object.keys(its).find(k => k.endsWith('_' + id)) || ''] || null;
+  const its = progItems || {};
+  /* v409：已經算過的進度 key。第二輪（下面「以前教室賺的」）不可以再算一次。 */
+  const used = new Set();
+  const findKey = (wid, id) => {
+    if (its[`${wid}_${id}`] !== undefined) return `${wid}_${id}`;
+    if (its[id] !== undefined) return id;
+    return Object.keys(its).find(k => k.endsWith('_' + id)) || '';
   };
+  const getProg = (wid, id) => { const k = findKey(wid, id); return k ? its[k] : null; };
   const dateOf = (prog) => {
     const t = Number((prog && (prog.ts || prog.done)) || 0);
     return t > 1e11 ? new Date(t).toISOString().slice(0, 10) : '';
@@ -3701,6 +3705,8 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
     const all = [];
     Object.values(wk.items || {}).forEach(arr => (arr || []).forEach(it => all.push(it)));
     all.forEach(it => {
+      const k = findKey(wid, it.id);
+      if (k) used.add(k);
       const prog = getProg(wid, it.id);
       const n = autoStarsForItem(it, prog, cloudShape);
       if (n > 0) {
@@ -3719,6 +3725,31 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
                      amount: bonus, note: `${wk.label || wid} 作業全部完成 🎉` });
     }
   });
+
+  /* ══ v409（學生回報：「暑假拿的星星，開學就不見了」）══════════════════════
+     真的有 bug，而且每個學生都中。原因是上面那一圈只走「現在這個教室看得到的週次」：
+     weeks / weekOrder 是跟著年級走的（class/data_g4、class/data_summer_lib… 各一份），
+     開學之後學生被學號綁到自己的年級，暑假題庫那 9 週就再也不會被載進來
+     → 在暑假賺的每一顆自動星星當場歸零（暑假題庫全做完上限 2370 顆）。
+     封存(v398)或看別的年級也會踩到同一顆地雷。
+
+     修法：**拿到的星星就是拿到了**。進度紀錄（progress/{uid}.items）是跟著「人」走的，
+     不會因為換教室而消失，所以第二輪直接掃進度：上面沒算到的紀錄，用它自己存的
+     itemType 算星星。這樣星星就跟「他做過什麼」綁在一起，而不是「他現在看得到什麼」。
+     ⚠ 只認得出 itemType 的紀錄。純本機、沒有型別的舊紀錄算不出來也不會亂給
+       （寧可少給也不要無中生有）——它們只要那一週還看得到，第一輪本來就算過了。
+     ⚠ 作業獎金沒辦法補算（要有那一週的 homework 清單）。暑假 9 週都沒有設作業，
+       所以這次一顆都沒差；封存的學期週次會少掉獎金那一筆。 */
+  Object.keys(its).forEach(k => {
+    if (used.has(k)) return;
+    const prog = its[k];
+    const n = autoStarsForItem(null, prog, cloudShape);
+    if (n <= 0) return;
+    total += n;
+    entries.push({ id: `auto:${k}`, auto: true, past: true, date: dateOf(prog),
+                   amount: n, note: `完成「${(prog && prog.itemTitle) || '之前的練習'}」` });
+  });
+
   return { total, entries };
 }
 Object.assign(window, { computeAutoStars, autoStarsForItem, autoStarItemOk, AUTO_STAR_RULES });
