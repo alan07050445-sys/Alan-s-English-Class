@@ -635,19 +635,26 @@
 .gr-tabs button.active { background: #2E7D5B; border-color: #2E7D5B; color: #fff; }
 .gr-tabs button em { font-style: normal; margin-left: 6px; opacity: .7; font-size: 12px; }
 .gr-proof { max-height: 54vh; overflow-y: auto; padding-right: 4px; }
-.gr-q { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border-soft, #eee7d4); }
-.gr-q:first-child { border-top: none; }
-.gr-q.bad { background: #fdf3f1; border-radius: 10px; padding: 10px 8px; }
-.gr-q-n { font-family: var(--mono); font-size: 13px; color: var(--ink-3, #8a8270); padding-top: 10px; }
-.gr-q-f textarea, .gr-q-f input, .gr-passage {
+/* ⚠⚠ v413：這幾條本來叫 .gr-q / .gr-q-n / .gr-q-f / .gr-q-2（v382 五大時態出題工具），
+   跟「分段閱讀」的題目區塊 .gr-q 撞名——而這支 CSS 比 styles-quiz-mode.css 後載入，
+   所以學生端分段閱讀的答題頁一直被這裡的 `display:grid; 28px 1fr` 蓋掉：
+   選項全部被塞進 28px 的那一欄，一個字一行，「問題 1 / 2」也變成直的。
+   （從 v382 就壞了，只是 v407 才開始自動幫每一段出題、v411 才讓翻頁一路走到答題頁，
+     所以到現在才被看到。）
+   老師端的東西一律改用 gq- 開頭，跟學生端的 gr- 分乾淨。 */
+.gq-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border-soft, #eee7d4); }
+.gq-row:first-child { border-top: none; }
+.gq-row.bad { background: #fdf3f1; border-radius: 10px; padding: 10px 8px; }
+.gq-row-n { font-family: var(--mono); font-size: 13px; color: var(--ink-3, #8a8270); padding-top: 10px; }
+.gq-row-f textarea, .gq-row-f input, .gr-passage {
   width: 100%; padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 8px;
   font-family: inherit; font-size: 15px; line-height: 1.6; background: #fff; resize: vertical;
 }
 .gr-passage { font-family: var(--mono, monospace); font-size: 14px; line-height: 1.85; }
-.gr-q-2 { display: grid; grid-template-columns: 200px 1fr; gap: 10px; margin-top: 6px; }
-.gr-q-2 label { display: block; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--ink-3, #8a8270); margin-bottom: 3px; }
+.gq-row-2 { display: grid; grid-template-columns: 200px 1fr; gap: 10px; margin-top: 6px; }
+.gq-row-2 label { display: block; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--ink-3, #8a8270); margin-bottom: 3px; }
 .gr-warn { margin-top: 6px; font-size: 13px; color: #A8331F; line-height: 1.5; }
-@media (max-width: 820px) { .gr-num-row, .gr-q-2 { grid-template-columns: 1fr; } }
+@media (max-width: 820px) { .gr-num-row, .gq-row-2 { grid-template-columns: 1fr; } }
 
 /* ══════════════════════════════════════════════════════════
    v383：教學卡（lesson）——先教再練

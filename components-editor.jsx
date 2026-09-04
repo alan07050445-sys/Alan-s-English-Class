@@ -843,11 +843,11 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
               {(cur.kind === 'C' ? res.check : res.A[cur.i]).map((x, i) => {
                 const ok = window.grValidA(x);
                 return (
-                  <div key={i} className={'gr-q' + (ok ? '' : ' bad')}>
-                    <span className="gr-q-n">{i + 1}</span>
-                    <div className="gr-q-f">
+                  <div key={i} className={'gq-row' + (ok ? '' : ' bad')}>
+                    <span className="gq-row-n">{i + 1}</span>
+                    <div className="gq-row-f">
                       <textarea rows={2} value={x.prompt} onChange={e => updAny(cur, i, 'prompt', e.target.value)}/>
-                      <div className="gr-q-2">
+                      <div className="gq-row-2">
                         <div><label>答案</label><input value={x.answer} onChange={e => updAny(cur, i, 'answer', e.target.value)}/></div>
                         <div><label>中文解說</label><input value={x.explain} onChange={e => updAny(cur, i, 'explain', e.target.value)}/></div>
                       </div>
