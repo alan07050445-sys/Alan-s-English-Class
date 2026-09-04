@@ -3012,6 +3012,8 @@
 
 /* ══ v285: 閱讀頁放寬放大（Alan：文章太窄很難看）══
    閱讀頁吃滿 ~1060px——掃描頁照片大很多；答題頁維持適中寬度（選項太寬難點）。 */
+/* ⚠ 這一行其實被 styles-tune.css 的 .gr-player{max-width:var(--measure-wide,1080px)} 蓋掉了
+   （那支比較後面載入）。v412 放寬「文章頁」的規則寫在 styles-tune.css，跟其他寬度規則放一起。 */
 .gr-player { max-width: 1060px; }
 .gr-page-quiz .gr-seg { max-width: 800px; margin-left: auto; margin-right: auto; }
 .gr-page-intro .qm-intro { max-width: 640px; margin-left: auto; margin-right: auto; }
@@ -3023,6 +3025,39 @@
   margin-right: auto;
 }
 .gr-continue { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+/* ══ v412：文章頁一定要「一畫面看得完」（Alan：不要還得往下滑）════════════
+   照片段落的高度本來只跟寬度綁（padding-bottom: 比例%），寬度越大就越高——
+   跨頁的掃描檔在 1000px 寬的視窗上會高到 550px 以上，加上抬頭、提示、翻頁列就爆掉，
+   學生每一頁都要先往下滑才按得到「下一頁」。
+   改成同時卡住高度：由高度反推「這張圖最寬可以多寬」。
+     可用高度 = 視窗高 − 其他東西（--gr-chrome）
+     最大寬度 = 可用高度 ÷ 這張圖的長寬比（--gr-ar，由 JS 帶進來 = ar × 裁切帶）
+   ⚠ 用 dvh 不用 vh：iPad Safari 的 100vh 含網址列，會算出比看得到的還高。
+     沒有 dvh 的舊瀏覽器退回 vh（下面 @supports 蓋過去）。 */
+.grd-fit { width: 100%; margin-left: auto; margin-right: auto; }
+.gr-page-read .grd-fit {
+  /* 250 → 275：實測「圖片以外」一共佔 273px（進度條 8＋抬頭 43＋圓點 8＋卡片內距
+     與抬頭列 ~90＋提示 27＋翻頁列 64＋外距），留 2px 不要壓線。
+     ⚠ 動到閱讀頁任何一塊的高度，這個數字就要重量一次。 */
+  --gr-chrome: 275px;
+  max-width: calc((100vh - var(--gr-chrome)) / var(--gr-ar, 1));
+}
+@supports (height: 100dvh) {
+  .gr-page-read .grd-fit { max-width: calc((100dvh - var(--gr-chrome)) / var(--gr-ar, 1)); }
+}
+/* 圖片段落的閱讀頁：把圖片以外的東西收緊，讓圖片能大一點
+   （--gr-chrome 是「圖片以外一共佔多高」，收得越緊圖片就能越大）。
+   ⚠ 只在「這一段是圖片」時收緊——純文字段落的留白是刻意的，收了會很擠。 */
+.gr-page-read .gr-seg:has(.grd-fit) { padding: 14px 16px; margin-bottom: 10px; }
+.gr-page-read .gr-seg:has(.grd-fit) .gr-read-head { margin-bottom: 8px; }
+.gr-page-read .gr-seg:has(.grd-fit) .gr-tap-hint { margin-top: 7px; font-size: 12px; }
+.gr-page-read .gr-dots { margin: 0 0 8px; }
+.gr-page-read .gr-continue { margin-top: 10px; }
+/* 手機直式：抬頭與翻頁列比較矮，而且圖片本來就吃滿寬度，門檻放寬一點 */
+@media (max-width: 640px) {
+  .gr-page-read .grd-fit { --gr-chrome: 210px; }
+}
 
 /* ══ v411：文章頁的翻頁列（Alan：「改成上一頁 下一頁」）══════════════════
    下一頁是主要動作 → 放右邊、用主色；上一頁安靜地待在左邊。

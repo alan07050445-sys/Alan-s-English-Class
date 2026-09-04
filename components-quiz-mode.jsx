@@ -1,6 +1,6 @@
 // components-quiz-mode.jsx — Quiz mode (main UI for students + teacher edit)
 
-const { useState: useQM, useMemo: useQMM, useEffect: useQME } = React;
+const { useState: useQM, useMemo: useQMM, useEffect: useQME, useLayoutEffect: useQML } = React;
 
 /* ══════════════════════════════════════════════════════
    v392：作答節奏統一（所有逐題型 Player 共用）
@@ -3237,6 +3237,12 @@ function GrImgCrop({ img, className, onWord, onSide, sideBusy, hlRect }) {
   const bandWords = (onWord && wdata && wdata.words ? wdata.words : [])
     .filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; });
   return (
+    /* v412: 外面多包一層 .grd-fit 專門負責「最寬可以多寬」。
+       ⚠ 不能直接在 .grd-img 上面加 max-width：它的高度是 padding-bottom 百分比撐出來的，
+         而百分比是對「外層的寬度」算的，不是對自己——加了 max-width 只會讓它變窄卻一樣高
+         （實測 731×553，比例整個跑掉）。包一層之後百分比就是對這一層算，比例才對。
+       --gr-ar ＝ 這一張（裁切後）的長寬比，CSS 用它由高度反推最大寬度。 */
+    <div className="grd-fit" style={{ '--gr-ar': (ar * band) }}>
     <div className={'grd-img' + (loaded ? ' loaded' : '') + (className ? ' ' + className : '')}
       style={{ paddingBottom: (ar * band * 100) + '%' }}>
       <img ref={imgRef} src={img.url} style={{ transform: `translateY(-${y0 * 100}%)` }}
@@ -3263,6 +3269,7 @@ function GrImgCrop({ img, className, onWord, onSide, sideBusy, hlRect }) {
               onClick={(e) => { e.stopPropagation(); onSide(r); }}>{busy ? '⏳' : '🔊'}</button>
           );
         })}
+    </div>
     </div>
   );
 }
@@ -3480,6 +3487,34 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       });
     }
   };
+
+  /* ══ v412：小卡畫出來之後「量一次、超出畫面就拉回來」════════════════════
+     Alan 第二次回報「字典又跑到最右邊」。v410 修掉了根因（進場動畫把 translateX(-50%)
+     蓋掉），但這種「算好座標就放手」的寫法本來就很脆弱——半寬是寫死的 170、
+     沒有考慮 iPad 雙指放大之後的可視範圍、往上開的時候也可能整張衝出畫面上緣，
+     任何一個估錯就是一張看不完整的卡片。
+     改成不再靠預測：畫出來之後量它真正的位置，哪一邊出界就往回推多少。
+     ⚠ 用 margin 推，不要動 transform——transform 是置中用的，動了又會變成另一個 bug。
+     ⚠ 要量兩次（字查回來之前／之後）：內容變多會把卡片撐高，所以 deps 有 dict.text。 */
+  const popRef = React.useRef(null);
+  useQML(() => {
+    const el = popRef.current;
+    if (!el || !dict) return;
+    el.style.marginLeft = ''; el.style.marginTop = '';      // 先歸零再量，不然會疊加
+    const vv = window.visualViewport;
+    const vw = (vv && vv.width) || window.innerWidth;
+    const vh = (vv && vv.height) || window.innerHeight;
+    const ox = (vv && vv.offsetLeft) || 0, oy = (vv && vv.offsetTop) || 0;
+    const M = 8;                                            // 邊緣至少留 8px
+    const r = el.getBoundingClientRect();
+    let dx = 0, dy = 0;
+    if (r.right > ox + vw - M) dx = (ox + vw - M) - r.right;
+    if (r.left + dx < ox + M)  dx = (ox + M) - r.left;       // 左邊優先（寧可右邊被切也要看得到開頭）
+    if (r.bottom > oy + vh - M) dy = (oy + vh - M) - r.bottom;
+    if (r.top + dy < oy + M)   dy = (oy + M) - r.top;
+    if (dx) el.style.marginLeft = Math.round(dx) + 'px';
+    if (dy) el.style.marginTop  = Math.round(dy) + 'px';
+  }, [dict && dict.word, dict && dict.text]);
 
   // v289: 點小卡以外的地方就關掉（點別的單字＝換字，不算關）
   useQME(() => {
@@ -4111,7 +4146,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
 
       {/* v287: 點字查義小卡（點單字出現；自動唸一次，可再按 🔊） */}
       {dict && (
-        <div className={'gr-word-pop' + (dict.pos ? ' anch' : '')} role="dialog" aria-label={`單字 ${dict.word}`}
+        <div ref={popRef} className={'gr-word-pop' + (dict.pos ? ' anch' : '')} role="dialog" aria-label={`單字 ${dict.word}`}
           style={dict.pos ? { left: dict.pos.x, top: dict.pos.y, bottom: 'auto', transform: dict.pos.above ? 'translate(-50%, -100%)' : 'translateX(-50%)' } : undefined}>
           <div className="gr-word-pop-head">
             <b>{dict.word}</b>

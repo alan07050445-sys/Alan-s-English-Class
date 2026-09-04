@@ -1971,6 +1971,17 @@ input, textarea, select{ border-color: var(--border-em); }
   margin-left: auto;
   margin-right: auto;
 }
+/* ══ v412（Alan：「大小大概就是這樣…但可以再大一點點 滿版一點」）══════════
+   分段閱讀的「文章頁」要能滿版：課本掃描是跨頁的，卡在 860（.qm-player-shell）
+   或 1080（上面那條）都太窄，字會小到看不清楚。
+   ⚠ 只放寬文章頁——答題頁維持原本寬度（選項一行太寬反而難點、也難讀）。
+   ⚠ 高度那一半在 styles-quiz-mode.css 的 .gr-page-read .grd-fit（由畫面高度反推最大寬度）。
+   用 :has()；舊瀏覽器不支援就維持原本寬度，只是圖小一點，不會壞掉。 */
+.qm-player-shell:has(.gr-page-read),
+.gr-player:has(.gr-page-read) {
+  max-width: min(1500px, calc(100vw - 24px));
+}
+
 /* 說明頁／結果頁／上傳作業：短欄，讀起來才不會一行太長 */
 .qm-intro  { max-width: var(--measure-narrow, 640px); }
 .qm-result { max-width: var(--measure-narrow, 640px); }
