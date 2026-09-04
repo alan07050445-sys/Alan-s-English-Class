@@ -3311,7 +3311,7 @@ function GuidedReadingIntro({ item, onStart, resumeAt, onRestart, catItems, link
       <div className="qm-intro-title">{item.title}</div>
       <div className="qm-intro-meta">{segs.length > 1 ? `${segs.length} 段文章 · ` : ''}{total ? `${total} 題` : '純閱讀 · 沒有題目'}</div>
       <div className="qm-intro-rules">
-        <div className="qm-intro-rule-row"><span>📖</span><span>{!total ? (segs.length > 1 ? '一次讀一段——讀完按「完成閱讀」換下一段' : '把文章讀完，按「完成閱讀」就結束') : (segs.length > 1 ? '一次讀一段——讀完按「完成閱讀」，再回答這段的問題' : '讀完文章按「完成閱讀」，再回答問題')}</span></div>
+        <div className="qm-intro-rule-row"><span>📖</span><span>{!total ? (segs.length > 1 ? '一次讀一段——「下一頁」換下一段，「上一頁」可以回去重看' : '把文章讀完，按「完成閱讀」就結束') : (segs.length > 1 ? '一次讀一段——「下一頁」接著回答這段的問題，「上一頁」可以回去重看' : '讀完文章按「下一頁」，再回答問題')}</span></div>
         {total > 0 && <div className="qm-intro-rule-row"><span>👀</span><span>答題時忘了內容，按「回頭看文章」就能再看一次</span></div>}
         {finalN > 0 && <div className="qm-intro-rule-row"><span>📚</span><span>全部讀完後，還有 {finalN} 題整篇文章的綜合題</span></div>}
         <div className="qm-intro-rule-row"><span>⭐</span><span>{!total ? '這一份沒有題目——讀完就算完成' : hasShort ? '選擇題自動改分；簡答題 AI 批改' : '答對加一分，答錯會告訴你正確答案'}</span></div>
@@ -3410,6 +3410,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [grErr,    setGrErr]    = useQM(''); // v306: 分段閱讀簡答批改失敗（不計分、可重送）
   const [checking, setChecking] = useQM(false);
   const [peek, setPeek]         = useQM(false);   // 答題頁展開「回頭看文章」
+  const maxSegRef = React.useRef(0);              // v411: 讀到最遠的那一段（往回讀時圓點不倒退）
   const [done, setDone]         = useQM(false);
   const [dict, setDict]         = useQM(null);    // v287: 點字查義 {word, text|null}
   const [speaking, setSpeaking] = useQM(false);   // v287: 朗讀中
@@ -3499,6 +3500,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     setActiveWord(-1); // v301: 停止朗讀＝清掉逐字高亮
   };
   useQME(() => {
+    if (segIdx > maxSegRef.current) maxSegRef.current = segIdx;   // v411
     let dead = false;
     stopSpeak();
     setTtsText('');
@@ -3543,21 +3545,43 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       if (window.prefetchTts)  { try { window.prefetchTts(list.slice(0, 40)); } catch (e) {} }
       if (window.prefetchDict) { try { cancelDict = window.prefetchDict(list, { limit: 60 }); } catch (e) {} }
     };
+    // 一段的字：貼上的文字直接切；照片段落用 OCR 的字（只取這個裁切帶內的）
+    const wordsOf = (sg) => {
+      const txt = (sg.text || '').trim();
+      if (txt) return Promise.resolve(txt.match(/[A-Za-z'\u2019-]{2,}/g) || []);
+      const key = sg.img && (sg.img.wordsId || sg.img.wordsUrl);
+      if (!key) return Promise.resolve([]);
+      return grFetchWords(key).then(d => {
+        if (!d || !d.words) return [];
+        const y0 = sg.img.y0 || 0, y1 = sg.img.y1 == null ? 1 : sg.img.y1;
+        return d.words.filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; }).map(w => w.t);
+      }).catch(() => []);
+    };
+    // v411: 600ms → 250ms。字典改成批次之後請求數少很多，不會再跟圖片搶連線
     const t = setTimeout(() => {
       if (dead) return;
-      const txt = (seg.text || '').trim();
-      if (txt) { warm(txt.match(/[A-Za-z'\u2019-]{2,}/g) || []); return; }
-      const key = seg.img && (seg.img.wordsId || seg.img.wordsUrl);
-      if (!key) return;
-      grFetchWords(key).then(d => {
-        if (dead || !d || !d.words) return;
-        const y0 = seg.img.y0 || 0, y1 = seg.img.y1 == null ? 1 : seg.img.y1;
-        warm(d.words
-          .filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; })
-          .map(w => w.t));
-      }).catch(() => {});
-    }, 600);
-    return () => { dead = true; clearTimeout(t); if (cancelDict) cancelDict(); };
+      wordsOf(seg).then(ws => warm(ws));
+    }, 250);
+    /* v411：順便把「下一段」也暖起來——現在有上一頁／下一頁，翻頁很快，
+       等翻過去才開始暖就等於每一段都要再等一次。等這一段暖得差不多了再開始。 */
+    const nextSeg = segs[segIdx + 1];
+    const t2 = nextSeg ? setTimeout(() => {
+      if (dead) return;
+      wordsOf(nextSeg).then(ws => {
+        if (dead || !window.readWorthyWords) return;
+        const list = window.readWorthyWords(ws, 0);
+        if (!list.length) return;
+        if (window.prefetchTts)  { try { window.prefetchTts(list.slice(0, 40)); } catch (e) {} }
+        if (window.prefetchDict) { try { window.prefetchDict(list, { limit: 60 }); } catch (e) {} }
+      });
+    }, 5000) : null;
+    return () => {
+      dead = true; clearTimeout(t); if (t2) clearTimeout(t2);
+      /* 這一段的預抓：學生已經離開，沒跑完的就別花錢了。
+         ⚠ 但「下一段」的那一份刻意不取消——會啟動它就表示學生在這一段待了 5 秒以上，
+            接下來多半就是翻過去，取消掉等於白暖一場、翻過去還要再要一次。 */
+      if (cancelDict) cancelDict();
+    };
   }, [segIdx, mode]);
 
   // v293: 瀏覽器朗讀的語速——跟著學生選的速度，但夾在語音合成聽起來自然的範圍內
@@ -3718,10 +3742,38 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     finish(nres);
   };
 
-  // 「✅ 完成閱讀」——這段有題進答題頁；沒題直接下一段/綜合題/完成
-  const finishReading = () => {
+  /* ══ v411：文章頁可以往回讀（Alan：「現在都只能一路往後」）═══════════════
+     ⚠ 往回讀之後再往前，不可以叫學生把答過的題目再答一次——
+        會讓已經拿到的分數被第二次作答蓋掉。所以「這一段的題目答完了沒」要看 res，
+        答完的就直接跳過去下一段。 */
+  const segAnswered = (si) => {
+    const qs = segQs[si] || [];
+    return qs.every((_, k) => res[gIdxOf(si, k)] !== undefined);
+  };
+  const firstUnansweredQ = (si) => {
+    const qs = segQs[si] || [];
+    const k = qs.findIndex((_, i) => res[gIdxOf(si, i)] === undefined);
+    return k < 0 ? 0 : k;
+  };
+  /* 讀完這一頁之後還有沒有東西——沒有才叫「完成閱讀」 */
+  const moreAfterRead =
+    ((segQs[segIdx] || []).length > 0 && !segAnswered(segIdx)) ||
+    segIdx + 1 < segs.length ||
+    finalQs.length > 0;
+
+  const goPrevPage = () => {
+    if (segIdx <= 0) return;
+    clearAuto();
     resetQState();
-    if ((segQs[segIdx] || []).length) { setMode('quiz'); setQIdx(0); return; }
+    setSegIdx(segIdx - 1); setMode('read'); setQIdx(0);
+  };
+
+  // 「下一頁 →」／最後一頁的「✅ 完成閱讀」
+  const goNextPage = () => {
+    resetQState();
+    if ((segQs[segIdx] || []).length && !segAnswered(segIdx)) {
+      setMode('quiz'); setQIdx(firstUnansweredQ(segIdx)); return;
+    }
     if (segIdx + 1 < segs.length) { setSegIdx(segIdx + 1); setMode('read'); setQIdx(0); return; }
     if (finalQs.length) { setMode('final-intro'); setQIdx(0); return; }
     finish(res);
@@ -3772,7 +3824,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     setChecking(false);
   };
 
-  // 鍵盤：文章頁 Enter＝完成閱讀；答題頁 1–4 選選項、Enter 下一題
+  // 鍵盤：文章頁 Enter／→＝下一頁、←＝上一頁；答題頁 1–4 選選項、Enter 下一題
   useQME(() => {
     const onKey = (e) => {
       /* v390 修正：同上——本來擋掉「所有按鍵 × 所有按鈕」，
@@ -3781,7 +3833,12 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       if (done) return;
       if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
       if ((e.key === 'Enter' || e.key === ' ') && t && t.closest && t.closest('button, a[href], [role="button"]')) return;
-      if (mode === 'read') { if (e.key === 'Enter') finishReading(); return; }
+      if (mode === 'read') {
+        // v411: 方向鍵翻頁（桌機），Enter 維持「往下一頁」
+        if (e.key === 'Enter' || e.key === 'ArrowRight') goNextPage();
+        else if (e.key === 'ArrowLeft') goPrevPage();
+        return;
+      }
       if (mode === 'final-intro') { if (e.key === 'Enter') startFinal(); return; }
       if (qIdx >= curQs.length) return;
       const q = grNormalizeQ(curQs[qIdx]);
@@ -3982,9 +4039,11 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
             </div>
           ) : null}
           {segs.length > 1 && (
+            /* v411: 圓點看「讀到最遠哪一段」，不是「現在在第幾段」——
+               不然往回讀的時候後面的點會全部熄掉，看起來像進度倒退了。 */
             <div className="gr-dots" aria-hidden="true">
               {segs.map((_, i) => (
-                <span key={i} className={i < segIdx ? 'past' : i === segIdx ? 'cur' : ''}/>
+                <span key={i} className={i === segIdx ? 'cur' : (i <= maxSegRef.current ? 'past' : '')}/>
               ))}
             </div>
           )}
@@ -4002,8 +4061,14 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               <div className="gr-tap-hint">💡 不會的單字點一下，聽發音、看意思</div>
             ) : null}
           </div>
-          <div className="gr-continue">
-            <button className="qm-btn primary gr-readdone" onClick={finishReading}>✅ 完成閱讀</button>
+          {/* v411（Alan：「我不要完成閱讀 改成上一頁 下一頁 只有文章結束才會完成閱讀」）*/}
+          <div className="gr-continue gr-nav">
+            <button className="qm-btn ghost gr-prev" onClick={goPrevPage} disabled={segIdx === 0}
+              aria-label="上一頁">← 上一頁</button>
+            {segs.length > 1 && <span className="gr-nav-pos">{segIdx + 1} / {segs.length}</span>}
+            <button className="qm-btn primary gr-readdone" onClick={goNextPage}>
+              {moreAfterRead ? '下一頁 →' : '✅ 完成閱讀'}
+            </button>
           </div>
         </>
       ) : mode === 'final-intro' ? (

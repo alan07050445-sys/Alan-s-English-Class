@@ -528,20 +528,75 @@ function readWorthyWords(words, limit) {
   });
   return out;
 }
-const DICT_PREFETCH_PARALLEL = 3;
-function prefetchDict(words, { limit = 60, parallel = DICT_PREFETCH_PARALLEL } = {}) {
+/* ══ v411：預抓改成「一次問一批」（Alan：「AI 能不能再更快」）════════════════
+   量出來的數字（打 Alan 的 Worker 實測）：
+     · 固定成本 ≈ 915ms —— 連線來回＋模型開口前的時間，一個 token 的回答也要這麼久。
+       所以「把一個字查快」沒什麼空間可壓（單字查一次 1.3~1.8 秒，其中 0.9 秒是這個）。
+     · 但一次問 15 個字只要 5.06 秒 ＝ **338ms/字**，是一個一個問的 1/4。
+   結論：讓「點下去要等」這件事變少，比讓「等的時候變快」實際。
+   所以預抓改成批次：一批 12 個字、最多兩批同時跑，一整段（約 14 個字）約 5 秒就全暖好。
+   ⚠ 請求數也從 14 次降到 1~2 次——省錢，也不會跟圖片、語音搶連線。 */
+const DICT_BATCH_SIZE = 12;
+const DICT_BATCH_PARALLEL = 2;
+const _DICT_BATCH_SYS =
+`You are a dictionary for Taiwanese elementary school students learning English.
+Output ONLY a JSON object mapping every word I give you to its entry. No prose, no markdown, no code fences.
+{"<word>":{"z":"<Traditional Chinese meaning, 2-6 characters>","e":"<one very simple English definition an 8-year-old understands, max 12 words>","s":"<one short natural example sentence using the word, max 10 words>"}}
+Include every word exactly as I spelled it. If a word is not real English, use {"z":"（這個字讀不出來）","e":"","s":""}.`;
+
+// 批次回來的資料 → 跟單字查詢一模一樣的三行格式（兩邊存進同一份快取，學生看不出差別）
+function _dictFromEntry(o) {
+  const z = String((o && o.z) || '').trim();
+  if (!z) return '';
+  const e = String((o && o.e) || '').trim();
+  const x = String((o && o.s) || '').trim();
+  return `【中文】${z}` + (e ? `\n【英文】${e}` : '') + (x ? `\n【例句】${x}` : '');
+}
+async function _dictBatch(words) {
+  const endpoint = AI_WRITING_ENDPOINT || '';
+  if (!endpoint || !words.length) return;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5', max_tokens: 140 * words.length + 200,
+      system: _DICT_BATCH_SYS,
+      messages: [{ role: 'user', content: 'Words: ' + words.join(', ') }],
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  const txt = data?.content?.[0]?.text || '';
+  let obj = null;
+  try { obj = JSON.parse(_aiStripFence(txt)); } catch (e) { obj = null; }   // 解析不了就整批放棄，點下去再單獨查
+  if (!obj || typeof obj !== 'object') return;
+  const c = _dictCache();
+  let n = 0;
+  Object.keys(obj).forEach(k => {
+    const w = String(k || '').trim().toLowerCase();
+    const line = _dictFromEntry(obj[k]);
+    if (!w || !line || c[w]) return;
+    c[w] = line; n++;
+  });
+  if (!n) return;
+  const keys = Object.keys(c);
+  if (keys.length > 600) keys.slice(0, 200).forEach(k => delete c[k]);      // 快取上限，跟單字查詢同一條規則
+  try { localStorage.setItem(DICT_CACHE_KEY, JSON.stringify(c)); } catch (e) {}
+}
+function prefetchDict(words, { limit = 60, size = DICT_BATCH_SIZE, parallel = DICT_BATCH_PARALLEL } = {}) {
   const cache = _dictCache();
   const list = readWorthyWords(words, 0).filter(w => !cache[w]).slice(0, limit);
-  let stop = false, i = 0;
+  const groups = [];
+  for (let i = 0; i < list.length; i += size) groups.push(list.slice(i, i + size));
+  let stop = false, g = 0;
   const run = async () => {
     while (!stop) {
-      const w = list[i++];
-      if (w === undefined) return;
-      try { await lookupWord(w, ''); } catch (e) { /* 這個字算了，繼續下一個 */ }
+      const batch = groups[g++];
+      if (batch === undefined) return;
+      try { await _dictBatch(batch); } catch (e) { /* 這一批算了，繼續下一批 */ }
     }
   };
-  if (list.length) {
-    const n = Math.min(parallel, list.length);
+  if (groups.length) {
+    const n = Math.min(parallel, groups.length);
     Promise.all(Array.from({ length: n }, run)).catch(() => {});
   }
   return () => { stop = true; };     // 換段就把還沒查的收掉
