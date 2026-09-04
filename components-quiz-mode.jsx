@@ -3213,7 +3213,10 @@ function grNormalizeQ(q) {
 
 /* v277: 段落照片切片——只存裁切範圍 {url, ar, y0, y1}（0~1 高度比例），
    不產生新圖片：CSS 高度=寬×ar×(y1-y0)、img translateY(-y0%) 顯示該帶。 */
-function GrImgCrop({ img, onZoom, className, onWord, onSide, sideBusy, hlRect }) {
+/* v410（Alan：「取消放大功能 這很麻煩」）：拿掉整張圖的「點一下放大」。
+   點圖放大原本會蓋掉整個畫面，而字本來就點得到（下面的 .grd-word 一個字一個框），
+   放大反而多一層要關掉的東西，還會把「想點字卻點到空白」變成開燈箱。 */
+function GrImgCrop({ img, className, onWord, onSide, sideBusy, hlRect }) {
   const y0 = img.y0 || 0;
   const y1 = img.y1 == null ? 1 : img.y1;
   const band = Math.max(0.02, y1 - y0);
@@ -3235,8 +3238,7 @@ function GrImgCrop({ img, onZoom, className, onWord, onSide, sideBusy, hlRect })
     .filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; });
   return (
     <div className={'grd-img' + (loaded ? ' loaded' : '') + (className ? ' ' + className : '')}
-      style={{ paddingBottom: (ar * band * 100) + '%' }}
-      onClick={onZoom} title={onZoom ? '點一下放大' : undefined}>
+      style={{ paddingBottom: (ar * band * 100) + '%' }}>
       <img ref={imgRef} src={img.url} style={{ transform: `translateY(-${y0 * 100}%)` }}
         alt="文章段落" decoding="async" onLoad={() => setLoaded(true)}/>
       {bandWords.map((w, i) => (
@@ -3409,7 +3411,6 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [checking, setChecking] = useQM(false);
   const [peek, setPeek]         = useQM(false);   // 答題頁展開「回頭看文章」
   const [done, setDone]         = useQM(false);
-  const [zoom, setZoom]         = useQM(null);
   const [dict, setDict]         = useQM(null);    // v287: 點字查義 {word, text|null}
   const [speaking, setSpeaking] = useQM(false);   // v287: 朗讀中
   const [ttsText, setTtsText]   = useQM('');      // v287: 這一段可朗讀的文字（文字段落或 OCR）
@@ -3518,6 +3519,45 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       });
     }
     return () => { dead = true; };
+  }, [segIdx, mode]);
+
+  /* ══ v410：進到一段就先在背景把「聲音」與「字典」暖好 ══════════════════════
+     Alan：「點下去 聲音很慢才出來 以及字典功能也很慢」。
+     查下去發現分段閱讀從頭到尾就沒有做過預抓——單字卡、聽寫、配對連線都有
+     （都呼叫 window.prefetchTts），只有這裡沒有。所以每點一個字都是一次冷的來回：
+       · 語音：跟 Worker 要 MP3，實測 1.3~2.3 秒
+       · 字典：問 AI，約 1.8 秒
+     進到一段就先把這一段值得暖的字暖起來，真的點下去多半已經是現成的（約 1ms）。
+     ⚠ 三個節制：① 慢 600ms 再開始，先把頻寬讓給圖片與 OCR
+                 ② 只暖「值得暖的字」（readWorthyWords 濾掉 the/and/was 這種）
+                 ③ 換段一定要把還沒跑完的收掉，不然翻頁翻很快會有好幾段一起搶頻寬 */
+  useQME(() => {
+    if (mode !== 'read' || !segs[segIdx]) return;
+    const seg = segs[segIdx];
+    let dead = false, cancelDict = null;
+    const warm = (raw) => {
+      if (dead || !window.readWorthyWords) return;
+      const list = window.readWorthyWords(raw, 0);
+      if (!list.length) return;
+      // 語音一個字就是一個 MP3，抓太多是浪費頻寬 → 只暖前 40 個；字典便宜，放到 60
+      if (window.prefetchTts)  { try { window.prefetchTts(list.slice(0, 40)); } catch (e) {} }
+      if (window.prefetchDict) { try { cancelDict = window.prefetchDict(list, { limit: 60 }); } catch (e) {} }
+    };
+    const t = setTimeout(() => {
+      if (dead) return;
+      const txt = (seg.text || '').trim();
+      if (txt) { warm(txt.match(/[A-Za-z'\u2019-]{2,}/g) || []); return; }
+      const key = seg.img && (seg.img.wordsId || seg.img.wordsUrl);
+      if (!key) return;
+      grFetchWords(key).then(d => {
+        if (dead || !d || !d.words) return;
+        const y0 = seg.img.y0 || 0, y1 = seg.img.y1 == null ? 1 : seg.img.y1;
+        warm(d.words
+          .filter(w => { const cy = w.y + (w.h || 0) / 2; return cy >= y0 && cy <= y1; })
+          .map(w => w.t));
+      }).catch(() => {});
+    }, 600);
+    return () => { dead = true; clearTimeout(t); if (cancelDict) cancelDict(); };
   }, [segIdx, mode]);
 
   // v293: 瀏覽器朗讀的語速——跟著學生選的速度，但夾在語音合成聽起來自然的範圍內
@@ -3810,14 +3850,14 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
       ));
   };
 
-  const renderSegContent = (seg, allowZoom, highlight) => {
+  const renderSegContent = (seg, highlight) => {
     const hl = (typeof highlight === 'number' && highlight >= 0) ? highlight : null;
     // 照片段落逐字高亮：只在「當前正在讀的這一段」且有 readWords 時，把當前字的框傳給 GrImgCrop
     const hlRect = (hl != null && seg === segs[segIdx] && readWords[hl]) ? readWords[hl] : null;
     return (
       <>
         {seg.img && seg.img.url ? (
-          <GrImgCrop img={seg.img} onZoom={allowZoom ? () => setZoom(seg.img) : null}
+          <GrImgCrop img={seg.img}
             onWord={(w, e) => openWord(w, '', e)} hlRect={hlRect}
             onSide={(r) => speakSideRect(seg.img, r)} sideBusy={sideBusy}/>
         ) : null}
@@ -3957,7 +3997,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
                 </button>
               ) : null}
             </div>
-            {renderSegContent(segs[segIdx], true, activeWord)}
+            {renderSegContent(segs[segIdx], activeWord)}
             {((segs[segIdx].text || '').trim() || (segs[segIdx].img && (segs[segIdx].img.wordsId || segs[segIdx].img.wordsUrl))) ? (
               <div className="gr-tap-hint">💡 不會的單字點一下，聽發音、看意思</div>
             ) : null}
@@ -3994,7 +4034,7 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               {(mode === 'final' ? segs : [segs[segIdx]]).map((seg, i) => (
                 <div key={i} className="gr-peek-seg">
                   {mode === 'final' && segs.length > 1 && <div className="gr-seg-label">第 {i + 1} 段</div>}
-                  {renderSegContent(seg, true)}
+                  {renderSegContent(seg)}
                 </div>
               ))}
             </div>
@@ -4022,14 +4062,6 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         </div>
       )}
 
-      {zoom && (
-        <div className="gr-lightbox" onClick={() => setZoom(null)}>
-          <div className="gr-lightbox-in">
-            <GrImgCrop img={zoom} onWord={(w, e) => openWord(w, '', e)} onSide={(r) => speakSideRect(zoom, r)} sideBusy={sideBusy}/>
-            <div className="gr-lightbox-hint">點單字＝查意思 · 點其他地方關閉</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

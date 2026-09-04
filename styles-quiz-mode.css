@@ -2901,24 +2901,6 @@
   display: block;
 }
 .gr-seg .grd-img { margin-bottom: 10px; }
-.gr-lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  background: rgba(24, 18, 10, .92);
-  overflow: auto;
-  padding: 24px 12px 40px;
-  cursor: zoom-out;
-}
-.gr-lightbox-in { width: min(1200px, 175vw); margin: 0 auto; }
-.gr-lightbox .grd-img { cursor: zoom-out; border-radius: 6px; }
-.gr-lightbox-hint {
-  text-align: center;
-  color: #d8cbb4;
-  font-size: 12.5px;
-  margin-top: 12px;
-  font-family: var(--mono, monospace);
-}
 
 /* ══ v281: 分段閱讀翻頁式流程——答題頁「回頭看文章」＋綜合題 ══ */
 .gr-quiz-head {
@@ -3123,8 +3105,18 @@
   border-radius: 14px;
   box-shadow: 0 12px 34px rgba(58, 43, 20, .18);
   padding: 12px 16px;
-  animation: grPageIn .28s cubic-bezier(.22, 1, .36, 1) both;
+  /* ⚠⚠ v410（Alan：「查字典功能怎麼都跑到最右邊」）——這一行絕對不能用 grPageIn。
+     grPageIn 會動到 transform（from translateY(14px) → to none），而 CSS 動畫的優先權
+     高過 inline style，animation-fill-mode:both 又讓最後那個 `none` 永久留著
+     → 上面這個 translateX(-50%)（還有錨定模式用 inline style 下的 translate(-50%,-100%)）
+     從頭到尾都沒有生效過。
+     結果：left 變成「左邊緣」而不是「中心」，小卡整個往右偏半個寬度；
+     底部置中模式更慘，左邊緣直接落在畫面正中央 → 實測 1062px 寬的視窗上
+     小卡從 531 排到 971，右半邊被切掉（就是 Alan 截圖那樣）。
+     這裡只淡入、不碰 transform，置中就正常了。 */
+  animation: grWordPopIn .16s ease-out both;
 }
+@keyframes grWordPopIn { from { opacity: 0; } to { opacity: 1; } }
 .gr-word-pop-head { display: flex; align-items: center; gap: 8px; }
 .gr-word-pop-head b {
   font-family: 'Lora', 'Noto Serif TC', Georgia, serif;

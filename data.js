@@ -452,11 +452,22 @@ async function fetchReadingWords(ref) {
 // 小朋友點文章裡的單字 → 中文意思＋簡單英文釋義；localStorage 快取，同字不重打
 const DICT_CACHE_KEY = 'alan-dict-v1';
 function _dictCache() { try { return JSON.parse(localStorage.getItem(DICT_CACHE_KEY) || '{}'); } catch (e) { return {}; } }
+function dictHas(word) { const w = String(word || '').trim().toLowerCase(); return !!(w && _dictCache()[w]); }
+/* v410：同一個字同時被「背景預查」與「學生點下去」要到時，只跟 AI 要一次——
+   而且點下去的那一次會直接接上正在跑的那一發，不用重打（本來會打兩次、也慢兩倍）。 */
+const _dictPending = {};
 async function lookupWord(word, context) {
   const w = String(word || '').trim().toLowerCase();
   if (!w) return '';
   const cache = _dictCache();
   if (cache[w]) return cache[w];
+  if (_dictPending[w]) return _dictPending[w];
+  const p = _lookupWordNow(w, context);
+  _dictPending[w] = p;
+  p.then(() => { delete _dictPending[w]; }, () => { delete _dictPending[w]; });
+  return p;
+}
+async function _lookupWordNow(w, context) {
   const endpoint = AI_WRITING_ENDPOINT || '';
   if (!endpoint) return '（查詢服務未設定）';
   const systemPrompt =
@@ -490,6 +501,50 @@ If the input is not a real English word (typo/garbled), reply only: 【中文】
     }
     return text || '查詢失敗，請再點一次。';
   } catch (e) { return '網路連不上，請再試一次。'; }
+}
+
+/* ══ v410：背景先把整段的字查好（Alan：「字典功能也很慢」）══════════════════
+   一次查一個字要等 AI 約 1.8 秒，小朋友點下去就是乾等。
+   進到一段文章時就在背景把這一段的字先查起來（查過的存在 localStorage，永久有效），
+   等他真的點下去多半已經是現成的。
+   ⚠ 只查「值得查的」：太短的、最常見的功能詞（the/and/was…）小朋友不會點，
+     查了只是白花錢。上限 60 個字、同時 3 個，不要跟圖片和 OCR 搶頻寬。 */
+const _DICT_SKIP = new Set(('a an the and or but so if then than that this these those there here ' +
+  'is are was were be been being am do does did done have has had will would shall should can could ' +
+  'may might must not no yes of to in on at for with from by as into onto over under about after before ' +
+  'it its he she his her him they them their we us our you your i me my mine one two three four five ' +
+  'who what when where why how all any both each few more most other some such only own same too very ' +
+  'up out off down again once also just now new old get got go went come came make made take took ' +
+  'said say says like well back even still way day').split(/\s+/));
+/* 「值得先暖起來的字」——語音預抓也用同一份，兩邊的名單才會一致。
+   去重、去掉 2 個字母以內的、去掉最常見的功能詞，再截上限。 */
+function readWorthyWords(words, limit) {
+  const seen = {}, out = [];
+  (Array.isArray(words) ? words : [words]).forEach(x => {
+    const w = String(x || '').toLowerCase().replace(/[^a-z'\u2019-]/g, '');
+    if (w.length < 3 || seen[w] || _DICT_SKIP.has(w)) return;
+    seen[w] = 1;
+    if (!limit || out.length < limit) out.push(w);
+  });
+  return out;
+}
+const DICT_PREFETCH_PARALLEL = 3;
+function prefetchDict(words, { limit = 60, parallel = DICT_PREFETCH_PARALLEL } = {}) {
+  const cache = _dictCache();
+  const list = readWorthyWords(words, 0).filter(w => !cache[w]).slice(0, limit);
+  let stop = false, i = 0;
+  const run = async () => {
+    while (!stop) {
+      const w = list[i++];
+      if (w === undefined) return;
+      try { await lookupWord(w, ''); } catch (e) { /* 這個字算了，繼續下一個 */ }
+    }
+  };
+  if (list.length) {
+    const n = Math.min(parallel, list.length);
+    Promise.all(Array.from({ length: n }, run)).catch(() => {});
+  }
+  return () => { stop = true; };     // 換段就把還沒查的收掉
 }
 
 // v263: 學生作業照片上傳（「上傳作業」題型）——存 submissions/{uid}/{progressKey}/
@@ -3575,6 +3630,7 @@ Object.assign(window, {
   buildReportHTML,
   COMPANION_LINES, pickLine,
   // Sound & TTS
+  dictHas, prefetchDict, readWorthyWords,
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
