@@ -3749,13 +3749,43 @@ Object.assign(window, { noteCloudWeeks, guardWeekSave, countWeekItems: _countWee
      ① 學生沒有 stars/ 的寫入權限（規則只開放老師），不必改 rules
      ② 分數改了、老師刪了某筆成績，星星自動跟著對，不會有一份對不起來的舊帳
      ③ 學生無法自己灌星星（沒有可寫的計數器） */
+/* ══ v414（Alan：「他們完成作業都應該有加分吧？有學生說沒有！」）═══════════
+   學生說得對。舊的規則只列了 6 種題型，autoStarsForItem 最後一行是 `return 0`
+   —— 也就是**沒列到的題型，做得再好也是零顆**。實際上 17 種題型裡有 11 種掛零：
+     聽寫、選擇題、分段閱讀、打答案、圈選題、切音節、分類排序、
+     AI 造句、意見文寫作、故事山、上傳作業。
+   暑假題庫 167 個單元裡就有 65 個（39%）屬於這些型別。
+   現在改成「有列表就一定有規則」，而且分成三種算法，新的題型只要歸類就好。 */
+const AUTO_STAR_KIND = {
+  // ① 分數型：80 分 +10、滿分 +15（沿用原本填空的標準，沒有調鬆也沒有調緊）
+  quiz: 'pct', spelling: 'pct', fillblank: 'pct', cloze: 'pct', 'def-match': 'pct',
+  'reading-skill': 'pct', 'type-answer': 'pct', 'circle-answer': 'pct',
+  'syllable-div': 'pct', 'word-sort': 'pct', 'guided-reading': 'pct',
+  // ② AI 批改的五星型：3 星 +10、4 星 +20（沿用原本閱讀簡答的標準）
+  'short-answer': 'stars', 'writing-practice': 'stars', essay: 'stars', 'story-mountain': 'stars',
+  // ③ 沒有分數可言的：做完就給
+  lesson: 'done5',      // 教學卡：讀完 +5（v383 原本就是這樣）
+  upload: 'done10',     // 上傳作業：拍照交上來就是完成 +10
+};
 const AUTO_STAR_RULES = {
   flashcard: '學習＋測驗（選擇題）完成 +10；測驗的手寫題也全部答完再 +20',
+  quiz: '80 分 +10／100 分 +15',
+  spelling: '80 分 +10／100 分 +15',
   fillblank: '80 分 +10／100 分 +15',
+  cloze: '80 分 +10／100 分 +15',
   'def-match': '比照填空：80 分 +10／100 分 +15',
   'reading-skill': '比照填空：80 分 +10／100 分 +15',
+  'type-answer': '80 分 +10／100 分 +15',
+  'circle-answer': '80 分 +10／100 分 +15',
+  'syllable-div': '80 分 +10／100 分 +15',
+  'word-sort': '80 分 +10／100 分 +15',
+  'guided-reading': '有題目：80 分 +10／100 分 +15；純閱讀：整篇讀完 +10',
   lesson: '教學卡讀完 +5',
+  upload: '上傳作業交出來 +10',
   'short-answer': '平均 3 星 +10／4 星 +20',
+  'writing-practice': '平均 3 星 +10／4 星 +20',
+  essay: '平均 3 星 +10／4 星 +20',
+  'story-mountain': '平均 3 星 +10／4 星 +20',
   bonus: '本週作業全部達標：+10（超過 5 個 +15、超過 8 個 +20）',
 };
 // 分數取百分比。⚠ 兩種來源格式不同，一定要講清楚是哪一種：
@@ -3773,7 +3803,10 @@ function autoStarItemOk(item, prog, cloudShape) {
   const type = (item && item.type) || prog.itemType || '';
   const pct = autoStarPct(prog, cloudShape);
   if (type === 'flashcard') return !!(prog.modes && prog.modes.learn && (prog.modes.test || prog.modes.fill));
-  if (type === 'short-answer') return pct != null && pct >= 60;     // 5 星制的 3 星
+  /* v414: AI 批改的五星型一律用「3 星（60 分）」當達標線，跟給星星的規則同一條。
+     本來只寫死 short-answer，造句／意見文／故事山被拿去跟分數型比 80 分，
+     等於同樣是 3 星，一個算達標、一個不算。 */
+  if (AUTO_STAR_KIND[type] === 'stars') return pct != null && pct >= 60;
   if (pct == null) return !!prog.done;                              // 上傳作業等沒有分數的
   return pct >= 80;
 }
@@ -3781,15 +3814,24 @@ function autoStarsForItem(item, prog, cloudShape) {
   if (!prog) return 0;
   const type = (item && item.type) || prog.itemType || '';
   const pct = autoStarPct(prog, cloudShape);
+  // 單字卡自成一格：它沒有分數，看的是「兩個模式都跑完了沒」
   if (type === 'flashcard') {
     const m = prog.modes || {};
     if (!(m.learn && (m.test || m.fill))) return 0;
     return 10 + (m.written ? 20 : 0);   // v374: 測驗的手寫題全部答完再加 20
   }
-  if (type === 'short-answer') { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
-  if (type === 'lesson') return 5;   // v383: 教學卡讀完就給，重點是讓他先看
-  if (type === 'fillblank' || type === 'cloze' || type === 'def-match' || type === 'reading-skill') { if (pct == null) return 0; return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0); }
-  return 0;
+  const kind = AUTO_STAR_KIND[type];
+  if (!kind) return 0;                       // 真的認不得的型別才是 0（例如舊資料沒存型別）
+  if (kind === 'done5')  return 5;           // v383: 教學卡讀完就給，重點是讓他先看
+  if (kind === 'done10') return prog.done ? 10 : 0;
+  if (kind === 'stars')  { if (pct == null) return 0; return pct >= 80 ? 20 : (pct >= 60 ? 10 : 0); }
+  // 'pct'
+  if (pct == null) {
+    /* 沒有分數的分段閱讀＝純閱讀（v387 那種沒出題的），整篇讀完就給。
+       ⚠ 其他分數型沒有分數＝資料不完整，不給——寧可少給也不要無中生有。 */
+    return (type === 'guided-reading' && prog.done) ? 10 : 0;
+  }
+  return pct >= 100 ? 15 : (pct >= 80 ? 10 : 0);
 }
 // weeks/weekOrder＝這位學生看得到的週次（暑假要先用 filterWeeksForPlan 過濾）
 // progItems＝進度 map；opts.cloudShape=true 代表直接吃 progress 文件的 items
@@ -3863,7 +3905,7 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
 
   return { total, entries };
 }
-Object.assign(window, { computeAutoStars, autoStarsForItem, autoStarItemOk, AUTO_STAR_RULES });
+Object.assign(window, { computeAutoStars, autoStarsForItem, autoStarItemOk, AUTO_STAR_RULES, AUTO_STAR_KIND });
 
 /* 單字卡「學習／填空」模式完成 → 記在該單元的進度底下（雲端＋本機） */
 async function markFlashcardMode(uid, displayName, email, progressKey, mode) {

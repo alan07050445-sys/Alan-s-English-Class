@@ -295,6 +295,8 @@ const MX_ACTS = ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek'
 const MX_MOVE_ACTS = ['walk', 'roll', 'dash'];
 /* 每種走位的基礎速度（px / 秒），再乘上該夥伴的 speed。 */
 const MX_BASE_SPEED = { walk: 62, roll: 190, dash: 620 };
+/* 上面那些 px/秒 是以「桌機的身體大小」為準訂的；實際速度會照身體比例縮放（v414）。 */
+const MX_REF_W = 50;
 const MX_PETS = [
   {
     id: 'clay', speed: 1, zh: 'Claudius', tip: '陪你唸書的老夥伴',
@@ -452,7 +454,18 @@ function MascotLayer() {
      用 null 保證第一次一定會執行一遍（重讀同樣的值是無害的）。 */
   const uidRef = useFxR(null);
   useFxE(() => {
-    try { reduce.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    /* v414：「減少動態」本來只在掛載時讀一次，之後改設定要重新整理才算數
+       （iPad 的輔助使用很容易被開開關關）。改成掛監聽＋每秒的 tick 也順手重讀，
+       開了就立刻安靜、關了就立刻活過來。 */
+    let mq = null;
+    const readReduce = () => {
+      try {
+        if (!mq) mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        reduce.current = mq.matches;
+      } catch (e) {}
+    };
+    readReduce();
+    if (mq && mq.addEventListener) mq.addEventListener('change', readReduce);
     const t = setTimeout(() => setAlive(true), 2500);
     const syncAccount = () => {
       const u = mxUid();
@@ -465,13 +478,14 @@ function MascotLayer() {
       // 帽子有自己的 4 秒同步（要跟星星商店對帳），這裡不重複處理
     };
     syncAccount();
-    const tick = () => { syncAccount(); setAllowed(okNow()); setShown(canShow()); };
+    const tick = () => { readReduce(); syncAccount(); setAllowed(okNow()); setShown(canShow()); };
     const iv = setInterval(tick, 1000);
     /* v392（F-2）：切回分頁時立刻同步，不然要等最多 1 秒才醒過來 */
     document.addEventListener('visibilitychange', tick);
     return () => {
       clearTimeout(t); clearInterval(iv);
       document.removeEventListener('visibilitychange', tick);
+      if (mq && mq.removeEventListener) mq.removeEventListener('change', readReduce);
     };
   }, []);
 
@@ -503,6 +517,10 @@ function MascotLayer() {
 
     // 右下角有「浮動頭像」等固定元件，留白不要走過去
     const maxX = () => Math.max(20, (window.innerWidth || 360) - 130);
+    /* 身體現在多寬（＝ --mx-w 解析後的值）。
+       ⚠ 不要用 getComputedStyle 讀 --mx-w：自訂屬性回的是沒算過的 "clamp(...)" 字串。
+       直接量 .mx-body 的版面寬度最準（transform 不影響 offsetWidth）。 */
+    const petW = () => (bodyRef.current && bodyRef.current.offsetWidth) || MX_REF_W;
 
     const doAct = () => {
       if (stopped) return;
@@ -532,8 +550,12 @@ function MascotLayer() {
         const target = pick === 'dash' ? (x > W / 2 ? 0 : W) : Math.round(Math.random() * W);
         const dist   = Math.abs(target - x);
         if (dist < 30) { setAct('idle'); later(doAct, 1200); return; }
-        // v407: 速度＝這個動作的基礎速度 × 這一隻的倍率（阿石 0.4、小焰 1.15）
-        const speed  = (MX_BASE_SPEED[pick] || 62) * (pet.speed || 1);   // px / 秒
+        /* v407: 速度＝這個動作的基礎速度 × 這一隻的倍率（阿石 0.38、小焰 1.15）
+           v414（Alan：「平板的動畫跟電腦不太一樣」）：再乘上「身體有多大」。
+           基礎速度是絕對 px/秒，但身體會跟著畫面縮（--mx-w：桌機 50px、平板直式 38px），
+           所以在平板上牠等於用「每秒 16 個身長」在跑、桌機只有 12 個——同一隻卻更毛躁。
+           改成用身長計速，不管什麼裝置看起來都是同一個角色。 */
+        const speed  = (MX_BASE_SPEED[pick] || 62) * (pet.speed || 1) * (petW() / MX_REF_W);
         const ms     = Math.max(200, Math.round(dist / speed * 1000));
         setDir(target > x ? 1 : -1);
         setMoveMs(ms);

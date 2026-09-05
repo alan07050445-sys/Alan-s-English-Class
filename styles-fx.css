@@ -13,6 +13,13 @@
      390px→32 · 820px→38 · 1024px→47 · ≥1090px→50 */
   --mx-w: clamp(32px, 4.6vw, 50px);
 }
+/* v414：平板（iPad 直式 834px）本來只有 38px，比桌機小了快四分之一，
+   加上速度線與位移都是照身體算的，整體看起來就是「另一隻比較小、比較急的寵物」。
+   把下限拉到 42px，平板跟桌機的差距從 24% 縮到 16%。
+   ⚠ 只動 ≥700px（平板以上）；手機維持原本的 32px，不然會擋到內容。 */
+@media (min-width: 700px) {
+  .mx-layer { --mx-w: clamp(42px, 4.6vw, 50px); }
+}
 .mx-layer.dragging .mx-body { cursor: grabbing; }
 .mx-slot { position: absolute; left: 0; bottom: 0; will-change: transform; }
 
@@ -307,9 +314,13 @@
   transform-origin: 100% 50%;
   background: linear-gradient(to left, var(--mx-trail-c, rgba(255, 138, 60, .9)), rgba(255, 138, 60, 0));
 }
-.mx-trail i:nth-child(1) { top: 28%; width: 26px; margin-right: 2px; }
-.mx-trail i:nth-child(2) { top: 52%; width: 40px; margin-right: 4px; }
-.mx-trail i:nth-child(3) { top: 74%; width: 20px; margin-right: 1px; }
+/* v414（Alan：「平板的動畫跟電腦不太一樣」）：長度改成用身體寬度的倍數。
+   本來是寫死的 26/40/20px——桌機的身體 50px 時最長那條是 0.8 個身長，
+   平板直式的身體只有 38px，同樣 40px 就變成 1.05 個身長、手機更誇張（1.25 個），
+   螢幕越小速度線看起來越長，同一隻狗看起來像不同動畫。 */
+.mx-trail i:nth-child(1) { top: 28%; width: calc(var(--mx-w) * .52); margin-right: 2px; }
+.mx-trail i:nth-child(2) { top: 52%; width: calc(var(--mx-w) * .80); margin-right: 4px; }
+.mx-trail i:nth-child(3) { top: 74%; width: calc(var(--mx-w) * .40); margin-right: 1px; }
 .act-dash .mx-trail { opacity: 1; }
 .act-dash .mx-trail i:nth-child(1) { animation: mxTrail .34s linear infinite; }
 .act-dash .mx-trail i:nth-child(2) { animation: mxTrail .28s linear infinite .07s; }
@@ -317,16 +328,16 @@
 /* 起點刻意只往前 4px：再多就會壓到身體上（實測 10px 時線的右緣越過身體左緣 8px），
    看起來像穿過牠、而不是從牠身後拉出來。 */
 @keyframes mxTrail {
-  0%   { opacity: 0; transform: translateX(4px)   scaleX(.4); }
-  35%  { opacity: 1; transform: translateX(-2px)  scaleX(1); }
-  100% { opacity: 0; transform: translateX(-20px) scaleX(1.35); }
+  0%   { opacity: 0; transform: translateX(calc(var(--mx-w) * .08))  scaleX(.4); }
+  35%  { opacity: 1; transform: translateX(calc(var(--mx-w) * -.04)) scaleX(1); }
+  100% { opacity: 0; transform: translateX(calc(var(--mx-w) * -.40)) scaleX(1.35); }
 }
 /* 煞車時速度線散掉＝揚起的塵土 */
 .act-skid .mx-trail { opacity: 1; }
 .act-skid .mx-trail i { animation: mxSkidPuff .36s ease-out both; }
 @keyframes mxSkidPuff {
-  0%   { opacity: .9; transform: translateX(0)    scaleX(1); }
-  100% { opacity: 0;  transform: translateX(-22px) scaleX(1.7); }
+  0%   { opacity: .9; transform: translateX(0) scaleX(1); }
+  100% { opacity: 0;  transform: translateX(calc(var(--mx-w) * -.44)) scaleX(1.7); }
 }
 
 /* ── 阿石：慢（v407）──────────────────────────────────────────────────
