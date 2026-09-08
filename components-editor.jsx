@@ -2490,6 +2490,7 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catIte
   const [aiFinM,  setAiFinM]  = useS(3);   // 整篇綜合幾題選擇
   const [aiFinS,  setAiFinS]  = useS(1);   // 整篇綜合幾題簡答
   const [aiSkills, setAiSkills] = useS([]);
+  const [aiQSkills, setAiQSkills] = useS([]);   // v415: 題目要偏哪些閱讀技巧（空＝一般閱讀理解）
   const [aiReplace, setAiReplace] = useS(false);
   const [aiRun,   setAiRun]   = useS('');  // 進度文字（空字串＝沒在跑）
   const [aiErr,   setAiErr]   = useS('');
@@ -2631,6 +2632,7 @@ function grParseBulk(text, segCount) {
      rcGroundedBlock：AI 引用的線索句必須真的在文章裡）——這裡只負責把
      「擋掉了幾題」誠實回報，不要讓老師以為每次都剛好出滿。 */
   const AI_SKILL_LIST = Object.keys(window.RC_SKILLS || {});
+  const aiSegN = (n) => segments.length * (+n || 0);
   const runAiQuestions = async () => {
     setAiErr(''); setAiInfo(''); setAiRun('讀取每一段的文字…');
     try {
@@ -2643,7 +2645,8 @@ function grParseBulk(text, segCount) {
       }
       const r = await window.aiMakeGuidedQuestions({
         segments: texts, title: itemTitle || '', grade: aiGrade,
-        perMcq: aiPerM, perSa: aiPerS, finalMcq: aiFinM, finalSa: aiFinS, skills: aiSkills,
+        perMcq: aiPerM, perSa: aiPerS, finalMcq: aiFinM, finalSa: aiFinS,
+        skills: aiSkills, qSkills: aiQSkills,
         onProgress: (d, tot, label) => setAiRun(`出題中 ${d}/${tot}${label ? ' · ' + label : ''}`),
       });
 
@@ -3011,7 +3014,10 @@ function grParseBulk(text, segCount) {
               </select>
             </label>
             <label>每段 · 選擇題
-              <select value={aiPerM} onChange={e => setAiPerM(+e.target.value)}>
+              {/* v415（Alan 本來就是人工判斷「視每段的長度以及有沒有重點」出 2~5 題）：
+                  「自動」＝照這一段有多少字給題數，短段 1 題、長段最多 4 題。 */}
+              <select value={aiPerM} onChange={e => setAiPerM(e.target.value === 'auto' ? 'auto' : +e.target.value)}>
+                <option value="auto">自動（依長度 1~4 題）</option>
                 {[0,1,2,3].map(n => <option key={n} value={n}>{n} 題</option>)}
               </select>
             </label>
@@ -3031,11 +3037,39 @@ function grParseBulk(text, segCount) {
               </select>
             </label>
           </div>
+          {/* ══ v415（Alan：「我可以自己勾選我這次要什麼 reading skill 的題目」）══
+              ⚠ 跟下面那一區不是同一件事，兩個都要留著：
+                這一區＝每段的「題目」要問哪個角度（還是選擇題／簡答題）
+                下面那一區＝額外做一個「拖卡片」的閱讀技巧單元
+              不勾＝一般閱讀理解（v407 的行為，完全沒變）。 */}
+          <div className="gr-ai-skills">
+            <div className="gr-ai-skills-head">
+              🎯 每一段的題目要考哪些閱讀技巧（不勾＝一般閱讀理解）
+            </div>
+            <div className="gr-ai-chips">
+              {Object.keys(window.RC_QSKILLS || {}).map(k => {
+                const sk = (window.RC_QSKILLS || {})[k] || {};
+                const on = aiQSkills.indexOf(k) >= 0;
+                return (
+                  <button key={k} type="button" className={'gr-ai-chip' + (on ? ' on' : '')}
+                    onClick={() => setAiQSkills(v => on ? v.filter(x => x !== k) : v.concat(k))}
+                    title={sk.en}>
+                    {sk.ico} {sk.zh}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="gr-ai-hint">
+              勾了幾種就<b>輪流出</b>（第 1 題因果、第 2 題推論…），題目本身還是選擇題／簡答題。
+              「找出文本證據」與「上下文猜字」這兩種程式會<b>再多驗一關</b>
+              （正解必須真的是文章裡的句子／問的那個字必須真的出現在文章裡）。
+            </div>
+          </div>
           {/* 「最後統整…配合 reading skill 也很好，但不能亂出」——所以預設不勾，
               而且對不上文章的那一種會整個不做，不會硬生一份出來。 */}
           <div className="gr-ai-skills">
             <div className="gr-ai-skills-head">
-              🔍 讀完整篇之後，順便做一份「閱讀技巧」單元（選填）
+              🔍 讀完整篇之後，順便做一份「拖卡片」的閱讀技巧單元（選填）
             </div>
             <div className="gr-ai-chips">
               {AI_SKILL_LIST.map(k => {
@@ -3061,15 +3095,18 @@ function grParseBulk(text, segCount) {
           {aiErr && <div className="gr-ai-err">{aiErr}</div>}
           <div className="gr-ai-foot">
             <span className="gr-ai-sum">
-              {segments.length} 段 · 預計 {segments.length * (aiPerM + aiPerS) + aiFinM + aiFinS} 題
-              {aiSkills.length ? ` ＋ ${aiSkills.length} 種閱讀技巧` : ''}
+              {segments.length} 段 · 預計 {aiPerM === 'auto'
+                ? `${segments.length * 1 + aiSegN(aiPerS) + aiFinM + aiFinS}~${segments.length * 4 + aiSegN(aiPerS) + aiFinM + aiFinS}`
+                : segments.length * (aiPerM + aiPerS) + aiFinM + aiFinS} 題
+              {aiQSkills.length ? ` · ${aiQSkills.length} 種技巧輪流` : ''}
+              {aiSkills.length ? ` ＋ ${aiSkills.length} 種拖卡片技巧` : ''}
             </span>
             <span style={{flex:1}}/>
             <button className="btn ghost" style={{fontSize:12,padding:'5px 12px'}}
               onClick={() => setAiOpen(false)} disabled={!!aiRun}>取消</button>
             <button className="btn primary" style={{fontSize:12,padding:'5px 14px'}}
               onClick={runAiQuestions}
-              disabled={!!aiRun || (!aiPerM && !aiPerS && !aiFinM && !aiFinS && !aiSkills.length)}>
+              disabled={!!aiRun || (aiPerM !== 'auto' && !aiPerM && !aiPerS && !aiFinM && !aiFinS && !aiSkills.length)}>
               {aiRun || '🤖 開始出題'}
             </button>
           </div>
@@ -4613,6 +4650,10 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const [nMcq, setNMcq]     = useS(10);
   const [nSa, setNSa]       = useS(5);
   const [skills, setSkills] = useS({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
+  /* v415（Alan：「這個也幫我多加額外的 reading skill 題目」）：
+     跟上面那組不一樣——上面是「拖卡片的活動」，這裡是「選擇題，只是問的角度指定技巧」。 */
+  const [qSkills, setQSkills] = useS({});
+  const [qsN, setQsN]         = useS(2);
   const [keepPassage, setKeepPassage] = useS(true);
   const [busy, setBusy]     = useS(null);     // { done, total, label }
   const [err, setErr]       = useS('');
@@ -4627,6 +4668,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
     setTitle(''); setText(''); setCat(defaultCat || 'reading'); setGrade('g4');
     setNMcq(10); setNSa(5); setKeepPassage(true);
     setSkills({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
+    setQSkills({}); setQsN(2);
     setBusy(null); setErr(''); setRes(null); setTab(0); setAssign(true); setWho([]);
     const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
     setDue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
@@ -4634,15 +4676,18 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   if (!open) return null;
 
   const kinds = Object.keys(SK).filter(k => skills[k]);
+  const QSK = window.RC_QSKILLS || {};
+  const qKinds = Object.keys(QSK).filter(k => qSkills[k]);
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-  const ready = title.trim() && words >= 40 && (nMcq > 0 || nSa > 0 || kinds.length > 0);
+  const ready = title.trim() && words >= 40 && (nMcq > 0 || nSa > 0 || kinds.length > 0 || (qKinds.length > 0 && qsN > 0));
 
   const run = async () => {
     setErr('');
-    setBusy({ done: 0, total: Math.ceil(nMcq / 5) + (nSa ? 1 : 0) + kinds.length, label: '讀文章中' });
+    setBusy({ done: 0, total: Math.ceil(nMcq / 5) + (nSa ? 1 : 0) + kinds.length + (qsN ? qKinds.length : 0), label: '讀文章中' });
     try {
       const r = await window.aiMakeReadingSet({
         passage: text, title: title.trim(), grade, mcq: nMcq, sa: nSa, skills: kinds,
+        qSkills: qKinds, qSkillN: qsN,
         onProgress: (done, total, label) => setBusy({ done, total, label }),
       });
       setRes(r); setTab(0);
@@ -4650,9 +4695,11 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
     setBusy(null);
   };
 
-  const updMcq = (i, k, v) => setRes(r => ({ ...r, mcq: r.mcq.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
-  const updOpt = (i, oi, v) => setRes(r => ({ ...r, mcq: r.mcq.map((x, j) => j === i ? { ...x, options: x.options.map((o, k) => k === oi ? v : o) } : x) }));
-  const delMcq = (i) => setRes(r => { const n = r.mcq.filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, mcq: n }; });
+  /* v415：選擇題有兩份（一般的 mcq、閱讀技巧題 skillQs），編輯 UI 完全一樣 →
+     處理函式改成吃「哪一份」，不要把整段 JSX 複製第二遍。 */
+  const updMcqIn = (key, i, k, v) => setRes(r => ({ ...r, [key]: r[key].map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+  const updOptIn = (key, i, oi, v) => setRes(r => ({ ...r, [key]: r[key].map((x, j) => j === i ? { ...x, options: x.options.map((o, k) => k === oi ? v : o) } : x) }));
+  const delMcqIn = (key, i) => setRes(r => { const n = r[key].filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, [key]: n }; });
   const updSa  = (i, k, v) => setRes(r => ({ ...r, sa: r.sa.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
   const delSa  = (i) => setRes(r => { const n = r.sa.filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, sa: n }; });
   const updBlk = (i, nb) => setRes(r => ({ ...r, blocks: r.blocks.map((x, j) => j === i ? nb : x) }));
@@ -4696,7 +4743,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
 
   const payload = () => ({
     title: title.trim(), cat, passage: keepPassage ? text.trim() : '',
-    mcq: res.mcq, sa: res.sa, blocks: res.blocks,
+    mcq: res.mcq, sa: res.sa, blocks: res.blocks, skillQs: res.skillQs || [],
     assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
   });
 
@@ -4755,8 +4802,32 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
               </label>
             </div>
 
+            {/* v415：閱讀技巧「題目」——選擇題形式，一種技巧各出幾題。
+                跟下面那一區（拖卡片的活動）是兩回事，所以標題刻意寫清楚。 */}
             <div className="field">
-              <label className="field-label">🔍 閱讀技巧 Reading Skills（學校會考的那幾種）</label>
+              <div className="rc-qs-head">
+                <label className="field-label" style={{margin:0}}>🎯 閱讀技巧題（選擇題形式，每種各出幾題）</label>
+                <select value={qsN} onChange={e => setQsN(+e.target.value)} className="rc-qs-n">
+                  {[1,2,3,4,5].map(n => <option key={n} value={n}>每種 {n} 題</option>)}
+                </select>
+              </div>
+              <div className="rc-skills">
+                {Object.keys(QSK).map(k => (
+                  <label key={k} className={'rc-skill rc-skill-q' + (qSkills[k] ? ' on' : '')}>
+                    <input type="checkbox" checked={!!qSkills[k]} onChange={e => setQSkills(s2 => ({ ...s2, [k]: e.target.checked }))}/>
+                    <span className="rc-skill-ico">{QSK[k].ico}</span>
+                    <span className="rc-skill-tx"><b>{QSK[k].en}</b><em>{QSK[k].zh}</em></span>
+                  </label>
+                ))}
+              </div>
+              <div className="field-help">
+                勾起來的會合成<b>一個</b>「閱讀技巧題」單元（{qKinds.length ? `${qKinds.length} 種 × ${qsN} 題 = ${qKinds.length * qsN} 題` : '還沒勾'}）。
+                這是<b>選擇題</b>，跟下面那一區「拖卡片」的活動不一樣，兩個可以同時出。
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="field-label">🔍 閱讀技巧活動 Reading Skills（拖卡片，學校會考的那幾種）</label>
               <div className="rc-skills">
                 {Object.keys(SK).map(k => (
                   <label key={k} className={'rc-skill' + (skills[k] ? ' on' : '')}>
@@ -4766,7 +4837,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
                   </label>
                 ))}
               </div>
-              <div className="field-help">勾起來的會合成<b>一個</b>「閱讀技巧」單元，學生一步一步走完。</div>
+              <div className="field-help">勾起來的會合成<b>一個</b>「閱讀技巧」單元，學生把卡片一張一張放進正確的格子。</div>
             </div>
 
             <label className="rc-check">
@@ -4787,7 +4858,8 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
           <div className="modal-foot">
             <button className="btn ghost" onClick={onClose} disabled={!!busy}>取消</button>
             <button className="btn primary" onClick={run} disabled={!ready || !!busy}>
-              {busy ? '出題中…' : `✨ 開始出題（${(nMcq ? 1 : 0) + (nSa ? 1 : 0) + (kinds.length ? 1 : 0)} 個單元）`}
+              {/* v415: 閱讀技巧題自成一個單元，數量要算進去 */}
+              {busy ? '出題中…' : `✨ 開始出題（${(nMcq ? 1 : 0) + (nSa ? 1 : 0) + (kinds.length ? 1 : 0) + ((qKinds.length && qsN) ? 1 : 0)} 個單元）`}
             </button>
           </div>
         </div>
@@ -4798,13 +4870,15 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   // ───────────────────────── 校稿畫面 ─────────────────────────
   const tabs = []
     .concat(res.mcq.length ? [{ k: 'mcq', name: '📝 選擇題', n: res.mcq.length }] : [])
+    .concat((res.skillQs || []).length ? [{ k: 'qs', name: '🎯 閱讀技巧題', n: res.skillQs.length }] : [])
     .concat(res.sa.length ? [{ k: 'sa', name: '📖 閱讀簡答', n: res.sa.length }] : [])
     .concat(res.blocks.map((b, i) => ({ k: 'b', i, name: (window.RC_SKILLS[b.kind] || {}).ico + ' ' + (window.RC_SKILLS[b.kind] || {}).zh, n: (b.chips || []).length })));
   const cur = tabs[Math.min(tab, Math.max(0, tabs.length - 1))];
-  const nUnits = (res.mcq.length ? 1 : 0) + (res.sa.length ? 1 : 0) + (res.blocks.length ? 1 : 0);
+  const nUnits = (res.mcq.length ? 1 : 0) + ((res.skillQs || []).length ? 1 : 0) + (res.sa.length ? 1 : 0) + (res.blocks.length ? 1 : 0);
   /* ⚠ 以前紅色的題目會被 rcBuildItems 靜靜濾掉——老師按了「建立 3 個單元」，
      結果少了 4 題也不會知道。改成擋住按鈕、直接說是哪一頁有問題。 */
   const badTabs = tabs.filter(t => t.k === 'mcq' ? res.mcq.some(q => !rcMcqOk(q))
+    : t.k === 'qs' ? (res.skillQs || []).some(q => !rcMcqOk(q))
     : t.k === 'sa' ? res.sa.some(q => !String(q.question || '').trim() || !String(q.keyPoints || '').trim())
     : !window.rcValidBlock(res.blocks[t.i]));
 
@@ -4824,29 +4898,34 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
 
           <div className="gr-proof">
             {!cur ? <div className="rc-note">這次什麼都沒生出來，回上一步再試一次。</div>
-              : cur.k === 'mcq' ? res.mcq.map((q, i) => {
-                const opts = (q.options || []).map(o => String(o || '').trim());
-                const bad = !rcMcqOk(q);
-                return (
-                  <div key={q.id || i} className={'rc-q' + (bad ? ' bad' : '')}>
-                    <div className="rc-q-head">
-                      <span className="rc-n">{i + 1}</span>
-                      <span className="rc-skilltag">{q.skill || 'detail'}</span>
-                      <button type="button" className="rc-x" onClick={() => delMcq(i)}>✕</button>
+              : (cur.k === 'mcq' || cur.k === 'qs') ? (() => {
+                const key = cur.k === 'qs' ? 'skillQs' : 'mcq';
+                const QS = window.RC_QSKILLS || {};
+                return (res[key] || []).map((q, i) => {
+                  const opts = (q.options || []).map(o => String(o || '').trim());
+                  const bad = !rcMcqOk(q);
+                  const sk = QS[q.skill];
+                  return (
+                    <div key={q.id || i} className={'rc-q' + (bad ? ' bad' : '')}>
+                      <div className="rc-q-head">
+                        <span className="rc-n">{i + 1}</span>
+                        <span className="rc-skilltag">{sk ? `${sk.ico} ${sk.zh}` : (q.skill || 'detail')}</span>
+                        <button type="button" className="rc-x" onClick={() => delMcqIn(key, i)}>✕</button>
+                      </div>
+                      <textarea className="rc-in" rows={2} value={q.q} onChange={e => updMcqIn(key, i, 'q', e.target.value)} placeholder="題目（英文）"/>
+                      {opts.map((o, oi) => (
+                        <label key={oi} className={'rc-opt' + (q.answer === oi ? ' on' : '')}>
+                          <input type="radio" checked={q.answer === oi} onChange={() => updMcqIn(key, i, 'answer', oi)}/>
+                          <span className="rc-opt-l">{'ABCD'[oi]}</span>
+                          <input className="rc-in" value={q.options[oi]} onChange={e => updOptIn(key, i, oi, e.target.value)}/>
+                        </label>
+                      ))}
+                      <input className="rc-in rc-why" value={q.explain || ''} onChange={e => updMcqIn(key, i, 'explain', e.target.value)} placeholder="中文解說（答完會給學生看）"/>
+                      {bad && <div className="rc-warn">⚠ 題目、四個選項都要填，選項不可重複，而且要選一個正確答案。</div>}
                     </div>
-                    <textarea className="rc-in" rows={2} value={q.q} onChange={e => updMcq(i, 'q', e.target.value)} placeholder="題目（英文）"/>
-                    {opts.map((o, oi) => (
-                      <label key={oi} className={'rc-opt' + (q.answer === oi ? ' on' : '')}>
-                        <input type="radio" checked={q.answer === oi} onChange={() => updMcq(i, 'answer', oi)}/>
-                        <span className="rc-opt-l">{'ABCD'[oi]}</span>
-                        <input className="rc-in" value={q.options[oi]} onChange={e => updOpt(i, oi, e.target.value)}/>
-                      </label>
-                    ))}
-                    <input className="rc-in rc-why" value={q.explain || ''} onChange={e => updMcq(i, 'explain', e.target.value)} placeholder="中文解說（答完會給學生看）"/>
-                    {bad && <div className="rc-warn">⚠ 題目、四個選項都要填，選項不可重複，而且要選一個正確答案。</div>}
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
               : cur.k === 'sa' ? res.sa.map((q, i) => (
                 <div key={q.id || i} className={'rc-q' + (!q.question.trim() || !q.keyPoints.trim() ? ' bad' : '')}>
                   <div className="rc-q-head">
@@ -4882,7 +4961,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
 /* 把校稿完的東西變成週次裡的單元。
    order 不特別指定，讓 QM_TYPE_ORDER 的預設順序生效：
    選擇題(1) → 閱讀技巧(3.5) → 閱讀簡答(6)，剛好就是「先讀懂 → 練技巧 → 自己寫」。 */
-function rcBuildItems({ title, passage, mcq, sa, blocks }) {
+function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const out = [];
@@ -4900,6 +4979,28 @@ function rcBuildItems({ title, passage, mcq, sa, blocks }) {
         options: q.options.map(o => String(o).trim()),
         answer: q.answer,
         explain: String(q.explain || '').trim(),
+      })),
+    });
+  }
+  /* v415：閱讀技巧題自成一個單元——跟一般選擇題分開，老師才點得出來
+     「這一份是專門練技巧的」，學生做完也知道自己在練什麼。 */
+  const goodQS = (skillQs || []).filter(rcMcqOk);
+  if (goodQS.length) {
+    const QS = window.RC_QSKILLS || {};
+    const kindsUsed = Array.from(new Set(goodQS.map(q => q.skill).filter(k => QS[k])));
+    out.push({
+      id: 'rc' + stamp + 'qs' + rnd(), type: 'quiz', group: g,
+      title: `${g} · 閱讀技巧題`,
+      zh: `${goodQS.length} 題 · ${kindsUsed.map(k => QS[k].zh).join('、') || '閱讀技巧'}`,
+      shuffle: true,
+      passage: passage || '',
+      questions: goodQS.map((q, i) => ({
+        id: 'qs' + stamp + i + rnd(),
+        q: String(q.q).trim(),
+        options: q.options.map(o => String(o).trim()),
+        answer: q.answer,
+        explain: String(q.explain || '').trim(),
+        skill: q.skill || '',
       })),
     });
   }

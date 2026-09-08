@@ -2391,6 +2391,66 @@ const RC_GRADES = {
   g6: 'Grade 6 (age 12, CEFR A2). May include one inference question that needs two facts joined together.',
 };
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v415：閱讀技巧「題目」（Alan：「我可以自己勾選我這次要什麼 reading skill 的題目」）
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠ 跟上面的 RC_SKILLS 不是同一件事，兩個都要留著：
+     · RC_SKILLS  ＝ 拖卡片的「活動」（問題/解決兩個框、因果配對、排序、文氏圖）
+     · RC_QSKILLS ＝ 一般的選擇題／簡答題，只是「問的角度」指定成某一種閱讀技巧
+   Alan 的課本頁邊就是印這些：Use Text Evidence／Make Inferences／
+   Explain Author's Purpose／Vocabulary in Context…，所以是題目不是活動。
+   ══════════════════════════════════════════════════════════════════════════ */
+const RC_QSKILLS = {
+  'main-idea':        { zh: '主旨大意',     en: 'Main Idea',             ico: '🌟' },
+  'text-evidence':    { zh: '找出文本證據', en: 'Use Text Evidence',     ico: '🔎' },
+  'inference':        { zh: '推論',         en: 'Make Inferences',       ico: '💡' },
+  'cause-effect':     { zh: '因果關係',     en: 'Cause & Effect',        ico: '⚡' },
+  'problem-solution': { zh: '問題與解決',   en: 'Problem & Solution',    ico: '🧩' },
+  'character':        { zh: '描述角色',     en: 'Describe a Character',  ico: '🧍' },
+  'compare-contrast': { zh: '比較對照',     en: 'Compare & Contrast',    ico: '⚖️' },
+  'author-purpose':   { zh: '作者目的',     en: "Explain Author's Purpose", ico: '🎯' },
+  'vocabulary':       { zh: '上下文猜字',   en: 'Vocabulary in Context', ico: '🔤' },
+};
+/* 每一種到底該問什麼——寫給 AI 看的。寫得越具體，出來的題目越像那一種技巧。 */
+const RC_QSKILL_RULE = {
+  'main-idea':        'Ask what the passage is MOSTLY about. The three wrong options should be details that are true but too small to be the main idea.',
+  'text-evidence':    'Ask which detail from the passage BEST shows or proves a given statement. Every option must be a short quote or a close paraphrase of a real sentence in the passage.',
+  'inference':        'Ask something the passage strongly implies but never says outright; the student must put two facts together. Never require outside knowledge.',
+  'cause-effect':     'Name one event from the passage and ask WHY it happened, or ask what that event caused. Both sides must be in the passage.',
+  'problem-solution': 'Ask what problem someone faced, or how a problem was fixed. Both the problem and the solution must be stated in the passage.',
+  'character':        'Ask what a person in the passage is like - a trait, a feeling, or why they did something - and make the answer provable from what they DO or SAY in the passage.',
+  'compare-contrast': 'Ask how two things, people, places or times in the passage are alike or different. Both must appear in the passage.',
+  'author-purpose':   'Ask WHY the author wrote this, or why the author included one particular detail or paragraph (to inform / to entertain / to persuade / to show something).',
+  'vocabulary':       'Pick a word that really appears in the passage and ask what it means AS USED there. The student must work it out from the sentence around it.',
+};
+/* 把「這次要考哪幾種」變成一段 prompt。round-robin 分配，題數不夠時只出前幾種。 */
+function _rcFocusBlock(qskills, n) {
+  const ks = (qskills || []).filter(k => RC_QSKILLS[k]);
+  if (!ks.length || !n) return '';
+  const plan = Array.from({ length: n }, (_, i) => ks[i % ks.length]);
+  return '\n\nTHIS SET MUST PRACTISE THESE READING SKILLS.\n' +
+    ks.map(k => `- ${RC_QSKILLS[k].en}: ${RC_QSKILL_RULE[k]}`).join('\n') +
+    '\nWrite the items in exactly this order:\n' +
+    plan.map((k, i) => `  ${i + 1}. ${RC_QSKILLS[k].en}`).join('\n') +
+    '\nPut the matching key in the "skill" field: ' + ks.join(', ') + '.';
+}
+/* 有兩種技巧「說得出來就驗得到」，程式再確認一次（其餘靠 grounding 那一關）：
+   · 找證據：正解必須真的是文章裡的句子（不是改寫得面目全非的東西）
+   · 上下文猜字：題目裡問的那個字，必須真的出現在文章裡 */
+function rcQSkillOk(passage, q, skill) {
+  if (skill === 'text-evidence') {
+    const ans = (q.options || [])[q.answer];
+    return _rcInPassage(passage, ans);
+  }
+  if (skill === 'vocabulary') {
+    const quoted = String(q.q || '').match(/["'“‘]([A-Za-z][A-Za-z'-]{2,})["'”’]/);
+    const w = quoted ? quoted[1] : '';
+    if (!w) return true;                       // 沒用引號標出來就不強求
+    return new RegExp('\\b' + w + '\\b', 'i').test(String(passage || ''));
+  }
+  return true;
+}
+
 function _rcId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function _rcTxt(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
 
@@ -2437,7 +2497,7 @@ Everything you write must be answerable from the passage ALONE. Never use outsid
 Never write the literal characters "..." or the Chinese ellipsis - always write the real wording.
 ${_AI_MINIFY}`;
 
-function _RC_SYS_MCQ(gradeNote, n) {
+function _RC_SYS_MCQ(gradeNote, n, focus) {
   return _RC_SYS_BASE + '\n\n' +
 `Student level: ${gradeNote}
 
@@ -2456,13 +2516,17 @@ RULES
   GOOD: 「the wolves left the healthy deer alone」說狼只吃虛弱的鹿，所以鹿群反而變健康。
   BAD:  文章有提到相關內容，所以選 B。
   BAD:  quoting nothing from the passage.
+- Keep every word simple enough for the student level above.` +
+    /* ⚠ v415：老師指定了要考哪些技巧時，這兩條一定要拿掉——
+       底稿要求「混合 main-idea / vocabulary / inference」，跟指定的技巧會互相打架，
+       出來的題目就會一半聽老師的、一半聽底稿的。 */
+    (focus ? focus : `
 - skill: one of "main-idea", "detail", "vocabulary", "inference", "sequence", "cause-effect".
 - Mix the skills: at least one "main-idea", at least one "vocabulary" (a word used in the passage,
-  asked in context), at least one "inference". The rest can be "detail".
-- Keep every word simple enough for the student level above.`;
+  asked in context), at least one "inference". The rest can be "detail".`);
 }
 
-function _RC_SYS_SA(gradeNote, n) {
+function _RC_SYS_SA(gradeNote, n, focus) {
   return _RC_SYS_BASE + '\n\n' +
 `Student level: ${gradeNote}
 
@@ -2476,7 +2540,7 @@ RULES
 - keyPoints: what a full-credit answer must contain, in ENGLISH, 2-4 points separated by " / ".
   These are marking points for the teacher's AI grader, not a model answer paragraph.
   Example: "wolves left the island / no one hunted the deer / too many deer ate the plants"
-- Ask about different parts of the passage - do not ask two questions about the same sentence.`;
+- Ask about different parts of the passage - do not ask two questions about the same sentence.` + (focus || '');
 }
 
 function _RC_SYS_SKILL(kind, gradeNote) {
@@ -2692,19 +2756,25 @@ function rcFixBlock(block) {
    opts: { passage, title, grade:'g2'..'g6', mcq:0|5|10|15|20, sa:0|3|5|8|10,
            skills:['problem-solution',…], onProgress(done,total,label) }
    回傳 { mcq:[…], sa:[…], blocks:[…] }（blocks 已是最終結構，可直接存） */
-async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, sa = 5, skills = [], onProgress } = {}) {
+async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, sa = 5,
+  skills = [], qSkills = [], qSkillN = 2, onProgress } = {}) {
   const text = String(passage || '').trim();
   if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字），請貼完整的文字稿。');
   const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
   const nMcq = Math.max(0, +mcq || 0);
   const nSa = Math.max(0, +sa || 0);
   const kinds = (skills || []).filter(k => RC_SKILLS[k]);
+  // v415: 閱讀技巧「題目」（跟上面拖卡片的活動是兩回事）
+  const qsk = (qSkills || []).filter(k => RC_QSKILLS[k]);
+  const nQS = Math.max(0, +qSkillN || 0);
 
-  if (!nMcq && !nSa && !kinds.length) throw new Error('至少要勾一種：選擇題、閱讀簡答，或閱讀技巧。');
+  if (!nMcq && !nSa && !kinds.length && !(qsk.length && nQS)) {
+    throw new Error('至少要勾一種：選擇題、閱讀簡答、閱讀技巧活動，或閱讀技巧題。');
+  }
 
   const CHUNK = 5;
   const mcqRounds = Math.ceil(nMcq / CHUNK);
-  const total = mcqRounds + (nSa ? 1 : 0) + kinds.length;
+  const total = mcqRounds + (nSa ? 1 : 0) + kinds.length + (nQS ? qsk.length : 0);
   let done = 0;
   const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
 
@@ -2795,8 +2865,43 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
     return best;
   }, 4)).filter(Boolean);
 
-  if (!mcqOut.length && !saOut.length && !blocks.length) throw new Error('AI 這次什麼都沒生出來，請再試一次。');
-  return { mcq: mcqOut, sa: saOut, blocks };
+  /* ── v415：閱讀技巧題（Alan：「這個也幫我多加額外的 reading skill 題目」）──
+     一種技巧一個請求：這樣「這一題是哪一種」是由請求本身決定的，
+     不用去猜 AI 自己標的 skill 對不對，也不會幾種混在一起互相排擠。
+     驗證跟一般選擇題完全一樣（格式 → 有沒有根據 → 找證據/猜字再多驗一關）。 */
+  const skillQs = nQS && qsk.length ? [].concat(...(await pMap(qsk, async (kind) => {
+    const got = [];
+    for (let round = 0; round < 2 && got.length < nQS; round++) {
+      const need = nQS - got.length;
+      const asked = got.map(q => q.q).join(' | ');
+      let o = null;
+      try {
+        o = await _rcCall(
+          _RC_SYS_MCQ(gradeNote, need + 1, _rcFocusBlock([kind], need + 1)),
+          _rcUser(text, title, asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : ''), 3000);
+      } catch (e) { continue; }
+      ((o && o.items) || []).forEach(raw => {
+        if (got.length >= nQS) return;
+        const q = _rcFixAnswerIdx({
+          q: _rcTxt(raw && raw.q),
+          options: ((raw && raw.options) || []).map(_rcTxt).slice(0, 4),
+          answer: raw && raw.answer,
+          explain: _rcTxt(raw && raw.explain),
+          skill: kind,
+        });
+        if (!q || !_rcValidMcq(q)) return;
+        if (!rcGroundedMcq(text, q, kind)) return;           // 不能亂出
+        if (!rcQSkillOk(text, q, kind)) return;              // 找證據／猜字再多驗一關
+        if (got.some(e => e.q.toLowerCase() === q.q.toLowerCase())) return;
+        got.push({ id: _rcId('rq'), ...q });
+      });
+    }
+    bump(RC_QSKILLS[kind].zh);
+    return got;
+  }, 4))) : [];
+
+  if (!mcqOut.length && !saOut.length && !blocks.length && !skillQs.length) throw new Error('AI 這次什麼都沒生出來，請再試一次。');
+  return { mcq: mcqOut, sa: saOut, blocks, skillQs };
 }
 
 
@@ -2841,10 +2946,16 @@ function _rcInPassage(passage, phrase) {
    一個字都對不上但完全正確。抓太緊會把好題目一起丟掉。
    ⚠ 正解這一關用「整字」比對，不是子字串：不然 with 會被 without 收下、
    gold 會被 golden 收下，等於沒擋。 */
-function rcGroundedMcq(passage, q) {
+/* v415：有幾種技巧的「正解」天生就是抽象敘述，不會重用文章的字——
+   例：作者目的的答案是「To show how his early experiences led to his interest in flight」，
+   跟文章只有 3/11 個實詞重疊，會被下面那一關誤擋（實測就擋掉了一題好題目）。
+   這幾種只驗線索句那一關（那本來就是主要的關卡，而且是真的比對文章）。 */
+const _RC_ABSTRACT_ANSWER = { 'author-purpose': 1, 'main-idea': 1, 'inference': 1, 'character': 1 };
+function rcGroundedMcq(passage, q, skill) {
   const clue = _rcClue(q && q.explain);
   if (!clue) return false;                       // 沒引用文章＝沒辦法證明它有根據
   if (!_rcInPassage(passage, clue)) return false;
+  if (_RC_ABSTRACT_ANSWER[skill || (q && q.skill)]) return true;
   const words = new Set(_rcFlat(passage).split(' '));
   const ws = _rcFlat((q.options || [])[q.answer]).split(' ').filter(w => w.length > 2);
   if (!ws.length) return true;
@@ -2870,19 +2981,21 @@ function _grQFromMcq(q) {
   const correct = opts[q.answer];
   for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
   while (opts.length < 4) opts.push('');
-  return { id: _rcId('gq'), kind: 'mc', q: q.q, options: opts, answer: opts.indexOf(correct), explain: q.explain || '' };
+  return { id: _rcId('gq'), kind: 'mc', q: q.q, options: opts, answer: opts.indexOf(correct),
+           explain: q.explain || '', skill: q.skill || '' };
 }
 const _grQFromSa = (q) => ({ id: _rcId('gq'), kind: 'short', q: q.question, keyPoints: q.keyPoints || '' });
 
 /* 一段（或整篇）出一組題。mcq / sa 兩種同時送出，驗不過的重來一輪。 */
-async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where }) {
+async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where, qskills }) {
   const out = { mcq: [], sa: [], dropped: 0 };
   for (let round = 0; round < 2; round++) {
     const needM = mcq - out.mcq.length, needS = sa - out.sa.length;
     if (needM <= 0 && needS <= 0) break;
     const jobs = [];
-    if (needM > 0) jobs.push(['mcq', _RC_SYS_MCQ(gradeNote, needM + 1), 2800]);
-    if (needS > 0) jobs.push(['sa',  _RC_SYS_SA(gradeNote,  needS + 1), 1800]);
+    // v415: 老師勾了閱讀技巧 → 把「每一題要問哪一種」寫進 prompt（round-robin 分配）
+    if (needM > 0) jobs.push(['mcq', _RC_SYS_MCQ(gradeNote, needM + 1, _rcFocusBlock(qskills, needM + 1)), 3000]);
+    if (needS > 0) jobs.push(['sa',  _RC_SYS_SA(gradeNote,  needS + 1, _rcFocusBlock(qskills, needS + 1)), 2000]);
     const asked = out.mcq.map(q => q.q).concat(out.sa.map(q => q.question)).join(' | ');
     const extra = where +
       (asked ? '\n\nDo NOT repeat or rephrase these questions:\n' + asked : '') +
@@ -2905,7 +3018,10 @@ async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where }) {
             skill: _rcTxt(raw && raw.skill) || 'detail',
           });
           if (!q || !_rcValidMcq(q)) { out.dropped++; return; }
-          if (!rcGroundedMcq(text, q)) { out.dropped++; return; }        // ← 不能亂出
+          if (!rcGroundedMcq(text, q, q.skill)) { out.dropped++; return; }   // ← 不能亂出
+          /* v415：技巧標籤是 AI 自己講的，光看標籤不算驗證；
+             但「找證據」與「上下文猜字」這兩種說得出來就驗得到，程式再確認一次。 */
+          if (!rcQSkillOk(text, q, q.skill)) { out.dropped++; return; }
           if (out.mcq.some(e => e.q.toLowerCase() === q.q.toLowerCase())) return;
           out.mcq.push(q);
         } else {
@@ -2925,8 +3041,15 @@ async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where }) {
 /* ── 主要入口 ────────────────────────────────────────────────────────────
    segments: [{ i, text }]（i ＝ 第幾段，用來對回編輯器的段落）
    回傳 { bySeg:{ [i]: [題目…] }, final:[題目…], blocks:[…], skipped:[i…], dropped, made } */
+/* v415：每段要出幾題——'auto' 就照這一段的長度給（Alan 本來就是這樣人工判斷的：
+   「視每段的長度以及有沒有重點」2~5 題）。短段只出 1 題，長段最多 4 題。 */
+function _rcAutoN(text, cap) {
+  const w = String(text || '').split(/\s+/).filter(Boolean).length;
+  const n = w < 45 ? 1 : w < 100 ? 2 : w < 180 ? 3 : 4;
+  return Math.min(n, cap == null ? 4 : cap);
+}
 async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
-  perMcq = 2, perSa = 1, finalMcq = 3, finalSa = 1, skills = [], onProgress } = {}) {
+  perMcq = 2, perSa = 1, finalMcq = 3, finalSa = 1, skills = [], qSkills = [], onProgress } = {}) {
   const all = (segments || []).map((s, k) => ({
     i: (s && s.i != null) ? s.i : k,
     text: String((s && s.text) || '').replace(/\s+/g, ' ').trim(),
@@ -2938,7 +3061,10 @@ async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
   if (!segs.length) throw new Error('沒有一段有足夠的文字可以出題——照片段落要先按「🔍 辨識單字」，或直接把文字貼進段落裡。');
 
   const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
-  const nMcq = Math.max(0, +perMcq || 0), nSa = Math.max(0, +perSa || 0);
+  const autoMcq = perMcq === 'auto';                       // v415: 每段題數照長度給
+  const nMcq = autoMcq ? 4 : Math.max(0, +perMcq || 0);
+  const nSa = Math.max(0, +perSa || 0);
+  const qsk = (qSkills || []).filter(k => RC_QSKILLS[k]);
   const fMcq = Math.max(0, +finalMcq || 0), fSa = Math.max(0, +finalSa || 0);
   const kinds = (skills || []).filter(k => RC_SKILLS[k]);
   if (!nMcq && !nSa && !fMcq && !fSa && !kinds.length) throw new Error('至少要選一種題目。');
@@ -2957,7 +3083,8 @@ async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
     await pMap(segs, async (seg) => {
       const where = `The passage above is paragraph ${seg.i + 1} of ${all.length} of a longer article. ` +
         'Ask ONLY about what is written in THIS paragraph. The student has not read the later paragraphs yet.';
-      const r = await _rcOneChunk(seg.text, { title, gradeNote, mcq: nMcq, sa: nSa, where });
+      const want = autoMcq ? _rcAutoN(seg.text) : nMcq;
+      const r = await _rcOneChunk(seg.text, { title, gradeNote, mcq: want, sa: nSa, where, qskills: qsk });
       dropped += r.dropped;
       const qs = r.mcq.map(_grQFromMcq).concat(r.sa.map(_grQFromSa));
       if (qs.length) bySeg[seg.i] = qs;
@@ -2968,7 +3095,7 @@ async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
   // ── 整篇綜合 ──
   let final = [];
   if (wantFinal) {
-    const r = await _rcOneChunk(full, { title, gradeNote, mcq: fMcq, sa: fSa,
+    const r = await _rcOneChunk(full, { title, gradeNote, mcq: fMcq, sa: fSa, qskills: qsk,
       where: 'The passage above is the WHOLE article. Ask about the article as a whole - ' +
              'the main idea, how the parts connect, and what it all adds up to. ' +
              'Do not ask about one small detail that sits in a single paragraph.' });
@@ -3689,7 +3816,8 @@ Object.assign(window, {
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
-  aiMakeReadingSet, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, RC_SKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
+  aiMakeReadingSet, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk,
+  RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
   // AI Writing, Short Answer, Essay & Story Mountain

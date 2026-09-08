@@ -3437,3 +3437,14 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   font-size: 13px; line-height: 1; padding: 2px 4px; opacity: .65;
 }
 .gr-ai-done button:hover { opacity: 1; }
+
+/* ══ v415：閱讀技巧「題目」的設定區（📖 出閱讀理解）══════════════════════
+   跟下面那一區（拖卡片的活動）長得像，但刻意用不同的勾選色，
+   老師才不會把「技巧題」跟「技巧活動」搞混。 */
+.rc-qs-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.rc-qs-n {
+  font-family: inherit; font-size: 13px; padding: 5px 9px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 8px; background: #fff; color: var(--ink, #15130e);
+}
+.rc-skill-q.on { border-color: #3f5680; background: rgba(90, 120, 170, .10); }
+.rc-skill-q.on .rc-skill-tx b { color: #3f5680; }

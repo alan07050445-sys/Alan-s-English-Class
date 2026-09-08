@@ -1033,11 +1033,12 @@ function App() {
 
   /* v382: 時態出題完成 → 建立成多個單元（Type A→type-answer、Type B→cloze），
      全部丟進「該時態」那個分類底下，並掛同一個 group。 */
-  /* v386: 閱讀理解出題完成 → 建立 1~3 個單元（選擇題 / 閱讀技巧 / 閱讀簡答），
+  /* v386: 閱讀理解出題完成 → 建立 1~4 個單元（選擇題 / 閱讀技巧題 / 閱讀技巧活動 / 閱讀簡答），
      全部掛同一個 group（＝文章標題），順序交給 QM_TYPE_ORDER 排。
      指派的兩條路跟 handleQuickSet 一樣：學期年級用 week.homework，暑假用 summer_meta。 */
-  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, assign }) => {
-    const items = window.rcBuildItems({ title, passage, mcq, sa, blocks });
+  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, skillQs, assign }) => {
+    // v415: skillQs ＝ 閱讀技巧題（多一個 quiz 單元）
+    const items = window.rcBuildItems({ title, passage, mcq, sa, blocks, skillQs });
     if (!items.length) { showToast('沒有可以建立的題目'); return; }
     // 蓋上作者：後台「只看我的」會依 owner 篩，沒蓋的話老師看不到自己剛生的單元
     const me = (user && user.email || '').toLowerCase();
