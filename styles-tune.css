@@ -2602,8 +2602,20 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .fc-p-card .fc-back-img-wrap img { height: 100%; object-fit: contain; }
 .fc-p-learn .fc-learn-img { flex: 1 1 auto; min-height: 0; object-fit: contain; }
 
-/* 例句與中文也要能讓一點，才不會為了它們把圖片擠爆 */
-.fc-p-card .fc-example { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+/* ⚠⚠ v416（Alan：「圖片比較大的時候下面的例句會沒位置…iPad 更有這個問題，例句會消失」）
+   本來這一條是 `flex: 0 1 auto; min-height: 0; overflow: hidden`——
+   min-height:0 等於允許 flexbox 把例句壓成 **0 高度**，而圖片是 flex-grow:1 會先把空間吃光，
+   所以圖片一大，例句就整個不見（實測 1440×820：例句高度 0）。
+   改成「例句先佔位、圖片再拿剩下的」：例句 flex:0 0 auto 不讓步，
+   圖片本來就有 flex:1 1 auto + min-height:0 + object-fit:contain，會自己縮小讓位。
+   真的太長時用 line-clamp 收在「整行」的地方，不會像以前那樣切半行。 */
+.fc-p-card .fc-example {
+  flex: 0 0 auto; min-height: auto;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+@media (max-height: 820px) { .fc-p-card .fc-example { -webkit-line-clamp: 2; } }
+@media (max-height: 680px) { .fc-p-card .fc-example { -webkit-line-clamp: 1; } }
 
 /* ② 作答畫面填滿右半邊（Alan：「右邊留白還是太多」）
    .fc-player 沒有 max-width，但 .fc-flip-card 之類的內層有；
@@ -2623,7 +2635,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
    桌機／高螢幕完全不受影響。 */
 @media (max-height: 900px) {
   .fc-p-card .fc-face { padding: 14px 18px; }
-  .fc-p-card .fc-example { display: none; }
+  /* ⚠ v416：這裡本來是 `.fc-p-card .fc-example { display: none; }`——
+     v393 為了「圖片要大又不要捲」把例句整個藏起來，代價是 900px 以下的螢幕
+     （iPad 橫式 1180×760、很多筆電）通通看不到例句。Alan 回報的就是這件事。
+     現在改成讓圖片縮小讓位（上面那一段），例句一律留著。 */
   .fc-p-card .fc-zh { margin-top: 4px; }
 }
 /* 更矮的（手機橫式）連中文都要收一點行高，但不隱藏——那是題目本身 */
@@ -3448,3 +3463,12 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
 .rc-skill-q.on { border-color: #3f5680; background: rgba(90, 120, 170, .10); }
 .rc-skill-q.on .rc-skill-tx b { color: #3f5680; }
+
+/* ══ v416：翻頁鈕底下那截空白還給卡片 ═══════════════════════════════════
+   Alan：「你看底下的上一張 下一張其實還有點位置 所以其實可以往下拉一點」。
+   實測 1440×820：翻頁鈕下緣到視窗底還有 44px ＝ .fc-player 的 12px
+   ＋ .qm-quiz-area 的 32px。單字卡這一頁把它收窄，多出來的高度
+   useFitHeight 會自動算給卡片（它是扣完頁面溢出才定案的）。
+   ⚠ 只在「單字卡播放中」收窄，其他題型的呼吸空間不動。 */
+.fc-player.fc-p-card { padding-bottom: 6px; }
+.qm-quiz-area:has(.fc-p-card) { padding-bottom: 10px; }
