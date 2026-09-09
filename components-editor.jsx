@@ -2509,6 +2509,14 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catIte
   // v299: OCR 不再卡住匯入——背景跑。canvasCache 留著剛匯入的畫布（避開 Storage CORS）；
   // segRef 永遠指向最新 segments，背景回填才不會蓋掉老師同時在改的內容。
   const canvasCache = React.useRef(new Map()); // v387: img.url -> 壓好的 JPEG blob（本來存整張畫布，太吃記憶體）
+  /* ⚠ v417（Alan：「每次上傳完之後 AI 辨識單字沒辦法直接辨識，我還要再重新上傳一次」）
+     本來背景辨識完會無條件 `canvasCache.delete(url)`（註解寫「避免卡死迴圈」）——
+     於是剛上傳的照片只要背景那一輪沒成功（或老師手快、在背景輪到它之前就按了 🔍），
+     手上就已經沒有照片了，只剩「去雲端抓」這條路，而 Storage 沒有 CORS 標頭 → 讀不到像素
+     → 跳出「請重選原始照片」。老師的體感就是「要再上傳一次」。
+     改成「試過的記在 triedOcr，但照片本身留著」：迴圈照樣不會卡住，
+     而 🔍 永遠有本機的照片可以用，不必碰網路。 */
+  const triedOcr = React.useRef(new Set());
   const segRef = React.useRef(segments); segRef.current = segments;
   const bgBusy = React.useRef(false);
   const [ocrStatus, setOcrStatus] = useS(''); // 非阻塞的小提示（不 disable 匯入鈕）
@@ -2518,9 +2526,11 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catIte
     let worker = null;
     try {
       while (true) {
-        const cur = (segRef.current || []).find(s => s.img && s.img.url && !s.img.wordsId && canvasCache.current.has(s.img.url));
+        const todo = (s2) => s2.img && s2.img.url && !s2.img.wordsId
+          && canvasCache.current.has(s2.img.url) && !triedOcr.current.has(s2.img.url);
+        const cur = (segRef.current || []).find(todo);
         if (!cur) break;
-        const left = (segRef.current || []).filter(s => s.img && s.img.url && !s.img.wordsId && canvasCache.current.has(s.img.url)).length;
+        const left = (segRef.current || []).filter(todo).length;
         setOcrStatus(`背景辨識單字中…還有 ${left} 張（可繼續編輯）`);
         if (!worker) { try { worker = await grWarmWorker(); } catch (e) { break; } } // 載不動就跳過，閱讀本身不受影響
         const src = canvasCache.current.get(cur.img.url);
@@ -2530,11 +2540,33 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catIte
           const cv = (src && src.getContext) ? grOcrScaled(src) : await grDecodeScaled(src, 1200);
           wordsId = await ocrAndSave(worker, cv);
         } catch (e) {}
-        canvasCache.current.delete(cur.img.url); // 不論成功都移除，避免卡死迴圈
-        if (wordsId) onChange((segRef.current || []).map(s => (s.img && s.img.url === cur.img.url) ? { ...s, img: { ...s.img, wordsId } } : s));
+        triedOcr.current.add(cur.img.url);          // 這一張背景試過了（不論成敗），迴圈不會卡住
+        if (wordsId) {
+          canvasCache.current.delete(cur.img.url);  // 成功了才真的把照片放掉
+          onChange((segRef.current || []).map(s => (s.img && s.img.url === cur.img.url) ? { ...s, img: { ...s.img, wordsId } } : s));
+        }
       }
-    } finally { bgBusy.current = false; setOcrStatus(''); }
+    } finally {
+      bgBusy.current = false;
+      /* v417：背景那一輪如果有沒辨識成功的，講出來——本來是靜靜跳過，
+         老師只會看到「有些照片可以點字、有些不行」卻不知道為什麼。
+         照片還留在本機（見上面 triedOcr），所以按 🔍 就能重試，不用重新上傳。 */
+      const left = (segRef.current || []).filter(s2 => s2.img && s2.img.url && !s2.img.wordsId
+        && canvasCache.current.has(s2.img.url)).length;
+      setOcrStatus(left ? `有 ${left} 張還沒辨識出來——按那張照片下面的「🔍 辨識單字」再試一次就好（照片還在，不用重傳）` : '');
+    }
   };
+
+  /* ⚠⚠ v417（Alan：「每次上傳完之後 AI 辨識單字沒辦法直接辨識」）——真正的根因就在這裡。
+     本來是 `onChange([...新的段落]); queueBgOcr();` 寫在同一行。
+     但 segRef.current 是在「重繪時」才被指到新的 segments，而 onChange 只是排一次更新，
+     同一個 tick 裡 segRef.current 還是**上傳前的舊陣列** →
+     queueBgOcr 的 find 找不到剛加進去的段落 → while 迴圈第一圈就 break → **背景辨識從來沒跑過**。
+     老師於是每次都只能按 🔍，而 🔍 以前只會去雲端抓圖（Storage 沒有 CORS）→ 讀不到 →
+     叫他重選原始照片，體感就是「要重新上傳一次」。
+     改成用 effect：等 React 把 segments 更新完、segRef 也指到新的之後才跑。
+     ⚠ 不要改回「onChange 後面直接呼叫」。 */
+  useE(() => { queueBgOcr(); }, [segments]);
 
   /* v387（Alan：「12 頁我就要上傳 12 次題目，想用匯入的方式一次搞定」）
    ── 一次匯入所有段落的題目 ──
@@ -2730,7 +2762,7 @@ function grParseBulk(text, segCount) {
     } catch (err) {
       setUpErr('上傳失敗：' + ((err && err.message) || err) + '——請確認你是用老師帳號登入。');
     }
-    if (added.length) { onChange([...segRef.current, ...added]); queueBgOcr(); } // 段落立刻出現，OCR 背景跑
+    if (added.length) onChange([...segRef.current, ...added]); // 段落立刻出現；OCR 由下面那個 effect 接手
     setUploading('');
   };
 
@@ -2802,7 +2834,7 @@ function grParseBulk(text, segCount) {
       setUpErr('PDF 匯入失敗：' + ((err && err.message) || err));
     }
     if (pageErrs.length) setUpErr(`第 ${pageErrs.join('、')} 頁上傳失敗（其餘 ${added.length} 頁已建立），可以再匯入一次補這幾頁。`);
-    if (added.length) { onChange([...segRef.current, ...added]); queueBgOcr(); } // 頁面立刻出現，OCR 背景跑
+    if (added.length) onChange([...segRef.current, ...added]); // 頁面立刻出現；OCR 由下面那個 effect 接手
     setUploading('');
   };
 
@@ -2825,6 +2857,23 @@ function grParseBulk(text, segCount) {
 
   const ocrExisting = async (seg) => {
     setUpErr('');
+    /* v417：先用「上傳當下留在本機的那張照片」。這是最常見的情況
+       （剛上傳完就按 🔍），完全不用碰網路，也就沒有 CORS 的問題。 */
+    const cached = canvasCache.current.get(seg.img && seg.img.url);
+    if (cached) {
+      try {
+        setUploading('辨識單字中…（第一次會多等幾秒）');
+        const cv = (cached && cached.getContext) ? cached : await grDecodeScaled(cached, 1200);
+        await finishOcr(seg, cv);
+        canvasCache.current.delete(seg.img.url);
+        setUploading('');
+        return;
+      } catch (err) {
+        setUpErr('辨識失敗：' + ((err && err.message) || err));
+        setUploading('');
+        return;
+      }
+    }
     try {
       setUploading('辨識單字中…（第一次會多等幾秒）');
       const img = new Image();

@@ -2414,7 +2414,7 @@ const RC_QSKILLS = {
 /* 每一種到底該問什麼——寫給 AI 看的。寫得越具體，出來的題目越像那一種技巧。 */
 const RC_QSKILL_RULE = {
   'main-idea':        'Ask what the passage is MOSTLY about. The three wrong options should be details that are true but too small to be the main idea.',
-  'text-evidence':    'Ask which detail from the passage BEST shows or proves a given statement. Every option must be a short quote or a close paraphrase of a real sentence in the passage.',
+  'text-evidence':    'Ask which detail from the passage BEST shows or proves a given statement. Every option must be a short quote or a close paraphrase of a real sentence in the passage, and all four must be about the same length - trim the correct one if you have to.',
   'inference':        'Ask something the passage strongly implies but never says outright; the student must put two facts together. Never require outside knowledge.',
   'cause-effect':     'Name one event from the passage and ask WHY it happened, or ask what that event caused. Both sides must be in the passage.',
   'problem-solution': 'Ask what problem someone faced, or how a problem was fixed. Both the problem and the solution must be stated in the passage.',
@@ -2470,6 +2470,38 @@ function _rcFixAnswerIdx(q) {
   return { ...q, answer: a };
 }
 
+/* ══ v417（Alan：「選擇題的答案選項都是最長的為答案，小朋友用猜的也猜得到」）══
+   量過他截圖裡的 4 題：4 題的正解都是最長的 → 只要「選最長的」正確率 100%（隨便猜 25%），
+   而且正解比第二長的多 15／17／42／48 個字元——那是一眼就看得出來的差距。
+
+   實測三種寫法之後才定案（都是打 Worker、同一篇課文各出 6 題）：
+     · 只寫「similar length」（原本就有這句）→ 正解最長 6/6，差 15~48 字元
+     · 改成用「字元數」下指令              → 正解最長 6/6，差 1~13 字元（模型數不準字元）
+     · 改成用「詞數」下相對指令            → 一般題最大只差 3 個字元、找證據最大 13
+   ⚠ 結論：**要模型數「詞」不要數「字元」**，而且要相對（四個選項詞數一樣），
+     不要給絕對值——短答案（例：On an island）被逼到 8 個字會很不自然。
+
+   程式這一關只擋「看得出來」的：差 12 個字元以上、或整整多 2 個詞。
+   差 1~6 個字元的不擋——那在畫面上根本分不出長短，擋了只是白花錢重生。 */
+const _RC_LEN_REMIND = '\n\nSome of your last items were thrown away because the correct answer was ' +
+  'clearly the LONGEST option - a child could pick it without reading. Count the WORDS in each option: ' +
+  'all four must have the same number of words, give or take one, and the correct answer must not be the longest.';
+function rcOptionLenOk(q) {
+  const opts = ((q && q.options) || []).map(o => String(o || '').trim());
+  if (opts.length !== 4 || opts.some(o => !o)) return false;
+  const C = opts.map(o => o.length);
+  const W = opts.map(o => o.split(/\s+/).length);
+  const i = q.answer;
+  if (!(C[i] > 0)) return false;
+  const oc = C.filter((_, k) => k !== i), ow = W.filter((_, k) => k !== i);
+  const hiC = Math.max.apply(null, oc), loC = Math.min.apply(null, oc);
+  const hiW = Math.max.apply(null, ow), loW = Math.min.apply(null, ow);
+  const visible = (dc, dw) => dc >= 12 || dw >= 2;      // 「看得出來」的門檻
+  if (C[i] > hiC && visible(C[i] - hiC, W[i] - hiW)) return false;   // 明顯最長＝選最長就對
+  if (C[i] < loC && visible(loC - C[i], loW - W[i])) return false;   // 明顯最短＝反向的破綻
+  return true;
+}
+
 function _rcValidMcq(q) {
   if (!q || !_rcTxt(q.q)) return false;
   const opts = (q.options || []).map(_rcTxt);
@@ -2481,6 +2513,7 @@ function _rcValidMcq(q) {
   if (typeof q.answer !== 'number' || q.answer < 0 || q.answer > 3) return false;
   if (!_rcTxt(q.explain)) return false;
   if (/…|\.\.\./.test(q.explain)) return false;   // v379 踩過：模型把範本的「…」抄進輸出
+  if (!rcOptionLenOk(q)) return false;             // v417: 正解不可以是「明顯最長的那一個」
   return true;
 }
 
@@ -2506,9 +2539,15 @@ Generate ${n} items.
 
 RULES
 - q: ONE English question about the passage, 6-18 words. Answerable from the passage alone.
-- options: EXACTLY 4 short English choices, similar length, all plausible. Exactly ONE is correct.
+- options: EXACTLY 4 short English choices, all plausible. Exactly ONE is correct.
   The three wrong ones must be wrong because of the passage, not because they are silly.
   Never use "All of the above" or "None of the above".
+- SAME-LENGTH RULE (a program checks this and throws the item away if it fails):
+  Count the WORDS in each of the four options. All four must have the same number of words,
+  give or take one word. Write the three wrong options FIRST and give them just as much detail
+  as the right one; then make the correct answer the same length.
+  The correct answer must NOT be the longest option.
+  A child who cannot read the passage must not be able to spot the answer just by its length.
 - answer: the 0-BASED INDEX (0,1,2,3) of the correct option. A number, never the text.
 - explain: Traditional Chinese, 20-45 characters. Quote the English clue phrase from the passage
   inside the Chinese quotation marks, then say what it means, then give the answer.
@@ -2816,7 +2855,8 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
       let o = null;
       try {
         o = await _rcCall(_RC_SYS_MCQ(gradeNote, want + 2),
-          _rcUser(text, title, asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : ''), 3200);
+          _rcUser(text, title, (asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : '')
+            + (wave ? _RC_LEN_REMIND : '')), 3200);
       } catch (e) { return null; }
       absorbMcq(o); mcqTick();
       return true;
@@ -2878,7 +2918,8 @@ async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, s
       try {
         o = await _rcCall(
           _RC_SYS_MCQ(gradeNote, need + 1, _rcFocusBlock([kind], need + 1)),
-          _rcUser(text, title, asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : ''), 3000);
+          _rcUser(text, title, (asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : '')
+            + (round ? _RC_LEN_REMIND : '')), 3000);
       } catch (e) { continue; }
       ((o && o.items) || []).forEach(raw => {
         if (got.length >= nQS) return;
@@ -2999,8 +3040,14 @@ async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where, qskills }) 
     const asked = out.mcq.map(q => q.q).concat(out.sa.map(q => q.question)).join(' | ');
     const extra = where +
       (asked ? '\n\nDo NOT repeat or rephrase these questions:\n' + asked : '') +
-      (round ? '\n\nYour last try asked about things that are NOT written in the passage above. ' +
-               'Every question, every correct option and every clue you quote must appear in that passage.' : '');
+      /* v417：重生的回饋要指名道姓（v382 的老教訓）。上一輪最常被丟掉的兩個原因都寫出來：
+         說了文章裡沒有的事、以及「正解是最長的那一個」。 */
+      (round ? '\n\nYour last try was rejected. Two things to fix:\n' +
+               '1. Everything - the question, the correct option, and the clue you quote in "explain" - ' +
+               'must appear in the passage above.\n' +
+               '2. Count the WORDS in the four options - they must all have the same number of words, ' +
+               'give or take one. Last time the correct answer was clearly the longest, so a child could ' +
+               'pick it without reading. Make the three wrong options just as detailed as the right one.' : '');
     /* ⚠ 各自 try：一發連線失敗不該把同一段已經收到的題目一起丟掉 */
     const got = await pMap(jobs, async ([k, sys, mx]) => {
       try { return [k, await _rcCall(sys, _rcUser(text, title, extra), mx)]; } catch (e) { return [k, null]; }
@@ -3816,7 +3863,7 @@ Object.assign(window, {
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
-  aiMakeReadingSet, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk,
+  aiMakeReadingSet, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
   RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
