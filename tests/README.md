@@ -7,7 +7,7 @@
 node tests/t-line-bind.mjs       # LINE 家長綁定對話：78 項
 node tests/t-line-webhook.mjs    # LINE webhook 從 HTTP 進來跑一遍：15 項
 node tests/t-line-reminders.mjs  # 作業提醒照年級發（不會發到別班）：16 項
-node tests/t-line-hw-layout.mjs  # 作業提醒的三區排版、Flex 訊息與發送頻率：44 項
+node tests/t-line-hw-layout.mjs  # 作業提醒的三區排版、Flex 訊息與發送頻率：50 項
 node tests/t-line-chat.mjs       # 聊天室三件事的意圖判斷、新增/刪除孩子、禮貌回覆：64 項
 ```
 

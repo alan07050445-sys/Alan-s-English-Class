@@ -252,6 +252,19 @@ log.push('\n【L8】四大類的中文名要跟各年級的課表一致');
   ok('件數算對', rows[0].n === 2 && rows[1].n === 1, JSON.stringify(rows));
 }
 
+// ═══ 9. 開學之後不再提醒暑假發派 ═══
+log.push('\n【L9】學期之中不提醒暑假（Alan：「現在是學期之中 不用包含暑假」）');
+{
+  const lib = { 'sl-2026-SW09': { items: { vocab: [{ id: 'sv1', title: '暑假單字', type: 'quiz' }] } } };
+  const plan = { weeks: { SW09: ['sv1'] } };
+  ok('暑假期間（8/20）→ 暑假發派算進來', W.summerTodos(lib, plan, '2026-08-20').length === 1);
+  ok('暑假最後一天（8/31）→ 還算', W.summerTodos(lib, plan, W.SUMMER_LAST_DAY).length === 1);
+  ok('⭐ 開學後（9/1）→ 完全不算', W.summerTodos(lib, plan, '2026-09-01').length === 0);
+  ok('⭐ 今天（學期中）→ 完全不算', W.summerTodos(lib, plan, '2026-09-10').length === 0);
+  ok('暑假最後一天就是 SUMMER_WEEK_END 的最後一週', W.SUMMER_LAST_DAY === '2026-08-31', W.SUMMER_LAST_DAY);
+  ok('沒帶 today（舊呼叫）不會爆，照舊全算', W.summerTodos(lib, plan).length === 1);
+}
+
 console.log(log.join('\n'));
 console.log(`\n${fail === 0 ? '🎉 全部通過' : '⚠️ 有失敗'}：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -804,6 +804,10 @@ const SUMMER_WEEK_END = {
   SW01: '2026-07-05', SW02: '2026-07-12', SW03: '2026-07-19', SW04: '2026-07-26',
   SW05: '2026-08-02', SW06: '2026-08-09', SW07: '2026-08-16', SW08: '2026-08-23', SW09: '2026-08-31',
 };
+// v424：Alan「現在是學期之中 不用包含暑假」。
+// 暑假最後一週結束之後，暑假發派就不再進提醒（開學了就講學期的事）。
+// ⚠️ 明年暑假要一起更新 SUMMER_WEEK_END（這個日期就是從它最後一週來的）。
+const SUMMER_LAST_DAY = SUMMER_WEEK_END.SW09;
 // v422：暑假發派也要拿到「分類」與「題型」，不然在提醒裡會全部變成「其他練習」
 function summerLibMeta(libWeeks, sw, itemId) {
   const wk = libWeeks['sl-2026-' + sw] || {};
@@ -818,9 +822,10 @@ function summerLibMeta(libWeeks, sw, itemId) {
 const summerWeekLabel = (sw) => '暑假第 ' + Number(String(sw).replace(/^SW/, '')) + ' 週';
 // v423：暑假發派的 todo（每日提醒與「家長現查」共用——之前只有每日提醒有，
 // 所以家長自己按「作業」時，暑假那幾項會整區消失）
-function summerTodos(libWeeks, plan) {
+function summerTodos(libWeeks, plan, today) {
   const out = [];
   if (!plan || !plan.weeks) return out;
+  if (today && today > SUMMER_LAST_DAY) return out;      // 開學了 → 不再提醒暑假發派
   for (const sw of Object.keys(plan.weeks)) {
     const due = SUMMER_WEEK_END[sw];
     if (!due) continue;
@@ -886,7 +891,7 @@ async function queryHomework(env, children) {
     const grade = gradeOf[email];
     const prog = progByEmail[email] || {};
     const todos = (grade && hwByGrade[grade] ? hwByGrade[grade] : []).slice();
-    todos.push(...summerTodos(summer.libWeeks, summer.metaByEmail[email]));
+    todos.push(...summerTodos(summer.libWeeks, summer.metaByEmail[email], today));
     const thisWeek = [], overdue = [], preview = [];
     splitTodos(todos, prog.items, today, thisWeek, overdue, preview);
     const secs = {
@@ -933,7 +938,8 @@ async function runReminders(env, dryRun) {
   const meta = metaDoc && metaDoc.fields ? fsVal({ mapValue: { fields: metaDoc.fields } }) : {};
   const metaByEmail = {};
   for (const [em, plan] of Object.entries(meta.students || {})) metaByEmail[String(em).toLowerCase()] = plan;
-  R.summerStudents = Object.keys(metaByEmail).length;
+  // 開學之後暑假發派不再進提醒 → 這個數字也要誠實顯示 0（老師端會看到）
+  R.summerStudents = R.today > SUMMER_LAST_DAY ? 0 : Object.keys(metaByEmail).length;
 
   // 學生進度（private，需服務帳號）
   const progressDocs = await firestoreList(project, token, 'progress');
@@ -970,7 +976,7 @@ async function runReminders(env, dryRun) {
     const grade = gradeFromEmail(st.email) || gradeByEmail[st.email] || null;
     if (!grade) R.skippedNoGrade.push(st.name || st.email);
     const todos = (grade && hwByGrade[grade] ? hwByGrade[grade] : []).slice();
-    todos.push(...summerTodos(libWeeks, metaByEmail[st.email]));
+    todos.push(...summerTodos(libWeeks, metaByEmail[st.email], today));
     // 記錄每份作業「第一次被看到」的日期（＝發布基準）
     for (const hw of todos) { if (!hwseen[hw.key]) hwseen[hw.key] = today; }
 
@@ -1201,6 +1207,6 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
-  queryHomework, hwReplyMessages, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos,
+  queryHomework, hwReplyMessages, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
   catRows, weekGroups, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH, SEC_DEF, summerLibMeta,
 };
