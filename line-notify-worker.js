@@ -423,25 +423,94 @@ function gradeFromEmail(email) {
   return (g >= 1 && g <= 6) ? ('g' + g) : null;
 }
 
-// 從 class/data 整理出「有期限的作業」清單
+// v420：題型的中文名。同一課會出一整組（字卡／選擇／拼字／填空／配對／短文填空），
+// 家長看到六行一模一樣的標題會以為壞掉——所以訊息裡改成一課一行、後面列題型。
+const TYPE_ZH = {
+  flashcard: '單字卡', quiz: '選擇題', spelling: '拼字', fillblank: '填空', 'def-match': '配對',
+  cloze: '短文填空', 'short-answer': '簡答', 'reading-skill': '閱讀技巧', 'guided-reading': '分段閱讀',
+  'type-answer': '打字練習', 'circle-answer': '圈選', 'syllable-div': '音節切分', 'word-sort': '單字分類',
+  'writing-practice': '手寫練習', essay: '寫作', 'story-mountain': '故事山', lesson: '教學卡', upload: '上傳作業',
+};
+// 題型與分類的固定排序——Firestore 的 map 沒有順序，不排的話每天的訊息長得都不一樣
+const TYPE_ORDER = ['lesson', 'flashcard', 'quiz', 'spelling', 'fillblank', 'def-match', 'cloze',
+  'word-sort', 'syllable-div', 'type-answer', 'circle-answer', 'reading-skill', 'guided-reading',
+  'short-answer', 'writing-practice', 'essay', 'story-mountain', 'upload'];
+const CAT_ORDER = ['vocab', 'word', 'grammar', 'reading'];
+const idxIn = (arr, v) => { const i = arr.indexOf(v); return i < 0 ? 99 : i; };
+
+// 從某個年級的課程文件整理出「有期限的作業」清單。
+// v420：連「這份作業屬於哪一週」一起帶出來（startISO/endISO/label/archived），
+// 因為要分「本週／前幾週沒完成／可以先預習」，光看 dueDate 分不出來
+// （實際資料裡 Week 2 的單字作業 dueDate 還寫著 Week 1 的日期）。
 function buildHomeworkList(cls) {
   const weeks = (cls && cls.weeks) || {};
   const out = [];
   for (const wid of Object.keys(weeks)) {
     const wk = weeks[wid] || {};
     const hw = wk.homework || {};
-    const titleById = {};
+    const metaById = {};
     const items = wk.items || {};
     for (const cat of Object.keys(items)) {
-      for (const it of (items[cat] || [])) { if (it && it.id) titleById[it.id] = it.title || it.id; }
+      for (const it of (items[cat] || [])) {
+        if (it && it.id) metaById[it.id] = { title: it.title || it.id, type: it.type || '', cat };
+      }
     }
     for (const itemId of Object.keys(hw)) {
       const dd = hw[itemId] && hw[itemId].dueDate;
       if (!dd) continue;
-      out.push({ wid, itemId, key: wid + '_' + itemId, title: titleById[itemId] || itemId, dueDate: dd });
+      const m = metaById[itemId] || { title: itemId, type: '', cat: '' };
+      out.push({
+        wid, itemId, key: wid + '_' + itemId,
+        title: String(m.title || '').trim() || itemId, type: m.type, cat: m.cat, dueDate: dd,
+        wkLabel: wk.label || '', wkStart: wk.startISO || '', wkEnd: wk.endISO || '',
+        archived: wk.archived === true,
+      });
     }
   }
+  // 固定排序：週次 → 分類（單字/字彙/文法/閱讀）→ 課名 → 題型
+  out.sort((a, b) =>
+    String(a.wkStart || a.wid).localeCompare(String(b.wkStart || b.wid)) ||
+    idxIn(CAT_ORDER, a.cat) - idxIn(CAT_ORDER, b.cat) ||
+    a.title.localeCompare(b.title) ||
+    idxIn(TYPE_ORDER, a.type) - idxIn(TYPE_ORDER, b.type));
   return out;
+}
+
+// ── v420：把一堆作業排成家長看得懂的三區 ─────────────────
+const OVERDUE_DAYS = 28;   // 「前幾週還沒完成」最多回溯 4 週，不然上學期的會全部冒出來
+// 這一週的星期一（週次是週一～週日）
+function mondayOf(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  const back = (d.getUTCDay() + 6) % 7;
+  return new Date(d.getTime() - back * 86400000).toISOString().slice(0, 10);
+}
+function addDays(iso, n) {
+  return new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+}
+// 同一課的不同題型併成一行（標題的「· 短文填空」這種尾巴要先拿掉才併得起來）
+function groupByLesson(list) {
+  const order = [], map = new Map();
+  for (const hw of list) {
+    const k = String(hw.title || '').split('·')[0].trim() || hw.title || hw.itemId;
+    if (!map.has(k)) { map.set(k, []); order.push(k); }
+    map.get(k).push(hw);
+  }
+  return order.map((k) => ({ title: k, items: map.get(k) }));
+}
+function lessonLine(g) {
+  const seen = [];
+  for (const it of g.items) if (seen.indexOf(it.type) < 0) seen.push(it.type);
+  const types = seen.slice().sort((a, b) => idxIn(TYPE_ORDER, a) - idxIn(TYPE_ORDER, b))
+    .map((t) => TYPE_ZH[t] || '').filter(Boolean);
+  if (g.items.length === 1) return `• ${g.title}${types.length ? '（' + types[0] + '）' : ''}`;
+  const tail = types.length ? types.join('・') : g.items.length + ' 項';
+  return `• ${g.title}\n   ${tail}（${g.items.length} 項）`;
+}
+const wkTag = (hw) => (hw.wkLabel ? hw.wkLabel.replace(/^Week\s*/i, 'Week ') : '');
+// 一週的日期範圍寫成 9/7–9/13
+function wkRange(hw) {
+  if (!hw.wkStart || !hw.wkEnd) return '';
+  return fmtDate(hw.wkStart) + '–' + fmtDate(hw.wkEnd);
 }
 function isDone(items, wid, itemId) {
   if (!items) return false;
@@ -521,6 +590,7 @@ async function runReminders(env, dryRun) {
   const links = JSON.parse((await env.LINKS.get('links')) || '{}');
   const hwseen = JSON.parse((await env.LINKS.get('hwseen')) || '{}');
   const hwsent = JSON.parse((await env.LINKS.get('hwsent')) || '{}');
+  const hwweek = JSON.parse((await env.LINKS.get('hwweek')) || '{}');   // v420：每位學生「上次的週一回報」
   const today = R.today;
 
   const emailToUids = {};
@@ -553,42 +623,97 @@ async function runReminders(env, dryRun) {
 
     const uids = emailToUids[st.email];
     if (!uids || !uids.length) { if (todos.length) R.skippedNoBind.push(st.name || st.email); continue; }
-    const lines = [];
+
+    // ── v420：先分三區（本週／前幾週沒完成／可以先預習）────────
+    // Alan：「當周作業, 前幾週未完成作業, 可以先預習 都要排版排清楚 不然家長很亂」
+    const thisWeek = [], overdue = [], preview = [];
     for (const hw of todos) {
-      if (today > hw.dueDate) continue;                // 過期不再提醒
+      if (hw.archived) continue;                        // 封存的是上學期，不提醒
       if (isDone(st.items, hw.wid, hw.itemId)) continue;
-      const sent = (hwsent[hw.key] && hwsent[hw.key][st.email]) || [];
-      const firstSeen = hwseen[hw.key] || today;
-      const sinceSeen = dateDiffDays(today, firstSeen);
-      const toDue = dateDiffDays(hw.dueDate, today);
-      let ms = null;
-      if (!sent.includes('new')) ms = 'new';
-      else if (toDue === 1 && !sent.includes('due1')) ms = 'due1';
-      else if (sinceSeen >= 5 && toDue >= 1 && !sent.includes('d5')) ms = 'd5';
-      else if (sinceSeen >= 3 && toDue >= 1 && !sent.includes('d3')) ms = 'd3';
-      if (!ms) continue;
-      const dd = fmtDate(hw.dueDate);
-      if (ms === 'new') lines.push(`• ${hw.title}（新作業，${dd} 到期）`);
-      else if (ms === 'due1') lines.push(`• ${hw.title}（⚠️ 明天 ${dd} 到期！）`);
-      else lines.push(`• ${hw.title}（${dd} 到期，剩 ${toDue} 天）`);
-      if (!dryRun) {
-        hwsent[hw.key] = hwsent[hw.key] || {};
-        hwsent[hw.key][st.email] = sent.concat([ms]);
+      if (hw.wkStart && hw.wkEnd) {
+        // 有週次日期就照週次分（最準：dueDate 有時候是舊的沒改到）
+        if (today < hw.wkStart) preview.push(hw);
+        else if (today > hw.wkEnd) { if (dateDiffDays(today, hw.wkEnd) <= OVERDUE_DAYS) overdue.push(hw); }
+        else thisWeek.push(hw);
+      } else {
+        // 沒有週次日期（暑假發派、很舊的週次）→ 退回用 dueDate 判斷
+        if (today > hw.dueDate) { if (dateDiffDays(today, hw.dueDate) <= OVERDUE_DAYS) overdue.push(hw); }
+        else if (dateDiffDays(hw.dueDate, today) > 7) preview.push(hw);
+        else thisWeek.push(hw);
       }
     }
-    if (lines.length) {
-      R.sends.push({ name: st.name, email: st.email, count: lines.length, lines });
-      if (!dryRun) {
-        const text = `📚 作業提醒 — ${st.name || ''}\n還有 ${lines.length} 份作業要完成：\n${lines.join('\n')}\n\n請提醒孩子完成 💪 — Alan 老師`;
-        const errs = await lineMulticast(uids, text, env.LINE_TOKEN);
-        if (errs.length) R.errors.push('push_failed ' + st.email + ': ' + errs.join(','));
-      }
+    const nDue = thisWeek.length + overdue.length;
+    if (!nDue) continue;                                 // 只剩「可以先預習」→ 不打擾
+
+    // ── 今天到底要不要發？（不要每天煩同一件事）────────────
+    //   ① 有這位家長沒被通知過的新作業  ② 每週一固定回報一次  ③ 明天就到期
+    const fresh = thisWeek.concat(overdue).filter((hw) => !(((hwsent[hw.key] || {})[st.email]) || []).includes('new'));
+    const monday = mondayOf(today);
+    const weeklyDue = today === monday && (hwweek[st.email] || '') !== monday;
+    const dueTomorrow = thisWeek.some((hw) => hw.dueDate === addDays(today, 1));
+    const reason = fresh.length ? 'new' : (weeklyDue ? 'weekly' : (dueTomorrow ? 'due1' : ''));
+    if (!reason) continue;
+
+    // ── 組訊息 ────────────────────────────────────────────
+    const parts = [`📚 作業提醒 — ${st.name || ''}`];
+    if (thisWeek.length) {
+      const w0 = thisWeek[0];
+      const head = [wkTag(w0), wkRange(w0)].filter(Boolean).join('・');
+      parts.push('', `▍本週作業${head ? '（' + head + '）' : ''}　${thisWeek.length} 項`);
+      groupByLesson(thisWeek).forEach((g) => parts.push(lessonLine(g)));
+    }
+    if (overdue.length) {
+      parts.push('', `▍前幾週還沒完成　${overdue.length} 項`);
+      groupByLesson(overdue).forEach((g) => {
+        const tag = wkTag(g.items[0]);
+        parts.push(lessonLine(g).replace(/^• /, '• ' + (tag ? tag + '：' : '')));
+      });
+    }
+    if (preview.length) {
+      parts.push('', `▍可以先預習（還沒開始，不用急）　${preview.length} 項`);
+      const byWeek = {};
+      const wOrder = [];
+      preview.forEach((hw) => {
+        const k = hw.wid;
+        if (!byWeek[k]) { byWeek[k] = []; wOrder.push(k); }
+        byWeek[k].push(hw);
+      });
+      wOrder.sort((a, b) => String((byWeek[a][0].wkStart) || '').localeCompare(String((byWeek[b][0].wkStart) || '')));
+      wOrder.forEach((k) => {
+        const arr = byWeek[k], w0 = arr[0];
+        const head = [wkTag(w0), wkRange(w0)].filter(Boolean).join('・') || fmtDate(w0.dueDate);
+        const names = groupByLesson(arr).map((g) => g.title);
+        parts.push(`• ${head}：${names.join('、')}（${arr.length} 項）`);
+      });
+    }
+    parts.push('', preview.length
+      ? '先把上面該完成的做完就好，預習區不急 💪 — Alan 老師'
+      : '請提醒孩子完成 💪 — Alan 老師');
+    const text = parts.join('\n');
+
+    R.sends.push({
+      name: st.name, email: st.email, count: nDue, reason, text,
+      lines: text.split('\n').filter((l) => l.trim()),
+      buckets: { thisWeek: thisWeek.length, overdue: overdue.length, preview: preview.length },
+    });
+    if (!dryRun) {
+      thisWeek.concat(overdue).forEach((hw) => {
+        const sent = (hwsent[hw.key] && hwsent[hw.key][st.email]) || [];
+        if (!sent.includes('new')) {
+          hwsent[hw.key] = hwsent[hw.key] || {};
+          hwsent[hw.key][st.email] = sent.concat(['new']);
+        }
+      });
+      if (weeklyDue) hwweek[st.email] = monday;
+      const errs = await lineMulticast(uids, text, env.LINE_TOKEN);
+      if (errs.length) R.errors.push('push_failed ' + st.email + ': ' + errs.join(','));
     }
   }
 
   if (!dryRun) {
     await env.LINKS.put('hwseen', JSON.stringify(hwseen));
     await env.LINKS.put('hwsent', JSON.stringify(hwsent));
+    await env.LINKS.put('hwweek', JSON.stringify(hwweek));
   }
   return R;
 }
@@ -735,5 +860,5 @@ export default {
 export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
-  MAX_CHILDREN, GRADE_DOCS,
+  MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
 };

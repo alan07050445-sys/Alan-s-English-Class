@@ -1509,7 +1509,7 @@ function HwRemind() {
         <div className="linkbind-head">
           <div>
             <b>作業自動提醒</b>
-            <span className="linkbind-summary">每天傍晚 18:00 自動檢查，未完成作業依「新／3天／5天／前1天」提醒家長</span>
+            <span className="linkbind-summary">每天傍晚 18:00 自動檢查，一則訊息分「本週／前幾週沒完成／可以先預習」三區</span>
           </div>
         </div>
 
@@ -1553,7 +1553,20 @@ function HwRemind() {
                 {result.sends.map(s => (
                   <div key={s.email} className="hwr-row">
                     <b>{s.name || s.email}</b>
-                    <ul>{(s.lines || []).map((l, i) => <li key={i}>{l.replace(/^•\s*/, '')}</li>)}</ul>
+                    {/* v420：直接把家長會收到的那則訊息原樣顯示，排版對不對一眼就知道 */}
+                    {s.buckets && (
+                      <div className="hwr-buckets">
+                        <span>本週 <em>{s.buckets.thisWeek}</em></span>
+                        <span>前幾週沒完成 <em>{s.buckets.overdue}</em></span>
+                        <span className="soft">可以先預習 <em>{s.buckets.preview}</em></span>
+                        {s.reason && <span className="soft">今天發的原因：{
+                          s.reason === 'new' ? '有新作業' : s.reason === 'weekly' ? '每週一回報' : '明天到期'
+                        }</span>}
+                      </div>
+                    )}
+                    {s.text
+                      ? <pre className="hwr-msg">{s.text}</pre>
+                      : <ul>{(s.lines || []).map((l, i) => <li key={i}>{l.replace(/^•\s*/, '')}</li>)}</ul>}
                   </div>
                 ))}
               </div>
@@ -1573,14 +1586,21 @@ function HwRemind() {
       </div>
 
       <aside className="notify-side">
-        <h4>提醒排程</h4>
+        <h4>訊息長什麼樣</h4>
         <ol>
-          <li>系統第一次看到作業 → 發「新作業」</li>
-          <li>第 3 天未完成 → 提醒</li>
-          <li>第 5 天未完成 → 提醒</li>
-          <li>期限前 1 天 → 「明天到期」</li>
+          <li><b>本週作業</b>：這一週的，還沒完成的</li>
+          <li><b>前幾週還沒完成</b>：要補完的（最多回溯 4 週）</li>
+          <li><b>可以先預習</b>：之後的週次，附在最後、標明不用急</li>
         </ol>
-        <p className="notify-note">同一孩子今天要提醒的作業會合併成一則。過期就不再提醒。只發給「已綁定」的家長。</p>
+        <p className="notify-note">同一課的不同題型（單字卡／選擇題／拼字…）會併成一行，不會刷一整排一樣的標題。</p>
+
+        <h4>什麼時候會發</h4>
+        <ol>
+          <li>出現這位家長<b>沒被通知過的新作業</b></li>
+          <li>每週<b>星期一</b>固定回報一次</li>
+          <li>本週有作業<b>明天到期</b></li>
+        </ol>
+        <p className="notify-note">同一孩子合併成一則。只剩「可以先預習」時不會發（不打擾）。已封存的上學期作業不會出現。只發給「已綁定」的家長。</p>
       </aside>
     </div>
   );
