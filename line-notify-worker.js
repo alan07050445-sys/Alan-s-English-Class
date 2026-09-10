@@ -59,6 +59,14 @@ async function lineReply(replyToken, text, token) {
 }
 // v421：純文字的 LINE 訊息不能粗體也不能上色——要醒目就得用 Flex Message。
 // 送失敗（Flex 被拒）時自動退回純文字，家長不會漏收。
+async function lineReplyMessages(replyToken, messages, token) {
+  if (!messages || !messages.length) return;
+  return fetch(LINE_API + '/v2/bot/message/reply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ replyToken, messages: messages.slice(0, 5) }),
+  });
+}
 async function lineMulticastFlex(to, altText, bubble, fallbackText, token) {
   const errors = [];
   for (let i = 0; i < to.length; i += 500) {
@@ -115,7 +123,7 @@ async function getRoster(env) {
         return cached.list;
       }
       const sa = JSON.parse(env.FIREBASE_SA);
-      const token = await getAccessToken(sa);
+      const token = await getAccessTokenCached(env, sa);
       if (token) {
         const docs = await firestoreList(sa.project_id, token, 'roster');
         const list = docs.map((d) => {
@@ -149,6 +157,10 @@ function rosterAllEnglish(roster) {
 async function getStage(env, uid) {
   try { return ((JSON.parse((await env.LINKS.get('chatstate')) || '{}'))[uid] || {}).stage || ''; }
   catch (e) { return ''; }
+}
+async function getStageTs(env, uid) {
+  try { return ((JSON.parse((await env.LINKS.get('chatstate')) || '{}'))[uid] || {}).ts || 0; }
+  catch (e) { return 0; }
 }
 async function setStage(env, uid, stage) {
   let m = {};
@@ -240,6 +252,7 @@ function doneText(children, english) {
   return (
     '綁定完成 🎉\n\n目前這個 LINE 已綁定：\n' + listChildren(children) + '\n\n' +
     '之後班級通知與作業提醒都會傳到這裡 📩\n' +
+    '隨時輸入「作業」就能查孩子還有哪些沒完成 📚\n' +
     `（要再新增孩子，隨時回覆他的${english ? '英文名字' : '姓名'}就可以；一個 LINE 最多 ${MAX_CHILDREN} 位）`
   );
 }
@@ -266,6 +279,37 @@ async function welcomeMessage(env, lineUserId) {
   return welcomeText(english, ex, who);
 }
 
+// v422：Alan「不管我問什麼他都會回答綁定學生的訊息…怕小朋友亂問問題」
+// → 先走固定指令；其餘只有「還沒綁」或「真的是名單上的名字」才進綁定流程。
+const CMD = {
+  hw:    /^(作業|查作業|我的作業|功課|進度|查進度|homework|hw)$/i,
+  bind:  /^(查詢|查詢綁定|綁定|綁定狀態|我的孩子|狀態|status|查|list)$/i,
+  site:  /^(網站|連結|練習|打開練習|登入|網址|link|site)$/i,
+  class: /^(課表|上課|上課時間|時間|schedule)$/i,
+  human: /^(老師|聯絡老師|找老師|請假|我要問問題|問問題|客服|人工)$/i,
+  help:  /^(說明|幫助|選單|功能|help|menu|\?|？)$/i,
+};
+const HUMAN_MS = 60 * 60 * 1000;         // 轉人工後安靜一小時，讓家長好好打字
+
+function helpText() {
+  return (
+    '這個帳號是自動回覆的小幫手 🤖\n可以直接輸入下面的字（或用下方選單）：\n\n' +
+    '📚「作業」－ 看孩子還有哪些沒完成\n' +
+    '🔗「綁定」－ 看這個 LINE 綁了誰\n' +
+    '💻「網站」－ 拿到練習網站的連結\n' +
+    '🕐「課表」－ 上課時間\n' +
+    '🙋「老師」－ 有事情要問 Alan 老師'
+  );
+}
+const CLASS_TEXT =
+  '🕐 上課時間\n\n' +
+  '上課時間與請假請直接跟 Alan 老師確認。\n輸入「老師」我就不再自動回覆，您可以直接留言，老師看到會親自回覆 🙏';
+const HUMAN_TEXT =
+  '好的，接下來這一小時我不會自動回覆 🤫\n\n' +
+  '請直接在這裡留言（請假、進度、任何問題都可以），Alan 老師看到會親自回覆您。\n' +
+  '※ 老師不一定能馬上看到，急事請用平常的聯絡方式 🙏';
+const siteText = () => '💻 練習網站\n' + SITE_URL + '\n\n用孩子的學校帳號登入就可以開始練習 📚';
+
 async function handleNameBinding(env, lineUserId, rawText) {
   const text = String(rawText || '').trim();
   const roster = await getRoster(env);
@@ -276,11 +320,24 @@ async function handleNameBinding(env, lineUserId, rawText) {
   const bound = links[lineUserId] || [];
   const stage = await getStage(env, lineUserId);
 
+  // ── 固定指令（不管綁沒綁都能用）────────────────────────
+  if (CMD.help.test(text)) return helpText();
+  if (CMD.site.test(text)) return siteText();
+  if (CMD.class.test(text)) return CLASS_TEXT;
+  if (CMD.human.test(text)) { await setStage(env, lineUserId, 'human'); return HUMAN_TEXT; }
+  if (CMD.hw.test(text)) return { hw: bound };            // 交給 webhook 現查（要讀 Firestore）
+
+  // 已轉人工 → 一小時內安靜，讓家長好好打字給老師看
+  if (stage === 'human') {
+    const ts = await getStageTs(env, lineUserId);
+    if (Date.now() - ts < HUMAN_MS) return '';
+  }
+
   // 名單還沒就緒
   if (!activeRoster(roster).length) return '系統名單尚未就緒，請稍後再試，或直接聯絡 Alan 老師 🙏';
 
   // 「查詢」
-  if (ASK_RE.test(text)) {
+  if (ASK_RE.test(text) || CMD.bind.test(text)) {
     if (!bound.length) return '這個 LINE 還沒有綁定任何孩子 🙌\n\n' + askNameLine(english, ex);
     return '目前這個 LINE 已綁定：\n' + listChildren(bound) +
       (bound.length < MAX_CHILDREN ? `\n\n要再新增孩子，直接回覆他的${english ? '英文名字' : '姓名'}就可以 👌` : '');
@@ -322,6 +379,8 @@ async function handleNameBinding(env, lineUserId, rawText) {
   // 完全沒配到
   if (!added.length && !dup.length) {
     if (amb.length) return `班上有多位「${amb[0]}」🤔\n請直接聯絡 Alan 老師協助綁定 🙏`;
+    // 已經綁好的人隨口聊天／小朋友亂打 → 不要再回「找不到這位學生」，給選單就好
+    if (bound.length) return '我看不懂這句話 🙇\n\n' + helpText();
     const who = bad[0] || text;
     if (english && hasCJK(who)) {
       return '我們的名單是用「英文名字」登記的 📝\n\n' + askNameLine(english, ex) + '\n\n找不到的話請直接聯絡 Alan 老師 🙏';
@@ -362,6 +421,16 @@ async function importPrivateKey(pem) {
   return crypto.subtle.importKey('pkcs8', der.buffer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
 }
 
+// v422：OAuth token 有效 1 小時，快取起來——家長按「查作業」時要即時回覆
+async function getAccessTokenCached(env, sa) {
+  try {
+    const c = JSON.parse((await env.LINKS.get('gtoken')) || 'null');
+    if (c && c.exp > Date.now() + 60000 && c.t) return c.t;
+  } catch (e) {}
+  const t = await getAccessToken(sa);
+  if (t) { try { await env.LINKS.put('gtoken', JSON.stringify({ t, exp: Date.now() + 50 * 60000 })); } catch (e) {} }
+  return t;
+}
 async function getAccessToken(sa) {
   const nowSec = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
@@ -539,42 +608,27 @@ function lessonLine(g) {
   return `• ${g.title}\n   ${tail}（${g.items.length} 項）`;
 }
 
-// v421：一行只放「類別 + 幾項」。家長在手機上看 LINE，行一長就折行，越短越清楚。
+// v421/v422：一行只放「類別 + 幾項」。家長在手機上看 LINE，行一長就折行，越短越清楚。
 // Alan：「如果是單字題目就不用像這樣 Feathers, Not just for flying - week2 …
 //         可以改成 單字作業未完成（幾項）不然太亂了」
-// 本週：照四大類彙總 → [{label:'外師單字', n:10}]
-function rowsByCat(list, grade) {
+//        「為什麼只有當周練習有分類 前幾週 只是顯示其他練習 …幫我都統一」
+// → 三區一律是【週次小標】＋【四大類各幾項】，長相完全一致。
+function catRows(list, grade) {
   const by = {};
   list.forEach((hw) => { (by[hw.cat || 'other'] = by[hw.cat || 'other'] || []).push(hw); });
   return Object.keys(by)
     .sort((a, b) => idxIn(CAT_ORDER, a) - idxIn(CAT_ORDER, b))
     .map((c) => ({ label: catZh(grade, c), n: by[c].length }));
 }
-// 前幾週：照「週次＋類別」彙總 → [{label:'Week 1・外師單字', n:10}]
-function rowsByWeekCat(list, grade) {
-  const by = {}, order = [];
-  list.forEach((hw) => {
-    const k = hw.wid + '|' + (hw.cat || 'other');
-    if (!by[k]) { by[k] = []; order.push(k); }
-    by[k].push(hw);
-  });
-  order.sort((a, b) => String(by[a][0].wkStart || '').localeCompare(String(by[b][0].wkStart || '')) ||
-                       idxIn(CAT_ORDER, by[a][0].cat) - idxIn(CAT_ORDER, by[b][0].cat));
-  return order.map((k) => {
-    const arr = by[k], w0 = arr[0];
-    const tag = wkTag(w0);
-    return { label: (tag ? tag + '・' : '') + catZh(grade, w0.cat), n: arr.length };
-  });
-}
-// 預習：只照週次彙總（不用急，不必分到類別）
-function rowsByWeek(list) {
+// [{head:'Week 1・8/31–9/6', rows:[{label:'外師單字', n:10}]}]，照週次先後排
+function weekGroups(list, grade) {
   const by = {}, order = [];
   list.forEach((hw) => { if (!by[hw.wid]) { by[hw.wid] = []; order.push(hw.wid); } by[hw.wid].push(hw); });
   order.sort((a, b) => String(by[a][0].wkStart || '').localeCompare(String(by[b][0].wkStart || '')));
   return order.map((k) => {
     const arr = by[k], w0 = arr[0];
-    const r = wkRange(w0);
-    return { label: (wkTag(w0) || fmtDate(w0.dueDate)) + (r ? '（' + r + '）' : ''), n: arr.length };
+    const head = [wkTag(w0) || fmtDate(w0.dueDate), wkRange(w0)].filter(Boolean).join('・');
+    return { head, rows: catRows(arr, grade) };
   });
 }
 
@@ -585,12 +639,37 @@ function wkRange(hw) {
   return fmtDate(hw.wkStart) + '–' + fmtDate(hw.wkEnd);
 }
 
+// 一份作業要放進哪一區（每日提醒與「家長現查」共用）
+function splitTodos(todos, doneItems, today, thisWeek, overdue, preview) {
+  for (const hw of todos) {
+    if (hw.archived) continue;                          // 封存的是上學期，不提醒
+    if (isDone(doneItems, hw.wid, hw.itemId)) continue;
+    if (hw.wkStart && hw.wkEnd) {
+      // 有週次日期就照週次分（最準：dueDate 有時候是舊的沒改到）
+      if (today < hw.wkStart) preview.push(hw);
+      else if (today > hw.wkEnd) { if (dateDiffDays(today, hw.wkEnd) <= OVERDUE_DAYS) overdue.push(hw); }
+      else thisWeek.push(hw);
+    } else {
+      // 沒有週次日期 → 退回用 dueDate 判斷
+      if (today > hw.dueDate) { if (dateDiffDays(today, hw.dueDate) <= OVERDUE_DAYS) overdue.push(hw); }
+      else if (dateDiffDays(hw.dueDate, today) > 7) preview.push(hw);
+      else thisWeek.push(hw);
+    }
+  }
+}
+
 // ── v421：Flex Message（LINE 唯一能粗體、能上色的訊息形式）────
 const C_INK = '#1F2328', C_SUB = '#8A9099', C_LINE = '#E6E8EA';
 const C_NOW = '#1B7A3E';   // 本週＝綠（要做）
 const C_OLD = '#C62828';   // 前幾週沒完成＝紅（醒目）
 const C_SOON = '#9AA0A6';  // 預習＝灰（不用急）
 const SITE_URL = 'https://alan07050445-sys.github.io/Alan-s-English-Class/';
+// 三個區塊的定義（標題／小字／顏色／摘要用的短名）——訊息、純文字、老師端預覽共用同一份
+const SEC_DEF = [
+  ['week',    '▍本週作業',       '',                 C_NOW,  '本週'],
+  ['overdue', '▍前幾週還沒完成', '請盡快補完',       C_OLD,  '前幾週還沒完成'],
+  ['preview', '▍可以先預習',     '還沒開始，不用急', C_SOON, '可先預習'],
+];
 
 function fxRow(row, color) {
   return {
@@ -600,22 +679,28 @@ function fxRow(row, color) {
     ],
   };
 }
-function fxSection(title, note, rows, color, first) {
-  const head = [{ type: 'text', text: title, size: 'sm', weight: 'bold', color }];
-  if (note) head.push({ type: 'text', text: note, size: 'xxs', color: C_SUB, margin: 'xs' });
+function fxSection(title, note, groups, color, first) {
   const out = [];
   if (!first) out.push({ type: 'separator', margin: 'lg', color: C_LINE });
+  const head = [{ type: 'text', text: title, size: 'sm', weight: 'bold', color }];
+  if (note) head.push({ type: 'text', text: note, size: 'xxs', color: C_SUB, margin: 'xs' });
   out.push({ type: 'box', layout: 'vertical', margin: first ? 'none' : 'lg', contents: head });
-  rows.forEach((r, k) => out.push(Object.assign(fxRow(r, color), { margin: k === 0 ? 'md' : 'sm' })));
+  groups.forEach((g, gi) => {
+    if (g.head) out.push({ type: 'text', text: g.head, size: 'xxs', color: C_SUB, margin: gi === 0 ? 'md' : 'lg', wrap: true });
+    g.rows.forEach((r) => out.push(fxRow(r, color)));
+  });
   return out;
 }
 // 三區 → 一顆 Flex 泡泡
 function hwBubble(name, secs) {
   const body = [];
   let first = true;
-  if (secs.week.rows.length) { body.push(...fxSection('▍本週作業', secs.week.note, secs.week.rows, C_NOW, first)); first = false; }
-  if (secs.overdue.rows.length) { body.push(...fxSection('▍前幾週還沒完成', '請盡快補完', secs.overdue.rows, C_OLD, first)); first = false; }
-  if (secs.preview.rows.length) { body.push(...fxSection('▍可以先預習', '還沒開始，不用急', secs.preview.rows, C_SOON, first)); first = false; }
+  SEC_DEF.forEach(([k, title, note, color]) => {
+    const gs = (secs[k] || {}).groups || [];
+    if (!gs.length) return;
+    body.push(...fxSection(title, typeof note === 'function' ? note(secs) : note, gs, color, first));
+    first = false;
+  });
   return {
     type: 'bubble', size: 'mega',
     header: {
@@ -638,21 +723,25 @@ function hwBubble(name, secs) {
 }
 // 同一份內容的純文字版（Flex 送不出去時的退路，也給老師端預覽用）
 function hwPlain(name, secs) {
-  const pad = (r) => `　${r.label}　${r.n} 項`;
   const out = [`📚 作業提醒 — ${name || ''}`];
-  if (secs.week.rows.length) { out.push('', `▍本週作業${secs.week.note ? '（' + secs.week.note + '）' : ''}`); secs.week.rows.forEach((r) => out.push(pad(r))); }
-  if (secs.overdue.rows.length) { out.push('', '▍前幾週還沒完成（請盡快補完）'); secs.overdue.rows.forEach((r) => out.push(pad(r))); }
-  if (secs.preview.rows.length) { out.push('', '▍可以先預習（不用急）'); secs.preview.rows.forEach((r) => out.push(pad(r))); }
+  SEC_DEF.forEach(([k, title, note]) => {
+    const gs = (secs[k] || {}).groups || [];
+    if (!gs.length) return;
+    const nt = typeof note === 'function' ? note(secs) : note;
+    out.push('', title + (nt ? `（${nt}）` : ''));
+    gs.forEach((g) => {
+      if (g.head) out.push(`　${g.head}`);
+      g.rows.forEach((r) => out.push(`　　${r.label}　${r.n} 項`));
+    });
+  });
   out.push('', SITE_URL, '— Alan 老師');
   return out.join('\n');
 }
+const secCount = (sec) => ((sec || {}).groups || []).reduce((a, g) => a + g.rows.reduce((b, r) => b + r.n, 0), 0);
 // 通知列/舊版客戶端看到的一行摘要（LINE 上限 400 字）
 function hwAlt(name, secs) {
-  const n = (rs) => rs.reduce((a, r) => a + r.n, 0);
   const bits = [];
-  if (secs.week.rows.length) bits.push(`本週 ${n(secs.week.rows)} 項`);
-  if (secs.overdue.rows.length) bits.push(`前幾週還沒完成 ${n(secs.overdue.rows)} 項`);
-  if (secs.preview.rows.length) bits.push(`可先預習 ${n(secs.preview.rows)} 項`);
+  SEC_DEF.forEach(([k, , , , short]) => { const n = secCount(secs[k]); if (n) bits.push(short + ' ' + n + ' 項'); });
   return `📚 作業提醒 — ${name || ''}｜` + bits.join('、');
 }
 
@@ -673,11 +762,67 @@ const SUMMER_WEEK_END = {
   SW01: '2026-07-05', SW02: '2026-07-12', SW03: '2026-07-19', SW04: '2026-07-26',
   SW05: '2026-08-02', SW06: '2026-08-09', SW07: '2026-08-16', SW08: '2026-08-23', SW09: '2026-08-31',
 };
-function summerLibTitle(libWeeks, sw, itemId) {
+// v422：暑假發派也要拿到「分類」與「題型」，不然在提醒裡會全部變成「其他練習」
+function summerLibMeta(libWeeks, sw, itemId) {
   const wk = libWeeks['sl-2026-' + sw] || {};
   const items = wk.items || {};
-  for (const cat of Object.keys(items)) for (const it of (items[cat] || [])) if (it && it.id === itemId) return it.title || itemId;
-  return itemId;
+  for (const cat of Object.keys(items)) {
+    for (const it of (items[cat] || [])) {
+      if (it && it.id === itemId) return { title: String(it.title || itemId).trim(), type: it.type || '', cat };
+    }
+  }
+  return { title: itemId, type: '', cat: '' };
+}
+const summerWeekLabel = (sw) => '暑假第 ' + Number(String(sw).replace(/^SW/, '')) + ' 週';
+
+// ── v422：家長在聊天室輸入「作業」→ 現場查一次，回同一張卡 ────
+// 用的是跟每日提醒完全一樣的分區邏輯，只是不管里程碑、也不寫任何紀錄。
+async function queryHomework(env, children) {
+  if (!env.FIREBASE_SA) return null;
+  let sa;
+  try { sa = JSON.parse(env.FIREBASE_SA); } catch (e) { return null; }
+  const token = await getAccessTokenCached(env, sa);
+  if (!token) return null;
+  const project = sa.project_id;
+  const today = taipeiToday();
+
+  // 只讀這些孩子用得到的年級
+  const grades = [];
+  const gradeOf = {};
+  children.forEach((c) => {
+    const g = gradeFromEmail(c.email) || String(c.grade || '').toLowerCase() || '';
+    gradeOf[String(c.email).toLowerCase()] = g;
+    if (g && GRADE_DOCS[g] && grades.indexOf(g) < 0) grades.push(g);
+  });
+  const hwByGrade = {};
+  for (const g of grades) {
+    const doc = await firestoreGet(project, token, GRADE_DOCS[g]);
+    const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
+    hwByGrade[g] = buildHomeworkList(c);
+  }
+  const progressDocs = await firestoreList(project, token, 'progress');
+  const progByEmail = {};
+  progressDocs.forEach((d) => {
+    const o = d.fields ? fsVal({ mapValue: { fields: d.fields } }) : {};
+    if (o.email) progByEmail[String(o.email).toLowerCase()] = o;
+  });
+
+  const out = [];
+  for (const c of children) {
+    const email = String(c.email).toLowerCase();
+    const grade = gradeOf[email];
+    const prog = progByEmail[email] || {};
+    const todos = (grade && hwByGrade[grade] ? hwByGrade[grade] : []).slice();
+    const thisWeek = [], overdue = [], preview = [];
+    splitTodos(todos, prog.items, today, thisWeek, overdue, preview);
+    const secs = {
+      week: { groups: weekGroups(thisWeek, grade) },
+      overdue: { groups: weekGroups(overdue, grade) },
+      preview: { groups: weekGroups(preview, grade) },
+    };
+    out.push({ name: c.name || prog.name || '', secs, empty: !thisWeek.length && !overdue.length && !preview.length });
+  }
+  return out;
 }
 
 async function runReminders(env, dryRun) {
@@ -688,7 +833,7 @@ async function runReminders(env, dryRun) {
   try { sa = JSON.parse(env.FIREBASE_SA); } catch (e) { R.ok = false; R.errors.push('bad_firebase_sa_json'); return R; }
   const project = sa.project_id;
   let token;
-  try { token = await getAccessToken(sa); } catch (e) { R.ok = false; R.errors.push('auth_error: ' + String(e)); return R; }
+  try { token = await getAccessTokenCached(env, sa); } catch (e) { R.ok = false; R.errors.push('auth_error: ' + String(e)); return R; }
   if (!token) { R.ok = false; R.errors.push('no_access_token（金鑰或權限有問題）'); return R; }
 
   // 作業清單：六個年級各一份（公開資料）。v419 之前只讀 class/data 一份，
@@ -758,7 +903,12 @@ async function runReminders(env, dryRun) {
         if (!due) continue;
         const libWid = 'sl-2026-' + sw;
         for (const itemId of (plan.weeks[sw] || [])) {
-          todos.push({ wid: libWid, itemId, key: libWid + '_' + itemId, title: summerLibTitle(libWeeks, sw, itemId), dueDate: due });
+          const m = summerLibMeta(libWeeks, sw, itemId);
+          todos.push({
+            wid: libWid, itemId, key: libWid + '_' + itemId,
+            title: m.title, type: m.type, cat: m.cat, dueDate: due,
+            wkLabel: summerWeekLabel(sw), wkStart: addDays(due, -6), wkEnd: due, archived: false,
+          });
         }
       }
     }
@@ -771,21 +921,7 @@ async function runReminders(env, dryRun) {
     // ── v420：先分三區（本週／前幾週沒完成／可以先預習）────────
     // Alan：「當周作業, 前幾週未完成作業, 可以先預習 都要排版排清楚 不然家長很亂」
     const thisWeek = [], overdue = [], preview = [];
-    for (const hw of todos) {
-      if (hw.archived) continue;                        // 封存的是上學期，不提醒
-      if (isDone(st.items, hw.wid, hw.itemId)) continue;
-      if (hw.wkStart && hw.wkEnd) {
-        // 有週次日期就照週次分（最準：dueDate 有時候是舊的沒改到）
-        if (today < hw.wkStart) preview.push(hw);
-        else if (today > hw.wkEnd) { if (dateDiffDays(today, hw.wkEnd) <= OVERDUE_DAYS) overdue.push(hw); }
-        else thisWeek.push(hw);
-      } else {
-        // 沒有週次日期（暑假發派、很舊的週次）→ 退回用 dueDate 判斷
-        if (today > hw.dueDate) { if (dateDiffDays(today, hw.dueDate) <= OVERDUE_DAYS) overdue.push(hw); }
-        else if (dateDiffDays(hw.dueDate, today) > 7) preview.push(hw);
-        else thisWeek.push(hw);
-      }
-    }
+    splitTodos(todos, st.items, today, thisWeek, overdue, preview);
     const nDue = thisWeek.length + overdue.length;
     if (!nDue) continue;                                 // 只剩「可以先預習」→ 不打擾
 
@@ -799,11 +935,10 @@ async function runReminders(env, dryRun) {
     if (!reason) continue;
 
     // ── 組訊息（v421：四大類彙總＋Flex 粗體上色）──────────────
-    const w0 = thisWeek[0];
     const secs = {
-      week: { note: w0 ? [wkTag(w0), wkRange(w0)].filter(Boolean).join('・') : '', rows: rowsByCat(thisWeek, grade) },
-      overdue: { rows: rowsByWeekCat(overdue, grade) },
-      preview: { rows: rowsByWeek(preview) },
+      week:    { groups: weekGroups(thisWeek, grade) },
+      overdue: { groups: weekGroups(overdue, grade) },
+      preview: { groups: weekGroups(preview, grade) },
     };
     const bubble = hwBubble(st.name, secs);
     const text = hwPlain(st.name, secs);
@@ -837,6 +972,25 @@ async function runReminders(env, dryRun) {
   return R;
 }
 
+// v422：把「現查作業」的結果包成 LINE 訊息（一個孩子一張卡，最多 5 張）
+async function hwReplyMessages(env, children) {
+  if (!children || !children.length) {
+    let roster = [];
+    try { roster = await getRoster(env); } catch (e) {}
+    const english = rosterAllEnglish(roster);
+    return [{ type: 'text', text: '這個 LINE 還沒綁定孩子，查不到作業 🙌\n\n' + askNameLine(english, exampleNames(roster, english)) }];
+  }
+  let list = null;
+  try { list = await queryHomework(env, children); } catch (e) {}
+  if (!list) return [{ type: 'text', text: '暫時查不到作業，請稍後再試，或直接聯絡 Alan 老師 🙏' }];
+  const msgs = [];
+  for (const r of list) {
+    if (r.empty) { msgs.push({ type: 'text', text: `🎉 ${r.name || ''} 目前沒有未完成的作業，太棒了！` }); continue; }
+    msgs.push({ type: 'flex', altText: hwAlt(r.name, r.secs).slice(0, 390), contents: hwBubble(r.name, r.secs) });
+  }
+  return msgs;
+}
+
 // ── main ─────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
@@ -862,7 +1016,15 @@ export default {
             await lineReply(ev.replyToken, await welcomeMessage(env, ev.source && ev.source.userId), env.LINE_TOKEN);
           } else if (ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
             const uid = ev.source && ev.source.userId;
-            if (uid && env.LINKS) await lineReply(ev.replyToken, await handleNameBinding(env, uid, ev.message.text), env.LINE_TOKEN);
+            if (!uid || !env.LINKS) continue;
+            const r = await handleNameBinding(env, uid, ev.message.text);
+            if (r && r.hw) {
+              // v422：家長輸入「作業」→ 現場查一次，回跟每日提醒一樣的卡片
+              await lineReplyMessages(ev.replyToken, await hwReplyMessages(env, r.hw), env.LINE_TOKEN);
+            } else if (typeof r === 'string' && r.trim()) {
+              await lineReply(ev.replyToken, r, env.LINE_TOKEN);
+            }
+            // r === '' → 已轉人工，故意不回話
           }
         } catch (e) {}
       }
@@ -980,5 +1142,6 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
-  rowsByCat, rowsByWeekCat, rowsByWeek, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH,
+  queryHomework, hwReplyMessages, helpText, CMD, splitTodos,
+  catRows, weekGroups, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH, SEC_DEF, summerLibMeta,
 };

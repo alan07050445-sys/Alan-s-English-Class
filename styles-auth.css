@@ -2610,7 +2610,9 @@
 .lnb-sec.now  .lnb-t, .lnb-sec.now  .lnb-r b { color: #1B7A3E; }
 .lnb-sec.old  .lnb-t, .lnb-sec.old  .lnb-r b { color: #C62828; }
 .lnb-sec.soon .lnb-t, .lnb-sec.soon .lnb-r b { color: #9AA0A6; }
-.lnb-r { display: flex; align-items: baseline; gap: 10px; margin-top: 7px; font-size: 12.5px; }
+.lnb-g + .lnb-g { margin-top: 10px; }
+.lnb-h { font-size: 10.5px; color: #8A9099; margin-top: 8px; }
+.lnb-r { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; font-size: 12.5px; }
 .lnb-r span { flex: 1; color: #1F2328; }
 .lnb-r b { font-weight: 800; white-space: nowrap; }
 .lnb-foot { padding: 12px 12px 14px; }
@@ -2653,6 +2655,8 @@
 .linkbind-check.warn { background: rgba(240, 160, 30, .10); border-color: rgba(240, 160, 30, .35); }
 .linkbind-check p { font-family: var(--sans); font-size: 12.5px; line-height: 1.7; color: var(--ink); margin: 0; }
 .linkbind-check p + p { margin-top: 6px; }
+.notify-cmds { margin: 8px 0 0; padding-left: 18px; }
+.notify-cmds li { font-family: var(--sans); font-size: 12.5px; line-height: 1.9; color: var(--ink); }
 .notify-side code {
   font-family: var(--mono, ui-monospace, monospace); font-size: 12px;
   background: var(--surface-2, rgba(0,0,0,.05)); padding: 1px 5px; border-radius: 5px;

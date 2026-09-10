@@ -125,7 +125,7 @@ let MSG = null, RES = null, TEXT = '';
   ok('altText 在 LINE 的 400 字上限內', MSG && MSG.altText.length <= 400, MSG && String(MSG.altText.length));
   ok('altText 一眼看得出重點', /本週 6 項/.test(MSG.altText) && /前幾週還沒完成 5 項/.test(MSG.altText), MSG.altText);
   const secs = RES.sections;
-  ok('三區都在', secs.week.rows.length && secs.overdue.rows.length && secs.preview.rows.length, JSON.stringify(secs));
+  ok('三區都在', secs.week.groups.length && secs.overdue.groups.length && secs.preview.groups.length, JSON.stringify(secs));
   ok('分區數字對（本週 6・前幾週 5・預習 11）',
      RES.buckets.thisWeek === 6 && RES.buckets.overdue === 5 && RES.buckets.preview === 11,
      JSON.stringify(RES.buckets));
@@ -137,20 +137,24 @@ let MSG = null, RES = null, TEXT = '';
 log.push('\n【L2】Alan 指出的問題，逐項檢查');
 {
   const secs = RES.sections;
-  const labels = (k) => secs[k].rows.map((r) => r.label);
+  const labels = (k) => secs[k].groups.map((g) => g.head + '｜' + g.rows.map((r) => r.label + ' ' + r.n).join('/'));
   ok('⭐ 本週只寫「哪一類・幾項」，不再列課名',
-     labels('week').join() === '外師單字,文法', JSON.stringify(secs.week.rows));
+     labels('week').join() === 'Week 2・9/7–9/13｜外師單字 5/文法 1', JSON.stringify(secs.week));
   ok('⭐ 五種題型的單字作業合成一行「外師單字 5 項」',
-     secs.week.rows[0].label === '外師單字' && secs.week.rows[0].n === 5, JSON.stringify(secs.week.rows[0]));
+     secs.week.groups[0].rows[0].label === '外師單字' && secs.week.groups[0].rows[0].n === 5, JSON.stringify(secs.week.groups[0]));
   ok('⭐ 訊息裡完全找不到課名（Feathers…／Rare Treasure）',
      !JSON.stringify(MSG).includes('Feathers') && !JSON.stringify(MSG).includes('Rare Treasure'), TEXT);
   ok('⭐ 每一行都很短（手機不會折行）：純文字版最長 ≤ 22 字',
      TEXT.split('\n').filter((l) => l.startsWith('　')).every((l) => l.length <= 22),
      TEXT.split('\n').filter((l) => l.startsWith('　')).map((l) => l.length + ':' + l).join(' | '));
-  ok('前幾週那一區標了是第幾週＋哪一類', labels('overdue').join() === 'Week 1・外師單字', JSON.stringify(labels('overdue')));
-  ok('預習那一區標了週次與日期', labels('preview').join() === 'Week 4（9/21–9/27）,Week 5（9/28–10/4）', JSON.stringify(labels('preview')));
-  ok('本週標題有寫是第幾週和日期', secs.week.note === 'Week 2・9/7–9/13', secs.week.note);
-  ok('⭐ Week4/Week5 只出現在預習區', !JSON.stringify(secs.week).includes('Week 4') && labels('preview').length === 2, JSON.stringify(secs));
+  ok('⭐ 前幾週那一區也有分類（不再是「其他練習」）',
+     labels('overdue').join() === 'Week 1・8/31–9/6｜外師單字 5', JSON.stringify(secs.overdue));
+  ok('⭐ 可以先預習那一區也有分類（三區長相一致）',
+     labels('preview').join() === 'Week 4・9/21–9/27｜外師單字 6,Week 5・9/28–10/4｜外師單字 5', JSON.stringify(secs.preview));
+  ok('每一區的小標都是「第幾週・日期」，格式一樣',
+     ['week','overdue','preview'].every((k) => secs[k].groups.every((g) => /^(Week \d+|暑假第 \d+ 週)・\d+\/\d+–\d+\/\d+$/.test(g.head))),
+     JSON.stringify(['week','overdue','preview'].map((k) => secs[k].groups.map((g) => g.head))));
+  ok('⭐ Week4/Week5 只出現在預習區', !JSON.stringify(secs.week).includes('Week 4') && secs.preview.groups.length === 2, JSON.stringify(secs));
   ok('⭐ 不再滿篇「新作業」', !TEXT.includes('新作業'), TEXT);
   ok('⭐ 已封存（上學期）的作業完全不出現', !JSON.stringify(MSG).includes('上學期的舊作業'), TEXT);
 }
@@ -191,8 +195,8 @@ log.push('\n【L4】做完的不會再出現');
   pushed.length = 0;
   const R = await W.runReminders(makeEnv(), false);
   const secs = (R.sends[0] || {}).sections || {};
-  ok('把 Week 1 補完之後，「前幾週還沒完成」整區消失', (secs.overdue || {}).rows.length === 0, JSON.stringify(secs.overdue));
-  ok('本週那一區不受影響', (secs.week || {}).rows.length > 0, JSON.stringify(secs.week));
+  ok('把 Week 1 補完之後，「前幾週還沒完成」整區消失', ((secs.overdue || {}).groups || []).length === 0, JSON.stringify(secs.overdue));
+  ok('本週那一區不受影響', ((secs.week || {}).groups || []).length > 0, JSON.stringify(secs.week));
   doneItems = {};
 }
 
@@ -240,7 +244,7 @@ log.push('\n【L8】四大類的中文名要跟各年級的課表一致');
   ok('G3 的 word 是「字根字首」', W.catZh('g3', 'word') === '字根字首');
   ok('六個年級都有四大類', ['g1','g2','g3','g4','g5','g6'].every((g) => Object.keys(W.CAT_ZH[g]).length === 4));
   ok('沒見過的分類 → 叫「其他練習」，不會變成 undefined', W.catZh('g4', 'zzz') === '其他練習');
-  const rows = W.rowsByCat([
+  const rows = W.catRows([
     { cat: 'reading' }, { cat: 'vocab' }, { cat: 'vocab' }, { cat: 'grammar' }, { cat: 'word' },
   ], 'g4');
   ok('四大類照固定順序排（單字→字彙→文法→閱讀）',

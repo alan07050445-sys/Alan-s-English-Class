@@ -1108,6 +1108,19 @@ function LineLink() {
         </p>
         <p className="notify-note">一個 LINE <b>最多綁 2 位</b>孩子；第三位以上請家長聯絡你，由你在上面手動處理。</p>
         <p className="notify-note">綁定後才收得到「按年級／個別」通知與作業提醒。配不到名字時系統不會亂猜，會請家長聯絡你。</p>
+
+        <h4>家長在聊天室能做什麼</h4>
+        <ol className="notify-cmds">
+          <li><code>作業</code>　現場查孩子還有哪些沒完成</li>
+          <li><code>綁定</code>　看這個 LINE 綁了誰</li>
+          <li><code>網站</code>　拿到練習網站連結</li>
+          <li><code>課表</code>　上課時間</li>
+          <li><code>老師</code>　<b>之後一小時不自動回覆</b>，家長可以直接留言</li>
+        </ol>
+        <p className="notify-note">
+          其他話一律回同一份功能表，不會再亂猜成學生姓名（小朋友亂打也不怕）。
+          家長按「老師」之後留的話，請到 <b>LINE 官方帳號管理後台 → 聊天</b> 看。
+        </p>
       </aside>
     </div>
   );
@@ -1480,10 +1493,11 @@ function ShopManager() {
 /* v421：老師端把「家長在 LINE 上看到的那顆泡泡」照著畫一次。
    資料來自 Worker 回傳的 sections，跟真的 Flex Message 是同一份，不會走鐘。 */
 function HwBubble({ name, secs }) {
+  // v422：三區長相統一——【週次小標】＋【四大類各幾項】
   const SEC = [
-    ['week',    '▍本週作業',       (secs.week || {}).note || '',  'now'],
-    ['overdue', '▍前幾週還沒完成', '請盡快補完',                  'old'],
-    ['preview', '▍可以先預習',     '還沒開始，不用急',            'soon'],
+    ['week',    '▍本週作業',       '',                 'now'],
+    ['overdue', '▍前幾週還沒完成', '請盡快補完',       'old'],
+    ['preview', '▍可以先預習',     '還沒開始，不用急', 'soon'],
   ];
   return (
     <div className="lnb">
@@ -1493,13 +1507,18 @@ function HwBubble({ name, secs }) {
       </div>
       <div className="lnb-body">
         {SEC.map(([k, title, note, tone]) => {
-          const rows = ((secs[k] || {}).rows) || [];
-          if (!rows.length) return null;
+          const groups = ((secs[k] || {}).groups) || [];
+          if (!groups.length) return null;
           return (
             <div key={k} className={'lnb-sec ' + tone}>
               <div className="lnb-t">{title}{note ? <em>{note}</em> : null}</div>
-              {rows.map((r, i) => (
-                <div key={i} className="lnb-r"><span>{r.label}</span><b>{r.n} 項</b></div>
+              {groups.map((g, gi) => (
+                <div key={gi} className="lnb-g">
+                  {g.head ? <div className="lnb-h">{g.head}</div> : null}
+                  {(g.rows || []).map((r, i) => (
+                    <div key={i} className="lnb-r"><span>{r.label}</span><b>{r.n} 項</b></div>
+                  ))}
+                </div>
               ))}
             </div>
           );
