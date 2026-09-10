@@ -57,6 +57,27 @@ async function lineReply(replyToken, text, token) {
     body: JSON.stringify({ replyToken, messages: [{ type: 'text', text }] }),
   });
 }
+// v421：純文字的 LINE 訊息不能粗體也不能上色——要醒目就得用 Flex Message。
+// 送失敗（Flex 被拒）時自動退回純文字，家長不會漏收。
+async function lineMulticastFlex(to, altText, bubble, fallbackText, token) {
+  const errors = [];
+  for (let i = 0; i < to.length; i += 500) {
+    const batch = to.slice(i, i + 500);
+    const send = (messages) => fetch(LINE_API + '/v2/bot/message/multicast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ to: batch, messages }),
+    });
+    let res = await send([{ type: 'flex', altText: altText.slice(0, 390), contents: bubble }]);
+    if (!res.ok) {
+      const why = await res.text().catch(() => '');
+      errors.push('flex ' + res.status + ':' + why.slice(0, 200));
+      res = await send([{ type: 'text', text: fallbackText }]);   // 退回純文字
+      if (!res.ok) errors.push('text ' + res.status + ':' + (await res.text().catch(() => '')).slice(0, 200));
+    }
+  }
+  return errors;
+}
 async function lineMulticast(to, text, token) {
   const errors = [];
   for (let i = 0; i < to.length; i += 500) {
@@ -436,6 +457,17 @@ const TYPE_ORDER = ['lesson', 'flashcard', 'quiz', 'spelling', 'fillblank', 'def
   'word-sort', 'syllable-div', 'type-answer', 'circle-answer', 'reading-skill', 'guided-reading',
   'short-answer', 'writing-practice', 'essay', 'story-mountain', 'upload'];
 const CAT_ORDER = ['vocab', 'word', 'grammar', 'reading'];
+// v421：家長要看的是「哪一類作業還沒做」，不是一長串課名。
+// 四大類的中文名各年級不一樣（跟 data-g*.js 的 CATEGORIES 對齊）。
+const CAT_ZH = {
+  g1: { vocab: '中師單字', word: '外師單字', grammar: '文法', reading: '閱讀理解' },
+  g2: { vocab: '中師單字', word: '外師單字', grammar: '文法', reading: '閱讀理解' },
+  g3: { vocab: '外師單字', word: '字根字首', grammar: '文法', reading: '閱讀理解' },
+  g4: { vocab: '外師單字', word: '字彙學習', grammar: '文法', reading: '閱讀寫作' },
+  g5: { vocab: '外師單字', word: '字彙學習', grammar: '文法', reading: '閱讀寫作' },
+  g6: { vocab: '外師單字', word: '字彙學習', grammar: '文法', reading: '閱讀寫作' },
+};
+const catZh = (grade, cat) => ((CAT_ZH[grade] || CAT_ZH.g4)[cat] || '其他練習');
 const idxIn = (arr, v) => { const i = arr.indexOf(v); return i < 0 ? 99 : i; };
 
 // 從某個年級的課程文件整理出「有期限的作業」清單。
@@ -506,12 +538,124 @@ function lessonLine(g) {
   const tail = types.length ? types.join('・') : g.items.length + ' 項';
   return `• ${g.title}\n   ${tail}（${g.items.length} 項）`;
 }
+
+// v421：一行只放「類別 + 幾項」。家長在手機上看 LINE，行一長就折行，越短越清楚。
+// Alan：「如果是單字題目就不用像這樣 Feathers, Not just for flying - week2 …
+//         可以改成 單字作業未完成（幾項）不然太亂了」
+// 本週：照四大類彙總 → [{label:'外師單字', n:10}]
+function rowsByCat(list, grade) {
+  const by = {};
+  list.forEach((hw) => { (by[hw.cat || 'other'] = by[hw.cat || 'other'] || []).push(hw); });
+  return Object.keys(by)
+    .sort((a, b) => idxIn(CAT_ORDER, a) - idxIn(CAT_ORDER, b))
+    .map((c) => ({ label: catZh(grade, c), n: by[c].length }));
+}
+// 前幾週：照「週次＋類別」彙總 → [{label:'Week 1・外師單字', n:10}]
+function rowsByWeekCat(list, grade) {
+  const by = {}, order = [];
+  list.forEach((hw) => {
+    const k = hw.wid + '|' + (hw.cat || 'other');
+    if (!by[k]) { by[k] = []; order.push(k); }
+    by[k].push(hw);
+  });
+  order.sort((a, b) => String(by[a][0].wkStart || '').localeCompare(String(by[b][0].wkStart || '')) ||
+                       idxIn(CAT_ORDER, by[a][0].cat) - idxIn(CAT_ORDER, by[b][0].cat));
+  return order.map((k) => {
+    const arr = by[k], w0 = arr[0];
+    const tag = wkTag(w0);
+    return { label: (tag ? tag + '・' : '') + catZh(grade, w0.cat), n: arr.length };
+  });
+}
+// 預習：只照週次彙總（不用急，不必分到類別）
+function rowsByWeek(list) {
+  const by = {}, order = [];
+  list.forEach((hw) => { if (!by[hw.wid]) { by[hw.wid] = []; order.push(hw.wid); } by[hw.wid].push(hw); });
+  order.sort((a, b) => String(by[a][0].wkStart || '').localeCompare(String(by[b][0].wkStart || '')));
+  return order.map((k) => {
+    const arr = by[k], w0 = arr[0];
+    const r = wkRange(w0);
+    return { label: (wkTag(w0) || fmtDate(w0.dueDate)) + (r ? '（' + r + '）' : ''), n: arr.length };
+  });
+}
+
 const wkTag = (hw) => (hw.wkLabel ? hw.wkLabel.replace(/^Week\s*/i, 'Week ') : '');
 // 一週的日期範圍寫成 9/7–9/13
 function wkRange(hw) {
   if (!hw.wkStart || !hw.wkEnd) return '';
   return fmtDate(hw.wkStart) + '–' + fmtDate(hw.wkEnd);
 }
+
+// ── v421：Flex Message（LINE 唯一能粗體、能上色的訊息形式）────
+const C_INK = '#1F2328', C_SUB = '#8A9099', C_LINE = '#E6E8EA';
+const C_NOW = '#1B7A3E';   // 本週＝綠（要做）
+const C_OLD = '#C62828';   // 前幾週沒完成＝紅（醒目）
+const C_SOON = '#9AA0A6';  // 預習＝灰（不用急）
+const SITE_URL = 'https://alan07050445-sys.github.io/Alan-s-English-Class/';
+
+function fxRow(row, color) {
+  return {
+    type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+      { type: 'text', text: row.label, size: 'sm', color: C_INK, flex: 1, wrap: true },
+      { type: 'text', text: row.n + ' 項', size: 'sm', weight: 'bold', color, align: 'end', flex: 0 },
+    ],
+  };
+}
+function fxSection(title, note, rows, color, first) {
+  const head = [{ type: 'text', text: title, size: 'sm', weight: 'bold', color }];
+  if (note) head.push({ type: 'text', text: note, size: 'xxs', color: C_SUB, margin: 'xs' });
+  const out = [];
+  if (!first) out.push({ type: 'separator', margin: 'lg', color: C_LINE });
+  out.push({ type: 'box', layout: 'vertical', margin: first ? 'none' : 'lg', contents: head });
+  rows.forEach((r, k) => out.push(Object.assign(fxRow(r, color), { margin: k === 0 ? 'md' : 'sm' })));
+  return out;
+}
+// 三區 → 一顆 Flex 泡泡
+function hwBubble(name, secs) {
+  const body = [];
+  let first = true;
+  if (secs.week.rows.length) { body.push(...fxSection('▍本週作業', secs.week.note, secs.week.rows, C_NOW, first)); first = false; }
+  if (secs.overdue.rows.length) { body.push(...fxSection('▍前幾週還沒完成', '請盡快補完', secs.overdue.rows, C_OLD, first)); first = false; }
+  if (secs.preview.rows.length) { body.push(...fxSection('▍可以先預習', '還沒開始，不用急', secs.preview.rows, C_SOON, first)); first = false; }
+  return {
+    type: 'bubble', size: 'mega',
+    header: {
+      type: 'box', layout: 'vertical', paddingAll: '16px', paddingBottom: '12px',
+      backgroundColor: '#F4F7F4',
+      contents: [
+        { type: 'text', text: '📚 作業提醒', size: 'xs', color: C_SUB },
+        { type: 'text', text: name || '同學', size: 'lg', weight: 'bold', color: C_INK, wrap: true, margin: 'xs' },
+      ],
+    },
+    body: { type: 'box', layout: 'vertical', paddingAll: '16px', paddingTop: '14px', contents: body },
+    footer: {
+      type: 'box', layout: 'vertical', paddingAll: '12px', paddingTop: 'none', contents: [
+        { type: 'button', style: 'primary', height: 'sm', color: '#06C755',
+          action: { type: 'uri', label: '打開練習', uri: SITE_URL } },
+        { type: 'text', text: 'Alan 老師', size: 'xxs', color: C_SUB, align: 'center', margin: 'md' },
+      ],
+    },
+  };
+}
+// 同一份內容的純文字版（Flex 送不出去時的退路，也給老師端預覽用）
+function hwPlain(name, secs) {
+  const pad = (r) => `　${r.label}　${r.n} 項`;
+  const out = [`📚 作業提醒 — ${name || ''}`];
+  if (secs.week.rows.length) { out.push('', `▍本週作業${secs.week.note ? '（' + secs.week.note + '）' : ''}`); secs.week.rows.forEach((r) => out.push(pad(r))); }
+  if (secs.overdue.rows.length) { out.push('', '▍前幾週還沒完成（請盡快補完）'); secs.overdue.rows.forEach((r) => out.push(pad(r))); }
+  if (secs.preview.rows.length) { out.push('', '▍可以先預習（不用急）'); secs.preview.rows.forEach((r) => out.push(pad(r))); }
+  out.push('', SITE_URL, '— Alan 老師');
+  return out.join('\n');
+}
+// 通知列/舊版客戶端看到的一行摘要（LINE 上限 400 字）
+function hwAlt(name, secs) {
+  const n = (rs) => rs.reduce((a, r) => a + r.n, 0);
+  const bits = [];
+  if (secs.week.rows.length) bits.push(`本週 ${n(secs.week.rows)} 項`);
+  if (secs.overdue.rows.length) bits.push(`前幾週還沒完成 ${n(secs.overdue.rows)} 項`);
+  if (secs.preview.rows.length) bits.push(`可先預習 ${n(secs.preview.rows)} 項`);
+  return `📚 作業提醒 — ${name || ''}｜` + bits.join('、');
+}
+
 function isDone(items, wid, itemId) {
   if (!items) return false;
   const pid = wid + '_' + itemId;
@@ -654,46 +798,21 @@ async function runReminders(env, dryRun) {
     const reason = fresh.length ? 'new' : (weeklyDue ? 'weekly' : (dueTomorrow ? 'due1' : ''));
     if (!reason) continue;
 
-    // ── 組訊息 ────────────────────────────────────────────
-    const parts = [`📚 作業提醒 — ${st.name || ''}`];
-    if (thisWeek.length) {
-      const w0 = thisWeek[0];
-      const head = [wkTag(w0), wkRange(w0)].filter(Boolean).join('・');
-      parts.push('', `▍本週作業${head ? '（' + head + '）' : ''}　${thisWeek.length} 項`);
-      groupByLesson(thisWeek).forEach((g) => parts.push(lessonLine(g)));
-    }
-    if (overdue.length) {
-      parts.push('', `▍前幾週還沒完成　${overdue.length} 項`);
-      groupByLesson(overdue).forEach((g) => {
-        const tag = wkTag(g.items[0]);
-        parts.push(lessonLine(g).replace(/^• /, '• ' + (tag ? tag + '：' : '')));
-      });
-    }
-    if (preview.length) {
-      parts.push('', `▍可以先預習（還沒開始，不用急）　${preview.length} 項`);
-      const byWeek = {};
-      const wOrder = [];
-      preview.forEach((hw) => {
-        const k = hw.wid;
-        if (!byWeek[k]) { byWeek[k] = []; wOrder.push(k); }
-        byWeek[k].push(hw);
-      });
-      wOrder.sort((a, b) => String((byWeek[a][0].wkStart) || '').localeCompare(String((byWeek[b][0].wkStart) || '')));
-      wOrder.forEach((k) => {
-        const arr = byWeek[k], w0 = arr[0];
-        const head = [wkTag(w0), wkRange(w0)].filter(Boolean).join('・') || fmtDate(w0.dueDate);
-        const names = groupByLesson(arr).map((g) => g.title);
-        parts.push(`• ${head}：${names.join('、')}（${arr.length} 項）`);
-      });
-    }
-    parts.push('', preview.length
-      ? '先把上面該完成的做完就好，預習區不急 💪 — Alan 老師'
-      : '請提醒孩子完成 💪 — Alan 老師');
-    const text = parts.join('\n');
+    // ── 組訊息（v421：四大類彙總＋Flex 粗體上色）──────────────
+    const w0 = thisWeek[0];
+    const secs = {
+      week: { note: w0 ? [wkTag(w0), wkRange(w0)].filter(Boolean).join('・') : '', rows: rowsByCat(thisWeek, grade) },
+      overdue: { rows: rowsByWeekCat(overdue, grade) },
+      preview: { rows: rowsByWeek(preview) },
+    };
+    const bubble = hwBubble(st.name, secs);
+    const text = hwPlain(st.name, secs);
+    const alt = hwAlt(st.name, secs);
 
     R.sends.push({
-      name: st.name, email: st.email, count: nDue, reason, text,
+      name: st.name, email: st.email, count: nDue, reason, text, alt,
       lines: text.split('\n').filter((l) => l.trim()),
+      sections: secs,
       buckets: { thisWeek: thisWeek.length, overdue: overdue.length, preview: preview.length },
     });
     if (!dryRun) {
@@ -705,7 +824,7 @@ async function runReminders(env, dryRun) {
         }
       });
       if (weeklyDue) hwweek[st.email] = monday;
-      const errs = await lineMulticast(uids, text, env.LINE_TOKEN);
+      const errs = await lineMulticastFlex(uids, alt, bubble, text, env.LINE_TOKEN);
       if (errs.length) R.errors.push('push_failed ' + st.email + ': ' + errs.join(','));
     }
   }
@@ -861,4 +980,5 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
+  rowsByCat, rowsByWeekCat, rowsByWeek, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH,
 };

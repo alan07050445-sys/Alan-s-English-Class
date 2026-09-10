@@ -62,8 +62,8 @@ globalThis.fetch = async (url, opts) => {
     return d ? new Response(JSON.stringify(d), { status: 200 }) : new Response('{}', { status: 404 });
   }
   if (u.includes('/message/multicast')) {
-    const b = JSON.parse(opts.body);
-    pushed.push({ to: b.to, text: b.messages[0].text });
+    const b = JSON.parse(opts.body), m = b.messages[0];
+    pushed.push({ to: b.to, alt: m.altText || m.text || '', json: JSON.stringify(m) });
     return new Response('{}', { status: 200 });
   }
   return new Response('{}', { status: 200 });
@@ -102,13 +102,13 @@ log.push('\n【R1】只綁 G6 的家長，只能收到 G6 的作業（Alan 回�
   ok('跑得起來（沒有 auth / kv 錯誤）', R.ok && !R.errors.length, JSON.stringify(R.errors));
   ok('六個年級的作業都讀到了（各 1 份）',
      R.homeworkCount === 6 && Object.values(R.homeworkByGrade).every((n) => n === 1), JSON.stringify(R.homeworkByGrade));
-  ok('只送出 1 則（只有 Frank 的家長有綁）', pushed.length === 1, JSON.stringify(pushed.map((p) => p.text)));
-  const t = pushed[0] ? pushed[0].text : '';
-  ok('⭐ 內容只有 G6 的作業', t.includes('G6 的單字作業'), t);
-  ok('⭐ 完全沒有 G1~G5 的作業',
-     ['G1', 'G2', 'G3', 'G4', 'G5'].every((g) => !t.includes(g + ' 的單字作業')), t);
+  ok('只送出 1 則（只有 Frank 的家長有綁）', pushed.length === 1, JSON.stringify(pushed.map((p) => p.alt)));
+  const send = R.sends[0] || {};
+  ok('⭐ 只算到 1 份作業（他自己年級的那一份）', send.count === 1, JSON.stringify(send.buckets));
+  ok('⭐ 沒有把六個年級的作業加總（修好前這裡會是 6）',
+     send.buckets && send.buckets.thisWeek + send.buckets.overdue === 1, JSON.stringify(send.buckets));
   ok('只發給有綁的那個 LINE', pushed[0] && pushed[0].to.length === 1 && pushed[0].to[0] === G6_UID, JSON.stringify(pushed[0] && pushed[0].to));
-  log.push('\n───── 這位家長實際會收到 ─────\n' + t + '\n──────────────────────────────');
+  log.push('\n───── 這位家長實際會收到 ─────\n' + (send.text || '') + '\n──────────────────────────────');
 }
 
 log.push('\n【R2】每個年級各綁一位 → 每人只拿到自己那一份');
@@ -117,19 +117,17 @@ log.push('\n【R2】每個年級各綁一位 → 每人只拿到自己那一份'
   const links = {};
   STUDENTS.forEach((st) => { links['U_' + st.grade] = [{ email: st.email, name: st.name, grade: st.grade }]; });
   const env = makeEnv(links);
-  await W.runReminders(env, false);
+  const R = await W.runReminders(env, false);
   ok('六位家長各收到一則', pushed.length === 6, String(pushed.length));
   let clean = true, why = '';
   for (const st of STUDENTS) {
     const p = pushed.find((x) => x.to[0] === 'U_' + st.grade);
-    if (!p) { clean = false; why = st.grade + ' 沒收到'; break; }
-    const mine = st.grade.toUpperCase() + ' 的單字作業';
-    if (!p.text.includes(mine)) { clean = false; why = st.grade + ' 沒拿到自己的作業'; break; }
-    const others = STUDENTS.filter((o) => o.grade !== st.grade).map((o) => o.grade.toUpperCase() + ' 的單字作業');
-    const leak = others.find((o) => p.text.includes(o));
-    if (leak) { clean = false; why = st.grade + ' 收到了別班的：' + leak; break; }
+    const send = R.sends.find((x) => x.email === st.email);
+    if (!p || !send) { clean = false; why = st.grade + ' 沒收到'; break; }
+    if (send.count !== 1) { clean = false; why = st.grade + ' 拿到 ' + send.count + ' 份（應該只有 1 份）'; break; }
   }
-  ok('⭐ 每個年級只收到自己的作業，沒有一則串到別班', clean, why);
+  ok('⭐ 每個年級只收到自己那一份，沒有一則串到別班（修好前每人都是 6 份）', clean, why);
+  ok('每則都是 Flex Message', pushed.every((p) => p.json.includes('"type":"flex"')), pushed[0] && pushed[0].json.slice(0, 120));
 }
 
 log.push('\n【R3】年級是照學號算的（跟學生在網站上看到的教室同一套）');
@@ -150,7 +148,7 @@ log.push('\n【R4】認不出年級的帳號 → 不亂發學期作業');
   const env = makeEnv({ U_guest: [{ email: 'visitor@gmail.com', name: 'Guest', grade: '' }] });
   const R = await W.runReminders(env, false);
   ok('報告裡有標出來是誰', (R.skippedNoGrade || []).includes('Guest'), JSON.stringify(R.skippedNoGrade));
-  ok('⭐ 沒有硬塞任何一班的作業給他', pushed.length === 0, JSON.stringify(pushed.map((p) => p.text)));
+  ok('⭐ 沒有硬塞任何一班的作業給他', pushed.length === 0, JSON.stringify(pushed.map((p) => p.alt)));
   STUDENTS.pop();
 }
 

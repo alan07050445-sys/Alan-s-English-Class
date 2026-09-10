@@ -2594,6 +2594,32 @@
 .linkbind-chip em { font-style: normal; font-family: var(--mono); font-size: 10px; color: var(--ink-muted); }
 .linkbind-note { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; margin: 10px 0 0; }
 
+/* v421：試跑預覽照著畫「家長在 LINE 上看到的那顆泡泡」*/
+.lnb {
+  max-width: 300px; border-radius: 16px; overflow: hidden;
+  background: #fff; border: 1px solid #E6E8EA; color: #1F2328;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); font-family: var(--sans);
+}
+.lnb-head { padding: 14px 16px 12px; background: #F4F7F4; }
+.lnb-head span { display: block; font-size: 10.5px; color: #8A9099; }
+.lnb-head b { display: block; font-size: 16px; font-weight: 800; margin-top: 3px; line-height: 1.35; }
+.lnb-body { padding: 14px 16px 4px; }
+.lnb-sec + .lnb-sec { margin-top: 14px; padding-top: 14px; border-top: 1px solid #E6E8EA; }
+.lnb-t { font-size: 12.5px; font-weight: 800; }
+.lnb-t em { display: block; font-style: normal; font-size: 10.5px; font-weight: 500; color: #8A9099; margin-top: 2px; }
+.lnb-sec.now  .lnb-t, .lnb-sec.now  .lnb-r b { color: #1B7A3E; }
+.lnb-sec.old  .lnb-t, .lnb-sec.old  .lnb-r b { color: #C62828; }
+.lnb-sec.soon .lnb-t, .lnb-sec.soon .lnb-r b { color: #9AA0A6; }
+.lnb-r { display: flex; align-items: baseline; gap: 10px; margin-top: 7px; font-size: 12.5px; }
+.lnb-r span { flex: 1; color: #1F2328; }
+.lnb-r b { font-weight: 800; white-space: nowrap; }
+.lnb-foot { padding: 12px 12px 14px; }
+.lnb-btn {
+  display: block; text-align: center; background: #06C755; color: #fff;
+  font-size: 12.5px; font-weight: 700; border-radius: 8px; padding: 8px 0;
+}
+.lnb-foot small { display: block; text-align: center; font-size: 10.5px; color: #8A9099; margin-top: 9px; }
+
 /* v420：試跑預覽直接顯示「家長會收到的那則訊息」*/
 .hwr-buckets { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
 .hwr-buckets span {

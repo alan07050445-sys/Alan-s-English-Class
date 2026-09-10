@@ -62,7 +62,7 @@ globalThis.fetch = async (url, opts) => {
   if (u.includes('/documents/roster')) return new Response(JSON.stringify({ documents: [] }), { status: 200 });
   const m = u.match(/\/documents\/(class\/[A-Za-z0-9_]+)/);
   if (m) return new Response(JSON.stringify(m[1] === 'class/data_g4' ? G4 : {}), { status: 200 });
-  if (u.includes('multicast')) { pushed.push(JSON.parse(opts.body).messages[0].text); return new Response('{}', { status: 200 }); }
+  if (u.includes('multicast')) { pushed.push(JSON.parse(opts.body).messages[0]); return new Response('{}', { status: 200 }); }
   return new Response('{}', { status: 200 });
 };
 const rImport = crypto.subtle.importKey.bind(crypto.subtle);
@@ -79,49 +79,96 @@ function makeEnv(seed) {
     LINKS: { get: async (k) => (store.has(k) ? store.get(k) : null), put: async (k, v) => void store.set(k, v) }, _store: store };
 }
 
+// ── Flex Message 結構檢查（LINE 會直接 400，所以自己先驗）──────
+const SIZES = ['xxs','xs','sm','md','lg','xl','xxl','3xl','4xl','5xl'];
+const SPACING = ['none','xs','sm','md','lg','xl','xxl'];
+function flexErrors(node, path, out) {
+  out = out || []; path = path || '$';
+  if (!node || typeof node !== 'object') { out.push(path + ' 不是物件'); return out; }
+  const t = node.type;
+  if (t === 'text') {
+    if (typeof node.text !== 'string' || !node.text.trim()) out.push(path + '.text 是空的（LINE 會 400）');
+    if (node.size && SIZES.indexOf(node.size) < 0) out.push(path + '.size=' + node.size + ' 不合法');
+    if (node.weight && ['regular','bold'].indexOf(node.weight) < 0) out.push(path + '.weight 不合法');
+    if (node.color && !/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(node.color)) out.push(path + '.color=' + node.color + ' 不合法');
+    if (node.align && ['start','end','center'].indexOf(node.align) < 0) out.push(path + '.align 不合法');
+  } else if (t === 'box') {
+    if (['vertical','horizontal','baseline'].indexOf(node.layout) < 0) out.push(path + '.layout 不合法');
+    if (!Array.isArray(node.contents) || !node.contents.length) out.push(path + '.contents 是空的');
+    (node.contents || []).forEach((c, i) => flexErrors(c, path + '.contents[' + i + ']', out));
+  } else if (t === 'button') {
+    if (!node.action || node.action.type !== 'uri') out.push(path + '.action 不是 uri');
+    else if (!/^https:\/\//.test(node.action.uri)) out.push(path + '.action.uri 不是 https');
+    else if (!node.action.label || node.action.label.length > 20) out.push(path + '.action.label 長度不對');
+  } else if (t === 'separator') {
+    if (node.color && !/^#[0-9A-Fa-f]{6}$/.test(node.color)) out.push(path + '.color 不合法');
+  } else if (t === 'bubble') {
+    if (node.size && ['nano','micro','deca','hecto','kilo','mega','giga'].indexOf(node.size) < 0) out.push(path + '.size 不合法');
+    ['header','hero','body','footer'].forEach((k) => { if (node[k]) flexErrors(node[k], path + '.' + k, out); });
+  } else out.push(path + '.type=' + t + ' 不認得');
+  if (node.margin && SPACING.indexOf(node.margin) < 0) out.push(path + '.margin 不合法');
+  return out;
+}
+
 // ═══ 1. 三個區塊 ═══
 log.push('\n【L1】訊息分成三區，而且分對了');
-let TEXT = '', RES = null;
+let MSG = null, RES = null, TEXT = '';
 {
   pushed.length = 0;
   const env = makeEnv();
   const R = await W.runReminders(env, false);
-  RES = R.sends[0]; TEXT = pushed[0] || '';
-  ok('有發出來', !!TEXT, JSON.stringify(R.errors));
-  ok('三個標題都在', has(TEXT, '▍本週作業', '▍前幾週還沒完成', '▍可以先預習'), TEXT);
-  ok('順序是 本週 → 前幾週 → 預習',
-     TEXT.indexOf('▍本週作業') < TEXT.indexOf('▍前幾週還沒完成') &&
-     TEXT.indexOf('▍前幾週還沒完成') < TEXT.indexOf('▍可以先預習'), TEXT);
-  ok('本週標題有寫是第幾週和日期', /▍本週作業（Week 2・9\/7–9\/13）/.test(TEXT), TEXT);
+  RES = R.sends[0]; MSG = pushed[0] || null; TEXT = (RES || {}).text || '';
+  ok('有發出來', !!MSG, JSON.stringify(R.errors));
+  ok('送的是 Flex Message（純文字沒辦法粗體/上色）', MSG && MSG.type === 'flex', MSG && MSG.type);
+  ok('Flex 結構合法', MSG && flexErrors(MSG.contents).length === 0, MSG && flexErrors(MSG.contents).join('\n'));
+  ok('Flex JSON 沒有太大（< 10KB）', MSG && JSON.stringify(MSG.contents).length < 10000, MSG && String(JSON.stringify(MSG.contents).length));
+  ok('altText 在 LINE 的 400 字上限內', MSG && MSG.altText.length <= 400, MSG && String(MSG.altText.length));
+  ok('altText 一眼看得出重點', /本週 6 項/.test(MSG.altText) && /前幾週還沒完成 5 項/.test(MSG.altText), MSG.altText);
+  const secs = RES.sections;
+  ok('三區都在', secs.week.rows.length && secs.overdue.rows.length && secs.preview.rows.length, JSON.stringify(secs));
   ok('分區數字對（本週 6・前幾週 5・預習 11）',
      RES.buckets.thisWeek === 6 && RES.buckets.overdue === 5 && RES.buckets.preview === 11,
      JSON.stringify(RES.buckets));
-  log.push('\n───── 家長會收到 ─────\n' + TEXT + '\n──────────────────────');
+  log.push('\n───── 純文字版（Flex 送不出去時的退路）─────\n' + TEXT + '\n──────────────────────');
+  log.push('\n───── 三區資料（老師端就是照這個畫）─────\n' + JSON.stringify(secs, null, 1) + '\n──────────────────────');
 }
 
-// ═══ 2. Alan 指出的三個具體問題 ═══
+// ═══ 2. Alan 指出的問題 ═══
 log.push('\n【L2】Alan 指出的問題，逐項檢查');
 {
-  const sec = (name) => {
-    const i = TEXT.indexOf('▍' + name);
-    if (i < 0) return '';
-    const rest = TEXT.slice(i + 1);
-    const j = rest.indexOf('▍');
-    return j < 0 ? rest : rest.slice(0, j);
-  };
-  ok('⭐ Week4/Week5 只出現在「可以先預習」，不會混進本週',
-     !has(sec('本週作業'), 'Rare Treasure') && has(sec('可以先預習'), 'Rare Treasure - Part 1', 'Rare Treasure - Part 2'), sec('本週作業'));
-  ok('⭐ 同一課的六種題型併成一行，不再六行一樣的標題',
-     (TEXT.match(/Rare Treasure - Part 1/g) || []).length === 1, TEXT);
-  ok('題型併行時有寫清楚是哪些', has(TEXT, '單字卡・選擇題・拼字・填空・配對（5 項）'), TEXT);
-  ok('「· 短文填空」跟本體算同一課（所以 Part 1 是 6 項）', has(TEXT, 'Rare Treasure - Part 1（6 項）'), TEXT);
+  const secs = RES.sections;
+  const labels = (k) => secs[k].rows.map((r) => r.label);
+  ok('⭐ 本週只寫「哪一類・幾項」，不再列課名',
+     labels('week').join() === '外師單字,文法', JSON.stringify(secs.week.rows));
+  ok('⭐ 五種題型的單字作業合成一行「外師單字 5 項」',
+     secs.week.rows[0].label === '外師單字' && secs.week.rows[0].n === 5, JSON.stringify(secs.week.rows[0]));
+  ok('⭐ 訊息裡完全找不到課名（Feathers…／Rare Treasure）',
+     !JSON.stringify(MSG).includes('Feathers') && !JSON.stringify(MSG).includes('Rare Treasure'), TEXT);
+  ok('⭐ 每一行都很短（手機不會折行）：純文字版最長 ≤ 22 字',
+     TEXT.split('\n').filter((l) => l.startsWith('　')).every((l) => l.length <= 22),
+     TEXT.split('\n').filter((l) => l.startsWith('　')).map((l) => l.length + ':' + l).join(' | '));
+  ok('前幾週那一區標了是第幾週＋哪一類', labels('overdue').join() === 'Week 1・外師單字', JSON.stringify(labels('overdue')));
+  ok('預習那一區標了週次與日期', labels('preview').join() === 'Week 4（9/21–9/27）,Week 5（9/28–10/4）', JSON.stringify(labels('preview')));
+  ok('本週標題有寫是第幾週和日期', secs.week.note === 'Week 2・9/7–9/13', secs.week.note);
+  ok('⭐ Week4/Week5 只出現在預習區', !JSON.stringify(secs.week).includes('Week 4') && labels('preview').length === 2, JSON.stringify(secs));
   ok('⭐ 不再滿篇「新作業」', !TEXT.includes('新作業'), TEXT);
-  ok('前幾週那一區有標是第幾週', has(TEXT, '• Week 1：Reaching for the moon - week1'), TEXT);
-  ok('預習那一區有寫哪一週、什麼時候', has(TEXT, '• Week 4・9/21–9/27：', '• Week 5・9/28–10/4：'), TEXT);
-  ok('結尾告訴家長預習區不急', has(TEXT, '預習區不急'), TEXT);
-  ok('⭐ 已封存（上學期）的作業完全不出現', !TEXT.includes('上學期的舊作業'), TEXT);
-  ok('標題尾巴的空白有清掉', has(TEXT, '• 判斷 Compound Sentences（選擇題）'), TEXT);
-  ok('沒有超過 LINE 單則 5000 字', TEXT.length < 5000, String(TEXT.length));
+  ok('⭐ 已封存（上學期）的作業完全不出現', !JSON.stringify(MSG).includes('上學期的舊作業'), TEXT);
+}
+
+// ═══ 2b. 顏色與粗體（Alan：要更醒目）═══
+log.push('\n【L2b】粗體與顏色（純文字的 LINE 訊息做不到，所以才改用 Flex）');
+{
+  const flat = [];
+  (function walk(n) { if (!n || typeof n !== 'object') return; flat.push(n); (n.contents || []).forEach(walk);
+    ['header','body','footer'].forEach((k) => n[k] && walk(n[k])); })(MSG.contents);
+  const byText = (t) => flat.find((n) => n.type === 'text' && n.text === t);
+  ok('學生名字是粗體', (byText('王思淮 Eric WANG') || {}).weight === 'bold');
+  ok('「本週作業」是粗體＋綠色', (byText('▍本週作業') || {}).weight === 'bold' && (byText('▍本週作業') || {}).color === '#1B7A3E', JSON.stringify(byText('▍本週作業')));
+  ok('「前幾週還沒完成」是粗體＋紅色（最醒目）', (byText('▍前幾週還沒完成') || {}).color === '#C62828', JSON.stringify(byText('▍前幾週還沒完成')));
+  ok('「可以先預習」是灰色（不搶注意力）', (byText('▍可以先預習') || {}).color === '#9AA0A6', JSON.stringify(byText('▍可以先預習')));
+  ok('件數是粗體、靠右對齊', flat.filter((n) => n.type === 'text' && / 項$/.test(n.text || '')).every((n) => n.weight === 'bold' && n.align === 'end'));
+  ok('三區的顏色各不相同', new Set(['▍本週作業','▍前幾週還沒完成','▍可以先預習'].map((t) => (byText(t) || {}).color)).size === 3);
+  ok('有一顆「打開練習」按鈕連到網站', flat.some((n) => n.type === 'button' && /github\.io/.test(n.action.uri)));
 }
 
 // ═══ 3. 排序穩定（Firestore 的 map 沒有順序）═══
@@ -130,8 +177,8 @@ log.push('\n【L3】同樣的資料跑兩次，訊息要一模一樣');
   pushed.length = 0;
   await W.runReminders(makeEnv(), false);
   await W.runReminders(makeEnv(), false);
-  ok('兩次完全相同（有排序，不會每天長得不一樣）', pushed[0] === pushed[1],
-     pushed[0] === pushed[1] ? '' : pushed[0] + '\n=== vs ===\n' + pushed[1]);
+  const a = JSON.stringify(pushed[0]), b = JSON.stringify(pushed[1]);
+  ok('兩次完全相同（有排序，不會每天長得不一樣）', a === b, a === b ? '' : a + '\n=== vs ===\n' + b);
 }
 
 // ═══ 4. 完成了就不列 ═══
@@ -143,9 +190,9 @@ log.push('\n【L4】做完的不會再出現');
   });
   pushed.length = 0;
   const R = await W.runReminders(makeEnv(), false);
-  const t = pushed[0] || '';
-  ok('把 Week 1 補完之後，「前幾週還沒完成」整區消失', !t.includes('▍前幾週還沒完成'), t);
-  ok('本週那一區不受影響', t.includes('▍本週作業'), t);
+  const secs = (R.sends[0] || {}).sections || {};
+  ok('把 Week 1 補完之後，「前幾週還沒完成」整區消失', (secs.overdue || {}).rows.length === 0, JSON.stringify(secs.overdue));
+  ok('本週那一區不受影響', (secs.week || {}).rows.length > 0, JSON.stringify(secs.week));
   doneItems = {};
 }
 
@@ -159,7 +206,7 @@ log.push('\n【L5】只剩「可以先預習」時，不發訊息');
   doneItems['g4-2026F-W02_判斷 Compound Sentences __quiz'] = { mapValue: { fields: { done: B(true) } } };
   pushed.length = 0;
   const R = await W.runReminders(makeEnv(), false);
-  ok('⭐ 該做的都做完了 → 不會為了預習而發通知', pushed.length === 0, pushed[0]);
+  ok('⭐ 該做的都做完了 → 不會為了預習而發通知', pushed.length === 0, JSON.stringify(pushed[0]));
   doneItems = {};
 }
 
@@ -185,15 +232,20 @@ log.push('\n【L7】mondayOf：週次是週一～週日');
 }
 
 // ═══ 8. 題型併行的細節 ═══
-log.push('\n【L8】題型併行');
+log.push('\n【L8】四大類的中文名要跟各年級的課表一致');
 {
-  const g = W.groupByLesson([
-    { title: 'Unit 1', type: 'quiz' }, { title: 'Unit 1', type: 'flashcard' },
-    { title: 'Unit 1 · 短文填空', type: 'cloze' }, { title: 'Unit 2', type: 'spelling' },
-  ]);
-  ok('「Unit 1」與「Unit 1 · 短文填空」併成同一課', g.length === 2 && g[0].items.length === 3, JSON.stringify(g.map((x) => [x.title, x.items.length])));
-  ok('題型照固定順序排（單字卡在選擇題前面）', W.lessonLine(g[0]).includes('單字卡・選擇題・短文填空'), W.lessonLine(g[0]));
-  ok('只有一項時就寫在括號裡，不換行', W.lessonLine(g[1]) === '• Unit 2（拼字）', W.lessonLine(g[1]));
+  ok('G4 的 word 是「字彙學習」', W.catZh('g4', 'word') === '字彙學習');
+  ok('G4 的 reading 是「閱讀寫作」', W.catZh('g4', 'reading') === '閱讀寫作');
+  ok('G1 的 vocab 是「中師單字」（跟 G4 不一樣）', W.catZh('g1', 'vocab') === '中師單字' && W.catZh('g4', 'vocab') === '外師單字');
+  ok('G3 的 word 是「字根字首」', W.catZh('g3', 'word') === '字根字首');
+  ok('六個年級都有四大類', ['g1','g2','g3','g4','g5','g6'].every((g) => Object.keys(W.CAT_ZH[g]).length === 4));
+  ok('沒見過的分類 → 叫「其他練習」，不會變成 undefined', W.catZh('g4', 'zzz') === '其他練習');
+  const rows = W.rowsByCat([
+    { cat: 'reading' }, { cat: 'vocab' }, { cat: 'vocab' }, { cat: 'grammar' }, { cat: 'word' },
+  ], 'g4');
+  ok('四大類照固定順序排（單字→字彙→文法→閱讀）',
+     rows.map((r) => r.label).join() === '外師單字,字彙學習,文法,閱讀寫作', JSON.stringify(rows));
+  ok('件數算對', rows[0].n === 2 && rows[1].n === 1, JSON.stringify(rows));
 }
 
 console.log(log.join('\n'));

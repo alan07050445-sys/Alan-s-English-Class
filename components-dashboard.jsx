@@ -1477,6 +1477,39 @@ function ShopManager() {
 }
 
 /* ── 作業自動提醒（功能B）分頁 ─────────────────────────── */
+/* v421：老師端把「家長在 LINE 上看到的那顆泡泡」照著畫一次。
+   資料來自 Worker 回傳的 sections，跟真的 Flex Message 是同一份，不會走鐘。 */
+function HwBubble({ name, secs }) {
+  const SEC = [
+    ['week',    '▍本週作業',       (secs.week || {}).note || '',  'now'],
+    ['overdue', '▍前幾週還沒完成', '請盡快補完',                  'old'],
+    ['preview', '▍可以先預習',     '還沒開始，不用急',            'soon'],
+  ];
+  return (
+    <div className="lnb">
+      <div className="lnb-head">
+        <span>📚 作業提醒</span>
+        <b>{name || '同學'}</b>
+      </div>
+      <div className="lnb-body">
+        {SEC.map(([k, title, note, tone]) => {
+          const rows = ((secs[k] || {}).rows) || [];
+          if (!rows.length) return null;
+          return (
+            <div key={k} className={'lnb-sec ' + tone}>
+              <div className="lnb-t">{title}{note ? <em>{note}</em> : null}</div>
+              {rows.map((r, i) => (
+                <div key={i} className="lnb-r"><span>{r.label}</span><b>{r.n} 項</b></div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      <div className="lnb-foot"><span className="lnb-btn">打開練習</span><small>Alan 老師</small></div>
+    </div>
+  );
+}
+
 function HwRemind() {
   const [pass, setPass]     = useDash(() => { try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; } });
   const [busy, setBusy]     = useDash(false);
@@ -1509,7 +1542,7 @@ function HwRemind() {
         <div className="linkbind-head">
           <div>
             <b>作業自動提醒</b>
-            <span className="linkbind-summary">每天傍晚 18:00 自動檢查，一則訊息分「本週／前幾週沒完成／可以先預習」三區</span>
+            <span className="linkbind-summary">每天傍晚 18:00 自動檢查，一則訊息分三區，每行只寫「哪一類・幾項」</span>
           </div>
         </div>
 
@@ -1564,9 +1597,11 @@ function HwRemind() {
                         }</span>}
                       </div>
                     )}
-                    {s.text
-                      ? <pre className="hwr-msg">{s.text}</pre>
-                      : <ul>{(s.lines || []).map((l, i) => <li key={i}>{l.replace(/^•\s*/, '')}</li>)}</ul>}
+                    {s.sections
+                      ? <HwBubble name={s.name} secs={s.sections} />
+                      : s.text
+                        ? <pre className="hwr-msg">{s.text}</pre>
+                        : <ul>{(s.lines || []).map((l, i) => <li key={i}>{l.replace(/^•\s*/, '')}</li>)}</ul>}
                   </div>
                 ))}
               </div>
@@ -1592,7 +1627,10 @@ function HwRemind() {
           <li><b>前幾週還沒完成</b>：要補完的（最多回溯 4 週）</li>
           <li><b>可以先預習</b>：之後的週次，附在最後、標明不用急</li>
         </ol>
-        <p className="notify-note">同一課的不同題型（單字卡／選擇題／拼字…）會併成一行，不會刷一整排一樣的標題。</p>
+        <p className="notify-note">
+          每一行只有「哪一類、還有幾項」——不列課名、不列題型，家長用手機看不會折行。
+          本週<b style={{color:'#1B7A3E'}}>綠色</b>、前幾週沒完成<b style={{color:'#C62828'}}>紅色</b>、預習灰色（LINE 的 Flex 訊息才做得到粗體與顏色）。
+        </p>
 
         <h4>什麼時候會發</h4>
         <ol>
