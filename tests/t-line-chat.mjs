@@ -22,64 +22,87 @@ const BOUND = { U1: [{ email: 'le12777@kcbs.tw', name: 'Eric', grade: 'g4' }] };
 // ═══ 1. 已綁定的人亂打 → 不再回「找不到這位學生」═══
 log.push('\n【C1】已經綁好的人隨口打字（Alan 回報的困擾）');
 {
-  const env = makeEnv(BOUND);
   for (const t of ['你好', '在嗎', '哈哈哈', '???', '老師好帥', '123456', 'ㄅㄨㄅㄨ']) {
-    const r = await W.handleNameBinding(env, 'U1', t);
+    const r = await W.handleNameBinding(makeEnv(BOUND), 'U1', t);
     ok(`「${t}」→ 不再說「找不到這位學生」`, !String(r).includes('找不到'), r);
   }
-  const r = await W.handleNameBinding(env, 'U1', '你好');
-  ok('改成給一份看得懂的功能表', has(r, '看不懂這句話', '「作業」', '「綁定」', '「網站」', '「課表」', '「老師」'), r);
-  log.push('\n───── 亂打時會收到 ─────\n' + r + '\n────────────────────────');
+  const r = await W.handleNameBinding(makeEnv(BOUND), 'U1', '你好');
+  ok('改成一句有禮貌的回覆', W.POLITE.indexOf(r) >= 0, r);
 }
 
-// ═══ 2. 固定指令 ═══
-log.push('\n【C2】固定指令');
+// ═══ 2. 三件事：打字也認得（不是只有選單）═══
+log.push('\n【C2】不用選單、直接打字也認得（Alan：有些家長不想用選單）');
 {
-  const env = makeEnv(BOUND);
-  const say = (t) => W.handleNameBinding(env, 'U1', t);
-  ok('「說明」→ 功能表', has(await say('說明'), '自動回覆的小幫手'), await say('說明'));
-  ok('「選單」「help」「？」都通', [await say('選單'), await say('help'), await say('？')].every((x) => has(x, '自動回覆的小幫手')));
-  const site = await say('網站');
-  ok('「網站」→ 給網址', has(site, 'https://alan07050445-sys.github.io/Alan-s-English-Class/', '學校帳號登入'), site);
-  ok('「連結」「練習」「登入」都通', [await say('連結'), await say('練習'), await say('登入')].every((x) => x.includes('github.io')));
-  const cls = await say('課表');
-  ok('「課表」→ 固定回覆，並告訴他怎麼找老師', has(cls, '上課時間', '輸入「老師」'), cls);
-  const bind = await say('綁定');
-  ok('「綁定」→ 列出綁了誰', has(bind, '已綁定', 'Eric'), bind);
-}
-
-// ═══ 3. 「作業」＝交給 webhook 現查 ═══
-log.push('\n【C3】「作業」會去現場查（不是回一句話）');
-{
-  const env = makeEnv(BOUND);
-  for (const t of ['作業', '查作業', '功課', '進度', 'hw']) {
-    const r = await W.handleNameBinding(env, 'U1', t);
-    ok(`「${t}」→ 交給現查流程`, r && r.hw && r.hw.length === 1 && r.hw[0].email === 'le12777@kcbs.tw', JSON.stringify(r));
+  const say = (t) => W.handleNameBinding(makeEnv(BOUND), 'U1', t);
+  const isHw = (r) => !!(r && r.hw);
+  for (const t of ['作業', '查作業', '我要看作業', '功課寫完了嗎', '小孩還有什麼沒完成', '進度如何', 'homework']) {
+    ok(`「${t}」→ 查作業`, isHw(await say(t)), JSON.stringify(await say(t)).slice(0, 80));
   }
-  const r0 = await W.handleNameBinding(makeEnv(), 'Uzz', '作業');
-  ok('還沒綁的人問作業 → 先請他綁定', r0 && r0.hw && r0.hw.length === 0, JSON.stringify(r0));
-  const msgs = await W.hwReplyMessages(makeEnv(), []);
-  ok('回覆會請他輸入孩子的英文名字', has(msgs[0].text, '還沒綁定', '英文名字'), JSON.stringify(msgs));
+  for (const t of ['練習', '網站', '網址', '連結', '網站在哪', '要去哪裡練習', '怎麼進去']) {
+    ok(`「${t}」→ 給練習網站`, String(await say(t)).includes('github.io'), await say(t));
+  }
+  for (const t of ['孩子', '我的孩子', '新增', '新增孩子', '要加一個小孩', '弟弟也要收']) {
+    ok(`「${t}」→ 新增/刪除孩子`, String(await say(t)).includes('➕ 新增'), await say(t));
+  }
+  ok('「小孩寫完了嗎」判成查作業，不是問綁定（順序很重要）', isHw(await say('小孩寫完了嗎')));
+  ok('「我的孩子作業」判成查作業', isHw(await say('我的孩子作業')));
 }
 
-// ═══ 4. 轉人工：一小時內完全不自動回覆 ═══
-log.push('\n【C4】「老師」→ 轉人工，之後安靜（讓家長好好留言）');
+// ═══ 3. 新增／刪除孩子 ═══
+log.push('\n【C3】家長可以自己新增與刪除孩子');
 {
   const env = makeEnv(BOUND);
-  const r = await W.handleNameBinding(env, 'U1', '老師');
-  ok('先說明接下來不會自動回覆', has(r, '不會自動回覆', '親自回覆'), r);
-  for (const t of ['我想請假', '禮拜三可以嗎', '小孩最近很累']) {
-    const q = await W.handleNameBinding(env, 'U1', t);
-    ok(`「${t}」→ 完全不回話（空字串）`, q === '', JSON.stringify(q));
+  const links = () => JSON.parse(env._store.get('links') || '{}');
+  const r1 = await W.handleNameBinding(env, 'U1', '新增 Tayler');
+  ok('「新增 Tayler」一句就綁好', has(r1, '已綁定 Tayler（G2）') && links().U1.length === 2, r1);
+  const r2 = await W.handleNameBinding(env, 'U1', '刪除');
+  ok('只打「刪除」→ 先問要刪哪一位，並列出名單', has(r2, '要刪除哪一位', '・Eric（G4）', '刪除 Eric'), r2);
+  ok('只打「刪除」不會真的刪掉', links().U1.length === 2, JSON.stringify(links()));
+  const r3 = await W.handleNameBinding(env, 'U1', '刪除 Tayler');
+  ok('「刪除 Tayler」→ 刪掉並回報剩下誰', has(r3, '已刪除 Tayler（G2）', '目前還綁定', 'Eric'), r3);
+  ok('KV 真的只剩一位', links().U1.length === 1 && links().U1[0].name === 'Eric', JSON.stringify(links()));
+  const r4 = await W.handleNameBinding(env, 'U1', '刪掉Eric');
+  ok('「刪掉Eric」（沒空格）也認得', has(r4, '已刪除 Eric（G4）'), r4);
+  ok('全部刪光 → KV 不留空殼', !links().U1, JSON.stringify(links()));
+  ok('刪光之後會教他怎麼加回來', has(r4, '重新加回來'), r4);
+  const r5 = await W.handleNameBinding(env, 'U1', 'Eric');
+  ok('刪掉之後還能重新綁回來', has(r5, '已綁定 Eric（G4）'), r5);
+  const r6 = await W.handleNameBinding(makeEnv(), 'Uz', '刪除');
+  ok('沒綁過的人打「刪除」→ 引導他先綁定', has(r6, '沒有綁定任何孩子'), r6);
+}
+
+// ═══ 4. 無關訊息 → 隨機有禮貌的回覆 ═══
+log.push('\n【C4】跟三件事無關的訊息 → 隨機一句有禮貌的回覆');
+{
+  const seen = new Set();
+  for (const t of ['你好', '今天天氣真好', '老師好帥', 'ㄏㄏ', '???', '123', '在嗎', '哈哈哈哈']) {
+    const r = await W.handleNameBinding(makeEnv(BOUND), 'U1', t);
+    ok(`「${t}」→ 有禮貌的回覆（不再說找不到學生）`,
+       W.POLITE.indexOf(r) >= 0, r);
+    seen.add(r);
   }
-  ok('但「作業」還是叫得動', (await W.handleNameBinding(env, 'U1', '作業')).hw !== undefined);
-  ok('「說明」也叫得動', has(await W.handleNameBinding(env, 'U1', '說明'), '小幫手'));
-  log.push('\n───── 輸入「老師」會收到 ─────\n' + r + '\n────────────────────────────');
-  // 一小時後恢復
+  ok('不是每次都同一句（不同人會拿到不同句）',
+     new Set(['Ua','Ub','Uc','Ud','Ue','Uf','Ug'].map((u) => W.politeReply(u))).size > 1,
+     JSON.stringify(['Ua','Ub','Uc','Ud','Ue','Uf','Ug'].map((u) => W.politeReply(u))));
+  ok('每一句都有禮貌、也都短', W.POLITE.every((x) => x.length < 60 && /謝謝|收到|好的/.test(x)), JSON.stringify(W.POLITE.map((x) => x.length)));
+  ok('至少有一句會提示可以查作業', W.POLITE.some((x) => x.includes('作業')));
+  log.push('\n───── 六句備選 ─────\n' + W.POLITE.map((x, i) => (i + 1) + '. ' + x.replace(/\n/g, ' / ')).join('\n') + '\n────────────────────');
+}
+
+// ═══ 4b. 不洗版 ═══
+log.push('\n【C4b】家長連打好幾句，不會被自動回覆洗版');
+{
+  const env = makeEnv(BOUND);
+  const a = await W.handleNameBinding(env, 'U1', '老師我想請假');
+  ok('第一句 → 有禮貌地回一次', W.POLITE.indexOf(a) >= 0, a);
+  const b = await W.handleNameBinding(env, 'U1', '因為下禮拜要出國');
+  const c = await W.handleNameBinding(env, 'U1', '大概兩個禮拜');
+  ok('接下來 10 分鐘內完全不回話', b === '' && c === '', JSON.stringify([b, c]));
+  ok('但「作業」還是叫得動', !!(await W.handleNameBinding(env, 'U1', '作業')).hw);
   const st = JSON.parse(env._store.get('chatstate'));
-  st.U1.ts = Date.now() - 61 * 60 * 1000;
+  st.U1.ts = Date.now() - 11 * 60 * 1000;
   env._store.set('chatstate', JSON.stringify(st));
-  ok('一小時後恢復自動回覆', has(await W.handleNameBinding(env, 'U1', '你好'), '看不懂這句話'));
+  ok('過了 10 分鐘再開口 → 又會客氣回一次', W.POLITE.indexOf(await W.handleNameBinding(env, 'U1', '在嗎')) >= 0);
 }
 
 // ═══ 5. 綁定流程沒有被指令弄壞 ═══
@@ -101,13 +124,14 @@ log.push('\n【C5】綁定流程不受影響');
 }
 
 // ═══ 6. 指令要「整句吻合」才算，不能誤判成名字 ═══
-log.push('\n【C6】指令只認整句，不會誤傷');
+log.push('\n【C6】意圖判斷的邊界');
 {
-  ok('「作業」是指令', W.CMD.hw.test('作業'));
-  ok('「我的作業寫完了」不是指令（交給一般流程）', !W.CMD.hw.test('我的作業寫完了'));
-  ok('「老師」是指令', W.CMD.human.test('老師'));
-  ok('「老師好」不是指令', !W.CMD.human.test('老師好'));
-  ok('大小寫不影響（HW / Help）', W.CMD.hw.test('HW') && W.CMD.help.test('Help'));
+  ok('「刪除」排在「新增」前面（刪除 Eric 不會被當成新增）', W.INTENT.remove.test('刪除 Eric'));
+  ok('「說明/選單」要整句吻合，不會誤傷別的句子', W.INTENT.help.test('說明') && !W.INTENT.help.test('說明一下作業'));
+  ok('大小寫不影響（HW / homework）', W.INTENT.hw.test('HW') && W.INTENT.hw.test('Homework'));
+  const menu = W.menuText();
+  ok('功能表只講三件事', has(menu, '「練習」', '「作業」', '「孩子」') && !menu.includes('課表'), menu);
+  log.push('\n───── 輸入「說明」會收到 ─────\n' + menu + '\n────────────────────────────');
 }
 
 console.log(log.join('\n'));

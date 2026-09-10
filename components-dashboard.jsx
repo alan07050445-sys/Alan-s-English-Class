@@ -1109,17 +1109,16 @@ function LineLink() {
         <p className="notify-note">一個 LINE <b>最多綁 2 位</b>孩子；第三位以上請家長聯絡你，由你在上面手動處理。</p>
         <p className="notify-note">綁定後才收得到「按年級／個別」通知與作業提醒。配不到名字時系統不會亂猜，會請家長聯絡你。</p>
 
-        <h4>家長在聊天室能做什麼</h4>
+        <h4>家長在聊天室能做的三件事</h4>
         <ol className="notify-cmds">
+          <li><code>練習</code>　拿到練習網站連結</li>
           <li><code>作業</code>　現場查孩子還有哪些沒完成</li>
-          <li><code>綁定</code>　看這個 LINE 綁了誰</li>
-          <li><code>網站</code>　拿到練習網站連結</li>
-          <li><code>課表</code>　上課時間</li>
-          <li><code>老師</code>　<b>之後一小時不自動回覆</b>，家長可以直接留言</li>
+          <li><code>孩子</code>　新增或刪除要收通知的孩子<br />（<code>新增 Eric</code>／<code>刪除 Eric</code> 一句就完成）</li>
         </ol>
         <p className="notify-note">
-          其他話一律回同一份功能表，不會再亂猜成學生姓名（小朋友亂打也不怕）。
-          家長按「老師」之後留的話，請到 <b>LINE 官方帳號管理後台 → 聊天</b> 看。
+          不一定要用選單——「網站在哪」「功課寫完了嗎」「弟弟也要收」這種話都聽得懂。
+          其他無關的訊息會隨機回一句有禮貌的話，<b>同一個人 10 分鐘內只回一次</b>，
+          家長連打好幾句不會被洗版；那些話請到 <b>LINE 官方帳號管理後台 → 聊天</b> 看。
         </p>
       </aside>
     </div>

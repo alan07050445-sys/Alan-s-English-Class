@@ -149,7 +149,7 @@ log.push('\n【8】重複輸入、查詢綁定狀態');
   const r = await W.handleNameBinding(env, U, 'Eric');
   ok('同一位再打一次 → 不重複綁', (env._links()[U] || []).length === 1 && has(r, '之前就綁好了'), r);
   const q = await W.handleNameBinding(env, U, '查詢');
-  ok('「查詢」→ 列出已綁的孩子', has(q, '已綁定', '・Eric（G4）'), q);
+  ok('「查詢」→ 列出已綁的孩子（並教他怎麼新增/刪除）', has(q, '・Eric（G4）', '➕ 新增'), q);
   ok('「查詢」不會被當成名字', (env._links()[U] || []).length === 1);
   const q2 = await W.handleNameBinding(makeEnv(ROSTER), 'U_q0', '查詢');
   ok('還沒綁的人查詢 → 引導他輸入名字', has(q2, '還沒有綁定', '英文名字'), q2);

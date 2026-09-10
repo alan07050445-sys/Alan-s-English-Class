@@ -214,8 +214,8 @@ function parseNames(roster, text) {
 }
 
 const NEG_RE = /^(沒有|沒|無|不用|不用了|不需要|no|nope|n|只有一位|只有一個|一位|一個|1|完成|好了|沒有了|就這樣|結束)$/i;
-const ASK_RE = /^(查詢|查詢綁定|綁定|綁定狀態|狀態|status|查|list|\?|？)$/i;
 
+const matchName = (a, b) => nkey(a) === nkey(b) || nkey(a).startsWith(nkey(b)) || nkey(b).startsWith(nkey(a));
 const fmtChild = (x) => `${x.name}${x.grade ? '（' + gradeLabel(x.grade) + '）' : ''}`;
 const listChildren = (arr) => (arr || []).map((x) => '・' + fmtChild(x)).join('\n');
 
@@ -279,36 +279,53 @@ async function welcomeMessage(env, lineUserId) {
   return welcomeText(english, ex, who);
 }
 
-// v422：Alan「不管我問什麼他都會回答綁定學生的訊息…怕小朋友亂問問題」
-// → 先走固定指令；其餘只有「還沒綁」或「真的是名單上的名字」才進綁定流程。
-const CMD = {
-  hw:    /^(作業|查作業|我的作業|功課|進度|查進度|homework|hw)$/i,
-  bind:  /^(查詢|查詢綁定|綁定|綁定狀態|我的孩子|狀態|status|查|list)$/i,
-  site:  /^(網站|連結|練習|打開練習|登入|網址|link|site)$/i,
-  class: /^(課表|上課|上課時間|時間|schedule)$/i,
-  human: /^(老師|聯絡老師|找老師|請假|我要問問題|問問題|客服|人工)$/i,
-  help:  /^(說明|幫助|選單|功能|help|menu|\?|？)$/i,
+// v423：Alan 決定只留三件事——打開練習／查作業／新增或刪除孩子。
+// 「如果不是用選單而是直接打字 偵測是否跟…有關係 因為有些家長可能不想用選單」
+// → 用「包含關鍵字」而不是整句吻合；順序有意義（先刪、再加、再作業、再網站）。
+const INTENT = {
+  // 刪除孩子要排在最前面：「刪除 Eric」裡面也有名字，不能被當成新增
+  remove: /(刪除|刪掉|移除|解除|取消綁定|拿掉|不要收|退出)/,
+  add:    /(新增|加入|加一個|再加|新增孩子|新增小孩|綁定|綁孩子|加小孩|加孩子)/,
+  kids:   /(我的孩子|孩子|小孩|弟弟|妹妹|哥哥|姐姐|姊姊|名單|誰|查詢|綁定|狀態|status)/i,
+  hw:     /(作業|功課|進度|homework|hw|沒完成|未完成|要做什麼|還有什麼|寫完)/i,
+  site:   /(網站|網址|連結|練習|登入|開始|題目|link|site|怎麼進|哪裡練)/i,
+  help:   /^(說明|幫助|選單|功能|help|menu|\?|？)$/i,
 };
-const HUMAN_MS = 60 * 60 * 1000;         // 轉人工後安靜一小時，讓家長好好打字
+const HUMAN_MS = 10 * 60 * 1000;      // 無關訊息：10 分鐘內只客氣回一次，不洗版
 
-function helpText() {
+// v423：跟三件事都無關的訊息 → 隨機挑一句有禮貌的回覆
+const POLITE = [
+  '收到您的訊息了，謝謝您 🙏\n老師會看到，有需要會親自回覆您。',
+  '謝謝您的訊息 😊\n這裡是自動回覆的小幫手，老師看到後會再跟您聯絡。',
+  '好的，已經收到 🙌\n若是想看孩子的作業，回覆「作業」就可以囉。',
+  '謝謝您 🌱\n訊息老師都看得到，請放心。',
+  '收到囉 ✨\n有任何問題都可以留言，老師會回覆您。',
+  '謝謝您的來訊 🙏\n需要查作業的話，回覆「作業」兩個字就行了。',
+];
+// 同一個人不要每次都收到同一句（用 userId + 分鐘數挑，不必存狀態）
+function politeReply(uid) {
+  const seed = String(uid || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) + Math.floor(Date.now() / 60000);
+  return POLITE[seed % POLITE.length];
+}
+
+// 客氣回一次，10 分鐘內再講就安靜（家長連打好幾句不會被洗版）
+async function politeOrQuiet(env, uid, stage) {
+  const ts = await getStageTs(env, uid);
+  if (stage === 'chat' && Date.now() - ts < HUMAN_MS) return '';
+  await setStage(env, uid, 'chat');
+  return politeReply(uid);
+}
+
+function menuText() {
   return (
-    '這個帳號是自動回覆的小幫手 🤖\n可以直接輸入下面的字（或用下方選單）：\n\n' +
-    '📚「作業」－ 看孩子還有哪些沒完成\n' +
-    '🔗「綁定」－ 看這個 LINE 綁了誰\n' +
-    '💻「網站」－ 拿到練習網站的連結\n' +
-    '🕐「課表」－ 上課時間\n' +
-    '🙋「老師」－ 有事情要問 Alan 老師'
+    '這個帳號可以做三件事 🙌\n\n' +
+    '📚「練習」－ 拿到練習網站的連結\n' +
+    '📝「作業」－ 看孩子還有哪些沒完成\n' +
+    '👦「孩子」－ 新增或刪除要收通知的孩子\n\n' +
+    '直接打這些字，或用下方的選單都可以 👇'
   );
 }
-const CLASS_TEXT =
-  '🕐 上課時間\n\n' +
-  '上課時間與請假請直接跟 Alan 老師確認。\n輸入「老師」我就不再自動回覆，您可以直接留言，老師看到會親自回覆 🙏';
-const HUMAN_TEXT =
-  '好的，接下來這一小時我不會自動回覆 🤫\n\n' +
-  '請直接在這裡留言（請假、進度、任何問題都可以），Alan 老師看到會親自回覆您。\n' +
-  '※ 老師不一定能馬上看到，急事請用平常的聯絡方式 🙏';
-const siteText = () => '💻 練習網站\n' + SITE_URL + '\n\n用孩子的學校帳號登入就可以開始練習 📚';
+const siteText = () => '📚 練習網站\n' + SITE_URL + '\n\n用孩子的學校帳號登入就可以開始練習。';
 
 async function handleNameBinding(env, lineUserId, rawText) {
   const text = String(rawText || '').trim();
@@ -320,28 +337,48 @@ async function handleNameBinding(env, lineUserId, rawText) {
   const bound = links[lineUserId] || [];
   const stage = await getStage(env, lineUserId);
 
-  // ── 固定指令（不管綁沒綁都能用）────────────────────────
-  if (CMD.help.test(text)) return helpText();
-  if (CMD.site.test(text)) return siteText();
-  if (CMD.class.test(text)) return CLASS_TEXT;
-  if (CMD.human.test(text)) { await setStage(env, lineUserId, 'human'); return HUMAN_TEXT; }
-  if (CMD.hw.test(text)) return { hw: bound };            // 交給 webhook 現查（要讀 Firestore）
+  // ── 三件事的意圖判斷（打字或按選單都走這裡）──────────────
+  if (INTENT.help.test(text)) return menuText();
+  if (INTENT.site.test(text)) return siteText();
 
-  // 已轉人工 → 一小時內安靜，讓家長好好打字給老師看
-  if (stage === 'human') {
-    const ts = await getStageTs(env, lineUserId);
-    if (Date.now() - ts < HUMAN_MS) return '';
+  // 刪除孩子：「刪除 Eric」直接刪；只打「刪除」就先問要刪誰
+  if (INTENT.remove.test(text)) {
+    if (!bound.length) return '這個 LINE 目前沒有綁定任何孩子 🙌\n\n' + askNameLine(english, ex);
+    const who = text.replace(INTENT.remove, ' ').trim();
+    const hit = who ? bound.find((c) => matchName(c.name, who)) : null;
+    if (!hit) {
+      return '要刪除哪一位呢？目前綁定的是：\n' + listChildren(bound) +
+        `\n\n請回覆「刪除 ${bound[0].name}」這樣的格式 🙏`;
+    }
+    const left = bound.filter((c) => c.email !== hit.email);
+    if (left.length) links[lineUserId] = left; else delete links[lineUserId];
+    await env.LINKS.put('links', JSON.stringify(links));
+    await setStage(env, lineUserId, left.length ? 'done' : '');
+    return `已刪除 ${fmtChild(hit)} ✅\n之後不會再收到他的作業提醒。\n\n` +
+      (left.length ? '目前還綁定：\n' + listChildren(left) : '要重新加回來，直接回覆孩子的' + (english ? '英文名字' : '姓名') + '就可以 👌');
+  }
+
+  // 「小孩寫完了嗎」是在問作業，不是在問綁定 → hw 要排在 kids 前面
+  if (INTENT.hw.test(text)) return { hw: bound };          // 交給 webhook 現查（要讀 Firestore）
+
+  // 新增孩子／看目前綁了誰
+  let nameText = text;                                     // 進到綁定流程時要比對的字
+  if (INTENT.add.test(text) || INTENT.kids.test(text)) {
+    const nm = text.replace(INTENT.add, ' ').replace(INTENT.kids, ' ').trim();
+    const guess = nm ? matchOne(roster, nm) : null;
+    if (!guess || !guess.hit) {
+      const head = bound.length ? '目前這個 LINE 綁定：\n' + listChildren(bound) + '\n\n' : '這個 LINE 還沒有綁定孩子 🙌\n\n';
+      if (bound.length >= MAX_CHILDREN) {
+        return head + `已經是上限 ${MAX_CHILDREN} 位了。\n要換人的話，回覆「刪除 ${bound[0].name}」再輸入新的名字 🙏`;
+      }
+      return head + '➕ 新增：直接回覆孩子的' + (english ? '英文名字（例：' + ex.one + '）' : '姓名') +
+        (bound.length ? `\n➖ 刪除：回覆「刪除 ${bound[0].name}」` : '');
+    }
+    nameText = nm;                                         // 「新增 Eric」這種一次講完的
   }
 
   // 名單還沒就緒
   if (!activeRoster(roster).length) return '系統名單尚未就緒，請稍後再試，或直接聯絡 Alan 老師 🙏';
-
-  // 「查詢」
-  if (ASK_RE.test(text) || CMD.bind.test(text)) {
-    if (!bound.length) return '這個 LINE 還沒有綁定任何孩子 🙌\n\n' + askNameLine(english, ex);
-    return '目前這個 LINE 已綁定：\n' + listChildren(bound) +
-      (bound.length < MAX_CHILDREN ? `\n\n要再新增孩子，直接回覆他的${english ? '英文名字' : '姓名'}就可以 👌` : '');
-  }
 
   // 問「還有第二位嗎」→ 回答「沒有」
   if (stage === 'ask2' && NEG_RE.test(text)) {
@@ -355,8 +392,12 @@ async function handleNameBinding(env, lineUserId, rawText) {
       '\n\n還要新增其他孩子的話，請直接聯絡 Alan 老師 🙏';
   }
 
-  const names = parseNames(roster, text);
-  if (!names.length) return askNameLine(english, ex);
+  const names = parseNames(roster, nameText);
+  if (!names.length) {
+    // 標點符號之類的（「???」）——已綁定的人就客氣帶過，還沒綁的才請他打名字
+    if (bound.length) return politeOrQuiet(env, lineUserId, stage);
+    return askNameLine(english, ex);
+  }
 
   const added = [], dup = [], bad = [], amb = [], over = [];
   const cur = bound.slice();
@@ -379,9 +420,10 @@ async function handleNameBinding(env, lineUserId, rawText) {
   // 完全沒配到
   if (!added.length && !dup.length) {
     if (amb.length) return `班上有多位「${amb[0]}」🤔\n請直接聯絡 Alan 老師協助綁定 🙏`;
-    // 已經綁好的人隨口聊天／小朋友亂打 → 不要再回「找不到這位學生」，給選單就好
-    if (bound.length) return '我看不懂這句話 🙇\n\n' + helpText();
-    const who = bad[0] || text;
+    // v423：跟三件事都無關的閒聊／小朋友亂打 → 隨機一句有禮貌的回覆，
+    //       而且 10 分鐘內只回一次，家長連打好幾句不會被洗版。
+    if (bound.length) return politeOrQuiet(env, lineUserId, stage);
+    const who = bad[0] || nameText;
     if (english && hasCJK(who)) {
       return '我們的名單是用「英文名字」登記的 📝\n\n' + askNameLine(english, ex) + '\n\n找不到的話請直接聯絡 Alan 老師 🙏';
     }
@@ -774,6 +816,36 @@ function summerLibMeta(libWeeks, sw, itemId) {
   return { title: itemId, type: '', cat: '' };
 }
 const summerWeekLabel = (sw) => '暑假第 ' + Number(String(sw).replace(/^SW/, '')) + ' 週';
+// v423：暑假發派的 todo（每日提醒與「家長現查」共用——之前只有每日提醒有，
+// 所以家長自己按「作業」時，暑假那幾項會整區消失）
+function summerTodos(libWeeks, plan) {
+  const out = [];
+  if (!plan || !plan.weeks) return out;
+  for (const sw of Object.keys(plan.weeks)) {
+    const due = SUMMER_WEEK_END[sw];
+    if (!due) continue;
+    const libWid = 'sl-2026-' + sw;
+    for (const itemId of (plan.weeks[sw] || [])) {
+      const m = summerLibMeta(libWeeks, sw, itemId);
+      out.push({
+        wid: libWid, itemId, key: libWid + '_' + itemId,
+        title: m.title, type: m.type, cat: m.cat, dueDate: due,
+        wkLabel: summerWeekLabel(sw), wkStart: addDays(due, -6), wkEnd: due, archived: false,
+      });
+    }
+  }
+  return out;
+}
+// 暑假的兩份文件（題庫標題＋每個人的發派）
+async function loadSummer(project, token) {
+  const libDoc = await firestoreGet(project, token, 'class/data_summer_lib');
+  const lib = libDoc && libDoc.fields ? fsVal({ mapValue: { fields: libDoc.fields } }) : {};
+  const metaDoc = await firestoreGet(project, token, 'class/summer_meta');
+  const meta = metaDoc && metaDoc.fields ? fsVal({ mapValue: { fields: metaDoc.fields } }) : {};
+  const byEmail = {};
+  for (const em of Object.keys(meta.students || {})) byEmail[String(em).toLowerCase()] = meta.students[em];
+  return { libWeeks: lib.weeks || {}, metaByEmail: byEmail };
+}
 
 // ── v422：家長在聊天室輸入「作業」→ 現場查一次，回同一張卡 ────
 // 用的是跟每日提醒完全一樣的分區邏輯，只是不管里程碑、也不寫任何紀錄。
@@ -800,6 +872,7 @@ async function queryHomework(env, children) {
     const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
     hwByGrade[g] = buildHomeworkList(c);
   }
+  const summer = await loadSummer(project, token);       // v423：暑假發派也要算進去
   const progressDocs = await firestoreList(project, token, 'progress');
   const progByEmail = {};
   progressDocs.forEach((d) => {
@@ -813,6 +886,7 @@ async function queryHomework(env, children) {
     const grade = gradeOf[email];
     const prog = progByEmail[email] || {};
     const todos = (grade && hwByGrade[grade] ? hwByGrade[grade] : []).slice();
+    todos.push(...summerTodos(summer.libWeeks, summer.metaByEmail[email]));
     const thisWeek = [], overdue = [], preview = [];
     splitTodos(todos, prog.items, today, thisWeek, overdue, preview);
     const secs = {
@@ -896,22 +970,7 @@ async function runReminders(env, dryRun) {
     const grade = gradeFromEmail(st.email) || gradeByEmail[st.email] || null;
     if (!grade) R.skippedNoGrade.push(st.name || st.email);
     const todos = (grade && hwByGrade[grade] ? hwByGrade[grade] : []).slice();
-    const plan = metaByEmail[st.email];
-    if (plan && plan.weeks) {
-      for (const sw of Object.keys(plan.weeks)) {
-        const due = SUMMER_WEEK_END[sw];
-        if (!due) continue;
-        const libWid = 'sl-2026-' + sw;
-        for (const itemId of (plan.weeks[sw] || [])) {
-          const m = summerLibMeta(libWeeks, sw, itemId);
-          todos.push({
-            wid: libWid, itemId, key: libWid + '_' + itemId,
-            title: m.title, type: m.type, cat: m.cat, dueDate: due,
-            wkLabel: summerWeekLabel(sw), wkStart: addDays(due, -6), wkEnd: due, archived: false,
-          });
-        }
-      }
-    }
+    todos.push(...summerTodos(libWeeks, metaByEmail[st.email]));
     // 記錄每份作業「第一次被看到」的日期（＝發布基準）
     for (const hw of todos) { if (!hwseen[hw.key]) hwseen[hw.key] = today; }
 
@@ -1142,6 +1201,6 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
-  queryHomework, hwReplyMessages, helpText, CMD, splitTodos,
+  queryHomework, hwReplyMessages, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos,
   catRows, weekGroups, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH, SEC_DEF, summerLibMeta,
 };
