@@ -1099,11 +1099,11 @@ function LineLink() {
         <ol>
           <li>加官方帳號好友 <b>@247igfhl</b></li>
           <li>官方帳號的歡迎訊息之後，會再問一次孩子的名字</li>
-          <li>回覆{allEnglish ? '孩子的英文名字（例：Eric）' : '孩子的姓名'}，系統自動配對名單</li>
+          <li>回覆{allEnglish ? '孩子的英文名字（例：Emma）' : '孩子的姓名'}，系統自動配對名單</li>
           <li>綁好第一位後會問「還有第二位嗎？」<br />有就再打一個名字，沒有就回「沒有」</li>
         </ol>
         <p className="notify-note">
-          兩位孩子也可以<b>一次打完</b>：<code>Eric &amp; Tayler</code>（逗號、頓號、and、和、跟 都通）。
+          兩位孩子也可以<b>一次打完</b>：<code>Emma &amp; Ryan</code>（逗號、頓號、and、和、跟 都通）。
           大小寫、空格都沒關係。
         </p>
         <p className="notify-note">一個 LINE <b>最多綁 2 位</b>孩子；第三位以上請家長聯絡你，由你在上面手動處理。</p>
@@ -1535,6 +1535,16 @@ function HwRemind() {
         {result && (
           <div className="hwr-result">
             <div className="hwr-meta">今天 {result.today} ｜ 學期作業 {result.homeworkCount} 份 ｜ 暑假發派 {result.summerStudents || 0} 人 ｜ {result.dryRun ? '預覽' : '已發送'} {result.sends.length} 位</div>
+            {/* v419：作業是「照年級」發的——這裡把每個年級各幾份攤開，一眼看得出有沒有發錯班 */}
+            {result.homeworkByGrade && (
+              <div className="hwr-grades">
+                {Object.keys(result.homeworkByGrade).sort().map(g => (
+                  <span key={g} className={'hwr-grade' + (result.homeworkByGrade[g] ? '' : ' zero')}>
+                    {g.toUpperCase()}<em>{result.homeworkByGrade[g]}</em>
+                  </span>
+                ))}
+              </div>
+            )}
 
             {result.sends.length === 0 ? (
               <div className="roster-hint">目前沒有要提醒的 — 可能大家都完成了、還沒到提醒時間點，或今天的提醒已發過。</div>
@@ -1549,6 +1559,9 @@ function HwRemind() {
               </div>
             )}
 
+            {result.skippedNoGrade && result.skippedNoGrade.length > 0 && (
+              <div className="hwr-warn">⚠️ 認不出年級（學號不是 le○○ 開頭），沒有發學期作業給他們：{result.skippedNoGrade.join('、')}</div>
+            )}
             {result.skippedNoBind && result.skippedNoBind.length > 0 && (
               <div className="hwr-warn">⚠️ 有作業但家長未綁定（收不到）：{result.skippedNoBind.join('、')}</div>
             )}

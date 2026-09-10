@@ -45,14 +45,24 @@ ok('停用的中文名不影響', W.rosterAllEnglish([...ROSTER, { email: 'y@y',
 ok('Lucas Chen 這種兩段英文名算英文', W.rosterAllEnglish([{ email: 'a@a', name: "Lucas Chen" }]) === true);
 
 // ═══ 2. 歡迎訊息 ═══
-log.push('\n【2】加好友後的第二則訊息（接在官方帳號歡迎訊息後面）');
+log.push('\n【2】加好友後的歡迎訊息（問候＋請家長輸入孩子名字，一則講完）');
 {
   const env = makeEnv(ROSTER);
   const w = await W.welcomeMessage(env);
+  ok('第一句就是問候（不用再靠官方帳號的歡迎訊息）', w.startsWith("歡迎加入 Alan's English Class"), w);
+  ok('有先說這裡會做什麼，再請家長輸入', w.indexOf('班級通知') < w.indexOf('回覆孩子的英文名字'), w);
   ok('有問孩子名字', has(w, '回覆孩子的英文名字'), w);
   ok('有註明是康橋帳號的英文名字', has(w, '康橋帳號'), w);
-  ok('有示範兩位孩子怎麼打', has(w, 'Eric & Tayler'), w);
-  ok('沒有洩漏真實學生名單', !w.includes('Elaine') && !w.includes('Lucas'), w);
+  ok('有示範兩位孩子怎麼打', /例如：\n[A-Za-z]+ & [A-Za-z]+/.test(w), w);
+  ok('⭐ 舉例完全沒用到班上任何一位學生的名字',
+     ROSTER.every((st) => !new RegExp('\\b' + st.name.split(' ')[0] + '\\b').test(w)), w);
+  const ex = W.exampleNames(ROSTER, true);
+  ok('舉例的兩個名字互不相同', ex.one !== ex.two.split(' & ')[1]);
+  ok('名單裡若剛好有 Emma、Ryan → 自動換掉，不會拿學生當範例', (() => {
+    const r2 = [{ email: 'a@a', name: 'Emma' }, { email: 'b@b', name: 'Ryan' }];
+    const e2 = W.exampleNames(r2, true);
+    return e2.one !== 'Emma' && !e2.two.includes('Emma') && !e2.two.includes('Ryan');
+  })(), JSON.stringify(W.exampleNames([{ email: 'a@a', name: 'Emma' }, { email: 'b@b', name: 'Ryan' }], true)));
   const wc = await W.welcomeMessage(makeEnv([{ email: 'a@a', name: '王小明', grade: 'g1' }]));
   ok('名單若有中文名 → 改講「姓名」不講英文', has(wc, '孩子的姓名') && !wc.includes('英文名字'), wc);
 }

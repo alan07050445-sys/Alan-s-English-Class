@@ -15,10 +15,17 @@ const env = {
 };
 
 // 攔截所有對 LINE API 的呼叫
-const sent = [];
+const sent = [];        // 只記「真的送出訊息」的呼叫
+const calls = [];       // 記全部（含查家長顯示名稱）
+let profileName = '媽媽';
 globalThis.fetch = async (url, opts) => {
-  const body = JSON.parse(opts.body || '{}');
-  sent.push({ url: String(url), auth: opts.headers.Authorization, text: (body.messages || [])[0] });
+  const u = String(url);
+  calls.push(u);
+  if (u.includes('/v2/bot/profile/')) {
+    return new Response(JSON.stringify({ displayName: profileName }), { status: 200 });
+  }
+  const body = JSON.parse((opts && opts.body) || '{}');
+  sent.push({ url: u, auth: opts.headers.Authorization, text: (body.messages || [])[0] });
   return new Response('{}', { status: 200 });
 };
 
@@ -47,7 +54,9 @@ log.push('\n【W2】家長按「加入好友」');
   ok('有回一則訊息', sent.length === 1, JSON.stringify(sent));
   ok('走 reply API（不是 push，不花額度）', last().url.includes('/message/reply'), last().url);
   ok('訊息在問孩子英文名字', last().text.text.includes('英文名字'), last().text.text);
-  log.push('\n───── 家長會看到的第 2 則 ─────\n' + last().text.text + '\n──────────────────────────────');
+  ok('開頭就是問候，不用再靠官方帳號的歡迎訊息', last().text.text.startsWith('媽媽 您好，歡迎加入'), last().text.text);
+  ok('有去查家長的 LINE 顯示名稱', calls.some((u) => u.includes('/v2/bot/profile/')), calls.join(' '));
+  log.push('\n───── 家長加好友會看到的訊息 ─────\n' + last().text.text + '\n──────────────────────────────');
 }
 
 log.push('\n【W3】家長回「Eric & Tayler」');
@@ -56,6 +65,16 @@ log.push('\n【W3】家長回「Eric & Tayler」');
   ok('兩位都寫進 KV', (JSON.parse(store.get('links'))['Uaaa'] || []).length === 2, store.get('links'));
   ok('回覆說綁定完成', last().text.text.includes('綁定完成'), last().text.text);
   log.push('\n───── 家長會看到的回覆 ─────\n' + last().text.text + '\n──────────────────────────────');
+}
+
+log.push('\n【W3b】查不到顯示名稱時，訊息仍然通順');
+{
+  profileName = '';
+  const n = sent.length;
+  await W.fetch(post('webhook', ev({ type: 'follow', replyToken: 'rtx', source: { userId: 'Ubbb' } })), env);
+  ok('沒有名字就直接說「歡迎加入」，不會出現空白或 undefined',
+     sent[n].text.text.startsWith("歡迎加入 Alan's English Class") && !sent[n].text.text.includes('undefined'), sent[n].text.text);
+  profileName = '媽媽';
 }
 
 log.push('\n【W4】非文字訊息（貼圖／照片）不該爆掉');

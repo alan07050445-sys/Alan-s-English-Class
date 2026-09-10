@@ -4,8 +4,9 @@
 在專案根目錄執行：
 
 ```
-node tests/t-line-bind.mjs      # LINE 家長綁定對話：74 項
-node tests/t-line-webhook.mjs   # LINE webhook 從 HTTP 進來跑一遍：12 項
+node tests/t-line-bind.mjs       # LINE 家長綁定對話：78 項
+node tests/t-line-webhook.mjs    # LINE webhook 從 HTTP 進來跑一遍：15 項
+node tests/t-line-reminders.mjs  # 作業提醒照年級發（不會發到別班）：15 項
 ```
 
-兩支都不連網路：Workers KV 用記憶體假的，LINE API 呼叫被攔下來檢查內容。
+三支都不連網路：Workers KV 用記憶體假的，Firestore 與 LINE API 的呼叫都被攔下來檢查內容。

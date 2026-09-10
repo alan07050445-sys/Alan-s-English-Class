@@ -186,17 +186,33 @@ const ASK_RE = /^(查詢|查詢綁定|綁定|綁定狀態|狀態|status|查|list
 const fmtChild = (x) => `${x.name}${x.grade ? '（' + gradeLabel(x.grade) + '）' : ''}`;
 const listChildren = (arr) => (arr || []).map((x) => '・' + fmtChild(x)).join('\n');
 
-function askNameLine(english) {
-  return english
-    ? '請直接回覆孩子的英文名字（就是康橋帳號上的英文名字，例如：Eric）。\n大小寫、空格都沒關係 👌'
-    : '請直接回覆孩子的姓名（例如：王小明）。';
+// v419：舉例用的名字不能是真的學生（Alan：「不要用 Eric Tayler 當作舉例」）。
+// 從這一池挑兩個「名單裡沒有的」名字，所以永遠不會撞到班上的孩子。
+const EX_POOL_EN = ['Emma', 'Ryan', 'Olivia', 'Ethan', 'Chloe', 'Daniel', 'Hannah', 'Jason', 'Sophia', 'Brian'];
+const EX_POOL_ZH = ['小明', '小美', '小華', '小安'];
+function exampleNames(roster, english) {
+  const taken = new Set(activeRoster(roster).map((st) => nkey(st.name)));
+  const pool = (english ? EX_POOL_EN : EX_POOL_ZH).filter((n) => !taken.has(nkey(n)));
+  const a = pool[0] || (english ? 'Emma' : '小明');
+  const b = pool[1] || (english ? 'Ryan' : '小美');
+  return { one: a, two: a + ' & ' + b };
 }
-function welcomeText(english) {
+
+function askNameLine(english, ex) {
+  return english
+    ? `請直接回覆孩子的英文名字（康橋帳號上的那個英文名字，例如：${ex.one}）。\n大小寫、空格都沒關係 👌`
+    : `請直接回覆孩子的姓名（例如：${ex.one}）。`;
+}
+// 加好友後的第一則訊息：問候 → 說明這裡會做什麼 → 才請家長輸入名字
+function welcomeText(english, ex, displayName) {
+  const hi = displayName ? `${displayName} 您好，歡迎加入 Alan's English Class 👋` : "歡迎加入 Alan's English Class 👋";
   return (
-    '再一個小步驟就完成囉 📌\n\n' +
-    askNameLine(english) + '\n\n' +
-    `有兩位孩子的話，可以一次輸入，例如：\n${english ? 'Eric & Tayler' : '王小明 & 王小美'}\n\n` +
-    '綁定完成後，班級通知與作業提醒都會傳到這裡 📩'
+    hi + '\n\n' +
+    '這裡會發班級通知，也會提醒孩子還沒完成的作業。\n' +
+    '開始之前，先讓我把您和孩子的帳號連起來 🔗\n\n' +
+    askNameLine(english, ex) + '\n\n' +
+    `有兩位孩子的話，可以一次輸入，例如：\n${ex.two}\n\n` +
+    '連好之後，通知就會傳到這裡 📩'
   );
 }
 function doneText(children, english) {
@@ -207,17 +223,33 @@ function doneText(children, english) {
   );
 }
 
-// 加好友時的歡迎（接在官方帳號原本的歡迎訊息後面）
-async function welcomeMessage(env) {
-  let english = true;
-  try { english = rosterAllEnglish(await getRoster(env)); } catch (e) {}
-  return welcomeText(english);
+// 家長的 LINE 顯示名稱（拿不到就算了，訊息照樣通順）
+async function lineDisplayName(env, lineUserId) {
+  try {
+    const res = await fetch(LINE_API + '/v2/bot/profile/' + encodeURIComponent(lineUserId), {
+      headers: { Authorization: 'Bearer ' + env.LINE_TOKEN },
+    });
+    if (!res.ok) return '';
+    const p = await res.json();
+    return String((p && p.displayName) || '').trim().slice(0, 30);
+  } catch (e) { return ''; }
+}
+
+// 加好友時的整則歡迎（問候 ＋ 請家長輸入孩子名字，一則講完）
+async function welcomeMessage(env, lineUserId) {
+  let roster = [];
+  try { roster = await getRoster(env); } catch (e) {}
+  const english = rosterAllEnglish(roster);
+  const ex = exampleNames(roster, english);
+  const who = lineUserId && env.LINE_TOKEN ? await lineDisplayName(env, lineUserId) : '';
+  return welcomeText(english, ex, who);
 }
 
 async function handleNameBinding(env, lineUserId, rawText) {
   const text = String(rawText || '').trim();
   const roster = await getRoster(env);
   const english = rosterAllEnglish(roster);
+  const ex = exampleNames(roster, english);
   let links = {};
   try { links = JSON.parse((await env.LINKS.get('links')) || '{}'); } catch (e) {}
   const bound = links[lineUserId] || [];
@@ -228,7 +260,7 @@ async function handleNameBinding(env, lineUserId, rawText) {
 
   // 「查詢」
   if (ASK_RE.test(text)) {
-    if (!bound.length) return '這個 LINE 還沒有綁定任何孩子 🙌\n\n' + askNameLine(english);
+    if (!bound.length) return '這個 LINE 還沒有綁定任何孩子 🙌\n\n' + askNameLine(english, ex);
     return '目前這個 LINE 已綁定：\n' + listChildren(bound) +
       (bound.length < MAX_CHILDREN ? `\n\n要再新增孩子，直接回覆他的${english ? '英文名字' : '姓名'}就可以 👌` : '');
   }
@@ -246,7 +278,7 @@ async function handleNameBinding(env, lineUserId, rawText) {
   }
 
   const names = parseNames(roster, text);
-  if (!names.length) return askNameLine(english);
+  if (!names.length) return askNameLine(english, ex);
 
   const added = [], dup = [], bad = [], amb = [], over = [];
   const cur = bound.slice();
@@ -271,7 +303,7 @@ async function handleNameBinding(env, lineUserId, rawText) {
     if (amb.length) return `班上有多位「${amb[0]}」🤔\n請直接聯絡 Alan 老師協助綁定 🙏`;
     const who = bad[0] || text;
     if (english && hasCJK(who)) {
-      return '我們的名單是用「英文名字」登記的 📝\n\n' + askNameLine(english) + '\n\n找不到的話請直接聯絡 Alan 老師 🙏';
+      return '我們的名單是用「英文名字」登記的 📝\n\n' + askNameLine(english, ex) + '\n\n找不到的話請直接聯絡 Alan 老師 🙏';
     }
     return `找不到「${who}」這位學生 🤔\n\n` +
       (english ? '請確認是康橋帳號上的英文名字（大小寫沒關係）。\n' : '請確認姓名與報名時一致。\n') +
@@ -374,6 +406,23 @@ function dateDiffDays(a, b) { // a - b（天）
 }
 function fmtDate(s) { const p = String(s || '').split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; }
 
+// v419：作業提醒必須「照年級發」。
+// 每個年級的課程各存一份文件（G3 是最早的那份，所以叫 class/data）。
+// 以前只讀 class/data 一份、然後發給所有學生 → 只綁 G6 的家長也會收到 G1~G5 的作業。
+const GRADE_DOCS = {
+  g1: 'class/data_g1', g2: 'class/data_g2', g3: 'class/data',
+  g4: 'class/data_g4', g5: 'class/data_g5', g6: 'class/data_g6',
+};
+// 學號 → 年級。跟網站 data.js 的 gradeFromEmail 同一套規則（學生看到哪一班的唯一依據）。
+// ⚠️ 每年開學要 +1：2026 學年 base=16，2027 學年要改成 17。
+const LE_GRADE_BASE = 16;
+function gradeFromEmail(email) {
+  const m = String(email || '').toLowerCase().match(/^le(\d{2})/);
+  if (!m) return null;
+  const g = LE_GRADE_BASE - parseInt(m[1], 10);
+  return (g >= 1 && g <= 6) ? ('g' + g) : null;
+}
+
 // 從 class/data 整理出「有期限的作業」清單
 function buildHomeworkList(cls) {
   const weeks = (cls && cls.weeks) || {};
@@ -429,11 +478,20 @@ async function runReminders(env, dryRun) {
   try { token = await getAccessToken(sa); } catch (e) { R.ok = false; R.errors.push('auth_error: ' + String(e)); return R; }
   if (!token) { R.ok = false; R.errors.push('no_access_token（金鑰或權限有問題）'); return R; }
 
-  // 作業清單（class/data，公開資料）
-  const clsDoc = await firestoreGet(project, token, 'class/data');
-  const cls = clsDoc && clsDoc.fields ? fsVal({ mapValue: { fields: clsDoc.fields } }) : {};
-  const homeworks = buildHomeworkList(cls);
-  R.homeworkCount = homeworks.length;
+  // 作業清單：六個年級各一份（公開資料）。v419 之前只讀 class/data 一份，
+  // 然後把它發給每一位學生——這就是「只綁 G6 卻收到 G1~G5 作業」的原因。
+  const hwByGrade = {};
+  for (const g of Object.keys(GRADE_DOCS)) {
+    const doc = await firestoreGet(project, token, GRADE_DOCS[g]);
+    const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
+    hwByGrade[g] = buildHomeworkList(c);
+  }
+  R.homeworkByGrade = {};
+  R.homeworkCount = 0;
+  for (const g of Object.keys(hwByGrade)) {
+    R.homeworkByGrade[g] = hwByGrade[g].length;
+    R.homeworkCount += hwByGrade[g].length;
+  }
 
   // 暑假題庫（class/data_summer_lib，取標題）＋ 暑假發派（class/summer_meta）
   const libDoc = await firestoreGet(project, token, 'class/data_summer_lib');
@@ -452,6 +510,14 @@ async function runReminders(env, dryRun) {
     return { email: String(o.email || '').toLowerCase(), name: o.name || '', items: o.items || {} };
   }).filter((s) => s.email);
 
+  // 學生 → 年級：學號是唯一真相，名單上的年級只當備援（學號認不出來時）
+  const gradeByEmail = {};
+  try {
+    activeRoster(await getRoster(env)).forEach((st) => {
+      if (st.grade) gradeByEmail[String(st.email).toLowerCase()] = String(st.grade).toLowerCase();
+    });
+  } catch (e) {}
+
   const links = JSON.parse((await env.LINKS.get('links')) || '{}');
   const hwseen = JSON.parse((await env.LINKS.get('hwseen')) || '{}');
   const hwsent = JSON.parse((await env.LINKS.get('hwsent')) || '{}');
@@ -465,9 +531,12 @@ async function runReminders(env, dryRun) {
     }
   }
 
+  R.skippedNoGrade = [];
   for (const st of students) {
-    // 這位學生要追蹤的作業＝學期作業（全班）＋暑假發派給他的單元
-    const todos = homeworks.slice();
+    // 這位學生要追蹤的作業＝【他自己年級的】學期作業 ＋ 暑假發派給他的單元
+    const grade = gradeFromEmail(st.email) || gradeByEmail[st.email] || null;
+    if (!grade) R.skippedNoGrade.push(st.name || st.email);
+    const todos = (grade && hwByGrade[grade] ? hwByGrade[grade] : []).slice();
     const plan = metaByEmail[st.email];
     if (plan && plan.weeks) {
       for (const sw of Object.keys(plan.weeks)) {
@@ -546,7 +615,7 @@ export default {
       for (const ev of (payload.events || [])) {
         try {
           if (ev.type === 'follow' && ev.replyToken) {
-            await lineReply(ev.replyToken, await welcomeMessage(env), env.LINE_TOKEN);
+            await lineReply(ev.replyToken, await welcomeMessage(env, ev.source && ev.source.userId), env.LINE_TOKEN);
           } else if (ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
             const uid = ev.source && ev.source.userId;
             if (uid && env.LINKS) await lineReply(ev.replyToken, await handleNameBinding(env, uid, ev.message.text), env.LINE_TOKEN);
@@ -663,4 +732,8 @@ export default {
 };
 
 // ── 給 Node 測試用的具名匯出（Cloudflare 不會用到，留著無害）─────
-export { handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish, matchOne, parseNames, splitNames, MAX_CHILDREN };
+export {
+  handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
+  matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
+  MAX_CHILDREN, GRADE_DOCS,
+};
