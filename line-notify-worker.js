@@ -1,5 +1,5 @@
 /*
- * Alan's English Class — LINE 通知 Worker（v3：加「作業自動提醒」功能B）
+ * Alan's English Class — LINE 通知 Worker（v4：綁定對話流程正式版，可綁 2 位孩子）
  * ────────────────────────────────────────────────────────────
  * 獨立 Worker。負責：發公告 + 家長自助綁定 + 作業沒完成自動提醒。
  *
@@ -72,30 +72,228 @@ async function lineMulticast(to, text, token) {
 }
 
 // ── 綁定（功能地基）───────────────────────────────────────
-const WELCOME =
-  '歡迎加入 Alan\'s English Class 👋\n\n' +
-  '請直接回覆孩子的姓名完成綁定（例如：王小明）。\n' +
-  '有多位孩子請分別輸入姓名。\n\n' +
-  '綁定後，班級通知與作業提醒都會傳到這裡 📩';
+// v418：正式上線版的綁定對話流程
+//   ① 加好友 → 官方帳號的歡迎訊息之後，再問一次孩子的名字
+//   ② 一個 LINE 可以綁「最多 2 位」孩子（Eric & Tayler 這種家庭）
+//   ③ 名單若全是英文名（康橋帳號綁英文名）→ 訊息會註明「請用英文名字」
+const MAX_CHILDREN = 2;                       // 一個 LINE 最多綁幾位孩子
+const ROSTER_TTL_MS = 10 * 60 * 1000;         // 即時名單快取 10 分鐘
+
+// 比對用的鍵：忽略大小寫、空白與標點（Eric Chen / eric-chen / ERIC CHEN 都一樣）
+const nkey = (s) => String(s || '').toLowerCase().replace(/[\s.'’\-_]/g, '').trim();
+const hasCJK = (s) => /[㐀-鿿豈-﫿]/.test(String(s || ''));
+const isEnglishName = (s) => /^[A-Za-z][A-Za-z .'’\-]*$/.test(String(s || '').trim());
+
+// 名單來源：優先用服務帳號即時讀 Firestore（老師剛加的學生馬上能綁），
+// 讀不到才退回老師後台同步過的 KV 名單。
+async function getRoster(env) {
+  if (env.FIREBASE_SA && env.LINKS) {
+    try {
+      const cached = JSON.parse((await env.LINKS.get('roster_live')) || 'null');
+      if (cached && cached.ts && Date.now() - cached.ts < ROSTER_TTL_MS && Array.isArray(cached.list) && cached.list.length) {
+        return cached.list;
+      }
+      const sa = JSON.parse(env.FIREBASE_SA);
+      const token = await getAccessToken(sa);
+      if (token) {
+        const docs = await firestoreList(sa.project_id, token, 'roster');
+        const list = docs.map((d) => {
+          const f = d.fields || {};
+          return {
+            email: String(d.name || '').split('/').pop(),
+            name: fsVal(f.name) || '',
+            grade: fsVal(f.grade) || '',
+            active: f.active ? fsVal(f.active) : undefined,
+          };
+        }).filter((s) => s.email && s.name);
+        if (list.length) {
+          await env.LINKS.put('roster_live', JSON.stringify({ ts: Date.now(), list }));
+          return list;
+        }
+      }
+    } catch (e) { /* 讀不到就用 KV 名單 */ }
+  }
+  try { return JSON.parse((await env.LINKS.get('roster')) || '[]'); } catch (e) { return []; }
+}
+
+const activeRoster = (roster) => (roster || []).filter((s) => s && s.name && s.active !== false);
+
+// 名單是不是「全部都是英文名字」→ 決定訊息要不要註明「請用英文名字」
+function rosterAllEnglish(roster) {
+  const act = activeRoster(roster);
+  return act.length > 0 && act.every((s) => isEnglishName(s.name));
+}
+
+// 對話狀態（只用來記「問過第二位孩子了沒」，資料本體仍在 links）
+async function getStage(env, uid) {
+  try { return ((JSON.parse((await env.LINKS.get('chatstate')) || '{}'))[uid] || {}).stage || ''; }
+  catch (e) { return ''; }
+}
+async function setStage(env, uid, stage) {
+  let m = {};
+  try { m = JSON.parse((await env.LINKS.get('chatstate')) || '{}'); } catch (e) {}
+  if (stage) m[uid] = { stage, ts: Date.now() }; else delete m[uid];
+  await env.LINKS.put('chatstate', JSON.stringify(m));
+}
+
+// 家長輸入的一句話 → 拆成 1~N 個名字（Eric & Tayler / Eric,Tayler / Eric 和 Tayler）
+function splitNames(text) {
+  const t = String(text || '').replace(/[。！!？?]+$/g, '').trim();
+  const parts = t.split(/\s*(?:&|＆|,|，|、|\+|\/|and|及|和|跟|還有)\s*/i)
+    .map((x) => x.trim()).filter(Boolean);
+  return parts.length ? parts : (t ? [t] : []);
+}
+
+// 單一名字 → 名單比對。回傳 {hit} / {many} / {none}
+function matchOne(roster, raw) {
+  const k = nkey(raw);
+  if (!k) return { none: true };
+  const act = activeRoster(roster);
+  const exact = act.filter((s) => nkey(s.name) === k);
+  if (exact.length === 1) return { hit: exact[0] };
+  if (exact.length > 1) return { many: exact };
+  // 名單寫「Eric Chen」、家長只打「Eric」
+  const first = act.filter((s) => nkey(String(s.name).trim().split(/\s+/)[0]) === k);
+  if (first.length === 1) return { hit: first[0] };
+  if (first.length > 1) return { many: first };
+  // 開頭吻合（至少 3 個字元才允許，避免 "a" 亂中）
+  if (k.length >= 3) {
+    const pre = act.filter((s) => nkey(s.name).startsWith(k));
+    if (pre.length === 1) return { hit: pre[0] };
+    if (pre.length > 1) return { many: pre };
+  }
+  return { none: true };
+}
+
+// 整句 → 名字清單。若整句配不到、但用空白拆開後兩段各自配得到 → 當成兩個名字
+function parseNames(roster, text) {
+  const direct = splitNames(text);
+  if (direct.length > 1) return direct;
+  const one = direct[0] || '';
+  if (matchOne(roster, one).none) {
+    const toks = one.split(/\s+/).filter(Boolean);
+    if (toks.length === 2) {
+      const a = matchOne(roster, toks[0]), b = matchOne(roster, toks[1]);
+      if (a.hit && b.hit && a.hit.email !== b.hit.email) return toks;
+    }
+  }
+  return direct;
+}
+
+const NEG_RE = /^(沒有|沒|無|不用|不用了|不需要|no|nope|n|只有一位|只有一個|一位|一個|1|完成|好了|沒有了|就這樣|結束)$/i;
+const ASK_RE = /^(查詢|查詢綁定|綁定|綁定狀態|狀態|status|查|list|\?|？)$/i;
+
+const fmtChild = (x) => `${x.name}${x.grade ? '（' + gradeLabel(x.grade) + '）' : ''}`;
+const listChildren = (arr) => (arr || []).map((x) => '・' + fmtChild(x)).join('\n');
+
+function askNameLine(english) {
+  return english
+    ? '請直接回覆孩子的英文名字（就是康橋帳號上的英文名字，例如：Eric）。\n大小寫、空格都沒關係 👌'
+    : '請直接回覆孩子的姓名（例如：王小明）。';
+}
+function welcomeText(english) {
+  return (
+    '再一個小步驟就完成囉 📌\n\n' +
+    askNameLine(english) + '\n\n' +
+    `有兩位孩子的話，可以一次輸入，例如：\n${english ? 'Eric & Tayler' : '王小明 & 王小美'}\n\n` +
+    '綁定完成後，班級通知與作業提醒都會傳到這裡 📩'
+  );
+}
+function doneText(children, english) {
+  return (
+    '綁定完成 🎉\n\n目前這個 LINE 已綁定：\n' + listChildren(children) + '\n\n' +
+    '之後班級通知與作業提醒都會傳到這裡 📩\n' +
+    `（要再新增孩子，隨時回覆他的${english ? '英文名字' : '姓名'}就可以；一個 LINE 最多 ${MAX_CHILDREN} 位）`
+  );
+}
+
+// 加好友時的歡迎（接在官方帳號原本的歡迎訊息後面）
+async function welcomeMessage(env) {
+  let english = true;
+  try { english = rosterAllEnglish(await getRoster(env)); } catch (e) {}
+  return welcomeText(english);
+}
 
 async function handleNameBinding(env, lineUserId, rawText) {
-  const name = norm(rawText);
-  const roster = JSON.parse((await env.LINKS.get('roster')) || '[]');
-  const links = JSON.parse((await env.LINKS.get('links')) || '{}');
-  const existing = links[lineUserId] || [];
-  if (!roster.length) return '系統名單尚未就緒，請稍後再試，或直接聯絡 Alan 老師 🙏';
-  const matches = roster.filter((s) => s.active !== false && norm(s.name) === name && name);
-  if (matches.length === 0) {
-    if (existing.length) return '您已完成綁定 👍\n若要新增其他孩子，請輸入他的姓名；其他問題請直接聯絡 Alan 老師。';
-    return `找不到「${rawText.trim()}」這位學生 🤔\n請確認姓名與報名時一致，或直接聯絡 Alan 老師。`;
+  const text = String(rawText || '').trim();
+  const roster = await getRoster(env);
+  const english = rosterAllEnglish(roster);
+  let links = {};
+  try { links = JSON.parse((await env.LINKS.get('links')) || '{}'); } catch (e) {}
+  const bound = links[lineUserId] || [];
+  const stage = await getStage(env, lineUserId);
+
+  // 名單還沒就緒
+  if (!activeRoster(roster).length) return '系統名單尚未就緒，請稍後再試，或直接聯絡 Alan 老師 🙏';
+
+  // 「查詢」
+  if (ASK_RE.test(text)) {
+    if (!bound.length) return '這個 LINE 還沒有綁定任何孩子 🙌\n\n' + askNameLine(english);
+    return '目前這個 LINE 已綁定：\n' + listChildren(bound) +
+      (bound.length < MAX_CHILDREN ? `\n\n要再新增孩子，直接回覆他的${english ? '英文名字' : '姓名'}就可以 👌` : '');
   }
-  if (matches.length > 1) return `有多位同名「${rawText.trim()}」，請直接聯絡 Alan 老師協助綁定 🙏`;
-  const s = matches[0];
-  if (existing.some((x) => x.email === s.email)) return `${s.name}（${gradeLabel(s.grade)}）已經綁定過了 👍`;
-  existing.push({ email: s.email, name: s.name, grade: s.grade || '' });
-  links[lineUserId] = existing;
-  await env.LINKS.put('links', JSON.stringify(links));
-  return `✅ 已綁定 ${s.name}（${gradeLabel(s.grade)}）！\n之後班級通知與作業提醒都會傳到這裡。`;
+
+  // 問「還有第二位嗎」→ 回答「沒有」
+  if (stage === 'ask2' && NEG_RE.test(text)) {
+    await setStage(env, lineUserId, 'done');
+    return doneText(bound, english);
+  }
+
+  // 已經綁滿
+  if (bound.length >= MAX_CHILDREN) {
+    return `這個 LINE 已經綁定 ${MAX_CHILDREN} 位孩子了：\n` + listChildren(bound) +
+      '\n\n還要新增其他孩子的話，請直接聯絡 Alan 老師 🙏';
+  }
+
+  const names = parseNames(roster, text);
+  if (!names.length) return askNameLine(english);
+
+  const added = [], dup = [], bad = [], amb = [], over = [];
+  const cur = bound.slice();
+  for (const nm of names) {
+    if (cur.length >= MAX_CHILDREN) { over.push(nm); continue; }
+    const r = matchOne(roster, nm);
+    if (r.hit) {
+      if (cur.some((x) => String(x.email).toLowerCase() === String(r.hit.email).toLowerCase())) { dup.push(r.hit); continue; }
+      const rec = { email: r.hit.email, name: r.hit.name, grade: r.hit.grade || '' };
+      cur.push(rec); added.push(rec);
+    } else if (r.many) { amb.push(nm); }
+    else { bad.push(nm); }
+  }
+
+  if (added.length) {
+    links[lineUserId] = cur;
+    await env.LINKS.put('links', JSON.stringify(links));
+  }
+
+  // 完全沒配到
+  if (!added.length && !dup.length) {
+    if (amb.length) return `班上有多位「${amb[0]}」🤔\n請直接聯絡 Alan 老師協助綁定 🙏`;
+    const who = bad[0] || text;
+    if (english && hasCJK(who)) {
+      return '我們的名單是用「英文名字」登記的 📝\n\n' + askNameLine(english) + '\n\n找不到的話請直接聯絡 Alan 老師 🙏';
+    }
+    return `找不到「${who}」這位學生 🤔\n\n` +
+      (english ? '請確認是康橋帳號上的英文名字（大小寫沒關係）。\n' : '請確認姓名與報名時一致。\n') +
+      '還是不行的話，請直接聯絡 Alan 老師 🙏';
+  }
+
+  // 有配到 → 組回覆
+  const lines = [];
+  if (added.length) lines.push('✅ 已綁定 ' + added.map(fmtChild).join('、') + '！');
+  if (dup.length) lines.push('👍 ' + dup.map(fmtChild).join('、') + ' 之前就綁好了。');
+  if (amb.length) lines.push(`⚠️ 班上有多位「${amb[0]}」，請聯絡 Alan 老師協助。`);
+  if (bad.length) lines.push(`⚠️ 找不到「${bad[0]}」，請確認${english ? '英文名字' : '姓名'}或聯絡 Alan 老師。`);
+  if (over.length) lines.push(`⚠️ 一個 LINE 最多綁 ${MAX_CHILDREN} 位，「${over[0]}」請聯絡 Alan 老師協助。`);
+
+  if (cur.length >= MAX_CHILDREN || bad.length || amb.length || over.length) {
+    await setStage(env, lineUserId, 'done');
+    return lines.join('\n') + '\n\n' + doneText(cur, english);
+  }
+  // 只綁到 1 位、還有空位 → 問第二位
+  await setStage(env, lineUserId, 'ask2');
+  return lines.join('\n') + '\n\n還有第二位孩子嗎？\n' +
+    `有的話請直接回覆他的${english ? '英文名字' : '姓名'}；沒有的話回覆「沒有」就完成囉 🙌`;
 }
 
 // ── 功能B：Firebase 服務帳號 → 讀 Firestore ──────────────
@@ -348,7 +546,7 @@ export default {
       for (const ev of (payload.events || [])) {
         try {
           if (ev.type === 'follow' && ev.replyToken) {
-            await lineReply(ev.replyToken, WELCOME, env.LINE_TOKEN);
+            await lineReply(ev.replyToken, await welcomeMessage(env), env.LINE_TOKEN);
           } else if (ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
             const uid = ev.source && ev.source.userId;
             if (uid && env.LINKS) await lineReply(ev.replyToken, await handleNameBinding(env, uid, ev.message.text), env.LINE_TOKEN);
@@ -463,3 +661,6 @@ export default {
     ctx.waitUntil(runReminders(env, false));
   },
 };
+
+// ── 給 Node 測試用的具名匯出（Cloudflare 不會用到，留著無害）─────
+export { handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish, matchOne, parseNames, splitNames, MAX_CHILDREN };

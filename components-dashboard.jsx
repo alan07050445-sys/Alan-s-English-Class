@@ -992,6 +992,19 @@ function LineLink() {
   const boundEmails = new Set();
   Object.values(links || {}).forEach(arr => (arr || []).forEach(x => boundEmails.add(String(x.email).toLowerCase())));
   const activeStudents = roster.filter(s => s.active !== false);
+  // v418：家長是用「名字」綁定的，所以名單本身要先體檢。
+  // 康橋帳號綁的是英文名字 → 只要全是英文，LINE 就會直接叫家長「回覆英文名字」。
+  const badNames = activeStudents.filter(s => !/^[A-Za-z][A-Za-z .'\u2019-]*$/.test(String(s.name || '').trim()));
+  const dupNames = (() => {
+    const seen = {}, out = [];
+    activeStudents.forEach(s => {
+      const k = String(s.name || '').toLowerCase().replace(/[\s.'\u2019_-]/g, '');
+      if (!k) return;
+      if (seen[k]) { if (out.indexOf(seen[k].name) < 0) out.push(seen[k].name); } else seen[k] = s;
+    });
+    return out;
+  })();
+  const allEnglish = activeStudents.length > 0 && badNames.length === 0;
   const unbound = activeStudents.filter(s => !boundEmails.has(String(s.email).toLowerCase()));
   const linkEntries = Object.entries(links || {});
 
@@ -1026,13 +1039,27 @@ function LineLink() {
 
         {msg && <div className={`notify-msg ${msg.type}`}>{msg.text}</div>}
 
+        {/* v418：名單體檢——家長打字綁定成不成功，全看這裡 */}
+        {activeStudents.length > 0 && (
+          <div className={'linkbind-check' + (badNames.length || dupNames.length ? ' warn' : '')}>
+            {allEnglish
+              ? <p>✅ 名單 {activeStudents.length} 位<b>全部都是英文名字</b>——LINE 會直接請家長「回覆孩子的英文名字」。</p>
+              : <p>⚠️ 有 {badNames.length} 位<b>不是純英文名字</b>，LINE 會改用「請回覆孩子的姓名」這種說法：
+                  {' '}{badNames.slice(0, 8).map(s => s.name || s.email).join('、')}{badNames.length > 8 ? ' …' : ''}
+                </p>}
+            {dupNames.length > 0 && (
+              <p>⚠️ 名單裡有<b>同名</b>的學生（{dupNames.join('、')}）——家長打這個名字時系統不會亂猜，會請他聯絡你，你再手動處理。</p>
+            )}
+          </div>
+        )}
+
         {links === null ? (
           !busy && pass.trim() && <div className="roster-hint">載入中…（若一直沒反應，按「重新整理」）</div>
         ) : (
           <>
             {/* 已綁定 */}
             {linkEntries.length === 0 ? (
-              <div className="dt-empty"><p>還沒有人綁定</p><p className="dt-empty-hint">請家長加官方帳號好友後，回覆孩子姓名即可綁定。</p></div>
+              <div className="dt-empty"><p>還沒有人綁定</p><p className="dt-empty-hint">請家長加官方帳號好友後，依照對話回覆孩子的名字即可綁定（一個 LINE 最多 2 位孩子）。</p></div>
             ) : (
               <div className="roster-list">
                 {linkEntries.map(([uid, arr]) => (
@@ -1060,7 +1087,7 @@ function LineLink() {
                     <span key={s.email} className="linkbind-chip">{s.name || s.email}<em>{(s.grade || '').toUpperCase()}</em></span>
                   ))}
                 </div>
-                <p className="linkbind-note">提醒這些孩子的家長：加官方帳號好友 → 回覆孩子姓名即可。</p>
+                <p className="linkbind-note">提醒這些孩子的家長：加官方帳號好友 <b>@247igfhl</b> → 依照對話回覆孩子的名字即可。</p>
               </div>
             )}
           </>
@@ -1071,10 +1098,16 @@ function LineLink() {
         <h4>家長怎麼綁定？</h4>
         <ol>
           <li>加官方帳號好友 <b>@247igfhl</b></li>
-          <li>直接回覆孩子的姓名（例：王小明）</li>
-          <li>系統自動配對名單、回覆「已綁定」</li>
+          <li>官方帳號的歡迎訊息之後，會再問一次孩子的名字</li>
+          <li>回覆{allEnglish ? '孩子的英文名字（例：Eric）' : '孩子的姓名'}，系統自動配對名單</li>
+          <li>綁好第一位後會問「還有第二位嗎？」<br />有就再打一個名字，沒有就回「沒有」</li>
         </ol>
-        <p className="notify-note">綁定後才收得到「按年級／個別」通知與作業提醒。名字要和名單一致，配不到會請家長聯絡你。</p>
+        <p className="notify-note">
+          兩位孩子也可以<b>一次打完</b>：<code>Eric &amp; Tayler</code>（逗號、頓號、and、和、跟 都通）。
+          大小寫、空格都沒關係。
+        </p>
+        <p className="notify-note">一個 LINE <b>最多綁 2 位</b>孩子；第三位以上請家長聯絡你，由你在上面手動處理。</p>
+        <p className="notify-note">綁定後才收得到「按年級／個別」通知與作業提醒。配不到名字時系統不會亂猜，會請家長聯絡你。</p>
       </aside>
     </div>
   );
