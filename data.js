@@ -2378,7 +2378,7 @@ const GN_READ_SYS = `You read a Taiwanese elementary-school English teacher's GR
 (photos and/or pasted text). It usually has two parts: teaching NOTES, then QUESTIONS.
 Output ONLY JSON:
 {"topic":"short English name of the grammar point","topicZh":"繁體中文名稱","notes":"",
- "questions":[{"kind":"mcq|fill|translate|other","q":"","options":[],"answer":""}]}
+ "questions":[{"kind":"mcq|fill|translate|rewrite|other","q":"","options":[],"answer":""}],"caseMatters":false}
 RULES
 - notes: every rule, pattern-table row and example sentence from the NOTES part, as plain text,
   one idea per line (use \\n). Copy the teacher's own examples word for word. Never invent content.
@@ -2388,7 +2388,11 @@ RULES
   * A sentence with a blank line to fill → kind "fill", q with the blank written as ________ .
     If the section title lists words to use (e.g. is / are / isn't), put them in options.
   * A Chinese sentence to translate into English → kind "translate", q = the Chinese sentence.
+  * "Rewrite / correct each sentence" → kind "rewrite", q = ONLY the sentence to fix (leave out the directions).
+  * A multiple-choice question with no stem (e.g. "Circle the correct sentence" with A-D sentences) → kind "mcq",
+    q = the directions, options = the sentences.
   * Anything else → kind "other".
+- caseMatters: true if the grammar point is about CAPITAL LETTERS (proper nouns, capitalization), else false.
   * answer: only if the answer is printed or already written in; otherwise "".
 - If a photo is unreadable, skip it. If there are no questions, return "questions":[].
 ${_AI_MINIFY}`;
@@ -2408,9 +2412,9 @@ async function aiReadGrammarSheet({ images = [], text = '' } = {}) {
         const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
         if (!o || typeof o !== 'object') return null;
         const qs = (Array.isArray(o.questions) ? o.questions : []).map(q => ({
-          kind: ['mcq', 'fill', 'translate'].indexOf(q && q.kind) >= 0 ? q.kind : 'other',
+          kind: ['mcq', 'fill', 'translate', 'rewrite'].indexOf(q && q.kind) >= 0 ? q.kind : 'other',
           q: String((q && q.q) || '').trim(),
-          options: Array.isArray(q && q.options) ? q.options.map(x => String(x).trim()).filter(Boolean) : [],
+          options: Array.isArray(q && q.options) ? q.options.map(x => String(x).trim().replace(_gnOptLabel, '').trim()).filter(Boolean) : [],
           answer: String((q && q.answer) || '').trim(),
         })).filter(q => q.q).map(q => {
           // 「There (is / are) a book.」這種圈選題：括號變空格、括號裡的字變選項
@@ -2419,10 +2423,14 @@ async function aiReadGrammarSheet({ images = [], text = '' } = {}) {
             const opts = m[1].split(/[\/／]/).map(x => x.trim()).filter(Boolean);
             if (opts.length >= 2) return { ...q, kind: 'mcq', q: q.q.replace(m[0], '________'), options: opts };
           }
+          // 「Rewrite with the correct capital letters: my cousin junie…」→ 改寫題（只留要改的句子）
+          const rw = q.kind === 'other' && q.q.match(/^(?:rewrite|correct|fix)[^:：]*[:：]\s*(.+)$/i);
+          if (rw) return { ...q, kind: 'rewrite', q: rw[1].trim() };
           return q;
         });
+        const notes = String(o.notes || '').trim();
         return { topic: String(o.topic || '').trim(), topicZh: String(o.topicZh || '').trim(),
-                 notes: String(o.notes || '').trim(), questions: qs };
+                 notes, questions: qs, caseMatters: o.caseMatters === true || /capital letter|大寫/i.test(notes) };
       }, 90000);
   } catch (e) {
     throw new Error(e && e.timeout ? '讀照片太久沒有回應，請再試一次（照片少一點會比較快）。' : '讀不懂這份作業，請換清楚一點的照片，或直接貼文字。');
@@ -2439,15 +2447,19 @@ const _GN_CONTRACT = [
   [/\bi'm\b/g, 'i am'], [/\b(you|we|they)'re\b/g, '$1 are'], [/\b(he|she|it|there|that|what|who|where|here)'s\b/g, '$1 is'],
   [/\b(i|you|we|they)'ve\b/g, '$1 have'], [/\b(i|you|he|she|it|we|they)'ll\b/g, '$1 will'], [/\b(i|you|he|she|it|we|they)'d\b/g, '$1 would'],
 ];
-function gnNorm(s) {
-  let t = String(s || '').toLowerCase().replace(/[’‘`´]/g, "'").replace(/[“”]/g, '"');
-  _GN_CONTRACT.forEach(([re, to]) => { t = t.replace(re, to); });
+// opts.caseSensitive：v429——教「專有名詞／大寫」的單元，大小寫就是考點，不能忽略
+function gnNorm(s, opts) {
+  let t = String(s || '').replace(/[’‘`´]/g, "'").replace(/[“”]/g, '"');
+  if (!(opts && opts.caseSensitive)) {
+    t = t.toLowerCase();
+    _GN_CONTRACT.forEach(([re, to]) => { t = t.replace(re, to); });
+  }
   return t.replace(/[.,!?;:"()\[\]…。，！？；：、]/g, ' ').replace(/\s+/g, ' ').trim();
 }
-function gnAnswerOk(user, answer, accept) {
-  const u = gnNorm(user);
+function gnAnswerOk(user, answer, accept, opts) {
+  const u = gnNorm(user, opts);
   if (!u) return false;
-  return [answer].concat(Array.isArray(accept) ? accept : []).some(a => a && gnNorm(a) === u);
+  return [answer].concat(Array.isArray(accept) ? accept : []).some(a => a && gnNorm(a, opts) === u);
 }
 
 /* ── 中翻英：程式比對不過時，請 AI 判斷「意思對、文法對」的其他說法（只在答錯時才問，平常不花時間）── */
@@ -2478,11 +2490,13 @@ const GN_GRADE = {
   g3: 'Grade 3 (age 9, CEFR A1).', g4: 'Grade 4 (age 10, CEFR A1-A2).',
   g5: 'Grade 5 (age 11, CEFR A2).', g6: 'Grade 6 (age 12, CEFR A2).',
 };
-const _GN_BASE = (grade, topic, notes) => `Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
+const _GN_BASE = (grade, topic, notes, caseMatters) => `Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
 Grammar point: ${topic}
 The teacher's notes (stay inside them — do not teach anything the notes do not cover):
 ${String(notes || '').slice(0, 4000)}
-Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.`;
+Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.${caseMatters ? `
+IMPORTANT: this lesson is about CAPITAL LETTERS. Every question and interaction must test capitalization,
+and every answer must be written with exactly the right capital letters.` : ''}`;
 
 const GN_LESSON_SYS = `You design a VERY SIMPLE, INTERACTIVE mini-lesson that comes before practice.
 Explanations in Traditional Chinese, examples in English. As simple as possible — a 9-year-old must get it.
@@ -2500,12 +2514,15 @@ RULES
 - learn.say: ONE idea only, Traditional Chinese, ≤30 characters, no grammar jargon.
 - learn.examples: 1-2 short English sentences (≤8 words). hl = the exact words in "en" to highlight
   (the grammar part). zh = the Chinese meaning.
-- pick.q: one sentence with ________ for the missing part. options: 2 or 3 short choices. answer: 0-based index.
+- pick.q: EITHER one sentence with ________ for the missing part, OR a short question
+  (e.g. "Which one is a proper noun?"). options: 2-4 short choices. answer: 0-based index.
   why: Traditional Chinese ≤30 characters.
 - order.zh: a Chinese sentence. order.words: the English translation split into 3-8 word tiles IN THE CORRECT ORDER
   (keep the final punctuation on the last word).
 - fix.sentence: an English sentence with exactly ONE wrong word. wrong: that word exactly as written. right: the correct word.
-  why: Traditional Chinese ≤30 characters.
+  A capital-letter mistake counts (wrong "taipei", right "Taipei"). why: Traditional Chinese ≤30 characters.
+- Practise ONLY what the notes teach. If the notes are about capital letters, EVERY interaction must be about capital letters
+  (never switch to a different grammar point such as articles or plurals).
 - outro: ONE encouraging Traditional Chinese sentence, ≤25 characters, telling them the practice comes next.
 - Every English sentence must be 100% grammatically correct. Use only simple COUNTABLE nouns (book, cat, apple, toy, pencil…);
   avoid uncountable nouns (water, milk, equipment, furniture, homework…) unless the notes are about them.
@@ -2527,7 +2544,17 @@ RULES
   in parentheses at the end: "She ________ to school every day. (walk)".
 - answer: 1-3 words that go in the blank. accept: other forms that are ALSO correct (e.g. "is not" for "isn't"), or [].
 - If one of the teacher's questions has TWO blanks, split it into two questions: each keeps one blank and has the other one filled in.
+- If CAPITAL LETTERS are the grammar point: give the word(s) in lowercase in parentheses at the end, and the answer is the same
+  word(s) with the correct capital letters. e.g. prompt "We live in ________. (taipei)", answer "Taipei". Only ONE correct answer.
 - explain: Traditional Chinese, ≤30 characters.
+${_AI_MINIFY}`,
+  rewrite: `You write "correct the sentence" questions: the student rewrites a sentence that has mistakes.
+Output ONLY a JSON array: [{"wrong":"","answer":"","explain":""}]
+RULES
+- wrong: one short English sentence (≤12 words) with 1-3 mistakes of EXACTLY the kind the notes teach
+  (e.g. missing capital letters). Nothing else in the sentence may be wrong.
+- answer: the same sentence, fully corrected. Change ONLY the mistakes.
+- explain: Traditional Chinese, ≤30 characters, what was fixed.
 ${_AI_MINIFY}`,
   translate: `You write Chinese-to-English translation questions that practise the grammar point.
 Output ONLY a JSON array: [{"zh":"","answer":"","accept":[],"hint":"","explain":""}]
@@ -2560,9 +2587,10 @@ function gnValidStep(st) {
     const opts = (Array.isArray(st.options) ? st.options : []).map(o => String(o).trim()).filter(Boolean);
     let a = st.answer;
     if (typeof a === 'string') a = opts.findIndex(o => o.toLowerCase() === a.trim().toLowerCase());
-    const q = _gnBlank(st.q);
-    const uniq = new Set(opts.map(o => o.toLowerCase())).size === opts.length;
-    return q.indexOf('________') >= 0 && opts.length >= 2 && opts.length <= 3 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
+    const q = _gnBlank(st.q).trim();
+    // 選項只差大小寫（taipei／Taipei）也算不同——大寫單元就是在考這個
+    const uniq = new Set(opts).size === opts.length;
+    return q && opts.length >= 2 && opts.length <= 4 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
       ? { kind: 'pick', q, options: opts, answer: a, why: String(st.why || '').trim() } : null;
   }
   if (st.kind === 'order') {
@@ -2572,9 +2600,11 @@ function gnValidStep(st) {
   }
   if (st.kind === 'fix') {
     const sentence = String(st.sentence || '').trim(), wrong = String(st.wrong || '').trim(), right = String(st.right || '').trim();
-    const toks = sentence.split(/\s+/).map(w => w.replace(/[.,!?]+$/, ''));
-    const hits = toks.filter(w => w.toLowerCase() === wrong.toLowerCase()).length;
-    return sentence && wrong && right && right.toLowerCase() !== wrong.toLowerCase() && hits === 1
+    const toks = sentence.split(/\s+/).map(w => w.replace(/[.,!?;:]+$/, ''));
+    // v429：只改大小寫（taipei → Taipei）也是一種錯——以前被當成「沒改」丟掉，整份教學就不夠步數而失敗
+    const exact = toks.filter(w => w === wrong).length;
+    const hits = exact || toks.filter(w => w.toLowerCase() === wrong.toLowerCase()).length;
+    return sentence && wrong && right && right !== wrong && hits === 1
       ? { kind: 'fix', sentence, wrong, right, why: String(st.why || '').trim() } : null;
   }
   return null;
@@ -2586,12 +2616,21 @@ function gnValidLesson(o) {
   if (learn < 2 || act < 2) return null;
   return { lead: String((o && o.lead) || '').trim(), steps, outro: String((o && o.outro) || '').trim() };
 }
+// 「A. My family visited…」「(B) …」→ 拿掉標號（老師作業的選項常常帶著）
+const _gnOptLabel = /^\s*(?:[(（]?[A-Da-d][)）.．、:]|[○◯●]\s*[A-Da-d][.．)）]?)\s+/;
 function gnValidMcq(x) {
-  const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o).trim()).filter(Boolean);
+  const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o).trim().replace(_gnOptLabel, '').trim()).filter(Boolean);
   let a = x && x.answer;
-  if (typeof a === 'string') a = opts.findIndex(o => o.toLowerCase() === a.trim().toLowerCase());
+  if (typeof a === 'string') {
+    const t = a.trim().replace(_gnOptLabel, '').trim();
+    a = opts.indexOf(t);                                                  // 先比完全一樣（大小寫單元靠這個）
+    if (a < 0 && /^[A-Da-d]$/.test(t)) a = 'abcd'.indexOf(t.toLowerCase()); // 答案寫成「B」
+    if (a < 0) a = opts.findIndex(o => o.toLowerCase() === t.toLowerCase());
+  }
   const q = _gnBlank(x && x.q);
-  const uniq = new Set(opts.map(o => o.toLowerCase())).size === opts.length;
+  // v429：「taipei zoo」和「Taipei Zoo」是兩個不同的選項——大寫單元的選擇題就是在考這個。
+  //       以前比對時轉小寫，Alan 作業 Part B 的選項全被當成重複，整題丟掉。
+  const uniq = new Set(opts).size === opts.length;
   return q && opts.length >= 2 && opts.length <= 4 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
     ? { q, options: opts, answer: a, explain: String((x && x.explain) || '').trim() } : null;
 }
@@ -2600,11 +2639,19 @@ function gnValidFill(x) {
   // 括號提示如果就是答案本身（「Is there ____ cat? (a)」答案 a）→ 等於送分，拿掉提示
   let prompt = _gnBlank(x && (x.prompt || x.q));
   const hint = prompt.match(/\s*[(（]([^()（）]+)[)）]\s*$/);
-  if (hint && answer && hint[1].trim().toLowerCase() === answer.toLowerCase()) prompt = prompt.slice(0, hint.index).trim();
+  // （只拿掉「完全一樣」的；大寫單元的「(taipei) → Taipei」提示是小寫、答案是大寫，那是題目本身，要留著）
+  if (hint && answer && hint[1].trim() === answer) prompt = prompt.slice(0, hint.index).trim();
   const blanks = (prompt.match(/________/g) || []).length;
   return blanks === 1 && answer && answer.split(/\s+/).length <= 4
     ? { prompt, answer, accept: (Array.isArray(x.accept) ? x.accept : []).map(a => String(a).trim()).filter(Boolean).slice(0, 4),
         explain: String(x.explain || '').trim() } : null;
+}
+function gnValidRewrite(x) {
+  const wrong = String((x && (x.wrong || x.q || x.prompt)) || '').trim();
+  const answer = String((x && x.answer) || '').trim();
+  const nw = wrong.split(/\s+/).length, na = answer.split(/\s+/).length;
+  return wrong && answer && wrong !== answer && !_gnCJK.test(wrong + answer) && nw <= 18 && Math.abs(nw - na) <= 2
+    ? { wrong, answer, explain: String(x.explain || '').trim() } : null;
 }
 function gnValidTranslate(x) {
   const zh = String((x && (x.zh || x.q)) || '').trim();
@@ -2622,12 +2669,15 @@ async function _gnCall(system, user, maxTokens) {
 
 /* 出一種題型到 n 題：老師原本的題目先收（請 AI 補答案、照原文），不夠再請 AI 另外出；
    驗不過的丟掉、不夠就再出一輪（最多兩輪）。 */
-async function _gnMakeKind(kind, { n, base, teacherQs }) {
+async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   if (!n || n <= 0) return [];
-  const valid = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate }[kind];
+  const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite }[kind];
+  // 大寫單元的填空：答案一定要有大寫字母（實測 AI 會出「My friend ____ lives in Taipei. → teacher」這種跟大寫無關、答案又不唯一的題）
+  const valid = (kind === 'fill' && caseMatters) ? (x) => { const v = v0(x); return v && /[A-Z]/.test(v.answer) ? v : null; } : v0;
   const tq = (teacherQs || []).filter(q => q.kind === kind).slice(0, n);
   const out = [], seen = new Set();
-  const key = (x) => String(x.q || x.prompt || x.zh || '').toLowerCase().replace(/\s+/g, ' ');
+  // 選擇題的題幹常常一模一樣（「Circle the sentence with the correct capital letters.」）→ 連選項一起比
+  const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || '') + '|' + (x.options || []).join('|')).replace(/\s+/g, ' ');
   const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
     const v = valid(x); if (!v) return;
     const k = key(v); if (!k || seen.has(k)) return;
@@ -2648,22 +2698,50 @@ async function _gnMakeKind(kind, { n, base, teacherQs }) {
   return out.slice(0, n);
 }
 
-async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, onProgress } = {}) {
+// v429：互動教學獨立出來（校稿頁也能單獨按「重新產生」）
+async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', caseMatters = false } = {}) {
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters);
+  let feedback = '', best = null, lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    let raw;
+    try { raw = await _gnCall(GN_LESSON_SYS, base + feedback, 2400); } catch (e) { lastErr = e; continue; }
+    const l = gnValidLesson(raw);
+    if (l) return l;
+    const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
+    const valid = steps.map(gnValidStep).filter(Boolean);
+    if (!best || valid.length > best.steps.length) best = { lead: String((raw && raw.lead) || '').trim(), steps: valid, outro: String((raw && raw.outro) || '').trim() };
+    const bad = steps.map((st, k) => (gnValidStep(st) ? null : `- step ${k + 1}: ${JSON.stringify(st).slice(0, 180)}`)).filter(Boolean);
+    feedback = `\n\nYour previous answer was REJECTED by the checker. Problem steps:\n${bad.join('\n') || '- not enough valid steps'}\n` +
+      'Fix them. You need at least 2 "learn" steps and 2 interaction steps, and every step must follow the RULES exactly.';
+  }
+  // 三次都不完美 → 只要有「學」也有「動手」，就先用驗過的那幾步（總比整個失敗好）
+  if (best && best.steps.some(s => s.kind === 'learn') && best.steps.some(s => s.kind !== 'learn')) return best;
+  throw new Error(lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗');
+}
+
+async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
+                                   caseMatters = false, onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
-  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes);
-  let done = 0; const total = 1 + [nMcq, nFill, nTr].filter(Boolean).length;
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters);
+  let done = 0; const total = 1 + [nMcq, nFill, nTr, nRw].filter(Boolean).length;
   const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
-  const lessonP = (async () => {
-    for (let i = 0; i < 2; i++) {
-      try { const l = gnValidLesson(await _gnCall(GN_LESSON_SYS, base, 2400)); if (l) return l; } catch (e) { if (i === 1) throw e; }
-    }
-    throw new Error('互動教學產生失敗，請再試一次。');
-  })().finally(() => tick('互動教學'));
-  const kindP = (kind, n, label) => _gnMakeKind(kind, { n, base, teacherQs }).finally(() => tick(label));
-  const [lesson, mcq, fill, tr] = await Promise.all([
-    lessonP, kindP('mcq', nMcq, '選擇題'), kindP('fill', nFill, '填空題'), kindP('translate', nTr, '中翻英'),
+  // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
+  const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
+  const [L, M, F, T, R] = await Promise.all([
+    settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters }), '互動教學'),
+    settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
+    settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
+    settle(_gnMakeKind('translate', { n: nTr, base, teacherQs, caseMatters }), '中翻英', nTr),
+    settle(_gnMakeKind('rewrite', { n: nRw, base, teacherQs, caseMatters }), '改寫句子', nRw),
   ]);
-  return { lesson, mcq, fill, tr };
+  const errors = [];
+  if (L.e) errors.push('互動教學');
+  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw]].forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
+  const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [], caseMatters, errors };
+  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length) {
+    throw new Error('全部都沒有產生成功，請再試一次。');
+  }
+  return out;
 }
 
 function grCountBlanks(passage) {
@@ -4144,7 +4222,7 @@ function lineManual(target, note, dry, pass) {
 function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
 Object.assign(window, {
-  aiReadGrammarSheet, aiMakeGrammarPack, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep,
+  aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite,
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,

@@ -4714,6 +4714,9 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [nMcq, setNMcq]     = useS(8);
   const [nFill, setNFill]   = useS(8);
   const [nTr, setNTr]       = useS(5);
+  const [nRw, setNRw]       = useS(5);          // v429：改寫句子（例：把大小寫改對）
+  const [lsBusy, setLsBusy] = useS(false);      // v429：校稿頁單獨重出互動教學
+  const runRef = React.useRef(0);               // v429：失敗之後，還在跑的請求不准再把「處理中…」叫回來
   const [busy, setBusy]     = useS(null);        // { done, total, label }
   const [err, setErr]       = useS('');
   const [res, setRes]       = useS(null);        // { sheet, lesson, mcq, fill, tr }
@@ -4726,7 +4729,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   useE(() => {
     if (!open) return;
     setTitle(''); setText(''); setImgs([]); setCat(defaultCat || 'grammar'); setGrade(defaultGrade || 'g4');
-    setNMcq(8); setNFill(8); setNTr(5); setBusy(null); setErr(''); setRes(null); setTab('lesson');
+    setNMcq(8); setNFill(8); setNTr(5); setNRw(5); setBusy(null); setErr(''); setRes(null); setTab('lesson'); setLsBusy(false);
+    runRef.current++;
     setAssign(true); setWho([]);
     const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
     setDue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
@@ -4743,24 +4747,40 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       setImgs(v => v.concat(out).slice(0, 6));
     } catch (e) { setErr('有照片讀不出來，請換一張試試。'); }
   };
-  const ready = (imgs.length > 0 || text.trim().length >= 20) && (nMcq + nFill + nTr) > 0;
+  const ready = (imgs.length > 0 || text.trim().length >= 20) && (nMcq + nFill + nTr + nRw) > 0;
 
   const run = async () => {
+    const id = ++runRef.current;
+    const live = () => runRef.current === id;
     setErr('');
-    setBusy({ done: 0, total: 5, label: imgs.length ? '讀作業照片中（約 10 秒）' : '讀文字中' });
+    setBusy({ done: 0, total: 6, label: imgs.length ? '讀作業照片中（約 10 秒）' : '讀文字中' });
     try {
       const sheet = await window.aiReadGrammarSheet({ images: imgs.map(i => ({ media_type: i.media_type, data: i.data })), text });
+      if (!live()) return;
       if (!sheet.notes && !sheet.questions.length) throw new Error('照片裡讀不到教學重點或題目，請換清楚一點的照片，或直接貼文字。');
-      setBusy({ done: 1, total: 5, label: `讀到了：${sheet.topic || '文法'}，開始出題` });
+      setBusy({ done: 1, total: 6, label: `讀到了：${sheet.topic || '文法'}，開始出題` });
       const pack = await window.aiMakeGrammarPack({
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
-        grade, nMcq, nFill, nTr,
-        onProgress: (d, t, label) => setBusy({ done: 1 + d, total: 1 + t, label }),
+        grade, nMcq, nFill, nTr, nRw, caseMatters: !!sheet.caseMatters,
+        onProgress: (d, t, label) => { if (live()) setBusy({ done: 1 + d, total: 1 + t, label }); },
       });
+      if (!live()) return;
       if (!title.trim()) setTitle(sheet.topicZh ? `${sheet.topic}（${sheet.topicZh}）` : (sheet.topic || '文法練習'));
+      // 一律先開「互動教學」分頁——沒產生成功時，老師第一眼就看到提示和「🔄 重新產生」按鈕
       setRes({ sheet, ...pack }); setTab('lesson');
-    } catch (e) { setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
-    setBusy(null);
+      // 有一部分沒出成功：其他的照樣可以用，那一部分在校稿頁可以單獨重出
+      if (pack.errors && pack.errors.length) setErr(`「${pack.errors.join('、')}」這次沒有產生成功——其他的都好了，可以在校稿頁按「🔄 重新產生」。`);
+    } catch (e) { if (live()) setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
+    if (live()) setBusy(null);
+  };
+  const redoLesson = async () => {
+    setLsBusy(true); setErr('');
+    try {
+      const lesson = await window.aiMakeGrammarLesson({ topic: res.sheet.topic || title, topicZh: res.sheet.topicZh,
+        notes: res.sheet.notes || text, grade, caseMatters: !!res.caseMatters });
+      setRes(r => ({ ...r, lesson, errors: (r.errors || []).filter(x => x !== '互動教學') }));
+    } catch (e) { setErr('互動教學還是沒有產生成功，請再按一次；或先建立練習（練習就不會上鎖）。'); }
+    setLsBusy(false);
   };
 
   // ── 校稿用的更新函式 ──
@@ -4857,7 +4877,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
               </div>
             </div>
             <div className="gr-num-row">
-              {[['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['🔤 中翻英', nTr, setNTr, 10]].map(([lb, v, set, max]) => (
+              {[['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['✍️ 改寫句子', nRw, setNRw, 10], ['🔤 中翻英', nTr, setNTr, 10]].map(([lb, v, set, max]) => (
                 <div className="field" key={lb}>
                   <label className="field-label">{lb}</label>
                   <select value={v} onChange={e => set(+e.target.value)}>
@@ -4868,7 +4888,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
             <div className="field-help">
               會建立：<b>📘 互動教學</b>（一步一個小重點，每步都要學生動手：選一選、排句子、找錯字）→ 學完才解鎖
-              <b> 📝 選擇 → ✏️ 填空 → 🔤 中翻英</b>。老師作業上原本的題目會優先收進去，不夠的 AI 再依教學重點補。出完先校稿，確認了才寫進題庫。
+              <b> 📝 選擇 → ✏️ 填空 → ✍️ 改寫句子 → 🔤 中翻英</b>（不要的選「不要」）。老師作業上原本的題目會優先收進去，不夠的 AI 再依教學重點補。出完先校稿，確認了才寫進題庫。
             </div>
             {assignBox()}
             {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
@@ -4892,8 +4912,9 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 
   // ───────────────────────── 校稿畫面 ─────────────────────────
   const steps = (res.lesson && res.lesson.steps) || [];
-  const TABS = [['lesson', `📘 互動教學`, steps.length], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length], ['tr', '🔤 中翻英', res.tr.length]];
-  const unitsN = 1 + ['mcq', 'fill', 'tr'].filter(k => res[k].length).length;
+  const TABS = [['lesson', `📘 互動教學`, steps.length], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
+    ['rw', '✍️ 改寫句子', (res.rw || []).length], ['tr', '🔤 中翻英', res.tr.length]].filter(t => t[0] === 'lesson' || t[2] > 0);
+  const unitsN = (steps.length ? 1 : 0) + ['mcq', 'fill', 'rw', 'tr'].filter(k => (res[k] || []).length).length;
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal wide" onClick={e => e.stopPropagation()}>
@@ -4908,8 +4929,21 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             ))}
           </div>
 
-          {tab === 'lesson' && (
+          {err && <div className="notify-msg err" style={{ marginBottom: 10 }}>⚠️ {err}</div>}
+          {tab === 'lesson' && !steps.length && (
             <div className="gr-proof">
+              <div className="gn-ls-miss">
+                <b>⚠️ 互動教學這次沒有產生成功</b>
+                <span>題目都已經出好了。按下面重新產生一次（通常第二次就會成功）；沒有互動教學的話，練習就不會上鎖。</span>
+                <button className="btn primary" disabled={lsBusy} onClick={redoLesson}>{lsBusy ? '產生中…' : '🔄 重新產生互動教學'}</button>
+              </div>
+            </div>
+          )}
+          {tab === 'lesson' && steps.length > 0 && (
+            <div className="gr-proof">
+              <div style={{ textAlign: 'right', marginBottom: 6 }}>
+                <button type="button" className="btn ghost" disabled={lsBusy} onClick={redoLesson}>{lsBusy ? '產生中…' : '🔄 整份重新產生'}</button>
+              </div>
               <div className="field">
                 <label className="field-label">開頭一句話</label>
                 <input value={res.lesson.lead} onChange={e => setRes(r => ({ ...r, lesson: { ...r.lesson, lead: e.target.value } }))}/>
@@ -5004,6 +5038,27 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
           )}
 
+          {tab === 'rw' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生看到的是「有錯的句子」，已經幫他打在輸入框裡，他只要改錯的地方。{res.caseMatters ? <b> 這個單元大小寫會算分（taipei ≠ Taipei）。</b> : null}
+              </div>
+              {(res.rw || []).map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <div className="gq-row-2">
+                      <div><label>有錯的句子</label><input value={x.wrong} onChange={e => upd('rw', i, { wrong: e.target.value })}/></div>
+                      <div><label>改對的句子</label><input value={x.answer} onChange={e => upd('rw', i, { answer: e.target.value })}/></div>
+                      <div><label>解說</label><input value={x.explain} onChange={e => upd('rw', i, { explain: e.target.value })}/></div>
+                    </div>
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('rw', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {tab === 'tr' && (
             <div className="gr-proof">
               <div className="field-help" style={{ marginBottom: 8 }}>
@@ -5028,11 +5083,14 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
         </div>
         <div className="modal-foot">
           <button className="btn ghost" onClick={() => setRes(null)}>← 重新設定</button>
-          <button className="btn primary" onClick={() => onCreate({
-            title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
-            lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr,
-            assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
-          })}>建立 {unitsN} 個單元 →</button>
+          <button className="btn primary" disabled={lsBusy || !unitsN} onClick={() => {
+            if (!steps.length && !confirm('這一份沒有互動教學，練習就不會上鎖（學生可以直接做題）。\n確定要先建立嗎？')) return;
+            onCreate({
+              title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
+              lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [], caseMatters: !!res.caseMatters,
+              assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
+            });
+          }}>建立 {unitsN} 個單元 →</button>
         </div>
       </div>
     </div>
@@ -5040,7 +5098,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, lesson, mcq, fill, tr }) {
+function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, caseMatters }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
@@ -5053,16 +5111,21 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr }) {
       lead: lesson.lead || '', steps, outro: lesson.outro || '' });
   }
   const req = lessonId ? { requires: lessonId } : {};
+  const cs = caseMatters ? { caseSensitive: true } : {};   // v429：大小寫是考點的單元，打字題要分大小寫
   const goodMcq = (mcq || []).filter(x => x && x.q && (x.options || []).length >= 2);
   if (goodMcq.length) out.push({ id: 'gn' + stamp + 'qz' + rnd(), type: 'quiz', group: g, order: 1, ...req,
     title: `${g} · 選擇題`, zh: `${goodMcq.length} 題 · 選出正確的答案`, shuffle: true,
     questions: goodMcq.map((x, i) => ({ id: 'q' + stamp + i + rnd(), q: x.q, options: x.options, answer: x.answer, explain: x.explain || '' })) });
   const goodFill = (fill || []).filter(x => x && x.prompt && x.answer);
-  if (goodFill.length) out.push({ id: 'gn' + stamp + 'fb' + rnd(), type: 'type-answer', variant: 'fill', group: g, order: 2, ...req,
+  if (goodFill.length) out.push({ id: 'gn' + stamp + 'fb' + rnd(), type: 'type-answer', variant: 'fill', group: g, order: 2, ...req, ...cs,
     title: `${g} · 填空題`, zh: `${goodFill.length} 題 · 把空格填上正確的字`, instruction: '把 ________ 填上正確的字',
     pairs: goodFill.map((x, i) => ({ id: 'p' + stamp + 'f' + i + rnd(), prompt: x.prompt, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
+  const goodRw = (rw || []).filter(x => x && x.wrong && x.answer && x.wrong !== x.answer);
+  if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 3, ...req, ...cs,
+    title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把句子改對`, instruction: '把句子裡錯的地方改對',
+    pairs: goodRw.map((x, i) => ({ id: 'p' + stamp + 'r' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) });
   const goodTr = (tr || []).filter(x => x && x.zh && x.answer);
-  if (goodTr.length) out.push({ id: 'gn' + stamp + 'tr' + rnd(), type: 'type-answer', variant: 'translate', group: g, order: 3, ...req,
+  if (goodTr.length) out.push({ id: 'gn' + stamp + 'tr' + rnd(), type: 'type-answer', variant: 'translate', group: g, order: 4, ...req, ...cs,
     topic: topic || g, title: `${g} · 中翻英`, zh: `${goodTr.length} 題 · 看中文，打出英文句子`,
     pairs: goodTr.map((x, i) => ({ id: 'p' + stamp + 't' + i + rnd(), prompt: x.zh, answer: x.answer, accept: x.accept || [], hint: x.hint || '', explain: x.explain || '' })) });
   return out;

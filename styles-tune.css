@@ -3562,3 +3562,6 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 /* v428：中翻英打的是整句——等寬字體（單字練習用的）讀起來很吃力，改一般字體 */
 .ta-input.tr { font-family: var(--sans, system-ui, sans-serif); letter-spacing: 0; }
 .ta-input.tr + .ta-correct-ans, .ta-input.tr ~ .ta-correct-ans { font-family: var(--sans, system-ui, sans-serif); }
+/* v429：互動教學沒產生成功時的提示＋重出按鈕 */
+.gn-ls-miss { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: #FFF6E0; border: 1px solid #F0D9A0; font-family: var(--sans); font-size: 14px; line-height: 1.6; }
+.gn-ls-miss b { font-size: 15px; }
