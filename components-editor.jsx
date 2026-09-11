@@ -4755,10 +4755,12 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
     setErr('');
     setBusy({ done: 0, total: 6, label: imgs.length ? '讀作業照片中（約 10 秒）' : '讀文字中' });
     try {
-      const sheet = await window.aiReadGrammarSheet({ images: imgs.map(i => ({ media_type: i.media_type, data: i.data })), text });
+      // v430：照片／長文字拆成好幾段同時讀——進度條顯示讀到第幾段
+      const sheet = await window.aiReadGrammarSheet({ images: imgs.map(i => ({ media_type: i.media_type, data: i.data })), text,
+        onProgress: (d, t) => { if (live() && t > 1) setBusy({ done: d / t, total: 6, label: `讀作業中（${d}/${t} 段，約 10 秒）` }); } });
       if (!live()) return;
       if (!sheet.notes && !sheet.questions.length) throw new Error('照片裡讀不到教學重點或題目，請換清楚一點的照片，或直接貼文字。');
-      setBusy({ done: 1, total: 6, label: `讀到了：${sheet.topic || '文法'}，開始出題` });
+      setBusy({ done: 1, total: 6, label: `讀到了：${sheet.topic || '文法'}${(sheet.sections || []).length > 1 ? `（${sheet.sections.length} 段、${sheet.questions.length} 題）` : ''}，開始出題` });
       const pack = await window.aiMakeGrammarPack({
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
         grade, nMcq, nFill, nTr, nRw, caseMatters: !!sheet.caseMatters,
@@ -4769,7 +4771,10 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       // 一律先開「互動教學」分頁——沒產生成功時，老師第一眼就看到提示和「🔄 重新產生」按鈕
       setRes({ sheet, ...pack }); setTab('lesson');
       // 有一部分沒出成功：其他的照樣可以用，那一部分在校稿頁可以單獨重出
-      if (pack.errors && pack.errors.length) setErr(`「${pack.errors.join('、')}」這次沒有產生成功——其他的都好了，可以在校稿頁按「🔄 重新產生」。`);
+      const warn = [];
+      if (sheet.missed && sheet.missed.length) warn.push(`${sheet.missed.join('、')}沒有讀到（其他都讀好了），要的話可以換一張清楚的照片再出一次。`);
+      if (pack.errors && pack.errors.length) warn.push(`「${pack.errors.join('、')}」這次沒有產生成功——其他的都好了，可以在校稿頁按「🔄 重新產生」。`);
+      if (warn.length) setErr(warn.join(' '));
     } catch (e) { if (live()) setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
     if (live()) setBusy(null);
   };
@@ -4895,7 +4900,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             {busy && (
               <div className="gr-busy">
                 <div className="gr-busy-bar"><i style={{ width: (busy.done / busy.total * 100) + '%' }}/></div>
-                <span>{busy.label}… {busy.done}/{busy.total}</span>
+                <span>{busy.label}… {Math.floor(busy.done)}/{busy.total}</span>
               </div>
             )}
           </div>

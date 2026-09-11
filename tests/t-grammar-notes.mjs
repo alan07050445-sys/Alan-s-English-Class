@@ -11,8 +11,16 @@ const byKind = {};           // v429：依 system prompt 分流（lesson/mcq/fil
 const kindOf = (sys) => /INTERACTIVE mini-lesson/.test(sys) ? 'lesson' : /multiple-choice/.test(sys) ? 'mcq'
   : /fill-in-the-blank/.test(sys) ? 'fill' : /correct the sentence/.test(sys) ? 'rewrite' : /Chinese-to-English translation questions/.test(sys) ? 'translate' : null;
 const calls = [];
-const _aiAsk = async (body, pickFn) => {
+const _aiAskImpl = {};
+const _aiAsk = (body, pickFn) => _aiAskImpl.fn(body, pickFn);
+_aiAskImpl.fn = async (body, pickFn) => {
   calls.push(body);
+  // v430：選擇題交叉檢查——沒指定答案就當作「檢查失敗」（程式照收），不吃掉其他題型排好的假答案
+  if (/checking a quiz/.test(String(body.system || ''))) {
+    const c = byKind.check && byKind.check.shift();
+    if (!c) throw new Error('no check');
+    return pickFn({ content: [{ type: 'text', text: JSON.stringify(c) }] });
+  }
   const k = kindOf(String(body.system || ''));
   const next = (k && byKind[k] && byKind[k].length) ? byKind[k].shift() : aiQueue.shift();
   if (next instanceof Error) throw next;
@@ -23,7 +31,7 @@ const _aiAsk = async (body, pickFn) => {
 };
 const code = slice(data, 'const GN_MODEL', 'function grCountBlanks');
 const W = new Function('_aiAsk', '_aiStripFence', '_AI_MINIFY',
-  code + '\nreturn { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidStep, gnValidLesson, gnValidFill, gnValidRewrite, gnValidMcq, GN_READ_MODEL, GN_MODEL };')(
+  code + '\nreturn { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidStep, gnValidLesson, gnValidFill, gnValidRewrite, gnValidMcq, gnCleanStem, gnSplitText, _gnSalvageJson, _gnSpread, GN_READ_MODEL, GN_MODEL };')(
   _aiAsk, (t) => String(t).replace(/^```(json)?/, '').replace(/```$/, '').trim(), '');
 // gnBuildItems 在 JSX 檔裡，但本身是純 JS
 globalThis.window = { gnValidStep: W.gnValidStep };
@@ -210,6 +218,135 @@ log.push('\n【5】建出來的單元');
   ok('一般單元不會被標成分大小寫', !items.some(x => x.caseSensitive));
   const noLesson = B({ title: 'T', lesson: { steps: [] }, mcq: [{ q: 'a ________', options: ['x', 'y'], answer: 0 }], fill: [], tr: [] });
   ok('教學全部被刪光 → 練習就不鎖（不然永遠打不開）', noLesson.length === 1 && !noLesson[0].requires);
+}
+
+// ═══ 7. v430：一份很長的作業（Alan 的 Nouns 五大類：5 頁照片／5800 字）═══
+// 以前一次讀，AI 寫到 3000 token 上限被切斷 → JSON 不完整 → 「讀不到」（照片、文字都一樣）。
+log.push('\n【7】（v430）長作業：拆段同時讀、被切斷也救得回來、題目各段都有');
+{
+  const nouns = `老師把Nouns 分成五大類
+1. A Noun: People, Places, Things, and Ideas
+A noun names a person, a place, a thing, or an idea.
+Type	Examples
+People	Kelis, sister, skateboarder, Senator Kaur
+Practice A: Identifying Nouns
+Read each sentence. Then underline the nouns.
+Luna is a smart cat.
+My brother plays the drums.
+${'Chris eats blueberries in the morning.\n'.repeat(8)}2. Collective Nouns
+A collective noun names a group of people, animals, or things.
+Practice A: Finding Collective Nouns
+fans, audience, viewers ____________________
+${'uncle, aunt, family ____________________\n'.repeat(8)}3. Count Nouns and Non-Count Nouns
+Count nouns name things that can be counted.
+${'Dad added too much sugar to the cake.\n'.repeat(8)}4. Common Nouns and Proper Nouns
+Proper nouns are always capitalized.
+${'Mary Cassatt was a well-known painter who lived in France.\n'.repeat(5)}5. Possessive Nouns: Using Apostrophes
+Rule 1: Most Singular Nouns and Irregular Plural Nouns
+Add an apostrophe and -s to most singular nouns.
+${'the (dog) barking ____________________\n'.repeat(8)}`;
+  const parts = W.gnSplitText(nouns);
+  ok('⭐ 依大標題切成 5 段（「1. A Noun…」到「5. Possessive…」）', parts.length === 5, parts.map(p => p.split('\n')[0]).join(' ｜ '));
+  ok('標題前的「老師把Nouns 分成五大類」併到第一段，不自己成一段', parts[0].startsWith('老師把Nouns') && /1\. A Noun/.test(parts[0]));
+  ok('題目句（以句號結尾、小寫開頭）不會被當成標題', !parts.some(p => /^(Luna is|the \(dog\))/.test(p)));
+  ok('「Rule 1: …」「Practice A」不會把段落切碎', parts[4].indexOf('Rule 1') > 0 && parts[1].indexOf('Practice A') > 0);
+  const huge = Array.from({ length: 300 }, (_, i) => `Sentence number ${i} is here.`).join('\n');
+  const hp = W.gnSplitText(huge);
+  ok('沒有標題的一大段 → 照長度切，每段都不超過上限，而且不超過 8 段', hp.length > 1 && hp.length <= 8 && hp.join('\n').split('\n').filter(l => /^Sentence/.test(l)).length === 300, hp.map(p => p.length).join(','));
+  ok('短文字 → 一段就好（不要多花請求）', W.gnSplitText('There is a cat.\nThere are two dogs.').length === 1);
+
+  const cut = '{"unit":"Nouns","topic":"Collective Nouns","notes":"A collective noun names a group.","questions":[{"kind":"mcq","q":"Which one is a collective noun?","options":["fans","audience"]},{"kind":"mcq","q":"Which one is a coll';
+  const sv = W._gnSalvageJson(cut);
+  ok('⭐ AI 被 max_tokens 切斷的 JSON → 救回 notes 和已經寫完的題目', sv && sv.notes === 'A collective noun names a group.' && sv.questions.length === 1, JSON.stringify(sv));
+  ok('完全不是 JSON → null', W._gnSalvageJson('sorry I cannot') === null);
+
+  // 平行讀：5 段各自回答（依內容分流，因為同時送出、順序不固定）
+  const reply = {
+    'A Noun': { unit: 'Nouns', topic: 'Nouns: People, Places, Things, Ideas', notes: 'A noun names a person.', questions: [{ kind: 'identify', q: 'Luna is a smart cat.', find: 'noun' }, { kind: 'identify', q: 'My brother plays the drums.', find: 'noun' }] },
+    'Collective': { unit: 'Nouns', topic: 'Collective Nouns', notes: 'A collective noun names a group.', questions: [{ kind: 'mcq', q: 'Which one is a collective noun?', options: ['fans', 'audience', 'viewers'] }] },
+    'Count Nouns': new Error('timeout'),
+    'Common Nouns': { unit: '', topic: 'Common and Proper Nouns', notes: 'Proper nouns are always capitalized. Use a capital letter.', caseMatters: true, questions: [{ kind: 'identify', q: 'Mary Cassatt was a painter.', find: 'proper noun' }] },
+    'Possessive': { unit: 'Nouns', topic: 'Possessive Nouns', notes: "Add 's.", questions: [{ kind: 'fill', q: 'the ________ barking (dog)' }] },
+  };
+  const realAsk = _aiAskImpl.fn;
+  _aiAskImpl.fn = async (body, pickFn) => {
+    calls.push(body);
+    const t = JSON.stringify(body.messages[0].content);
+    const k = Object.keys(reply).find(x => t.indexOf(x) >= 0);
+    const r = reply[k];
+    if (r instanceof Error) throw r;
+    return pickFn({ content: [{ type: 'text', text: JSON.stringify(r) }] });
+  };
+  const n0 = calls.length, prog = [];
+  const sh = await W.aiReadGrammarSheet({ text: nouns, onProgress: (d, t) => prog.push(`${d}/${t}`) });
+  const mine = calls.slice(n0);
+  ok('⭐ 5 段同時送出（5 個請求，不是一個大請求）', mine.length === 5 && mine.every(c => c.max_tokens >= 4000), mine.length + ' 個');
+  ok('進度回報 0/5 → 5/5', prog[0] === '0/5' && prog[prog.length - 1] === '5/5', prog.join(' '));
+  ok('⭐ 一段讀不到（第 3 段逾時）→ 其他 4 段照樣可以用，missed 說是哪一段', sh.sections.length === 4 && sh.missed.join() === '文字第 3 段', JSON.stringify(sh.missed));
+  ok('單元名稱取大家都說的「Nouns」', sh.topic === 'Nouns' && sh.unit === 'Nouns', sh.topic);
+  ok('notes 每段都有【主題】標頭', (sh.notes.match(/^【/gm) || []).length === 4 && sh.notes.indexOf('【Collective Nouns】') >= 0);
+  ok('題目帶著段落編號（出題時才能各段輪流挑）', sh.questions.map(q => q.sec).join() === '0,0,1,2,3', sh.questions.map(q => q.sec).join());
+  ok('⭐ 只有一段在教大寫 → 整份不算大寫單元（不然每題都變成考大寫）', sh.caseMatters === false);
+  ok('identify（底線畫出名詞）有保留要找什麼', sh.questions[0].kind === 'identify' && sh.questions[0].find === 'noun');
+
+  const n1 = calls.length;
+  const one = await W.aiReadGrammarSheet({ images: [1, 2, 3].map(() => ({ media_type: 'image/jpeg', data: 'A' })) }).catch(e => e);
+  ok('三張照片 → 三個請求，每個請求只有自己那張', calls.length - n1 === 3 && calls.slice(n1).every(c => c.messages[0].content.filter(b => b.type === 'image').length === 1));
+  ok('每張都讀不到 → 才整份失敗，訊息照舊', one instanceof Error && /讀不懂|太久/.test(one.message));
+
+  // 出題：老師題目各段輪流挑、identify 轉選擇題
+  const spread = W._gnSpread([{ sec: 0, q: 'a1' }, { sec: 0, q: 'a2' }, { sec: 0, q: 'a3' }, { sec: 1, q: 'b1' }, { sec: 2, q: 'c1' }, { sec: 2, q: 'c2' }], 4);
+  ok('⭐ 各段輪流挑（不是前 4 題全出自第 1 段）', spread.map(x => x.q).join() === 'a1,b1,c1,a2', spread.map(x => x.q).join());
+  _aiAskImpl.fn = realAsk;
+  byKind.mcq = [[{ q: 'Which word is a noun? "Luna is a smart cat."', options: ['smart', 'cat', 'is'], answer: 1 }]];
+  const n2 = calls.length;
+  await W.aiMakeGrammarPack({ topic: 'Nouns', notes: sh.notes, teacherQs: sh.questions, nMcq: 1, nFill: 0, nTr: 0, nRw: 0 }).catch(() => {});
+  const mq = calls.slice(n2).find(c => /multiple-choice/.test(c.system));
+  ok('⭐ 「底線畫出名詞」的老師題目交給選擇題，並說明要改成 Which word is a …?', mq && /\[identify: find the noun\] Luna is a smart cat\./.test(mq.messages[0].content) && /Which word is a <X>\?/.test(mq.messages[0].content));
+  ok('notes 有好幾段 → 提醒 AI 每一段都要照顧到', mq && /Cover EVERY section/.test(mq.messages[0].content));
+  const ls = calls.slice(n2).find(c => /INTERACTIVE mini-lesson/.test(c.system));
+  ok('多段的互動教學：一段一回合、字數上限放寬', ls && ls.max_tokens >= 3800 && /ONE round per section/.test(ls.system));
+  ok('notes 不再只給前 4000 字', /slice\(0, 9000\)/.test(data));
+}
+
+log.push('\n【8】（v430）選擇題題目只要「Choose the correct answer.」（Alan：不然太亂了）');
+{
+  const opts = ['My family visited taipei zoo.', 'My family visited Taipei Zoo.', 'my family visited Taipei zoo.'];
+  ok('⭐ 題目＝指示＋四個句子全部擠在一起 → Choose the correct answer.',
+     W.gnCleanStem('Circle the sentence with the correct capital letters. A. My family visited taipei zoo. B. My family visited Taipei Zoo. C. my family visited Taipei zoo.', opts) === 'Choose the correct answer.');
+  ok('選項是整句 → 題目一律 Choose the correct answer.', W.gnCleanStem('Which sentence uses capital letters correctly?', opts) === 'Choose the correct answer.');
+  ok('有空格的題目不動', W.gnCleanStem('There ________ a book.', ['is', 'are']) === 'There ________ a book.');
+  ok('「Which word is a noun? "…"」選項是單字 → 不動（句子是題目的一部分）',
+     W.gnCleanStem('Which word is a proper noun? "Mary Cassatt was a well-known painter."', ['Mary Cassatt', 'painter', 'well-known']) === 'Which word is a proper noun? "Mary Cassatt was a well-known painter."');
+  ok('Which one is a collective noun?（選項是單字）→ 不動', W.gnCleanStem('Which one is a collective noun?', ['fans', 'audience', 'viewers']) === 'Which one is a collective noun?');
+  ok('新出的選擇題經過驗證器就整理好', W.gnValidMcq({ q: 'Circle the correct sentence.', options: opts, answer: 1 }).q === 'Choose the correct answer.');
+  const qm = fs.readFileSync(new URL('components-quiz-mode.jsx', ROOT), 'utf8');
+  const player = qm.slice(qm.indexOf('function QuizModePlayer('), qm.indexOf('function WritingPracticePlayer('));
+  ok('⭐ 已經建好的 ✏️ 出文法單元，播放時也顯示乾淨的題目（不用重出）', /\/\^gn\/\.test\(String\(item\.id[^)]*\)\)[^?]*\?\s*window\.gnCleanStem\(q\.q, q\.options\)/.test(player));
+  ok('只套在 gn 單元（其他題型的題目不動）', (qm.match(/gnCleanStem/g) || []).length === 2 && player.indexOf('gnCleanStem') > 0);
+  ok('gnCleanStem 有掛到 window', /aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,/.test(data));
+}
+
+log.push('\n【9】（v430）選擇題答案要對：另一個 AI 自己作答交叉檢查＋選項要出自句子');
+{
+  const sent = 'Which word is a noun? "Luna is a smart cat."';
+  ok('⭐ 選項不在句子裡（woman）→ 丟掉', W.gnValidMcq({ q: 'Which word is a proper noun? "Mary Cassatt was a well-known painter."', options: ['painter', 'Mary Cassatt', 'woman'], answer: 1 }) === null);
+  ok('組合選項「park(common), Elm Street(proper)」→ 丟掉', W.gnValidMcq({ q: 'Which words are common and proper nouns? "We walked to the park on Elm Street."', options: ['park(common), Elm Street(proper)', 'We(common), walked(proper)'], answer: 0 }) === null);
+  ok('選項都出自句子 → 收', !!W.gnValidMcq({ q: sent, options: ['smart', 'Luna', 'is'], answer: 1 }));
+  ok('「is」不會被當成「this」的一部分（整個字比對）', W.gnValidMcq({ q: 'Which word is a noun? "This cat sleeps."', options: ['is', 'cat', 'sleeps'], answer: 1 }) === null);
+  byKind.mcq = [[{ q: sent, options: ['smart', 'is', 'Luna'], answer: 1 }, { q: 'Which one is a collective noun?', options: ['fans', 'audience', 'viewers'], answer: 1 }],
+                [{ q: 'Which word is a noun? "My brother plays the drums."', options: ['plays', 'the', 'brother'], answer: 2 }, { q: 'Which one is a collective noun?', options: ['uncle', 'family', 'aunt'], answer: 1 }]];
+  byKind.check = [[2, 1], [2, 1]];     // 檢查者：第一題答案應該是 Luna（2），不是 is（1）
+  const n0 = calls.length;
+  const p = await W.aiMakeGrammarPack({ topic: 'Nouns', notes: 'A noun names a person.', nMcq: 3, nFill: 0, nTr: 0, nRw: 0 });
+  ok('⭐ 出題 AI 把名詞標成「is」→ 檢查者答 Luna → 這題丟掉', !p.mcq.some(q => q.q === sent), JSON.stringify(p.mcq.map(q => q.q)));
+  ok('丟掉之後自動再出一輪補回來', p.mcq.length === 3, p.mcq.length + ' 題');
+  const chk = calls.slice(n0).filter(c => /checking a quiz/.test(c.system));
+  ok('檢查者看不到答案（只看題目和選項）', chk.length === 2 && !/answer/i.test(chk[0].messages[0].content.split('QUESTIONS')[1]), chk.length + ' 次');
+  byKind.check = [];
+  byKind.mcq = [[{ q: 'There ________ a cat.', options: ['is', 'are'], answer: 0 }]];
+  const p2 = await W.aiMakeGrammarPack({ topic: 'x', notes: 'x', nMcq: 1, nFill: 0, nTr: 0, nRw: 0 });
+  ok('檢查本身失敗（網路）→ 不擋，照收', p2.mcq.length === 1);
 }
 
 // ═══ 6. 守門：新變數不能跑到別的播放器裡 ═══

@@ -2812,13 +2812,15 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
 
       <div key={deckPos} className="qm-question-area qm-question-swap">
         {q.hint && <div className="qm-question-hint">{q.hint}</div>}
+        {/* v430：✏️ 出文法的選擇題——AI 有時把「指示＋四個句子」全塞進題目（Alan 截圖：一大段疊在上面）。
+            只對 gn 單元整理成「Choose the correct answer.」；已經建好的單元也一起變乾淨，不用重出。 */}
         {q.qtype === 'listening' ? (
           <button className="qm-listen-btn" onClick={() => (window.speakTTS || window.speakText)(q.word)} title="再聽一次">
             <span className="qm-listen-icon">🔊</span>
             <span className="qm-listen-label">點擊重聽 · Tap to replay</span>
           </button>
         ) : (
-          <div className="qm-question-text">{q.q}</div>
+          <div className="qm-question-text">{(item && /^gn/.test(String(item.id || '')) && window.gnCleanStem) ? window.gnCleanStem(q.q, q.options) : q.q}</div>
         )}
       </div>
 

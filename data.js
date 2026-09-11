@@ -2374,67 +2374,197 @@ const GN_MODEL = 'claude-haiku-4-5';
 // 但 Haiku 把「你的書包裡有任何書嗎」讀成「有什麼書」，還自己填上作業沒印的答案；Sonnet 逐字照抄。
 const GN_READ_MODEL = 'claude-sonnet-5';
 
-const GN_READ_SYS = `You read a Taiwanese elementary-school English teacher's GRAMMAR homework
-(photos and/or pasted text). It usually has two parts: teaching NOTES, then QUESTIONS.
+const GN_READ_SYS = `You read ONE part of a Taiwanese elementary-school English teacher's GRAMMAR homework
+(a photo of one page, or one section of pasted text). It usually has teaching NOTES, then QUESTIONS.
 Output ONLY JSON:
-{"topic":"short English name of the grammar point","topicZh":"繁體中文名稱","notes":"",
- "questions":[{"kind":"mcq|fill|translate|rewrite|other","q":"","options":[],"answer":""}],"caseMatters":false}
+{"unit":"","topic":"short English name of the grammar point in THIS part","topicZh":"繁體中文名稱","notes":"",
+ "questions":[{"kind":"mcq|fill|translate|rewrite|identify|other","q":"","options":[],"find":"","answer":""}],"caseMatters":false}
 RULES
+- unit: the name of the WHOLE unit if you can see it (e.g. "Nouns"), else "".
 - notes: every rule, pattern-table row and example sentence from the NOTES part, as plain text,
   one idea per line (use \\n). Copy the teacher's own examples word for word. Never invent content.
+  Worked examples ("Example: … Answer: …") belong in notes, NOT in questions.
 - questions: every question you can read, in order.
   * "Circle the correct answer: There (is / are) a book." → kind "mcq", q "There ________ a book.",
     options ["is","are"].
+  * A group of words where the student writes or circles the one that is a ___ (e.g. "fans, audience, viewers")
+    → kind "mcq", q "Which one is a collective noun?", options = the words.
+  * "Underline / circle the ___ in each sentence" → kind "identify", q = ONLY the sentence,
+    find = what to look for (e.g. "noun", "non-count noun", "proper noun").
   * A sentence with a blank line to fill → kind "fill", q with the blank written as ________ .
     If the section title lists words to use (e.g. is / are / isn't), put them in options.
+    If the student writes a changed form of a word given in parentheses, put ________ where that word goes
+    and the word in parentheses at the end: "the (dog) barking ____" → "the ________ barking (dog)".
   * A Chinese sentence to translate into English → kind "translate", q = the Chinese sentence.
   * "Rewrite / correct each sentence" → kind "rewrite", q = ONLY the sentence to fix (leave out the directions).
-  * A multiple-choice question with no stem (e.g. "Circle the correct sentence" with A-D sentences) → kind "mcq",
-    q = the directions, options = the sentences.
+  * A multiple-choice question whose choices are whole sentences (e.g. "Circle the correct sentence" with A-D)
+    → kind "mcq", q "Choose the correct answer.", options = the sentences (without the A/B/C/D labels).
   * Anything else → kind "other".
-- caseMatters: true if the grammar point is about CAPITAL LETTERS (proper nouns, capitalization), else false.
   * answer: only if the answer is printed or already written in; otherwise "".
-- If a photo is unreadable, skip it. If there are no questions, return "questions":[].
+- caseMatters: true ONLY if the grammar point of THIS part is CAPITAL LETTERS (capitalization rules), else false.
+- Keep notes short: rules and examples only, no directions. If a photo is unreadable, return empty fields.
 ${_AI_MINIFY}`;
 
-// images: [{ media_type:'image/jpeg', data:'<base64>' }]
-async function aiReadGrammarSheet({ images = [], text = '' } = {}) {
-  const content = (images || []).slice(0, 6).map(im => ({
-    type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data },
-  }));
-  content.push({ type: 'text', text: String(text || '').trim()
-    ? `The teacher also pasted this text:\n${String(text).slice(0, 8000)}`
-    : 'Read the worksheet.' });
-  try {
-    return await _aiAsk(
-      { model: GN_READ_MODEL, max_tokens: 3000, system: GN_READ_SYS, messages: [{ role: 'user', content }] },
-      (data) => {
-        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
-        if (!o || typeof o !== 'object') return null;
-        const qs = (Array.isArray(o.questions) ? o.questions : []).map(q => ({
-          kind: ['mcq', 'fill', 'translate', 'rewrite'].indexOf(q && q.kind) >= 0 ? q.kind : 'other',
-          q: String((q && q.q) || '').trim(),
-          options: Array.isArray(q && q.options) ? q.options.map(x => String(x).trim().replace(_gnOptLabel, '').trim()).filter(Boolean) : [],
-          answer: String((q && q.answer) || '').trim(),
-        })).filter(q => q.q).map(q => {
-          // 「There (is / are) a book.」這種圈選題：括號變空格、括號裡的字變選項
-          const m = q.q.match(/[(（]([^()（）]*[\/／][^()（）]*)[)）]/);
-          if ((q.kind === 'mcq' || q.kind === 'other') && m) {
-            const opts = m[1].split(/[\/／]/).map(x => x.trim()).filter(Boolean);
-            if (opts.length >= 2) return { ...q, kind: 'mcq', q: q.q.replace(m[0], '________'), options: opts };
-          }
-          // 「Rewrite with the correct capital letters: my cousin junie…」→ 改寫題（只留要改的句子）
-          const rw = q.kind === 'other' && q.q.match(/^(?:rewrite|correct|fix)[^:：]*[:：]\s*(.+)$/i);
-          if (rw) return { ...q, kind: 'rewrite', q: rw[1].trim() };
-          return q;
-        });
-        const notes = String(o.notes || '').trim();
-        return { topic: String(o.topic || '').trim(), topicZh: String(o.topicZh || '').trim(),
-                 notes, questions: qs, caseMatters: o.caseMatters === true || /capital letter|大寫/i.test(notes) };
-      }, 90000);
-  } catch (e) {
-    throw new Error(e && e.timeout ? '讀照片太久沒有回應，請再試一次（照片少一點會比較快）。' : '讀不懂這份作業，請換清楚一點的照片，或直接貼文字。');
+// v430：AI 寫到 max_tokens 被切斷時，JSON 尾巴不完整——把已經寫完的題目救回來（notes 在前面，通常是完整的）
+function _gnSalvageJson(txt) {
+  const t = String(txt || '').trim();
+  try { return JSON.parse(t); } catch (e) { /* 往下救 */ }
+  const s = t.indexOf('{');
+  if (s < 0) return null;
+  let tries = 0;
+  for (let i = t.lastIndexOf('}'); i > s && tries < 60; i = t.lastIndexOf('}', i - 1), tries++) {
+    for (const tail of [']}', '}', ']', '']) {
+      try { const o = JSON.parse(t.slice(s, i + 1) + tail); if (o && typeof o === 'object' && !Array.isArray(o)) return o; } catch (e) { /* 再往前一個 } */ }
+    }
   }
+  return null;
+}
+
+// 「題目裡混著 A. … B. … C. …」→ 拆成選項（老師作業常見；AI 偶爾整串抄進 q）
+function _gnInlineOpts(q) {
+  const m = String(q || '').match(/^(.*?)(?:^|\s)[(（]?A[)）.．]\s+(.+?)\s+[(（]?B[)）.．]\s+(.+?)(?:\s+[(（]?C[)）.．]\s+(.+?))?(?:\s+[(（]?D[)）.．]\s+(.+?))?\s*$/);
+  return m ? { stem: m[1].trim(), options: [m[2], m[3], m[4], m[5]].filter(Boolean).map(x => x.trim()) } : null;
+}
+
+// v430：選項本身就是完整句子（「選出正確的句子」）→ 題目只要一句 Choose the correct answer.
+//       Alan：「應該問題只要顯示Choose the correct answer就好了吧？ 不然太亂了」
+//       ⚠ 有空格的題目、選項是單字的題目（Which word is a noun? "Luna is a smart cat."）不動。
+function gnCleanStem(q, options) {
+  const s = String(q || '').trim();
+  const opts = (options || []).map(o => String(o).trim()).filter(Boolean);
+  if (!s || /_{3,}/.test(s) || opts.length < 2) return s;
+  const long = opts.filter(o => o.split(/\s+/).length >= 3);
+  const inStem = long.filter(o => s.toLowerCase().indexOf(o.toLowerCase().replace(/[.!?]+$/, '')) >= 0).length;
+  if (long.length === opts.length || inStem >= 2 || /(^|\s)[(（]?[A-D][)）.．]\s+\S/.test(s) && /(^|\s)[(（]?B[)）.．]\s/.test(s)) {
+    return 'Choose the correct answer.';
+  }
+  return s;
+}
+
+/* v430：把貼上的長文字依大標題切段——Alan 的 Nouns 五大類（5800 字）一次讀，AI 寫到上限被切斷＝「讀不到」。
+   大標題＝「1. Collective Nouns」「Part B」「Lesson 2 …」這種短行：大寫開頭、不以句號結尾（題目會以 . ? 結尾）。 */
+function gnSplitText(text, max = 2400) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  const isHead = (l) => {
+    const t = l.trim();
+    return t.length >= 4 && t.length <= 80 && !/[.?!。？！_]\s*$/.test(t) &&
+      /^(?:\d{1,2}[.)．、]\s*[A-Z]|(?:part|unit|lesson|section|chapter)\s+[\w]+|[一二三四五六七八九十]+、)/i.test(t);
+  };
+  const secs = [];
+  lines.forEach(l => { if (isHead(l) || !secs.length) secs.push([l]); else secs[secs.length - 1].push(l); });
+  // 太短的（標題前的「老師把 Nouns 分成五大類」）併到下一段
+  for (let i = 0; i < secs.length - 1; i++) {
+    if (secs[i].join('\n').trim().length < 200) { secs[i + 1] = secs[i].concat(secs[i + 1]); secs.splice(i, 1); i--; }
+  }
+  // 太長的一段 → 在行之間切開，後面那塊帶上段落標題
+  const out = [];
+  secs.forEach(sec => {
+    const head = sec.find(l => l.trim()) || '';
+    let cur = [];
+    sec.forEach(l => {
+      if (cur.length && (cur.join('\n') + '\n' + l).length > max) { out.push(cur.join('\n')); cur = [`(continued) ${head.trim()}`]; }
+      cur.push(l);
+    });
+    if (cur.join('').trim()) out.push(cur.join('\n'));
+  });
+  // 段數太多就把相鄰的小段併起來（同時送出的請求不要超過 8 個）
+  while (out.length > 8) {
+    let k = 0, best = Infinity;
+    for (let i = 0; i < out.length - 1; i++) { const n = out[i].length + out[i + 1].length; if (n < best) { best = n; k = i; } }
+    out.splice(k, 2, out[k] + '\n' + out[k + 1]);
+  }
+  return out.map(s => s.trim()).filter(Boolean);
+}
+
+function _gnReadOne(content) {
+  return _aiAsk(
+    { model: GN_READ_MODEL, max_tokens: 4000, system: GN_READ_SYS, messages: [{ role: 'user', content }] },
+    (data) => {
+      const txt = (data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.content?.[0]?.text || '';
+      const o = _gnSalvageJson(_aiStripFence(txt));
+      if (!o || typeof o !== 'object') return null;
+      const qs = (Array.isArray(o.questions) ? o.questions : []).map(q => ({
+        kind: ['mcq', 'fill', 'translate', 'rewrite', 'identify'].indexOf(q && q.kind) >= 0 ? q.kind : 'other',
+        q: String((q && q.q) || '').trim(),
+        options: Array.isArray(q && q.options) ? q.options.map(x => String(x).trim().replace(_gnOptLabel, '').trim()).filter(Boolean) : [],
+        find: String((q && q.find) || '').trim(),
+        answer: String((q && q.answer) || '').trim(),
+      })).filter(q => q.q).map(q => {
+        // 「There (is / are) a book.」這種圈選題：括號變空格、括號裡的字變選項
+        const m = q.q.match(/[(（]([^()（）]*[\/／][^()（）]*)[)）]/);
+        if ((q.kind === 'mcq' || q.kind === 'other') && m) {
+          const opts = m[1].split(/[\/／]/).map(x => x.trim()).filter(Boolean);
+          if (opts.length >= 2) return { ...q, kind: 'mcq', q: q.q.replace(m[0], '________'), options: opts };
+        }
+        // 選項整串寫在題目裡（「Circle the correct one. A. … B. …」）→ 拆出來
+        if ((q.kind === 'mcq' || q.kind === 'other') && !q.options.length) {
+          const io = _gnInlineOpts(q.q);
+          if (io && io.options.length >= 2) return { ...q, kind: 'mcq', q: io.stem, options: io.options };
+        }
+        // 「Rewrite with the correct capital letters: my cousin junie…」→ 改寫題（只留要改的句子）
+        const rw = q.kind === 'other' && q.q.match(/^(?:rewrite|correct|fix)[^:：]*[:：]\s*(.+)$/i);
+        if (rw) return { ...q, kind: 'rewrite', q: rw[1].trim() };
+        return q;
+      }).map(q => (q.kind === 'mcq' ? { ...q, q: gnCleanStem(q.q, q.options) } : q));
+      const notes = String(o.notes || '').trim();
+      return { unit: String(o.unit || '').trim(), topic: String(o.topic || '').trim(), topicZh: String(o.topicZh || '').trim(),
+               notes, questions: qs, caseMatters: o.caseMatters === true || /capital letter|大寫/i.test(notes) };
+    }, 60000);
+}
+
+// images: [{ media_type:'image/jpeg', data:'<base64>' }]
+// v430：每張照片一個請求、文字依大標題切段，全部同時送出再合併——一份再長也不會被切斷；
+//       某一段讀不到只少那一段（missed 告訴老師是哪一張），不再整份「讀不懂」。
+async function aiReadGrammarSheet({ images = [], text = '', onProgress } = {}) {
+  const raw = String(text || '').trim().slice(0, 20000);
+  const imgs = (images || []).slice(0, 6);
+  const chunks = raw ? gnSplitText(raw) : [];
+  const head = raw ? raw.split('\n').find(l => l.trim()).trim().slice(0, 120) : '';
+  const parts = imgs.map((im, i) => ({
+    label: `第 ${i + 1} 張照片`,
+    content: [{ type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } },
+              { type: 'text', text: imgs.length > 1 ? `This is page ${i + 1} of ${imgs.length}. Read only this page.` : 'Read the worksheet.' }],
+  })).concat(chunks.map((c, i) => ({
+    label: chunks.length > 1 ? `文字第 ${i + 1} 段` : '貼上的文字',
+    content: [{ type: 'text', text: (chunks.length > 1
+      ? `The teacher pasted a long worksheet; this is section ${i + 1} of ${chunks.length}.${i > 0 && head ? ` (The worksheet begins with: "${head}")` : ''}\n`
+      : 'The teacher pasted this text:\n') + c }],
+  })));
+  if (!parts.length) parts.push({ label: '作業', content: [{ type: 'text', text: 'Read the worksheet.' }] });
+  let done = 0;
+  if (onProgress) onProgress(0, parts.length);
+  const got = await Promise.all(parts.map(p => _gnReadOne(p.content)
+    .then(v => ({ v }), e => ({ e }))
+    .finally(() => { done++; if (onProgress) onProgress(done, parts.length); })));
+  const ok = got.map((g, i) => ({ ...g, label: parts[i].label })).filter(g => g.v && (g.v.notes || g.v.questions.length));
+  if (!ok.length) {
+    const to = got.some(g => g.e && g.e.timeout);
+    throw new Error(to ? '讀作業太久沒有回應，請再試一次。' : '讀不懂這份作業，請換清楚一點的照片，或直接貼文字。');
+  }
+  const missed = got.map((g, i) => (g.v && (g.v.notes || g.v.questions.length) ? null : parts[i].label)).filter(Boolean);
+  if (ok.length === 1) return { ...ok[0].v, questions: ok[0].v.questions.map(q => ({ ...q, sec: 0 })), sections: [ok[0].v.topic], missed };
+  // 合併：同一個主題（跨兩頁的同一段）併在一起；notes 每段加上【主題】，出題和教學才知道要照顧到每一段
+  const secs = [];
+  ok.forEach(({ v }) => {
+    const last = secs[secs.length - 1];
+    const k = (v.topic || '').toLowerCase();
+    if (last && k && last.key === k) { last.notes.push(v.notes); last.qs.push(...v.questions); last.cm.push(v.caseMatters); return; }
+    secs.push({ key: k, topic: v.topic, topicZh: v.topicZh, notes: [v.notes], qs: v.questions.slice(), cm: [v.caseMatters] });
+  });
+  const mode = (arr) => { const c = {}; let best = ''; arr.filter(Boolean).forEach(x => { c[x] = (c[x] || 0) + 1; if (!best || c[x] > c[best]) best = x; }); return best; };
+  const unit = mode(ok.map(g => g.v.unit));
+  const topics = secs.map(s => s.topic).filter(Boolean);
+  const notes = secs.map(s => { const n = s.notes.filter(Boolean).join('\n').trim(); return n ? (s.topic ? `【${s.topic}】\n${n}` : n) : ''; })
+    .filter(Boolean).join('\n\n');
+  // 大小寫：只有「大部分段落」都在教大寫才算——Nouns 五段只有一段講大寫，不能讓整份都變成大寫單元
+  const cmSecs = secs.filter(s => s.cm.some(Boolean)).length;
+  return {
+    unit, topic: unit || (secs.length === 1 ? secs[0].topic : topics.slice(0, 3).join(' / ')),
+    topicZh: (secs.length === 1 ? secs[0].topicZh : '') || '',
+    notes, sections: topics, missed,
+    questions: secs.reduce((a, s, i) => a.concat(s.qs.map(q => ({ ...q, sec: i }))), []),
+    caseMatters: cmSecs * 2 > secs.length,
+  };
 }
 
 /* ── 學生答案比對：不分大小寫、標點，縮寫當作一樣（isn't = is not），另外收老師／AI 給的其他正確說法 ── */
@@ -2490,11 +2620,14 @@ const GN_GRADE = {
   g3: 'Grade 3 (age 9, CEFR A1).', g4: 'Grade 4 (age 10, CEFR A1-A2).',
   g5: 'Grade 5 (age 11, CEFR A2).', g6: 'Grade 6 (age 12, CEFR A2).',
 };
+// v430：notes 由好幾段合併（【Collective Nouns】【Possessive Nouns】…）→ 回傳段數，否則 0
+const _gnMultiSec = (notes) => { const n = (String(notes || '').match(/^【[^】\n]+】/gm) || []).length; return n >= 2 ? n : 0; };
 const _GN_BASE = (grade, topic, notes, caseMatters) => `Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
 Grammar point: ${topic}
 The teacher's notes (stay inside them — do not teach anything the notes do not cover):
-${String(notes || '').slice(0, 4000)}
-Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.${caseMatters ? `
+${String(notes || '').slice(0, 9000)}
+Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.${_gnMultiSec(notes) ? `
+The notes have ${_gnMultiSec(notes)} sections (each starts with 【…】). Cover EVERY section, spread evenly — do not stay on the first one.` : ''}${caseMatters ? `
 IMPORTANT: this lesson is about CAPITAL LETTERS. Every question and interaction must test capitalization,
 and every answer must be written with exactly the right capital letters.` : ''}`;
 
@@ -2509,7 +2642,7 @@ Output ONLY JSON:
 ],"outro":""}
 RULES
 - lead: ONE Traditional Chinese sentence, ≤25 characters, what this grammar is for.
-- steps: 3 or 4 rounds. Each round = ONE "learn" step immediately followed by ONE interaction
+- steps: 3 or 4 rounds (if the notes have several 【…】 sections: ONE round per section, up to 6). Each round = ONE "learn" step immediately followed by ONE interaction
   ("pick", "order" or "fix") that practises exactly what that learn step just said. Use all three interaction kinds at least once.
 - learn.say: ONE idea only, Traditional Chinese, ≤30 characters, no grammar jargon.
 - learn.examples: 1-2 short English sentences (≤8 words). hl = the exact words in "en" to highlight
@@ -2532,7 +2665,9 @@ const GN_Q_SYS = {
   mcq: `You write multiple-choice grammar questions.
 Output ONLY a JSON array: [{"q":"","options":["","",""],"answer":0,"explain":""}]
 RULES
-- q: one English sentence with ________ for the missing part.
+- q: one English sentence with ________ for the missing part, OR a short question such as
+  Which word is a noun? "Luna is a smart cat."  (options = 3 words from that sentence, exactly ONE is correct).
+  If the options are whole sentences, q is just "Choose the correct answer."
 - options: 3 short choices (sometimes 2 if the notes only have two forms, e.g. is/are). Exactly one is correct.
 - answer: 0-based index of the correct option. Put the correct option in a DIFFERENT position each time.
 - explain: Traditional Chinese, ≤30 characters, why that answer.
@@ -2627,11 +2762,16 @@ function gnValidMcq(x) {
     if (a < 0 && /^[A-Da-d]$/.test(t)) a = 'abcd'.indexOf(t.toLowerCase()); // 答案寫成「B」
     if (a < 0) a = opts.findIndex(o => o.toLowerCase() === t.toLowerCase());
   }
-  const q = _gnBlank(x && x.q);
+  const q = gnCleanStem(_gnBlank(x && x.q), opts);
   // v429：「taipei zoo」和「Taipei Zoo」是兩個不同的選項——大寫單元的選擇題就是在考這個。
   //       以前比對時轉小寫，Alan 作業 Part B 的選項全被當成重複，整題丟掉。
   const uniq = new Set(opts).size === opts.length;
-  return q && opts.length >= 2 && opts.length <= 4 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
+  // v430：「Which word is a noun? "Luna is a smart cat."」→ 選項一定要是引號裡那句話的字（實測出現過句子裡沒有的 woman、
+  //       還有「park(common), Elm Street(proper)」這種組合選項）
+  const qt = q.match(/^Which\s+(?:word|one|words)\b[^"“]*["“]([^"”]+)["”]/i);
+  const fromSent = !qt || opts.every(o => o.split(/\s+/).length <= 3 && !/[()（）,]/.test(o) &&
+    new RegExp('(^|[^A-Za-z])' + o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(qt[1]));
+  return q && opts.length >= 2 && opts.length <= 4 && uniq && fromSent && Number.isInteger(a) && a >= 0 && a < opts.length
     ? { q, options: opts, answer: a, explain: String((x && x.explain) || '').trim() } : null;
 }
 function gnValidFill(x) {
@@ -2669,12 +2809,35 @@ async function _gnCall(system, user, maxTokens) {
 
 /* 出一種題型到 n 題：老師原本的題目先收（請 AI 補答案、照原文），不夠再請 AI 另外出；
    驗不過的丟掉、不夠就再出一輪（最多兩輪）。 */
+/* v430：選擇題交叉檢查——實測 AI 把「Luna is a smart cat.」的名詞標成 is。
+   請另一次 AI 不看答案、自己作答；跟出題的答案不一樣的題目丟掉（下一輪會補）。
+   檢查本身失敗（網路）→ 不擋，全部照收。回傳要丟掉的題目索引。 */
+async function _gnCheckMcq(items, base) {
+  if (!items.length) return new Set();
+  const sys = `You are checking a quiz for a Taiwanese elementary English class. Solve every question yourself.
+Output ONLY a JSON array of 0-based option indexes, one per question, in order. e.g. [2,0,1]`;
+  const list = items.map((x, i) => `${i + 1}. ${x.q}\n${x.options.map((o, k) => `   ${k}) ${o}`).join('\n')}`).join('\n');
+  try {
+    const got = await _gnCall(sys, `${base}\n\nQUESTIONS\n${list}`, 300);
+    if (!Array.isArray(got) || got.length !== items.length) return new Set();
+    return new Set(items.map((x, i) => (Number(got[i]) === x.answer ? -1 : i)).filter(i => i >= 0));
+  } catch (e) { return new Set(); }
+}
+function _gnSpread(list, n) {
+  const by = new Map();
+  list.forEach(q => { const k = q.sec || 0; if (!by.has(k)) by.set(k, []); by.get(k).push(q); });
+  const groups = [...by.values()], out = [];
+  for (let i = 0; out.length < n && groups.some(g => i < g.length); i++) groups.forEach(g => { if (i < g.length && out.length < n) out.push(g[i]); });
+  return out;
+}
 async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   if (!n || n <= 0) return [];
   const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite }[kind];
   // 大寫單元的填空：答案一定要有大寫字母（實測 AI 會出「My friend ____ lives in Taipei. → teacher」這種跟大寫無關、答案又不唯一的題）
   const valid = (kind === 'fill' && caseMatters) ? (x) => { const v = v0(x); return v && /[A-Z]/.test(v.answer) ? v : null; } : v0;
-  const tq = (teacherQs || []).filter(q => q.kind === kind).slice(0, n);
+  // v430：老師題目各段輪流挑（不然 8 題全出自第一段）；「底線畫出名詞」這種 identify 題改成選擇題
+  const tq = _gnSpread((teacherQs || []).filter(q => q.kind === kind || (kind === 'mcq' && q.kind === 'identify')), n);
+  const hasId = tq.some(q => q.kind === 'identify');
   const out = [], seen = new Set();
   // 選擇題的題幹常常一模一樣（「Circle the sentence with the correct capital letters.」）→ 連選項一起比
   const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || '') + '|' + (x.options || []).join('|')).replace(/\s+/g, ' ');
@@ -2687,12 +2850,20 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
     const need = n - out.length;
     const teacherPart = (round === 0 && tq.length)
       ? `FIRST include these ${tq.length} questions from the teacher's worksheet, keeping their wording (fill in the correct answer yourself):\n` +
-        tq.map((q, i) => `${i + 1}. ${q.q}${q.options.length ? '  [' + q.options.join(' / ') + ']' : ''}${q.answer ? '  (answer: ' + q.answer + ')' : ''}`).join('\n') +
+        tq.map((q, i) => `${i + 1}. ${q.kind === 'identify' ? `[identify: find the ${q.find || 'target word'}] ` : ''}${q.q}${q.options.length ? '  [' + q.options.join(' / ') + ']' : ''}${q.answer ? '  (answer: ' + q.answer + ')' : ''}`).join('\n') +
+        (hasId ? `\nItems marked [identify] come from "underline the …" exercises. Turn each into: q = Which word is a <X>? "<the sentence>" ,` +
+          ' options = 3 words taken from that sentence, where exactly ONE is a <X> and the other two clearly are not.' +
+          ' If an item asks for two kinds (e.g. common and proper nouns), ask about only ONE kind — alternate between them.' : '') +
         `\nTHEN write ${Math.max(0, need - tq.length)} NEW questions of the same kind.`
       : `Write ${need + 2} questions.`;
     try {
       const arr = await _gnCall(GN_Q_SYS[kind], `${base}\n\n${teacherPart}`, 2600);
+      const before = out.length;
       take(arr, round === 0 && tq.length ? 'mixed' : 'ai');
+      if (kind === 'mcq' && out.length > before) {
+        const bad = await _gnCheckMcq(out.slice(before), base);
+        for (let i = out.length - 1; i >= before; i--) if (bad.has(i - before)) out.splice(i, 1);
+      }
     } catch (e) { if (round === 1) throw e; }
   }
   return out.slice(0, n);
@@ -2704,7 +2875,7 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
   let feedback = '', best = null, lastErr = null;
   for (let i = 0; i < 3; i++) {
     let raw;
-    try { raw = await _gnCall(GN_LESSON_SYS, base + feedback, 2400); } catch (e) { lastErr = e; continue; }
+    try { raw = await _gnCall(GN_LESSON_SYS, base + feedback, _gnMultiSec(notes) ? 3800 : 2400); } catch (e) { lastErr = e; continue; }
     const l = gnValidLesson(raw);
     if (l) return l;
     const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
@@ -4222,7 +4393,7 @@ function lineManual(target, note, dry, pass) {
 function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
 Object.assign(window, {
-  aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite,
+  aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,
