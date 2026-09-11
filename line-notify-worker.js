@@ -1,5 +1,5 @@
 /*
- * Alan's English Class — LINE 通知 Worker（v5：先回 200 再處理＋診斷紀錄）
+ * Alan's English Class — LINE 通知 Worker（v6：更快＋看得懂家長的話＋自動/主動提醒分開）
  * ────────────────────────────────────────────────────────────
  * 獨立 Worker。負責：發公告 + 家長自助綁定 + 作業沒完成自動提醒。
  *
@@ -19,7 +19,8 @@
  *   POST /sync-roster     {roster}
  *   GET  /links
  *   POST /unlink          {lineUserId, email?}
- *   POST /run-reminders   （?dry=1 只預覽不發送；?force=1 不管頻率規則）
+ *   POST /run-reminders   自動提醒（?dry=1 只預覽「今晚會發什麼」）
+ *   POST /manual          老師主動提醒 {target, note}（?dry=1 預覽）——跟自動提醒的紀錄完全分開
  *   GET  /diag            最近 30 則 LINE 訊息的處理紀錄
  */
 
@@ -117,12 +118,24 @@ const isEnglishName = (s) => /^[A-Za-z][A-Za-z .'’\-]*$/.test(String(s || '').
 // 名單來源：優先用服務帳號即時讀 Firestore（老師剛加的學生馬上能綁），
 // 讀不到才退回老師後台同步過的 KV 名單。
 async function getRoster(env) {
+  // v426：同一個 Worker 裡先看記憶體（綁定、刪除這些回覆就不用每次跑 KV）
+  if (MEM.roster && Date.now() - MEM.roster.ts < ROSTER_TTL_MS && MEM.roster.env === env) return MEM.roster.list;
+  const keep = (list) => { if (list && list.length) MEM.roster = { ts: Date.now(), list, env }; return list; };
+  if (env.FIREBASE_SA && env.LINKS) {
+    let cached = null;
+    try { cached = JSON.parse((await env.LINKS.get('roster_live')) || 'null'); } catch (e) {}
+    const has = cached && cached.ts && Array.isArray(cached.list) && cached.list.length;
+    if (has && Date.now() - cached.ts < ROSTER_TTL_MS) return keep(cached.list);
+    // v426：名單很少變——過期的先拿來用（新增／刪除孩子就不用等 Firestore），背景再更新
+    if (has) { bg(refreshRoster(env)); return keep(cached.list); }
+    const fresh = await refreshRoster(env);
+    if (fresh && fresh.length) return keep(fresh);
+  }
+  try { return keep(JSON.parse((await env.LINKS.get('roster')) || '[]')); } catch (e) { return []; }
+}
+async function refreshRoster(env) {
   if (env.FIREBASE_SA && env.LINKS) {
     try {
-      const cached = JSON.parse((await env.LINKS.get('roster_live')) || 'null');
-      if (cached && cached.ts && Date.now() - cached.ts < ROSTER_TTL_MS && Array.isArray(cached.list) && cached.list.length) {
-        return cached.list;
-      }
       const sa = JSON.parse(env.FIREBASE_SA);
       const token = await getAccessTokenCached(env, sa);
       if (token) {
@@ -138,12 +151,13 @@ async function getRoster(env) {
         }).filter((s) => s.email && s.name);
         if (list.length) {
           await env.LINKS.put('roster_live', JSON.stringify({ ts: Date.now(), list }));
+          MEM.roster = { ts: Date.now(), list, env };
           return list;
         }
       }
     } catch (e) { /* 讀不到就用 KV 名單 */ }
   }
-  try { return JSON.parse((await env.LINKS.get('roster')) || '[]'); } catch (e) { return []; }
+  return null;
 }
 
 const activeRoster = (roster) => (roster || []).filter((s) => s && s.name && s.active !== false);
@@ -328,15 +342,123 @@ function menuText() {
 }
 const siteText = () => '📚 練習網站\n' + SITE_URL + '\n\n用孩子的學校帳號登入就可以開始練習。';
 
+// ── v426：更聰明——看不懂的話交給 Claude 判斷（選單按鈕、純名字仍走規則，毫秒級）──
+// Alan：「我要的是更智慧的版本 而不是很死板」
+// AI 只負責「看懂意思、挑出是哪個孩子／哪一類」，真正的動作（查作業、綁定、刪除）
+// 一律由程式照名單驗證後才做——AI 講錯名字也不會綁錯人、不會編造作業。
+const AI_ENDPOINT = 'https://alan-ai-proxy.alan07050445.workers.dev';   // 網站本來就在用的 Anthropic 代理
+const AI_MODEL = 'claude-haiku-4-5-20251001';
+const AI_TIMEOUT_MS = 6000;
+const AI_INTENTS = ['homework', 'practice', 'add', 'remove', 'list', 'chat'];
+const AI_CATS = ['vocab', 'word', 'grammar', 'reading'];
+const CHAT_QUIET_MS = 3 * 60 * 1000;      // 聊天：3 分鐘內同一個人只回一次，不洗版
+
+function aiSystem(kids) {
+  return [
+    "你是「Alan's English Class」LINE 官方帳號的小幫手，對象是小學生的家長，用繁體中文（台灣用語）。",
+    '你能做的事：查作業(homework)、給練習網站(practice)、新增孩子(add)、刪除孩子(remove)、看綁了哪些孩子(list)。其他一律是聊天(chat)。',
+    '這個 LINE 目前綁定的孩子：' + (kids.length ? kids.join('、') : '（還沒綁定）'),
+    '只輸出一行 JSON，不要任何其他文字：',
+    '{"intent":"homework|practice|add|remove|list|chat","child":"孩子的英文名字或 null","cat":"vocab|word|grammar|reading 或 null","reply":"只有 chat 才寫"}',
+    '判斷方式：',
+    '- 問作業、功課、進度、寫完沒、還剩什麼、這週要做什麼、有沒有交 → homework。有講是哪個孩子就填 child；有講單字填 vocab、字彙填 word、文法填 grammar、閱讀或寫作填 reading。',
+    '- 想要新增、加入、綁定孩子 → add，child 填他講的英文名字（沒講就 null）。',
+    '- 想要刪除、取消、不要再收某個孩子的通知 → remove，child 填名字（沒講就 null）。',
+    '- 要網站、連結、去哪裡練習 → practice。問綁了誰 → list。',
+    '- chat 的 reply：1～2 句、不超過 50 字、溫暖有禮貌。不要承諾任何事、不要編造作業或成績、不要附網址。',
+    '  要老師處理的事（請假、學習狀況、費用、上課時間）就說老師會看到訊息並回覆。小朋友亂打或開玩笑，就友善簡短地回，可以鼓勵他去練習。',
+  ].join('\n');
+}
+async function aiUnderstand(env, text, bound) {
+  if (env.AI_CHAT === 'off') return null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), Number(env.AI_TIMEOUT_MS) || AI_TIMEOUT_MS);
+  try {
+    const res = await fetch(env.AI_ENDPOINT || AI_ENDPOINT, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl.signal,
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 160, system: aiSystem(bound.map((c) => c.name)),
+        messages: [{ role: 'user', content: String(text).slice(0, 300) }] }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const txt = (((data && data.content) || []).find((c) => c && c.type === 'text') || {}).text || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const j = JSON.parse(m[0]);
+    const intent = AI_INTENTS.indexOf(j.intent) >= 0 ? j.intent : null;
+    if (!intent) return null;
+    const child = typeof j.child === 'string' && j.child.trim() && j.child !== 'null' ? j.child.trim().slice(0, 40) : null;
+    const cat = AI_CATS.indexOf(j.cat) >= 0 ? j.cat : null;
+    // AI 的回話：拿掉網址、限制長度（不讓它亂發連結、長篇大論）
+    const reply = String(j.reply || '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    return { intent, child, cat, reply };
+  } catch (e) {
+    return null;
+  } finally { clearTimeout(timer); }
+}
+
+// 選單按鈕送的固定字、「刪除 Eric／新增 Eric」→ 規則就夠了，不必問 AI
+const FAST = {
+  hw:   /^(作業|查作業|查詢作業|看作業|功課|進度|查進度|homework|hw)$/i,
+  site: /^(練習|網站|打開練習|網址|連結)$/,
+  kids: /^(孩子|我的孩子|小孩|新增|刪除|新增或刪除|新增or刪除|新增\/刪除|綁定|查詢)$/i,
+  act:  /^(刪除|刪掉|移除|新增|加入)\s*[A-Za-z]/,
+};
+async function readLinks(env) {
+  try { return JSON.parse((await env.LINKS.get('links')) || '{}'); } catch (e) { return {}; }
+}
+
+// v426：聊天室的總入口。hooks.slow() → 要花時間了（顯示「輸入中…」）；hooks.path 記錄走哪條路
+async function handleMessage(env, uid, rawText, hooks) {
+  const h = hooks || {};
+  const text = String(rawText || '').trim();
+  h.path = 'fast';
+  if (FAST.hw.test(text) && h.slow) h.slow();              // 查作業一定要讀資料 → 先讓家長看到「輸入中…」
+  if (FAST.hw.test(text) || FAST.site.test(text) || FAST.kids.test(text) || FAST.act.test(text) || INTENT.help.test(text)) {
+    return handleNameBinding(env, uid, text);
+  }
+  const [roster, links, stage] = await Promise.all([getRoster(env), readLinks(env), getStage(env, uid)]);
+  const bound = links[uid] || [];
+  if (stage === 'ask2' && NEG_RE.test(text)) return handleNameBinding(env, uid, text);
+  // 整句就是名單上的名字（含「Eric & Tayler」）→ 綁定
+  const names = parseNames(roster, text);
+  if (names.length && names.every((n) => !matchOne(roster, n).none)) return handleNameBinding(env, uid, text);
+
+  // 其他 → 交給 AI 看懂
+  if (h.slow) h.slow();
+  const t0 = Date.now();
+  const ai = await aiUnderstand(env, text, bound);
+  h.aiMs = Date.now() - t0;
+  if (!ai) { h.path = 'rules'; return handleNameBinding(env, uid, text); }   // AI 沒回 → 退回原本的規則
+  h.path = 'ai:' + ai.intent;
+  const pickKids = () => {
+    if (!ai.child) return bound;
+    const hit = bound.filter((c) => matchName(c.name, ai.child));
+    return hit.length ? hit : bound;
+  };
+  switch (ai.intent) {
+    case 'homework': return { hw: bound.length ? pickKids() : [], cat: ai.cat, child: ai.child };
+    case 'practice': return siteText();
+    case 'list':     return handleNameBinding(env, uid, '孩子');
+    case 'add':      return handleNameBinding(env, uid, ai.child ? '新增 ' + ai.child : '新增');
+    case 'remove':   return handleNameBinding(env, uid, ai.child ? '刪除 ' + ai.child : '刪除');
+    default: {
+      if (!bound.length) return handleNameBinding(env, uid, text);          // 還沒綁：先請他綁定
+      const ts = await getStageTs(env, uid);
+      if (stage === 'chat' && Date.now() - ts < CHAT_QUIET_MS) return '';
+      await setStage(env, uid, 'chat');
+      return ai.reply || politeReply(uid);
+    }
+  }
+}
+
 async function handleNameBinding(env, lineUserId, rawText) {
   const text = String(rawText || '').trim();
-  const roster = await getRoster(env);
+  // v426：名單、綁定、對話狀態三樣同時讀（以前一個等一個）
+  const [roster, links, stage] = await Promise.all([getRoster(env), readLinks(env), getStage(env, lineUserId)]);
   const english = rosterAllEnglish(roster);
   const ex = exampleNames(roster, english);
-  let links = {};
-  try { links = JSON.parse((await env.LINKS.get('links')) || '{}'); } catch (e) {}
   const bound = links[lineUserId] || [];
-  const stage = await getStage(env, lineUserId);
 
   // ── 三件事的意圖判斷（打字或按選單都走這裡）──────────────
   if (INTENT.help.test(text)) return menuText();
@@ -353,8 +475,7 @@ async function handleNameBinding(env, lineUserId, rawText) {
     }
     const left = bound.filter((c) => c.email !== hit.email);
     if (left.length) links[lineUserId] = left; else delete links[lineUserId];
-    await env.LINKS.put('links', JSON.stringify(links));
-    await setStage(env, lineUserId, left.length ? 'done' : '');
+    await Promise.all([env.LINKS.put('links', JSON.stringify(links)), setStage(env, lineUserId, left.length ? 'done' : '')]);
     return `已刪除 ${fmtChild(hit)} ✅\n之後不會再收到他的作業提醒。\n\n` +
       (left.length ? '目前還綁定：\n' + listChildren(left) : '要重新加回來，直接回覆孩子的' + (english ? '英文名字' : '姓名') + '就可以 👌');
   }
@@ -364,10 +485,13 @@ async function handleNameBinding(env, lineUserId, rawText) {
 
   // 新增孩子／看目前綁了誰
   let nameText = text;                                     // 進到綁定流程時要比對的字
+  let explicitAdd = false;
   if (INTENT.add.test(text) || INTENT.kids.test(text)) {
     const nm = text.replace(INTENT.add, ' ').replace(INTENT.kids, ' ').trim();
-    const guess = nm ? matchOne(roster, nm) : null;
-    if (!guess || !guess.hit) {
+    // v426：「新增 Ghost」這種有講名字的 → 交給下面的名字流程（配不到會說「找不到」）；
+    //       「要加一個小孩」剩下的「要」不是名字 → 顯示新增／刪除面板
+    const looksLikeName = english ? /[A-Za-z]/.test(nm) : /^[\u4e00-\u9fff]{2,4}$/.test(nm) || /[A-Za-z]/.test(nm);
+    if (!looksLikeName) {
       const head = bound.length ? '目前這個 LINE 綁定：\n' + listChildren(bound) + '\n\n' : '這個 LINE 還沒有綁定孩子 🙌\n\n';
       if (bound.length >= MAX_CHILDREN) {
         return head + `已經是上限 ${MAX_CHILDREN} 位了。\n要換人的話，回覆「刪除 ${bound[0].name}」再輸入新的名字 🙏`;
@@ -376,6 +500,7 @@ async function handleNameBinding(env, lineUserId, rawText) {
         (bound.length ? `\n➖ 刪除：回覆「刪除 ${bound[0].name}」` : '');
     }
     nameText = nm;                                         // 「新增 Eric」這種一次講完的
+    explicitAdd = true;                                    // 他明確說要加人 → 配不到要講「找不到」
   }
 
   // 名單還沒就緒
@@ -387,11 +512,8 @@ async function handleNameBinding(env, lineUserId, rawText) {
     return doneText(bound, english);
   }
 
-  // 已經綁滿
-  if (bound.length >= MAX_CHILDREN) {
-    return `這個 LINE 已經綁定 ${MAX_CHILDREN} 位孩子了：\n` + listChildren(bound) +
-      '\n\n還要新增其他孩子的話，請直接聯絡 Alan 老師 🙏';
-  }
+  // v426：「已經綁滿」要等確定他真的在講名單上的另一個孩子才說——
+  //       以前這一段放在比對名字之前，綁了 2 位的家長打「你好」也會收到「已經綁定 2 位孩子了」
 
   const names = parseNames(roster, nameText);
   if (!names.length) {
@@ -403,27 +525,32 @@ async function handleNameBinding(env, lineUserId, rawText) {
   const added = [], dup = [], bad = [], amb = [], over = [];
   const cur = bound.slice();
   for (const nm of names) {
-    if (cur.length >= MAX_CHILDREN) { over.push(nm); continue; }
     const r = matchOne(roster, nm);
     if (r.hit) {
       if (cur.some((x) => String(x.email).toLowerCase() === String(r.hit.email).toLowerCase())) { dup.push(r.hit); continue; }
+      if (cur.length >= MAX_CHILDREN) { over.push(r.hit.name); continue; }
       const rec = { email: r.hit.email, name: r.hit.name, grade: r.hit.grade || '' };
       cur.push(rec); added.push(rec);
     } else if (r.many) { amb.push(nm); }
     else { bad.push(nm); }
   }
 
+  let linksWrite = null;                                    // 跟最後的 setStage 一起等
   if (added.length) {
     links[lineUserId] = cur;
-    await env.LINKS.put('links', JSON.stringify(links));
+    linksWrite = env.LINKS.put('links', JSON.stringify(links));
   }
 
-  // 完全沒配到
+  // 完全沒配到（這條路不會有寫入）
   if (!added.length && !dup.length) {
+    if (over.length) {
+      return `這個 LINE 已經綁定 ${MAX_CHILDREN} 位孩子了：\n` + listChildren(bound) +
+        `\n\n要換成 ${over[0]} 的話，先回覆「刪除 ${bound[0].name}」再輸入他的名字；其他問題請聯絡 Alan 老師 🙏`;
+    }
     if (amb.length) return `班上有多位「${amb[0]}」🤔\n請直接聯絡 Alan 老師協助綁定 🙏`;
     // v423：跟三件事都無關的閒聊／小朋友亂打 → 隨機一句有禮貌的回覆，
     //       而且 10 分鐘內只回一次，家長連打好幾句不會被洗版。
-    if (bound.length) return politeOrQuiet(env, lineUserId, stage);
+    if (bound.length && !explicitAdd) return politeOrQuiet(env, lineUserId, stage);
     const who = bad[0] || nameText;
     if (english && hasCJK(who)) {
       return '我們的名單是用「英文名字」登記的 📝\n\n' + askNameLine(english, ex) + '\n\n找不到的話請直接聯絡 Alan 老師 🙏';
@@ -442,11 +569,11 @@ async function handleNameBinding(env, lineUserId, rawText) {
   if (over.length) lines.push(`⚠️ 一個 LINE 最多綁 ${MAX_CHILDREN} 位，「${over[0]}」請聯絡 Alan 老師協助。`);
 
   if (cur.length >= MAX_CHILDREN || bad.length || amb.length || over.length) {
-    await setStage(env, lineUserId, 'done');
+    await Promise.all([linksWrite, setStage(env, lineUserId, 'done')]);
     return lines.join('\n') + '\n\n' + doneText(cur, english);
   }
   // 只綁到 1 位、還有空位 → 問第二位
-  await setStage(env, lineUserId, 'ask2');
+  await Promise.all([linksWrite, setStage(env, lineUserId, 'ask2')]);
   return lines.join('\n') + '\n\n還有第二位孩子嗎？\n' +
     `有的話請直接回覆他的${english ? '英文名字' : '姓名'}；沒有的話回覆「沒有」就完成囉 🙌`;
 }
@@ -462,6 +589,71 @@ async function importPrivateKey(pem) {
     .replace(/\s+/g, '');
   const der = Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
   return crypto.subtle.importKey('pkcs8', der.buffer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+}
+
+// ── v426：速度 ──────────────────────────────────────────
+// 實測：一個年級的課程文件從 Firestore 下載是 ~1.4MB、~1.5 秒（就算只拿一個欄位也要 ~1.1 秒）。
+// 家長按「作業」其實只需要每份作業的「標題／分類／週次／期限」，壓縮後才幾 KB。
+// → 三層快取：同一個 Worker 的記憶體（毫秒）→ KV（~幾十毫秒）→ Firestore（~1.5 秒）。
+//   每天 18:00 的自動提醒會強制重抓一次，順便把 KV 更新成最新。
+const MEM = { hw: {}, roster: null, bg: [] };
+const HW_TTL_MS = 10 * 60 * 1000;          // 10 分鐘內的快取直接用
+const HW_STALE_MS = 26 * 3600 * 1000;      // 26 小時內的舊快取：先拿來回覆，背景再更新
+                                           //（每天 18:00 的自動提醒會刷新一次，26 小時保證整天都是熱的）
+// 「先用舊的回，背景再更新」——家長不用等那 1.5 秒；更新好的下一次就用得到
+function bg(p) { MEM.bg.push(Promise.resolve(p).catch(() => {})); }
+async function flushBg() { while (MEM.bg.length) await Promise.all(MEM.bg.splice(0)); }
+async function fetchHwList(env, project, token, g) {
+  const doc = await firestoreGet(project, token, GRADE_DOCS[g]);
+  const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
+  const list = buildHomeworkList(c);
+  const now = Date.now();
+  MEM.hw[g] = { ts: now, list, env };
+  if (env.LINKS) { try { await env.LINKS.put('hwc:' + g, JSON.stringify({ ts: now, list })); } catch (e) {} }
+  return list;
+}
+async function getHwList(env, project, token, g, fresh) {
+  if (fresh) return fetchHwList(env, project, token, g);
+  const now = Date.now();
+  const m = MEM.hw[g];
+  if (m && m.env === env && now - m.ts < HW_TTL_MS) return m.list;
+  if (env.LINKS) {
+    let c = null;
+    try { c = JSON.parse((await env.LINKS.get('hwc:' + g)) || 'null'); } catch (e) {}
+    if (c && Array.isArray(c.list)) {
+      if (now - c.ts < HW_TTL_MS) { MEM.hw[g] = { ts: c.ts, list: c.list, env }; return c.list; }
+      if (now - c.ts < HW_STALE_MS) {
+        MEM.hw[g] = { ts: now, list: c.list, env };         // 這個 Worker 先別再重抓
+        bg(fetchHwList(env, project, token, g));
+        return c.list;
+      }
+    }
+  }
+  return fetchHwList(env, project, token, g);
+}
+// 進度文件的 id 是登入的 uid，不是 email → 第一次要整批列出來才知道誰是誰；
+// 之後把「email → 文件路徑」記在 KV，只讀需要的那幾份（原本每次都整批下載全班）
+async function getProgressFor(env, project, token, emails) {
+  const need = emails.map((e) => String(e).toLowerCase());
+  const out = {};
+  let map = {};
+  try { map = JSON.parse((env.LINKS && (await env.LINKS.get('progmap'))) || '{}'); } catch (e) {}
+  if (need.some((e) => !map[e])) {
+    const docs = await firestoreList(project, token, 'progress');
+    docs.forEach((d) => {
+      const o = d.fields ? fsVal({ mapValue: { fields: d.fields } }) : {};
+      if (!o.email) return;
+      const e = String(o.email).toLowerCase();
+      const rel = String(d.name || '').split('/documents/')[1];
+      if (rel) map[e] = rel;
+      if (need.indexOf(e) >= 0) out[e] = o;
+    });
+    if (env.LINKS) { try { await env.LINKS.put('progmap', JSON.stringify(map)); } catch (e) {} }
+  }
+  const toGet = need.filter((e) => !out[e] && map[e]);
+  const got = await Promise.all(toGet.map((e) => firestoreGet(project, token, map[e])));
+  toGet.forEach((e, i) => { const d = got[i]; out[e] = d && d.fields ? fsVal({ mapValue: { fields: d.fields } }) : {}; });
+  return out;
 }
 
 // v422：OAuth token 有效 1 小時，快取起來——家長按「查作業」時要即時回覆
@@ -735,13 +927,22 @@ function fxSection(title, note, groups, color, first) {
   return out;
 }
 // 三區 → 一顆 Flex 泡泡
-function hwBubble(name, secs) {
+// v426：opts.title／opts.note——老師「主動提醒」用不同的標題，並可以附一段話
+function hwBubble(name, secs, opts) {
+  const o = opts || {};
   const body = [];
   let first = true;
+  if (o.note) {
+    body.push({ type: 'box', layout: 'vertical', backgroundColor: '#FFF6E0', cornerRadius: 'md', paddingAll: '10px',
+      contents: [{ type: 'text', text: o.note, size: 'sm', color: C_INK, wrap: true }] });
+    body.push({ type: 'separator', margin: 'lg', color: C_LINE });
+  }
   SEC_DEF.forEach(([k, title, note, color]) => {
     const gs = (secs[k] || {}).groups || [];
     if (!gs.length) return;
-    body.push(...fxSection(title, typeof note === 'function' ? note(secs) : note, gs, color, first));
+    const sec = fxSection(title, typeof note === 'function' ? note(secs) : note, gs, color, first);
+    if (first && o.note) sec[0] = Object.assign({}, sec[0], { margin: 'lg' });
+    body.push(...sec);
     first = false;
   });
   return {
@@ -750,7 +951,7 @@ function hwBubble(name, secs) {
       type: 'box', layout: 'vertical', paddingAll: '16px', paddingBottom: '12px',
       backgroundColor: '#F4F7F4',
       contents: [
-        { type: 'text', text: '📚 作業提醒', size: 'xs', color: C_SUB },
+        { type: 'text', text: o.title || '📚 作業提醒', size: 'xs', color: C_SUB },
         { type: 'text', text: name || '同學', size: 'lg', weight: 'bold', color: C_INK, wrap: true, margin: 'xs' },
       ],
     },
@@ -765,8 +966,10 @@ function hwBubble(name, secs) {
   };
 }
 // 同一份內容的純文字版（Flex 送不出去時的退路，也給老師端預覽用）
-function hwPlain(name, secs) {
-  const out = [`📚 作業提醒 — ${name || ''}`];
+function hwPlain(name, secs, opts) {
+  const o = opts || {};
+  const out = [`${o.title || '📚 作業提醒'} — ${name || ''}`];
+  if (o.note) out.push('', '💬 ' + o.note);
   SEC_DEF.forEach(([k, title, note]) => {
     const gs = (secs[k] || {}).groups || [];
     if (!gs.length) return;
@@ -782,10 +985,11 @@ function hwPlain(name, secs) {
 }
 const secCount = (sec) => ((sec || {}).groups || []).reduce((a, g) => a + g.rows.reduce((b, r) => b + r.n, 0), 0);
 // 通知列/舊版客戶端看到的一行摘要（LINE 上限 400 字）
-function hwAlt(name, secs) {
+function hwAlt(name, secs, opts) {
+  const o = opts || {};
   const bits = [];
   SEC_DEF.forEach(([k, , , , short]) => { const n = secCount(secs[k]); if (n) bits.push(short + ' ' + n + ' 項'); });
-  return `📚 作業提醒 — ${name || ''}｜` + bits.join('、');
+  return `${o.title || '📚 作業提醒'} — ${name || ''}｜` + (o.note ? o.note.slice(0, 40) + '｜' : '') + bits.join('、');
 }
 
 function isDone(items, wid, itemId) {
@@ -853,6 +1057,61 @@ async function loadSummer(project, token) {
   return { libWeeks: lib.weeks || {}, metaByEmail: byEmail };
 }
 
+// ── v426：老師「主動提醒」────────────────────────────────
+// Alan：「自動提醒是自動提醒 但我主動提醒是主動提醒 不要混在一起」
+// → 完全不碰自動提醒的紀錄（hwsent／hwbind／hwweek），自己記在 manuallog。
+//   家長看到的標題也不一樣：「📣 Alan 老師提醒」＋老師想說的話。
+const MANUAL_TITLE = '📣 Alan 老師提醒';
+async function manualSend(env, body, dryRun) {
+  const R = { ok: true, dryRun: !!dryRun, today: taipeiToday(), sends: [], skippedDone: [], noBind: [], errors: [] };
+  if (!env.LINKS) { R.ok = false; R.errors.push('no_kv'); return R; }
+  const target = (body && body.target) || { type: 'all' };
+  const note = String((body && body.note) || '').replace(/\s+$/g, '').slice(0, 200).trim();
+  R.note = note;
+  let links = {};
+  try { links = JSON.parse((await env.LINKS.get('links')) || '{}'); } catch (e) {}
+  const byStudent = {};
+  for (const [uid, arr] of Object.entries(links)) {
+    for (const c of (arr || [])) {
+      const e = String(c.email).toLowerCase();
+      (byStudent[e] = byStudent[e] || { child: c, uids: [] }).uids.push(uid);
+    }
+  }
+  let picked = Object.values(byStudent);
+  if (target.type === 'grade') {
+    const g = String(target.grade || '').toLowerCase();
+    picked = picked.filter((x) => (gradeFromEmail(x.child.email) || String(x.child.grade || '').toLowerCase()) === g);
+  } else if (target.type === 'students') {
+    const want = (target.emails || []).map((e) => String(e).toLowerCase());
+    picked = picked.filter((x) => want.indexOf(String(x.child.email).toLowerCase()) >= 0);
+    R.noBind = want.filter((e) => !byStudent[e]);          // 老師選了、但家長還沒綁定
+  }
+  if (!picked.length) return R;
+  const list = await queryHomework(env, picked.map((x) => x.child));
+  if (!list) { R.ok = false; R.errors.push('查不到作業（Firebase 服務金鑰有問題？）'); return R; }
+  const opts = { title: MANUAL_TITLE, note };
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i], x = picked[i];
+    const nDue = secCount(r.secs.week) + secCount(r.secs.overdue);
+    if (!nDue) { R.skippedDone.push(r.name || x.child.email); continue; }
+    const alt = hwAlt(r.name, r.secs, opts);
+    R.sends.push({ name: r.name, email: x.child.email, to: x.uids.length, sections: r.secs, alt,
+      buckets: { thisWeek: secCount(r.secs.week), overdue: secCount(r.secs.overdue), preview: secCount(r.secs.preview) } });
+    if (!dryRun) {
+      const errs = await lineMulticastFlex(x.uids, alt, hwBubble(r.name, r.secs, opts), hwPlain(r.name, r.secs, opts), env.LINE_TOKEN);
+      if (errs.length) R.errors.push('push_failed ' + x.child.email + ': ' + errs.join(','));
+    }
+  }
+  if (!dryRun && R.sends.length) {
+    try {
+      const log = JSON.parse((await env.LINKS.get('manuallog')) || '[]');
+      log.unshift({ at: R.today, target, note, kids: R.sends.map((x) => x.name) });
+      await env.LINKS.put('manuallog', JSON.stringify(log.slice(0, 20)));
+    } catch (e) {}
+  }
+  return R;
+}
+
 // ── v422：家長在聊天室輸入「作業」→ 現場查一次，回同一張卡 ────
 // 用的是跟每日提醒完全一樣的分區邏輯，只是不管里程碑、也不寫任何紀錄。
 async function queryHomework(env, children) {
@@ -874,22 +1133,14 @@ async function queryHomework(env, children) {
   });
   // v425：以前是一份等一份（還包含 2.7MB 的暑假題庫）→ 家長按「作業」要等好幾秒，
   // LINE 先斷線、Worker 跟著被取消，回覆就消失了。改成同時讀，開學後也不讀暑假。
+  // v426：作業清單走快取（不再每次下載 1.4MB）、進度只讀這幾個孩子的
   const hwByGrade = {};
-  const [docs, summer, progressDocs] = await Promise.all([
-    Promise.all(grades.map((g) => firestoreGet(project, token, GRADE_DOCS[g]))),
+  const [lists, summer, progByEmail] = await Promise.all([
+    Promise.all(grades.map((g) => getHwList(env, project, token, g, false))),
     today > SUMMER_LAST_DAY ? Promise.resolve({ libWeeks: {}, metaByEmail: {} }) : loadSummer(project, token),
-    firestoreList(project, token, 'progress'),
+    getProgressFor(env, project, token, children.map((c) => c.email)),
   ]);
-  grades.forEach((g, i) => {
-    const doc = docs[i];
-    const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
-    hwByGrade[g] = buildHomeworkList(c);
-  });
-  const progByEmail = {};
-  progressDocs.forEach((d) => {
-    const o = d.fields ? fsVal({ mapValue: { fields: d.fields } }) : {};
-    if (o.email) progByEmail[String(o.email).toLowerCase()] = o;
-  });
+  grades.forEach((g, i) => { hwByGrade[g] = lists[i]; });
 
   const out = [];
   for (const c of children) {
@@ -905,14 +1156,15 @@ async function queryHomework(env, children) {
       overdue: { groups: weekGroups(overdue, grade) },
       preview: { groups: weekGroups(preview, grade) },
     };
-    out.push({ name: c.name || prog.name || '', secs, empty: !thisWeek.length && !overdue.length && !preview.length });
+    out.push({ name: c.name || prog.name || '', grade, email, secs, empty: !thisWeek.length && !overdue.length && !preview.length });
   }
   return out;
 }
 
-// force：老師按「立即發送」＝不管頻率規則，把現況發給每一位有未完成作業的家長
-async function runReminders(env, dryRun, force) {
-  const R = { ok: true, dryRun: !!dryRun, force: !!force, today: taipeiToday(), homeworkCount: 0, summerStudents: 0,
+// v426：這裡只做「自動提醒」（每天 18:00，照頻率規則）。
+// 老師主動發的提醒是另一條路（manualSend），兩邊的紀錄完全分開，互不影響。
+async function runReminders(env, dryRun) {
+  const R = { ok: true, dryRun: !!dryRun, today: taipeiToday(), homeworkCount: 0, summerStudents: 0,
               sends: [], skippedNoBind: [], skippedQuiet: [], skippedDone: [], errors: [] };
   if (!env.FIREBASE_SA) { R.ok = false; R.errors.push('no_firebase_sa'); return R; }
   if (!env.LINKS) { R.ok = false; R.errors.push('no_kv'); return R; }
@@ -927,12 +1179,9 @@ async function runReminders(env, dryRun, force) {
   // 然後把它發給每一位學生——這就是「只綁 G6 卻收到 G1~G5 作業」的原因。
   const hwByGrade = {};
   const gList = Object.keys(GRADE_DOCS);
-  const gDocs = await Promise.all(gList.map((g) => firestoreGet(project, token, GRADE_DOCS[g])));
-  gList.forEach((g, i) => {
-    const doc = gDocs[i];
-    const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
-    hwByGrade[g] = buildHomeworkList(c);
-  });
+  // 每天的自動提醒一定抓最新的，順便把快取更新（家長之後查作業就是這份）
+  const gLists = await Promise.all(gList.map((g) => getHwList(env, project, token, g, true)));
+  gList.forEach((g, i) => { hwByGrade[g] = gLists[i]; });
   R.homeworkByGrade = {};
   R.homeworkCount = 0;
   for (const g of Object.keys(hwByGrade)) {
@@ -1008,8 +1257,6 @@ async function runReminders(env, dryRun, force) {
     let reason = fresh.length ? 'new' : (weeklyDue ? 'weekly' : (dueTomorrow ? 'due1' : ''));
     let targets = uids;
     if (!reason && newbies.length) { reason = 'bind'; targets = newbies; }   // 只補發給新綁定的那幾個 LINE
-    const auto = !!reason;                                   // 18:00 的自動提醒會不會發
-    if (!reason && force) reason = 'manual';
     if (!reason) {
       R.skippedQuiet.push({ name: st.name || st.email, why: '這批作業已經通知過了，下次週一或到期前一天會再提醒' });
       continue;
@@ -1026,7 +1273,7 @@ async function runReminders(env, dryRun, force) {
     const alt = hwAlt(st.name, secs);
 
     R.sends.push({
-      name: st.name, email: st.email, count: nDue, reason, auto, to: targets.length, text, alt,
+      name: st.name, email: st.email, count: nDue, reason, to: targets.length, text, alt,
       lines: text.split('\n').filter((l) => l.trim()),
       sections: secs,
       buckets: { thisWeek: thisWeek.length, overdue: overdue.length, preview: preview.length },
@@ -1056,7 +1303,8 @@ async function runReminders(env, dryRun, force) {
 }
 
 // v422：把「現查作業」的結果包成 LINE 訊息（一個孩子一張卡，最多 5 張）
-async function hwReplyMessages(env, children) {
+async function hwReplyMessages(env, children, opts) {
+  const o = opts || {};
   if (!children || !children.length) {
     let roster = [];
     try { roster = await getRoster(env); } catch (e) {}
@@ -1067,7 +1315,19 @@ async function hwReplyMessages(env, children) {
   try { list = await queryHomework(env, children); } catch (e) {}
   if (!list) return [{ type: 'text', text: '暫時查不到作業，請稍後再試，或直接聯絡 Alan 老師 🙏' }];
   const msgs = [];
+  // v426：家長問的是某一類（「Tayler 文法寫完了嗎」）→ 先用一句話直接回答
+  if (o.cat) {
+    const lines = list.map((r) => {
+      const label = catZh(r.grade, o.cat);
+      const cnt = (sec) => ((sec || {}).groups || []).reduce((a, g) => a + g.rows.filter((x) => x.label === label).reduce((b, x) => b + x.n, 0), 0);
+      const w = cnt(r.secs.week), ov = cnt(r.secs.overdue);
+      if (!w && !ov) return `🎉 ${r.name} 的${label}都完成了！`;
+      return `${r.name} 的${label}：` + [w ? `本週還有 ${w} 項` : '', ov ? `前幾週還有 ${ov} 項` : ''].filter(Boolean).join('、');
+    });
+    msgs.push({ type: 'text', text: lines.join('\n') });
+  }
   for (const r of list) {
+    if (msgs.length >= 5) break;
     if (r.empty) { msgs.push({ type: 'text', text: `🎉 ${r.name || ''} 目前沒有未完成的作業，太棒了！` }); continue; }
     msgs.push({ type: 'flex', altText: hwAlt(r.name, r.secs).slice(0, 390), contents: hwBubble(r.name, r.secs) });
   }
@@ -1083,6 +1343,16 @@ async function diagLog(env, entry) {
     list.unshift(Object.assign({ at: new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(5, 19).replace('T', ' ') }, entry));
     await env.LINKS.put('diag', JSON.stringify(list.slice(0, 30)));
   } catch (e) {}
+}
+// LINE 的「輸入中…」動畫：要花一兩秒的回覆，家長一按下去就先看到有在處理
+async function lineLoading(uid, token) {
+  try {
+    return await fetch(LINE_API + '/v2/bot/chat/loading/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ chatId: uid, loadingSeconds: 20 }),
+    });
+  } catch (e) { return null; }
 }
 async function pushMessages(to, messages, token) {
   return fetch(LINE_API + '/v2/bot/message/push', {
@@ -1102,10 +1372,19 @@ async function processEvent(env, ev) {
       messages = [{ type: 'text', text: await welcomeMessage(env, uid) }];
       D.kind = 'welcome';
     } else if (ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken && uid && env.LINKS) {
-      const r = await handleNameBinding(env, uid, ev.message.text);
-      if (r && r.hw) { messages = await hwReplyMessages(env, r.hw); D.kind = 'homework'; D.kids = r.hw.length; }
+      let loadingP = null;
+      const hooks = { slow: () => { if (!loadingP) loadingP = lineLoading(uid, env.LINE_TOKEN); } };
+      const r = await handleMessage(env, uid, ev.message.text, hooks);
+      D.path = hooks.path;
+      if (hooks.aiMs != null) D.aiMs = hooks.aiMs;
+      if (r && r.hw) {
+        hooks.slow();
+        messages = await hwReplyMessages(env, r.hw, { cat: r.cat });
+        D.kind = 'homework'; D.kids = r.hw.length;
+      }
       else if (typeof r === 'string' && r.trim()) { messages = [{ type: 'text', text: r }]; D.kind = 'text'; }
       else { D.kind = 'quiet'; }
+      if (loadingP) await loadingP;
     } else { D.kind = 'ignored'; }
 
     if (messages && messages.length) {
@@ -1124,8 +1403,8 @@ async function processEvent(env, ev) {
   } catch (e) {
     D.err = String((e && e.stack) || e).slice(0, 200);
   }
-  D.ms = Date.now() - t0;
-  await diagLog(env, D);
+  D.ms = Date.now() - t0;                                   // 家長等待的時間（到回覆送出為止）
+  await Promise.all([diagLog(env, D), flushBg()]);         // 背景更新快取：回覆已經送出了才做
 }
 
 // ── main ─────────────────────────────────────────────────
@@ -1248,8 +1527,16 @@ export default {
     if (request.method === 'POST' && path === '/run-reminders') {
       if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
       const dry = url.searchParams.get('dry') === '1';
-      const force = url.searchParams.get('force') === '1';
-      const R = await runReminders(env, dry, force);
+      const R = await runReminders(env, dry);
+      return json(R, 200, origin);
+    }
+
+    // v426：老師主動提醒（跟自動提醒分開）
+    if (request.method === 'POST' && path === '/manual') {
+      if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
+      let body = {};
+      try { body = await request.json(); } catch (e) {}
+      const R = await manualSend(env, body, url.searchParams.get('dry') === '1');
       return json(R, 200, origin);
     }
 
@@ -1274,6 +1561,6 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
-  queryHomework, hwReplyMessages, processEvent, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
+  queryHomework, hwReplyMessages, processEvent, handleMessage, aiUnderstand, manualSend, getHwList, getProgressFor, getRoster, flushBg, MEM, FAST, HW_TTL_MS, MANUAL_TITLE, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
   catRows, weekGroups, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH, SEC_DEF, summerLibMeta,
 };

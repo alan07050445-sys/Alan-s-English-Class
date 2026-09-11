@@ -1534,7 +1534,7 @@ function ShopManager() {
 /* ── 作業自動提醒（功能B）分頁 ─────────────────────────── */
 /* v421：老師端把「家長在 LINE 上看到的那顆泡泡」照著畫一次。
    資料來自 Worker 回傳的 sections，跟真的 Flex Message 是同一份，不會走鐘。 */
-function HwBubble({ name, secs }) {
+function HwBubble({ name, secs, title, note }) {
   // v422：三區長相統一——【週次小標】＋【四大類各幾項】
   const SEC = [
     ['week',    '▍本週作業',       '',                 'now'],
@@ -1544,10 +1544,11 @@ function HwBubble({ name, secs }) {
   return (
     <div className="lnb">
       <div className="lnb-head">
-        <span>📚 作業提醒</span>
+        <span>{title || '📚 作業提醒'}</span>
         <b>{name || '同學'}</b>
       </div>
       <div className="lnb-body">
+        {note ? <div className="lnb-note">{note}</div> : null}
         {SEC.map(([k, title, note, tone]) => {
           const groups = ((secs[k] || {}).groups) || [];
           if (!groups.length) return null;
@@ -1572,154 +1573,211 @@ function HwBubble({ name, secs }) {
 }
 
 function HwRemind() {
+  // v426：Alan「自動提醒是自動提醒 但我主動提醒是主動提醒 不要混在一起」
+  //   ⏰ 自動提醒：每天 18:00 系統自己照規則發，這裡只能「看今晚會發什麼」
+  //   📣 主動提醒：老師自己挑對象、寫一句話、按下去就發；完全不影響自動提醒的紀錄
   const [pass, setPass]     = useDash(() => { try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; } });
-  const [busy, setBusy]     = useDash(false);
-  const [result, setResult] = useDash(null);
-  const [msg, setMsg]       = useDash(null);
+  const [roster, setRoster] = useDash([]);
+  useDashE(() => window.subscribeRoster(setRoster, () => {}), []);
 
-  const run = async (dry) => {
-    const p = pass.trim();
-    if (!p) { setMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
-    if (!dry && !confirm('確定「立即發送」作業提醒給家長嗎？\n（會真的發 LINE，通常拿來測試或補發）')) return;
-    setBusy(true); setMsg(null); setResult(null);
+  const [aBusy, setABusy] = useDash(false);
+  const [aRes, setARes]   = useDash(null);
+  const [aMsg, setAMsg]   = useDash(null);
+
+  const [target, setTarget] = useDash('all');
+  const [grade, setGrade]   = useDash('');
+  const [picked, setPicked] = useDash([]);
+  const [note, setNote]     = useDash('');
+  const [mBusy, setMBusy]   = useDash(false);
+  const [mRes, setMRes]     = useDash(null);
+  const [mMsg, setMMsg]     = useDash(null);
+
+  const students = roster.filter(s => s.active !== false && String(s.name || '').trim());
+  const grades = Array.from(new Set(students.map(s => String(s.grade || '').toLowerCase()).filter(Boolean))).sort();
+  const nameOf = (em) => (students.find(s => String(s.email).toLowerCase() === String(em).toLowerCase()) || {}).name || em;
+  const errText = (e) => e.message === 'unauthorized' ? '管理密碼錯誤'
+    : e.message === 'no_firebase_sa' ? 'Firebase 服務金鑰還沒設定'
+    : String(e.message || '').indexOf('no_access_token') >= 0 ? 'Firebase 金鑰無效或權限不足，請重新產生金鑰'
+    : e.message === 'not_found' ? 'Worker 還是舊版——請先到 Cloudflare 貼上新的 line-notify-worker.js'
+    : (e.message || '執行失敗');
+  const usePass = () => { const p = pass.trim(); if (p) { try { localStorage.setItem('lineAdminPass', p); } catch (e) {} } return p; };
+
+  const previewAuto = async () => {
+    const p = usePass();
+    if (!p) { setAMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    setABusy(true); setAMsg(null); setARes(null);
+    try { setARes(await window.lineRunReminders(true, p)); }
+    catch (e) { setAMsg({ type: 'err', text: '⚠️ ' + errText(e) }); }
+    setABusy(false);
+  };
+
+  const tgtLabel = target === 'all' ? '所有已綁定的家長'
+    : target === 'grade' ? (grade ? grade.toUpperCase() + ' 的家長' : '（還沒選年級）')
+    : (picked.length ? picked.map(nameOf).join('、') + ' 的家長' : '（還沒選孩子）');
+  const runManual = async (dry) => {
+    const p = usePass();
+    if (!p) { setMMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    if (target === 'grade' && !grade) { setMMsg({ type: 'err', text: '請先選一個年級' }); return; }
+    if (target === 'students' && !picked.length) { setMMsg({ type: 'err', text: '請先選至少一位孩子' }); return; }
+    const tgt = target === 'all' ? { type: 'all' } : target === 'grade' ? { type: 'grade', grade } : { type: 'students', emails: picked };
+    if (!dry && !confirm(`確定現在發送主動提醒給「${tgtLabel}」嗎？\n\n只會發給還有作業沒完成的孩子的家長。${note.trim() ? '\n\n附上的話：' + note.trim().slice(0, 60) : ''}`)) return;
+    setMBusy(true); setMMsg(null); setMRes(null);
     try {
-      try { localStorage.setItem('lineAdminPass', p); } catch (e) {}
-      // v425：老師按的兩顆鈕都是「現在的完整狀況」——不套 18:00 自動提醒的頻率規則。
-      //       以前「立即發送」也照規則走，已通知過的就跳過 → 顯示「已發送給 0 位」讓人以為壞了。
-      const R = await window.lineRunReminders(dry, p, true);
-      setResult(R);
-      setMsg({ type: 'ok', text: dry ? '✅ 試跑完成（未實際發送）' : `✅ 已發送給 ${R.sends.length} 位孩子的家長` });
-    } catch (e) {
-      const m = e.message === 'unauthorized' ? '管理密碼錯誤'
-              : e.message === 'no_firebase_sa' ? 'Firebase 服務金鑰還沒設定（見右側步驟）'
-              : String(e.message || '').indexOf('no_access_token') >= 0 ? 'Firebase 金鑰無效或權限不足，請重新產生金鑰'
-              : (e.message || '執行失敗');
-      setMsg({ type: 'err', text: '⚠️ ' + m });
-    }
-    setBusy(false);
+      const R = await window.lineManual(tgt, note.trim(), dry, p);
+      setMRes(R);
+      const lines = (R.sends || []).reduce((a, x) => a + (x.to || 0), 0);
+      setMMsg({ type: 'ok', text: dry ? '✅ 預覽完成（還沒發出去）' : `✅ 已發送：${R.sends.length} 位孩子、共 ${lines} 個 LINE` });
+    } catch (e) { setMMsg({ type: 'err', text: '⚠️ ' + errText(e) }); }
+    setMBusy(false);
   };
 
   return (
     <div className="notify-wrap">
       <div className="notify-card">
-        <div className="linkbind-head">
-          <div>
-            <b>作業自動提醒</b>
-            <span className="linkbind-summary">每天傍晚 18:00 自動檢查，一則訊息分三區，每行只寫「哪一類・幾項」</span>
-          </div>
+        <div className="linkbind-passrow">
+          <input className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）" value={pass} onChange={e => setPass(e.target.value)} />
         </div>
 
-        {/* v394: 本來是「有密碼就不顯示輸入框」——密碼存錯時會變成
-            只看到「管理密碼錯誤」卻沒有地方可以改，是死路。改成一律顯示。 */}
-        {(true) && (
-          <div className="linkbind-passrow">
-            <input className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）" value={pass} onChange={e => setPass(e.target.value)} />
+        {/* ── ⏰ 自動提醒 ── */}
+        <section className="hwr-sec auto">
+          <div className="hwr-sec-head">
+            <b>⏰ 自動提醒</b>
+            <span>每天 18:00 系統自己發、照固定規則。這裡只能看，不會發。</span>
           </div>
-        )}
-
-        <div className="hwr-btns">
-          <button className="notify-send hwr-preview" onClick={() => run(true)} disabled={busy}>
-            {busy ? '執行中…' : '🔍 試跑預覽（不發送）'}
+          <button className="notify-send hwr-preview" onClick={previewAuto} disabled={aBusy}>
+            {aBusy ? '讀取中…' : '🔍 看今晚 18:00 會發什麼'}
           </button>
-          <button className="notify-send" onClick={() => run(false)} disabled={busy}>
-            📤 立即發送一次
-          </button>
-        </div>
+          {aMsg && <div className={`notify-msg ${aMsg.type}`}>{aMsg.text}</div>}
+          {aRes && <HwResult R={aRes} mode="auto" />}
+        </section>
 
-        {msg && <div className={`notify-msg ${msg.type}`}>{msg.text}</div>}
-
-        {result && (
-          <div className="hwr-result">
-            <div className="hwr-meta">今天 {result.today} ｜ 學期作業 {result.homeworkCount} 份 ｜ 暑假發派 {result.summerStudents || 0} 人 ｜ {result.dryRun ? '預覽' : '已發送'} {result.sends.length} 位</div>
-            {/* v419：作業是「照年級」發的——這裡把每個年級各幾份攤開，一眼看得出有沒有發錯班 */}
-            {result.homeworkByGrade && (
-              <div className="hwr-grades">
-                {Object.keys(result.homeworkByGrade).sort().map(g => (
-                  <span key={g} className={'hwr-grade' + (result.homeworkByGrade[g] ? '' : ' zero')}>
-                    {g.toUpperCase()}<em>{result.homeworkByGrade[g]}</em>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {result.sends.length === 0 ? (
-              <div className="roster-hint">
-                {(result.skippedDone || []).length
-                  ? '有綁定的孩子目前都沒有未完成的作業（只剩可以先預習的）🎉'
-                  : '目前沒有已綁定、而且有未完成作業的孩子。'}
-              </div>
-            ) : (
-              <div className="hwr-list">
-                {result.sends.map(s => (
-                  <div key={s.email} className="hwr-row">
-                    <b>{s.name || s.email}</b>
-                    {/* v420：直接把家長會收到的那則訊息原樣顯示，排版對不對一眼就知道 */}
-                    {s.buckets && (
-                      <div className="hwr-buckets">
-                        <span>本週 <em>{s.buckets.thisWeek}</em></span>
-                        <span>前幾週沒完成 <em>{s.buckets.overdue}</em></span>
-                        <span className="soft">可以先預習 <em>{s.buckets.preview}</em></span>
-                        {s.reason && <span className="soft">{
-                          s.auto === false
-                            ? '18:00 自動提醒今天不會發這則（已通知過）'
-                            : '18:00 會自動發：' + ({ new: '有新作業', weekly: '每週一回報', due1: '明天到期', bind: '剛綁定、還沒收過' }[s.reason] || s.reason)
-                        }</span>}
-                      </div>
-                    )}
-                    {s.sections
-                      ? <HwBubble name={s.name} secs={s.sections} />
-                      : s.text
-                        ? <pre className="hwr-msg">{s.text}</pre>
-                        : <ul>{(s.lines || []).map((l, i) => <li key={i}>{l.replace(/^•\s*/, '')}</li>)}</ul>}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* v425：沒發的一定要講清楚為什麼，不然只看到「0 位」會以為壞掉 */}
-            {(result.skippedQuiet || []).length > 0 && (
-              <div className="hwr-warn soft">🔕 今天不發（避免每天洗版）：{
-                result.skippedQuiet.map(x => x.name).join('、')
-              }——{result.skippedQuiet[0].why}</div>
-            )}
-            {(result.skippedDone || []).length > 0 && (
-              <div className="hwr-warn soft">🎉 都做完了（只剩預習，不打擾）：{result.skippedDone.join('、')}</div>
-            )}
-            {result.skippedNoGrade && result.skippedNoGrade.length > 0 && (
-              <div className="hwr-warn soft">ℹ️ 不是學校帳號（學號不是 le○○ 開頭），不發學期作業：{result.skippedNoGrade.join('、')}</div>
-            )}
-            {result.skippedNoBind && result.skippedNoBind.length > 0 && (
-              <div className="hwr-warn">⚠️ 有作業但家長未綁定（收不到）：{result.skippedNoBind.join('、')}</div>
-            )}
-            {result.errors && result.errors.length > 0 && (
-              <div className="notify-msg err">發送錯誤：{result.errors.join('；')}</div>
-            )}
+        {/* ── 📣 主動提醒 ── */}
+        <section className="hwr-sec manual">
+          <div className="hwr-sec-head">
+            <b>📣 主動提醒</b>
+            <span>老師自己決定現在提醒誰。標題是「Alan 老師提醒」，跟自動提醒分開，互不影響。</span>
           </div>
-        )}
+
+          <label className="notify-label">要提醒誰</label>
+          <div className="notify-target">
+            <button className={target === 'all' ? 'on' : ''} onClick={() => setTarget('all')}>全部</button>
+            <button className={target === 'grade' ? 'on' : ''} onClick={() => setTarget('grade')}>年級</button>
+            <button className={target === 'students' ? 'on' : ''} onClick={() => setTarget('students')}>個別孩子</button>
+          </div>
+          {target === 'grade' && (
+            <div className="notify-picker">
+              {grades.length === 0 ? <span className="notify-hint">名單裡還沒有年級資料</span>
+                : grades.map(g => <button key={g} className={`notify-chip${grade === g ? ' on' : ''}`} onClick={() => setGrade(g)}>{g.toUpperCase()}</button>)}
+            </div>
+          )}
+          {target === 'students' && (
+            <div className="notify-picker notify-picker-list">
+              {students.map(s => {
+                const on = picked.includes(s.email);
+                return <button key={s.email} className={`notify-chip${on ? ' on' : ''}`}
+                  onClick={() => setPicked(on ? picked.filter(e => e !== s.email) : [...picked, s.email])}>{s.name}<em>{(s.grade || '').toUpperCase()}</em></button>;
+              })}
+            </div>
+          )}
+
+          <label className="notify-label">想對家長說的話（選填）</label>
+          <textarea className="notify-textarea" rows={3} maxLength={200}
+            placeholder="例如：這週五要小考，請提醒孩子把單字練完 💪"
+            value={note} onChange={e => setNote(e.target.value)} />
+          <div className="notify-count">{note.length} / 200</div>
+
+          <div className="hwr-btns">
+            <button className="notify-send hwr-preview" onClick={() => runManual(true)} disabled={mBusy}>{mBusy ? '處理中…' : '🔍 預覽'}</button>
+            <button className="notify-send" onClick={() => runManual(false)} disabled={mBusy}>📤 發送主動提醒</button>
+          </div>
+          {mMsg && <div className={`notify-msg ${mMsg.type}`}>{mMsg.text}</div>}
+          {mRes && <HwResult R={mRes} mode="manual" nameOf={nameOf} />}
+        </section>
       </div>
 
       <aside className="notify-side">
-        <h4>訊息長什麼樣</h4>
-        <ol>
-          <li><b>本週作業</b>：這一週的，還沒完成的</li>
-          <li><b>前幾週還沒完成</b>：要補完的（最多回溯 4 週）</li>
-          <li><b>可以先預習</b>：之後的週次，附在最後、標明不用急</li>
-        </ol>
-        <p className="notify-note">
-          每一行只有「哪一類、還有幾項」——不列課名、不列題型，家長用手機看不會折行。
-          本週<b style={{color:'#1B7A3E'}}>綠色</b>、前幾週沒完成<b style={{color:'#C62828'}}>紅色</b>、預習灰色（LINE 的 Flex 訊息才做得到粗體與顏色）。
-        </p>
-
-        <h4>18:00 自動提醒什麼時候會發</h4>
+        <h4>⏰ 自動提醒（每天 18:00）</h4>
         <ol>
           <li>出現<b>沒被通知過的新作業</b></li>
           <li>有家長<b>剛綁定</b>、還沒收過這位孩子的提醒</li>
           <li>每週<b>星期一</b>固定回報一次</li>
           <li>本週有作業<b>明天到期</b></li>
         </ol>
-        <p className="notify-note">上面兩顆按鈕<b>不套這些規則</b>：「立即發送」就是把現在的完整狀況發給每一位有未完成作業的家長。</p>
-        <p className="notify-note">同一孩子合併成一則。只剩「可以先預習」時不會發（不打擾）。已封存的上學期作業不會出現。只發給「已綁定」的家長。</p>
+        <p className="notify-note">同一個孩子一天最多一則。只剩「可以先預習」時不發。</p>
+
+        <h4>📣 主動提醒</h4>
+        <p className="notify-note">
+          你想提醒的時候再用。可以只挑一個年級或幾位孩子，也可以附一句話（例如小考、補交）。
+          家長看到的標題是「📣 Alan 老師提醒」，一眼就分得出不是系統自動發的。
+        </p>
+        <p className="notify-note"><b>兩邊的紀錄完全分開</b>：你主動發過，不會讓今晚的自動提醒少發；自動發過，也不會擋住你主動發。</p>
+
+        <h4>訊息長什麼樣</h4>
+        <p className="notify-note">
+          三區：本週<b style={{color:'#1B7A3E'}}>綠</b>、前幾週還沒完成<b style={{color:'#C62828'}}>紅</b>、可以先預習灰。
+          每行只寫「哪一類・幾項」，手機看不會折行。
+        </p>
       </aside>
+    </div>
+  );
+}
+
+/* v426：自動／主動共用的結果區（預覽時一定講清楚誰會收到、誰不會、為什麼） */
+function HwResult({ R, mode, nameOf }) {
+  const REASON = { new: '有新作業', weekly: '每週一回報', due1: '明天到期', bind: '剛綁定、還沒收過' };
+  const sends = R.sends || [];
+  return (
+    <div className="hwr-result">
+      <div className="hwr-meta">
+        今天 {R.today}
+        {mode === 'auto' ? <> ｜ 學期作業 {R.homeworkCount} 份 ｜ 今晚會發 {sends.length} 位</> : <> ｜ {R.dryRun ? '預覽' : '已發送'} {sends.length} 位孩子</>}
+      </div>
+      {mode === 'auto' && R.homeworkByGrade && (
+        <div className="hwr-grades">
+          {Object.keys(R.homeworkByGrade).sort().map(g => (
+            <span key={g} className={'hwr-grade' + (R.homeworkByGrade[g] ? '' : ' zero')}>{g.toUpperCase()}<em>{R.homeworkByGrade[g]}</em></span>
+          ))}
+        </div>
+      )}
+      {sends.length === 0
+        ? <div className="roster-hint">{mode === 'auto' ? '今晚 18:00 沒有要自動發的。' : '這個對象目前沒有要提醒的（見下方原因）。'}</div>
+        : (
+          <div className="hwr-list">
+            {sends.map(s => (
+              <div key={s.email} className="hwr-row">
+                <b>{s.name || s.email}</b>
+                <div className="hwr-buckets">
+                  {s.buckets && <>
+                    <span>本週 <em>{s.buckets.thisWeek}</em></span>
+                    <span>前幾週沒完成 <em>{s.buckets.overdue}</em></span>
+                    <span className="soft">可以先預習 <em>{s.buckets.preview}</em></span>
+                  </>}
+                  {mode === 'auto' && s.reason && <span className="soft">原因：{REASON[s.reason] || s.reason}</span>}
+                  {s.to > 1 && <span className="soft">{s.to} 個 LINE</span>}
+                </div>
+                {s.sections
+                  ? <HwBubble name={s.name} secs={s.sections} title={mode === 'manual' ? '📣 Alan 老師提醒' : null} note={mode === 'manual' ? R.note : null} />
+                  : s.text ? <pre className="hwr-msg">{s.text}</pre> : null}
+              </div>
+            ))}
+          </div>
+        )}
+      {(R.skippedQuiet || []).length > 0 && (
+        <div className="hwr-warn soft">🔕 今晚不發（避免每天洗版）：{R.skippedQuiet.map(x => x.name).join('、')}——{R.skippedQuiet[0].why}。要現在提醒他們，用下面的「📣 主動提醒」。</div>
+      )}
+      {(R.skippedDone || []).length > 0 && (
+        <div className="hwr-warn soft">🎉 都做完了（只剩預習或全部完成）：{R.skippedDone.join('、')}</div>
+      )}
+      {(R.noBind || []).length > 0 && (
+        <div className="hwr-warn">⚠️ 家長還沒綁定，收不到：{R.noBind.map(e => (nameOf ? nameOf(e) : e)).join('、')}</div>
+      )}
+      {(R.skippedNoBind || []).length > 0 && (
+        <div className="hwr-warn">⚠️ 有作業但家長還沒綁定（收不到）：{R.skippedNoBind.join('、')}</div>
+      )}
+      {(R.skippedNoGrade || []).length > 0 && (
+        <div className="hwr-warn soft">ℹ️ 不是學校帳號（學號不是 le○○ 開頭），不發學期作業：{R.skippedNoGrade.join('、')}</div>
+      )}
+      {(R.errors || []).length > 0 && <div className="notify-msg err">發送錯誤：{R.errors.join('；')}</div>}
     </div>
   );
 }

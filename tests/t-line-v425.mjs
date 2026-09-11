@@ -116,40 +116,49 @@ log.push('\n【③】家長按「查詢作業」要有回應');
 }
 
 // ═══ ② 立即發送 0 位 ═══
-log.push('\n【②】老師測試時收過 → 媽媽綁定後還是要收得到');
+log.push('\n【②】老師測試時收過 → 媽媽綁定後還是要收得到；主動提醒與自動提醒分開');
 {
   reset();
   // 情境：Eric 的作業之前已經通知過（老師自己的 LINE 測試時收的），今天不是週一
   const hwsent = { 'g4-W_v1': { [ERIC]: ['new'] } };
   const env = makeEnv(Object.assign({}, BOUND, { hwsent: JSON.stringify(hwsent) }));
-  const R = await W.runReminders(env, false, false);
+  const R = await W.runReminders(env, false);
   const isMon = today === mon;
   if (!isMon) {
     ok('⭐ 媽媽剛綁定、還沒收過 → 18:00 會補發給她（原因 bind）',
        R.sends.length === 1 && R.sends[0].reason === 'bind' && sent.multicast[0].to.join() === 'Ucandy0076d66b',
        JSON.stringify({ sends: R.sends.map((x) => x.reason), quiet: R.skippedQuiet }));
   } else ok('（今天剛好週一，改由週一回報觸發）', R.sends.length === 1);
-  const R2 = await W.runReminders(env, false, false);
+  const R2 = await W.runReminders(env, false);
   ok('補發過一次之後，同一天不會再發', R2.sends.length === 0 && R2.skippedQuiet.length === 1, JSON.stringify(R2.sends.map((x) => x.reason)));
   ok('⭐ 沒發的原因寫得清清楚楚（給老師看）', /已經通知過/.test((R2.skippedQuiet[0] || {}).why), JSON.stringify(R2.skippedQuiet));
 }
 {
   reset();
+  // v426：「主動提醒」跟自動提醒分開——就算自動提醒已經通知過，老師主動發照樣會發，
+  //       而且完全不動自動提醒的紀錄
   const hwsent = { 'g4-W_v1': { [ERIC]: ['new'] } };
   const hwbind = { ['Ucandy0076d66b|' + ERIC]: today };
   const env = makeEnv(Object.assign({}, BOUND, { hwsent: JSON.stringify(hwsent), hwbind: JSON.stringify(hwbind) }));
-  const R = await W.runReminders(env, false, true);
-  ok('⭐ 老師按「立即發送」→ 不管頻率規則，照樣發', R.sends.length === 1 && sent.multicast.length === 1,
-     JSON.stringify(R.sends.map((x) => x.reason)));
-  ok('報告會標出「18:00 自動提醒其實不會發這一則」',
-     today === mon ? true : (R.sends[0].reason === 'manual' && R.sends[0].auto === false), JSON.stringify(R.sends[0] && { reason: R.sends[0].reason, auto: R.sends[0].auto }));
-  const Rp = await W.runReminders(env, true, true);
-  ok('試跑預覽（force）不會真的發', Rp.sends.length === 1 && sent.multicast.length === 1);
+  const before = ['hwsent', 'hwbind', 'hwweek', 'hwseen'].map((k) => env._s.get(k));
+  const R = await W.manualSend(env, { target: { type: 'all' }, note: '週五要小考，請提醒孩子把單字練完' }, false);
+  ok('⭐ 老師主動提醒 → 自動提醒已經通知過也照樣發', R.sends.length === 1 && sent.multicast.length === 1, JSON.stringify(R));
+  ok('⭐ 主動提醒完全不動自動提醒的紀錄（hwsent/hwbind/hwweek/hwseen）',
+     ['hwsent', 'hwbind', 'hwweek', 'hwseen'].every((k, i) => env._s.get(k) === before[i]));
+  const m = JSON.stringify(sent.multicast[0]);
+  ok('家長看到的標題是「📣 Alan 老師提醒」，還附上老師的話', m.includes('📣 Alan 老師提醒') && m.includes('週五要小考'), m.slice(0, 200));
+  ok('主動提醒另外記在 manuallog', JSON.parse(env._s.get('manuallog'))[0].note.includes('週五要小考'));
+  const Rp = await W.manualSend(env, { target: { type: 'all' } }, true);
+  ok('預覽不會真的發', Rp.sends.length === 1 && sent.multicast.length === 1);
+  const Ra = await W.runReminders(env, true);
+  ok('⭐ 主動發過之後，今晚的自動提醒照原本的規則判斷（不會因此少發或多發）',
+     today === mon ? Ra.sends.length === 1 : (Ra.sends.length === 0 && Ra.skippedQuiet.length === 1),
+     JSON.stringify({ sends: Ra.sends.map((x) => x.reason), quiet: Ra.skippedQuiet }));
 }
 {
   reset();
   const env = makeEnv(BOUND);
-  const R = await W.runReminders(env, true, false);
+  const R = await W.runReminders(env, true);
   ok('開學後：老師端「暑假發派」誠實顯示 0', R.summerStudents === 0);
   ok('開學後：每日提醒也不下載暑假題庫', !calls.some((u) => u.includes('data_summer_lib')));
 }

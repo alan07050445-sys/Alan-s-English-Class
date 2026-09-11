@@ -2594,6 +2594,16 @@
 .linkbind-chip em { font-style: normal; font-family: var(--mono); font-size: 10px; color: var(--ink-muted); }
 .linkbind-note { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; margin: 10px 0 0; }
 
+/* v426：🔔 分頁拆成「⏰ 自動提醒」與「📣 主動提醒」兩區 */
+.hwr-sec { margin-top: 16px; padding: 14px 14px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface, #fff); }
+.hwr-sec.auto { border-left: 4px solid #1B7A3E; }
+.hwr-sec.manual { border-left: 4px solid #E0A100; }
+.hwr-sec-head { margin-bottom: 10px; }
+.hwr-sec-head b { display: block; font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink); }
+.hwr-sec-head span { display: block; font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); margin-top: 3px; line-height: 1.6; }
+.hwr-sec .notify-send.hwr-preview { width: 100%; }
+.lnb-note { background: #FFF6E0; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.6; color: #1F2328; margin-bottom: 14px; padding-bottom: 8px; }
+
 /* v425：沒發的原因（淡一點，不是錯誤）＋名單體檢的附註 */
 .hwr-warn.soft { background: var(--surface-2, rgba(0,0,0,.04)); border-color: var(--border); color: var(--ink-muted); }
 .linkbind-check p.soft { color: var(--ink-muted); }
