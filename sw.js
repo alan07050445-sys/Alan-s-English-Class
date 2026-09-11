@@ -6,26 +6,26 @@
 // 為什麼要分：Alan 一個月內從 v375 跳到 v391（16 次 deploy），舊版 activate 會刪掉所有
 // key !== CACHE 的快取，等於每次 deploy 都把每個學生的圖片也一起清空重新冷啟動。
 // 圖片其實一整年都沒變，沒有理由跟著版本號陪葬。
-const CACHE = 'alans-english-v423';
+const CACHE = 'alans-english-v425';
 const STATIC = 'alans-static-v1';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
 const asset = path => BASE + path;
 
-// 跟版本走的檔案：URL 上都帶 ?v=423，所以 cache-first 是安全的（改版就換 URL）。
+// 跟版本走的檔案：URL 上都帶 ?v=425，所以 cache-first 是安全的（改版就換 URL）。
 const PRECACHE = [
-  asset('/'), asset('/index.html'), asset('/manifest.json?v=423'),
-  asset('/styles.css?v=423'), asset('/styles-part2.css?v=423'), asset('/styles-quiz.css?v=423'),
-  asset('/styles-flashcard.css?v=423'), asset('/styles-auth.css?v=423'), asset('/styles-quiz-mode.css?v=423'),
-  asset('/data.js?v=423'), asset('/data-g1.js?v=423'), asset('/data-g2.js?v=423'), asset('/data-g4.js?v=423'), asset('/data-g5.js?v=423'), asset('/data-g6.js?v=423'), asset('/data-summer.js?v=423'), asset('/data-grammar.js?v=423'),
-  asset('/components-shell.jsx?v=423'), asset('/components-quiz.jsx?v=423'),
-  asset('/components-flashcard.jsx?v=423'), asset('/components-editor.jsx?v=423'),
-  asset('/components-quiz-mode.jsx?v=423'), asset('/components-dashboard.jsx?v=423'),
-  asset('/components-mistakes.jsx?v=423'), asset('/styles-mistakes.css?v=423'),
-  asset('/styles-theme.css?v=423'), asset('/styles-home.css?v=423'),
-  asset('/app.jsx?v=423'), asset('/components-fx.jsx?v=423'),
-  asset('/styles-fx.css?v=423'), asset('/styles-tune.css?v=423'),
-  asset('/summer-booking.html'), asset('/summer-booking.css?v=423'), asset('/summer-booking-admin.css?v=423'), asset('/summer-booking.js?v=423'),
+  asset('/'), asset('/index.html'), asset('/manifest.json?v=425'),
+  asset('/styles.css?v=425'), asset('/styles-part2.css?v=425'), asset('/styles-quiz.css?v=425'),
+  asset('/styles-flashcard.css?v=425'), asset('/styles-auth.css?v=425'), asset('/styles-quiz-mode.css?v=425'),
+  asset('/data.js?v=425'), asset('/data-g1.js?v=425'), asset('/data-g2.js?v=425'), asset('/data-g4.js?v=425'), asset('/data-g5.js?v=425'), asset('/data-g6.js?v=425'), asset('/data-summer.js?v=425'), asset('/data-grammar.js?v=425'),
+  asset('/components-shell.jsx?v=425'), asset('/components-quiz.jsx?v=425'),
+  asset('/components-flashcard.jsx?v=425'), asset('/components-editor.jsx?v=425'),
+  asset('/components-quiz-mode.jsx?v=425'), asset('/components-dashboard.jsx?v=425'),
+  asset('/components-mistakes.jsx?v=425'), asset('/styles-mistakes.css?v=425'),
+  asset('/styles-theme.css?v=425'), asset('/styles-home.css?v=425'),
+  asset('/app.jsx?v=425'), asset('/components-fx.jsx?v=425'),
+  asset('/styles-fx.css?v=425'), asset('/styles-tune.css?v=425'),
+  asset('/summer-booking.html'), asset('/summer-booking.css?v=425'), asset('/summer-booking-admin.css?v=425'), asset('/summer-booking.js?v=425'),
 ];
 
 // 跟版本無關的圖片／icon（合計約 417KB）。原本完全沒進快取，而 GitHub Pages 全站

@@ -1,5 +1,5 @@
 /*
- * Alan's English Class — LINE 通知 Worker（v4：綁定對話流程正式版，可綁 2 位孩子）
+ * Alan's English Class — LINE 通知 Worker（v5：先回 200 再處理＋診斷紀錄）
  * ────────────────────────────────────────────────────────────
  * 獨立 Worker。負責：發公告 + 家長自助綁定 + 作業沒完成自動提醒。
  *
@@ -19,7 +19,8 @@
  *   POST /sync-roster     {roster}
  *   GET  /links
  *   POST /unlink          {lineUserId, email?}
- *   POST /run-reminders   （?dry=1 只預覽不發送）功能B 手動試跑
+ *   POST /run-reminders   （?dry=1 只預覽不發送；?force=1 不管頻率規則）
+ *   GET  /diag            最近 30 則 LINE 訊息的處理紀錄
  */
 
 const LINE_API = 'https://api.line.me';
@@ -871,14 +872,19 @@ async function queryHomework(env, children) {
     gradeOf[String(c.email).toLowerCase()] = g;
     if (g && GRADE_DOCS[g] && grades.indexOf(g) < 0) grades.push(g);
   });
+  // v425：以前是一份等一份（還包含 2.7MB 的暑假題庫）→ 家長按「作業」要等好幾秒，
+  // LINE 先斷線、Worker 跟著被取消，回覆就消失了。改成同時讀，開學後也不讀暑假。
   const hwByGrade = {};
-  for (const g of grades) {
-    const doc = await firestoreGet(project, token, GRADE_DOCS[g]);
+  const [docs, summer, progressDocs] = await Promise.all([
+    Promise.all(grades.map((g) => firestoreGet(project, token, GRADE_DOCS[g]))),
+    today > SUMMER_LAST_DAY ? Promise.resolve({ libWeeks: {}, metaByEmail: {} }) : loadSummer(project, token),
+    firestoreList(project, token, 'progress'),
+  ]);
+  grades.forEach((g, i) => {
+    const doc = docs[i];
     const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
     hwByGrade[g] = buildHomeworkList(c);
-  }
-  const summer = await loadSummer(project, token);       // v423：暑假發派也要算進去
-  const progressDocs = await firestoreList(project, token, 'progress');
+  });
   const progByEmail = {};
   progressDocs.forEach((d) => {
     const o = d.fields ? fsVal({ mapValue: { fields: d.fields } }) : {};
@@ -904,8 +910,10 @@ async function queryHomework(env, children) {
   return out;
 }
 
-async function runReminders(env, dryRun) {
-  const R = { ok: true, dryRun: !!dryRun, today: taipeiToday(), homeworkCount: 0, summerStudents: 0, sends: [], skippedNoBind: [], errors: [] };
+// force：老師按「立即發送」＝不管頻率規則，把現況發給每一位有未完成作業的家長
+async function runReminders(env, dryRun, force) {
+  const R = { ok: true, dryRun: !!dryRun, force: !!force, today: taipeiToday(), homeworkCount: 0, summerStudents: 0,
+              sends: [], skippedNoBind: [], skippedQuiet: [], skippedDone: [], errors: [] };
   if (!env.FIREBASE_SA) { R.ok = false; R.errors.push('no_firebase_sa'); return R; }
   if (!env.LINKS) { R.ok = false; R.errors.push('no_kv'); return R; }
   let sa;
@@ -918,11 +926,13 @@ async function runReminders(env, dryRun) {
   // 作業清單：六個年級各一份（公開資料）。v419 之前只讀 class/data 一份，
   // 然後把它發給每一位學生——這就是「只綁 G6 卻收到 G1~G5 作業」的原因。
   const hwByGrade = {};
-  for (const g of Object.keys(GRADE_DOCS)) {
-    const doc = await firestoreGet(project, token, GRADE_DOCS[g]);
+  const gList = Object.keys(GRADE_DOCS);
+  const gDocs = await Promise.all(gList.map((g) => firestoreGet(project, token, GRADE_DOCS[g])));
+  gList.forEach((g, i) => {
+    const doc = gDocs[i];
     const c = doc && doc.fields ? fsVal({ mapValue: { fields: doc.fields } }) : {};
     hwByGrade[g] = buildHomeworkList(c);
-  }
+  });
   R.homeworkByGrade = {};
   R.homeworkCount = 0;
   for (const g of Object.keys(hwByGrade)) {
@@ -930,16 +940,11 @@ async function runReminders(env, dryRun) {
     R.homeworkCount += hwByGrade[g].length;
   }
 
-  // 暑假題庫（class/data_summer_lib，取標題）＋ 暑假發派（class/summer_meta）
-  const libDoc = await firestoreGet(project, token, 'class/data_summer_lib');
-  const lib = libDoc && libDoc.fields ? fsVal({ mapValue: { fields: libDoc.fields } }) : {};
-  const libWeeks = lib.weeks || {};
-  const metaDoc = await firestoreGet(project, token, 'class/summer_meta');
-  const meta = metaDoc && metaDoc.fields ? fsVal({ mapValue: { fields: metaDoc.fields } }) : {};
-  const metaByEmail = {};
-  for (const [em, plan] of Object.entries(meta.students || {})) metaByEmail[String(em).toLowerCase()] = plan;
-  // 開學之後暑假發派不再進提醒 → 這個數字也要誠實顯示 0（老師端會看到）
-  R.summerStudents = R.today > SUMMER_LAST_DAY ? 0 : Object.keys(metaByEmail).length;
+  // 暑假題庫＋暑假發派——開學後根本用不到，不要去下載那 2.7MB
+  const summer = R.today > SUMMER_LAST_DAY ? { libWeeks: {}, metaByEmail: {} } : await loadSummer(project, token);
+  const libWeeks = summer.libWeeks;
+  const metaByEmail = summer.metaByEmail;
+  R.summerStudents = Object.keys(metaByEmail).length;
 
   // 學生進度（private，需服務帳號）
   const progressDocs = await firestoreList(project, token, 'progress');
@@ -960,6 +965,9 @@ async function runReminders(env, dryRun) {
   const hwseen = JSON.parse((await env.LINKS.get('hwseen')) || '{}');
   const hwsent = JSON.parse((await env.LINKS.get('hwsent')) || '{}');
   const hwweek = JSON.parse((await env.LINKS.get('hwweek')) || '{}');   // v420：每位學生「上次的週一回報」
+  // v425：「已通知過」原本只記在孩子身上，不管是哪個 LINE 收到的——所以老師自己測試時
+  //       收過 Eric 的提醒，後來 Eric 的媽媽綁定，她就永遠等不到第一則。改成記在「LINE×孩子」上。
+  const hwbind = JSON.parse((await env.LINKS.get('hwbind')) || '{}');
   const today = R.today;
 
   const emailToUids = {};
@@ -988,16 +996,24 @@ async function runReminders(env, dryRun) {
     const thisWeek = [], overdue = [], preview = [];
     splitTodos(todos, st.items, today, thisWeek, overdue, preview);
     const nDue = thisWeek.length + overdue.length;
-    if (!nDue) continue;                                 // 只剩「可以先預習」→ 不打擾
+    if (!nDue) { R.skippedDone.push(st.name || st.email); continue; }   // 只剩預習 → 不打擾
 
     // ── 今天到底要不要發？（不要每天煩同一件事）────────────
-    //   ① 有這位家長沒被通知過的新作業  ② 每週一固定回報一次  ③ 明天就到期
+    //   ① 有新作業  ② 有剛綁定、還沒收過這位孩子提醒的 LINE  ③ 每週一固定回報  ④ 明天就到期
     const fresh = thisWeek.concat(overdue).filter((hw) => !(((hwsent[hw.key] || {})[st.email]) || []).includes('new'));
+    const newbies = uids.filter((u) => !hwbind[u + '|' + st.email]);
     const monday = mondayOf(today);
     const weeklyDue = today === monday && (hwweek[st.email] || '') !== monday;
     const dueTomorrow = thisWeek.some((hw) => hw.dueDate === addDays(today, 1));
-    const reason = fresh.length ? 'new' : (weeklyDue ? 'weekly' : (dueTomorrow ? 'due1' : ''));
-    if (!reason) continue;
+    let reason = fresh.length ? 'new' : (weeklyDue ? 'weekly' : (dueTomorrow ? 'due1' : ''));
+    let targets = uids;
+    if (!reason && newbies.length) { reason = 'bind'; targets = newbies; }   // 只補發給新綁定的那幾個 LINE
+    const auto = !!reason;                                   // 18:00 的自動提醒會不會發
+    if (!reason && force) reason = 'manual';
+    if (!reason) {
+      R.skippedQuiet.push({ name: st.name || st.email, why: '這批作業已經通知過了，下次週一或到期前一天會再提醒' });
+      continue;
+    }
 
     // ── 組訊息（v421：四大類彙總＋Flex 粗體上色）──────────────
     const secs = {
@@ -1010,7 +1026,7 @@ async function runReminders(env, dryRun) {
     const alt = hwAlt(st.name, secs);
 
     R.sends.push({
-      name: st.name, email: st.email, count: nDue, reason, text, alt,
+      name: st.name, email: st.email, count: nDue, reason, auto, to: targets.length, text, alt,
       lines: text.split('\n').filter((l) => l.trim()),
       sections: secs,
       buckets: { thisWeek: thisWeek.length, overdue: overdue.length, preview: preview.length },
@@ -1024,7 +1040,8 @@ async function runReminders(env, dryRun) {
         }
       });
       if (weeklyDue) hwweek[st.email] = monday;
-      const errs = await lineMulticastFlex(uids, alt, bubble, text, env.LINE_TOKEN);
+      targets.forEach((u) => { hwbind[u + '|' + st.email] = today; });
+      const errs = await lineMulticastFlex(targets, alt, bubble, text, env.LINE_TOKEN);
       if (errs.length) R.errors.push('push_failed ' + st.email + ': ' + errs.join(','));
     }
   }
@@ -1033,6 +1050,7 @@ async function runReminders(env, dryRun) {
     await env.LINKS.put('hwseen', JSON.stringify(hwseen));
     await env.LINKS.put('hwsent', JSON.stringify(hwsent));
     await env.LINKS.put('hwweek', JSON.stringify(hwweek));
+    await env.LINKS.put('hwbind', JSON.stringify(hwbind));
   }
   return R;
 }
@@ -1056,9 +1074,63 @@ async function hwReplyMessages(env, children) {
   return msgs;
 }
 
+// v425：把每一則 LINE 訊息「怎麼處理的、有沒有回成功、花了多久」記下來，
+// 老師端🔗分頁看得到——下次再有「沒回應」就不用猜。只留最近 30 筆、不存完整 userId。
+async function diagLog(env, entry) {
+  if (!env.LINKS) return;
+  try {
+    const list = JSON.parse((await env.LINKS.get('diag')) || '[]');
+    list.unshift(Object.assign({ at: new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(5, 19).replace('T', ' ') }, entry));
+    await env.LINKS.put('diag', JSON.stringify(list.slice(0, 30)));
+  } catch (e) {}
+}
+async function pushMessages(to, messages, token) {
+  return fetch(LINE_API + '/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ to, messages: messages.slice(0, 5) }),
+  });
+}
+// 一則 LINE 事件的完整處理（在 waitUntil 裡跑，LINE 早就收到 200 了）
+async function processEvent(env, ev) {
+  const t0 = Date.now();
+  const uid = ev.source && ev.source.userId;
+  const D = { u: uid ? '…' + String(uid).slice(-6) : '', type: ev.type, text: ev.message && ev.message.text ? String(ev.message.text).slice(0, 30) : '' };
+  try {
+    let messages = null;
+    if (ev.type === 'follow' && ev.replyToken) {
+      messages = [{ type: 'text', text: await welcomeMessage(env, uid) }];
+      D.kind = 'welcome';
+    } else if (ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken && uid && env.LINKS) {
+      const r = await handleNameBinding(env, uid, ev.message.text);
+      if (r && r.hw) { messages = await hwReplyMessages(env, r.hw); D.kind = 'homework'; D.kids = r.hw.length; }
+      else if (typeof r === 'string' && r.trim()) { messages = [{ type: 'text', text: r }]; D.kind = 'text'; }
+      else { D.kind = 'quiet'; }
+    } else { D.kind = 'ignored'; }
+
+    if (messages && messages.length) {
+      const res = await lineReplyMessages(ev.replyToken, messages, env.LINE_TOKEN);
+      D.reply = res ? res.status : 0;
+      if (!res || !res.ok) {
+        D.replyErr = res ? (await res.text().catch(() => '')).slice(0, 160) : 'no_response';
+        // 回覆權杖過期之類的 → 改用 push 補送（只在失敗時，才不會吃掉每月額度）
+        if (uid) {
+          const p = await pushMessages(uid, messages, env.LINE_TOKEN);
+          D.push = p.status;
+          if (!p.ok) D.pushErr = (await p.text().catch(() => '')).slice(0, 160);
+        }
+      }
+    }
+  } catch (e) {
+    D.err = String((e && e.stack) || e).slice(0, 200);
+  }
+  D.ms = Date.now() - t0;
+  await diagLog(env, D);
+}
+
 // ── main ─────────────────────────────────────────────────
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin') || '*';
     const url = new URL(request.url);
     const path = url.pathname;
@@ -1075,24 +1147,11 @@ export default {
       if (!(await verifyLineSignature(raw, sig, env.LINE_SECRET))) return json({ ok: false, error: 'bad_signature' }, 401, origin);
       let payload = {};
       try { payload = JSON.parse(raw); } catch (e) {}
-      for (const ev of (payload.events || [])) {
-        try {
-          if (ev.type === 'follow' && ev.replyToken) {
-            await lineReply(ev.replyToken, await welcomeMessage(env, ev.source && ev.source.userId), env.LINE_TOKEN);
-          } else if (ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
-            const uid = ev.source && ev.source.userId;
-            if (!uid || !env.LINKS) continue;
-            const r = await handleNameBinding(env, uid, ev.message.text);
-            if (r && r.hw) {
-              // v422：家長輸入「作業」→ 現場查一次，回跟每日提醒一樣的卡片
-              await lineReplyMessages(ev.replyToken, await hwReplyMessages(env, r.hw), env.LINE_TOKEN);
-            } else if (typeof r === 'string' && r.trim()) {
-              await lineReply(ev.replyToken, r, env.LINE_TOKEN);
-            }
-            // r === '' → 已轉人工，故意不回話
-          }
-        } catch (e) {}
-      }
+      // v425：先回 200 給 LINE，再慢慢處理。以前是全部做完才回——「作業」要讀好幾份
+      // Firestore，LINE 等不及就斷線，Cloudflare 看到對方斷線會把整個 Worker 取消，
+      // 回覆根本送不出去（Candy 按兩次「查詢作業」都石沉大海就是這樣）。
+      const work = Promise.all((payload.events || []).map((ev) => processEvent(env, ev)));
+      if (ctx && ctx.waitUntil) ctx.waitUntil(work); else await work;
       return json({ ok: true }, 200, origin);
     }
 
@@ -1189,8 +1248,16 @@ export default {
     if (request.method === 'POST' && path === '/run-reminders') {
       if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
       const dry = url.searchParams.get('dry') === '1';
-      const R = await runReminders(env, dry);
+      const force = url.searchParams.get('force') === '1';
+      const R = await runReminders(env, dry, force);
       return json(R, 200, origin);
+    }
+
+    // v425：最近 30 則 LINE 訊息的處理紀錄（老師端🔗分頁用）
+    if (request.method === 'GET' && path === '/diag') {
+      if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
+      const list = JSON.parse((env.LINKS && (await env.LINKS.get('diag'))) || '[]');
+      return json({ ok: true, list }, 200, origin);
     }
 
     return json({ ok: false, error: 'not_found' }, 404, origin);
@@ -1207,6 +1274,6 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
-  queryHomework, hwReplyMessages, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
+  queryHomework, hwReplyMessages, processEvent, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
   catRows, weekGroups, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH, SEC_DEF, summerLibMeta,
 };

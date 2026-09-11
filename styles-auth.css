@@ -2594,6 +2594,31 @@
 .linkbind-chip em { font-style: normal; font-family: var(--mono); font-size: 10px; color: var(--ink-muted); }
 .linkbind-note { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; margin: 10px 0 0; }
 
+/* v425：沒發的原因（淡一點，不是錯誤）＋名單體檢的附註 */
+.hwr-warn.soft { background: var(--surface-2, rgba(0,0,0,.04)); border-color: var(--border); color: var(--ink-muted); }
+.linkbind-check p.soft { color: var(--ink-muted); }
+
+/* v425：🔗 分頁的「最近 LINE 對話紀錄」——家長說沒回應時先看這裡 */
+.diag-box { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.diag-box summary { cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink); }
+.diag-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.diag-row {
+  display: grid; grid-template-columns: 92px 64px minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline;
+  font-family: var(--sans); font-size: 12px; color: var(--ink);
+  background: var(--surface-2, rgba(0,0,0,.03)); border-radius: 8px; padding: 6px 10px;
+}
+.diag-row.bad { background: rgba(198, 40, 40, .07); }
+.diag-at, .diag-u { color: var(--ink-muted); font-family: var(--mono, ui-monospace, monospace); font-size: 11px; }
+.diag-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diag-k { color: var(--ink-muted); grid-column: 3; font-size: 11px; }
+.diag-r { grid-column: 4; grid-row: 1 / span 2; text-align: right; white-space: nowrap; font-weight: 700; }
+.diag-e { grid-column: 1 / -1; font-size: 11px; color: #C62828; white-space: pre-wrap; word-break: break-all; }
+@media (max-width: 640px) {
+  .diag-row { grid-template-columns: 1fr auto; }
+  .diag-at, .diag-u, .diag-t, .diag-k { grid-column: 1; }
+  .diag-r { grid-column: 2; grid-row: 1 / span 4; }
+}
+
 /* v421：試跑預覽照著畫「家長在 LINE 上看到的那顆泡泡」*/
 .lnb {
   max-width: 300px; border-radius: 16px; overflow: hidden;

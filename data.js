@@ -3826,7 +3826,13 @@ function lineGetLinks(pass) { return _lineCall('/links', 'GET', pass); }
 // 解除某筆綁定（email 省略＝整個 LINE 帳號解綁）
 function lineUnlink(lineUserId, email, pass) { return _lineCall('/unlink', 'POST', pass, { lineUserId, email }); }
 // 功能B：手動試跑作業提醒（dry=true 只預覽不發送）
-function lineRunReminders(dry, pass) { return _lineCall('/run-reminders' + (dry ? '?dry=1' : ''), 'POST', pass); }
+// v425：force＝老師按「立即發送／試跑」時不管頻率規則（每日 18:00 的自動提醒仍照規則）
+function lineRunReminders(dry, pass, force) {
+  const q = [dry ? 'dry=1' : '', force ? 'force=1' : ''].filter(Boolean).join('&');
+  return _lineCall('/run-reminders' + (q ? '?' + q : ''), 'POST', pass);
+}
+// v425：最近 30 則 LINE 訊息「怎麼處理、有沒有回成功」
+function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
 Object.assign(window, {
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
@@ -3835,7 +3841,7 @@ Object.assign(window, {
   // v343: 商店商品（老師自己維護）
   subscribeShop, saveShopItems,
   // LINE 通知
-  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders,
+  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders, lineDiag,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,

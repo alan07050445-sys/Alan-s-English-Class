@@ -960,6 +960,8 @@ function LineLink() {
     try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; }
   });
 
+  const [diag,   setDiag]   = useDash(null);   // v425：最近 30 則 LINE 訊息的處理紀錄
+
   useDashE(() => window.subscribeRoster(setRoster, () => {}), []);
 
   const load = async (r, p) => {
@@ -972,6 +974,8 @@ function LineLink() {
       await window.lineSyncRoster(rr, pp);        // 先把最新名單推上 Worker
       const data = await window.lineGetLinks(pp); // 再讀綁定狀態
       setLinks(data.links || {});
+      // 診斷紀錄讀不到（Worker 還沒更新）也不影響綁定狀態
+      try { const d = await window.lineDiag(pp); setDiag(d.list || []); } catch (e) { setDiag(null); }
     } catch (e) {
       setMsg({ type: 'err', text: e.message === 'unauthorized' ? '⚠️ 管理密碼錯誤' : ('⚠️ 讀取失敗：' + (e.message || '')) });
     }
@@ -994,7 +998,11 @@ function LineLink() {
   const activeStudents = roster.filter(s => s.active !== false);
   // v418：家長是用「名字」綁定的，所以名單本身要先體檢。
   // 康橋帳號綁的是英文名字 → 只要全是英文，LINE 就會直接叫家長「回覆英文名字」。
-  const badNames = activeStudents.filter(s => !/^[A-Za-z][A-Za-z .'\u2019-]*$/.test(String(s.name || '').trim()));
+  // v425：沒填名字的（例如老師自己的測試帳號）Worker 本來就不會拿來比對，
+  //       這裡以前卻把它算成「不是英文名字」→ 跳出一個假警告。分開算。
+  const noName = activeStudents.filter(s => !String(s.name || '').trim());
+  const named = activeStudents.filter(s => String(s.name || '').trim());
+  const badNames = named.filter(s => !/^[A-Za-z][A-Za-z .'\u2019-]*$/.test(String(s.name || '').trim()));
   const dupNames = (() => {
     const seen = {}, out = [];
     activeStudents.forEach(s => {
@@ -1004,7 +1012,7 @@ function LineLink() {
     });
     return out;
   })();
-  const allEnglish = activeStudents.length > 0 && badNames.length === 0;
+  const allEnglish = named.length > 0 && badNames.length === 0;
   const unbound = activeStudents.filter(s => !boundEmails.has(String(s.email).toLowerCase()));
   const linkEntries = Object.entries(links || {});
 
@@ -1043,12 +1051,15 @@ function LineLink() {
         {activeStudents.length > 0 && (
           <div className={'linkbind-check' + (badNames.length || dupNames.length ? ' warn' : '')}>
             {allEnglish
-              ? <p>✅ 名單 {activeStudents.length} 位<b>全部都是英文名字</b>——LINE 會直接請家長「回覆孩子的英文名字」。</p>
+              ? <p>✅ 名單 {named.length} 位<b>全部都是英文名字</b>——LINE 會直接請家長「回覆孩子的英文名字」。</p>
               : <p>⚠️ 有 {badNames.length} 位<b>不是純英文名字</b>，LINE 會改用「請回覆孩子的姓名」這種說法：
                   {' '}{badNames.slice(0, 8).map(s => s.name || s.email).join('、')}{badNames.length > 8 ? ' …' : ''}
                 </p>}
             {dupNames.length > 0 && (
               <p>⚠️ 名單裡有<b>同名</b>的學生（{dupNames.join('、')}）——家長打這個名字時系統不會亂猜，會請他聯絡你，你再手動處理。</p>
+            )}
+            {noName.length > 0 && (
+              <p className="soft">ℹ️ 有 {noName.length} 位<b>沒有填名字</b>（{noName.map(s => s.email).join('、')}），家長沒辦法用名字綁定——是測試帳號的話不用理它。</p>
             )}
           </div>
         )}
@@ -1089,6 +1100,38 @@ function LineLink() {
                 </div>
                 <p className="linkbind-note">提醒這些孩子的家長：加官方帳號好友 <b>@247igfhl</b> → 依照對話回覆孩子的名字即可。</p>
               </div>
+            )}
+
+            {/* v425：家長說「傳了沒反應」時，這裡看得到每一則是怎麼處理的 */}
+            {diag && (
+              <details className="diag-box">
+                <summary>🩺 最近的 LINE 對話紀錄（{diag.length} 則）—— 家長說「沒回應」時看這裡</summary>
+                {diag.length === 0 ? <p className="linkbind-note">還沒有紀錄（Worker 更新之後的訊息才會記）。</p> : (
+                  <div className="diag-list">
+                    {diag.map((d, i) => {
+                      const okReply = d.reply === 200 || d.push === 200 || d.kind === 'quiet' || d.kind === 'ignored';
+                      const kindZh = { welcome: '加好友', homework: '查作業', text: '文字回覆', quiet: '刻意不回（防洗版）', ignored: '貼圖/其他' }[d.kind] || d.kind || '—';
+                      return (
+                        <div key={i} className={'diag-row' + (okReply && !d.err ? '' : ' bad')}>
+                          <span className="diag-at">{d.at}</span>
+                          <span className="diag-u">{d.u}</span>
+                          <span className="diag-t">{d.text || '（' + (d.type || '') + '）'}</span>
+                          <span className="diag-k">{kindZh}{d.kids ? `・${d.kids} 位孩子` : ''}</span>
+                          <span className="diag-r">
+                            {d.err ? '❌ 程式錯誤'
+                              : d.reply === 200 ? '✅ 已回覆'
+                              : d.push === 200 ? '⚠️ 回覆失敗，已改用推播補送'
+                              : d.reply ? '❌ 回覆失敗 ' + d.reply
+                              : '—'}
+                            {typeof d.ms === 'number' ? `（${(d.ms / 1000).toFixed(1)} 秒）` : ''}
+                          </span>
+                          {(d.err || d.replyErr || d.pushErr) && <code className="diag-e">{d.err || d.pushErr || d.replyErr}</code>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </details>
             )}
           </>
         )}
@@ -1541,9 +1584,11 @@ function HwRemind() {
     setBusy(true); setMsg(null); setResult(null);
     try {
       try { localStorage.setItem('lineAdminPass', p); } catch (e) {}
-      const R = await window.lineRunReminders(dry, p);
+      // v425：老師按的兩顆鈕都是「現在的完整狀況」——不套 18:00 自動提醒的頻率規則。
+      //       以前「立即發送」也照規則走，已通知過的就跳過 → 顯示「已發送給 0 位」讓人以為壞了。
+      const R = await window.lineRunReminders(dry, p, true);
       setResult(R);
-      setMsg({ type: 'ok', text: dry ? '✅ 試跑完成（未實際發送）' : `✅ 已發送給 ${R.sends.length} 位家長` });
+      setMsg({ type: 'ok', text: dry ? '✅ 試跑完成（未實際發送）' : `✅ 已發送給 ${R.sends.length} 位孩子的家長` });
     } catch (e) {
       const m = e.message === 'unauthorized' ? '管理密碼錯誤'
               : e.message === 'no_firebase_sa' ? 'Firebase 服務金鑰還沒設定（見右側步驟）'
@@ -1598,7 +1643,11 @@ function HwRemind() {
             )}
 
             {result.sends.length === 0 ? (
-              <div className="roster-hint">目前沒有要提醒的 — 可能大家都完成了、還沒到提醒時間點，或今天的提醒已發過。</div>
+              <div className="roster-hint">
+                {(result.skippedDone || []).length
+                  ? '有綁定的孩子目前都沒有未完成的作業（只剩可以先預習的）🎉'
+                  : '目前沒有已綁定、而且有未完成作業的孩子。'}
+              </div>
             ) : (
               <div className="hwr-list">
                 {result.sends.map(s => (
@@ -1610,8 +1659,10 @@ function HwRemind() {
                         <span>本週 <em>{s.buckets.thisWeek}</em></span>
                         <span>前幾週沒完成 <em>{s.buckets.overdue}</em></span>
                         <span className="soft">可以先預習 <em>{s.buckets.preview}</em></span>
-                        {s.reason && <span className="soft">今天發的原因：{
-                          s.reason === 'new' ? '有新作業' : s.reason === 'weekly' ? '每週一回報' : '明天到期'
+                        {s.reason && <span className="soft">{
+                          s.auto === false
+                            ? '18:00 自動提醒今天不會發這則（已通知過）'
+                            : '18:00 會自動發：' + ({ new: '有新作業', weekly: '每週一回報', due1: '明天到期', bind: '剛綁定、還沒收過' }[s.reason] || s.reason)
                         }</span>}
                       </div>
                     )}
@@ -1625,8 +1676,17 @@ function HwRemind() {
               </div>
             )}
 
+            {/* v425：沒發的一定要講清楚為什麼，不然只看到「0 位」會以為壞掉 */}
+            {(result.skippedQuiet || []).length > 0 && (
+              <div className="hwr-warn soft">🔕 今天不發（避免每天洗版）：{
+                result.skippedQuiet.map(x => x.name).join('、')
+              }——{result.skippedQuiet[0].why}</div>
+            )}
+            {(result.skippedDone || []).length > 0 && (
+              <div className="hwr-warn soft">🎉 都做完了（只剩預習，不打擾）：{result.skippedDone.join('、')}</div>
+            )}
             {result.skippedNoGrade && result.skippedNoGrade.length > 0 && (
-              <div className="hwr-warn">⚠️ 認不出年級（學號不是 le○○ 開頭），沒有發學期作業給他們：{result.skippedNoGrade.join('、')}</div>
+              <div className="hwr-warn soft">ℹ️ 不是學校帳號（學號不是 le○○ 開頭），不發學期作業：{result.skippedNoGrade.join('、')}</div>
             )}
             {result.skippedNoBind && result.skippedNoBind.length > 0 && (
               <div className="hwr-warn">⚠️ 有作業但家長未綁定（收不到）：{result.skippedNoBind.join('、')}</div>
@@ -1650,12 +1710,14 @@ function HwRemind() {
           本週<b style={{color:'#1B7A3E'}}>綠色</b>、前幾週沒完成<b style={{color:'#C62828'}}>紅色</b>、預習灰色（LINE 的 Flex 訊息才做得到粗體與顏色）。
         </p>
 
-        <h4>什麼時候會發</h4>
+        <h4>18:00 自動提醒什麼時候會發</h4>
         <ol>
-          <li>出現這位家長<b>沒被通知過的新作業</b></li>
+          <li>出現<b>沒被通知過的新作業</b></li>
+          <li>有家長<b>剛綁定</b>、還沒收過這位孩子的提醒</li>
           <li>每週<b>星期一</b>固定回報一次</li>
           <li>本週有作業<b>明天到期</b></li>
         </ol>
+        <p className="notify-note">上面兩顆按鈕<b>不套這些規則</b>：「立即發送」就是把現在的完整狀況發給每一位有未完成作業的家長。</p>
         <p className="notify-note">同一孩子合併成一則。只剩「可以先預習」時不會發（不打擾）。已封存的上學期作業不會出現。只發給「已綁定」的家長。</p>
       </aside>
     </div>
