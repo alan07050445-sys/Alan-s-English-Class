@@ -350,7 +350,7 @@ const siteText = () => '📚 練習網站\n' + SITE_URL + '\n\n用孩子的學�
 //      「Lucas 作業寫完了嗎」→ 直接查；「我還要加 Nick」「不想收 Tayler 的通知」→ 直接新增／刪除
 //   ② 剩下看不懂的才問 AI；AI 每次都回（不再防洗版），但範圍寫死、每個 LINE 一天最多 AI_DAILY 次
 //   ③ 每則回覆底下都有快速按鈕（作業／練習／孩子／找老師），家長幾乎不用打字
-const TEACHER_LINE_URL = '';   // Alan 本人 LINE 的連結（例：https://line.me/ti/p/xxxx）；也可在 Cloudflare 設 env TEACHER_LINE_URL
+const TEACHER_LINE_URL = 'https://line.me/ti/p/BgUz6sEtJ9';   // Alan 本人的 LINE（2026-09-11 給的）；Cloudflare env TEACHER_LINE_URL 可覆蓋，設 off 就只給文字
 const AI_DAILY = 40;           // 每個 LINE 一天最多問 AI 幾次（小朋友一直打也不會一直花錢；超過就用固定的客氣話）
 const CONTACT_RE = /(請假|請個假|病假|事假|要請|加課|調課|補課|換時間|改時間|上課時間|幾點上課|什麼時候上課|哪天上課|停課|取消上課|批改|改作業|幫忙改|幫他改|訂正|成績|分數|考幾分|考試結果|學費|費用|繳費|退費|收據|老師電話|聯絡老師|找老師|私訊老師|跟老師說|想問老師|請問老師|老師在嗎|問老師)/;
 const SITE_RE = /(網站|網址|連結|哪裡練|去哪練|怎麼練習|練習網站|登入|怎麼進|link|site)/i;
@@ -386,7 +386,8 @@ function quickRoute(text, bound, roster) {
 }
 // 「請私訊老師本人」——有設定老師的 LINE 連結就附一顆按鈕
 function contactMessages(env) {
-  const url = String((env && env.TEACHER_LINE_URL) || TEACHER_LINE_URL || '').trim();
+  const raw = env && env.TEACHER_LINE_URL != null && env.TEACHER_LINE_URL !== '' ? env.TEACHER_LINE_URL : TEACHER_LINE_URL;
+  const url = raw === 'off' ? '' : String(raw || '').trim();
   const text = '這個帳號只負責 Alan 老師的公告和作業提醒 📌\n\n請假、調課、作業批改、成績或其他問題，請直接私訊 Alan 老師本人的 LINE，老師會親自回覆您 🙏';
   if (!/^https:\/\/\S+$/.test(url)) return [{ type: 'text', text }];
   return [{ type: 'flex', altText: '請假、調課、作業批改等問題，請直接私訊 Alan 老師本人', contents: {

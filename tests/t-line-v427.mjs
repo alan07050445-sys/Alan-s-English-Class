@@ -112,8 +112,10 @@ log.push('\n【3】限制：範圍寫死、一天有上限');
 // ═══ 4. 找老師 ═══
 log.push('\n【4】「請私訊 Alan 老師本人」');
 {
-  const m1 = W.contactMessages({});
-  ok('沒設定老師的 LINE 連結 → 一段文字，講清楚這個帳號辦不到、請私訊本人', m1.length === 1 && m1[0].type === 'text' && m1[0].text.includes('只負責 Alan 老師的公告和作業提醒') && m1[0].text.includes('私訊 Alan 老師本人'), m1[0].text);
+  const m0 = JSON.stringify(W.contactMessages({}));
+  ok('⭐ 預設就帶 Alan 本人的 LINE（https://line.me/ti/p/BgUz6sEtJ9）', m0.includes('"uri":"https://line.me/ti/p/BgUz6sEtJ9"') && m0.includes('私訊 Alan 老師'), m0.slice(0, 300));
+  const m1 = W.contactMessages({ TEACHER_LINE_URL: 'off' });
+  ok('env 設 off → 只給文字，講清楚這個帳號辦不到、請私訊本人', m1.length === 1 && m1[0].type === 'text' && m1[0].text.includes('只負責 Alan 老師的公告和作業提醒') && m1[0].text.includes('私訊 Alan 老師本人'), m1[0].text);
   const m2 = W.contactMessages({ TEACHER_LINE_URL: 'https://line.me/ti/p/abc123' });
   const btn = JSON.stringify(m2[0]);
   ok('⭐ 設定了連結 → 附一顆「💬 私訊 Alan 老師」按鈕', m2[0].type === 'flex' && btn.includes('"uri":"https://line.me/ti/p/abc123"') && btn.includes('私訊 Alan 老師'));
@@ -139,7 +141,7 @@ log.push('\n【5】每則回覆底下都有快速按鈕');
   await run('Lucas要請假', env);
   const last = sent.reply[0].messages[sent.reply[0].messages.length - 1];
   ok('⭐ 實際送出的回覆有快速按鈕', last.quickReply && last.quickReply.items.length === 4, JSON.stringify(sent.reply[0]).slice(0, 200));
-  ok('「Lucas要請假」→ 回「請私訊老師本人」，不顯示輸入中（本來就秒回）', last.text.includes('私訊 Alan 老師本人') && sent.loading.length === 0);
+  ok('「Lucas要請假」→ 回「請私訊老師本人」＋私訊按鈕，不顯示輸入中（本來就秒回）', JSON.stringify(last).includes('私訊 Alan 老師本人') && JSON.stringify(last).includes('line.me/ti/p/BgUz6sEtJ9') && sent.loading.length === 0);
   const d = JSON.parse(env._s.get('diag'))[0];
   ok('診斷紀錄：kind=contact、path=fast', d.kind === 'contact' && d.path === 'fast', JSON.stringify(d));
   reset();
