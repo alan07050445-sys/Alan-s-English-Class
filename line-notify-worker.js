@@ -1,5 +1,5 @@
 /*
- * Alan's English Class — LINE 通知 Worker（v6：更快＋看得懂家長的話＋自動/主動提醒分開）
+ * Alan's English Class — LINE 通知 Worker（v7：關鍵字秒回＋AI 每次都回但範圍寫死＋快速按鈕）
  * ────────────────────────────────────────────────────────────
  * 獨立 Worker。負責：發公告 + 家長自助綁定 + 作業沒完成自動提醒。
  *
@@ -180,7 +180,9 @@ async function getStageTs(env, uid) {
 async function setStage(env, uid, stage) {
   let m = {};
   try { m = JSON.parse((await env.LINKS.get('chatstate')) || '{}'); } catch (e) {}
-  if (stage) m[uid] = { stage, ts: Date.now() }; else delete m[uid];
+  const e = Object.assign({}, m[uid] || {});                // 保留 e.ai（今天問 AI 的次數）
+  if (stage) { e.stage = stage; e.ts = Date.now(); } else { delete e.stage; delete e.ts; }
+  if (Object.keys(e).length) m[uid] = e; else delete m[uid];
   await env.LINKS.put('chatstate', JSON.stringify(m));
 }
 
@@ -299,7 +301,7 @@ async function welcomeMessage(env, lineUserId) {
 // → 用「包含關鍵字」而不是整句吻合；順序有意義（先刪、再加、再作業、再網站）。
 const INTENT = {
   // 刪除孩子要排在最前面：「刪除 Eric」裡面也有名字，不能被當成新增
-  remove: /(刪除|刪掉|移除|解除|取消綁定|拿掉|不要收|退出)/,
+  remove: /(刪除|刪掉|移除|解除|取消綁定|拿掉|不要收|不想收|不想再收|不要再收|不用收|不用再收|取消通知|不要通知|退訂|退出)/,
   add:    /(新增|加入|加一個|再加|新增孩子|新增小孩|綁定|綁孩子|加小孩|加孩子)/,
   kids:   /(我的孩子|孩子|小孩|弟弟|妹妹|哥哥|姐姐|姊姊|名單|誰|查詢|綁定|狀態|status)/i,
   hw:     /(作業|功課|進度|homework|hw|沒完成|未完成|要做什麼|還有什麼|寫完)/i,
@@ -310,12 +312,12 @@ const HUMAN_MS = 10 * 60 * 1000;      // 無關訊息：10 分鐘內只客氣回
 
 // v423：跟三件事都無關的訊息 → 隨機挑一句有禮貌的回覆
 const POLITE = [
-  '收到您的訊息了，謝謝您 🙏\n老師會看到，有需要會親自回覆您。',
-  '謝謝您的訊息 😊\n這裡是自動回覆的小幫手，老師看到後會再跟您聯絡。',
-  '好的，已經收到 🙌\n若是想看孩子的作業，回覆「作業」就可以囉。',
-  '謝謝您 🌱\n訊息老師都看得到，請放心。',
-  '收到囉 ✨\n有任何問題都可以留言，老師會回覆您。',
-  '謝謝您的來訊 🙏\n需要查作業的話，回覆「作業」兩個字就行了。',
+  '謝謝您的訊息 😊\n想看孩子的作業，按下面的「📝 作業」就可以囉。',
+  '收到囉 🙌\n這裡是自動小幫手，有其他問題請按「💬 找老師」。',
+  '謝謝您 🌱\n需要查作業的話，回覆「作業」兩個字就行了。',
+  '好的 ✨\n練習網站在下面的「📚 練習」按鈕裡。',
+  '謝謝您的來訊 🙏\n請假、調課等事情，請按「💬 找老師」私訊老師本人。',
+  '收到 😊\n祝孩子練習順利，有需要隨時按下面的按鈕。',
 ];
 // 同一個人不要每次都收到同一句（用 userId + 分鐘數挑，不必存狀態）
 function politeReply(uid) {
@@ -324,10 +326,8 @@ function politeReply(uid) {
 }
 
 // 客氣回一次，10 分鐘內再講就安靜（家長連打好幾句不會被洗版）
+// v427：Alan「不用防洗版」——每次都客氣回（名字保留，呼叫的地方不用改）
 async function politeOrQuiet(env, uid, stage) {
-  const ts = await getStageTs(env, uid);
-  if (stage === 'chat' && Date.now() - ts < HUMAN_MS) return '';
-  await setStage(env, uid, 'chat');
   return politeReply(uid);
 }
 
@@ -342,6 +342,88 @@ function menuText() {
 }
 const siteText = () => '📚 練習網站\n' + SITE_URL + '\n\n用孩子的學校帳號登入就可以開始練習。';
 
+// ── v427：這個官方帳號「只」做公告與作業提醒 ──────────────────
+// Alan：「這個 line 的功能主要是 Alan 老師宣布事情 提醒作業的地方 沒辦法請假 加課
+//        或是批改功課 等等之類的 要的話都直接聯絡我本人 Line」
+//       「不用防洗版就讓 AI 正常回覆 但是要有限制 這很重要」「速度很重要 不要有延遲」
+// → ① 關鍵字先判斷（毫秒級，不問 AI）：請假／調課／批改／成績／學費…→ 固定回覆「請私訊老師本人」；
+//      「Lucas 作業寫完了嗎」→ 直接查；「我還要加 Nick」「不想收 Tayler 的通知」→ 直接新增／刪除
+//   ② 剩下看不懂的才問 AI；AI 每次都回（不再防洗版），但範圍寫死、每個 LINE 一天最多 AI_DAILY 次
+//   ③ 每則回覆底下都有快速按鈕（作業／練習／孩子／找老師），家長幾乎不用打字
+const TEACHER_LINE_URL = '';   // Alan 本人 LINE 的連結（例：https://line.me/ti/p/xxxx）；也可在 Cloudflare 設 env TEACHER_LINE_URL
+const AI_DAILY = 40;           // 每個 LINE 一天最多問 AI 幾次（小朋友一直打也不會一直花錢；超過就用固定的客氣話）
+const CONTACT_RE = /(請假|請個假|病假|事假|要請|加課|調課|補課|換時間|改時間|上課時間|幾點上課|什麼時候上課|哪天上課|停課|取消上課|批改|改作業|幫忙改|幫他改|訂正|成績|分數|考幾分|考試結果|學費|費用|繳費|退費|收據|老師電話|聯絡老師|找老師|私訊老師|跟老師說|想問老師|請問老師|老師在嗎|問老師)/;
+const SITE_RE = /(網站|網址|連結|哪裡練|去哪練|怎麼練習|練習網站|登入|怎麼進|link|site)/i;
+const CAT_KW = [[/文法|grammar/i, 'grammar'], [/閱讀|寫作|reading|writing/i, 'reading'], [/字彙|字根|字首/, 'word']];
+const QUICK_ITEMS = [['📝 作業', '作業'], ['📚 練習', '練習'], ['👦 孩子', '孩子'], ['💬 找老師', '找老師']];
+
+// 句子裡有沒有提到這個孩子（英文名要整個字吻合：「Lucas作業」可以，「Lucasss」不行）
+function nameIn(text, name) {
+  const first = String(name || '').trim().split(/\s+/)[0];
+  if (!first || first.length < 2) return false;
+  const esc = first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^A-Za-z])' + esc + '($|[^A-Za-z])', 'i').test(text);
+}
+// 不用 AI 就能確定意思的句子
+function quickRoute(text, bound, roster) {
+  if (CONTACT_RE.test(text)) return { contact: true };
+  if (INTENT.remove.test(text)) {
+    const hit = bound.find((c) => nameIn(text, c.name));
+    if (hit) return { bind: '刪除 ' + hit.name };
+  }
+  if (INTENT.add.test(text) || /(還有|也要|也要收|再加|加上)/.test(text)) {
+    const hit = activeRoster(roster).find((st) => nameIn(text, st.name) && !bound.some((b) => b.email === st.email));
+    if (hit) return { bind: '新增 ' + hit.name };
+  }
+  if (INTENT.hw.test(text)) {
+    const kids = bound.filter((c) => nameIn(text, c.name));
+    let cat = null;
+    for (const [re, c] of CAT_KW) if (re.test(text)) { cat = c; break; }
+    return { hw: kids.length ? kids : bound, cat };
+  }
+  if (SITE_RE.test(text)) return { site: true };
+  return null;
+}
+// 「請私訊老師本人」——有設定老師的 LINE 連結就附一顆按鈕
+function contactMessages(env) {
+  const url = String((env && env.TEACHER_LINE_URL) || TEACHER_LINE_URL || '').trim();
+  const text = '這個帳號只負責 Alan 老師的公告和作業提醒 📌\n\n請假、調課、作業批改、成績或其他問題，請直接私訊 Alan 老師本人的 LINE，老師會親自回覆您 🙏';
+  if (!/^https:\/\/\S+$/.test(url)) return [{ type: 'text', text }];
+  return [{ type: 'flex', altText: '請假、調課、作業批改等問題，請直接私訊 Alan 老師本人', contents: {
+    type: 'bubble', size: 'kilo',
+    body: { type: 'box', layout: 'vertical', paddingAll: '16px', contents: [
+      { type: 'text', text: '這個帳號只負責公告和作業提醒 📌', weight: 'bold', size: 'sm', color: C_INK, wrap: true },
+      { type: 'text', text: '請假、調課、作業批改、成績或其他問題，請直接私訊 Alan 老師本人，老師會親自回覆您 🙏', size: 'sm', color: C_SUB, wrap: true, margin: 'md' },
+    ] },
+    footer: { type: 'box', layout: 'vertical', paddingAll: '12px', paddingTop: 'none', contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: '#06C755', action: { type: 'uri', label: '💬 私訊 Alan 老師', uri: url } },
+    ] },
+  } }];
+}
+// 最後一則訊息底下掛快速按鈕（LINE 只顯示最後一則的）
+function withQuickReply(messages) {
+  if (!messages || !messages.length) return messages;
+  const items = QUICK_ITEMS.map(([label, text]) => ({ type: 'action', action: { type: 'message', label, text } }));
+  const last = Object.assign({}, messages[messages.length - 1], { quickReply: { items } });
+  return messages.slice(0, -1).concat([last]);
+}
+// 每個 LINE 一天問 AI 的次數（記在 chatstate，回覆送出後才寫）
+async function aiUsedToday(env, uid) {
+  try {
+    const e = (JSON.parse((await env.LINKS.get('chatstate')) || '{}'))[uid] || {};
+    return e.ai && e.ai.d === taipeiToday() ? e.ai.n : 0;
+  } catch (e) { return 0; }
+}
+async function aiBump(env, uid) {
+  let m = {};
+  try { m = JSON.parse((await env.LINKS.get('chatstate')) || '{}'); } catch (e) {}
+  const d = taipeiToday();
+  const e = Object.assign({}, m[uid] || {});
+  e.ai = { d, n: (e.ai && e.ai.d === d ? e.ai.n : 0) + 1 };
+  m[uid] = e;
+  await env.LINKS.put('chatstate', JSON.stringify(m));
+}
+
 // ── v426：更聰明——看不懂的話交給 Claude 判斷（選單按鈕、純名字仍走規則，毫秒級）──
 // Alan：「我要的是更智慧的版本 而不是很死板」
 // AI 只負責「看懂意思、挑出是哪個孩子／哪一類」，真正的動作（查作業、綁定、刪除）
@@ -349,25 +431,29 @@ const siteText = () => '📚 練習網站\n' + SITE_URL + '\n\n用孩子的學�
 const AI_ENDPOINT = 'https://alan-ai-proxy.alan07050445.workers.dev';   // 網站本來就在用的 Anthropic 代理
 const AI_MODEL = 'claude-haiku-4-5-20251001';
 const AI_TIMEOUT_MS = 6000;
-const AI_INTENTS = ['homework', 'practice', 'add', 'remove', 'list', 'chat'];
+const AI_INTENTS = ['homework', 'practice', 'add', 'remove', 'list', 'contact', 'chat'];
 const AI_CATS = ['vocab', 'word', 'grammar', 'reading'];
-const CHAT_QUIET_MS = 3 * 60 * 1000;      // 聊天：3 分鐘內同一個人只回一次，不洗版
 
 function aiSystem(kids) {
   return [
-    "你是「Alan's English Class」LINE 官方帳號的小幫手，對象是小學生的家長，用繁體中文（台灣用語）。",
-    '你能做的事：查作業(homework)、給練習網站(practice)、新增孩子(add)、刪除孩子(remove)、看綁了哪些孩子(list)。其他一律是聊天(chat)。',
+    "你是「Alan's English Class」LINE 官方帳號的自動小幫手，對象是小學生的家長，用繁體中文（台灣用語）。",
+    '這個帳號只用來：Alan 老師發公告、提醒作業。家長在這裡只能：查作業(homework)、拿練習網站(practice)、新增孩子(add)、刪除孩子(remove)、看綁了哪些孩子(list)。',
+    '請假、調課、加課、補課、上課時間、作業批改或訂正、成績、學費或費用、想跟老師討論孩子的狀況——這個帳號都辦不到，一律判成 contact（系統會請家長直接私訊 Alan 老師本人）。',
     '這個 LINE 目前綁定的孩子：' + (kids.length ? kids.join('、') : '（還沒綁定）'),
     '只輸出一行 JSON，不要任何其他文字：',
-    '{"intent":"homework|practice|add|remove|list|chat","child":"孩子的英文名字或 null","cat":"vocab|word|grammar|reading 或 null","reply":"只有 chat 才寫"}',
-    '判斷方式：',
-    '- 問作業、功課、進度、寫完沒、還剩什麼、這週要做什麼、有沒有交 → homework。有講是哪個孩子就填 child；有講單字填 vocab、字彙填 word、文法填 grammar、閱讀或寫作填 reading。',
-    '- 想要新增、加入、綁定孩子 → add，child 填他講的英文名字（沒講就 null）。',
-    '- 想要刪除、取消、不要再收某個孩子的通知 → remove，child 填名字（沒講就 null）。',
-    '- 要網站、連結、去哪裡練習 → practice。問綁了誰 → list。',
-    '- chat 的 reply：1～2 句、不超過 50 字、溫暖有禮貌。不要承諾任何事、不要編造作業或成績、不要附網址。',
-    '  要老師處理的事（請假、學習狀況、費用、上課時間）就說老師會看到訊息並回覆。小朋友亂打或開玩笑，就友善簡短地回，可以鼓勵他去練習。',
+    '{"intent":"homework|practice|add|remove|list|contact|chat","child":"孩子的英文名字或 null","cat":"vocab|word|grammar|reading 或 null","reply":"只有 chat 才寫"}',
+    '- 問作業、功課、進度、寫完沒、還剩什麼 → homework（有講哪個孩子填 child；單字 vocab、字彙 word、文法 grammar、閱讀或寫作 reading）。',
+    '- 要新增／加入孩子 → add；要刪除、取消、不要再收某個孩子的通知 → remove（child 填名字，沒講就 null）。要網站或連結 → practice。問綁了誰 → list。',
+    '- chat 只限打招呼、道謝、閒聊、小朋友亂打：reply 一句話、30 字以內、溫暖有禮。',
+    '  不能答應任何事、不能給學習建議或教學、不能說會轉告老師、不能編造作業或成績、不要附網址、不要反問或邀請對方繼續聊。拿不準的一律判 contact。',
   ].join('\n');
+}
+const REPLY_MAX = 40;
+function clipReply(t) {
+  if (t.length <= REPLY_MAX) return t;
+  const cut = t.slice(0, REPLY_MAX);
+  const k = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('！'), cut.lastIndexOf('？'), cut.lastIndexOf('!'), cut.lastIndexOf('?'), cut.lastIndexOf('～'));
+  return k >= 8 ? cut.slice(0, k + 1) : cut.replace(/[，、,\s]+$/, '') + '…';
 }
 async function aiUnderstand(env, text, bound) {
   if (env.AI_CHAT === 'off') return null;
@@ -376,7 +462,7 @@ async function aiUnderstand(env, text, bound) {
   try {
     const res = await fetch(env.AI_ENDPOINT || AI_ENDPOINT, {
       method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl.signal,
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 160, system: aiSystem(bound.map((c) => c.name)),
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 120, system: aiSystem(bound.map((c) => c.name)),
         messages: [{ role: 'user', content: String(text).slice(0, 300) }] }),
     });
     if (!res.ok) return null;
@@ -389,8 +475,8 @@ async function aiUnderstand(env, text, bound) {
     if (!intent) return null;
     const child = typeof j.child === 'string' && j.child.trim() && j.child !== 'null' ? j.child.trim().slice(0, 40) : null;
     const cat = AI_CATS.indexOf(j.cat) >= 0 ? j.cat : null;
-    // AI 的回話：拿掉網址、限制長度（不讓它亂發連結、長篇大論）
-    const reply = String(j.reply || '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    // AI 的回話：拿掉網址、由程式限制在 40 字內（在句子結尾切；實測 AI 偶爾會寫到 59 字）
+    const reply = clipReply(String(j.reply || '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim());
     return { intent, child, cat, reply };
   } catch (e) {
     return null;
@@ -413,6 +499,7 @@ async function handleMessage(env, uid, rawText, hooks) {
   const h = hooks || {};
   const text = String(rawText || '').trim();
   h.path = 'fast';
+  if (CONTACT_RE.test(text)) return { contact: true };                  // 「找老師」「請假」→ 馬上回
   if (FAST.hw.test(text) && h.slow) h.slow();              // 查作業一定要讀資料 → 先讓家長看到「輸入中…」
   if (FAST.hw.test(text) || FAST.site.test(text) || FAST.kids.test(text) || FAST.act.test(text) || INTENT.help.test(text)) {
     return handleNameBinding(env, uid, text);
@@ -424,11 +511,22 @@ async function handleMessage(env, uid, rawText, hooks) {
   const names = parseNames(roster, text);
   if (names.length && names.every((n) => !matchOne(roster, n).none)) return handleNameBinding(env, uid, text);
 
-  // 其他 → 交給 AI 看懂
+  // v427：關鍵字就能確定意思的，不必等 AI
+  const q = quickRoute(text, bound, roster);
+  if (q) {
+    if (q.bind) return handleNameBinding(env, uid, q.bind);
+    if (q.site) return siteText();
+    if (q.hw && h.slow) h.slow();
+    return q;
+  }
+
+  // 其他 → 交給 AI 看懂（每個 LINE 一天最多 AI_DAILY 次）
+  if (await aiUsedToday(env, uid) >= AI_DAILY) { h.path = 'quota'; return bound.length ? politeReply(uid) : handleNameBinding(env, uid, text); }
   if (h.slow) h.slow();
   const t0 = Date.now();
   const ai = await aiUnderstand(env, text, bound);
   h.aiMs = Date.now() - t0;
+  bg(aiBump(env, uid));
   if (!ai) { h.path = 'rules'; return handleNameBinding(env, uid, text); }   // AI 沒回 → 退回原本的規則
   h.path = 'ai:' + ai.intent;
   const pickKids = () => {
@@ -439,16 +537,13 @@ async function handleMessage(env, uid, rawText, hooks) {
   switch (ai.intent) {
     case 'homework': return { hw: bound.length ? pickKids() : [], cat: ai.cat, child: ai.child };
     case 'practice': return siteText();
+    case 'contact':  return { contact: true };
     case 'list':     return handleNameBinding(env, uid, '孩子');
     case 'add':      return handleNameBinding(env, uid, ai.child ? '新增 ' + ai.child : '新增');
     case 'remove':   return handleNameBinding(env, uid, ai.child ? '刪除 ' + ai.child : '刪除');
-    default: {
+    default:
       if (!bound.length) return handleNameBinding(env, uid, text);          // 還沒綁：先請他綁定
-      const ts = await getStageTs(env, uid);
-      if (stage === 'chat' && Date.now() - ts < CHAT_QUIET_MS) return '';
-      await setStage(env, uid, 'chat');
-      return ai.reply || politeReply(uid);
-    }
+      return ai.reply || politeReply(uid);                                    // v427：每次都回，不再防洗版
   }
 }
 
@@ -1382,12 +1477,14 @@ async function processEvent(env, ev) {
         messages = await hwReplyMessages(env, r.hw, { cat: r.cat });
         D.kind = 'homework'; D.kids = r.hw.length;
       }
+      else if (r && r.contact) { messages = contactMessages(env); D.kind = 'contact'; }
       else if (typeof r === 'string' && r.trim()) { messages = [{ type: 'text', text: r }]; D.kind = 'text'; }
       else { D.kind = 'quiet'; }
       if (loadingP) await loadingP;
     } else { D.kind = 'ignored'; }
 
     if (messages && messages.length) {
+      messages = withQuickReply(messages);                  // v427：底下都有快速按鈕
       const res = await lineReplyMessages(ev.replyToken, messages, env.LINE_TOKEN);
       D.reply = res ? res.status : 0;
       if (!res || !res.ok) {
@@ -1561,6 +1658,6 @@ export {
   handleNameBinding, welcomeMessage, welcomeText, doneText, rosterAllEnglish,
   matchOne, parseNames, splitNames, exampleNames, gradeFromEmail, runReminders,
   MAX_CHILDREN, GRADE_DOCS, buildHomeworkList, groupByLesson, lessonLine, mondayOf, TYPE_ZH, OVERDUE_DAYS,
-  queryHomework, hwReplyMessages, processEvent, handleMessage, aiUnderstand, manualSend, getHwList, getProgressFor, getRoster, flushBg, MEM, FAST, HW_TTL_MS, MANUAL_TITLE, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
+  queryHomework, hwReplyMessages, processEvent, handleMessage, aiUnderstand, aiSystem, clipReply, REPLY_MAX, manualSend, quickRoute, contactMessages, withQuickReply, nameIn, aiUsedToday, AI_DAILY, CONTACT_RE, QUICK_ITEMS, getHwList, getProgressFor, getRoster, flushBg, MEM, FAST, HW_TTL_MS, MANUAL_TITLE, menuText, INTENT, POLITE, politeReply, splitTodos, summerTodos, SUMMER_LAST_DAY,
   catRows, weekGroups, hwBubble, hwPlain, hwAlt, catZh, CAT_ZH, SEC_DEF, summerLibMeta,
 };

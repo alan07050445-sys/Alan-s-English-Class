@@ -93,10 +93,14 @@ log.push('\n【1】看不懂的話交給 AI；選單按鈕／名字不用等 AI'
   ok('整句就是名字（Eric & Tayler）→ 直接綁定，不問 AI', aiCalls() === 0 && String(rN).includes('已綁定'), rN);
 
   reset();
+  const h0 = {};
+  const r0 = await say(env, '請問Tayler文法寫完了嗎', h0);
+  ok('⭐ （v427）「請問Tayler文法寫完了嗎」關鍵字就看得懂 → 不必問 AI，直接挑出 Tayler＋文法', aiCalls() === 0 && r0.hw.length === 1 && r0.hw[0].name === 'Tayler' && r0.cat === 'grammar' && h0.path === 'fast', JSON.stringify({ r0, path: h0.path }));
+  reset();
   aiAnswer = { intent: 'homework', child: 'Tayler', cat: 'grammar' };
   const h = {};
-  const r = await say(env, '請問Tayler文法寫完了嗎', h);
-  ok('⭐ 「請問Tayler文法寫完了嗎」→ 問 AI 一次，挑出 Tayler＋文法', aiCalls() === 1 && r.hw.length === 1 && r.hw[0].name === 'Tayler' && r.cat === 'grammar', JSON.stringify(r));
+  const r = await say(env, 'Tayler那個還有幾項沒交', h);
+  ok('⭐ 關鍵字抓不到的（「Tayler那個還有幾項沒交」）→ 問 AI 一次，挑出 Tayler＋文法', aiCalls() === 1 && r.hw.length === 1 && r.hw[0].name === 'Tayler' && r.cat === 'grammar', JSON.stringify(r));
   ok('路徑記成 ai:homework', h.path === 'ai:homework' && typeof h.aiMs === 'number', h.path);
 
   reset();
@@ -124,16 +128,16 @@ log.push('\n【1】看不懂的話交給 AI；選單按鈕／名字不用等 AI'
 }
 
 // ═══ 2. AI 聊天 ═══
-log.push('\n【2】聊天：像人一樣回，但不洗版、不亂發連結');
+log.push('\n【2】聊天：像人一樣回、每次都回、不亂發連結');
 {
   reset();
   const env = makeEnv({ Uc: BOTH });
-  aiAnswer = { intent: 'chat', reply: '收到！請假的事老師會看到並回覆您 🙏 詳情 https://evil.example/x' };
-  const r = await say(env, '老師下禮拜三Eric要請假', {});
-  ok('⭐ 用 AI 寫的話回覆（不是固定那六句）', String(r).startsWith('收到！請假的事老師會看到'), r);
+  aiAnswer = { intent: 'chat', reply: '哈哈謝謝你 😊 詳情 https://evil.example/x' };
+  const r = await say(env, '老師好帥', {});
+  ok('⭐ 用 AI 寫的話回覆（不是固定那六句）', String(r).startsWith('哈哈謝謝你'), r);
   ok('⭐ AI 的回話裡網址被拿掉', !/https?:/.test(r), r);
   const r2 = await say(env, '大概兩天', {});
-  ok('3 分鐘內再聊天 → 不再回（家長打好幾句不會被洗版）', r2 === '', JSON.stringify(r2));
+  ok('（v427）再聊一句 → 照樣回（Alan：不用防洗版）', String(r2).startsWith('哈哈謝謝你'), JSON.stringify(r2));
   aiAnswer = { intent: 'homework', child: null, cat: null };
   const r3 = await say(env, '那他這週還剩什麼', {});
   ok('但中間問作業還是會回', !!(r3 && r3.hw), JSON.stringify(r3));

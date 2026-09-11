@@ -1110,13 +1110,17 @@ function LineLink() {
                   <div className="diag-list">
                     {diag.map((d, i) => {
                       const okReply = d.reply === 200 || d.push === 200 || d.kind === 'quiet' || d.kind === 'ignored';
-                      const kindZh = { welcome: '加好友', homework: '查作業', text: '文字回覆', quiet: '刻意不回（防洗版）', ignored: '貼圖/其他' }[d.kind] || d.kind || '—';
+                      const kindZh = { welcome: '加好友', homework: '查作業', text: '文字回覆', contact: '請私訊老師本人', quiet: '沒有回覆', ignored: '貼圖/其他' }[d.kind] || d.kind || '—';
+                      // v427：看得出這一則是走哪條路——⚡ 關鍵字秒回、🤖 問了 AI、📋 AI 沒回退回規則、🧮 今天 AI 次數用完
+                      const p = String(d.path || '');
+                      const pathZh = !p ? '' : p === 'fast' ? '⚡ 秒回' : p === 'rules' ? '📋 規則（AI 沒回）' : p === 'quota' ? '🧮 今天 AI 次數用完'
+                        : p.indexOf('ai:') === 0 ? '🤖 AI' + (typeof d.aiMs === 'number' ? ` ${(d.aiMs / 1000).toFixed(1)}s` : '') : p;
                       return (
                         <div key={i} className={'diag-row' + (okReply && !d.err ? '' : ' bad')}>
                           <span className="diag-at">{d.at}</span>
                           <span className="diag-u">{d.u}</span>
                           <span className="diag-t">{d.text || '（' + (d.type || '') + '）'}</span>
-                          <span className="diag-k">{kindZh}{d.kids ? `・${d.kids} 位孩子` : ''}</span>
+                          <span className="diag-k">{kindZh}{d.kids ? `・${d.kids} 位孩子` : ''}{pathZh ? `・${pathZh}` : ''}</span>
                           <span className="diag-r">
                             {d.err ? '❌ 程式錯誤'
                               : d.reply === 200 ? '✅ 已回覆'

@@ -89,20 +89,14 @@ log.push('\n【C4】跟三件事無關的訊息 → 隨機一句有禮貌的回�
   log.push('\n───── 六句備選 ─────\n' + W.POLITE.map((x, i) => (i + 1) + '. ' + x.replace(/\n/g, ' / ')).join('\n') + '\n────────────────────');
 }
 
-// ═══ 4b. 不洗版 ═══
-log.push('\n【C4b】家長連打好幾句，不會被自動回覆洗版');
+// ═══ 4b. v427：不再防洗版——每一句都回 ═══
+log.push('\n【C4b】家長連打好幾句，每一句都有回（v427：Alan 說不用防洗版）');
 {
   const env = makeEnv(BOUND);
-  const a = await W.handleNameBinding(env, 'U1', '老師我想請假');
-  ok('第一句 → 有禮貌地回一次', W.POLITE.indexOf(a) >= 0, a);
-  const b = await W.handleNameBinding(env, 'U1', '因為下禮拜要出國');
-  const c = await W.handleNameBinding(env, 'U1', '大概兩個禮拜');
-  ok('接下來 10 分鐘內完全不回話', b === '' && c === '', JSON.stringify([b, c]));
+  const out = [];
+  for (const t of ['在嗎', '哈囉', '嗯嗯']) out.push(await W.handleNameBinding(env, 'U1', t));
+  ok('三句都有客氣的回覆，沒有一句被吃掉', out.every((r) => W.POLITE.indexOf(r) >= 0), JSON.stringify(out));
   ok('但「作業」還是叫得動', !!(await W.handleNameBinding(env, 'U1', '作業')).hw);
-  const st = JSON.parse(env._store.get('chatstate'));
-  st.U1.ts = Date.now() - 11 * 60 * 1000;
-  env._store.set('chatstate', JSON.stringify(st));
-  ok('過了 10 分鐘再開口 → 又會客氣回一次', W.POLITE.indexOf(await W.handleNameBinding(env, 'U1', '在嗎')) >= 0);
 }
 
 // ═══ 5. 綁定流程沒有被指令弄壞 ═══
