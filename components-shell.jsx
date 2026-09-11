@@ -134,7 +134,7 @@ function FocusBtn() {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -271,6 +271,9 @@ function Header({
               )}
               {onReadingGen && (
                 <button className="banner-btn rc" onClick={onReadingGen}>📖 出閱讀理解</button>
+              )}
+              {onGrammarNotes && (
+                <button className="banner-btn gn" onClick={onGrammarNotes}>✏️ 出文法</button>
               )}
               {onQuickSet && (
                 <button className="banner-btn quick" onClick={onQuickSet}>⚡ 貼單字 · 一次建立整套</button>

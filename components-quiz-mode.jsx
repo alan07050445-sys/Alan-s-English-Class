@@ -416,7 +416,7 @@ function getTodayInputValue(offsetDays = 0) {
 
 function getQuizItemTotal(item) {
   if (!item) return 0;
-  if (item.type === 'lesson')       return Math.max(1, (item.check || []).length);
+  if (item.type === 'lesson')       return Math.max(1, Array.isArray(item.steps) && item.steps.length ? item.steps.filter(x => x && x.kind !== 'learn').length : (item.check || []).length);
   if (item.type === 'flashcard')    return (item.cards || []).length;
   if (item.type === 'type-answer')  return (item.pairs || []).length;
   if (item.type === 'spelling')     return (item.spellWords || []).length; // v254
@@ -916,6 +916,18 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     return (p && p.modes && p.modes.learn) ? null : fc;          // 學習模式跑完就放行
   }, [selectedItem && selectedItem.id, qmProg, weekAllItems, items, weekId, isTeacherView]);
 
+  /* v428：✏️ 出文法的練習都帶 requires（互動教學的 id）——學生沒學完就先鎖著。
+     null＝沒擋（老師、沒設、教學被刪了、或已經學完）。 */
+  const lessonOf = (it) => {
+    if (!it || isTeacherView || !it.requires) return null;
+    const pool = (weekAllItems && weekAllItems.length) ? weekAllItems : (items || []);
+    const ls = pool.find(x => x.id === it.requires && x.type === 'lesson');
+    if (!ls) return null;
+    const p = qmProg[`${weekId}_${ls.id}`];
+    return (p && p.done) ? null : ls;
+  };
+  const lessonGate = useQMM(() => lessonOf(selectedItem), [selectedItem && selectedItem.id, qmProg, weekAllItems, items, weekId, isTeacherView]);
+
 
   /* ── v360: 排序（群組內互換單元／整組上下移）──────────────
      一律以「完整清單的 id 排列」送回去，即使畫面正在依學生篩選，也不會弄丟沒列到的單元。 */
@@ -1126,6 +1138,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const scorePct = (prog && prog.score != null) ? Math.round(prog.score / prog.total * 100) : null; // 單字卡完成無分數 → 不顯示 %
             const isDone   = !!(prog && prog.done); // v311(#21): 達 80 才算完成（未達 80 仍顯示上次分數，但不打勾）
             const isActive = selectedItem?.id === item.id;
+            const lockLs   = !editMode ? lessonOf(item) : null;   // v428：教學還沒學完 → 🔒
             const isWriting      = item.type === 'writing-practice';
             const isTypeAnswer   = item.type === 'type-answer';
             const isSpelling     = item.type === 'spelling'; // v254
@@ -1161,7 +1174,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             return (
               <RowTag
                 key={item.id}
-                className={`qm-unit-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}${!hasQuiz && !editMode ? ' disabled' : ''}`}
+                className={`qm-unit-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}${!hasQuiz && !editMode ? ' disabled' : ''}${lockLs ? ' gnl-locked' : ''}`}
                 onClick={() => (hasQuiz || editMode) && selectItem(item)}
                 {...(editMode ? {} : { type: 'button', disabled: !hasQuiz })}
               >
@@ -1169,6 +1182,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                   <div className="qm-unit-row-title">
                     {/* v272: 同組之下用短名（聽寫/填空 2…）——跟任務清單一致，四張同名卡不再分不出誰是誰 */}
                     {!editMode && groupName ? qmShortLabel(item, groupName) : item.title}
+                    {lockLs && <span className="gnl-lock-badge">🔒 先學一下</span>}
                     {dueLabel && !editMode && <span className={`qm-hw-badge${isDone ? ' done' : ''}${dueLabel === '已結束' ? ' ended' : ''}`}>{isDone ? '✓ 作業完成' : dueLabel}</span>}
                   </div>
                   <div className="qm-unit-row-meta">
@@ -1182,7 +1196,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? `⌨ ${(item.pairs||[]).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? `📘 先教再練 · ${(item.check||[]).length} 題小試身手` : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -1348,7 +1362,16 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           <div className="qm-type-chip">{QM_TYPE_ICO[selectedItem.type] || ''} {QM_TYPE_ZH[selectedItem.type]}</div>
         )}
         <div key={quizSwapKey} className="qm-quiz-swap">
-        {!selectedItem ? (
+        {(selectedItem && lessonGate) ? (
+          <div className="qm-intro gnl-gate">
+            <div className="qm-intro-icon">🔒</div>
+            <div className="qm-intro-title">{selectedItem.title}</div>
+            <div className="gnl-gate-msg">先完成「<b>{lessonGate.title}</b>」，學會了才能開始練習喔！</div>
+            <div className="qm-intro-btns">
+              <button className="qm-btn primary" onClick={() => selectItem(lessonGate)}>📘 去學一下 →</button>
+            </div>
+          </div>
+        ) : !selectedItem ? (
           <div className="qm-placeholder">
             <div className="qm-placeholder-icon">👈</div>
             <div className="qm-placeholder-msg">Select a unit to start</div>
@@ -2228,15 +2251,23 @@ function TypeAnswerIntro({ item, onStart, resumeAt, onRestart, prog }) {
   const count = (item.pairs || []).length;
   return (
     <div className="qm-intro">
-      <div className="qm-intro-icon">⌨</div>
+      <div className="qm-intro-icon">{item.variant === 'translate' ? '🔤' : item.variant === 'fill' ? '✏️' : '⌨'}</div>
       <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{count} words</div>
+      <div className="qm-intro-meta">{item.variant === 'translate' ? `${count} 題中翻英` : item.variant === 'fill' ? `${count} 題填空` : `${count} words`}</div>
       <div className="qm-intro-rules">
         {item.instruction && (
           <div className="qm-intro-rule-row"><span>📋</span><span>{item.instruction}</span></div>
         )}
-        <div className="qm-intro-rule-row"><span>✏️</span><span>看到提示單字，自己打出正確答案</span></div>
-        <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫，拼對就算對</span></div>
+        {item.variant === 'translate' ? <>
+          <div className="qm-intro-rule-row"><span>🇹🇼</span><span>看中文，打出英文句子；卡住了可以按「💡 提示」</span></div>
+          <div className="qm-intro-rule-row"><span>✅</span><span>大小寫、句尾標點不影響；意思對、文法對的其他說法也算對</span></div>
+        </> : item.variant === 'fill' ? <>
+          <div className="qm-intro-rule-row"><span>✏️</span><span>把 ________ 填上正確的字</span></div>
+          <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫；isn't 和 is not 都算對</span></div>
+        </> : <>
+          <div className="qm-intro-rule-row"><span>✏️</span><span>看到提示單字，自己打出正確答案</span></div>
+          <div className="qm-intro-rule-row"><span>✅</span><span>不分大小寫，拼對就算對</span></div>
+        </>}
       </div>
       <QmIntroDoneHint prog={prog} />
       <div className="qm-intro-btns">
@@ -2269,6 +2300,10 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   const [result,   setResult]   = useQM(null); // null | 'correct' | 'wrong'
   const [score,    setScore]    = useQM(rz ? (rz.score || 0) : 0);
   const [screen,   setScreen]   = useQM('play'); // 'play' | 'done'
+  const [judging,  setJudging]  = useQM(false);  // v428：中翻英 AI 判斷中
+  const [tip,      setTip]      = useQM('');     // v428：AI 給的一句話回饋
+  const [showHint, setShowHint] = useQM(false);
+  const isTr = item.variant === 'translate';
   const inputRef = React.useRef(null);
   const wrongsRef = React.useRef(rz && Array.isArray(rz.wrongs) ? rz.wrongs.slice() : []); // v258: 錯題記錄（老師端＋錯題本）
   // v392: 同 SpellingPlayer——本來是裸 setTimeout，答對後按返回會在單元列表放彩帶
@@ -2283,9 +2318,19 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
     if (result === null && inputRef.current) inputRef.current.focus();
   }, [idx, result]);
 
-  const check = () => {
-    if (!input.trim()) return;
-    const correct = input.trim().toLowerCase() === (current.answer || '').trim().toLowerCase();
+  const check = async () => {
+    if (!input.trim() || judging) return;
+    // v428：大小寫、標點不算錯；isn't＝is not；老師校稿時列的其他正確寫法也算對
+    let correct = window.gnAnswerOk ? window.gnAnswerOk(input, current.answer, current.accept)
+      : input.trim().toLowerCase() === (current.answer || '').trim().toLowerCase();
+    setTip('');
+    // 中翻英：程式比不上的，再請 AI 判斷「意思對、文法對」的其他說法（平常答對不花這個時間）
+    if (!correct && isTr && window.aiJudgeTranslation) {
+      setJudging(true);
+      const j = await window.aiJudgeTranslation({ zh: current.prompt, answer: current.answer, user: input, topic: item.topic || item.group || '' });
+      setJudging(false);
+      if (j) { correct = !!j.ok; setTip(j.tip || ''); }
+    }
     setResult(correct ? 'correct' : 'wrong');
     if (correct) {
       const nextScore = score + 1;
@@ -2320,6 +2365,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       setIdx(i => i + 1);
       setInput('');
       setResult(null);
+      setTip(''); setShowHint(false);
     }
   };
 
@@ -2368,18 +2414,24 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
 
       <div key={idx} className="qm-question-area qm-question-swap">
         {item.instruction && <div className="qm-question-hint">{item.instruction}</div>}
-        <div className="ta-prompt">{current?.prompt}</div>
+        {isTr && <div className="qm-question-hint">翻成英文：</div>}
+        <div className={'ta-prompt' + (isTr ? ' tr' : '')}>{current?.prompt}</div>
+        {isTr && (current?.hint || current?.answer) && result === null && (
+          showHint
+            ? <div className="ta-hint">💡 {current.hint || ''}{current.hint ? '　' : ''}（共 {String(current.answer || '').split(/\s+/).length} 個字）</div>
+            : <button className="ta-hint-btn" onClick={() => setShowHint(true)}>💡 提示</button>
+        )}
       </div>
 
       <div className="ta-input-wrap">
         <input
           ref={inputRef}
-          className={`ta-input${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
+          className={`ta-input${isTr ? ' tr' : ''}${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
           value={input}
           onChange={e => { if (result === null) setInput(e.target.value); }}
           onKeyDown={handleKey}
-          placeholder="Type your answer…"
-          disabled={result !== null}
+          placeholder={isTr ? 'Type the English sentence…' : 'Type your answer…'}
+          disabled={result !== null || judging}
           autoComplete="off" autoCapitalize="none" spellCheck={false}
         />
         {result === 'wrong' && (
@@ -2392,14 +2444,15 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
            style={{marginTop: result ? 8 : 0}}
            onPointerDown={clearAuto} onKeyDown={clearAuto}>
         {result === null ? (
-          <button className="qm-btn primary" onClick={check} disabled={!input.trim()}>
-            確認 · Check →
+          <button className="qm-btn primary" onClick={check} disabled={!input.trim() || judging}>
+            {judging ? '🤖 老師小幫手檢查中…' : '確認 · Check →'}
           </button>
         ) : (
           <>
             <div className={`qm-feedback-banner ${result}`}>
               {result === 'correct' ? '✓ Correct! 答對了！' : `✗ 正解：${current.answer}`}
             </div>
+            {tip && <div className={'ta-ai-tip' + (result === 'correct' ? ' ok' : '')}>🤖 {tip}</div>}
             {current.explain && (
               <div className="ta-explain">
                 <span className="ta-explain-icon">💡</span>
@@ -6582,7 +6635,211 @@ const DM_HUES = ['#2E4F7E', '#7A4FA8', '#1F7A8C', '#4C5BA8', '#5E6B7A', '#8A4F7A
      ① 這是什麼／什麼時候用   ② 長什麼樣子（形式表＋提示詞）
      ③ 看老師示範（有答案、有解說的範例題）  ④ 小試身手（即時回饋，答完才算完成）
    ══════════════════════════════════════════════════════════════ */
-function LessonPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+/* v428：教學卡有 steps（✏️ 出文法做的）→ 一步一步的互動教學；沒有 → 原本的教學卡（五大時態） */
+function LessonPlayer(props) {
+  return (props.item && Array.isArray(props.item.steps) && props.item.steps.length)
+    ? <StepLesson {...props}/> : <LessonPlayerClassic {...props}/>;
+}
+
+/* ══════════════════════════════════════════════════════
+   v428：互動教學（Alan：「越簡單越好…一定要是互動式的學習」）
+   一次只講一件事（learn），緊接著馬上動手：👆 選一選／🧩 排句子／🔍 找錯字。
+   答錯可以再試、會告訴他為什麼；每一步都答對才能往下。學完才解鎖後面的練習。
+══════════════════════════════════════════════════════ */
+function gnlShuffle(n, seed) {
+  const idx = Array.from({ length: n }, (_, i) => i);
+  let x = seed * 9301 + 49297;
+  for (let i = n - 1; i > 0; i--) { x = (x * 9301 + 49297) % 233280; const j = Math.floor(x / 233280 * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  if (n > 2 && idx.every((v, i) => v === i)) idx.push(idx.shift());   // 不要剛好就是正確順序
+  return idx;
+}
+function GnlMark({ text, hl }) {
+  // 把要強調的字（There is / are…）標出來
+  const words = (hl || []).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!words.length) return <>{text}</>;
+  const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+  return <>{String(text).split(re).map((part, i) => (i % 2 ? <mark key={i} className="gnl-hl">{part}</mark> : <React.Fragment key={i}>{part}</React.Fragment>))}</>;
+}
+function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const steps = useQMM(() => (item.steps || []).map(st => (window.gnValidStep ? window.gnValidStep(st) : st)).filter(Boolean), [item.id]);
+  const acts = steps.filter(st => st.kind !== 'learn').length;
+  const [si, setSi] = useQM(0);
+  const [st, setSt] = useQM({});             // 這一步的作答狀態
+  const [firstOk, setFirstOk] = useQM({});   // 第幾步第一次就答對
+  const done = si >= steps.length;
+  const cur = steps[Math.min(si, steps.length - 1)];
+  const sound = (ok) => { if (window.playSound) window.playSound(ok ? 'correct' : 'wrong'); };
+  const say = (t) => { try { (window.speakTTS || window.speakText)(t, { lang: 'en-US', rate: 0.85 }); } catch (e) {} };
+  const markFirst = (ok) => setFirstOk(f => (si in f ? f : { ...f, [si]: ok }));
+  const next = () => { setSi(i => i + 1); setSt({}); try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {} };
+  const solved = !cur || cur.kind === 'learn' || !!st.ok;
+
+  useQME(() => {
+    if (!done) return;
+    // 學完就算完成（不看分數）——不然答錯幾題的孩子會被鎖在練習外面
+    saveQuizModeCompletion(progressKey, item, { doneCount: Math.max(1, acts), score: null, total: Math.max(1, acts) });
+    fireCelebration(null);
+  }, [done]);
+
+  const tiles = useQMM(() => (cur && cur.kind === 'order' ? gnlShuffle(cur.words.length, si + 7) : []), [si, item.id]);
+
+  if (done) {
+    const n1 = Object.values(firstOk).filter(Boolean).length;
+    return (
+      <div className="ls-wrap">
+        <div className="ls-card ls-enter ls-done">
+          <div className="ls-done-ico">🎉</div>
+          <h2 className="ls-title">學會了！</h2>
+          {acts > 0 && <div className="ls-done-score">一次就答對 {n1} / {acts} 題</div>}
+          <p className="ls-lead">{item.outro || '接下來開始練習，把它練熟！'}</p>
+          <div className="gnl-unlocked">🔓 後面的練習已經解鎖了</div>
+          <div className="qm-result-btns">
+            <button className="qm-btn secondary" onClick={() => { setSi(0); setSt({}); setFirstOk({}); }}>再學一次</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="開始練習 →"/>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ls-wrap">
+      <div className="ls-head">
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="ls-steps">
+          {steps.map((_, i) => <span key={i} className={'ls-dot' + (i === si ? ' on' : '') + (i < si ? ' done' : '')}/>)}
+        </div>
+        <span className="ls-step-n">{si + 1} / {steps.length}</span>
+      </div>
+
+      <div key={si} className="ls-card ls-enter gnl-card">
+        {si === 0 && item.lead && <div className="gnl-lead">{item.lead}</div>}
+
+        {cur.kind === 'learn' && (
+          <>
+            <div className="ls-kicker">📖 學一個重點</div>
+            <div className="gnl-say">{cur.say}</div>
+            <div className="gnl-exs">
+              {cur.examples.map((e, i) => (
+                <button key={i} type="button" className="gnl-ex" onClick={() => say(e.en)} title="點一下聽發音">
+                  <span className="gnl-ex-en"><GnlMark text={e.en} hl={e.hl}/></span>
+                  {e.zh && <span className="gnl-ex-zh">{e.zh}</span>}
+                  <span className="gnl-ex-say">🔊</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {cur.kind === 'pick' && (
+          <>
+            <div className="ls-kicker">👆 選一選</div>
+            <div className="gnl-q">
+              {cur.q.split('________').map((part, i, arr) => (
+                <React.Fragment key={i}>{part}{i < arr.length - 1 && (
+                  <span className={'gnl-blank' + (st.ok ? ' ok' : '')}>{st.ok ? cur.options[cur.answer] : '？'}</span>
+                )}</React.Fragment>
+              ))}
+            </div>
+            <div className="gnl-opts">
+              {cur.options.map((o, k) => {
+                const wrong = (st.wrong || []).indexOf(k) >= 0;
+                const cls = 'gnl-opt' + (st.ok && k === cur.answer ? ' ok' : '') + (wrong ? ' no' : '');
+                return (
+                  <button key={k} className={cls} disabled={st.ok || wrong} onClick={() => {
+                    const ok = k === cur.answer;
+                    sound(ok); markFirst(ok);
+                    setSt(s0 => ok ? { ...s0, ok: true } : { ...s0, wrong: (s0.wrong || []).concat(k) });
+                  }}>{o}</button>
+                );
+              })}
+            </div>
+            {(st.ok || (st.wrong || []).length > 0) && cur.why && (
+              <div className={'gnl-why' + (st.ok ? ' ok' : '')}>{st.ok ? '✓ ' : '再想想看：'}{cur.why}</div>
+            )}
+          </>
+        )}
+
+        {cur.kind === 'order' && (() => {
+          const picked = st.picked || [];
+          const built = picked.map(i => cur.words[tiles[i]]);
+          const full = picked.length === cur.words.length;
+          const check = () => {
+            const ok = (window.gnNorm ? window.gnNorm(built.join(' ')) === window.gnNorm(cur.words.join(' ')) : built.join(' ') === cur.words.join(' '));
+            sound(ok); markFirst(ok);
+            setSt(s0 => ok ? { ...s0, ok: true } : { ...s0, bad: true, tries: (s0.tries || 0) + 1 });
+          };
+          return (
+            <>
+              <div className="ls-kicker">🧩 排句子</div>
+              <div className="gnl-zh">{cur.zh}</div>
+              <div className={'gnl-line' + (st.ok ? ' ok' : st.bad ? ' no' : '')}>
+                {built.length ? built.map((w, i) => (
+                  <button key={i} className="gnl-tile in" disabled={st.ok}
+                    onClick={() => setSt(s0 => ({ ...s0, bad: false, picked: picked.filter((_, j) => j !== i) }))}>{w}</button>
+                )) : <span className="gnl-line-ph">點下面的字，排成英文句子</span>}
+              </div>
+              {!st.ok && (
+                <div className="gnl-pool">
+                  {tiles.map((wi, i) => picked.indexOf(i) >= 0 ? <span key={i} className="gnl-tile ghost">{cur.words[wi]}</span> : (
+                    <button key={i} className="gnl-tile" onClick={() => setSt(s0 => ({ ...s0, bad: false, picked: (s0.picked || []).concat(i) }))}>{cur.words[wi]}</button>
+                  ))}
+                </div>
+              )}
+              {!st.ok && full && !st.bad && <button className="qm-btn primary gnl-check" onClick={check}>確認 →</button>}
+              {st.bad && (
+                <div className="gnl-why">
+                  順序不太對，再試一次！
+                  {(st.tries || 0) >= 2 && <div className="gnl-ans">正確是：<b>{cur.words.join(' ')}</b></div>}
+                  <button className="qm-btn secondary gnl-retry" onClick={() => setSt(s0 => ({ ...s0, bad: false, picked: [] }))}>↺ 重新排</button>
+                </div>
+              )}
+              {st.ok && <div className="gnl-why ok">✓ 排對了！<button className="gnl-say-btn" onClick={() => say(cur.words.join(' '))}>🔊</button></div>}
+            </>
+          );
+        })()}
+
+        {cur.kind === 'fix' && (() => {
+          const toks = cur.sentence.split(/\s+/);
+          const bare = (t) => t.replace(/[.,!?]+$/, '');
+          return (
+            <>
+              <div className="ls-kicker">🔍 找錯字</div>
+              <div className="gnl-sub">這句話有一個字錯了，點它！</div>
+              <div className="gnl-fix">
+                {toks.map((t, i) => {
+                  const isWrong = bare(t).toLowerCase() === cur.wrong.toLowerCase();
+                  const missed = (st.miss || []).indexOf(i) >= 0;
+                  if (st.ok && isWrong) {
+                    return <span key={i} className="gnl-word fixed"><s>{bare(t)}</s> <b>{cur.right}</b>{t.slice(bare(t).length)}</span>;
+                  }
+                  return (
+                    <button key={i} className={'gnl-word' + (missed ? ' no' : '')} disabled={st.ok || missed} onClick={() => {
+                      sound(isWrong); markFirst(isWrong);
+                      setSt(s0 => isWrong ? { ...s0, ok: true } : { ...s0, miss: (s0.miss || []).concat(i) });
+                    }}>{t}</button>
+                  );
+                })}
+              </div>
+              {(st.ok || (st.miss || []).length > 0) && (
+                <div className={'gnl-why' + (st.ok ? ' ok' : '')}>{st.ok ? `✓ 找到了！${cur.why || ''}` : '這個字沒有錯，再找找看～'}</div>
+              )}
+            </>
+          );
+        })()}
+      </div>
+
+      <div className="ls-foot">
+        <button className="qm-btn secondary" disabled={si === 0} onClick={() => { setSi(i => Math.max(0, i - 1)); setSt({}); }}>← 上一步</button>
+        <button className="qm-btn primary" disabled={!solved} onClick={next}>
+          {cur.kind === 'learn' ? '我懂了 →' : (solved ? (si + 1 >= steps.length ? '完成 🎉' : '下一步 →') : '先答對才能往下')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LessonPlayerClassic({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const uses     = (item.uses || []).filter(u => u && (u.zh || u.en));
   const forms    = (item.forms || []).filter(f => f && f.subj);
   const clues    = (item.clues || []).filter(Boolean);

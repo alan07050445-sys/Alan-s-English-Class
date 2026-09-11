@@ -2358,6 +2358,314 @@ async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v428：✏️ 出文法——老師上傳作業照片／貼文字 → 簡單互動教學 → 選擇＋填空＋中翻英
+   ──────────────────────────────────────────────────────────────────────────
+   Alan：「我會上傳老師的作業圖片檔 或是文字 老師的圖片或是文字主要就是分成教學 notes
+          再來就是題目…我希望一開始有簡單教學 越簡單越好不要複雜 一定要是互動式的學習
+          可以跟學生有互動的，學習完成才開始正式練習題目測驗，可以包含選擇題，填空題，
+          以及中翻英」
+   ① aiReadGrammarSheet：看照片（Claude 看圖）＋貼的文字 → 教學重點＋老師原本的題目
+   ② aiMakeGrammarPack：依教學重點出「互動教學步驟」＋三種題目（老師的題目優先收進去）
+   ⚠ 沿用 v382 的教訓：AI 產出一律程式驗，驗不過的丟掉或重出，絕不整批信任。
+   ══════════════════════════════════════════════════════════════════════════ */
+const GN_MODEL = 'claude-haiku-4-5';
+// 看照片用 Sonnet：v428 用同一張作業實測，兩個都讀到 10/10 題、都約 8 秒，
+// 但 Haiku 把「你的書包裡有任何書嗎」讀成「有什麼書」，還自己填上作業沒印的答案；Sonnet 逐字照抄。
+const GN_READ_MODEL = 'claude-sonnet-5';
+
+const GN_READ_SYS = `You read a Taiwanese elementary-school English teacher's GRAMMAR homework
+(photos and/or pasted text). It usually has two parts: teaching NOTES, then QUESTIONS.
+Output ONLY JSON:
+{"topic":"short English name of the grammar point","topicZh":"繁體中文名稱","notes":"",
+ "questions":[{"kind":"mcq|fill|translate|other","q":"","options":[],"answer":""}]}
+RULES
+- notes: every rule, pattern-table row and example sentence from the NOTES part, as plain text,
+  one idea per line (use \\n). Copy the teacher's own examples word for word. Never invent content.
+- questions: every question you can read, in order.
+  * "Circle the correct answer: There (is / are) a book." → kind "mcq", q "There ________ a book.",
+    options ["is","are"].
+  * A sentence with a blank line to fill → kind "fill", q with the blank written as ________ .
+    If the section title lists words to use (e.g. is / are / isn't), put them in options.
+  * A Chinese sentence to translate into English → kind "translate", q = the Chinese sentence.
+  * Anything else → kind "other".
+  * answer: only if the answer is printed or already written in; otherwise "".
+- If a photo is unreadable, skip it. If there are no questions, return "questions":[].
+${_AI_MINIFY}`;
+
+// images: [{ media_type:'image/jpeg', data:'<base64>' }]
+async function aiReadGrammarSheet({ images = [], text = '' } = {}) {
+  const content = (images || []).slice(0, 6).map(im => ({
+    type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data },
+  }));
+  content.push({ type: 'text', text: String(text || '').trim()
+    ? `The teacher also pasted this text:\n${String(text).slice(0, 8000)}`
+    : 'Read the worksheet.' });
+  try {
+    return await _aiAsk(
+      { model: GN_READ_MODEL, max_tokens: 3000, system: GN_READ_SYS, messages: [{ role: 'user', content }] },
+      (data) => {
+        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+        if (!o || typeof o !== 'object') return null;
+        const qs = (Array.isArray(o.questions) ? o.questions : []).map(q => ({
+          kind: ['mcq', 'fill', 'translate'].indexOf(q && q.kind) >= 0 ? q.kind : 'other',
+          q: String((q && q.q) || '').trim(),
+          options: Array.isArray(q && q.options) ? q.options.map(x => String(x).trim()).filter(Boolean) : [],
+          answer: String((q && q.answer) || '').trim(),
+        })).filter(q => q.q).map(q => {
+          // 「There (is / are) a book.」這種圈選題：括號變空格、括號裡的字變選項
+          const m = q.q.match(/[(（]([^()（）]*[\/／][^()（）]*)[)）]/);
+          if ((q.kind === 'mcq' || q.kind === 'other') && m) {
+            const opts = m[1].split(/[\/／]/).map(x => x.trim()).filter(Boolean);
+            if (opts.length >= 2) return { ...q, kind: 'mcq', q: q.q.replace(m[0], '________'), options: opts };
+          }
+          return q;
+        });
+        return { topic: String(o.topic || '').trim(), topicZh: String(o.topicZh || '').trim(),
+                 notes: String(o.notes || '').trim(), questions: qs };
+      }, 90000);
+  } catch (e) {
+    throw new Error(e && e.timeout ? '讀照片太久沒有回應，請再試一次（照片少一點會比較快）。' : '讀不懂這份作業，請換清楚一點的照片，或直接貼文字。');
+  }
+}
+
+/* ── 學生答案比對：不分大小寫、標點，縮寫當作一樣（isn't = is not），另外收老師／AI 給的其他正確說法 ── */
+const _GN_CONTRACT = [
+  [/\bcan't\b/g, 'cannot'], [/\bcan not\b/g, 'cannot'], [/\bwon't\b/g, 'will not'], [/\bshan't\b/g, 'shall not'],
+  [/\b(is|are|was|were|do|does|did|has|have|had|would|should|could|must)n't\b/g, '$1 not'],
+  [/\bcant\b/g, 'cannot'], [/\bwont\b/g, 'will not'],
+  [/\b(is|are|was|were|do|does|did|has|have|had)nt\b/g, '$1 not'],
+  [/\bim\b/g, 'i am'], [/\b(there|that|what|where)s\b/g, '$1 is'],
+  [/\bi'm\b/g, 'i am'], [/\b(you|we|they)'re\b/g, '$1 are'], [/\b(he|she|it|there|that|what|who|where|here)'s\b/g, '$1 is'],
+  [/\b(i|you|we|they)'ve\b/g, '$1 have'], [/\b(i|you|he|she|it|we|they)'ll\b/g, '$1 will'], [/\b(i|you|he|she|it|we|they)'d\b/g, '$1 would'],
+];
+function gnNorm(s) {
+  let t = String(s || '').toLowerCase().replace(/[’‘`´]/g, "'").replace(/[“”]/g, '"');
+  _GN_CONTRACT.forEach(([re, to]) => { t = t.replace(re, to); });
+  return t.replace(/[.,!?;:"()\[\]…。，！？；：、]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function gnAnswerOk(user, answer, accept) {
+  const u = gnNorm(user);
+  if (!u) return false;
+  return [answer].concat(Array.isArray(accept) ? accept : []).some(a => a && gnNorm(a) === u);
+}
+
+/* ── 中翻英：程式比對不過時，請 AI 判斷「意思對、文法對」的其他說法（只在答錯時才問，平常不花時間）── */
+async function aiJudgeTranslation({ zh, answer, user, topic = '' } = {}) {
+  const sys = `You check a Taiwanese elementary student's Chinese-to-English translation.
+Target grammar point: ${topic || '(see the model answer)'}.
+Say ok:true ONLY if the student's English is grammatically correct, means the same as the Chinese,
+AND uses the target grammar point correctly. Ignore capital letters and final punctuation.
+A spelling mistake or a wrong word form is NOT ok.
+Output ONLY JSON: {"ok":true|false,"tip":"繁體中文，30 字以內。不對：只講一個要改的地方；對：一句稱讚"}`;
+  try {
+    return await _aiAsk(
+      { model: GN_MODEL, max_tokens: 120, system: sys,
+        messages: [{ role: 'user', content: `Chinese: ${zh}\nModel answer: ${answer}\nStudent: ${user}` }] },
+      (data) => {
+        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+        if (!o || typeof o.ok !== 'boolean') return null;
+        // 模型偶爾會把欄位說明抄進來（實測出現過「Traditional Chinese: …」）
+        const tip = String(o.tip || '').replace(/^\s*(traditional chinese|繁體中文|繁中)\s*[:：]\s*/i, '').trim();
+        return { ok: o.ok, tip: tip.slice(0, 60) };
+      }, 12000);
+  } catch (e) { return null; }       // 判不出來＝照程式的結果（算錯），不讓學生卡住
+}
+
+/* ── ② 出題 ─────────────────────────────────────────────── */
+const GN_GRADE = {
+  g1: 'Grade 1 (age 7). Tiny sentences of 3-5 words.', g2: 'Grade 2 (age 8). Very short sentences.',
+  g3: 'Grade 3 (age 9, CEFR A1).', g4: 'Grade 4 (age 10, CEFR A1-A2).',
+  g5: 'Grade 5 (age 11, CEFR A2).', g6: 'Grade 6 (age 12, CEFR A2).',
+};
+const _GN_BASE = (grade, topic, notes) => `Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
+Grammar point: ${topic}
+The teacher's notes (stay inside them — do not teach anything the notes do not cover):
+${String(notes || '').slice(0, 4000)}
+Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.`;
+
+const GN_LESSON_SYS = `You design a VERY SIMPLE, INTERACTIVE mini-lesson that comes before practice.
+Explanations in Traditional Chinese, examples in English. As simple as possible — a 9-year-old must get it.
+Output ONLY JSON:
+{"lead":"","steps":[
+ {"kind":"learn","say":"","examples":[{"en":"","hl":[""],"zh":""}]},
+ {"kind":"pick","q":"","options":["",""],"answer":0,"why":""},
+ {"kind":"order","zh":"","words":[""]},
+ {"kind":"fix","sentence":"","wrong":"","right":"","why":""}
+],"outro":""}
+RULES
+- lead: ONE Traditional Chinese sentence, ≤25 characters, what this grammar is for.
+- steps: 3 or 4 rounds. Each round = ONE "learn" step immediately followed by ONE interaction
+  ("pick", "order" or "fix") that practises exactly what that learn step just said. Use all three interaction kinds at least once.
+- learn.say: ONE idea only, Traditional Chinese, ≤30 characters, no grammar jargon.
+- learn.examples: 1-2 short English sentences (≤8 words). hl = the exact words in "en" to highlight
+  (the grammar part). zh = the Chinese meaning.
+- pick.q: one sentence with ________ for the missing part. options: 2 or 3 short choices. answer: 0-based index.
+  why: Traditional Chinese ≤30 characters.
+- order.zh: a Chinese sentence. order.words: the English translation split into 3-8 word tiles IN THE CORRECT ORDER
+  (keep the final punctuation on the last word).
+- fix.sentence: an English sentence with exactly ONE wrong word. wrong: that word exactly as written. right: the correct word.
+  why: Traditional Chinese ≤30 characters.
+- outro: ONE encouraging Traditional Chinese sentence, ≤25 characters, telling them the practice comes next.
+- Every English sentence must be 100% grammatically correct. Use only simple COUNTABLE nouns (book, cat, apple, toy, pencil…);
+  avoid uncountable nouns (water, milk, equipment, furniture, homework…) unless the notes are about them.
+${_AI_MINIFY}`;
+
+const GN_Q_SYS = {
+  mcq: `You write multiple-choice grammar questions.
+Output ONLY a JSON array: [{"q":"","options":["","",""],"answer":0,"explain":""}]
+RULES
+- q: one English sentence with ________ for the missing part.
+- options: 3 short choices (sometimes 2 if the notes only have two forms, e.g. is/are). Exactly one is correct.
+- answer: 0-based index of the correct option. Put the correct option in a DIFFERENT position each time.
+- explain: Traditional Chinese, ≤30 characters, why that answer.
+${_AI_MINIFY}`,
+  fill: `You write fill-in-the-blank grammar questions (the student TYPES the answer).
+Output ONLY a JSON array: [{"prompt":"","answer":"","accept":[],"explain":""}]
+RULES
+- prompt: one English sentence with exactly one ________ . If the student needs a hint (e.g. the base verb), put it
+  in parentheses at the end: "She ________ to school every day. (walk)".
+- answer: 1-3 words that go in the blank. accept: other forms that are ALSO correct (e.g. "is not" for "isn't"), or [].
+- If one of the teacher's questions has TWO blanks, split it into two questions: each keeps one blank and has the other one filled in.
+- explain: Traditional Chinese, ≤30 characters.
+${_AI_MINIFY}`,
+  translate: `You write Chinese-to-English translation questions that practise the grammar point.
+Output ONLY a JSON array: [{"zh":"","answer":"","accept":[],"hint":"","explain":""}]
+RULES
+- zh: a natural Traditional Chinese sentence a child would say.
+- answer: the best English translation, 4-10 words, ending with . or ? . It MUST use the grammar point.
+- accept: usually []. Only add a variant if it has EXACTLY the same meaning AND still uses the grammar point
+  (e.g. the contraction "There's" for "There is"). Never add a sentence that avoids the grammar point
+  ("I have a dog" does NOT practise "There is"). The system already has an AI checker for other wordings.
+- Every English sentence must be 100% grammatically correct; avoid uncountable nouns unless the notes are about them.
+- hint: the grammar pattern to use, e.g. "There are + 複數名詞". Short.
+- explain: Traditional Chinese, ≤30 characters.
+${_AI_MINIFY}`,
+};
+
+const _gnCJK = /[一-鿿]/;
+const _gnBlank = (t) => String(t || '').replace(/_{2,}|＿{2,}|\(\s*\)|（\s*）/g, '________');
+function gnValidStep(st) {
+  if (!st || typeof st !== 'object') return null;
+  if (st.kind === 'learn') {
+    const say = String(st.say || '').trim();
+    const ex = (Array.isArray(st.examples) ? st.examples : []).map(e => {
+      const en = String((e && e.en) || '').trim();
+      const hl = (Array.isArray(e && e.hl) ? e.hl : []).map(h => String(h).trim()).filter(h => h && en.toLowerCase().indexOf(h.toLowerCase()) >= 0);
+      return en ? { en, hl, zh: String((e && e.zh) || '').trim() } : null;
+    }).filter(Boolean).slice(0, 2);
+    return say && say.length <= 60 && ex.length ? { kind: 'learn', say, examples: ex } : null;
+  }
+  if (st.kind === 'pick') {
+    const opts = (Array.isArray(st.options) ? st.options : []).map(o => String(o).trim()).filter(Boolean);
+    let a = st.answer;
+    if (typeof a === 'string') a = opts.findIndex(o => o.toLowerCase() === a.trim().toLowerCase());
+    const q = _gnBlank(st.q);
+    const uniq = new Set(opts.map(o => o.toLowerCase())).size === opts.length;
+    return q.indexOf('________') >= 0 && opts.length >= 2 && opts.length <= 3 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
+      ? { kind: 'pick', q, options: opts, answer: a, why: String(st.why || '').trim() } : null;
+  }
+  if (st.kind === 'order') {
+    const words = (Array.isArray(st.words) ? st.words : []).map(w => String(w).trim()).filter(Boolean);
+    const zh = String(st.zh || '').trim();
+    return zh && _gnCJK.test(zh) && words.length >= 3 && words.length <= 9 ? { kind: 'order', zh, words } : null;
+  }
+  if (st.kind === 'fix') {
+    const sentence = String(st.sentence || '').trim(), wrong = String(st.wrong || '').trim(), right = String(st.right || '').trim();
+    const toks = sentence.split(/\s+/).map(w => w.replace(/[.,!?]+$/, ''));
+    const hits = toks.filter(w => w.toLowerCase() === wrong.toLowerCase()).length;
+    return sentence && wrong && right && right.toLowerCase() !== wrong.toLowerCase() && hits === 1
+      ? { kind: 'fix', sentence, wrong, right, why: String(st.why || '').trim() } : null;
+  }
+  return null;
+}
+function gnValidLesson(o) {
+  const steps = (o && Array.isArray(o.steps) ? o.steps : []).map(gnValidStep).filter(Boolean);
+  const learn = steps.filter(s => s.kind === 'learn').length;
+  const act = steps.length - learn;
+  if (learn < 2 || act < 2) return null;
+  return { lead: String((o && o.lead) || '').trim(), steps, outro: String((o && o.outro) || '').trim() };
+}
+function gnValidMcq(x) {
+  const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o).trim()).filter(Boolean);
+  let a = x && x.answer;
+  if (typeof a === 'string') a = opts.findIndex(o => o.toLowerCase() === a.trim().toLowerCase());
+  const q = _gnBlank(x && x.q);
+  const uniq = new Set(opts.map(o => o.toLowerCase())).size === opts.length;
+  return q && opts.length >= 2 && opts.length <= 4 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
+    ? { q, options: opts, answer: a, explain: String((x && x.explain) || '').trim() } : null;
+}
+function gnValidFill(x) {
+  const answer = String((x && x.answer) || '').trim();
+  // 括號提示如果就是答案本身（「Is there ____ cat? (a)」答案 a）→ 等於送分，拿掉提示
+  let prompt = _gnBlank(x && (x.prompt || x.q));
+  const hint = prompt.match(/\s*[(（]([^()（）]+)[)）]\s*$/);
+  if (hint && answer && hint[1].trim().toLowerCase() === answer.toLowerCase()) prompt = prompt.slice(0, hint.index).trim();
+  const blanks = (prompt.match(/________/g) || []).length;
+  return blanks === 1 && answer && answer.split(/\s+/).length <= 4
+    ? { prompt, answer, accept: (Array.isArray(x.accept) ? x.accept : []).map(a => String(a).trim()).filter(Boolean).slice(0, 4),
+        explain: String(x.explain || '').trim() } : null;
+}
+function gnValidTranslate(x) {
+  const zh = String((x && (x.zh || x.q)) || '').trim();
+  const answer = String((x && x.answer) || '').trim();
+  const n = answer.split(/\s+/).length;
+  return zh && _gnCJK.test(zh) && answer && !_gnCJK.test(answer) && n >= 2 && n <= 16
+    ? { zh, answer, accept: (Array.isArray(x.accept) ? x.accept : []).map(a => String(a).trim()).filter(a => a && !_gnCJK.test(a)).slice(0, 4),
+        hint: String(x.hint || '').trim().slice(0, 40), explain: String(x.explain || '').trim() } : null;
+}
+
+async function _gnCall(system, user, maxTokens) {
+  return _aiAsk({ model: GN_MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] },
+    (data) => { const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || '')); return o == null ? null : o; }, 60000);
+}
+
+/* 出一種題型到 n 題：老師原本的題目先收（請 AI 補答案、照原文），不夠再請 AI 另外出；
+   驗不過的丟掉、不夠就再出一輪（最多兩輪）。 */
+async function _gnMakeKind(kind, { n, base, teacherQs }) {
+  if (!n || n <= 0) return [];
+  const valid = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate }[kind];
+  const tq = (teacherQs || []).filter(q => q.kind === kind).slice(0, n);
+  const out = [], seen = new Set();
+  const key = (x) => String(x.q || x.prompt || x.zh || '').toLowerCase().replace(/\s+/g, ' ');
+  const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
+    const v = valid(x); if (!v) return;
+    const k = key(v); if (!k || seen.has(k)) return;
+    seen.add(k); out.push(Object.assign(v, { from }));
+  });
+  for (let round = 0; round < 2 && out.length < n; round++) {
+    const need = n - out.length;
+    const teacherPart = (round === 0 && tq.length)
+      ? `FIRST include these ${tq.length} questions from the teacher's worksheet, keeping their wording (fill in the correct answer yourself):\n` +
+        tq.map((q, i) => `${i + 1}. ${q.q}${q.options.length ? '  [' + q.options.join(' / ') + ']' : ''}${q.answer ? '  (answer: ' + q.answer + ')' : ''}`).join('\n') +
+        `\nTHEN write ${Math.max(0, need - tq.length)} NEW questions of the same kind.`
+      : `Write ${need + 2} questions.`;
+    try {
+      const arr = await _gnCall(GN_Q_SYS[kind], `${base}\n\n${teacherPart}`, 2600);
+      take(arr, round === 0 && tq.length ? 'mixed' : 'ai');
+    } catch (e) { if (round === 1) throw e; }
+  }
+  return out.slice(0, n);
+}
+
+async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, onProgress } = {}) {
+  if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes);
+  let done = 0; const total = 1 + [nMcq, nFill, nTr].filter(Boolean).length;
+  const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+  const lessonP = (async () => {
+    for (let i = 0; i < 2; i++) {
+      try { const l = gnValidLesson(await _gnCall(GN_LESSON_SYS, base, 2400)); if (l) return l; } catch (e) { if (i === 1) throw e; }
+    }
+    throw new Error('互動教學產生失敗，請再試一次。');
+  })().finally(() => tick('互動教學'));
+  const kindP = (kind, n, label) => _gnMakeKind(kind, { n, base, teacherQs }).finally(() => tick(label));
+  const [lesson, mcq, fill, tr] = await Promise.all([
+    lessonP, kindP('mcq', nMcq, '選擇題'), kindP('fill', nFill, '填空題'), kindP('translate', nTr, '中翻英'),
+  ]);
+  return { lesson, mcq, fill, tr };
+}
+
 function grCountBlanks(passage) {
   return (String(passage || '').match(/\[[^\]]+\]/g) || []).length;
 }
@@ -3836,6 +4144,7 @@ function lineManual(target, note, dry, pass) {
 function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
 Object.assign(window, {
+  aiReadGrammarSheet, aiMakeGrammarPack, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep,
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,

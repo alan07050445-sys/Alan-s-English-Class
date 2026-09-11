@@ -200,6 +200,7 @@ function App() {
   const [qsRoster, setQsRoster] = useAppState([]);            // v380: 指派用的學生名單
   const [grGenOpen, setGrGenOpen] = useAppState(false);       // v382: 五大時態出題
   const [rcGenOpen, setRcGenOpen] = useAppState(false);       // v386: 貼文字稿→出閱讀理解
+  const [gnGenOpen, setGnGenOpen] = useAppState(false);       // v428: 上傳老師作業→互動教學＋選擇／填空／中翻英
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -1036,9 +1037,10 @@ function App() {
   /* v386: 閱讀理解出題完成 → 建立 1~4 個單元（選擇題 / 閱讀技巧題 / 閱讀技巧活動 / 閱讀簡答），
      全部掛同一個 group（＝文章標題），順序交給 QM_TYPE_ORDER 排。
      指派的兩條路跟 handleQuickSet 一樣：學期年級用 week.homework，暑假用 summer_meta。 */
-  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, skillQs, assign }) => {
+  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, skillQs, assign, prebuilt }) => {
     // v415: skillQs ＝ 閱讀技巧題（多一個 quiz 單元）
-    const items = window.rcBuildItems({ title, passage, mcq, sa, blocks, skillQs });
+    // v428: ✏️ 出文法也走這裡（prebuilt＝已經建好的單元）——存檔、作業期限、指派的邏輯一模一樣
+    const items = prebuilt || window.rcBuildItems({ title, passage, mcq, sa, blocks, skillQs });
     if (!items.length) { showToast('沒有可以建立的題目'); return; }
     // 蓋上作者：後台「只看我的」會依 owner 篩，沒蓋的話老師看不到自己剛生的單元
     const me = (user && user.email || '').toLowerCase();
@@ -1074,9 +1076,17 @@ function App() {
     }
 
     setRcGenOpen(false);
+    setGnGenOpen(false);
     setOpenCat(cat);
-    const names = items.map(it => ({ quiz: '選擇題', 'reading-skill': '閱讀技巧', 'short-answer': '閱讀簡答' })[it.type] || it.type).join('、');
+    const names = items.map(it => it.type === 'type-answer' ? (it.variant === 'translate' ? '中翻英' : '填空')
+      : ({ quiz: '選擇題', 'reading-skill': '閱讀技巧', 'short-answer': '閱讀簡答', lesson: '互動教學' })[it.type] || it.type).join('、');
     showToast(`已建立 ${items.length} 個單元 · ${names}${note}`);
+  };
+
+  // v428: ✏️ 出文法
+  const handleGrammarNotesCreate = (payload) => {
+    const items = window.gnBuildItems(payload);
+    handleReadingCreate({ cat: payload.cat, assign: payload.assign, prebuilt: items });
   };
 
   const handleGrammarCreate = (payload) => {
@@ -1606,6 +1616,7 @@ function App() {
             onQuickSet={() => setQuickSetOpen(true)}
             onGrammarGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? () => setGrGenOpen(true) : null}
             onReadingGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setRcGenOpen(true)}
+            onGrammarNotes={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setGnGenOpen(true)}
             onDeleteWeek={handleDeleteWeek}
             onArchiveWeek={handleArchiveWeek}
             onExport={() => setExportOpen(true)}
@@ -1859,6 +1870,16 @@ function App() {
             onClose={() => setGrGenOpen(false)}
             onCreate={handleGrammarCreate}
           />
+          {window.GrammarNotesModal && <window.GrammarNotesModal
+            open={gnGenOpen}
+            categories={activeCategories}
+            defaultGrade={/^g[1-6]$/.test(String(grade)) ? grade : 'g4'}
+            perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
+            roster={qsRoster}
+            defaultCat={openCat || (activeCategories.find(c => c.id === 'grammar') ? 'grammar' : (activeCategories[0] && activeCategories[0].id)) || 'grammar'}
+            onClose={() => setGnGenOpen(false)}
+            onCreate={handleGrammarNotesCreate}
+          />}
           <window.ReadingGenModal
             open={rcGenOpen}
             categories={activeCategories}

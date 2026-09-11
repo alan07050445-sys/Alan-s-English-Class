@@ -3472,3 +3472,93 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
    ⚠ 只在「單字卡播放中」收窄，其他題型的呼吸空間不動。 */
 .fc-player.fc-p-card { padding-bottom: 6px; }
 .qm-quiz-area:has(.fc-p-card) { padding-bottom: 10px; }
+
+/* ═════════════════════════════════════════════════════════════
+   v428：✏️ 出文法（老師端）＋互動教學／中翻英／練習鎖（學生端）
+   ⚠ 前綴刻意用 gn-（老師端）、gnl-（學生端），跟既有的 gr-／gq-／ls- 分開（v413 撞名的教訓）
+   ═════════════════════════════════════════════════════════════ */
+.banner-btn.gn { background: #7A4E1E; border-color: #7A4E1E; }
+.banner-btn.gn:hover { background: #653F16; border-color: #653F16; }
+
+/* 老師端：上傳區 */
+.gn-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 18px; text-align: center; cursor: pointer; background: var(--surface-2, rgba(0,0,0,.02)); }
+.gn-drop:hover { border-color: #7A4E1E; }
+.gn-drop.has { text-align: left; cursor: default; padding: 10px; }
+.gn-drop-empty { font-family: var(--sans); font-size: 14px; color: var(--ink-muted); line-height: 1.8; }
+.gn-drop-empty b { color: var(--ink); }
+.gn-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+.gn-thumb { position: relative; width: 96px; height: 120px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
+.gn-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.gn-thumb button { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; line-height: 22px; cursor: pointer; }
+.gn-thumb-add { width: 96px; height: 120px; border-radius: 8px; border: 2px dashed var(--border); background: transparent; font-size: 28px; color: var(--ink-muted); cursor: pointer; }
+
+/* 老師端：校稿 */
+.gn-step { border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; background: var(--surface, #fff); }
+.gn-step.k-learn { border-left-color: #2E6FB7; }
+.gn-step.k-pick  { border-left-color: #1B7A3E; }
+.gn-step.k-order { border-left-color: #E0A100; }
+.gn-step.k-fix   { border-left-color: #C62828; }
+.gn-step-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--sans); font-size: 13px; }
+.gn-step-head button, .gn-del { border: 1px solid var(--border); background: transparent; border-radius: 6px; font-size: 12px; padding: 2px 8px; cursor: pointer; color: var(--ink-muted); }
+.gn-step input, .gn-step select { width: 100%; }
+.gn-row3 { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 6px; }
+@media (max-width: 640px) { .gn-row3 { grid-template-columns: 1fr; } }
+.gn-notes { margin-top: 12px; }
+.gn-notes summary { cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700; }
+.gn-notes pre { white-space: pre-wrap; font-family: var(--sans); font-size: 12.5px; line-height: 1.7; background: var(--surface-2, rgba(0,0,0,.04)); border-radius: 8px; padding: 10px 12px; }
+
+/* 學生端：互動教學 */
+.gnl-card { text-align: left; }
+.gnl-lead { font-family: var(--sans); font-size: 14px; color: var(--ink-muted); margin-bottom: 10px; }
+.gnl-say { font-family: var(--sans); font-size: clamp(20px, 3.4vw, 26px); font-weight: 800; line-height: 1.45; color: var(--ink); margin: 4px 0 16px; }
+.gnl-exs { display: flex; flex-direction: column; gap: 10px; }
+.gnl-ex { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; border: 1px solid var(--border); border-radius: 14px; padding: 12px 44px 12px 14px; background: var(--surface-2, #FAF7F0); cursor: pointer; }
+.gnl-ex-en { font-family: var(--serif, Georgia, serif); font-size: clamp(18px, 3vw, 22px); color: var(--ink); }
+.gnl-ex-zh { font-family: var(--sans); font-size: 13px; color: var(--ink-muted); }
+.gnl-ex-say { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 18px; }
+.gnl-hl { background: #FFE58F; color: inherit; border-radius: 4px; padding: 0 3px; font-weight: 700; }
+.gnl-q, .gnl-zh { font-family: var(--serif, Georgia, serif); font-size: clamp(19px, 3.2vw, 24px); line-height: 1.6; color: var(--ink); margin: 6px 0 16px; }
+.gnl-zh { font-family: var(--sans); font-weight: 700; }
+.gnl-sub { font-family: var(--sans); font-size: 14px; color: var(--ink-muted); margin-bottom: 10px; }
+.gnl-blank { display: inline-block; min-width: 64px; text-align: center; border-bottom: 3px solid #E0A100; padding: 0 6px; margin: 0 4px; color: var(--ink-muted); }
+.gnl-blank.ok { border-color: #1B7A3E; color: #1B7A3E; font-weight: 800; }
+.gnl-opts { display: flex; flex-wrap: wrap; gap: 10px; }
+.gnl-opt { min-width: 110px; min-height: 52px; padding: 10px 18px; border-radius: 14px; border: 2px solid var(--border); background: var(--surface, #fff); font-size: 19px; font-weight: 700; cursor: pointer; }
+.gnl-opt.ok { border-color: #1B7A3E; background: #E7F4EA; color: #1B7A3E; }
+.gnl-opt.no { border-color: #C62828; background: #FBEAEA; color: #C62828; opacity: .7; animation: gnlShake .35s; }
+.gnl-why { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: #FFF6E0; font-family: var(--sans); font-size: 14.5px; line-height: 1.6; }
+.gnl-why.ok { background: #E7F4EA; color: #1B5E2E; }
+.gnl-ans { margin-top: 6px; }
+.gnl-line { min-height: 60px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border-radius: 14px; border: 2px dashed var(--border); margin-bottom: 12px; }
+.gnl-line.ok { border-style: solid; border-color: #1B7A3E; background: #E7F4EA; }
+.gnl-line.no { border-color: #C62828; animation: gnlShake .35s; }
+.gnl-line-ph { font-family: var(--sans); font-size: 13.5px; color: var(--ink-muted); }
+.gnl-pool { display: flex; flex-wrap: wrap; gap: 8px; }
+.gnl-tile { min-height: 46px; padding: 8px 14px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface, #fff); font-size: 18px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 var(--border); }
+.gnl-tile.in { border-color: #2E6FB7; background: #EAF2FB; }
+.gnl-tile.ghost { opacity: .25; box-shadow: none; cursor: default; }
+.gnl-check, .gnl-retry { margin-top: 12px; }
+.gnl-fix { display: flex; flex-wrap: wrap; gap: 8px; font-size: 20px; }
+.gnl-word { padding: 8px 12px; border-radius: 10px; border: 2px solid var(--border); background: var(--surface, #fff); font-size: 20px; cursor: pointer; }
+.gnl-word.no { border-color: #C62828; color: #C62828; opacity: .6; animation: gnlShake .35s; }
+.gnl-word.fixed { border-color: #1B7A3E; background: #E7F4EA; color: #1B5E2E; }
+.gnl-word.fixed s { color: #C62828; opacity: .7; }
+.gnl-say-btn { border: 0; background: transparent; font-size: 16px; cursor: pointer; margin-left: 6px; }
+.gnl-unlocked { font-family: var(--sans); font-size: 14px; font-weight: 700; color: #1B7A3E; margin: 6px 0 14px; }
+@keyframes gnlShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+/* 學生端：練習鎖 */
+.gnl-lock-badge { display: inline-block; margin-left: 8px; font-size: 11.5px; font-weight: 700; color: #8A6D1E; background: #FFF3CF; border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
+.qm-unit-row.gnl-locked { opacity: .72; }
+.gnl-gate-msg { font-family: var(--sans); font-size: 15px; line-height: 1.7; color: var(--ink); margin: 8px 0 16px; }
+
+/* 學生端：中翻英 */
+.ta-prompt.tr { font-family: var(--sans); font-size: clamp(20px, 3.4vw, 26px); font-weight: 700; }
+.ta-input.tr { font-size: 18px; }
+.ta-hint-btn { margin-top: 10px; border: 1px dashed var(--border); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; color: var(--ink-muted); }
+.ta-hint { margin-top: 10px; font-family: var(--sans); font-size: 14px; color: #8A6D1E; background: #FFF6E0; border-radius: 10px; padding: 6px 12px; display: inline-block; }
+.ta-ai-tip { margin-top: 8px; font-family: var(--sans); font-size: 14px; line-height: 1.6; background: #FBEAEA; color: #8E1F1F; border-radius: 10px; padding: 8px 12px; }
+.ta-ai-tip.ok { background: #E7F4EA; color: #1B5E2E; }
+/* v428：中翻英打的是整句——等寬字體（單字練習用的）讀起來很吃力，改一般字體 */
+.ta-input.tr { font-family: var(--sans, system-ui, sans-serif); letter-spacing: 0; }
+.ta-input.tr + .ta-correct-ans, .ta-input.tr ~ .ta-correct-ans { font-family: var(--sans, system-ui, sans-serif); }

@@ -4690,6 +4690,384 @@ function rcMcqOk(q) {
   return q.answer >= 0 && q.answer < 4;
 }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   v428: ✏️ 出文法 —— 上傳老師的作業照片（或貼文字）→ 簡單互動教學 → 選擇＋填空＋中翻英
+   ─────────────────────────────────────────────────────────────────────────
+   Alan：「我會上傳老師的作業圖片檔 或是文字…希望一開始有簡單教學 越簡單越好不要複雜
+          一定要是互動式的學習…學習完成才開始正式練習題目測驗，可以包含選擇題，填空題，以及中翻英」
+   建出來的單元：📘 互動教學（lesson＋steps）→ 📝 選擇題（quiz）→ ✏️ 填空（type-answer/fill）
+   → 🔤 中翻英（type-answer/translate）。後三個都帶 requires＝教學的 id：沒學完鎖著。
+   ═════════════════════════════════════════════════════════════════════════ */
+const GN_KIND_ZH = { learn: '📖 學', pick: '👆 選一選', order: '🧩 排句子', fix: '🔍 找錯字' };
+async function gnFileToImage(file) {
+  const cv = await grDecodeScaled(file, 1600);            // 1600px：字看得清楚、上傳也不會太大
+  const url = cv.toDataURL('image/jpeg', 0.82);
+  return { media_type: 'image/jpeg', data: url.split(',')[1], preview: url };
+}
+
+function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, onClose, onCreate }) {
+  const [title, setTitle]   = useS('');
+  const [text, setText]     = useS('');
+  const [imgs, setImgs]     = useS([]);          // [{ media_type, data, preview, name }]
+  const [cat, setCat]       = useS(defaultCat || 'grammar');
+  const [grade, setGrade]   = useS(defaultGrade || 'g4');
+  const [nMcq, setNMcq]     = useS(8);
+  const [nFill, setNFill]   = useS(8);
+  const [nTr, setNTr]       = useS(5);
+  const [busy, setBusy]     = useS(null);        // { done, total, label }
+  const [err, setErr]       = useS('');
+  const [res, setRes]       = useS(null);        // { sheet, lesson, mcq, fill, tr }
+  const [tab, setTab]       = useS('lesson');
+  const [assign, setAssign] = useS(true);
+  const [due, setDue]       = useS('');
+  const [who, setWho]       = useS([]);
+  const fileRef = React.useRef(null);
+
+  useE(() => {
+    if (!open) return;
+    setTitle(''); setText(''); setImgs([]); setCat(defaultCat || 'grammar'); setGrade(defaultGrade || 'g4');
+    setNMcq(8); setNFill(8); setNTr(5); setBusy(null); setErr(''); setRes(null); setTab('lesson');
+    setAssign(true); setWho([]);
+    const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+    setDue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  }, [open]);
+  if (!open) return null;
+
+  const addFiles = async (files) => {
+    setErr('');
+    const list = Array.from(files || []).filter(f => /^image\//.test(f.type)).slice(0, 6 - imgs.length);
+    if (!list.length) { if ((files || []).length) setErr('只收照片（JPG／PNG）。PDF 請先截圖。'); return; }
+    try {
+      const out = [];
+      for (const f of list) out.push(Object.assign(await gnFileToImage(f), { name: f.name }));
+      setImgs(v => v.concat(out).slice(0, 6));
+    } catch (e) { setErr('有照片讀不出來，請換一張試試。'); }
+  };
+  const ready = (imgs.length > 0 || text.trim().length >= 20) && (nMcq + nFill + nTr) > 0;
+
+  const run = async () => {
+    setErr('');
+    setBusy({ done: 0, total: 5, label: imgs.length ? '讀作業照片中（約 10 秒）' : '讀文字中' });
+    try {
+      const sheet = await window.aiReadGrammarSheet({ images: imgs.map(i => ({ media_type: i.media_type, data: i.data })), text });
+      if (!sheet.notes && !sheet.questions.length) throw new Error('照片裡讀不到教學重點或題目，請換清楚一點的照片，或直接貼文字。');
+      setBusy({ done: 1, total: 5, label: `讀到了：${sheet.topic || '文法'}，開始出題` });
+      const pack = await window.aiMakeGrammarPack({
+        topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
+        grade, nMcq, nFill, nTr,
+        onProgress: (d, t, label) => setBusy({ done: 1 + d, total: 1 + t, label }),
+      });
+      if (!title.trim()) setTitle(sheet.topicZh ? `${sheet.topic}（${sheet.topicZh}）` : (sheet.topic || '文法練習'));
+      setRes({ sheet, ...pack }); setTab('lesson');
+    } catch (e) { setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
+    setBusy(null);
+  };
+
+  // ── 校稿用的更新函式 ──
+  const updStep = (i, patch) => setRes(r => ({ ...r, lesson: { ...r.lesson, steps: r.lesson.steps.map((s, j) => j === i ? { ...s, ...patch } : s) } }));
+  const delStep = (i) => setRes(r => ({ ...r, lesson: { ...r.lesson, steps: r.lesson.steps.filter((_, j) => j !== i) } }));
+  const upd = (key, i, patch) => setRes(r => ({ ...r, [key]: r[key].map((x, j) => j === i ? { ...x, ...patch } : x) }));
+  const del = (key, i) => setRes(r => ({ ...r, [key]: r[key].filter((_, j) => j !== i) }));
+  const csv = (a) => (a || []).join(' / ');
+  const uncsv = (t) => String(t || '').split('/').map(x => x.trim()).filter(Boolean);
+
+  const assignBox = () => (
+    <div className={'qs-assign' + (assign ? ' on' : '')}>
+      <label className="qs-assign-head">
+        <input type="checkbox" checked={assign} onChange={e => setAssign(e.target.checked)}/>
+        <span>建立後<b>整組直接指派</b>（教學＋三份練習一次派出去）</span>
+      </label>
+      {assign && (perStudent ? (
+        <div className="qs-who">
+          <div className="qs-who-bar">
+            <span>指派給（{who.length}/{(roster || []).length}）</span>
+            <button type="button" onClick={() => setWho((roster || []).map(r => r.email))}>全選</button>
+            <button type="button" onClick={() => setWho([])}>全不選</button>
+          </div>
+          <div className="qs-who-list">
+            {(roster || []).map(r => (
+              <label key={r.email} className={'qs-who-item' + (who.indexOf(r.email) >= 0 ? ' on' : '')}>
+                <input type="checkbox" checked={who.indexOf(r.email) >= 0}
+                  onChange={e => setWho(w => e.target.checked ? w.concat(r.email) : w.filter(x => x !== r.email))}/>
+                {r.name || r.email}
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="qs-due">
+          <label>截止日</label>
+          <input type="date" value={due} onChange={e => setDue(e.target.value)}/>
+          <span className="qs-due-n">整組會出現在學生的「今天的任務」</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ───────────────────────── 設定畫面 ─────────────────────────
+  if (!res) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal wide" onClick={e => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>✏️ 出文法 <em>上傳老師的作業，一次做好「互動教學＋選擇＋填空＋中翻英」</em></h3>
+            <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
+          </div>
+          <div className="modal-body">
+            <div className="field">
+              <label className="field-label">老師的作業（教學 notes＋題目）</label>
+              <div className={'gn-drop' + (imgs.length ? ' has' : '')}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+                onClick={() => fileRef.current && fileRef.current.click()}>
+                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { addFiles(e.target.files); e.target.value = ''; }}/>
+                {imgs.length === 0 ? (
+                  <div className="gn-drop-empty"><b>📷 點這裡選照片</b>，或把照片拖進來（最多 6 張）</div>
+                ) : (
+                  <div className="gn-thumbs" onClick={e => e.stopPropagation()}>
+                    {imgs.map((im, i) => (
+                      <div key={i} className="gn-thumb">
+                        <img src={im.preview} alt={im.name || ''}/>
+                        <button type="button" aria-label="移除" onClick={() => setImgs(v => v.filter((_, j) => j !== i))}>×</button>
+                      </div>
+                    ))}
+                    {imgs.length < 6 && <button type="button" className="gn-thumb-add" onClick={() => fileRef.current && fileRef.current.click()}>＋</button>}
+                  </div>
+                )}
+              </div>
+              <textarea className="gr-passage" rows={4} placeholder="也可以直接貼文字（教學重點、題目都可以；跟照片一起用也行）"
+                value={text} onChange={e => setText(e.target.value)} style={{ marginTop: 8 }}/>
+            </div>
+            <div className="gr-num-row">
+              <div className="field">
+                <label className="field-label">單元名稱（留空＝用 AI 讀到的文法名稱）</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="例：There is / There are"/>
+              </div>
+              <div className="field">
+                <label className="field-label">年級</label>
+                <select value={grade} onChange={e => setGrade(e.target.value)}>
+                  {['g1','g2','g3','g4','g5','g6'].map(g => <option key={g} value={g}>{g.toUpperCase()}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field-label">放在哪個分類</label>
+                <select value={cat} onChange={e => setCat(e.target.value)}>
+                  {(categories || []).map(c => <option key={c.id} value={c.id}>{c.titleZh || c.title || c.id}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="gr-num-row">
+              {[['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['🔤 中翻英', nTr, setNTr, 10]].map(([lb, v, set, max]) => (
+                <div className="field" key={lb}>
+                  <label className="field-label">{lb}</label>
+                  <select value={v} onChange={e => set(+e.target.value)}>
+                    {Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n ? n + ' 題' : '不要'}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="field-help">
+              會建立：<b>📘 互動教學</b>（一步一個小重點，每步都要學生動手：選一選、排句子、找錯字）→ 學完才解鎖
+              <b> 📝 選擇 → ✏️ 填空 → 🔤 中翻英</b>。老師作業上原本的題目會優先收進去，不夠的 AI 再依教學重點補。出完先校稿，確認了才寫進題庫。
+            </div>
+            {assignBox()}
+            {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
+            {busy && (
+              <div className="gr-busy">
+                <div className="gr-busy-bar"><i style={{ width: (busy.done / busy.total * 100) + '%' }}/></div>
+                <span>{busy.label}… {busy.done}/{busy.total}</span>
+              </div>
+            )}
+          </div>
+          <div className="modal-foot">
+            <button className="btn ghost" onClick={onClose}>取消</button>
+            <button className="btn primary" disabled={!ready || !!busy} onClick={run}>
+              {busy ? '處理中…' : '✨ 讀作業並出題 →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ───────────────────────── 校稿畫面 ─────────────────────────
+  const steps = (res.lesson && res.lesson.steps) || [];
+  const TABS = [['lesson', `📘 互動教學`, steps.length], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length], ['tr', '🔤 中翻英', res.tr.length]];
+  const unitsN = 1 + ['mcq', 'fill', 'tr'].filter(k => res[k].length).length;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>校稿 · <em>{title || res.sheet.topic}</em></h3>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+        <div className="modal-body">
+          <div className="gr-tabs">
+            {TABS.map(([k, name, n]) => (
+              <button key={k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{name}<em>{n}</em></button>
+            ))}
+          </div>
+
+          {tab === 'lesson' && (
+            <div className="gr-proof">
+              <div className="field">
+                <label className="field-label">開頭一句話</label>
+                <input value={res.lesson.lead} onChange={e => setRes(r => ({ ...r, lesson: { ...r.lesson, lead: e.target.value } }))}/>
+              </div>
+              {steps.map((st, i) => (
+                <div key={i} className={'gn-step k-' + st.kind}>
+                  <div className="gn-step-head"><b>{i + 1}. {GN_KIND_ZH[st.kind]}</b><button type="button" onClick={() => delStep(i)}>刪除</button></div>
+                  {st.kind === 'learn' && <>
+                    <input value={st.say} onChange={e => updStep(i, { say: e.target.value })} placeholder="這一步要教的一件事（繁中）"/>
+                    {st.examples.map((ex, k) => (
+                      <div key={k} className="gn-row3">
+                        <input value={ex.en} onChange={e => updStep(i, { examples: st.examples.map((x, j) => j === k ? { ...x, en: e.target.value } : x) })} placeholder="English example"/>
+                        <input value={csv(ex.hl)} onChange={e => updStep(i, { examples: st.examples.map((x, j) => j === k ? { ...x, hl: uncsv(e.target.value) } : x) })} placeholder="要標重點的字（用 / 分開）"/>
+                        <input value={ex.zh} onChange={e => updStep(i, { examples: st.examples.map((x, j) => j === k ? { ...x, zh: e.target.value } : x) })} placeholder="中文意思"/>
+                      </div>
+                    ))}
+                  </>}
+                  {st.kind === 'pick' && <>
+                    <input value={st.q} onChange={e => updStep(i, { q: e.target.value })}/>
+                    <div className="gn-row3">
+                      <input value={csv(st.options)} onChange={e => updStep(i, { options: uncsv(e.target.value) })} placeholder="選項（用 / 分開）"/>
+                      <select value={st.answer} onChange={e => updStep(i, { answer: +e.target.value })}>
+                        {st.options.map((o, k) => <option key={k} value={k}>正解：{o}</option>)}
+                      </select>
+                      <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="為什麼（繁中）"/>
+                    </div>
+                  </>}
+                  {st.kind === 'order' && <>
+                    <input value={st.zh} onChange={e => updStep(i, { zh: e.target.value })} placeholder="中文句子"/>
+                    <input value={st.words.join(' ')} onChange={e => updStep(i, { words: e.target.value.split(/\s+/).filter(Boolean) })} placeholder="正確的英文句子（空格分開，學生看到會打散）"/>
+                  </>}
+                  {st.kind === 'fix' && <>
+                    <input value={st.sentence} onChange={e => updStep(i, { sentence: e.target.value })} placeholder="有一個錯字的句子"/>
+                    <div className="gn-row3">
+                      <input value={st.wrong} onChange={e => updStep(i, { wrong: e.target.value })} placeholder="錯的字"/>
+                      <input value={st.right} onChange={e => updStep(i, { right: e.target.value })} placeholder="改成"/>
+                      <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="為什麼（繁中）"/>
+                    </div>
+                  </>}
+                  {!window.gnValidStep(st) && <div className="gr-warn">⚠ 這一步格式不對，學生端會自動略過（選項 2–3 個、排句子 3–9 塊、錯字要剛好出現一次）</div>}
+                </div>
+              ))}
+              <div className="field">
+                <label className="field-label">最後一句話</label>
+                <input value={res.lesson.outro} onChange={e => setRes(r => ({ ...r, lesson: { ...r.lesson, outro: e.target.value } }))}/>
+              </div>
+              <details className="gn-notes">
+                <summary>📄 AI 從作業讀到的教學重點（出題的依據）</summary>
+                <pre>{res.sheet.notes || '（沒有讀到教學重點，題目是依貼上的文字出的）'}</pre>
+              </details>
+            </div>
+          )}
+
+          {tab === 'mcq' && (
+            <div className="gr-proof">
+              {res.mcq.map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <input value={x.q} onChange={e => upd('mcq', i, { q: e.target.value })}/>
+                    <div className="gq-row-2">
+                      <div><label>選項（/ 分開）</label><input value={csv(x.options)} onChange={e => upd('mcq', i, { options: uncsv(e.target.value) })}/></div>
+                      <div><label>正解</label>
+                        <select value={x.answer} onChange={e => upd('mcq', i, { answer: +e.target.value })}>
+                          {x.options.map((o, k) => <option key={k} value={k}>{o}</option>)}
+                        </select></div>
+                      <div><label>解說</label><input value={x.explain} onChange={e => upd('mcq', i, { explain: e.target.value })}/></div>
+                    </div>
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('mcq', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'fill' && (
+            <div className="gr-proof">
+              {res.fill.map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <input value={x.prompt} onChange={e => upd('fill', i, { prompt: e.target.value })}/>
+                    <div className="gq-row-2">
+                      <div><label>答案</label><input value={x.answer} onChange={e => upd('fill', i, { answer: e.target.value })}/></div>
+                      <div><label>也算對（/ 分開）</label><input value={csv(x.accept)} onChange={e => upd('fill', i, { accept: uncsv(e.target.value) })}/></div>
+                      <div><label>解說</label><input value={x.explain} onChange={e => upd('fill', i, { explain: e.target.value })}/></div>
+                    </div>
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('fill', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'tr' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生的答案會先由程式比對（大小寫、句尾標點、isn't／is not 都不影響）；比不上的，再由 AI 判斷「意思對、文法對」的其他說法——所以不用把每一種說法都列出來。
+              </div>
+              {res.tr.map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <input value={x.zh} onChange={e => upd('tr', i, { zh: e.target.value })}/>
+                    <div className="gq-row-2">
+                      <div><label>標準答案</label><input value={x.answer} onChange={e => upd('tr', i, { answer: e.target.value })}/></div>
+                      <div><label>其他正確說法（/ 分開）</label><input value={csv(x.accept)} onChange={e => upd('tr', i, { accept: uncsv(e.target.value) })}/></div>
+                      <div><label>提示</label><input value={x.hint} onChange={e => upd('tr', i, { hint: e.target.value })}/></div>
+                    </div>
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('tr', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={() => setRes(null)}>← 重新設定</button>
+          <button className="btn primary" onClick={() => onCreate({
+            title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
+            lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr,
+            assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
+          })}>建立 {unitsN} 個單元 →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
+function gnBuildItems({ title, topic, lesson, mcq, fill, tr }) {
+  const stamp = Date.now();
+  const rnd = () => Math.random().toString(36).slice(2, 5);
+  const g = title;
+  const out = [];
+  const steps = ((lesson && lesson.steps) || []).map(window.gnValidStep).filter(Boolean);
+  const lessonId = steps.length ? 'gn' + stamp + 'ls' + rnd() : null;
+  if (lessonId) {
+    out.push({ id: lessonId, type: 'lesson', group: g, order: 0,
+      title: `${g} · 先學一下`, zh: `互動教學 · ${steps.length} 步 · 學完才能開始練習`,
+      lead: lesson.lead || '', steps, outro: lesson.outro || '' });
+  }
+  const req = lessonId ? { requires: lessonId } : {};
+  const goodMcq = (mcq || []).filter(x => x && x.q && (x.options || []).length >= 2);
+  if (goodMcq.length) out.push({ id: 'gn' + stamp + 'qz' + rnd(), type: 'quiz', group: g, order: 1, ...req,
+    title: `${g} · 選擇題`, zh: `${goodMcq.length} 題 · 選出正確的答案`, shuffle: true,
+    questions: goodMcq.map((x, i) => ({ id: 'q' + stamp + i + rnd(), q: x.q, options: x.options, answer: x.answer, explain: x.explain || '' })) });
+  const goodFill = (fill || []).filter(x => x && x.prompt && x.answer);
+  if (goodFill.length) out.push({ id: 'gn' + stamp + 'fb' + rnd(), type: 'type-answer', variant: 'fill', group: g, order: 2, ...req,
+    title: `${g} · 填空題`, zh: `${goodFill.length} 題 · 把空格填上正確的字`, instruction: '把 ________ 填上正確的字',
+    pairs: goodFill.map((x, i) => ({ id: 'p' + stamp + 'f' + i + rnd(), prompt: x.prompt, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
+  const goodTr = (tr || []).filter(x => x && x.zh && x.answer);
+  if (goodTr.length) out.push({ id: 'gn' + stamp + 'tr' + rnd(), type: 'type-answer', variant: 'translate', group: g, order: 3, ...req,
+    topic: topic || g, title: `${g} · 中翻英`, zh: `${goodTr.length} 題 · 看中文，打出英文句子`,
+    pairs: goodTr.map((x, i) => ({ id: 'p' + stamp + 't' + i + rnd(), prompt: x.zh, answer: x.answer, accept: x.accept || [], hint: x.hint || '', explain: x.explain || '' })) });
+  return out;
+}
+
 function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onClose, onCreate }) {
   const SK = window.RC_SKILLS || {};
   const [title, setTitle]   = useS('');
@@ -5083,4 +5461,4 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs }) {
   return out;
 }
 
-Object.assign(window, { ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems });
+Object.assign(window, { GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems });
