@@ -591,13 +591,18 @@
 .fx-cfp-ch { line-height: 1; text-align: center; }
 
 /* ── 裝扮室 ─────────────────────────────────────────── */
+/* ⚠⚠ v433：裝扮室改用 createPortal 掛在 <body> 底下、自己有一層底（見 components-fx.jsx 的長註解）。
+   v431 只加 pointer-events:auto 不夠——.mx-layer（z-index:60）本身就是一個堆疊環境，
+   裡面寫 z-index:70 對外還是 60，頁面上比 60 高的浮層照樣蓋在上面、把點擊吃掉。 */
+.mx-dress-back {
+  position: fixed; inset: 0; z-index: 3000; pointer-events: auto;
+  background: rgba(21,19,14,.28);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
 .mx-dress {
-  /* ⚠ .mx-layer 是 pointer-events:none（不然吉祥物那一層會擋住整個頁面）——
-     浮在上面的東西一定要自己把 pointer-events 開回來，.mx-menu／.mx-pets 都是這樣。
-     v431 第一版漏了這一行 → 裝扮室按不到，點下去都按到後面的頁面（Alan 回報）。 */
-  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
-  pointer-events: auto; z-index: 70; width: min(420px, calc(100vw - 24px));
-  max-height: min(72vh, 560px); display: flex; flex-direction: column;
+  position: relative;
+  pointer-events: auto; width: min(420px, calc(100vw - 24px));
+  max-height: min(86vh, 620px); display: flex; flex-direction: column;
   padding: 12px 12px 10px; border-radius: 16px;
   background: #fffdf7; border: 1px solid var(--border, #DDD6C4);
   box-shadow: 0 22px 50px -18px rgba(21,19,14,.45);

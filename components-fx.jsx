@@ -566,6 +566,10 @@ function MascotLayer() {
   /* v431：剛買下去的那幾件先記在這裡——Firestore 的快照要一下下才回來，
      這段期間畫面就已經是「買到了」，不會閃一下又變回價錢。 */
   const pendRef = useFxR([]);
+  /* 剛換上去的那一套也一樣：Firestore 的快照回來之前，先維持「按下去的樣子」，
+     不然 1.5 秒的 sync 會把它蓋回舊的（畫面看起來像「按了又跳回去」）。
+     6 秒還沒對上就放手（存失敗、或訪客沒有帳號可以存）。 */
+  const wearPendRef = useFxR(null);
   useFxE(() => {
     const sync = () => {
       /* v392（G）：每次都回傳新陣列，setState 的參考永遠不同 → 會保證每次都重繪。
@@ -582,6 +586,12 @@ function MascotLayer() {
         w.hat = (legacy.indexOf(want) >= 0 ? want : legacy[0]) || '';
         if (w.hat === 'party') w.hat = 'hat_party';
         if (w.hat === 'crown') w.hat = 'hat_crown';
+      }
+      const pend = wearPendRef.current;
+      if (pend) {
+        const same = ['hat', 'item', 'fx', 'voice'].every(k => (w[k] || '') === (pend.wear[k] || ''));
+        if (same || Date.now() - pend.t > 6000) wearPendRef.current = null;
+        else Object.assign(w, pend.wear);
       }
       setWear(prev => ((prev.hat === w.hat && prev.item === w.item && prev.fx === w.fx && prev.voice === w.voice) ? prev : w));
       setStars(prev => (prev === (window.__mxStars || 0) ? prev : (window.__mxStars || 0)));
@@ -610,8 +620,11 @@ function MascotLayer() {
       const off = wear[it.kind] === it.id;
       // 特效與語音一定要留一個（預設那個是免費的），不然答對就沒有反應了
       const next = off ? (it.kind === 'fx' ? 'fx_confetti' : it.kind === 'voice' ? 'vo_default' : '') : it.id;
-      setWear(prev => Object.assign({}, prev, { [it.kind]: next }));
+      const nextWear = Object.assign({}, wear, { [it.kind]: next });
+      wearPendRef.current = { wear: nextWear, t: Date.now() };
+      setWear(nextWear);
       const r = await (window.__mxWear ? window.__mxWear(it.kind, next) : Promise.resolve({ ok: false, reason: 'no-user' }));
+      if (!r.ok) { wearPendRef.current = null; }               // 沒存成功就讓它變回去（下一次 sync）
       if (!r.ok && r.reason === 'no-user') { say('登入以後才存得起來喔', 2600); return; }
       say(off ? '先收起來' : `${it.zh}，好看嗎？`, 2200);
       return;
@@ -631,7 +644,9 @@ function MascotLayer() {
     setStars(prev => Math.max(0, prev - (it.cost || 0)));
     if (window.playSound) window.playSound('pop');
     if (it.kind === 'dance') { say(`學會${it.zh}了！`, 2600); setDress(false); playDance(it.id); return; }
-    setWear(prev => Object.assign({}, prev, { [it.kind]: it.id }));
+    const boughtWear = Object.assign({}, wear, { [it.kind]: it.id });
+    wearPendRef.current = { wear: boughtWear, t: Date.now() };
+    setWear(boughtWear);
     if (window.__mxWear) window.__mxWear(it.kind, it.id);
     say(`買到${it.zh}了！`, 2800);
   };
@@ -995,11 +1010,17 @@ function MascotLayer() {
             <button className="mx-menu-x" onClick={() => setMenu(false)}>取消</button>
           </div>
         )}
-        {dress && (
-          <div className="mx-dress"
-            /* ⚠ style 也寫一次 pointerEvents：.mx-layer 是 pointer-events:none，
-               萬一 CSS 是舊的（Service Worker 快取），按不到會是致命的——寫在 JSX 上就不會漏 */
-            style={{ pointerEvents: 'auto' }} onPointerDown={e => e.stopPropagation()}>
+        {/* ⚠⚠ v433（Alan：「裝扮室還是按不到」）：裝扮室不能住在 .mx-layer 裡面。
+            .mx-layer 是 z-index:60 的定位元素 ＝ 它自己就是一個**堆疊環境**，
+            裡面的 z-index:70 只在這一層內有效——整層對外永遠是 60，
+            所以頁面上任何 z-index 比 60 大的東西（sticky header、各種浮層）都會蓋在它上面，
+            把點擊整個吃掉（實測正式站：點裝扮室的格子，命中的是背景那一層的 .lc-fan）。
+            改成跟「我的星星」同一種做法：createPortal 掛到 document.body、
+            自己有一層 z-index:3000 的底，點外面就關起來。 */}
+        {dress && ReactDOM.createPortal(
+          <div className="mx-dress-back"
+            onPointerDown={e => { if (e.target === e.currentTarget) setDress(false); }}>
+            <div className="mx-dress" style={{ pointerEvents: 'auto' }} onPointerDown={e => e.stopPropagation()}>
             <div className="mx-dress-head">
               <b>👕 裝扮室</b>
               <span className="mx-dress-bal">{stars.toLocaleString()} ⭐</span>
@@ -1040,9 +1061,9 @@ function MascotLayer() {
                 : dressTab === 'dance' ? '買了之後，長按牠就可以叫牠表演 💃'
                 : '星星是做練習賺來的；買了以後隨時可以換 · 再按一次可以脫下來'}
             </div>
-            <button className="mx-menu-x" onClick={() => setDress(false)}>關起來</button>
-          </div>
-        )}
+              <button className="mx-menu-x" onClick={() => setDress(false)}>關起來</button>
+            </div>
+          </div>, document.body)}
         {petPick && (
           <div className="mx-pets" onPointerDown={e => e.stopPropagation()}>
             <div className="mx-menu-name">選一個夥伴陪你</div>

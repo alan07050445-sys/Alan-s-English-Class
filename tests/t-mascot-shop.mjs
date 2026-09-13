@@ -116,6 +116,13 @@ log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
   const dress = css.slice(css.indexOf('.mx-dress {'), css.indexOf('.mx-dress-head'));
   ok('⭐ 裝扮室要自己開 pointer-events（.mx-layer 是 none，不然按下去會穿過去按到後面）',
      /pointer-events:\s*auto/.test(dress), dress.slice(0, 200));
+  ok('⭐（v433）裝扮室要 createPortal 掛到 body：住在 .mx-layer（z-index:60）裡面＝被頁面上比較高的浮層蓋住、點擊被吃掉',
+     /\{dress && ReactDOM\.createPortal\(/.test(fx) && /document\.body\)\}/.test(fx));
+  ok('（v433）自己那一層要夠高、而且點外面會關起來',
+     /\.mx-dress-back\s*\{[^}]*z-index:\s*3000/s.test(css) && /e\.target === e\.currentTarget\) setDress\(false\)/.test(fx));
+  ok('（v433）剛換上的樣子在存檔回來之前不會被 sync 蓋回去（按了不會跳回舊的）',
+     /wearPendRef/.test(fx) && /Date\.now\(\) - pend\.t > 6000/.test(fx));
+  ok('（v433）存不起來（訪客／離線）就讓它變回去，不假裝成功', /if \(!r\.ok\) \{ wearPendRef\.current = null; \}/.test(fx));
   const dressTag = fx.slice(fx.indexOf('<div className="mx-dress"'), fx.indexOf('<div className="mx-dress-head"'));
   ok('⭐ JSX 上也寫一次（CSS 被快取住也不會按不到）', /pointerEvents:\s*'auto'/.test(dressTag), dressTag.slice(0, 160));
   ok('選單與圖鑑也都有（本來就有，順便守住）',
