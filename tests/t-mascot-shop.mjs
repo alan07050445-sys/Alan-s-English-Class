@@ -116,6 +116,7 @@ log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
   const dress = css.slice(css.indexOf('.mx-dress {'), css.indexOf('.mx-dress-head'));
   ok('⭐ 裝扮室要自己開 pointer-events（.mx-layer 是 none，不然按下去會穿過去按到後面）',
      /pointer-events:\s*auto/.test(dress), dress.slice(0, 200));
+  ok('⭐ JSX 上也寫一次（CSS 被快取住也不會按不到）', /className="mx-dress" style=\{\{ pointerEvents: 'auto' \}\}/.test(fx));
   ok('選單與圖鑑也都有（本來就有，順便守住）',
      /\.mx-menu\s*\{[^}]*pointer-events:\s*auto/s.test(css) && /\.mx-pets\s*\{[^}]*pointer-events:\s*auto/s.test(css));
   const fc = fs.readFileSync(new URL('components-flashcard.jsx', ROOT), 'utf8');

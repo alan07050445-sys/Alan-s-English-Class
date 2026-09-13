@@ -996,7 +996,9 @@ function MascotLayer() {
           </div>
         )}
         {dress && (
-          <div className="mx-dress" onPointerDown={e => e.stopPropagation()}>
+          {/* ⚠ style 也寫一次 pointerEvents：.mx-layer 是 pointer-events:none，
+              萬一 CSS 是舊的（Service Worker 快取），這裡按不到會是致命的——寫在 JSX 上就不會漏。 */}
+          <div className="mx-dress" style={{ pointerEvents: 'auto' }} onPointerDown={e => e.stopPropagation()}>
             <div className="mx-dress-head">
               <b>👕 裝扮室</b>
               <span className="mx-dress-bal">{stars.toLocaleString()} ⭐</span>
