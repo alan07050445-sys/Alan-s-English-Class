@@ -110,6 +110,25 @@ log.push('\n【6】三個地方的星星要用同一個算法');
   ok('商店與長按選單都進得了裝扮室', /mxOpenDress/.test(app) && /mxOpenDress/.test(fx) && /onOpenDress/.test(shell));
 }
 
+log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
+{
+  const css = fs.readFileSync(new URL('styles-fx.css', ROOT), 'utf8');
+  const dress = css.slice(css.indexOf('.mx-dress {'), css.indexOf('.mx-dress-head'));
+  ok('⭐ 裝扮室要自己開 pointer-events（.mx-layer 是 none，不然按下去會穿過去按到後面）',
+     /pointer-events:\s*auto/.test(dress), dress.slice(0, 200));
+  ok('選單與圖鑑也都有（本來就有，順便守住）',
+     /\.mx-menu\s*\{[^}]*pointer-events:\s*auto/s.test(css) && /\.mx-pets\s*\{[^}]*pointer-events:\s*auto/s.test(css));
+  const fc = fs.readFileSync(new URL('components-flashcard.jsx', ROOT), 'utf8');
+  const fit = fc.slice(fc.indexOf('function useFitHeight('), fc.indexOf('}, [enabled]);'));
+  ok('⭐ 倒扣整頁溢出時，扣了沒效就還原（側欄比較長不該讓卡片變小）',
+     /measureOver\(\) >= over - 2/.test(fit) && /el\.style\.height = h \+ 'px'/.test(fit));
+  ok('⭐ 版面之後才變（收合側欄）也會重量：看「上緣」有沒有動',
+     /const recheck =/.test(fit) && /Math\.abs\(t - lastTop\) < 8/.test(fit));
+  ok('重量有上限（最多 6 次），不會沒完沒了', /fixes >= 6/.test(fit));
+  ok('ResizeObserver 盯的是容器，不是 document.body（v387 的教訓）',
+     /new ResizeObserver\(recheck\)/.test(fit) && fit.indexOf('observe(document.body') < 0);
+}
+
 console.log(log.join('\n'));
 console.log(`\n${fail === 0 ? '🎉 全部通過' : '⚠️ 有失敗'}：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

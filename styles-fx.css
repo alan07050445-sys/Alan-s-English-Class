@@ -592,8 +592,11 @@
 
 /* ── 裝扮室 ─────────────────────────────────────────── */
 .mx-dress {
+  /* ⚠ .mx-layer 是 pointer-events:none（不然吉祥物那一層會擋住整個頁面）——
+     浮在上面的東西一定要自己把 pointer-events 開回來，.mx-menu／.mx-pets 都是這樣。
+     v431 第一版漏了這一行 → 裝扮室按不到，點下去都按到後面的頁面（Alan 回報）。 */
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
-  z-index: 70; width: min(420px, calc(100vw - 24px));
+  pointer-events: auto; z-index: 70; width: min(420px, calc(100vw - 24px));
   max-height: min(72vh, 560px); display: flex; flex-direction: column;
   padding: 12px 12px 10px; border-radius: 16px;
   background: #fffdf7; border: 1px solid var(--border, #DDD6C4);

@@ -415,7 +415,7 @@ function useFitHeight(ref, enabled, min) {
            網址列那種幾十 px 的伸縮一律忽略。
          · 拿掉 body 的 ResizeObserver，改用進場後的幾次補量（圖片/字體載入）。
        結果＝進來量一次就固定住，捲動不會再改變大小。 */
-    let lastW = 0, lastH = 0, measured = false;
+    let lastW = 0, lastH = 0, lastTop = -1, measured = false;
 
     const apply = () => {
       const vv = window.visualViewport;
@@ -441,6 +441,7 @@ function useFitHeight(ref, enabled, min) {
         const hb = host.getBoundingClientRect();
         top = hb.top + (rect.top - hb.top + host.scrollTop);
       }
+      lastTop = top;
       // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
       const floor = Math.min(min || 320, Math.round(vh * 0.55));
       let h = Math.max(floor, Math.round(vh - top - 10));
@@ -522,12 +523,51 @@ function useFitHeight(ref, enabled, min) {
             但套下去就是一次可見的跳動。 */
     const raf = requestAnimationFrame(relayout);
     const t1 = setTimeout(relayout, 150), t2 = setTimeout(relayout, 600), t3 = null;
+
+    /* ⚠⚠ v431（Alan：「如果我一開始先收（側欄）再開始練習，就一樣是之前的樣子」）：
+       上面那三次補量都在進場後 0.6 秒內結束，之後「量一次就固定」（v387 為了止住抖動）。
+       代價是**量完之後版面才變**的情況永遠不會被修正：收合／展開側欄、字體晚載入、
+       iPad 工具列伸縮，卡片就停在舊高度——看起來就是「怎麼又變小了」。
+       這裡多一個只看「上緣」的守望：上緣用的是**文件座標**，捲動不會改變它
+       （這正是 v387 改座標基準的目的），所以它一變就代表版面真的動了 → 重量一次。
+       ⚠ 卡片自己改高度不會改變自己的上緣（它是由上往下排的）→ 不會變成自己餵自己的迴圈；
+         真的遇到意外的來回，最多修 6 次就收手。 */
+    let fixes = 0;
+    const topNow = () => {
+      const node = ref.current;
+      if (!node) return -1;
+      const host2 = _fcScrollHost(node);
+      const r2 = node.getBoundingClientRect();
+      if (host2 === document.documentElement) return r2.top + (window.scrollY || window.pageYOffset || 0);
+      const hb2 = host2.getBoundingClientRect();
+      return hb2.top + (r2.top - hb2.top + host2.scrollTop);
+    };
+    const recheck = () => {
+      if (fixes >= 6 || lastTop < 0) return;
+      const t = topNow();
+      if (t < 0 || Math.abs(t - lastTop) < 8) return;     // 上緣沒動＝版面沒動（捲動不會改變它）
+      fixes++;
+      measured = false;
+      apply();
+    };
+    /* 版面一變就立刻重量：ResizeObserver 盯的是「裝著它的那一塊」，
+       ⚠ 不是盯 document.body（v387 拿掉那個是因為卡片自己改高度會再觸發自己＝迴圈）。
+       這裡即使被自己的高度變化觸發也不會迴圈——recheck 只看上緣，
+       而卡片是由上往下排的，改自己的高度不會改變自己的上緣。 */
+    let ro = null;
+    try {
+      ro = new ResizeObserver(recheck);
+      const host3 = _fcScrollHost(el);
+      ro.observe(host3 === document.documentElement ? document.documentElement : host3);
+    } catch (e) { ro = null; }
+    const watch = setInterval(recheck, 700);   // 保險（有些變化不會讓容器改變大小）
     window.addEventListener('resize', relayout);
     window.addEventListener('orientationchange', relayout);
     // visualViewport 的 resize 走 apply（不是 relayout）＝網址列伸縮會被上面的門檻擋掉
     if (window.visualViewport) window.visualViewport.addEventListener('resize', apply);
     return () => {
       cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); if (t3) clearTimeout(t3);
+      clearInterval(watch); if (ro) ro.disconnect();
       window.removeEventListener('resize', relayout);
       window.removeEventListener('orientationchange', relayout);
       imgs.forEach(im => im.removeEventListener('load', onImg));
