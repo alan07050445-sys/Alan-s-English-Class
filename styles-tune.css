@@ -3565,3 +3565,17 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 /* v429：互動教學沒產生成功時的提示＋重出按鈕 */
 .gn-ls-miss { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: #FFF6E0; border: 1px solid #F0D9A0; font-family: var(--sans); font-size: 14px; line-height: 1.6; }
 .gn-ls-miss b { font-size: 15px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v431 ③：平板直式的圖片上限（Alan：「iPad 直式 我覺得格子和圖片也可以再大一點」）
+   ──────────────────────────────────────────────────────────────────────────
+   卡片高度由 useFitHeight 量出來（v431 修好倒扣之後，iPad 直式 834×1194 是 945px），
+   但圖片仍被 @media (max-width:900px) 的 240px 上限夾住 → 背面 806px 高的區域裡
+   圖片只有 240px，下面空一大塊。這裡只放寬「又寬又高」的平板直式（≥601 且高 ≥900），
+   手機（≤560→200）、橫躺的手機（max-height:480→150）都不受影響。
+   圖片本來就是 flex:1 1 auto + object-fit:contain ＝ 空間不夠時自己讓位，放寬上限不會擠掉例句。 */
+@media (min-width: 601px) and (max-width: 1024px) and (min-height: 900px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 460px; }
+  .fc-p-learn .fc-learn-img { max-height: 470px; }
+}

@@ -572,3 +572,103 @@
   font-family: var(--sans); font-size: 11.5px; line-height: 1.4;
   color: var(--ink-3, #8a8270); text-align: center;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v431 ④：吉祥物裝扮（Alan：「可以購買吉祥物的裝扮…頭飾 語音 特效 動作跳舞之類的」）
+   ══════════════════════════════════════════════════════════════════════════ */
+/* 配件疊在身上：跟 .mx-svg 同一個 viewBox、同樣大小，所以五隻夥伴都對得準 */
+.mx-acc {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  width: var(--mx-w); height: calc(var(--mx-w) * 10 / 9);
+  transform-origin: 50% 92%;
+}
+/* 身體在動的時候配件要跟著動（跟帽子同一套做法） */
+.act-walk  .mx-acc { animation: mxWalkBob .34s ease-in-out infinite; }
+.act-dance .mx-acc { animation: mxDance .42s ease-in-out infinite; }
+.act-idle  .mx-acc { animation: mxBreathe 2.8s ease-in-out infinite; }
+
+/* 表情符號版的特效（星星雨／愛心／泡泡／煙火）——沿用彩帶的 fxFall 動畫 */
+.fx-cfp-ch { line-height: 1; text-align: center; }
+
+/* ── 裝扮室 ─────────────────────────────────────────── */
+.mx-dress {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+  z-index: 70; width: min(420px, calc(100vw - 24px));
+  max-height: min(72vh, 560px); display: flex; flex-direction: column;
+  padding: 12px 12px 10px; border-radius: 16px;
+  background: #fffdf7; border: 1px solid var(--border, #DDD6C4);
+  box-shadow: 0 22px 50px -18px rgba(21,19,14,.45);
+  animation: mxPop .18s ease-out;
+}
+.mx-dress-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.mx-dress-head b { font-size: 15px; color: var(--ink, #15130e); }
+.mx-dress-bal {
+  margin-left: auto; font-size: 13.5px; font-weight: 700; color: #8a6d1f;
+  background: #FBF3D9; border: 1px solid #EBDCA8; border-radius: 999px; padding: 3px 10px;
+}
+.mx-dress-x {
+  width: 26px; height: 26px; border-radius: 8px; border: 0; cursor: pointer;
+  background: rgba(21,19,14,.06); color: var(--ink-2, #5c554a); font-size: 13px;
+}
+.mx-dress-prev {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 8px 10px; margin-bottom: 8px; border-radius: 12px;
+  background: linear-gradient(180deg, #F7F2E4, #FBF8F0);
+  border: 1px solid #EDE5D2;
+}
+.mx-dress-figure { position: relative; display: block; width: 62px; height: 69px; --mx-w: 62px; }
+.mx-dress-figure .mx-acc { width: 62px; height: 69px; }
+.mx-dress-who { font-size: 13.5px; font-weight: 700; color: var(--ink-2, #5c554a); }
+.mx-dress-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.mx-dress-tabs button {
+  flex: 1 1 auto; padding: 6px 4px; border-radius: 9px; cursor: pointer;
+  border: 1px solid transparent; background: rgba(21,19,14,.05);
+  font-size: 12.5px; font-weight: 600; color: var(--ink-2, #5c554a);
+}
+.mx-dress-tabs button.on { background: var(--accent, #8B3120); color: #fbf8f1; }
+.mx-dress-grid {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding-right: 2px;
+}
+.mx-dz {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
+  padding: 9px 4px 7px; border-radius: 12px; text-align: center;
+  border: 1px solid var(--border, #DDD6C4); background: #fff;
+}
+.mx-dz:hover { border-color: #C9A84C; }
+.mx-dz-ico  { font-size: 24px; line-height: 1.1; }
+.mx-dz-name { font-size: 12px; color: var(--ink, #15130e); font-weight: 600; }
+.mx-dz-tag  { font-size: 11.5px; color: #8a6d1f; font-weight: 700; }
+.mx-dz.have .mx-dz-tag { color: var(--ink-3, #8a8270); }
+.mx-dz.on { border-color: var(--accent, #8B3120); background: #FBF1EE; }
+.mx-dz.on .mx-dz-tag { color: var(--accent, #8B3120); }
+.mx-dress-note { font-size: 11.5px; color: var(--ink-3, #8a8270); line-height: 1.5; margin: 8px 2px 4px; }
+
+/* ── 買得到的新動作 ──────────────────────────────────── */
+.act-wave .mx-svg { animation: mxWave .5s ease-in-out 3; transform-origin: 50% 92%; }
+@keyframes mxWave {
+  0%, 100% { transform: rotate(0deg); }
+  30%      { transform: rotate(-11deg) translateY(-1px); }
+  70%      { transform: rotate(11deg) translateY(-1px); }
+}
+.act-flip .mx-svg { animation: mxFlip .95s cubic-bezier(.35,.1,.3,1); transform-origin: 50% 55%; }
+@keyframes mxFlip {
+  0%   { transform: translateY(0) rotate(0deg); }
+  45%  { transform: translateY(-34px) rotate(-200deg); }
+  100% { transform: translateY(0) rotate(-360deg); }
+}
+.act-moon .mx-svg { animation: mxMoon 1.3s ease-in-out infinite; }
+@keyframes mxMoon {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25%      { transform: translateX(-7px) rotate(-5deg); }
+  50%      { transform: translateX(0) rotate(0deg); }
+  75%      { transform: translateX(-7px) rotate(5deg); }
+}
+.act-moon .mx-leg-a { animation: mxStep .65s ease-in-out infinite; }
+.act-moon .mx-leg-c { animation: mxStep .65s ease-in-out infinite .32s; }
+@media (prefers-reduced-motion: reduce) {
+  .act-wave .mx-svg, .act-flip .mx-svg, .act-moon .mx-svg, .mx-acc { animation: none !important; }
+  .mx-dress { animation: none; }
+}
+/* 商店裡的「吉祥物裝扮」小標題（跟實體禮物分開） */
+.sp-shop-head { font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); margin: 10px 2px 6px; }

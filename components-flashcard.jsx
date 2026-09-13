@@ -469,13 +469,25 @@ function useFitHeight(ref, enabled, min) {
             它那 32px 的 padding-bottom 從來沒被扣掉，於是整頁多出 20~30px 可以捲。
             實測 1440×900：卡片底 890、視窗 900，但 .qm-quiz-area 到 922 → 頁面可捲 22px。
             改成「容器溢出」與「整頁溢出」取大的那個；扣完可能又冒出一點點，最多修兩輪。 */
-      for (let i = 0; i < 2; i++) {
+      /* ⚠⚠ v431（Alan：「iPad 橫式格子太小啦 圖片也很小」）：這個倒扣以前是「無條件扣」，
+         但頁面會溢出不一定是卡片造成的——iPad 橫式（1194×834）左邊的單元清單就有 913px 高，
+         整頁比視窗高 162px。卡片被扣 162 → 再量還是 162（清單又沒變短）→ 再扣…
+         一路扣到下限 360px 為止，實測明明有 612px 可以用。畫面上就是「卡片小一截、下面空一大塊」。
+         改成「扣完要真的有效才算數」：扣一次、再量一次，溢出沒有跟著變少就還原回去。
+         v405 要修的那種（.qm-quiz-area 的 padding-bottom 讓整頁多捲 22px）扣下去溢出會變少，行為不變。 */
+      const measureOver = () => {
         const overHost = host === document.documentElement ? 0 : (host.scrollHeight - host.clientHeight);
         const overDoc  = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-        const over = Math.max(overHost, overDoc);
+        return Math.max(overHost, overDoc);
+      };
+      for (let i = 0; i < 2; i++) {
+        const over = measureOver();
         if (over <= 1) break;
-        h = Math.max(floor, h - over);
-        el.style.height = h + 'px';
+        const next = Math.max(floor, h - over);
+        if (next === h) break;
+        el.style.height = next + 'px';
+        if (measureOver() >= over - 2) { el.style.height = h + 'px'; break; }   // 縮了也沒用＝不是卡片造成的
+        h = next;
       }
 
       /* 差不到 8px 就維持原值——避免進場那幾次補量被看成「卡片自己在跳」。

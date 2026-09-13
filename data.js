@@ -1451,6 +1451,7 @@ function subscribeUserProfile(uid, callback) {
       streak: d.streak || { count: 0, lastDate: null },
       badges: d.badges || {},
       xp:     d.xp     || 0,
+      mx:     d.mx     || {},          // v431：吉祥物裝扮（買到什麼、身上穿什麼）
     });
   });
 }
@@ -2668,7 +2669,10 @@ RULES
 - q: one English sentence with ________ for the missing part, OR a short question such as
   Which word is a noun? "Luna is a smart cat."  (options = 3 words from that sentence, exactly ONE is correct).
   If the options are whole sentences, q is just "Choose the correct answer."
-- options: 3 short choices (sometimes 2 if the notes only have two forms, e.g. is/are). Exactly one is correct.
+- options: 3 short choices (sometimes 2 if the notes only have two forms, e.g. is/are). EXACTLY ONE may be correct:
+  check every other option yourself and make sure a teacher would mark it wrong. If a sentence contains two words
+  that both fit (e.g. "Rex, lie down and relax." has TWO intransitive verbs), pick a different sentence or different
+  options — never let two options be acceptable.
 - answer: 0-based index of the correct option. Put the correct option in a DIFFERENT position each time.
 - explain: Traditional Chinese, ≤30 characters, why that answer.
 ${_AI_MINIFY}`,
@@ -2810,17 +2814,27 @@ async function _gnCall(system, user, maxTokens) {
 /* 出一種題型到 n 題：老師原本的題目先收（請 AI 補答案、照原文），不夠再請 AI 另外出；
    驗不過的丟掉、不夠就再出一輪（最多兩輪）。 */
 /* v430：選擇題交叉檢查——實測 AI 把「Luna is a smart cat.」的名詞標成 is。
-   請另一次 AI 不看答案、自己作答；跟出題的答案不一樣的題目丟掉（下一輪會補）。
+   v431（Alan 圖1「relax 跟 lie 都是答案」）：只比對答案還不夠——要問「有幾個選項是對的」。
+   請另一次 AI 不看答案、自己把每一題**所有**說得通的選項列出來：
+     · 列出來只有一個、而且就是出題的答案 → 收
+     · 列出兩個以上（兩個答案都對）或跟出題的答案不一樣 → 丟掉，下一輪補
    檢查本身失敗（網路）→ 不擋，全部照收。回傳要丟掉的題目索引。 */
 async function _gnCheckMcq(items, base) {
   if (!items.length) return new Set();
-  const sys = `You are checking a quiz for a Taiwanese elementary English class. Solve every question yourself.
-Output ONLY a JSON array of 0-based option indexes, one per question, in order. e.g. [2,0,1]`;
+  const sys = `You are checking a quiz for a Taiwanese elementary English class.
+For EVERY question, list the 0-based index of EVERY option a teacher would have to accept as correct.
+A question must have exactly ONE correct option. If two options are both acceptable, list them both —
+e.g. in 'Which word is an intransitive verb? "Rex, lie down and relax."' both "lie" and "relax" are
+intransitive verbs, so you list both. Judge each option on its own; do not assume only one is right.
+Output ONLY a JSON array of arrays, one per question, in order. e.g. [[2],[0,3],[1]]`;
   const list = items.map((x, i) => `${i + 1}. ${x.q}\n${x.options.map((o, k) => `   ${k}) ${o}`).join('\n')}`).join('\n');
   try {
-    const got = await _gnCall(sys, `${base}\n\nQUESTIONS\n${list}`, 300);
+    const got = await _gnCall(sys, `${base}\n\nQUESTIONS\n${list}`, 600);
     if (!Array.isArray(got) || got.length !== items.length) return new Set();
-    return new Set(items.map((x, i) => (Number(got[i]) === x.answer ? -1 : i)).filter(i => i >= 0));
+    return new Set(items.map((x, i) => {
+      const a = Array.isArray(got[i]) ? got[i].map(Number).filter(n => Number.isInteger(n)) : [Number(got[i])];
+      return (a.length === 1 && a[0] === x.answer) ? -1 : i;     // 只有一個對、而且就是答案才收
+    }).filter(i => i >= 0));
   } catch (e) { return new Set(); }
 }
 function _gnSpread(list, n) {
@@ -4693,6 +4707,123 @@ async function checkInToday(uid, displayName, email) {
 }
 
 // 回傳 { days, streak, cycleDay, cycleDates, signedToday, total, entries }
+/* ══════════════════════════════════════════════════════════════════════════
+   v431 ④：吉祥物裝扮（Alan：「我想讓小朋友可以購買吉祥物的裝扮…頭飾 語音 特效 動作跳舞之類的」）
+   ──────────────────────────────────────────────────────────────────────────
+   為什麼買賣要放在 progress/{uid}，不放 stars/{email}：
+     firestore.rules 寫得很清楚——stars 只有老師寫得了（學生只能讀自己那一筆），
+     這是刻意的（不然小朋友可以自己加星星）。progress/{uid} 本來就是「學生自己可寫」，
+     所以「買了什麼」記在這裡，星星本身一顆都不會被學生改到。
+   花掉多少星星不是存一個數字，而是**由買到的東西反算**（mxSpent）：
+     存數字會有「改數字＝白拿」的漏洞，反算就不可能對不上。
+   ⚠ 舊的兩頂帽子（v385，老師手動扣點）仍然算數：那是老師扣的，不能再扣一次，
+     所以 legacy 的 party／crown 走 window.__mxHats，不進 owned、也不進 mxSpent。
+   ══════════════════════════════════════════════════════════════════════════ */
+const MX_KINDS = [
+  { kind: 'hat',   zh: '頭飾', ico: '🎩', tip: '戴在頭上' },
+  { kind: 'item',  zh: '配件', ico: '🧣', tip: '穿在身上' },
+  { kind: 'fx',    zh: '特效', ico: '✨', tip: '答對的時候放' },
+  { kind: 'voice', zh: '語音', ico: '🔊', tip: '牠說話的口氣' },
+  { kind: 'dance', zh: '動作', ico: '💃', tip: '按一下就表演' },
+];
+const MX_SHOP = [
+  /* 頭飾 */
+  { id: 'hat_cap',    kind: 'hat',   zh: '鴨舌帽',   emoji: '🧢', cost: 150,  legacy: '' },
+  { id: 'hat_flower', kind: 'hat',   zh: '小花',     emoji: '🌸', cost: 150 },
+  { id: 'hat_party',  kind: 'hat',   zh: '派對帽',   emoji: '🎉', cost: 200,  legacy: 'party' },
+  { id: 'hat_grad',   kind: 'hat',   zh: '畢業帽',   emoji: '🎓', cost: 300 },
+  { id: 'hat_bunny',  kind: 'hat',   zh: '兔耳朵',   emoji: '🐰', cost: 350 },
+  { id: 'hat_horn',   kind: 'hat',   zh: '小鹿角',   emoji: '🦌', cost: 400 },
+  { id: 'hat_star',   kind: 'hat',   zh: '星星髮箍', emoji: '⭐', cost: 500 },
+  { id: 'hat_crown',  kind: 'hat',   zh: '皇冠',     emoji: '👑', cost: 600,  legacy: 'crown' },
+  /* 配件 */
+  { id: 'it_bow',     kind: 'item',  zh: '蝴蝶結',   emoji: '🎀', cost: 150 },
+  { id: 'it_scarf',   kind: 'item',  zh: '圍巾',     emoji: '🧣', cost: 200 },
+  { id: 'it_glass',   kind: 'item',  zh: '墨鏡',     emoji: '🕶️', cost: 300 },
+  { id: 'it_bag',     kind: 'item',  zh: '小書包',   emoji: '🎒', cost: 400 },
+  { id: 'it_cape',    kind: 'item',  zh: '英雄披風', emoji: '🦸', cost: 700 },
+  { id: 'it_wand',    kind: 'item',  zh: '魔法棒',   emoji: '🪄', cost: 800 },
+  /* 答對特效 */
+  { id: 'fx_confetti', kind: 'fx',   zh: '彩帶',     emoji: '🎊', cost: 0, free: true },
+  { id: 'fx_stars',   kind: 'fx',    zh: '星星雨',   emoji: '✨', cost: 250 },
+  { id: 'fx_hearts',  kind: 'fx',    zh: '愛心雨',   emoji: '💗', cost: 250 },
+  { id: 'fx_bubble',  kind: 'fx',    zh: '泡泡',     emoji: '🫧', cost: 400 },
+  { id: 'fx_fire',    kind: 'fx',    zh: '煙火',     emoji: '🎆', cost: 600 },
+  /* 語音（牠講話的口氣） */
+  { id: 'vo_default', kind: 'voice', zh: '原本的聲音', emoji: '🗨️', cost: 0, free: true },
+  { id: 'vo_cheer',   kind: 'voice', zh: '加油隊長', emoji: '📣', cost: 200 },
+  { id: 'vo_cat',     kind: 'voice', zh: '貓貓語',   emoji: '🐱', cost: 350 },
+  { id: 'vo_robot',   kind: 'voice', zh: '機器人',   emoji: '🤖', cost: 350 },
+  { id: 'vo_eng',     kind: 'voice', zh: '全英文',   emoji: '🗣️', cost: 500 },
+  /* 動作（買了就能叫牠表演） */
+  { id: 'dc_wave',    kind: 'dance', zh: '揮揮手',   emoji: '👋', cost: 100 },
+  { id: 'dc_spin',    kind: 'dance', zh: '轉圈圈',   emoji: '🌀', cost: 200 },
+  { id: 'dc_dance',   kind: 'dance', zh: '跳舞',     emoji: '🕺', cost: 450 },
+  { id: 'dc_flip',    kind: 'dance', zh: '後空翻',   emoji: '🤸', cost: 700 },
+  { id: 'dc_moon',    kind: 'dance', zh: '月球漫步', emoji: '🌙', cost: 900 },
+];
+const MX_BY_ID = {};
+MX_SHOP.forEach(it => { MX_BY_ID[it.id] = it; });
+function mxItemOf(id) { return MX_BY_ID[id] || null; }
+/* 買到的東西：只認得出來的 id（將來下架某一件，也不會讓畫面壞掉或把星星算錯） */
+function mxOwnedList(mx) {
+  const raw = (mx && Array.isArray(mx.owned)) ? mx.owned : [];
+  const seen = {}, out = [];
+  raw.forEach(id => { if (MX_BY_ID[id] && !seen[id]) { seen[id] = 1; out.push(id); } });
+  return out;
+}
+// 免費的（彩帶／原音）不用買就有
+function mxHasItem(mx, id) {
+  const it = MX_BY_ID[id];
+  if (!it) return false;
+  if (it.free) return true;
+  if (it.legacy && (window.__mxHats || []).indexOf(it.legacy) >= 0) return true;   // 老師以前扣點買的
+  return mxOwnedList(mx).indexOf(id) >= 0;
+}
+function mxSpent(mx) {
+  return mxOwnedList(mx).reduce((n, id) => n + (MX_BY_ID[id].cost || 0), 0);
+}
+/* 身上穿的：只留「真的有」的（下架或資料怪怪的就當沒穿），動作不算穿戴 */
+function mxWearOf(mx) {
+  const w = (mx && mx.wear) || {};
+  const out = {};
+  ['hat', 'item', 'fx', 'voice'].forEach(k => {
+    const id = w[k];
+    const it = id && MX_BY_ID[id];
+    out[k] = (it && it.kind === k && mxHasItem(mx, id)) ? id : '';
+  });
+  if (!out.fx) out.fx = 'fx_confetti';
+  if (!out.voice) out.voice = 'vo_default';
+  return out;
+}
+/* 買一件。balance＝現在有幾顆星星（含自動集點，由 app.jsx 算好傳進來）。
+   回傳 { ok, reason }；reason：'no-user'｜'bad-id'｜'owned'｜'poor'｜'save' */
+async function mxBuy(uid, id, balance, mx) {
+  const it = MX_BY_ID[id];
+  if (!uid) return { ok: false, reason: 'no-user' };
+  if (!it || it.free) return { ok: false, reason: 'bad-id' };
+  if (mxHasItem(mx, id)) return { ok: false, reason: 'owned' };
+  if ((balance || 0) < (it.cost || 0)) return { ok: false, reason: 'poor', short: (it.cost || 0) - (balance || 0) };
+  const owned = mxOwnedList(mx).concat([id]);
+  try {
+    await _db.collection('progress').doc(uid).set({ mx: { owned, wear: (mx && mx.wear) || {} } }, { merge: true });
+    return { ok: true, owned, item: it };
+  } catch (e) { return { ok: false, reason: 'save' }; }
+}
+/* 穿上／脫下（id 空字串＝脫掉）。只寫 wear，不動 owned。 */
+async function mxSetWear(uid, kind, id, mx) {
+  if (!uid) return { ok: false, reason: 'no-user' };
+  const it = id ? MX_BY_ID[id] : null;
+  if (id && (!it || it.kind !== kind || !mxHasItem(mx, id))) return { ok: false, reason: 'bad-id' };
+  const wear = Object.assign({}, (mx && mx.wear) || {});
+  wear[kind] = id || '';
+  try {
+    await _db.collection('progress').doc(uid).set({ mx: { owned: mxOwnedList(mx), wear } }, { merge: true });
+    return { ok: true, wear };
+  } catch (e) { return { ok: false, reason: 'save' }; }
+}
+Object.assign(window, { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear });
+
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};
   const dates = Object.keys(map).filter(k => map[k]).sort();

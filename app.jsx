@@ -676,6 +676,26 @@ function App() {
     return (a.total || 0) + (c.total || 0);
   }, [user, weeks, viewOrder, qmProgress, myCheckin]);
 
+  /* v431 ④：買裝扮花掉的星星要扣掉——由「買到哪幾件」反算，不是存一個數字（見 data.js mxSpent）。
+     header、集點面板、裝扮室三個地方都用這一個數，不可能對不起來。 */
+  const mxSpentStars = useAppMemo(
+    () => (window.mxSpent ? window.mxSpent(userProfile.mx) : 0),
+    [userProfile.mx]);
+  const starsTotal = Math.max(0, starBalance + autoStarTotal - mxSpentStars);
+
+  /* 吉祥物（components-fx.jsx）是獨立的一層，拿不到 React 的狀態——
+     用 window 當橋：牠只讀這三個，買／穿都回到這裡來寫 Firestore。 */
+  useAppEffect(() => {
+    window.__mxStars = starsTotal;
+    window.__mxData  = userProfile.mx || {};
+    window.__mxBuy   = (id) => (user && window.mxBuy
+      ? window.mxBuy(user.uid, id, starsTotal, userProfile.mx)
+      : Promise.resolve({ ok: false, reason: 'no-user' }));
+    window.__mxWear  = (kind, id) => (user && window.mxSetWear
+      ? window.mxSetWear(user.uid, kind, id, userProfile.mx)
+      : Promise.resolve({ ok: false, reason: 'no-user' }));
+  }, [user, starsTotal, userProfile.mx]);
+
   // v311 (#21): 只計「真的完成」——qmProgress 記錄存在不代表完成（未達 80 分 done 會是 0）；一律看 .done
   const qmIsDone = (id) => { const p = qmProgress[`${weekId}_${id}`]; return !!(p && p.done); };
   const totalItems = weekQuizItems.length || allItems.length;
@@ -1636,7 +1656,7 @@ function App() {
             onShowMistakes={user ? () => setMistakesOpen(true) : null}
             grade={grade}
             compactLobby={!catView && !editMode}
-            starBalance={starBalance + autoStarTotal}
+            starBalance={starsTotal}
             onShowCheckin={user && !(window.isAdminUser && window.isAdminUser(user)) ? () => setCheckinOpen(true) : null}
             checkinDone={!!(window.computeCheckin && window.computeCheckin(myCheckin).signedToday)}
             checkinStreak={(window.computeCheckin ? window.computeCheckin(myCheckin).streak : 0)}
@@ -1937,7 +1957,8 @@ function App() {
           {/* v342: 我的星星 + 商店 */}
           {starsOpen && user && (
             <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}
-              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin}/>
+              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin}
+              mx={userProfile.mx} onOpenDress={() => { setStarsOpen(false); if (window.mxOpenDress) window.mxOpenDress(); }}/>
           )}
           {checkinOpen && window.CheckinPanel && (
             <window.CheckinPanel user={user} checkin={myCheckin} onClose={() => setCheckinOpen(false)}/>

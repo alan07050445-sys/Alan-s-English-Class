@@ -336,13 +336,22 @@ log.push('\n【9】（v430）選擇題答案要對：另一個 AI 自己作答�
   ok('「is」不會被當成「this」的一部分（整個字比對）', W.gnValidMcq({ q: 'Which word is a noun? "This cat sleeps."', options: ['is', 'cat', 'sleeps'], answer: 1 }) === null);
   byKind.mcq = [[{ q: sent, options: ['smart', 'is', 'Luna'], answer: 1 }, { q: 'Which one is a collective noun?', options: ['fans', 'audience', 'viewers'], answer: 1 }],
                 [{ q: 'Which word is a noun? "My brother plays the drums."', options: ['plays', 'the', 'brother'], answer: 2 }, { q: 'Which one is a collective noun?', options: ['uncle', 'family', 'aunt'], answer: 1 }]];
-  byKind.check = [[2, 1], [2, 1]];     // 檢查者：第一題答案應該是 Luna（2），不是 is（1）
+  byKind.check = [[[2], [1]], [[2], [1]]];   // 檢查者：第一題只有 Luna（2）對，不是出題說的 is（1）
   const n0 = calls.length;
   const p = await W.aiMakeGrammarPack({ topic: 'Nouns', notes: 'A noun names a person.', nMcq: 3, nFill: 0, nTr: 0, nRw: 0 });
   ok('⭐ 出題 AI 把名詞標成「is」→ 檢查者答 Luna → 這題丟掉', !p.mcq.some(q => q.q === sent), JSON.stringify(p.mcq.map(q => q.q)));
   ok('丟掉之後自動再出一輪補回來', p.mcq.length === 3, p.mcq.length + ' 題');
   const chk = calls.slice(n0).filter(c => /checking a quiz/.test(c.system));
   ok('檢查者看不到答案（只看題目和選項）', chk.length === 2 && !/answer/i.test(chk[0].messages[0].content.split('QUESTIONS')[1]), chk.length + ' 次');
+  // v431（Alan 圖1）：「Rex, lie down and relax.」的 lie 和 relax 都是不及物動詞 → 兩個答案都對，要丟掉
+  const twoOk = 'Which word is an intransitive verb? "Rex, lie down and relax."';
+  byKind.mcq = [[{ q: twoOk, options: ['down', 'relax', 'lie'], answer: 2 }],
+                [{ q: 'Which word is an intransitive verb? "The baby smiled at me."', options: ['baby', 'smiled', 'me'], answer: 1 }]];
+  byKind.check = [[[1, 2]], [[1]]];          // 檢查者：第一題 relax 和 lie 都對 → 丟掉
+  const p3 = await W.aiMakeGrammarPack({ topic: 'Verbs', notes: 'x', nMcq: 1, nFill: 0, nTr: 0, nRw: 0 });
+  ok('⭐（v431）兩個選項都說得通（lie／relax 都是不及物動詞）→ 丟掉重出', !p3.mcq.some(q => q.q === twoOk), JSON.stringify(p3.mcq.map(q => q.q)));
+  ok('（v431）重出的那一題只有一個答案 → 收下', p3.mcq.length === 1);
+  ok('（v431）出題 prompt 也先叮嚀「不能有兩個選項都對」', /never let two options be acceptable/.test(data));
   byKind.check = [];
   byKind.mcq = [[{ q: 'There ________ a cat.', options: ['is', 'are'], answer: 0 }]];
   const p2 = await W.aiMakeGrammarPack({ topic: 'x', notes: 'x', nMcq: 1, nFill: 0, nTr: 0, nRw: 0 });

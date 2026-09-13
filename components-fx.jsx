@@ -10,11 +10,145 @@ const { useState: useFx, useEffect: useFxE, useRef: useFxR } = React;
    9×8 的格子：頭上兩個小角、兩顆方眼睛、三隻腳。
    腳分成三塊，走路時左右腳輪流抬起來。 */
 /* v385（Alan）：帽子不再「自動解鎖」，改成商店裡用星星買的東西。
-   有沒有買到＝看老師在集點裡扣過哪一筆（app.jsx 算好放在 window.__mxHats）。 */
+   v431：全部搬到 data.js 的 MX_SHOP（頭飾／配件／特效／語音／動作一起賣），
+   這裡只留「怎麼畫」。舊的兩頂（party／crown，老師手動扣點買的）畫法一模一樣，
+   id 也還認得，戴著的人不會突然變成沒戴。
+   ⚠ 座標在 18×20 的格子裡（見下面 v402 的說明）：y −4~0 是頭上的地盤，
+     身體 y2~12、腳 y12~16，所以配件畫在 y2 以下。 */
 const MX_HATS = [
   { id: 'party', zh: '派對帽', cost: 500 },
   { id: 'crown', zh: '皇冠',   cost: 1000 },
 ];
+const MX_HAT_ART = {
+  hat_party: (
+    <g className="mx-hat">
+      <rect x="8" y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="6" y="-2" width="6" height="2" fill="#D6533C"/>
+    </g>
+  ),
+  hat_crown: (
+    <g className="mx-hat">
+      <rect x="4"  y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="8"  y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="12" y="-4" width="2" height="2" fill="#E8C86A"/>
+      <rect x="4"  y="-2" width="10" height="2" fill="#E8C86A"/>
+    </g>
+  ),
+  hat_cap: (           /* 鴨舌帽：帽身＋右邊帽簷 */
+    <g className="mx-hat">
+      <rect x="3"  y="-3" width="12" height="3" fill="#2E6F9E"/>
+      <rect x="12" y="-1" width="6"  height="1" fill="#24567A"/>
+    </g>
+  ),
+  hat_grad: (          /* 畢業帽：方板＋帽身＋流蘇 */
+    <g className="mx-hat">
+      <rect x="2"  y="-2" width="14" height="1" fill="#2B2A26"/>
+      <rect x="6"  y="-4" width="6"  height="2" fill="#3A3833"/>
+      <rect x="15" y="-2" width="1"  height="3" fill="#E8C86A"/>
+    </g>
+  ),
+  hat_flower: (        /* 小花：四片花瓣＋花心，戴在右邊 */
+    <g className="mx-hat">
+      <rect x="12" y="-4" width="2" height="2" fill="#E39AB8"/>
+      <rect x="10" y="-2" width="2" height="2" fill="#E39AB8"/>
+      <rect x="14" y="-2" width="2" height="2" fill="#E39AB8"/>
+      <rect x="12" y="-2" width="2" height="2" fill="#E8C86A"/>
+      <rect x="12" y="0"  width="2" height="1" fill="#2E7D5B"/>
+    </g>
+  ),
+  hat_bunny: (         /* 兔耳朵：兩隻長耳＋粉紅內耳 */
+    <g className="mx-hat">
+      <rect x="3.5"  y="-4" width="3" height="4.5" fill="#B9AE95"/>
+      <rect x="11.5" y="-4" width="3" height="4.5" fill="#B9AE95"/>
+      <rect x="4"  y="-3.5" width="2" height="4" fill="#FBF6EA"/>
+      <rect x="12" y="-3.5" width="2" height="4" fill="#FBF6EA"/>
+      <rect x="4.5"  y="-3" width="1" height="2" fill="#E39AB8"/>
+      <rect x="12.5" y="-3" width="1" height="2" fill="#E39AB8"/>
+    </g>
+  ),
+  hat_horn: (          /* 小鹿角 */
+    <g className="mx-hat">
+      <rect x="4"  y="-3" width="1" height="3" fill="#8A5A33"/>
+      <rect x="2"  y="-4" width="1" height="2" fill="#8A5A33"/>
+      <rect x="13" y="-3" width="1" height="3" fill="#8A5A33"/>
+      <rect x="15" y="-4" width="1" height="2" fill="#8A5A33"/>
+    </g>
+  ),
+  hat_star: (          /* 星星髮箍 */
+    <g className="mx-hat">
+      <rect x="2"  y="-1" width="14" height="1" fill="#8A5FA8"/>
+      <rect x="12" y="-4" width="2"  height="2" fill="#E8C86A"/>
+      <rect x="11" y="-3" width="4"  height="1" fill="#E8C86A"/>
+      <rect x="11.5" y="-2" width="1" height="1" fill="#E8C86A"/>
+      <rect x="13.5" y="-2" width="1" height="1" fill="#E8C86A"/>
+    </g>
+  ),
+};
+function MxHat({ id }) {
+  const key = id === 'party' ? 'hat_party' : id === 'crown' ? 'hat_crown' : id;
+  return MX_HAT_ART[key] || null;
+}
+/* v431：配件畫成「疊在身上的一層」——同一個 viewBox 蓋在吉祥物上面，
+   所以五隻夥伴都不用改，換哪一隻都對得準。 */
+const MX_ACC_ART = {
+  it_bow: (
+    <g>
+      <rect x="6"  y="2" width="2" height="2" fill="#D6533C"/>
+      <rect x="10" y="2" width="2" height="2" fill="#D6533C"/>
+      <rect x="8"  y="2.5" width="2" height="1" fill="#B23A28"/>
+    </g>
+  ),
+  it_scarf: (
+    <g>
+      <rect x="0"  y="8"  width="18" height="2" fill="#C1454A"/>
+      <rect x="13" y="10" width="2"  height="4" fill="#C1454A"/>
+      <rect x="13" y="13" width="2"  height="1" fill="#8E3034"/>
+    </g>
+  ),
+  it_glass: (
+    <g>
+      <rect x="1"  y="4" width="6" height="3" fill="#2B2A26"/>
+      <rect x="11" y="4" width="6" height="3" fill="#2B2A26"/>
+      <rect x="7"  y="5" width="4" height="1" fill="#2B2A26"/>
+      <rect x="2"  y="4.5" width="1.5" height="1" fill="#6E6A60"/>
+    </g>
+  ),
+  it_bag: (
+    <g>
+      <rect x="0" y="8"  width="3" height="5" fill="#2E7D5B"/>
+      <rect x="0" y="10" width="3" height="1" fill="#1F5B41"/>
+      <rect x="3" y="7"  width="1" height="5" fill="#1F5B41"/>
+    </g>
+  ),
+  it_cape: (
+    <g>
+      <polygon points="0,3 2.5,3 2.5,15 0,15" fill="#8A2F3B"/>
+      <rect x="0" y="2" width="4" height="1" fill="#6E2430"/>
+    </g>
+  ),
+  it_wand: (
+    <g>
+      <rect x="15" y="6" width="1" height="8" fill="#6B5B45"/>
+      <rect x="14" y="4" width="3" height="1" fill="#E8C86A"/>
+      <rect x="15" y="3" width="1" height="3" fill="#E8C86A"/>
+    </g>
+  ),
+};
+function MxAcc({ id }) {
+  const art = MX_ACC_ART[id];
+  if (!art) return null;
+  return (
+    <svg className="mx-acc" viewBox="0 -4 18 20" shapeRendering="crispEdges" aria-hidden="true">{art}</svg>
+  );
+}
+/* v431：語音包＝牠說話的口氣（買了就換一種講法）。答對、打招呼、耍寶都吃這一份。 */
+const MX_VOICE = {
+  vo_cheer: { win: ['太棒了！再一題！', '你超強的！', '就是這樣！衝！'], hello: ['我們開始吧！', '今天也要加油！'], idle: ['你可以的！'] },
+  vo_cat:   { win: ['答對了喵～', '好厲害喵！', '喵嗚～滿分！'], hello: ['喵～你來啦', '今天也要一起喵'], idle: ['喵…'] },
+  vo_robot: { win: ['嗶——正確——', '答案-正-確-', '系統顯示：很強'], hello: ['嗶。啟動完成。', '偵測到同學一名'], idle: ['嗶…嗶…'] },
+  vo_eng:   { win: ['Great job!', 'You got it!', 'Awesome!'], hello: ['Hi there!', "Let's study!"], idle: ['Nice work!'] },
+};
+
 /* ══ v404（Alan：「我讓小寵物去休息，其他人的帳號也跟著休息——我都用同一台電腦」）══
    吉祥物的四樣設定（帽子／名字／休息到哪天／挑了哪一隻）本來全部存在
    localStorage 的固定 key ＝ **跟著這台電腦走，不跟著帳號走**。
@@ -45,27 +179,13 @@ function mxMigrateOnce() {
   } catch (e) {}
 }
 
+/* v431：戴什麼不再存在這台電腦的 localStorage，而是存在帳號的 progress/{uid}.mx.wear
+   （data.js mxWearOf）——換一台裝置、換一個帳號都跟著人走，不會互相影響。
+   舊的 alan-mx-hat 只剩「以前買過帽子的人第一次進來自動幫他戴上」這一個用途。 */
 const MX_HAT_KEY = 'alan-mx-hat';
 function mxOwnedHats() { return (window.__mxHats || []).filter(h => MX_HATS.some(x => x.id === h)); }
 function mxGetHat() { try { return localStorage.getItem(mxKey(MX_HAT_KEY)) || ''; } catch (e) { return ''; } }
 function mxSetHat(h) { try { localStorage.setItem(mxKey(MX_HAT_KEY), h || ''); } catch (e) {} }
-function MxHat({ id }) {
-  if (id === 'party') return (
-    <g className="mx-hat">
-      <rect x="8" y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="6" y="-2" width="6" height="2" fill="#D6533C"/>
-    </g>
-  );
-  if (id === 'crown') return (
-    <g className="mx-hat">
-      <rect x="4"  y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="8"  y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="12" y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="4"  y="-2" width="10" height="2" fill="#E8C86A"/>
-    </g>
-  );
-  return null;
-}
 
 /* ══════════════════════════════════════════════════════════════════════════
    夥伴圖鑑（v401 建立；v402 全部重畫）
@@ -257,6 +377,13 @@ const MX_LINES = {
 const lastSaid = {};
 /* v401：第二個參數是「現在是哪一隻夥伴」。牠自己有寫這一類的台詞就用牠的，
    沒寫就退回共用的那組（correct/wrong/win/tap 全部共用，不必每隻都重寫一遍）。 */
+/* v431：買了語音包就換一種口氣講話；沒有買（或這一句語音包沒寫）就照原本的。 */
+const mxLine = (k, pet, voice) => {
+  const v = MX_VOICE[voice];
+  const arr = v && v[k];
+  if (arr && arr.length) return arr[Math.floor(Math.random() * arr.length)];
+  return mxPick(k, pet);
+};
 const mxPick = (k, pet) => {
   const a = (pet && pet.lines && pet.lines[k]) || MX_LINES[k] || MX_LINES.idle;
   let s = a[Math.floor(Math.random() * a.length)];
@@ -362,7 +489,10 @@ function MascotLayer() {
   const [act,    setAct]    = useFx('idle');
   const [moveMs, setMoveMs] = useFx(0);
   const [bubble, setBubble] = useFx('');
-  const [hat, setHat]     = useFx('none');       // v384: 完成越多，帽子越好
+  const [wear, setWear]   = useFx(() => (window.mxWearOf ? window.mxWearOf(window.__mxData) : { hat: '', item: '', fx: 'fx_confetti', voice: 'vo_default' }));
+  const [stars, setStars] = useFx(0);           // v431: 現在有幾顆星星（app.jsx 算好放 window.__mxStars）
+  const [dress, setDress] = useFx(false);       // v431: 裝扮室
+  const [dressTab, setDressTab] = useFx('hat');
   const [name, setName]   = useFx(mxGetName());
   const [petId, setPetId] = useFx(mxGetPet);     // v401: 現在陪你的是哪一隻
   const [menu, setMenu]   = useFx(false);        // 長按叫出來的小選單
@@ -398,6 +528,10 @@ function MascotLayer() {
      （deps 沒有 petId），直接引用 pet 會抓到換之前的舊值 → 用 ref 帶著走。 */
   const petRef = useFxR(pet);
   useFxE(() => { petRef.current = pet; }, [petId]);
+  /* 跟 petRef 一樣的理由：掛 window.mascotCheer／攔 playSound 的那兩個 effect
+     不會因為換裝而重建，直接引用 wear 會抓到換裝之前的舊值。 */
+  const wearRef = useFxR(wear);
+  useFxE(() => { wearRef.current = wear; }, [wear]);
 
   const say = (text, ms) => {
     setBubble(text);
@@ -429,20 +563,78 @@ function MascotLayer() {
   const [allowed, setAllowed] = useFx(okNow());
   const [shown,   setShown]   = useFx(canShow());
   const [owned, setOwned] = useFx([]);
+  /* v431：剛買下去的那幾件先記在這裡——Firestore 的快照要一下下才回來，
+     這段期間畫面就已經是「買到了」，不會閃一下又變回價錢。 */
+  const pendRef = useFxR([]);
   useFxE(() => {
     const sync = () => {
-      /* v392（G）：mxOwnedHats() 每次都回傳新陣列，setOwned 的參考永遠不同
-         → 保證每 4 秒強制重繪一次，永遠不停。先比對再 setState。
-         （買了帽子仍會在 4 秒內偵測到，只是不再無謂重繪。） */
-      const own = mxOwnedHats();
+      /* v392（G）：每次都回傳新陣列，setState 的參考永遠不同 → 會保證每次都重繪。
+         先比對再 setState（買了東西仍會在 1.5 秒內看到，只是不再無謂重繪）。 */
+      const mx = window.__mxData || {};
+      const srv = window.mxOwnedList ? window.mxOwnedList(mx) : [];
+      pendRef.current = pendRef.current.filter(id => srv.indexOf(id) < 0);
+      const own = srv.concat(pendRef.current);
       setOwned(prev => (prev.join() === own.join() ? prev : own));
-      const want = mxGetHat();
-      setHat(own.indexOf(want) >= 0 ? want : (own[0] || 'none'));   // 買了就自動戴上
+      const w = window.mxWearOf ? window.mxWearOf(mx) : { hat: '', item: '', fx: 'fx_confetti', voice: 'vo_default' };
+      /* v385 買過帽子、但還沒進過裝扮室的人：照舊自動幫他戴上（不然會覺得帽子不見了） */
+      if (!w.hat) {
+        const legacy = mxOwnedHats(), want = mxGetHat();
+        w.hat = (legacy.indexOf(want) >= 0 ? want : legacy[0]) || '';
+        if (w.hat === 'party') w.hat = 'hat_party';
+        if (w.hat === 'crown') w.hat = 'hat_crown';
+      }
+      setWear(prev => ((prev.hat === w.hat && prev.item === w.item && prev.fx === w.fx && prev.voice === w.voice) ? prev : w));
+      setStars(prev => (prev === (window.__mxStars || 0) ? prev : (window.__mxStars || 0)));
     };
     sync();
-    const iv = setInterval(sync, 4000);
+    const iv = setInterval(sync, 1500);
     return () => clearInterval(iv);
   }, []);
+
+  /* ── v431 裝扮室：買／穿／表演 ────────────────────────────────
+     買賣真正寫進 Firestore 的是 app.jsx 掛上來的 window.__mxBuy／__mxWear
+     （那裡才有 user.uid 與「現在有幾顆星星」）。這裡只負責畫面與說話。 */
+  const MX_DANCE_ACT = { dc_wave: ['wave', 1500], dc_spin: ['spin', 1000], dc_dance: ['dance', 2600], dc_flip: ['flip', 1000], dc_moon: ['moon', 2600] };
+  const hasItem = (id) => (window.mxHasItem ? window.mxHasItem({ owned }, id) : false);
+  const myDances = (window.MX_SHOP || []).filter(it => it.kind === 'dance' && hasItem(it.id));
+  const playDance = (id) => {
+    const d = MX_DANCE_ACT[id] || ['dance', 2000];
+    if (reduce.current) { say('動畫關起來了，我先不動 🙂', 2400); return; }
+    setAct(d[0]); later(() => setAct('idle'), d[1]);
+    if (window.playSound) window.playSound('pop');
+  };
+  const pickItem = async (it) => {
+    // 已經有了 → 穿上／脫下（動作類就是表演一次）
+    if (hasItem(it.id)) {
+      if (it.kind === 'dance') { setDress(false); playDance(it.id); return; }
+      const off = wear[it.kind] === it.id;
+      // 特效與語音一定要留一個（預設那個是免費的），不然答對就沒有反應了
+      const next = off ? (it.kind === 'fx' ? 'fx_confetti' : it.kind === 'voice' ? 'vo_default' : '') : it.id;
+      setWear(prev => Object.assign({}, prev, { [it.kind]: next }));
+      const r = await (window.__mxWear ? window.__mxWear(it.kind, next) : Promise.resolve({ ok: false, reason: 'no-user' }));
+      if (!r.ok && r.reason === 'no-user') { say('登入以後才存得起來喔', 2600); return; }
+      say(off ? '先收起來' : `${it.zh}，好看嗎？`, 2200);
+      return;
+    }
+    // 還沒有 → 用星星買
+    if (stars < (it.cost || 0)) { say(`還差 ${((it.cost || 0) - stars).toLocaleString()} 顆星星 ⭐`, 2800); return; }
+    if (!window.confirm(`要用 ${it.cost.toLocaleString()} 顆星星買「${it.zh}」嗎？`)) return;
+    const r = await (window.__mxBuy ? window.__mxBuy(it.id) : Promise.resolve({ ok: false, reason: 'no-user' }));
+    if (!r.ok) {
+      say(r.reason === 'no-user' ? '要先登入才能買喔' :
+          r.reason === 'poor'    ? `還差 ${(r.short || 0).toLocaleString()} 顆星星` :
+                                   '沒買成功，等一下再試一次', 3000);
+      return;
+    }
+    pendRef.current = pendRef.current.concat([it.id]);
+    setOwned(prev => prev.concat([it.id]));
+    setStars(prev => Math.max(0, prev - (it.cost || 0)));
+    if (window.playSound) window.playSound('pop');
+    if (it.kind === 'dance') { say(`學會${it.zh}了！`, 2600); setDress(false); playDance(it.id); return; }
+    setWear(prev => Object.assign({}, prev, { [it.kind]: it.id }));
+    if (window.__mxWear) window.__mxWear(it.kind, it.id);
+    say(`買到${it.zh}了！`, 2800);
+  };
 
   /* v404：登入／換帳號時，把「這個帳號自己的」設定重讀一次。
      ⚠ 這幾個 useState 的初始值是在 mount 當下算的，那時 Firebase 還沒解析完、
@@ -561,7 +753,7 @@ function MascotLayer() {
         setMoveMs(ms);
         setX(target);
         setAct(pick);
-        if (Math.random() < 0.08) say(mxPick(pick === pet.sig ? 'sig' : 'idle', pet));   // v392（D）：0.25 → 0.08
+        if (Math.random() < 0.08) say(mxLine(pick === pet.sig ? 'sig' : 'idle', pet, wearRef.current.voice));   // v392（D）：0.25 → 0.08
         /* v407：衝刺改成「衝到底 → 煞車 → 再衝回來」。
            速度是比較出來的：中間那 0.36 秒的煞車停格就是參考點，
            有它才看得出牠剛剛橫越了整個畫面，沒有它只是一路滑過去。 */
@@ -587,12 +779,12 @@ function MascotLayer() {
       /* v392（D）：泡泡是文字（font-weight:700、最寬 190px），比動作更會搶走視線。
          實測 1180px 是 4.50 泡泡/分鐘、390px 是 6.01 → 出現率腰斬。
          睡覺以前是「無條件講一句」，也改成一半機率。 */
-      if (pick === 'sleep') { if (Math.random() < 0.5) say(mxPick('sleep', pet), 3800); }
+      if (pick === 'sleep') { if (Math.random() < 0.5) say(mxLine('sleep', pet, wearRef.current.voice), 3800); }
       /* v401：招牌動作的泡泡機率拉高到 40%——它一個 session 才出現幾次，
          而且「牠在做什麼」要靠這句話才看得懂（打電腦、看書、裝石頭）。
          其他動作維持 v392 調低後的 15%，整體泡泡量不會回到當初被嫌吵的程度。 */
-      else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxPick('sig', pet)); }
-      else if (Math.random() < 0.15) say(mxPick('idle', pet));   // v392（D）：0.45 → 0.15
+      else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxLine('sig', pet, wearRef.current.voice)); }
+      else if (Math.random() < 0.15) say(mxLine('idle', pet, wearRef.current.voice));   // v392（D）：0.45 → 0.15
       later(() => { setAct('idle'); later(doAct, 1200 + Math.random() * 3000); }, HOLD[pick] || 1200);
     };
 
@@ -600,7 +792,7 @@ function MascotLayer() {
        來回切換——以前每重跑一次就再說一次 hello，學生做完一個練習回到清單，
        700ms 後就被重新打招呼。A 做完之後切換更頻繁，所以這條必須跟 A 一起做。 */
     const first = later(() => {
-      if (!greetedRef.current) { greetedRef.current = true; say(mxPick('hello', pet)); }
+      if (!greetedRef.current) { greetedRef.current = true; say(mxLine('hello', pet, wearRef.current.voice)); }
       later(doAct, 1600);
     }, 700);
     return () => { stopped = true; clearTimeout(first); clearAll(); };
@@ -631,7 +823,7 @@ function MascotLayer() {
         else if (type === 'wrong') { runRef.current = 0; }   // 答錯＝連勝歸零，完全不反應
         else if (type === 'complete' || type === 'fanfare') {
           // 做完了本來就該有大慶祝——這條維持不動
-          setAct('cheer'); say(mxPick('win', petRef.current), 3000); later(() => setAct('idle'), 2200);
+          setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000); later(() => setAct('idle'), 2200);
         }
       } catch (e) {}
     };
@@ -642,9 +834,11 @@ function MascotLayer() {
 
   /* 給外面用的小 API */
   useFxE(() => {
+    /* v431：商店（StarsPanel）按「去裝扮室」會叫這個；牠在睡覺就順便叫醒 */
+    window.mxOpenDress = () => { mxSetOff(''); setHidden(false); setDress(true); };
     window.mascotSay = (t) => say(String(t || ''), 2600);
     window.mascotDo  = (a) => { setAct(a); later(() => setAct('idle'), 1600); };
-    window.mascotCheer = () => { setAct('cheer'); say(mxPick('win', petRef.current), 3000); later(() => setAct('idle'), 2200); };
+    window.mascotCheer = () => { setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000); later(() => setAct('idle'), 2200); };
   }, []);
 
   /* 點一下＝耍寶；長按＝去睡覺（這次不再出現）。
@@ -708,14 +902,14 @@ function MascotLayer() {
          套上去只會原地抽動，所以那一隻退回一般把戲。 */
     const sigOk = !reduce.current && pet.sig && MX_MOVE_ACTS.indexOf(pet.sig) < 0;
     if (sigOk && Math.random() < 0.45) {
-      setAct(pet.sig); say(mxPick('sig', pet), 2400);
+      setAct(pet.sig); say(mxLine('sig', pet, wearRef.current.voice), 2400);
       if (window.playSound) window.playSound('match');
       later(() => setAct('idle'), MX_SIG_HOLD[pet.sig] || 1600);
       return;
     }
     const tricks = reduce.current ? ['think'] : ['jump', 'spin', 'dance', 'roll'];
     const t = tricks[Math.floor(Math.random() * tricks.length)];
-    setAct(t); say(mxPick('tap', pet), 2000);
+    setAct(t); say(mxLine('tap', pet, wearRef.current.voice), 2000);
     if (window.playSound) window.playSound('match');
     later(() => setAct('idle'), t === 'dance' ? 2000 : 1000);
   };
@@ -763,7 +957,9 @@ function MascotLayer() {
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
           onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
           role="img" aria-label={`吉祥物 ${name || pet.zh}`}>
-          <Art hat={hat}/>
+          <Art hat={wear.hat || 'none'}/>
+          {/* v431：買來的配件疊在身上（同一個 viewBox，五隻夥伴都對得準） */}
+          <MxAcc id={wear.item}/>
           {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
               永遠留在「牠的身後」，不用另外算方向。 */}
           <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
@@ -781,15 +977,12 @@ function MascotLayer() {
               if (n !== null) { mxSetName(n.trim()); setName(n.trim()); say(n.trim() ? `我叫 ${n.trim()}！` : '好吧，我沒有名字', 2600); }
               setMenu(false);
             }}>✏️ 取名字</button>
-            {owned.length > 0 && (
-              <button onClick={() => {
-                const cycle = ['none'].concat(owned);
-                const next = cycle[(cycle.indexOf(hat) + 1) % cycle.length];
-                setHat(next); mxSetHat(next === 'none' ? '' : next);
-                const zh = (MX_HATS.find(h => h.id === next) || {}).zh;
-                say(next === 'none' ? '帽子先收起來' : `戴上${zh}了！`, 2200);
-                setMenu(false);
-              }}>🎩 換帽子</button>
+            {/* v431（Alan：「長按吉祥物可以直接購買和換裝」）：帽子／配件／特效／語音／動作都在這裡 */}
+            <button onClick={() => { setMenu(false); setDress(true); }}>👕 裝扮室</button>
+            {myDances.length > 0 && (
+              <button onClick={() => { setMenu(false); playDance(myDances[Math.floor(Math.random() * myDances.length)].id); }}>
+                💃 表演一個
+              </button>
             )}
             {/* v401：換夥伴——名冊做成一張小圖鑑，點頭像就換 */}
             <button onClick={() => { setMenu(false); setPetPick(true); }}>🐾 換夥伴</button>
@@ -800,6 +993,51 @@ function MascotLayer() {
             <button onClick={() => { setMenu(false); mxSetOff(mxDay(1)); setHidden(true); }}>😴 明天也不要</button>
             <div className="mx-menu-hint">睡著後點角落的 💤 就能叫回來</div>
             <button className="mx-menu-x" onClick={() => setMenu(false)}>取消</button>
+          </div>
+        )}
+        {dress && (
+          <div className="mx-dress" onPointerDown={e => e.stopPropagation()}>
+            <div className="mx-dress-head">
+              <b>👕 裝扮室</b>
+              <span className="mx-dress-bal">{stars.toLocaleString()} ⭐</span>
+              <button className="mx-dress-x" onClick={() => setDress(false)} aria-label="關起來">✕</button>
+            </div>
+            {/* 預覽：現在這一隻穿好的樣子，點一下就表演 */}
+            <div className="mx-dress-prev" onClick={() => myDances.length && playDance(myDances[0].id)}>
+              <span className="mx-dress-figure"><Art size={62} hat={wear.hat || 'none'}/><MxAcc id={wear.item}/></span>
+              <span className="mx-dress-who">{name || pet.zh}</span>
+            </div>
+            <div className="mx-dress-tabs">
+              {(window.MX_KINDS || []).map(k => (
+                <button key={k.kind} className={dressTab === k.kind ? 'on' : ''}
+                  onClick={() => setDressTab(k.kind)}>{k.ico} {k.zh}</button>
+              ))}
+            </div>
+            <div className="mx-dress-grid">
+              {(window.MX_SHOP || []).filter(it => it.kind === dressTab).map(it => {
+                const have = hasItem(it.id);
+                const on   = have && (it.kind === 'dance' ? false : wear[it.kind] === it.id);
+                return (
+                  <button key={it.id} className={'mx-dz' + (have ? ' have' : '') + (on ? ' on' : '')}
+                    onClick={() => pickItem(it)}>
+                    <span className="mx-dz-ico">{it.emoji}</span>
+                    <span className="mx-dz-name">{it.zh}</span>
+                    <span className="mx-dz-tag">
+                      {!have ? `${it.cost.toLocaleString()}⭐`
+                        : it.kind === 'dance' ? '表演'
+                        : on ? '穿著中' : '穿上'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mx-dress-note">
+              {dressTab === 'fx' ? '答對題目的時候會放這個特效 ✨'
+                : dressTab === 'voice' ? '牠講話的口氣會變成這一種 🔊'
+                : dressTab === 'dance' ? '買了之後，長按牠就可以叫牠表演 💃'
+                : '星星是做練習賺來的；買了以後隨時可以換 · 再按一次可以脫下來'}
+            </div>
+            <button className="mx-menu-x" onClick={() => setDress(false)}>關起來</button>
           </div>
         )}
         {petPick && (
@@ -838,7 +1076,16 @@ function MascotLayer() {
 /* ── 彩帶 ─────────────────────────────────────────────────── */
 const FX_COLORS = ['#C1785A', '#C9A84C', '#2E7D5B', '#2E6F9E', '#8A5FA8', '#D6533C', '#E8C86A'];
 
+/* v431：買了特效就換掉答對時灑下來的東西（預設仍然是彩帶）。
+   一律用同一支 fxFall 動畫，只是把「紙片」換成字——不用另外寫動畫，也不會變慢。 */
+const FX_CHARS = {
+  fx_stars:  ['⭐', '✨', '🌟'],
+  fx_hearts: ['💗', '💖', '❤️'],
+  fx_bubble: ['🫧', '◦', '○'],
+  fx_fire:   ['🎆', '🎇', '✨'],
+};
 function ConfettiBurst({ big, onDone }) {
+  const chars = useFxR(FX_CHARS[(window.mxWearOf ? window.mxWearOf(window.__mxData).fx : '')] || null).current;
   const pieces = useFxR(
     Array.from({ length: big ? 84 : 26 }, (_, i) => ({   // 沒達標時只放一點點（是「你做完了」不是「你贏了」）
       id: i,
@@ -851,6 +1098,7 @@ function ConfettiBurst({ big, onDone }) {
       spin:  Math.round((Math.random() - 0.5) * 900),
       drift: Math.round((Math.random() - 0.5) * 180),
       round: Math.random() < 0.3,
+      ch: chars ? chars[Math.floor(Math.random() * chars.length)] : null,
     }))
   ).current;
 
@@ -862,16 +1110,17 @@ function ConfettiBurst({ big, onDone }) {
   return (
     <div className="fx-confetti" aria-hidden="true">
       {pieces.map(p => (
-        <span key={p.id} className="fx-cfp"
+        <span key={p.id} className={'fx-cfp' + (p.ch ? ' fx-cfp-ch' : '')}
           style={{
-            left: p.left + '%', background: p.color,
-            width: p.w + 'px', height: p.h + 'px',
+            left: p.left + '%', background: p.ch ? 'none' : p.color,
+            width: p.ch ? 'auto' : p.w + 'px', height: p.ch ? 'auto' : p.h + 'px',
+            fontSize: p.ch ? (p.h + 9) + 'px' : undefined,
             borderRadius: p.round ? '50%' : '1px',
             animationDelay: p.delay + 'ms',
             animationDuration: p.dur + 'ms',
             '--fx-spin': p.spin + 'deg',
             '--fx-drift': p.drift + 'px',
-          }}/>
+          }}>{p.ch}</span>
       ))}
     </div>
   );

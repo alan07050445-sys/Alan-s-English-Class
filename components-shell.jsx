@@ -1181,10 +1181,8 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
    兌換＝送出申請給老師（老師確認後在後台扣點）。
 ══════════════════════════════════════════════════════ */
 const SHOP_ITEMS = [
-  /* v385: 吉祥物的帽子＝虛擬商品。老師在後台扣點的那一筆就是「買到了」的憑證，
-     app.jsx 會從星星紀錄算出擁有哪幾頂（見 window.__mxHats）。 */
-  { id:'hat_party', emoji:'🎉', name:'吉祥物的派對帽', cost:500,  tag:'吉祥物', virtual:true },
-  { id:'hat_crown', emoji:'👑', name:'吉祥物的皇冠',   cost:1000, tag:'吉祥物', virtual:true },
+  /* v385 的兩頂帽子已經搬到 v431 的「吉祥物裝扮」區（data.js MX_SHOP）——
+     那邊是按了就買到、馬上換上，不用再麻煩老師扣點。以前老師扣過點的人仍然算擁有。 */
   { id:'labubu',   emoji:'🧸', name:'Labubu 公仔',        cost:3000,  tag:'娃娃' },
   { id:'capy_big', emoji:'🦫', name:'50 公分大卡皮巴拉',  cost:3000,  tag:'娃娃' },
   { id:'capy_sm',  emoji:'🧸', name:'小卡皮巴拉吊飾',      cost:800,   tag:'娃娃' },
@@ -1298,7 +1296,7 @@ function CheckinPanel({ user, checkin, onClose, onDone }) {
   );
 }
 
-function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
+function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, mx, onOpenDress }) {
   const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
@@ -1322,10 +1320,24 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
     const c = window.computeCheckin ? window.computeCheckin(checkin) : { total: 0, entries: [] };
     return { total: a.total + c.total, entries: [...a.entries, ...c.entries] };
   }, [weeks, weekOrder, progItems, checkin]);
-  const bal   = (data.balance || 0) + auto.total;   // v361: 手動 + 自動
+  /* v431 ④：買吉祥物裝扮花掉的星星要扣掉。花了多少由「買到哪幾件」反算（data.js mxSpent），
+     跟 header 右上角那顆 ⭐ 用的是同一個算法，兩邊不可能對不起來。 */
+  const spent = window.mxSpent ? window.mxSpent(mx) : 0;
+  const bal   = Math.max(0, (data.balance || 0) + auto.total - spent);   // v361: 手動 + 自動 − 裝扮
   const items = (shopItems && shopItems.length) ? shopItems : SHOP_ITEMS;
-  const tags  = ['全部', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
-  const shown = filter === '全部' ? items : items.filter(i => i.tag === filter);
+  const tags  = ['全部', '吉祥物', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
+  const shown = filter === '全部' ? items : filter === '吉祥物' ? [] : items.filter(i => i.tag === filter);
+  // v431：吉祥物的裝扮是「按了就買到、馬上換上」的虛擬商品，跟實體商品分開一區
+  const cosmetics = (filter === '全部' || filter === '吉祥物') ? (window.MX_SHOP || []).filter(it => !it.free) : [];
+  const buyCosmetic = async (it) => {
+    if (window.mxHasItem && window.mxHasItem(mx, it.id)) { if (onOpenDress) onOpenDress(); return; }
+    if (bal < it.cost) { alert(`還差 ${(it.cost - bal).toLocaleString()} 顆星星才能買「${it.zh}」，繼續加油！⭐`); return; }
+    if (!window.confirm(`要用 ${it.cost.toLocaleString()} 顆星星買「${it.zh}」嗎？\n買了馬上就可以換上，之後也能隨時換。`)) return;
+    const r = await (window.__mxBuy ? window.__mxBuy(it.id) : Promise.resolve({ ok: false, reason: 'no-user' }));
+    if (!r.ok) { alert(r.reason === 'poor' ? `還差 ${(r.short || 0).toLocaleString()} 顆星星` : '沒買成功，等一下再試一次。'); return; }
+    if (window.__mxWear && it.kind !== 'dance') window.__mxWear(it.kind, it.id);
+    alert(`買到「${it.zh}」了！🎉\n長按吉祥物 → 👕 裝扮室，隨時可以換。`);
+  };
 
   const redeem = (it) => {
     if (bal < it.cost) {
@@ -1384,6 +1396,28 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin }) {
                 <button key={t} className={filter === t ? 'on' : ''} onClick={() => setFilter(t)}>{t}</button>
               ))}
             </div>
+            {cosmetics.length > 0 && (
+              <React.Fragment>
+                <div className="sp-shop-head">🧸 吉祥物裝扮 · 買了馬上換上（長按吉祥物可以再換）</div>
+                <div className="sp-shop sp-shop-mx">
+                  {cosmetics.map(it => {
+                    const have = !!(window.mxHasItem && window.mxHasItem(mx, it.id));
+                    const ok2  = have || bal >= (it.cost || 0);
+                    return (
+                      <div key={it.id} className={'sp-item' + (ok2 ? '' : ' locked')}>
+                        <div className="sp-item-img" aria-hidden="true">{it.emoji}</div>
+                        <div className="sp-item-name">{it.zh}</div>
+                        <div className="sp-item-cost">{have ? '已擁有' : Number(it.cost || 0).toLocaleString() + '⭐'}</div>
+                        <button className="sp-item-btn" onClick={() => buyCosmetic(it)}>
+                          {have ? '去換上' : ok2 ? '買下來' : `還差 ${((it.cost || 0) - bal).toLocaleString()}`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {shown.length > 0 && <div className="sp-shop-head">🎁 跟老師換的禮物</div>}
+              </React.Fragment>
+            )}
             <div className="sp-shop">
               {shown.map(it => {
                 const ok = bal >= (it.cost || 0);
