@@ -20,6 +20,15 @@
 @media (min-width: 700px) {
   .mx-layer { --mx-w: clamp(42px, 4.6vw, 50px); }
 }
+/* v434（Alan：「iPad 橫式的吉祥物太大了」）：牠的大小本來只看「寬度」——
+   iPad 橫式 1180 寬 → 4.6vw = 54 → 吃到上限 50px，跟 27 吋桌機一樣大；
+   但橫式的高度只有 820~834，牠又是站在畫面最底下，同樣 50px 在矮螢幕上就特別搶戲。
+   矮而寬的螢幕（平板橫式、小筆電）改用「高度」算，約 40px。
+   ⚠ 只限平板到小筆電的寬度（≤1366）：大桌機即使視窗拉矮也維持原本大小；
+     iPad 直式（高 1194）不在這個範圍，維持 42~50px（Alan 沒說直式的問題）。 */
+@media (min-width: 700px) and (max-width: 1366px) and (max-height: 900px) {
+  .mx-layer { --mx-w: clamp(34px, 4.8vh, 42px); }
+}
 .mx-layer.dragging .mx-body { cursor: grabbing; }
 .mx-slot { position: absolute; left: 0; bottom: 0; will-change: transform; }
 

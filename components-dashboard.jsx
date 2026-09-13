@@ -73,7 +73,7 @@ function WeeklyReportModal({ student, weeks, weekOrder, initialWeekId, onClose }
 }
 
 /* ── All-Class Report Modal ────────────────────────────── */
-function AllClassReportModal({ students, weeks, weekOrder, weeksFor, initialWeekId, onClose }) {
+function AllClassReportModal({ students, weeks, weekOrder, weeksFor, dataFor, initialWeekId, onClose }) {
   const [selWeekId, setSelWeekId] = useDash(() =>
     initialWeekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null)
   );
@@ -82,10 +82,12 @@ function AllClassReportModal({ students, weeks, weekOrder, weeksFor, initialWeek
   const allText = useDashM(() => {
     if (!selWeekId || !students.length) return '尚無學生資料。';
     return students.map(s => {
-      const r = window.buildWeeklyReport(s, weeksFor ? weeksFor(s) : weeks, weekOrder, { weekId: selWeekId });
+      // v434：各年級各一份作業——用這位學生自己年級的那一份（週次自動對應）
+      const d = (dataFor && dataFor(s)) || { weeks: weeksFor ? weeksFor(s) : weeks, order: weekOrder, weekId: selWeekId };
+      const r = window.buildWeeklyReport(s, d.weeks, d.order, { weekId: d.weekId || selWeekId });
       return window.formatReportAsText(r, friendlyName(s));
     }).join('\n\n' + '－'.repeat(28) + '\n\n');
-  }, [students, weeks, weekOrder, selWeekId, weeksFor]);
+  }, [students, weeks, weekOrder, selWeekId, weeksFor, dataFor]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(allText).then(() => {
@@ -130,7 +132,7 @@ const CWO_CATS = [
   { id: 'word',    short: '字根' },
   { id: 'reading', short: '閱讀' },
 ];
-function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade, onSelect, selWeekId, setSelWeekId }) {
+function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, dataFor, currentGrade, onSelect, selWeekId, setSelWeekId }) {
   // v251: selWeekId 由 TeacherDashboard 統一管理（進學生詳情返回不再重置、預設=今天所在週）
   // v307 (Finding 6): 預設篩選＝目前載入的年級——KPI 平均、燈號只算本年級，跨年級不再假紅字（可切「全部」看全校）
   const [gradeFilter, setGradeFilter] = useDash(currentGrade || 'all'); // v237: 年級篩選
@@ -166,14 +168,18 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade,
   const rows = useDashM(() => {
     if (!selWeekId) return [];
     return students.map(s => {
-      const r = window.buildWeeklyReport(s, weeksFor ? weeksFor(s) : weeks, weekOrder, { weekId: selWeekId }); // v238: 暑假=只算派給他的
+      /* v434：用「這位學生自己年級」的作業與同一週（id 規則見 TeacherDashboard 的 weekIdForGrade） */
+      const d = (dataFor && dataFor(s)) || { weeks: weeksFor ? weeksFor(s) : weeks, order: weekOrder, weekId: selWeekId, ok: true };
+      /* ⚠ weekId 給 null 的話 buildWeeklyReport 會退回「那個年級的最後一週」（見 data.js），
+         那是別週的資料——這裡改用一個一定不存在的 id，讓它乾乾淨淨回空的（那一列會灰掉）。 */
+      const r = window.buildWeeklyReport(s, d.weeks, d.order, { weekId: d.weekId || '__no_week__' }); // v238: 暑假=只算派給他的
       const catMap = {};
       (window.CATEGORIES || []).forEach(c => { catMap[c.titleZh] = { done: 0, total: 0 }; });
       r.completed.forEach(x => { if (catMap[x.cat]) { catMap[x.cat].done++; catMap[x.cat].total++; } });
       r.pending.forEach(x => { if (catMap[x.cat]) { catMap[x.cat].total++; } });
       const done = r.completed.length, total = r.totalItems;
       // v266: 待批改——這週已交照片但還沒給分的上傳作業數；v307(F10): 也算「本週有沒有已過期的作業」
-      const wk = (weeksFor ? weeksFor(s) : weeks)[selWeekId];
+      const wk = d.weeks[d.weekId];
       let pendingGrade = 0, anyPastDue = false;
       if (wk) {
         const hw = wk.homework || {};
@@ -186,7 +192,7 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade,
         });
         (window.CATEGORIES || []).forEach(c => ((wk.items || {})[c.id] || []).forEach(it => {
           const its2 = s.items || {};
-          const pr = its2[`${selWeekId}_${it.id}`] || its2[it.id] ||
+          const pr = its2[`${d.weekId}_${it.id}`] || its2[it.id] ||
             its2[Object.keys(its2).find(k => k.endsWith('_' + it.id)) || ''] || null;
           if (pr && pr.files && pr.files.length && pr.score == null) pendingGrade++;
         }));
@@ -198,9 +204,9 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade,
         const st = m.total === 0 ? 'none' : (m.done === 0 ? (anyPastDue ? 'red' : 'wait') : (m.done >= m.total ? 'green' : 'yellow'));
         return { short: (CWO_CATS[i] || {}).short || c.titleZh, ...m, st };
       });
-      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt, late: r.lateCount || 0, pendingGrade };
+      return { s, name: friendlyName(s), grade: window.gradeFromEmail(s.email), done, total, pct: r.completionRate, avg: r.avgScore, status, cats, last: s.updatedAt, late: r.lateCount || 0, pendingGrade, noData: !d.ok };
     });
-  }, [students, weeks, weekOrder, selWeekId, weeksFor]);
+  }, [students, weeks, weekOrder, selWeekId, weeksFor, dataFor]);
 
   const orderRank = { red: 0, yellow: 1, wait: 2, none: 3, green: 4 };
   const sorted = useDashM(() =>
@@ -220,9 +226,9 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade,
     (!q.trim() || (r.name + ' ' + (r.s.email || '')).toLowerCase().includes(q.trim().toLowerCase()))
   ), [sorted, gradeFilter, q]);
 
-  // v307 (Finding 6):「全部」檢視下，非目前年級的學生（週次沒載入 → 會假裝 0 完成）——列灰掉、不列入平均。
-  // 個人 Gmail（無年級）視為屬於本班，不灰不排除。
-  const isOffGrade = (r) => gradeFilter === 'all' && currentGrade && r.grade && r.grade !== currentGrade;
+  /* v307 (F6) 當時是「不是目前這一班就灰掉、不算平均」——那時後台只載入一個年級，別班學生會假裝 0 完成。
+     v434 之後每位學生都用自己年級的作業算，所以不用再灰；只有「那個年級這一週真的讀不到」才灰。 */
+  const isOffGrade = (r) => !!r.noData;
 
   const sum = useDashM(() => {
     let green = 0, yellow = 0, red = 0, none = 0, sp = 0, n = 0;
@@ -231,7 +237,9 @@ function ClassWeekOverview({ students, weeks, weekOrder, weeksFor, currentGrade,
       else if (r.status === 'red') red++; else none++;
       if (r.total > 0 && !isOffGrade(r)) { sp += r.pct; n++; }
     });
-    return { green, yellow, red, none, avgPct: n ? Math.round(sp / n) : 0, items: rows.reduce((m, r) => Math.max(m, r.total), 0) };
+    // v434：「本週 N 項練習」跟著現在篩選的名單走（切到 G6 就顯示 G6 這一週有幾項）
+    return { green, yellow, red, none, avgPct: n ? Math.round(sp / n) : 0,
+             items: (shown.length ? shown : rows).reduce((m, r) => Math.max(m, r.total), 0) };
   }, [shown, rows, gradeFilter, currentGrade]);
 
   const fmtLast = (t) => {
@@ -365,6 +373,23 @@ function _dashParseRange(dr) {
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
   end.setHours(23, 59, 59, 999);
   return { start, end };
+}
+/* v434：同一週在各年級的 id 只差前綴（G3「2026F-W02」、G4「g4-2026F-W02」）。
+   先照規則猜，猜不到就用「日期區間一樣」的那一週，再不行就回 null＝這個年級沒有這一週
+   （後台會把那一列灰掉，而不是假裝他一題都沒做）。 */
+function dashWeekIdForGrade(gd, srcWeeks, g, wid) {
+  if (!gd || !gd.order || !gd.order.length || !wid) return null;
+  const bare = String(wid).replace(/^g\d-/, '');
+  const guess = (g === 'g3') ? bare : `${g}-${bare}`;
+  if (gd.order.indexOf(guess) >= 0) return guess;
+  if (gd.order.indexOf(wid) >= 0) return wid;
+  const src = (srcWeeks || {})[wid];
+  const dr = src && src.dateRange;
+  if (dr && dr !== '—') {
+    const hit = gd.order.find(id => gd.weeks[id] && gd.weeks[id].dateRange === dr);
+    if (hit) return hit;
+  }
+  return null;
 }
 function dashCurrentWeekId(weeks, order) {
   const now = new Date();
@@ -1173,7 +1198,7 @@ function LineLink() {
 }
 
 /* ── 集點（星星）v342 ──────────────────────────────────── */
-function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFor, weekOrder }) {
+function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFor, weekOrder, dataFor }) {
   const [stars, setStars] = useDash({});
   const [sel, setSel]     = useDash(null);     // 選中的學生 email
   const [amount, setAmount] = useDash('');
@@ -1197,15 +1222,17 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
     (students || []).forEach(st => {
       const em = String(st.email || '').toLowerCase();
       if (!em) return;
-      const wk = weeksFor ? weeksFor(st) : null;
+      // v434：自動集點也要用這位學生自己年級的課程，不然別班的星星算不出來
+      const d = dataFor ? dataFor(st) : null;
+      const wk = d ? d.weeks : (weeksFor ? weeksFor(st) : null);
       if (!wk) return;
-      const a = window.computeAutoStars(wk, weekOrder, st.items || {}, { cloudShape: true });
+      const a = window.computeAutoStars(wk, (d && d.order) || weekOrder, st.items || {}, { cloudShape: true });
       // v362: 每日簽到
       const c = window.computeCheckin ? window.computeCheckin(st.checkin) : { total: 0, entries: [] };
       m[em] = { total: a.total + c.total, entries: [...a.entries, ...c.entries] };
     });
     return m;
-  }, [students, weeksFor, weekOrder]);
+  }, [students, weeksFor, weekOrder, dataFor]);
   const autoTotal = (email) => ((autoOf[String(email || '').toLowerCase()] || {}).total || 0);
   const balanceOf = (email) => (((stars[String(email || '').toLowerCase()] || {}).balance) || 0) + autoTotal(email);
 
@@ -1966,14 +1993,60 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     return m ? 'g' + m[1] : 'g3';
   }, [grade, dOrder, isSummerData]);
 
+  /* ══ v434（Alan：「我進 G4 只能看 G4；切到 G6 只會看到 G6 有沒有做 G4 的作業，
+        但 G6 只會有 G6 的作業」）══════════════════════════════════════════════
+     每個年級的作業各存一份（class/data、class/data_g1…data_g6），後台以前只載入
+     「目前打開的那間教室」那一份 → 別班學生一律被拿去對這一份算，當然全是 0/20。
+     （這跟 v419 LINE 提醒發到別班是同一個坑：一份資料當成全部。）
+     改成六個年級全部訂閱，每位學生用**他自己年級**的那一份算。 */
+  const [gradeData, setGradeData] = useDash({});     // { g3: { weeks, order }, g4: {...} … }
+  useDashE(() => {
+    const subs = [];
+    const add = (g, fn) => {
+      if (typeof fn !== 'function') return;
+      try {
+        subs.push(fn(
+          (w, o) => setGradeData(prev => Object.assign({}, prev, { [g]: { weeks: w || {}, order: (o || []).slice() } })),
+          () => {}));
+      } catch (e) { /* 某個年級讀不到就少那一個年級，其他照常 */ }
+    };
+    add('g1', window.subscribeToClassDataG1); add('g2', window.subscribeToClassDataG2);
+    add('g3', window.subscribeToClassData);   add('g4', window.subscribeToClassDataG4);
+    add('g5', window.subscribeToClassDataG5); add('g6', window.subscribeToClassDataG6);
+    return () => subs.forEach(u => { try { u && u(); } catch (e) {} });
+  }, []);
+
+  const gradeOfStu = (s) => (window.gradeFromEmail ? window.gradeFromEmail((s && s.email) || '') : null) || null;
+  const weekIdForGrade = (g, wid) => dashWeekIdForGrade(gradeData[g], dWeeks, g, wid);
+  /* 一位學生要用「哪一份作業、哪一週」——暑假照舊（暑假題庫是全校共用一份）。 */
+  const dataForStudent = (s) => {
+    if (isSummerData) return { weeks: weeksForStudent(s), order: dOrder, weekId: selWeekId, ok: true };
+    const g = gradeOfStu(s);
+    const gd = g && gradeData[g];
+    if (!gd || !gd.order.length) return { weeks: dWeeks, order: dOrder, weekId: selWeekId, ok: !g || g === currentGrade };
+    const wid = weekIdForGrade(g, selWeekId);
+    return { weeks: gd.weeks, order: gd.order, weekId: wid, ok: !!wid };
+  };
+
   const weeksForStudent = (s) => {
-    if (!isSummerData || !window.filterWeeksForPlan) return dWeeks;
-    const plan = (summerMeta.students || {})[String((s && s.email) || '').toLowerCase()] || null;
-    return window.filterWeeksForPlan(dWeeks, dOrder, plan);
+    if (isSummerData) {
+      if (!window.filterWeeksForPlan) return dWeeks;
+      const plan = (summerMeta.students || {})[String((s && s.email) || '').toLowerCase()] || null;
+      return window.filterWeeksForPlan(dWeeks, dOrder, plan);
+    }
+    const g = gradeOfStu(s);
+    const gd = g && gradeData[g];
+    return (gd && gd.order.length) ? gd.weeks : dWeeks;
+  };
+  const orderForStudent = (s) => {
+    if (isSummerData) return dOrder;
+    const g = gradeOfStu(s);
+    const gd = g && gradeData[g];
+    return (gd && gd.order.length) ? gd.order : dOrder;
   };
   const allItemsFor = (s) => {
     const w = weeksForStudent(s);
-    return dOrder.flatMap(wid => {
+    return orderForStudent(s).flatMap(wid => {
       const wk = w[wid];
       if (!wk) return [];
       return window.CATEGORIES.flatMap(c =>
@@ -2190,7 +2263,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <LineLink/>
           ) : tab === 'stars' ? (
             <StarsManager roster={rosterAll} myEmail={myEmailD} ownerEmail={ownerEmailD} stuScope={stuScope}
-              students={students} weeksFor={weeksForStudent} weekOrder={dOrder}/>
+              students={students} weeksFor={weeksForStudent} weekOrder={dOrder} dataFor={dataForStudent}/>
           ) : tab === 'shop' ? (
             <ShopManager/>
           ) : tab === 'hwremind' ? (
@@ -2205,8 +2278,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
               student={selected}
               allItems={allItemsFor(selected)}
               weeks={weeksForStudent(selected)}
-              weekOrder={dOrder}
-              selWeekId={selWeekId}
+              weekOrder={orderForStudent(selected)}
+              selWeekId={(dataForStudent(selected) || {}).weekId || selWeekId}
               onBack={() => setSelected(null)}
             />
           ) : (
@@ -2217,6 +2290,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
                 weeks={dWeeks}
                 weekOrder={dOrder}
                 weeksFor={weeksForStudent}
+                dataFor={dataForStudent}
                 currentGrade={currentGrade}
                 onSelect={setSelected}
                 selWeekId={selWeekId}
@@ -2279,6 +2353,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             weeks={dWeeks}
             weekOrder={dOrder}
             weeksFor={weeksForStudent}
+            dataFor={dataForStudent}
             initialWeekId={selWeekId}
             onClose={() => setAllReportOpen(false)}
           />
