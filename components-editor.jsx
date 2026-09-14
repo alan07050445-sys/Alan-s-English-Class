@@ -2530,9 +2530,9 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, sideIt
   const putBg = (lesson) => {
     if (!lesson || !(lesson.steps || []).length) return;
     const id = (bgItem && bgItem.id) || ('gr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'bg');
-    const item = { id, type: 'lesson', group: itemGroup || undefined,
+    const item = { id, type: 'lesson', group: itemGroup || undefined, brief: true,   // v440：簡報式
       title: (itemTitle || '分段閱讀') + ' · 讀之前先知道',
-      zh: `背景知識 · ${lesson.steps.length} 步 · 學完才開始讀`,
+      zh: `背景知識 · ${lesson.steps.length} 個重點 · 看完才開始讀`,
       lead: lesson.lead || '', steps: lesson.steps, outro: lesson.outro || '' };
     setSide(side.filter(x => x && x.type !== 'lesson').concat([item]));
     if (onChangeRequires) onChangeRequires(id);
@@ -5665,8 +5665,8 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background }) 
   const bgSteps = ((background && background.steps) || []).map(window.gnValidStep).filter(Boolean);
   const bgId = bgSteps.length ? 'rc' + stamp + 'bg' + rnd() : null;
   if (bgId) {
-    out.push({ id: bgId, type: 'lesson', group: g, order: 0,
-      title: `${g} · 讀之前先知道`, zh: `背景知識 · ${bgSteps.length} 步 · 學完才開始讀`,
+    out.push({ id: bgId, type: 'lesson', group: g, order: 0, brief: true,   // v440：簡報式（重點一次看完）
+      title: `${g} · 讀之前先知道`, zh: `背景知識 · ${bgSteps.length} 個重點 · 看完才開始讀`,
       lead: (background && background.lead) || '', steps: bgSteps, outro: (background && background.outro) || '' });
   }
   const req = bgId ? { requires: bgId } : {};

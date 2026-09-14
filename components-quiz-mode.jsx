@@ -6647,8 +6647,10 @@ const DM_HUES = ['#2E4F7E', '#7A4FA8', '#1F7A8C', '#4C5BA8', '#5E6B7A', '#8A4F7A
    ══════════════════════════════════════════════════════════════ */
 /* v428：教學卡有 steps（✏️ 出文法做的）→ 一步一步的互動教學；沒有 → 原本的教學卡（五大時態） */
 function LessonPlayer(props) {
-  return (props.item && Array.isArray(props.item.steps) && props.item.steps.length)
-    ? <StepLesson {...props}/> : <LessonPlayerClassic {...props}/>;
+  const it = props.item;
+  if (!(it && Array.isArray(it.steps) && it.steps.length)) return <LessonPlayerClassic {...props}/>;
+  // v440：閱讀的背景知識用「簡報式」（brief），✏️ 出文法維持一頁一個重點
+  return it.brief ? <BriefLesson {...props}/> : <StepLesson {...props}/>;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -6670,6 +6672,115 @@ function GnlMark({ text, hl }) {
   const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
   return <>{String(text).split(re).map((part, i) => (i % 2 ? <mark key={i} className="gnl-hl">{part}</mark> : <React.Fragment key={i}>{part}</React.Fragment>))}</>;
 }
+/* ══════════════════════════════════════════════════════
+   v440：簡報式（Alan：「分段閱讀的互動式不需要像 grammar 一樣一頁一個重點…
+   像是簡報一樣的直接呈現 summary 重點出來 當然要包含圖片」）
+   ──────────────────────────────────────────────────────
+   資料結構跟互動教學一模一樣（steps: learn／pick），只是**畫法**不同：
+   重點一次全部攤在同一頁（圖＋一句話＋例句），最後附一小段「快速確認」，
+   就在同一頁作答、不用翻頁。閱讀的背景知識用這個；✏️ 出文法維持一頁一個重點。
+══════════════════════════════════════════════════════ */
+function BriefLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const steps = useQMM(() => (item.steps || []).map(st => (window.gnValidStep ? window.gnValidStep(st) : st)).filter(Boolean), [item.id]);
+  const learns = useQMM(() => steps.filter(s => s.kind === 'learn'), [steps]);
+  const picks  = useQMM(() => steps.filter(s => s.kind === 'pick'), [steps]);
+  const [ans, setAns] = useQM({});        // 第 i 題 → { ok, wrong: [] }
+  const [done, setDone] = useQM(false);
+  const nOk = picks.filter((_, i) => ans[i] && ans[i].ok).length;
+  const allOk = nOk >= picks.length;
+  const say = (t) => { try { (window.speakTTS || window.speakText)(t, { lang: 'en-US', rate: 0.85 }); } catch (e) {} };
+  const sound = (ok) => { if (window.playSound) window.playSound(ok ? 'correct' : 'wrong'); };
+
+  useQME(() => {
+    if (!done) return;
+    // 看完就算完成（跟互動教學一樣不看分數——不然答錯的孩子會被鎖在外面）
+    saveQuizModeCompletion(progressKey, item, { doneCount: Math.max(1, picks.length), score: null, total: Math.max(1, picks.length) });
+    fireCelebration(null);
+  }, [done]);
+
+  if (done) {
+    return (
+      <div className="ls-wrap">
+        <div className="ls-card ls-enter ls-done">
+          <div className="ls-done-ico">🎉</div>
+          <h2 className="ls-title">準備好了！</h2>
+          {picks.length > 0 && <div className="ls-done-score">小問題答對 {nOk} / {picks.length}</div>}
+          <p className="ls-lead">{item.outro || '接下來開始讀這篇文章吧！'}</p>
+          <div className="gnl-unlocked">🔓 後面的練習已經解鎖了</div>
+          <div className="qm-result-btns">
+            <button className="qm-btn secondary" onClick={() => { setAns({}); setDone(false); }}>再看一次</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} backLabel="開始讀 →"/>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ls-wrap">
+      <div className="ls-head">
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <span className="ls-step-n">讀之前先知道</span>
+      </div>
+
+      <div className="ls-card ls-enter gnb-card">
+        {item.lead && <div className="gnb-lead">{item.lead}</div>}
+
+        <div className="gnb-points">
+          {learns.map((st, i) => (
+            <div className="gnb-point" key={i}>
+              {st.img && <img className="gnb-img" src={st.img} alt="" loading="lazy" decoding="async"/>}
+              <div className="gnb-body">
+                <div className="gnb-say"><span className="gnb-n">{i + 1}</span>{st.say}</div>
+                {(st.examples || []).map((e, k) => (
+                  <button key={k} type="button" className="gnb-ex" onClick={() => say(e.en)} title="點一下聽發音">
+                    <span className="gnb-ex-en"><GnlMark text={e.en} hl={e.hl}/></span>
+                    {e.zh && <span className="gnb-ex-zh">{e.zh}</span>}
+                    <span className="gnb-ex-say">🔊</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {picks.length > 0 && (
+          <div className="gnb-check">
+            <div className="gnb-check-head">✅ 快速確認 <em>{nOk} / {picks.length}</em></div>
+            {picks.map((p, i) => {
+              const a = ans[i] || {};
+              return (
+                <div key={i} className={'gnb-q' + (a.ok ? ' ok' : '')}>
+                  <div className="gnb-q-t">{p.q}</div>
+                  <div className="gnb-opts">
+                    {p.options.map((o, k) => {
+                      const wrong = (a.wrong || []).indexOf(k) >= 0;
+                      const cls = 'gnb-opt' + (a.ok && k === p.answer ? ' ok' : '') + (wrong ? ' no' : '');
+                      return (
+                        <button key={k} type="button" className={cls} disabled={a.ok || wrong}
+                          onClick={() => {
+                            const ok = k === p.answer;
+                            sound(ok);
+                            setAns(s0 => ({ ...s0, [i]: ok ? { ...(s0[i] || {}), ok: true } : { ...(s0[i] || {}), wrong: ((s0[i] || {}).wrong || []).concat(k) } }));
+                          }}>{o}</button>
+                      );
+                    })}
+                  </div>
+                  {a.ok && p.why && <div className="gnb-why">{p.why}</div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button className="gnb-go" disabled={!allOk} onClick={() => setDone(true)}>
+          {allOk ? '我看完了，開始讀 →' : `還有 ${picks.length - nOk} 個小問題`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const steps = useQMM(() => (item.steps || []).map(st => (window.gnValidStep ? window.gnValidStep(st) : st)).filter(Boolean), [item.id]);
   const acts = steps.filter(st => st.kind !== 'learn').length;

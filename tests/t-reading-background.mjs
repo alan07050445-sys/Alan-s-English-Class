@@ -145,6 +145,25 @@ log.push('\n【5】（v437）分段閱讀也能先教背景知識');
   ok('EditorModal 有把 sideItems／requires 傳下去', /sideItems=\{form\.__side \|\| \[\]\}/.test(editor) && /onChangeRequires=\{v => update\("requires"/.test(editor));
 }
 
+log.push('\n【6】（v440）簡報式：重點一次看完，不要一頁一個');
+{
+  const items = B({ title: 'P', passage: 'p', mcq: [{ q: 'a', options: ['x', 'y'], answer: 0 }], sa: [], blocks: [], skillQs: [], background: goodLesson });
+  ok('⭐ 閱讀的背景知識標成簡報式（brief）', items[0].brief === true && items[0].type === 'lesson');
+  ok('說明文字也改成「幾個重點／看完才開始讀」', /個重點/.test(items[0].zh) && /看完才開始讀/.test(items[0].zh));
+  const gr = slice(editor, 'function GuidedReadingEditor(', 'function GrRegionModal(');
+  ok('分段閱讀做出來的那一份也是簡報式', /type: 'lesson', group: itemGroup \|\| undefined, brief: true/.test(gr));
+  ok('⭐ 播放器照 brief 分流：閱讀走簡報式、✏️ 出文法維持一頁一個重點',
+     /return it\.brief \? <BriefLesson \{\.\.\.props\}\/> : <StepLesson \{\.\.\.props\}\/>/.test(qm));
+  const bl = slice(qm, 'function BriefLesson(', 'function StepLesson(');
+  ok('⭐ 重點是「全部一次列出來」（不是一頁一個）', /learns\.map\(\(st, i\)/.test(bl) && !/setSi/.test(bl));
+  ok('⭐ 有圖片就顯示（Alan：當然要包含圖片）', /st\.img && <img className="gnb-img"/.test(bl));
+  ok('小問題就在同一頁作答（不用翻頁）', /picks\.map\(\(p, i\)/.test(bl) && /gnb-check/.test(bl));
+  ok('答對才算完成，但不看分數（跟互動教學一致，不會把人鎖在外面）',
+     /score: null/.test(bl) && /saveQuizModeCompletion/.test(bl));
+  ok('例句可以點著聽發音', /onClick=\{\(\) => say\(e\.en\)\}/.test(bl));
+  ok('⚠ 沒有動到 ✏️ 出文法的 StepLesson', /function StepLesson\(\{ item, progressKey/.test(qm) && /ls-kicker">📖 學一個重點/.test(qm));
+}
+
 console.log(log.join('\n'));
 console.log(`\n${fail === 0 ? '🎉 全部通過' : '⚠️ 有失敗'}：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
