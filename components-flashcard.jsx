@@ -714,6 +714,26 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const [flipped, setFlipped] = useFC(false);
 
   // Learn mode — queue-based spaced repetition
+  /* ⚠ v439（Alan：「換下一張的時候會停在上一張的圖片一秒左右」）：
+     <img> 的 src 換掉之後，瀏覽器**會繼續畫舊的那張**，直到新的解碼完成——
+     所以看起來就是「卡在上一張」。兩件事一起做才會順：
+       ① 這裡先把接下來幾張的圖抓進快取（換頁時通常已經在本機，不用等網路）
+       ② 圖片本身加 key（見下面的 <img key=…>）＝ 換卡就是一個新節點，
+          舊的畫面不會留著；配上快取＝新的幾乎是立刻出現。
+     圖片是 Firebase Storage 上的固定網址（上傳時就設了一年快取），抓過就不會再下載。 */
+  const preloadedRef = React.useRef(new Set());
+  const preloadFrom = (i, ahead = 3) => {
+    const list = pool();
+    for (let k = 0; k <= ahead; k++) {
+      const c = list[i + k];
+      const u = c && c.imageUrl;
+      if (!u || preloadedRef.current.has(u)) continue;
+      preloadedRef.current.add(u);
+      const im = new Image();
+      im.decoding = 'async';
+      im.src = u;
+    }
+  };
   const [learnQueue, setLearnQueue] = useFC([]); // [{card, isRetry}]
   /* v376: 「作答中」才量高度——按「再練一次」會重新掛一個 .fc-player，
      只看 mode 的話 enabled 沒變、效果不會重跑，新的那個就會沒有高度。 */
@@ -957,6 +977,19 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   useFC_E(() => {
     if (mode === "learn" && learnQueue.length === 0 && fullRound(learnTotal) && onModeDone) onModeDone("learn");
   }, [mode, learnQueue.length, learnTotal, cards.length]);
+
+  /* v439：卡片模式——目前這張的前後都先抓好（開場抓 0~3，之後永遠領先 3 張） */
+  useFC_E(() => { if (mode === 'card') preloadFrom(cardIdx); }, [mode, cardIdx, cards.length, starOnly]);
+  /* 學習模式是排隊的，抓「現在這張＋接下來兩張」 */
+  useFC_E(() => {
+    if (mode !== 'learn') return;
+    (learnQueue || []).slice(0, 3).forEach(q => {
+      const u = q && q.card && q.card.imageUrl;
+      if (!u || preloadedRef.current.has(u)) return;
+      preloadedRef.current.add(u);
+      const im = new Image(); im.decoding = 'async'; im.src = u;
+    });
+  }, [mode, learnQueue]);
   useFC_E(() => {
     if (mode === "fill" && fillDone && onModeDone) onModeDone("fill");
   }, [mode, fillDone]);
@@ -1092,7 +1125,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                     ⚠ 一定要 stopPropagation：不然點圖會被外層當成「翻卡」。 */}
                 {card.imageUrl && (
                   <div className="fc-back-img-wrap">
-                    <img src={card.imageUrl} alt={card.zh} decoding="async"
+                    <img key={card.imageUrl} src={card.imageUrl} alt={card.zh} decoding="async" fetchpriority="high"
                       className="fc-img-zoomable"
                       role="button" tabIndex={flipped ? 0 : -1}
                       aria-label={"放大圖片：" + card.zh}
@@ -1212,7 +1245,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
               title="不熟的字打 ★"
             >★</button>
             {isRetry && <div className="fc-retry-badge mono">再試一次吧 · Try again</div>}
-            {card.imageUrl && <img src={card.imageUrl} alt={card.zh} className="fc-learn-img" decoding="async"/>}
+            {card.imageUrl && <img key={card.imageUrl} src={card.imageUrl} alt={card.zh} className="fc-learn-img" decoding="async" fetchpriority="high"/>}
             <div className="fc-learn-zh">{card.zh}</div>
             <div className="mono" style={{fontSize: 10, color: "var(--ink-muted)", marginTop: 10}}>
               Choose the English word · 選出正確英文單字
@@ -1423,7 +1456,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                         包起來會多一個 flex 子元素、版面與圖片尺寸都可能跑掉；
                         直接讓這張 <img> 變成可用鍵盤操作的按鈕，DOM 結構與尺寸完全不變。 */}
                     {card.imageUrl && (
-                      <img src={card.imageUrl} alt={card.zh} className="fc-test-img fc-img-zoomable" decoding="async"
+                      <img key={card.imageUrl} src={card.imageUrl} alt={card.zh} className="fc-test-img fc-img-zoomable" decoding="async" fetchpriority="high"
                         role="button" tabIndex={0}
                         aria-label={"放大圖片：" + card.zh}
                         title="點一下看大圖"

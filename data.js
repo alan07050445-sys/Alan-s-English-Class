@@ -2999,33 +2999,37 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
    星星、進度、鎖（requires）也全部沿用。差別只在內容：教的是「讀這篇之前要先知道的事」。
    ⚠ 不能爆雷：背景知識不可以直接回答文章的理解題（prompt 有寫）。
    ══════════════════════════════════════════════════════════════════════════ */
-const RC_BG_SYS = `You design a SHORT "before you read" lesson for a Taiwanese elementary student
-who is about to read an English article. It gives the BACKGROUND KNOWLEDGE the article assumes.
+const RC_BG_SYS = `You write a SHORT interactive briefing a Taiwanese elementary student reads
+BEFORE the article, so they know what this text is about and what to look for.
 Output ONLY JSON:
 {"lead":"","steps":[
  {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
  {"kind":"pick","q":"","options":["",""],"answer":0,"why":""}
 ],"outro":""}
 RULES
-- lead: ONE Traditional Chinese sentence, ≤25 characters: what this article is about.
+- lead: ONE Traditional Chinese sentence, ≤30 characters, saying what the whole article is about —
+  like a one-line summary: 「這篇在講化石獵人 Mary Anning 的一生」.
 - steps: 3 or 4 rounds. Each round = ONE "learn" immediately followed by ONE "pick" that checks it.
-- learn.say: ONE idea in Traditional Chinese, ≤30 characters. Choose things a 9-12 year old in Taiwan
-  would NOT already know: who/what/where this is, the key concept, or a key word they will meet.
+- ROUND 1 MUST BE THE OVERVIEW: learn.say = the main point of the article in ONE Traditional Chinese
+  sentence (≤30 characters): who/what it is about and why that person or thing matters.
+  e.g. 「Mary Anning 是兩百年前英國的化石獵人」.
+- ROUNDS 2-4: the other things the child should know before reading — who the key people are,
+  where the place is, what the key idea means, or what big thing happened.
+  Adding true, relevant background beyond the article is fine when it helps (年代、地點、為什麼重要).
+- learn.say: ONE idea, Traditional Chinese, ≤30 characters, no jargon.
 - learn.examples: 1-2 short English sentences (≤10 words) from the article or built from its words.
   hl = the exact words in "en" to highlight. zh = the Chinese meaning.
 - learn.imgHint: 2-4 English words naming a photo that would help (the teacher adds the photo).
 - pick.q: a short question in Traditional Chinese, OR one English sentence with ________ .
   options: 2-4 short choices. answer: 0-based index. why: Traditional Chinese ≤30 characters.
-- Teach BACKGROUND ONLY. Never give away the article's own comprehension answers, and never say
-  "the article says…" — the child has not read it yet.
-- Everything must be true and come from the article; do not invent facts.
+- Give the big picture, NOT every detail: leave the story's details, dates and numbers for the child
+  to find while reading. Never write 課文提到／文章說 — they have not read it yet.
+- Everything must be true. Do not invent facts about the people or places.
 - outro: ONE encouraging Traditional Chinese sentence, ≤25 characters, telling them to start reading.
-- Never write 課文 or 文章 in the Chinese text: the child has not read it yet, so "課文提到…" makes no sense.
-- Traditional Chinese only (繁體中文). Never use simplified characters.
 ${_AI_MINIFY}`;
 
 /* 有沒有「爆雷／講得像已經讀過」——實測 AI 會寫「課文提到他們留下美國國旗」 */
-const _rcBgSpoiler = (l) => JSON.stringify(l || {}).match(/課文|文章(說|提到|裡|中)/g) || [];
+const _rcBgSpoiler = (l) => JSON.stringify(l || {}).match(/課文(提到|說|裡|中)|文章(說|提到)/g) || [];
 
 async function aiMakeReadingBackground({ passage, title = '', grade = 'g4', onProgress } = {}) {
   const text = String(passage || '').trim();

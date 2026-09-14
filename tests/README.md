@@ -15,7 +15,8 @@ node tests/t-line-v427.mjs       # 關鍵字秒回（請假/調課/批改→請�
 node tests/t-grammar-notes.mjs   # ✏️ 出文法：驗證器、答案比對、長作業拆段同時讀、選擇題交叉檢查（含「兩個答案都對」）：120 項
 node tests/t-mascot-shop.mjs     # 🧸 吉祥物裝扮：商品表、買賣把關、夥伴要買、裝扮貼合每一隻、動作是新的：62 項
 node tests/t-dashboard-grades.mjs # 🧑‍🏫 後台：每位學生用自己年級的作業算＋新學生提示：30 項
-node tests/t-reading-background.mjs # 📖「讀之前先知道」：背景知識、圖片、繁體字、不爆雷、分段閱讀也能用（照片段落用 OCR 的文字）：44 項
+node tests/t-reading-background.mjs # 📖「讀之前先知道」：背景知識、圖片、繁體字、不爆雷、分段閱讀也能用、背景知識先講重點：47 項
+node tests/t-flashcard-img.mjs   # 🃏 單字卡換圖不殘留上一張＋預先抓圖：10 項
 ```
 
-十二支都不連網路（AI 也是假的）：Workers KV 用記憶體假的，Firestore 與 LINE API 的呼叫都被攔下來檢查內容（Flex Message 的結構也自己驗一遍，\nLINE 收到不合法的 JSON 會直接回 400）。
+十三支都不連網路（AI 也是假的）：Workers KV 用記憶體假的，Firestore 與 LINE API 的呼叫都被攔下來檢查內容（Flex Message 的結構也自己驗一遍，\nLINE 收到不合法的 JSON 會直接回 400）。

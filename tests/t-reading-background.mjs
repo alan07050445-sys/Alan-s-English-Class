@@ -52,7 +52,10 @@ log.push('\n【1】產生背景知識');
   ok('四步（學→選→學→選）都收下', l.steps.length === 4 && l.lead === '這篇在講南極的企鵝');
   ok('⭐ 老師建議放什麼圖有留著（imgHint）', l.steps[0].imgHint === 'antarctica ice penguins');
   ok('文章太短就直說（AI 不會白跑）', await W.aiMakeReadingBackground({ passage: 'too short', grade: 'g4' }).then(() => false, e => /至少要 40/.test(e.message)));
-  ok('⭐ prompt 明講「不可以爆雷、不要說 the article says」', /Never give away the article's own comprehension answers/.test(W.RC_BG_SYS) && /the child has not read it yet/.test(W.RC_BG_SYS));
+  ok('⭐（v439 Alan）第一回合一定是「這篇在講什麼」的 summary，不是先解釋單字',
+     /ROUND 1 MUST BE THE OVERVIEW/.test(W.RC_BG_SYS) && /one-line summary/.test(W.RC_BG_SYS));
+  ok('（v439）可以延伸補背景（年代、地點、為什麼重要）', /Adding true, relevant background beyond the article is fine/.test(W.RC_BG_SYS));
+  ok('只給大方向，細節留給學生自己讀', /Give the big picture, NOT every detail/.test(W.RC_BG_SYS));
   ok('prompt 要求一學一測、3~4 回合', /3 or 4 rounds/.test(W.RC_BG_SYS) && /ONE "pick" that checks it/.test(W.RC_BG_SYS));
   ok('prompt 要 AI 建議配什麼圖（老師自己放）', /imgHint/.test(W.RC_BG_SYS) && /the teacher adds the photo/.test(W.RC_BG_SYS));
   aiQueue = [{ steps: [{ kind: 'learn', say: 'x', examples: [{ en: 'A b c.' }] }] }, goodLesson];
@@ -76,7 +79,10 @@ log.push('\n【1b】（v436）AI 混進簡體字／講得像學生已經讀過')
   const l3 = await W.aiMakeReadingBackground({ passage: ART, grade: 'g4' });
   ok('⭐ 講「課文提到…」＝爆雷（學生還沒讀）→ 退回重出', !JSON.stringify(l3).includes('課文') &&
      /it mentioned 課文\/文章/.test(calls[calls.length - 1].messages[0].content), JSON.stringify(l3.steps[1]));
-  ok('prompt 也明講不要寫課文／文章、只用繁體', /Never write 課文 or 文章/.test(W.RC_BG_SYS) && /Never use simplified characters/.test(W.RC_BG_SYS));
+  ok('prompt 也明講不要寫「課文提到」這種口氣', /Never write 課文提到／文章說/.test(W.RC_BG_SYS));
+  ok('⭐（v439）「這篇在講…」不算爆雷（那正是 Alan 要的），只有「課文提到」才算',
+     !JSON.stringify(W.gnValidLesson({ steps: [], lead: '這篇文章在講 Mary 的一生' })).includes('x') &&
+     /課文\(提到\|說\|裡\|中\)\|文章\(說\|提到\)/.test(data));
 }
 
 log.push('\n【2】圖片（Alan：「我可以自己找圖片放上去」）');
