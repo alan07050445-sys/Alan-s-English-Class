@@ -2709,18 +2709,79 @@ RULES
 ${_AI_MINIFY}`,
 };
 
+/* v436：AI 生成的中文偶爾會混進簡體字（實測：「人類怎样第一次登上月球？」）。
+   這是給台灣小朋友看的，一個簡體字就很突兀。這裡只收「一對一、不會歧義」的常用字，
+   像 发（發/髮）、后（後/后）、干（乾/幹）這種一對多的**刻意不放**，寧可漏也不要轉錯。 */
+const _ZH_S2T = {
+  '们':'們','这':'這','个':'個','来':'來','说':'說','时':'時','过':'過','点':'點','无':'無','还':'還',
+  '当':'當','学':'學','习':'習','实':'實','现':'現','见':'見','门':'門','问':'問','题':'題','样':'樣',
+  '儿':'兒','马':'馬','与':'與','关':'關','开':'開','觉':'覺','让':'讓','记':'記','认':'認','识':'識',
+  '语':'語','话':'話','读':'讀','写':'寫','听':'聽','会':'會','长':'長','东':'東','车':'車','风':'風',
+  '飞':'飛','鸟':'鳥','鱼':'魚','岁':'歲','边':'邊','应':'應','该':'該','对':'對','难':'難','爱':'愛',
+  '变':'變','电':'電','单':'單','双':'雙','号':'號','图':'圖','团':'團','国':'國','园':'園','场':'場',
+  '声':'聲','备':'備','总':'總','经':'經','级':'級','练':'練','结':'結','给':'給','续':'續','线':'線',
+  '组':'組','细':'細','织':'織','终':'終','纸':'紙','类':'類','简':'簡','节':'節','药':'藥','视':'視',
+  '试':'試','谁':'誰','请':'請','讲':'講','论':'論','计':'計','设':'設','证':'證','词':'詞','译':'譯',
+  '谢':'謝','员':'員','质':'質','购':'購','费':'費','资':'資','赛':'賽','转':'轉','输':'輸','运':'運',
+  '远':'遠','选':'選','连':'連','进':'進','岛':'島','热':'熱','冷':'冷','乐':'樂','兴':'興','动':'動',
+  '带':'帶','帮':'幫','觉':'覺','两':'兩','从':'從','众':'眾','丽':'麗','义':'義','乡':'鄉','书':'書',
+  '买':'買','卖':'賣','龙':'龍','鸡':'雞','鸭':'鴨','猫':'貓','树':'樹','叶':'葉',
+  '头':'頭','师':'師','医':'醫','观':'觀','间':'間','尔':'爾','军':'軍','农':'農','极':'極','标':'標',
+  '检':'檢','验':'驗','显':'顯','传':'傳','统':'統','术':'術','机':'機','权':'權','断':'斷','责':'責',
+  '报':'報','战':'戰','历':'歷','独':'獨','环':'環','济':'濟','张':'張','陈':'陳','华':'華','汉':'漢',
+  '湾':'灣','丝':'絲','纪':'紀','罗':'羅','鲜':'鮮','鲸':'鯨','龟':'龜','鹅':'鵝','虾':'蝦','鲨':'鯊',
+  '态':'態','脑':'腦','气':'氣','汽':'汽','层':'層','养':'養','产':'產','协':'協','丰':'豐','际':'際',
+  '亚':'亞','库':'庫','岗':'崗','础':'礎','积':'積','测':'測','确':'確','负':'負',
+  '陆':'陸','温':'溫','录':'錄','卫':'衛','严':'嚴','满':'滿','减':'減','灭':'滅','烧':'燒','势':'勢',
+  '妈':'媽','爷':'爺','体':'體','举':'舉','达':'達','适':'適','遗':'遺','邻':'鄰','郑':'鄭','处':'處',
+  '阳':'陽','阴':'陰','队':'隊','险':'險','静':'靜','龄':'齡','齿':'齒','亿':'億','键':'鍵','银':'銀',
+  '铁':'鐵','钟':'鐘','针':'針','铅':'鉛','锁':'鎖','错':'錯','镜':'鏡','钱':'錢','丢':'丟',
+  '么':'麼','为':'為','万':'萬','专':'專','业':'業','区':'區','厂':'廠','厅':'廳','县':'縣','叹':'嘆',
+  '吗':'嗎','启':'啟','响':'響','圆':'圓','圣':'聖','坏':'壞','块':'塊','坚':'堅','执':'執','墙':'牆',
+  '壮':'壯','夺':'奪','奖':'獎','妇':'婦','孙':'孫','宁':'寧','宝':'寶','审':'審','宫':'宮','宽':'寬',
+  '尘':'塵','属':'屬','岭':'嶺','币':'幣','帐':'帳','决':'決','况':'況','净':'淨','凤':'鳳','击':'擊',
+  '则':'則','刚':'剛','创':'創','剑':'劍','劝':'勸','务':'務','劳':'勞','兰':'蘭','党':'黨','优':'優',
+  '价':'價','伟':'偉','伤':'傷','仅':'僅','亲':'親','争':'爭','乌':'烏','糧':'糧','红':'紅','绿':'綠',
+  '缩':'縮','网':'網','罚':'罰','肠':'腸','脱':'脫','腾':'騰','艺':'藝','苹':'蘋','营':'營','蓝':'藍',
+  '虽':'雖','补':'補','规':'規','览':'覽','训':'訓','议':'議','讯':'訊','诉':'訴','诚':'誠','课':'課',
+  '谈':'談','贵':'貴','贴':'貼','赞':'讚','跃':'躍','轮':'輪','软':'軟','违':'違','邮':'郵','释':'釋',
+  '铃':'鈴','链':'鏈','锅':'鍋','镇':'鎮','闪':'閃','闭':'閉','闻':'聞','阅':'閱','阶':'階','隐':'隱',
+  '雾':'霧','页':'頁','顶':'頂','顺':'順','须':'須','预':'預','领':'領','颗':'顆','飘':'飄','饭':'飯',
+  '饮':'飲','饱':'飽','饿':'餓','馆':'館','驾':'駕','骑':'騎','鸣':'鳴','鹰':'鷹','齐':'齊',
+};
+/* 一對多的字（发/后/干/复/里…）沒辦法逐字轉——先用「詞」對一遍，剩下的再逐字。
+   沒對到的就維持原樣（寧可留一個簡體字，也不要轉成錯字）。 */
+const _ZH_WORD = [
+  ['头发', '頭髮'], ['干净', '乾淨'], ['干燥', '乾燥'], ['干杯', '乾杯'], ['干嘛', '幹嘛'], ['干什么', '幹什麼'],
+  ['以后', '以後'], ['然后', '然後'], ['最后', '最後'], ['后来', '後來'], ['后面', '後面'], ['之后', '之後'],
+  ['发现', '發現'], ['发生', '發生'], ['发明', '發明'], ['发展', '發展'], ['发出', '發出'], ['出发', '出發'],
+  ['复习', '複習'], ['重复', '重複'], ['复杂', '複雜'], ['恢复', '恢復'], ['答复', '答覆'],
+  ['里面', '裡面'], ['这里', '這裡'], ['那里', '那裡'], ['哪里', '哪裡'], ['心里', '心裡'], ['家里', '家裡'],
+  ['制作', '製作'], ['制造', '製造'], ['只是', '只是'], ['台风', '颱風'], ['卷起', '捲起'],
+];
+const _zhTW = (t) => {
+  let out = String(t == null ? '' : t);
+  _ZH_WORD.forEach(([a, b]) => { if (out.indexOf(a) >= 0) out = out.split(a).join(b); });
+  return out.replace(/[\u4e00-\u9fff]/g, (c) => _ZH_S2T[c] || c);
+};
 const _gnCJK = /[一-鿿]/;
 const _gnBlank = (t) => String(t || '').replace(/_{2,}|＿{2,}|\(\s*\)|（\s*）/g, '________');
 function gnValidStep(st) {
   if (!st || typeof st !== 'object') return null;
   if (st.kind === 'learn') {
-    const say = String(st.say || '').trim();
+    const say = _zhTW(st.say).trim();
     const ex = (Array.isArray(st.examples) ? st.examples : []).map(e => {
       const en = String((e && e.en) || '').trim();
       const hl = (Array.isArray(e && e.hl) ? e.hl : []).map(h => String(h).trim()).filter(h => h && en.toLowerCase().indexOf(h.toLowerCase()) >= 0);
-      return en ? { en, hl, zh: String((e && e.zh) || '').trim() } : null;
+      return en ? { en, hl, zh: _zhTW((e && e.zh) || '').trim() } : null;
     }).filter(Boolean).slice(0, 2);
-    return say && say.length <= 60 && ex.length ? { kind: 'learn', say, examples: ex } : null;
+    /* v436：learn 多兩個選用欄位——img＝老師自己放的圖片網址、imgHint＝AI 建議找什麼圖。
+       （閱讀的「背景知識」很吃圖：講南極就該看到南極。） */
+    const img = String(st.img || '').trim();
+    const imgHint = String(st.imgHint || '').trim().slice(0, 60);
+    return say && say.length <= 60 && ex.length
+      ? Object.assign({ kind: 'learn', say, examples: ex }, img ? { img } : {}, imgHint ? { imgHint } : {})
+      : null;
   }
   if (st.kind === 'pick') {
     const opts = (Array.isArray(st.options) ? st.options : []).map(o => String(o).trim()).filter(Boolean);
@@ -2730,11 +2791,11 @@ function gnValidStep(st) {
     // 選項只差大小寫（taipei／Taipei）也算不同——大寫單元就是在考這個
     const uniq = new Set(opts).size === opts.length;
     return q && opts.length >= 2 && opts.length <= 4 && uniq && Number.isInteger(a) && a >= 0 && a < opts.length
-      ? { kind: 'pick', q, options: opts, answer: a, why: String(st.why || '').trim() } : null;
+      ? { kind: 'pick', q: _zhTW(q), options: opts.map(_zhTW), answer: a, why: _zhTW(st.why).trim() } : null;
   }
   if (st.kind === 'order') {
     const words = (Array.isArray(st.words) ? st.words : []).map(w => String(w).trim()).filter(Boolean);
-    const zh = String(st.zh || '').trim();
+    const zh = _zhTW(st.zh).trim();
     return zh && _gnCJK.test(zh) && words.length >= 3 && words.length <= 9 ? { kind: 'order', zh, words } : null;
   }
   if (st.kind === 'fix') {
@@ -2744,7 +2805,7 @@ function gnValidStep(st) {
     const exact = toks.filter(w => w === wrong).length;
     const hits = exact || toks.filter(w => w.toLowerCase() === wrong.toLowerCase()).length;
     return sentence && wrong && right && right !== wrong && hits === 1
-      ? { kind: 'fix', sentence, wrong, right, why: String(st.why || '').trim() } : null;
+      ? { kind: 'fix', sentence, wrong, right, why: _zhTW(st.why).trim() } : null;
   }
   return null;
 }
@@ -2753,7 +2814,7 @@ function gnValidLesson(o) {
   const learn = steps.filter(s => s.kind === 'learn').length;
   const act = steps.length - learn;
   if (learn < 2 || act < 2) return null;
-  return { lead: String((o && o.lead) || '').trim(), steps, outro: String((o && o.outro) || '').trim() };
+  return { lead: _zhTW((o && o.lead) || '').trim(), steps, outro: _zhTW((o && o.outro) || '').trim() };
 }
 // 「A. My family visited…」「(B) …」→ 拿掉標號（老師作業的選項常常帶著）
 const _gnOptLabel = /^\s*(?:[(（]?[A-Da-d][)）.．、:]|[○◯●]\s*[A-Da-d][.．)）]?)\s+/;
@@ -2927,6 +2988,76 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
     throw new Error('全部都沒有產生成功，請再試一次。');
   }
   return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v436：📖 閱讀理解的「先備知識」互動教學（Alan：「還缺少了一開始的 background
+   給學生的背景知識…我希望可以跟 grammar 一樣有互動式學習，讓小朋友可以提前知道
+   一些重要知識，這樣對網站來說更有意義」）
+   ──────────────────────────────────────────────────────────────────────────
+   刻意沿用 ✏️ 出文法那一套 lesson.steps（learn／pick）＝ 學生端 StepLesson 不用改，
+   星星、進度、鎖（requires）也全部沿用。差別只在內容：教的是「讀這篇之前要先知道的事」。
+   ⚠ 不能爆雷：背景知識不可以直接回答文章的理解題（prompt 有寫）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const RC_BG_SYS = `You design a SHORT "before you read" lesson for a Taiwanese elementary student
+who is about to read an English article. It gives the BACKGROUND KNOWLEDGE the article assumes.
+Output ONLY JSON:
+{"lead":"","steps":[
+ {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
+ {"kind":"pick","q":"","options":["",""],"answer":0,"why":""}
+],"outro":""}
+RULES
+- lead: ONE Traditional Chinese sentence, ≤25 characters: what this article is about.
+- steps: 3 or 4 rounds. Each round = ONE "learn" immediately followed by ONE "pick" that checks it.
+- learn.say: ONE idea in Traditional Chinese, ≤30 characters. Choose things a 9-12 year old in Taiwan
+  would NOT already know: who/what/where this is, the key concept, or a key word they will meet.
+- learn.examples: 1-2 short English sentences (≤10 words) from the article or built from its words.
+  hl = the exact words in "en" to highlight. zh = the Chinese meaning.
+- learn.imgHint: 2-4 English words naming a photo that would help (the teacher adds the photo).
+- pick.q: a short question in Traditional Chinese, OR one English sentence with ________ .
+  options: 2-4 short choices. answer: 0-based index. why: Traditional Chinese ≤30 characters.
+- Teach BACKGROUND ONLY. Never give away the article's own comprehension answers, and never say
+  "the article says…" — the child has not read it yet.
+- Everything must be true and come from the article; do not invent facts.
+- outro: ONE encouraging Traditional Chinese sentence, ≤25 characters, telling them to start reading.
+- Never write 課文 or 文章 in the Chinese text: the child has not read it yet, so "課文提到…" makes no sense.
+- Traditional Chinese only (繁體中文). Never use simplified characters.
+${_AI_MINIFY}`;
+
+/* 有沒有「爆雷／講得像已經讀過」——實測 AI 會寫「課文提到他們留下美國國旗」 */
+const _rcBgSpoiler = (l) => JSON.stringify(l || {}).match(/課文|文章(說|提到|裡|中)/g) || [];
+
+async function aiMakeReadingBackground({ passage, title = '', grade = 'g4', onProgress } = {}) {
+  const text = String(passage || '').trim();
+  if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字）。');
+  const base = `Students: Taiwanese elementary school, ${RC_GRADES[grade] || RC_GRADES.g4}
+Article title: ${title || '(untitled)'}
+The article:
+${text.slice(0, 6000)}`;
+  let feedback = '', best = null, lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    if (onProgress) onProgress(i + 1, 3, '背景知識');
+    let raw;
+    try { raw = await _gnCall(RC_BG_SYS, base + feedback, 2600); } catch (e) { lastErr = e; continue; }
+    const l = gnValidLesson(raw);
+    const spoil = l ? _rcBgSpoiler(l) : [];
+    if (l && !spoil.length) return l;
+    const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
+    const valid = steps.map(gnValidStep).filter(Boolean);
+    if (!best || valid.length > best.steps.length) {
+      best = { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() };
+    }
+    if (l && spoil.length) {           // 步驟都合格，只是講得像已經讀過 → 換個講法重出
+      feedback = '\n\nYour previous answer was REJECTED: it mentioned 課文/文章 (' + spoil.join('、') +
+        '). The child has NOT read the article yet — teach the background as general knowledge instead.';
+      continue;
+    }
+    const bad = steps.map((st, k) => (gnValidStep(st) ? null : `- step ${k + 1}: ${JSON.stringify(st).slice(0, 180)}`)).filter(Boolean);
+    feedback = `\n\nYour previous answer was REJECTED by the checker. Problem steps:\n${bad.join('\n') || '- not enough valid steps'}\n` +
+      'Fix them. You need at least 2 "learn" steps and 2 "pick" steps, and every step must follow the RULES exactly.';
+  }
+  if (best && best.steps.some(s => s.kind === 'learn') && best.steps.some(s => s.kind !== 'learn')) return best;
+  throw new Error(lastErr && lastErr.timeout ? '背景知識太久沒有回應' : '背景知識產生失敗');
 }
 
 function grCountBlanks(passage) {
@@ -4442,7 +4573,7 @@ Object.assign(window, {
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
-  aiMakeReadingSet, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
+  aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
   RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
@@ -4729,46 +4860,46 @@ const MX_KINDS = [
 ];
 const MX_SHOP = [
   /* 頭飾 */
-  { id: 'hat_cap',    kind: 'hat',   zh: '鴨舌帽',   emoji: '🧢', cost: 150,  legacy: '' },
-  { id: 'hat_flower', kind: 'hat',   zh: '小花',     emoji: '🌸', cost: 150 },
-  { id: 'hat_party',  kind: 'hat',   zh: '派對帽',   emoji: '🎉', cost: 200,  legacy: 'party' },
-  { id: 'hat_grad',   kind: 'hat',   zh: '畢業帽',   emoji: '🎓', cost: 300 },
-  { id: 'hat_bunny',  kind: 'hat',   zh: '兔耳朵',   emoji: '🐰', cost: 350 },
-  { id: 'hat_horn',   kind: 'hat',   zh: '小鹿角',   emoji: '🦌', cost: 400 },
-  { id: 'hat_star',   kind: 'hat',   zh: '星星髮箍', emoji: '⭐', cost: 500 },
-  { id: 'hat_crown',  kind: 'hat',   zh: '皇冠',     emoji: '👑', cost: 600,  legacy: 'crown' },
+  { id: 'hat_cap',    kind: 'hat',   zh: '鴨舌帽',   emoji: '🧢', cost: 100,  legacy: '' },
+  { id: 'hat_flower', kind: 'hat',   zh: '小花',     emoji: '🌸', cost: 100 },
+  { id: 'hat_party',  kind: 'hat',   zh: '派對帽',   emoji: '🎉', cost: 150,  legacy: 'party' },
+  { id: 'hat_grad',   kind: 'hat',   zh: '畢業帽',   emoji: '🎓', cost: 150 },
+  { id: 'hat_bunny',  kind: 'hat',   zh: '兔耳朵',   emoji: '🐰', cost: 200 },
+  { id: 'hat_horn',   kind: 'hat',   zh: '小鹿角',   emoji: '🦌', cost: 200 },
+  { id: 'hat_star',   kind: 'hat',   zh: '星星髮箍', emoji: '⭐', cost: 250 },
+  { id: 'hat_crown',  kind: 'hat',   zh: '皇冠',     emoji: '👑', cost: 250,  legacy: 'crown' },
   /* 配件 */
-  { id: 'it_bow',     kind: 'item',  zh: '蝴蝶結',   emoji: '🎀', cost: 150 },
-  { id: 'it_scarf',   kind: 'item',  zh: '圍巾',     emoji: '🧣', cost: 200 },
-  { id: 'it_glass',   kind: 'item',  zh: '墨鏡',     emoji: '🕶️', cost: 300 },
-  { id: 'it_bag',     kind: 'item',  zh: '小書包',   emoji: '🎒', cost: 400 },
-  { id: 'it_cape',    kind: 'item',  zh: '英雄披風', emoji: '🦸', cost: 700 },
-  { id: 'it_wand',    kind: 'item',  zh: '魔法棒',   emoji: '🪄', cost: 800 },
+  { id: 'it_bow',     kind: 'item',  zh: '蝴蝶結',   emoji: '🎀', cost: 100 },
+  { id: 'it_scarf',   kind: 'item',  zh: '圍巾',     emoji: '🧣', cost: 100 },
+  { id: 'it_glass',   kind: 'item',  zh: '墨鏡',     emoji: '🕶️', cost: 150 },
+  { id: 'it_bag',     kind: 'item',  zh: '小書包',   emoji: '🎒', cost: 150 },
+  { id: 'it_cape',    kind: 'item',  zh: '英雄披風', emoji: '🦸', cost: 200 },
+  { id: 'it_wand',    kind: 'item',  zh: '魔法棒',   emoji: '🪄', cost: 250 },
   /* 答對特效 */
   { id: 'fx_confetti', kind: 'fx',   zh: '彩帶',     emoji: '🎊', cost: 0, free: true },
-  { id: 'fx_stars',   kind: 'fx',    zh: '星星雨',   emoji: '✨', cost: 250 },
-  { id: 'fx_hearts',  kind: 'fx',    zh: '愛心雨',   emoji: '💗', cost: 250 },
-  { id: 'fx_bubble',  kind: 'fx',    zh: '泡泡',     emoji: '🫧', cost: 400 },
-  { id: 'fx_fire',    kind: 'fx',    zh: '煙火',     emoji: '🎆', cost: 600 },
+  { id: 'fx_stars',   kind: 'fx',    zh: '星星雨',   emoji: '✨', cost: 150 },
+  { id: 'fx_hearts',  kind: 'fx',    zh: '愛心雨',   emoji: '💗', cost: 150 },
+  { id: 'fx_bubble',  kind: 'fx',    zh: '泡泡',     emoji: '🫧', cost: 200 },
+  { id: 'fx_fire',    kind: 'fx',    zh: '煙火',     emoji: '🎆', cost: 300 },
   /* 語音（牠講話的口氣） */
   { id: 'vo_default', kind: 'voice', zh: '原本的聲音', emoji: '🗨️', cost: 0, free: true },
-  { id: 'vo_cheer',   kind: 'voice', zh: '加油隊長', emoji: '📣', cost: 200 },
-  { id: 'vo_cat',     kind: 'voice', zh: '貓貓語',   emoji: '🐱', cost: 350 },
-  { id: 'vo_robot',   kind: 'voice', zh: '機器人',   emoji: '🤖', cost: 350 },
-  { id: 'vo_eng',     kind: 'voice', zh: '全英文',   emoji: '🗣️', cost: 500 },
+  { id: 'vo_cheer',   kind: 'voice', zh: '加油隊長', emoji: '📣', cost: 100 },
+  { id: 'vo_cat',     kind: 'voice', zh: '貓貓語',   emoji: '🐱', cost: 150 },
+  { id: 'vo_robot',   kind: 'voice', zh: '機器人',   emoji: '🤖', cost: 150 },
+  { id: 'vo_eng',     kind: 'voice', zh: '全英文',   emoji: '🗣️', cost: 200 },
   /* 動作（買了就能叫牠表演） */
   { id: 'dc_wave',    kind: 'dance', zh: '揮揮手',   emoji: '👋', cost: 100 },
-  { id: 'dc_spin',    kind: 'dance', zh: '轉圈圈',   emoji: '🌀', cost: 200 },
-  { id: 'dc_dance',   kind: 'dance', zh: '跳舞',     emoji: '🕺', cost: 450 },
-  { id: 'dc_flip',    kind: 'dance', zh: '後空翻',   emoji: '🤸', cost: 700 },
-  { id: 'dc_moon',    kind: 'dance', zh: '月球漫步', emoji: '🌙', cost: 900 },
+  { id: 'dc_spin',    kind: 'dance', zh: '轉圈圈',   emoji: '🌀', cost: 100 },
+  { id: 'dc_dance',   kind: 'dance', zh: '跳舞',     emoji: '🕺', cost: 150 },
+  { id: 'dc_flip',    kind: 'dance', zh: '後空翻',   emoji: '🤸', cost: 200 },
+  { id: 'dc_moon',    kind: 'dance', zh: '月球漫步', emoji: '🌙', cost: 250 },
   /* v435（Alan：「初始的角色都是 Claudius，其他都要買，這樣才有稀有的感覺」）
      夥伴本身也變成商品；Claudius 免費、永遠都在。id 對應 components-fx.jsx 的 MX_PETS。 */
   { id: 'pet_clay',   kind: 'pet',   zh: 'Claudius', emoji: '🟤', cost: 0, free: true, pet: 'clay' },
   { id: 'pet_rock',   kind: 'pet',   zh: '阿石',     emoji: '🪨', cost: 500,  pet: 'rock' },
-  { id: 'pet_sprout', kind: 'pet',   zh: '小芽',     emoji: '🌱', cost: 600,  pet: 'sprout' },
-  { id: 'pet_owl',    kind: 'pet',   zh: '咕咕',     emoji: '🦉', cost: 800,  pet: 'owl' },
-  { id: 'pet_flame',  kind: 'pet',   zh: '小焰',     emoji: '🔥', cost: 1000, pet: 'flame' },
+  { id: 'pet_sprout', kind: 'pet',   zh: '小芽',     emoji: '🌱', cost: 500,  pet: 'sprout' },
+  { id: 'pet_owl',    kind: 'pet',   zh: '咕咕',     emoji: '🦉', cost: 500,  pet: 'owl' },
+  { id: 'pet_flame',  kind: 'pet',   zh: '小焰',     emoji: '🔥', cost: 800, pet: 'flame' },
 ];
 const MX_BY_ID = {};
 MX_SHOP.forEach(it => { MX_BY_ID[it.id] = it; });

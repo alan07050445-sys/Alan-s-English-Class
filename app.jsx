@@ -1057,10 +1057,11 @@ function App() {
   /* v386: 閱讀理解出題完成 → 建立 1~4 個單元（選擇題 / 閱讀技巧題 / 閱讀技巧活動 / 閱讀簡答），
      全部掛同一個 group（＝文章標題），順序交給 QM_TYPE_ORDER 排。
      指派的兩條路跟 handleQuickSet 一樣：學期年級用 week.homework，暑假用 summer_meta。 */
-  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, skillQs, assign, prebuilt }) => {
+  const handleReadingCreate = ({ title, cat, passage, mcq, sa, blocks, skillQs, background, assign, prebuilt }) => {
     // v415: skillQs ＝ 閱讀技巧題（多一個 quiz 單元）
     // v428: ✏️ 出文法也走這裡（prebuilt＝已經建好的單元）——存檔、作業期限、指派的邏輯一模一樣
-    const items = prebuilt || window.rcBuildItems({ title, passage, mcq, sa, blocks, skillQs });
+    // v436：background＝讀之前的互動式背景知識（會變成一個 lesson 單元，其他單元要學完才解鎖）
+    const items = prebuilt || window.rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background });
     if (!items.length) { showToast('沒有可以建立的題目'); return; }
     // 蓋上作者：後台「只看我的」會依 owner 篩，沒蓋的話老師看不到自己剛生的單元
     const me = (user && user.email || '').toLowerCase();

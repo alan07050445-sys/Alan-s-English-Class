@@ -6729,6 +6729,8 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           <>
             <div className="ls-kicker">📖 學一個重點</div>
             <div className="gnl-say">{cur.say}</div>
+            {/* v436：閱讀的「先備知識」很吃圖（講南極就該看到南極）——老師在校稿頁放的圖片 */}
+            {cur.img && <img className="gnl-img" src={cur.img} alt="" loading="lazy"/>}
             <div className="gnl-exs">
               {cur.examples.map((e, i) => (
                 <button key={i} type="button" className="gnl-ex" onClick={() => say(e.en)} title="點一下聽發音">

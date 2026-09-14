@@ -35,9 +35,10 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
      W.MX_SHOP.filter(i => i.free).map(i => i.id).sort().join() === 'fx_confetti,pet_clay,vo_default');
   ok('特效與語音一定各有一個免費的（不然答對就沒反應、也不會講話）',
      ['fx', 'voice'].every(k => W.MX_SHOP.some(i => i.kind === k && i.free)));
-  ok('最便宜的 100 顆、最貴的不超過 1000（小朋友存得到）',
-     Math.min(...W.MX_SHOP.filter(i => !i.free).map(i => i.cost)) <= 150 &&
-     Math.max(...W.MX_SHOP.map(i => i.cost)) <= 1000);
+  ok('（v436 Alan 定價）裝備／特效／語音／動作 ≤ 300、夥伴 500（小焰 800）',
+     W.MX_SHOP.filter(i => ['hat', 'item', 'fx', 'voice', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
+     W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => i.cost === 500 || i.cost === 800) &&
+     Math.min(...W.MX_SHOP.filter(i => !i.free).map(i => i.cost)) === 100);
   ok('舊的兩頂帽子還在，而且對得回老師扣過點的名字',
      W.mxItemOf('hat_party').legacy === 'party' && W.mxItemOf('hat_crown').legacy === 'crown');
   ok('每一件都畫得出來（頭飾在 MX_HAT_ART、配件在 mxAccArt、動作有對照表）',
@@ -50,7 +51,7 @@ log.push('\n【2】買到什麼、花了多少（星星一定要算得剛剛好�
 {
   globalThis.window.__mxHats = [];
   ok('看不懂的 id 一律忽略（將來下架也不會算錯）', W.mxOwnedList({ owned: ['hat_cap', 'ghost', 'hat_cap'] }).join() === 'hat_cap');
-  ok('花掉的星星＝買到的東西的價錢總和', W.mxSpent({ owned: ['hat_cap', 'it_scarf'] }) === 150 + 200);
+  ok('花掉的星星＝買到的東西的價錢總和', W.mxSpent({ owned: ['hat_cap', 'it_scarf'] }) === W.mxItemOf('hat_cap').cost + W.mxItemOf('it_scarf').cost);
   ok('⭐ 花掉的是「反算」出來的，不是存的數字（存數字＝可以改）', /mxSpent\(mx\) \{[\s\S]{0,200}reduce/.test(data));
   ok('免費的不用買就有', W.mxHasItem({}, 'fx_confetti') && W.mxHasItem({}, 'vo_default'));
   ok('沒買的就是沒有', !W.mxHasItem({ owned: [] }, 'hat_crown'));
@@ -78,10 +79,10 @@ log.push('\n【4】買東西的把關');
   ok('亂七八糟的 id 不能買', (await W.mxBuy('u1', 'nope', 9999, mx)).reason === 'bad-id');
   ok('免費的不用買（也不會白扣星星）', (await W.mxBuy('u1', 'fx_confetti', 9999, mx)).reason === 'bad-id');
   ok('⭐ 已經買過的不會再買一次（不會重複扣星星）', (await W.mxBuy('u1', 'hat_cap', 9999, mx)).reason === 'owned');
-  const poor = await W.mxBuy('u1', 'hat_crown', 100, mx);
-  ok('⭐ 星星不夠不能買，而且會說還差幾顆', poor.reason === 'poor' && poor.short === 500, JSON.stringify(poor));
+  const poor = await W.mxBuy('u1', 'hat_crown', 30, mx);
+  ok('⭐ 星星不夠不能買，而且會說還差幾顆', poor.reason === 'poor' && poor.short === W.mxItemOf('hat_crown').cost - 30, JSON.stringify(poor));
   writes.length = 0;
-  const good = await W.mxBuy('u1', 'hat_crown', 600, mx);
+  const good = await W.mxBuy('u1', 'hat_crown', W.mxItemOf('hat_crown').cost, mx);
   ok('星星剛好夠 → 買得到', good.ok && good.owned.join() === 'hat_cap,hat_crown');
   ok('⭐ 寫進學生自己的 progress/{uid}（stars 是老師才寫得了的，見 firestore.rules）',
      writes.length === 1 && writes[0].uid === 'u1' && !!writes[0].obj.mx && writes[0].opt.merge === true);
@@ -121,7 +122,7 @@ log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻�
   globalThis.window.__mxHats = [];
   ok('沒買任何東西時，只有 Claudius 是你的', W.mxOwnedPets({}).join() === 'clay');
   ok('買了咕咕就多一隻', W.mxOwnedPets({ owned: ['pet_owl'] }).sort().join() === 'clay,owl');
-  ok('用 petId 找得回商品（圖鑑要顯示價錢）', W.mxPetItem('flame').cost === 1000 && W.mxPetItem('clay').free === true);
+  ok('用 petId 找得回商品（圖鑑要顯示價錢）', W.mxPetItem('flame').cost === 800 && W.mxPetItem('clay').free === true);
   ok('⭐ 選到沒買的夥伴會退回 Claudius（不然等於免費送）', /pets\.indexOf\(prev\) >= 0/.test(fx) && /mxSetPet\('clay'\)/.test(fx));
   ok('⭐ 每一隻都有自己的裝扮錨點（頭頂／眼睛／脖子／側邊）',
      ['clay', 'owl', 'flame', 'rock', 'sprout'].every(k => new RegExp(k + ':\\s*\\{ hat: \\{').test(fx)) &&

@@ -3579,3 +3579,40 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-p-card .fc-back-img-wrap img { max-height: 460px; }
   .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
+
+/* v436：互動教學的圖片（📖 閱讀的先備知識——老師自己放的圖） */
+.gnl-img {
+  display: block; margin: 10px auto 12px; max-width: min(520px, 100%);
+  max-height: 260px; object-fit: contain; border-radius: 10px;
+  border: 1px solid var(--border, #DDD6C4); background: #fff;
+}
+@media (max-width: 900px) { .gnl-img { max-height: 200px; } }
+@media (max-height: 820px) { .gnl-img { max-height: 180px; } }
+
+/* ══ v436：📖 出閱讀理解——「先教背景知識」的老師端 UI ══ */
+.rc-bgbox {
+  display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+  padding: 11px 13px; border-radius: 12px; margin-bottom: 12px;
+  border: 1px solid var(--border, #DDD6C4); background: #FBF8F0;
+}
+.rc-bgbox.on { border-color: #C9A84C; background: #FBF6E8; }
+.rc-bgbox input { margin-top: 3px; }
+.rc-bgbox b { font-size: 14px; color: var(--ink, #15130e); }
+.rc-bgbox em { display: block; font-style: normal; font-size: 12.5px; color: var(--ink-3, #8a8270); margin-top: 3px; }
+.rc-bg-top { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.rc-bg-top .rc-in { flex: 1 1 auto; }
+.rc-bg-redo {
+  flex: none; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  color: var(--ink-2, #5c554a); background: #fff; border: 1px solid var(--border, #DDD6C4);
+  border-radius: 999px; padding: 7px 14px;
+}
+.rc-bg-redo:disabled { opacity: .6; cursor: default; }
+.rc-bg-img { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.rc-bg-img .rc-in { flex: 1 1 220px; }
+.rc-bg-thumb { width: 84px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border, #DDD6C4); }
+.rc-bg-hint { font-size: 12.5px; color: var(--ink-3, #8a8270); }
+.rc-bg-hint b { color: var(--ink-2, #5c554a); }
+.rc-bg-up {
+  flex: none; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: #fbf8f1; background: var(--accent, #8B3120); border-radius: 999px; padding: 6px 12px;
+}

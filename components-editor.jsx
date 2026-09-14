@@ -5150,6 +5150,9 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const [qSkills, setQSkills] = useS({});
   const [qsN, setQsN]         = useS(2);
   const [keepPassage, setKeepPassage] = useS(true);
+  /* v436（Alan：「還缺少了一開始的 background 給學生的背景知識…希望跟 grammar 一樣有互動式學習」） */
+  const [bg, setBg]         = useS(true);      // 要不要先教背景知識
+  const [bgBusy, setBgBusy] = useS(false);     // 校稿頁按「重新產生」時
   const [busy, setBusy]     = useS(null);     // { done, total, label }
   const [err, setErr]       = useS('');
   const [res, setRes]       = useS(null);     // { mcq, sa, blocks }
@@ -5161,7 +5164,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   useE(() => {
     if (!open) return;
     setTitle(''); setText(''); setCat(defaultCat || 'reading'); setGrade('g4');
-    setNMcq(10); setNSa(5); setKeepPassage(true);
+    setNMcq(10); setNSa(5); setKeepPassage(true); setBg(true); setBgBusy(false);
     setSkills({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
     setQSkills({}); setQsN(2);
     setBusy(null); setErr(''); setRes(null); setTab(0); setAssign(true); setWho([]);
@@ -5180,12 +5183,20 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
     setErr('');
     setBusy({ done: 0, total: Math.ceil(nMcq / 5) + (nSa ? 1 : 0) + kinds.length + (qsN ? qKinds.length : 0), label: '讀文章中' });
     try {
-      const r = await window.aiMakeReadingSet({
-        passage: text, title: title.trim(), grade, mcq: nMcq, sa: nSa, skills: kinds,
-        qSkills: qKinds, qSkillN: qsN,
-        onProgress: (done, total, label) => setBusy({ done, total, label }),
-      });
-      setRes(r); setTab(0);
+      /* v436：背景知識跟題目同時產生，而且各自成敗——背景失敗不能把整批題目拖下水
+         （v429 出文法踩過同一個坑：Promise.all 一個失敗全部丟掉）。 */
+      const [r, bgR] = await Promise.all([
+        window.aiMakeReadingSet({
+          passage: text, title: title.trim(), grade, mcq: nMcq, sa: nSa, skills: kinds,
+          qSkills: qKinds, qSkillN: qsN,
+          onProgress: (done, total, label) => setBusy({ done, total, label }),
+        }),
+        (bg && window.aiMakeReadingBackground)
+          ? window.aiMakeReadingBackground({ passage: text, title: title.trim(), grade }).then(v => ({ v }), e => ({ e }))
+          : Promise.resolve(null),
+      ]);
+      setRes({ ...r, background: (bgR && bgR.v) || null }); setTab(0);
+      if (bg && bgR && bgR.e) setErr('背景知識這次沒有產生成功——題目都好了，可以在校稿頁按「🔄 重新產生」，或直接建立（不會上鎖）。');
     } catch (e) { setErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
     setBusy(null);
   };
@@ -5198,6 +5209,24 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const updSa  = (i, k, v) => setRes(r => ({ ...r, sa: r.sa.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
   const delSa  = (i) => setRes(r => { const n = r.sa.filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, sa: n }; });
   const updBlk = (i, nb) => setRes(r => ({ ...r, blocks: r.blocks.map((x, j) => j === i ? nb : x) }));
+  /* v436 背景知識：改字、換圖、刪一步、整份重出 */
+  const updBg   = (i, k, v) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.map((x, j) => j === i ? { ...x, [k]: v } : x) } }));
+  const updBgEx = (i, k, v) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.map((x, j) => j === i ? { ...x, examples: x.examples.map((e, m) => m === k ? { ...e, en: v } : e) } : x) } }));
+  const updBgOpt= (i, k, v) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.map((x, j) => j === i ? { ...x, options: x.options.map((o, m) => m === k ? v : o) } : x) } }));
+  const delBgStep = (i) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.filter((_, j) => j !== i) } }));
+  const uploadBgImg = async (i, file) => {
+    if (!file || !window.uploadFlashcardImage) return;
+    try { updBg(i, 'img', await window.uploadFlashcardImage(file)); }
+    catch (e) { setErr('圖片上傳失敗：' + ((e && e.message) || '請換一張')); }
+  };
+  const redoBg = async () => {
+    setBgBusy(true); setErr('');
+    try {
+      const l = await window.aiMakeReadingBackground({ passage: text, title: title.trim(), grade });
+      setRes(r => ({ ...r, background: l }));
+    } catch (e) { setErr('背景知識還是沒有產生成功，請再按一次；或直接建立（練習就不會上鎖）。'); }
+    setBgBusy(false);
+  };
   const delBlk = (i) => setRes(r => ({ ...r, blocks: r.blocks.filter((_, j) => j !== i) }));
 
   /* ⚠ 不要寫成 const AssignBox = () => … 再 <AssignBox/>（v380 踩過）：
@@ -5239,6 +5268,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const payload = () => ({
     title: title.trim(), cat, passage: keepPassage ? text.trim() : '',
     mcq: res.mcq, sa: res.sa, blocks: res.blocks, skillQs: res.skillQs || [],
+    background: (res.background && (res.background.steps || []).length) ? res.background : null,
     assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
   });
 
@@ -5296,6 +5326,15 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
                 </select>
               </label>
             </div>
+
+            {/* v436：讀之前先教背景知識（互動式，跟 ✏️ 出文法同一套播放器） */}
+            <label className={'rc-bgbox' + (bg ? ' on' : '')}>
+              <input type="checkbox" checked={bg} onChange={e => setBg(e.target.checked)}/>
+              <span>
+                <b>🧠 先教背景知識</b>（互動式：讀之前先認識人、地、關鍵字，學完才解鎖題目）
+                <em>AI 會依文章挑 3~4 個重點＋小測驗；每一步都可以放你自己找的圖片。</em>
+              </span>
+            </label>
 
             {/* v415：閱讀技巧「題目」——選擇題形式，一種技巧各出幾題。
                 跟下面那一區（拖卡片的活動）是兩回事，所以標題刻意寫清楚。 */}
@@ -5363,13 +5402,15 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   }
 
   // ───────────────────────── 校稿畫面 ─────────────────────────
+  const bgSteps = (res.background && res.background.steps) || [];
   const tabs = []
+    .concat(bgSteps.length ? [{ k: 'bg', name: '🧠 背景知識', n: bgSteps.length }] : [])
     .concat(res.mcq.length ? [{ k: 'mcq', name: '📝 選擇題', n: res.mcq.length }] : [])
     .concat((res.skillQs || []).length ? [{ k: 'qs', name: '🎯 閱讀技巧題', n: res.skillQs.length }] : [])
     .concat(res.sa.length ? [{ k: 'sa', name: '📖 閱讀簡答', n: res.sa.length }] : [])
     .concat(res.blocks.map((b, i) => ({ k: 'b', i, name: (window.RC_SKILLS[b.kind] || {}).ico + ' ' + (window.RC_SKILLS[b.kind] || {}).zh, n: (b.chips || []).length })));
   const cur = tabs[Math.min(tab, Math.max(0, tabs.length - 1))];
-  const nUnits = (res.mcq.length ? 1 : 0) + ((res.skillQs || []).length ? 1 : 0) + (res.sa.length ? 1 : 0) + (res.blocks.length ? 1 : 0);
+  const nUnits = (bgSteps.length ? 1 : 0) + (res.mcq.length ? 1 : 0) + ((res.skillQs || []).length ? 1 : 0) + (res.sa.length ? 1 : 0) + (res.blocks.length ? 1 : 0);
   /* ⚠ 以前紅色的題目會被 rcBuildItems 靜靜濾掉——老師按了「建立 3 個單元」，
      結果少了 4 題也不會知道。改成擋住按鈕、直接說是哪一頁有問題。 */
   const badTabs = tabs.filter(t => t.k === 'mcq' ? res.mcq.some(q => !rcMcqOk(q))
@@ -5393,6 +5434,57 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
 
           <div className="gr-proof">
             {!cur ? <div className="rc-note">這次什麼都沒生出來，回上一步再試一次。</div>
+              : cur.k === 'bg' ? (
+                <div className="rc-bg">
+                  <div className="rc-bg-top">
+                    <input className="rc-in" value={res.background.lead || ''} placeholder="開場白（一句中文，例如：這篇在講南極的企鵝）"
+                      onChange={e => setRes(r => ({ ...r, background: { ...r.background, lead: e.target.value } }))}/>
+                    <button type="button" className="rc-bg-redo" disabled={bgBusy} onClick={redoBg}>
+                      {bgBusy ? '重新產生中…' : '🔄 重新產生'}
+                    </button>
+                  </div>
+                  {bgSteps.map((st, i) => (
+                    <div key={i} className="rc-q">
+                      <div className="rc-q-head">
+                        <span className="rc-n">{i + 1}</span>
+                        <span className="rc-skilltag">{st.kind === 'learn' ? '📖 學一個重點' : '👆 選一選'}</span>
+                        <button type="button" className="rc-x" onClick={() => delBgStep(i)}>✕</button>
+                      </div>
+                      {st.kind === 'learn' ? (
+                        <>
+                          <input className="rc-in" value={st.say} onChange={e => updBg(i, 'say', e.target.value)} placeholder="一句中文重點（越簡單越好）"/>
+                          {(st.examples || []).map((ex, k) => (
+                            <input key={k} className="rc-in" value={ex.en} onChange={e => updBgEx(i, k, e.target.value)} placeholder="英文例句"/>
+                          ))}
+                          <div className="rc-bg-img">
+                            {st.img
+                              ? <img src={st.img} alt="" className="rc-bg-thumb"/>
+                              : <span className="rc-bg-hint">建議放的圖：<b>{st.imgHint || '（你自己決定）'}</b></span>}
+                            <input className="rc-in" value={st.img || ''} onChange={e => updBg(i, 'img', e.target.value)} placeholder="圖片網址（可留白）"/>
+                            <label className="rc-bg-up">📷 上傳
+                              <input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; uploadBgImg(i, f); }}/>
+                            </label>
+                            {st.img && <button type="button" className="rc-x" onClick={() => updBg(i, 'img', '')}>移除圖</button>}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <input className="rc-in" value={st.q} onChange={e => updBg(i, 'q', e.target.value)} placeholder="問題"/>
+                          {(st.options || []).map((o, k) => (
+                            <label key={k} className={'rc-opt' + (st.answer === k ? ' on' : '')}>
+                              <input type="radio" checked={st.answer === k} onChange={() => updBg(i, 'answer', k)}/>
+                              <span className="rc-opt-l">{'ABCD'[k]}</span>
+                              <input className="rc-in" value={o} onChange={e => updBgOpt(i, k, e.target.value)}/>
+                            </label>
+                          ))}
+                          <input className="rc-in rc-why" value={st.why || ''} onChange={e => updBg(i, 'why', e.target.value)} placeholder="中文解說（答對後給學生看）"/>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  <div className="rc-note">學生要把這幾步做完，才會解鎖下面的題目（跟 ✏️ 出文法一樣）。</div>
+                </div>
+              )
               : (cur.k === 'mcq' || cur.k === 'qs') ? (() => {
                 const key = cur.k === 'qs' ? 'skillQs' : 'mcq';
                 const QS = window.RC_QSKILLS || {};
@@ -5456,15 +5548,25 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
 /* 把校稿完的東西變成週次裡的單元。
    order 不特別指定，讓 QM_TYPE_ORDER 的預設順序生效：
    選擇題(1) → 閱讀技巧(3.5) → 閱讀簡答(6)，剛好就是「先讀懂 → 練技巧 → 自己寫」。 */
-function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs }) {
+function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const out = [];
   const g = title;
+  /* v436：讀之前先教「背景知識」——跟 ✏️ 出文法同一套 lesson.steps，
+     學完才解鎖後面的題目（requires），學生端播放器完全不用改。 */
+  const bgSteps = ((background && background.steps) || []).map(window.gnValidStep).filter(Boolean);
+  const bgId = bgSteps.length ? 'rc' + stamp + 'bg' + rnd() : null;
+  if (bgId) {
+    out.push({ id: bgId, type: 'lesson', group: g, order: 0,
+      title: `${g} · 讀之前先知道`, zh: `背景知識 · ${bgSteps.length} 步 · 學完才開始讀`,
+      lead: (background && background.lead) || '', steps: bgSteps, outro: (background && background.outro) || '' });
+  }
+  const req = bgId ? { requires: bgId } : {};
   const good = (mcq || []).filter(rcMcqOk);
   if (good.length) {
     out.push({
-      id: 'rc' + stamp + 'qz' + rnd(), type: 'quiz', group: g,
+      id: 'rc' + stamp + 'qz' + rnd(), type: 'quiz', group: g, ...req,
       title: `${g} · 選擇題`, zh: `${good.length} 題 · 讀完文章選出正確答案`,
       shuffle: true,
       passage: passage || '',          // v386: 學生在選擇題畫面按 📖 就能看文章
@@ -5484,7 +5586,7 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs }) {
     const QS = window.RC_QSKILLS || {};
     const kindsUsed = Array.from(new Set(goodQS.map(q => q.skill).filter(k => QS[k])));
     out.push({
-      id: 'rc' + stamp + 'qs' + rnd(), type: 'quiz', group: g,
+      id: 'rc' + stamp + 'qs' + rnd(), type: 'quiz', group: g, ...req,
       title: `${g} · 閱讀技巧題`,
       zh: `${goodQS.length} 題 · ${kindsUsed.map(k => QS[k].zh).join('、') || '閱讀技巧'}`,
       shuffle: true,
@@ -5507,7 +5609,7 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs }) {
       c => !!c.text));
     const nChips = clean.reduce((n, b) => n + b.chips.length, 0);
     out.push({
-      id: 'rc' + stamp + 'rs' + rnd(), type: 'reading-skill', group: g,
+      id: 'rc' + stamp + 'rs' + rnd(), type: 'reading-skill', group: g, ...req,
       title: `${g} · 閱讀技巧`, zh: `${clean.length} 種技巧 · ${nChips} 張卡片`,
       rsPassage: passage || '', rsBlocks: clean,
     });
@@ -5515,7 +5617,7 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs }) {
   const goodSa = (sa || []).filter(q => q && String(q.question || '').trim());
   if (goodSa.length) {
     out.push({
-      id: 'rc' + stamp + 'sa' + rnd(), type: 'short-answer', group: g,
+      id: 'rc' + stamp + 'sa' + rnd(), type: 'short-answer', group: g, ...req,
       title: `${g} · 閱讀簡答`, zh: `${goodSa.length} 題 · 自己寫出答案，AI 批改`,
       passage: passage || '',
       saShowPassage: !!passage,        // v386: 有貼文章就讓學生看得到（舊單元的 passage 一向只給 AI）
