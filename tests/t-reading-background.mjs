@@ -119,8 +119,11 @@ log.push('\n【5】（v437）分段閱讀也能先教背景知識');
 {
   const gr = slice(editor, 'function GuidedReadingEditor(', 'function GrRegionModal(');
   ok('⭐ 分段閱讀的編輯器有「🧠 讀之前先知道」', /🧠 讀之前先知道/.test(gr) && /const runBg = async/.test(gr));
-  ok('文字從段落來，太少會擋下來（不要叫 AI 白跑）',
-     /const bgPassage = \(\) => \(segments \|\| \[\]\)\.map/.test(gr) && /至少 40 個英文字/.test(gr));
+  ok('⭐（v437b）照片段落的文字要用 grSegMainText 拿——Alan 上傳 11 張圖卻一直說「文字不夠」，'
+     + '就是因為只讀 seg.text（照片的文字在 OCR 結果裡）',
+     /const bgPassage = async \(\)/.test(gr) && /await grSegMainText\(sg\)/.test(gr));
+  ok('跟 AI 出題走同一條路（同一個函式）', (gr.match(/grSegMainText/g) || []).length >= 3);
+  ok('文字真的不夠時才擋，而且說得出下一步', gr.indexOf('至少 40 個英文字') > 0 && gr.indexOf('點字查義 ✓') > 0);
   ok('⭐ 產生的是一個 lesson 單元、掛在 __side（存檔時一起建立）',
      /type: 'lesson', group: itemGroup/.test(gr) && /讀之前先知道/.test(gr));
   ok('⭐ 分段閱讀本身帶 requires（學完才解鎖）', /onChangeRequires\(id\)/.test(gr));

@@ -2512,7 +2512,20 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, sideIt
      這時只要認得出「已經有了」就好，不要讓老師又生一份重複的。 */
   const bgSaved = (!bgItem && requiresId)
     ? ((weekItems || []).find(x => x && x.id === requiresId && x.type === 'lesson') || null) : null;
-  const bgPassage = () => (segments || []).map(sg => String((sg && sg.text) || '').trim()).filter(Boolean).join('\n\n');
+  /* ⚠ v437b（Alan：「我已經上傳完 11 張課文圖片了 為什麼還不能產生背景知識？」）：
+     照片段落的文字**不在 seg.text**，而是在 OCR 的結果裡（img.wordsId → fetchReadingWords，
+     還要照「朗讀區域」只取主文）。AI 出題那條路本來就是用 grSegMainText 拿的，
+     這裡一開始只讀 seg.text ＝ 照片段落一律當成空的 → 永遠說「文字不夠」。 */
+  const bgPassage = async () => {
+    const list = segRef.current || segments || [];
+    const out = [];
+    for (const sg of list) {
+      let t = '';
+      try { t = await grSegMainText(sg); } catch (e) { t = ''; }
+      if (t && t.trim()) out.push(t.trim());
+    }
+    return out.join('\n\n');
+  };
   const setSide = (next) => { if (onSideItems) onSideItems(next); };
   const putBg = (lesson) => {
     if (!lesson || !(lesson.steps || []).length) return;
@@ -2530,13 +2543,14 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, sideIt
   };
   const runBg = async () => {
     setBknErr('');
-    const text = bgPassage();
-    if (text.split(/\s+/).filter(Boolean).length < 40) {
-      setBknErr('段落裡的文字不夠（至少 40 個英文字）——照片段落要先按「🔍 辨識單字」，或把文字貼進段落裡。');
-      return;
-    }
     setBknBusy(true);
     try {
+      const text = await bgPassage();     // 照片段落要等 OCR 的文字抓回來
+      if (text.split(/\s+/).filter(Boolean).length < 40) {
+        setBknErr('讀不到足夠的文字（至少 40 個英文字）——照片段落要先按「🔍 辨識單字」（辨識好會顯示「點字查義 ✓」），或把文字貼進段落的「補充文字」裡。');
+        setBknBusy(false);
+        return;
+      }
       const l = await window.aiMakeReadingBackground({ passage: text, title: itemTitle || '', grade: aiGrade });
       putBg(l);
     } catch (e) { setBknErr(String((e && e.message) || e)); }
