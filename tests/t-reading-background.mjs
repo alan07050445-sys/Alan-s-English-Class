@@ -87,7 +87,7 @@ log.push('\n【2】圖片（Alan：「我可以自己找圖片放上去」）');
   const st2 = W.gnValidStep({ kind: 'learn', say: '南極很冷', examples: [{ en: 'It is cold.' }] });
   ok('沒放圖就不要有 img 這個欄位（資料乾淨）', !('img' in st2));
   ok('⭐ 學生端會把圖畫出來', /cur\.img && <img className="gnl-img"/.test(qm));
-  ok('老師端可以上傳圖片（沿用單字卡那一套）', /uploadBgImg/.test(editor) && /window\.uploadFlashcardImage\(file\)/.test(editor));
+  ok('老師端可以上傳圖片（沿用單字卡那一套）', /function BgStepsEditor/.test(editor) && /window\.uploadFlashcardImage\(file\)/.test(editor));
   ok('AI 建議的關鍵字會顯示給老師看', /st\.imgHint \|\| '（你自己決定）'/.test(editor));
 }
 
@@ -113,6 +113,27 @@ log.push('\n【4】老師端的流程');
   ok('建立時會把背景知識送出去', /background: \(res\.background && \(res\.background\.steps \|\| \[\]\)\.length\) \? res\.background : null/.test(editor));
   ok('app.jsx 有把 background 傳給 rcBuildItems', /rcBuildItems\(\{ title, passage, mcq, sa, blocks, skillQs, background \}\)/.test(app));
   ok('沿用 ✏️ 出文法的播放器（不另外寫一套）', /window\.gnValidStep/.test(editor) && /type: 'lesson'/.test(editor));
+}
+
+log.push('\n【5】（v437）分段閱讀也能先教背景知識');
+{
+  const gr = slice(editor, 'function GuidedReadingEditor(', 'function GrRegionModal(');
+  ok('⭐ 分段閱讀的編輯器有「🧠 讀之前先知道」', /🧠 讀之前先知道/.test(gr) && /const runBg = async/.test(gr));
+  ok('文字從段落來，太少會擋下來（不要叫 AI 白跑）',
+     /const bgPassage = \(\) => \(segments \|\| \[\]\)\.map/.test(gr) && /至少 40 個英文字/.test(gr));
+  ok('⭐ 產生的是一個 lesson 單元、掛在 __side（存檔時一起建立）',
+     /type: 'lesson', group: itemGroup/.test(gr) && /讀之前先知道/.test(gr));
+  ok('⭐ 分段閱讀本身帶 requires（學完才解鎖）', /onChangeRequires\(id\)/.test(gr));
+  ok('⭐ 跟「必須先練完單字卡」那個鎖可以並存（兩個不同欄位）',
+     /requiresId/.test(gr) && /linkedFcRequired/.test(gr) && !/linkedFcRequired.*requires =/.test(gr));
+  ok('AI 出題做的「閱讀技巧」單元不會蓋掉背景知識（以前是整個換掉）',
+     /onSideItems\(\(sideItems \|\| \[\]\)\.filter\(x => x && x\.type === 'lesson'\)\.concat/.test(gr));
+  ok('刪光步驟＝取消（不會留一個空的 lesson）', /\(next\.steps \|\| \[\]\)\.length \? putBg\(next\) : removeBg\(\)/.test(gr));
+  ok('已經存過的那一份認得出來，不會又生一份重複的', /const bgSaved = \(!bgItem && requiresId\)/.test(gr));
+  ok('⭐ 步驟編輯器是共用的（兩邊行為一樣、改一次就好）',
+     /function BgStepsEditor/.test(editor) && (editor.match(/<BgStepsEditor/g) || []).length === 2);
+  ok('⚠ 變數沒有跟既有的背景 OCR（bgBusy ref）撞名', /const \[bknBusy, setBknBusy\]/.test(gr) && /const bgBusy = React\.useRef\(false\)/.test(gr));
+  ok('EditorModal 有把 sideItems／requires 傳下去', /sideItems=\{form\.__side \|\| \[\]\}/.test(editor) && /onChangeRequires=\{v => update\("requires"/.test(editor));
 }
 
 console.log(log.join('\n'));

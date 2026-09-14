@@ -252,6 +252,10 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
               /* v407：AI 出題若順便做了「閱讀技巧」，它是另一個型別的單元、
                  塞不進分段閱讀的資料結構 → 掛在 __side，存檔時由 app.jsx 一起建立。 */
               onSideItems={items => update("__side", items)}
+              sideItems={form.__side || []}
+              /* v437：分段閱讀也可以先教背景知識——鎖用的是 requires（跟單字卡的鎖是兩回事，可以並存） */
+              requiresId={form.requires || ''}
+              onChangeRequires={v => update("requires", v || undefined)}
               catItems={catItems || []}
               weekItems={weekItems || []}
               linkedFlashcardId={form.linkedFlashcardId || ''}
@@ -2473,7 +2477,7 @@ function GrQuestionsEditor({ qs, onChange, impOpen, onToggleImp, impText, onImpT
 /* ── GuidedReadingEditor 分段閱讀（v276；v277 照片＋裁切；v278 PDF；v281 綜合題）──
    段落 = { id, text, img?:{url, ar, y0, y1}, questions:[{kind:'mc',q,options[4],answer} | {kind:'short',q,keyPoints}] }
    grFinal = 全部讀完後的整篇綜合題（同題目格式）；img 只存裁切範圍，不產生新圖檔 */
-function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catItems, weekItems, linkedFlashcardId, onChangeLinked, linkedFcRequired, onChangeRequired, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
+function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, sideItems, requiresId, onChangeRequires, catItems, weekItems, linkedFlashcardId, onChangeLinked, linkedFcRequired, onChangeRequired, audioUrl, onChangeAudio, segments, onChange, finalQs, onChangeFinal }) {
   // v364: 單字卡多半在「單字」分類，只找同分類會找不到 → 改看整週所有分類
   const fcOptions = (((weekItems && weekItems.length) ? weekItems : (catItems || []))
     .filter(it => it.type === 'flashcard' && (it.cards || []).length > 0));
@@ -2495,6 +2499,50 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, catIte
   const [aiRun,   setAiRun]   = useS('');  // 進度文字（空字串＝沒在跑）
   const [aiErr,   setAiErr]   = useS('');
   const [aiInfo,  setAiInfo]  = useS('');  // 跑完的回報（出了幾題、跳過哪幾段、擋掉幾題）
+  /* v437（Alan：「分段閱讀也一起加上去」）：讀之前先教背景知識。
+     做法跟 📖 出閱讀理解一樣——產生一個 lesson 單元掛在 __side，
+     分段閱讀本身帶 requires 指向它（跟「必須先練完單字卡」那個鎖可以並存）。 */
+  /* ⚠ 這個檔案裡已經有一個 bgBusy 了（背景 OCR 的 ref，:2563）——名字撞到會直接壞掉，
+     所以背景知識這一組一律用 bkn（background knowledge）開頭。 */
+  const [bknBusy, setBknBusy] = useS(false);
+  const [bknErr,  setBknErr]  = useS('');
+  const side = Array.isArray(sideItems) ? sideItems : [];
+  const bgItem = side.find(x => x && x.type === 'lesson') || null;
+  /* 這一份存過之後，背景知識已經是同一週的一個單元了（__side 會被清掉）——
+     這時只要認得出「已經有了」就好，不要讓老師又生一份重複的。 */
+  const bgSaved = (!bgItem && requiresId)
+    ? ((weekItems || []).find(x => x && x.id === requiresId && x.type === 'lesson') || null) : null;
+  const bgPassage = () => (segments || []).map(sg => String((sg && sg.text) || '').trim()).filter(Boolean).join('\n\n');
+  const setSide = (next) => { if (onSideItems) onSideItems(next); };
+  const putBg = (lesson) => {
+    if (!lesson || !(lesson.steps || []).length) return;
+    const id = (bgItem && bgItem.id) || ('gr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'bg');
+    const item = { id, type: 'lesson', group: itemGroup || undefined,
+      title: (itemTitle || '分段閱讀') + ' · 讀之前先知道',
+      zh: `背景知識 · ${lesson.steps.length} 步 · 學完才開始讀`,
+      lead: lesson.lead || '', steps: lesson.steps, outro: lesson.outro || '' };
+    setSide(side.filter(x => x && x.type !== 'lesson').concat([item]));
+    if (onChangeRequires) onChangeRequires(id);
+  };
+  const removeBg = () => {
+    setSide(side.filter(x => x && x.type !== 'lesson'));
+    if (onChangeRequires && bgItem && requiresId === bgItem.id) onChangeRequires('');
+  };
+  const runBg = async () => {
+    setBknErr('');
+    const text = bgPassage();
+    if (text.split(/\s+/).filter(Boolean).length < 40) {
+      setBknErr('段落裡的文字不夠（至少 40 個英文字）——照片段落要先按「🔍 辨識單字」，或把文字貼進段落裡。');
+      return;
+    }
+    setBknBusy(true);
+    try {
+      const l = await window.aiMakeReadingBackground({ passage: text, title: itemTitle || '', grade: aiGrade });
+      putBg(l);
+    } catch (e) { setBknErr(String((e && e.message) || e)); }
+    setBknBusy(false);
+  };
+
   const [bulkOpen, setBulkOpen] = useS(false);   // v387: 一次匯入所有段落的題目
   const [bulkText, setBulkText] = useS('');
   const [bulkReplace, setBulkReplace] = useS(false);
@@ -2694,13 +2742,14 @@ function grParseBulk(text, segCount) {
          存檔時跟這一份分段閱讀一起建立（同一週、同一個分組）。 */
       if (r.blocks.length && onSideItems) {
         const nChips = r.blocks.reduce((n, b) => n + (b.chips || []).length, 0);
-        onSideItems([{
+        // v437：保留已經做好的背景知識（以前是整個蓋掉，兩個功能會互相洗掉）
+        onSideItems((sideItems || []).filter(x => x && x.type === 'lesson').concat([{
           id: 'gr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + 'rs',
           type: 'reading-skill', group: itemGroup || undefined,
           title: (itemTitle || '分段閱讀') + ' · 閱讀技巧',
           zh: `${r.blocks.length} 種技巧 · ${nChips} 張卡片`,
           rsPassage: r.passage || '', rsBlocks: r.blocks,
-        }]);
+        }]));
       }
 
       const bits = [`出了 ${r.made} 題`];
@@ -3048,6 +3097,37 @@ function grParseBulk(text, segCount) {
       {/* v407：AI 自動出題的設定面板 ────────────────────────────────────
           刻意跟「📋 一次匯入所有題目」長得一樣（同一種紙感卡片、同一個位置），
           因為它們做的是同一件事，只是一個用貼的、一個用生的。 */}
+      {/* v437（Alan：「分段閱讀也一起加上去」）：讀之前先教背景知識 */}
+      <div className="gr-bk">
+        <div className="gr-bk-head">
+          <b>🧠 讀之前先知道</b>
+          <span className="gr-bk-sub">互動式背景知識：先認識人、地、關鍵字，學完才解鎖這篇文章</span>
+          <span style={{ flex: 1 }}/>
+          {(bgItem || bgSaved) && (
+            <button type="button" className="btn ghost" style={{ fontSize: 11, padding: '5px 10px' }}
+              onClick={removeBg}>{bgSaved ? '不要鎖了' : '移除'}</button>
+          )}
+          <button type="button" className="btn primary" style={{ fontSize: 11, padding: '5px 12px' }}
+            disabled={bknBusy} onClick={runBg}>
+            {bknBusy ? '產生中…' : (bgItem || bgSaved ? '🔄 重新產生' : '✨ 產生背景知識')}
+          </button>
+        </div>
+        {bknErr && <div className="gr-ai-err">{bknErr}</div>}
+        {bgSaved && (
+          <div className="gr-bk-note">
+            已經有一份：<b>{bgSaved.title}</b>（在同一週的單元列表裡，點進去就能改）。
+            這篇文章會鎖到學生學完為止；按「🔄 重新產生」會做一份新的來取代。
+          </div>
+        )}
+        {bgItem && (
+          <>
+            <div className="gr-bk-note">存檔時會一起建立成「{bgItem.title}」；學生學完才會解鎖這篇分段閱讀。</div>
+            <BgStepsEditor bg={bgItem} onErr={setBknErr}
+              onChange={next => ((next.steps || []).length ? putBg(next) : removeBg())}/>
+          </>
+        )}
+      </div>
+
       {aiOpen && (
         <div className="gr-ai-panel">
           <div className="gr-ai-note">
@@ -5136,6 +5216,75 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, caseMatters }) 
   return out;
 }
 
+/* ── v437：「讀之前先知道」的步驟編輯器（📖 出閱讀理解 與 分段閱讀 共用）──────────
+   v436 這段 JSX 本來寫死在 ReadingGenModal 裡；分段閱讀也要用，所以抽出來。
+   兩邊的行為完全一樣（改字、換圖、上傳、刪一步、整份重出）。 */
+function BgStepsEditor({ bg, onChange, onRedo, busy, onErr }) {
+  const steps = (bg && bg.steps) || [];
+  const setStep = (i, k, v) => onChange({ ...bg, steps: steps.map((x, j) => j === i ? { ...x, [k]: v } : x) });
+  const setEx   = (i, k, v) => onChange({ ...bg, steps: steps.map((x, j) => j === i ? { ...x, examples: x.examples.map((e, m) => m === k ? { ...e, en: v } : e) } : x) });
+  const setOpt  = (i, k, v) => onChange({ ...bg, steps: steps.map((x, j) => j === i ? { ...x, options: x.options.map((o, m) => m === k ? v : o) } : x) });
+  const delStep = (i) => onChange({ ...bg, steps: steps.filter((_, j) => j !== i) });
+  const upload = async (i, file) => {
+    if (!file || !window.uploadFlashcardImage) return;
+    try { setStep(i, 'img', await window.uploadFlashcardImage(file)); }
+    catch (e) { if (onErr) onErr('圖片上傳失敗：' + ((e && e.message) || '請換一張')); }
+  };
+  return (
+    <div className="rc-bg">
+      <div className="rc-bg-top">
+        <input className="rc-in" value={(bg && bg.lead) || ''} placeholder="開場白（一句中文，例如：這篇在講南極的企鵝）"
+          onChange={e => onChange({ ...bg, lead: e.target.value })}/>
+        {onRedo && (
+          <button type="button" className="rc-bg-redo" disabled={busy} onClick={onRedo}>
+            {busy ? '重新產生中…' : '🔄 重新產生'}
+          </button>
+        )}
+      </div>
+      {steps.map((st, i) => (
+        <div key={i} className="rc-q">
+          <div className="rc-q-head">
+            <span className="rc-n">{i + 1}</span>
+            <span className="rc-skilltag">{st.kind === 'learn' ? '📖 學一個重點' : '👆 選一選'}</span>
+            <button type="button" className="rc-x" onClick={() => delStep(i)}>✕</button>
+          </div>
+          {st.kind === 'learn' ? (
+            <>
+              <input className="rc-in" value={st.say} onChange={e => setStep(i, 'say', e.target.value)} placeholder="一句中文重點（越簡單越好）"/>
+              {(st.examples || []).map((ex, k) => (
+                <input key={k} className="rc-in" value={ex.en} onChange={e => setEx(i, k, e.target.value)} placeholder="英文例句"/>
+              ))}
+              <div className="rc-bg-img">
+                {st.img
+                  ? <img src={st.img} alt="" className="rc-bg-thumb"/>
+                  : <span className="rc-bg-hint">建議放的圖：<b>{st.imgHint || '（你自己決定）'}</b></span>}
+                <input className="rc-in" value={st.img || ''} onChange={e => setStep(i, 'img', e.target.value)} placeholder="圖片網址（可留白）"/>
+                <label className="rc-bg-up">📷 上傳
+                  <input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; upload(i, f); }}/>
+                </label>
+                {st.img && <button type="button" className="rc-x" onClick={() => setStep(i, 'img', '')}>移除圖</button>}
+              </div>
+            </>
+          ) : (
+            <>
+              <input className="rc-in" value={st.q} onChange={e => setStep(i, 'q', e.target.value)} placeholder="問題"/>
+              {(st.options || []).map((o, k) => (
+                <label key={k} className={'rc-opt' + (st.answer === k ? ' on' : '')}>
+                  <input type="radio" checked={st.answer === k} onChange={() => setStep(i, 'answer', k)}/>
+                  <span className="rc-opt-l">{'ABCD'[k]}</span>
+                  <input className="rc-in" value={o} onChange={e => setOpt(i, k, e.target.value)}/>
+                </label>
+              ))}
+              <input className="rc-in rc-why" value={st.why || ''} onChange={e => setStep(i, 'why', e.target.value)} placeholder="中文解說（答對後給學生看）"/>
+            </>
+          )}
+        </div>
+      ))}
+      <div className="rc-note">學生要把這幾步做完，才會解鎖後面的題目（跟 ✏️ 出文法一樣）。</div>
+    </div>
+  );
+}
+
 function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onClose, onCreate }) {
   const SK = window.RC_SKILLS || {};
   const [title, setTitle]   = useS('');
@@ -5209,16 +5358,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const updSa  = (i, k, v) => setRes(r => ({ ...r, sa: r.sa.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
   const delSa  = (i) => setRes(r => { const n = r.sa.filter((_, j) => j !== i); if (!n.length) setTab(0); return { ...r, sa: n }; });
   const updBlk = (i, nb) => setRes(r => ({ ...r, blocks: r.blocks.map((x, j) => j === i ? nb : x) }));
-  /* v436 背景知識：改字、換圖、刪一步、整份重出 */
-  const updBg   = (i, k, v) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.map((x, j) => j === i ? { ...x, [k]: v } : x) } }));
-  const updBgEx = (i, k, v) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.map((x, j) => j === i ? { ...x, examples: x.examples.map((e, m) => m === k ? { ...e, en: v } : e) } : x) } }));
-  const updBgOpt= (i, k, v) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.map((x, j) => j === i ? { ...x, options: x.options.map((o, m) => m === k ? v : o) } : x) } }));
-  const delBgStep = (i) => setRes(r => ({ ...r, background: { ...r.background, steps: r.background.steps.filter((_, j) => j !== i) } }));
-  const uploadBgImg = async (i, file) => {
-    if (!file || !window.uploadFlashcardImage) return;
-    try { updBg(i, 'img', await window.uploadFlashcardImage(file)); }
-    catch (e) { setErr('圖片上傳失敗：' + ((e && e.message) || '請換一張')); }
-  };
+  /* v436 背景知識：步驟的編輯交給共用的 BgStepsEditor（分段閱讀也用同一個），這裡只管「重新產生」 */
   const redoBg = async () => {
     setBgBusy(true); setErr('');
     try {
@@ -5435,55 +5575,8 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
           <div className="gr-proof">
             {!cur ? <div className="rc-note">這次什麼都沒生出來，回上一步再試一次。</div>
               : cur.k === 'bg' ? (
-                <div className="rc-bg">
-                  <div className="rc-bg-top">
-                    <input className="rc-in" value={res.background.lead || ''} placeholder="開場白（一句中文，例如：這篇在講南極的企鵝）"
-                      onChange={e => setRes(r => ({ ...r, background: { ...r.background, lead: e.target.value } }))}/>
-                    <button type="button" className="rc-bg-redo" disabled={bgBusy} onClick={redoBg}>
-                      {bgBusy ? '重新產生中…' : '🔄 重新產生'}
-                    </button>
-                  </div>
-                  {bgSteps.map((st, i) => (
-                    <div key={i} className="rc-q">
-                      <div className="rc-q-head">
-                        <span className="rc-n">{i + 1}</span>
-                        <span className="rc-skilltag">{st.kind === 'learn' ? '📖 學一個重點' : '👆 選一選'}</span>
-                        <button type="button" className="rc-x" onClick={() => delBgStep(i)}>✕</button>
-                      </div>
-                      {st.kind === 'learn' ? (
-                        <>
-                          <input className="rc-in" value={st.say} onChange={e => updBg(i, 'say', e.target.value)} placeholder="一句中文重點（越簡單越好）"/>
-                          {(st.examples || []).map((ex, k) => (
-                            <input key={k} className="rc-in" value={ex.en} onChange={e => updBgEx(i, k, e.target.value)} placeholder="英文例句"/>
-                          ))}
-                          <div className="rc-bg-img">
-                            {st.img
-                              ? <img src={st.img} alt="" className="rc-bg-thumb"/>
-                              : <span className="rc-bg-hint">建議放的圖：<b>{st.imgHint || '（你自己決定）'}</b></span>}
-                            <input className="rc-in" value={st.img || ''} onChange={e => updBg(i, 'img', e.target.value)} placeholder="圖片網址（可留白）"/>
-                            <label className="rc-bg-up">📷 上傳
-                              <input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; uploadBgImg(i, f); }}/>
-                            </label>
-                            {st.img && <button type="button" className="rc-x" onClick={() => updBg(i, 'img', '')}>移除圖</button>}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <input className="rc-in" value={st.q} onChange={e => updBg(i, 'q', e.target.value)} placeholder="問題"/>
-                          {(st.options || []).map((o, k) => (
-                            <label key={k} className={'rc-opt' + (st.answer === k ? ' on' : '')}>
-                              <input type="radio" checked={st.answer === k} onChange={() => updBg(i, 'answer', k)}/>
-                              <span className="rc-opt-l">{'ABCD'[k]}</span>
-                              <input className="rc-in" value={o} onChange={e => updBgOpt(i, k, e.target.value)}/>
-                            </label>
-                          ))}
-                          <input className="rc-in rc-why" value={st.why || ''} onChange={e => updBg(i, 'why', e.target.value)} placeholder="中文解說（答對後給學生看）"/>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                  <div className="rc-note">學生要把這幾步做完，才會解鎖下面的題目（跟 ✏️ 出文法一樣）。</div>
-                </div>
+                <BgStepsEditor bg={res.background} busy={bgBusy} onRedo={redoBg} onErr={setErr}
+                  onChange={next => setRes(r => ({ ...r, background: next }))}/>
               )
               : (cur.k === 'mcq' || cur.k === 'qs') ? (() => {
                 const key = cur.k === 'qs' ? 'skillQs' : 'mcq';

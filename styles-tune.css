@@ -3616,3 +3616,14 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   flex: none; font-size: 12.5px; font-weight: 700; cursor: pointer;
   color: #fbf8f1; background: var(--accent, #8B3120); border-radius: 999px; padding: 6px 12px;
 }
+
+/* v437：分段閱讀的「🧠 讀之前先知道」區塊 */
+.gr-bk {
+  border: 1px solid var(--border, #DDD6C4); border-radius: 12px;
+  padding: 10px 12px; margin: 0 0 10px; background: #FBF8F0;
+}
+.gr-bk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gr-bk-head b { font-size: 13px; color: var(--ink, #15130e); }
+.gr-bk-sub { font-size: 11.5px; color: var(--ink-3, #8a8270); }
+.gr-bk-note { font-size: 11.5px; color: var(--ink-2, #5c554a); margin: 8px 0 4px; }
+.gr-bk .rc-bg { margin-top: 6px; }
