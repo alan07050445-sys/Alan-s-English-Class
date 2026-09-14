@@ -661,31 +661,97 @@
 .mx-dz.on .mx-dz-tag { color: var(--accent, #8B3120); }
 .mx-dress-note { font-size: 11.5px; color: var(--ink-3, #8a8270); line-height: 1.5; margin: 8px 2px 4px; }
 
-/* ── 買得到的新動作 ──────────────────────────────────── */
-.act-wave .mx-svg { animation: mxWave .5s ease-in-out 3; transform-origin: 50% 92%; }
+/* ── 買得到的新動作（v435：全部是新的，不重用免費的走路／衝刺／轉圈／跳舞）──────
+   都掛在 .mx-svg 上（transform-origin 50% 92% ＝ 腳底），所以旋轉、傾斜看起來都像踩在地上。 */
+
+/* 👋 揮揮手：整個身體左右倒、每一下都彈起來，像在跟你打招呼 */
+.act-wave .mx-svg { animation: mxWave 1.55s cubic-bezier(.36,.07,.19,.97); }
+.act-wave .mx-leg-a { animation: mxStep .52s ease-in-out 3; }
+.act-wave .mx-leg-c { animation: mxStep .52s ease-in-out 3 .26s; }
 @keyframes mxWave {
-  0%, 100% { transform: rotate(0deg); }
-  30%      { transform: rotate(-11deg) translateY(-1px); }
-  70%      { transform: rotate(11deg) translateY(-1px); }
+  0%   { transform: rotate(0deg) translateY(0); }
+  12%  { transform: rotate(-17deg) translateY(-2.5px); }
+  26%  { transform: rotate(7deg)  translateY(0); }
+  40%  { transform: rotate(-17deg) translateY(-2.5px); }
+  54%  { transform: rotate(7deg)  translateY(0); }
+  68%  { transform: rotate(-14deg) translateY(-2px); }
+  84%  { transform: rotate(5deg)  translateY(0); }
+  100% { transform: rotate(0deg) translateY(0); }
 }
-.act-flip .mx-svg { animation: mxFlip .95s cubic-bezier(.35,.1,.3,1); transform-origin: 50% 55%; }
+
+/* 🌀 轉圈圈：跳起來連轉兩圈，落地壓一下（免費的 spin 只是原地轉一圈） */
+.act-twirl .mx-svg { animation: mxTwirl 1.45s cubic-bezier(.33,.02,.25,1); }
+@keyframes mxTwirl {
+  0%   { transform: translateY(0) rotate(0deg) scale(1, 1); }
+  10%  { transform: translateY(1.5px) rotate(0deg) scale(1.12, .86); }   /* 蹲 */
+  30%  { transform: translateY(-16px) rotate(240deg) scale(.94, 1.1); }
+  55%  { transform: translateY(-20px) rotate(520deg) scale(1, 1); }
+  80%  { transform: translateY(0) rotate(720deg) scale(1, 1); }
+  88%  { transform: translateY(1.5px) rotate(720deg) scale(1.14, .84); } /* 落地 */
+  100% { transform: translateY(0) rotate(720deg) scale(1, 1); }
+}
+
+/* 🕺 跳舞：扭腰＋上下彈＋左右踏步，腳輪流抬（免費的 dance 只有小幅度晃） */
+.act-party .mx-svg   { animation: mxParty .62s ease-in-out infinite; }
+.act-party .mx-leg-a { animation: mxPartyLegA .62s ease-in-out infinite; }
+.act-party .mx-leg-c { animation: mxPartyLegA .62s ease-in-out infinite .31s; }
+.act-party .mx-eye   { animation: mxBlink 1.4s steps(1) infinite; }
+@keyframes mxParty {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1, 1); }
+  20%  { transform: translate(-3px, -4px) rotate(-11deg) scale(.97, 1.05); }
+  40%  { transform: translate(0, .5px) rotate(0deg) scale(1.06, .94); }
+  60%  { transform: translate(3px, -4px) rotate(11deg) scale(.97, 1.05); }
+  80%  { transform: translate(0, .5px) rotate(0deg) scale(1.06, .94); }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1, 1); }
+}
+@keyframes mxPartyLegA {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-2.6px) rotate(-12deg); }
+}
+
+/* 🤸 後空翻：蹲→跳→翻一圈→落地壓一下 */
+.act-flip .mx-svg { animation: mxFlip 1.05s cubic-bezier(.3,.05,.3,1); transform-origin: 50% 55%; }
 @keyframes mxFlip {
-  0%   { transform: translateY(0) rotate(0deg); }
-  45%  { transform: translateY(-34px) rotate(-200deg); }
-  100% { transform: translateY(0) rotate(-360deg); }
+  0%   { transform: translateY(0) rotate(0deg) scale(1, 1); }
+  12%  { transform: translateY(2px) rotate(0deg) scale(1.14, .84); }
+  45%  { transform: translateY(-30px) rotate(-210deg) scale(.95, 1.08); }
+  78%  { transform: translateY(-6px) rotate(-330deg) scale(1, 1); }
+  90%  { transform: translateY(1.5px) rotate(-360deg) scale(1.16, .82); }
+  100% { transform: translateY(0) rotate(-360deg) scale(1, 1); }
 }
-.act-moon .mx-svg { animation: mxMoon 1.3s ease-in-out infinite; }
+
+/* 🌙 月球漫步：身體往前傾、腳在滑，人卻一路往後退 */
+.act-moon .mx-svg   { animation: mxMoon 2.75s cubic-bezier(.4,0,.6,1); }
+.act-moon .mx-leg-a { animation: mxMoonLeg .46s ease-in-out infinite; }
+.act-moon .mx-leg-c { animation: mxMoonLeg .46s ease-in-out infinite .23s; }
 @keyframes mxMoon {
-  0%, 100% { transform: translateX(0) rotate(0deg); }
-  25%      { transform: translateX(-7px) rotate(-5deg); }
-  50%      { transform: translateX(0) rotate(0deg); }
-  75%      { transform: translateX(-7px) rotate(5deg); }
+  0%   { transform: translateX(0) rotate(0deg); }
+  12%  { transform: translateX(2px) rotate(9deg); }      /* 先前傾 */
+  35%  { transform: translateX(-8px) rotate(11deg); }
+  60%  { transform: translateX(-16px) rotate(9deg); }
+  78%  { transform: translateX(-9px) rotate(12deg); }
+  92%  { transform: translateX(-2px) rotate(4deg); }
+  100% { transform: translateX(0) rotate(0deg); }
 }
-.act-moon .mx-leg-a { animation: mxStep .65s ease-in-out infinite; }
-.act-moon .mx-leg-c { animation: mxStep .65s ease-in-out infinite .32s; }
+@keyframes mxMoonLeg {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  50%      { transform: translateX(2.4px) translateY(-1.4px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .act-wave .mx-svg, .act-flip .mx-svg, .act-moon .mx-svg, .mx-acc { animation: none !important; }
+  .act-wave .mx-svg, .act-twirl .mx-svg, .act-flip .mx-svg, .act-moon .mx-svg,
+  .act-party .mx-svg, .act-party .mx-leg-a, .act-party .mx-leg-c,
+  .act-wave .mx-leg-a, .act-wave .mx-leg-c, .act-moon .mx-leg-a, .act-moon .mx-leg-c,
+  .mx-acc { animation: none !important; }
   .mx-dress { animation: none; }
 }
+
+/* 夥伴圖鑑：還沒買的那幾隻 */
+.mx-pet-row.locked .mx-pet-ico { filter: grayscale(1); opacity: .55; }
+.mx-pet-cost {
+  margin-left: auto; font-size: 12px; font-weight: 700; color: #8a6d1f;
+  background: #FBF3D9; border: 1px solid #EBDCA8; border-radius: 999px; padding: 2px 8px;
+}
+
 /* 商店裡的「吉祥物裝扮」小標題（跟實體禮物分開） */
 .sp-shop-head { font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); margin: 10px 2px 6px; }

@@ -4725,6 +4725,7 @@ const MX_KINDS = [
   { kind: 'fx',    zh: '特效', ico: '✨', tip: '答對的時候放' },
   { kind: 'voice', zh: '語音', ico: '🔊', tip: '牠說話的口氣' },
   { kind: 'dance', zh: '動作', ico: '💃', tip: '按一下就表演' },
+  { kind: 'pet',   zh: '夥伴', ico: '🐾', tip: '換一隻陪你' },
 ];
 const MX_SHOP = [
   /* 頭飾 */
@@ -4761,6 +4762,13 @@ const MX_SHOP = [
   { id: 'dc_dance',   kind: 'dance', zh: '跳舞',     emoji: '🕺', cost: 450 },
   { id: 'dc_flip',    kind: 'dance', zh: '後空翻',   emoji: '🤸', cost: 700 },
   { id: 'dc_moon',    kind: 'dance', zh: '月球漫步', emoji: '🌙', cost: 900 },
+  /* v435（Alan：「初始的角色都是 Claudius，其他都要買，這樣才有稀有的感覺」）
+     夥伴本身也變成商品；Claudius 免費、永遠都在。id 對應 components-fx.jsx 的 MX_PETS。 */
+  { id: 'pet_clay',   kind: 'pet',   zh: 'Claudius', emoji: '🟤', cost: 0, free: true, pet: 'clay' },
+  { id: 'pet_rock',   kind: 'pet',   zh: '阿石',     emoji: '🪨', cost: 500,  pet: 'rock' },
+  { id: 'pet_sprout', kind: 'pet',   zh: '小芽',     emoji: '🌱', cost: 600,  pet: 'sprout' },
+  { id: 'pet_owl',    kind: 'pet',   zh: '咕咕',     emoji: '🦉', cost: 800,  pet: 'owl' },
+  { id: 'pet_flame',  kind: 'pet',   zh: '小焰',     emoji: '🔥', cost: 1000, pet: 'flame' },
 ];
 const MX_BY_ID = {};
 MX_SHOP.forEach(it => { MX_BY_ID[it.id] = it; });
@@ -4784,6 +4792,13 @@ function mxSpent(mx) {
   return mxOwnedList(mx).reduce((n, id) => n + (MX_BY_ID[id].cost || 0), 0);
 }
 /* 身上穿的：只留「真的有」的（下架或資料怪怪的就當沒穿），動作不算穿戴 */
+/* 夥伴：買到哪幾隻（Claudius 永遠有）。給吉祥物那一層判斷「這一隻能不能選」用。 */
+function mxOwnedPets(mx) {
+  return MX_SHOP.filter(it => it.kind === 'pet' && mxHasItem(mx, it.id)).map(it => it.pet);
+}
+function mxPetItem(petId) {
+  return MX_SHOP.find(it => it.kind === 'pet' && it.pet === petId) || null;
+}
 function mxWearOf(mx) {
   const w = (mx && mx.wear) || {};
   const out = {};
@@ -4822,7 +4837,7 @@ async function mxSetWear(uid, kind, id, mx) {
     return { ok: true, wear };
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
-Object.assign(window, { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear });
+Object.assign(window, { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear, mxOwnedPets, mxPetItem });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};

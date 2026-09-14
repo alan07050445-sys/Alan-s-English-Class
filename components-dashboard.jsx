@@ -1955,6 +1955,29 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     [students, myStudentEmails, stuScope]
   );
 
+  /* v435（Alan：「我怎麼看不到有新的學生？」）：學生要「在名單裡而且是我帶的」才會出現在
+     「我的學生」。新同學第一次用 Google 登入時只會產生進度資料，名單裡還沒有他 →
+     舊版是什麼都不說、他就這樣被藏起來。這裡把這種人抓出來，一鍵加進我的名單。
+     ⚠ 完全沒登入的「訪客」不會在這裡：他沒有帳號，紀錄只留在那台裝置上（下面那行字有寫）。 */
+  const rosterEmails = useDashM(
+    () => new Set(rosterAll.map(s => String(s.email || '').toLowerCase()).filter(Boolean)),
+    [rosterAll]);
+  const newcomers = useDashM(() => students.filter(s => {
+    const em = String(s.email || '').toLowerCase();
+    if (!em || rosterEmails.has(em)) return false;
+    if (em === myEmailD || em === ownerEmailD) return false;     // 老師自己的帳號不算
+    return true;
+  }), [students, rosterEmails, myEmailD, ownerEmailD]);
+  const [addingNew, setAddingNew] = useDash('');
+  const addNewcomer = async (s) => {
+    const em = String(s.email || '').toLowerCase();
+    setAddingNew(em);
+    try {
+      await window.addRosterStudent(em, friendlyName(s), (window.gradeFromEmail && window.gradeFromEmail(em)) || 'g3');
+    } catch (e) { alert('加入名單失敗：' + (e.code || e.message)); }
+    setAddingNew('');
+  };
+
   // v251: 範圍切換——「教室（目前年級）」／「☀️ 暑假」，後台自己訂閱暑假題庫，不必出去繞一圈
   const appIsSummer = useDashM(
     () => (weekOrder || []).some(wid => window.isSummerTrack && window.isSummerTrack(String(wid).split('-')[0])),
@@ -2285,6 +2308,30 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
           ) : (
             /* ── 總覽（v257: 併入原「學習報告」的全班常錯題）── */
             <>
+              {newcomers.length > 0 && (
+                <div className="dash-newcomers">
+                  <div className="dash-nc-head">
+                    👋 有 {newcomers.length} 位學生登入過，但還不在你的名單裡——加進來才會出現在「我的學生」
+                  </div>
+                  <div className="dash-nc-list">
+                    {newcomers.map(s => {
+                      const em = String(s.email || '').toLowerCase();
+                      const g = (window.gradeFromEmail && window.gradeFromEmail(em)) || null;
+                      return (
+                        <div key={s.uid} className="dash-nc-row">
+                          <b>{friendlyName(s)}</b>
+                          {g && <span className="dash-nc-grade">{g.toUpperCase()}</span>}
+                          <span className="dash-nc-mail">{s.email}</span>
+                          <button className="dash-nc-add" disabled={addingNew === em} onClick={() => addNewcomer(s)}>
+                            {addingNew === em ? '加入中…' : '＋ 加入我的名單'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="dash-nc-hint">沒有登入的「訪客」不會出現在這裡——他們沒有帳號，練習紀錄只留在那台裝置上。</div>
+                </div>
+              )}
               <ClassWeekOverview
                 students={visibleStudents}
                 weeks={dWeeks}

@@ -6639,3 +6639,27 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   border-radius: 5px; cursor: pointer; font-size: 10px; color: var(--ink-2, #5c554a); }
 .dme-tools button:disabled { opacity: .35; cursor: default; }
 .dme-tools .dme-del { color: #b23c27; }
+
+/* v435：後台總覽最上面——「登入過但還不在名單裡」的新學生（Alan：「我怎麼看不到有新的學生？」） */
+.dash-newcomers {
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 14px;
+  background: #FBF6E8; border: 1px solid #E7D9A8;
+}
+.dash-nc-head { font-size: 13.5px; font-weight: 700; color: #6B5518; margin-bottom: 8px; }
+.dash-nc-list { display: flex; flex-direction: column; gap: 6px; }
+.dash-nc-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: #fff; border: 1px solid #EDE3C6; border-radius: 10px; padding: 7px 10px;
+}
+.dash-nc-row b { font-size: 13.5px; color: var(--ink, #15130e); }
+.dash-nc-grade {
+  font-size: 11px; font-weight: 700; color: #8B3120;
+  background: #F6E7E3; border-radius: 6px; padding: 1px 6px;
+}
+.dash-nc-mail { font-size: 12px; color: var(--ink-3, #8a8270); }
+.dash-nc-add {
+  margin-left: auto; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: #fbf8f1; background: var(--accent, #8B3120); border: 0; border-radius: 999px; padding: 5px 12px;
+}
+.dash-nc-add:disabled { opacity: .6; cursor: default; }
+.dash-nc-hint { font-size: 11.5px; color: var(--ink-3, #8a8270); margin-top: 8px; }

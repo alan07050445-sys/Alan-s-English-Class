@@ -19,128 +19,198 @@ const MX_HATS = [
   { id: 'party', zh: '派對帽', cost: 500 },
   { id: 'crown', zh: '皇冠',   cost: 1000 },
 ];
+/* ══ v435：每一隻的「裝扮錨點」（Alan：「要完全符合每一隻的造型，不能有硬塞上去的樣子」）══
+   帽子一律畫在同一個標準空間（頭寬 18、頭頂在 y=0、帽子往上長到 y=−4），
+   再用每一隻自己的 hat{x,y,s} 搬過去＋縮放：
+     · Claudius 頭就是 18 寬 → 原尺寸
+     · 咕咕 頭頂在 y2（上面那兩撮是耳羽）→ 往下挪、縮一點，帽子才不會浮在耳羽上面
+     · 小焰 尖端只有 2 寬 → 戴在比較寬的中段（y4 那一層有 10 寬），縮到 0.62
+     · 阿石 頂面只有 x5~14 → 對準 9.5、縮到 0.62
+     · 小芽 頭上是兩片葉子 → 帽子坐在葉子上緣、縮到 0.86
+   配件則用 eye（眼睛帶）／neck（脖子）／side（側邊）三個位置算出來畫，
+   所以墨鏡一定蓋在那一隻的眼睛上、圍巾一定在脖子上，不會有「飄在旁邊」的情況。 */
+const MX_FIT = {
+  clay:   { hat: { x: 9,   y: 0,    s: 1    }, eye: { y: 4,   h: 4,   x0: 1, x1: 17 }, neck: { y: 9.5  }, side: { y: 7 } },
+  owl:    { hat: { x: 9,   y: 1.6,  s: 0.9  }, eye: { y: 3.2, h: 5.6, x0: 1, x1: 17 }, neck: { y: 10   }, side: { y: 6 } },
+  flame:  { hat: { x: 9,   y: 3.7,  s: 0.72 }, eye: { y: 7,   h: 4,   x0: 3, x1: 15 }, neck: { y: 10.6 }, side: { y: 8.5 } },
+  rock:   { hat: { x: 9.5, y: 0,    s: 0.7  }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 10   }, side: { y: 6 } },
+  sprout: { hat: { x: 9,   y: 0.2,  s: 0.86 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 9.6  }, side: { y: 6 } },
+};
+const MX_FIT_DEF = MX_FIT.clay;
+/* 帽子的畫法（標準空間：頭頂 y=0、往上到 y=−4.6、頭寬 18）。
+   v435：每一頂都加深色收邊、體積也放大——小小一塊色在 40px 的身體上根本看不出來。 */
+const OUTLINE = '#2B2A26';
 const MX_HAT_ART = {
-  hat_party: (
+  hat_cap: (                                   /* 鴨舌帽 */
     <g className="mx-hat">
-      <rect x="8" y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="6" y="-2" width="6" height="2" fill="#D6533C"/>
+      <rect x="2.6" y="-3.8" width="12.8" height="4" fill={OUTLINE}/>
+      <rect x="3.2" y="-3.2" width="11.6" height="3.4" fill="#2E6F9E"/>
+      <rect x="3.2" y="-3.2" width="11.6" height="1.2" fill="#3E86BC"/>
+      <rect x="11.4" y="-0.8" width="6.8" height="1.6" fill={OUTLINE}/>
+      <rect x="11.6" y="-0.6" width="6.2" height="1.1" fill="#24567A"/>
     </g>
   ),
-  hat_crown: (
+  hat_crown: (                                 /* 皇冠 */
     <g className="mx-hat">
-      <rect x="4"  y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="8"  y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="12" y="-4" width="2" height="2" fill="#E8C86A"/>
-      <rect x="4"  y="-2" width="10" height="2" fill="#E8C86A"/>
+      <polygon points="2.4,-1 2.4,-4.8 5.4,-2.6 9,-5.4 12.6,-2.6 15.6,-4.8 15.6,-1" fill={OUTLINE}/>
+      <polygon points="3.2,-1.4 3.2,-4 5.4,-2.2 9,-4.6 12.6,-2.2 14.8,-4 14.8,-1.4" fill="#E8C86A"/>
+      <rect x="2.4" y="-1.4" width="13.2" height="1.8" fill={OUTLINE}/>
+      <rect x="2.9" y="-1" width="12.2" height="1.2" fill="#D8A93C"/>
+      <rect x="8.2" y="-1" width="1.6" height="1.2" fill="#C1454A"/>
     </g>
   ),
-  hat_cap: (           /* 鴨舌帽：帽身＋右邊帽簷 */
+  hat_party: (                                 /* 派對帽 */
     <g className="mx-hat">
-      <rect x="3"  y="-3" width="12" height="3" fill="#2E6F9E"/>
-      <rect x="12" y="-1" width="6"  height="1" fill="#24567A"/>
+      <polygon points="9,-5.4 14,0.2 4,0.2" fill={OUTLINE}/>
+      <polygon points="9,-4.6 13.2,0 4.8,0" fill="#D6533C"/>
+      <rect x="6.4" y="-2.2" width="5.2" height="1" fill="#FBF6EA"/>
+      <rect x="7.6" y="-0.9" width="2.8" height="0.9" fill="#E8C86A"/>
+      <circle cx="9" cy="-5.4" r="1.1" fill="#E8C86A" stroke={OUTLINE} strokeWidth="0.35"/>
     </g>
   ),
-  hat_grad: (          /* 畢業帽：方板＋帽身＋流蘇 */
+  hat_grad: (                                  /* 畢業帽 */
     <g className="mx-hat">
-      <rect x="2"  y="-2" width="14" height="1" fill="#2B2A26"/>
-      <rect x="6"  y="-4" width="6"  height="2" fill="#3A3833"/>
-      <rect x="15" y="-2" width="1"  height="3" fill="#E8C86A"/>
+      <rect x="5" y="-3.6" width="8" height="2.4" fill={OUTLINE}/>
+      <rect x="5.5" y="-3.1" width="7" height="1.9" fill="#3A3833"/>
+      <polygon points="0.6,-1.2 17.4,-1.2 15.4,0.5 2.6,0.5" fill={OUTLINE}/>
+      <polygon points="1.6,-1 16.4,-1 14.8,0.2 3.2,0.2" fill="#2B2A26"/>
+      <rect x="15" y="-1.2" width="0.9" height="3.4" fill="#E8C86A"/>
+      <rect x="14.6" y="1.8" width="1.8" height="1.2" fill="#E8C86A"/>
     </g>
   ),
-  hat_flower: (        /* 小花：四片花瓣＋花心，戴在右邊 */
+  hat_flower: (                                /* 小花（戴在右邊） */
     <g className="mx-hat">
-      <rect x="12" y="-4" width="2" height="2" fill="#E39AB8"/>
-      <rect x="10" y="-2" width="2" height="2" fill="#E39AB8"/>
-      <rect x="14" y="-2" width="2" height="2" fill="#E39AB8"/>
-      <rect x="12" y="-2" width="2" height="2" fill="#E8C86A"/>
-      <rect x="12" y="0"  width="2" height="1" fill="#2E7D5B"/>
+      <circle cx="12.6" cy="-2.2" r="2.9" fill={OUTLINE}/>
+      <circle cx="12.6" cy="-3.6" r="1.25" fill="#E39AB8"/>
+      <circle cx="12.6" cy="-0.8" r="1.25" fill="#E39AB8"/>
+      <circle cx="11.2" cy="-2.2" r="1.25" fill="#E39AB8"/>
+      <circle cx="14"   cy="-2.2" r="1.25" fill="#E39AB8"/>
+      <circle cx="12.6" cy="-2.2" r="1.15" fill="#E8C86A"/>
+      <rect x="11.9" y="-0.4" width="1.4" height="1.2" fill="#2E7D5B"/>
     </g>
   ),
-  hat_bunny: (         /* 兔耳朵：兩隻長耳＋粉紅內耳 */
+  hat_bunny: (                                 /* 兔耳朵 */
     <g className="mx-hat">
-      <rect x="3.5"  y="-4" width="3" height="4.5" fill="#B9AE95"/>
-      <rect x="11.5" y="-4" width="3" height="4.5" fill="#B9AE95"/>
-      <rect x="4"  y="-3.5" width="2" height="4" fill="#FBF6EA"/>
-      <rect x="12" y="-3.5" width="2" height="4" fill="#FBF6EA"/>
-      <rect x="4.5"  y="-3" width="1" height="2" fill="#E39AB8"/>
-      <rect x="12.5" y="-3" width="1" height="2" fill="#E39AB8"/>
+      <rect x="3.2" y="-5" width="3.6" height="5.4" fill={OUTLINE}/>
+      <rect x="11.2" y="-5" width="3.6" height="5.4" fill={OUTLINE}/>
+      <rect x="3.7" y="-4.5" width="2.6" height="4.6" fill="#FBF6EA"/>
+      <rect x="11.7" y="-4.5" width="2.6" height="4.6" fill="#FBF6EA"/>
+      <rect x="4.3" y="-3.9" width="1.4" height="3" fill="#E39AB8"/>
+      <rect x="12.3" y="-3.9" width="1.4" height="3" fill="#E39AB8"/>
     </g>
   ),
-  hat_horn: (          /* 小鹿角 */
+  hat_horn: (                                  /* 小鹿角 */
     <g className="mx-hat">
-      <rect x="4"  y="-3" width="1" height="3" fill="#8A5A33"/>
-      <rect x="2"  y="-4" width="1" height="2" fill="#8A5A33"/>
-      <rect x="13" y="-3" width="1" height="3" fill="#8A5A33"/>
-      <rect x="15" y="-4" width="1" height="2" fill="#8A5A33"/>
+      <rect x="3.6" y="-4.4" width="1.6" height="4.6" fill={OUTLINE}/>
+      <rect x="12.8" y="-4.4" width="1.6" height="4.6" fill={OUTLINE}/>
+      <rect x="3.9" y="-4.1" width="1" height="4.2" fill="#8A5A33"/>
+      <rect x="13.1" y="-4.1" width="1" height="4.2" fill="#8A5A33"/>
+      <rect x="1.6" y="-3.4" width="2.4" height="1.5" fill={OUTLINE}/>
+      <rect x="14" y="-3.4" width="2.4" height="1.5" fill={OUTLINE}/>
+      <rect x="1.9" y="-3.1" width="2" height="0.9" fill="#8A5A33"/>
+      <rect x="14.1" y="-3.1" width="2" height="0.9" fill="#8A5A33"/>
     </g>
   ),
-  hat_star: (          /* 星星髮箍 */
+  hat_star: (                                  /* 星星髮箍 */
     <g className="mx-hat">
-      <rect x="2"  y="-1" width="14" height="1" fill="#8A5FA8"/>
-      <rect x="12" y="-4" width="2"  height="2" fill="#E8C86A"/>
-      <rect x="11" y="-3" width="4"  height="1" fill="#E8C86A"/>
-      <rect x="11.5" y="-2" width="1" height="1" fill="#E8C86A"/>
-      <rect x="13.5" y="-2" width="1" height="1" fill="#E8C86A"/>
+      <rect x="1.8" y="-1.4" width="14.4" height="1.8" fill={OUTLINE}/>
+      <rect x="2.2" y="-1.1" width="13.6" height="1.2" fill="#8A5FA8"/>
+      <polygon points="12.6,-5.6 13.65,-3.4 16,-3.1 14.3,-1.5 14.75,0.8 12.6,-0.3 10.45,0.8 10.9,-1.5 9.2,-3.1 11.55,-3.4"
+        fill="#E8C86A" stroke={OUTLINE} strokeWidth="0.5" strokeLinejoin="round"/>
     </g>
   ),
 };
-function MxHat({ id }) {
+function MxHat({ id, fit }) {
   const key = id === 'party' ? 'hat_party' : id === 'crown' ? 'hat_crown' : id;
-  return MX_HAT_ART[key] || null;
+  const art = MX_HAT_ART[key];
+  if (!art) return null;
+  const f = (fit && fit.hat) || MX_FIT_DEF.hat;
+  // 標準空間的中心是 9；搬到這一隻的頭頂中心、再照頭寬縮放
+  return <g transform={`translate(${f.x - 9 * f.s} ${f.y}) scale(${f.s})`}>{art}</g>;
 }
-/* v431：配件畫成「疊在身上的一層」——同一個 viewBox 蓋在吉祥物上面，
-   所以五隻夥伴都不用改，換哪一隻都對得準。 */
-const MX_ACC_ART = {
-  it_bow: (
-    <g>
-      <rect x="6"  y="2" width="2" height="2" fill="#D6533C"/>
-      <rect x="10" y="2" width="2" height="2" fill="#D6533C"/>
-      <rect x="8"  y="2.5" width="2" height="1" fill="#B23A28"/>
-    </g>
-  ),
-  it_scarf: (
-    <g>
-      <rect x="0"  y="8"  width="18" height="2" fill="#C1454A"/>
-      <rect x="13" y="10" width="2"  height="4" fill="#C1454A"/>
-      <rect x="13" y="13" width="2"  height="1" fill="#8E3034"/>
-    </g>
-  ),
-  it_glass: (
-    <g>
-      <rect x="1"  y="4" width="6" height="3" fill="#2B2A26"/>
-      <rect x="11" y="4" width="6" height="3" fill="#2B2A26"/>
-      <rect x="7"  y="5" width="4" height="1" fill="#2B2A26"/>
-      <rect x="2"  y="4.5" width="1.5" height="1" fill="#6E6A60"/>
-    </g>
-  ),
-  it_bag: (
-    <g>
-      <rect x="0" y="8"  width="3" height="5" fill="#2E7D5B"/>
-      <rect x="0" y="10" width="3" height="1" fill="#1F5B41"/>
-      <rect x="3" y="7"  width="1" height="5" fill="#1F5B41"/>
-    </g>
-  ),
-  it_cape: (
-    <g>
-      <polygon points="0,3 2.5,3 2.5,15 0,15" fill="#8A2F3B"/>
-      <rect x="0" y="2" width="4" height="1" fill="#6E2430"/>
-    </g>
-  ),
-  it_wand: (
-    <g>
-      <rect x="15" y="6" width="1" height="8" fill="#6B5B45"/>
-      <rect x="14" y="4" width="3" height="1" fill="#E8C86A"/>
-      <rect x="15" y="3" width="1" height="3" fill="#E8C86A"/>
-    </g>
-  ),
-};
-function MxAcc({ id }) {
-  const art = MX_ACC_ART[id];
+
+/* v435：配件改成「照這一隻的眼睛／脖子／側邊算出來畫」，而不是固定座標硬疊。 */
+function mxAccArt(id, fit) {
+  const f = fit || MX_FIT_DEF;
+  const eye = f.eye, neck = f.neck.y, side = f.side.y;
+  if (id === 'it_glass') {                      /* 墨鏡：剛好蓋住那一隻的兩顆眼睛 */
+    const w = (eye.x1 - eye.x0) / 2 - 0.6, h = eye.h + 0.6;
+    return (
+      <g>
+        <rect x={eye.x0} y={eye.y - 0.3} width={w} height={h} rx="0.6" fill={OUTLINE}/>
+        <rect x={eye.x1 - w} y={eye.y - 0.3} width={w} height={h} rx="0.6" fill={OUTLINE}/>
+        <rect x={eye.x0 + 0.5} y={eye.y + 0.1} width={w - 1} height={h - 0.8} rx="0.4" fill="#4A4741"/>
+        <rect x={eye.x1 - w + 0.5} y={eye.y + 0.1} width={w - 1} height={h - 0.8} rx="0.4" fill="#4A4741"/>
+        <rect x={eye.x0 + w - 0.2} y={eye.y + h / 2 - 0.7} width={eye.x1 - eye.x0 - 2 * w + 0.4} height="1" fill={OUTLINE}/>
+        <rect x={eye.x0 + 1} y={eye.y + 0.5} width="1.6" height="1" fill="#8E8A80"/>
+      </g>
+    );
+  }
+  if (id === 'it_scarf') {                      /* 圍巾：繞在脖子那一圈＋垂在右邊的尾巴 */
+    return (
+      <g>
+        <rect x="0.2" y={neck - 0.3} width="17.6" height="2.6" fill={OUTLINE}/>
+        <rect x="0.6" y={neck} width="16.8" height="1.9" fill="#C1454A"/>
+        <rect x="12.4" y={neck + 1.6} width="3" height="4.4" fill={OUTLINE}/>
+        <rect x="12.7" y={neck + 1.8} width="2.4" height="3.9" fill="#C1454A"/>
+        <rect x="12.7" y={neck + 4.4} width="2.4" height="1.1" fill="#8E3034"/>
+      </g>
+    );
+  }
+  if (id === 'it_bow') {                        /* 蝴蝶結：脖子正中間，兩片大一點才看得出來 */
+    const y = neck - 0.6;
+    return (
+      <g>
+        <polygon points={`4.4,${y - 1.6} 8.4,${y + 0.6} 4.4,${y + 2.8}`} fill={OUTLINE}/>
+        <polygon points={`13.6,${y - 1.6} 9.6,${y + 0.6} 13.6,${y + 2.8}`} fill={OUTLINE}/>
+        <polygon points={`4.9,${y - 1.1} 8.1,${y + 0.6} 4.9,${y + 2.3}`} fill="#D6533C"/>
+        <polygon points={`13.1,${y - 1.1} 9.9,${y + 0.6} 13.1,${y + 2.3}`} fill="#D6533C"/>
+        <rect x="8" y={y - 0.5} width="2" height="2.2" rx="0.5" fill={OUTLINE}/>
+        <rect x="8.3" y={y - 0.2} width="1.4" height="1.6" rx="0.4" fill="#B23A28"/>
+      </g>
+    );
+  }
+  if (id === 'it_cape') {                       /* 披風：從肩膀披到腳邊，只佔左半邊不擋臉 */
+    return (
+      <g>
+        <polygon points={`-0.2,${side} 4.4,${side} 3.4,15.4 -0.2,15.4`} fill={OUTLINE}/>
+        <polygon points={`0.2,${side + 0.4} 3.7,${side + 0.4} 2.9,15 0.2,15`} fill="#8A2F3B"/>
+        <rect x="-0.2" y={side - 1.2} width="7" height="1.8" fill={OUTLINE}/>
+        <rect x="0.1" y={side - 0.9} width="6.4" height="1.2" fill="#6E2430"/>
+      </g>
+    );
+  }
+  if (id === 'it_bag') {                        /* 小書包：背在左側，肩帶跨過身體 */
+    return (
+      <g>
+        <rect x="-0.4" y={side + 1.4} width="4.4" height="6.4" rx="0.8" fill={OUTLINE}/>
+        <rect x="0" y={side + 1.8} width="3.6" height="5.6" rx="0.6" fill="#2E7D5B"/>
+        <rect x="0" y={side + 3.8} width="3.6" height="1.2" fill="#1F5B41"/>
+        <rect x="3.4" y={side - 0.4} width="1.6" height="5" fill={OUTLINE}/>
+        <rect x="3.6" y={side - 0.2} width="1.1" height="4.6" fill="#1F5B41"/>
+      </g>
+    );
+  }
+  if (id === 'it_wand') {                       /* 魔法棒：握在右邊，星星在上面 */
+    return (
+      <g>
+        <rect x="14.9" y={side} width="1.8" height="8" rx="0.6" fill={OUTLINE}/>
+        <rect x="15.2" y={side + 0.3} width="1.2" height="7.4" fill="#6B5B45"/>
+        <polygon points={`15.8,${side - 5} 16.8,${side - 3} 19,${side - 2.7} 17.4,${side - 1.2} 17.8,${side + 0.9} 15.8,${side - 0.1} 13.8,${side + 0.9} 14.2,${side - 1.2} 12.6,${side - 2.7} 14.8,${side - 3}`}
+          fill="#E8C86A" stroke={OUTLINE} strokeWidth="0.5" strokeLinejoin="round"/>
+      </g>
+    );
+  }
+  return null;
+}
+function MxAcc({ id, fit }) {
+  const art = mxAccArt(id, fit);
   if (!art) return null;
   return (
     <svg className="mx-acc" viewBox="0 -4 18 20" shapeRendering="crispEdges" aria-hidden="true">{art}</svg>
   );
 }
+
 /* v431：語音包＝牠說話的口氣（買了就換一種講法）。答對、打招呼、耍寶都吃這一份。 */
 const MX_VOICE = {
   vo_cheer: { win: ['太棒了！再一題！', '你超強的！', '就是這樣！衝！'], hello: ['我們開始吧！', '今天也要加油！'], idle: ['你可以的！'] },
@@ -212,7 +282,7 @@ function ClaudeMascot({ size = 46, hat = 'none' }) {
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat}/>
+      <MxHat id={hat} fit={MX_FIT.clay}/>
       <g className="mx-torso">
         {/* 頭上的兩個小角 */}
         <rect x="2" y="0" width="2" height="2" fill={CLAY}/>
@@ -243,7 +313,7 @@ function OwlMascot({ size = 46, hat = 'none' }) {
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat}/>
+      <MxHat id={hat} fit={MX_FIT.owl}/>
       <g className="mx-torso">
         {/* 耳羽 */}
         <rect x="2" y="0" width="3" height="2" fill={DARK}/>
@@ -283,7 +353,7 @@ function FlameMascot({ size = 46, hat = 'none' }) {
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat}/>
+      <MxHat id={hat} fit={MX_FIT.flame}/>
       <g className="mx-torso">
         {/* 2→6→10→14→16 一層一層變寬，收邊才像火不像方塊 */}
         <rect x="8" y="0" width="2" height="2" fill={IN}/>
@@ -308,7 +378,7 @@ function RockMascot({ size = 46, hat = 'none' }) {
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat}/>
+      <MxHat id={hat} fit={MX_FIT.rock}/>
       <g className="mx-torso">
         {/* 上緣切一角、左右各縮一格＝石頭的不規則感 */}
         <rect x="5" y="0" width="9" height="2" fill={LIGHT}/>
@@ -333,7 +403,7 @@ function SproutMascot({ size = 46, hat = 'none' }) {
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat}/>
+      <MxHat id={hat} fit={MX_FIT.sprout}/>
       {/* 葉子從 y0 開始長，帽子（y−4~0）才不會壓在葉子上 */}
       {/* v408：莖獨立成一組。長高的時候葉子會往上移 5 個單位，
           本來沒有東西接住它 → 葉子整片飄在半空、跟身體斷開（實測 --mx-w 120px 時斷了 27px）。
@@ -595,6 +665,13 @@ function MascotLayer() {
       }
       setWear(prev => ((prev.hat === w.hat && prev.item === w.item && prev.fx === w.fx && prev.voice === w.voice) ? prev : w));
       setStars(prev => (prev === (window.__mxStars || 0) ? prev : (window.__mxStars || 0)));
+      /* v435：選著一隻沒買的夥伴（換帳號、資料怪怪的）→ 退回 Claudius，不然等於免費送 */
+      const pets = window.mxOwnedPets ? window.mxOwnedPets(mx) : ['clay'];
+      setPetId(prev => {
+        if (pets.indexOf(prev) >= 0) return prev;
+        mxSetPet('clay');
+        return 'clay';
+      });
     };
     sync();
     const iv = setInterval(sync, 1500);
@@ -604,19 +681,36 @@ function MascotLayer() {
   /* ── v431 裝扮室：買／穿／表演 ────────────────────────────────
      買賣真正寫進 Firestore 的是 app.jsx 掛上來的 window.__mxBuy／__mxWear
      （那裡才有 user.uid 與「現在有幾顆星星」）。這裡只負責畫面與說話。 */
-  const MX_DANCE_ACT = { dc_wave: ['wave', 1500], dc_spin: ['spin', 1000], dc_dance: ['dance', 2600], dc_flip: ['flip', 1000], dc_moon: ['moon', 2600] };
+  /* v435（Alan：「動作要再生動一點，不然幹嘛買？原本就會走路、原本就會快快走」）：
+     買來的五個動作全部是**新的**動畫，不重用免費的 walk／dash／spin／dance。 */
+  const MX_DANCE_ACT = { dc_wave: ['wave', 1600], dc_spin: ['twirl', 1500], dc_dance: ['party', 2800], dc_flip: ['flip', 1100], dc_moon: ['moon', 2800] };
   const hasItem = (id) => (window.mxHasItem ? window.mxHasItem({ owned }, id) : false);
   const myDances = (window.MX_SHOP || []).filter(it => it.kind === 'dance' && hasItem(it.id));
   const playDance = (id) => {
-    const d = MX_DANCE_ACT[id] || ['dance', 2000];
+    const d = MX_DANCE_ACT[id] || ['party', 2000];
     if (reduce.current) { say('動畫關起來了，我先不動 🙂', 2400); return; }
     setAct(d[0]); later(() => setAct('idle'), d[1]);
+    // 表演的時候順便灑一次「你買的那個特效」——按下去有反應，才像在表演
+    if (window.spawnConfetti) window.spawnConfetti({});
+    const it = window.mxItemOf ? window.mxItemOf(id) : null;
+    if (it) say(mxLine('sig', petRef.current, wearRef.current.voice) || `${it.zh}！`, 2200);
+    if (window.playSound) window.playSound('pop');
+  };
+  /* v435：換夥伴（買到才換得了）。sig 是走位類的招牌動作就不在這裡放，會跟走路打架。 */
+  const usePet = (pid) => {
+    const p = mxPetOf(pid);
+    mxSetPet(pid); setPetId(pid); setAct('idle');
+    say(mxLine('hello', p, wearRef.current.voice), 2600);
+    if (MX_MOVE_ACTS.indexOf(p.sig) < 0 && !reduce.current) {
+      later(() => { setAct(p.sig); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
+    }
     if (window.playSound) window.playSound('pop');
   };
   const pickItem = async (it) => {
-    // 已經有了 → 穿上／脫下（動作類就是表演一次）
+    // 已經有了 → 穿上／脫下（動作類就是表演一次、夥伴就是換牠）
     if (hasItem(it.id)) {
       if (it.kind === 'dance') { setDress(false); playDance(it.id); return; }
+      if (it.kind === 'pet')   { setDress(false); usePet(it.pet); return; }
       const off = wear[it.kind] === it.id;
       // 特效與語音一定要留一個（預設那個是免費的），不然答對就沒有反應了
       const next = off ? (it.kind === 'fx' ? 'fx_confetti' : it.kind === 'voice' ? 'vo_default' : '') : it.id;
@@ -644,6 +738,7 @@ function MascotLayer() {
     setStars(prev => Math.max(0, prev - (it.cost || 0)));
     if (window.playSound) window.playSound('pop');
     if (it.kind === 'dance') { say(`學會${it.zh}了！`, 2600); setDress(false); playDance(it.id); return; }
+    if (it.kind === 'pet')   { say(`${it.zh} 加入了！`, 2800); setDress(false); usePet(it.pet); return; }
     const boughtWear = Object.assign({}, wear, { [it.kind]: it.id });
     wearPendRef.current = { wear: boughtWear, t: Date.now() };
     setWear(boughtWear);
@@ -973,8 +1068,8 @@ function MascotLayer() {
           onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
           role="img" aria-label={`吉祥物 ${name || pet.zh}`}>
           <Art hat={wear.hat || 'none'}/>
-          {/* v431：買來的配件疊在身上（同一個 viewBox，五隻夥伴都對得準） */}
-          <MxAcc id={wear.item}/>
+          {/* v431/v435：配件疊在身上——用「這一隻」的眼睛／脖子／側邊位置畫，不是硬疊固定座標 */}
+          <MxAcc id={wear.item} fit={MX_FIT[petId]}/>
           {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
               永遠留在「牠的身後」，不用另外算方向。 */}
           <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
@@ -1028,7 +1123,7 @@ function MascotLayer() {
             </div>
             {/* 預覽：現在這一隻穿好的樣子，點一下就表演 */}
             <div className="mx-dress-prev" onClick={() => myDances.length && playDance(myDances[0].id)}>
-              <span className="mx-dress-figure"><Art size={62} hat={wear.hat || 'none'}/><MxAcc id={wear.item}/></span>
+              <span className="mx-dress-figure"><Art size={62} hat={wear.hat || 'none'}/><MxAcc id={wear.item} fit={MX_FIT[petId]}/></span>
               <span className="mx-dress-who">{name || pet.zh}</span>
             </div>
             <div className="mx-dress-tabs">
@@ -1040,7 +1135,7 @@ function MascotLayer() {
             <div className="mx-dress-grid">
               {(window.MX_SHOP || []).filter(it => it.kind === dressTab).map(it => {
                 const have = hasItem(it.id);
-                const on   = have && (it.kind === 'dance' ? false : wear[it.kind] === it.id);
+                const on   = have && (it.kind === 'pet' ? it.pet === petId : it.kind === 'dance' ? false : wear[it.kind] === it.id);
                 return (
                   <button key={it.id} className={'mx-dz' + (have ? ' have' : '') + (on ? ' on' : '')}
                     onClick={() => pickItem(it)}>
@@ -1049,6 +1144,7 @@ function MascotLayer() {
                     <span className="mx-dz-tag">
                       {!have ? `${it.cost.toLocaleString()}⭐`
                         : it.kind === 'dance' ? '表演'
+                        : it.kind === 'pet' ? (on ? '陪你中' : '換牠')
                         : on ? '穿著中' : '穿上'}
                     </span>
                   </button>
@@ -1059,6 +1155,7 @@ function MascotLayer() {
               {dressTab === 'fx' ? '答對題目的時候會放這個特效 ✨'
                 : dressTab === 'voice' ? '牠講話的口氣會變成這一種 🔊'
                 : dressTab === 'dance' ? '買了之後，長按牠就可以叫牠表演 💃'
+                : dressTab === 'pet' ? 'Claudius 一開始就在；其他夥伴要用星星請牠來 🐾'
                 : '星星是做練習賺來的；買了以後隨時可以換 · 再按一次可以脫下來'}
             </div>
               <button className="mx-menu-x" onClick={() => setDress(false)}>關起來</button>
@@ -1069,24 +1166,22 @@ function MascotLayer() {
             <div className="mx-menu-name">選一個夥伴陪你</div>
             {MX_PETS.map(p => {
               const PArt = p.art;
+              /* v435：Claudius 以外都要用星星請來——沒買的顯示價錢，按下去就是買 */
+              const shopIt = window.mxPetItem ? window.mxPetItem(p.id) : null;
+              const have = !shopIt || hasItem(shopIt.id);
               return (
-                <button key={p.id} className={'mx-pet-row' + (p.id === petId ? ' on' : '')}
+                <button key={p.id} className={'mx-pet-row' + (p.id === petId ? ' on' : '') + (have ? '' : ' locked')}
                   onClick={() => {
-                    mxSetPet(p.id); setPetId(p.id); setPetPick(false);
-                    setAct('idle');
-                    /* 換完立刻打一次招呼＋做一次招牌動作，小朋友才知道換成功了、
-                       也順便看到這一隻會什麼。走位類的招牌一樣不能在這裡放（見上面）。 */
-                    say(mxPick('hello', p), 2600);
-                    if (MX_MOVE_ACTS.indexOf(p.sig) < 0 && !reduce.current) {
-                      later(() => { setAct(p.sig); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
-                    }
-                    if (window.playSound) window.playSound('pop');
+                    if (!have) { setPetPick(false); pickItem(shopIt); return; }
+                    setPetPick(false);
+                    usePet(p.id);
                   }}>
                   <span className="mx-pet-ico"><PArt size={30}/></span>
                   <span className="mx-pet-txt">
                     <b>{p.zh}{p.id === petId && <em> · 現在</em>}</b>
                     <span>{p.tip} · 會{p.sigZh}</span>
                   </span>
+                  {!have && <span className="mx-pet-cost">{shopIt.cost.toLocaleString()}⭐</span>}
                 </button>
               );
             })}
@@ -1172,7 +1267,10 @@ function FxLayer() {
 
 /* v402：mxGetPet／mxPetOf 給 app.jsx 的登出過場用（要畫「現在這一隻」跟你說再見）*/
 Object.assign(window, { ClaudeMascot, OwlMascot, FlameMascot, RockMascot, SproutMascot,
-  MX_PETS, mxGetPet, mxPetOf, MascotLayer, FxLayer, ConfettiBurst });
+  MX_PETS, mxGetPet, mxPetOf, MascotLayer, FxLayer, ConfettiBurst,
+  /* v435：裝扮的繪圖元件也開放出來——校稿／對照表（scratchpad/site/_fit.html）要能一次畫出
+     「五隻 × 每一件」，不然只能一個一個換來換去看。 */
+  MxHat, MxAcc, MX_FIT });
 
 /* 自己掛載——不動 App 的樹，任何頁面都在 */
 (function mountFx() {

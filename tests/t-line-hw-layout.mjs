@@ -5,6 +5,17 @@ import fs from 'fs';
 const src = fs.readFileSync(new URL('../line-notify-worker.js', import.meta.url), 'utf8');
 const W = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
 
+/* ⚠ v435：這份測試的期待值全部是照「今天＝2026-09-10（四）、本週 9/7~9/13」寫的，
+   但 runReminders 讀的是真的時鐘 → 隔一週再跑就會整片紅（2026-09-14 星期一就中了）。
+   這裡把時鐘釘住，測試才是在測程式、不是在測今天幾號。 */
+const REAL_DATE = Date;
+const FIXED_NOW = new REAL_DATE('2026-09-10T12:00:00+08:00').getTime();
+class FixedDate extends REAL_DATE {
+  constructor(...a) { if (a.length === 0) super(FIXED_NOW); else super(...a); }
+  static now() { return FIXED_NOW; }
+}
+globalThis.Date = FixedDate;
+
 let pass = 0, fail = 0; const log = [];
 const ok = (n, c, e) => c ? (pass++, log.push('  ✅ ' + n)) : (fail++, log.push('  ❌ ' + n + (e ? '\n       ↳ ' + String(e).replace(/\n/g, '\n         ') : '')));
 const has = (s, ...xs) => xs.every((x) => String(s).includes(x));
@@ -265,6 +276,7 @@ log.push('\n【L9】學期之中不提醒暑假（Alan：「現在是學期之�
   ok('沒帶 today（舊呼叫）不會爆，照舊全算', W.summerTodos(lib, plan).length === 1);
 }
 
+globalThis.Date = REAL_DATE;      // 還原時鐘（後面沒有再用到，但別留著影響其他人）
 console.log(log.join('\n'));
 console.log(`\n${fail === 0 ? '🎉 全部通過' : '⚠️ 有失敗'}：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

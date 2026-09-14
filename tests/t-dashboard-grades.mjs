@@ -60,6 +60,16 @@ log.push('\n【2】後台真的有把六個年級都載進來、而且照學生�
   ok('自動集點也是（不然別班學生的星星算不出來）', /const d = dataFor \? dataFor\(st\) : null/.test(sm));
 }
 
+log.push('\n【3】（v435）新學生登入過、但還不在名單裡（Alan：「我怎麼看不到有新的學生？」）');
+{
+  const td = slice(dash, 'function TeacherDashboard(', 'function StudentDetail(');
+  ok('⭐ 會把「有進度資料、名單裡卻沒有」的人抓出來', /const newcomers = useDashM/.test(td) && /rosterEmails\.has\(em\)/.test(td));
+  ok('老師自己的帳號不算新學生', /em === myEmailD \|\| em === ownerEmailD/.test(td));
+  ok('一鍵加入名單，年級用學號自動判斷', /addRosterStudent\(em, friendlyName\(s\), \(window\.gradeFromEmail && window\.gradeFromEmail\(em\)\)/.test(td));
+  ok('⭐ 有寫清楚「沒登入的訪客不會出現」（不然老師會一直找）', /沒有登入的「訪客」不會出現在這裡/.test(td));
+  ok('提示放在總覽最上面（看得到才有用）', td.indexOf('dash-newcomers') < td.indexOf('<ClassWeekOverview'));
+}
+
 console.log(log.join('\n'));
 console.log(`\n${fail === 0 ? '🎉 全部通過' : '⚠️ 有失敗'}：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

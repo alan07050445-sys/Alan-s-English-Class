@@ -15,8 +15,9 @@ const _db = { collection: () => ({ doc: (uid) => ({
   set: async (obj, opt) => { if (failNext) { failNext = false; throw new Error('offline'); } writes.push({ uid, obj, opt }); },
 }) }) };
 globalThis.window = {};
+const css  = fs.readFileSync(new URL('styles-fx.css', ROOT), 'utf8');
 const code = slice(data, '/* ══════════════════════════════════════════════════════════════════════════\n   v431 ④：吉祥物裝扮', 'function computeCheckin(checkin) {');
-const W = new Function('_db', 'window', code + '\nreturn { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear };')(_db, globalThis.window);
+const W = new Function('_db', 'window', code + '\nreturn { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear, mxOwnedPets, mxPetItem };')(_db, globalThis.window);
 
 let pass = 0, fail = 0; const log = [];
 const ok = (n, c, e) => c ? (pass++, log.push('  ✅ ' + n)) : (fail++, log.push('  ❌ ' + n + (e ? '\n       ↳ ' + String(e) : '')));
@@ -29,9 +30,9 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
   ok('每一件都屬於五大類之一', W.MX_SHOP.every(i => kinds.indexOf(i.kind) >= 0));
   ok('五大類都有東西可以買', kinds.every(k => W.MX_SHOP.some(i => i.kind === k && !i.free)));
   ok('每一件都有中文名字與圖示', W.MX_SHOP.every(i => i.zh && i.emoji));
-  ok('要錢的都 > 0、免費的剛好是「彩帶」與「原音」',
+  ok('要錢的都 > 0、免費的剛好是「彩帶」「原音」與 Claudius',
      W.MX_SHOP.every(i => (i.free ? i.cost === 0 : i.cost > 0)) &&
-     W.MX_SHOP.filter(i => i.free).map(i => i.id).join() === 'fx_confetti,vo_default');
+     W.MX_SHOP.filter(i => i.free).map(i => i.id).sort().join() === 'fx_confetti,pet_clay,vo_default');
   ok('特效與語音一定各有一個免費的（不然答對就沒反應、也不會講話）',
      ['fx', 'voice'].every(k => W.MX_SHOP.some(i => i.kind === k && i.free)));
   ok('最便宜的 100 顆、最貴的不超過 1000（小朋友存得到）',
@@ -39,9 +40,9 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
      Math.max(...W.MX_SHOP.map(i => i.cost)) <= 1000);
   ok('舊的兩頂帽子還在，而且對得回老師扣過點的名字',
      W.mxItemOf('hat_party').legacy === 'party' && W.mxItemOf('hat_crown').legacy === 'crown');
-  ok('每一件都畫得出來（頭飾在 MX_HAT_ART、配件在 MX_ACC_ART、動作有動畫）',
+  ok('每一件都畫得出來（頭飾在 MX_HAT_ART、配件在 mxAccArt、動作有對照表）',
      W.MX_SHOP.filter(i => i.kind === 'hat').every(i => fx.indexOf(i.id + ':') > 0) &&
-     W.MX_SHOP.filter(i => i.kind === 'item').every(i => fx.indexOf(i.id + ':') > 0) &&
+     W.MX_SHOP.filter(i => i.kind === 'item').every(i => fx.indexOf("id === '" + i.id + "'") > 0) &&
      W.MX_SHOP.filter(i => i.kind === 'dance').every(i => fx.indexOf(i.id + ':') > 0));
 }
 
@@ -108,6 +109,30 @@ log.push('\n【6】三個地方的星星要用同一個算法');
   ok('吉祥物那一層只透過 window.__mxBuy／__mxWear 寫資料（uid 與星星都在 app.jsx）',
      /window\.__mxBuy/.test(fx) && /window\.__mxWear/.test(fx) && fx.indexOf('_db.collection') < 0);
   ok('商店與長按選單都進得了裝扮室', /mxOpenDress/.test(app) && /mxOpenDress/.test(fx) && /onOpenDress/.test(shell));
+}
+
+log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻、動作要是新的');
+{
+  const pets = W.MX_SHOP.filter(i => i.kind === 'pet');
+  ok('⭐ 五隻夥伴都在商品表裡', pets.length === 5, pets.map(p => p.pet).join());
+  ok('⭐ 只有 Claudius 免費，其他四隻要買（才有稀有感）',
+     pets.filter(p => p.free).map(p => p.pet).join() === 'clay' && pets.filter(p => !p.free).every(p => p.cost >= 500));
+  ok('每一隻都對得到 components-fx.jsx 的 MX_PETS', pets.every(p => fx.indexOf(`id: '${p.pet}'`) > 0));
+  globalThis.window.__mxHats = [];
+  ok('沒買任何東西時，只有 Claudius 是你的', W.mxOwnedPets({}).join() === 'clay');
+  ok('買了咕咕就多一隻', W.mxOwnedPets({ owned: ['pet_owl'] }).sort().join() === 'clay,owl');
+  ok('用 petId 找得回商品（圖鑑要顯示價錢）', W.mxPetItem('flame').cost === 1000 && W.mxPetItem('clay').free === true);
+  ok('⭐ 選到沒買的夥伴會退回 Claudius（不然等於免費送）', /pets\.indexOf\(prev\) >= 0/.test(fx) && /mxSetPet\('clay'\)/.test(fx));
+  ok('⭐ 每一隻都有自己的裝扮錨點（頭頂／眼睛／脖子／側邊）',
+     ['clay', 'owl', 'flame', 'rock', 'sprout'].every(k => new RegExp(k + ':\\s*\\{ hat: \\{').test(fx)) &&
+     /MxHat\({ id, fit }\)/.test(fx) && /translate\(\$\{f\.x - 9 \* f\.s\}/.test(fx));
+  ok('墨鏡、圍巾是照那一隻的眼睛與脖子算出來的（不是固定座標）',
+     /const eye = f\.eye, neck = f\.neck\.y/.test(fx) && /x=\{eye\.x0\}/.test(fx));
+  ok('⭐ 買來的五個動作都是新動畫，不重用免費的 walk／dash／spin／dance',
+     ['wave', 'twirl', 'party', 'flip', 'moon'].every(a => new RegExp('\\.act-' + a + ' \\.mx-svg').test(css)) &&
+     /dc_spin: \['twirl'/.test(fx) && /dc_dance: \['party'/.test(fx));
+  ok('表演的時候會灑一次你買的特效（按下去要有反應）', /playDance[\s\S]{0,400}spawnConfetti/.test(fx));
+  ok('減少動態時全部停掉（無障礙）', /prefers-reduced-motion[\s\S]{0,400}act-twirl/.test(css));
 }
 
 log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
