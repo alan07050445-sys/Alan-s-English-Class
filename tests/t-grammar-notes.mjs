@@ -30,7 +30,9 @@ _aiAskImpl.fn = async (body, pickFn) => {
   return got;
 };
 // v445：_GN_BASE 會用到「老師特別要求」那個小工具（它住在短文那一區）
-const code = slice(data, 'function _aiTeacherNote', 'const _STORY_CJK_G') + '\n' + slice(data, 'const GN_MODEL', 'function grCountBlanks');
+const code = slice(data, 'function _aiTeacherNote', 'const _STORY_CJK_G') + '\n' +
+  slice(data, 'let _aiLastUpstream', 'async function _aiAsk') + '\n' +
+  slice(data, 'const GN_MODEL', 'function grCountBlanks');
 const W = new Function('_aiAsk', '_aiStripFence', '_AI_MINIFY',
   code + '\nreturn { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidStep, gnValidLesson, gnValidFill, gnValidRewrite, gnValidMcq, gnCleanStem, gnSplitText, _gnSalvageJson, _gnSpread, GN_READ_MODEL, GN_MODEL };')(
   _aiAsk, (t) => String(t).replace(/^```(json)?/, '').replace(/```$/, '').trim(), '');

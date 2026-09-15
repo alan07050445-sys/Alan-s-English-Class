@@ -20,7 +20,9 @@ const _aiAsk = async (body, pickFn) => {
   return got;
 };
 // data.js 的閱讀背景知識用到 GN 那一區的驗證器與 _gnCall，一起載進來
-const code = slice(data, 'const GN_MODEL', 'function grCountBlanks') + '\n' + slice(data, 'const RC_GRADES = {', 'const RC_QSKILLS = {');
+// v449：失敗訊息會帶上「上游回了什麼」，那個小工具住在 _aiAsk 旁邊
+const code = slice(data, 'let _aiLastUpstream', 'async function _aiAsk') + '\n' +
+  slice(data, 'const GN_MODEL', 'function grCountBlanks') + '\n' + slice(data, 'const RC_GRADES = {', 'const RC_QSKILLS = {');
 const W = new Function('_aiAsk', '_aiStripFence', '_AI_MINIFY',
   code + '\nreturn { aiMakeReadingBackground, RC_BG_SYS, gnValidStep, gnValidLesson };')(
   _aiAsk, (t) => String(t).replace(/^```(json)?/, '').replace(/```$/, '').trim(), '');
