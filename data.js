@@ -912,6 +912,7 @@ function subscribeAllStudents(callback) {
         streak: d.streak || { count: 0 },
         badges: d.badges || {},
         checkin: d.checkin || null,   // v362
+        mx: d.mx || {},               // v448：後台要看得到「買過哪些裝扮」才算得出真正的星星數
       });
     });
     all.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -5364,10 +5365,62 @@ async function mxBuy(uid, id, balance, mx) {
   if (mxHasItem(mx, id)) return { ok: false, reason: 'owned' };
   if ((balance || 0) < (it.cost || 0)) return { ok: false, reason: 'poor', short: (it.cost || 0) - (balance || 0) };
   const owned = mxOwnedList(mx).concat([id]);
+  const log = mxLogAdd(mx, { id, cost: it.cost || 0 });     // v448：老師要看得到誰買了什麼
   try {
-    await _db.collection('progress').doc(uid).set({ mx: { owned, wear: (mx && mx.wear) || {} } }, { merge: true });
+    await _db.collection('progress').doc(uid).set({ mx: { owned, wear: (mx && mx.wear) || {}, log } }, { merge: true });
     return { ok: true, owned, item: it };
   } catch (e) { return { ok: false, reason: 'save' }; }
+}
+
+/* ══ v448（Alan：「Tayler 亂買東西要退掉」）═══════════════════════════════
+   購買紀錄 mx.log：[{ id, cost, at }]，最多留 120 筆（夠看，也不會把文件撐大）。
+   退費＝把東西從 owned 拿掉；星星是「賺到的 − 花掉的」算出來的，
+   所以東西一拿掉，點數自己就回去了（不用、也不能去改 stars，那是另一本帳）。 */
+const MX_LOG_MAX = 120;
+function mxLogAdd(mx, ent) {
+  const log = (mx && Array.isArray(mx.log)) ? mx.log.slice() : [];
+  log.push(Object.assign({ at: Date.now() }, ent));
+  return log.slice(-MX_LOG_MAX);
+}
+/* 老師端：把買過的東西整理成一列一列（有紀錄的用紀錄的時間，舊資料沒時間就留空） */
+function mxPurchases(mx) {
+  const log = (mx && Array.isArray(mx.log)) ? mx.log : [];
+  const byId = {};
+  log.forEach(e => { if (e && e.id && !byId[e.id]) byId[e.id] = e; });
+  const out = mxOwnedList(mx).map(id => {
+    const it = MX_BY_ID[id], e = byId[id] || {};
+    return { id, zh: (it && it.zh) || id, kind: (it && it.kind) || '', cost: (it && it.cost) || 0, at: e.at || 0 };
+  });
+  const paid = mxRenamesPaid(mx);
+  for (let i = 0; i < paid; i++) {
+    const e = (log.filter(x => x && x.id === '__rename')[i]) || {};
+    out.push({ id: '__rename', zh: '改名卡', kind: 'rename', cost: MX_RENAME_COST, at: e.at || 0 });
+  }
+  return out.sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+/* 退費：拿掉一件（改名卡就把次數減一）。回傳新的 mx，畫面可以馬上更新。 */
+async function mxRefund(uid, id, mx) {
+  if (!uid) return { ok: false, reason: 'no-user' };
+  const cur = mx || {};
+  let owned = mxOwnedList(cur), renames = (+cur.renames || 0);
+  let cost = 0;
+  if (id === '__rename') {
+    if (mxRenamesPaid(cur) <= 0) return { ok: false, reason: 'not-owned' };
+    renames = Math.max(0, renames - 1);
+    cost = MX_RENAME_COST;
+  } else {
+    if (owned.indexOf(id) < 0) return { ok: false, reason: 'not-owned' };
+    cost = (MX_BY_ID[id] && MX_BY_ID[id].cost) || 0;
+    owned = owned.filter(x => x !== id);
+  }
+  // 身上正穿著的就順手脫掉（不然畫面會戴著一個已經不屬於他的東西）
+  const wear = Object.assign({}, cur.wear || {});
+  Object.keys(wear).forEach(k => { if (wear[k] === id) wear[k] = ''; });
+  const log = mxLogAdd(cur, { id, cost: -cost, refund: true });
+  try {
+    await _db.collection('progress').doc(uid).set({ mx: { owned, wear, renames, log } }, { merge: true });
+    return { ok: true, cost, mx: Object.assign({}, cur, { owned, wear, renames, log }) };
+  } catch (e) { return { ok: false, reason: 'save', err: e }; }
 }
 /* 取名字／改名字。第一次免費，之後要 50 顆星（Alan 的「改名卡」）。 */
 async function mxRename(uid, name, balance, mx) {
@@ -5377,9 +5430,10 @@ async function mxRename(uid, name, balance, mx) {
   const cost = mxRenameCost(mx);
   if (cost && (balance || 0) < cost) return { ok: false, reason: 'poor', short: cost - (balance || 0) };
   const renames = (((mx && +mx.renames) || 0) + 1);
+  const log = cost ? mxLogAdd(mx, { id: '__rename', cost }) : ((mx && mx.log) || []);   // v448：免費那次不算購買
   try {
     await _db.collection('progress').doc(uid).set({
-      mx: { owned: mxOwnedList(mx), wear: (mx && mx.wear) || {}, name: nm, renames },
+      mx: { owned: mxOwnedList(mx), wear: (mx && mx.wear) || {}, name: nm, renames, log },
     }, { merge: true });
     return { ok: true, name: nm, cost, renames };
   } catch (e) { return { ok: false, reason: 'save' }; }
@@ -5397,7 +5451,8 @@ async function mxSetWear(uid, kind, id, mx) {
     return { ok: true, wear };
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
-Object.assign(window, { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
+Object.assign(window, { mxPurchases, mxRefund, mxLogAdd,
+  MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
 function computeCheckin(checkin) {

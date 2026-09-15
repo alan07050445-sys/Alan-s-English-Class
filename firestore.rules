@@ -76,6 +76,11 @@ service cloud.firestore {
                   && (request.auth.uid == userId || isTeacher());
       allow write: if request.auth != null
                    && request.auth.uid == userId;
+      // v448（Alan：「亂買東西要退掉」）：老師可以把學生買的吉祥物裝扮退掉。
+      //   星星是「賺到的 − 花掉的」算出來的，所以退費＝把東西從 mx.owned 拿掉，點數自己就回去。
+      //   ⚠ 只准動 mx 這一個欄位——成績、完成度、錯題老師一律不能改（那是學生自己的紀錄）。
+      allow update: if isTeacher()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mx']);
     }
 
     // ── 學生 XP / Streak / Badges（users 集合）──────────────

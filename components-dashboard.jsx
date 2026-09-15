@@ -1198,6 +1198,8 @@ function LineLink() {
 }
 
 /* ── 集點（星星）v342 ──────────────────────────────────── */
+const MX_KIND_ZH = { hat: '頭飾', item: '配件', fx: '特效', voice: '聲音', dance: '動作', pet: '夥伴' };   // rename 不標（名字本身就是「改名卡」）
+
 function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFor, weekOrder, dataFor }) {
   const [stars, setStars] = useDash({});
   const [sel, setSel]     = useDash(null);     // 選中的學生 email
@@ -1234,11 +1236,44 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
     return m;
   }, [students, weeksFor, weekOrder, dataFor]);
   const autoTotal = (email) => ((autoOf[String(email || '').toLowerCase()] || {}).total || 0);
-  const balanceOf = (email) => (((stars[String(email || '').toLowerCase()] || {}).balance) || 0) + autoTotal(email);
+  /* v448（Alan：「Tayler 的點數應該不是 570，因為他有買裝扮了」）——
+     學生端的星星本來就是「賺到的 − 花掉的」（v442），老師端卻只加不減 → 兩邊對不起來。
+     花掉的＝買吉祥物裝扮（記在 progress/{uid}.mx），所以這裡用同一個 mxSpent 算。 */
+  const mxOf = useDashM(() => {
+    const m = {};
+    (students || []).forEach(st => { const em = String(st.email || '').toLowerCase(); if (em) m[em] = st.mx || {}; });
+    return m;
+  }, [students]);
+  const uidOf = useDashM(() => {
+    const m = {};
+    (students || []).forEach(st => { const em = String(st.email || '').toLowerCase(); if (em) m[em] = st.uid; });
+    return m;
+  }, [students]);
+  const spentOf = (email) => (window.mxSpent ? window.mxSpent(mxOf[String(email || '').toLowerCase()] || {}) : 0);
+  const balanceOf = (email) => (((stars[String(email || '').toLowerCase()] || {}).balance) || 0) + autoTotal(email) - spentOf(email);
 
   const cur = sel ? (stars[String(sel).toLowerCase()] || { balance: 0, entries: [] }) : null;
   const curAuto = sel ? (autoOf[String(sel).toLowerCase()] || { total: 0, entries: [] }) : { total: 0, entries: [] };
+  const curMx = sel ? (mxOf[String(sel).toLowerCase()] || {}) : {};
+  const curSpent = sel ? spentOf(sel) : 0;
+  const curBuys = (sel && window.mxPurchases) ? window.mxPurchases(curMx) : [];
   const curStudent = list.find(s => String(s.email).toLowerCase() === String(sel).toLowerCase());
+
+  /* v448：退掉一件裝扮。星星是算出來的——東西一拿掉，點數自己就回去了。 */
+  const refund = async (b) => {
+    const uid = uidOf[String(sel).toLowerCase()];
+    if (!uid) { setErr('這位學生還沒有登入過（找不到他的進度資料），沒辦法退。'); return; }
+    if (!confirm(`確定把「${b.zh}」退掉嗎？\n${b.cost} 顆星星會退回給他。`)) return;
+    setBusy(true);
+    setErr(null);
+    const r = await window.mxRefund(uid, b.id, curMx);
+    if (!r.ok) {
+      setErr(r.reason === 'save'
+        ? '退費失敗（權限）——請先到 Firebase Console 發布新版 firestore.rules（v448 加了「老師可以退學生的裝扮」那一條）。'
+        : '退費失敗：' + r.reason);
+    }
+    setBusy(false);
+  };
 
   const add = async (signedAmount) => {
     setErr(null);
@@ -1302,11 +1337,12 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
           <>
             <div className="stars-bal-card">
               <span className="stars-bal-name">{(curStudent && curStudent.name) || sel}</span>
-              <span className="stars-bal-num">{((cur.balance || 0) + curAuto.total).toLocaleString()}<em>🌟</em></span>
-              {/* v361: 拆給老師看——哪些是你手動記的、哪些是完成練習自動給的 */}
-              {curAuto.total > 0 && (
+              <span className="stars-bal-num">{((cur.balance || 0) + curAuto.total - curSpent).toLocaleString()}<em>🌟</em></span>
+              {/* v361: 拆給老師看——哪些是你手動記的、哪些是完成練習自動給的；v448：再減掉買裝扮花掉的 */}
+              {(curAuto.total > 0 || curSpent > 0) && (
                 <span className="stars-bal-split">
                   手動 {(cur.balance || 0).toLocaleString()} ＋ 自動 {curAuto.total.toLocaleString()}
+                  {curSpent > 0 ? ` − 買裝扮 ${curSpent.toLocaleString()}` : ''}
                 </span>
               )}
             </div>
@@ -1319,6 +1355,23 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
                       <span className="stars-row-date">{en.date || '—'}</span>
                       <span className="stars-row-amt">+{en.amount}⭐</span>
                       <span className="stars-row-note">{en.note}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            {/* v448：他買了什麼（吉祥物裝扮）＋一鍵退掉 */}
+            {curBuys.length > 0 && (
+              <details className="stars-buys" open>
+                <summary>🧸 買過的裝扮 {curBuys.length} 件 · 共花掉 {curSpent.toLocaleString()}🌟（退掉星星就回去）</summary>
+                <div className="stars-list">
+                  {curBuys.map((b, i) => (
+                    <div key={b.id + i} className="stars-row">
+                      <span className="stars-row-date">{b.at ? new Date(b.at).toISOString().slice(0, 10) : '—'}</span>
+                      <span className="stars-row-amt minus">−{b.cost.toLocaleString()}🌟</span>
+                      <span className="stars-row-note">{b.zh}{MX_KIND_ZH[b.kind] ? `（${MX_KIND_ZH[b.kind]}）` : ''}</span>
+                      <button className="stars-refund-btn" disabled={busy} onClick={() => refund(b)}>退掉</button>
                     </div>
                   ))}
                 </div>

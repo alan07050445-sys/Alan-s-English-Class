@@ -3787,3 +3787,13 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .save-fail-bar button { border: 0; border-radius: 999px; padding: 6px 14px; font-size: 13.5px; font-weight: 700;
   background: #fff; color: #7A1F1F; cursor: pointer; }
 .save-fail-bar button.ghost { background: transparent; color: #FFD9D9; border: 1px solid rgba(255,255,255,.4); }
+
+/* v448：後台「買過的裝扮」與退費 */
+.stars-buys { margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff); }
+.stars-buys > summary { cursor: pointer; padding: 10px 14px; font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink); }
+.stars-buys .stars-list { padding: 0 8px 8px; }
+.stars-row-amt.minus { color: #A33; }
+.stars-refund-btn { border: 1px solid #C88; background: #fff; color: #A33; border-radius: 999px;
+  padding: 4px 12px; font-family: var(--sans); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.stars-refund-btn:hover { background: #FBEAEA; }
+.stars-refund-btn:disabled { opacity: .5; cursor: default; }
