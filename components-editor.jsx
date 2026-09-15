@@ -4825,6 +4825,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [nFill, setNFill]   = useS(8);
   const [nTr, setNTr]       = useS(5);
   const [nRw, setNRw]       = useS(5);          // v429：改寫句子（例：把大小寫改對）
+  const [nCircle, setNCircle] = useS(6);       // v444：找出來（在句子裡圈出名詞／動詞）
+  const [nSort, setNSort]   = useS(8);         // v444：分一分（把字分到 2-4 個籃子）
   const [lsBusy, setLsBusy] = useS(false);      // v429：校稿頁單獨重出互動教學
   /* v442：互動教學的「AI 自動配圖」——只補還沒有圖的 learn 步驟 */
   const [lsImg, setLsImg] = useS(false);
@@ -4876,7 +4878,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       setImgs(v => v.concat(out).slice(0, 6));
     } catch (e) { setErr('有照片讀不出來，請換一張試試。'); }
   };
-  const ready = (imgs.length > 0 || text.trim().length >= 20) && (nMcq + nFill + nTr + nRw) > 0;
+  const ready = (imgs.length > 0 || text.trim().length >= 20) && (nMcq + nFill + nTr + nRw + nCircle + nSort) > 0;
 
   const run = async () => {
     const id = ++runRef.current;
@@ -4892,7 +4894,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       setBusy({ done: 1, total: 6, label: `讀到了：${sheet.topic || '文法'}${(sheet.sections || []).length > 1 ? `（${sheet.sections.length} 段、${sheet.questions.length} 題）` : ''}，開始出題` });
       const pack = await window.aiMakeGrammarPack({
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
-        grade, nMcq, nFill, nTr, nRw, caseMatters: !!sheet.caseMatters,
+        grade, nMcq, nFill, nTr, nRw, nCircle, nSort, caseMatters: !!sheet.caseMatters,
         onProgress: (d, t, label) => { if (live()) setBusy({ done: 1 + d, total: 1 + t, label }); },
       });
       if (!live()) return;
@@ -5011,7 +5013,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
               </div>
             </div>
             <div className="gr-num-row">
-              {[['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['✍️ 改寫句子', nRw, setNRw, 10], ['🔤 中翻英', nTr, setNTr, 10]].map(([lb, v, set, max]) => (
+              {[['👉 找出來', nCircle, setNCircle, 12], ['🗂 分一分', nSort, setNSort, 12], ['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['✍️ 改寫句子', nRw, setNRw, 10], ['🔤 中翻英', nTr, setNTr, 10]].map(([lb, v, set, max]) => (
                 <div className="field" key={lb}>
                   <label className="field-label">{lb}</label>
                   <select value={v} onChange={e => set(+e.target.value)}>
@@ -5021,8 +5023,10 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
               ))}
             </div>
             <div className="field-help">
-              會建立：<b>📘 互動教學</b>（一步一個小重點，每步都要學生動手：選一選、排句子、找錯字）→ 學完才解鎖
-              <b> 📝 選擇 → ✏️ 填空 → ✍️ 改寫句子 → 🔤 中翻英</b>（不要的選「不要」）。老師作業上原本的題目會優先收進去，不夠的 AI 再依教學重點補。出完先校稿，確認了才寫進題庫。
+              會建立：<b>📘 互動教學</b>（一步一個小重點，每步都要學生動手：選一選、找出來、分一分、找錯字）→ 學完才解鎖
+              <b> 👉 找出來 → 🗂 分一分 → 📝 選擇 → ✏️ 填空 → ✍️ 改寫句子 → 🔤 中翻英</b>（不要的選「不要」）。
+              <b>找出來</b>＝在句子裡圈出名詞／動詞（會再用另一個 AI 檢查「只有一個答案」）；<b>分一分</b>＝把字分到 2–4 個籃子。
+              老師作業上原本的題目會優先收進去，不夠的 AI 再依教學重點補。出完先校稿，確認了才寫進題庫。
             </div>
             {assignBox()}
             {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
@@ -5046,9 +5050,11 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 
   // ───────────────────────── 校稿畫面 ─────────────────────────
   const steps = (res.lesson && res.lesson.steps) || [];
-  const TABS = [['lesson', `📘 互動教學`, steps.length], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
+  const sortSet = res.sort && (res.sort.words || []).length >= 4 ? res.sort : null;
+  const TABS = [['lesson', `📘 互動教學`, steps.length], ['circle', '👉 找出來', (res.circle || []).length],
+    ['sort', '🗂 分一分', sortSet ? sortSet.words.length : 0], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
     ['rw', '✍️ 改寫句子', (res.rw || []).length], ['tr', '🔤 中翻英', res.tr.length]].filter(t => t[0] === 'lesson' || t[2] > 0);
-  const unitsN = (steps.length ? 1 : 0) + ['mcq', 'fill', 'rw', 'tr'].filter(k => (res[k] || []).length).length;
+  const unitsN = (steps.length ? 1 : 0) + (sortSet ? 1 : 0) + ['mcq', 'fill', 'rw', 'tr', 'circle'].filter(k => (res[k] || []).length).length;
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal wide" onClick={e => e.stopPropagation()}>
@@ -5174,6 +5180,65 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
           )}
 
+          {/* v444 找出來：一句話圈一個字（校稿時最重要的是「答案真的只有一個」） */}
+          {tab === 'circle' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生看到的指示語：<b>把每一句裡的{(res.circle[0] || {}).findZh}圈出來</b>
+                （整份只會有一句指示語，所以每一題都要問同一種字）
+              </div>
+              {res.circle.map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <input value={x.sentence} onChange={e => upd('circle', i, { sentence: e.target.value })}/>
+                    <div className="gq-row-2">
+                      <div><label>要圈的字（/ 分開）</label><input value={csv(x.answers || [x.answer])} onChange={e => upd('circle', i, { answers: uncsv(e.target.value) })}/></div>
+                      <div><label>找什麼（中文）</label><input value={x.findZh} onChange={e => upd('circle', i, { findZh: e.target.value })}/></div>
+                      <div><label>解說</label><input value={x.explain} onChange={e => upd('circle', i, { explain: e.target.value })}/></div>
+                    </div>
+                    {!window.gnValidCircle(x) && <div className="gr-warn">⚠ 這一題學生端會略過：要圈的字必須是句子裡「只出現一次」的完整單字，而且句子裡符合的字要全部列出來</div>}
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('circle', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* v444 分一分：2-4 個籃子＋每個字屬於哪一籃 */}
+          {tab === 'sort' && sortSet && (
+            <div className="gr-proof">
+              <div className="field">
+                <label className="field-label">要小朋友做什麼</label>
+                <input value={sortSet.instruction} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, instruction: e.target.value } }))}/>
+              </div>
+              <div className="field">
+                <label className="field-label">籃子（用 / 分開，2–4 個）</label>
+                <input value={csv(sortSet.categories)} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, categories: uncsv(e.target.value) } }))}/>
+              </div>
+              {sortSet.words.map((w, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <div className="gq-row-2">
+                      <div><label>單字</label>
+                        <input value={w.word} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, words: r.sort.words.map((x, j) => j === i ? { ...x, word: e.target.value } : x) } }))}/></div>
+                      <div><label>放哪一籃</label>
+                        <select value={w.category} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, words: r.sort.words.map((x, j) => j === i ? { ...x, category: e.target.value } : x) } }))}>
+                          {sortSet.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                          {sortSet.categories.indexOf(w.category) < 0 && <option value={w.category}>{w.category}（不在籃子裡）</option>}
+                        </select></div>
+                    </div>
+                  </div>
+                  <button type="button" className="gn-del"
+                    onClick={() => setRes(r => ({ ...r, sort: { ...r.sort, words: r.sort.words.filter((_, j) => j !== i) } }))}>刪</button>
+                </div>
+              ))}
+              {!window.gnValidSortSet(sortSet, sortSet.words.length) &&
+                <div className="gr-warn">⚠ 這樣學生端不會建立：要 2–4 個籃子、每籃至少 2 個字、同一個字不能出現兩次</div>}
+            </div>
+          )}
+
           {tab === 'mcq' && (
             <div className="gr-proof">
               {res.mcq.map((x, i) => (
@@ -5264,7 +5329,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             if (!steps.length && !confirm('這一份沒有互動教學，練習就不會上鎖（學生可以直接做題）。\n確定要先建立嗎？')) return;
             onCreate({
               title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
-              lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [], caseMatters: !!res.caseMatters,
+              lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [],
+              circle: res.circle || [], sort: sortSet, caseMatters: !!res.caseMatters,
               assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
             });
           }}>建立 {unitsN} 個單元 →</button>
@@ -5275,7 +5341,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, caseMatters }) {
+function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, circle, sort, caseMatters }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
@@ -5289,20 +5355,34 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, caseMatters }) 
   }
   const req = lessonId ? { requires: lessonId } : {};
   const cs = caseMatters ? { caseSensitive: true } : {};   // v429：大小寫是考點的單元，打字題要分大小寫
+  /* v444 找出來＝現成的「圈選題」；分一分＝現成的「單字分類」。
+     沿用既有題型＝計分、星星（AUTO_STAR_KIND 的 pct）、只重做錯的、側欄歸戶全部自動有。 */
+  const goodCircle = (circle || []).filter(x => x && x.sentence && ((x.answers || []).length || x.answer));
+  if (goodCircle.length) out.push({ id: 'gn' + stamp + 'ci' + rnd(), type: 'circle-answer', group: g, order: 1, ...req,
+    title: `${g} · 找出來`, zh: `${goodCircle.length} 題 · 把句子裡的${goodCircle[0].findZh}圈出來`,
+    circleInstruction: `把每一句裡的${goodCircle[0].findZh}圈出來（可能不只一個）`,
+    circleQuestions: goodCircle.map((x, i) => ({ id: 'c' + stamp + i + rnd(), sentence: x.sentence,
+      answers: (x.answers && x.answers.length ? x.answers : [x.answer]).filter(Boolean),
+      answer: (x.answers && x.answers[0]) || x.answer, explain: x.explain || '' })) });
+  const goodSort = (sort && (sort.words || []).length >= 4 && (sort.categories || []).length >= 2) ? sort : null;
+  if (goodSort) out.push({ id: 'gn' + stamp + 'ws' + rnd(), type: 'word-sort', group: g, order: 2, ...req,
+    title: `${g} · 分一分`, zh: `${goodSort.words.length} 個字 · ${goodSort.instruction}`,
+    sortCategories: goodSort.categories,
+    sortWords: goodSort.words.map((w, i) => ({ id: 'w' + stamp + i + rnd(), word: w.word, category: w.category })) });
   const goodMcq = (mcq || []).filter(x => x && x.q && (x.options || []).length >= 2);
-  if (goodMcq.length) out.push({ id: 'gn' + stamp + 'qz' + rnd(), type: 'quiz', group: g, order: 1, ...req,
+  if (goodMcq.length) out.push({ id: 'gn' + stamp + 'qz' + rnd(), type: 'quiz', group: g, order: 3, ...req,
     title: `${g} · 選擇題`, zh: `${goodMcq.length} 題 · 選出正確的答案`, shuffle: true,
     questions: goodMcq.map((x, i) => ({ id: 'q' + stamp + i + rnd(), q: x.q, options: x.options, answer: x.answer, explain: x.explain || '' })) });
   const goodFill = (fill || []).filter(x => x && x.prompt && x.answer);
-  if (goodFill.length) out.push({ id: 'gn' + stamp + 'fb' + rnd(), type: 'type-answer', variant: 'fill', group: g, order: 2, ...req, ...cs,
+  if (goodFill.length) out.push({ id: 'gn' + stamp + 'fb' + rnd(), type: 'type-answer', variant: 'fill', group: g, order: 4, ...req, ...cs,
     title: `${g} · 填空題`, zh: `${goodFill.length} 題 · 把空格填上正確的字`, instruction: '把 ________ 填上正確的字',
     pairs: goodFill.map((x, i) => ({ id: 'p' + stamp + 'f' + i + rnd(), prompt: x.prompt, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
   const goodRw = (rw || []).filter(x => x && x.wrong && x.answer && x.wrong !== x.answer);
-  if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 3, ...req, ...cs,
+  if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 5, ...req, ...cs,
     title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把句子改對`, instruction: '把句子裡錯的地方改對',
     pairs: goodRw.map((x, i) => ({ id: 'p' + stamp + 'r' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) });
   const goodTr = (tr || []).filter(x => x && x.zh && x.answer);
-  if (goodTr.length) out.push({ id: 'gn' + stamp + 'tr' + rnd(), type: 'type-answer', variant: 'translate', group: g, order: 4, ...req, ...cs,
+  if (goodTr.length) out.push({ id: 'gn' + stamp + 'tr' + rnd(), type: 'type-answer', variant: 'translate', group: g, order: 6, ...req, ...cs,
     topic: topic || g, title: `${g} · 中翻英`, zh: `${goodTr.length} 題 · 看中文，打出英文句子`,
     pairs: goodTr.map((x, i) => ({ id: 'p' + stamp + 't' + i + rnd(), prompt: x.zh, answer: x.answer, accept: x.accept || [], hint: x.hint || '', explain: x.explain || '' })) });
   return out;

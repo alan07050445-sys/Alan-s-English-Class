@@ -207,7 +207,7 @@ function getQuizItems(items) {
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
     (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
     (item.type === 'cloze'            && (item.passage || '').includes('[')) ||
-    (item.type === 'circle-answer'    && (item.circleQuestions || []).some(q => q.sentence && q.answer)) ||
+    (item.type === 'circle-answer'    && (item.circleQuestions || []).some(q => q.sentence && (q.answer || (q.answers || []).length))) ||
     (item.type === 'upload') || // v263: 上傳作業——單元本身就是任務，不需要題目
     /* v387（Alan：「分段閱讀不一定一定要有題目 才能新增」）：
        改成「有段落就能玩」——純閱讀（只有課文/掃描頁、沒有題目）本身就是一件任務，
@@ -429,7 +429,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
-  if (item.type === 'circle-answer') return (item.circleQuestions || []).filter(q => q.sentence && q.answer).length;
+  if (item.type === 'circle-answer') return (item.circleQuestions || []).filter(q => q.sentence && (q.answer || (q.answers || []).length)).length;
   if (item.type === 'writing-practice') return 1;
   if (item.type === 'upload') return 1; // v263: 上傳作業＝一件事
   if (item.type === 'guided-reading') return grTotalQ(item); // v276: 分段閱讀＝全部段落的題數
@@ -680,7 +680,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
      「配對」若排在「配對連線」前面，就會先吃掉「配對」、留下沒人認得的「連線」。
    ⚠ 拿掉之後只剩不到 3 個字的標題會被 qmGroupByArticle 判成「單張卡」平鋪，
      所以就算某個標題整個被吃光也不會亂分組。 */
-const QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
+const QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|改寫句子|互動教學|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|找出來|分一分|中翻英|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
 function qmGroupByArticle(items) {
   const keyOf = (t) => String(t || '').toLowerCase().replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
   // v254: 老師手動分組（item.group）優先；沒設才用標題自動歸戶
@@ -5215,7 +5215,7 @@ function tokenizeCircleSentence(sentence) {
 }
 
 function CircleAnswerIntro({ item, onStart, prog }) {
-  const questions = (item.circleQuestions || []).filter(q => q.sentence && q.answer);
+  const questions = (item.circleQuestions || []).filter(q => q.sentence && (q.answer || (q.answers || []).length));
   const hasClassification = questions.some(q => q.label);
   return (
     <div className="qm-intro">
@@ -5240,7 +5240,7 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
   const [redoKeys, setRedoKeys] = useQM(null); // v306+: 非 null＝只重做這些錯的（ephemeral，不覆蓋最佳成績）
   const questions = useQMM(() => {
     const base = (item.circleQuestions || [])
-      .filter(q => q.sentence && q.answer)
+      .filter(q => q.sentence && (q.answer || (q.answers || []).length))
       .map((q, index) => ({ ...q, _circleKey: q.id || `circle-${index}` }));
     return redoKeys ? base.filter(q => redoKeys.includes(q._circleKey)) : base;
   }, [item.id, redoKeys]);
@@ -5254,12 +5254,19 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
   const [submitted, setSubmitted] = useQM(false);
   const [score, setScore] = useQM(0);
 
-  const isQuestionComplete = q => selectedWords[q._circleKey] !== undefined && (!q.label || !!selectedLabels[q._circleKey]);
+  /* v444：一句話可以圈「好幾個字」（Alan 的作業就是「Read each sentence. Then underline the nouns.」——
+     答案是 Amira, Rhode Island, week 三個）。selectedWords[key] 一律存成陣列；
+     只有一個答案的舊題目行為完全一樣（點第二個字會換掉第一個）。 */
+  const answersOf = q => ((q.answers || []).length ? q.answers : [q.answer]).filter(Boolean);
+  const pickedOf = q => selectedWords[q._circleKey] || [];
+  const isQuestionComplete = q => pickedOf(q).length === answersOf(q).length && (!q.label || !!selectedLabels[q._circleKey]);
   const completedCount = questions.filter(isQuestionComplete).length;
 
   const isCircleCorrect = q => {
     const tokens = tokenizeCircleSentence(q.sentence);
-    return normalizeCircleValue(tokens[selectedWords[q._circleKey]]) === normalizeCircleValue(q.answer);
+    const want = answersOf(q).map(normalizeCircleValue).sort();
+    const got = pickedOf(q).map(i => normalizeCircleValue(tokens[i])).sort();
+    return want.length > 0 && want.length === got.length && want.every((w, i) => w === got[i]);
   };
   const isLabelCorrect = q => !q.label || normalizeCircleValue(selectedLabels[q._circleKey]) === normalizeCircleValue(q.label);
   const isQuestionCorrect = q => isCircleCorrect(q) && isLabelCorrect(q);
@@ -5270,7 +5277,7 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
       if (!isQuestionCorrect(q)) {
         list.push({
           q: `Question ${index + 1}: ${q.sentence}`,
-          answer: q.label ? `${q.answer} · ${q.label}` : q.answer
+          answer: q.label ? `${answersOf(q).join(', ')} · ${q.label}` : answersOf(q).join(', ')
         });
       }
       return list;
@@ -5331,13 +5338,22 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
                   {tokens.map((token, tokenIndex) => {
                     if (/^\s+$/.test(token)) return <span key={tokenIndex}>{token}</span>;
                     if (!/[\p{L}\p{N}]/u.test(token)) return <span key={tokenIndex}>{token}</span>;
-                    const selected = selectedWords[q._circleKey] === tokenIndex;
-                    const correctAnswer = submitted && normalizeCircleValue(token) === normalizeCircleValue(q.answer);
+                    const picked = pickedOf(q);
+                    const selected = picked.indexOf(tokenIndex) >= 0;
+                    const want = answersOf(q).map(normalizeCircleValue);
+                    const correctAnswer = submitted && want.indexOf(normalizeCircleValue(token)) >= 0;
+                    const need = want.length;
                     return (
                       <button
                         key={tokenIndex}
-                        className={`circle-word${selected ? ' selected' : ''}${submitted && selected ? circleCorrect ? ' correct' : ' wrong' : ''}${correctAnswer ? ' answer' : ''}`}
-                        onClick={() => !submitted && setSelectedWords(prev => ({...prev, [q._circleKey]: tokenIndex}))}
+                        className={`circle-word${selected ? ' selected' : ''}${submitted && selected ? (correctAnswer ? ' correct' : ' wrong') : ''}${correctAnswer ? ' answer' : ''}`}
+                        onClick={() => !submitted && setSelectedWords(prev => {
+                          const cur = prev[q._circleKey] || [];
+                          if (cur.indexOf(tokenIndex) >= 0) return { ...prev, [q._circleKey]: cur.filter(i => i !== tokenIndex) };
+                          // 只要一個答案時：點新的就換掉舊的；要好幾個時：點滿了就先取消一個
+                          const next = need === 1 ? [tokenIndex] : cur.length >= need ? cur : cur.concat(tokenIndex);
+                          return { ...prev, [q._circleKey]: next };
+                        })}
                         disabled={submitted}
                       >
                         {token}
@@ -5370,7 +5386,8 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
 
                 {submitted && !questionCorrect && (
                   <div className="circle-correction">
-                    Correct answer: <strong>{q.answer}</strong>{q.label ? <> · <strong>{q.label}</strong></> : null}
+                    Correct answer: <strong>{answersOf(q).join(', ')}</strong>{q.label ? <> · <strong>{q.label}</strong></> : null}
+                    {q.explain && <span className="circle-explain"> · {q.explain}</span>}
                   </div>
                 )}
               </div>

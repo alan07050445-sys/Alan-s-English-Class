@@ -2736,6 +2736,23 @@ RULES
   avoid uncountable nouns (water, milk, equipment, furniture, homework…) unless the notes are about them.
 ${_AI_MINIFY}`;
 
+/* v444（Alan：「這邊沒有找出來和分一分的題目，也幫我加上去」）
+   互動教學裡的 tap／sort 現在也能各自出成一個練習單元：
+   · 找出來 → 沿用現成的「圈選題」(circle-answer)：一句話圈一個字，已經有計分、星星、只重做錯的
+   · 分一分 → 沿用現成的「單字分類」(word-sort)：把字拖進 2-4 個籃子
+   ⚠ 不新增題型，因為 v414 的教訓：新題型要補 AUTO_STAR_KIND、QM_TYPE_WORDS… 漏一個就整個單元沒星星。 */
+const GN_SORT_SYS = `You design ONE sorting exercise for Taiwanese elementary-school students.
+The child drags English words into 2-4 labelled baskets.
+Output ONLY JSON: {"instruction":"","categories":["",""],"words":[{"word":"","category":""}]}
+RULES
+- categories: 2-4 baskets, Traditional Chinese labels, ≤6 characters each, taken straight from the notes
+  (e.g. 人／地方／東西, 普通名詞／專有名詞, 可數／不可數, 單數／複數).
+- words: short English words (1-2 words each). "category" must be EXACTLY one of the labels you listed.
+- EVERY word must belong to exactly ONE basket. If a teacher could argue it fits two baskets, do not use it.
+- At least 2 words per basket, spread evenly, and never repeat a word.
+- instruction: ONE Traditional Chinese sentence, ≤20 characters, telling the child what to do.
+${_AI_MINIFY}`;
+
 const GN_Q_SYS = {
   mcq: `You write multiple-choice grammar questions.
 Output ONLY a JSON array: [{"q":"","options":["","",""],"answer":0,"explain":""}]
@@ -2760,6 +2777,23 @@ RULES
 - If CAPITAL LETTERS are the grammar point: give the word(s) in lowercase in parentheses at the end, and the answer is the same
   word(s) with the correct capital letters. e.g. prompt "We live in ________. (taipei)", answer "Taipei". Only ONE correct answer.
 - explain: Traditional Chinese, ≤30 characters.
+${_AI_MINIFY}`,
+  circle: `You write "find the words" questions: the student reads a sentence and taps EVERY word of one kind,
+exactly like the worksheet task "Read each sentence. Then underline the nouns."
+Output ONLY a JSON array: [{"sentence":"","answers":[""],"find":"","findZh":"","explain":""}]
+RULES
+- EVERY question in your answer must ask for the SAME kind of word (all nouns, or all verbs, or all proper nouns…),
+  because the children see one instruction above the whole exercise.
+- find: that kind of word in English, 1-3 words ("noun", "proper noun", "action verb").
+  findZh: the same thing in Traditional Chinese, ≤6 characters ("名詞", "專有名詞").
+- sentence: ONE English sentence, 4-12 words, everyday life, 100% correct English.
+- answers: EVERY word in that sentence that qualifies — 1 to 4 of them, copied EXACTLY as written
+  (same spelling, same capital letters), in the order they appear. A checker re-reads your sentence and
+  throws the question away if you missed one, so count carefully: in "My sister goes to school every morning."
+  the nouns are sister, school AND morning.
+- Each answer word must be ONE word that appears only once in the sentence. If a target is two words
+  (New York), choose a different sentence.
+- explain: Traditional Chinese, ≤30 characters, why those words.
 ${_AI_MINIFY}`,
   rewrite: `You write "correct the sentence" questions: the student rewrites a sentence that has mistakes.
 Output ONLY a JSON array: [{"wrong":"","answer":"","explain":""}]
@@ -2969,6 +3003,43 @@ function gnValidMcq(x) {
   return q && opts.length >= 2 && opts.length <= 4 && uniq && fromSent && Number.isInteger(a) && a >= 0 && a < opts.length
     ? { q, options: opts, answer: a, explain: String((x && x.explain) || '').trim() } : null;
 }
+/* v444 找出來：句子＋一個要圈的字。答案一定要在句子裡只出現一次（不然圈哪個都算） */
+function gnValidCircle(x) {
+  const sentence = String((x && x.sentence) || '').trim();
+  const raw = (Array.isArray(x && x.answers) ? x.answers : [x && x.answer]).map(a => _GN_TOK(String(a || ''))).filter(Boolean);
+  const find = String((x && x.find) || '').trim().slice(0, 30);
+  const findZh = _zhTW((x && x.findZh) || '').trim().slice(0, 8);
+  const toks = sentence.split(/\s+/).map(_GN_TOK).filter(Boolean);
+  const lower = raw.map(a => a.toLowerCase());
+  const uniq = new Set(lower).size === lower.length;
+  // 每個答案都要是句子裡「只出現一次」的完整單字，不然點哪一個都對／都不對
+  const once = raw.length >= 1 && raw.length <= 4 && uniq &&
+    raw.every(a => toks.filter(t => t.toLowerCase() === a.toLowerCase()).length === 1);
+  // 照句子的順序排（學生端會照順序亮起來，看起來才不會亂）
+  const answers = raw.slice().sort((a, b) => toks.findIndex(t => t.toLowerCase() === a.toLowerCase()) - toks.findIndex(t => t.toLowerCase() === b.toLowerCase()));
+  return sentence && find && findZh && once && toks.length >= 3 && toks.length <= 16
+    ? { sentence, answers, answer: answers[0], find, findZh, explain: _zhTW((x && x.explain) || '').trim() } : null;
+}
+/* v444 分一分：2-4 個籃子，每個字只能屬於一個籃子、每籃至少兩個字 */
+function gnValidSortSet(o, n) {
+  const cats = (Array.isArray(o && o.categories) ? o.categories : [])
+    .map(c => _zhTW(c).trim().slice(0, 8)).filter(Boolean);
+  const uniqCats = [...new Set(cats)];
+  if (uniqCats.length !== cats.length || cats.length < 2 || cats.length > 4) return null;
+  const seen = new Set(), words = [];
+  (Array.isArray(o && o.words) ? o.words : []).forEach(w => {
+    const word = String((w && w.word) || '').trim().slice(0, 24);
+    const cat = _zhTW((w && w.category) || '').trim().slice(0, 8);
+    const k = word.toLowerCase();
+    if (!word || cats.indexOf(cat) < 0 || seen.has(k)) return;
+    seen.add(k); words.push({ word, category: cat });
+  });
+  const kept = words.slice(0, Math.max(4, n || 8));
+  // 每一籃至少兩個字，而且每一籃都要有人（不然畫面上會出現空欄）
+  const per = cats.map(c => kept.filter(w => w.category === c).length);
+  if (kept.length < 4 || per.some(k => k < 2)) return null;
+  return { instruction: _zhTW((o && o.instruction) || '').trim().slice(0, 30) || '把這些字分到正確的籃子裡', categories: cats, words: kept };
+}
 function gnValidFill(x) {
   const answer = String((x && x.answer) || '').trim();
   // 括號提示如果就是答案本身（「Is there ____ cat? (a)」答案 a）→ 等於送分，拿掉提示
@@ -3028,6 +3099,28 @@ Output ONLY a JSON array of arrays, one per question, in order. e.g. [[2],[0,3],
     }).filter(i => i >= 0));
   } catch (e) { return new Set(); }
 }
+/* v444：找出來也要防「兩個答案都對」——問另一個 AI「這句話裡符合的字有哪些」，多於一個就丟掉。
+   跟 v431 的選擇題交叉檢查同一招（那次也是「lie 和 relax 都對」）。 */
+async function _gnCheckCircle(items, base) {
+  if (!items.length) return new Set();
+  const sys = `You are checking a "find the words" exercise for a Taiwanese elementary English class.
+For EVERY item you get a sentence and what the child must find.
+List EVERY word in that sentence a teacher would have to accept — if three words qualify, list all three.
+Judge each word on its own; do not stop at the first one.
+Output ONLY a JSON array of arrays of words, one per item, in order. e.g. [["cat"],["Tom","park"],["is"]]`;
+  const list = items.map((x, i) => `${i + 1}. find: ${x.find}\n   sentence: ${x.sentence}`).join('\n');
+  try {
+    const got = await _gnCall(sys, `${base}\n\nITEMS\n${list}`, 900);
+    if (!Array.isArray(got) || got.length !== items.length) return new Set();
+    const norm = (t) => String(t || '').trim().toLowerCase().replace(/[^a-z0-9']/g, '');
+    return new Set(items.map((x, i) => {
+      const a = [...new Set((Array.isArray(got[i]) ? got[i] : [got[i]]).map(norm).filter(Boolean))].sort();
+      const want = [...new Set((x.answers || [x.answer]).map(norm))].sort();
+      // 兩邊的字要完全一樣——少寫一個（漏掉的名詞）或多寫一個（不是名詞）都丟掉
+      return (a.length === want.length && a.every((t, k) => t === want[k])) ? -1 : i;
+    }).filter(i => i >= 0));
+  } catch (e) { return new Set(); }
+}
 function _gnSpread(list, n) {
   const by = new Map();
   list.forEach(q => { const k = q.sec || 0; if (!by.has(k)) by.set(k, []); by.get(k).push(q); });
@@ -3037,7 +3130,7 @@ function _gnSpread(list, n) {
 }
 async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   if (!n || n <= 0) return [];
-  const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite }[kind];
+  const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite, circle: gnValidCircle }[kind];
   // 大寫單元的填空：答案一定要有大寫字母（實測 AI 會出「My friend ____ lives in Taipei. → teacher」這種跟大寫無關、答案又不唯一的題）
   const valid = (kind === 'fill' && caseMatters) ? (x) => { const v = v0(x); return v && /[A-Z]/.test(v.answer) ? v : null; } : v0;
   // v430：老師題目各段輪流挑（不然 8 題全出自第一段）；「底線畫出名詞」這種 identify 題改成選擇題
@@ -3045,7 +3138,7 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   const hasId = tq.some(q => q.kind === 'identify');
   const out = [], seen = new Set();
   // 選擇題的題幹常常一模一樣（「Circle the sentence with the correct capital letters.」）→ 連選項一起比
-  const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || '') + '|' + (x.options || []).join('|')).replace(/\s+/g, ' ');
+  const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || x.sentence || '') + '|' + (x.options || []).join('|')).replace(/\s+/g, ' ');
   const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
     const v = valid(x); if (!v) return;
     const k = key(v); if (!k || seen.has(k)) return;
@@ -3069,9 +3162,35 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
         const bad = await _gnCheckMcq(out.slice(before), base);
         for (let i = out.length - 1; i >= before; i--) if (bad.has(i - before)) out.splice(i, 1);
       }
+      if (kind === 'circle' && out.length > before) {
+        const bad = await _gnCheckCircle(out.slice(before), base);
+        for (let i = out.length - 1; i >= before; i--) if (bad.has(i - before)) out.splice(i, 1);
+      }
     } catch (e) { if (round === 1) throw e; }
   }
+  if (kind === 'circle' && out.length > 1) {
+    // 學生端整份只有一句指示語（「把名詞圈出來」）→ 只留最多數的那一種，問別種的丟掉
+    const tally = {};
+    out.forEach(x => { tally[x.findZh] = (tally[x.findZh] || 0) + 1; });
+    const main = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+    return out.filter(x => x.findZh === main).slice(0, n);
+  }
   return out.slice(0, n);
+}
+
+/* v444：分一分是「一整組」而不是一題一題，所以不走 _gnMakeKind，自己一個小迴圈。 */
+async function aiMakeGrammarSortSet({ base, n = 8, rounds = 3 } = {}) {
+  let feedback = '', lastErr = null;
+  for (let i = 0; i < Math.max(1, rounds); i++) {
+    let raw;
+    try { raw = await _gnCall(GN_SORT_SYS, `${base}${feedback}\n\nMake ${n} words in total.`, 1200); } catch (e) { lastErr = e; continue; }
+    const v = gnValidSortSet(raw, n);
+    if (v) return v;
+    feedback = '\n\nYour previous answer was REJECTED: ' +
+      'you need 2-4 Chinese basket labels, at least 2 words in EVERY basket, no repeated word, ' +
+      'and every word\'s "category" must be exactly one of the labels you listed.';
+  }
+  throw lastErr || new Error('分一分這次沒有產生成功');
 }
 
 /* ══ v443：這一課該用哪幾種互動？（Alan：「圖4 為什麼要組合句子」）══
@@ -3157,25 +3276,29 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
 }
 
 async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
-                                   caseMatters = false, onProgress } = {}) {
+                                   nCircle = 0, nSort = 0, caseMatters = false, onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
   const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters);
-  let done = 0; const total = 1 + [nMcq, nFill, nTr, nRw].filter(Boolean).length;
+  let done = 0; const total = 1 + [nMcq, nFill, nTr, nRw, nCircle, nSort].filter(Boolean).length;
   const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
   // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
   const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
-  const [L, M, F, T, R] = await Promise.all([
+  const [L, M, F, T, R, C, S] = await Promise.all([
     settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters }), '互動教學'),
     settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
     settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
     settle(_gnMakeKind('translate', { n: nTr, base, teacherQs, caseMatters }), '中翻英', nTr),
     settle(_gnMakeKind('rewrite', { n: nRw, base, teacherQs, caseMatters }), '改寫句子', nRw),
+    settle(_gnMakeKind('circle', { n: nCircle, base, teacherQs, caseMatters }), '找出來', nCircle),
+    settle(nSort > 0 ? aiMakeGrammarSortSet({ base, n: nSort }) : Promise.resolve(null), '分一分', nSort),
   ]);
   const errors = [];
   if (L.e) errors.push('互動教學');
-  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw]].forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
-  const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [], caseMatters, errors };
-  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length) {
+  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw],
+   [C, '找出來', nCircle], [S, '分一分', nSort]].forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
+  const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [],
+                circle: C.v || [], sort: S.v || null, caseMatters, errors };
+  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length && !out.circle.length && !out.sort) {
     throw new Error('全部都沒有產生成功，請再試一次。');
   }
   return out;
@@ -4735,6 +4858,7 @@ function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 Object.assign(window, {
   aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,
   gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint,
+  gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet,
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,

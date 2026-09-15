@@ -3735,3 +3735,6 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .qs-band-b.on { border-color: var(--accent, #8B3120); background: #FBF1EE; }
 .qs-band-b.on b { color: var(--accent, #8B3120); }
 .qs-band-note { flex: 1 1 100%; font-size: 11.5px; color: var(--ink-3, #8a8270); }
+
+/* v444：找出來答錯時，除了正確答案也把解說寫出來 */
+.circle-explain { color: var(--ink-muted); font-weight: 600; }

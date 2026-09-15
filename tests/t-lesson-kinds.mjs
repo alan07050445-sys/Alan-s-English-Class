@@ -11,8 +11,14 @@ const css    = fs.readFileSync(new URL('styles-tune.css', ROOT), 'utf8');
 const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); if (i < 0 || j < 0) throw new Error('找不到 ' + a); return src.slice(i, j); };
 
 let aiQueue = []; const calls = [];
+let router = null;              // 設了就依 system prompt 分流（平行請求的順序不固定）
 const _aiAsk = async (body, pickFn) => {
   calls.push(body);
+  if (router) {
+    const got = pickFn({ content: [{ type: 'text', text: JSON.stringify(router(String(body.system || ''))) }] });
+    if (got == null) throw new Error('bad');
+    return got;
+  }
   for (let k = 0; k < 3; k++) {                      // 真的 _aiAsk 同一輪會重問三次
     const next = aiQueue.shift();
     if (next === undefined) throw new Error('mock 用完了');
@@ -26,8 +32,15 @@ const code = slice(data, 'const VOCAB_BANDS = {', 'function _aiStripFence') + '\
              slice(data, 'const GN_MODEL', 'function grCountBlanks');
 const W = new Function('_aiAsk', '_aiStripFence', '_AI_MINIFY',
   code + '\nreturn { gnValidStep, gnValidLesson, aiMakeGrammarLesson, _gnFixPairOk, _gnLessonPlan, _gnFixImgHint,' +
-         ' storyCheck, storyFix, _storyScore, aiMakeVocabStory, AI_STORY_SYS, GN_LESSON_SYS };')(
+         ' storyCheck, storyFix, _storyScore, aiMakeVocabStory, AI_STORY_SYS, GN_LESSON_SYS,' +
+         ' gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet, aiMakeGrammarPack, GN_Q_SYS, GN_SORT_SYS };')(
   _aiAsk, (t) => String(t).replace(/^```(json)?/, '').replace(/```$/, '').trim(), '');
+
+// gnBuildItems 在 JSX 檔裡，但本身是純 JS
+const fnEnd = (src, a) => { const i = src.indexOf(a); const j = src.indexOf('\n}\n', i); if (i < 0 || j < 0) throw new Error('找不到 ' + a); return src.slice(i, j + 2); };
+globalThis.window = { gnValidStep: W.gnValidStep, gnValidCircle: W.gnValidCircle, gnValidSortSet: W.gnValidSortSet };
+const buildItems = new Function('window', fnEnd(editor, 'function gnBuildItems') + '\nreturn gnBuildItems;')(globalThis.window);
+const qmWords = (qm.match(/const QM_TYPE_WORDS = [^\n]+/) || [''])[0];
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { if (cond) { pass++; console.log('  ✅ ' + name); } else { fail++; console.log('  ❌ ' + name); } };
@@ -186,6 +199,68 @@ ok('老師端的題型中文名有補上', /tap: '👉 找出來', sort: '🗂 �
 ok('CSS 有新題型的樣式', /\.gnl-bins/.test(css) && /\.gnl-word\.got/.test(css) && /\.gnl-chip-now/.test(css));
 ok('GN_LESSON_SYS 有教 AI 什麼時候用哪一種', /CHOOSING THE INTERACTION/.test(W.GN_LESSON_SYS));
 ok('GN_LESSON_SYS 有叮嚀 imgHint 要跟例句有關', /WHAT THE FIRST EXAMPLE SENTENCE IS ABOUT/.test(W.GN_LESSON_SYS));
+
+console.log('\n【11】v444 👉 找出來（沿用圈選題）');
+const circ = (o) => W.gnValidCircle(Object.assign({ sentence: 'The dog runs in the park.', answers: ['dog', 'park'], find: 'noun', findZh: '名詞', explain: '狗和公園都是名詞' }, o));
+ok('正常的一題收下（兩個答案）', !!circ({}) && circ({}).answers.join() === 'dog,park');
+ok('⭐ 答案照句子的順序排', circ({ answers: ['park', 'dog'] }).answers.join() === 'dog,park');
+ok('舊格式的單一 answer 也認得', W.gnValidCircle({ sentence: 'The dog runs.', answer: 'dog', find: 'noun', findZh: '名詞' }).answers.join() === 'dog');
+ok('⭐ 要圈的字在句子裡出現兩次 → 丟掉', !circ({ sentence: 'The dog sees the dog.', answers: ['dog'] }));
+ok('要圈的字不在句子裡 → 丟掉', !circ({ answers: ['cat'] }));
+ok('同一個字寫兩次 → 丟掉', !circ({ answers: ['dog', 'dog'] }));
+ok('五個答案 → 丟掉（一句話圈太多）', !circ({ sentence: 'Tom and Amy see a dog near the park today.', answers: ['Tom', 'Amy', 'dog', 'park', 'today'] }));
+ok('沒寫「找什麼」→ 丟掉（學生端的指示語會空白）', !circ({ findZh: '' }));
+ok('句子太長 → 丟掉', !circ({ sentence: 'a b c d e f g h i j k l m n o p dog', answers: ['dog'] }));
+ok('答案帶標點也認得', !!circ({ answers: ['dog', 'park.'] }));
+ok('findZh 會轉正體', circ({ findZh: '名词' }).findZh === '名詞');
+ok('prompt 有叮嚀要把符合的字「全部」列出來', /EVERY word in that sentence that qualifies/.test(W.GN_Q_SYS.circle));
+
+console.log('\n【12】v444 🗂 分一分（沿用單字分類）');
+const SET = { instruction: '這些字是人還是地方？', categories: ['人', '地方'],
+  words: [{ word: 'teacher', category: '人' }, { word: 'doctor', category: '人' }, { word: 'park', category: '地方' }, { word: 'school', category: '地方' }] };
+ok('正常的一組收下', !!W.gnValidSortSet(SET, 8));
+ok('只有一個籃子 → 不收', !W.gnValidSortSet({ ...SET, categories: ['人'] }, 8));
+ok('五個籃子 → 不收', !W.gnValidSortSet({ ...SET, categories: ['一', '二', '三', '四', '五'] }, 8));
+ok('⭐ 有一籃只有一個字 → 不收（畫面會很空）', !W.gnValidSortSet({ ...SET, words: SET.words.slice(0, 3) }, 8));
+ok('同一個字出現兩次 → 只留一個，剩下不夠就不收', !W.gnValidSortSet({ ...SET, words: SET.words.concat([{ word: 'Park', category: '人' }]).slice(1) }, 8));
+ok('字的籃子不在清單裡 → 那個字不算', W.gnValidSortSet({ ...SET, words: SET.words.concat([{ word: 'cat', category: '動物' }]) }, 8).words.length === 4);
+ok('沒寫指示語會給預設的', W.gnValidSortSet({ ...SET, instruction: '' }, 8).instruction.length > 0);
+aiQueue = [{ categories: ['人'], words: [] }, SET];
+const SS = await W.aiMakeGrammarSortSet({ base: 'x', n: 8 });
+ok('不合格會重問一次', SS.categories.length === 2 && SS.words.length === 4);
+
+console.log('\n【13】v444 整包出題：找出來與分一分會一起出來');
+calls.length = 0;
+const circleQs = [{ sentence: 'Tom went to the park.', answers: ['Tom', 'park'], find: 'noun', findZh: '名詞', explain: '' },
+                  { sentence: 'She reads a book.', answers: ['book'], find: 'noun', findZh: '名詞', explain: '' },
+                  { sentence: 'Luna is a smart cat.', answers: ['cat'], find: 'noun', findZh: '名詞', explain: '' }];
+router = (sys) => /INTERACTIVE mini-lesson/.test(sys) ? goodLesson
+  : /checking a "find the words"/.test(sys) ? [['Tom', 'park'], ['book'], ['Luna', 'cat']]   // 第三題漏了 Luna
+  : /find the words/.test(sys) ? circleQs
+  : /sorting exercise/.test(sys) ? SET
+  : [];
+const pack = await W.aiMakeGrammarPack({ topic: 'Nouns', notes: 'A noun is a person, place or thing.', nMcq: 0, nFill: 0, nTr: 0, nRw: 0, nCircle: 3, nSort: 8 });
+eq('找出來出了幾題', pack.circle.length, 2);
+ok('⭐ 漏掉 Luna 的那一題被交叉檢查丟掉', !pack.circle.some(x => /Luna/.test(x.sentence)));
+ok('分一分整組收下', !!pack.sort && pack.sort.words.length === 4);
+ok('沒有錯誤', (pack.errors || []).length === 0);
+router = null;
+
+console.log('\n【14】v444 建出來的單元（沿用圈選題與單字分類）');
+const built = buildItems({ title: 'Nouns', topic: 'Nouns', lesson: goodLesson, circle: pack.circle, sort: pack.sort,
+  mcq: [{ q: 'x ________.', options: ['a', 'b'], answer: 0, explain: '' }], fill: [], tr: [], rw: [] });
+ok('找出來 → circle-answer', built.some(x => x.type === 'circle-answer'));
+ok('分一分 → word-sort', built.some(x => x.type === 'word-sort'));
+const ci = built.find(x => x.type === 'circle-answer'), ws = built.find(x => x.type === 'word-sort');
+ok('指示語寫的是要找什麼', /名詞/.test(ci.circleInstruction));
+ok('題目帶到學生端的欄位名稱正確', ci.circleQuestions.every(q => q.id && q.sentence && q.answers.length && q.answer));
+ok('一句話可以圈好幾個字', ci.circleQuestions.some(q => q.answers.length > 1));
+ok('學生端：一句話可以圈好幾個字（answersOf／pickedOf）', /const answersOf = q =>/.test(qm) && /pickedOf\(q\)\.length === answersOf\(q\)\.length/.test(qm));
+ok('分類籃子與答案都在', ws.sortCategories.length === 2 && ws.sortWords.every(w => w.id && w.word && w.category));
+ok('兩個單元都被教學卡鎖住', ci.requires === built[0].id && ws.requires === built[0].id);
+ok('順序是 教學 → 找出來 → 分一分 → 選擇', built.map(x => x.order).join() === '0,1,2,3');
+ok('側欄歸戶認得「找出來」「分一分」（不然會自己落單成一組）',
+  /找出來/.test(qmWords) && /分一分/.test(qmWords));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
 process.exit(fail ? 1 : 0);
