@@ -4808,7 +4808,7 @@ function rcMcqOk(q) {
    建出來的單元：📘 互動教學（lesson＋steps）→ 📝 選擇題（quiz）→ ✏️ 填空（type-answer/fill）
    → 🔤 中翻英（type-answer/translate）。後三個都帶 requires＝教學的 id：沒學完鎖著。
    ═════════════════════════════════════════════════════════════════════════ */
-const GN_KIND_ZH = { learn: '📖 學', pick: '👆 選一選', order: '🧩 排句子', fix: '🔍 找錯字' };
+const GN_KIND_ZH = { learn: '📖 學', pick: '👆 選一選', tap: '👉 找出來', sort: '🗂 分一分', order: '🧩 排句子', fix: '🔍 找錯字' };
 async function gnFileToImage(file) {
   const cv = await grDecodeScaled(file, 1600);            // 1600px：字看得清楚、上傳也不會太大
   const url = cv.toDataURL('image/jpeg', 0.82);
@@ -5123,6 +5123,31 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                       <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="為什麼（繁中）"/>
                     </div>
                   </>}
+                  {/* v443：在句子裡點出目標字 */}
+                  {st.kind === 'tap' && <>
+                    <input value={st.q} onChange={e => updStep(i, { q: e.target.value })} placeholder="要小朋友做什麼（繁中，例：點出句子裡的名詞）"/>
+                    <input value={st.sentence} onChange={e => updStep(i, { sentence: e.target.value })} placeholder="English sentence"/>
+                    <div className="gn-row3">
+                      <input value={csv(st.answers || [])} onChange={e => updStep(i, { answers: uncsv(e.target.value) })} placeholder="答案的字（用 / 分開，要跟句子裡一模一樣）"/>
+                      <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="為什麼（繁中）"/>
+                    </div>
+                  </>}
+                  {/* v443：分類 */}
+                  {st.kind === 'sort' && <>
+                    <input value={st.q} onChange={e => updStep(i, { q: e.target.value })} placeholder="要小朋友做什麼（繁中，例：這些字是人、地方還是東西？）"/>
+                    {(st.groups || []).map((g, k) => (
+                      <div key={k} className="gn-row3">
+                        <input value={g.label} onChange={e => updStep(i, { groups: (st.groups || []).map((x, j) => j === k ? { ...x, label: e.target.value } : x) })} placeholder="籃子名稱（繁中）"/>
+                        <input value={csv(g.items)} onChange={e => updStep(i, { groups: (st.groups || []).map((x, j) => j === k ? { ...x, items: uncsv(e.target.value) } : x) })} placeholder="這一籃的字（用 / 分開）"/>
+                        <button type="button" className="btn ghost" onClick={() => updStep(i, { groups: (st.groups || []).filter((_, j) => j !== k) })}>刪掉這一籃</button>
+                      </div>
+                    ))}
+                    <div className="gn-row3">
+                      <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="為什麼（繁中）"/>
+                      <button type="button" className="btn ghost" disabled={(st.groups || []).length >= 3}
+                        onClick={() => updStep(i, { groups: (st.groups || []).concat([{ label: '', items: [] }]) })}>＋ 加一籃</button>
+                    </div>
+                  </>}
                   {st.kind === 'order' && <>
                     <input value={st.zh} onChange={e => updStep(i, { zh: e.target.value })} placeholder="中文句子"/>
                     <input value={st.words.join(' ')} onChange={e => updStep(i, { words: e.target.value.split(/\s+/).filter(Boolean) })} placeholder="正確的英文句子（空格分開，學生看到會打散）"/>
@@ -5135,7 +5160,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                       <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="為什麼（繁中）"/>
                     </div>
                   </>}
-                  {!window.gnValidStep(st) && <div className="gr-warn">⚠ 這一步格式不對，學生端會自動略過（選項 2–3 個、排句子 3–9 塊、錯字要剛好出現一次）</div>}
+                  {!window.gnValidStep(st) && <div className="gr-warn">⚠ 這一步格式不對，學生端會自動略過（選項 2–4 個／排句子 3–9 塊／錯字要剛好出現一次，而且要是文法錯不是換個字／找出來的答案要是句子裡只出現一次的字／分一分要 2–3 籃、每個字只能屬於一籃）</div>}
                 </div>
               ))}
               <div className="field">

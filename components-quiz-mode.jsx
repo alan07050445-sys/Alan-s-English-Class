@@ -6932,6 +6932,84 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           );
         })()}
 
+        {/* v443：點出句子裡的目標字（Alan：「noun 主要是讓小朋友判斷什麼是 noun、從句子中找到」） */}
+        {cur.kind === 'tap' && (() => {
+          const toks = cur.sentence.split(/\s+/);
+          const bare = (t) => t.replace(/^["'“”‘’(\[]+|["'“”‘’)\].,!?;:]+$/g, '');
+          const isAns = (t) => cur.answers.some(a => a.toLowerCase() === bare(t).toLowerCase());
+          const got = st.got || [];
+          const left = cur.answers.length - got.length;
+          return (
+            <>
+              <div className="ls-kicker">👉 找出來</div>
+              <div className="gnl-sub">{cur.q}{cur.answers.length > 1 && <b>（{cur.answers.length} 個）</b>}</div>
+              <div className="gnl-fix gnl-tap">
+                {toks.map((t, i) => {
+                  const hit = got.indexOf(i) >= 0, missed = (st.miss || []).indexOf(i) >= 0;
+                  return (
+                    <button key={i} className={'gnl-word' + (hit ? ' got' : '') + (missed ? ' no' : '')}
+                      disabled={st.ok || hit || missed} onClick={() => {
+                        const ok = isAns(t);
+                        sound(ok);
+                        if (!ok) { markFirst(false); setSt(s0 => ({ ...s0, bad: true, miss: (s0.miss || []).concat(i) })); return; }
+                        setSt(s0 => {
+                          const g = (s0.got || []).concat(i);
+                          const done2 = g.length >= cur.answers.length;
+                          if (done2) markFirst(!(s0.miss || []).length);
+                          return { ...s0, bad: false, got: g, ok: done2 };
+                        });
+                      }}>{t}</button>
+                  );
+                })}
+              </div>
+              {st.ok
+                ? <div className="gnl-why ok">✓ 全部找到了！{cur.why || ''}<button className="gnl-say-btn" onClick={() => say(cur.sentence)}>🔊</button></div>
+                : <div className="gnl-why">{st.bad ? '這個不是喔，再看看～' : `還要找 ${left} 個`}</div>}
+            </>
+          );
+        })()}
+
+        {/* v443：分類（人／地方／東西、普通名詞／專有名詞…） */}
+        {cur.kind === 'sort' && (() => {
+          const items = cur.groups.reduce((a, g, gi) => a.concat(g.items.map(x => ({ x, gi }))), []);
+          const order = gnlShuffle(items.length, si + 11);
+          const done2 = st.n || 0;
+          const box = st.box || {};                                // item index → 放進哪一籃
+          const curItem = done2 < items.length ? items[order[done2]] : null;
+          return (
+            <>
+              <div className="ls-kicker">🗂 分一分</div>
+              <div className="gnl-sub">{cur.q}</div>
+              {curItem
+                ? <div className={'gnl-chip-now' + (st.bad ? ' no' : '')}>{curItem.x}</div>
+                : <div className="gnl-chip-now ok">全部分完了！</div>}
+              <div className="gnl-bins">
+                {cur.groups.map((g, gi) => (
+                  <button key={gi} className="gnl-bin" disabled={!curItem} onClick={() => {
+                    if (!curItem) return;
+                    const ok = gi === curItem.gi;
+                    sound(ok);
+                    if (!ok) { markFirst(false); setSt(s0 => ({ ...s0, bad: true, everBad: true })); return; }
+                    setSt(s0 => {
+                      const n2 = (s0.n || 0) + 1;
+                      if (n2 >= items.length) markFirst(!s0.everBad);
+                      return { ...s0, bad: false, n: n2, box: { ...(s0.box || {}), [order[s0.n || 0]]: gi }, ok: n2 >= items.length };
+                    });
+                  }}>
+                    <span className="gnl-bin-lab">{g.label}</span>
+                    <span className="gnl-bin-items">
+                      {items.map((it, ii) => (box[ii] === gi ? <em key={ii}>{it.x}</em> : null))}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {st.ok
+                ? <div className="gnl-why ok">✓ 分對了！{cur.why || ''}</div>
+                : <div className="gnl-why">{st.bad ? '這一個不是放這裡喔，再想想～' : `還有 ${items.length - done2} 個`}</div>}
+            </>
+          );
+        })()}
+
         {cur.kind === 'fix' && (() => {
           const toks = cur.sentence.split(/\s+/);
           const bare = (t) => t.replace(/[.,!?;:]+$/, '');

@@ -1606,10 +1606,14 @@ Output ONLY a JSON object. No prose, no markdown, no code fences.
 {"title":"<2-5 words>","passage":"<the story>"}
 
 RULES
+- ENGLISH ONLY. The passage and the title must contain no Chinese characters at all —
+  not for translation, not for hints, not in brackets. A single Chinese character makes the whole story invalid.
 - The story must use EVERY target word exactly once, and nothing else may be bracketed.
 - Wrap each target word in square brackets where it belongs: [word]
 - If the word needs a different form, put the exact form the student types inside the brackets
   and the ending as a hint right after: [soaring](ing)  [attracts](s)  [trapped](ed)
+- The hint in ( ) is ONLY ever a word ENDING. If the word is unchanged, write no hint at all.
+  Never write a part of speech such as (n) (v) (adj) (adv) — the child is filling in a word, not labelling it.
 - Never let a target word appear anywhere outside its own brackets (no giveaways).
 - 70-140 words, 4-8 sentences, one connected story with a beginning and an end.
 - Every OTHER word must be simple, everyday vocabulary a 3rd grader knows.
@@ -1626,6 +1630,7 @@ function storyBlanks(passage) {
   return out;
 }
 
+const _STORY_CJK_G = /[\u3400-\u9fff\uf900-\ufaff]/g;
 const _storyNorm = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
 
 /* 字尾提示——作業紙上的 ______(ing) 就是這個。
@@ -1690,11 +1695,14 @@ function storyCheck(passage, words) {
   // 括號外面直接出現目標字＝答案被洩漏
   const bare = String(passage || '').replace(/\[[^\]]*\](?:\([^)]*\))?/g, ' ');
   const leaked = terms.filter(t => new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(bare));
-  return { blanks: blanks.length, used, missing, extra, leaked };
+  // v443（Alan：「短文一定只能英文，我不要中文的」）——整篇出現中文就是不合格，不是小瑕疵
+  const zh = (String(passage || '').match(_STORY_CJK_G) || []).join('');
+  return { blanks: blanks.length, used, missing, extra, leaked, zh };
 }
 /* 分數越低越好——多輪重生時用來挑「最不糟的那一篇」 */
 function _storyScore(c) {
-  return (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length;
+  // 中文權重最重：寧可拿一篇漏字的英文，也不要一篇中文的
+  return (c.zh ? 99 : 0) + (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1762,6 +1770,21 @@ function storyFix(passage, words) {
   });
   if (wrapped.length) notes.push(`補挖成空格：${wrapped.join('、')}`);
 
+  /* ③ v443：字尾提示一律由程式重算。
+     實測 AI 會自己發明詞性標記——[storm](n)、[check](v)、[quiet](adj)——
+     小朋友看到的是作業紙上的 ______(ing) 那種「字尾」提示，標詞性只會讓他們更混亂。
+     沒有變化形的字就不該有提示（[storm](s) 也是錯的，storm 本來就沒有加 s）。 */
+  const badHints = [];
+  p = p.replace(/\[([^\]]+)\](\(([^)]*)\))?/g, (m, a, _h, hv) => {
+    const t = terms.find(x => _storySame(x, a) || _storyIsForm(x, a));
+    const want = t ? _storyHint(t, a) : '';
+    const now = String(hv == null ? '' : hv).trim();
+    if (now === want) return m;
+    if (now) badHints.push(now);
+    return '[' + a + ']' + (want ? '(' + want + ')' : '');
+  });
+  if (badHints.length) notes.push(`拿掉不對的字尾提示：${badHints.join('、')}`);
+
   return { passage: p, check: storyCheck(p, terms), notes };
 }
 
@@ -1808,7 +1831,10 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
       }, (data) => {
         const txt = data?.content?.[0]?.text || data?.text || '';
         const o = JSON.parse(_aiStripFence(txt));
-        return (o && typeof o.passage === 'string' && o.passage.indexOf('[') >= 0) ? o : null;
+        // v443：中文的短文直接不收（_aiAsk 會自己再問一次，比整輪重來快）
+        const bad = !o || typeof o.passage !== 'string' || o.passage.indexOf('[') < 0 || _STORY_CJK_G.test(o.passage);
+        _STORY_CJK_G.lastIndex = 0;
+        return bad ? null : o;
       });
     } catch (e) { lastErr = e; continue; }
 
@@ -1827,6 +1853,7 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
       (c.missing.length ? `- These target words were never used: ${c.missing.join(', ')}\n` : '') +
       (c.leaked.length  ? `- These target words appear OUTSIDE their brackets, which gives the answer away: ${c.leaked.join(', ')}\n` : '') +
       (c.extra.length   ? `- You bracketed words that are not targets: ${c.extra.join(', ')}\n` : '') +
+      (c.zh             ? `- You wrote Chinese characters (${c.zh.slice(0, 20)}). The story must be 100% English.\n` : '') +
       'Write a NEW story that uses every target word exactly once, each one inside brackets.';
   }
 
@@ -2663,22 +2690,41 @@ Output ONLY JSON:
 {"lead":"","steps":[
  {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
  {"kind":"pick","q":"","options":["",""],"answer":0,"why":""},
+ {"kind":"tap","q":"","sentence":"","answers":[""],"why":""},
+ {"kind":"sort","q":"","groups":[{"label":"","items":[""]}],"why":""},
  {"kind":"order","zh":"","words":[""]},
  {"kind":"fix","sentence":"","wrong":"","right":"","why":""}
 ],"outro":""}
 RULES
 - lead: ONE Traditional Chinese sentence, ≤25 characters, what this grammar is for.
 - steps: 3 or 4 rounds (if the notes have several 【…】 sections: ONE round per section, up to 6). Each round = ONE "learn" step immediately followed by ONE interaction
-  ("pick", "order" or "fix") that practises exactly what that learn step just said. Use all three interaction kinds at least once.
+  that practises exactly what that learn step just said.
+- CHOOSING THE INTERACTION — pick the one that really tests the idea, and use at least two different kinds:
+  · "tap"   → the idea is "find the X in a sentence" (find the nouns / the verb / the adjective / the capital letter).
+  · "sort"  → the idea has 2-3 groups (person/place/thing, common/proper, countable/uncountable, a/an, is/are).
+  · "pick"  → one blank or one short question with 2-4 choices. Always safe.
+  · "order" → ONLY when the notes teach WORD ORDER or sentence building. If the notes are about recognising
+            or classifying words, do NOT use "order" — rearranging a sentence teaches nothing about it.
+  · "fix"   → ONLY when a word can be WRONG because of THIS rule (taipei→Taipei, cat→cats, go→goes, a→an).
+            The wrong word must break the rule you just taught. NEVER swap a word just because another word
+            would sound nicer (cat→dog is NOT a mistake) — a checker rejects that and the whole lesson fails.
 - learn.say: ONE idea only, Traditional Chinese, ≤30 characters, no grammar jargon.
-- learn.imgHint: 2-4 English words naming a PHOTO that shows this idea in a real situation
-  (e.g. "two cats on sofa", "boy walking to school"). The site fetches the photo automatically,
-  so pick something a stock photo would actually show — a scene, not an abstract idea.
+- learn.imgHint: 2-4 English words naming a PHOTO of WHAT THE FIRST EXAMPLE SENTENCE IS ABOUT.
+  If the example is "The park is big." the hint is "big city park"; if it is "I have a pencil." the hint is "pencil on desk".
+  The site fetches that photo automatically, so name a scene a stock photo would really show, and always reuse the
+  main word from your own example — a photo that does not match the sentence confuses the child.
 - learn.examples: 1-2 short English sentences (≤8 words). hl = the exact words in "en" to highlight
   (the grammar part). zh = the Chinese meaning.
 - pick.q: EITHER one sentence with ________ for the missing part, OR a short question
   (e.g. "Which one is a proper noun?"). options: 2-4 short choices. answer: 0-based index.
   why: Traditional Chinese ≤30 characters.
+- tap.q: a Traditional Chinese instruction, ≤20 characters (e.g. 「點出句子裡的名詞」).
+  tap.sentence: ONE English sentence, 4-10 words. tap.answers: 1-3 words copied EXACTLY from that sentence
+  (each word may appear only once in the sentence). Every other word in the sentence must clearly NOT be an answer.
+  why: Traditional Chinese ≤30 characters.
+- sort.q: a Traditional Chinese instruction, ≤20 characters (e.g. 「這些字是人、地方還是東西？」).
+  sort.groups: 2 or 3 groups. label = Traditional Chinese, ≤6 characters. items = 2-3 SHORT English words each,
+  6 items in total at most, every item clearly belongs to one group only. why: Traditional Chinese ≤30 characters.
 - order.zh: a Chinese sentence. order.words: the English translation split into 3-8 word tiles IN THE CORRECT ORDER
   (keep the final punctuation on the last word).
 - fix.sentence: an English sentence with exactly ONE wrong word. wrong: that word exactly as written. right: the correct word.
@@ -2794,6 +2840,37 @@ const _zhTW = (t) => {
 };
 const _gnCJK = /[一-鿿]/;
 const _gnBlank = (t) => String(t || '').replace(/_{2,}|＿{2,}|\(\s*\)|（\s*）/g, '________');
+/* ══ v443：互動教學的題型（Alan：「noun 主要是讓小朋友判斷什麼是 noun、從句子中找到、以及分類」）══
+   ① tap  ＝ 在句子裡點出目標字（找名詞／找動詞／找大寫）
+   ② sort ＝ 把字分到 2-3 個籃子（人／地方／東西、普通名詞／專有名詞）
+   ③ fix  ＝ 加上「這個錯誤真的是文法錯嗎」的把關：AI 很愛把 cat 改成 dog（那是喜好不是錯）。 */
+const _GN_TOK = (t) => String(t || '').replace(/^[\s"'“”‘’(\[]+|[\s"'“”‘’)\].,!?;:]+$/g, '');
+/* 功能詞／介系詞：這些字互換（a↔an、is↔are、in↔on）本來就是文法錯，一律放行 */
+const _GN_FIX_FN = new Set(('a an the is are am was were be been do does did done don\'t doesn\'t didn\'t isn\'t aren\'t wasn\'t weren\'t ' +
+  'has have had he she it they them him her his hers their theirs this that these those i me my mine we us our ours you your yours ' +
+  'in on at to of for from by with under over above below behind near next between into about after before during through ' +
+  'much many some any a lot few little more most and but or so because there their they\'re its it\'s who whom whose which what where when why how').split(' '));
+/* 不規則變化（單複數／過去式）——字尾規則抓不到，但它們是貨真價實的文法錯 */
+const _GN_FIX_IRREG = ('child/children man/men woman/women foot/feet tooth/teeth mouse/mice goose/geese person/people ' +
+  'leaf/leaves knife/knives wolf/wolves life/lives shelf/shelves ' +
+  'go/went eat/ate see/saw run/ran take/took come/came get/got make/made buy/bought bring/brought think/thought ' +
+  'write/wrote give/gave find/found know/knew say/said sit/sat sleep/slept swim/swam teach/taught tell/told ' +
+  'good/better good/best bad/worse bad/worst').split(' ').map(x => x.split('/'));
+function _gnFixPairOk(wrong, right) {
+  const w = String(wrong || '').trim(), r = String(right || '').trim();
+  if (!w || !r || w === r) return false;
+  const lw = w.toLowerCase(), lr = r.toLowerCase();
+  if (lw === lr) return true;                                                     // 只差大小寫＝大寫單元
+  if (_GN_FIX_FN.has(lw) && _GN_FIX_FN.has(lr)) return true;
+  if (_GN_FIX_IRREG.some(([a, b]) => (a === lw && b === lr) || (a === lr && b === lw))) return true;
+  const short = lw.length <= lr.length ? lw : lr, long = lw.length <= lr.length ? lr : lw;
+  const tail = (base) => (long.startsWith(base) ? long.slice(base.length) : null);
+  const suf = /^(s|es|ed|d|ing|ies|ied|er|est|n't|'s)$/;
+  if (suf.test(tail(short) || '')) return true;                                   // walk→walks、play→played
+  if (short.length >= 3 && suf.test(tail(short.slice(0, -1)) || '')) return true;  // study→studies、make→making
+  if (short.length >= 3 && suf.test(tail(short + short.slice(-1)) || '')) return true; // run→running、big→bigger
+  return false;
+}
 function gnValidStep(st) {
   if (!st || typeof st !== 'object') return null;
   if (st.kind === 'learn') {
@@ -2826,13 +2903,38 @@ function gnValidStep(st) {
     const zh = _zhTW(st.zh).trim();
     return zh && _gnCJK.test(zh) && words.length >= 3 && words.length <= 9 ? { kind: 'order', zh, words } : null;
   }
+  if (st.kind === 'tap') {
+    // v443：在句子裡點出目標字。答案一定要是句子裡「只出現一次」的完整單字，不然點哪個都對
+    const sentence = String(st.sentence || '').trim();
+    const toks = sentence.split(/\s+/).map(_GN_TOK).filter(Boolean);
+    const ans = (Array.isArray(st.answers) ? st.answers : []).map(a => _GN_TOK(a)).filter(Boolean);
+    const uniq = ans.length === new Set(ans.map(a => a.toLowerCase())).size;
+    const once = ans.every(a => toks.filter(t => t.toLowerCase() === a.toLowerCase()).length === 1);
+    const q = _zhTW(st.q).trim() || '點出句子裡正確的字';
+    return sentence && toks.length >= 3 && toks.length <= 14 && ans.length >= 1 && ans.length <= 4 && uniq && once
+      ? { kind: 'tap', q, sentence, answers: ans, why: _zhTW(st.why).trim() } : null;
+  }
+  if (st.kind === 'sort') {
+    // v443：把字分到 2-3 個籃子。同一個字只能屬於一個籃子（不然分到哪都算錯）
+    const groups = (Array.isArray(st.groups) ? st.groups : []).map(g => {
+      const label = _zhTW((g && g.label) || '').trim().slice(0, 8);
+      const items = (Array.isArray(g && g.items) ? g.items : []).map(x => String(x).trim()).filter(Boolean).slice(0, 4);
+      return label && items.length ? { label, items } : null;
+    }).filter(Boolean);
+    const all = groups.reduce((a, g) => a.concat(g.items.map(x => x.toLowerCase())), []);
+    const labels = groups.map(g => g.label);
+    const ok = groups.length >= 2 && groups.length <= 3 && all.length >= 3 && all.length <= 9 &&
+      new Set(all).size === all.length && new Set(labels).size === labels.length;
+    return ok ? { kind: 'sort', q: _zhTW(st.q).trim() || '把這些字分到正確的地方', groups, why: _zhTW(st.why).trim() } : null;
+  }
   if (st.kind === 'fix') {
     const sentence = String(st.sentence || '').trim(), wrong = String(st.wrong || '').trim(), right = String(st.right || '').trim();
     const toks = sentence.split(/\s+/).map(w => w.replace(/[.,!?;:]+$/, ''));
     // v429：只改大小寫（taipei → Taipei）也是一種錯——以前被當成「沒改」丟掉，整份教學就不夠步數而失敗
     const exact = toks.filter(w => w === wrong).length;
     const hits = exact || toks.filter(w => w.toLowerCase() === wrong.toLowerCase()).length;
-    return sentence && wrong && right && right !== wrong && hits === 1
+    // v443：「cat → dog」不是錯字，是換一個字。錯的那個字一定要因為文法規則而錯（大小寫／單複數／時態／功能詞）
+    return sentence && wrong && right && hits === 1 && _gnFixPairOk(wrong, right)
       ? { kind: 'fix', sentence, wrong, right, why: _zhTW(st.why).trim() } : null;
   }
   return null;
@@ -2972,19 +3074,80 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   return out.slice(0, n);
 }
 
+/* ══ v443：這一課該用哪幾種互動？（Alan：「圖4 為什麼要組合句子」）══
+   「什麼是名詞」這種「認出來／分類」的單元，排句子跟找錯字都答非所問。
+   用主題字判斷，禁掉不合適的題型，並在 prompt 裡直接講清楚要用哪幾種。 */
+const _GN_IDENTIFY_RE = /(noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|part[s]?\s*of\s*speech|名詞|動詞|形容詞|副詞|代名詞|介系詞|冠詞|詞性)/i;
+const _GN_ORDER_RE = /(word\s*order|sentence\s*(order|structure|building|pattern)|question\s*form|語序|句型|句子結構|造句|重組|疑問句)/i;
+const _GN_RULEY_RE = /(tense|past|present|future|plural|singular|capital|letter|agreement|comparative|superlative|spelling|時態|過去|現在|未來|複數|單數|大寫|比較級|最高級)/i;
+function _gnLessonPlan(topic, notes) {
+  const t = String(topic || '').trim() || String(notes || '').slice(0, 200);
+  // 「什麼是名詞」＝認出來／分類；「名詞的複數」「過去式」＝有規則可以違反，找錯字與排句子都合理
+  const identify = _GN_IDENTIFY_RE.test(t) && !_GN_RULEY_RE.test(t + ' ' + String(notes || '').slice(0, 200));
+  const ordery = _GN_ORDER_RE.test(t);
+  const ban = (identify && !ordery) ? ['order'] : [];
+  const text = identify && !ordery
+    ? '\n\nLESSON PLAN: this grammar point is about RECOGNISING and CLASSIFYING words.\n' +
+      'Use "tap" (find the target words inside a sentence) and "sort" (put words into 2-3 groups) for most rounds; "pick" is also fine.\n' +
+      'Do NOT use "order" at all — rearranging a sentence does not show whether a child can recognise these words.\n' +
+      'Use "fix" only if a word can really be WRONG because of this rule (e.g. a capital letter, a missing -s).'
+    : '\n\nLESSON PLAN: choose for every round the interaction that really tests what that round just taught.\n' +
+      'Use at least two different interaction kinds, and prefer "tap" or "sort" whenever the idea is "find it" or "which group".';
+  return { ban, text };
+}
+/* imgHint 要講的是「例句在說什麼」，不是抽象的文法概念——
+   v442 的自動配圖抓的就是 imgHint，AI 給了「classroom」而例句在講公園，圖片就完全不相干。 */
+const _GN_STOP = new Set(('a an the is are am was were be been being do does did have has had can will would should could ' +
+  'i you he she it we they me him her us them my your his its our their this that these those there here to of in on at ' +
+  'and or but not with for from by as so very too what which who how why when where one two some any no yes ' +
+  // 常見動詞：拿來當圖片關鍵字沒有用（stock photo 搜「loves」搜不到東西），留名詞才找得到圖
+  'like likes love loves play plays go goes went run runs eat eats see sees get gets make makes take takes ' +
+  'read reads want wants need needs say says put give gives come comes look looks find finds live lives ' +
+  'work works walk walks sit sits drink drinks help helps know knows think thinks feel feels').split(' '));
+function _gnHintWords(en) {
+  return String(en || '').toLowerCase().replace(/[^a-z\s'-]/g, ' ').split(/\s+/)
+    .filter(w => w && w.length > 1 && !_GN_STOP.has(w));
+}
+function _gnFixImgHint(st) {
+  if (!st || st.kind !== 'learn') return st;
+  const words = (st.examples || []).reduce((a, e) => a.concat(_gnHintWords(e.en)), []);
+  if (!words.length) return st;
+  const hint = String(st.imgHint || '').toLowerCase();
+  const related = hint && _gnHintWords(hint).some(h => words.some(w => w === h || w.indexOf(h) === 0 || h.indexOf(w) === 0));
+  if (related) return st;
+  // 用第一句例句自己的實詞當關鍵字（「The park is big.」→「park big」），圖片至少跟句子有關
+  const first = _gnHintWords((st.examples[0] || {}).en).slice(0, 3).join(' ');
+  return first ? Object.assign({}, st, { imgHint: first }) : st;
+}
+
 // v429：互動教學獨立出來（校稿頁也能單獨按「重新產生」）
 async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', caseMatters = false } = {}) {
-  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters);
+  const plan = _gnLessonPlan(topic + ' ' + topicZh, notes);                      // v443
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters) + plan.text;
+  // 這一課用不到的題型（例：「什麼是名詞」不該出「排句子」）直接當成不合格，讓 AI 換一種
+  const keep = (st) => { const v = gnValidStep(st); return v && plan.ban.indexOf(v.kind) < 0 ? v : null; };
   let feedback = '', best = null, lastErr = null;
   for (let i = 0; i < 3; i++) {
     let raw;
     try { raw = await _gnCall(GN_LESSON_SYS, base + feedback, _gnMultiSec(notes) ? 3800 : 2400); } catch (e) { lastErr = e; continue; }
-    const l = gnValidLesson(raw);
-    if (l) return l;
     const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
-    const valid = steps.map(gnValidStep).filter(Boolean);
-    if (!best || valid.length > best.steps.length) best = { lead: String((raw && raw.lead) || '').trim(), steps: valid, outro: String((raw && raw.outro) || '').trim() };
-    const bad = steps.map((st, k) => (gnValidStep(st) ? null : `- step ${k + 1}: ${JSON.stringify(st).slice(0, 180)}`)).filter(Boolean);
+    const valid = steps.map(keep).filter(Boolean).map(_gnFixImgHint);
+    // 最後一步是「學」＝學完沒得練就結束了，砍掉（互動教學的重點就是動手）
+    let trimmed = false;
+    while (valid.length && valid[valid.length - 1].kind === 'learn') { valid.pop(); trimmed = true; }
+    const l = valid.filter(s2 => s2.kind === 'learn').length >= 2 && valid.filter(s2 => s2.kind !== 'learn').length >= 2
+      ? { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() } : null;
+    if (l) return l;
+    if (!best || valid.length > best.steps.length) best = { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() };
+    const why = (st) => {
+      if (gnValidStep(st)) return `kind "${st.kind}" does not suit this grammar point — use tap / sort / pick instead`;
+      if (st && st.kind === 'fix') return 'the "wrong" word is not a grammar mistake (or does not appear exactly once)';
+      if (st && st.kind === 'tap') return 'the answers must be words that appear exactly once in the sentence';
+      if (st && st.kind === 'sort') return 'need 2-3 groups, 3-9 items in total, every item in exactly one group';
+      return 'it breaks the RULES';
+    };
+    const bad = steps.map((st, k) => (keep(st) ? null : `- step ${k + 1} (${why(st)}): ${JSON.stringify(st).slice(0, 160)}`)).filter(Boolean);
+    if (trimmed) bad.push('- the lesson ended with a "learn" step: every "learn" must be followed by an interaction');
     feedback = `\n\nYour previous answer was REJECTED by the checker. Problem steps:\n${bad.join('\n') || '- not enough valid steps'}\n` +
       'Fix them. You need at least 2 "learn" steps and 2 interaction steps, and every step must follow the RULES exactly.';
   }
@@ -4571,6 +4734,7 @@ function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
 Object.assign(window, {
   aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,
+  gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint,
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,

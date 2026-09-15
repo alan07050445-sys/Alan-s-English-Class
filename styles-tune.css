@@ -3545,6 +3545,24 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .gnl-word.fixed s { color: #C62828; opacity: .7; }
 .gnl-say-btn { border: 0; background: transparent; font-size: 16px; cursor: pointer; margin-left: 6px; }
 .gnl-unlocked { font-family: var(--sans); font-size: 14px; font-weight: 700; color: #1B7A3E; margin: 6px 0 14px; }
+/* v443：互動教學新題型——👉 找出來（tap）與 🗂 分一分（sort） */
+.gnl-tap { line-height: 2.1; }
+.gnl-word.got { border-color: #1B7A3E; background: #E7F4EA; color: #1B5E2E; font-weight: 700; }
+.gnl-chip-now { display: inline-block; margin: 4px 0 14px; padding: 12px 26px; border-radius: 16px;
+  border: 2px solid var(--border); background: var(--surface, #fff); font-size: clamp(24px, 4.4vw, 34px); font-weight: 700;
+  box-shadow: 0 3px 0 var(--border); }
+.gnl-chip-now.no { border-color: #C62828; color: #C62828; animation: gnlShake .35s; }
+.gnl-chip-now.ok { border-color: #1B7A3E; background: #E7F4EA; color: #1B5E2E; }
+.gnl-bins { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.gnl-bin { display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: center;
+  min-height: 92px; padding: 12px 10px; border-radius: 14px; border: 2px dashed var(--border);
+  background: var(--surface, #fff); cursor: pointer; }
+.gnl-bin:disabled { cursor: default; opacity: .8; }
+.gnl-bin-lab { font-family: var(--sans); font-size: 17px; font-weight: 800; color: var(--ink); }
+.gnl-bin-items { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.gnl-bin-items em { font-style: normal; font-size: 15px; font-weight: 700; color: #1B5E2E;
+  background: #E7F4EA; border-radius: 999px; padding: 3px 10px; }
+
 @keyframes gnlShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 
 /* 學生端：練習鎖 */
