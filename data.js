@@ -1989,8 +1989,30 @@ function _aiShouldBackoff(status) { return status === 429 || status === 500 || s
    pick(json) 把回傳整理成呼叫端要的東西；回 null／undefined 或丟例外
    就當「這一發沒中」，換下一輪（格式錯誤不等待，直接重打）。
    三次都沒中才丟錯，錯誤物件上帶 .timeout 讓 UI 能給不同文案。 */
+/* v449（Alan：「分段閱讀沒辦法 AI 生成背景知識以及題目」）
+   實測那天 AI 供應商對所有請求回 403 {"error":{"type":"forbidden","message":"Request not allowed"}}
+   ——網站每一個 AI 功能都不通，畫面上卻只寫「產生失敗」，看起來像是這一篇文章的問題。
+   ⚠ 這裡把「上游到底回了什麼」記下來，往上丟，讓老師一眼看出是 AI 服務不通還是內容不合格。 */
+let _aiLastUpstream = null;              // { status, type, message, at }
+function _aiUpstreamNote(e) {
+  // 只認「這次的」或「兩分鐘內剛發生的」——不然幾小時前的一次失敗會被拿來誤導老師
+  const fresh = _aiLastUpstream && (Date.now() - (_aiLastUpstream.at || 0) < 120000) ? _aiLastUpstream : null;
+  const u = (e && e.upstream) || fresh;
+  if (!u || !u.status) return '';
+  const zh = u.status === 403 ? '金鑰被拒（Cloudflare Worker 的 API 金鑰失效、或 Anthropic 那邊停用／額度用完）'
+    : u.status === 401 ? '金鑰不正確（Worker 的 API 金鑰要重設）'
+    : u.status === 429 ? '請求太密集（等一下再試）'
+    : (u.status >= 500 ? 'AI 服務暫時出問題（等一下再試）' : '');
+  return `\n\n⚠ 這不是你的內容有問題：AI 服務回了 ${u.status}${u.message ? '「' + u.message + '」' : ''}${zh ? ' ＝ ' + zh : ''}。` +
+         '\n（網站所有 AI 功能都會一起不通——一鍵出單字／文法／閱讀理解也是。）';
+}
+function _aiNoteUpstream(status, data) {
+  const err = (data && data.error) || {};
+  _aiLastUpstream = { status, type: err.type || '', message: String(err.message || '').slice(0, 120), at: Date.now() };
+  return _aiLastUpstream;
+}
 async function _aiAsk(body, pick, timeoutMs) {
-  let timedOut = false;
+  let timedOut = false, upstream = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     let wait = false;
     try {
@@ -2001,9 +2023,10 @@ async function _aiAsk(body, pick, timeoutMs) {
       }, timeoutMs || 60000);
       try {
         const data = await res.json();
+        if (!res.ok || (data && data.error)) upstream = _aiNoteUpstream(res.status, data);
         const got = pick(data);
-        if (got != null) return got;
-      } catch (e) { /* 不是 JSON、或格式不符 → 立刻換下一輪，等待也沒用 */ }
+        if (got != null) { _aiLastUpstream = null; return got; }
+      } catch (e) { if (!res.ok) upstream = _aiNoteUpstream(res.status, null); }
       wait = !res.ok && _aiShouldBackoff(res.status);   // 只有 429/500/529 值得等
     } catch (e) {
       if (e && e.name === 'AbortError') timedOut = true;
@@ -2013,10 +2036,13 @@ async function _aiAsk(body, pick, timeoutMs) {
       await _aiSleep(_AI_BACKOFF[attempt] + Math.floor(Math.random() * 300));
     }
   }
-  const err = new Error(timedOut
+  const err = new Error((timedOut
     ? 'AI 太久沒有回應，請再試一次。'
-    : 'AI 出題失敗（回傳格式看不懂），請再試一次。');
+    : (upstream && upstream.status
+        ? `AI 服務拒絕了這次請求（${upstream.status}${upstream.message ? '：' + upstream.message : ''}）。`
+        : 'AI 出題失敗（回傳格式看不懂），請再試一次。')) + (upstream ? _aiUpstreamNote({ upstream }) : ''));
   err.timeout = timedOut;
+  err.upstream = upstream;
   throw err;
 }
 
@@ -3264,7 +3290,7 @@ async function aiMakeGrammarSortSet({ base, n = 8, rounds = 3 } = {}) {
       'you need 2-4 Chinese basket labels, at least 2 words in EVERY basket, no repeated word, ' +
       'and every word\'s "category" must be exactly one of the labels you listed.';
   }
-  throw lastErr || new Error('分一分這次沒有產生成功');
+  throw new Error((lastErr && lastErr.timeout ? '分一分太久沒有回應' : '分一分這次沒有產生成功') + _aiUpstreamNote(lastErr));
 }
 
 /* ══ v443：這一課該用哪幾種互動？（Alan：「圖4 為什麼要組合句子」）══
@@ -3350,7 +3376,7 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
   }
   // 三次都不完美 → 只要有「學」也有「動手」，就先用驗過的那幾步（總比整個失敗好）
   if (best && best.steps.some(s => s.kind === 'learn') && best.steps.some(s => s.kind !== 'learn')) return best;
-  throw new Error(lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗');
+  throw new Error((lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗') + _aiUpstreamNote(lastErr));
 }
 
 async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
@@ -3454,7 +3480,7 @@ ${text.slice(0, 6000)}`;
       'Fix them. You need at least 2 "learn" steps and 2 "pick" steps, and every step must follow the RULES exactly.';
   }
   if (best && best.steps.some(s => s.kind === 'learn') && best.steps.some(s => s.kind !== 'learn')) return best;
-  throw new Error(lastErr && lastErr.timeout ? '背景知識太久沒有回應' : '背景知識產生失敗');
+  throw new Error((lastErr && lastErr.timeout ? '背景知識太久沒有回應' : '背景知識產生失敗') + _aiUpstreamNote(lastErr));
 }
 
 function grCountBlanks(passage) {
@@ -4274,7 +4300,8 @@ async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
   }, 4)).filter(Boolean) : [];
 
   const made = Object.keys(bySeg).reduce((n, k) => n + bySeg[k].length, 0) + final.length;
-  if (!made && !blocks.length) throw new Error('AI 這次沒有出到符合文章的題目，請再試一次。');
+  // v449：一題都沒出來時，先講「是不是 AI 服務不通」——不然老師會以為是自己的文章有問題
+  if (!made && !blocks.length) throw new Error('AI 這次沒有出到符合文章的題目，請再試一次。' + _aiUpstreamNote(null));
   return { bySeg, final, blocks, passage: full, skipped, dropped, made, segCount: segs.length };
 }
 
