@@ -17,9 +17,6 @@ service cloud.firestore {
     }
 
     // ── 管理者名單 ──────────────────────────────────────────
-    // ⚠ 只有「擁有者」能新增/移除管理者——避免權限擴散（老師無法自己再加老師、
-    //    也無法把別的老師踢掉）。讀取：本人只能讀自己那筆（前端判斷是不是老師用），
-    //    擁有者可讀全部（後台管理畫面用）。
     match /admins/{adminEmail} {
       allow read: if isOwner()
                   || (request.auth != null && request.auth.token.email.lower() == adminEmail);
@@ -27,18 +24,8 @@ service cloud.firestore {
     }
 
     // ── v342: 集點（星星）──────────────────────────────────
-    // 只有老師能給/扣星星；學生只能讀自己那一筆（看不到別人的星星數）。
-    //
-    // v392 資安：加「單筆文件的 entries 上限」。
-    //   原因：admins 名單裡的任何協同老師都能無上限給星星，而 v385 開始星星
-    //   可以在商店換東西（帽子 500／1000 星），等於可以無限發行點數。
-    //   「多老師開放」是既定方向，先把爆量的上界訂出來。
-    //   ⚠ 上限故意訂 1000 而不是 500：這次無法用匿名 curl 讀 stars（規則本來就擋，
-    //     403），沒辦法確認現有資料的 entries 長度。訂太低會讓「已經累積很多筆」的
-    //     學生再也加不了星星。1000 筆＝1000 次手動加減，足夠寬，也仍然擋得住濫發。
-    //   ⚠ 用 `!('entries' in ...)` 開頭：addStarEntry/deleteStarEntry 都是 merge 寫入，
-    //     萬一將來有只寫 name 的路徑、而該文件又還沒有 entries 欄位，
-    //     直接讀 .size() 會在規則裡丟錯 → 變成「安靜地存不進去」。
+    // v392 資安：一筆文件最多 1000 筆 entries。協同老師可以無上限給星星，而星星能換東西，
+    //   等於可以無限發行點數；1000 筆＝1000 次手動加減，正常用一輩子也用不完。
     match /stars/{studentEmail} {
       allow read: if isTeacher()
                   || (request.auth != null && request.auth.token.email.lower() == studentEmail);
@@ -70,7 +57,6 @@ service cloud.firestore {
     }
 
     // ── 學生個人進度（成績 / 完成度 / 錯題）─────────────────
-    // 只有「本人」或「老師」可讀；只有本人可寫。
     match /progress/{userId} {
       allow read: if request.auth != null
                   && (request.auth.uid == userId || isTeacher());
@@ -84,7 +70,6 @@ service cloud.firestore {
     }
 
     // ── 學生 XP / Streak / Badges（users 集合）──────────────
-    // 本人可讀寫；老師可讀。
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null
                          && request.auth.uid == userId;
@@ -92,22 +77,18 @@ service cloud.firestore {
     }
 
     // ── 班級名單（roster）──────────────────────────────────
-    // 登入者可讀（顯示同學名字等）；只有老師可寫。
     match /roster/{docId} {
       allow read: if request.auth != null;
       allow write: if isTeacher();
     }
 
     // ── 全班合作目標（coop）────────────────────────────────
-    // 登入者可讀；只有老師可寫（維持現狀）。
     match /coop/{docId} {
       allow read: if request.auth != null;
       allow write: if isTeacher();
     }
 
     // ── 2026 暑假選課 ───────────────────────────────────────
-    // 時段本身沒有個資，公開讀取讓家長只看到「可選 / 已額滿」。
-    // 家長留下的姓名與聯絡方式則只允許 Alan 老師查看。
     match /summerSlots2026/{slotId} {
       allow read: if true;
       allow create, delete: if isTeacher();
@@ -155,16 +136,6 @@ service cloud.firestore {
     }
 
     // ── 其他未列出的文件 ───────────────────────────────────
-    // 關鍵修正：舊版這裡是 "allow read: if request.auth != null"，
-    // 由於 Firestore 規則是 OR 邏輯，那條會「架空」上面 progress 的限制，
-    // 讓任何登入的人都能讀到別人的成績與錯題。
-    // 改成「預設拒絕讀取、只有老師可寫」，洩漏即關閉。
-    //
-    // ⚠ v337 再修一次：這條原本是 isTeacher()，但因為規則是 OR 邏輯，
-    //   它會「架空」上面 /admins 的擁有者限制——任何老師都能改管理者名單
-    //   （自己加人、把別人踢掉）＝權限擴散。改成 isOwner() 之後：
-    //   已列出的集合（class/roster/progress/暑假…）照原本的老師權限運作，
-    //   未列出的集合則只有擁有者能寫，/admins 也才真正鎖住。
     match /{document=**} {
       allow write: if isOwner();
     }
