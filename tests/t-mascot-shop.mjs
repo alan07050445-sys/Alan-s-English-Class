@@ -153,6 +153,24 @@ log.push('\n【7c】（v441）配件要跟著吉祥物動、整體要大一點�
      /translateY\(-1\.4px\) rotate\(-2deg\)/.test(css) && /translateY\(-26px\)/.test(css) && /rotate\(180deg\) translateY\(-18px\)/.test(css));
 }
 
+log.push('\n【7d】（v442）取名字：第一次免費，之後 50 顆星');
+{
+  const W2 = new Function('_db', 'window', code + '\nreturn { mxRename, mxRenameCost, mxSpent, MX_RENAME_COST };')(_db, globalThis.window);
+  ok('第一次取名免費', W2.mxRenameCost({}) === 0 && W2.mxRenameCost({ renames: 0 }) === 0);
+  ok('⭐ 取過名字之後，每次改名 50 顆星', W2.mxRenameCost({ renames: 1 }) === 50 && W2.MX_RENAME_COST === 50);
+  ok('⭐ 改名花掉的星星也算進去（而且第一次不算）',
+     W2.mxSpent({ renames: 1 }) === 0 && W2.mxSpent({ renames: 2 }) === 50 && W2.mxSpent({ renames: 4 }) === 150);
+  ok('沒登入不能存名字（訪客只留在那台裝置）', (await W2.mxRename('', 'Bob', 999, {})).reason === 'no-user');
+  ok('空名字擋掉', (await W2.mxRename('u1', '   ', 999, {})).reason === 'empty');
+  ok('⭐ 星星不夠不能改名，而且說還差幾顆', (await W2.mxRename('u1', 'Bob', 20, { renames: 1 })).short === 30);
+  writes.length = 0;
+  const r1 = await W2.mxRename('u1', '  小咪超長的名字會被截掉  ', 0, {});
+  ok('第一次不用星星也改得了，名字最多 8 個字', r1.ok && r1.cost === 0 && r1.name.length <= 8, JSON.stringify(r1));
+  ok('次數記在 progress（下次就要收費了）', writes[0].obj.mx.renames === 1 && writes[0].obj.mx.name === r1.name);
+  const r2 = await W2.mxRename('u1', 'Coco', 60, { renames: 1, owned: ['hat_cap'] });
+  ok('第二次收 50，而且不會弄丟已經買的東西', r2.ok && r2.cost === 50 && writes[1].obj.mx.owned.join() === 'hat_cap');
+}
+
 log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
 {
   const css = fs.readFileSync(new URL('styles-fx.css', ROOT), 'utf8');

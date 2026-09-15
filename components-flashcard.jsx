@@ -87,6 +87,27 @@ const THEMES = {
 /* ══════════════════════════════════════════════════════
    IMAGE SEARCH  (Pixabay)
 ══════════════════════════════════════════════════════ */
+/* v442（Alan：「可以讓 AI 自己找給我？」）：拿 AI 給的關鍵字直接去免費圖庫抓第一張。
+   跟下面 ImageSearch 用同一組 key／同樣的來源（Pexels 優先、Pixabay 備援），
+   老師還是可以在校稿頁換掉或自己上傳。找不到就回 null——寧可沒有圖，也不要放錯的圖。 */
+async function autoFindImage(keywords) {
+  const q = String(keywords || '').trim();
+  if (!q) return null;
+  try {
+    const r = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=1&page=1&locale=en-US`,
+      { headers: { Authorization: PEXELS_KEY } });
+    const d = await r.json();
+    const hit = (d.photos || [])[0];
+    if (hit && hit.src) return hit.src.large || hit.src.medium;
+  } catch (e) { /* 換下一個來源 */ }
+  try {
+    const d = await fetch(`https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(q)}&image_type=photo&safesearch=true&per_page=3&page=1`).then(x => x.json());
+    const hit = (d.hits || [])[0];
+    if (hit) return hit.webformatURL || hit.previewURL;
+  } catch (e) { /* 找不到就算了 */ }
+  return null;
+}
+
 function ImageSearch({ term: initialTerm, onSelect, onClose }) {
   const [q, setQ] = useFC(initialTerm || "");
   const [source, setSource] = useFC("pexels"); // 'pexels' | 'pixabay'
@@ -1955,4 +1976,4 @@ function FillBlankEditor({ questions, onChange }) {
 }
 
 // v392: 移除 FillBlankPlayer（dead code，見上面 FillBlankEditor 前的說明）
-Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, FillBlankEditor, collectStarredWords, ReviewFlashcardModal });
+Object.assign(window, { FlashcardPlayer, FlashcardEditor, ImageSearch, autoFindImage, FillBlankEditor, collectStarredWords, ReviewFlashcardModal });

@@ -720,6 +720,9 @@ function MascotLayer() {
       }
       setWear(prev => ((prev.hat === w.hat && prev.item === w.item && prev.fx === w.fx && prev.voice === w.voice) ? prev : w));
       setStars(prev => (prev === (window.__mxStars || 0) ? prev : (window.__mxStars || 0)));
+      // v442：名字改成跟著帳號（雲端有就用雲端的；訪客仍然只存在這台裝置）
+      const cloudName = String((mx && mx.name) || '').trim();
+      if (cloudName) setName(prev => (prev === cloudName ? prev : cloudName));
       /* v435：選著一隻沒買的夥伴（換帳號、資料怪怪的）→ 退回 Claudius，不然等於免費送 */
       const pets = window.mxOwnedPets ? window.mxOwnedPets(mx) : ['clay'];
       setPetId(prev => {
@@ -1137,11 +1140,26 @@ function MascotLayer() {
         {menu && (
           <div className="mx-menu" onPointerDown={e => e.stopPropagation()}>
             <div className="mx-menu-name">{name || '還沒有名字'}</div>
-            <button onClick={() => {
-              const n = window.prompt('幫牠取個名字（最多 8 個字）', name || '');
-              if (n !== null) { mxSetName(n.trim()); setName(n.trim()); say(n.trim() ? `我叫 ${n.trim()}！` : '好吧，我沒有名字', 2600); }
+            {/* v442（Alan：「一旦取了只能免費更改一次，如果要換要花 50 買改名卡」） */}
+            <button onClick={async () => {
               setMenu(false);
-            }}>✏️ 取名字</button>
+              const cost = window.mxRenameCost ? window.mxRenameCost(window.__mxData) : 0;
+              if (cost && stars < cost) { say(`改名要 ${cost} 顆星星，還差 ${cost - stars} 顆`, 3000); return; }
+              if (cost && !window.confirm(`改名字要用 ${cost} 顆星星（第一次取名是免費的），要改嗎？`)) return;
+              const n = window.prompt(cost ? `幫牠改名字（最多 8 個字）· 這次要 ${cost} 顆星星` : '幫牠取個名字（最多 8 個字）', name || '');
+              if (n === null) return;
+              const nm = n.trim().slice(0, 8);
+              if (!nm) { say('名字不能空白喔', 2200); return; }
+              const r = await (window.__mxRename ? window.__mxRename(nm) : Promise.resolve({ ok: false, reason: 'no-user' }));
+              if (!r.ok) {
+                if (r.reason === 'no-user') { mxSetName(nm); setName(nm); say(`我叫 ${nm}！`, 2600); return; }   // 訪客：只存這台裝置
+                say(r.reason === 'poor' ? `還差 ${(r.short || 0)} 顆星星` : '改名沒成功，等一下再試', 2800);
+                return;
+              }
+              mxSetName(nm); setName(nm);
+              setStars(v => Math.max(0, v - (r.cost || 0)));
+              say(r.cost ? `我現在叫 ${nm} 了！（用了 ${r.cost} 顆星星）` : `我叫 ${nm}！`, 3000);
+            }}>{(window.mxRenameCost && window.mxRenameCost(window.__mxData)) ? '✏️ 改名字（50⭐）' : '✏️ 取名字'}</button>
             {/* v431（Alan：「長按吉祥物可以直接購買和換裝」）：帽子／配件／特效／語音／動作都在這裡 */}
             <button onClick={() => { setMenu(false); setDress(true); }}>👕 裝扮室</button>
             {myDances.length > 0 && (

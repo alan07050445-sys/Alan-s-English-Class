@@ -145,6 +145,8 @@ function Header({
   compactLobby,
   starBalance, onShowStars,   // v342: 集點
 }) {
+  // v442：編輯列的「⋯ 更多」預設收起來（其他老師最常用的是三顆一鍵生成）
+  const [moreOpen, setMoreOpen] = React.useState(false);
   const pct = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0;
   const atStart = weekIdx <= 0;
   const atEnd = weekIdx >= (weekOrder?.length || 1) - 1;
@@ -260,43 +262,65 @@ function Header({
         </div>
       </div>
       {editMode && canEdit &&
+        /* ══ v442（Alan：「因為我要給其他老師用了，所以這個 edit 介面做清楚一點——
+           主要就是一鍵生成單字／文法／閱讀理解，其他功能比較少用到」）══
+           三顆一鍵生成放最上面、各自寫清楚「貼什麼進去、會生出什麼」；
+           其餘（學期、新增一週、備份、封存、刪除）收在「⋯ 更多」裡，需要才打開。
+           ⚠ 這個檔案裡有兩個 `{editMode && canEdit &&`（另一個在週次標題旁邊）——
+             改這一段一定要從檔案後面找，不要用「第一個符合的」。 */
         <div className="edit-banner">
           <div className="shell edit-banner-inner">
-            <span>● Teacher Edit Mode</span>
-            {/* v398：封存中的週次，老師端一定要一眼看得出來——不然會以為學生也看得到 */}
-            {weekArchived && <span className="edit-banner-archived">📦 這一週已封存 · 學生看不到</span>}
-            <div className="edit-banner-tools">
-              {onGrammarGen && (
-                <button className="banner-btn gr" onClick={onGrammarGen}>✨ 出時態題目</button>
-              )}
-              {onReadingGen && (
-                <button className="banner-btn rc" onClick={onReadingGen}>📖 出閱讀理解</button>
-              )}
-              {onGrammarNotes && (
-                <button className="banner-btn gn" onClick={onGrammarNotes}>✏️ 出文法</button>
-              )}
+            <div className="edit-banner-top">
+              <span className="edit-banner-tag">● 老師編輯模式</span>
+              {weekArchived && <span className="edit-banner-archived">📦 這一週已封存 · 學生看不到</span>}
+              <span className="edit-banner-gap"/>
+              <button className="banner-btn" onClick={() => setMoreOpen(v => !v)}>
+                {moreOpen ? '收起其他功能' : '⋯ 更多（學期／備份／封存）'}
+              </button>
+              <button className="banner-btn done" onClick={onToggleEdit}>完成編輯 →</button>
+            </div>
+
+            <div className="edit-make">
               {onQuickSet && (
-                <button className="banner-btn quick" onClick={onQuickSet}>⚡ 貼單字 · 一次建立整套</button>
-              )}
-              {onTermSetup && (
-                <button className="banner-btn term" onClick={onTermSetup}>📅 建立一整個學期</button>
-              )}
-              <button className="banner-btn" onClick={onAddWeek}><Icon name="plus" size={12}/> New Week</button>
-              {/* v398：把 ExportModal 接回來——期末整理的第一步是「先備份」，
-                  在這之前 UI 完全沒有備份的入口。 */}
-              {onExport && (
-                <button className="banner-btn" onClick={onExport}>💾 匯出備份</button>
-              )}
-              {/* v398：期末整理用的「封存」——內容一個字都不刪，只是學生端看不到。
-                  刻意排在 Delete 前面：要藏舊學期時，正確答案永遠是這一顆。 */}
-              {onArchiveWeek && (
-                <button className="banner-btn arch" onClick={onArchiveWeek}>
-                  {weekArchived ? '↩ 取消封存' : '📦 封存這一週'}
+                <button className="edit-make-btn quick" onClick={onQuickSet}>
+                  <span className="emk-ico">🔤</span>
+                  <span className="emk-txt"><b>一鍵出單字</b><em>貼單字表 → 單字卡・測驗・配對・填空・聽寫</em></span>
                 </button>
               )}
-              <button className="banner-btn danger" onClick={onDeleteWeek}><Icon name="trash" size={12}/> Delete this Week</button>
-              <button className="banner-btn" onClick={onToggleEdit}>Done editing →</button>
+              {onGrammarNotes && (
+                <button className="edit-make-btn gn" onClick={onGrammarNotes}>
+                  <span className="emk-ico">✏️</span>
+                  <span className="emk-txt"><b>一鍵出文法</b><em>上傳作業照片／貼文字 → 互動教學・選擇・填空・中翻英</em></span>
+                </button>
+              )}
+              {onReadingGen && (
+                <button className="edit-make-btn rc" onClick={onReadingGen}>
+                  <span className="emk-ico">📖</span>
+                  <span className="emk-txt"><b>一鍵出閱讀理解</b><em>貼文章 → 背景知識・選擇・簡答・閱讀技巧</em></span>
+                </button>
+              )}
             </div>
+
+            {moreOpen && (
+              <div className="edit-banner-tools">
+                {onGrammarGen && (
+                  <button className="banner-btn gr" onClick={onGrammarGen}>✨ 出時態題目</button>
+                )}
+                {onTermSetup && (
+                  <button className="banner-btn term" onClick={onTermSetup}>📅 建立一整個學期</button>
+                )}
+                <button className="banner-btn" onClick={onAddWeek}><Icon name="plus" size={12}/> 新增一週</button>
+                {onExport && (
+                  <button className="banner-btn" onClick={onExport}>💾 匯出備份</button>
+                )}
+                {onArchiveWeek && (
+                  <button className="banner-btn arch" onClick={onArchiveWeek}>
+                    {weekArchived ? '↩ 取消封存' : '📦 封存這一週'}
+                  </button>
+                )}
+                <button className="banner-btn danger" onClick={onDeleteWeek}><Icon name="trash" size={12}/> 刪除這一週</button>
+              </div>
+            )}
           </div>
         </div>
       }

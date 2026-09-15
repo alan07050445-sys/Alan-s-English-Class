@@ -694,6 +694,10 @@ function App() {
     window.__mxWear  = (kind, id) => (user && window.mxSetWear
       ? window.mxSetWear(user.uid, kind, id, userProfile.mx)
       : Promise.resolve({ ok: false, reason: 'no-user' }));
+    // v442：取名字／改名字（第一次免費，之後 50 顆星）
+    window.__mxRename = (name) => (user && window.mxRename
+      ? window.mxRename(user.uid, name, starsTotal, userProfile.mx)
+      : Promise.resolve({ ok: false, reason: 'no-user' }));
   }, [user, starsTotal, userProfile.mx]);
 
   // v311 (#21): 只計「真的完成」——qmProgress 記錄存在不代表完成（未達 80 分 done 會是 0）；一律看 .done
@@ -1916,6 +1920,7 @@ function App() {
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
             roster={qsRoster}
             defaultCat={openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab'}
+            defaultGrade={grade}
             onClose={() => setQuickSetOpen(false)}
             onCreate={handleQuickSet}
           />

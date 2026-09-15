@@ -932,7 +932,7 @@ function grBuildItems({ tense, zh, lesson, A, B, check }) {
   return out;
 }
 
-function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, onClose, onCreate }) {
+function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, onClose, onCreate }) {
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
   const [cat, setCat]     = useS(defaultCat || 'vocab');
@@ -941,6 +941,9 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
      不是單字表就能生出來的東西——他本來都貼給 ChatGPT 再匯入。
      出完先進「校稿」畫面，每一格都可以改，確認了才寫進週次。 */
   const [useAI, setUseAI]   = useS(true);
+  /* v442（Alan：「我也有 G1 G2 的學生，生成出來的題目要簡單一點…分級 G1G2／G3G4／G5G6，
+     但一定都要給 context clue」）：句子的難度跟著年級走，線索一律都要有。 */
+  const [grade, setGrade]   = useS(defaultGrade || 'g4');
   const [busy, setBusy]     = useS(0);       // 0=沒在跑，否則是已完成的字數
   const [aiErr, setAiErr]   = useS('');
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
@@ -987,9 +990,9 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
          不是兩個相加。短文失敗不影響單字題目——它只是少一個練習。
          v407：短文的第三層保底要用到「填空題」的例句，所以把同一個 promise
          當 rescue 傳進去——它只在真的漏字時才會 await，並行完全沒被打斷。 */
-      const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), onProgress: (done) => setBusy(done) });
+      const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), grade, onProgress: (done) => setBusy(done) });
       const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
-        ? window.aiMakeVocabStory(words, { hint: title.trim(), rescue: () => exP }).catch(() => null)
+        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, rescue: () => exP }).catch(() => null)
         : Promise.resolve(null);
       const [r, st] = await Promise.all([exP, stP]);
       setRows(r);
@@ -1071,7 +1074,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                     onClick={async () => {
                       setReStory(true);
                       try {
-                        const st2 = await window.aiMakeVocabStory(words, { hint: title.trim(), rescue: () => rows });
+                        const st2 = await window.aiMakeVocabStory(words, { hint: title.trim(), grade, rescue: () => rows });
                         if (st2) setStory(st2);
                       } catch (e) { /* 失敗就維持原本那一篇，不要把老師手上的東西弄不見 */ }
                       setReStory(false);
@@ -1210,6 +1213,19 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
               出完會先讓你逐題校稿再建立。不勾的話：配對＝單字對中文、填空＝把你貼的例句挖空。
             </span>
           </label>
+          {useAI && (
+            <div className="qs-band">
+              <span className="qs-band-l">難度</span>
+              {[['g1', 'G1–G2', '句子最短最簡單'], ['g3', 'G3–G4', '一般'], ['g5', 'G5–G6', '句子長一點、用字多一點']].map(([g, t, n]) => (
+                <button key={g} type="button"
+                  className={'qs-band-b' + ((window.vocabBandOf ? window.vocabBandOf(grade) === window.vocabBandOf(g) : grade === g) ? ' on' : '')}
+                  onClick={() => setGrade(g)}>
+                  <b>{t}</b><em>{n}</em>
+                </button>
+              ))}
+              <span className="qs-band-note">不管哪一級，例句一定會留線索讓孩子猜得出答案。</span>
+            </div>
+          )}
           {aiErr && <div className="notify-msg err" style={{ marginTop: 8 }}>⚠️ {aiErr}</div>}
           {!wantAI && assignBox()}
         </div>
@@ -4810,6 +4826,25 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [nTr, setNTr]       = useS(5);
   const [nRw, setNRw]       = useS(5);          // v429：改寫句子（例：把大小寫改對）
   const [lsBusy, setLsBusy] = useS(false);      // v429：校稿頁單獨重出互動教學
+  /* v442：互動教學的「AI 自動配圖」——只補還沒有圖的 learn 步驟 */
+  const [lsImg, setLsImg] = useS(false);
+  const autoLessonImages = async () => {
+    if (!window.autoFindImage || !res || !res.lesson) return;
+    setLsImg(true);
+    const arr = (res.lesson.steps || []).slice();
+    let got = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const st = arr[i];
+      if (!st || st.kind !== 'learn' || st.img) continue;
+      try {
+        const url = await window.autoFindImage(st.imgHint || (st.examples && st.examples[0] && st.examples[0].en) || '');
+        if (url) { arr[i] = { ...st, img: url }; got++; }
+      } catch (e) { /* 這一步找不到就跳過 */ }
+    }
+    setRes(r => ({ ...r, lesson: { ...r.lesson, steps: arr } }));
+    setLsImg(false);
+    if (!got) setErr('圖庫這次沒找到合適的圖——可以改一下「建議的情境圖」關鍵字，或自己上傳。');
+  };
   const runRef = React.useRef(0);               // v429：失敗之後，還在跑的請求不准再把「處理中…」叫回來
   const [busy, setBusy]     = useS(null);        // { done, total, label }
   const [err, setErr]       = useS('');
@@ -5040,7 +5075,11 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
           )}
           {tab === 'lesson' && steps.length > 0 && (
             <div className="gr-proof">
-              <div style={{ textAlign: 'right', marginBottom: 6 }}>
+              <div style={{ textAlign: 'right', marginBottom: 6, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                {/* v442（Alan 選了「圖片情境選擇」）：每個重點配一張情境圖，AI 自己去免費圖庫找 */}
+                <button type="button" className="btn ghost" disabled={lsImg} onClick={autoLessonImages}>
+                  {lsImg ? '找圖中…' : '🖼️ AI 自動配圖'}
+                </button>
                 <button type="button" className="btn ghost" disabled={lsBusy} onClick={redoLesson}>{lsBusy ? '產生中…' : '🔄 整份重新產生'}</button>
               </div>
               <div className="field">
@@ -5052,6 +5091,20 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                   <div className="gn-step-head"><b>{i + 1}. {GN_KIND_ZH[st.kind]}</b><button type="button" onClick={() => delStep(i)}>刪除</button></div>
                   {st.kind === 'learn' && <>
                     <input value={st.say} onChange={e => updStep(i, { say: e.target.value })} placeholder="這一步要教的一件事（繁中）"/>
+                    <div className="rc-bg-img">
+                      {st.img
+                        ? <img src={st.img} alt="" className="rc-bg-thumb"/>
+                        : <span className="rc-bg-hint">建議的情境圖：<b>{st.imgHint || '（沒有建議）'}</b></span>}
+                      <input className="rc-in" value={st.img || ''} onChange={e => updStep(i, { img: e.target.value })} placeholder="圖片網址（可留白）"/>
+                      <label className="rc-bg-up">📷 上傳
+                        <input type="file" accept="image/*" hidden onChange={async e => {
+                          const f = e.target.files && e.target.files[0]; e.target.value = '';
+                          if (!f || !window.uploadFlashcardImage) return;
+                          try { updStep(i, { img: await window.uploadFlashcardImage(f) }); } catch (err) { setErr('圖片上傳失敗'); }
+                        }}/>
+                      </label>
+                      {st.img && <button type="button" className="rc-x" onClick={() => updStep(i, { img: '' })}>移除圖</button>}
+                    </div>
                     {st.examples.map((ex, k) => (
                       <div key={k} className="gn-row3">
                         <input value={ex.en} onChange={e => updStep(i, { examples: st.examples.map((x, j) => j === k ? { ...x, en: e.target.value } : x) })} placeholder="English example"/>
@@ -5235,6 +5288,26 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, caseMatters }) 
    兩邊的行為完全一樣（改字、換圖、上傳、刪一步、整份重出）。 */
 function BgStepsEditor({ bg, onChange, onRedo, busy, onErr }) {
   const steps = (bg && bg.steps) || [];
+  /* v442（Alan：「可以讓 AI 自己找給我？」）：用 AI 給的關鍵字去免費圖庫抓圖，
+     只補「還沒有圖」的那幾步，老師自己放的不會被蓋掉。 */
+  const [autoImg, setAutoImg] = useS(false);
+  const autoFillImages = async () => {
+    if (!window.autoFindImage) return;
+    setAutoImg(true);
+    const next = { ...bg, steps: steps.slice() };
+    let got = 0;
+    for (let i = 0; i < next.steps.length; i++) {
+      const st = next.steps[i];
+      if (st.kind !== 'learn' || st.img) continue;
+      try {
+        const url = await window.autoFindImage(st.imgHint || st.say);
+        if (url) { next.steps[i] = { ...st, img: url }; got++; }
+      } catch (e) { /* 找不到就跳過這一步 */ }
+    }
+    onChange(next);
+    setAutoImg(false);
+    if (!got && onErr) onErr('圖庫這次沒找到合適的圖——可以改一下「建議放的圖」的關鍵字，或自己上傳。');
+  };
   const setStep = (i, k, v) => onChange({ ...bg, steps: steps.map((x, j) => j === i ? { ...x, [k]: v } : x) });
   const setEx   = (i, k, v) => onChange({ ...bg, steps: steps.map((x, j) => j === i ? { ...x, examples: x.examples.map((e, m) => m === k ? { ...e, en: v } : e) } : x) });
   const setOpt  = (i, k, v) => onChange({ ...bg, steps: steps.map((x, j) => j === i ? { ...x, options: x.options.map((o, m) => m === k ? v : o) } : x) });
@@ -5249,6 +5322,9 @@ function BgStepsEditor({ bg, onChange, onRedo, busy, onErr }) {
       <div className="rc-bg-top">
         <input className="rc-in" value={(bg && bg.lead) || ''} placeholder="開場白（一句中文，例如：這篇在講南極的企鵝）"
           onChange={e => onChange({ ...bg, lead: e.target.value })}/>
+        <button type="button" className="rc-bg-redo" disabled={autoImg} onClick={autoFillImages}>
+          {autoImg ? '找圖中…' : '🖼️ AI 自動配圖'}
+        </button>
         {onRedo && (
           <button type="button" className="rc-bg-redo" disabled={busy} onClick={onRedo}>
             {busy ? '重新產生中…' : '🔄 重新產生'}

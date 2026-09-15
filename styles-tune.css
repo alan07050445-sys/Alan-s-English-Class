@@ -3682,3 +3682,38 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .gnb-img { width: 100%; height: 170px; }
   .gnb-lead { font-size: 18px; }
 }
+
+/* ══ v442：老師編輯列（Alan：「要給其他老師用了，做清楚一點——主要就是三個一鍵生成」）══ */
+.edit-banner-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.edit-banner-gap { flex: 1 1 auto; }
+.edit-banner-tag { font-size: 12px; letter-spacing: .12em; color: #C9A84C; font-weight: 700; }
+.edit-banner .banner-btn.done { background: rgba(255,255,255,.14); color: #fbf8f1; }
+.edit-make { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.edit-make-btn {
+  display: flex; align-items: center; gap: 11px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.07); color: #fbf8f1; transition: all .15s ease;
+}
+.edit-make-btn:hover { background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.3); transform: translateY(-1px); }
+.edit-make-btn .emk-ico { font-size: 22px; line-height: 1; flex: none; }
+.edit-make-btn .emk-txt { display: block; min-width: 0; }
+.edit-make-btn b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+.edit-make-btn em { display: block; font-style: normal; font-size: 11.5px; line-height: 1.5; color: rgba(251,248,241,.62); }
+.edit-make-btn.quick { border-color: rgba(201,168,76,.5); }
+.edit-make-btn.gn    { border-color: rgba(214,131,60,.5); }
+.edit-make-btn.rc    { border-color: rgba(110,160,200,.5); }
+.edit-banner-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.12); }
+@media (max-width: 900px) { .edit-make { grid-template-columns: 1fr; } }
+
+/* v442：一鍵出單字的難度分級（G1–G2／G3–G4／G5–G6） */
+.qs-band { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.qs-band-l { font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); }
+.qs-band-b {
+  cursor: pointer; padding: 6px 12px; border-radius: 999px; text-align: left;
+  border: 1px solid var(--border, #DDD6C4); background: #fff; color: var(--ink, #15130e);
+}
+.qs-band-b b { display: block; font-size: 13px; }
+.qs-band-b em { display: block; font-style: normal; font-size: 11px; color: var(--ink-3, #8a8270); }
+.qs-band-b.on { border-color: var(--accent, #8B3120); background: #FBF1EE; }
+.qs-band-b.on b { color: var(--accent, #8B3120); }
+.qs-band-note { flex: 1 1 100%; font-size: 11.5px; color: var(--ink-3, #8a8270); }

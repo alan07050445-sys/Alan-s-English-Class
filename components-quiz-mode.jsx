@@ -1418,8 +1418,9 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             item={selectedItem}
             prog={qmProg[`${weekId}_${selectedItem.id}`]}
             onStart={() => setPhase('quiz')}
-            resumeAt={resumeFor(it => (it.spellWords || []).filter(w => w && w.word).length)}
-            onRestart={restartFresh}
+            /* v442（Alan）：聽寫不給「繼續上一次」——跳出去查答案再回來就沒意義了 */
+            resumeAt={null}
+            onRestart={null}
           />
         ) : selectedItem?.type === 'upload' ? (
           /* v263: 上傳作業——單一畫面（說明＋拍照上傳＋已交/批改狀態），不分 intro/quiz */
@@ -2036,12 +2037,11 @@ function SpellingIntro({ item, onStart, resumeAt, onRestart, prog }) {
 
 function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const base = useQMM(() => (item.spellWords || []).filter(w => w && w.word), [item.id]);
-  // v265: 續做——上次的題目順序、做到第幾題、得分、錯題都接回來
-  const rz = useQMM(() => {
-    const r = getResume(progressKey, base.length);
-    return (r && Array.isArray(r.deck) && r.deck.length === base.length && r.deck.every(i => Number.isInteger(i) && base[i]))
-      ? r : null;
-  }, [item.id]);
+  /* v265 的「續做」在 v442 被 Alan 關掉了（聽寫專屬）：
+     「不要讓小朋友有機會跳出去去找答案再回來」——聽寫一離開就是從頭開始。
+     ⚠ 這裡順手把舊的紀錄清掉，不然升版前存的還會被接回來。 */
+  const rz = null;
+  React.useEffect(() => { clearResume(progressKey); }, [item.id]);
   const words = useQMM(() => (rz ? rz.deck.map(i => base[i]) : shuffleArr(base.slice())), [item.id]);
   const [idx,    setIdx]    = useQM(rz ? rz.deckPos : 0);
   const [input,  setInput]  = useQM('');
@@ -2126,14 +2126,9 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
       fireCelebration(total ? Math.round(finalScoreBase / total * 100) : null);   // v375(#7)
       setScreen('done');
     } else {
-      // v265: 每前進一題就存續做進度——中途離開，下次從同一題接著做
-      saveResume(progressKey, {
-        deck: words.map(w => base.indexOf(w)),
-        deckPos: idx + 1,
-        uniqueTotal: total,
-        score: finalScoreBase,
-        wrongs: wrongsRef.current,
-      });
+      /* v442（Alan）：聽寫刻意**不存**續做進度——中途離開就是從頭開始，
+         不然小朋友可以聽到不會的字就跳出去查，再回來接著拼。 */
+      clearResume(progressKey);
       setIdx(i => i + 1);
       setInput('');
       setResult(null);
@@ -2339,6 +2334,13 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       if (j) { correct = !!j.ok; setTip(j.tip || ''); }
     }
     setResult(correct ? 'correct' : 'wrong');
+    /* v442：一作答就把「下一題」存起來——不然答完離開、回來還是同一題（可以先去查答案） */
+    if (!isLast) {
+      saveResume(progressKey, {
+        deck: pairs.map(p => base.indexOf(p)), deckPos: idx + 1, uniqueTotal: total,
+        score: score + (correct ? 1 : 0), wrongs: wrongsRef.current,
+      });
+    }
     if (correct) {
       const nextScore = score + 1;
       setScore(nextScore);
@@ -2727,6 +2729,14 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
     setScreen('result');
   };
 
+  /* ⚠ v442（Alan 的學生找到的）：「答錯直接跳出去，再回來按繼續上一題，
+     還是剛剛錯的那一題」——續做紀錄本來只在「換到下一題」時才存，
+     所以答完就離開＝停在同一題，回來可以先去查答案再作答一次。
+     改成**一作答就先把下一題的位置存起來**（最後一題沒有下一題，維持原樣）。 */
+  const saveAfterAnswer = (nextDeck, nextFirstRight, nextWrongList) => {
+    if (isLast) return;
+    saveResume(progressKey, { deck: nextDeck, deckPos: deckPos + 1, firstRight: nextFirstRight, wrongList: nextWrongList, uniqueTotal });
+  };
   const handleSelect = (optIdx) => {
     if (selected !== null) return;
     setSelected(optIdx);
@@ -2737,6 +2747,7 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       setFirstRight(nextFirstRight);
       setPlusOneKey(k => k + 1);
       setLastRight(true);
+      saveAfterAnswer(deck, nextFirstRight, wrongList);
       /* v392: 統一節奏——沒解說 1 秒、有解說 4 秒（碰到回饋區就取消倒數）；
          最後一題一律不自動跳，停在「✓ 答對了！」讓學生自己按「查看成績 →」，
          結果頁的彩帶才不會跟答對音效撞在一起。 */
@@ -2746,12 +2757,11 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
 
     const nextWrongList = !q._retry ? [...wrongList, q] : wrongList;
     setWrongList(nextWrongList);
-    setDeck(prev => {
-      const next = [...prev];
-      next.splice(Math.min(deckPos + QM_RETRY_GAP, next.length), 0, {...q, _retry: true});
-      return next;
-    });
+    const nextDeck = [...deck];
+    nextDeck.splice(Math.min(deckPos + QM_RETRY_GAP, nextDeck.length), 0, { ...q, _retry: true });
+    setDeck(nextDeck);
     setLastRight(false);
+    saveAfterAnswer(nextDeck, firstRight, nextWrongList);
   };
 
   const handleNext = () => {

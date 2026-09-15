@@ -1550,6 +1550,27 @@ English: Write one improved sentence using or answering "${word}" correctly. Kee
 const _AI_MINIFY =
   "Output the JSON MINIFIED on a single line: no newlines, no indentation, no spaces after ':' or ','. Do not wrap it in a code fence.";
 
+/* v442（Alan：「我也有 G1 G2 的學生，生成出來的題目要簡單一點，
+   所以我希望 AI 可以分級 G1G2 / G3G4 / G5G6，但一定都要給 context clue」）
+   ⚠ 只有「句子的難度」跟著年級走；**線索一定要有**——那是這個題型的重點，
+     低年級只是把線索講得更白話、句子更短。 */
+const VOCAB_BANDS = {
+  low:  { label: 'G1-G2', note: `Grades 1-2 (age 6-8, CEFR pre-A1).
+- sentence: 8-12 words, ONE simple clause, present tense, only very common words (like, eat, play, happy, school).
+- The clue must be a concrete, everyday picture a 7-year-old can see (food, animals, family, toys, weather).
+- def: 5-8 words, use the simplest words you know.
+- explain: Traditional Chinese, 15-30 characters, very plain wording.` },
+  mid:  { label: 'G3-G4', note: `Grades 3-4 (age 9-10, CEFR A1-A2).
+- sentence: 12-18 words, one or two clauses, simple past or present.
+- def: 5-12 words.
+- explain: Traditional Chinese, 20-40 characters.` },
+  high: { label: 'G5-G6', note: `Grades 5-6 (age 11-12, CEFR A2).
+- sentence: 14-22 words, may use because/when/so and richer vocabulary around the blank.
+- def: 6-14 words.
+- explain: Traditional Chinese, 25-45 characters.` },
+};
+const vocabBandOf = (g) => (g === 'g1' || g === 'g2' || g === 'low') ? 'low'
+  : (g === 'g5' || g === 'g6' || g === 'high') ? 'high' : 'mid';
 const AI_VOCAB_SYS =
 `You write English exercises for Taiwanese elementary-school students (grades 2-6, CEFR A1-A2).
 Output ONLY a JSON array. No prose, no markdown, no code fences.
@@ -1764,10 +1785,12 @@ function _storyRescue(passage, missing, ex) {
   return { passage: out, added };
 }
 
-async function aiMakeVocabStory(words, { hint = '', rescue = null, rounds = 3 } = {}) {
+async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3 } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];   // v442：短文也跟著年級（低年級句子更短更白話）
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
   const head =
+    `LEVEL: ${band.label}\n${band.note}\nEvery blank must still be findable from the words around it — that rule never changes.\n\n` +
     (hint ? `Story topic / lesson title: ${hint}\n` : '') +
     'Target words (use each exactly once):\n' +
     list.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
@@ -1913,7 +1936,8 @@ async function _aiAsk(body, pick, timeoutMs) {
    20 個單字實測從 20.8 秒降到 3 秒上下。
    ⚠ 對回輸入順序的方式完全沒變（part.forEach((w,k) => parsed[k]），
    校稿頁看到的欄位、順序、中文解說都跟以前一樣。 */
-async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '' } = {}) {
+async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4' } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (!list.length) return [];
   const size = Math.max(1, +chunk || 1);
@@ -1924,6 +1948,7 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '' } 
   let timedOut = false;
   const packs = await pMap(parts, async (part) => {
     const userMsg =
+      `LEVEL: ${band.label}\n${band.note}\nThe blank's sentence must ALWAYS contain a clue that makes the answer findable — that rule never changes.\n\n` +
       (hint ? `Context / topic: ${hint}\n` : '') +
       'Target words:\n' +
       part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`).join('\n');
@@ -2636,7 +2661,7 @@ const GN_LESSON_SYS = `You design a VERY SIMPLE, INTERACTIVE mini-lesson that co
 Explanations in Traditional Chinese, examples in English. As simple as possible — a 9-year-old must get it.
 Output ONLY JSON:
 {"lead":"","steps":[
- {"kind":"learn","say":"","examples":[{"en":"","hl":[""],"zh":""}]},
+ {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
  {"kind":"pick","q":"","options":["",""],"answer":0,"why":""},
  {"kind":"order","zh":"","words":[""]},
  {"kind":"fix","sentence":"","wrong":"","right":"","why":""}
@@ -2646,6 +2671,9 @@ RULES
 - steps: 3 or 4 rounds (if the notes have several 【…】 sections: ONE round per section, up to 6). Each round = ONE "learn" step immediately followed by ONE interaction
   ("pick", "order" or "fix") that practises exactly what that learn step just said. Use all three interaction kinds at least once.
 - learn.say: ONE idea only, Traditional Chinese, ≤30 characters, no grammar jargon.
+- learn.imgHint: 2-4 English words naming a PHOTO that shows this idea in a real situation
+  (e.g. "two cats on sofa", "boy walking to school"). The site fetches the photo automatically,
+  so pick something a stock photo would actually show — a scene, not an abstract idea.
 - learn.examples: 1-2 short English sentences (≤8 words). hl = the exact words in "en" to highlight
   (the grammar part). zh = the Chinese meaning.
 - pick.q: EITHER one sentence with ________ for the missing part, OR a short question
@@ -4577,7 +4605,7 @@ Object.assign(window, {
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
-  aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
+  vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
   RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
   saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
@@ -4923,8 +4951,19 @@ function mxHasItem(mx, id) {
   if (it.legacy && (window.__mxHats || []).indexOf(it.legacy) >= 0) return true;   // 老師以前扣點買的
   return mxOwnedList(mx).indexOf(id) >= 0;
 }
+/* v442（Alan：「可以取名字，但一旦取了只能免費更改一次，如果要換要花 50 買改名卡」）
+   第一次取名免費，之後每改一次 50 顆星。改了幾次記在 progress/{uid}.mx.renames，
+   花掉的星星一樣是「反算」出來的（買到的東西 ＋ 改名的次數），不存數字。 */
+const MX_RENAME_COST = 50;
+function mxRenamesPaid(mx) {
+  return Math.max(0, ((mx && +mx.renames) || 0) - 1);   // 第一次免費
+}
+function mxRenameCost(mx) {
+  return ((mx && +mx.renames) || 0) === 0 ? 0 : MX_RENAME_COST;
+}
 function mxSpent(mx) {
-  return mxOwnedList(mx).reduce((n, id) => n + (MX_BY_ID[id].cost || 0), 0);
+  return mxOwnedList(mx).reduce((n, id) => n + (MX_BY_ID[id].cost || 0), 0)
+    + mxRenamesPaid(mx) * MX_RENAME_COST;
 }
 /* 身上穿的：只留「真的有」的（下架或資料怪怪的就當沒穿），動作不算穿戴 */
 /* 夥伴：買到哪幾隻（Claudius 永遠有）。給吉祥物那一層判斷「這一隻能不能選」用。 */
@@ -4960,6 +4999,22 @@ async function mxBuy(uid, id, balance, mx) {
     return { ok: true, owned, item: it };
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
+/* 取名字／改名字。第一次免費，之後要 50 顆星（Alan 的「改名卡」）。 */
+async function mxRename(uid, name, balance, mx) {
+  const nm = String(name || '').trim().slice(0, 8);
+  if (!uid) return { ok: false, reason: 'no-user' };
+  if (!nm) return { ok: false, reason: 'empty' };
+  const cost = mxRenameCost(mx);
+  if (cost && (balance || 0) < cost) return { ok: false, reason: 'poor', short: cost - (balance || 0) };
+  const renames = (((mx && +mx.renames) || 0) + 1);
+  try {
+    await _db.collection('progress').doc(uid).set({
+      mx: { owned: mxOwnedList(mx), wear: (mx && mx.wear) || {}, name: nm, renames },
+    }, { merge: true });
+    return { ok: true, name: nm, cost, renames };
+  } catch (e) { return { ok: false, reason: 'save' }; }
+}
+
 /* 穿上／脫下（id 空字串＝脫掉）。只寫 wear，不動 owned。 */
 async function mxSetWear(uid, kind, id, mx) {
   if (!uid) return { ok: false, reason: 'no-user' };
@@ -4972,7 +5027,8 @@ async function mxSetWear(uid, kind, id, mx) {
     return { ok: true, wear };
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
-Object.assign(window, { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear, mxOwnedPets, mxPetItem });
+Object.assign(window, { MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
+  mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};
