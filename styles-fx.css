@@ -42,7 +42,9 @@
   touch-action: none;
   filter: drop-shadow(0 3px 4px rgba(21, 19, 14, .22));
 }
-.mx-svg { display: block; transform-origin: 50% 92%; width: var(--mx-w); height: calc(var(--mx-w) * 10 / 9); }
+/* ⚠ v441：overflow 一定要 visible——SVG 預設會把 viewBox 外面的東西切掉，
+   兔耳朵、星星髮箍、魔法棒本來畫到 y < −4 的部分整段被切掉，難怪看起來小又不清楚。 */
+.mx-svg { display: block; overflow: visible; transform-origin: 50% 92%; width: var(--mx-w); height: calc(var(--mx-w) * 10 / 9); }
 
 /* 眼睛偶爾眨一下 */
 /* v408：transform-box 也要寫。少了它，「center」是整個 viewBox 的中心（y=6），
@@ -67,8 +69,8 @@
 .act-nod .mx-svg { animation: mxNod .55s ease-in-out; }
 @keyframes mxNod {
   0%, 100% { transform: translateY(0)     scaleY(1); }
-  35%      { transform: translateY(3px)   scaleY(.95); }
-  70%      { transform: translateY(-1px)  scaleY(1.02); }
+  35%      { transform: translateY(4px)   scaleY(.9) scaleX(1.06); }
+  70%      { transform: translateY(-3px)  scaleY(1.05); }
 }
 
 /* ── 走路：身體上下晃、前後腳輪流抬 ── */
@@ -76,26 +78,30 @@
 .act-walk .mx-leg-a { animation: mxStep    .34s ease-in-out infinite; }
 .act-walk .mx-leg-c { animation: mxStep    .34s ease-in-out infinite .17s; }
 .act-walk .mx-leg-b { animation: mxStep    .68s ease-in-out infinite; }
-@keyframes mxWalkBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-.42px); } }
+/* v441：走路的上下晃太小（0.42px 幾乎看不到）→ 加大，腳也抬高一點 */
+@keyframes mxWalkBob { 0%, 100% { transform: translateY(0) rotate(0deg); } 25% { transform: translateY(-1.4px) rotate(-2deg); } 75% { transform: translateY(-1.4px) rotate(2deg); } }
 /* v402：網格 9→18 之後，掛在 <g> 上的位移是「使用者單位」，要跟著加倍才等寬 */
-@keyframes mxStep    { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.44px); } }
+@keyframes mxStep    { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-3px) rotate(-6deg); } }
 
 /* ── 跳 ── */
 .act-jump .mx-svg { animation: mxJump .95s cubic-bezier(.3, .9, .4, 1); }
 @keyframes mxJump {
   0%   { transform: translateY(0)    scaleY(1); }
-  18%  { transform: translateY(1px)  scaleY(.82) scaleX(1.1); }
-  45%  { transform: translateY(-13px) scaleY(1.1) scaleX(.94); }
-  70%  { transform: translateY(0)    scaleY(.9)  scaleX(1.06); }
+  18%  { transform: translateY(2px)  scaleY(.76) scaleX(1.16); }
+  45%  { transform: translateY(-26px) scaleY(1.16) scaleX(.9); }
+  70%  { transform: translateY(0)    scaleY(.84)  scaleX(1.1); }
   100% { transform: translateY(0)    scaleY(1); }
 }
 
 /* ── 轉圈 ── */
 .act-spin .mx-svg { animation: mxSpin .92s cubic-bezier(.4, 0, .3, 1); }
 @keyframes mxSpin {
-  0%   { transform: rotate(0)      translateY(0); }
-  50%  { transform: rotate(180deg) translateY(-8px); }
-  100% { transform: rotate(360deg) translateY(0); }
+  0%   { transform: rotate(0)      translateY(0)     scale(1); }
+  20%  { transform: rotate(60deg)  translateY(-10px) scale(1.06); }
+  50%  { transform: rotate(180deg) translateY(-18px) scale(1.06); }
+  85%  { transform: rotate(340deg) translateY(0)     scale(1); }
+  92%  { transform: rotate(360deg) translateY(1.5px) scaleY(.88) scaleX(1.1); }
+  100% { transform: rotate(360deg) translateY(0)     scale(1); }
 }
 
 /* ── 跳舞：左右扭 ── */
@@ -103,8 +109,10 @@
 .act-dance .mx-leg-a { animation: mxStep  .42s ease-in-out infinite; }
 .act-dance .mx-leg-c { animation: mxStep  .42s ease-in-out infinite .21s; }
 @keyframes mxDance {
-  0%, 100% { transform: rotate(-9deg)  translateY(0); }
-  50%      { transform: rotate(9deg)   translateY(-3px); }
+  0%, 100% { transform: rotate(-14deg) translateY(0)    scale(1); }
+  25%      { transform: rotate(-4deg)  translateY(-6px) scale(1.04); }
+  50%      { transform: rotate(14deg)  translateY(0)    scale(1); }
+  75%      { transform: rotate(4deg)   translateY(-6px) scale(1.04); }
 }
 
 /* ── 翻滾（移動比較快的那種） ── */
@@ -585,16 +593,9 @@
 /* ══════════════════════════════════════════════════════════════════════════
    v431 ④：吉祥物裝扮（Alan：「可以購買吉祥物的裝扮…頭飾 語音 特效 動作跳舞之類的」）
    ══════════════════════════════════════════════════════════════════════════ */
-/* 配件疊在身上：跟 .mx-svg 同一個 viewBox、同樣大小，所以五隻夥伴都對得準 */
-.mx-acc {
-  position: absolute; left: 0; top: 0; pointer-events: none;
-  width: var(--mx-w); height: calc(var(--mx-w) * 10 / 9);
-  transform-origin: 50% 92%;
-}
-/* 身體在動的時候配件要跟著動（跟帽子同一套做法） */
-.act-walk  .mx-acc { animation: mxWalkBob .34s ease-in-out infinite; }
-.act-dance .mx-acc { animation: mxDance .42s ease-in-out infinite; }
-.act-idle  .mx-acc { animation: mxBreathe 2.8s ease-in-out infinite; }
+/* v441：配件現在畫在吉祥物同一個 <svg> 裡（見 components-fx.jsx 的 mxAccArt）——
+   不再需要「疊一層、自己補動畫」：翻滾、轉圈、跳舞全部自動跟著動。
+   ⚠ 這裡不要再加 .mx-acc 的動畫，會變成「動兩次」。 */
 
 /* 表情符號版的特效（星星雨／愛心／泡泡／煙火）——沿用彩帶的 fxFall 動畫 */
 .fx-cfp-ch { line-height: 1; text-align: center; }
@@ -634,7 +635,6 @@
   border: 1px solid #EDE5D2;
 }
 .mx-dress-figure { position: relative; display: block; width: 62px; height: 69px; --mx-w: 62px; }
-.mx-dress-figure .mx-acc { width: 62px; height: 69px; }
 .mx-dress-who { font-size: 13.5px; font-weight: 700; color: var(--ink-2, #5c554a); }
 .mx-dress-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
 .mx-dress-tabs button {
@@ -670,11 +670,11 @@
 .act-wave .mx-leg-c { animation: mxStep .52s ease-in-out 3 .26s; }
 @keyframes mxWave {
   0%   { transform: rotate(0deg) translateY(0); }
-  12%  { transform: rotate(-17deg) translateY(-2.5px); }
+  12%  { transform: rotate(-24deg) translateY(-4px); }
   26%  { transform: rotate(7deg)  translateY(0); }
-  40%  { transform: rotate(-17deg) translateY(-2.5px); }
+  40%  { transform: rotate(-24deg) translateY(-4px); }
   54%  { transform: rotate(7deg)  translateY(0); }
-  68%  { transform: rotate(-14deg) translateY(-2px); }
+  68%  { transform: rotate(-20deg) translateY(-3px); }
   84%  { transform: rotate(5deg)  translateY(0); }
   100% { transform: rotate(0deg) translateY(0); }
 }
@@ -684,8 +684,8 @@
 @keyframes mxTwirl {
   0%   { transform: translateY(0) rotate(0deg) scale(1, 1); }
   10%  { transform: translateY(1.5px) rotate(0deg) scale(1.12, .86); }   /* 蹲 */
-  30%  { transform: translateY(-16px) rotate(240deg) scale(.94, 1.1); }
-  55%  { transform: translateY(-20px) rotate(520deg) scale(1, 1); }
+  30%  { transform: translateY(-26px) rotate(240deg) scale(.92, 1.12); }
+  55%  { transform: translateY(-32px) rotate(520deg) scale(1, 1); }
   80%  { transform: translateY(0) rotate(720deg) scale(1, 1); }
   88%  { transform: translateY(1.5px) rotate(720deg) scale(1.14, .84); } /* 落地 */
   100% { transform: translateY(0) rotate(720deg) scale(1, 1); }
@@ -698,9 +698,9 @@
 .act-party .mx-eye   { animation: mxBlink 1.4s steps(1) infinite; }
 @keyframes mxParty {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1, 1); }
-  20%  { transform: translate(-3px, -4px) rotate(-11deg) scale(.97, 1.05); }
+  20%  { transform: translate(-5px, -7px) rotate(-16deg) scale(.95, 1.08); }
   40%  { transform: translate(0, .5px) rotate(0deg) scale(1.06, .94); }
-  60%  { transform: translate(3px, -4px) rotate(11deg) scale(.97, 1.05); }
+  60%  { transform: translate(5px, -7px) rotate(16deg) scale(.95, 1.08); }
   80%  { transform: translate(0, .5px) rotate(0deg) scale(1.06, .94); }
   100% { transform: translate(0, 0) rotate(0deg) scale(1, 1); }
 }
@@ -714,7 +714,7 @@
 @keyframes mxFlip {
   0%   { transform: translateY(0) rotate(0deg) scale(1, 1); }
   12%  { transform: translateY(2px) rotate(0deg) scale(1.14, .84); }
-  45%  { transform: translateY(-30px) rotate(-210deg) scale(.95, 1.08); }
+  45%  { transform: translateY(-42px) rotate(-210deg) scale(.93, 1.1); }
   78%  { transform: translateY(-6px) rotate(-330deg) scale(1, 1); }
   90%  { transform: translateY(1.5px) rotate(-360deg) scale(1.16, .82); }
   100% { transform: translateY(0) rotate(-360deg) scale(1, 1); }
@@ -727,9 +727,9 @@
 @keyframes mxMoon {
   0%   { transform: translateX(0) rotate(0deg); }
   12%  { transform: translateX(2px) rotate(9deg); }      /* 先前傾 */
-  35%  { transform: translateX(-8px) rotate(11deg); }
-  60%  { transform: translateX(-16px) rotate(9deg); }
-  78%  { transform: translateX(-9px) rotate(12deg); }
+  35%  { transform: translateX(-14px) rotate(14deg); }
+  60%  { transform: translateX(-26px) rotate(12deg); }
+  78%  { transform: translateX(-15px) rotate(15deg); }
   92%  { transform: translateX(-2px) rotate(4deg); }
   100% { transform: translateX(0) rotate(0deg); }
 }
@@ -741,8 +741,7 @@
 @media (prefers-reduced-motion: reduce) {
   .act-wave .mx-svg, .act-twirl .mx-svg, .act-flip .mx-svg, .act-moon .mx-svg,
   .act-party .mx-svg, .act-party .mx-leg-a, .act-party .mx-leg-c,
-  .act-wave .mx-leg-a, .act-wave .mx-leg-c, .act-moon .mx-leg-a, .act-moon .mx-leg-c,
-  .mx-acc { animation: none !important; }
+  .act-wave .mx-leg-a, .act-wave .mx-leg-c, .act-moon .mx-leg-a, .act-moon .mx-leg-c { animation: none !important; }
   .mx-dress { animation: none; }
 }
 

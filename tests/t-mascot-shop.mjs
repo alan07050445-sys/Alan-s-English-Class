@@ -136,6 +136,23 @@ log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻�
   ok('減少動態時全部停掉（無障礙）', /prefers-reduced-motion[\s\S]{0,400}act-twirl/.test(css));
 }
 
+log.push('\n【7c】（v441）配件要跟著吉祥物動、整體要大一點明顯一點');
+{
+  ok('⭐ 配件畫在吉祥物同一個 <svg> 裡（翻滾／轉圈才會跟著動）',
+     /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="back"\/>/.test(fx) &&
+     /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="front"\/>/.test(fx));
+  ok('五隻都收下 acc、而且都有前後兩層', (fx.match(/layer="back"/g) || []).length === 5 && (fx.match(/layer="front"/g) || []).length === 5);
+  ok('⭐ 不再是疊在上面的另一個 svg（那就是它會留在原地的原因）', fx.indexOf('<svg className="mx-acc"') < 0);
+  ok('CSS 也把「自己補動畫」那段拿掉（不然會動兩次）', !/\.act-walk\s+\.mx-acc/.test(css) && !/\.act-dance\s+\.mx-acc/.test(css));
+  ok('⭐ 書包、披風畫在身體後面（back 層）＝真的背在後面', /if \(id === 'it_bag'\)[\s\S]{0,900}back:/.test(fx) && /if \(id === 'it_cape'\)[\s\S]{0,900}back:/.test(fx));
+  ok('⭐ 魔法棒是「拿起來」的（有握把、斜的）', /id === 'it_wand'[\s\S]{0,400}rotate\(-18/.test(fx));
+  ok('⭐ SVG 的 overflow 要 visible（不然兔耳朵、星星會被切掉）', /\.mx-svg \{[^}]*overflow: visible/.test(css));
+  ok('帽子整體放大（五隻的 scale 都調過）',
+     /clay:.*s: 1\.06/.test(fx) && /owl:.*s: 1\.0/.test(fx) && /flame:.*s: 0\.86/.test(fx) && /rock:.*s: 0\.85/.test(fx) && /sprout:.*s: 0\.96/.test(fx));
+  ok('⭐ 動作做大（走路的上下晃從 0.42px 加大、跳更高、轉更明顯）',
+     /translateY\(-1\.4px\) rotate\(-2deg\)/.test(css) && /translateY\(-26px\)/.test(css) && /rotate\(180deg\) translateY\(-18px\)/.test(css));
+}
+
 log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
 {
   const css = fs.readFileSync(new URL('styles-fx.css', ROOT), 'utf8');
