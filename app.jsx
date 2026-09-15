@@ -873,6 +873,18 @@ function App() {
   const keepCatOnWeekChange = () => setCatView(c => (c ? { ...c, itemId: null } : null));
   const goPrevWeek = () => { returnWeekRef.current = null; setSlideDir('right'); setWeekIdx(i => Math.max(0, i - 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
   const goNextWeek = () => { returnWeekRef.current = null; setSlideDir('left');  setWeekIdx(i => Math.min(viewOrder.length - 1, i + 1)); setOpenCat(null); keepCatOnWeekChange(); scrollPageToTop(); };
+  /* v446（Alan：「我原本做的 desert 一鍵生成不見了」）：直接跳到某一週（順便開那一類）。
+     東西其實一直在第 1 週——網站開起來停在「今天這一週」，那一週是空的，看起來就像不見了。 */
+  const goWeekId = (id, cat) => {
+    const j = viewOrder.indexOf(id);
+    if (j < 0) return;
+    returnWeekRef.current = null;
+    setSlideDir(j > weekIdx ? 'left' : 'right');
+    setWeekIdx(j);
+    setCatView(null);
+    setOpenCat(cat || null);
+    scrollPageToTop();
+  };
 
   // ── Week CRUD ──────────────────────────────────────────
 
@@ -1633,6 +1645,8 @@ function App() {
             }}
             onPrevWeek={goPrevWeek}
             onNextWeek={goNextWeek}
+            weeks={weeks}
+            onGoWeek={goWeekId}
             canEdit={isTeacher}
             editMode={editMode}
             onToggleEdit={() => setEditMode(e => !e)}
@@ -1751,6 +1765,8 @@ function App() {
                   who={isSummer && !isSummerLib ? summerWho : null}
                   onPrevWeek={goPrevWeek}
                   onNextWeek={goNextWeek}
+                  weeks={weeks}
+                  onGoWeek={goWeekId}
                   weekAvg={weekAvgScore}
                   onOpenGrowth={() => setGrowthOpen(true)}
                 />
@@ -1865,6 +1881,8 @@ function App() {
               weekOrder={viewOrder}
               onPrevWeek={goPrevWeek}
               onNextWeek={goNextWeek}
+              weeks={weeks}
+              onGoWeek={goWeekId}
               catView={catView}
               onBackFromCat={() => { setCatView(null); scrollPageToTop(); }}
               user={user}

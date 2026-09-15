@@ -131,6 +131,31 @@ function FocusBtn() {
   );
 }
 
+/* ══ v446（Alan：「我原本有製作 G3 living in the desert 的一鍵生成，但現在不見了」）══
+   單元其實一直都在——在第 1 週，而網站開起來停在「今天這一週」，那一週是空的。
+   這支是「用名字找單元」的純比對：整個年級的每一週、每一類都找，同名的併成一列。 */
+function findUnitsIn(weekOrder, weeks, q) {
+  const key = String(q || '').trim().toLowerCase();
+  if (key.length < 2) return [];
+  const seen = {}, out = [];
+  (weekOrder || []).forEach((id) => {
+    const w = (weeks || {})[id];
+    if (!w) return;
+    Object.keys(w.items || {}).forEach((cat) => {
+      (w.items[cat] || []).forEach((it) => {
+        const name = String((it && it.group) || (it && it.title) || '');
+        if (!name) return;
+        if ((name + ' ' + String((it && it.title) || '')).toLowerCase().indexOf(key) < 0) return;
+        const k = id + '|' + cat + '|' + name;
+        if (seen[k]) { seen[k].n++; return; }
+        seen[k] = { id, cat, name, n: 1, label: w.label || id, range: w.dateRange || '' };
+        out.push(seen[k]);
+      });
+    });
+  });
+  return out.slice(0, 12);
+}
+
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
@@ -144,9 +169,33 @@ function Header({
   grade, onSwitchGrade,
   compactLobby,
   starBalance, onShowStars,   // v342: 集點
+  weeks, onGoWeek,            // v446：找單元／跳到有內容的那一週
 }) {
   // v442：編輯列的「⋯ 更多」預設收起來（其他老師最常用的是三顆一鍵生成）
   const [moreOpen, setMoreOpen] = React.useState(false);
+  /* ══ v446（Alan：「我原本有製作 G3 living in the desert 的一鍵生成，但現在不見了」）══
+     東西沒有不見——它在第 1 週，而網站開起來會停在「今天這一週」，那一週剛好是空的。
+     所以補兩件事：① 空的一週直接告訴老師最近有內容的是哪一週 ② 用名字搜尋整個年級的單元。 */
+  const [findQ, setFindQ] = React.useState('');
+  const weekMap = weeks || {};
+  const weekItems = React.useCallback((id) => {
+    const w = weekMap[id];
+    return w ? [].concat.apply([], Object.keys(w.items || {}).map(c => (w.items[c] || []).map(it => ({ it, cat: c })))) : [];
+  }, [weekMap]);
+  const curEmpty = !!(canEdit && week && week.id && weekMap[week.id] && weekItems(week.id).length === 0);
+  // 最近一個「有內容」的週次（先往回找，沒有再往後找）
+  const nearest = React.useMemo(() => {
+    if (!curEmpty) return null;
+    const ord = weekOrder || [];
+    for (let d = 1; d < ord.length; d++) {
+      for (const j of [weekIdx - d, weekIdx + d]) {
+        if (j < 0 || j >= ord.length) continue;
+        if (weekItems(ord[j]).length) return { id: ord[j], w: weekMap[ord[j]] || {} };
+      }
+    }
+    return null;
+  }, [curEmpty, weekIdx, weekOrder, weekMap]);
+  const findHits = React.useMemo(() => findUnitsIn(weekOrder, weekMap, findQ), [findQ, weekOrder, weekMap]);
   const pct = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0;
   const atStart = weekIdx <= 0;
   const atEnd = weekIdx >= (weekOrder?.length || 1) - 1;
@@ -280,6 +329,24 @@ function Header({
               <button className="banner-btn done" onClick={onToggleEdit}>完成編輯 →</button>
             </div>
 
+            {/* v446：用名字找回自己做過的單元（做完那一週之後就很難翻） */}
+            <div className="find-unit">
+              <input className="find-unit-in" value={findQ} onChange={e => setFindQ(e.target.value)}
+                placeholder="🔍 找單元（打名字就好，例：desert）"/>
+              {findQ.trim().length >= 2 && (
+                <div className="find-unit-res">
+                  {findHits.length === 0
+                    ? <div className="find-unit-none">這個年級找不到「{findQ.trim()}」——可能在別的年級（右上角切換）</div>
+                    : findHits.map((h, i) => (
+                      <button key={i} className="find-unit-row" onClick={() => { setFindQ(''); if (onGoWeek) onGoWeek(h.id, h.cat); }}>
+                        <b>{h.name}</b>
+                        <span>{h.label}{h.range ? '（' + h.range + '）' : ''} · {h.n} 個單元</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
             <div className="edit-make">
               {onQuickSet && (
                 <button className="edit-make-btn quick" onClick={onQuickSet}>
@@ -324,6 +391,16 @@ function Header({
           </div>
         </div>
       }
+      {/* v446：老師打開網站會停在「今天這一週」，那一週常常還是空的——直接指路，
+          不然做過的東西看起來就像不見了（Alan 的 desert 單字其實一直在第 1 週）。 */}
+      {curEmpty && nearest && (
+        <div className="week-empty-bar">
+          <span>這一週（{week.label}）還沒有內容。</span>
+          <button onClick={() => onGoWeek && onGoWeek(nearest.id)}>
+            最近有內容的是 {nearest.w.label || nearest.id}{nearest.w.dateRange ? `（${nearest.w.dateRange}）` : ''} →
+          </button>
+        </div>
+      )}
     </header>
   );
 }
@@ -1476,4 +1553,4 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, mx, o
 }
 
 // v392: 舊版行銷長頁的元件已從這份匯出名單移除（函式本體同時刪除，見檔案上方 v392 註解）
-Object.assign(window, { FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+Object.assign(window, { findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
