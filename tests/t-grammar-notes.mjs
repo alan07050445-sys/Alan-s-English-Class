@@ -8,7 +8,7 @@ const slice = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); 
 
 let aiQueue = [];            // 沒指定題型時，依序回給 _aiAsk 的假答案（物件＝JSON 文字）
 const byKind = {};           // v429：依 system prompt 分流（lesson/mcq/fill/translate/rewrite），平行請求順序不固定
-const kindOf = (sys) => /INTERACTIVE mini-lesson/.test(sys) ? 'lesson' : /multiple-choice/.test(sys) ? 'mcq'
+const kindOf = (sys) => /INTERACTIVE warm-up/.test(sys) ? 'lesson' : /multiple-choice/.test(sys) ? 'mcq'
   : /fill-in-the-blank/.test(sys) ? 'fill' : /correct the sentence/.test(sys) ? 'rewrite' : /Chinese-to-English translation questions/.test(sys) ? 'translate' : null;
 const calls = [];
 const _aiAskImpl = {};
@@ -29,7 +29,8 @@ _aiAskImpl.fn = async (body, pickFn) => {
   if (got == null) throw new Error('bad');
   return got;
 };
-const code = slice(data, 'const GN_MODEL', 'function grCountBlanks');
+// v445：_GN_BASE 會用到「老師特別要求」那個小工具（它住在短文那一區）
+const code = slice(data, 'function _aiTeacherNote', 'const _STORY_CJK_G') + '\n' + slice(data, 'const GN_MODEL', 'function grCountBlanks');
 const W = new Function('_aiAsk', '_aiStripFence', '_AI_MINIFY',
   code + '\nreturn { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidStep, gnValidLesson, gnValidFill, gnValidRewrite, gnValidMcq, gnCleanStem, gnSplitText, _gnSalvageJson, _gnSpread, GN_READ_MODEL, GN_MODEL };')(
   _aiAsk, (t) => String(t).replace(/^```(json)?/, '').replace(/```$/, '').trim(), '');
@@ -304,8 +305,10 @@ ${'the (dog) barking ____________________\n'.repeat(8)}`;
   const mq = calls.slice(n2).find(c => /multiple-choice/.test(c.system));
   ok('⭐ 「底線畫出名詞」的老師題目交給選擇題，並說明要改成 Which word is a …?', mq && /\[identify: find the noun\] Luna is a smart cat\./.test(mq.messages[0].content) && /Which word is a <X>\?/.test(mq.messages[0].content));
   ok('notes 有好幾段 → 提醒 AI 每一段都要照顧到', mq && /Cover EVERY section/.test(mq.messages[0].content));
-  const ls = calls.slice(n2).find(c => /INTERACTIVE mini-lesson/.test(c.system));
-  ok('多段的互動教學：一段一回合、字數上限放寬', ls && ls.max_tokens >= 3800 && /ONE round per section/.test(ls.system));
+  const ls = calls.slice(n2).find(c => /INTERACTIVE warm-up/.test(c.system));
+  // v445（Alan：「不需要這麼多頁講解」）——多段的作業也只出 3 回合，不再一段一回合
+  ok('多段的互動教學：字數上限放寬，但回合數固定 3 回合（v445 改）',
+    ls && ls.max_tokens >= 3800 && /EXACTLY 3 rounds/.test(ls.system) && !/ONE round per section/.test(ls.system));
   ok('notes 不再只給前 4000 字', /slice\(0, 9000\)/.test(data));
 }
 

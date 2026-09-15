@@ -234,7 +234,7 @@ calls.length = 0;
 const circleQs = [{ sentence: 'Tom went to the park.', answers: ['Tom', 'park'], find: 'noun', findZh: '名詞', explain: '' },
                   { sentence: 'She reads a book.', answers: ['book'], find: 'noun', findZh: '名詞', explain: '' },
                   { sentence: 'Luna is a smart cat.', answers: ['cat'], find: 'noun', findZh: '名詞', explain: '' }];
-router = (sys) => /INTERACTIVE mini-lesson/.test(sys) ? goodLesson
+router = (sys) => /INTERACTIVE warm-up/.test(sys) ? goodLesson
   : /checking a "find the words"/.test(sys) ? [['Tom', 'park'], ['book'], ['Luna', 'cat']]   // 第三題漏了 Luna
   : /find the words/.test(sys) ? circleQs
   : /sorting exercise/.test(sys) ? SET

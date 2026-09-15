@@ -3738,3 +3738,15 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 
 /* v444：找出來答錯時，除了正確答案也把解說寫出來 */
 .circle-explain { color: var(--ink-muted); font-weight: 600; }
+
+/* v445：一鍵生成的「💬 這次的特別要求」 */
+.ai-note { margin-top: 12px; }
+.ai-note-open { border: 1px dashed var(--border); background: transparent; border-radius: 999px;
+  padding: 7px 16px; font-family: var(--sans); font-size: 14px; color: var(--ink-muted); cursor: pointer; }
+.ai-note-open:hover { border-color: var(--accent, #8A6D1E); color: var(--ink); }
+.ai-note-in { width: 100%; box-sizing: border-box; font-family: var(--sans); font-size: 14px; line-height: 1.6;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, #fff); resize: vertical; }
+.ai-note-tip { margin-top: 6px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); line-height: 1.9; }
+.ai-note-tip b { display: inline-block; font-weight: 600; background: var(--surface-2, #F3EFE6);
+  border-radius: 999px; padding: 2px 10px; margin-right: 6px; }
+.qs-story-sub { font-weight: 400; color: var(--ink-muted); font-size: 12.5px; }

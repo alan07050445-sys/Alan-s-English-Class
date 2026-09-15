@@ -660,6 +660,32 @@ const QS_KINDS = [
 ];
 
 /* 一行一個字：英文 [Tab | ｜ | 逗號 | " - "] 中文 [同樣分隔] 例句 */
+/* ══ v445（Alan：「一鍵生成都可以在自己跟 AI 協調和溝通，這次我可能要客製化某一些地方」）══
+   三個一鍵生成視窗共用的「特別要求」欄。寫什麼就原封不動送給 AI（只限內容，不能改格式）。
+   預設收起來——不寫的老師完全不受影響。 */
+function AiNoteBox({ value, onChange, examples }) {
+  const [open, setOpen] = useS(!!String(value || '').trim());
+  return (
+    <div className="ai-note">
+      {!open ? (
+        <button type="button" className="ai-note-open" onClick={() => setOpen(true)}>
+          💬 這次有特別要求嗎？（可留空）
+        </button>
+      ) : (
+        <>
+          <label className="field-label">💬 這次的特別要求（直接跟 AI 說，用中文就可以）</label>
+          <textarea className="ai-note-in" rows={3} value={value} onChange={e => onChange(e.target.value.slice(0, 600))}
+            placeholder={examples || '例：只講重點就好，不要講太多頁'}/>
+          <div className="ai-note-tip">
+            例：{(examples || '').split('｜').map((x, i) => <b key={i}>{x}</b>)}
+            <span>　（{String(value || '').length}/600）</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function qsParseWords(text) {
   return String(text || '').split('\n').map(l => l.trim()).filter(Boolean).map((line, i) => {
     const cols = (line.includes('\t') ? line.split('\t')
@@ -667,7 +693,8 @@ function qsParseWords(text) {
       : /\s+-\s+/.test(line) ? line.split(/\s+-\s+/)
       : line.includes(',') ? line.split(',')
       : [line]).map(c => c.trim().replace(/^["']|["']$/g, ''));
-    return { term: cols[0] || '', zh: cols[1] || '', example: cols[2] || '', _i: i };
+    // v445（Alan：「老師已經有自己會考的 definition，就可以直接複製上去」）：第四欄＝英文定義
+    return { term: cols[0] || '', zh: cols[1] || '', example: cols[2] || '', def: cols[3] || '', _i: i };
   }).filter(w => w.term);
 }
 
@@ -946,6 +973,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [grade, setGrade]   = useS(defaultGrade || 'g4');
   const [busy, setBusy]     = useS(0);       // 0=沒在跑，否則是已完成的字數
   const [aiErr, setAiErr]   = useS('');
+  const [aiNote, setAiNote] = useS('');            // v445：這次的特別要求（直接寫給 AI）
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
   const [story, setStory]   = useS(null);    // v406: AI 出的短文填空（校稿中一起改）
   const [reStory, setReStory] = useS(false); // v407: 校稿頁單獨重生短文（不用整組重出）
@@ -967,6 +995,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const words = qsParseWords(text);
   const withZh = words.filter(w => w.zh);
   const withEx = words.filter(w => qsBlank(w.example, w.term));
+  const withDef = words.filter(w => w.def);        // v445：老師自己寫的英文定義
   /* ⚠ 開了 AI 就不需要自己先寫中文／例句——句子和定義都是 AI 出的。
      沒開 AI 才需要：配對要有中文、填空要有例句。 */
   const canDo = {
@@ -990,9 +1019,9 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
          不是兩個相加。短文失敗不影響單字題目——它只是少一個練習。
          v407：短文的第三層保底要用到「填空題」的例句，所以把同一個 promise
          當 rescue 傳進去——它只在真的漏字時才會 await，並行完全沒被打斷。 */
-      const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), grade, onProgress: (done) => setBusy(done) });
+      const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), grade, teacherNote: aiNote, onProgress: (done) => setBusy(done) });
       const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
-        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, rescue: () => exP }).catch(() => null)
+        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP }).catch(() => null)
         : Promise.resolve(null);
       const [r, st] = await Promise.all([exP, stP]);
       setRows(r);
@@ -1074,7 +1103,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                     onClick={async () => {
                       setReStory(true);
                       try {
-                        const st2 = await window.aiMakeVocabStory(words, { hint: title.trim(), grade, rescue: () => rows });
+                        const st2 = await window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => rows });
                         if (st2) setStory(st2);
                       } catch (e) { /* 失敗就維持原本那一篇，不要把老師手上的東西弄不見 */ }
                       setReStory(false);
@@ -1094,21 +1123,26 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                     <label className="qs-story-lab">
                       短文（<code>[答案]</code> 是空格，後面可以加 <code>(提示)</code>，
                       例：<code>[soaring](ing)</code>）
+                      <span className="qs-story-sub">
+                        · 只挖 {((story.passage || '').match(/\[[^\]]+\]/g) || []).length} 格，
+                        Word Bank 還是全部 {words.length} 個字（其他當誘答）——想多挖就自己加 <code>[ ]</code>
+                      </span>
                     </label>
                     <textarea rows={8} value={story.passage || ''}
                       onChange={e => setStory(s2 => ({
                         ...s2, passage: e.target.value,
-                        check: window.storyCheck ? window.storyCheck(e.target.value, words) : s2.check,
+                        check: window.storyCheck ? window.storyCheck(e.target.value, words, { partial: true }) : s2.check,
                       }))}/>
                     {(() => {
                       const c = story.check || {};
                       const bad = [];
-                      if ((c.missing || []).length) bad.push(`漏了：${c.missing.join('、')}`);
+                      if ((c.missing || []).length) bad.push(`短文裡沒有出現：${c.missing.join('、')}`);
                       if ((c.extra || []).length)   bad.push(`挖到不是這一課的字：${c.extra.join('、')}`);
                       if ((c.leaked || []).length)  bad.push(`答案出現在括號外面：${c.leaked.join('、')}`);
+                      const nb = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
                       return bad.length
                         ? <div className="qs-story-warn">⚠ {bad.join('；')}</div>
-                        : <div className="qs-story-ok">✓ 每個單字都各挖了一格，沒有洩漏答案</div>;
+                        : <div className="qs-story-ok">✓ 每個單字都在短文裡、挖了 {nb} 格，沒有洩漏答案</div>;
                     })()}
                     {/* v407：程式自動修過的地方要講出來，老師才知道這篇被動過哪裡 */}
                     {(story.fixes || []).length > 0 && (
@@ -1166,10 +1200,11 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
               <div className="field">
                 <label className="field-label">單字清單</label>
                 <textarea className="qs-ta" rows={11} value={text} onChange={e => setText(e.target.value)}
-                  placeholder={"一行一個字：英文 - 中文 - 例句（中文、例句可省略）\n也可以直接從 Excel／Google 試算表整段貼過來\n\npharaoh - 法老 - The pharaoh ruled ancient Egypt.\npyramid - 金字塔 - They built a huge pyramid.\ntomb - 墳墓"}/>
+                  placeholder={"一行一個字：英文 - 中文 - 例句 - 英文定義（中文之後都可以省略）\n也可以直接從 Excel／Google 試算表整段貼過來\n\npharaoh - 法老 - The pharaoh ruled ancient Egypt. - a king in ancient Egypt\npyramid - 金字塔 - They built a huge pyramid.\ntomb - 墳墓"}/>
                 <div className="field-help">
                   分隔符號 Tab／<code>|</code>／逗號／<code> - </code> 都吃。
-                  目前 <b>{words.length}</b> 個字（有中文 {withZh.length}、有例句 {withEx.length}）。
+                  目前 <b>{words.length}</b> 個字（有中文 {withZh.length}、有例句 {withEx.length}、有定義 {withDef.length}）。
+                  {withDef.length > 0 && <>　<b>配對連線</b>會直接用你寫的英文定義，不會讓 AI 自己生。</>}
                 </div>
               </div>
             </div>
@@ -1226,6 +1261,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
               <span className="qs-band-note">不管哪一級，例句一定會留線索讓孩子猜得出答案。</span>
             </div>
           )}
+          {wantAI && <AiNoteBox value={aiNote} onChange={setAiNote}
+            examples="短文用萬聖節當背景｜例句都用學校生活｜定義寫簡單一點，三年級看得懂｜短文只挖 3 格"/>}
           {aiErr && <div className="notify-msg err" style={{ marginTop: 8 }}>⚠️ {aiErr}</div>}
           {!wantAI && assignBox()}
         </div>
@@ -1269,7 +1306,8 @@ function qsBuildItems({ words, title, kinds, ai, story }) {
     // 有 AI 出的英文定義就用它（Alan 的風格），沒有才退回「單字 → 中文」
     const pairs = words.map((w, i) => {
       const a = aiOf(w.term);
-      const def = (a && a.def) || w.zh;
+      // v445：老師自己貼的定義最優先（他有自己要考的講法），沒貼才用 AI 的、再沒有才用中文
+      const def = w.def || (a && a.def) || w.zh;
       return def ? { id: 'p' + stamp + i + rnd(), word: (a && a.word) || w.term, def } : null;
     }).filter(Boolean);
     if (pairs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'dm', type: 'def-match', title, linkedFlashcardId: fcId, defPairs: pairs });
@@ -2512,6 +2550,7 @@ function GuidedReadingEditor({ itemId, itemTitle, itemGroup, onSideItems, sideIt
   const [aiSkills, setAiSkills] = useS([]);
   const [aiQSkills, setAiQSkills] = useS([]);   // v415: 題目要偏哪些閱讀技巧（空＝一般閱讀理解）
   const [aiReplace, setAiReplace] = useS(false);
+  const [aiNote, setAiNote] = useS('');       // v445：這次的特別要求（直接寫給 AI）
   const [aiRun,   setAiRun]   = useS('');  // 進度文字（空字串＝沒在跑）
   const [aiErr,   setAiErr]   = useS('');
   const [aiInfo,  setAiInfo]  = useS('');  // 跑完的回報（出了幾題、跳過哪幾段、擋掉幾題）
@@ -2756,7 +2795,7 @@ function grParseBulk(text, segCount) {
       const r = await window.aiMakeGuidedQuestions({
         segments: texts, title: itemTitle || '', grade: aiGrade,
         perMcq: aiPerM, perSa: aiPerS, finalMcq: aiFinM, finalSa: aiFinS,
-        skills: aiSkills, qSkills: aiQSkills,
+        skills: aiSkills, qSkills: aiQSkills, teacherNote: aiNote,
         onProgress: (d, tot, label) => setAiRun(`出題中 ${d}/${tot}${label ? ' · ' + label : ''}`),
       });
 
@@ -3251,6 +3290,8 @@ function grParseBulk(text, segCount) {
             <input type="checkbox" checked={aiReplace} onChange={e => setAiReplace(e.target.checked)}/>
             <span>蓋掉原本的題目（不勾＝加在原本的後面）</span>
           </label>
+          <AiNoteBox value={aiNote} onChange={setAiNote}
+            examples="多問人物的心情｜每段都要有一題問細節｜不要考年份數字｜簡答題要引用文章的句子"/>
           {aiErr && <div className="gr-ai-err">{aiErr}</div>}
           <div className="gr-ai-foot">
             <span className="gr-ai-sum">
@@ -4827,6 +4868,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [nRw, setNRw]       = useS(5);          // v429：改寫句子（例：把大小寫改對）
   const [nCircle, setNCircle] = useS(6);       // v444：找出來（在句子裡圈出名詞／動詞）
   const [nSort, setNSort]   = useS(8);         // v444：分一分（把字分到 2-4 個籃子）
+  const [aiNote, setAiNote] = useS('');        // v445：這次的特別要求（直接寫給 AI）
   const [lsBusy, setLsBusy] = useS(false);      // v429：校稿頁單獨重出互動教學
   /* v442：互動教學的「AI 自動配圖」——只補還沒有圖的 learn 步驟 */
   const [lsImg, setLsImg] = useS(false);
@@ -4894,7 +4936,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       setBusy({ done: 1, total: 6, label: `讀到了：${sheet.topic || '文法'}${(sheet.sections || []).length > 1 ? `（${sheet.sections.length} 段、${sheet.questions.length} 題）` : ''}，開始出題` });
       const pack = await window.aiMakeGrammarPack({
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
-        grade, nMcq, nFill, nTr, nRw, nCircle, nSort, caseMatters: !!sheet.caseMatters,
+        grade, nMcq, nFill, nTr, nRw, nCircle, nSort, caseMatters: !!sheet.caseMatters, teacherNote: aiNote,
         onProgress: (d, t, label) => { if (live()) setBusy({ done: 1 + d, total: 1 + t, label }); },
       });
       if (!live()) return;
@@ -4913,7 +4955,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
     setLsBusy(true); setErr('');
     try {
       const lesson = await window.aiMakeGrammarLesson({ topic: res.sheet.topic || title, topicZh: res.sheet.topicZh,
-        notes: res.sheet.notes || text, grade, caseMatters: !!res.caseMatters });
+        notes: res.sheet.notes || text, grade, caseMatters: !!res.caseMatters, teacherNote: aiNote });
       setRes(r => ({ ...r, lesson, errors: (r.errors || []).filter(x => x !== '互動教學') }));
     } catch (e) { setErr('互動教學還是沒有產生成功，請再按一次；或先建立練習（練習就不會上鎖）。'); }
     setLsBusy(false);
@@ -5028,6 +5070,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
               <b>找出來</b>＝在句子裡圈出名詞／動詞（會再用另一個 AI 檢查「只有一個答案」）；<b>分一分</b>＝把字分到 2–4 個籃子。
               老師作業上原本的題目會優先收進去，不夠的 AI 再依教學重點補。出完先校稿，確認了才寫進題庫。
             </div>
+            <AiNoteBox value={aiNote} onChange={setAiNote}
+              examples="這一課只要先講解，再出分類和從句子找出來的練習｜講解只要 2 頁，其他直接練習｜題目都用班上同學的名字｜不要考不可數名詞"/>
             {assignBox()}
             {err && <div className="notify-msg err" style={{ marginTop: 10 }}>⚠️ {err}</div>}
             {busy && (
@@ -5494,6 +5538,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const [qSkills, setQSkills] = useS({});
   const [qsN, setQsN]         = useS(2);
   const [keepPassage, setKeepPassage] = useS(true);
+  const [aiNote, setAiNote] = useS('');        // v445：這次的特別要求（直接寫給 AI）
   /* v436（Alan：「還缺少了一開始的 background 給學生的背景知識…希望跟 grammar 一樣有互動式學習」） */
   const [bg, setBg]         = useS(true);      // 要不要先教背景知識
   const [bgBusy, setBgBusy] = useS(false);     // 校稿頁按「重新產生」時
@@ -5532,11 +5577,11 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
       const [r, bgR] = await Promise.all([
         window.aiMakeReadingSet({
           passage: text, title: title.trim(), grade, mcq: nMcq, sa: nSa, skills: kinds,
-          qSkills: qKinds, qSkillN: qsN,
+          qSkills: qKinds, qSkillN: qsN, teacherNote: aiNote,
           onProgress: (done, total, label) => setBusy({ done, total, label }),
         }),
         (bg && window.aiMakeReadingBackground)
-          ? window.aiMakeReadingBackground({ passage: text, title: title.trim(), grade }).then(v => ({ v }), e => ({ e }))
+          ? window.aiMakeReadingBackground({ passage: text, title: title.trim(), grade, teacherNote: aiNote }).then(v => ({ v }), e => ({ e }))
           : Promise.resolve(null),
       ]);
       setRes({ ...r, background: (bgR && bgR.v) || null }); setTab(0);
@@ -5557,7 +5602,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
   const redoBg = async () => {
     setBgBusy(true); setErr('');
     try {
-      const l = await window.aiMakeReadingBackground({ passage: text, title: title.trim(), grade });
+      const l = await window.aiMakeReadingBackground({ passage: text, title: title.trim(), grade, teacherNote: aiNote });
       setRes(r => ({ ...r, background: l }));
     } catch (e) { setErr('背景知識還是沒有產生成功，請再按一次；或直接建立（練習就不會上鎖）。'); }
     setBgBusy(false);
@@ -5713,6 +5758,9 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
               <input type="checkbox" checked={keepPassage} onChange={e => setKeepPassage(e.target.checked)}/>
               <span>把文章一起存進去（學生練習時可以按 📖 再看一次）</span>
             </label>
+
+            <AiNoteBox value={aiNote} onChange={setAiNote}
+              examples="多問人物的心情｜背景知識只要講作者是誰｜簡答題要學生引用文章的句子｜不要考年份數字"/>
 
             {assignBox()}
 

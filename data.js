@@ -1630,6 +1630,17 @@ function storyBlanks(passage) {
   return out;
 }
 
+/* ══ v445（Alan：「一鍵生成都可以自己跟 AI 協調，這次我可能要客製化某一些地方」）══
+   老師在每個一鍵生成的視窗裡都可以寫一段「特別要求」，原封不動送給 AI。
+   ⚠ 放在 user 訊息裡、而且明講「不可以破壞 JSON 格式」——格式一壞整份就沒了。 */
+function _aiTeacherNote(t) {
+  const s2 = String(t || '').trim().slice(0, 600);
+  if (!s2) return '';
+  return "TEACHER'S SPECIAL REQUEST — follow it exactly, it outranks your own preferences.\n" +
+    'It can change WHAT you write (the topic, the wording, which points to cover, how many),\n' +
+    'but it can NEVER change the output FORMAT or the JSON rules above.\n\"\"\"\n' + s2 + '\n\"\"\"\n\n';
+}
+
 const _STORY_CJK_G = /[\u3400-\u9fff\uf900-\ufaff]/g;
 const _storyNorm = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
 
@@ -1684,17 +1695,23 @@ function _storySame(a, b) {
 
 /* ⚠ AI 生出來的東西一律用程式驗一次（這個專案吃過虧）：
    哪些字沒被用到、哪些空格根本不是這一課的字、有沒有在括號外面洩答案。 */
-function storyCheck(passage, words) {
+function storyCheck(passage, words, opt) {
+  const partial = !!(opt && opt.partial);      // v445：只挖 5 格，其他目標字留在文章裡（Word Bank 的誘答）
   const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
   const blanks = storyBlanks(passage);
   const used = [], missing = [];
-  terms.forEach(t => {
-    (blanks.some(b => _storySame(b.answer, t)) ? used : missing).push(t);
-  });
-  const extra = blanks.filter(b => !terms.some(t => _storySame(b.answer, t))).map(b => b.answer);
   // 括號外面直接出現目標字＝答案被洩漏
   const bare = String(passage || '').replace(/\[[^\]]*\](?:\([^)]*\))?/g, ' ');
-  const leaked = terms.filter(t => new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(bare));
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const inBare = (t) => new RegExp('\\b' + esc(t) + '\\w*\\b', 'i').test(bare);
+  terms.forEach(t => {
+    const hasBlank = blanks.some(b => _storySame(b.answer, t));
+    ((hasBlank || (partial && inBare(t))) ? used : missing).push(t);   // partial：有出現在文章裡就算用到了
+  });
+  const extra = blanks.filter(b => !terms.some(t => _storySame(b.answer, t))).map(b => b.answer);
+  // partial：沒挖的字本來就會出現在文章裡，只有「挖了又出現」才是洩漏
+  const leaked = terms.filter(t => (!partial || blanks.some(b => _storySame(b.answer, t))) &&
+    new RegExp('\\b' + esc(t) + '\\b', 'i').test(bare));
   // v443（Alan：「短文一定只能英文，我不要中文的」）——整篇出現中文就是不合格，不是小瑕疵
   const zh = (String(passage || '').match(_STORY_CJK_G) || []).join('');
   return { blanks: blanks.length, used, missing, extra, leaked, zh };
@@ -1808,13 +1825,60 @@ function _storyRescue(passage, missing, ex) {
   return { passage: out, added };
 }
 
-async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3 } = {}) {
+/* v445（Alan：「只抽五個單字填空，但 word bank 還是全部單字，這樣才有難度」）
+   文章照樣每個字都挖（產生與驗證完全不變），最後只留 n 格、其他還原成原本的字。
+   平均分散著留，不然五格會全擠在前面。 */
+const _STORY_PICK = 5;
+function storyPick(passage, n) {
+  const p = String(passage || '');
+  const re = /\[([^\]]+)\](\([^)]*\))?/g;
+  const hits = [];
+  let m;
+  while ((m = re.exec(p))) hits.push({ i: m.index, len: m[0].length, word: m[1], key: _storyNorm(m[1]) });
+  if (hits.length <= n || n < 1) return p;
+  /* ⚠ 同一個字要嘛整組留、要嘛整組還原。
+     實測踩過：AI 寫了兩次 lights、兩格都挖，只留一格之後另一格變回原文
+     ＝答案就寫在文章裡（真 AI 第一次跑就中）。所以這裡以「字」為單位挑，不是以「格」。 */
+  const keys = [];
+  hits.forEach(h => { if (keys.indexOf(h.key) < 0) keys.push(h.key); });
+  const size = (k) => hits.filter(h => h.key === k).length;
+  const keep = new Set();
+  let total = 0;
+  const want = Math.min(keys.length, Math.max(1, n));
+  for (let k = 0; k < want && total < n; k++) {
+    const key = keys[want === 1 ? 0 : Math.round(k * (keys.length - 1) / (want - 1))];
+    if (keep.has(key)) continue;
+    keep.add(key); total += size(key);
+  }
+  let out = '', last = 0;
+  hits.forEach(h => {
+    if (keep.has(h.key)) return;
+    out += p.slice(last, h.i) + h.word;
+    last = h.i + h.len;
+  });
+  return out + p.slice(last);
+}
+
+async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3, blanks = _STORY_PICK, teacherNote = '' } = {}) {
   const band = VOCAB_BANDS[vocabBandOf(grade)];   // v442：短文也跟著年級（低年級句子更短更白話）
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
+  /* v445：交出去之前只留幾格——挖太多格，前後文就不夠孩子推答案了 */
+  const finish = (b) => {
+    const nb = Math.max(2, +blanks || _STORY_PICK);
+    const before = storyBlanks(b.passage).length;
+    let picked = storyPick(b.passage, nb);
+    // 保險絲：挑完如果反而洩漏了答案（同一個字挖一格、另一格變回原文），就整篇照原樣全挖
+    if (storyCheck(picked, list, { partial: true }).leaked.length > storyCheck(b.passage, list).leaked.length) picked = b.passage;
+    const n = storyBlanks(picked).length;
+    return { ...b, passage: picked, full: b.passage, partial: true,
+             check: storyCheck(picked, list, { partial: true }),
+             fixes: (b.fixes || []).concat(n < before ? ['只留 ' + n + ' 個空格（Word Bank 還是全部 ' + list.length + ' 個字，其他當誘答）'] : []) };
+  };
   const head =
     `LEVEL: ${band.label}\n${band.note}\nEvery blank must still be findable from the words around it — that rule never changes.\n\n` +
     (hint ? `Story topic / lesson title: ${hint}\n` : '') +
+    _aiTeacherNote(teacherNote) +
     'Target words (use each exactly once):\n' +
     list.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
 
@@ -1843,7 +1907,7 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
       title: String(r.title || '').trim(),
       passage: fixed.passage, check: fixed.check, fixes: fixed.notes, rounds: round + 1,
     };
-    if (!_storyScore(cand.check)) return cand;                       // 完全乾淨，收工
+    if (!_storyScore(cand.check)) return finish(cand);               // 完全乾淨，收工（最後只留 5 格）
     if (!best || _storyScore(cand.check) < _storyScore(best.check)) best = cand;
 
     /* 下一輪把「這次哪裡不合格」原原本本告訴它。
@@ -1870,7 +1934,7 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
                fixes: (best.fixes || []).concat(again.notes, [`用填空題的例句補上：${pat.added.join('、')}`]) };
     }
   }
-  return best;
+  return finish(best);
 }
 
 function _aiStripFence(t) {
@@ -1963,7 +2027,7 @@ async function _aiAsk(body, pick, timeoutMs) {
    20 個單字實測從 20.8 秒降到 3 秒上下。
    ⚠ 對回輸入順序的方式完全沒變（part.forEach((w,k) => parsed[k]），
    校稿頁看到的欄位、順序、中文解說都跟以前一樣。 */
-async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4' } = {}) {
+async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4', teacherNote = '' } = {}) {
   const band = VOCAB_BANDS[vocabBandOf(grade)];
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (!list.length) return [];
@@ -1977,6 +2041,7 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', g
     const userMsg =
       `LEVEL: ${band.label}\n${band.note}\nThe blank's sentence must ALWAYS contain a clue that makes the answer findable — that rule never changes.\n\n` +
       (hint ? `Context / topic: ${hint}\n` : '') +
+      _aiTeacherNote(teacherNote) +
       'Target words:\n' +
       part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`).join('\n');
     try {
@@ -2675,7 +2740,7 @@ const GN_GRADE = {
 };
 // v430：notes 由好幾段合併（【Collective Nouns】【Possessive Nouns】…）→ 回傳段數，否則 0
 const _gnMultiSec = (notes) => { const n = (String(notes || '').match(/^【[^】\n]+】/gm) || []).length; return n >= 2 ? n : 0; };
-const _GN_BASE = (grade, topic, notes, caseMatters) => `Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
+const _GN_BASE = (grade, topic, notes, caseMatters, teacherNote) => `${_aiTeacherNote(teacherNote)}Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
 Grammar point: ${topic}
 The teacher's notes (stay inside them — do not teach anything the notes do not cover):
 ${String(notes || '').slice(0, 9000)}
@@ -2684,8 +2749,11 @@ The notes have ${_gnMultiSec(notes)} sections (each starts with 【…】). Cove
 IMPORTANT: this lesson is about CAPITAL LETTERS. Every question and interaction must test capitalization,
 and every answer must be written with exactly the right capital letters.` : ''}`;
 
-const GN_LESSON_SYS = `You design a VERY SIMPLE, INTERACTIVE mini-lesson that comes before practice.
-Explanations in Traditional Chinese, examples in English. As simple as possible — a 9-year-old must get it.
+const GN_LESSON_SYS = `You design a VERY SHORT, INTERACTIVE warm-up that comes before practice.
+It is NOT the whole worksheet — 3 rounds, the most important ideas only, then the child practises.
+Explanations in spoken Traditional Chinese that KEEPS THE ENGLISH WORDS IN ENGLISH, examples in English.
+Write the way a teacher talks to a 9-year-old: 「Noun 就是名字，分成四種：person、animal、place、thing」
+— never a wall of Chinese, never grammar jargon.
 Output ONLY JSON:
 {"lead":"","steps":[
  {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
@@ -2697,8 +2765,9 @@ Output ONLY JSON:
 ],"outro":""}
 RULES
 - lead: ONE Traditional Chinese sentence, ≤25 characters, what this grammar is for.
-- steps: 3 or 4 rounds (if the notes have several 【…】 sections: ONE round per section, up to 6). Each round = ONE "learn" step immediately followed by ONE interaction
-  that practises exactly what that learn step just said.
+- steps: EXACTLY 3 rounds (4 only if the notes truly cover four different ideas — never more, even if the
+  notes have ten sections; pick the ideas the child needs before practising and drop the rest).
+  Each round = ONE "learn" step immediately followed by ONE interaction that practises exactly what that learn step just said.
 - CHOOSING THE INTERACTION — pick the one that really tests the idea, and use at least two different kinds:
   · "tap"   → the idea is "find the X in a sentence" (find the nouns / the verb / the adjective / the capital letter).
   · "sort"  → the idea has 2-3 groups (person/place/thing, common/proper, countable/uncountable, a/an, is/are).
@@ -2708,7 +2777,11 @@ RULES
   · "fix"   → ONLY when a word can be WRONG because of THIS rule (taipei→Taipei, cat→cats, go→goes, a→an).
             The wrong word must break the rule you just taught. NEVER swap a word just because another word
             would sound nicer (cat→dog is NOT a mistake) — a checker rejects that and the whole lesson fails.
-- learn.say: ONE idea only, Traditional Chinese, ≤30 characters, no grammar jargon.
+- learn.say: ONE idea only, ≤30 characters, spoken Chinese with the English terms left in English
+  (「Noun 分成四種：person、animal、place、thing」／「專有名詞 proper noun 開頭要大寫」).
+  A child must understand it out loud. No grammar jargon, no full-Chinese translation of English terms.
+- ⚠ NEVER teach an instruction that only works on paper — colouring words, underlining, drawing lines,
+  "places are blue, things are yellow". On a screen that means nothing. Teach the language point itself.
 - learn.imgHint: 2-4 English words naming a PHOTO of WHAT THE FIRST EXAMPLE SENTENCE IS ABOUT.
   If the example is "The park is big." the hint is "big city park"; if it is "I have a pencil." the hint is "pencil on desk".
   The site fetches that photo automatically, so name a scene a stock photo would really show, and always reuse the
@@ -3240,9 +3313,9 @@ function _gnFixImgHint(st) {
 }
 
 // v429：互動教學獨立出來（校稿頁也能單獨按「重新產生」）
-async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', caseMatters = false } = {}) {
+async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', caseMatters = false, teacherNote = '' } = {}) {
   const plan = _gnLessonPlan(topic + ' ' + topicZh, notes);                      // v443
-  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters) + plan.text;
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote) + plan.text;
   // 這一課用不到的題型（例：「什麼是名詞」不該出「排句子」）直接當成不合格，讓 AI 換一種
   const keep = (st) => { const v = gnValidStep(st); return v && plan.ban.indexOf(v.kind) < 0 ? v : null; };
   let feedback = '', best = null, lastErr = null;
@@ -3254,6 +3327,10 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
     // 最後一步是「學」＝學完沒得練就結束了，砍掉（互動教學的重點就是動手）
     let trimmed = false;
     while (valid.length && valid[valid.length - 1].kind === 'learn') { valid.pop(); trimmed = true; }
+    /* v445（Alan：「不需要這麼多頁講解，講解不是越多越好」）——最多 4 輪（8 步）。
+       多出來的整輪砍掉，寧可少講兩頁也不要小朋友翻十頁。 */
+    if (valid.length > 8) valid.length = 8;
+    while (valid.length && valid[valid.length - 1].kind === 'learn') valid.pop();
     const l = valid.filter(s2 => s2.kind === 'learn').length >= 2 && valid.filter(s2 => s2.kind !== 'learn').length >= 2
       ? { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() } : null;
     if (l) return l;
@@ -3276,15 +3353,15 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
 }
 
 async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
-                                   nCircle = 0, nSort = 0, caseMatters = false, onProgress } = {}) {
+                                   nCircle = 0, nSort = 0, caseMatters = false, teacherNote = '', onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
-  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters);
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote);
   let done = 0; const total = 1 + [nMcq, nFill, nTr, nRw, nCircle, nSort].filter(Boolean).length;
   const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
   // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
   const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
   const [L, M, F, T, R, C, S] = await Promise.all([
-    settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters }), '互動教學'),
+    settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters, teacherNote }), '互動教學'),
     settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
     settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
     settle(_gnMakeKind('translate', { n: nTr, base, teacherQs, caseMatters }), '中翻英', nTr),
@@ -3345,7 +3422,8 @@ ${_AI_MINIFY}`;
 /* 有沒有「爆雷／講得像已經讀過」——實測 AI 會寫「課文提到他們留下美國國旗」 */
 const _rcBgSpoiler = (l) => JSON.stringify(l || {}).match(/課文(提到|說|裡|中)|文章(說|提到)/g) || [];
 
-async function aiMakeReadingBackground({ passage, title = '', grade = 'g4', onProgress } = {}) {
+async function aiMakeReadingBackground({ passage, title = '', grade = 'g4', teacherNote = '', onProgress } = {}) {
+  const _rcUser = (pg, ti, ex) => _rcUserBase(pg, ti, [_aiTeacherNote(teacherNote).trim(), ex].filter(Boolean).join('\n\n'));
   const text = String(passage || '').trim();
   if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字）。');
   const base = `Students: Taiwanese elementary school, ${RC_GRADES[grade] || RC_GRADES.g4}
@@ -3679,11 +3757,12 @@ async function _rcCall(system, user, maxTokens) {
   );
 }
 
-function _rcUser(passage, title, extra) {
+function _rcUserBase(passage, title, extra) {
   return (title ? 'Title: ' + title + '\n\n' : '') +
     'Passage:\n"""\n' + String(passage || '').trim() + '\n"""' +
     (extra ? '\n\n' + extra : '');
 }
+const _rcUser = _rcUserBase;      // 沒有特別要求時就是原本的（各函式內部會自己蓋掉）
 
 /* ── 把 AI 回來的東西整理成「卡片 → 區塊」的統一結構 ──────────────────────
    四種技巧在畫面上長得不一樣，但底下都是同一件事：把卡片放到正確的格子裡。
@@ -3816,7 +3895,9 @@ function rcFixBlock(block) {
            skills:['problem-solution',…], onProgress(done,total,label) }
    回傳 { mcq:[…], sa:[…], blocks:[…] }（blocks 已是最終結構，可直接存） */
 async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, sa = 5,
-  skills = [], qSkills = [], qSkillN = 2, onProgress } = {}) {
+  skills = [], qSkills = [], qSkillN = 2, teacherNote = '', onProgress } = {}) {
+  // v445：老師的「特別要求」跟著每一個請求走（題目、簡答、閱讀技巧都算）
+  const _rcUser = (pg, ti, ex) => _rcUserBase(pg, ti, [_aiTeacherNote(teacherNote).trim(), ex].filter(Boolean).join('\n\n'));
   const text = String(passage || '').trim();
   if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字），請貼完整的文字稿。');
   const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
@@ -4116,7 +4197,8 @@ function _rcAutoN(text, cap) {
   return Math.min(n, cap == null ? 4 : cap);
 }
 async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
-  perMcq = 2, perSa = 1, finalMcq = 3, finalSa = 1, skills = [], qSkills = [], onProgress } = {}) {
+  perMcq = 2, perSa = 1, finalMcq = 3, finalSa = 1, skills = [], qSkills = [], onProgress, teacherNote = '' } = {}) {
+  const _rcUser = (pg, ti, ex) => _rcUserBase(pg, ti, [_aiTeacherNote(teacherNote).trim(), ex].filter(Boolean).join('\n\n'));
   const all = (segments || []).map((s, k) => ({
     i: (s && s.i != null) ? s.i : k,
     text: String((s && s.text) || '').replace(/\s+/g, ' ').trim(),
