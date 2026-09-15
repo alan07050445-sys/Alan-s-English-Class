@@ -37,9 +37,89 @@ const TYPE_OPTIONS = [
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
+/* ══ v447（Alan：「living in deserts 的分段不見了」）═══════════════════════════
+   查線上資料的結果：那一份從來沒有寫進雲端（G3 的 class/data 自 9/11 起就沒被寫過），
+   但 Storage 裡留著三組沒人認領的課文照片（9/14 兩組各 11 張、9/15 一組 9 張）——
+   也就是「照片都上傳好了、單元卻還沒存」就不見了（重新整理、當掉、或不小心關掉）。
+   ⚠ 照片是一上傳就進 Storage，編輯中的段落／題目卻只活在記憶體裡。
+   這裡補上「邊改邊留底」：每次改動都寫進 localStorage，下次打開同一週的編輯器時問他要不要接回來。 */
+const ED_DRAFT_PREFIX = 'alan-edraft:';
+const ED_DRAFT_KEEP_MS = 14 * 24 * 3600 * 1000;
+const edDraftKey = (weekId, id) => ED_DRAFT_PREFIX + (weekId || '?') + ':' + (id || 'new');
+/* 有沒有東西值得留（空白的新單元不要留底，不然下次會被問「上次有一份沒存到」但裡面什麼都沒有） */
+function edDraftHasContent(form) {
+  if (!form) return false;
+  if (String(form.title || '').trim()) return true;
+  return ['grSegments', 'grFinal', 'cards', 'questions', 'pairs', 'saQuestions', 'spellWords', 'defPairs',
+          'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts']
+    .some(k => Array.isArray(form[k]) && form[k].length > 0) ||
+    !!String(form.passage || form.essayPrompt || form.smPrompt || '').trim();
+}
+function edDraftSave(weekId, form) {
+  try {
+    if (!form || !form.id) return;
+    if (!edDraftHasContent(form)) { localStorage.removeItem(edDraftKey(weekId, form.id)); return; }
+    const body = JSON.stringify({ t: Date.now(), weekId, form });
+    if (body.length > 2000000) return;            // 太大就不留（localStorage 會直接爆掉）
+    localStorage.setItem(edDraftKey(weekId, form.id), body);
+  } catch (e) { /* 無痕模式／容量滿了：留不了底就算了，不能影響編輯 */ }
+}
+function edDraftClear(weekId, id) {
+  try { localStorage.removeItem(edDraftKey(weekId, id)); } catch (e) {}
+}
+/* 找「這一週還沒存成功」的草稿：id 已經在這一週的單元裡＝存過了，不要再問。 */
+function edDraftFind(weekId, existingIds, type) {
+  const out = [];
+  try {
+    const have = new Set(existingIds || []);
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf(ED_DRAFT_PREFIX) !== 0) continue;
+      let d = null;
+      try { d = JSON.parse(localStorage.getItem(k)); } catch (e) { continue; }
+      if (!d || !d.form || !d.form.id) continue;
+      if (Date.now() - (d.t || 0) > ED_DRAFT_KEEP_MS) { localStorage.removeItem(k); i--; continue; }
+      if (d.weekId !== weekId) continue;
+      if (have.has(d.form.id)) { localStorage.removeItem(k); i--; continue; }   // 已經存進去了
+      if (type && d.form.type !== type) continue;
+      out.push(d);
+    }
+  } catch (e) {}
+  return out.sort((a, b) => (b.t || 0) - (a.t || 0));
+}
+/* 草稿裡有多少東西——講給老師聽的那一句（「11 段課文・8 題」） */
+function edDraftSummary(form) {
+  const bits = [];
+  const n = (a) => (Array.isArray(a) ? a.length : 0);
+  if (n(form.grSegments)) bits.push(`${n(form.grSegments)} 段課文`);
+  if (n(form.cards)) bits.push(`${n(form.cards)} 張單字卡`);
+  if (n(form.questions)) bits.push(`${n(form.questions)} 題`);
+  if (n(form.pairs)) bits.push(`${n(form.pairs)} 題`);
+  if (n(form.saQuestions)) bits.push(`${n(form.saQuestions)} 題簡答`);
+  if (n(form.spellWords)) bits.push(`${n(form.spellWords)} 個聽寫`);
+  if (n(form.defPairs)) bits.push(`${n(form.defPairs)} 組配對`);
+  if (n(form.grFinal)) bits.push(`${n(form.grFinal)} 題總結`);
+  if (n(form.circleQuestions)) bits.push(`${n(form.circleQuestions)} 題找出來`);
+  if (n(form.sortWords)) bits.push(`${n(form.sortWords)} 個分類`);
+  return bits.join('・') || '還沒有題目';
+}
+
 function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
   const [moreTypes, setMoreTypes] = useS(false);
+  /* v447：沒存到的編輯，下次打開時接回來 */
+  const [recover, setRecover] = useS(null);
+  useE(() => {
+    if (!open || !draft) { setRecover(null); return; }
+    const ids = (weekItems || []).map(x => x && x.id);
+    const found = edDraftFind(weekId, ids, draft.type).filter(d => d.form.id !== draft.id);
+    setRecover(found[0] || null);
+  }, [open, draft && draft.id]);
+  useE(() => {
+    if (!open || !form) return;
+    const t = setTimeout(() => edDraftSave(weekId, form), 700);   // 邊改邊留底（慢一點寫，不要每個鍵盤事件都寫）
+    return () => clearTimeout(t);
+  }, [form, open]);
 
   useE(() => { setForm(draft); }, [draft]);
   // 編輯既有單元、而且它不是那 4 種常用題型 → 直接把「更多題型」展開，不然會找不到自己
@@ -67,6 +147,7 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
     if (form.type !== 'upload' && window.getQuizItems && window.getQuizItems([form]).length === 0) {
       if (!window.confirm('⚠ 這個單元目前是 0 題，儲存後學生頁「不會顯示」它。\n\n（題目清單會標「⚠ 沒有題目」提醒你補題）\n\n仍要儲存嗎？')) return;
     }
+    edDraftClear(weekId, form.id);          // v447：存出去了就不用留底了
     onSave(form);
   };
 
@@ -81,6 +162,17 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
         </div>
 
         <div className="modal-body">
+          {/* v447：上次沒存到的編輯（照片都上傳好了卻沒存成功） */}
+          {recover && (
+            <div className="ed-recover">
+              <div className="ed-recover-tx">
+                <b>⚠ 上次有一份「{TYPE_ZH[recover.form.type] || recover.form.type}」沒有存到</b>
+                <span>{recover.form.title || '（沒有標題）'} · {edDraftSummary(recover.form)} · {new Date(recover.t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <button type="button" className="btn primary" onClick={() => { setForm({ ...recover.form, _isNew: true }); setRecover(null); }}>接回來繼續改</button>
+              <button type="button" className="btn ghost" onClick={() => { edDraftClear(recover.weekId, recover.form.id); setRecover(null); }}>不要了</button>
+            </div>
+          )}
           <div className="field">
             <label className="field-label">題型</label>
             <div className="type-picker">

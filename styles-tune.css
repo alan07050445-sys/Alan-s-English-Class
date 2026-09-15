@@ -3772,3 +3772,18 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .week-empty-bar button { border: 1px solid #C8AE62; background: #fff; color: #6B551A; border-radius: 999px;
   padding: 5px 14px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
 .week-empty-bar button:hover { background: #FFF9E8; }
+
+/* v447：沒存到的編輯（草稿接回來）與「存檔沒成功」的常駐提示 */
+.ed-recover { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px;
+  padding: 10px 14px; border-radius: 12px; background: #FFF3CF; border: 1px solid #E3CE8C; }
+.ed-recover-tx { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; }
+.ed-recover-tx b { font-family: var(--sans); font-size: 14px; color: #6B551A; }
+.ed-recover-tx span { font-family: var(--sans); font-size: 12.5px; color: #8A7434; }
+.save-fail-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 4000;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: min(92vw, 720px);
+  padding: 10px 16px; border-radius: 14px; background: #7A1F1F; color: #fff;
+  font-family: var(--sans); font-size: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+.save-fail-bar b { font-weight: 800; }
+.save-fail-bar button { border: 0; border-radius: 999px; padding: 6px 14px; font-size: 13.5px; font-weight: 700;
+  background: #fff; color: #7A1F1F; cursor: pointer; }
+.save-fail-bar button.ghost { background: transparent; color: #FFD9D9; border: 1px solid rgba(255,255,255,.4); }

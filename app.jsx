@@ -541,6 +541,15 @@ function App() {
 
   // v355: 所有課程內容的存檔都走這裡——雲端還沒回來就不准寫，寫失敗要讓老師看得到。
   //       （以前是直接呼叫 window.saveWeeks，失敗只會靜靜地變成 unhandled rejection。）
+  /* v447（Alan：「分段不見了」）：存檔失敗以前只跳一次 alert，畫面上的東西還在
+     ——他以為存好了，重新整理才發現沒有。現在改成「失敗就一直掛在畫面上，可以再試一次」，
+     而且整份內容先寫進 localStorage，重新整理也還在。 */
+  const [saveFail, setSaveFail] = useAppState(null);   // { msg, at, weeks }
+  const markSaveFail = (w, e) => {
+    const msg = (e && e.message) || String(e || '存檔失敗');
+    try { localStorage.setItem('alan-unsaved-weeks', JSON.stringify({ t: Date.now(), grade, weeks: w })); } catch (x) {}
+    setSaveFail({ msg, at: Date.now(), weeks: w });
+  };
   const saveWeeksSafe = (w) => {
     if (!cloudReadyRef.current) {
       alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
@@ -548,8 +557,11 @@ function App() {
     }
     try {
       const p = window.saveWeeks(w);
-      if (p && p.catch) p.catch(e => alert('儲存失敗：' + ((e && e.message) || e)));
-    } catch (e) { alert('儲存失敗：' + ((e && e.message) || e)); }
+      if (p && p.then) p.then(() => {
+        setSaveFail(null);
+        try { localStorage.removeItem('alan-unsaved-weeks'); } catch (x) {}
+      }, e => markSaveFail(w, e));
+    } catch (e) { markSaveFail(w, e); }
     return true;
   };
 
@@ -1967,6 +1979,14 @@ function App() {
           />
 
           {toast && <div className="toast">{toast}</div>}
+          {/* v447：存檔沒成功就一直掛著，不要讓老師以為存好了（他的分段閱讀就是這樣不見的） */}
+          {saveFail && (
+            <div className="save-fail-bar">
+              <span><b>⚠ 剛剛那次變更沒有存進雲端</b>：{saveFail.msg}</span>
+              <button onClick={() => { const w = saveFail.weeks; setSaveFail(null); saveWeeksSafe(w); }}>再存一次</button>
+              <button className="ghost" onClick={() => setSaveFail(null)}>先關掉</button>
+            </div>
+          )}
 
           {mistakesOpen && user && (
             <window.MistakesPanel
