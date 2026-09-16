@@ -2826,7 +2826,10 @@ RULES
   why: Traditional Chinese ≤30 characters.
 - sort.q: a Traditional Chinese instruction, ≤20 characters (e.g. 「這些字是人、地方還是東西？」).
   sort.groups: 2 or 3 groups. label = Traditional Chinese, ≤6 characters. items = 2-3 SHORT English words each,
-  6 items in total at most, every item clearly belongs to one group only. why: Traditional Chinese ≤30 characters.
+  6 items in total at most. why: Traditional Chinese ≤30 characters.
+  ⚠⚠ Every item must fit ONE group only. Never use a word that belongs to two groups — the sense verbs
+  (smell, taste, feel, look, sound) are BOTH linking and action verbs, so they can never be sorted;
+  the same goes for any word your own lesson just called "both". A checker deletes such items.
 - order.zh: a Chinese sentence. order.words: the English translation split into 3-8 word tiles IN THE CORRECT ORDER
   (keep the final punctuation on the last word).
 - fix.sentence: an English sentence with exactly ONE wrong word. wrong: that word exactly as written. right: the correct word.
@@ -2850,7 +2853,11 @@ RULES
 - categories: 2-4 baskets, Traditional Chinese labels, ≤6 characters each, taken straight from the notes
   (e.g. 人／地方／東西, 普通名詞／專有名詞, 可數／不可數, 單數／複數).
 - words: short English words (1-2 words each). "category" must be EXACTLY one of the labels you listed.
-- EVERY word must belong to exactly ONE basket. If a teacher could argue it fits two baskets, do not use it.
+- ⚠⚠ EVERY word must belong to exactly ONE basket, with NO exceptions a teacher could argue about.
+  English is full of words that sit in two baskets at once — the sense verbs (smell, taste, feel, look, sound)
+  are BOTH linking verbs AND action verbs; "orange" is a colour AND a fruit; "play" is a verb AND a noun.
+  Those words are unusable here, no matter how well they fit the lesson. Pick a word that can only go in one basket.
+  A second checker re-reads every word and throws away the whole question if even one word fits two baskets.
 - At least 2 words per basket, spread evenly, and never repeat a word.
 - instruction: ONE Traditional Chinese sentence, ≤20 characters, telling the child what to do.
 ${_AI_MINIFY}`;
@@ -3136,7 +3143,20 @@ function gnValidSortSet(o, n) {
     if (!word || cats.indexOf(cat) < 0 || seen.has(k)) return;
     seen.add(k); words.push({ word, category: cat });
   });
-  const kept = words.slice(0, Math.max(4, n || 8));
+  /* v452：要砍到 n 個字的時候「每一籃輪流拿」，不要直接切前面幾個——
+     直接 slice 會把最後一籃整個切光，整組就因為「有一籃不到兩個字」被判不合格。 */
+  const cap = Math.max(4, n || 8);
+  const byCat = {};
+  words.forEach(w => { (byCat[w.category] = byCat[w.category] || []).push(w); });
+  const kept = [];
+  for (let r = 0; kept.length < cap; r++) {
+    let added = false;
+    for (const c of cats) {
+      const arr = byCat[c] || [];
+      if (arr[r] && kept.length < cap) { kept.push(arr[r]); added = true; }
+    }
+    if (!added) break;
+  }
   // 每一籃至少兩個字，而且每一籃都要有人（不然畫面上會出現空欄）
   const per = cats.map(c => kept.filter(w => w.category === c).length);
   if (kept.length < 4 || per.some(k => k < 2)) return null;
@@ -3223,6 +3243,30 @@ Output ONLY a JSON array of arrays of words, one per item, in order. e.g. [["cat
     }).filter(i => i >= 0));
   } catch (e) { return new Set(); }
 }
+/* ══ v452（Alan：「先學一下才剛講到某些字既可以是 linking 也可以是 action，
+   像是感官動詞就有兩種，那出這種題目也是應該有兩種選項」）═══════════════════
+   「分一分」只有一個正確籃子，所以**凡是能放進兩個籃子的字都不能用**
+   （smells 既是連綴動詞也是動作動詞——它被丟進「連綴動詞」，孩子放「動作動詞」就被判錯，
+     而那正是前一頁剛教過的事）。跟選擇題（v431）、找出來（v444）同一招：
+   再問一個 AI「這個字可以放進哪幾個籃子」，答案不只一個就整個字丟掉。 */
+async function _gnCheckSort(categories, words, base) {
+  if (!words.length) return new Set();
+  const sys = `You are checking a sorting exercise for a Taiwanese elementary English class.
+The child must drag each word into exactly ONE basket, so a word that honestly belongs in two baskets is unusable.
+For EVERY word, list EVERY basket label a teacher would have to accept.
+Be strict: English sense verbs (smell, taste, feel, look, sound) are BOTH linking verbs AND action verbs, so list both.
+Output ONLY a JSON array of arrays of basket labels, one per word, in order. e.g. [["人"],["地方","東西"],["人"]]`;
+  const list = words.map((w, i) => `${i + 1}. ${w.word}`).join('\n');
+  try {
+    const got = await _gnCall(sys, `${base}\n\nBASKETS: ${categories.join(' / ')}\n\nWORDS\n${list}`, 700);
+    if (!Array.isArray(got) || got.length !== words.length) return new Set();
+    const norm = (t) => _zhTW(String(t || '')).trim();
+    return new Set(words.map((w, i) => {
+      const a = [...new Set((Array.isArray(got[i]) ? got[i] : [got[i]]).map(norm).filter(Boolean))];
+      return (a.length === 1 && a[0] === norm(w.category)) ? -1 : i;   // 只能放一個籃子、而且就是我們給的那個
+    }).filter(i => i >= 0));
+  } catch (e) { return new Set(); }
+}
 function _gnSpread(list, n) {
   const by = new Map();
   list.forEach(q => { const k = q.sec || 0; if (!by.has(k)) by.set(k, []); by.get(k).push(q); });
@@ -3285,9 +3329,24 @@ async function aiMakeGrammarSortSet({ base, n = 8, rounds = 3 } = {}) {
   let feedback = '', lastErr = null;
   for (let i = 0; i < Math.max(1, rounds); i++) {
     let raw;
-    try { raw = await _gnCall(GN_SORT_SYS, `${base}${feedback}\n\nMake ${n} words in total.`, 1200); } catch (e) { lastErr = e; continue; }
-    const v = gnValidSortSet(raw, n);
-    if (v) return v;
+    try { raw = await _gnCall(GN_SORT_SYS, `${base}${feedback}\n\nMake ${n + 2} words in total.`, 1400); } catch (e) { lastErr = e; continue; }
+    let v = gnValidSortSet(raw, n + 2);
+    if (v) {
+      /* v452：再問一個 AI「這個字可以放幾個籃子」，能放兩個的（smells…）整個丟掉。
+         故意多要 2 個字，丟掉之後通常還夠用，不必整組重出。 */
+      const bad = await _gnCheckSort(v.categories, v.words, base);
+      if (bad.size) {
+        const dropped = v.words.filter((w, k) => bad.has(k)).map(w => w.word);
+        v = gnValidSortSet({ ...v, words: v.words.filter((w, k) => !bad.has(k)) }, n);
+        feedback = '\n\nYour previous answer was REJECTED: these words fit TWO baskets at once, ' +
+          `so a child who sorted them correctly would still be marked wrong: ${dropped.join(', ')}.\n` +
+          'Replace them with words that can only ever go in ONE basket.';
+      } else {
+        v = gnValidSortSet({ ...v, words: v.words.slice(0, n) }, n);
+      }
+      if (v) return v;
+      continue;                                    // 丟完剩太少 → 換一輪重出（回饋已經寫好）
+    }
     feedback = '\n\nYour previous answer was REJECTED: ' +
       'you need 2-4 Chinese basket labels, at least 2 words in EVERY basket, no repeated word, ' +
       'and every word\'s "category" must be exactly one of the labels you listed.';
@@ -3352,7 +3411,25 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
     let raw;
     try { raw = await _gnCall(GN_LESSON_SYS, base + feedback, _gnMultiSec(notes) ? 3800 : 2400); } catch (e) { lastErr = e; continue; }
     const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
-    const valid = steps.map(keep).filter(Boolean).map(_gnFixImgHint);
+    let valid = steps.map(keep).filter(Boolean).map(_gnFixImgHint);
+    /* v452（Alan：「才剛講到感官動詞兩種都可以，那出這種題目也應該有兩種選項」）：
+       教學裡的「分一分」也要過同一關——能放進兩個籃子的字（smells…）先丟掉，
+       丟到某一籃不夠兩個字就整步不要（寧可少一步，也不要考一題一定會被誤判的題目）。 */
+    let sortBad = [];
+    for (let k = 0; k < valid.length; k++) {
+      const st = valid[k];
+      if (!st || st.kind !== 'sort') continue;
+      const flat = [].concat.apply([], st.groups.map(g => g.items.map(x => ({ word: x, category: g.label }))));
+      const bad = await _gnCheckSort(st.groups.map(g => g.label), flat, base);
+      if (!bad.size) continue;
+      sortBad = sortBad.concat(flat.filter((w, i) => bad.has(i)).map(w => w.word));
+      const drop = {};
+      flat.forEach((w, i) => { if (bad.has(i)) drop[w.word] = 1; });
+      const groups = st.groups.map(g => ({ ...g, items: g.items.filter(x => !drop[x]) }));
+      const left = groups.reduce((n2, g) => n2 + g.items.length, 0);
+      valid[k] = (groups.every(g => g.items.length >= 2) && left >= 4) ? { ...st, groups } : null;
+    }
+    valid = valid.filter(Boolean);
     // 最後一步是「學」＝學完沒得練就結束了，砍掉（互動教學的重點就是動手）
     let trimmed = false;
     while (valid.length && valid[valid.length - 1].kind === 'learn') { valid.pop(); trimmed = true; }
@@ -3373,6 +3450,9 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
     };
     const bad = steps.map((st, k) => (keep(st) ? null : `- step ${k + 1} (${why(st)}): ${JSON.stringify(st).slice(0, 160)}`)).filter(Boolean);
     if (trimmed) bad.push('- the lesson ended with a "learn" step: every "learn" must be followed by an interaction');
+    if (sortBad.length) bad.push('- a "sort" step used words that belong to TWO groups at once (a child who sorts them ' +
+      `correctly would still be marked wrong): ${sortBad.join(', ')}. Sense verbs (smell/taste/feel/look/sound) are ` +
+      'both linking and action verbs — never put them in a sorting question.');
     feedback = `\n\nYour previous answer was REJECTED by the checker. Problem steps:\n${bad.join('\n') || '- not enough valid steps'}\n` +
       'Fix them. You need at least 2 "learn" steps and 2 interaction steps, and every step must follow the RULES exactly.';
   }
