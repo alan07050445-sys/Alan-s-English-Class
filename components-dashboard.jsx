@@ -1407,22 +1407,29 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
 
             {err && <div className="notify-msg err">⚠️ {err}</div>}
 
-            {(cur.entries || []).length === 0 ? (
-              <div className="roster-hint">還沒有紀錄——上面記第一筆吧！</div>
-            ) : (
-              <div className="stars-list">
-                {cur.entries.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(en => (
-                  <div key={en.id} className={'stars-row' + (en.amount < 0 ? ' minus' : '')}>
-                    <span className="stars-row-date">{en.date}</span>
-                    <span className="stars-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}🌟</span>
-                    <span className="stars-row-note">{en.note || ''}</span>
-                    <button className="roster-del-btn" title="刪除這筆" onClick={() => del(en)}>
-                      <window.Icon name="trash" size={13}/>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* v451：手動記的 ＋ 買裝扮／改名卡／退費，全部排在同一張清單（買的那幾筆不能刪，要退請按上面的「退掉」） */}
+            {(() => {
+              const mxRows = window.mxStarRows ? window.mxStarRows(curMx) : [];
+              const rows = (cur.entries || []).concat(mxRows)
+                .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+              if (!rows.length) return <div className="roster-hint">還沒有紀錄——上面記第一筆吧！</div>;
+              return (
+                <div className="stars-list">
+                  {rows.map(en => (
+                    <div key={en.id} className={'stars-row' + (en.amount < 0 ? ' minus' : '') + (en.mx ? ' mx' : '')}>
+                      <span className="stars-row-date">{en.date || '—'}</span>
+                      <span className="stars-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}🌟</span>
+                      <span className="stars-row-note">{en.note || ''}</span>
+                      {en.mx
+                        ? <span className="stars-row-tag">學生自己買的</span>
+                        : <button className="roster-del-btn" title="刪除這筆" onClick={() => del(en)}>
+                            <window.Icon name="trash" size={13}/>
+                          </button>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </>
         )}
       </div>

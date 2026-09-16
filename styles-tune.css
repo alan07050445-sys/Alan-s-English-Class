@@ -3800,3 +3800,11 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 
 /* v449：AI 失敗訊息現在會多帶一段「上游回了什麼」——換行要留著才看得懂 */
 .notify-msg.err, .gr-ai-err, .gn-ls-miss span, .qs-story-warn { white-space: pre-line; }
+
+/* v451：集點紀錄也列出「買了什麼／被退掉」 */
+.sp-sum { font-family: var(--sans); font-size: 13.5px; color: var(--ink-muted); padding: 2px 2px 10px; }
+.sp-sum b { color: var(--ink); font-size: 15px; }
+.sp-row.mx .sp-row-note { color: #8A6D1E; }
+.stars-row-tag { font-family: var(--sans); font-size: 11.5px; color: var(--ink-muted); background: var(--surface-2, #F3EFE6);
+  border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.stars-row.mx .stars-row-note { color: #8A6D1E; }

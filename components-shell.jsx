@@ -1425,6 +1425,13 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, mx, o
      跟 header 右上角那顆 ⭐ 用的是同一個算法，兩邊不可能對不起來。 */
   const spent = window.mxSpent ? window.mxSpent(mx) : 0;
   const bal   = Math.max(0, (data.balance || 0) + auto.total - spent);   // v361: 手動 + 自動 − 裝扮
+  /* v451（Alan：「集點紀錄除了集點也要包含扣點或是買了什麼東西，全部都標示上去」）：
+     買裝扮／改名卡／老師退費也排進同一張清單（data.js mxStarRows，跟餘額同一份資料算出來）。 */
+  const mxRows = React.useMemo(() => (window.mxStarRows ? window.mxStarRows(mx) : []), [mx]);
+  const allRows = React.useMemo(
+    () => [...data.entries, ...auto.entries, ...mxRows]
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
+    [data.entries, auto.entries, mxRows]);
   const items = (shopItems && shopItems.length) ? shopItems : SHOP_ITEMS;
   const tags  = ['全部', '吉祥物', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
   const shown = filter === '全部' ? items : filter === '吉祥物' ? [] : items.filter(i => i.tag === filter);
@@ -1473,21 +1480,26 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, mx, o
 
         {tab === 'me' ? (
           <div className="sp-body">
-            {(data.entries.length + auto.entries.length) === 0 ? (
+            {allRows.length === 0 ? (
               <div className="sp-empty">還沒有集點紀錄——上課認真表現、把練習做完就會拿到星星喔！⭐</div>
             ) : (
-              <div className="sp-list">
-                {/* v361: 老師手動記的 + 完成練習自動給的，一起依日期排 */}
-                {[...data.entries, ...auto.entries]
-                  .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
-                  .map(en => (
-                  <div key={en.id} className={'sp-row' + (en.amount < 0 ? ' minus' : '') + (en.auto ? ' auto' : '')}>
-                    <span className="sp-row-date">{en.date || '—'}</span>
-                    <span className="sp-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}⭐</span>
-                    <span className="sp-row-note">{en.auto ? '⚡ ' : ''}{en.note || (en.amount < 0 ? '兌換' : '集點')}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="sp-sum">
+                  賺到 {((data.entries || []).filter(e => e.amount > 0).reduce((n, e) => n + e.amount, 0) + auto.total).toLocaleString()}⭐
+                  ・花掉 {(spent + (data.entries || []).filter(e => e.amount < 0).reduce((n, e) => n - e.amount, 0)).toLocaleString()}⭐
+                  ＝ 現在有 <b>{bal.toLocaleString()}⭐</b>
+                </div>
+                <div className="sp-list">
+                  {/* v361: 老師手動記的 ＋ 完成練習自動給的；v451：再加上買裝扮／改名卡／退費 */}
+                  {allRows.map(en => (
+                    <div key={en.id} className={'sp-row' + (en.amount < 0 ? ' minus' : '') + (en.auto ? ' auto' : '') + (en.mx ? ' mx' : '')}>
+                      <span className="sp-row-date">{en.date || '—'}</span>
+                      <span className="sp-row-amt">{en.amount > 0 ? '+' : ''}{en.amount.toLocaleString()}⭐</span>
+                      <span className="sp-row-note">{en.auto ? '⚡ ' : ''}{en.note || (en.amount < 0 ? '兌換' : '集點')}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         ) : (

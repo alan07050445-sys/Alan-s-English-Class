@@ -257,11 +257,91 @@ function MxAcc({ id, fit, layer }) {
 }
 
 /* v431：語音包＝牠說話的口氣（買了就換一種講法）。答對、打招呼、耍寶都吃這一份。 */
+/* ══ v451（Alan：「語音也要再更明顯一點，整個語音包更多元」）════════════════
+   以前每一包只寫了 win／hello／idle 三種場合，其他場合（答對、答錯、被摸、睡覺、
+   招牌動作）都退回原本的口氣 → 買了感覺不出來。現在**八種場合全部寫滿**，
+   而且從 4 包變 8 包。⚠ 一包裡的每一個桶都要至少兩句，不然會一直重複同一句。 */
 const MX_VOICE = {
-  vo_cheer: { win: ['太棒了！再一題！', '你超強的！', '就是這樣！衝！'], hello: ['我們開始吧！', '今天也要加油！'], idle: ['你可以的！'] },
-  vo_cat:   { win: ['答對了喵～', '好厲害喵！', '喵嗚～滿分！'], hello: ['喵～你來啦', '今天也要一起喵'], idle: ['喵…'] },
-  vo_robot: { win: ['嗶——正確——', '答案-正-確-', '系統顯示：很強'], hello: ['嗶。啟動完成。', '偵測到同學一名'], idle: ['嗶…嗶…'] },
-  vo_eng:   { win: ['Great job!', 'You got it!', 'Awesome!'], hello: ['Hi there!', "Let's study!"], idle: ['Nice work!'] },
+  vo_cheer: {
+    hello:   ['我們開始吧！', '今天也要加油！', '熱身完畢，上場囉！'],
+    correct: ['漂亮！', '就是這樣！', '這球進了！', '好球！'],
+    wrong:   ['沒事沒事，下一題！', '再來一次，你可以的！', '差一點點而已！'],
+    win:     ['太棒了！再一題！', '你超強的！', '就是這樣！衝！'],
+    idle:    ['你可以的！', '保持節奏！', '我在旁邊看著你喔'],
+    tap:     ['一起喊！加油！', '擊個掌！✋', '好精神！'],
+    sleep:   ['休息也是訓練的一部分…', '小睡三分鐘…'],
+    sig:     ['看我的！', '認真模式，啟動！'],
+  },
+  vo_cat: {
+    hello:   ['喵～你來啦', '今天也要一起喵', '喵喵，開工了'],
+    correct: ['答對了喵～', '好厲害喵！', '喵嗚，可以喔'],
+    wrong:   ['沒關係喵，再一次', '差一點點喵…', '喵…再看一下下'],
+    win:     ['全部做完了喵！', '喵嗚～滿分！', '今天的你很棒喵'],
+    idle:    ['喵…', '在曬太陽喵', '想吃小魚乾喵'],
+    tap:     ['喵嗚！被摸到了', '呼嚕呼嚕～', '再摸一下下喵'],
+    sleep:   ['喵…zzz', '睡午覺喵…'],
+    sig:     ['看我的絕招喵！', '喵——！'],
+  },
+  vo_robot: {
+    hello:   ['嗶。啟動完成。', '偵測到同學一名', '系統：學習模式 ON'],
+    correct: ['嗶——正確——', '答案-正-確-', '資料比對：相符'],
+    wrong:   ['嗶。答案不符。重新計算。', '錯誤代碼 0-0-1：再試一次', '偵測到小失誤，可修正'],
+    win:     ['任務-完-成-', '系統顯示：很強', '效能評分：最高'],
+    idle:    ['嗶…嗶…', '待機中…', '掃描地板中…'],
+    tap:     ['偵測到觸碰', '嗶嗶！啟動', '感應器：癢'],
+    sleep:   ['進入-休-眠-', '電量不足…嗶…'],
+    sig:     ['執行特殊程式', '嗶！絕招載入中'],
+  },
+  vo_eng: {
+    hello:   ['Hi there!', "Let's study!", 'Ready? Go!'],
+    correct: ['Nice!', 'You got it!', 'Correct!'],
+    wrong:   ['Almost! Try again.', "It's okay, one more time.", 'Not yet — keep going!'],
+    win:     ['Great job!', 'Awesome!', 'You finished! 🎉'],
+    idle:    ['Nice work!', "I'm just walking.", 'Keep it up!'],
+    tap:     ['Hey! That tickles.', 'Hello!', 'You poked me!'],
+    sleep:   ['Zzz...', 'Nap time...'],
+    sig:     ['Watch this!', 'Ta-da!'],
+  },
+  vo_pirate: {
+    hello:   ['喲呵！水手，上船囉 🏴‍☠️', '今天要找寶藏嗎？', '船長我來了！'],
+    correct: ['喲呵！答對了', '好樣的，水手！', '這題是我們的寶藏！'],
+    wrong:   ['沒事，海上風浪本來就大', '再一次，穩住舵！', '差一點就靠岸了'],
+    win:     ['寶藏到手啦 💰', '全船歡呼！', '今天大豐收，喲呵！'],
+    idle:    ['在甲板上巡邏…', '海風真舒服', '我的鸚鵡呢？'],
+    tap:     ['喂！別碰船長的帽子', '喲呵！', '哈哈，好癢'],
+    sleep:   ['船長打個盹…', 'zzz…夢到寶藏了'],
+    sig:     ['看我的必殺技！', '揚帆——！'],
+  },
+  vo_baby: {
+    hello:   ['哈囉～是你耶 🍼', '我等你好久久', '一起玩一起學～'],
+    correct: ['哇——好棒棒', '答對對了！', '你好聰明喔～'],
+    wrong:   ['沒關係～再一次次', '差一點點點', '不哭不哭，再試試'],
+    win:     ['全部做完完了！', '好厲害害！', '要抱抱慶祝 🤗'],
+    idle:    ['走路走路～', '我在散步步', '肚肚有點餓'],
+    tap:     ['呀！被摸摸了', '嘻嘻～好癢癢', '再摸一下下'],
+    sleep:   ['睡覺覺…', '呼…呼…'],
+    sig:     ['看我的～', '登登登登！'],
+  },
+  vo_sport: {
+    hello:   ['各位觀眾，比賽開始！🎙️', '現場直播，今天的選手就是你', '哨音響起，出發！'],
+    correct: ['進球了！', '漂亮的一擊！', '完美示範，滿分！'],
+    wrong:   ['可惜！差一點點', '沒關係，下一球再來', '教練說：穩住，再一次'],
+    win:     ['全場歡聲雷動 🎉', '今天的 MVP 就是你！', '比賽結束，大獲全勝！'],
+    idle:    ['選手正在場邊熱身…', '賽況分析中…', '這裡是現場為您報導'],
+    tap:     ['哦！觀眾衝進場了', '來個賽後訪問？', '選手表示：好癢'],
+    sleep:   ['中場休息…', '選手補眠中…'],
+    sig:     ['精彩重播！', '這一球，值得回放！'],
+  },
+  vo_alien: {
+    hello:   ['我從 ZZ-3 星球來 👽', '地球同學，你好', '偵測到學習訊號'],
+    correct: ['ZZ！答案正確', '地球人好聰明', '這題已回報母星'],
+    wrong:   ['ZZ？資料有誤，再一次', '母星說：沒關係', '訊號干擾，重新傳送'],
+    win:     ['任務完成，準備回母星 🛸', 'ZZ——全部正確', '地球人，了不起'],
+    idle:    ['研究地球地板中…', '我的飛碟停在樓上', 'ZZ…ZZ…'],
+    tap:     ['ZZ！觸碰偵測', '地球人的手好溫暖', '這是地球的打招呼嗎'],
+    sleep:   ['充電中…ZZ…', '進入太空睡眠'],
+    sig:     ['啟動外星科技！', 'ZZ——變身！'],
+  },
 };
 
 /* ══ v404（Alan：「我讓小寵物去休息，其他人的帳號也跟著休息——我都用同一台電腦」）══
@@ -506,7 +586,15 @@ const lastSaid = {};
 const mxLine = (k, pet, voice) => {
   const v = MX_VOICE[voice];
   const arr = v && v[k];
-  if (arr && arr.length) return arr[Math.floor(Math.random() * arr.length)];
+  /* v451：語音包也要避免連講同一句（本來只有預設台詞有這個保護，
+     實測買了海盜語音之後連點五次都是「喂！別碰船長的帽子」）。 */
+  if (arr && arr.length) {
+    const kk = voice + ':' + k;
+    let s2 = arr[Math.floor(Math.random() * arr.length)];
+    if (s2 === lastSaid[kk] && arr.length > 1) s2 = arr[Math.floor(Math.random() * arr.length)];
+    lastSaid[kk] = s2;
+    return s2;
+  }
   return mxPick(k, pet);
 };
 const mxPick = (k, pet) => {
@@ -533,7 +621,12 @@ function mxSetOff(d) { try { if (d) localStorage.setItem(mxKey(MX_OFF_KEY), d); 
 
 
 /* 純走位／搞笑的動作（不含答題反應）——所有夥伴共用的底牌 */
-const MX_ACTS = ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think'];
+/* ══ v451（Alan：「預設的吉祥物會轉圈圈或做其他動作都改掉，改成只會一般走路，
+   不然小朋友就不買動作了。其他角色的特殊技能保留，但除了特殊技能也只會一般走路」）══
+   免費的動作池只剩「走路」——跳、轉圈、跳舞、翻滾這些全部變成要買（MX_SHOP 的 dance）。
+   每一隻自己的招牌動作（sig）留著，那是牠的個性，不是把戲。
+   ⚠ 買到的動作會自己加進池子裡（見 doAct 裡的 myActs）——這才是「買了真的有差」。 */
+const MX_ACTS = ['walk'];
 
 /* ══ v401：夥伴名冊 ══════════════════════════════════════════════════════
    acts ＝ 這一隻平常會做的事（權重就是「同一個動作寫幾次」，故意不用另一套資料結構）。
@@ -553,14 +646,14 @@ const MX_PETS = [
   {
     id: 'clay', speed: 1, zh: 'Claudius', tip: '陪你唸書的老夥伴',
     art: ClaudeMascot, sig: 'type', sigZh: '打電腦',
-    acts: ['walk', 'walk', 'walk', 'jump', 'spin', 'dance', 'roll', 'peek', 'sleep', 'think', 'type', 'type'],
+    acts: ['walk', 'walk', 'walk', 'type'],                       // v451：免費的只剩走路＋自己的招牌
     lines: { idle: ['我在散步 🚶', '這裡風景不錯', '要不要摸摸我', '我在數格子 1、2、3…'],
              sig:  ['我在寫程式（假的）💻', '叩叩叩…好忙好忙', '我幫你把答案存起來了（沒有）'] },
   },
   {
     id: 'owl', speed: 0.85, zh: '咕咕', tip: '眼睛很大，想的比走的多',
     art: OwlMascot, sig: 'read', sigZh: '看書',
-    acts: ['walk', 'walk', 'jump', 'peek', 'think', 'think', 'read', 'read', 'read', 'sleep', 'spin'],
+    acts: ['walk', 'walk', 'walk', 'read', 'read'],               // v451
     lines: { hello: ['咕…咕…📖', '我剛剛在看書', '嗨，一起唸書吧'],
              idle:  ['這一頁我看三遍了', '書裡面有答案喔', '咕咕。'],
              sig:   ['讀到好看的地方了 📖', '這句我記起來了', '再一頁就好…'] },
@@ -568,7 +661,7 @@ const MX_PETS = [
   {
     id: 'flame', speed: 1.15, zh: '小焰', tip: '靜不下來，跑超快',
     art: FlameMascot, sig: 'dash', sigZh: '衝刺',
-    acts: ['walk', 'walk', 'dash', 'dash', 'dash', 'jump', 'jump', 'spin', 'dance', 'roll', 'peek'],
+    acts: ['walk', 'walk', 'dash', 'dash', 'dash'],               // v451（衝刺是小焰的招牌，留著）
     lines: { hello: ['咻——！🔥', '我來了我來了', '要比賽跑步嗎'],
              idle:  ['坐不住啦', '好想跑', '我很燙喔（其實不會）'],
              sig:   ['咻咻咻！🔥', '你追不到我～', '再一圈！'] },
@@ -578,7 +671,7 @@ const MX_PETS = [
     art: RockMascot, sig: 'hide', sigZh: '裝石頭',
     /* v407：本來有兩個 roll。roll 的基礎速度是走路的 3 倍，所以「慢吞吞的阿石」
        實際上是全場移動最快的一隻——Alan 看到的就是這個。留一個 roll 當笑點就好。 */
-    acts: ['roll', 'walk', 'walk', 'hide', 'hide', 'hide', 'sleep', 'sleep', 'think', 'peek', 'jump'],
+    acts: ['walk', 'walk', 'hide', 'hide', 'hide'],               // v451（裝石頭是阿石的招牌）
     lines: { hello: ['……（是一顆石頭）', '嗨，我醒了', '慢慢來就好'],
              idle:  ['我在原地想事情', '好穩。', '滾一下比較快'],
              sig:   ['我是石頭。', '……（假裝沒看到）', '噓，別說出去'] },
@@ -586,7 +679,7 @@ const MX_PETS = [
   {
     id: 'sprout', speed: 1, zh: '小芽', tip: '好奇寶寶，開心就會長高',
     art: SproutMascot, sig: 'grow', sigZh: '長高',
-    acts: ['walk', 'walk', 'peek', 'peek', 'grow', 'grow', 'think', 'dance', 'sleep', 'jump'],
+    acts: ['walk', 'walk', 'grow', 'grow'],                       // v451（長高是小芽的招牌）
     lines: { hello: ['我今天又長高了 🌱', '嗨嗨！', '陽光好舒服'],
              idle:  ['再長一點點…', '你有澆水嗎', '葉子癢癢的'],
              sig:   ['長高了！🌱', '我又冒新葉子了', '再一公分就好'] },
@@ -688,6 +781,15 @@ function MascotLayer() {
   const [allowed, setAllowed] = useFx(okNow());
   const [shown,   setShown]   = useFx(canShow());
   const [owned, setOwned] = useFx([]);
+  /* v451：買到的動作（dc_* → 真正的動畫名稱）。免費的池子只有走路，這些是花星星換來的，
+     自動循環與「點一下」都從這裡拿——沒買就什麼把戲都沒有。 */
+  const ownedActsRef = useFxR([]);
+  useFxE(() => {
+    const map = { dc_wave: 'wave', dc_spin: 'twirl', dc_dance: 'party', dc_flip: 'flip', dc_moon: 'moon' };
+    ownedActsRef.current = (window.MX_SHOP || [])
+      .filter(it => it.kind === 'dance' && window.mxHasItem && window.mxHasItem({ owned }, it.id))
+      .map(it => map[it.id]).filter(Boolean);
+  }, [owned]);
   /* v431：剛買下去的那幾件先記在這裡——Firestore 的快照要一下下才回來，
      這段期間畫面就已經是「買到了」，不會閃一下又變回價錢。 */
   const pendRef = useFxR([]);
@@ -897,7 +999,10 @@ function MascotLayer() {
       }
       /* v401：動作池改成「這一隻自己的」——每隻夥伴的個性就是靠這個池子的比重表現的
          （阿石大量 hide/sleep、小焰大量 dash、咕咕大量 read/think）。 */
-      const pool = pet.acts && pet.acts.length ? pet.acts : MX_ACTS;
+      /* v451：免費的池子只剩走路＋自己的招牌；**買到的動作會加進來**（一件一格），
+         所以買了之後牠真的會自己表演——這就是花星星換到的東西。 */
+      const bought = (ownedActsRef.current || []);
+      const pool = (pet.acts && pet.acts.length ? pet.acts : MX_ACTS).concat(bought);
       const pick = reduce.current
         ? (Math.random() < 0.5 ? 'think' : 'sleep')            // 減少動態＝只做原地的小動作
         : pool[Math.floor(Math.random() * pool.length)];
@@ -942,7 +1047,8 @@ function MascotLayer() {
         return;
       }
 
-      const HOLD = Object.assign({ jump: 1000, spin: 950, dance: 2000, peek: 1700, sleep: 4200, think: 2200 }, MX_SIG_HOLD);
+      const HOLD = Object.assign({ jump: 1000, spin: 950, dance: 2000, peek: 1700, sleep: 4200, think: 2200,
+        wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 }, MX_SIG_HOLD);   // v451：買來的動作
       setAct(pick);
       /* v392（D）：泡泡是文字（font-weight:700、最寬 190px），比動作更會搶走視線。
          實測 1180px 是 4.50 泡泡/分鐘、390px 是 6.01 → 出現率腰斬。
@@ -986,7 +1092,13 @@ function MascotLayer() {
       try {
         if (type === 'correct') {
           runRef.current++;
-          if (runRef.current % 5 === 0) { setAct('nod'); later(() => setAct('idle'), 620); }
+          if (runRef.current % 5 === 0) {
+            setAct('nod'); later(() => setAct('idle'), 620);
+            /* v451：買了語音包才會順便講一句（沒買的維持 v392 的安靜，不加干擾）——
+               答對是最常發生的場合，牠在這裡開口，語音包才「看得出來換過」。 */
+            const vo = wearRef.current && wearRef.current.voice;
+            if (vo && vo !== 'vo_default') say(mxLine('correct', petRef.current, vo), 1800);
+          }
         }
         else if (type === 'wrong') { runRef.current = 0; }   // 答錯＝連勝歸零，完全不反應
         else if (type === 'complete' || type === 'fanfare') {
@@ -1075,11 +1187,15 @@ function MascotLayer() {
       later(() => setAct('idle'), MX_SIG_HOLD[pet.sig] || 1600);
       return;
     }
-    const tricks = reduce.current ? ['think'] : ['jump', 'spin', 'dance', 'roll'];
-    const t = tricks[Math.floor(Math.random() * tricks.length)];
+    /* v451：點一下不再免費送「跳／轉圈／跳舞／翻滾」——
+       有買動作就表演買到的那些，沒買就只是點個頭（想看表演＝去商店買一個）。 */
+    const bought = ownedActsRef.current || [];
+    const t = reduce.current ? 'think'
+      : (bought.length ? bought[Math.floor(Math.random() * bought.length)] : 'nod');
     setAct(t); say(mxLine('tap', pet, wearRef.current.voice), 2000);
     if (window.playSound) window.playSound('match');
-    later(() => setAct('idle'), t === 'dance' ? 2000 : 1000);
+    const HOLD_TAP = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800, think: 1600, nod: 620 };
+    later(() => setAct('idle'), HOLD_TAP[t] || 1000);
   };
 
   /* v392（A）：作答時不再整隻消失（那本身就是一個變化），只是安靜下來；

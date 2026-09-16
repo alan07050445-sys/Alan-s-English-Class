@@ -5314,11 +5314,19 @@ const MX_SHOP = [
   { id: 'fx_bubble',  kind: 'fx',    zh: '泡泡',     emoji: '🫧', cost: 200 },
   { id: 'fx_fire',    kind: 'fx',    zh: '煙火',     emoji: '🎆', cost: 300 },
   /* 語音（牠講話的口氣） */
+  /* v451（Alan：「語音也要再更明顯一點，整個語音包更多元」）：
+     ① 每一包都把八種場合（打招呼／答對／答錯／全部完成／散步／被摸／睡覺／招牌動作）寫滿——
+        以前只寫了三種，其他場合又講回原本的口氣，所以買了幾乎感覺不出來。
+     ② 從 4 包加到 8 包。 */
   { id: 'vo_default', kind: 'voice', zh: '原本的聲音', emoji: '🗨️', cost: 0, free: true },
   { id: 'vo_cheer',   kind: 'voice', zh: '加油隊長', emoji: '📣', cost: 100 },
   { id: 'vo_cat',     kind: 'voice', zh: '貓貓語',   emoji: '🐱', cost: 150 },
   { id: 'vo_robot',   kind: 'voice', zh: '機器人',   emoji: '🤖', cost: 150 },
   { id: 'vo_eng',     kind: 'voice', zh: '全英文',   emoji: '🗣️', cost: 200 },
+  { id: 'vo_pirate',  kind: 'voice', zh: '海盜船長', emoji: '🏴‍☠️', cost: 150 },
+  { id: 'vo_baby',    kind: 'voice', zh: '奶音寶寶', emoji: '🍼', cost: 150 },
+  { id: 'vo_sport',   kind: 'voice', zh: '運動主播', emoji: '🎙️', cost: 200 },
+  { id: 'vo_alien',   kind: 'voice', zh: '外星人',   emoji: '👽', cost: 200 },
   /* 動作（買了就能叫牠表演） */
   { id: 'dc_wave',    kind: 'dance', zh: '揮揮手',   emoji: '👋', cost: 100 },
   { id: 'dc_spin',    kind: 'dance', zh: '轉圈圈',   emoji: '🌀', cost: 100 },
@@ -5427,6 +5435,35 @@ function mxPurchases(mx) {
   }
   return out.sort((a, b) => (b.at || 0) - (a.at || 0));
 }
+/* v451（Alan：「集點紀錄那邊除了集點紀錄也順便包含扣點或是買了什麼東西，全部都標示上去」）
+   把「買裝扮／改名卡／老師退費」整理成跟集點紀錄同一個形狀（date / amount / note），
+   學生端與老師端就能跟手動、自動的紀錄排在同一張清單裡。
+   ⚠ 只負責「顯示」——餘額一律還是 mxSpent 算的，不要拿這裡的數字加總。 */
+function mxStarRows(mx) {
+  const rows = [];
+  const day = (at) => { try { return at ? new Date(at).toISOString().slice(0, 10) : ''; } catch (e) { return ''; } };
+  const zhOf = (id) => (id === '__rename' ? '改名卡' : ((MX_BY_ID[id] && MX_BY_ID[id].zh) || id));
+  const log = (mx && Array.isArray(mx.log)) ? mx.log : [];
+  log.forEach((e, i) => {
+    if (!e || !e.id) return;
+    const cost = +e.cost || 0;
+    if (!cost) return;
+    rows.push(cost < 0
+      ? { id: 'mxr' + i, date: day(e.at), amount: -cost, note: `↩️ 老師把「${zhOf(e.id)}」退掉了`, mx: true }
+      : { id: 'mxb' + i, date: day(e.at), amount: -cost, note: `🧸 買了「${zhOf(e.id)}」`, mx: true });
+  });
+  // 還沒有購買紀錄（v448 以前買的）也要看得到，只是沒有日期
+  const logged = {};
+  log.forEach(e => { if (e && e.id && (+e.cost || 0) > 0) logged[e.id] = 1; });
+  mxOwnedList(mx).forEach((id, i) => {
+    if (logged[id]) return;
+    const cost = (MX_BY_ID[id] && MX_BY_ID[id].cost) || 0;
+    if (cost) rows.push({ id: 'mxo' + i, date: '', amount: -cost, note: `🧸 買了「${zhOf(id)}」`, mx: true });
+  });
+  const paidRenames = mxRenamesPaid(mx) - log.filter(e => e && e.id === '__rename' && (+e.cost || 0) > 0).length;
+  for (let i = 0; i < paidRenames; i++) rows.push({ id: 'mxn' + i, date: '', amount: -MX_RENAME_COST, note: '✏️ 買了「改名卡」', mx: true });
+  return rows;
+}
 /* 退費：拿掉一件（改名卡就把次數減一）。回傳新的 mx，畫面可以馬上更新。 */
 async function mxRefund(uid, id, mx) {
   if (!uid) return { ok: false, reason: 'no-user' };
@@ -5480,7 +5517,7 @@ async function mxSetWear(uid, kind, id, mx) {
     return { ok: true, wear };
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
-Object.assign(window, { mxPurchases, mxRefund, mxLogAdd,
+Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
