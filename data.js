@@ -1999,7 +1999,9 @@ function _aiUpstreamNote(e) {
   const fresh = _aiLastUpstream && (Date.now() - (_aiLastUpstream.at || 0) < 120000) ? _aiLastUpstream : null;
   const u = (e && e.upstream) || fresh;
   if (!u || !u.status) return '';
-  const zh = u.status === 403 ? '金鑰被拒（Cloudflare Worker 的 API 金鑰失效、或 Anthropic 那邊停用／額度用完）'
+  /* ⚠ 實測 2026-09-15 晚上：403 也可能只是「暫時被擋」——那一晚全站 AI 都 403，
+     隔天早上什麼都沒改就自己好了。所以 403 先請老師等幾分鐘，不要一開口就叫他去換金鑰。 */
+  const zh = u.status === 403 ? '先等 10 分鐘再試一次；如果過一陣子還是這樣，才需要檢查 Cloudflare Worker 的 API 金鑰與 Anthropic 的額度'
     : u.status === 401 ? '金鑰不正確（Worker 的 API 金鑰要重設）'
     : u.status === 429 ? '請求太密集（等一下再試）'
     : (u.status >= 500 ? 'AI 服務暫時出問題（等一下再試）' : '');
