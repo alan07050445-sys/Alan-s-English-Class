@@ -3113,10 +3113,12 @@
 .gr-hw { transition: color .2s ease, opacity .2s ease, background .2s ease, box-shadow .2s ease; }
 .gr-hw-ahead { opacity: .38; }
 .gr-hw-done  { opacity: 1; }
+/* v453（Alan：「一個單字一個單字框起來太沒有質感，我要的是單字改變成螢光顏色」）：
+   改成螢光筆劃過去的樣子——顏色只鋪在字的下半部，沒有外框、沒有陰影。 */
 .gr-hw-now {
-  opacity: 1; color: var(--g-c, #8B3120); font-weight: 700;
-  background: rgba(200,138,66,.24); box-shadow: 0 0 0 3px rgba(200,138,66,.24);
-  border-radius: 5px;
+  opacity: 1; color: inherit; font-weight: 700;
+  background: linear-gradient(transparent 12%, rgba(255,222,110,.92) 12%, rgba(255,222,110,.92) 92%, transparent 92%);
+  box-shadow: none; border-radius: 2px; padding: 0 1px;
 }
 @media (prefers-reduced-motion: reduce) { .gr-hw { transition: none; } }
 /* 照片上的隱形字框——點得到但看不到；按下瞬間亮金 */
@@ -3136,12 +3138,14 @@
   background: #fdf1ee; border: 1px solid #f0c9c2; border-radius: 10px; padding: 10px 14px;
 }
 /* v301: 照片段落逐字朗讀高亮框——唸到哪個字就框亮 */
+/* v453：照片上的逐字高亮也改成「螢光筆」——用 multiply 疊在掃描的字上面，
+   看起來就是被螢光筆劃過，不再是一個一個的框。 */
 .grd-hlbox {
   position: absolute; z-index: 3; pointer-events: none;
-  background: rgba(242,195,104,.34); border: 2px solid rgba(200,138,66,.9);
-  border-radius: 5px; box-shadow: 0 0 0 3px rgba(242,195,104,.22);
-  transition: left .15s ease, top .15s ease, width .15s ease, height .15s ease;
-  margin: -2px 0 0 -2px; padding: 2px;
+  background: rgba(255,214,0,.55); mix-blend-mode: multiply;
+  border: 0; border-radius: 3px; box-shadow: none;
+  transition: left .12s linear, top .12s linear, width .12s linear, height .12s linear;
+  margin: 0; padding: 0;
 }
 /* 讀頁頂列：段落標籤＋朗讀按鈕 */
 .gr-read-head {

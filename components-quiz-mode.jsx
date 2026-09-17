@@ -3625,7 +3625,12 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
         const t = window.grReadTextFrom(d, zy0, zy1, main || null); // v292: 字層級過濾（行會跨欄）
         if (t.trim()) setTtsText(t);
         // v301: 同一套過濾拿「有座標的字」——照片段落逐字高亮
-        if (window.grReadWordsFrom) setReadWords(window.grReadWordsFrom(d, zy0, zy1, main || null));
+        /* v453：逐字高亮與朗讀文字要來自**同一份**字清單，第 N 個字才會對到第 N 個框。
+           以前朗讀文字另外走 grReadTextFrom（沒框選朗讀區域時甚至是整行的資料），
+           兩邊字序不同 → 高亮從第一個字就開始偏（Alan：「完全沒有跟著語速」）。 */
+        const ws = window.grReadWordsFrom ? window.grReadWordsFrom(d, zy0, zy1, main || null) : [];
+        setReadWords(ws);
+        if (ws.length && window.grWordsText) { const wt = window.grWordsText(ws); if (wt.trim()) setTtsText(wt); }
       });
     }
     return () => { dead = true; };
@@ -3729,7 +3734,9 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
     setSpeaking(true);
     speakStopRef.current = window.speakSentences(ttsText, {
       rate: speechRate(),
-      onProgress: (f) => setActiveWord(grWordAtFraction(activeModel, f)), // v301: 逐字高亮
+      // v453：直接用「唸到第幾個字」（speakSentences 由 onboundary 的字元位置換算），
+      //       比 v301 的「整段字元比例 → 加權反推」準得多；沒有 onWord 的舊路徑才退回比例。
+      onWord: (i2) => setActiveWord(i2),
       onDone: () => { speakStopRef.current = null; setSpeaking(false); setTimeout(() => setActiveWord(-1), 500); },
     });
   };

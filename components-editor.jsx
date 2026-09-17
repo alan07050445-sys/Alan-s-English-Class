@@ -2874,34 +2874,42 @@ function grParseBulk(text, segCount) {
      「擋掉了幾題」誠實回報，不要讓老師以為每次都剛好出滿。 */
   const AI_SKILL_LIST = Object.keys(window.RC_SKILLS || {});
   const aiSegN = (n) => segments.length * (+n || 0);
-  const runAiQuestions = async () => {
-    setAiErr(''); setAiInfo(''); setAiRun('讀取每一段的文字…');
+  /* v453（Alan：「我如果重新標註框，又要重新再跑一次，太麻煩」）：
+     onlySeg ＝ 只重出這一段的題目（改了裁切／朗讀區域之後就只補那一段），
+     其他段落與整篇綜合題原封不動。 */
+  const runAiQuestions = async (onlySeg) => {
+    const one = (typeof onlySeg === 'number');
+    setAiErr(''); setAiInfo(''); setAiRun(one ? `讀取第 ${onlySeg + 1} 段…` : '讀取每一段的文字…');
     try {
       const list = segRef.current || [];
       const texts = [];
       for (let i = 0; i < list.length; i++) {
+        if (one && i !== onlySeg) continue;
         let t = '';
         try { t = await grSegMainText(list[i]); } catch (e) { t = ''; }
         texts.push({ i, text: t });
       }
       const r = await window.aiMakeGuidedQuestions({
         segments: texts, title: itemTitle || '', grade: aiGrade,
-        perMcq: aiPerM, perSa: aiPerS, finalMcq: aiFinM, finalSa: aiFinS,
-        skills: aiSkills, qSkills: aiQSkills, teacherNote: aiNote,
+        perMcq: aiPerM, perSa: aiPerS,
+        finalMcq: one ? 0 : aiFinM, finalSa: one ? 0 : aiFinS,      // v453：只重出一段時不動整篇綜合題
+        skills: one ? [] : aiSkills, qSkills: aiQSkills, teacherNote: aiNote,
         onProgress: (d, tot, label) => setAiRun(`出題中 ${d}/${tot}${label ? ' · ' + label : ''}`),
       });
 
       // 寫回段落（segRef 永遠是最新的——老師在等待時可能又改了東西）
       onChange((segRef.current || []).map((sg, i) => {
+        if (one && i !== onlySeg) return sg;                         // v453：只動這一段
         const adds = r.bySeg[i];
-        if (!adds) return aiReplace ? { ...sg, questions: [] } : sg;
-        return { ...sg, questions: (aiReplace ? [] : (sg.questions || [])).concat(adds) };
+        const replace = one ? true : aiReplace;                      // 只重出一段＝就是要換掉那一段的舊題目
+        if (!adds) return replace ? { ...sg, questions: [] } : sg;
+        return { ...sg, questions: (replace ? [] : (sg.questions || [])).concat(adds) };
       }));
-      if (r.final.length || aiReplace) onChangeFinal((aiReplace ? [] : (finalQs || [])).concat(r.final));
+      if (!one && (r.final.length || aiReplace)) onChangeFinal((aiReplace ? [] : (finalQs || [])).concat(r.final));
 
       /* 閱讀技巧是另一個型別的單元，塞不進分段閱讀 → 交給 EditorModal 掛在 __side，
          存檔時跟這一份分段閱讀一起建立（同一週、同一個分組）。 */
-      if (r.blocks.length && onSideItems) {
+      if (!one && r.blocks.length && onSideItems) {
         const nChips = r.blocks.reduce((n, b) => n + (b.chips || []).length, 0);
         // v437：保留已經做好的背景知識（以前是整個蓋掉，兩個功能會互相洗掉）
         onSideItems((sideItems || []).filter(x => x && x.type === 'lesson').concat([{
@@ -3517,6 +3525,11 @@ function grParseBulk(text, segCount) {
             <b style={{fontSize:13}}>第 {si + 1} 段</b>
             <span style={{fontSize:11,color:'var(--ink-muted)'}}>{(seg.questions || []).length} 題</span>
             <span style={{flex:1}}/>
+            {/* v453：改完裁切／朗讀區域，只要重出這一段就好，不用整份重跑 */}
+            <button className="btn ghost" style={{fontSize:11,padding:'3px 8px'}} disabled={!!aiRun}
+              onClick={() => runAiQuestions(si)} title="只用這一段的文字重新出題（其他段落與綜合題不動）">
+              {aiRun ? '…' : '🤖 重出這段'}
+            </button>
             <button className="btn ghost" style={{fontSize:11,padding:'3px 8px'}} onClick={() => moveSeg(si, -1)} disabled={si === 0}>▲</button>
             <button className="btn ghost" style={{fontSize:11,padding:'3px 8px'}} onClick={() => moveSeg(si, 1)} disabled={si === segments.length - 1}>▼</button>
             <button className="btn ghost" style={{fontSize:11,padding:'3px 8px',color:'var(--accent)'}}

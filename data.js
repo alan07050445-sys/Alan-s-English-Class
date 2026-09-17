@@ -376,9 +376,26 @@ function grReadWordsFrom(d, y0, y1, rect) {
       const digits = (t.match(/\d/g) || []).length;
       if (digits <= 2 && !isWord(toks[i - 1]) && !isWord(toks[i + 1])) return; // 孤立一兩位數＝頁碼
     }
+    /* v453：行尾斷詞（coast- / line）接回成一個字。
+       ⚠ 這件事本來只有「朗讀用的文字」那一邊做，字清單這邊沒做 → 兩邊的字數不一樣，
+       逐字高亮就整段對不上（Alan：「螢光完全沒有跟著語速」）。 */
+    const prev = out[out.length - 1];
+    if (prev && /[A-Za-z]-$/.test(prev.t) && /^[A-Za-z]/.test(t)) {
+      prev.t = prev.t.replace(/-$/, '') + t;
+      prev.r = prev.t;
+      prev.w = Math.max(prev.w || 0, ((w.x || 0) + (w.w || 0)) - (prev.x || 0));   // 兩個框併成一個
+      return;
+    }
     out.push({ t: t, r: w.r || t, x: w.x, y: w.y, w: w.w, h: w.h });
   });
   return out;
+}
+
+/* v453：照片段落的「朗讀文字」直接用字清單接起來——跟逐字高亮吃的是同一份資料，
+   所以第 N 個字一定就是第 N 個框。以前朗讀文字走另一條路（沒有框選區域時甚至是
+   grJoinReadLines 的行資料），兩邊的字序不同，高亮從第一個字就開始偏。 */
+function grWordsText(words) {
+  return (words || []).map(w => String(w.t || w.r || '').trim()).filter(Boolean).join(' ').replace(/\s{2,}/g, ' ').trim();
 }
 
 // v290: AI 產生自然朗讀——打同一個 Worker 的 /tts 路由（Workers AI 神經語音）。
@@ -1233,11 +1250,46 @@ async function speakTTS(text, { lang = 'en-US', rate = 0.9 } = {}) {
 
 // v293: 把一段文字切成「句子／子句」，並為每塊標一個停頓時間（毫秒）——
 // 讓瀏覽器朗讀遇到標點會停一下、更像真人在讀。句末(.!?)停久一點、逗號類短停。
+/* v453（Alan：「有些單字還是會唸錯或是少念，尤其是阿拉伯數字，像是年份」）
+   ── 年份唸成「seventeen ninety-nine」而不是「one thousand seven hundred ninety-nine」，
+   長串數字改成一個一個唸（12345678 整串被跳過是實測過的老問題）。
+   ⚠ 一個 token 換成一個詞組＝**字數不變**，逐字高亮的對應關係才不會跑掉。 */
+const _ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const _TEENS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const _TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+function _say2(n) {                                   // 0~99
+  if (n < 10) return _ONES[n];
+  if (n < 20) return _TEENS[n - 10];
+  return _TENS[Math.floor(n / 10)] + (n % 10 ? '-' + _ONES[n % 10] : '');
+}
+function grSayNumber(tok) {
+  const raw = String(tok || '');
+  const m = raw.match(/^(\D*)(\d+)(\D*)$/);
+  if (!m) return raw;
+  const [, pre, digits, post] = m;
+  const n = +digits;
+  let said;
+  if (digits.length === 4 && n >= 1000 && n <= 2999) {
+    const hi = Math.floor(n / 100), lo = n % 100;      // 1799 → seventeen ninety-nine
+    said = lo === 0 ? _say2(hi) + ' hundred'
+      : lo < 10 ? _say2(hi) + ' oh ' + _ONES[lo]       // 1805 → eighteen oh five
+      : _say2(hi) + ' ' + _say2(lo);
+  } else if (digits.length > 4) {
+    said = digits.split('').map(d => _ONES[+d]).join(' ');   // 長串數字一個一個唸
+  } else {
+    return raw;                                        // 一般數字交給語音引擎（它唸得好）
+  }
+  return pre + said + post;
+}
 function grSpeechChunks(text) {
   const s = String(text || '').replace(/\s+/g, ' ').trim();
   if (!s) return [];
   const sents = s.match(/[^.!?]+[.!?]+["'”’)]*|[^.!?]+$/g) || [s];
   const out = [];
+  /* v453：每一塊記下「從第幾個字開始、有幾個字」——朗讀時就能把 onboundary 的字元位置
+     換算成「現在唸到第幾個字」，逐字高亮才會真的跟著聲音走（以前是用整段的字元比例估的）。 */
+  const WRE = /[A-Za-z0-9][A-Za-z0-9'’\-]*/g;
+  let wSeen = 0;
   sents.forEach(sent => {
     const clauses = sent.match(/[^,;:—–]+[,;:—–]?/g) || [sent];
     clauses.forEach(cl => {
@@ -1245,11 +1297,19 @@ function grSpeechChunks(text) {
       if (!t || !/[A-Za-z0-9]/.test(t)) return;
       const endSent = /[.!?]["'”’)]*$/.test(t);
       const endClause = /[,;:—–]$/.test(t);
-      out.push({ t, pause: endSent ? 420 : endClause ? 230 : 130 });
+      const words = t.match(WRE) || [];
+      const say = t.replace(WRE, (w) => grSayNumber(w));       // 數字換成唸得出來的寫法
+      out.push({ t, say, pause: endSent ? 420 : endClause ? 230 : 130, w0: wSeen, wn: words.length });
+      wSeen += words.length;
     });
   });
   if (out.length) out[out.length - 1].pause = 0;
   return out;
+}
+/* 這一塊裡、字元位置 charIndex 之前有幾個「完整唸過」的字（給逐字高亮用） */
+function grWordsBefore(t, charIndex) {
+  const s = String(t || '').slice(0, Math.max(0, charIndex || 0));
+  return (s.match(/[A-Za-z0-9][A-Za-z0-9'’\-]*/g) || []).length;
 }
 
 // v293: 逐句朗讀（瀏覽器語音）——句子之間留自然停頓、語速放慢，比一口氣唸完自然得多。
@@ -1257,7 +1317,7 @@ function grSpeechChunks(text) {
 // （_activeSpeak）——連點單字／附註／整段不會兩段聲音疊在一起。
 let _activeSpeak = null;
 // v301: onProgress(fraction 0~1)——朗讀到哪個字，回報進度（給「逐字亮起來」用）
-function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress } = {}) {
+function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress, onWord } = {}) {
   const synth = window.speechSynthesis;
   const chunks = grSpeechChunks(text);
   if (_activeSpeak) { try { _activeSpeak(); } catch (e) {} }
@@ -1266,12 +1326,17 @@ function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress 
   try { synth.cancel(); } catch (e) {}
   const totalChars = chunks.reduce((n, c) => n + c.t.length, 0) || 1;
   const before = []; let acc = 0; chunks.forEach(c => { before.push(acc); acc += c.t.length; });
+  const totalWords = chunks.reduce((n, c) => n + (c.wn || 0), 0);   // v453：逐字高亮改用「第幾個字」
   let i = 0, stopped = false, done = false;
   // v306+: iOS/iPadOS WebKit 幾乎不觸發 onboundary → 逐字亮起來會整段不動。用估時 timer 當後備推進；
   // 只要真的收到一次 onboundary（boundarySeen=true），就讓真實邊界接手，timer 立刻退讓。
   let boundarySeen = false, tick = null;
   const clearTick = () => { if (tick) { clearInterval(tick); tick = null; } };
   const report = (f) => { if (onProgress) { try { onProgress(Math.max(0, Math.min(1, f))); } catch (e) {} } };
+  /* v453（Alan：「螢光完全沒有跟著語速」）：把「唸到第幾個字」直接報出去。
+     以前只報整段的字元比例，呼叫端再用加權字數反推 → 一路累積誤差；
+     現在用 onboundary 給的字元位置換算成這一塊裡的第幾個字，是精準的。 */
+  const reportWord = (i2) => { if (onWord && totalWords) { try { onWord(Math.max(0, Math.min(totalWords - 1, i2))); } catch (e) {} } };
   const finish = () => {
     if (done) return; done = true;
     clearTick();
@@ -1286,17 +1351,26 @@ function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress 
     if (i >= chunks.length) { finish(); return; }
     const c = chunks[i];
     const idx = i; // 給非同步 timer 抓穩目前段落（i 之後會被 onend 遞增）
-    const u = new SpeechSynthesisUtterance(c.t);
+    const u = new SpeechSynthesisUtterance(c.say || c.t);      // v453：數字唸成年份／逐位數
     u.lang = lang; u.rate = rate; u.pitch = 1;
     if (v) u.voice = v;
-    if (onProgress) u.onboundary = (e) => { boundarySeen = true; report((before[idx] + (e.charIndex || 0)) / totalChars); };
-    u.onend = () => { clearTick(); report((before[idx] + c.t.length) / totalChars); i += 1; if (!stopped) setTimeout(step, c.pause); };
+    if (onProgress || onWord) u.onboundary = (e) => {
+      boundarySeen = true;
+      report((before[idx] + (e.charIndex || 0)) / totalChars);
+      // say 與 t 的「字數」一樣（一個 token 換一個詞組），所以數 say 裡的字就等於數 t 裡的字
+      reportWord((c.w0 || 0) + Math.min((c.wn || 1) - 1, grWordsBefore(c.say || c.t, e.charIndex || 0)));
+    };
+    u.onend = () => {
+      clearTick(); report((before[idx] + c.t.length) / totalChars);
+      reportWord((c.w0 || 0) + (c.wn || 1) - 1);
+      i += 1; if (!stopped) setTimeout(step, c.pause);
+    };
     u.onerror = () => { clearTick(); i += 1; if (!stopped) setTimeout(step, c.pause); };
     try { synth.resume(); } catch (e) {}
     synth.speak(u);
     // 估時後備：onboundary 沒動時，用約 14 字/秒（隨 rate 調整）在本段內線性推進，
     // 上限剛好是本段結尾 (before[idx]+c.t.length)/totalChars，永遠不會超過。
-    if (onProgress) {
+    if (onProgress || onWord) {
       clearTick();
       const startT = Date.now();
       const estMs = Math.max(1, (c.t.length / (14 * rate)) * 1000);
@@ -1304,6 +1378,8 @@ function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress 
         if (stopped || boundarySeen) return;
         const frac = Math.min(1, (Date.now() - startT) / estMs);
         report((before[idx] + frac * c.t.length) / totalChars);
+        // iOS 幾乎不給 onboundary → 在這一塊裡依時間平均推進（只在塊內估，不會整段漂掉）
+        reportWord((c.w0 || 0) + Math.min((c.wn || 1) - 1, Math.floor(frac * (c.wn || 1))));
       }, 70);
     }
   };
@@ -4347,7 +4423,7 @@ async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
       const qs = r.mcq.map(_grQFromMcq).concat(r.sa.map(_grQFromSa));
       if (qs.length) bySeg[seg.i] = qs;
       bump(`第 ${seg.i + 1} 段（${qs.length} 題）`);
-    }, 6);
+    }, 8);   // v453：一次 6 段 → 8 段（Worker 扛得住，11 段的文章少等一輪）
   }
 
   // ── 整篇綜合 ──
@@ -5088,7 +5164,7 @@ Object.assign(window, {
   vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
   RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),
   // v287/v288: 分段閱讀——OCR 單字資料（Firestore）＋點字查義
-  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom,
+  saveReadingWords, fetchReadingWords, lookupWord, uploadReadingAudio, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom, grWordsText, grSayNumber, grWordsBefore,
   // AI Writing, Short Answer, Essay & Story Mountain
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions
