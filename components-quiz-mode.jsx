@@ -723,7 +723,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, homework, onSetHomework, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -732,6 +732,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [copyItem,     setCopyItem]     = useQM(null);   // v294: 「沿用到其他週」的題目
   const [copySel,      setCopySel]      = useQM([]);     // v294: 勾選的目標週 id
   const [dueEditFor,   setDueEditFor]   = useQM(null);   // v306+: 正在編輯截止日的 item.id（老師端 inline 日期選擇）
+  /* v454（Alan：「我只能一個一個去改日期…但我也希望可以一整包一起去改，因為這是一整包一起生成的」）
+     整組操作：設／取消截止日、沿用到其他週（可順便在那一週也設成作業）。 */
+  const [grpMenu,      setGrpMenu]      = useQM(null);   // 打開選單的那一組（group key）
+  const [grpDue,       setGrpDue]       = useQM('');     // 整組截止日輸入框
   const dueInputRef = React.useRef(null);
   const [sidebarHidden, setSidebarHidden] = useQM(() => loadSidebarCollapsed()); // v298: 學生自控側欄收合
   const toggleSidebar = () => setSidebarHidden(v => { const n = !v; saveSidebarCollapsed(n); return n; });
@@ -1319,6 +1323,14 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       📎{(groupRes || {})[`${cat.id}::${g.name}`] ? <i/> : null}
                     </button>
                   )}
+                  {/* v454：整組一起改（截止日／沿用到其他週／再出一次題目） */}
+                  {editMode && (
+                    <button className={'qm-ugroup-more' + (grpMenu === g.key ? ' on' : '')}
+                      title="整組一起改：截止日、沿用到其他週、再出一份題目"
+                      onClick={(e) => { e.stopPropagation(); setGrpMenu(k => (k === g.key ? null : g.key)); setGrpDue(''); }}>
+                      ⋯ 整組
+                    </button>
+                  )}
                   {/* v360: 整組上下移（例：Unit 17 移到 Unit 18 上面） */}
                   {editMode && onReorderItems && (
                     <div className="qm-ugroup-move">
@@ -1331,6 +1343,37 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                     </div>
                   )}
                 </div>
+                {editMode && grpMenu === g.key && (
+                  <div className="qm-grp-menu" onClick={(e) => e.stopPropagation()}>
+                    <div className="qm-grp-menu-row">
+                      <span className="qm-grp-menu-lab">📌 這一組 {g.items.length} 個單元的截止日</span>
+                      <input type="date" className="qm-grp-date" value={grpDue} onChange={(e) => setGrpDue(e.target.value)}/>
+                      <button className="qm-grp-go" disabled={!grpDue}
+                        onClick={() => { onSetHomeworkMany(g.items.map(it => it.id), { dueDate: grpDue }); setGrpMenu(null); }}>
+                        整組設為作業
+                      </button>
+                      <button className="qm-grp-ghost"
+                        onClick={() => { onSetHomeworkMany(g.items.map(it => it.id), null); setGrpMenu(null); }}>
+                        整組取消作業
+                      </button>
+                    </div>
+                    <div className="qm-grp-menu-row">
+                      {onCopyGroupToWeeks && (weekChoices || []).length > 0 && (
+                        <button className="qm-grp-ghost"
+                          onClick={() => { setCopyItem({ __group: true, name: g.name, items: g.items }); setCopySel([]); setGrpMenu(null); }}>
+                          📄 整組沿用到其他週…
+                        </button>
+                      )}
+                      {onRegenGroup && (
+                        <button className="qm-grp-ghost"
+                          onClick={() => { setGrpMenu(null); onRegenGroup(cat.id, g.name, g.items); }}
+                          title="用同一份設定再出一份新題目，直接加進這一組（不會變成另一組）">
+                          ✨ 在這一組再出一份題目
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {openGroups[g.key] && (groupRes || {})[`${cat.id}::${g.name}`] ? (
                   <button className="qm-gres-card" onClick={() => setResView(g.name)}>
                     <span className="qm-gres-ic">{(groupRes[`${cat.id}::${g.name}`].yt) ? '📺' : '📄'}</span>
@@ -1723,7 +1766,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               <div className="qm-copy-title">沿用到其他週</div>
               <button className="qm-copy-x" onClick={() => setCopyItem(null)} aria-label="關閉"><window.Icon name="close" size={16}/></button>
             </div>
-            <div className="qm-copy-sub">把「{copyItem.title}」複製到你勾選的週。<b>各週獨立</b>——哪一週想微調就改哪週，成績也分開算。</div>
+            <div className="qm-copy-sub">
+              {copyItem.__group
+                ? <>把「{copyItem.name}」這一組的 <b>{copyItem.items.length} 個單元</b>整包複製到你勾選的週。</>
+                : <>把「{copyItem.title}」複製到你勾選的週。</>}
+              <b>各週獨立</b>——哪一週想微調就改哪週，成績也分開算。
+            </div>
+            {/* v454：整組沿用時，可以順便在目標週就設好截止日（Alan：「功課要延續到下週當功課」） */}
+            {copyItem.__group && (
+              <label className="qm-copy-due">
+                <span>到了那一週也直接設成作業（選填）</span>
+                <input type="date" value={grpDue} onChange={(e) => setGrpDue(e.target.value)}/>
+              </label>
+            )}
             <div className="qm-copy-list">
               {(weekChoices || []).map(wc => {
                 const on = copySel.includes(wc.id);
@@ -1742,7 +1797,11 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             <div className="qm-copy-actions">
               <button className="qm-copy-cancel" onClick={() => setCopyItem(null)}>取消</button>
               <button className="qm-copy-go" disabled={!copySel.length}
-                onClick={() => { onCopyToWeeks(copyItem, copySel); setCopyItem(null); }}>
+                onClick={() => {
+                  if (copyItem.__group) onCopyGroupToWeeks(copyItem.items, copySel, grpDue || '');
+                  else onCopyToWeeks(copyItem, copySel);
+                  setCopyItem(null); setGrpDue('');
+                }}>
                 沿用到 {copySel.length || ''} 週
               </button>
             </div>

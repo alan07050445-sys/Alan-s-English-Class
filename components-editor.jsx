@@ -1051,7 +1051,7 @@ function grBuildItems({ tense, zh, lesson, A, B, check }) {
   return out;
 }
 
-function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, onClose, onCreate }) {
+function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, defaultTitle, onClose, onCreate }) {
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
   const [cat, setCat]     = useS(defaultCat || 'vocab');
@@ -1075,7 +1075,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [due, setDue]       = useS('');
   const [who, setWho]       = useS([]);       // 只有 perStudent 模式用得到
   useE(() => {
-    if (open) { setText(''); setTitle(''); setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
+    if (open) { setText(''); setTitle(defaultTitle || '');   /* v454：在同一組再出一份＝名字先填好 */ setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
@@ -4961,7 +4961,7 @@ async function gnFileToImage(file) {
   return { media_type: 'image/jpeg', data: url.split(',')[1], preview: url };
 }
 
-function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, onClose, onCreate }) {
+function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, onClose, onCreate }) {
   const [title, setTitle]   = useS('');
   const [text, setText]     = useS('');
   const [imgs, setImgs]     = useS([]);          // [{ media_type, data, preview, name }]
@@ -5006,7 +5006,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 
   useE(() => {
     if (!open) return;
-    setTitle(''); setText(''); setImgs([]); setCat(defaultCat || 'grammar'); setGrade(defaultGrade || 'g4');
+    setTitle(defaultTitle || ''); setText(''); setImgs([]); setCat(defaultCat || 'grammar'); setGrade(defaultGrade || 'g4');   // v454
     setNMcq(8); setNFill(8); setNTr(5); setNRw(5); setBusy(null); setErr(''); setRes(null); setTab('lesson'); setLsBusy(false);
     runRef.current++;
     setAssign(true); setWho([]);
@@ -5629,7 +5629,7 @@ function BgStepsEditor({ bg, onChange, onRedo, busy, onErr }) {
   );
 }
 
-function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onClose, onCreate }) {
+function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, defaultTitle, onClose, onCreate }) {
   const SK = window.RC_SKILLS || {};
   const [title, setTitle]   = useS('');
   const [text, setText]     = useS('');
@@ -5657,7 +5657,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, onC
 
   useE(() => {
     if (!open) return;
-    setTitle(''); setText(''); setCat(defaultCat || 'reading'); setGrade('g4');
+    setTitle(defaultTitle || ''); setText(''); setCat(defaultCat || 'reading'); setGrade('g4');   // v454
     setNMcq(10); setNSa(5); setKeepPassage(true); setBg(true); setBgBusy(false);
     setSkills({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
     setQSkills({}); setQsN(2);

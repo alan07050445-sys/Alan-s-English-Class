@@ -201,6 +201,10 @@ function App() {
   const [grGenOpen, setGrGenOpen] = useAppState(false);       // v382: 五大時態出題
   const [rcGenOpen, setRcGenOpen] = useAppState(false);       // v386: 貼文字稿→出閱讀理解
   const [gnGenOpen, setGnGenOpen] = useAppState(false);       // v428: 上傳老師作業→互動教學＋選擇／填空／中翻英
+  /* v454（Alan：「如果我發現有些題目出的不太好，也可以在那個 group 底下再生成一次新的題目，
+     不然又要重新生成並且又是不同 group」）：記住「要加進哪一組」，一鍵生成的標題就先填好，
+     建出來的單元 group 一樣＝直接落在同一組底下。 */
+  const [regenFor, setRegenFor] = useAppState(null);          // { catId, name }
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -1369,6 +1373,63 @@ function App() {
     showToast(hwData ? "設定作業 ✓" : "取消作業");
   };
 
+  /* v454（Alan：「我只能一個一個去改日期…希望可以一整包一起去改」）：
+     一次設／取消一整組的截止日——只寫一次 Firestore（一個一個設會存 N 次）。 */
+  const handleSetHomeworkMany = (itemIds, hwData) => {
+    const ids = (itemIds || []).filter(Boolean);
+    if (!ids.length) return;
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) return;
+    if (!w[weekId].homework) w[weekId].homework = {};
+    ids.forEach(id => { if (hwData) w[weekId].homework[id] = hwData; else delete w[weekId].homework[id]; });
+    setWeeks(w);
+    saveWeeksSafe(w);
+    showToast(hwData ? `${ids.length} 個單元都設成作業 ✓` : `${ids.length} 個單元取消作業`);
+  };
+
+  /* v454：整組沿用到其他週（Alan：「功課要延續到下週當功課」）——
+     一次把整組複製過去，dueDate 有值的話在目標週也直接設成作業。 */
+  const handleCopyGroupToWeeks = (catId, items, targetWeekIds, dueDate) => {
+    const list = (items || []).filter(x => x && x.id);
+    if (!list.length || !(targetWeekIds || []).length) return;
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    let copied = 0, weeksTouched = 0;
+    targetWeekIds.forEach(tw => {
+      if (!w[tw]) return;
+      if (!w[tw].items) w[tw].items = { vocab: [], grammar: [], word: [], reading: [] };
+      if (!w[tw].items[catId]) w[tw].items[catId] = [];
+      if (dueDate && !w[tw].homework) w[tw].homework = {};
+      let any = false;
+      list.forEach(item => {
+        const taken = new Set(Object.values(w[tw].items).flat().map(it => it.id));
+        let id = item.id, n = 2;
+        while (taken.has(id)) { id = `${item.id}-${n}`; n++; }
+        const clone = JSON.parse(JSON.stringify(item));
+        clone.id = id;
+        /* ⚠ 組內互相指向的 id（教學卡的鎖 requires、單字卡的 linkedFlashcardId）
+           要跟著換成複製後的新 id，不然到了新的一週會鎖著一個不存在的單元。 */
+        clone.__oldId = item.id;
+        w[tw].items[catId].push(clone);
+        if (dueDate) w[tw].homework[id] = { dueDate };
+        copied++; any = true;
+      });
+      // 第二輪：把 requires／linkedFlashcardId 對到這一週的新 id
+      const map = {};
+      w[tw].items[catId].forEach(it => { if (it.__oldId) map[it.__oldId] = it.id; });
+      w[tw].items[catId].forEach(it => {
+        if (!it.__oldId) return;
+        if (it.requires && map[it.requires]) it.requires = map[it.requires];
+        if (it.linkedFlashcardId && map[it.linkedFlashcardId]) it.linkedFlashcardId = map[it.linkedFlashcardId];
+        delete it.__oldId;
+      });
+      if (any) weeksTouched++;
+    });
+    if (!copied) { showToast('沒有可沿用的週'); return; }
+    setWeeks(w);
+    saveWeeksSafe(w);
+    showToast(`整組 ${list.length} 個單元已沿用到 ${weeksTouched} 週${dueDate ? '，並設成作業' : ''} ✓`);
+  };
+
   // v294: 沿用題目到其他週——深拷貝一份（各週獨立；進度分開算，因 key = weekId_itemId）。
   // 只帶內容，不自動設為作業（老師到目標週再用 📌 指派）。
   const handleCopyItemToWeeks = (catId, item, targetWeekIds) => {
@@ -1745,6 +1806,9 @@ function App() {
                 sub: weeks[id] ? [weeks[id].dateRange, weeks[id].theme].filter(Boolean).join(' · ') : '',
               }))}
               onCopyToWeeks={(item, targetIds) => handleCopyItemToWeeks(catView.id, item, targetIds)}
+              onCopyGroupToWeeks={(items, targetIds, due) => handleCopyGroupToWeeks(catView.id, items, targetIds, due)}
+              onRegenGroup={(catId, name) => setRegenFor({ catId, name, pick: true })}
+              onSetHomeworkMany={handleSetHomeworkMany}
               homework={week.homework || {}}
               onSetHomework={handleSetHomework}
               weekQuizItems={weekQuizItems}
@@ -1931,8 +1995,9 @@ function App() {
             defaultGrade={/^g[1-6]$/.test(String(grade)) ? grade : 'g4'}
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
             roster={qsRoster}
-            defaultCat={openCat || (activeCategories.find(c => c.id === 'grammar') ? 'grammar' : (activeCategories[0] && activeCategories[0].id)) || 'grammar'}
-            onClose={() => setGnGenOpen(false)}
+            defaultCat={(regenFor && regenFor.catId) || openCat || (activeCategories.find(c => c.id === 'grammar') ? 'grammar' : (activeCategories[0] && activeCategories[0].id)) || 'grammar'}
+            defaultTitle={regenFor ? regenFor.name : ''}
+            onClose={() => { setGnGenOpen(false); setRegenFor(null); }}
             onCreate={handleGrammarNotesCreate}
           />}
           <window.ReadingGenModal
@@ -1940,8 +2005,9 @@ function App() {
             categories={activeCategories}
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
             roster={qsRoster}
-            defaultCat={openCat || (activeCategories.find(c => c.id === 'reading') ? 'reading' : (activeCategories[0] && activeCategories[0].id)) || 'reading'}
-            onClose={() => setRcGenOpen(false)}
+            defaultCat={(regenFor && regenFor.catId) || openCat || (activeCategories.find(c => c.id === 'reading') ? 'reading' : (activeCategories[0] && activeCategories[0].id)) || 'reading'}
+            defaultTitle={regenFor ? regenFor.name : ''}
+            onClose={() => { setRcGenOpen(false); setRegenFor(null); }}
             onCreate={handleReadingCreate}
           />
           <window.QuickSetModal
@@ -1949,9 +2015,10 @@ function App() {
             categories={activeCategories}
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
             roster={qsRoster}
-            defaultCat={openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab'}
+            defaultCat={(regenFor && regenFor.catId) || openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab'}
             defaultGrade={grade}
-            onClose={() => setQuickSetOpen(false)}
+            defaultTitle={regenFor ? regenFor.name : ''}
+            onClose={() => { setQuickSetOpen(false); setRegenFor(null); }}
             onCreate={handleQuickSet}
           />
           <window.TermSetupModal
@@ -1978,6 +2045,37 @@ function App() {
             editWeek={{ id: weekId, label: week.label || '', dateRange: week.dateRange || '', theme: week.theme || '', themeZh: week.themeZh || '' }}
           />
 
+          {/* v454：「在這一組再出一份題目」——先問要出哪一種，名字已經幫你填好，出來就落在同一組 */}
+          {regenFor && regenFor.pick && (
+            <div className="modal-backdrop" onClick={() => setRegenFor(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-head">
+                  <h3>再出一份題目 <em>加進「{regenFor.name}」這一組</em></h3>
+                  <button className="modal-close" aria-label="關閉" onClick={() => setRegenFor(null)}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <div className="field-help" style={{ marginBottom: 12 }}>
+                    出好的單元會用同一個名字，<b>直接排在這一組底下</b>——不會變成另外一組。
+                    原本的題目一題都不會動，你可以出完再把不好的刪掉。
+                  </div>
+                  <div className="edit-make">
+                    <button className="edit-make-btn quick" onClick={() => { setRegenFor(r => ({ ...r, pick: false })); setQuickSetOpen(true); }}>
+                      <span className="emk-ico">🔤</span>
+                      <span className="emk-txt"><b>一鍵出單字</b><em>貼單字表 → 單字卡・測驗・配對・填空・聽寫</em></span>
+                    </button>
+                    <button className="edit-make-btn gn" onClick={() => { setRegenFor(r => ({ ...r, pick: false })); setGnGenOpen(true); }}>
+                      <span className="emk-ico">✏️</span>
+                      <span className="emk-txt"><b>一鍵出文法</b><em>上傳作業照片／貼文字 → 互動教學・選擇・填空・中翻英</em></span>
+                    </button>
+                    <button className="edit-make-btn rc" onClick={() => { setRegenFor(r => ({ ...r, pick: false })); setRcGenOpen(true); }}>
+                      <span className="emk-ico">📖</span>
+                      <span className="emk-txt"><b>一鍵出閱讀理解</b><em>貼文章 → 背景知識・選擇・簡答・閱讀技巧</em></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {toast && <div className="toast">{toast}</div>}
           {/* v447：存檔沒成功就一直掛著，不要讓老師以為存好了（他的分段閱讀就是這樣不見的） */}
           {saveFail && (
