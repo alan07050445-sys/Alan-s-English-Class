@@ -69,5 +69,27 @@ ok('⚠ 跳起來不能被 SVG 邊界切掉', /\.pet-bun\.act-hop \.mx-svg \{[^}
 ok('關掉動畫的人不會看到牠亂跳',
   /prefers-reduced-motion[\s\S]{0,260}\.pet-bun\.act-hop \.mx-svg, \.pet-bun\.act-hop \.mx-carrot/.test(css));
 
+console.log('\n【5】v456：走路要用兔子的方式（不是像螃蟹一樣挪）');
+ok('⭐ 走路換成一跳一跳（只蓋 .pet-bun，其他五隻不動）',
+  /\.pet-bun\.act-walk \.mx-svg\s+\{ animation: mxBunHop/.test(flat));
+ok('其他夥伴的走路還是原本那一套', /\.act-walk \.mx-svg\s+\{ animation: mxWalkBob/.test(flat));
+ok('蹲下蹬地 → 騰空拉長 → 落地壓扁',
+  /@keyframes mxBunHop \{[^@]*scaleY\(\.88\)[^@]*scaleY\(1\.1\)[^@]*scaleY\(\.82\)/.test(flat));
+ok('⭐ 後腳蹬、前腳先收（兩組不同的動畫）',
+  /@keyframes mxBunHind/.test(flat) && /@keyframes mxBunFore/.test(flat) &&
+  /\.pet-bun\.act-walk \.mx-leg-b\s+\{ animation: mxBunFore/.test(flat));
+ok('耳朵跟著上下甩', /@keyframes mxBunEar/.test(flat));
+ok('帽子也跟著跳（不然帽子會浮在原地）', /\.pet-bun\.act-walk \.mx-hat\s+\{ animation: mxBunHop/.test(flat));
+
+console.log('\n【6】v456：大跳的時候四肢也要演');
+ok('⭐ 跳的時候腳有自己的動畫（不再是 animation: none 停在原地）',
+  /\.pet-bun\.act-hop \.mx-leg-a,\s*\.pet-bun\.act-hop \.mx-leg-c \{ animation: mxHopHind/.test(flat));
+ok('前腳另一套', /\.pet-bun\.act-hop \.mx-leg-b \{ animation: mxHopFore/.test(flat));
+ok('⭐ 蹬地時腳往後下方伸', /@keyframes mxHopHind \{[^@]*translateY\(3px\)\s*rotate\(-16deg\)/.test(flat));
+ok('⭐ 騰空時把腳收起來（兔子跳起來會縮成一團）',
+  /@keyframes mxHopHind \{[^@]*translateY\(-3\.2px\)/.test(flat) && /@keyframes mxHopFore \{[^@]*translateY\(-3\.6px\)/.test(flat));
+ok('著地那一格會張開壓扁', /@keyframes mxHopHind \{[^@]*scaleY\(\.78\)/.test(flat));
+ok('關掉動畫的人一樣不會看到', /prefers-reduced-motion[\s\S]{0,300}\.pet-bun\.act-walk \.mx-svg/.test(css));
+
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
 process.exit(fail ? 1 : 0);

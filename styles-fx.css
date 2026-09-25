@@ -819,3 +819,80 @@
   .pet-bun.act-hop .mx-svg, .pet-bun.act-hop .mx-carrot, .pet-bun.act-hop .mx-ear, .mx-bubble-hop { animation: none; }
   .pet-bun.act-hop .mx-carrot { opacity: 1; }
 }
+
+/* ══ v456（Alan：「走路姿勢要變成兔子的方式，不要跟 Claudius 一樣像螃蟹」）══
+   兔子不是一步一步挪，是一跳一跳前進。走路（walk）改成「蹬地→騰空→落地壓扁」的小跳，
+   身體在半空中拉長、後腳往後蹬、前腳先著地，耳朵跟著上下甩。
+   ⚠ 只覆蓋 .pet-bun，其他五隻的走路一個像素都沒動。
+   ⚠ 掛在 .mx-svg 上的位移是真的 px；掛在 <g>（腳、耳朵）上的是 SVG 使用者單位（--mx-w/18）。 */
+.pet-bun.act-walk .mx-svg   { animation: mxBunHop .46s cubic-bezier(.33, .02, .55, 1) infinite; }
+.pet-bun.act-walk .mx-hat   { animation: mxBunHop .46s cubic-bezier(.33, .02, .55, 1) infinite; }
+.pet-bun.act-walk .mx-leg-a,
+.pet-bun.act-walk .mx-leg-c { animation: mxBunHind .46s cubic-bezier(.33, .02, .55, 1) infinite; }
+.pet-bun.act-walk .mx-leg-b { animation: mxBunFore .46s cubic-bezier(.33, .02, .55, 1) infinite; }
+.pet-bun.act-walk .mx-ear   { animation: mxBunEar  .46s cubic-bezier(.33, .02, .55, 1) infinite; transform-origin: 50% 100%; }
+@keyframes mxBunHop {
+  0%       { transform: translateY(1.2px) scaleY(.88) scaleX(1.1); }   /* 蹲下蹬地 */
+  20%      { transform: translateY(-7px)  scaleY(1.1) scaleX(.93); }   /* 彈起來，身體拉長 */
+  42%      { transform: translateY(-11px) scaleY(1.04) scaleX(.98); }  /* 最高點 */
+  66%      { transform: translateY(-4px)  scaleY(1.02) scaleX(.99); }  /* 掉下來 */
+  84%      { transform: translateY(1.6px) scaleY(.82) scaleX(1.14); }  /* 落地壓扁 */
+  100%     { transform: translateY(1.2px) scaleY(.88) scaleX(1.1); }
+}
+/* 後腳（兩側）：蹬地時往後伸，騰空時收起來 */
+@keyframes mxBunHind {
+  0%       { transform: translateY(.4px) rotate(0deg); }
+  20%      { transform: translateY(1.6px) rotate(-10deg); }
+  42%      { transform: translateY(-2.2px) rotate(6deg); }
+  66%      { transform: translateY(-.6px) rotate(2deg); }
+  84%, 100% { transform: translateY(.4px) rotate(0deg); }
+}
+/* 前腳（中間那隻）：先收起來、先著地 */
+@keyframes mxBunFore {
+  0%       { transform: translateY(0) rotate(0deg); }
+  20%      { transform: translateY(-2.4px) rotate(8deg); }
+  42%      { transform: translateY(-3px)  rotate(10deg); }
+  66%      { transform: translateY(.6px)  rotate(-4deg); }
+  84%, 100% { transform: translateY(0)    rotate(0deg); }
+}
+/* 耳朵：起跳往後、落地往前甩一下 */
+@keyframes mxBunEar {
+  0%       { transform: rotate(0deg); }
+  20%      { transform: rotate(-9deg); }
+  42%      { transform: rotate(-6deg); }
+  66%      { transform: rotate(7deg); }
+  84%, 100% { transform: rotate(0deg); }
+}
+
+/* ══ v456（Alan：「跳的時候動畫要做出來」）══════════════════════════════
+   原本大跳只有身體整個往上移，腳還停在原地＝看起來像被吊上去。
+   現在四肢也演：蹬地時後腳往下用力、騰空時把腳收起來（兔子跳起來就是這樣縮成一團）、
+   落地前伸腳準備著陸、著地那一格張開。 */
+.pet-bun.act-hop .mx-leg { animation: none; }            /* 先蓋掉走路的循環 */
+.pet-bun.act-hop .mx-leg-a,
+.pet-bun.act-hop .mx-leg-c { animation: mxHopHind 3.6s linear both; }
+.pet-bun.act-hop .mx-leg-b { animation: mxHopFore 3.6s linear both; }
+@keyframes mxHopHind {
+  0%, 33%  { transform: translateY(0) rotate(0deg); }
+  38%      { transform: translateY(1.2px) rotate(0deg) scaleY(.8); }    /* 蹲 */
+  42%      { transform: translateY(3px)  rotate(-16deg); }              /* 蹬地（腳往後下方伸） */
+  50%, 56% { transform: translateY(-3.2px) rotate(12deg); }             /* 騰空縮起來 */
+  66%      { transform: translateY(1.4px) rotate(-6deg); }              /* 準備著地 */
+  72%      { transform: translateY(.6px) rotate(0deg) scaleY(.78); }    /* 著地張開 */
+  86%      { transform: translateY(-1px) rotate(4deg); }                /* 小彈跳 */
+  100%     { transform: translateY(0) rotate(0deg); }
+}
+@keyframes mxHopFore {
+  0%, 33%  { transform: translateY(0) rotate(0deg); }
+  38%      { transform: translateY(1px) scaleY(.82); }
+  42%      { transform: translateY(-2.4px) rotate(14deg); }             /* 前腳先收到胸前 */
+  50%, 56% { transform: translateY(-3.6px) rotate(18deg); }
+  66%      { transform: translateY(1.6px) rotate(-8deg); }              /* 伸出來著地 */
+  72%      { transform: translateY(.8px) scaleY(.8); }
+  86%      { transform: translateY(-1.2px) rotate(3deg); }
+  100%     { transform: translateY(0) rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-bun.act-walk .mx-svg, .pet-bun.act-walk .mx-hat, .pet-bun.act-walk .mx-leg,
+  .pet-bun.act-walk .mx-ear, .pet-bun.act-hop .mx-leg { animation: none; }
+}
