@@ -37,7 +37,7 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
      ['fx', 'voice'].every(k => W.MX_SHOP.some(i => i.kind === k && i.free)));
   ok('（v436 Alan 定價）裝備／特效／語音／動作 ≤ 300、夥伴 500（小焰 800）',
      W.MX_SHOP.filter(i => ['hat', 'item', 'fx', 'voice', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
-     W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => i.cost === 500 || i.cost === 800) &&
+     W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => [300, 500, 800].indexOf(i.cost) >= 0) &&   // v455：小跳 300
      Math.min(...W.MX_SHOP.filter(i => !i.free).map(i => i.cost)) === 100);
   ok('舊的兩頂帽子還在，而且對得回老師扣過點的名字',
      W.mxItemOf('hat_party').legacy === 'party' && W.mxItemOf('hat_crown').legacy === 'crown');
@@ -115,9 +115,9 @@ log.push('\n【6】三個地方的星星要用同一個算法');
 log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻、動作要是新的');
 {
   const pets = W.MX_SHOP.filter(i => i.kind === 'pet');
-  ok('⭐ 五隻夥伴都在商品表裡', pets.length === 5, pets.map(p => p.pet).join());
-  ok('⭐ 只有 Claudius 免費，其他四隻要買（才有稀有感）',
-     pets.filter(p => p.free).map(p => p.pet).join() === 'clay' && pets.filter(p => !p.free).every(p => p.cost >= 500));
+  ok('⭐ 六隻夥伴都在商品表裡（v455 加了小跳）', pets.length === 6, pets.map(p => p.pet).join());
+  ok('⭐ 只有 Claudius 免費，其他都要買（才有稀有感）',
+     pets.filter(p => p.free).map(p => p.pet).join() === 'clay' && pets.filter(p => !p.free).every(p => p.cost >= 300));
   ok('每一隻都對得到 components-fx.jsx 的 MX_PETS', pets.every(p => fx.indexOf(`id: '${p.pet}'`) > 0));
   globalThis.window.__mxHats = [];
   ok('沒買任何東西時，只有 Claudius 是你的', W.mxOwnedPets({}).join() === 'clay');
@@ -141,7 +141,8 @@ log.push('\n【7c】（v441）配件要跟著吉祥物動、整體要大一點�
   ok('⭐ 配件畫在吉祥物同一個 <svg> 裡（翻滾／轉圈才會跟著動）',
      /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="back"\/>/.test(fx) &&
      /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="front"\/>/.test(fx));
-  ok('五隻都收下 acc、而且都有前後兩層', (fx.match(/layer="back"/g) || []).length === 5 && (fx.match(/layer="front"/g) || []).length === 5);
+  ok('每一隻都收下 acc、而且都有前後兩層（v455：六隻）',
+     (fx.match(/layer="back"/g) || []).length === 6 && (fx.match(/layer="front"/g) || []).length === 6);
   ok('⭐ 不再是疊在上面的另一個 svg（那就是它會留在原地的原因）', fx.indexOf('<svg className="mx-acc"') < 0);
   ok('CSS 也把「自己補動畫」那段拿掉（不然會動兩次）', !/\.act-walk\s+\.mx-acc/.test(css) && !/\.act-dance\s+\.mx-acc/.test(css));
   ok('⭐ 書包、披風畫在身體後面（back 層）＝真的背在後面', /if \(id === 'it_bag'\)[\s\S]{0,900}back:/.test(fx) && /if \(id === 'it_cape'\)[\s\S]{0,900}back:/.test(fx));

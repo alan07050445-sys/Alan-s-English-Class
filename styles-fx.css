@@ -754,3 +754,68 @@
 
 /* 商店裡的「吉祥物裝扮」小標題（跟實體禮物分開） */
 .sp-shop-head { font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); margin: 10px 2px 6px; }
+
+/* ══ v455 小跳的招牌：吃紅蘿蔔 ＋ 跳到半個畫面高 ══════════════════════
+   Alan：「特殊動作：吃紅蘿蔔＋跳很高，可以跳到螢幕一半」。
+   分成兩段演：① 0~34% 啃三口紅蘿蔔（紅蘿蔔會愈啃愈短）② 34% 之後蹲下蓄力，
+   一口氣跳到 -46vh（畫面一半），停在最高點讓人看清楚，落地壓扁再彈一小下。
+   ⚠ 動畫掛在 .mx-svg 上＝真正的 CSS 長度，所以可以用 vh（跟畫面高度綁在一起，
+     手機、iPad、桌機都剛好是「半個畫面」）；掛在 <g> 上的才是 SVG 使用者單位。
+   ⚠ 起跳前後都要回到 translateY(0)，不然牠會停在半空中。 */
+/* 平常看不到紅蘿蔔——只有招牌動作那 3.6 秒才拿出來啃 */
+.mx-carrot { opacity: 0; }
+.pet-bun.act-hop .mx-svg { animation: mxHop 3.6s linear both; overflow: visible; }
+.pet-bun.act-hop .mx-carrot { animation: mxCarrot 3.6s linear both; }
+.pet-bun.act-hop .mx-ear { animation: mxEarFlop 3.6s linear both; transform-origin: 50% 100%; }
+.pet-bun.act-hop .mx-leg { animation: none; }
+@keyframes mxHop {
+  0%,  4%   { transform: translateY(0)     scaleY(1)    scaleX(1); }
+  10%       { transform: translateY(.5px)  scaleY(.94)  scaleX(1.05); }   /* 啃第一口 */
+  16%       { transform: translateY(0)     scaleY(1)    scaleX(1); }
+  22%       { transform: translateY(.5px)  scaleY(.94)  scaleX(1.05); }   /* 第二口 */
+  28%       { transform: translateY(0)     scaleY(1)    scaleX(1); }
+  33%       { transform: translateY(.5px)  scaleY(.93)  scaleX(1.06); }   /* 第三口 */
+  38%       { transform: translateY(1.5px) scaleY(.76)  scaleX(1.16); }   /* 蹲下蓄力 */
+  42%       { transform: translateY(-14vh) scaleY(1.18) scaleX(.86); }    /* 起跳（拉長） */
+  50%, 56%  { transform: translateY(-46vh) scaleY(1.04) scaleX(.98); }    /* 最高點＝畫面一半 */
+  66%       { transform: translateY(-16vh) scaleY(1.12) scaleX(.9); }     /* 掉下來 */
+  72%       { transform: translateY(0)     scaleY(.74)  scaleX(1.2); }    /* 落地壓扁 */
+  78%       { transform: translateY(-7vh)  scaleY(1.06) scaleX(.96); }    /* 再彈一小下 */
+  86%       { transform: translateY(0)     scaleY(.9)   scaleX(1.08); }
+  100%      { transform: translateY(0)     scaleY(1)    scaleX(1); }
+}
+/* 紅蘿蔔：拿出來 → 啃三口愈來愈短 → 吃完收起來（transform-origin 在底部，從上面啃） */
+.pet-bun.act-hop .mx-carrot { transform-origin: 88% 50%; }   /* 從尖端（左邊）啃，所以原點在右邊 */
+@keyframes mxCarrot {
+  0%        { opacity: 0; transform: translateX(1.5px) scale(.6); }
+  4%        { opacity: 1; transform: translateX(0)     scale(1); }
+  10%, 15%  { opacity: 1; transform: scaleX(.78); }
+  22%, 27%  { opacity: 1; transform: scaleX(.52); }
+  33%       { opacity: 1; transform: scaleX(.26); }
+  36%, 100% { opacity: 0; transform: scaleX(.1); }
+}
+/* 耳朵：起跳時往後飄，落地時甩一下（SVG 使用者單位，不是 px） */
+@keyframes mxEarFlop {
+  0%, 36%   { transform: rotate(0deg); }
+  42%       { transform: rotate(-16deg) translateY(.6px); }
+  50%, 56%  { transform: rotate(-9deg); }
+  66%       { transform: rotate(14deg); }
+  72%       { transform: rotate(20deg) translateY(.4px); }
+  80%       { transform: rotate(-6deg); }
+  100%      { transform: rotate(0deg); }
+}
+/* 泡泡跟著一起飛（不然牠跳到半空、話還留在地板上） */
+.mx-bubble-hop { animation: mxBubbleHop 3.6s linear both; }
+@keyframes mxBubbleHop {
+  0%, 38%   { transform: translateY(0); }
+  42%       { transform: translateY(-14vh); }
+  50%, 56%  { transform: translateY(-46vh); }
+  66%       { transform: translateY(-16vh); }
+  72%       { transform: translateY(0); }
+  78%       { transform: translateY(-7vh); }
+  100%      { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-bun.act-hop .mx-svg, .pet-bun.act-hop .mx-carrot, .pet-bun.act-hop .mx-ear, .mx-bubble-hop { animation: none; }
+  .pet-bun.act-hop .mx-carrot { opacity: 1; }
+}

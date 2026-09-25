@@ -35,6 +35,8 @@ const MX_FIT = {
   flame:  { hat: { x: 9,   y: 3.4,  s: 0.86 }, eye: { y: 7,   h: 4,   x0: 3, x1: 15 }, neck: { y: 10.6 }, side: { y: 8.5 } },
   rock:   { hat: { x: 9.5, y: -0.2, s: 0.85 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 10   }, side: { y: 6 } },
   sprout: { hat: { x: 9,   y: 0,    s: 0.96 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 9.6  }, side: { y: 6 } },
+  /* v455 小跳：耳朵一路畫到 y=−4，帽子要壓到頭頂（y=1）並縮小，才不會蓋掉兩隻耳朵 */
+  bun:    { hat: { x: 9,   y: 1.2,  s: 0.82 }, eye: { y: 4,   h: 4,   x0: 2, x1: 16 }, neck: { y: 11   }, side: { y: 6 } },
 };
 const MX_FIT_DEF = MX_FIT.clay;
 /* 帽子的畫法（標準空間：頭頂 y=0、往上到 y=−4.6、頭寬 18）。
@@ -566,6 +568,65 @@ function SproutMascot({ size = 46, hat = 'none', acc = '' }) {
   );
 }
 
+/* ══ v455（Alan 給了一張白兔子的參考圖：奶油色身體、粉內耳、大黑眼、淺藍蝴蝶結）══
+   照網站原本的像素風重畫（同一個 18×20 網格、同樣三隻腳、同樣的 .mx-torso/.mx-eye/.mx-leg-*，
+   走路那十幾支現成動畫才掛得上去）。
+   ⚠ 耳朵畫在 y −4~0 那一段（帽子的地盤），所以 MX_FIT.bun 的帽子要往下壓、縮小一點，
+     不然帽子會蓋在耳朵上。耳朵獨立成 .mx-ear-l／.mx-ear-r，跳起來的時候會往後飄。
+   ⚠ 紅蘿蔔平常 opacity:0，只有招牌動作（.act-hop）前半段才出現——見 styles-fx.css。 */
+function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
+  const FUR = '#F7EFE0', DEEP = '#E0D2BC', INNER = '#D98E72', EYE = '#2B2A26',
+        BOW = '#CFE2F3', BOW_D = '#A8C6E4', BLUSH = '#F2B79A';
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat} fit={MX_FIT.bun}/>
+      <MxAcc id={acc} fit={MX_FIT.bun} layer="back"/>
+      {/* 耳朵：外圈奶油色、內圈粉紅（參考圖的紅棕內耳） */}
+      <g className="mx-ear mx-ear-l">
+        <rect x="3" y="-4" width="4" height="6" fill={FUR}/>
+        <rect x="4" y="-3" width="2" height="4" fill={INNER}/>
+      </g>
+      <g className="mx-ear mx-ear-r">
+        <rect x="11" y="-4" width="4" height="6" fill={FUR}/>
+        <rect x="12" y="-3" width="2" height="4" fill={INNER}/>
+      </g>
+      <g className="mx-torso">
+        {/* 頭與身體連成一塊（跟其他夥伴一樣的塊狀剪影；地板在 y=16，所以身體畫到 12、腳 12~16） */}
+        <rect x="1" y="1" width="16" height="2" fill={FUR}/>
+        <rect x="0" y="3" width="18" height="8" fill={FUR}/>
+        <rect x="0" y="11" width="18" height="1" fill={DEEP}/>
+        <rect className="mx-eye" x="3" y="4" width="4" height="4" fill={EYE}/>
+        <rect className="mx-eye" x="11" y="4" width="4" height="4" fill={EYE}/>
+        <rect x="1" y="7" width="2" height="2" fill={BLUSH}/>
+        <rect x="15" y="7" width="2" height="2" fill={BLUSH}/>
+        <rect x="8" y="6" width="2" height="1" fill={INNER}/>
+        {/* 淺藍蝴蝶結（參考圖的重點配色）：脖子一圈＋中間的結與兩片翅膀 */}
+        <rect x="0" y="9" width="18" height="2" fill={BOW}/>
+        <rect x="0" y="10" width="18" height="1" fill={BOW_D}/>
+        <rect x="5" y="8" width="3" height="4" fill={BOW}/>
+        <rect x="10" y="8" width="3" height="4" fill={BOW}/>
+        <rect x="5" y="11" width="3" height="1" fill={BOW_D}/>
+        <rect x="10" y="11" width="3" height="1" fill={BOW_D}/>
+        <rect x="8" y="8" width="2" height="4" fill={BOW_D}/>
+      </g>
+      {/* 紅蘿蔔：橫著拿到嘴邊（尖端對著鼻子），只有招牌動作才看得到。
+          啃的時候從左邊（尖端）愈來愈短——所以 CSS 的縮放原點在右邊。 */}
+      <g className="mx-carrot" aria-hidden="true">
+        <rect x="9.4" y="7.4" width="4.6" height="2" fill="#E0813C"/>
+        <rect x="8.6" y="7.8" width="0.8" height="1.2" fill="#C96B2C"/>
+        <rect x="14" y="6.6" width="1.4" height="1.2" fill="#5E9B4B"/>
+        <rect x="14" y="9" width="1.4" height="1.2" fill="#5E9B4B"/>
+        <rect x="13.6" y="7.8" width="1.6" height="1.2" fill="#4F8540"/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="0" y="12" width="5" height="4" fill={FUR}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="13" y="12" width="5" height="4" fill={FUR}/></g>
+      <MxAcc id={acc} fit={MX_FIT.bun} layer="front"/>
+    </svg>
+  );
+}
+
 /* ── 台詞（鼓勵為主，偶爾耍笨；不嘲諷小孩）────────────────── */
 const MX_LINES = {
   hello:   ['嗨！我陪你唸書 📚', '今天也要加油喔！', '我又出現了 👀', '你在唸什麼？我也想學', '長按我可以幫我取名字 ✏️'],
@@ -677,6 +738,14 @@ const MX_PETS = [
              sig:   ['我是石頭。', '……（假裝沒看到）', '噓，別說出去'] },
   },
   {
+    id: 'bun', speed: 1.1, zh: '小跳', tip: '吃一口紅蘿蔔，就能跳到半個螢幕高',
+    art: BunnyMascot, sig: 'hop', sigZh: '吃紅蘿蔔＋跳超高',
+    acts: ['walk', 'walk', 'walk', 'hop'],                        // v455：免費的只有走路＋自己的招牌
+    lines: { hello: ['蹦蹦！我來了 🐰', '嗨～要一起跳嗎', '我今天也想跳高高'],
+             idle:  ['蹦…蹦…', '鼻子癢癢的', '我在找紅蘿蔔', '耳朵聽得到你翻頁喔'],
+             sig:   ['卡滋卡滋…好吃 🥕', '吃飽了，看我跳！', '咻——跳到半空中啦！', '這一跳有沒有很高 😆'] },
+  },
+  {
     id: 'sprout', speed: 1, zh: '小芽', tip: '好奇寶寶，開心就會長高',
     art: SproutMascot, sig: 'grow', sigZh: '長高',
     acts: ['walk', 'walk', 'grow', 'grow'],                       // v451（長高是小芽的招牌）
@@ -685,6 +754,7 @@ const MX_PETS = [
              sig:   ['長高了！🌱', '我又冒新葉子了', '再一公分就好'] },
   },
 ];
+try { window.__MX_PETS = MX_PETS; } catch (e) {}   // harness 用（正式站不讀它）
 const MX_PET_KEY = 'alan-mx-pet';
 function mxGetPet() {
   try {
@@ -696,7 +766,7 @@ function mxSetPet(id) { try { localStorage.setItem(mxKey(MX_PET_KEY), id || '');
 function mxPetOf(id) { return MX_PETS.find(p => p.id === id) || MX_PETS[0]; }
 
 /* 招牌動作要停留多久（毫秒）。走位類的不在這裡，時間是照距離算的。 */
-const MX_SIG_HOLD = { type: 2800, read: 3000, hide: 2600, grow: 2600 };
+const MX_SIG_HOLD = { type: 2800, read: 3000, hide: 2600, grow: 2600, hop: 3600 };   // v455：吃紅蘿蔔 1.4s ＋ 跳 2.2s
 
 function MascotLayer() {
   const [alive,  setAlive]  = useFx(false);   // 進站 2.5 秒後才出來，不跟載入畫面搶
@@ -1234,7 +1304,7 @@ function MascotLayer() {
             所以小芽一抽高，頭跟葉子就鑽到泡泡底下去了。
             ⚠ 只有長高這個動作會把身體變高，所以只有它需要讓位。 */}
         {bubble && !menu && !petPick &&
-          <div className={'mx-bubble' + (act === 'grow' ? ' mx-bubble-high' : '')}>{bubble}</div>}
+          <div className={'mx-bubble' + (act === 'grow' ? ' mx-bubble-high' : '') + (act === 'hop' ? ' mx-bubble-hop' : '')}>{bubble}</div>}
         {/* v407：多一個 pet-<id>——同一個動作要能「這一隻做得不一樣」
             （阿石滾得慢、走得重；小焰衝刺時身後有速度線）。 */}
         <div ref={bodyRef} className={'mx-body pet-' + petId + ' act-' + act} style={{ '--mx-dir': dir }}

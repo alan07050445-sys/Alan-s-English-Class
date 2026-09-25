@@ -5496,6 +5496,9 @@ const MX_SHOP = [
   { id: 'pet_sprout', kind: 'pet',   zh: '小芽',     emoji: '🌱', cost: 500,  pet: 'sprout' },
   { id: 'pet_owl',    kind: 'pet',   zh: '咕咕',     emoji: '🦉', cost: 500,  pet: 'owl' },
   { id: 'pet_flame',  kind: 'pet',   zh: '小焰',     emoji: '🔥', cost: 800, pet: 'flame' },
+  /* v455（Alan 給了一張白兔子的參考圖）：小跳——招牌是「吃紅蘿蔔＋跳超高」，
+     跳到半個畫面高，所以定價 300（比其他夥伴貴一點點，但看得到的東西最多）。 */
+  { id: 'pet_bun',    kind: 'pet',   zh: '小跳',     emoji: '🐰', cost: 300, pet: 'bun' },
 ];
 const MX_BY_ID = {};
 MX_SHOP.forEach(it => { MX_BY_ID[it.id] = it; });
