@@ -610,18 +610,26 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect x="10" y="11" width="3" height="1" fill={BOW_D}/>
         <rect x="8" y="8" width="2" height="4" fill={BOW_D}/>
       </g>
-      {/* 紅蘿蔔：橫著拿到嘴邊（尖端對著鼻子），只有招牌動作才看得到。
+      {/* v457（Alan：「胡蘿蔔太小」）：整根放大一倍多，橫著拿到嘴邊（尖端對著鼻子）。
           啃的時候從左邊（尖端）愈來愈短——所以 CSS 的縮放原點在右邊。 */}
       <g className="mx-carrot" aria-hidden="true">
-        <rect x="9.4" y="7.4" width="4.6" height="2" fill="#E0813C"/>
-        <rect x="8.6" y="7.8" width="0.8" height="1.2" fill="#C96B2C"/>
-        <rect x="14" y="6.6" width="1.4" height="1.2" fill="#5E9B4B"/>
-        <rect x="14" y="9" width="1.4" height="1.2" fill="#5E9B4B"/>
-        <rect x="13.6" y="7.8" width="1.6" height="1.2" fill="#4F8540"/>
+        <rect x="7.6" y="7.2" width="6.6" height="3.2" fill="#E0813C"/>
+        <rect x="7.6" y="7.8" width="6.6" height="1" fill="#F09A55"/>
+        <rect x="6.2" y="7.8" width="1.4" height="2" fill="#C96B2C"/>
+        <rect x="14.2" y="6" width="2" height="1.8" fill="#5E9B4B"/>
+        <rect x="14.2" y="9.8" width="2" height="1.8" fill="#5E9B4B"/>
+        <rect x="13.8" y="7.6" width="2.4" height="2.4" fill="#4F8540"/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="0" y="12" width="5" height="4" fill={FUR}/></g>
-      <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" fill={DEEP}/></g>
-      <g className="mx-leg mx-leg-c"><rect x="13" y="12" width="5" height="4" fill={FUR}/></g>
+      {/* v457（Alan：「尾巴做可愛一點」）：圓圓的毛球尾巴，掛在身體後面（左邊） */}
+      <g className="mx-tail" aria-hidden="true">
+        <rect x="-2.4" y="8.4" width="4.4" height="4.4" rx="2.2" fill={DEEP}/>
+        <rect x="-2" y="8.8" width="3.6" height="3.6" rx="1.8" fill={FUR}/>
+        <rect x="-1.2" y="9.4" width="2" height="2" rx="1" fill="#FFFFFF"/>
+      </g>
+      {/* v457（Alan：「腳太開」）：三隻腳往中間收，站姿才像兔子不像螃蟹 */}
+      <g className="mx-leg mx-leg-a"><rect x="2" y="12" width="4" height="4" rx="1.4" fill={FUR}/></g>
+      <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" rx="1.4" fill={DEEP}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="12" y="12" width="4" height="4" rx="1.4" fill={FUR}/></g>
       <MxAcc id={acc} fit={MX_FIT.bun} layer="front"/>
     </svg>
   );
@@ -740,7 +748,9 @@ const MX_PETS = [
   {
     id: 'bun', speed: 1.1, zh: '小跳', tip: '吃一口紅蘿蔔，就能跳到半個螢幕高',
     art: BunnyMascot, sig: 'hop', sigZh: '吃紅蘿蔔＋跳超高',
-    acts: ['walk', 'walk', 'walk', 'hop'],                        // v455：免費的只有走路＋自己的招牌
+    /* v457（Alan：「兔子只能有一種走路方式就是跳跳跳，不要做其他動作，除非我叫操作」）：
+       平常就只是一路跳著走；吃紅蘿蔔＋大跳留給「點牠一下」（買到的動作還是會自己演）。 */
+    acts: ['walk'],
     lines: { hello: ['蹦蹦！我來了 🐰', '嗨～要一起跳嗎', '我今天也想跳高高'],
              idle:  ['蹦…蹦…', '鼻子癢癢的', '我在找紅蘿蔔', '耳朵聽得到你翻頁喔'],
              sig:   ['卡滋卡滋…好吃 🥕', '吃飽了，看我跳！', '咻——跳到半空中啦！', '這一跳有沒有很高 😆'] },
@@ -854,6 +864,10 @@ function MascotLayer() {
   /* v451：買到的動作（dc_* → 真正的動畫名稱）。免費的池子只有走路，這些是花星星換來的，
      自動循環與「點一下」都從這裡拿——沒買就什麼把戲都沒有。 */
   const ownedActsRef = useFxR([]);
+  /* v457（Alan：「有時候跳起來會很快就降落」）：點一下開始表演之後，
+     自動循環的下一輪可能剛好在半空中跑起來，setAct 一換動畫就整個重來
+     ——看起來就是「跳到一半突然掉下來」。表演期間先把循環擋住。 */
+  const busyUntil = useFxR(0);
   useFxE(() => {
     const map = { dc_wave: 'wave', dc_spin: 'twirl', dc_dance: 'party', dc_flip: 'flip', dc_moon: 'moon' };
     ownedActsRef.current = (window.MX_SHOP || [])
@@ -1062,6 +1076,8 @@ function MascotLayer() {
          實測就是在那 1 秒的縫隙裡漏出一個 jump。動作只有幾秒一次，
          多跑一個 querySelector 的成本遠低於「作答時牠又跳了」。
          用 functional setAct 是為了不要把「連對 5 題的點頭」或「做完的大慶祝」蓋掉。 */
+      /* v457：正在表演（點一下觸發的招牌／舞蹈）就先不要插手，等牠演完再排下一個 */
+      if (Date.now() < busyUntil.current) { later(doAct, busyUntil.current - Date.now() + 400); return; }
       if (!allowed || !okNow()) {
         setAct(a => (a === 'nod' || a === 'cheer' || a === 'land') ? a : 'idle');
         later(doAct, 3000);
@@ -1129,6 +1145,7 @@ function MascotLayer() {
          其他動作維持 v392 調低後的 15%，整體泡泡量不會回到當初被嫌吵的程度。 */
       else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxLine('sig', pet, wearRef.current.voice)); }
       else if (Math.random() < 0.15) say(mxLine('idle', pet, wearRef.current.voice));   // v392（D）：0.45 → 0.15
+      busyUntil.current = Date.now() + (HOLD[pick] || 1200);
       later(() => { setAct('idle'); later(doAct, 1200 + Math.random() * 3000); }, HOLD[pick] || 1200);
     };
 
@@ -1162,7 +1179,9 @@ function MascotLayer() {
       try {
         if (type === 'correct') {
           runRef.current++;
-          if (runRef.current % 5 === 0) {
+          /* v457：正在表演（點一下觸發的大跳／舞蹈）就不要插隊點頭——
+             一換動畫，CSS 動畫整個重來，看起來就是「跳到一半掉下來」。 */
+          if (runRef.current % 5 === 0 && Date.now() >= busyUntil.current) {
             setAct('nod'); later(() => setAct('idle'), 620);
             /* v451：買了語音包才會順便講一句（沒買的維持 v392 的安靜，不加干擾）——
                答對是最常發生的場合，牠在這裡開口，語音包才「看得出來換過」。 */
@@ -1172,8 +1191,12 @@ function MascotLayer() {
         }
         else if (type === 'wrong') { runRef.current = 0; }   // 答錯＝連勝歸零，完全不反應
         else if (type === 'complete' || type === 'fanfare') {
-          // 做完了本來就該有大慶祝——這條維持不動
-          setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000); later(() => setAct('idle'), 2200);
+          // 做完了本來就該有大慶祝——這條維持不動（但表演到一半就等牠演完）
+          const wait = Math.max(0, busyUntil.current - Date.now());
+          later(() => {
+            setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000);
+            later(() => setAct('idle'), 2200);
+          }, wait);
         }
       } catch (e) {}
     };
@@ -1246,26 +1269,34 @@ function MascotLayer() {
       const hit = under && under.closest && under.closest('button, a, input, select, textarea, label, [role="button"]');
       if (hit) { hit.click(); return; }     // 腳下是按鈕 → 這一下算按鈕的，不耍寶
     }
-    /* v401：點一下有 45% 直接做招牌動作。招牌動作在自動循環裡幾分鐘才輪到一次，
-       小朋友不會等那麼久——「點牠就會表演」才是他們發現這件事的方式。
+    /* v401：點一下就做招牌動作——招牌動作在自動循環裡幾分鐘才輪到一次，
+       小朋友不會等那麼久，「點牠就會表演」才是他們發現這件事的方式。
+       v457（Alan：「按下兔子的時候他只說了『休～』卻沒跳起來」）：
+       本來只有 45% 機率，另外 55% 只是點個頭＝看起來像壞掉。改成**一定會表演**：
+       招牌動作與「買到的動作」一起抽（招牌權重 2），沒有招牌也沒買動作才點頭。
        ⚠ 走位類的招牌（小焰的 dash）不能在這裡做：這裡不設定 moveMs/x，
-         套上去只會原地抽動，所以那一隻退回一般把戲。 */
+         套上去只會原地抽動，所以那一隻退回買來的動作或點頭。 */
     const sigOk = !reduce.current && pet.sig && MX_MOVE_ACTS.indexOf(pet.sig) < 0;
-    if (sigOk && Math.random() < 0.45) {
-      setAct(pet.sig); say(mxLine('sig', pet, wearRef.current.voice), 2400);
+    const boughtActs = ownedActsRef.current || [];
+    const picks = (sigOk ? [pet.sig, pet.sig] : []).concat(reduce.current ? [] : boughtActs);
+    if (picks.length) {
+      const t2 = picks[Math.floor(Math.random() * picks.length)];
+      const isSig = t2 === pet.sig;
+      setAct(t2);
+      say(mxLine(isSig ? 'sig' : 'tap', pet, wearRef.current.voice), 2400);
       if (window.playSound) window.playSound('match');
-      later(() => setAct('idle'), MX_SIG_HOLD[pet.sig] || 1600);
+      const HOLD_TAP2 = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 };
+      busyUntil.current = Date.now() + (MX_SIG_HOLD[t2] || HOLD_TAP2[t2] || 1600);
+      later(() => setAct('idle'), MX_SIG_HOLD[t2] || HOLD_TAP2[t2] || 1600);
       return;
     }
-    /* v451：點一下不再免費送「跳／轉圈／跳舞／翻滾」——
-       有買動作就表演買到的那些，沒買就只是點個頭（想看表演＝去商店買一個）。 */
-    const bought = ownedActsRef.current || [];
-    const t = reduce.current ? 'think'
-      : (bought.length ? bought[Math.floor(Math.random() * bought.length)] : 'nod');
+    /* v451：點一下不再免費送「跳／轉圈／跳舞／翻滾」。
+       走到這裡＝這一隻沒有原地招牌（小焰）又還沒買動作，就只是點個頭。 */
+    const t = reduce.current ? 'think' : 'nod';
     setAct(t); say(mxLine('tap', pet, wearRef.current.voice), 2000);
     if (window.playSound) window.playSound('match');
-    const HOLD_TAP = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800, think: 1600, nod: 620 };
-    later(() => setAct('idle'), HOLD_TAP[t] || 1000);
+    busyUntil.current = Date.now() + (t === 'think' ? 1600 : 620);
+    later(() => setAct('idle'), t === 'think' ? 1600 : 620);
   };
 
   /* v392（A）：作答時不再整隻消失（那本身就是一個變化），只是安靜下來；

@@ -48,7 +48,11 @@ ok('每一隻都還是會走路', acts.every(a => a.indexOf('walk') >= 0));
 ok('招牌動作留著（打電腦／看書／衝刺／裝石頭／長高）',
   ['type', 'read', 'dash', 'hide', 'grow'].every(sig => acts.some(a => a.indexOf(sig) >= 0)));
 ok('⭐ 買到的動作會自己加進池子裡', /\.concat\(bought\)/.test(fx) && /ownedActsRef/.test(fx));
-ok('點一下：有買才表演，沒買只點頭', /bought\.length \? bought\[Math\.floor/.test(fx) && /: 'nod'/.test(fx));
+/* v457（Alan：「按下兔子他只說了話卻沒跳起來」）：點一下改成「一定會表演」——
+   招牌動作與買到的動作一起抽（招牌權重 2）；兩者都沒有才點頭。 */
+ok('點一下一定會表演（招牌＋買到的動作一起抽）',
+  /const picks = \(sigOk \? \[pet\.sig, pet\.sig\] : \[\]\)\.concat\(reduce\.current \? \[\] : boughtActs\)/.test(fx));
+ok('招牌與買來的動作都沒有才點頭', /const t = reduce\.current \? 'think' : 'nod';/.test(fx));
 ok('買來的動作也有停留時間（不會一閃而過）', /wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800/.test(fx));
 ok('⚠ ownedActsRef 的 effect 排在 owned 宣告之後（不然整隻吉祥物會壞掉）',
   fx.indexOf('const [owned, setOwned]') < fx.indexOf('const ownedActsRef'));

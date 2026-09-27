@@ -47,7 +47,7 @@ console.log('\n【3】名冊裡的設定');
 ok('MX_PETS 有小跳', /id: 'bun', speed: 1\.1, zh: '小跳'/.test(fx));
 ok('招牌動作叫 hop', /sig: 'hop'/.test(fx));
 ok('招牌動作的中文寫清楚了', /sigZh: '吃紅蘿蔔＋跳超高'/.test(fx));
-ok('⭐ 免費動作只有走路＋自己的招牌（v451 的規矩）', /acts: \['walk', 'walk', 'walk', 'hop'\]/.test(fx));
+ok('⭐ v457：平常只有走路（招牌留給「點一下」，v451 的規矩照舊）', /acts: \['walk'\],/.test(fx));
 ok('招牌動作有停留時間（不然一閃而過）', /hop: 3600/.test(fx));
 ok('有自己的台詞（含吃紅蘿蔔那幾句）', /卡滋卡滋…好吃 🥕/.test(fx));
 
@@ -55,13 +55,18 @@ console.log('\n【4】吃紅蘿蔔＋跳到螢幕一半');
 ok('紅蘿蔔平常看不到', /\.mx-carrot \{ opacity: 0; \}/.test(flat));
 ok('只有招牌動作才拿出來啃', /\.pet-bun\.act-hop \.mx-carrot \{ animation: mxCarrot/.test(flat));
 ok('⭐ 啃三口愈來愈短（從尖端那一頭啃，所以縮的是 scaleX）',
-  flat.indexOf('scaleX(.78)') > 0 && flat.indexOf('scaleX(.52)') > flat.indexOf('scaleX(.78)') &&
-  flat.indexOf('scaleX(.26)') > flat.indexOf('scaleX(.52)'));
-ok('縮放原點在右邊（尖端在左邊，從左邊啃）', /\.pet-bun\.act-hop \.mx-carrot \{ transform-origin: 88% 50%; \}/.test(flat));
-ok('紅蘿蔔橫著拿到嘴邊（不是插在胸前）', /<rect x="9\.4" y="7\.4" width="4\.6" height="2"/.test(fx));
-ok('⭐ 跳到 -46vh ＝ 畫面一半（用 vh 才會每個裝置都是「半個螢幕」）', /translateY\(-46vh\)/.test(flat));
+  flat.indexOf('scaleX(.72)') > 0 && flat.indexOf('scaleX(.44)') > flat.indexOf('scaleX(.72)') &&
+  flat.indexOf('scaleX(.2)') > flat.indexOf('scaleX(.44)'));
+ok('縮放原點在右邊（尖端在左邊，從左邊啃）', /\.pet-bun\.act-hop \.mx-carrot \{ transform-origin: 92% 50%; \}/.test(flat));
+ok('紅蘿蔔橫著拿到嘴邊（不是插在胸前）', /<rect x="7\.6" y="7\.2" width="6\.6" height="3\.2"/.test(fx));
+ok('⭐ 有一條可愛的毛球尾巴', /className="mx-tail"/.test(fx) && /rx="2\.2"/.test(fx));
+ok('⭐ 跳的高度用變數（vh 在矮視窗／iPad 網址列伸縮時會算得很小，甚至 0）',
+  /--mx-jump: clamp\(150px, 44vh, 520px\)/.test(flat));
+ok('⭐ 變數萬一沒定義也有退路（不然那一格會失效＝整個跳不起來）',
+  /var\(--mx-jump, 44vh\)/.test(flat) && flat.indexOf('var(--mx-jump)') < 0);
+ok('最高點＝一整個 --mx-jump', /translateY\(calc\(var\(--mx-jump, 44vh\) \* -1\)\)/.test(flat));
 ok('起跳前有蹲下蓄力', /translateY\(1\.5px\) scaleY\(\.76\)/.test(flat));
-ok('落地會壓扁、再彈一小下', /scaleY\(\.74\)\s*scaleX\(1\.2\)/.test(flat) && /translateY\(-7vh\)/.test(flat));
+ok('落地會壓扁、再彈一小下', /scaleY\(\.74\)\s*scaleX\(1\.2\)/.test(flat) && /\* -\.14\)/.test(flat));
 ok('⭐ 最後回到地面（不會停在半空中）', /100%\s*\{ transform: translateY\(0\)\s*scaleY\(1\)\s*scaleX\(1\); \}/.test(flat));
 ok('耳朵會跟著往後飄', /@keyframes mxEarFlop/.test(flat) && /\.pet-bun\.act-hop \.mx-ear/.test(flat));
 ok('⭐ 泡泡跟著一起飛（不然話會留在地板上）', /mx-bubble-hop/.test(flat) && /mx-bubble-hop/.test(fx));
@@ -90,6 +95,21 @@ ok('⭐ 騰空時把腳收起來（兔子跳起來會縮成一團）',
   /@keyframes mxHopHind \{[^@]*translateY\(-3\.2px\)/.test(flat) && /@keyframes mxHopFore \{[^@]*translateY\(-3\.6px\)/.test(flat));
 ok('著地那一格會張開壓扁', /@keyframes mxHopHind \{[^@]*scaleY\(\.78\)/.test(flat));
 ok('關掉動畫的人一樣不會看到', /prefers-reduced-motion[\s\S]{0,300}\.pet-bun\.act-walk \.mx-svg/.test(css));
+
+console.log('\n【7】v457：點一下一定要跳、跳到一半不能被打斷、平常只會跳跳跳');
+ok('⭐ 點一下一定會表演（招牌權重 2，不再是 45% 機率）',
+  /const picks = \(sigOk \? \[pet\.sig, pet\.sig\] : \[\]\)\.concat/.test(fx));
+ok('沒招牌也沒買動作才點頭', /const t = reduce\.current \? 'think' : 'nod';/.test(fx));
+ok('⭐ 表演期間自動循環先不要插手（busyUntil）',
+  /if \(Date\.now\(\) < busyUntil\.current\) \{ later\(doAct/.test(fx));
+ok('⭐ 連對五題的點頭也不能插隊（那會讓牠跳到一半掉下來）',
+  /runRef\.current % 5 === 0 && Date\.now\(\) >= busyUntil\.current/.test(fx));
+ok('做完的大慶祝會等牠演完再放', /const wait = Math\.max\(0, busyUntil\.current - Date\.now\(\)\);/.test(fx));
+ok('⭐ 兔子平常只有「跳跳跳」這一種走法（其他動作要點牠或買）', /acts: \['walk'\],/.test(fx));
+ok('尾巴會跟著跳', /@keyframes mxTailBob/.test(flat) && /@keyframes mxTailHop/.test(flat));
+ok('⭐ 紅蘿蔔變大了（原本 4.6×2 → 6.6×3.2）', /<rect x="7\.6" y="7\.2" width="6\.6" height="3\.2"/.test(fx));
+ok('⭐ 啃的動作變大（身體邊啃邊點頭）', /scaleY\(\.84\)\s*scaleX\(1\.14\) rotate\(-3deg\)/.test(flat));
+ok('⭐ 腳收窄了（不再像螃蟹一樣開開的）', /x="2" y="12" width="4"/.test(fx) && /x="12" y="12" width="4"/.test(fx));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
 process.exit(fail ? 1 : 0);
