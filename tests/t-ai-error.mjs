@@ -32,9 +32,11 @@ ok('有丟錯', !!e);
 ok('⭐ 訊息直接寫「AI 服務拒絕了這次請求（403）」', /AI 服務拒絕了這次請求（403/.test(e.message));
 ok('⭐ 帶上上游原文', /Request not allowed/.test(e.message));
 ok('⭐ 明講「不是你的內容有問題」', /這不是你的內容有問題/.test(e.message));
-// v450：403 也可能只是暫時的（2026-09-15 晚上全站 403，隔天自己好了）→ 先叫他等，不要一開口就換金鑰
-ok('⭐ 403 先請他等一下再試', /先等 10 分鐘再試一次/.test(e.message));
-ok('⭐ 一直這樣才去查金鑰與額度', /如果過一陣子還是這樣.*Cloudflare Worker 的 API 金鑰與 Anthropic 的額度/.test(e.message));
+/* v458（2026-09-28 量過）：403 是「這一發被擋」，而且會自動重試 4 次才放棄
+   ——訊息要講「已經幫你重試過、再按一次通常就會成功」，不要一開口就叫他換金鑰。 */
+ok('⭐ 403 要說「已經自動重試過」', /自動重試 4 次/.test(e.message));
+ok('⭐ 先叫他再按一次，一直這樣才去看 Worker 與額度',
+  /再按一次通常就會成功/.test(e.message) && /Cloudflare Worker 的程式與 Anthropic 額度/.test(e.message));
 ok('提醒他所有 AI 功能都會一起不通', /所有 AI 功能都會一起不通/.test(e.message));
 ok('錯誤物件帶得走（upstream）', e.upstream && e.upstream.status === 403 && e.upstream.type === 'forbidden');
 

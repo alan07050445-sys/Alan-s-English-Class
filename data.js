@@ -2055,11 +2055,17 @@ function fetchT(url, opts, ms = 60000) {
 /* _aiBackoff：重試之間的等待。原本是 catch 完立刻重試、不看 status，
    兩次會在 100ms 內燒光，等於沒有重試。改成 400→1200→3000ms 各加 0–300ms 隨機
    （加隨機是為了避免平行的十幾個請求同時醒來、又一起撞上去）。 */
-const _AI_BACKOFF = [400, 1200, 3000];
+/* v458：多一段退避（本來 3 段＝3 次機會）。實測代理會間歇性回 403，
+   量過 30 發有 10 發被擋（約 1/3），3 次機會還是會漏掉約 3.6%；4 次就降到 1.2%。 */
+const _AI_BACKOFF = [400, 1200, 3000, 6000];
 const _aiSleep = (ms) => new Promise(r => setTimeout(r, ms));
-/* 只有「連線／逾時例外」或「429 / 500 / 529」才值得等一下再試；
-   400 那種是我們自己的格式錯誤，等再久也一樣，直接進下一輪。 */
-function _aiShouldBackoff(status) { return status === 429 || status === 500 || status === 529; }
+/* 只有「連線／逾時例外」或「403 / 429 / 500 / 529」才值得等一下再試；
+   400 那種是我們自己的格式錯誤，等再久也一樣，直接進下一輪。
+   ⚠ v458（2026-09-28 01:30 實測）：403「Request not allowed」是**間歇性**的——
+   同一秒內連打，有的 200 有的 403，403 只花 0.17 秒就回來（根本沒到模型那邊），
+   帶不帶瀏覽器標頭都一樣（9~10/15 成功）。所以它不是「金鑰壞了」而是「這一發被擋」，
+   等一下再送就會過 → 一定要重試，不然老師會隨機看到「AI 產生失敗」。 */
+function _aiShouldBackoff(status) { return status === 403 || status === 429 || status === 500 || status === 529; }
 
 /* _aiAsk：全站 AI 呼叫的單一入口（逾時＋退避重試都在這裡）。
    pick(json) 把回傳整理成呼叫端要的東西；回 null／undefined 或丟例外
@@ -2077,7 +2083,7 @@ function _aiUpstreamNote(e) {
   if (!u || !u.status) return '';
   /* ⚠ 實測 2026-09-15 晚上：403 也可能只是「暫時被擋」——那一晚全站 AI 都 403，
      隔天早上什麼都沒改就自己好了。所以 403 先請老師等幾分鐘，不要一開口就叫他去換金鑰。 */
-  const zh = u.status === 403 ? '先等 10 分鐘再試一次；如果過一陣子還是這樣，才需要檢查 Cloudflare Worker 的 API 金鑰與 Anthropic 的額度'
+  const zh = u.status === 403 ? '代理間歇性擋掉請求（網站已經自動重試 4 次還是沒過）——再按一次通常就會成功；一直這樣就要看 Cloudflare Worker 的程式與 Anthropic 額度'
     : u.status === 401 ? '金鑰不正確（Worker 的 API 金鑰要重設）'
     : u.status === 429 ? '請求太密集（等一下再試）'
     : (u.status >= 500 ? 'AI 服務暫時出問題（等一下再試）' : '');
@@ -2089,10 +2095,34 @@ function _aiNoteUpstream(status, data) {
   _aiLastUpstream = { status, type: err.type || '', message: String(err.message || '').slice(0, 120), at: Date.now() };
   return _aiLastUpstream;
 }
+/* ══ v458（Alan：「有時候晚上不能用」）═══════════════════════════════════
+   2026-09-28 01:20~01:40 實測代理：單發大多 200（0.7 秒），但會**間歇性**回 403
+   「Request not allowed」，而且 0.17 秒就回來＝根本沒送到模型。
+   量出來的重點：
+     · 30 發裡有 10 發被擋（約 1/3），帶不帶瀏覽器標頭都一樣 → 網站本身也會中。
+     · **打得愈兇擋得愈兇**：連續打了約 150 發之後，有一小段時間幾乎全擋（12 發全失敗）；
+       停 45 秒再打就恢復成 6 發 5 中。
+   結論：這是「量」觸發的保護，不是金鑰壞掉。網站能做的兩件事：
+     ① 被擋就重試（短間隔，見 _aiShouldBackoff）
+     ② **主動把量壓下來**：全站同時最多 4 個請求，而且一看到 403 就先冷卻一下再送。
+        一鍵生成本來會一口氣丟 6~10 個請求出去，正是最容易踩到的情境。 */
+const _AI_MAX_INFLIGHT = 4;
+let _aiInflight = 0, _aiCoolUntil = 0;
+async function _aiGate() {
+  for (;;) {
+    const now = Date.now();
+    if (now < _aiCoolUntil) { await _aiSleep(_aiCoolUntil - now + Math.floor(Math.random() * 140)); continue; }
+    if (_aiInflight < _AI_MAX_INFLIGHT) { _aiInflight++; return; }
+    await _aiSleep(60 + Math.floor(Math.random() * 90));
+  }
+}
+function _aiRelease() { if (_aiInflight > 0) _aiInflight--; }
+
 async function _aiAsk(body, pick, timeoutMs) {
   let timedOut = false, upstream = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < _AI_BACKOFF.length; attempt++) {
     let wait = false;
+    await _aiGate();                                    // v458：全站同時最多 4 個請求
     try {
       const res = await fetchT(AI_WRITING_ENDPOINT, {
         method: 'POST',
@@ -2103,15 +2133,22 @@ async function _aiAsk(body, pick, timeoutMs) {
         const data = await res.json();
         if (!res.ok || (data && data.error)) upstream = _aiNoteUpstream(res.status, data);
         const got = pick(data);
-        if (got != null) { _aiLastUpstream = null; return got; }
+        if (got != null) { _aiLastUpstream = null; return got; }   // finally 會把名額還回去
       } catch (e) { if (!res.ok) upstream = _aiNoteUpstream(res.status, null); }
-      wait = !res.ok && _aiShouldBackoff(res.status);   // 只有 429/500/529 值得等
+      // v458：被擋了就讓「所有」還沒送出去的請求也跟著等一下，不要一起撞上去
+      if (res.status === 403) _aiCoolUntil = Math.max(_aiCoolUntil, Date.now() + 900);
+      wait = !res.ok && _aiShouldBackoff(res.status);   // 403/429/500/529 值得等
     } catch (e) {
       if (e && e.name === 'AbortError') timedOut = true;
       wait = true;                                      // 連線失敗／逾時 → 退避後再試
-    }
+    } finally { _aiRelease(); }
     if (wait && attempt < _AI_BACKOFF.length - 1) {
-      await _aiSleep(_AI_BACKOFF[attempt] + Math.floor(Math.random() * 300));
+      /* v458：403 是「這一發被擋」，0.17 秒就回來、根本沒送到模型——
+         等 3 秒沒有意義（測過同一秒內重送就會過），等太久反而讓一鍵生成整組變慢。
+         429／5xx 才是真的塞車，照原本的階梯等。 */
+      const quick = upstream && upstream.status === 403;
+      await _aiSleep(quick ? 140 + Math.floor(Math.random() * 220)
+                           : _AI_BACKOFF[attempt] + Math.floor(Math.random() * 300));
     }
   }
   const err = new Error((timedOut
