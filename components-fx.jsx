@@ -35,7 +35,7 @@ const MX_FIT = {
   flame:  { hat: { x: 9,   y: 3.4,  s: 0.86 }, eye: { y: 7,   h: 4,   x0: 3, x1: 15 }, neck: { y: 10.6 }, side: { y: 8.5 } },
   rock:   { hat: { x: 9.5, y: -0.2, s: 0.85 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 10   }, side: { y: 6 } },
   sprout: { hat: { x: 9,   y: 0,    s: 0.96 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 9.6  }, side: { y: 6 } },
-  /* v455 小跳：耳朵一路畫到 y=−4，帽子要壓到頭頂（y=1）並縮小，才不會蓋掉兩隻耳朵 */
+  /* v455 小兔：耳朵一路畫到 y=−4，帽子要壓到頭頂（y=1）並縮小，才不會蓋掉兩隻耳朵 */
   bun:    { hat: { x: 9,   y: 1.2,  s: 0.82 }, eye: { y: 4,   h: 4,   x0: 2, x1: 16 }, neck: { y: 11   }, side: { y: 6 } },
 };
 const MX_FIT_DEF = MX_FIT.clay;
@@ -746,7 +746,7 @@ const MX_PETS = [
              sig:   ['我是石頭。', '……（假裝沒看到）', '噓，別說出去'] },
   },
   {
-    id: 'bun', speed: 1.1, zh: '小跳', tip: '吃一口紅蘿蔔，就能跳到半個螢幕高',
+    id: 'bun', speed: 1.1, zh: '小兔', tip: '吃一口紅蘿蔔，就能跳到半個螢幕高',
     art: BunnyMascot, sig: 'hop', sigZh: '吃紅蘿蔔＋跳超高',
     /* v457（Alan：「兔子只能有一種走路方式就是跳跳跳，不要做其他動作，除非我叫操作」）：
        平常就只是一路跳著走；吃紅蘿蔔＋大跳留給「點牠一下」（買到的動作還是會自己演）。 */
@@ -795,6 +795,16 @@ function MascotLayer() {
   const [petId, setPetId] = useFx(mxGetPet);     // v401: 現在陪你的是哪一隻
   const [menu, setMenu]   = useFx(false);        // 長按叫出來的小選單
   const [petPick, setPetPick] = useFx(false);    // v401: 夥伴圖鑑（從小選單打開）
+  /* v459：長按在某些平板上真的按不出來（瀏覽器搶走）。除了攔截右鍵選單之外，
+     再留一條「看得到」的路：點一下牠，旁邊會冒出一顆小小的 ⋯，五秒後自己消失。
+     小朋友本來就一直在點牠，所以這顆一定會被看見，而且平常不佔畫面。 */
+  const [handle, setHandle] = useFx(false);
+  const handleT = useFxR(null);
+  const showHandle = () => {
+    setHandle(true);
+    clearTimeout(handleT.current);
+    handleT.current = setTimeout(() => setHandle(false), 5000);
+  };
   const [drag, setDrag]   = useFx(null);         // 拖著走時的 {x,y}
   const timers  = useFxR([]);
   const bubbleT = useFxR(null);
@@ -946,7 +956,7 @@ function MascotLayer() {
     mxSetPet(pid); setPetId(pid); setAct('idle');
     say(mxLine('hello', p, wearRef.current.voice), 2600);
     if (MX_MOVE_ACTS.indexOf(p.sig) < 0 && !reduce.current) {
-      later(() => { setAct(p.sig); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
+      later(() => { setAct(p.sig); if (p.sig === 'hop') hopSideways(); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
     }
     if (window.playSound) window.playSound('pop');
   };
@@ -1057,6 +1067,35 @@ function MascotLayer() {
   }, [allowed, moveMs]);
 
   /* 隨機動作循環 */
+  /* v459（Alan：「除了往上跳，偶爾也會往左右跳，這樣比較有趣」）：
+     大跳的時候順便橫向飄一段。垂直是 mxHop 的 keyframe、水平是 .mx-slot 本來就有的
+     transition——兩個疊起來就是一條拋物線，而且真的會落在新的位置（不是跳回原地）。
+     時機對著 mxHop 3.6s 的 43%（起跳）到 76%（落地）。
+     ⚠ 起跳位置一律從 DOM 當場量：doAct 裡的 x 是「建立這個 effect 當下」的舊值，
+       拿它算方向會算反（牠會臉朝左飛向右邊）。 */
+  const HOP_AIR_AT = 1480, HOP_AIR_MS = 1180;
+  const hopSideways = () => {
+    if (reduce.current) return;
+    if (Math.random() < 0.4) return;                       // 「偶爾」＝六成的大跳會飄
+    const W = Math.max(20, (window.innerWidth || 360) - 130);
+    let cur = x;
+    try {
+      const m = new DOMMatrixReadOnly(getComputedStyle(slotRef.current).transform).m41;
+      if (isFinite(m)) cur = Math.round(m);
+    } catch (e) {}
+    const dist = 90 + Math.random() * 120;
+    let target = Math.round(cur + (Math.random() < 0.5 ? -dist : dist));
+    if (target < 0 || target > W) target = Math.round(cur * 2 - target);   // 快撞牆就往另一邊跳
+    target = Math.max(0, Math.min(W, target));
+    if (Math.abs(target - cur) < 45) return;               // 太短看不出來，就乖乖直上直下
+    later(() => {
+      setDir(target > cur ? 1 : -1);
+      setMoveMs(HOP_AIR_MS);
+      setX(target);
+      later(() => setMoveMs(0), HOP_AIR_MS + 80);
+    }, HOP_AIR_AT);
+  };
+
   useFxE(() => {
     if (!alive || hidden || !shown) return;
     let stopped = false;
@@ -1136,6 +1175,7 @@ function MascotLayer() {
       const HOLD = Object.assign({ jump: 1000, spin: 950, dance: 2000, peek: 1700, sleep: 4200, think: 2200,
         wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 }, MX_SIG_HOLD);   // v451：買來的動作
       setAct(pick);
+      if (pick === 'hop') hopSideways();        // v459：小兔的大跳偶爾往左右飛
       /* v392（D）：泡泡是文字（font-weight:700、最寬 190px），比動作更會搶走視線。
          實測 1180px 是 4.50 泡泡/分鐘、390px 是 6.01 → 出現率腰斬。
          睡覺以前是「無條件講一句」，也改成一半機率。 */
@@ -1228,7 +1268,8 @@ function MascotLayer() {
     startRef.current = { x: e.clientX, y: e.clientY };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
     // 長按＝叫出小選單（取名字／去睡覺）
-    pressT.current = setTimeout(() => { if (!movedRef.current) { longRef.current = true; setMenu(true); } }, 650);
+    // v459：650 → 500，要趕在 Android 瀏覽器自己的長按選單（約 500ms）之前先開
+    pressT.current = setTimeout(() => { if (!movedRef.current) { longRef.current = true; setMenu(true); } }, 500);
   };
   /* v384: 拖著走。小朋友最愛的就是這個，而且完全不吵——放開會掉回地上彈一下。 */
   const onMove = (e) => {
@@ -1269,6 +1310,7 @@ function MascotLayer() {
       const hit = under && under.closest && under.closest('button, a, input, select, textarea, label, [role="button"]');
       if (hit) { hit.click(); return; }     // 腳下是按鈕 → 這一下算按鈕的，不耍寶
     }
+    showHandle();   // v459：點一下就露出「⋯」——長按按不出來的平板也有路可走
     /* v401：點一下就做招牌動作——招牌動作在自動循環裡幾分鐘才輪到一次，
        小朋友不會等那麼久，「點牠就會表演」才是他們發現這件事的方式。
        v457（Alan：「按下兔子的時候他只說了『休～』卻沒跳起來」）：
@@ -1283,6 +1325,7 @@ function MascotLayer() {
       const t2 = picks[Math.floor(Math.random() * picks.length)];
       const isSig = t2 === pet.sig;
       setAct(t2);
+      if (t2 === 'hop') hopSideways();          // v459
       say(mxLine(isSig ? 'sig' : 'tap', pet, wearRef.current.voice), 2400);
       if (window.playSound) window.playSound('match');
       const HOLD_TAP2 = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 };
@@ -1341,6 +1384,18 @@ function MascotLayer() {
         <div ref={bodyRef} className={'mx-body pet-' + petId + ' act-' + act} style={{ '--mx-dir': dir }}
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
           onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
+          /* v459（Alan：「有學生的平板不是 iPad，長按會跳出網站的設定」）：
+             Android／Windows 的瀏覽器長按會自己彈出右鍵選單，把我們的長按吃掉。
+             這裡不只是擋掉它——順手把它當成「這個人正在長按」，直接開我們的選單。
+             所以在那些平板上長按一樣會叫出取名字／裝扮室，而不是瀏覽器的設定。 */
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (movedRef.current) return;
+            clearTimeout(pressT.current);
+            longRef.current = true;
+            setMenu(true);
+            if (window.playSound) window.playSound('pop');
+          }}
           role="img" aria-label={`吉祥物 ${name || pet.zh}`}>
           {/* v441：配件畫在同一個 SVG 裡（Art 內部分成「身體後面」與「身上」兩層）——
               翻滾、轉圈、跳舞都會跟著動；以前是疊在上面的另一個 svg，所以會留在原地。 */}
@@ -1349,6 +1404,17 @@ function MascotLayer() {
               永遠留在「牠的身後」，不用另外算方向。 */}
           <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
         </div>
+        {/* v459：長按的替代入口。只在剛點過牠的五秒內出現，不會一直佔著畫面。 */}
+        {handle && !menu && !dress && !petPick && (
+          <button className="mx-handle" title="打開夥伴選單" aria-label="打開夥伴選單"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setHandle(false);
+              setMenu(true);
+              if (window.playSound) window.playSound('pop');
+            }}>⋯</button>
+        )}
       </div>
       {/* v401：選單與圖鑑改掛在 .mx-layer 底下（不再是 .mx-slot 的小孩）。
           .mx-slot 會跟著吉祥物左右移動，選單本來是「以牠為中心」展開的——

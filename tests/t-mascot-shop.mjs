@@ -37,7 +37,7 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
      ['fx', 'voice'].every(k => W.MX_SHOP.some(i => i.kind === k && i.free)));
   ok('（v436 Alan 定價）裝備／特效／語音／動作 ≤ 300、夥伴 500（小焰 800）',
      W.MX_SHOP.filter(i => ['hat', 'item', 'fx', 'voice', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
-     W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => [300, 500, 800].indexOf(i.cost) >= 0) &&   // v455：小跳 300
+     W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => [300, 500, 800].indexOf(i.cost) >= 0) &&   // v455：小兔 300
      Math.min(...W.MX_SHOP.filter(i => !i.free).map(i => i.cost)) === 100);
   ok('舊的兩頂帽子還在，而且對得回老師扣過點的名字',
      W.mxItemOf('hat_party').legacy === 'party' && W.mxItemOf('hat_crown').legacy === 'crown');
@@ -115,7 +115,7 @@ log.push('\n【6】三個地方的星星要用同一個算法');
 log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻、動作要是新的');
 {
   const pets = W.MX_SHOP.filter(i => i.kind === 'pet');
-  ok('⭐ 六隻夥伴都在商品表裡（v455 加了小跳）', pets.length === 6, pets.map(p => p.pet).join());
+  ok('⭐ 六隻夥伴都在商品表裡（v455 加了小兔）', pets.length === 6, pets.map(p => p.pet).join());
   ok('⭐ 只有 Claudius 免費，其他都要買（才有稀有感）',
      pets.filter(p => p.free).map(p => p.pet).join() === 'clay' && pets.filter(p => !p.free).every(p => p.cost >= 300));
   ok('每一隻都對得到 components-fx.jsx 的 MX_PETS', pets.every(p => fx.indexOf(`id: '${p.pet}'`) > 0));
@@ -193,9 +193,12 @@ log.push('\n【7】（v431b）兩個回報的 bug 不能再發生');
   const fit = fc.slice(fc.indexOf('function useFitHeight('), fc.indexOf('}, [enabled]);'));
   ok('⭐ 倒扣整頁溢出時，扣了沒效就還原（側欄比較長不該讓卡片變小）',
      /measureOver\(\) >= over - 2/.test(fit) && /el\.style\.height = h \+ 'px'/.test(fit));
+  // v459：門檻從「< 8 就不管」改寫成「>= 8 才算動過」，而且也看可用高度
   ok('⭐ 版面之後才變（收合側欄）也會重量：看「上緣」有沒有動',
-     /const recheck =/.test(fit) && /Math\.abs\(t - lastTop\) < 8/.test(fit));
-  ok('重量有上限（最多 6 次），不會沒完沒了', /fixes >= 6/.test(fit));
+     /const recheck =/.test(fit) && /Math\.abs\(t - lastTop\) >= 8/.test(fit));
+  ok('重量有上限（連續 6 次），不會沒完沒了', /fixes >= 6/.test(fit));
+  ok('⭐ v459：預算是滾動的——安靜夠久就還回去，不是一輩子只有 6 次',
+     /if \(now - lastFixAt > FIX_WINDOW\) fixes = 0;/.test(fit));
   ok('ResizeObserver 盯的是容器，不是 document.body（v387 的教訓）',
      /new ResizeObserver\(recheck\)/.test(fit) && fit.indexOf('observe(document.body') < 0);
 }

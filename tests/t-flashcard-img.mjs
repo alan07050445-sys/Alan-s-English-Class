@@ -32,6 +32,24 @@ log.push('\n【3】不要動到已經很敏感的東西');
   ok('⚠ 圖片仍然是「可以縮的」（v393：空間不夠時讓位給例句）', /fc-back-img-wrap/.test(fc));
 }
 
+
+/* ── v459（Alan：「平板橫式底下還有空位，讓圖片大一點比較好」）────────────── */
+{
+  const fcj  = fs.readFileSync(new URL('components-flashcard.jsx', ROOT), 'utf8');
+  const tune = fs.readFileSync(new URL('styles-tune.css', ROOT), 'utf8');
+  console.log('\n【v459】卡片重新量測的預算＋平板橫式的留白');
+  ok('⭐ 重新量測改成「滾動式預算」，不再是一輩子只有 6 次',
+     /let fixes = 0, lastFixAt = 0;/.test(fcj) && /if \(now - lastFixAt > FIX_WINDOW\) fixes = 0;/.test(fcj));
+  ok('防迴圈還在（連續觸發照樣會被擋下來）', /if \(fixes >= 6\) return;/.test(fcj));
+  ok('⭐ 可用高度變了也要重量（上緣沒動、但下面變高變矮）',
+     /const roomNow = \(\) => \{/.test(fcj) && /if \(!moved && !roomed\) return;/.test(fcj));
+  ok('門檻仍是 8px（捲動不會誤觸）', /Math\.abs\(t - lastTop\) >= 8/.test(fcj) && /Math\.abs\(room - lastRoom\) >= 8/.test(fcj));
+  ok('⭐ 平板橫式把卡片內距收緊（實測圖片 204→240px，+18%）',
+     /@media \(min-width: 901px\) and \(max-width: 1366px\) and \(max-height: 900px\) \{[\s\S]{0,220}\.fc-p-card \.fc-face\s*\{ padding: 14px 24px; \}/.test(tune));
+  ok('只動留白，中文與例句的字級一個字都沒縮',
+     !/@media \(min-width: 901px\) and \(max-width: 1366px\) and \(max-height: 900px\) \{[\s\S]{0,260}font-size/.test(tune));
+}
+
 console.log(log.join('\n'));
 console.log(`\n${fail === 0 ? '🎉 全部通過' : '⚠️ 有失敗'}：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -670,6 +670,14 @@ function App() {
       const cur = local[key];
       const modes = { ...((cur && cur.modes) || {}), ...(fp.modes || {}) };
       const base = (!cur || pctOf(remote) > pctOf(cur)) ? remote : cur;
+      /* v459（Alan：「有學生反應補交作業不會顯示已完成並且消掉」）：
+         上面那一行是「同一單元取分數比較好的一次」——但它把 done 也一起換掉了。
+         done（有沒有做完）跟分數高低是兩件事，不該互相覆蓋。
+         實際會爆的情形：單字卡與上傳作業完成時 score 是 null（pctOf 只給 -1），
+         所以本機任何一筆「考過但沒到 80 分」的舊紀錄都會贏過雲端那筆「已完成」
+         → 換一台裝置打開，明明做完了卻沒有打勾、也不會從「還沒完成」清單消失。
+         做完就是做完：兩邊只要有一邊完成，合併後就是完成。 */
+      const doneVal = base.done || (cur && cur.done) || remote.done || 0;
       /* v409：型別與標題一定要帶過來。它們是「這一筆是什麼」的描述，跟挑哪一邊的分數無關，
          而本機那份（loadQMProg）從來只存 done/score/total/ts，根本沒有這兩個欄位。
          沒有 itemType，computeAutoStars 就認不出「以前教室賺的」那些紀錄
@@ -677,7 +685,7 @@ function App() {
       const meta = {};
       if (fp.itemType)  meta.itemType  = fp.itemType;
       if (fp.itemTitle) meta.itemTitle = fp.itemTitle;
-      local[key] = { ...base, ...(Object.keys(modes).length ? { modes } : {}), ...meta };
+      local[key] = { ...base, done: doneVal, ...(Object.keys(modes).length ? { modes } : {}), ...meta };
     });
     return local;
   }, [qmProgressVersion, weekId, grade, myProgressItems, user?.uid]);

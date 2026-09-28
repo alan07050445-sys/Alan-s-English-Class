@@ -3598,6 +3598,18 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
 
+/* ══ v459（Alan：「平板橫式底下還有空位，讓圖片大一點比較好」）══════════════
+   實測 1024×768 全螢幕：翻卡面 508px，圖片 325、中文 63、例句 61，
+   內距與間距吃掉 59px ＝ 圖片只佔 64%。圖片本來就是 flex:1 1 auto（自己會長大），
+   上限（360/560px）在這個尺寸根本沒碰到——真正擋住它的是那些留白。
+   把平板橫式的內距與間距收緊，空出來的高度會全部進到圖片。
+   ⚠ 中文與例句一個字都不縮（那是要看的內容），只動留白。 */
+@media (min-width: 901px) and (max-width: 1366px) and (max-height: 900px) {
+  .fc-p-card .fc-face          { padding: 14px 24px; }
+  .fc-p-card .fc-back-img-wrap { margin-bottom: 6px; }
+  .fc-p-card .fc-zh            { margin-bottom: 4px; }
+}
+
 /* v436：互動教學的圖片（📖 閱讀的先備知識——老師自己放的圖） */
 .gnl-img {
   display: block; margin: 10px auto 12px; max-width: min(520px, 100%);

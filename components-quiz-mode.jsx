@@ -1441,6 +1441,12 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             key={quizSwapKey}
             item={selectedItem}
             progressKey={`${weekId}_${selectedItem.id}`}
+            /* v459（Alan：「有學生反應補交作業不會顯示已完成並且消掉」）：
+               單字卡本來只從 localStorage 讀「學習／測驗做過沒」，
+               所以換一台裝置（學校 iPad ↔ 家裡）就全部歸零、「完成練習」一直鎖著
+               ——學生做完了卻永遠按不下去，看起來就是「作業不會消掉」。
+               qmProg 是已經把雲端併進來的那一份，改用它才跨裝置。 */
+            cloudModes={((qmProg || {})[`${weekId}_${selectedItem.id}`] || {}).modes || null}
             isHomework={!editMode && !!((homework || {})[selectedItem.id])}
             onDone={(goTasks) => {
               setProgVersion(v => v + 1);
@@ -1837,12 +1843,26 @@ function FlashcardStandaloneIntro({ item, cat, done, onStart }) {
   );
 }
 
-function FlashcardStandalone({ item, progressKey, isHomework, onDone }) {
+function FlashcardStandalone({ item, progressKey, isHomework, onDone, cloudModes }) {
   /* v372(#2): 要「學習」和「測驗」兩個模式都跑完，才能按「完成練習」（也才拿得到星星）。
-     已經做過的從進度讀回來，換裝置或重新進來不用重做。 */
+     已經做過的從進度讀回來，換裝置或重新進來不用重做。
+     v459：以前只讀 localStorage，所以「換裝置不用重做」其實從來沒有成立過——
+     換一台就整個歸零、按鈕鎖死。cloudModes 是合併過雲端的那一份，兩邊聯集才對。 */
   const [modes, setModes] = useQM(() => {
-    try { return ((loadQMProg()[progressKey] || {}).modes) || {}; } catch (e) { return {}; }
+    let local = {};
+    try { local = ((loadQMProg()[progressKey] || {}).modes) || {}; } catch (e) {}
+    return { ...local, ...(cloudModes || {}) };
   });
+  /* v459：雲端那一筆可能比這個畫面晚到（訂閱是非同步的）。晚到也要算數，
+     不然學生會看著「還要完成：學習、測驗」但其實昨天在別台已經做過了。
+     只加不減——這個畫面裡剛做完的不可以被舊的雲端資料蓋回去。 */
+  useQME(() => {
+    if (!cloudModes) return;
+    setModes(m => {
+      const next = { ...m, ...cloudModes };
+      return Object.keys(next).length === Object.keys(m).length ? m : next;
+    });
+  }, [cloudModes]);
   // v373: 測驗＝真正的 test 模式（v372 一度誤指到填空）；舊的 fill 紀錄仍然算數，不讓昨天做過的白做
   const needLearn = !modes.learn, needTest = !(modes.test || modes.fill);
   const ready = !needLearn && !needTest;
@@ -5891,8 +5911,13 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
         if (getQuizItems([hit.it]).length === 0) return;      // 空單元不算
         const p = (qmProg || {})[`${wid}_${id}`];
         if (p && p.done) return;                              // 已完成就不提醒
+        /* v459（Alan：「有學生反應補交作業不會顯示已完成並且消掉」）：
+           其中一種不是 bug——是「做了但沒到 80 分，所以不算完成」。
+           以前這一列只寫「補做 →」，學生做完回來看到它還在，就以為壞掉了。
+           把上次幾分帶出來，原因就寫在臉上。 */
+        const lastPct = (p && p.total && p.score != null) ? Math.round(p.score / p.total * 100) : null;
         out.push({
-          key: wid + '_' + id, wid, id, it: hit.it,
+          key: wid + '_' + id, wid, id, it: hit.it, lastPct,
           weekLabel: w.label || wid,
           cat: (categories || []).find(c => c.id === hit.catId),
         });
@@ -6089,7 +6114,10 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
                   onClick={() => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)}
                 >
                   <span className="tt-past-wk">{t.weekLabel}</span>
-                  <span className="tt-past-name">{t.it.title || t.id}</span>
+                  <span className="tt-past-name">
+                    {t.it.title || t.id}
+                    {t.lastPct != null && <em className="tt-past-tried">上次 {t.lastPct} 分 · 要 80 分才算完成</em>}
+                  </span>
                   <span className="tt-past-go">補做 →</span>
                 </button>
               ))}

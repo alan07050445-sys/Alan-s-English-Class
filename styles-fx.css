@@ -33,7 +33,25 @@
 @media (min-width: 700px) and (max-width: 1366px) and (max-height: 900px) {
   .mx-layer { --mx-w: clamp(34px, 4.8vh, 42px); }
 }
-.mx-layer.dragging .mx-body { cursor: grabbing; }
+.mx-layer.dragging /* v459：長按的替代入口——點一下牠就出現五秒的小 ⋯（某些平板長按真的按不出來）。
+   ⚠ .mx-layer 是 pointer-events:none，浮在上面的東西都要自己把它打開。 */
+.mx-handle {
+  position: absolute; left: 100%; bottom: 58%; margin-left: 2px;
+  pointer-events: auto; cursor: pointer;
+  width: 26px; height: 26px; padding: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(21, 19, 14, .18); border-radius: 50%;
+  background: rgba(255, 253, 246, .96); color: #6b6350;
+  font-size: 15px; font-weight: 800; letter-spacing: -1px;
+  box-shadow: 0 2px 6px rgba(21, 19, 14, .18);
+  animation: mxHandleIn .18s ease-out both;
+  -webkit-tap-highlight-color: transparent;
+}
+.mx-handle:active { transform: scale(.9); }
+@keyframes mxHandleIn { from { opacity: 0; transform: scale(.5) translateX(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mx-handle { animation: none; } }
+
+.mx-body { cursor: grabbing; }
 .mx-slot { position: absolute; left: 0; bottom: 0; will-change: transform; }
 
 .mx-body {
@@ -44,6 +62,11 @@
   /* v384: 要能用手指拖著走 → 不能讓瀏覽器把觸控解讀成捲動。
      牠只有 32~50px，擋住的捲動區域很小。 */
   touch-action: none;
+  /* v459（Alan：「有學生的平板不是 iPad，長按會顯示網站的設定」）：
+     Android／Windows 的瀏覽器長按會去選字、存圖、彈右鍵選單，把我們的長按整個吃掉。
+     這三行把那些行為關掉（JS 那邊另外攔 contextmenu，兩邊都要做才擋得乾淨）。 */
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
   filter: drop-shadow(0 3px 4px rgba(21, 19, 14, .22));
 }
 /* ⚠ v441：overflow 一定要 visible——SVG 預設會把 viewBox 外面的東西切掉，
@@ -759,7 +782,7 @@
 /* 商店裡的「吉祥物裝扮」小標題（跟實體禮物分開） */
 .sp-shop-head { font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); margin: 10px 2px 6px; }
 
-/* ══ v455 小跳的招牌：吃紅蘿蔔 ＋ 跳到半個畫面高 ══════════════════════
+/* ══ v455 小兔的招牌：吃紅蘿蔔 ＋ 跳到半個畫面高 ══════════════════════
    Alan：「特殊動作：吃紅蘿蔔＋跳很高，可以跳到螢幕一半」。
    分成兩段演：① 0~34% 啃三口紅蘿蔔（紅蘿蔔會愈啃愈短）② 34% 之後蹲下蓄力，
    一口氣跳到 -46vh（畫面一半），停在最高點讓人看清楚，落地壓扁再彈一小下。

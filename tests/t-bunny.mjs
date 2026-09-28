@@ -1,4 +1,4 @@
-/* t-bunny — v455 新夥伴「小跳」（Alan 給了一張白兔子參考圖，價格 300，
+/* t-bunny — v455 新夥伴「小兔」（Alan 給了一張白兔子參考圖，價格 300，
  * 招牌動作＝吃紅蘿蔔＋跳到螢幕一半高） */
 import fs from 'fs';
 const ROOT = new URL('..', import.meta.url);
@@ -17,12 +17,12 @@ const flat = css.replace(/\n/g, ' ');
 
 console.log('\n【1】商店裡買得到（300 顆星星）');
 const bun = W.MX_BY_ID.pet_bun;
-ok('小跳在商品表裡', !!bun);
+ok('小兔在商品表裡', !!bun);
 eq('價格 300', bun.cost, 300);
 eq('是「夥伴」這一類', bun.kind, 'pet');
 eq('對得到 components-fx.jsx 的 pet id', bun.pet, 'bun');
 ok('不是免費的（要用星星請）', !bun.free);
-ok('有中文名字與圖示', bun.zh === '小跳' && bun.emoji === '🐰');
+ok('有中文名字與圖示', bun.zh === '小兔' && bun.emoji === '🐰');
 eq('買了就多一隻可以選', W.mxOwnedPets({ owned: ['pet_bun'] }).sort().join(), 'bun,clay');
 eq('花掉的星星算得對', W.mxSpent({ owned: ['pet_bun'] }), 300);
 ok('沒買就選不到牠', W.mxOwnedPets({}).indexOf('bun') < 0);
@@ -44,7 +44,7 @@ ok('參考圖的重點都有：長耳朵、粉內耳、淺藍蝴蝶結、腮紅'
 ok('⭐ MX_FIT.bun 把帽子壓低縮小（不然會蓋住兩隻耳朵）', /bun:\s*\{ hat: \{ x: 9,\s*y: 1\.2,\s*s: 0\.82 \}/.test(fx));
 
 console.log('\n【3】名冊裡的設定');
-ok('MX_PETS 有小跳', /id: 'bun', speed: 1\.1, zh: '小跳'/.test(fx));
+ok('MX_PETS 有小兔', /id: 'bun', speed: 1\.1, zh: '小兔'/.test(fx));
 ok('招牌動作叫 hop', /sig: 'hop'/.test(fx));
 ok('招牌動作的中文寫清楚了', /sigZh: '吃紅蘿蔔＋跳超高'/.test(fx));
 ok('⭐ v457：平常只有走路（招牌留給「點一下」，v451 的規矩照舊）', /acts: \['walk'\],/.test(fx));
@@ -110,6 +110,31 @@ ok('尾巴會跟著跳', /@keyframes mxTailBob/.test(flat) && /@keyframes mxTail
 ok('⭐ 紅蘿蔔變大了（原本 4.6×2 → 6.6×3.2）', /<rect x="7\.6" y="7\.2" width="6\.6" height="3\.2"/.test(fx));
 ok('⭐ 啃的動作變大（身體邊啃邊點頭）', /scaleY\(\.84\)\s*scaleX\(1\.14\) rotate\(-3deg\)/.test(flat));
 ok('⭐ 腳收窄了（不再像螃蟹一樣開開的）', /x="2" y="12" width="4"/.test(fx) && /x="12" y="12" width="4"/.test(fx));
+
+
+console.log('\n【v459】小兔改名＋偶爾往左右跳＋非 iPad 也長得出選單');
+ok('⭐ 商店裡叫「小兔」（不再是小跳）', bun.zh === '小兔' && !/小跳/.test(JSON.stringify(bun)));
+ok('⭐ 大跳會橫向飄（hopSideways）', /const hopSideways = \(\) => \{/.test(fx));
+ok('水平用 .mx-slot 本來就有的 transition（跟垂直的 keyframe 疊成拋物線）',
+   /hopSideways[\s\S]{0,900}setMoveMs\(HOP_AIR_MS\);[\s\S]{0,60}setX\(target\)/.test(fx));
+ok('時機對著 mxHop 的起跳（約 1.5 秒）', /HOP_AIR_AT = 14\d\d/.test(fx));
+ok('是「偶爾」不是每次', /if \(Math\.random\(\) < 0\.4\) return;/.test(fx));
+ok('起跳位置從 DOM 當場量（doAct 裡的 x 是舊值，會算反方向）',
+   /hopSideways[\s\S]{0,600}DOMMatrixReadOnly/.test(fx));
+ok('不會跳出畫面（有夾在 0~W 之間）', /target = Math\.max\(0, Math\.min\(W, target\)\)/.test(fx));
+ok('太短就不飄（看不出來反而像抖動）', /Math\.abs\(target - cur\) < 45/.test(fx));
+ok('減少動態的人不飄', /hopSideways = \(\) => \{\s*\n\s*if \(reduce\.current\) return;/.test(fx));
+ok('三個觸發點都接上（自動循環／點一下／換夥伴打招呼）',
+   (fx.match(/hopSideways\(\)/g) || []).length >= 3);
+
+ok('⭐ 攔掉瀏覽器的長按選單（Android 平板會跳出網站設定）', /onContextMenu=\{\(e\) => \{\s*\n\s*e\.preventDefault\(\);/.test(fx));
+ok('⭐ 而且把它當成「要開我們的選單」，不是只擋掉', /onContextMenu[\s\S]{0,260}setMenu\(true\)/.test(fx));
+ok('長按門檻提前到 500ms（要趕在瀏覽器自己的長按之前）', /\}, 500\);/.test(fx));
+ok('⭐ 還有一條看得到的路：點一下會冒出「⋯」', /className="mx-handle"/.test(fx) && /showHandle\(\)/.test(fx));
+ok('「⋯」五秒後自己收掉，不佔畫面', /setTimeout\(\(\) => setHandle\(false\), 5000\)/.test(fx));
+ok('CSS 也把選字／存圖關掉（只靠 JS 擋不乾淨）',
+   /-webkit-touch-callout: none/.test(css) && /user-select: none/.test(css));
+ok('「⋯」自己打開 pointer-events（.mx-layer 是 none）', /\.mx-handle \{[\s\S]{0,300}pointer-events: auto/.test(css));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
 process.exit(fail ? 1 : 0);

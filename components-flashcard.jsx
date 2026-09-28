@@ -553,7 +553,16 @@ function useFitHeight(ref, enabled, min) {
        （這正是 v387 改座標基準的目的），所以它一變就代表版面真的動了 → 重量一次。
        ⚠ 卡片自己改高度不會改變自己的上緣（它是由上往下排的）→ 不會變成自己餵自己的迴圈；
          真的遇到意外的來回，最多修 6 次就收手。 */
-    let fixes = 0;
+    /* ⚠⚠ v459（Alan：「平板橫式底下還有空位」）：這個預算本來是「一輩子只有 6 次」。
+       防迴圈是對的，但它也讓「量完之後才變的版面」在用完 6 次之後**永遠**不會再修
+       ——一節課下來學生會收合側欄、進出全螢幕、翻很多張卡、上面那條
+       「還要完成：學習、測驗」做完一項就會變矮，每一件都會用掉一次。
+       用完之後卡片就停在舊高度，畫面上正是「卡片小一截、下面空一塊」。
+       改成「滾動式預算」：連續 6 次才算可疑；只要安靜超過 5 秒就把次數還回來。
+       真正的自己餵自己迴圈會在那 5 秒內連續觸發 → 照樣被擋下來（行為不變），
+       而「過了一分鐘才收合側欄」這種真實操作就修得到了。 */
+    let fixes = 0, lastFixAt = 0;
+    const FIX_WINDOW = 5000;
     const topNow = () => {
       const node = ref.current;
       if (!node) return -1;
@@ -563,11 +572,29 @@ function useFitHeight(ref, enabled, min) {
       const hb2 = host2.getBoundingClientRect();
       return hb2.top + (r2.top - hb2.top + host2.scrollTop);
     };
+    /* 可以用的高度也要看：上緣沒動、但下面變高變矮了（進出全螢幕、鍵盤收起來）
+       一樣是「版面真的變了」。只比上緣會漏掉這一種。 */
+    const roomNow = () => {
+      const node = ref.current;
+      if (!node) return -1;
+      const host4 = _fcScrollHost(node);
+      return host4 === document.documentElement
+        ? Math.round((window.visualViewport && window.visualViewport.height) || window.innerHeight)
+        : Math.round(host4.clientHeight);
+    };
+    let lastRoom = -1;
     const recheck = () => {
-      if (fixes >= 6 || lastTop < 0) return;
-      const t = topNow();
-      if (t < 0 || Math.abs(t - lastTop) < 8) return;     // 上緣沒動＝版面沒動（捲動不會改變它）
-      fixes++;
+      if (lastTop < 0) return;
+      const now = Date.now();
+      if (now - lastFixAt > FIX_WINDOW) fixes = 0;        // v459：安靜夠久就把預算還回來
+      if (fixes >= 6) return;
+      const t = topNow(), room = roomNow();
+      if (lastRoom < 0) lastRoom = room;
+      const moved  = t >= 0 && Math.abs(t - lastTop) >= 8;
+      const roomed = room > 0 && Math.abs(room - lastRoom) >= 8;
+      if (!moved && !roomed) return;                      // 上緣沒動、空間也沒變＝版面沒動（捲動不會改變它們）
+      lastRoom = room;
+      fixes++; lastFixAt = now;
       measured = false;
       apply();
     };
