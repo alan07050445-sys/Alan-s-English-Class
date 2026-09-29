@@ -1362,6 +1362,19 @@ function App() {
     Object.keys(w[weekId].items).forEach(k => {
       w[weekId].items[k] = w[weekId].items[k].filter(it => it.id !== itemId);
     });
+    /* 🔴 v460（Alan：「家長說作業都做完了，為什麼還在傳未交提醒」）：
+       單元刪掉了，homework 裡那一筆 id 要一起拿掉，不然會變成孤兒。
+       網站自己到處都會略過這種孤兒（學生看不到、點不進去），所以在網站上完全看不出問題，
+       但 LINE 的作業提醒是照 homework 清單算的 → 變成學生**永遠做不掉**的作業，天天催。
+       2026-09-29 查線上資料：六個年級共有 38 份這種幽靈（G1 的 34 份裡有 21 份是）。 */
+    if (w[weekId].homework && w[weekId].homework[itemId]) delete w[weekId].homework[itemId];
+    // 別的單元若「需要先學完這一個」，那個鎖也要解掉（不然學生被一個不存在的教學卡鎖住）
+    Object.keys(w[weekId].items).forEach(k => {
+      (w[weekId].items[k] || []).forEach(it => {
+        if (it && it.requires === itemId) delete it.requires;
+        if (it && it.linkedFlashcardId === itemId) delete it.linkedFlashcardId;
+      });
+    });
     setWeeks(w);
     saveWeeksSafe(w);
     setEditorOpen(false);

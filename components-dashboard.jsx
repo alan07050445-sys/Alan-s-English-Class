@@ -1673,6 +1673,14 @@ function HwRemind() {
 
   const [aBusy, setABusy] = useDash(false);
   const [aRes, setARes]   = useDash(null);
+  /* v460（Alan：「自動推播怎麼不會出現在官方 LINE 的聊天裡？家長卻有收到」）：
+     用 Messaging API 推出去的訊息不會進 LINE 官方帳號後台的聊天室
+     ——那裡只留「從聊天室手動打的」與「家長傳進來的」。
+     所以老師本來完全沒有紀錄可看。Worker 現在會把每天 18:00 跑的結果留下來，
+     這裡就能看到「幾點發的、發給誰、內容一字不差是什麼」。 */
+  const [logs, setLogs]   = useDash(null);
+  const [lBusy, setLBusy] = useDash(false);
+  const [lOpen, setLOpen] = useDash({});
   const [aMsg, setAMsg]   = useDash(null);
 
   const [target, setTarget] = useDash('all');
@@ -1700,6 +1708,15 @@ function HwRemind() {
     try { setARes(await window.lineRunReminders(true, p)); }
     catch (e) { setAMsg({ type: 'err', text: '⚠️ ' + errText(e) }); }
     setABusy(false);
+  };
+
+  const loadLogs = async () => {
+    const p = usePass();
+    if (!p) { setAMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    setLBusy(true); setAMsg(null);
+    try { const d = await window.lineRunLog(p); setLogs(d.runs || []); }
+    catch (e) { setAMsg({ type: 'err', text: '⚠️ ' + errText(e) }); setLogs(null); }
+    setLBusy(false);
   };
 
   const tgtLabel = target === 'all' ? '所有已綁定的家長'
@@ -1738,8 +1755,54 @@ function HwRemind() {
           <button className="notify-send hwr-preview" onClick={previewAuto} disabled={aBusy}>
             {aBusy ? '讀取中…' : '🔍 看今晚 18:00 會發什麼'}
           </button>
+          <button className="notify-send hwr-preview" onClick={loadLogs} disabled={lBusy} style={{ marginTop: 8 }}>
+            {lBusy ? '讀取中…' : '📜 看實際發出去的紀錄'}
+          </button>
           {aMsg && <div className={`notify-msg ${aMsg.type}`}>{aMsg.text}</div>}
           {aRes && <HwResult R={aRes} mode="auto" />}
+          {logs && (
+            <div className="hwlog">
+              <div className="hwlog-note">
+                LINE 官方帳號後台的聊天室<b>不會</b>顯示系統推播（那裡只留你手動打的、和家長傳進來的），
+                所以要看系統發了什麼，看這裡。
+              </div>
+              {logs.length === 0
+                ? <div className="hwlog-empty">還沒有紀錄。今天 18:00 跑過之後就會出現（也要先把新版 Worker 貼上去）。</div>
+                : logs.map((r, i) => {
+                    const when = (() => { try { return new Date(r.at).toLocaleString('zh-TW', { hour12: false }); } catch (e) { return r.at; } })();
+                    const open = !!lOpen[i];
+                    return (
+                      <div className={'hwlog-run' + (r.ok ? '' : ' bad')} key={r.at + i}>
+                        <button className="hwlog-head" onClick={() => setLOpen(o => ({ ...o, [i]: !o[i] }))}>
+                          <span className="hwlog-chev">{open ? '▾' : '▸'}</span>
+                          <b>{when}</b>
+                          <span className="hwlog-tag">{r.how === 'manual' ? '手動跑的' : '每天 18:00'}</span>
+                          <span className="hwlog-n">發出 {(r.sends || []).length} 位</span>
+                          <span className="hwlog-sub">全部做完 {r.allDone} · 已通知過 {r.quiet} · 家長沒綁 {r.noBind}</span>
+                        </button>
+                        {!!(r.errors || []).length && <div className="hwlog-err">⚠️ {r.errors.join('；')}</div>}
+                        {open && (
+                          (r.sends || []).length === 0
+                            ? <div className="hwlog-empty">這一次沒有發給任何人。</div>
+                            : <div className="hwlog-list">
+                                {r.sends.map(x => (
+                                  <div className="hwlog-item" key={x.email}>
+                                    <div className="hwlog-who">
+                                      <b>{x.name || x.email}</b>
+                                      <span>{x.count} 項未完成 · 送到 {x.to} 個 LINE</span>
+                                      {x.buckets && <span>本週 {x.buckets.thisWeek} · 前幾週 {x.buckets.overdue}</span>}
+                                    </div>
+                                    {/* 家長收到的一字不差就是這段（Flex 版面不同，文字一樣） */}
+                                    <pre className="hwlog-text">{x.text}</pre>
+                                  </div>
+                                ))}
+                              </div>
+                        )}
+                      </div>
+                    );
+                  })}
+            </div>
+          )}
         </section>
 
         {/* ── 📣 主動提醒 ── */}

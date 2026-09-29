@@ -20,6 +20,7 @@
  *   GET  /links
  *   POST /unlink          {lineUserId, email?}
  *   POST /run-reminders   自動提醒（?dry=1 只預覽「今晚會發什麼」）
+ *   GET  /run-log         最近 10 次自動提醒實際發了什麼（LINE 後台看不到 API 推播）
  *   POST /manual          老師主動提醒 {target, note}（?dry=1 預覽）——跟自動提醒的紀錄完全分開
  *   GET  /diag            最近 30 則 LINE 訊息的處理紀錄
  */
@@ -874,23 +875,62 @@ const idxIn = (arr, v) => { const i = arr.indexOf(v); return i < 0 ? 99 : i; };
 // v420：連「這份作業屬於哪一週」一起帶出來（startISO/endISO/label/archived），
 // 因為要分「本週／前幾週沒完成／可以先預習」，光看 dueDate 分不出來
 // （實際資料裡 Week 2 的單字作業 dueDate 還寫著 Week 1 的日期）。
+/* 🔴 v8：這一份要跟網站 components-quiz-mode.jsx 的 getQuizItems 保持一致。
+   「學生做得到嗎」只有一個標準答案，兩邊判得不一樣就會變成
+   「網站看不到、LINE 一直催」（或反過來，真的沒做卻不提醒）。
+   ⚠ 網站那邊新增題型時，這裡要一起補。 */
+const _len = (it, f) => ((it && it[f]) || []).filter(Boolean).length;
+function playableItem(it) {
+  if (!it) return false;
+  const t = it.type;
+  if (t === 'lesson' || t === 'upload') return true;       // 本身就是一件任務，不需要題目
+  if (t === 'flashcard')        return _len(it, 'cards') >= 1;
+  if (t === 'vocab-quiz')       return _len(it, 'words') >= 2;
+  if (t === 'fillblank')        return _len(it, 'questions') >= 2;
+  if (t === 'quiz')             return _len(it, 'questions') >= 1;
+  if (t === 'writing-practice') return !!it.linkedFlashcardId || (it.writingPrompts || []).some((p) => p && p.word);
+  if (t === 'type-answer')      return _len(it, 'pairs') >= 1;
+  if (t === 'spelling')         return _len(it, 'spellWords') >= 1;
+  if (t === 'short-answer')     return _len(it, 'saQuestions') >= 1;
+  if (t === 'syllable-div')     return _len(it, 'sdWords') >= 1;
+  if (t === 'word-sort')        return _len(it, 'sortWords') >= 1 && _len(it, 'sortCategories') >= 2;
+  if (t === 'def-match')        return (it.defPairs || []).filter((p) => p && p.word && p.def).length >= 2;
+  if (t === 'essay')            return !!String(it.essayPrompt || '').trim();
+  if (t === 'story-mountain')   return !!(it.smPrompt || it.smPassage);
+  if (t === 'cloze')            return String(it.passage || '').includes('[');
+  if (t === 'circle-answer')    return (it.circleQuestions || []).some((q) => q && q.sentence && (q.answer != null || (q.answers || []).length));
+  if (t === 'guided-reading')   return (it.grSegments || []).some((s) => s && (String(s.text || '').trim() || (s.img && s.img.url) || (s.questions || []).length));
+  if (t === 'reading-skill')    return true;   // 判斷要 rsBlocks，這裡放寬＝寧可提醒也不要漏
+  return false;                                // 認不得的型別一律不催（不要拿沒把握的事去吵家長）
+}
+
 function buildHomeworkList(cls) {
   const weeks = (cls && cls.weeks) || {};
   const out = [];
   for (const wid of Object.keys(weeks)) {
     const wk = weeks[wid] || {};
     const hw = wk.homework || {};
-    const metaById = {};
+    const metaById = {}, itemById = {};
     const items = wk.items || {};
     for (const cat of Object.keys(items)) {
       for (const it of (items[cat] || [])) {
-        if (it && it.id) metaById[it.id] = { title: it.title || it.id, type: it.type || '', cat };
+        if (it && it.id) { metaById[it.id] = { title: it.title || it.id, type: it.type || '', cat }; itemById[it.id] = it; }
       }
     }
     for (const itemId of Object.keys(hw)) {
       const dd = hw[itemId] && hw[itemId].dueDate;
       if (!dd) continue;
-      const m = metaById[itemId] || { title: itemId, type: '', cat: '' };
+      /* 🔴 v8（Alan：「家長說作業都做完了，為什麼還在傳未交提醒」）：
+         老師把單元刪掉／換掉時，week.homework 裡那一筆 id 會留著變成孤兒。
+         網站到處都會略過這種（getQuizItems 濾掉 → 學生根本看不到、也點不進去），
+         但這裡本來是「找不到就用 id 當標題」照樣推進提醒
+         → 變成學生**永遠做不掉**的作業，每天催、催到 28 天回溯期滿為止。
+         2026-09-29 實測線上資料：六個年級共追蹤 182 份，其中 38 份是這種幽靈
+         （G3 光 Week 3 就有 12 份），所以那一班每個人都被標成「12 項沒完成」。
+         規則跟網站對齊：單元不在了、或單元沒有內容可以做，就不要列進來。 */
+      const it = itemById[itemId];
+      if (!it || !playableItem(it)) continue;
+      const m = metaById[itemId];
       out.push({
         wid, itemId, key: wid + '_' + itemId,
         title: String(m.title || '').trim() || itemId, type: m.type, cat: m.cat, dueDate: dd,
@@ -1398,6 +1438,29 @@ async function runReminders(env, dryRun) {
   return R;
 }
 
+/* v8：把一次自動提醒的結果寫進 KV（留最近 10 次）。
+   只留老師看得懂的欄位，Flex 的巢狀結構不存（很大又沒人要看）。 */
+async function saveRunLog(env, R, how) {
+  if (!env.LINKS || !R) return;
+  try {
+    const rec = {
+      at: new Date().toISOString(), how: how || 'cron',
+      today: R.today, ok: R.ok !== false, errors: R.errors || [],
+      sends: (R.sends || []).map((x) => ({
+        name: x.name, email: x.email, count: x.count, to: x.to, reason: x.reason,
+        buckets: x.buckets, text: x.text,
+      })),
+      quiet: (R.skippedQuiet || []).length,
+      allDone: (R.skippedDone || []).length,
+      noBind: (R.skippedNoBind || []).length,
+      noGrade: (R.skippedNoGrade || []).length,
+    };
+    const list = JSON.parse((await env.LINKS.get('runlog')) || '[]');
+    list.unshift(rec);
+    await env.LINKS.put('runlog', JSON.stringify(list.slice(0, 10)));
+  } catch (e) {}
+}
+
 // v422：把「現查作業」的結果包成 LINE 訊息（一個孩子一張卡，最多 5 張）
 async function hwReplyMessages(env, children, opts) {
   const o = opts || {};
@@ -1626,6 +1689,7 @@ export default {
       if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
       const dry = url.searchParams.get('dry') === '1';
       const R = await runReminders(env, dry);
+      if (!dry) await saveRunLog(env, R, 'manual');   // v8：手動跑的也留紀錄
       return json(R, 200, origin);
     }
 
@@ -1645,12 +1709,25 @@ export default {
       return json({ ok: true, list }, 200, origin);
     }
 
+    // v8：最近幾次自動提醒發了什麼（LINE 官方帳號後台看不到 API 推播，這裡才看得到）
+    if (request.method === 'GET' && path === '/run-log') {
+      if (!adminOk) return json({ ok: false, error: 'unauthorized' }, 401, origin);
+      const list = JSON.parse((env.LINKS && (await env.LINKS.get('runlog'))) || '[]');
+      return json({ ok: true, runs: list }, 200, origin);
+    }
+
     return json({ ok: false, error: 'not_found' }, 404, origin);
   },
 
   // 每日 Cron（Settings → Triggers 設 0 10 * * *）
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runReminders(env, false));
+    /* v8（Alan：「自動推播不會出現在官方 LINE 的聊天裡，我看不到發了什麼」）：
+       用 Messaging API 推出去的訊息不會進 LINE 官方帳號後台的聊天室
+       ——那裡只留「從聊天室手動打的」與「家長傳進來的」。
+       以前這份報告跑完就丟掉了，所以老師手上等於沒有任何紀錄。
+       現在把每一次自動提醒的結果存起來（留最近 10 次），老師端就看得到
+       「幾點發的、發給誰、內容一字不差是什麼、誰被跳過又為什麼」。 */
+    ctx.waitUntil(runReminders(env, false).then((R) => saveRunLog(env, R, 'cron')).catch(() => {}));
   },
 };
 

@@ -13,13 +13,31 @@ const TODAY = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 const DUE = new Date(Date.now() + 8 * 3600 * 1000 + 5 * 86400000).toISOString().slice(0, 10);
 
 const fsStr = (v) => ({ stringValue: v });
+/* v460：Worker 現在會濾掉「單元不存在」與「沒有內容可以做」的作業
+   （跟網站 getQuizItems 同一套）——所以假單元也要給最小內容，不然會被正確地濾掉。 */
+const _fsContent = (type) => {
+  const one = { arrayValue: { values: [{ mapValue: { fields: {} } }] } };
+  const two = { arrayValue: { values: [{ mapValue: { fields: {} } }, { mapValue: { fields: {} } }] } };
+  const pair = { arrayValue: { values: [
+    { mapValue: { fields: { word: { stringValue: 'a' }, def: { stringValue: 'b' } } } },
+    { mapValue: { fields: { word: { stringValue: 'c' }, def: { stringValue: 'd' } } } }] } };
+  if (type === 'quiz')       return { questions: one };
+  if (type === 'fillblank')  return { questions: two };
+  if (type === 'flashcard')  return { cards: one };
+  if (type === 'spelling')   return { spellWords: one };
+  if (type === 'type-answer')return { pairs: one };
+  if (type === 'def-match')  return { defPairs: pair };
+  if (type === 'cloze')      return { passage: { stringValue: 'a [b] c' } };
+  return {};                 // lesson / upload 本來就不需要內容
+};
+
 function weekDoc(grade) {
   const wid = grade + '-2026F-W02';
   const itemId = grade + '-hw';
   return {
     fields: { weeks: { mapValue: { fields: { [wid]: { mapValue: { fields: {
       items: { mapValue: { fields: { vocab: { arrayValue: { values: [
-        { mapValue: { fields: { id: fsStr(itemId), title: fsStr(grade.toUpperCase() + ' 的單字作業') } } },
+        { mapValue: { fields: { id: fsStr(itemId), title: fsStr(grade.toUpperCase() + ' 的單字作業'), type: fsStr('quiz'), ..._fsContent('quiz') } } },
       ] } } } } },
       homework: { mapValue: { fields: { [itemId]: { mapValue: { fields: { dueDate: fsStr(DUE) } } } } } },
     } } } } } } },

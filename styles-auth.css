@@ -6663,3 +6663,37 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 }
 .dash-nc-add:disabled { opacity: .6; cursor: default; }
 .dash-nc-hint { font-size: 11.5px; color: var(--ink-3, #8a8270); margin-top: 8px; }
+
+/* ══ v460：自動提醒的「實際發出去的紀錄」（Alan：「推播在官方 LINE 後台看不到」）══
+   Messaging API 推出去的訊息不會進 LINE 官方帳號後台的聊天室，所以紀錄做在自己這邊。 */
+.hwlog { margin-top: 12px; border-top: 1px solid var(--border, #E6E8EA); padding-top: 12px; }
+.hwlog-note { font-size: 12.5px; line-height: 1.7; color: var(--ink-muted, #8A9099); margin-bottom: 10px; }
+.hwlog-note b { color: #C62828; }
+.hwlog-empty { font-size: 13px; color: var(--ink-muted, #8A9099); padding: 10px 2px; }
+.hwlog-run { border: 1px solid var(--border, #E6E8EA); border-radius: 10px; margin-bottom: 8px; overflow: hidden; background: #fff; }
+.hwlog-run.bad { border-color: #E9A8A8; }
+.hwlog-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  width: 100%; padding: 10px 12px; border: 0; background: transparent;
+  font-size: 13px; text-align: left; cursor: pointer;
+}
+.hwlog-head:hover { background: #FAFAF8; }
+.hwlog-chev { color: var(--ink-muted, #8A9099); }
+.hwlog-tag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: #F0F2F4; color: #5A6169; }
+.hwlog-n { font-weight: 700; color: #1B7A3E; }
+.hwlog-sub { font-size: 11.5px; color: var(--ink-muted, #8A9099); margin-left: auto; }
+.hwlog-err { padding: 8px 12px; font-size: 12.5px; color: #C62828; background: #FDF3F3; }
+.hwlog-list { border-top: 1px solid var(--border, #E6E8EA); }
+.hwlog-item { padding: 10px 12px; border-bottom: 1px solid #F1F2F4; }
+.hwlog-item:last-child { border-bottom: 0; }
+.hwlog-who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13px; margin-bottom: 6px; }
+.hwlog-who span { font-size: 11.5px; color: var(--ink-muted, #8A9099); }
+.hwlog-text {
+  margin: 0; padding: 10px 12px; border-radius: 8px; background: #F7F8F9;
+  font-size: 12.5px; line-height: 1.75; white-space: pre-wrap; word-break: break-word;
+  font-family: inherit; color: var(--ink, #1F2328); max-height: 260px; overflow: auto;
+}
+@media (max-width: 768px) {
+  .hwlog-sub { margin-left: 0; width: 100%; }
+  .hwlog-text { font-size: 12px; }
+}

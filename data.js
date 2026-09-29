@@ -5157,6 +5157,10 @@ function lineRunReminders(dry, pass) { return _lineCall('/run-reminders' + (dry 
 function lineManual(target, note, dry, pass) {
   return _lineCall('/manual' + (dry ? '?dry=1' : ''), 'POST', pass, { target, note: String(note || '') });
 }
+// v460：最近 10 次自動提醒「實際發了什麼」
+// （用 Messaging API 推出去的訊息不會進 LINE 官方帳號後台的聊天室——那裡只留
+//   「從聊天室手動打的」與「家長傳進來的」，所以老師本來完全沒有紀錄可看。）
+function lineRunLog(pass) { return _lineCall('/run-log', 'GET', pass); }
 // v425：最近 30 則 LINE 訊息「怎麼處理、有沒有回成功」
 function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
@@ -5170,7 +5174,7 @@ Object.assign(window, {
   // v343: 商店商品（老師自己維護）
   subscribeShop, saveShopItems,
   // LINE 通知
-  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders, lineManual, lineDiag,
+  LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders, lineManual, lineDiag, lineRunLog,
   loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed,
   loadWeekOrder, saveWeekOrder, suggestNextWeekId,
   subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadReadingPhoto,
