@@ -954,6 +954,60 @@
 /* 收起上方列——header 是 sticky，直接不顯示就好 */
 html.focus-on .header { display: none; }
 /* header 原本佔 72px，收起後把那塊高度還給內容 */
+/* ══ 🔴 v461（Alan：「測驗模式在 iPad 橫式或直式都滑不到最底下，沒辦法 submit」）══
+   兩個原因疊在一起，兩個都要修：
+
+   ① iPad Safari 的 100vh ＝「工具列收起來時」的高度，比實際看得到的還大。
+      作答區用 100vh 算高度 → 底部那一截永遠被藏在工具列底下，怎麼滑都滑不到。
+      → 改用 100dvh（動態視窗高度，會跟著工具列伸縮）。
+        舊瀏覽器讀不懂 dvh 就會忽略這一行，留著上面的 vh 當後備，不會壞掉。
+
+   ② .qm-quiz-area 自己是捲動區（overflow-y:auto），但它只有 min-height 沒有上限，
+      內容一多就長得比畫面還高 → 整頁**也**要捲。兩層捲動疊在一起，
+      在 iPad 上手指停在內層時，內層捲到底並不會自動接力去捲外層（iOS 不保證接力）
+      → 使用者卡在「內層到底了，但底部還在畫面外」。
+      → 給同樣數值的 max-height，讓作答區剛好等於可用高度＝只剩一層捲動。
+        內容再長也不會被切掉（它本來就會自己捲）。
+
+   ⚠ 這裡的每一條都要跟上面既有的 min-height 成對出現，數字要一樣，
+     不然會變成「上限比下限小」＝作答區被壓扁。 */
+@supports (height: 100dvh) {
+  .page-mission .qm-cat-view            { min-height: calc(100dvh - 72px); }
+  .page-mission .qm-quiz-area           { min-height: calc(100dvh - 140px); max-height: calc(100dvh - 140px); }
+  html.focus-on .page-mission .qm-cat-view  { min-height: 100dvh; }
+  html.focus-on .page-mission .qm-quiz-area { min-height: calc(100dvh - 54px); max-height: calc(100dvh - 54px); }
+  @media (max-width: 900px) {
+    .page-mission .qm-quiz-area           { min-height: calc(100dvh - 161px); max-height: calc(100dvh - 161px); }
+    html.focus-on .page-mission .qm-quiz-area { min-height: calc(100dvh - 88px); max-height: calc(100dvh - 88px); }
+  }
+}
+/* 左邊的單元清單也一樣：它比畫面高的時候，整頁就得捲（實測 iPad 橫式多出 135px）。
+   收進它自己的捲動區＝整頁完全不用捲，一個畫面只有一層捲動，iPad 上不會再卡住。
+   ⚠ 只在「左右雙欄」的寬度做（≥901px）。≤900px 是「一次一畫面」的手機式流程，
+     側欄那時是滿版的單元清單，鎖高度會把它壓扁。 */
+@media (min-width: 901px) {
+  .page-mission .qm-sidebar { max-height: calc(100vh - 140px); overflow-y: auto; }
+}
+@supports (height: 100dvh) {
+  @media (min-width: 901px) {
+    .page-mission .qm-sidebar { max-height: calc(100dvh - 140px); }
+    html.focus-on .page-mission .qm-sidebar { max-height: calc(100dvh - 54px); }
+  }
+}
+
+/* 不支援 dvh 的瀏覽器至少也拿掉「兩層捲動」那一半 */
+@supports not (height: 100dvh) {
+  .page-mission .qm-quiz-area { max-height: calc(100vh - 140px); }
+  @media (max-width: 900px) { .page-mission .qm-quiz-area { max-height: calc(100vh - 161px); } }
+}
+
+/* 交卷鈕黏在作答區底部——不管捲到哪裡都按得到（這是 Alan 真正在意的事） */
+.fc-test-foot {
+  position: sticky; bottom: 0; z-index: 4;
+  margin-top: 18px; padding: 12px 0 4px;
+  background: linear-gradient(to top, var(--bg, #F7F3EA) 62%, rgba(247, 243, 234, 0));
+}
+
 html.focus-on .page-mission .qm-cat-view  { min-height: 100vh; }
 html.focus-on .page-mission .qm-quiz-area { min-height: calc(100vh - 54px); }
 /* 收起上方列多出來的 72px 就拿來把圖片放大——按鈕是使用者自己按的，

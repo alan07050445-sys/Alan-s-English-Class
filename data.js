@@ -1658,6 +1658,9 @@ For each target word output:
 RULES
 - zh: the Traditional Chinese meaning of the word, 2-8 characters, no explanation (e.g. 遺產／移民／訪問).
 - def: a kid-friendly ENGLISH definition, 5-14 words, no ending punctuation, and it must NOT contain the target word or any form of it.
+- IF a target word comes with [TEACHER'S DEFINITION: "..."], copy that text into "def" EXACTLY, character for character.
+  Do not rewrite it, shorten it, fix its grammar, or add punctuation. That is the wording the teacher will test,
+  so every other field you write for that word (sentence, explain) must agree with it.
 - sentence: ONE natural sentence, 12-22 words, with exactly one ___ where the word goes. The rest of the sentence must give enough clues to work the answer out. Never let the target word appear anywhere else in the sentence.
 - answer: the exact surface form that fills the blank (may be inflected, e.g. plural or past tense).
 - explain: Traditional Chinese, 20-45 characters. Copy the clue phrase from YOUR OWN sentence (not from the definition), say in Chinese what that clue means, then give the answer. Never output the literal characters "…" or "..." — always write the real reasoning.
@@ -2185,7 +2188,13 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', g
       (hint ? `Context / topic: ${hint}\n` : '') +
       _aiTeacherNote(teacherNote) +
       'Target words:\n' +
-      part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`).join('\n');
+      /* v461（Alan：「有時候老師會直接給相對應的 definition，就直接用就可以了，
+         不需要 AI 生成；但如果沒有就還是需要」）：老師貼了定義就原封不動送進 prompt，
+         要求 AI 原樣抄回來。這樣「配對、選擇題、解說」用到的定義全部是老師的那一句，
+         不會出現「配對是老師的講法、選擇題是 AI 另一套講法」。
+         ⚠ 不能因此就整個字不送給 AI——例句（填空／短文）還是要它出。 */
+      part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`
+        + (w.def ? `  [TEACHER'S DEFINITION: "${String(w.def).replace(/"/g, "'")}"]` : '')).join('\n');
     try {
       /* max_tokens 700：chunk=2 時實測用量遠低於此，留約 1.6 倍餘裕當保險絲。
          ⚠ 不要再往下砍——一旦 stop_reason 變成 max_tokens，JSON 會被截斷、
@@ -2959,12 +2968,23 @@ ${_AI_MINIFY}`;
    · 找出來 → 沿用現成的「圈選題」(circle-answer)：一句話圈一個字，已經有計分、星星、只重做錯的
    · 分一分 → 沿用現成的「單字分類」(word-sort)：把字拖進 2-4 個籃子
    ⚠ 不新增題型，因為 v414 的教訓：新題型要補 AUTO_STAR_KIND、QM_TYPE_WORDS… 漏一個就整個單元沒星星。 */
+
+/* 🔴 v461（Alan：「一鍵生成文法出來的題目都要是英文版本，只有先學學看維持原本的中英混合」）：
+   練習題（選擇／填空／改寫／找出來／分一分）學生看得到的字一律英文——題幹、選項、
+   指示語、分類籃子的標籤、答錯後的解說，全部。
+   ⚠ 兩個例外，而且是題型本質，不能動：
+     ① 🔤 中翻英：題目本來就是中文句子，要他翻成英文。
+     ② 📘 先學一下（lesson）：Alan 要的就是「中英夾雜的口語講解」，維持原樣。 */
+const GN_EN_ONLY = `LANGUAGE: every word the student sees must be ENGLISH — the question, the options,
+the instruction, the basket labels and the explanation. No Chinese characters anywhere in your output.
+Write the explanation in very simple English an 8-year-old reads (≤14 words).`;
+
 const GN_SORT_SYS = `You design ONE sorting exercise for Taiwanese elementary-school students.
 The child drags English words into 2-4 labelled baskets.
 Output ONLY JSON: {"instruction":"","categories":["",""],"words":[{"word":"","category":""}]}
 RULES
-- categories: 2-4 baskets, Traditional Chinese labels, ≤6 characters each, taken straight from the notes
-  (e.g. 人／地方／東西, 普通名詞／專有名詞, 可數／不可數, 單數／複數).
+- categories: 2-4 baskets, ENGLISH labels, ≤3 words each, taken straight from the notes
+  (e.g. Person / Place / Thing, Common Noun / Proper Noun, Countable / Uncountable, Singular / Plural).
 - words: short English words (1-2 words each). "category" must be EXACTLY one of the labels you listed.
 - ⚠⚠ EVERY word must belong to exactly ONE basket, with NO exceptions a teacher could argue about.
   English is full of words that sit in two baskets at once — the sense verbs (smell, taste, feel, look, sound)
@@ -2972,7 +2992,9 @@ RULES
   Those words are unusable here, no matter how well they fit the lesson. Pick a word that can only go in one basket.
   A second checker re-reads every word and throws away the whole question if even one word fits two baskets.
 - At least 2 words per basket, spread evenly, and never repeat a word.
-- instruction: ONE Traditional Chinese sentence, ≤20 characters, telling the child what to do.
+- instruction: ONE short ENGLISH sentence, ≤12 words, telling the child what to do
+  (e.g. "Put each word in the right basket.").
+${GN_EN_ONLY}
 ${_AI_MINIFY}`;
 
 const GN_Q_SYS = {
@@ -2987,7 +3009,8 @@ RULES
   that both fit (e.g. "Rex, lie down and relax." has TWO intransitive verbs), pick a different sentence or different
   options — never let two options be acceptable.
 - answer: 0-based index of the correct option. Put the correct option in a DIFFERENT position each time.
-- explain: Traditional Chinese, ≤30 characters, why that answer.
+- explain: very simple ENGLISH, ≤14 words, why that answer.
+${GN_EN_ONLY}
 ${_AI_MINIFY}`,
   fill: `You write fill-in-the-blank grammar questions (the student TYPES the answer).
 Output ONLY a JSON array: [{"prompt":"","answer":"","accept":[],"explain":""}]
@@ -2998,7 +3021,8 @@ RULES
 - If one of the teacher's questions has TWO blanks, split it into two questions: each keeps one blank and has the other one filled in.
 - If CAPITAL LETTERS are the grammar point: give the word(s) in lowercase in parentheses at the end, and the answer is the same
   word(s) with the correct capital letters. e.g. prompt "We live in ________. (taipei)", answer "Taipei". Only ONE correct answer.
-- explain: Traditional Chinese, ≤30 characters.
+- explain: very simple ENGLISH, ≤14 words.
+${GN_EN_ONLY}
 ${_AI_MINIFY}`,
   circle: `You write "find the words" questions: the student reads a sentence and taps EVERY word of one kind,
 exactly like the worksheet task "Read each sentence. Then underline the nouns."
@@ -3007,7 +3031,8 @@ RULES
 - EVERY question in your answer must ask for the SAME kind of word (all nouns, or all verbs, or all proper nouns…),
   because the children see one instruction above the whole exercise.
 - find: that kind of word in English, 1-3 words ("noun", "proper noun", "action verb").
-  findZh: the same thing in Traditional Chinese, ≤6 characters ("名詞", "專有名詞").
+  findZh: v461 — this used to be Chinese; now write the SAME English words as "find".
+  The children see it in the instruction above the exercise, and that instruction is English now.
 - sentence: ONE English sentence, 4-12 words, everyday life, 100% correct English.
 - answers: EVERY word in that sentence that qualifies — 1 to 4 of them, copied EXACTLY as written
   (same spelling, same capital letters), in the order they appear. A checker re-reads your sentence and
@@ -3015,7 +3040,8 @@ RULES
   the nouns are sister, school AND morning.
 - Each answer word must be ONE word that appears only once in the sentence. If a target is two words
   (New York), choose a different sentence.
-- explain: Traditional Chinese, ≤30 characters, why those words.
+- explain: very simple ENGLISH, ≤14 words, why those words.
+${GN_EN_ONLY}
 ${_AI_MINIFY}`,
   rewrite: `You write "correct the sentence" questions: the student rewrites a sentence that has mistakes.
 Output ONLY a JSON array: [{"wrong":"","answer":"","explain":""}]
@@ -3023,7 +3049,8 @@ RULES
 - wrong: one short English sentence (≤12 words) with 1-3 mistakes of EXACTLY the kind the notes teach
   (e.g. missing capital letters). Nothing else in the sentence may be wrong.
 - answer: the same sentence, fully corrected. Change ONLY the mistakes.
-- explain: Traditional Chinese, ≤30 characters, what was fixed.
+- explain: very simple ENGLISH, ≤14 words, what was fixed.
+${GN_EN_ONLY}
 ${_AI_MINIFY}`,
   translate: `You write Chinese-to-English translation questions that practise the grammar point.
 Output ONLY a JSON array: [{"zh":"","answer":"","accept":[],"hint":"","explain":""}]
@@ -3574,30 +3601,66 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
   throw new Error((lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗') + _aiUpstreamNote(lastErr));
 }
 
+/* v461（Alan：「一鍵生成文法只能出一組找出來、分一分，但有時候我想出兩組三組」）：
+   要出好幾組的時候，每一組都要真的不一樣——同一個 prompt 送三次，模型很可能給你
+   三份幾乎一樣的句子。這裡明講「這是第幾組、跟別組不可以重複」。 */
+/* ⚠ 2026-09-30 實測：只說「要跟別組不一樣」不夠——分一分兩組 6 個字裡重複了 4 個
+   （teacher / bicycle / Friday / pizza 這種最順手的字，模型每次都先想到它們）。
+   平行送出去的請求彼此看不到對方，所以要給每一組**各自不同的題材範圍**，
+   靠題材把字分開才可靠。 */
+const _GN_SET_THEMES = [
+  'school and family life (classroom, homework, brother, grandmother, teacher, pencil)',
+  'food, animals and the night market (noodles, mango, rabbit, parrot, dumpling, market)',
+  'travel, weather and sport (mountain, typhoon, swimming, bicycle race, airport, umbrella)',
+];
+function _gnSetHint(k, total) {
+  if (!total || total <= 1) return '';
+  const theme = _GN_SET_THEMES[k % _GN_SET_THEMES.length];
+  return `\n\nThis is SET ${k + 1} of ${total} for the same lesson, and the sets are written at the same time
+by different writers who cannot see each other. To keep them from overlapping, THIS set must draw every
+sentence and every word from ONE subject area only: ${theme}.
+Do not use words or names from outside that area, and do not use the textbook's own examples.`;
+}
+
 async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
-                                   nCircle = 0, nSort = 0, caseMatters = false, teacherNote = '', onProgress } = {}) {
+                                   nCircle = 0, nSort = 0, nCircleSets = 1, nSortSets = 1,
+                                   caseMatters = false, teacherNote = '', onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
   const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote);
-  let done = 0; const total = 1 + [nMcq, nFill, nTr, nRw, nCircle, nSort].filter(Boolean).length;
+  const cSets = nCircle > 0 ? Math.max(1, Math.min(3, +nCircleSets || 1)) : 0;
+  const sSets = nSort   > 0 ? Math.max(1, Math.min(3, +nSortSets   || 1)) : 0;
+  let done = 0;
+  const total = 1 + [nMcq, nFill, nTr, nRw].filter(Boolean).length + cSets + sSets;
   const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
   // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
   const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
-  const [L, M, F, T, R, C, S] = await Promise.all([
+  const nm = (zh, k, tot) => tot > 1 ? `${zh} ${k + 1}` : zh;
+  const circleJobs = Array.from({ length: cSets }, (_, k) =>
+    settle(_gnMakeKind('circle', { n: nCircle, base: base + _gnSetHint(k, cSets), teacherQs, caseMatters }), nm('找出來', k, cSets), nCircle));
+  const sortJobs = Array.from({ length: sSets }, (_, k) =>
+    settle(aiMakeGrammarSortSet({ base: base + _gnSetHint(k, sSets), n: nSort }), nm('分一分', k, sSets), nSort));
+  const [L, M, F, T, R, Cs, Ss] = await Promise.all([
     settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters, teacherNote }), '互動教學'),
     settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
     settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
     settle(_gnMakeKind('translate', { n: nTr, base, teacherQs, caseMatters }), '中翻英', nTr),
     settle(_gnMakeKind('rewrite', { n: nRw, base, teacherQs, caseMatters }), '改寫句子', nRw),
-    settle(_gnMakeKind('circle', { n: nCircle, base, teacherQs, caseMatters }), '找出來', nCircle),
-    settle(nSort > 0 ? aiMakeGrammarSortSet({ base, n: nSort }) : Promise.resolve(null), '分一分', nSort),
+    Promise.all(circleJobs),
+    Promise.all(sortJobs),
   ]);
   const errors = [];
   if (L.e) errors.push('互動教學');
-  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw],
-   [C, '找出來', nCircle], [S, '分一分', nSort]].forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
+  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw]]
+    .forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
+  Cs.forEach((x, k) => { if (x.e) errors.push(nm('找出來', k, cSets)); });
+  Ss.forEach((x, k) => { if (x.e) errors.push(nm('分一分', k, sSets)); });
+  // 每一組各自一個單元；circle／sort 仍然是「第一組」，舊的呼叫端與校稿畫面完全不用改
+  const circleSets = Cs.map(x => x.v || []).filter(a => a.length);
+  const sortSets   = Ss.map(x => x.v || null).filter(Boolean);
   const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [],
-                circle: C.v || [], sort: S.v || null, caseMatters, errors };
-  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length && !out.circle.length && !out.sort) {
+                circle: circleSets[0] || [], sort: sortSets[0] || null,
+                circleSets, sortSets, caseMatters, errors };
+  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length && !circleSets.length && !sortSets.length) {
     throw new Error('全部都沒有產生成功，請再試一次。');
   }
   return out;

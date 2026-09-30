@@ -22,8 +22,13 @@ const { useState: useQM, useMemo: useQMM, useEffect: useQME, useLayoutEffect: us
    「按鈕 onClick」「鍵盤 Enter」「onBack」「unmount」四個入口都清 timer，
    少一個都會連跳兩題（或人已離開畫面，彩帶還在放）。
 ══════════════════════════════════════════════════════ */
-const QM_AUTO_MS_PLAIN   = 1000; // 答對、沒有解說
-const QM_AUTO_MS_EXPLAIN = 4000; // 答對、有解說（可被點畫面取消）
+/* v461（Alan：「答對跳下一題再快一點，原本是 10 分的話改成 13 分左右」）：
+   ＝ 大約快三成 → 等待時間乘以 10/13。
+   有解說的那一種本來就可以「點畫面直接跳過」，所以縮短不會來不及看。
+   ⚠ 全站所有題型的自動前進都吃這兩個常數（選擇／填空／中翻英／圈選／分類…），
+     改這裡就是全部一起改。 */
+const QM_AUTO_MS_PLAIN   = 760;  // 答對、沒有解說（1000 → 760）
+const QM_AUTO_MS_EXPLAIN = 3050; // 答對、有解說（4000 → 3050，可被點畫面取消）
 // 答錯的題目往後第幾題再考一次（對齊 components-flashcard.jsx 的 RETRY_GAP）
 const QM_RETRY_GAP = 4;
 

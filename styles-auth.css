@@ -6697,3 +6697,27 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
   .hwlog-sub { margin-left: 0; width: 100%; }
   .hwlog-text { font-size: 12px; }
 }
+
+/* v461：點背景不關閉長表單，改成「輕輕晃一下」告訴使用者要按 ✕
+   （Alan：「我滑鼠點到視窗外面就直接跳出來，我剛剛打的都消失了」） */
+.modal-nudge { animation: modalNudge .4s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes modalNudge {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-7px); }
+  40%, 60% { transform: translateX(7px); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-nudge { animation: none; outline: 3px solid var(--accent, #8B3120); outline-offset: 2px; }
+}
+
+/* v461：校稿畫面切換「第幾組」（找出來／分一分可以出 1~3 組） */
+.gn-setpick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12.5px; color: var(--ink-muted, #8A9099); }
+.gn-setpick-b {
+  padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--border, #DDD6C4); background: #fff; color: var(--ink-2, #5c554a);
+}
+.gn-setpick-b.on { background: var(--accent, #8B3120); border-color: var(--accent, #8B3120); color: #fbf8f1; }
+.gn-count-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 4px; }
+@media (max-width: 640px) { .gn-count-grid { grid-template-columns: 1fr; } }

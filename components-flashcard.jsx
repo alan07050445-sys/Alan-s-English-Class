@@ -683,7 +683,14 @@ function FcImageZoom({ src, alt, onClose }) {
     };
   }, []);
 
-  return (
+  /* 🔴 v461（Alan：「測驗模式放大圖片，圖片卻沒有跟著往下，停在第一題圖片的位置」）：
+     .fc-zoom-back 明明是 position:fixed，卻不是以螢幕為基準——因為祖先
+     .qm-quiz-swap 殘留了進場動畫的 transform（實測 matrix(1,0,0,1,0,8)）。
+     只要祖先有 transform / filter / perspective，position:fixed 就改以它為基準，
+     燈箱因此被釘在「那一整串題目」的最上面，看起來就是停在第一題那裡。
+     跟 v433 裝扮室按不到是同一類問題，解法也一樣：createPortal 掛到 document.body，
+     以後不管上層誰加了 transform 都不會再被綁架。 */
+  return ReactDOM.createPortal((
     <div className="fc-zoom-back" role="dialog" aria-modal="true" aria-label="放大圖片"
          onClick={() => onCloseRef.current()}>
       {/* 點面板本身不關（只有點暗底才關） */}
@@ -693,7 +700,7 @@ function FcImageZoom({ src, alt, onClose }) {
         {alt && <div className="fc-zoom-cap">{alt}</div>}
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 function FlashcardPlayer({ item, onComplete, onModeDone }) {

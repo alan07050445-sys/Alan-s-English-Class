@@ -2,6 +2,18 @@
 
 const { useState: useS, useEffect: useE } = React;
 
+/* 🔴 v461（Alan：「所有的一鍵生成，我滑鼠點到視窗外面就直接跳出來，我剛剛打的都消失了」）
+   這些是長表單（貼單字、寫特別要求、校稿逐題改），點一下背景就把人家打的東西整批丟掉，
+   代價完全不對等。改成：**背景點下去不關閉**，只讓視窗輕輕晃一下，告訴你「要關請按 ✕」。
+   ⚠ 一定要同時保留 ✕ 與「取消」兩個明確的出口，不然會變成關不掉。 */
+function useModalNudge() {
+  const [on, setOn] = useS(false);
+  const t = React.useRef(null);
+  React.useEffect(() => () => clearTimeout(t.current), []);
+  const nudge = () => { setOn(true); clearTimeout(t.current); t.current = setTimeout(() => setOn(false), 420); };
+  return [on ? ' modal-nudge' : '', nudge];
+}
+
 /* v377（Alan：「太多 item、太多沒什麼用的功能、也很亂」）
    拉了線上真實資料來看：248 個單元裡，單字卡 72／填空 53／選擇題 28／聽寫 23
    ＝ 這 4 種就佔 71%；其餘 12 種加起來只有 14 次，「圈出答案」一次都沒用過。
@@ -805,6 +817,7 @@ function qsBlank(example, term) {
    Type A → type-answer（打字作答）；Type B → cloze（[答案](原形)）。
    ══════════════════════════════════════════════════════════════ */
 function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const T = window.GR_TENSES || {};
   const [tense, setTense]   = useS(defaultTense || 't1');
   const [aG, setAG]         = useS(3);
@@ -848,8 +861,8 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
   /* ── 第 1 步：設定 ── */
   if (!res) {
     return (
-      <div className="modal-backdrop" onClick={onClose}>
-        <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={nudge}>
+        <div className={"modal" + nudgeCls} onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>出<em>時態題目</em></h3>
             <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -921,8 +934,8 @@ function GrammarGenModal({ open, defaultTense, onClose, onCreate }) {
   const cur = units[Math.min(tab, units.length - 1)];
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal wide" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>校稿 · <em>{meta.zh}</em></h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -1052,6 +1065,7 @@ function grBuildItems({ tense, zh, lesson, A, B, check }) {
 }
 
 function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, defaultTitle, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
   const [cat, setCat]     = useS(defaultCat || 'vocab');
@@ -1166,8 +1180,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   /* ── 第 2 步：AI 出完了，逐題校稿 ── */
   if (rows) {
     return (
-      <div className="modal-backdrop" onClick={onClose}>
-        <div className="modal wide" onClick={e => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={nudge}>
+        <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>校稿 · <em>{title}</em></h3>
             <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -1279,8 +1293,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal wide" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>貼一次單字，<em>一次建立整套練習</em></h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -1296,7 +1310,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                 <div className="field-help">
                   分隔符號 Tab／<code>|</code>／逗號／<code> - </code> 都吃。
                   目前 <b>{words.length}</b> 個字（有中文 {withZh.length}、有例句 {withEx.length}、有定義 {withDef.length}）。
-                  {withDef.length > 0 && <>　<b>配對連線</b>會直接用你寫的英文定義，不會讓 AI 自己生。</>}
+                  {withDef.length > 0 && <>　你寫的 {withDef.length} 個定義會<b>原封不動</b>使用（配對、選擇題、解說都用同一句），AI 不會另外改寫；沒寫定義的那幾個才由 AI 補。</>}
                 </div>
               </div>
             </div>
@@ -1399,6 +1413,8 @@ function qsBuildItems({ words, title, kinds, ai, story }) {
     const pairs = words.map((w, i) => {
       const a = aiOf(w.term);
       // v445：老師自己貼的定義最優先（他有自己要考的講法），沒貼才用 AI 的、再沒有才用中文
+      // v461：老師貼的定義永遠最優先——prompt 已經要 AI 原樣抄，這裡再保一次，
+      //        就算 AI 自作主張改寫了也蓋不掉老師的原文。
       const def = w.def || (a && a.def) || w.zh;
       return def ? { id: 'p' + stamp + i + rnd(), word: (a && a.word) || w.term, def } : null;
     }).filter(Boolean);
@@ -1484,6 +1500,7 @@ function termWeekPlan(startISO, count, prefix, tag) {
 }
 
 function TermSetupModal({ open, existingIds, gradeLabel, prefix, categories, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [start, setStart] = useS('2026-08-31');
   const [count, setCount] = useS(20);
   const [tag, setTag]     = useS('F');     // F = 上學期(Fall)，S = 下學期(Spring)
@@ -1496,8 +1513,8 @@ function TermSetupModal({ open, existingIds, gradeLabel, prefix, categories, onC
   const dup   = plan.length - fresh.length;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal wide" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>建立<em>一整個學期</em>的週次 · {gradeLabel}</h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -1557,6 +1574,7 @@ function TermSetupModal({ open, existingIds, gradeLabel, prefix, categories, onC
 }
 
 function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   // editWeek = { id, label, dateRange, theme, themeZh } for editing existing week
   const isEdit = !!editWeek;
   const [form, setForm] = useS(null);
@@ -1594,8 +1612,8 @@ function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
   const idConflict = idChanged && otherIds.includes(form.id);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal" + nudgeCls} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isEdit ? 'Edit' : 'Add'} <em>{isEdit ? 'week' : 'new week'}</em></h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -1671,6 +1689,7 @@ function WeekModal({ open, existingIds, onClose, onSave, editWeek }) {
 
 /* ───── Export Modal ───── */
 function ExportModal({ open, weeks, weekOrder, onClose, showToast }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   /* v398：預設改成 Raw JSON。這顆的用途是「期末備份」，而 data.js (legacy) 那個
      格式裡的 CATEGORIES／helper 是寫死的舊版樣板，拿去覆蓋現在的 data.js 會壞。
      備份要的是純資料，所以一打開就停在 JSON。 */
@@ -1878,8 +1897,8 @@ Object.assign(window, {
   });
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal wide" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>Export <em>data</em></h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -4962,6 +4981,7 @@ async function gnFileToImage(file) {
 }
 
 function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [title, setTitle]   = useS('');
   const [text, setText]     = useS('');
   const [imgs, setImgs]     = useS([]);          // [{ media_type, data, preview, name }]
@@ -4973,6 +4993,9 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [nRw, setNRw]       = useS(5);          // v429：改寫句子（例：把大小寫改對）
   const [nCircle, setNCircle] = useS(6);       // v444：找出來（在句子裡圈出名詞／動詞）
   const [nSort, setNSort]   = useS(8);         // v444：分一分（把字分到 2-4 個籃子）
+  // v461（Alan：「有時候我想出兩組三組」）：找出來／分一分各自可以出 1~3 組，每組一個單元
+  const [cSets, setCSets] = useS(1);
+  const [sSets, setSSets] = useS(1);
   const [aiNote, setAiNote] = useS('');        // v445：這次的特別要求（直接寫給 AI）
   const [lsBusy, setLsBusy] = useS(false);      // v429：校稿頁單獨重出互動教學
   /* v442：互動教學的「AI 自動配圖」——只補還沒有圖的 learn 步驟 */
@@ -5041,7 +5064,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       setBusy({ done: 1, total: 6, label: `讀到了：${sheet.topic || '文法'}${(sheet.sections || []).length > 1 ? `（${sheet.sections.length} 段、${sheet.questions.length} 題）` : ''}，開始出題` });
       const pack = await window.aiMakeGrammarPack({
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
-        grade, nMcq, nFill, nTr, nRw, nCircle, nSort, caseMatters: !!sheet.caseMatters, teacherNote: aiNote,
+        grade, nMcq, nFill, nTr, nRw, nCircle, nSort, nCircleSets: cSets, nSortSets: sSets,
+        caseMatters: !!sheet.caseMatters, teacherNote: aiNote,
         onProgress: (d, t, label) => { if (live()) setBusy({ done: 1 + d, total: 1 + t, label }); },
       });
       if (!live()) return;
@@ -5110,8 +5134,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   // ───────────────────────── 設定畫面 ─────────────────────────
   if (!res) {
     return (
-      <div className="modal-backdrop" onClick={onClose}>
-        <div className="modal wide" onClick={e => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={nudge}>
+        <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>✏️ 出文法 <em>上傳老師的作業，一次做好「互動教學＋選擇＋填空＋中翻英」</em></h3>
             <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -5169,6 +5193,27 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                 </div>
               ))}
             </div>
+            {/* v461：找出來／分一分各自可以出好幾組——一組一個單元，題目彼此不重複 */}
+            {(nCircle > 0 || nSort > 0) && (
+              <div className="gn-count-grid">
+                {nCircle > 0 && (
+                  <div className="field">
+                    <label className="field-label">👉 找出來 · 出幾組</label>
+                    <select value={cSets} onChange={e => setCSets(+e.target.value)}>
+                      {[1, 2, 3].map(n => <option key={n} value={n}>{n} 組{n > 1 ? `（共 ${n * nCircle} 題）` : ''}</option>)}
+                    </select>
+                  </div>
+                )}
+                {nSort > 0 && (
+                  <div className="field">
+                    <label className="field-label">🗂 分一分 · 出幾組</label>
+                    <select value={sSets} onChange={e => setSSets(+e.target.value)}>
+                      {[1, 2, 3].map(n => <option key={n} value={n}>{n} 組{n > 1 ? `（共 ${n * nSort} 個字）` : ''}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="field-help">
               會建立：<b>📘 互動教學</b>（一步一個小重點，每步都要學生動手：選一選、找出來、分一分、找錯字）→ 學完才解鎖
               <b> 👉 找出來 → 🗂 分一分 → 📝 選擇 → ✏️ 填空 → ✍️ 改寫句子 → 🔤 中翻英</b>（不要的選「不要」）。
@@ -5199,14 +5244,46 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 
   // ───────────────────────── 校稿畫面 ─────────────────────────
   const steps = (res.lesson && res.lesson.steps) || [];
-  const sortSet = res.sort && (res.sort.words || []).length >= 4 ? res.sort : null;
-  const TABS = [['lesson', `📘 互動教學`, steps.length], ['circle', '👉 找出來', (res.circle || []).length],
-    ['sort', '🗂 分一分', sortSet ? sortSet.words.length : 0], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
+  /* v461：找出來／分一分可能有 2~3 組。校稿畫面在同一個分頁裡加「第幾組」的切換，
+     編輯的永遠是「現在選到的那一組」。第 0 組同時要寫回 res.circle／res.sort，
+     舊的呼叫端（gnValidCircle 的提示、unitsN 計數）才不會失準。 */
+  const ciSets = (res.circleSets && res.circleSets.length) ? res.circleSets : ((res.circle || []).length ? [res.circle] : []);
+  const soSets = (res.sortSets   && res.sortSets.length)   ? res.sortSets   : (res.sort ? [res.sort] : []);
+  const [ciIx, setCiIx] = useS(0);
+  const [soIx, setSoIx] = useS(0);
+  const ciCur = ciSets[Math.min(ciIx, Math.max(0, ciSets.length - 1))] || [];
+  const soCur = soSets[Math.min(soIx, Math.max(0, soSets.length - 1))] || null;
+  // 改「第 k 組」：同步更新 circleSets[k]，k===0 時連 res.circle 一起更新
+  const putCircleSet = (k, arr) => setRes(r => {
+    const sets = ((r.circleSets && r.circleSets.length) ? r.circleSets.slice() : [r.circle || []]);
+    sets[k] = arr;
+    return { ...r, circleSets: sets, circle: k === 0 ? arr : (r.circle || []) };
+  });
+  const putSortSet = (k, obj) => setRes(r => {
+    const sets = ((r.sortSets && r.sortSets.length) ? r.sortSets.slice() : (r.sort ? [r.sort] : []));
+    sets[k] = obj;
+    return { ...r, sortSets: sets, sort: k === 0 ? obj : r.sort };
+  });
+  const SetTabs = ({ n, ix, set, zh }) => n <= 1 ? null : (
+    <div className="gn-setpick">
+      <span>{zh}共 {n} 組：</span>
+      {Array.from({ length: n }, (_, k) => (
+        <button type="button" key={k} className={'gn-setpick-b' + (k === ix ? ' on' : '')} onClick={() => set(k)}>第 {k + 1} 組</button>
+      ))}
+    </div>
+  );
+  const sortSet = soCur && (soCur.words || []).length >= 4 ? soCur : null;
+  const TABS = [['lesson', `📘 互動教學`, steps.length], ['circle', '👉 找出來', ciSets.reduce((a, x) => a + (x || []).length, 0)],
+    ['sort', '🗂 分一分', soSets.reduce((a, x) => a + ((x && x.words) || []).length, 0)], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
     ['rw', '✍️ 改寫句子', (res.rw || []).length], ['tr', '🔤 中翻英', res.tr.length]].filter(t => t[0] === 'lesson' || t[2] > 0);
-  const unitsN = (steps.length ? 1 : 0) + (sortSet ? 1 : 0) + ['mcq', 'fill', 'rw', 'tr', 'circle'].filter(k => (res[k] || []).length).length;
+  // v461：每一組找出來／分一分各自是一個單元
+  const unitsN = (steps.length ? 1 : 0)
+    + soSets.filter(x => x && (x.words || []).length >= 4).length
+    + ciSets.filter(x => (x || []).length).length
+    + ['mcq', 'fill', 'rw', 'tr'].filter(k => (res[k] || []).length).length;
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal wide" onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>校稿 · <em>{title || res.sheet.topic}</em></h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -5332,23 +5409,24 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
           {/* v444 找出來：一句話圈一個字（校稿時最重要的是「答案真的只有一個」） */}
           {tab === 'circle' && (
             <div className="gr-proof">
+              <SetTabs n={ciSets.length} ix={ciIx} set={setCiIx} zh="找出來"/>
               <div className="field-help" style={{ marginBottom: 8 }}>
-                學生看到的指示語：<b>把每一句裡的{(res.circle[0] || {}).findZh}圈出來</b>
-                （整份只會有一句指示語，所以每一題都要問同一種字）
+                學生看到的指示語：<b>Tap every {(ciCur[0] || {}).findZh || (ciCur[0] || {}).find || 'word'} in each sentence.</b>
+                （一組只有一句指示語，所以同一組的每一題都要問同一種字；不同組可以問不同種）
               </div>
-              {res.circle.map((x, i) => (
+              {ciCur.map((x, i) => (
                 <div key={i} className="gq-row">
                   <span className="gq-row-n">{i + 1}</span>
                   <div className="gq-row-f">
-                    <input value={x.sentence} onChange={e => upd('circle', i, { sentence: e.target.value })}/>
+                    <input value={x.sentence} onChange={e => putCircleSet(ciIx, ciCur.map((y, j) => j === i ? { ...y, sentence: e.target.value } : y))}/>
                     <div className="gq-row-2">
-                      <div><label>要圈的字（/ 分開）</label><input value={csv(x.answers || [x.answer])} onChange={e => upd('circle', i, { answers: uncsv(e.target.value) })}/></div>
-                      <div><label>找什麼（中文）</label><input value={x.findZh} onChange={e => upd('circle', i, { findZh: e.target.value })}/></div>
-                      <div><label>解說</label><input value={x.explain} onChange={e => upd('circle', i, { explain: e.target.value })}/></div>
+                      <div><label>要圈的字（/ 分開）</label><input value={csv(x.answers || [x.answer])} onChange={e => putCircleSet(ciIx, ciCur.map((y, j) => j === i ? { ...y, answers: uncsv(e.target.value) } : y))}/></div>
+                      <div><label>找什麼（英文）</label><input value={x.findZh} onChange={e => putCircleSet(ciIx, ciCur.map((y, j) => j === i ? { ...y, findZh: e.target.value } : y))}/></div>
+                      <div><label>解說</label><input value={x.explain} onChange={e => putCircleSet(ciIx, ciCur.map((y, j) => j === i ? { ...y, explain: e.target.value } : y))}/></div>
                     </div>
                     {!window.gnValidCircle(x) && <div className="gr-warn">⚠ 這一題學生端會略過：要圈的字必須是句子裡「只出現一次」的完整單字，而且句子裡符合的字要全部列出來</div>}
                   </div>
-                  <button type="button" className="gn-del" onClick={() => del('circle', i)}>刪</button>
+                  <button type="button" className="gn-del" onClick={() => putCircleSet(ciIx, ciCur.filter((_, j) => j !== i))}>刪</button>
                 </div>
               ))}
             </div>
@@ -5357,13 +5435,14 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
           {/* v444 分一分：2-4 個籃子＋每個字屬於哪一籃 */}
           {tab === 'sort' && sortSet && (
             <div className="gr-proof">
+              <SetTabs n={soSets.length} ix={soIx} set={setSoIx} zh="分一分"/>
               <div className="field">
                 <label className="field-label">要小朋友做什麼</label>
-                <input value={sortSet.instruction} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, instruction: e.target.value } }))}/>
+                <input value={sortSet.instruction} onChange={e => putSortSet(soIx, { ...sortSet, instruction: e.target.value })}/>
               </div>
               <div className="field">
                 <label className="field-label">籃子（用 / 分開，2–4 個）</label>
-                <input value={csv(sortSet.categories)} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, categories: uncsv(e.target.value) } }))}/>
+                <input value={csv(sortSet.categories)} onChange={e => putSortSet(soIx, { ...sortSet, categories: uncsv(e.target.value) })}/>
               </div>
               {sortSet.words.map((w, i) => (
                 <div key={i} className="gq-row">
@@ -5371,16 +5450,16 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                   <div className="gq-row-f">
                     <div className="gq-row-2">
                       <div><label>單字</label>
-                        <input value={w.word} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, words: r.sort.words.map((x, j) => j === i ? { ...x, word: e.target.value } : x) } }))}/></div>
+                        <input value={w.word} onChange={e => putSortSet(soIx, { ...sortSet, words: sortSet.words.map((x, j) => j === i ? { ...x, word: e.target.value } : x) })}/></div>
                       <div><label>放哪一籃</label>
-                        <select value={w.category} onChange={e => setRes(r => ({ ...r, sort: { ...r.sort, words: r.sort.words.map((x, j) => j === i ? { ...x, category: e.target.value } : x) } }))}>
+                        <select value={w.category} onChange={e => putSortSet(soIx, { ...sortSet, words: sortSet.words.map((x, j) => j === i ? { ...x, category: e.target.value } : x) })}>
                           {sortSet.categories.map(c => <option key={c} value={c}>{c}</option>)}
                           {sortSet.categories.indexOf(w.category) < 0 && <option value={w.category}>{w.category}（不在籃子裡）</option>}
                         </select></div>
                     </div>
                   </div>
                   <button type="button" className="gn-del"
-                    onClick={() => setRes(r => ({ ...r, sort: { ...r.sort, words: r.sort.words.filter((_, j) => j !== i) } }))}>刪</button>
+                    onClick={() => putSortSet(soIx, { ...sortSet, words: sortSet.words.filter((_, j) => j !== i) })}>刪</button>
                 </div>
               ))}
               {!window.gnValidSortSet(sortSet, sortSet.words.length) &&
@@ -5479,7 +5558,9 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             onCreate({
               title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
               lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [],
-              circle: res.circle || [], sort: sortSet, caseMatters: !!res.caseMatters,
+              circle: res.circle || [], sort: soSets[0] || null,
+              circleSets: ciSets, sortSets: soSets,          // v461：每一組各建一個單元
+              caseMatters: !!res.caseMatters,
               assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null,
             });
           }}>建立 {unitsN} 個單元 →</button>
@@ -5490,7 +5571,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, circle, sort, caseMatters }) {
+function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, circle, sort, circleSets, sortSets, caseMatters }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
@@ -5506,18 +5587,33 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, circle, sort, c
   const cs = caseMatters ? { caseSensitive: true } : {};   // v429：大小寫是考點的單元，打字題要分大小寫
   /* v444 找出來＝現成的「圈選題」；分一分＝現成的「單字分類」。
      沿用既有題型＝計分、星星（AUTO_STAR_KIND 的 pct）、只重做錯的、側欄歸戶全部自動有。 */
-  const goodCircle = (circle || []).filter(x => x && x.sentence && ((x.answers || []).length || x.answer));
-  if (goodCircle.length) out.push({ id: 'gn' + stamp + 'ci' + rnd(), type: 'circle-answer', group: g, order: 1, ...req,
-    title: `${g} · 找出來`, zh: `${goodCircle.length} 題 · 把句子裡的${goodCircle[0].findZh}圈出來`,
-    circleInstruction: `把每一句裡的${goodCircle[0].findZh}圈出來（可能不只一個）`,
-    circleQuestions: goodCircle.map((x, i) => ({ id: 'c' + stamp + i + rnd(), sentence: x.sentence,
-      answers: (x.answers && x.answers.length ? x.answers : [x.answer]).filter(Boolean),
-      answer: (x.answers && x.answers[0]) || x.answer, explain: x.explain || '' })) });
-  const goodSort = (sort && (sort.words || []).length >= 4 && (sort.categories || []).length >= 2) ? sort : null;
-  if (goodSort) out.push({ id: 'gn' + stamp + 'ws' + rnd(), type: 'word-sort', group: g, order: 2, ...req,
-    title: `${g} · 分一分`, zh: `${goodSort.words.length} 個字 · ${goodSort.instruction}`,
-    sortCategories: goodSort.categories,
-    sortWords: goodSort.words.map((w, i) => ({ id: 'w' + stamp + i + rnd(), word: w.word, category: w.category })) });
+  /* v461（Alan：「只能出一組找出來、分一分，但有時候我想出兩組三組」）：
+     circleSets／sortSets 是「每一組一個單元」；沒有就退回舊的單一 circle／sort，
+     所以舊的呼叫端（校稿畫面、測試）完全不用改。
+     ⚠ 每一組都要有自己的 id 與標題（找出來 1／找出來 2），不然側欄分不出誰是誰。 */
+  const circleList = (Array.isArray(circleSets) && circleSets.length) ? circleSets : (circle ? [circle] : []);
+  circleList.forEach((set, k) => {
+    const good = (set || []).filter(x => x && x.sentence && ((x.answers || []).length || x.answer));
+    if (!good.length) return;
+    const nth = circleList.length > 1 ? ` ${k + 1}` : '';
+    const what = good[0].findZh || good[0].find || 'words';
+    out.push({ id: 'gn' + stamp + 'ci' + k + rnd(), type: 'circle-answer', group: g, order: 1 + k * 0.01, ...req,
+      title: `${g} · 找出來${nth}`, zh: `${good.length} 題 · Find the ${what}`,
+      circleInstruction: `Tap every ${what} in each sentence (there may be more than one).`,
+      circleQuestions: good.map((x, i) => ({ id: 'c' + stamp + k + i + rnd(), sentence: x.sentence,
+        answers: (x.answers && x.answers.length ? x.answers : [x.answer]).filter(Boolean),
+        answer: (x.answers && x.answers[0]) || x.answer, explain: x.explain || '' })) });
+  });
+  const sortList = (Array.isArray(sortSets) && sortSets.length) ? sortSets : (sort ? [sort] : []);
+  sortList.forEach((set, k) => {
+    const good = (set && (set.words || []).length >= 4 && (set.categories || []).length >= 2) ? set : null;
+    if (!good) return;
+    const nth = sortList.length > 1 ? ` ${k + 1}` : '';
+    out.push({ id: 'gn' + stamp + 'ws' + k + rnd(), type: 'word-sort', group: g, order: 2 + k * 0.01, ...req,
+      title: `${g} · 分一分${nth}`, zh: `${good.words.length} 個字 · ${good.instruction}`,
+      sortCategories: good.categories,
+      sortWords: good.words.map((w, i) => ({ id: 'w' + stamp + k + i + rnd(), word: w.word, category: w.category })) });
+  });
   const goodMcq = (mcq || []).filter(x => x && x.q && (x.options || []).length >= 2);
   if (goodMcq.length) out.push({ id: 'gn' + stamp + 'qz' + rnd(), type: 'quiz', group: g, order: 3, ...req,
     title: `${g} · 選擇題`, zh: `${goodMcq.length} 題 · 選出正確的答案`, shuffle: true,
@@ -5630,6 +5726,7 @@ function BgStepsEditor({ bg, onChange, onRedo, busy, onErr }) {
 }
 
 function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, defaultTitle, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const SK = window.RC_SKILLS || {};
   const [title, setTitle]   = useS('');
   const [text, setText]     = useS('');
@@ -5761,8 +5858,8 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, def
   if (!res) {
     return (
       /* v261 的教訓：出到一半點到背景會全部不見。出題中／校稿中一律不讓背景關閉。 */
-      <div className="modal-backdrop" onClick={() => { if (!busy) onClose(); }}>
-        <div className="modal wide" onClick={e => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={nudge}>
+        <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
           <div className="modal-head">
             <h3>📖 出閱讀理解 <em>貼文字稿，一次出選擇題＋簡答＋閱讀技巧</em></h3>
             <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>

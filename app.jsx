@@ -2067,6 +2067,7 @@ function App() {
           />
 
           {/* v454：「在這一組再出一份題目」——先問要出哪一種，名字已經幫你填好，出來就落在同一組 */}
+          {/* v461：這一個沒有輸入欄位（只是選要重出哪一種），點背景關掉不會弄丟東西 */}
           {regenFor && regenFor.pick && (
             <div className="modal-backdrop" onClick={() => setRegenFor(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
