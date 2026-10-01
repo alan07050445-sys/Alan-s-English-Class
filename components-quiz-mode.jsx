@@ -207,6 +207,7 @@ function getQuizItems(items) {
     (item.type === 'short-answer'     && (item.saQuestions || []).length >= 1) ||
     (item.type === 'syllable-div'     && (item.sdWords || []).length >= 1) ||
     (item.type === 'word-sort'        && (item.sortWords || []).length >= 1 && (item.sortCategories || []).length >= 2) ||
+    (item.type === 'sentence-order'   && (item.orderQuestions || []).some(q => (q.words || []).length >= 3)) ||   // v462 ①
     (item.type === 'def-match'        && (item.defPairs || []).filter(p => p && p.word && p.def).length >= 2) ||
     (item.type === 'reading-skill'    && rsChipTotal(item) >= 2) ||   // v386: 閱讀技巧
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
@@ -303,14 +304,14 @@ const QM_TYPE_ZH = {
   lesson: '教學', flashcard: '單字卡', spelling: '聽寫', fillblank: '填空', quiz: '測驗',
   'vocab-quiz': '單字測驗', 'type-answer': '打字練習', 'short-answer': '簡答',
   cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
-  'word-sort': '單字分類', essay: '寫作', 'story-mountain': '故事山',
+  'word-sort': '單字分類', 'sentence-order': '排順序', essay: '寫作', 'story-mountain': '故事山',
   'writing-practice': '造句', upload: '上傳作業', 'guided-reading': '分段閱讀',
   'def-match': '配對連線', 'reading-skill': '閱讀技巧',
 };
 const QM_TYPE_ICO = {
   lesson: '📘', flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
   'type-answer': '⌨', 'short-answer': '📖', cloze: '📝', 'circle-answer': '⭕',
-  'syllable-div': '✂️', 'word-sort': '🗂', essay: '✍', 'story-mountain': '🏔',
+  'syllable-div': '✂️', 'word-sort': '🗂', 'sentence-order': '🧩', essay: '✍', 'story-mountain': '🏔',
   'writing-practice': '✍', upload: '📎', 'guided-reading': '📖',
   'def-match': '🔗', 'reading-skill': '🔍',
 };
@@ -322,7 +323,7 @@ const QM_TYPE_ORDER = {
   'vocab-quiz': 1, quiz: 1,
   'def-match': 1.5,
   fillblank: 2, cloze: 3, 'guided-reading': 3, 'reading-skill': 3.5, 'circle-answer': 4,
-  spelling: 5, 'type-answer': 5, 'syllable-div': 5, 'word-sort': 5,
+  spelling: 5, 'type-answer': 5, 'syllable-div': 5, 'word-sort': 5, 'sentence-order': 5,
   'short-answer': 6, 'writing-practice': 6,
   essay: 7, 'story-mountain': 7,
   upload: 8,
@@ -428,6 +429,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'short-answer') return (item.saQuestions || []).length;
   if (item.type === 'syllable-div') return (item.sdWords || []).length;
   if (item.type === 'word-sort')    return (item.sortWords || []).length;
+  if (item.type === 'sentence-order') return (item.orderQuestions || []).length;   // v462 ①
   if (item.type === 'def-match')   return (item.defPairs || []).filter(p => p && p.word && p.def).length;
   if (item.type === 'reading-skill') return rsChipTotal(item);   // v386
   if (item.type === 'guided-reading' && grTotalQ(item) === 0) return Math.max(1, grSegs(item).length); // v387: 純閱讀
@@ -685,7 +687,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
      「配對」若排在「配對連線」前面，就會先吃掉「配對」、留下沒人認得的「連線」。
    ⚠ 拿掉之後只剩不到 3 個字的標題會被 qmGroupByArticle 判成「單張卡」平鋪，
      所以就算某個標題整個被吃光也不會亂分組。 */
-const QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|改寫句子|互動教學|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|找出來|分一分|中翻英|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
+const QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|改寫句子|排順序|句型轉換|造句|互動教學|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|找出來|分一分|中翻英|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
 function qmGroupByArticle(items) {
   const keyOf = (t) => String(t || '').toLowerCase().replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
   // v254: 老師手動分組（item.group）優先；沒設才用標題自動歸戶
@@ -1155,6 +1157,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isGuided       = item.type === 'guided-reading'; // v276
             const isSyllableDiv  = item.type === 'syllable-div';
             const isWordSort     = item.type === 'word-sort';
+            const isSentOrder    = item.type === 'sentence-order';   // v462 ①
             const isEssay        = item.type === 'essay';
             const isStoryMtn     = item.type === 'story-mountain';
             const isCloze        = item.type === 'cloze';
@@ -1164,7 +1167,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isDefMatch     = item.type === 'def-match'; // v366
             const isLesson       = item.type === 'lesson';       // v386: v383 漏掉這一行 → 教學卡顯示 0 題、整列變灰點不進去
             const isReadSkill    = item.type === 'reading-skill'; // v386
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0)) || isSyllableDiv || isWordSort || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || (isFlashcard && (item.cards || []).length > 0);
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0)) || isSyllableDiv || isWordSort || isSentOrder || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
@@ -1205,7 +1208,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs||[]).length} 題改寫` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs||[]).length} 題改寫` : item.variant === 'transform' ? `🔄 ${(item.pairs||[]).length} 題句型轉換` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isSentOrder ? `🧩 ${(item.orderQuestions||[]).length} 句排順序` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -1576,6 +1579,21 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           />
         ) : selectedItem?.type === 'def-match' && phase === 'intro' ? (
           <DefMatchIntro
+            item={selectedItem}
+            prog={qmProg[`${weekId}_${selectedItem.id}`]}
+            onStart={() => setPhase('quiz')}
+          />
+        ) : selectedItem?.type === 'sentence-order' && phase === 'quiz' ? (
+          <SentenceOrderPlayer
+            onBackToTasks={onBackToTasksShared}
+            onNextTask={onNextTask}
+            key={playerKey}
+            item={selectedItem}
+            progressKey={`${weekId}_${selectedItem.id}`}
+            onBack={() => setPhase('intro')}
+          />
+        ) : selectedItem?.type === 'sentence-order' && phase === 'intro' ? (
+          <SentenceOrderIntro
             item={selectedItem}
             prog={qmProg[`${weekId}_${selectedItem.id}`]}
             onStart={() => setPhase('quiz')}
@@ -2330,14 +2348,18 @@ function TypeAnswerIntro({ item, onStart, resumeAt, onRestart, prog }) {
   const count = (item.pairs || []).length;
   return (
     <div className="qm-intro">
-      <div className="qm-intro-icon">{item.variant === 'translate' ? '🔤' : item.variant === 'fill' ? '✏️' : item.variant === 'rewrite' ? '✍️' : '⌨'}</div>
+      <div className="qm-intro-icon">{item.variant === 'translate' ? '🔤' : item.variant === 'fill' ? '✏️' : item.variant === 'rewrite' ? '✍️' : item.variant === 'transform' ? '🔄' : '⌨'}</div>
       <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{item.variant === 'translate' ? `${count} 題中翻英` : item.variant === 'fill' ? `${count} 題填空` : item.variant === 'rewrite' ? `${count} 題改寫` : `${count} words`}</div>
+      <div className="qm-intro-meta">{item.variant === 'translate' ? `${count} 題中翻英` : item.variant === 'fill' ? `${count} 題填空` : item.variant === 'rewrite' ? `${count} 題改寫` : item.variant === 'transform' ? `${count} 題句型轉換` : `${count} words`}</div>
       <div className="qm-intro-rules">
         {item.instruction && (
           <div className="qm-intro-rule-row"><span>📋</span><span>{item.instruction}</span></div>
         )}
-        {item.variant === 'translate' ? <>
+        {item.variant === 'transform' ? <>
+          <div className="qm-intro-rule-row"><span>🔄</span><span>上面是原本的句子，下面寫著要改成什麼</span></div>
+          <div className="qm-intro-rule-row"><span>⌨</span><span>把改好的整句打出來</span></div>
+          <div className="qm-intro-rule-row"><span>✅</span><span>大小寫、句尾標點、isn't／is not 都不影響對錯</span></div>
+        </> : item.variant === 'translate' ? <>
           <div className="qm-intro-rule-row"><span>🇹🇼</span><span>看中文，打出英文句子；卡住了可以按「💡 提示」</span></div>
           <div className="qm-intro-rule-row"><span>✅</span><span>大小寫、句尾標點不影響；意思對、文法對的其他說法也算對</span></div>
         </> : item.variant === 'fill' ? <>
@@ -2387,6 +2409,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   const [showHint, setShowHint] = useQM(false);
   const isTr = item.variant === 'translate';
   const isRw = item.variant === 'rewrite';                 // v429：把句子改對
+  const isTf = item.variant === 'transform';              // v462 ②：把句子換一種說法（題幹是「原句 → 要改成什麼」兩行）
   const cs = { caseSensitive: !!item.caseSensitive };      // v429：大小寫是考點的單元
   const inputRef = React.useRef(null);
   const wrongsRef = React.useRef(rz && Array.isArray(rz.wrongs) ? rz.wrongs.slice() : []); // v258: 錯題記錄（老師端＋錯題本）
@@ -2506,10 +2529,12 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       </div>
 
       <div key={idx} className="qm-question-area qm-question-swap">
-        {item.instruction && !isRw && <div className="qm-question-hint">{item.instruction}</div>}
+        {item.instruction && !isRw && !isTf && <div className="qm-question-hint">{item.instruction}</div>}
         {isTr && <div className="qm-question-hint">翻成英文：</div>}
         {isRw && <div className="qm-question-hint">把句子裡錯的地方改對{item.caseSensitive ? '（大寫小寫要注意！）' : ''}：</div>}
-        <div className={'ta-prompt' + (isTr ? ' tr' : '')}>{current?.prompt}</div>
+        {isTf && <div className="qm-question-hint">把句子換一種說法：</div>}
+        {/* v462 ②：轉換題的題幹是「原句 \n → 要改成什麼」兩行，要讓換行看得出來 */}
+        <div className={'ta-prompt' + (isTr ? ' tr' : '') + (isTf ? ' tf' : '')}>{current?.prompt}</div>
         {isTr && (current?.hint || current?.answer) && result === null && (
           showHint
             ? <div className="ta-hint">💡 {current.hint || ''}{current.hint ? '　' : ''}（共 {String(current.answer || '').split(/\s+/).length} 個字）</div>
@@ -2520,11 +2545,11 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       <div className="ta-input-wrap">
         <input
           ref={inputRef}
-          className={`ta-input${isTr || isRw ? ' tr' : ''}${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
+          className={`ta-input${isTr || isRw || isTf ? ' tr' : ''}${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
           value={input}
           onChange={e => { if (result === null) setInput(e.target.value); }}
           onKeyDown={handleKey}
-          placeholder={isTr ? 'Type the English sentence…' : isRw ? 'Rewrite the sentence…' : 'Type your answer…'}
+          placeholder={isTr ? 'Type the English sentence…' : isRw ? 'Rewrite the sentence…' : isTf ? 'Type the new sentence…' : 'Type your answer…'}
           disabled={result !== null || judging}
           autoComplete="off" autoCapitalize="none" spellCheck={false}
         />
@@ -5498,6 +5523,146 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
             {score < questions.length && (
               <button className="qm-btn secondary" onClick={redoWrongOnly}>只重做錯的 {questions.length - score} 題</button>
             )}
+            <button className="qm-btn secondary" onClick={reset}>Try again</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   v462 ①（Alan 挑的第四個）：🧩 排順序（句子重組）
+   ──────────────────────────────────────────────────────
+   語序類的文法（疑問句、形容詞順序、there is/are、副詞位置）用選擇題練不到——
+   要自己把打散的字排成一句，才知道順序對不對。
+
+   ⚠ 這是「新題型」，v414 的教訓是新題型要補的地方一個都不能漏：
+     getQuizItems／AUTO_STAR_KIND／QM_TYPE_WORDS／QM_TYPE_ZH／QM_TYPE_ICON／
+     qmItemRank／getQuizItemTotal／單元列的徽章／編輯器／LINE Worker 的 playableItem。
+     t-v462.mjs 會把這些全部檢查一遍。
+   字塊的樣式沿用互動教學的 .gnl-tile／.gnl-line／.gnl-pool，不另外寫一套。
+   ══════════════════════════════════════════════════════ */
+function soQuestions(item) {
+  return (item.orderQuestions || [])
+    .map((q, i) => ({ ...q, _k: q.id || ('so' + i), words: (q.words || []).map(w => String(w || '').trim()).filter(Boolean) }))
+    .filter(q => q.words.length >= 3);
+}
+/* 打散，但不可以「剛好排成正確答案」——那樣學生點一下交卷就滿分。
+   seed 固定＝同一題每次打開順序一樣，學生重做時不會覺得題目變了。 */
+function soShuffle(n, seed) {
+  const a = Array.from({ length: n }, (_, i) => i);
+  let r = seed * 9301 + 49297;
+  for (let i = n - 1; i > 0; i--) { r = (r * 9301 + 49297) % 233280; const j = Math.floor(r / 233280 * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  if (a.every((v, i) => v === i) && n > 1) { [a[0], a[1]] = [a[1], a[0]]; }
+  return a;
+}
+
+function SentenceOrderIntro({ item, onStart, prog }) {
+  const qs = soQuestions(item);
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">🧩</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{qs.length} sentences · 排順序</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>👆</span><span>點下面的字，一個一個排成一句話</span></div>
+        <div className="qm-intro-rule-row"><span>🔄</span><span>點排好的字可以把它拿回來</span></div>
+        <div className="qm-intro-rule-row"><span>✅</span><span>每一句都排完才能交卷</span></div>
+        <div className="qm-intro-rule-row"><span>⭐</span><span>80 分 +10 顆星、100 分 +15 顆星</span></div>
+      </div>
+      <QmIntroDoneHint prog={prog} />
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始排 · Start →</button>
+      </div>
+    </div>
+  );
+}
+
+function SentenceOrderPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const all = useQMM(() => soQuestions(item), [item.id]);
+  const [redoKeys, setRedoKeys] = useQM(null);
+  const questions = useQMM(() => (redoKeys ? all.filter(q => redoKeys.indexOf(q._k) >= 0) : all), [all, redoKeys]);
+  const [picked, setPicked] = useQM({});        // _k → [字塊編號…]
+  const [submitted, setSubmitted] = useQM(false);
+  const [score, setScore] = useQM(0);
+  const tilesOf = useQMM(() => {
+    const m = {};
+    questions.forEach((q, i) => { m[q._k] = soShuffle(q.words.length, (q._k.length + i + 3) * 7); });
+    return m;
+  }, [questions]);
+
+  const builtOf = (q) => (picked[q._k] || []).map(i => q.words[tilesOf[q._k][i]]);
+  const isRight = (q) => {
+    const got = builtOf(q).join(' '), want = q.words.join(' ');
+    return window.gnNorm ? window.gnNorm(got) === window.gnNorm(want) : got === want;
+  };
+  const doneCount = questions.filter(q => (picked[q._k] || []).length === q.words.length).length;
+
+  const submit = () => {
+    const correct = questions.filter(isRight).length;
+    const wrongList = questions.filter(q => !isRight(q)).map(q => ({ q: builtOf(q).join(' ') || '（沒排）', answer: q.words.join(' ') }));
+    setScore(correct);
+    setSubmitted(true);
+    // v306+：只重做錯的那一輪不寫進完成紀錄，免得用子集的題數蓋掉最佳成績
+    if (!redoKeys) {
+      saveQuizModeCompletion(progressKey, item, { doneCount: questions.length, score: correct, total: questions.length, wrongQuestions: wrongList });
+      if (window._onQuizComplete) window._onQuizComplete(correct, questions.length, wrongList, { itemId: progressKey });
+    }
+    if (correct !== questions.length && window.playSound) window.playSound('wrong');
+  };
+  const reset = () => { setRedoKeys(null); setPicked({}); setSubmitted(false); setScore(0); };
+  const redoWrongOnly = () => { setRedoKeys(questions.filter(q => !isRight(q)).map(q => q._k)); setPicked({}); setSubmitted(false); setScore(0); };
+
+  return (
+    <div className="circle-player">
+      <div className="circle-topbar">
+        <button className="qm-back-btn" onClick={onBack}>← Back</button>
+        <span className="circle-instruction">{item.instruction || 'Put the words in the right order.'}</span>
+        <span className="circle-progress">{submitted ? `${score}/${questions.length}` : `${doneCount}/${questions.length}`}</span>
+      </div>
+
+      <div className="circle-question-list">
+        {questions.map((q, qi) => {
+          const built = builtOf(q);
+          const mine = picked[q._k] || [];
+          const right = submitted && isRight(q);
+          return (
+            <div key={q._k} className={`circle-question so-q${submitted ? (right ? ' correct' : ' wrong') : ''}`}>
+              <div className="circle-question-number">{qi + 1}</div>
+              <div className="circle-question-body">
+                {q.hint && <div className="so-hint">{q.hint}</div>}
+                <div className={'gnl-line so-line' + (submitted ? (right ? ' ok' : ' no') : '')}>
+                  {built.length ? built.map((w, i) => (
+                    <button key={i} className="gnl-tile in" disabled={submitted}
+                      onClick={() => setPicked(p => ({ ...p, [q._k]: mine.filter((_, j) => j !== i) }))}>{w}</button>
+                  )) : <span className="gnl-line-ph">點下面的字，排成英文句子</span>}
+                </div>
+                {!submitted && (
+                  <div className="gnl-pool">
+                    {tilesOf[q._k].map((wi, i) => mine.indexOf(i) >= 0
+                      ? <span key={i} className="gnl-tile ghost">{q.words[wi]}</span>
+                      : <button key={i} className="gnl-tile" onClick={() => setPicked(p => ({ ...p, [q._k]: (p[q._k] || []).concat(i) }))}>{q.words[wi]}</button>)}
+                  </div>
+                )}
+                {submitted && !right && <div className="so-ans">✅ {q.words.join(' ')}</div>}
+                {submitted && q.explain && <div className="so-why">{q.explain}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="circle-footer">
+        {!submitted ? (
+          <button className="qm-btn primary" onClick={submit} disabled={doneCount < questions.length}>
+            Submit · 交卷 ({doneCount}/{questions.length})
+          </button>
+        ) : (
+          <>
+            <div className="circle-result">{score} / {questions.length} correct</div>
+            {score < questions.length && <button className="qm-btn secondary" onClick={redoWrongOnly}>只重做錯的 {questions.length - score} 題</button>}
             <button className="qm-btn secondary" onClick={reset}>Try again</button>
             <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
           </>

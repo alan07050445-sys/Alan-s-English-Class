@@ -3052,6 +3052,66 @@ RULES
 - explain: very simple ENGLISH, ≤14 words, what was fixed.
 ${GN_EN_ONLY}
 ${_AI_MINIFY}`,
+  /* v462 ③（Alan 挑的第一個）：造句。
+     前面六種題型都在問「選哪個／填哪個／改哪裡」——會選不等於會用。
+     這一種給情境，要學生自己寫一句話，而且那句話一定要用到這個文法點，由 AI 批改。
+     沿用現成的 writing-practice 單元（AI 造句批改、五星評分、星星規則都現成）。 */
+  write: `You write "make a sentence" tasks that force the student to USE one grammar point.
+Output ONLY a JSON array: [{"prompt":"","must":"","hint":"","explain":""}]
+RULES
+- prompt: ONE short English instruction telling the child what to write about, ≤16 words, from a child's
+  own world (family, school, food, pets, weekend, festivals). It must be impossible to answer well
+  WITHOUT using the grammar point. Each prompt must be about a DIFFERENT situation.
+  GOOD (proper nouns): "Write one sentence about where you went last weekend. Name the real place."
+  GOOD (simple past): "Write one sentence about something you ate yesterday."
+  BAD: "Write a sentence using a proper noun." (that is the rule, not a situation — boring and vague)
+- must: the grammar feature the sentence MUST contain, in English, ≤6 words ("a proper noun with a capital letter").
+- hint: ONE short English pattern or example opening, ≤10 words ("Last Sunday I went to ___.").
+- explain: very simple ENGLISH, ≤14 words, what a good answer shows.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* v462 ②（Alan 挑的第二個）：句型轉換。
+     「改寫句子」只能把錯的改對；轉換是「這句對，但換一個說法」——
+     主動↔被動、直述↔疑問／否定、單數↔複數、兩句用 and/but/because 合成一句。
+     康橋考卷最常出這一種，而且一個文法點可以出一整頁。
+     沿用 type-answer（打字作答）＝寬鬆比對＋AI 判斷＋星星全部現成。 */
+  transform: `You write "change the sentence" questions: the student rewrites a CORRECT sentence a different way.
+Output ONLY a JSON array: [{"prompt":"","task":"","answer":"","accept":[],"explain":""}]
+RULES
+- prompt: ONE correct, natural English sentence, 4-12 words, everyday life. It must already be 100% correct
+  — this is NOT a find-the-mistake question.
+- task: what to change it into, in English, ≤8 words. Use ONLY changes the notes actually teach, e.g.
+  "Make it a question." / "Make it negative." / "Make it plural." / "Join them with because."
+- answer: the ONE sentence that results. It must be the only natural answer a teacher would accept.
+  If two different sentences would both be right, pick a different prompt.
+- accept: usually []. Only add a variant with EXACTLY the same meaning (e.g. the contraction "isn't" for "is not").
+- The change must be the grammar point itself — do not just swap a word for a synonym.
+- explain: very simple ENGLISH, ≤14 words, what changed and why.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* v462 ①（Alan 挑的第四個）：排順序。
+     語序類文法（疑問句、形容詞順序、there is/are、副詞位置）用選擇題練不到。
+     ⚠ 出題時最怪的失敗是「打散之後其實有兩種排法都對」
+       （"I often play basketball." vs "Often I play basketball."）——明講不可以。 */
+  order: `You write "put the words in order" questions: the child sees the words of ONE sentence
+shuffled as tiles and taps them into the right order.
+Output ONLY a JSON array: [{"words":[""],"hint":"","explain":""}]
+RULES
+- words: the sentence split into tiles, IN THE CORRECT ORDER, 4-10 tiles.
+  Each tile is one word, except that punctuation stays attached to its word ("basketball." , "you?").
+  Keep the capital letter on the first word only — that is one of the clues the child uses.
+- ⚠⚠ There must be EXACTLY ONE order that a teacher would accept. English often allows two
+  ("I often play basketball." and "Often I play basketball." are both fine) — those sentences are
+  unusable here. Avoid movable adverbs (often, usually, sometimes, yesterday, today) unless the
+  notes are specifically about where they go, and avoid sentences where a phrase could move.
+- Use the grammar point in every sentence, and everyday child topics.
+- hint: ONE short ENGLISH clue, ≤8 words, about the pattern ("Questions start with Do or Does."). May be "".
+- explain: very simple ENGLISH, ≤14 words, why that order.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
   translate: `You write Chinese-to-English translation questions that practise the grammar point.
 Output ONLY a JSON array: [{"zh":"","answer":"","accept":[],"hint":"","explain":""}]
 RULES
@@ -3321,6 +3381,49 @@ function gnValidRewrite(x) {
   return wrong && answer && wrong !== answer && !_gnCJK.test(wrong + answer) && nw <= 18 && Math.abs(nw - na) <= 2
     ? { wrong, answer, explain: String(x.explain || '').trim() } : null;
 }
+/* v462 ③：造句。沒有標準答案（AI 批改），所以能驗的就是「題目本身像不像一題」：
+   要有情境、要講清楚必須用到什麼、而且不可以出現中文（v461 的規則）。 */
+function gnValidWrite(x) {
+  const prompt = String((x && (x.prompt || x.q)) || '').trim();
+  const must = String((x && x.must) || '').trim();
+  const n = prompt.split(/\s+/).length;
+  if (!prompt || _gnCJK.test(prompt + must)) return null;
+  if (n < 4 || n > 22) return null;                       // 太短＝沒有情境；太長＝小朋友讀不完
+  if (!must) return null;                                 // 沒寫「一定要用到什麼」就沒辦法批改
+  return { prompt, must, hint: String((x && x.hint) || '').trim().slice(0, 60),
+           explain: String((x && x.explain) || '').trim() };
+}
+
+/* v462 ②：句型轉換。原句一定要跟答案不一樣，而且長度不能差太多
+   （差太多通常是模型自己寫了一句不相干的）。 */
+/* v462 ①：排順序。能程式驗的：字塊數量、沒有中文、沒有重複的字塊
+   （重複的字塊會讓「哪一塊排哪裡」變成有兩種答案都對）。 */
+function gnValidOrder(x) {
+  const words = (Array.isArray(x && x.words) ? x.words : []).map(w => String(w || '').trim()).filter(Boolean);
+  if (words.length < 4 || words.length > 10) return null;
+  const joined = words.join(' ');
+  if (_gnCJK.test(joined)) return null;
+  if (words.some(w => w.split(/\s+/).length > 1)) return null;          // 一塊只能一個字
+  const low = words.map(w => w.toLowerCase().replace(/[.,!?]/g, ''));
+  if (new Set(low).size !== low.length) return null;                    // 有重複的字塊＝答案不唯一
+  return { words, hint: String((x && x.hint) || '').trim().slice(0, 60),
+           explain: String((x && x.explain) || '').trim() };
+}
+
+function gnValidTransform(x) {
+  const prompt = String((x && (x.prompt || x.q || x.from)) || '').trim();
+  const task = String((x && (x.task || x.instruction)) || '').trim();
+  const answer = String((x && x.answer) || '').trim();
+  if (!prompt || !answer || !task) return null;
+  if (_gnCJK.test(prompt + answer + task)) return null;
+  if (gnNorm(prompt) === gnNorm(answer)) return null;     // 沒變就不是轉換題
+  const np = prompt.split(/\s+/).length, na = answer.split(/\s+/).length;
+  if (np > 18 || na > 20 || Math.abs(np - na) > 6) return null;
+  return { prompt, task, answer,
+           accept: (Array.isArray(x.accept) ? x.accept : []).map(a2 => String(a2).trim()).filter(a2 => a2 && !_gnCJK.test(a2)).slice(0, 4),
+           explain: String((x && x.explain) || '').trim() };
+}
+
 function gnValidTranslate(x) {
   const zh = String((x && (x.zh || x.q)) || '').trim();
   const answer = String((x && x.answer) || '').trim();
@@ -3416,7 +3519,9 @@ function _gnSpread(list, n) {
 }
 async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   if (!n || n <= 0) return [];
-  const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite, circle: gnValidCircle }[kind];
+  const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite,
+               circle: gnValidCircle, write: gnValidWrite, transform: gnValidTransform,
+               order: gnValidOrder }[kind];   // v462
   // 大寫單元的填空：答案一定要有大寫字母（實測 AI 會出「My friend ____ lives in Taipei. → teacher」這種跟大寫無關、答案又不唯一的題）
   const valid = (kind === 'fill' && caseMatters) ? (x) => { const v = v0(x); return v && /[A-Z]/.test(v.answer) ? v : null; } : v0;
   // v430：老師題目各段輪流挑（不然 8 題全出自第一段）；「底線畫出名詞」這種 identify 題改成選擇題
@@ -3424,7 +3529,7 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   const hasId = tq.some(q => q.kind === 'identify');
   const out = [], seen = new Set();
   // 選擇題的題幹常常一模一樣（「Circle the sentence with the correct capital letters.」）→ 連選項一起比
-  const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || x.sentence || '') + '|' + (x.options || []).join('|')).replace(/\s+/g, ' ');
+  const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || x.sentence || (x.words || []).join(' ') || '') + '|' + (x.options || []).join('|') + '|' + (x.task || '')).replace(/\s+/g, ' ');   // v462：轉換題同一句可以換不同 task
   const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
     const v = valid(x); if (!v) return;
     const k = key(v); if (!k || seen.has(k)) return;
@@ -3601,6 +3706,67 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
   throw new Error((lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗') + _aiUpstreamNote(lastErr));
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v462 ⑦（Alan 挑的第三個）：依文法主題自動挑題型
+   ──────────────────────────────────────────────────────────────────────────
+   現在不管教什麼，八種題型都是同一組預設值。但它們根本不等價：
+     · 教「名詞分類」→ 找出來、分一分最有用，改寫句子出不出得來都沒意義
+     · 教「時態」    → 填空、句型轉換最有用，分一分沒東西可分
+     · 教「語序」    → 要排順序才練得到，選擇題練不到
+   所以先讓 AI 判斷「這是哪一類文法點」，再給一份建議的題型與題數，老師再微調。
+   ⚠ AI 只負責「判斷類型」這件它擅長的事；真正的題數是程式照對照表給的，
+     不讓模型自己編數字（它會給出 0 或 50 這種沒道理的值）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const GN_PLAN_SYS = `You classify ONE English grammar point so a teacher knows which exercises fit it.
+Output ONLY JSON: {"type":"","why":"","findWhat":"","sortBy":""}
+RULES
+- type: EXACTLY one of
+  "identify"  = the student must recognise or label words (noun / verb / proper noun / adjective…)
+  "form"      = the student must change a word's form (verb tense, plurals, comparatives, a/an…)
+  "order"     = the student must get the word order right (questions, adjective order, there is/are, adverb position)
+  "usage"     = the student must choose the right word for the meaning (prepositions, conjunctions, pronouns…)
+  "sentence"  = the point only shows up across a whole sentence (punctuation, capital letters, joining two sentences)
+- why: ONE Traditional Chinese sentence, ≤30 characters, telling the TEACHER why you picked that type.
+- findWhat: if the lesson can ask "find every X in this sentence", what is X, in English, ≤3 words. Else "".
+- sortBy: if the lesson can ask "put these words into baskets", what are the baskets, in English,
+  "A / B" or "A / B / C". Else "".
+${_AI_MINIFY}`;
+
+/* 每一類適合哪些題型、各出幾題。數字是「一節課寫得完」的量，老師可以自己改。
+   0 ＝ 這一類不要出這一種（例如教名詞分類不要出句型轉換）。 */
+const GN_PLAN_PRESET = {
+  identify: { nOrd: 0, nMcq: 6, nFill: 4, nTr: 0, nRw: 0, nWrite: 3, nTf: 0, nCircle: 6, nSort: 8, nCircleSets: 2, nSortSets: 1 },
+  form:     { nOrd: 4, nMcq: 6, nFill: 8, nTr: 4, nRw: 5, nWrite: 3, nTf: 6, nCircle: 0, nSort: 6, nCircleSets: 1, nSortSets: 1 },
+  order:    { nOrd: 8, nMcq: 4, nFill: 4, nTr: 5, nRw: 4, nWrite: 3, nTf: 6, nCircle: 0, nSort: 0, nCircleSets: 1, nSortSets: 1 },
+  usage:    { nOrd: 4, nMcq: 8, nFill: 8, nTr: 4, nRw: 0, nWrite: 3, nTf: 4, nCircle: 4, nSort: 6, nCircleSets: 1, nSortSets: 1 },
+  sentence: { nOrd: 5, nMcq: 6, nFill: 4, nTr: 3, nRw: 8, nWrite: 4, nTf: 5, nCircle: 4, nSort: 0, nCircleSets: 1, nSortSets: 1 },
+};
+const GN_PLAN_ZH = { identify: '認出來型', form: '變化形式型', order: '語序型', usage: '用對字型', sentence: '整句型' };
+
+async function aiPlanGrammarKinds({ topic, topicZh = '', notes, grade = 'g4' } = {}) {
+  const body = `GRAMMAR POINT: ${topic}${topicZh ? `（${topicZh}）` : ''}\nTEACHER'S NOTES:\n${String(notes || '').slice(0, 2500)}`;
+  let plan = null;
+  try {
+    plan = await _gnCall(GN_PLAN_SYS, body, 400);
+  } catch (e) { /* 判斷失敗不該擋住老師——退回通用的預設值 */ }
+  const type = (plan && GN_PLAN_PRESET[plan.type]) ? plan.type : 'usage';
+  const findWhat = String((plan && plan.findWhat) || '').trim();
+  const sortBy   = String((plan && plan.sortBy) || '').trim();
+  const preset = { ...GN_PLAN_PRESET[type] };
+  /* AI 已經回報「這一課能不能問『找出所有的 X』」「能不能分籃子」——那是它看完
+     教學重點之後的判斷，比我們的對照表知道得多。它說不行就關掉，不要硬出。
+     （實測：教 Do/Does 問句時 findWhat 是空的——句子裡沒有「一種可以全部找出來的字」。） */
+  if (!findWhat) preset.nCircle = 0;
+  if (!sortBy)   preset.nSort = 0;
+  return {
+    type, zh: GN_PLAN_ZH[type],
+    why: String((plan && plan.why) || '').trim() || '看不出特別偏向哪一種，先給通用的一組。',
+    findWhat, sortBy,
+    guessed: !plan,                       // true ＝ AI 沒判斷成功，這是退回的預設值
+    ...preset,
+  };
+}
+
 /* v461（Alan：「一鍵生成文法只能出一組找出來、分一分，但有時候我想出兩組三組」）：
    要出好幾組的時候，每一組都要真的不一樣——同一個 prompt 送三次，模型很可能給你
    三份幾乎一樣的句子。這裡明講「這是第幾組、跟別組不可以重複」。 */
@@ -3624,13 +3790,14 @@ Do not use words or names from outside that area, and do not use the textbook's 
 
 async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
                                    nCircle = 0, nSort = 0, nCircleSets = 1, nSortSets = 1,
+                                   nWrite = 0, nTf = 0, nOrd = 0,             // v462 ③造句 ②句型轉換 ①排順序
                                    caseMatters = false, teacherNote = '', onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
   const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote);
   const cSets = nCircle > 0 ? Math.max(1, Math.min(3, +nCircleSets || 1)) : 0;
   const sSets = nSort   > 0 ? Math.max(1, Math.min(3, +nSortSets   || 1)) : 0;
   let done = 0;
-  const total = 1 + [nMcq, nFill, nTr, nRw].filter(Boolean).length + cSets + sSets;
+  const total = 1 + [nMcq, nFill, nTr, nRw, nWrite, nTf, nOrd].filter(Boolean).length + cSets + sSets;
   const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
   // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
   const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
@@ -3639,18 +3806,22 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
     settle(_gnMakeKind('circle', { n: nCircle, base: base + _gnSetHint(k, cSets), teacherQs, caseMatters }), nm('找出來', k, cSets), nCircle));
   const sortJobs = Array.from({ length: sSets }, (_, k) =>
     settle(aiMakeGrammarSortSet({ base: base + _gnSetHint(k, sSets), n: nSort }), nm('分一分', k, sSets), nSort));
-  const [L, M, F, T, R, Cs, Ss] = await Promise.all([
+  const [L, M, F, T, R, W, X, O, Cs, Ss] = await Promise.all([
     settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters, teacherNote }), '互動教學'),
     settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
     settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
     settle(_gnMakeKind('translate', { n: nTr, base, teacherQs, caseMatters }), '中翻英', nTr),
     settle(_gnMakeKind('rewrite', { n: nRw, base, teacherQs, caseMatters }), '改寫句子', nRw),
+    settle(_gnMakeKind('write', { n: nWrite, base, teacherQs, caseMatters }), '造句', nWrite),
+    settle(_gnMakeKind('transform', { n: nTf, base, teacherQs, caseMatters }), '句型轉換', nTf),
+    settle(_gnMakeKind('order', { n: nOrd, base, teacherQs, caseMatters }), '排順序', nOrd),
     Promise.all(circleJobs),
     Promise.all(sortJobs),
   ]);
   const errors = [];
   if (L.e) errors.push('互動教學');
-  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw]]
+  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw],
+   [W, '造句', nWrite], [X, '句型轉換', nTf], [O, '排順序', nOrd]]
     .forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
   Cs.forEach((x, k) => { if (x.e) errors.push(nm('找出來', k, cSets)); });
   Ss.forEach((x, k) => { if (x.e) errors.push(nm('分一分', k, sSets)); });
@@ -3658,9 +3829,11 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
   const circleSets = Cs.map(x => x.v || []).filter(a => a.length);
   const sortSets   = Ss.map(x => x.v || null).filter(Boolean);
   const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [],
+                write: W.v || [], tf: X.v || [], ord: O.v || [],   // v462
                 circle: circleSets[0] || [], sort: sortSets[0] || null,
                 circleSets, sortSets, caseMatters, errors };
-  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length && !circleSets.length && !sortSets.length) {
+  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length
+      && !out.write.length && !out.tf.length && !out.ord.length && !circleSets.length && !sortSets.length) {
     throw new Error('全部都沒有產生成功，請再試一次。');
   }
   return out;
@@ -5231,6 +5404,8 @@ Object.assign(window, {
   aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,
   gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint,
   gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet,
+  gnValidWrite, gnValidTransform, gnValidOrder,    // v462 ③造句 ②句型轉換 ①排順序
+  aiPlanGrammarKinds, GN_PLAN_PRESET, GN_PLAN_ZH,   // v462 ⑦ 依主題自動挑題型
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
   subscribeMyStars, subscribeAllStars, addStarEntry, deleteStarEntry,
@@ -5337,7 +5512,7 @@ const AUTO_STAR_KIND = {
   // ① 分數型：80 分 +10、滿分 +15（沿用原本填空的標準，沒有調鬆也沒有調緊）
   quiz: 'pct', spelling: 'pct', fillblank: 'pct', cloze: 'pct', 'def-match': 'pct',
   'reading-skill': 'pct', 'type-answer': 'pct', 'circle-answer': 'pct',
-  'syllable-div': 'pct', 'word-sort': 'pct', 'guided-reading': 'pct',
+  'syllable-div': 'pct', 'word-sort': 'pct', 'sentence-order': 'pct', 'guided-reading': 'pct',   // v462 ①
   // ② AI 批改的五星型：3 星 +10、4 星 +20（沿用原本閱讀簡答的標準）
   'short-answer': 'stars', 'writing-practice': 'stars', essay: 'stars', 'story-mountain': 'stars',
   // ③ 沒有分數可言的：做完就給
@@ -5356,6 +5531,7 @@ const AUTO_STAR_RULES = {
   'circle-answer': '80 分 +10／100 分 +15',
   'syllable-div': '80 分 +10／100 分 +15',
   'word-sort': '80 分 +10／100 分 +15',
+  'sentence-order': '80 分 +10／100 分 +15',
   'guided-reading': '有題目：80 分 +10／100 分 +15；純閱讀：整篇讀完 +10',
   lesson: '教學卡讀完 +5',
   upload: '上傳作業交出來 +10',

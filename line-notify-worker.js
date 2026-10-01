@@ -851,11 +851,12 @@ const TYPE_ZH = {
   flashcard: '單字卡', quiz: '選擇題', spelling: '拼字', fillblank: '填空', 'def-match': '配對',
   cloze: '短文填空', 'short-answer': '簡答', 'reading-skill': '閱讀技巧', 'guided-reading': '分段閱讀',
   'type-answer': '打字練習', 'circle-answer': '圈選', 'syllable-div': '音節切分', 'word-sort': '單字分類',
+  'sentence-order': '排順序',
   'writing-practice': '手寫練習', essay: '寫作', 'story-mountain': '故事山', lesson: '教學卡', upload: '上傳作業',
 };
 // 題型與分類的固定排序——Firestore 的 map 沒有順序，不排的話每天的訊息長得都不一樣
 const TYPE_ORDER = ['lesson', 'flashcard', 'quiz', 'spelling', 'fillblank', 'def-match', 'cloze',
-  'word-sort', 'syllable-div', 'type-answer', 'circle-answer', 'reading-skill', 'guided-reading',
+  'word-sort', 'sentence-order', 'syllable-div', 'type-answer', 'circle-answer', 'reading-skill', 'guided-reading',
   'short-answer', 'writing-practice', 'essay', 'story-mountain', 'upload'];
 const CAT_ORDER = ['vocab', 'word', 'grammar', 'reading'];
 // v421：家長要看的是「哪一類作業還沒做」，不是一長串課名。
@@ -894,6 +895,7 @@ function playableItem(it) {
   if (t === 'short-answer')     return _len(it, 'saQuestions') >= 1;
   if (t === 'syllable-div')     return _len(it, 'sdWords') >= 1;
   if (t === 'word-sort')        return _len(it, 'sortWords') >= 1 && _len(it, 'sortCategories') >= 2;
+  if (t === 'sentence-order')   return (it.orderQuestions || []).some((q) => ((q && q.words) || []).length >= 3);   // v462 ①
   if (t === 'def-match')        return (it.defPairs || []).filter((p) => p && p.word && p.def).length >= 2;
   if (t === 'essay')            return !!String(it.essayPrompt || '').trim();
   if (t === 'story-mountain')   return !!(it.smPrompt || it.smPassage);

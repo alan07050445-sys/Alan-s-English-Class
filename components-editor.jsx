@@ -26,7 +26,7 @@ const TYPE_ZH = {
   upload: '上傳作業', 'short-answer': '閱讀簡答', cloze: '段落填空', 'def-match': '配對連線', lesson: '教學卡',
   'reading-skill': '閱讀技巧',
   essay: '意見文寫作', 'syllable-div': '切音節', 'word-sort': '分類排序',
-  'story-mountain': '故事山脈', 'circle-answer': '圈出答案',
+  'story-mountain': '故事山脈', 'circle-answer': '圈出答案', 'sentence-order': '排順序',   // v462 ①
 };
 const TYPE_OPTIONS = [
   { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },
@@ -43,6 +43,7 @@ const TYPE_OPTIONS = [
   { id: "story-mountain",   label: "Story Mountain",   hint: "🏔 故事山脈 — 逐步填寫 Introduction → Rising Action → Climax → Falling Action → Resolution，AI 批改結構與文法（10 分制）" },
   { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
   { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
+  { id: "sentence-order",   label: "Sentence Order",   hint: "🧩 排順序 — 一句話打散成字塊，學生點成正確順序；語序類文法（疑問句、形容詞順序）用這個練最直接" },
   { id: "def-match",        label: "配對連線 🔗",       hint: "🔗 配對連線 — 左邊單字、右邊解釋（自動打亂），學生點一點連起來，系統自動批改" },
   { id: "lesson",           label: "教學卡 📘",        hint: "📘 教學卡 — 單元開頭的「先教再練」：這是什麼／什麼時候用／形式表／常見錯誤／老師示範／小試身手" },
   { id: "reading-skill",    label: "閱讀技巧 🔍",       hint: "🔍 閱讀技巧 — 學校會考的 Cause & Effect／Problem & Solution／Sequencing／Compare & Contrast（Venn 圖）。點一下卡片、再點格子放進去，自動批改。" },
@@ -63,7 +64,7 @@ function edDraftHasContent(form) {
   if (!form) return false;
   if (String(form.title || '').trim()) return true;
   return ['grSegments', 'grFinal', 'cards', 'questions', 'pairs', 'saQuestions', 'spellWords', 'defPairs',
-          'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts']
+          'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts', 'orderQuestions']
     .some(k => Array.isArray(form[k]) && form[k].length > 0) ||
     !!String(form.passage || form.essayPrompt || form.smPrompt || '').trim();
 }
@@ -415,6 +416,27 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
               wordBank={form.wordBank || []}
               onChangeWordBank={v => update("wordBank", (v && v.length) ? v : undefined)}
             />
+          ) : form.type === "sentence-order" ? (
+            /* v462 ①：一行一句，每一句用空白分開每一塊。
+               ⚠ 不要做成「輸入整句再自動切」——標點要跟著前面那個字（basketball.），
+                 自動切會把句點切成獨立一塊，學生就多一塊不知道放哪的點。 */
+            <div className="field">
+              <label className="field-label">句子（一行一句，用空白分開每一塊；標點跟著前面那個字）</label>
+              <textarea rows={8}
+                value={(form.orderQuestions || []).map(q => (q.words || []).join(' ')).join('\n')}
+                onChange={e => update('orderQuestions', e.target.value.split('\n').map(l => l.trim()).filter(Boolean)
+                  .map((l, i) => {
+                    const old = (form.orderQuestions || [])[i] || {};
+                    return { id: old.id || ('o' + Date.now() + i), words: l.split(/\s+/).filter(Boolean),
+                             hint: old.hint || '', explain: old.explain || '' };
+                  }))}
+                placeholder={'Do you like ice cream?\nShe walks to school every day.'}/>
+              <div className="field-help">
+                學生看到的是打散的字塊。<b>每一句都要只有一種正確排法</b>——
+                像「I often play basketball.」有兩種排法都對，那種不要用。
+                目前 {(form.orderQuestions || []).filter(q => window.gnValidOrder && window.gnValidOrder(q)).length} / {(form.orderQuestions || []).length} 句是學生端會收的。
+              </div>
+            </div>
           ) : form.type === "circle-answer" ? (
             <CircleAnswerEditor
               questions={form.circleQuestions || []}
@@ -4996,6 +5018,12 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   // v461（Alan：「有時候我想出兩組三組」）：找出來／分一分各自可以出 1~3 組，每組一個單元
   const [cSets, setCSets] = useS(1);
   const [sSets, setSSets] = useS(1);
+  // v462：Alan 挑的四個新題型
+  const [nWrite, setNWrite] = useS(0);   // ③ 造句（AI 批改）
+  const [nTf, setNTf]       = useS(0);   // ② 句型轉換
+  const [nOrd, setNOrd]     = useS(0);   // ① 排順序
+  const [plan, setPlan]     = useS(null);  // ⑦ AI 判斷出來的「這是哪一類文法」
+  const [planBusy, setPlanBusy] = useS(false);
   const [aiNote, setAiNote] = useS('');        // v445：這次的特別要求（直接寫給 AI）
   const [lsBusy, setLsBusy] = useS(false);      // v429：校稿頁單獨重出互動教學
   /* v442：互動教學的「AI 自動配圖」——只補還沒有圖的 learn 步驟 */
@@ -5065,6 +5093,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
       const pack = await window.aiMakeGrammarPack({
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
         grade, nMcq, nFill, nTr, nRw, nCircle, nSort, nCircleSets: cSets, nSortSets: sSets,
+        nWrite, nTf, nOrd,                                    // v462
         caseMatters: !!sheet.caseMatters, teacherNote: aiNote,
         onProgress: (d, t, label) => { if (live()) setBusy({ done: 1 + d, total: 1 + t, label }); },
       });
@@ -5183,8 +5212,38 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                 </select>
               </div>
             </div>
+            {/* v462 ⑦（Alan 挑的第三個）：依文法主題自動挑題型。
+                八種題型對不同文法點的用處差很多——教名詞分類出「句型轉換」沒意義，
+                教時態出「分一分」也沒東西可分。讓 AI 先判斷這是哪一類，再套一組建議值。
+                ⚠ 只讓 AI 做「判斷類型」這件它擅長的事；題數由程式的對照表給，
+                  不讓模型自己編數字。老師看完還是可以自己改。 */}
+            <div className="gn-plan">
+              <button type="button" className="btn ghost gn-plan-btn" disabled={planBusy || !sheet}
+                onClick={async () => {
+                  setPlanBusy(true);
+                  try {
+                    const pl = await window.aiPlanGrammarKinds({ topic: sheet.topic, topicZh: sheet.topicZh, notes: sheet.notes, grade });
+                    setPlan(pl);
+                    setNMcq(pl.nMcq); setNFill(pl.nFill); setNTr(pl.nTr); setNRw(pl.nRw);
+                    setNCircle(pl.nCircle); setNSort(pl.nSort); setCSets(pl.nCircleSets); setSSets(pl.nSortSets);
+                    setNWrite(pl.nWrite); setNTf(pl.nTf); setNOrd(pl.nOrd);
+                  } catch (e) { setPlan({ why: '判斷失敗，題數維持原來的。', zh: '', guessed: true }); }
+                  setPlanBusy(false);
+                }}>
+                {planBusy ? '判斷中…' : '🤖 這一課該出哪些題型？幫我決定'}
+              </button>
+              {plan && (
+                <div className={'gn-plan-say' + (plan.guessed ? ' guessed' : '')}>
+                  {plan.zh && <b>{plan.zh}</b>} {plan.why}
+                  {plan.findWhat && <>　<span>找出來會找：<b>{plan.findWhat}</b></span></>}
+                  {plan.sortBy && <>　<span>分一分的籃子：<b>{plan.sortBy}</b></span></>}
+                  <span className="gn-plan-note">下面的題數已經幫你填好了，不滿意直接改。</span>
+                </div>
+              )}
+            </div>
             <div className="gr-num-row">
-              {[['👉 找出來', nCircle, setNCircle, 12], ['🗂 分一分', nSort, setNSort, 12], ['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['✍️ 改寫句子', nRw, setNRw, 10], ['🔤 中翻英', nTr, setNTr, 10]].map(([lb, v, set, max]) => (
+              {[['👉 找出來', nCircle, setNCircle, 12], ['🗂 分一分', nSort, setNSort, 12], ['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['✍️ 改寫句子', nRw, setNRw, 10], ['🔤 中翻英', nTr, setNTr, 10],
+                ['🧩 排順序', nOrd, setNOrd, 10], ['🔄 句型轉換', nTf, setNTf, 10], ['✍ 造句', nWrite, setNWrite, 8]].map(([lb, v, set, max]) => (
                 <div className="field" key={lb}>
                   <label className="field-label">{lb}</label>
                   <select value={v} onChange={e => set(+e.target.value)}>
@@ -5275,12 +5334,14 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const sortSet = soCur && (soCur.words || []).length >= 4 ? soCur : null;
   const TABS = [['lesson', `📘 互動教學`, steps.length], ['circle', '👉 找出來', ciSets.reduce((a, x) => a + (x || []).length, 0)],
     ['sort', '🗂 分一分', soSets.reduce((a, x) => a + ((x && x.words) || []).length, 0)], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
-    ['rw', '✍️ 改寫句子', (res.rw || []).length], ['tr', '🔤 中翻英', res.tr.length]].filter(t => t[0] === 'lesson' || t[2] > 0);
+    ['rw', '✍️ 改寫句子', (res.rw || []).length], ['tr', '🔤 中翻英', res.tr.length],
+    ['ord', '🧩 排順序', (res.ord || []).length], ['tf', '🔄 句型轉換', (res.tf || []).length],
+    ['write', '✍ 造句', (res.write || []).length]].filter(t => t[0] === 'lesson' || t[2] > 0);
   // v461：每一組找出來／分一分各自是一個單元
   const unitsN = (steps.length ? 1 : 0)
     + soSets.filter(x => x && (x.words || []).length >= 4).length
     + ciSets.filter(x => (x || []).length).length
-    + ['mcq', 'fill', 'rw', 'tr'].filter(k => (res[k] || []).length).length;
+    + ['mcq', 'fill', 'rw', 'tr', 'ord', 'tf', 'write'].filter(k => (res[k] || []).length).length;
   return (
     <div className="modal-backdrop" onClick={nudge}>
       <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
@@ -5529,6 +5590,82 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
           )}
 
+          {/* v462 ① 排順序：最怕「兩種排法都對」，所以把正確順序整句顯示出來讓老師唸一遍 */}
+          {tab === 'ord' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生看到的是打散的字塊，要排回正確順序。<b>請唸一遍確認「只有這一種排法」</b>——
+                英文常常兩種都對（I often play basketball／Often I play basketball），那種就刪掉。
+              </div>
+              {(res.ord || []).map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <div><label>正確順序（用空白分開每一塊）</label>
+                      <input value={(x.words || []).join(' ')} onChange={e => upd('ord', i, { words: e.target.value.split(/\s+/).filter(Boolean) })}/></div>
+                    <div className="gq-row-2">
+                      <div><label>提示（可空白）</label><input value={x.hint || ''} onChange={e => upd('ord', i, { hint: e.target.value })}/></div>
+                      <div><label>解說</label><input value={x.explain || ''} onChange={e => upd('ord', i, { explain: e.target.value })}/></div>
+                    </div>
+                    {!window.gnValidOrder(x) && <div className="gr-warn">⚠ 這一題學生端會略過：要 4–10 塊、不能有中文、一塊只能一個字，而且不能有重複的字塊（重複＝答案不只一種）</div>}
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('ord', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* v462 ② 句型轉換 */}
+          {tab === 'tf' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生看到「原句 → 要改成什麼」，自己打出轉換後的句子。
+                比對跟中翻英一樣寬鬆（大小寫、句尾標點、isn't／is not 都不影響），比不上的再由 AI 判斷。
+              </div>
+              {(res.tf || []).map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <div className="gq-row-2">
+                      <div><label>原句（本來就是對的）</label><input value={x.prompt} onChange={e => upd('tf', i, { prompt: e.target.value })}/></div>
+                      <div><label>要改成什麼</label><input value={x.task} onChange={e => upd('tf', i, { task: e.target.value })}/></div>
+                    </div>
+                    <div className="gq-row-2">
+                      <div><label>答案</label><input value={x.answer} onChange={e => upd('tf', i, { answer: e.target.value })}/></div>
+                      <div><label>解說</label><input value={x.explain || ''} onChange={e => upd('tf', i, { explain: e.target.value })}/></div>
+                    </div>
+                    {!window.gnValidTransform(x) && <div className="gr-warn">⚠ 這一題學生端會略過：原句與答案要不一樣、都不能有中文、長度不能差太多</div>}
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('tf', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* v462 ③ 造句：沒有標準答案，由 AI 批改五顆星 */}
+          {tab === 'write' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生自己寫一句話，由 AI 批改（最高 5 顆星）。
+                「一定要用到」那一欄就是 AI 的批改依據——寫得愈具體，批改愈準。
+              </div>
+              {(res.write || []).map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <div><label>題目（給學生的情境）</label><input value={x.prompt} onChange={e => upd('write', i, { prompt: e.target.value })}/></div>
+                    <div className="gq-row-2">
+                      <div><label>一定要用到</label><input value={x.must} onChange={e => upd('write', i, { must: e.target.value })}/></div>
+                      <div><label>提示（可空白）</label><input value={x.hint || ''} onChange={e => upd('write', i, { hint: e.target.value })}/></div>
+                    </div>
+                    {!window.gnValidWrite(x) && <div className="gr-warn">⚠ 這一題學生端會略過：題目要 4–22 個英文字、而且「一定要用到」不能空白</div>}
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('write', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {tab === 'tr' && (
             <div className="gr-proof">
               <div className="field-help" style={{ marginBottom: 8 }}>
@@ -5558,6 +5695,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             onCreate({
               title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
               lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [],
+              write: res.write || [], tf: res.tf || [], ord: res.ord || [],   // v462 ③②①
               circle: res.circle || [], sort: soSets[0] || null,
               circleSets: ciSets, sortSets: soSets,          // v461：每一組各建一個單元
               caseMatters: !!res.caseMatters,
@@ -5571,7 +5709,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, circle, sort, circleSets, sortSets, caseMatters }) {
+function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, write, tf, ord, circle, sort, circleSets, sortSets, caseMatters }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
@@ -5626,6 +5764,30 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, circle, sort, c
   if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 5, ...req, ...cs,
     title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把句子改對`, instruction: '把句子裡錯的地方改對',
     pairs: goodRw.map((x, i) => ({ id: 'p' + stamp + 'r' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) });
+  /* v462 ③ 造句 → 沿用 writing-practice（AI 批改、五星、星星規則都現成）。
+     writingPrompts 的 word 欄位就是「要檢查什麼」，checkWriting 會拿它當批改依據，
+     所以放「一定要用到的文法特徵」而不是單字。 */
+  const goodWrite = (write || []).filter(x => x && x.prompt && x.must);
+  if (goodWrite.length) out.push({ id: 'gn' + stamp + 'wr' + rnd(), type: 'writing-practice', group: g, order: 7, ...req,
+    title: `${g} · 造句`, zh: `${goodWrite.length} 題 · 自己寫一句，AI 批改`,
+    instruction: '每一題寫一個英文句子，一定要用到這一課的文法。',
+    writingPrompts: goodWrite.map((x, i) => ({ id: 'w' + stamp + i + rnd(),
+      word: x.must, zh: '', instruction: x.prompt + (x.hint ? `  (${x.hint})` : '') })) });
+
+  /* v462 ② 句型轉換 → type-answer 的新 variant 'transform'。
+     題幹寫成「原句 → 要改成什麼」，學生打出轉換後的句子。 */
+  const goodTf = (tf || []).filter(x => x && x.prompt && x.answer && x.task);
+  if (goodTf.length) out.push({ id: 'gn' + stamp + 'tf' + rnd(), type: 'type-answer', variant: 'transform', group: g, order: 8, ...req, ...cs,
+    title: `${g} · 句型轉換`, zh: `${goodTf.length} 題 · 把句子換一種說法`, instruction: 'Change each sentence as the task says.',
+    pairs: goodTf.map((x, i) => ({ id: 'p' + stamp + 'x' + i + rnd(),
+      prompt: `${x.prompt}\n→ ${x.task}`, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
+
+  /* v462 ① 排順序 → 新題型 sentence-order（字塊排句子）。 */
+  const goodOrd = (ord || []).filter(x => x && (x.words || []).length >= 4);
+  if (goodOrd.length) out.push({ id: 'gn' + stamp + 'so' + rnd(), type: 'sentence-order', group: g, order: 9, ...req,
+    title: `${g} · 排順序`, zh: `${goodOrd.length} 句 · 把字排成正確的句子`, instruction: 'Put the words in the right order.',
+    orderQuestions: goodOrd.map((x, i) => ({ id: 'o' + stamp + i + rnd(), words: x.words, hint: x.hint || '', explain: x.explain || '' })) });
+
   const goodTr = (tr || []).filter(x => x && x.zh && x.answer);
   if (goodTr.length) out.push({ id: 'gn' + stamp + 'tr' + rnd(), type: 'type-answer', variant: 'translate', group: g, order: 6, ...req, ...cs,
     topic: topic || g, title: `${g} · 中翻英`, zh: `${goodTr.length} 題 · 看中文，打出英文句子`,

@@ -6721,3 +6721,23 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .gn-setpick-b.on { background: var(--accent, #8B3120); border-color: var(--accent, #8B3120); color: #fbf8f1; }
 .gn-count-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 4px; }
 @media (max-width: 640px) { .gn-count-grid { grid-template-columns: 1fr; } }
+
+/* v462 ⑦：依文法主題自動挑題型 */
+.gn-plan { margin: 2px 0 10px; }
+.gn-plan-btn { font-size: 12.5px; padding: 7px 14px; }
+.gn-plan-say {
+  margin-top: 8px; padding: 9px 12px; border-radius: 10px;
+  background: #F2F7F3; border: 1px solid #CFE3D4;
+  font-size: 12.5px; line-height: 1.8; color: var(--ink-2, #5c554a);
+}
+.gn-plan-say.guessed { background: #FDF6EC; border-color: #EBD7B4; }
+.gn-plan-say b { color: var(--ink, #15130E); }
+.gn-plan-note { display: block; color: var(--ink-muted, #8A9099); }
+/* v462 ①：排順序的字塊區（沿用互動教學的 .gnl-tile 樣式，只補間距） */
+.so-q .so-line { min-height: 46px; margin-bottom: 8px; }
+.so-hint { font-size: 12.5px; color: var(--ink-muted, #8A9099); margin-bottom: 6px; }
+.so-ans { margin-top: 8px; font-size: 14.5px; font-weight: 700; color: #1B7A3E; }
+.so-why { margin-top: 4px; font-size: 12.5px; color: var(--ink-muted, #8A9099); }
+
+/* v462 ②：句型轉換的題幹是「原句 → 要改成什麼」兩行 */
+.ta-prompt.tf { white-space: pre-line; line-height: 1.6; }
