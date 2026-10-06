@@ -533,12 +533,40 @@ function CatIcon({ catId, className }) {
    MAIN SCREEN — 4 blocks
    editMode=true → show edit controls + week metadata editing
 ══════════════════════════════════════════════════════ */
-function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem, categories, cloudProg }) {
+function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem, categories, cloudProg, weeks, weekOrder, onOpenWeekCat }) {
   const activeCats = categories || window.CATEGORIES;
   // v265: 優先用 app.jsx 傳下來的「本機＋雲端合併」進度——只看本機會漏掉
   // 換裝置（或 v257 本機 key 換新）之前做完、只存在雲端的紀錄
   const qmProg = cloudProg || loadQMProg();
   const ET = window.EditableText;
+
+  /* 🔴 v464（Alan：「空分類的死卡片也幫我改掉」）：
+     這一類這週沒有安排時，本來只寫「即將開放 · 老師正在準備本週內容」，而且**點不進去**。
+     實測 G3 Week 6：學生能做的只有 2 個單元，畫面上卻有 3 張這種點不動的卡片。
+     改成往回找「這一類最近一次有內容的那一週」，變成「可以先複習 Week 5」並且點得進去。
+     ⚠ 跟逾期提醒用同一組規則：不看封存的週（v400 ①）、不跨學期（v400 ②）、
+       空單元不算（v460 幽靈作業），不然會指到一個點進去是空的週次。 */
+  const lastSeenOf = useQMM(() => {
+    const out = {};
+    if (!weeks || !weekOrder || !weekOrder.length) return out;
+    const curIdx = weekOrder.indexOf(weekId);
+    if (curIdx <= 0) return out;
+    const curTerm = qmTermKey(weekId);
+    (categories || window.CATEGORIES || []).forEach(cat => {
+      for (let i = curIdx - 1; i >= 0; i--) {          // 由近到遠，找到就停
+        const wid = weekOrder[i], w = weeks[wid];
+        if (!w || w.archived) continue;
+        const wTerm = qmTermKey(wid);
+        if (curTerm && wTerm && wTerm !== curTerm) continue;
+        const items = getQuizItems((w.items || {})[cat.id] || []);
+        if (!items.length) continue;
+        const left = items.filter(it => { const p = qmProg[`${wid}_${it.id}`]; return !(p && p.done); }).length;
+        out[cat.id] = { wid, label: w.label || wid, n: items.length, left };
+        break;
+      }
+    });
+    return out;
+  }, [weeks, weekOrder, weekId, categories, qmProg]);
 
   return (
     <>
@@ -603,7 +631,10 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             return s + starsFromScore(sp);
           }, 0);
           const maxStars = quizItems.length * 3;
-          const clickable = total > 0 || editMode;
+          // v464：這週沒安排、但以前有 → 卡片一樣點得進去（去那一週複習）
+          const lastSeen = (total > 0 || editMode) ? null : (lastSeenOf[cat.id] || null);
+          const canReview = !!(lastSeen && onOpenWeekCat);
+          const clickable = total > 0 || editMode || canReview;
           const countLabel = getCategoryCountLabel(cat);
           const BlockTag = editMode ? 'div' : 'button';
           const blockProps = editMode ? {} : {
@@ -611,14 +642,20 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             disabled: !clickable,
             'aria-label': total > 0
               ? `${cat.titleZh || cat.title} ${cat.title}, ${quizItems.length} units, ${total} ${countLabel}, ${pct}% complete`
-              : `${cat.titleZh || cat.title} ${cat.title}, coming soon`,
+              : canReview
+                ? `${cat.titleZh || cat.title} ${cat.title}，這週還沒有安排，可以複習 ${lastSeen.label} 的 ${lastSeen.n} 個練習`
+                : `${cat.titleZh || cat.title} ${cat.title}, coming soon`,
           };
 
           return (
             <BlockTag
               key={cat.id}
               className={`qm-block${!clickable ? ' empty' : ''}`}
-              onClick={() => clickable && onEnterCat(cat)}
+              onClick={() => {
+                if (!clickable) return;
+                if (total > 0 || editMode) return onEnterCat(cat);
+                onOpenWeekCat(lastSeen.wid, cat);        // v464：帶他回那一週複習
+              }}
               {...blockProps}
             >
               <CatIcon catId={cat.id} className="qm-block-icon"/>
@@ -656,7 +693,18 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                 ) : editMode ? (
                   <div className="qm-block-count">{allCatItems.length} items · no quiz yet</div>
                 ) : (
-                  <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'}</div>
+                  canReview ? (
+                    /* v464：點得進去的「先複習上次的」——比一張點不動的「即將開放」有用 */
+                    <>
+                      <div className="qm-block-empty">這週還沒有安排</div>
+                      <div className="qm-block-review">
+                        可以先複習 <b>{lastSeen.label}</b> 的 {lastSeen.n} 個練習
+                        {lastSeen.left > 0 && <span>（還有 {lastSeen.left} 個沒完成）</span>}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'}</div>
+                  )
                 )}
               </div>
               {editMode ? (
@@ -665,7 +713,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                   onClick={(e) => { e.stopPropagation(); onAddItem(cat.id); }}
                   title={`Add item to ${cat.title}`}
                 >＋</button>
-              ) : total > 0 ? (
+              ) : (total > 0 || canReview) ? (
                 <div className="qm-block-arrow">›</div>
               ) : null}
             </BlockTag>
@@ -688,6 +736,13 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
    ⚠ 拿掉之後只剩不到 3 個字的標題會被 qmGroupByArticle 判成「單張卡」平鋪，
      所以就算某個標題整個被吃光也不會亂分組。 */
 const QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|改寫句子|排順序|句型轉換|造句|互動教學|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|找出來|分一分|中翻英|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
+/* v400：週次 id 是「學期代碼-W週數」（2026-W16 → 2026、g4-2026F-W03 → g4-2026F）。
+   v464：本來只寫在 TodayTasks 裡面，現在大廳的空分類也要用——同一個判斷只留一份。 */
+function qmTermKey(id) {
+  const m = String(id || '').match(/^(.*)-W\d{1,3}$/i);
+  return m ? m[1] : null;
+}
+
 function qmGroupByArticle(items) {
   const keyOf = (t) => String(t || '').toLowerCase().replace(QM_TYPE_WORDS, '').replace(/[\s\-–—_·．.。,，()（）0-9０-９]+/g, '');
   // v254: 老師手動分組（item.group）優先；沒設才用標題自動歸戶
@@ -6064,10 +6119,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
         g4-2026F-W03 → g4-2026F）。學期代碼不同就是上一個學期，不催。
         ⚠ 兩邊 id 只要有一個解析不出學期代碼就不套用這條——寧可多提醒，
           也不要把「這學期真的還沒做完的作業」默默藏起來（那才是 v340 當初要修的 bug）。 */
-  const termKeyOf = (id) => {
-    const m = String(id || '').match(/^(.*)-W\d{1,3}$/i);
-    return m ? m[1] : null;
-  };
+  const termKeyOf = qmTermKey;   // v464：提到模組層，大廳的空分類也要用同一份
   const pastDue = useQMM(() => {
     const out = [];
     if (!weeks || !weekOrder || !weekOrder.length) return out;

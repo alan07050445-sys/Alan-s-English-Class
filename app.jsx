@@ -1934,6 +1934,16 @@ function App() {
                 week={week}
                 weekId={weekId}
                 cloudProg={qmProgress}
+                /* v464：這一類這週沒安排時，卡片要能點進「最近一次有內容的那一週」複習。
+                   沿用 onOpenPastTask 那條路（它會記住原本在哪一週，回來時不會被留在舊週次）。 */
+                weeks={weeks}
+                weekOrder={viewOrder}
+                onOpenWeekCat={(wid, cat) => {
+                  const idx = viewOrder.indexOf(wid);
+                  if (idx >= 0 && idx !== weekIdx) { returnWeekRef.current = weekIdx; setWeekIdx(idx); }
+                  setCatView({ ...cat, itemId: null });
+                  scrollPageToTop();
+                }}
                 onEnterCat={(cat) => { setCatView(cat); scrollPageToTop(); }}
                 editMode={editMode}
                 categories={activeCategories}
