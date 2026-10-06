@@ -783,6 +783,10 @@ const QS_KINDS = [
   /* v406（Alan：學校作業右半邊的 Part B 就長這樣）：一篇小故事，
      把這一課的每個單字各挖一格，學生讀上下文填回去。只有開 AI 才生得出來。 */
   { id: 'story',     zh: '短文填空', note: '一篇小故事，每個單字各挖一格（像作業紙的 Part B）', ai: true },
+  /* v468（Alan 2026-10-06 給的康橋考卷，Section I 的 A 一定是這一種）：
+     短文裡一個目標字 →「在這篇文章裡這個字是什麼意思？」四個選項**全是定義**，
+     干擾項是**同一個字的其他語意**。⚠ 跟「配對連線」不是同一件事。 */
+  { id: 'sense',     zh: '字義選擇', note: '短文＋「這個字在這裡是什麼意思」，像康橋考卷第一大題', ai: true },
 ];
 
 /* 一行一個字：英文 [Tab | ｜ | 逗號 | " - "] 中文 [同樣分隔] 例句 */
@@ -1104,6 +1108,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [aiNote, setAiNote] = useS('');            // v445：這次的特別要求（直接寫給 AI）
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
   const [story, setStory]   = useS(null);    // v406: AI 出的短文填空（校稿中一起改）
+  const [sense, setSense]   = useS([]);      // v468: 字義選擇題（康橋考卷第一大題）
   const [reStory, setReStory] = useS(false); // v407: 校稿頁單獨重生短文（不用整組重出）
   /* v380（Alan：「不用一整包要一份一份指定」）：建立的同時就指派出去。
      學期＝整組設為本週作業（含截止日）；暑假題庫＝勾選要給哪些學生。 */
@@ -1148,17 +1153,21 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
          v407：短文的第三層保底要用到「填空題」的例句，所以把同一個 promise
          當 rescue 傳進去——它只在真的漏字時才會 await，並行完全沒被打斷。 */
       const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), grade, teacherNote: aiNote, onProgress: (done) => setBusy(done) });
+      const seP = (picked.sense && window.aiMakeVocabSense)
+        ? window.aiMakeVocabSense(words, { hint: title.trim(), grade, teacherNote: aiNote }).catch(() => null)
+        : Promise.resolve(null);
       const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
         ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP }).catch(() => null)
         : Promise.resolve(null);
-      const [r, st] = await Promise.all([exP, stP]);
+      const [r, st, se] = await Promise.all([exP, stP, seP]);
       setRows(r);
       setStory(st);
+      setSense(se || []);
     } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
     setBusy(0);
   };
   const updRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const payload = (extra) => ({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id), story,
+  const payload = (extra) => ({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id), story, sense,
     assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null, ...extra });
 
   /* ⚠ 不要寫成 `const AssignBox = () => …` 再用 <AssignBox/> 那種寫法：
@@ -1278,6 +1287,44 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                     )}
                   </>
                 )}
+              </div>
+            )}
+            {/* v468：字義選擇題的校稿（康橋考卷第一大題）。
+                出題時已經讓第二個 AI 自己讀短文作答、對不上就重出一次——
+                實測第一輪大約一半會被擋掉（都是真的把答案標錯），所以這一關不能省。 */}
+            {(sense || []).length > 0 && (
+              <div className="qs-story" style={{ marginBottom: 12 }}>
+                <div className="qs-story-head">
+                  <b>🔍 字義選擇</b>
+                  <span className="qs-story-n">{sense.length} 題</span>
+                  {sense.length < words.length && (
+                    <span className="qs-story-n warn">{words.length - sense.length} 個字沒出成功（答案對不上就不給學生）</span>
+                  )}
+                </div>
+                {sense.map((x, i) => (
+                  <div key={i} className="qs-sense-q">
+                    <div className="qs-sense-head">
+                      <b>{x.word}</b>{x.title && <em>{x.title}</em>}
+                    </div>
+                    <textarea rows={2} value={x.passage}
+                      onChange={e => setSense(ss => ss.map((y, j) => j === i ? { ...y, passage: e.target.value } : y))}/>
+                    {x.options.map((o, oi) => (
+                      <label key={oi} className={'qs-sense-opt' + (oi === x.answer ? ' on' : '')}>
+                        <input type="radio" checked={oi === x.answer}
+                          onChange={() => setSense(ss => ss.map((y, j) => j === i ? { ...y, answer: oi } : y))}/>
+                        <input value={o}
+                          onChange={e => setSense(ss => ss.map((y, j) => j === i
+                            ? { ...y, options: y.options.map((z, k) => k === oi ? e.target.value : z) } : y))}/>
+                      </label>
+                    ))}
+                    <div className="field-help">{x.explain}</div>
+                  </div>
+                ))}
+                <div className="field-help">
+                  ⚠ 四個選項要<b>全部都是定義</b>，而且錯的三個要是<b>這個字的其他意思</b>
+                  （像考卷上的 shade：涼爽處／偏暗的顏色／燈罩／把東西藏起來）。
+                  換成別的單字的定義就變回配對題了。
+                </div>
               </div>
             )}
             <div className="qs-proof" style={{ marginTop: 12 }}>
@@ -1529,7 +1576,7 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
 }
 
 /* 真正產生各個單元的資料。抽出來是為了好測。 */
-function qsBuildItems({ words, title, kinds, ai, story }) {
+function qsBuildItems({ words, title, kinds, ai, story, sense }) {
   const aiOf = (term) => (ai || []).find(r => r.term === term) || null;
   const rnd = () => Math.random().toString(36).slice(2, 6);
   const stamp = Date.now();
@@ -1569,6 +1616,19 @@ function qsBuildItems({ words, title, kinds, ai, story }) {
     }).filter(Boolean);
     if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'fb', type: 'fillblank', title, linkedFlashcardId: fcId, questions: qs });
   }
+  /* v468 康橋考卷第一大題：字義選擇。
+     沿用 quiz（不新增題型——v414 的教訓）。短文放在題幹裡，學生先讀再選。
+     ⚠ 不能 shuffle 選項：正解位置已經由程式攤平過（_qsSpreadAnswers），
+       再洗一次會把那份安排打亂。 */
+  if (kinds.indexOf('sense') >= 0 && (sense || []).length >= 2) {
+    out.push({ ...base, id: 'qs' + stamp + 'se', type: 'quiz', title, linkedFlashcardId: fcId,
+      zh: `${sense.length} 題 · 讀短文，選出這個字在這裡的意思`,
+      instruction: 'Read each passage, then choose what the word means there.',
+      questions: sense.map((x, i) => ({ id: 'q' + stamp + 's' + i + rnd(),
+        q: `${x.title ? x.title + '\n' : ''}${x.passage}\n\n${x.q}`,
+        options: x.options, answer: x.answer, explain: x.explain || '' })) });
+  }
+
   if (kinds.indexOf('quiz') >= 0) {
     const pool = words.map(w => ({ ...w, zh: w.zh || ((aiOf(w.term) || {}).zh || '') })).filter(w => w.zh);
     const qs = pool.map((w, i) => {

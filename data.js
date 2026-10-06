@@ -1674,6 +1674,136 @@ RULES
 ${_AI_MINIFY}`;
 
 /* ══════════════════════════════════════════════════════════════════════════
+   v468：康橋單字考卷的第 1 大題——「字義選擇題」
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 2026-10-06 給的 G3/G4 考卷，Section I 的 A 一定是這一種（10%、5 題）：
+     · 第 1 題：給一個句子 →「Which definition matches how **shade** is used in the sentence?」
+     · 第 2~5 題：先一段 3~4 句的短文（有小標題），文中把目標字粗體 →
+       「Based on the passage above, what does **soaring** mean?」
+     · 四個選項**全部都是定義**，干擾項是**這個字的其他語意**
+       （shade：A 有點暗的顏色／B 躲太陽的涼爽地方／C 燈罩／D 把玩具藏起來）
+
+   ⚠⚠ 這跟現有的「配對連線」**不是同一件事**：
+     配對是「字 ↔ 它的定義」，這一種是「同一個字的好幾個語意裡，挑出在這個語境用的那一個」。
+     干擾項如果換成別的單字的定義，就變回配對題了，考點整個不見。
+   ══════════════════════════════════════════════════════════════════════════ */
+const AI_SENSE_SYS = `You write "which meaning is it here?" vocabulary questions for Taiwanese
+elementary students, exactly like a Kang Chiao formative assessment.
+Output ONLY a JSON array: [{"word":"","passage":"","title":"","q":"","options":["","","",""],"answer":0,"explain":""}]
+RULES
+- passage: 2-4 short sentences (25-55 words) that a 9-year-old enjoys, with a short "title".
+  The target word must appear in it EXACTLY ONCE, used in ONE clear meaning, and the sentences
+  around it must make that meaning findable. Never define the word inside the passage.
+  ⚠ Use the word NATURALLY — change its form if the sentence needs it (trap -> trapped, soar -> soaring).
+  Every sentence must be perfect English. "it got trapping in the bushes" is wrong and unusable.
+- q: always exactly "Based on the passage above, what does <word> mean?"
+- options: FOUR definitions, 3-9 words each, no ending punctuation.
+  ⚠⚠ The three wrong ones must be OTHER REAL MEANINGS OF THE SAME WORD, or meanings that sound
+  close to it — never the definition of a different word, and never something silly.
+  Example for "shade": "a cool place out of the sun" (right) / "a colour that is a little dark" /
+  "a cover for a lamp" / "to hide something from someone".
+  If the word honestly has only one meaning, use near-misses a child would really pick
+  (too wide, too narrow, or the opposite).
+- All four options must be about the SAME part of speech and similar length, so the longest one
+  is not always the answer.
+- answer: 0-based index. Put the correct one in a DIFFERENT position each time.
+- explain: very simple ENGLISH, ≤16 words, quoting the clue words from YOUR passage.
+${_AI_MINIFY}`;
+
+/* 回傳 [{word, title, passage, q, options, answer, explain}]。
+   驗證的重點：目標字在短文裡只出現一次、四個選項不重複、答案位置要分散。 */
+async function aiMakeVocabSense(words, { grade = 'g4', hint = '', teacherNote = '', avoid = [], onProgress } = {}) {
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  if (!list.length) return [];
+  /* 第一輪出完 → 交叉檢查 → 沒過的那幾個字**再出一次**。
+     實測第一輪大約會被擋掉一半（都是真的標錯答案），直接丟掉的話老師貼 8 個字只拿到 4 題。 */
+  let got = await _senseRound(list, { grade, hint, teacherNote, avoid, onProgress });
+  const miss = list.filter(w => !got.some(g => g.word.toLowerCase() === w.term.toLowerCase()));
+  if (miss.length) {
+    const more = await _senseRound(miss, { grade, hint, teacherNote, avoid, onProgress: null });
+    got = got.concat(more);
+  }
+  // 照老師貼的順序排回去，再把正解位置攤平
+  const ix = (w) => list.findIndex(x => x.term.toLowerCase() === w.word.toLowerCase());
+  got.sort((a, b) => ix(a) - ix(b));
+  return _qsSpreadAnswers(got);
+}
+
+async function _senseRound(list, { grade = 'g4', hint = '', teacherNote = '', avoid = [], onProgress } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const parts = [];
+  for (let i = 0; i < list.length; i += 2) parts.push(list.slice(i, i + 2));
+  let done = 0;
+  const packs = await pMap(parts, async (part) => {
+    const msg = `LEVEL: ${band.label}\n${band.note}\n\n` +
+      (hint ? `Topic: ${hint}\n` : '') + _aiTeacherNote(teacherNote) + _aiAvoidNote(avoid) +
+      'Target words:\n' + part.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
+    try {
+      return await _aiAsk({ model: 'claude-haiku-4-5', max_tokens: Math.max(900, part.length * 450),
+        system: AI_SENSE_SYS, messages: [{ role: 'user', content: msg }] },
+        (d) => { const a = JSON.parse(_aiStripFence(d?.content?.[0]?.text || '')); return Array.isArray(a) ? a : null; });
+    } finally { done += part.length; if (onProgress) onProgress(Math.min(done, list.length), list.length); }
+  }, 10);
+  const cand = [];
+  (packs || []).forEach(arr => (arr || []).forEach(x => { const v = qsValidSense(x); if (v) cand.push(v); }));
+  /* ⚠⚠ 2026-10-06 實測：模型會**把答案標錯**（trapping 的正解是「catching or holding」，
+     它標成「making a sound」）。這種錯程式看不出來——四個選項都像定義。
+     所以讓另一個 AI 自己讀短文作答，對不上就丟掉那一題。
+     跟 v431 選擇題、v444 找出來、v452 分一分、v467 整段改錯同一招：
+     **單一正解的題型，一律要有第二個 AI 的意見。** */
+  const checked = await pMap(cand, async (x) => {
+    try {
+      const pick = await _aiAsk({
+        model: 'claude-haiku-4-5', max_tokens: 120,
+        system: `You answer ONE multiple-choice vocabulary question. Output ONLY JSON: {"answer":0}
+Read the passage, decide what the word means THERE, and give the 0-based index of the best option.`,
+        messages: [{ role: 'user', content:
+          `PASSAGE:\n${x.passage}\n\nQUESTION: ${x.q}\nOPTIONS:\n` +
+          x.options.map((o, i) => `${i}. ${o}`).join('\n') }],
+      }, (d) => { const o = JSON.parse(_aiStripFence(d?.content?.[0]?.text || '')); return (o && Number.isInteger(o.answer)) ? o : null; }, 30000);
+      return pick.answer === x.answer ? x : null;     // 兩邊不同調＝這一題有問題，不要給學生
+    } catch (e) { return x; }                         // 檢查器掛掉不擋住老師
+  }, 6);
+  return checked.filter(Boolean);
+}
+
+function qsValidSense(x) {
+  const word = String((x && x.word) || '').trim();
+  const passage = String((x && x.passage) || '').trim();
+  const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o || '').trim()).filter(Boolean);
+  const ai = Number(x && x.answer);
+  if (!word || !passage || opts.length !== 4) return null;
+  if (_gnCJK.test(passage + opts.join(''))) return null;
+  if (!(ai >= 0 && ai < 4)) return null;
+  if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;      // 選項不可以重複
+  // 目標字在短文裡只能出現一次，不然「哪一個用法」就不唯一了
+  const toks = passage.split(/\s+/).map(_GN_TOK).filter(Boolean).map(t => t.toLowerCase());
+  const base = word.toLowerCase();
+  const hits = toks.filter(t => t === base || t === base + 's' || t === base + 'es' || t === base + 'ed' || t === base + 'ing').length;
+  if (hits !== 1) return null;
+  const n = toks.length;
+  if (n < 20 || n > 70) return null;
+  // 正解不可以永遠是最長的那一個（v417 的教訓：學生會發現「選最長的就對」）
+  const lens = opts.map(o => o.split(/\s+/).length);
+  if (lens[ai] > Math.max(...lens.filter((_, i) => i !== ai)) + 3) return null;
+  return { word, title: String((x && x.title) || '').trim().slice(0, 40), passage,
+           q: `Based on the passage above, what does ${word} mean?`,
+           options: opts, answer: ai, explain: String((x && x.explain) || '').trim() };
+}
+
+/* 把正解位置攤平：模型很愛一直放同一格，學生兩題就看出來了。 */
+function _qsSpreadAnswers(list) {
+  return (list || []).map((x, i) => {
+    const want = i % 4;
+    if (x.answer === want) return x;
+    const opts = x.options.slice();
+    const right = opts[x.answer];
+    opts[x.answer] = opts[want]; opts[want] = right;
+    return { ...x, options: opts, answer: want };
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    v406：一鍵出單字再多一種——「短文填空」（Alan 給的學校作業 Part B 就長這樣）
    ──────────────────────────────────────────────────────────────────────────
    一篇小故事，把這一課的每個單字各挖一個空格，學生讀上下文把字填回去。
@@ -5702,6 +5832,7 @@ Object.assign(window, {
   // Wrong questions
   collectWrongQuestions, removeWrongQuestion,
   reviewWordsOf, reviewSeenSentences,          // v466：複習用（同一批字、不一樣的題目）
+  aiMakeVocabSense, qsValidSense,              // v468 康橋：字義選擇題
   // Weekly Report
   buildWeeklyReport, formatReportAsText,
 });

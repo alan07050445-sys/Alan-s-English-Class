@@ -6747,3 +6747,13 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .rv-kind input[disabled] + span { color: var(--ink-muted, #8a8270); }
 .rv-hw { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; cursor: pointer; }
 .rv-hw input[type=date] { margin-left: 4px; font-size: 12.5px; padding: 4px 8px; }
+
+/* v468：字義選擇題的校稿（康橋考卷第一大題） */
+.qs-sense-q { padding: 10px 0; border-bottom: 1px solid var(--border, #DDD6C4); }
+.qs-sense-q:last-of-type { border-bottom: 0; }
+.qs-sense-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.qs-sense-head b { font-size: 15px; }
+.qs-sense-head em { font-style: normal; font-size: 12px; color: var(--ink-muted, #8a8270); }
+.qs-sense-opt { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.qs-sense-opt input[type=text], .qs-sense-opt input:not([type=radio]) { flex: 1; font-size: 13px; }
+.qs-sense-opt.on input:not([type=radio]) { border-color: #1B7A3E; background: #F2F7F3; }
