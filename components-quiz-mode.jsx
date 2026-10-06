@@ -6041,7 +6041,17 @@ function WeekHero({ week, weekIdx, weekOrder, done, total, who, onPrevWeek, onNe
 ══════════════════════════════════════════════════════ */
 function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, weeks, weekOrder, onOpenPastTask }) {
   const [ttOpen, setTtOpen] = useQM({}); // v267: 分組收合狀態（未動過＝全完成收、未完成開）
-  const [pastOpen, setPastOpen] = useQM(true); // v341: 「之前沒完成」預設展開，點標題可完全收合
+  /* 🔴 v463（a）（實測 G3：一個還沒開始做的學生會看到 42 項、預設展開）：
+     量過了——逾期區在桌機 1180×820 佔 2.7 個畫面、iPad 直式佔 2.1 個，
+     「今天的任務」被推到第 2.6～3.2 個畫面，整頁 4.1 個畫面。收起來之後整頁剩 2.1 個。
+     v341 當初預設展開是為了「不要讓小朋友以為作業不見了」——
+     標題列那一行永遠在（會寫「之前還有 N 項」），所以收起來並不會讓它消失，
+     只是不再把今天該做的事擠到三個畫面以下。 */
+  const [pastOpen, setPastOpen] = useQM(false);
+  /* v463（b）：展開之後再照週次收合——每一列現在多了一行（題型＋分類），
+     42 列全攤開會變成 3.2 個畫面，比改之前還長。
+     預設只開「最近的那一週」（最該補的），其他週收成一行，點了才展開。 */
+  const [pastWk, setPastWk] = useQM({});
 
   // v340: 之前週次還沒完成的作業——週次一往前推，舊作業就從畫面消失，
   // 小朋友會說「作業不見了」。這裡一律列出來，可以直接點回去補做。
@@ -6064,7 +6074,9 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
     const curIdx = weekOrder.indexOf(weekId);
     if (curIdx <= 0) return out;                       // 已經是第一週就沒有「之前」
     const curTerm = termKeyOf(weekId);
-    for (let i = 0; i < curIdx; i++) {
+    /* v463（c）：新的排前面。本來是 Week 1 在最上面（最舊的先看到）——
+       但最該補的是「最接近現在教的那一週」，而且一打開就看到最早的失敗最打擊人。 */
+    for (let i = curIdx - 1; i >= 0; i--) {
       const wid = weekOrder[i];
       const w = weeks[wid];
       if (!w) continue;
@@ -6095,6 +6107,32 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
     }
     return out;
   }, [weeks, weekOrder, weekId, qmProg, categories]);
+
+  /* 🔴 v463（b）：逾期清單改用「今天的任務」那一套版型。
+     實測問題：42 列裡「How Raven Brought Light To The World - Week1」原封不動重複 5 次，
+     而且一個字都沒寫是哪一種題型——學生做完一個回來，五列長得一模一樣，
+     根本不知道剛剛做的是哪個、還剩哪幾個。
+     解法：先照週次分段，每一段再用 qmGroupByArticle（跟今天的任務、側欄同一套）
+     歸成「一課一組」，列上顯示題型（qmShortLabel）。
+     實測 42 列 → 5 個週次段、18 組。 */
+  const pastByWeek = useQMM(() => {
+    const byWeek = [];
+    const seen = {};
+    pastDue.forEach(t => {
+      if (!seen[t.wid]) { seen[t.wid] = { wid: t.wid, label: t.weekLabel, rows: [] }; byWeek.push(seen[t.wid]); }
+      seen[t.wid].rows.push(t);
+    });
+    return byWeek.map(wk => {
+      const byKey = {};
+      wk.rows.forEach(t => { byKey[t.id] = t; });
+      const groups = qmGroupByArticle(wk.rows.map(t => t.it)).map(g => (
+        g.single
+          ? { name: null, rows: [byKey[g.single.id]].filter(Boolean) }
+          : { name: g.name, rows: g.items.map(it => byKey[it.id]).filter(Boolean) }
+      )).filter(g => g.rows.length);
+      return { ...wk, n: wk.rows.length, groups };
+    });
+  }, [pastDue]);
   const note = week.parentNote || '';
   const hw = week.homework || {};
   /* v392: 大廳的重繪成本——本來 itemById、tasks.map、分組、排序全部裸寫在 render body，
@@ -6275,22 +6313,51 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
               <span>{pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'}</span>
             </span>
           </button>
+          {/* v463（b）：照「週次 → 一課一組」排，列上寫清楚是哪一種題型。
+              以前是 42 列平鋪、同一個課名重複 5 次又沒有題型，學生分不出誰是誰。 */}
           {pastOpen && (
             <div className="tt-past-list">
-              {pastDue.map(t => (
-                <button
-                  key={t.key}
-                  className="tt-past-row"
-                  onClick={() => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)}
-                >
-                  <span className="tt-past-wk">{t.weekLabel}</span>
-                  <span className="tt-past-name">
-                    {t.it.title || t.id}
-                    {t.lastPct != null && <em className="tt-past-tried">上次 {t.lastPct} 分 · 要 80 分才算完成</em>}
-                  </span>
-                  <span className="tt-past-go">補做 →</span>
-                </button>
-              ))}
+              {pastByWeek.map((wk, wi) => {
+                const open = pastWk[wk.wid] !== undefined ? pastWk[wk.wid] : wi === 0;   // 預設只開最近的那一週
+                return (
+                <div className="tt-past-wkblock" key={wk.wid}>
+                  <button className="tt-past-wkhead" onClick={() => setPastWk(m => ({ ...m, [wk.wid]: !open }))} aria-expanded={open}>
+                    <span className="tt-past-chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                    <b>{wk.label}</b><span>還有 {wk.n} 項</span>
+                  </button>
+                  {open && wk.groups.map((g, gi) => (
+                    <div className={'tt-past-grp' + (g.name ? '' : ' solo')} key={g.name || gi}>
+                      {g.name && (
+                        <div className="tt-past-grpname">
+                          <span className="tt-past-grpdoc" aria-hidden="true">📄</span>{g.name}
+                          <em>{g.rows.length} 項</em>
+                        </div>
+                      )}
+                      {g.rows.map(t => (
+                        <button
+                          key={t.key}
+                          className={'tt-past-row' + (g.name ? ' in-group' : '')}
+                          onClick={() => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)}
+                        >
+                          {t.it.type === 'upload'
+                            ? <span className="tt-ic tt-ic-upload" aria-hidden="true">📎</span>
+                            : <CatIcon catId={t.cat ? t.cat.id : 'vocab'} className="tt-ic"/>}
+                          <span className="tt-past-name">
+                            {/* 跟「今天的任務」與側欄用同一個稱呼 */}
+                            <b>{g.name ? qmShortLabel(t.it, g.name) : (t.it.title || t.id)}</b>
+                            <span className="tt-past-meta">
+                              {t.cat ? (t.cat.titleZh || t.cat.title) : ''}
+                              {t.lastPct != null && <em className="tt-past-tried"> · 上次 {t.lastPct} 分，要 80 分才算完成</em>}
+                            </span>
+                          </span>
+                          <span className="tt-past-go">補做 →</span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                );
+              })}
             </div>
           )}
         </div>
