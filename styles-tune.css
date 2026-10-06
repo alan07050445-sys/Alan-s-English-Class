@@ -4020,14 +4020,80 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   to   { transform: none; opacity: 1; }
 }
 
+/* ══ v471：三種會動的講解 ══════════════════════════════════════════════════
+   照 v470 同四條規則：每段 150~300ms、不蓋住字、不結束在看不見的狀態、
+   reduced-motion 一律關掉。
+   平板只用「點」——沒有任何拖曳互動（規格要求）。 */
+
+/* ⏳ 時態時間軸 */
+.gnl-tl { position: relative; display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 8px; margin: 18px 0 16px; padding: 0 4px; }
+.gnl-tl-rail { position: absolute; left: 6%; right: 6%; bottom: 34px; height: 4px; border-radius: 2px;
+  background: linear-gradient(90deg, #D8CFBE, #E0A100); }
+.gnl-tl-dot { position: relative; z-index: 1; flex: 1 1 0; min-height: 64px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; padding: 6px 2px; border: 0; background: transparent; cursor: pointer; }
+.gnl-tl-ico { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--surface, #fff); font-size: 19px;
+  transition: transform .2s ease-out, border-color .2s ease-out, background .2s ease-out; }
+.gnl-tl-lab { font-family: var(--sans); font-size: 13.5px; font-weight: 700; color: var(--ink-muted); }
+.gnl-tl-dot.seen .gnl-tl-ico { border-color: #1B7A3E; background: #E7F4EA; }
+.gnl-tl-dot.on .gnl-tl-ico { transform: scale(1.14); border-color: #E0A100; background: #FFF6E0; }
+.gnl-tl-dot.on .gnl-tl-lab { color: var(--ink); }
+
+/* 時間軸／三種句型／比較級共用的「現在這一句」 */
+.gnl-tl-say { padding: 14px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface-2, #FAF7F0); animation: gnlSayIn .24s cubic-bezier(.34, 1.4, .64, 1); }
+.gnl-tl-en { position: relative; display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  padding: 0 32px 0 0; cursor: pointer; font-family: var(--serif, Georgia, serif);
+  font-size: clamp(19px, 3.2vw, 24px); line-height: 1.55; color: var(--ink); }
+.gnl-tl-en .gnl-ex-say { right: 0; }
+@keyframes gnlSayIn {
+  from { transform: translateY(8px) scale(.97); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* 🔀 肯定／否定／疑問 */
+.gnl-ftabs { display: flex; gap: 8px; margin: 14px 0 14px; }
+.gnl-ftab { flex: 1 1 0; min-height: 48px; padding: 10px 8px; border-radius: 12px;
+  border: 2px solid var(--border); background: var(--surface, #fff);
+  font-family: var(--sans); font-size: 16px; font-weight: 800; color: var(--ink-muted); cursor: pointer;
+  transition: transform .2s ease-out, border-color .2s ease-out, background .2s ease-out, color .2s ease-out; }
+.gnl-ftab.on { border-color: #E0A100; background: #FFF6E0; color: var(--ink); transform: translateY(-2px); }
+
+/* 📊 比較級長條圖 */
+.gnl-bars { display: flex; align-items: flex-end; gap: 10px; height: 168px; margin: 16px 0 14px; }
+.gnl-bar-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  gap: 6px; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.gnl-bar-slot { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.gnl-bar { width: 100%; max-width: 78px; border-radius: 10px 10px 0 0;
+  background: linear-gradient(180deg, #F0C04A, #E0A100);
+  transform-origin: bottom center; animation: gnlGrow .26s cubic-bezier(.34, 1.3, .64, 1) both;
+  transition: filter .2s ease-out; }
+.gnl-bar-col.on .gnl-bar { filter: brightness(1.08) saturate(1.2); box-shadow: 0 0 0 3px rgba(224, 161, 0, .25); }
+.gnl-bar-lab { font-family: var(--sans); font-size: 15.5px; font-weight: 800; color: var(--ink); }
+.gnl-bar-col.on .gnl-bar-lab { color: #8A6D1E; }
+.gnl-bar-zh { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); }
+@keyframes gnlGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* 窄螢幕：時間軸的字不要擠成兩行 */
+@media (max-width: 420px) {
+  .gnl-tl-ico { width: 36px; height: 36px; font-size: 16px; }
+  .gnl-tl-rail { bottom: 30px; }
+  .gnl-tl-lab, .gnl-bar-zh { font-size: 12px; }
+  .gnl-bars { height: 140px; }
+}
+
 /* ④ 會動暈的小朋友（或系統設了減少動態）一律不要動。
    ⚠ 答錯的晃動 gnlShake 也一起關掉——它本來就沒有被關過。 */
 @media (prefers-reduced-motion: reduce) {
   .gnl-tile.in, .gnl-line.ok .gnl-tile.in, .gnl-blank.ok, .gnl-opt.ok,
   .gnl-word.fixed, .gnl-word.fixed s, .gnl-word.fixed b, .gnl-word.got,
   .gnl-chip-now, .gnl-bin-items em, .gnl-why.ok,
-  .gnl-opt.no, .gnl-line.no, .gnl-word.no, .gnl-chip-now.no {
+  .gnl-opt.no, .gnl-line.no, .gnl-word.no, .gnl-chip-now.no,
+  .gnl-tl-say, .gnl-bar {                                  /* v471 的三種會動的講解 */
     animation: none !important;
   }
+  /* 關掉動畫時長條要維持該有的高度（scaleY 不跑＝也不會被縮成 0） */
+  .gnl-tl-ico, .gnl-ftab, .gnl-bar { transition: none !important; }
   .gnl-word.got { background-size: 100% 100%; }
 }

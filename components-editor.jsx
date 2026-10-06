@@ -5213,7 +5213,9 @@ function rcMcqOk(q) {
    建出來的單元：📘 互動教學（lesson＋steps）→ 📝 選擇題（quiz）→ ✏️ 填空（type-answer/fill）
    → 🔤 中翻英（type-answer/translate）。後三個都帶 requires＝教學的 id：沒學完鎖著。
    ═════════════════════════════════════════════════════════════════════════ */
-const GN_KIND_ZH = { learn: '📖 學', pick: '👆 選一選', tap: '👉 找出來', sort: '🗂 分一分', order: '🧩 排句子', fix: '🔍 找錯字' };
+const GN_KIND_ZH = { learn: '📖 學', pick: '👆 選一選', tap: '👉 找出來', sort: '🗂 分一分', order: '🧩 排句子', fix: '🔍 找錯字',
+  /* v471：三種會動的講解（跟 learn 一樣沒有對錯，看完就能往下） */
+  timeline: '⏳ 時態時間軸', forms: '🔀 三種句型', degree: '📊 比較級' };
 async function gnFileToImage(file) {
   const cv = await grDecodeScaled(file, 1600);            // 1600px：字看得清楚、上傳也不會太大
   const url = cv.toDataURL('image/jpeg', 0.82);
@@ -5671,6 +5673,45 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                   {st.kind === 'order' && <>
                     <input value={st.zh} onChange={e => updStep(i, { zh: e.target.value })} placeholder="中文句子"/>
                     <input value={st.words.join(' ')} onChange={e => updStep(i, { words: e.target.value.split(/\s+/).filter(Boolean) })} placeholder="正確的英文句子（空格分開，學生看到會打散）"/>
+                  </>}
+                  {/* ══ v471：三種會動的講解，老師一樣要看得到也改得動 ══ */}
+                  {st.kind === 'timeline' && <>
+                    <input value={st.q} onChange={e => updStep(i, { q: e.target.value })} placeholder="這一步在講什麼（繁中，例：同一件事什麼時候怎麼說）"/>
+                    {(st.points || []).map((pt, k) => (
+                      <div key={k} className="gn-row3">
+                        <select value={pt.when} onChange={e => updStep(i, { points: st.points.map((x, j) => j === k ? { ...x, when: e.target.value } : x) })}>
+                          <option value="past">過去</option><option value="now">現在</option><option value="future">未來</option>
+                        </select>
+                        <input value={pt.en} onChange={e => updStep(i, { points: st.points.map((x, j) => j === k ? { ...x, en: e.target.value } : x) })} placeholder="English sentence"/>
+                        <input value={pt.zh} onChange={e => updStep(i, { points: st.points.map((x, j) => j === k ? { ...x, zh: e.target.value } : x) })} placeholder="中文意思"/>
+                      </div>
+                    ))}
+                    <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="看完要記得什麼（繁中）"/>
+                  </>}
+                  {st.kind === 'forms' && <>
+                    <input value={st.q} onChange={e => updStep(i, { q: e.target.value })} placeholder="這一步在講什麼（繁中，例：同一句話的三種長相）"/>
+                    {(st.forms || []).map((f, k) => (
+                      <div key={k} className="gn-row3">
+                        <select value={f.type} onChange={e => updStep(i, { forms: st.forms.map((x, j) => j === k ? { ...x, type: e.target.value } : x) })}>
+                          <option value="affirmative">肯定</option><option value="negative">否定</option><option value="question">疑問</option>
+                        </select>
+                        <input value={f.en} onChange={e => updStep(i, { forms: st.forms.map((x, j) => j === k ? { ...x, en: e.target.value } : x) })} placeholder="English sentence（疑問句要有 ?）"/>
+                        <input value={f.zh} onChange={e => updStep(i, { forms: st.forms.map((x, j) => j === k ? { ...x, zh: e.target.value } : x) })} placeholder="中文意思"/>
+                      </div>
+                    ))}
+                    <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="看完要記得什麼（繁中）"/>
+                  </>}
+                  {st.kind === 'degree' && <>
+                    <input value={st.q} onChange={e => updStep(i, { q: e.target.value })} placeholder="這一步在講什麼（繁中，例：一個比一個更…）"/>
+                    {(st.levels || []).map((x0, k) => (
+                      <div key={k} className="gn-row3">
+                        <input value={x0.form} onChange={e => updStep(i, { levels: st.levels.map((x, j) => j === k ? { ...x, form: e.target.value } : x) })}
+                          placeholder={['原級（tall）', '比較級（taller）', '最高級（tallest）'][k] || '這一級的字'}/>
+                        <input value={x0.en} onChange={e => updStep(i, { levels: st.levels.map((x, j) => j === k ? { ...x, en: e.target.value } : x) })} placeholder="例句（一定要有上面那個字）"/>
+                        <input value={x0.zh} onChange={e => updStep(i, { levels: st.levels.map((x, j) => j === k ? { ...x, zh: e.target.value } : x) })} placeholder="中文"/>
+                      </div>
+                    ))}
+                    <input value={st.why} onChange={e => updStep(i, { why: e.target.value })} placeholder="看完要記得什麼（繁中）"/>
                   </>}
                   {st.kind === 'fix' && <>
                     <input value={st.sentence} onChange={e => updStep(i, { sentence: e.target.value })} placeholder="有一個錯字的句子"/>

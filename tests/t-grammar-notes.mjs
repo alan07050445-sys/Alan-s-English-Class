@@ -331,7 +331,10 @@ log.push('\n【8】（v430）選擇題題目只要「Choose the correct answer.�
   const player = qm.slice(qm.indexOf('function QuizModePlayer('), qm.indexOf('function WritingPracticePlayer('));
   ok('⭐ 已經建好的 ✏️ 出文法單元，播放時也顯示乾淨的題目（不用重出）', /\/\^gn\/\.test\(String\(item\.id[^)]*\)\)[^?]*\?\s*window\.gnCleanStem\(q\.q, q\.options\)/.test(player));
   ok('只套在 gn 單元（其他題型的題目不動）', (qm.match(/gnCleanStem/g) || []).length === 2 && player.indexOf('gnCleanStem') > 0);
-  ok('gnCleanStem 有掛到 window', /aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,/.test(data));
+  /* ⚠ 不要比對匯出表那一行的排版——換行或加一個名字就會假性失敗（v471 踩過）。
+     要守的是「有沒有真的掛到 window」這件事實，所以切出匯出區塊比名字。 */
+  const exportBlock = data.slice(data.indexOf('Object.assign(window, {'));
+  ok('gnCleanStem 有掛到 window', /\bgnCleanStem\b/.test(exportBlock));
 }
 
 log.push('\n【9】（v430）選擇題答案要對：另一個 AI 自己作答交叉檢查＋選項要出自句子');

@@ -94,14 +94,18 @@ ok('同一句換成 cat → cats 就收下', !!fix({ sentence: 'I have two cat.'
 
 console.log('\n【4】這一課該不該出「排句子」（Alan：「為什麼要組合句子」）');
 const planOf = (t, n) => W._gnLessonPlan(t, n || '');
-eq('教 noun → 禁掉 order', planOf('Nouns', 'A noun is a person, place or thing.').ban.join(), 'order');
-eq('教「名詞」（中文）→ 禁掉 order', planOf('名詞', '').ban.join(), 'order');
-eq('教 adjectives → 禁掉 order', planOf('Adjectives', '').ban.join(), 'order');
-eq('教 word order → 不禁（排句子正是重點）', planOf('Sentence structure and word order', '').ban.join(), '');
-eq('教疑問句 → 不禁', planOf('名詞在疑問句裡的語序', '').ban.join(), '');
-eq('教過去式 → 不禁', planOf('Past tense', 'Add -ed to the verb.').ban.join(), '');
-eq('教名詞複數 → 不禁（cat→cats 這種錯字題很合適）', planOf('Plural nouns', 'Add -s to most nouns.').ban.join(), '');
-eq('教專有名詞大寫 → 不禁', planOf('Proper nouns and capital letters', '').ban.join(), '');
+/* ⚠ 只問「order 禁不禁」，不要比對整個 ban 清單。
+   v471 把三種會動的講解也放進 ban（不適用的那幾種），比整串就會假性失敗——
+   但這一段要守的事情一點也沒變。 */
+const bansOrder = (t, n) => planOf(t, n).ban.indexOf('order') >= 0;
+ok('教 noun → 禁掉 order', bansOrder('Nouns', 'A noun is a person, place or thing.'));
+ok('教「名詞」（中文）→ 禁掉 order', bansOrder('名詞', ''));
+ok('教 adjectives → 禁掉 order', bansOrder('Adjectives', ''));
+ok('教 word order → 不禁（排句子正是重點）', !bansOrder('Sentence structure and word order', ''));
+ok('教疑問句 → 不禁', !bansOrder('名詞在疑問句裡的語序', ''));
+ok('教過去式 → 不禁', !bansOrder('Past tense', 'Add -ed to the verb.'));
+ok('教名詞複數 → 不禁（cat→cats 這種錯字題很合適）', !bansOrder('Plural nouns', 'Add -s to most nouns.'));
+ok('教專有名詞大寫 → 不禁', !bansOrder('Proper nouns and capital letters', ''));
 ok('認出來型會叫 AI 用 tap／sort', /tap.*sort|sort.*tap/s.test(planOf('Nouns', '').text));
 ok('認出來型會明講不要用 order', /Do NOT use "order"/.test(planOf('Nouns', '').text));
 
@@ -154,7 +158,8 @@ ok('⭐ 結尾多出來的「學」被砍掉', L6.steps.map(s => s.kind).join() 
 calls.length = 0;
 aiQueue = [{ ...goodLesson, steps: [learnStep(1), goodLesson.steps[1], learnStep(2)] }, goodLesson];
 const L7 = await W.aiMakeGrammarLesson({ topic: 'Nouns', notes: 'A noun is a person, place or thing.' });
-ok('砍完不夠步數 → 重問一次，回饋講明原因', L7.steps.length === 4 && /ended with a "learn" step/.test(String(calls[1].messages[0].content)));
+// v471：回饋文字改成「teaching step」（要涵蓋三種會動的講解，它們也不能當結尾）
+ok('砍完不夠步數 → 重問一次，回饋講明原因', L7.steps.length === 4 && /ended with a teaching step/.test(String(calls[1].messages[0].content)));
 
 console.log('\n【8】教語序的單元照樣可以出「排句子」');
 calls.length = 0;

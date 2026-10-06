@@ -7205,7 +7205,9 @@ function BriefLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
 
 function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const steps = useQMM(() => (item.steps || []).map(st => (window.gnValidStep ? window.gnValidStep(st) : st)).filter(Boolean), [item.id]);
-  const acts = steps.filter(st => st.kind !== 'learn').length;
+  // v471：講解型步驟（learn／時間軸／三種句型／比較級）不算「動手做的題數」
+  const isTeach = (st) => (window.gnIsTeachStep ? window.gnIsTeachStep(st) : (st && st.kind === 'learn'));
+  const acts = steps.filter(st => !isTeach(st)).length;
   const [si, setSi] = useQM(0);
   const [st, setSt] = useQM({});             // 這一步的作答狀態
   const [firstOk, setFirstOk] = useQM({});   // 第幾步第一次就答對
@@ -7215,7 +7217,7 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const say = (t) => { try { (window.speakTTS || window.speakText)(t, { lang: 'en-US', rate: 0.85 }); } catch (e) {} };
   const markFirst = (ok) => setFirstOk(f => (si in f ? f : { ...f, [si]: ok }));
   const next = () => { setSi(i => i + 1); setSt({}); try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {} };
-  const solved = !cur || cur.kind === 'learn' || !!st.ok;
+  const solved = !cur || isTeach(cur) || !!st.ok;
 
   useQME(() => {
     if (!done) return;
@@ -7427,6 +7429,112 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           );
         })()}
 
+        {/* ══ v471：三種「會動的講解」（Alan 給的動畫互動教學規格）
+            它們沒有對錯——小朋友點哪個都不會錯，重點是**看見變化發生**。
+            所以 solved 一開始就是 true，按鈕寫「我懂了 →」，跟 learn 一樣。 ══ */}
+
+        {/* ⏳ 時態時間軸：同一件事在過去／現在／未來怎麼說 */}
+        {cur.kind === 'timeline' && (() => {
+          const WHEN = { past: { zh: '過去', ico: '⏪' }, now: { zh: '現在', ico: '▶️' }, future: { zh: '未來', ico: '⏩' } };
+          const at = st.at == null ? 0 : st.at;
+          const p = cur.points[at];
+          const seenAll = (st.seen || [0]).length >= cur.points.length;
+          return (
+            <>
+              <div className="ls-kicker">⏳ 看時間怎麼改變句子</div>
+              <div className="gnl-sub">{cur.q}</div>
+              <div className="gnl-tl">
+                <div className="gnl-tl-rail"/>
+                {cur.points.map((pt, i) => (
+                  <button key={i} className={'gnl-tl-dot' + (i === at ? ' on' : '') + ((st.seen || [0]).indexOf(i) >= 0 ? ' seen' : '')}
+                    onClick={() => setSt(s0 => ({ ...s0, at: i, seen: (s0.seen || [0]).concat(i) }))}>
+                    <span className="gnl-tl-ico">{WHEN[pt.when].ico}</span>
+                    <span className="gnl-tl-lab">{WHEN[pt.when].zh}</span>
+                  </button>
+                ))}
+              </div>
+              {/* key 換了才會重新掛載＝句子變形的動畫才會播（v470 學到的） */}
+              <div key={at} className="gnl-tl-say">
+                <button type="button" className="gnl-tl-en" onClick={() => say(p.en)} title="點一下聽發音">
+                  <GnlMark text={p.en} hl={p.hl}/><span className="gnl-ex-say">🔊</span>
+                </button>
+                {p.zh && <div className="gnl-ex-zh">{p.zh}</div>}
+              </div>
+              <div className={'gnl-why' + (seenAll ? ' ok' : '')}>
+                {seenAll ? (cur.why ? '✓ ' + cur.why : '✓ 看完了！') : '👆 點上面的時間，看看句子怎麼變'}
+              </div>
+            </>
+          );
+        })()}
+
+        {/* 🔀 同一句話的三種長相：肯定／否定／疑問 */}
+        {cur.kind === 'forms' && (() => {
+          const TY = { affirmative: '肯定', negative: '否定', question: '疑問' };
+          const at = st.at == null ? 0 : st.at;
+          const f = cur.forms[at];
+          const seenAll = (st.seen || [0]).length >= cur.forms.length;
+          return (
+            <>
+              <div className="ls-kicker">🔀 同一句話，三種長相</div>
+              <div className="gnl-sub">{cur.q}</div>
+              <div className="gnl-ftabs">
+                {cur.forms.map((x, i) => (
+                  <button key={i} className={'gnl-ftab' + (i === at ? ' on' : '')}
+                    onClick={() => setSt(s0 => ({ ...s0, at: i, seen: (s0.seen || [0]).concat(i) }))}>
+                    {TY[x.type]}
+                  </button>
+                ))}
+              </div>
+              <div key={at} className="gnl-tl-say">
+                <button type="button" className="gnl-tl-en" onClick={() => say(f.en)} title="點一下聽發音">
+                  <GnlMark text={f.en} hl={f.hl}/><span className="gnl-ex-say">🔊</span>
+                </button>
+                {f.zh && <div className="gnl-ex-zh">{f.zh}</div>}
+              </div>
+              <div className={'gnl-why' + (seenAll ? ' ok' : '')}>
+                {seenAll ? (cur.why ? '✓ ' + cur.why : '✓ 三種都看過了！') : '👆 點上面三種，看看句子哪裡不一樣'}
+              </div>
+            </>
+          );
+        })()}
+
+        {/* 📊 比較級：原級 → 比較級 → 最高級，長條跟著長高 */}
+        {cur.kind === 'degree' && (() => {
+          const at = st.at == null ? 0 : st.at;
+          const lv = cur.levels[at];
+          const seenAll = (st.seen || [0]).length >= cur.levels.length;
+          const H = [46, 72, 100];                       // 三根長條的高度（%），讓「更…」一眼看得出來
+          return (
+            <>
+              <div className="ls-kicker">📊 一個比一個更…</div>
+              <div className="gnl-sub">{cur.q}</div>
+              <div className="gnl-bars">
+                {cur.levels.map((x, i) => (
+                  <button key={i} className={'gnl-bar-col' + (i === at ? ' on' : '')}
+                    onClick={() => setSt(s0 => ({ ...s0, at: i, seen: (s0.seen || [0]).concat(i) }))}>
+                    {/* ⚠ 長條要包一層「格子」：直接對 .gnl-bar-col 算 height:100%，
+                        會跟底下的字搶空間，最高那一根反而被壓扁。 */}
+                    <span className="gnl-bar-slot">
+                      <span className="gnl-bar" style={{ height: H[i] + '%', animationDelay: (i * 0.09) + 's' }}/>
+                    </span>
+                    <span className="gnl-bar-lab">{x.form}</span>
+                    {x.zh && <span className="gnl-bar-zh">{x.zh}</span>}
+                  </button>
+                ))}
+              </div>
+              <div key={at} className="gnl-tl-say">
+                <button type="button" className="gnl-tl-en" onClick={() => say(lv.en)} title="點一下聽發音">
+                  <GnlMark text={lv.en} hl={[lv.form]}/><span className="gnl-ex-say">🔊</span>
+                </button>
+                {lv.zh && <div className="gnl-ex-zh">{lv.zh}</div>}
+              </div>
+              <div className={'gnl-why' + (seenAll ? ' ok' : '')}>
+                {seenAll ? (cur.why ? '✓ ' + cur.why : '✓ 三種都看過了！') : '👆 點長條，看看句子怎麼說'}
+              </div>
+            </>
+          );
+        })()}
+
         {cur.kind === 'fix' && (() => {
           const toks = cur.sentence.split(/\s+/);
           const bare = (t) => t.replace(/[.,!?;:]+$/, '');
@@ -7463,7 +7571,7 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       <div className="ls-foot">
         <button className="qm-btn secondary" disabled={si === 0} onClick={() => { setSi(i => Math.max(0, i - 1)); setSt({}); }}>← 上一步</button>
         <button className="qm-btn primary" disabled={!solved} onClick={next}>
-          {cur.kind === 'learn' ? '我懂了 →' : (solved ? (si + 1 >= steps.length ? '完成 🎉' : '下一步 →') : '先答對才能往下')}
+          {isTeach(cur) ? '我懂了 →' : (solved ? (si + 1 >= steps.length ? '完成 🎉' : '下一步 →') : '先答對才能往下')}
         </button>
       </div>
     </div>

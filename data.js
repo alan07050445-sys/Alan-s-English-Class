@@ -3408,6 +3408,15 @@ function _gnFixPairOk(wrong, right) {
   if (short.length >= 3 && suf.test(tail(short + short.slice(-1)) || '')) return true; // run→running、big→bigger
   return false;
 }
+/* v471：哪些步驟是「講解」（沒有對錯，看完就可以往下）。
+   ⚠ 這件事會在五個地方被問到（算幾個互動、最後一步不能是講解、
+     至少兩個講解兩個互動、學生端可不可以按下一步、按鈕要寫什麼）。
+     只留一份，不然加新步驟時一定會漏掉其中一處。 */
+const GN_TEACH_KINDS = ['learn', 'timeline', 'forms', 'degree'];
+function gnIsTeachStep(st) {
+  return !!st && GN_TEACH_KINDS.indexOf(typeof st === 'string' ? st : st.kind) >= 0;
+}
+
 function gnValidStep(st) {
   if (!st || typeof st !== 'object') return null;
   if (st.kind === 'learn') {
@@ -3464,6 +3473,78 @@ function gnValidStep(st) {
       new Set(all).size === all.length && new Set(labels).size === labels.length;
     return ok ? { kind: 'sort', q: _zhTW(st.q).trim() || '把這些字分到正確的地方', groups, why: _zhTW(st.why).trim() } : null;
   }
+  /* ══ v471：三種「會動的講解」————————————————————————————————
+     它們是「學」的強化版：有動畫示範、小朋友可以點，但**沒有對錯**。
+     好處是不會引進新的答案正確性風險（v443／v452 那類坑），
+     而且剛好填「每輪 learn + 一個互動」的 learn 那一半。
+     ⚠ 雖然沒有對錯，程式還是要驗——講錯的文法比答錯一題更糟。
+     ══════════════════════════════════════════════════════════════ */
+
+  /* ⏳ 時態時間軸：同一件事在過去／現在／未來怎麼說 */
+  if (st.kind === 'timeline') {
+    const ORDER = ['past', 'now', 'future'];
+    const pts = (Array.isArray(st.points) ? st.points : []).map(p => {
+      const when = String((p && p.when) || '').trim().toLowerCase();
+      const en = String((p && p.en) || '').trim();
+      if (ORDER.indexOf(when) < 0 || !en) return null;
+      const hl = (Array.isArray(p && p.hl) ? p.hl : []).map(h => String(h).trim())
+        .filter(h => h && en.toLowerCase().indexOf(h.toLowerCase()) >= 0);
+      return { when, en, hl, zh: _zhTW((p && p.zh) || '').trim() };
+    }).filter(Boolean);
+    // 時間點不能重複，而且一定要照時間排——不信任 AI 給的順序，程式自己排
+    const whens = pts.map(p => p.when);
+    const uniq = new Set(whens).size === whens.length;
+    // 三個時間點講同一句話＝完全沒有示範到「變化」，整步不要
+    const ens = pts.map(p => p.en.toLowerCase().replace(/[.!?]+$/, ''));
+    const varied = new Set(ens).size === ens.length;
+    pts.sort((a, b) => ORDER.indexOf(a.when) - ORDER.indexOf(b.when));
+    return pts.length >= 2 && pts.length <= 3 && uniq && varied
+      ? { kind: 'timeline', q: _zhTW(st.q).trim() || '同一件事，什麼時候怎麼說', points: pts, why: _zhTW(st.why).trim() } : null;
+  }
+
+  /* 🔀 肯定／否定／疑問：同一句話的三種長相 */
+  if (st.kind === 'forms') {
+    const ORDER = ['affirmative', 'negative', 'question'];
+    const fs = (Array.isArray(st.forms) ? st.forms : []).map(f => {
+      const type = String((f && f.type) || '').trim().toLowerCase();
+      const en = String((f && f.en) || '').trim();
+      if (ORDER.indexOf(type) < 0 || !en) return null;
+      const hl = (Array.isArray(f && f.hl) ? f.hl : []).map(h => String(h).trim())
+        .filter(h => h && en.toLowerCase().indexOf(h.toLowerCase()) >= 0);
+      return { type, en, hl, zh: _zhTW((f && f.zh) || '').trim() };
+    }).filter(Boolean);
+    const types = fs.map(f => f.type);
+    const uniq = new Set(types).size === types.length;
+    const ens = fs.map(f => f.en.toLowerCase().replace(/[.!?]+$/, ''));
+    const varied = new Set(ens).size === ens.length;
+    // 疑問句沒有問號＝AI 根本沒改成疑問句（最常見的錯）
+    const qOk = fs.every(f => f.type !== 'question' || /\?\s*$/.test(f.en));
+    fs.sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
+    return fs.length >= 2 && fs.length <= 3 && uniq && varied && qOk
+      ? { kind: 'forms', q: _zhTW(st.q).trim() || '同一句話的三種長相', forms: fs, why: _zhTW(st.why).trim() } : null;
+  }
+
+  /* 📊 比較級：原級 → 比較級 → 最高級，長條圖跟著長高 */
+  if (st.kind === 'degree') {
+    const lv = (Array.isArray(st.levels) ? st.levels : []).map(x => {
+      const form = String((x && x.form) || '').trim();
+      const en = String((x && x.en) || '').trim();
+      // 例句裡一定要真的出現那個字，不然「taller」配一句沒有 taller 的句子，等於沒示範
+      return form && en && en.toLowerCase().indexOf(form.toLowerCase()) >= 0
+        ? { form, en, zh: _zhTW((x && x.zh) || '').trim() } : null;
+    }).filter(Boolean);
+    if (lv.length !== 3) return null;
+    const forms = lv.map(x => x.form.toLowerCase());
+    if (new Set(forms).size !== 3) return null;
+    /* 比較級那一句要看得出是在比較（than／-er／more），
+       最高級那一句要看得出是最高（the／-est／most）。
+       AI 最常見的錯就是給三句不相干的話，這兩條擋得住。 */
+    const cmpOk = /\bthan\b/i.test(lv[1].en) || /er$/i.test(forms[1]) || /^more\s/i.test(forms[1]);
+    const supOk = /\bthe\b/i.test(lv[2].en) || /est$/i.test(forms[2]) || /^most\s/i.test(forms[2]);
+    return cmpOk && supOk
+      ? { kind: 'degree', q: _zhTW(st.q).trim() || '一個比一個更…', levels: lv, why: _zhTW(st.why).trim() } : null;
+  }
+
   if (st.kind === 'fix') {
     const sentence = String(st.sentence || '').trim(), wrong = String(st.wrong || '').trim(), right = String(st.right || '').trim();
     const toks = sentence.split(/\s+/).map(w => w.replace(/[.,!?;:]+$/, ''));
@@ -3946,20 +4027,73 @@ async function aiMakeGrammarSortSet({ base, n = 8, rounds = 3 } = {}) {
 const _GN_IDENTIFY_RE = /(noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|part[s]?\s*of\s*speech|名詞|動詞|形容詞|副詞|代名詞|介系詞|冠詞|詞性)/i;
 const _GN_ORDER_RE = /(word\s*order|sentence\s*(order|structure|building|pattern)|question\s*form|語序|句型|句子結構|造句|重組|疑問句)/i;
 const _GN_RULEY_RE = /(tense|past|present|future|plural|singular|capital|letter|agreement|comparative|superlative|spelling|時態|過去|現在|未來|複數|單數|大寫|比較級|最高級)/i;
+/* v471：三種會動的講解長什麼樣子。只有用得到的那一課會把對應那一段放進提示詞
+   （不適用就連提都不提——AI 不會想用，也省 token）。 */
+const _GN_ANIM_SHAPE = {
+  timeline:
+    '  · "timeline" {"kind":"timeline","q":"","points":[{"when":"past|now|future","en":"","hl":[""],"zh":""}],"why":""}\n' +
+    '    2-3 points showing THE SAME action at different times. when: exactly "past", "now" or "future", each used once.\n' +
+    '    The English sentences must really differ (that difference IS the lesson) and each should carry its own time clue\n' +
+    '    ("I walked to school yesterday." / "I walk to school every day." / "I will walk to school tomorrow.").\n' +
+    '    hl = the words that changed, copied exactly from that sentence. q: Traditional Chinese ≤20 characters.',
+  forms:
+    '  · "forms" {"kind":"forms","q":"","forms":[{"type":"affirmative|negative|question","en":"","hl":[""],"zh":""}],"why":""}\n' +
+    '    2-3 versions of THE SAME sentence. type: exactly "affirmative", "negative" or "question", each used once.\n' +
+    '    Keep the subject and the main idea identical and change only what the grammar makes you change\n' +
+    '    ("She likes cats." / "She does not like cats." / "Does she like cats?").\n' +
+    '    A "question" MUST end with a question mark. hl = the words that changed. q: Traditional Chinese ≤20 characters.',
+  degree:
+    '  · "degree" {"kind":"degree","q":"","levels":[{"form":"","en":"","zh":""}],"why":""}\n' +
+    '    EXACTLY 3 levels of ONE adjective, in this order: plain, comparative, superlative (tall / taller / tallest,\n' +
+    '    good / better / best, beautiful / more beautiful / the most beautiful).\n' +
+    '    Every "en" must actually CONTAIN its own "form" word, the comparative sentence needs "than" (or an -er/more form)\n' +
+    '    and the superlative sentence needs "the" (or an -est/most form) — otherwise the example does not show the point.\n' +
+    '    q: Traditional Chinese ≤20 characters.',
+};
+
+/* v471：三種「會動的講解」各自綁死在它真正適用的文法點上。
+   v443 的教訓：不綁的話，教「什麼是名詞」也會跑出一條時態時間軸。
+   ⚠ 做法是「不適用就連提都不提」——提示詞裡不出現，AI 就不會想用，
+     比起先讓它生出來再擋掉，省 token 也少一輪重試。 */
+const _GN_TENSE_RE  = /(tense|past|present|future|simple\s*(past|present|future)|continuous|progressive|perfect|時態|過去式|現在式|未來式|進行式|完成式)/i;
+const _GN_DEGREE_RE = /(comparative|superlative|比較級|最高級|\ber\s*\/\s*est\b|more\s*\/\s*most)/i;
+const _GN_FORMS_RE  = /(negative|question|affirmative|yes\s*\/\s*no|do(es)?\s*not|don'?t|doesn'?t|auxiliar|helping\s*verb|否定|疑問|問句|肯定句|助動詞|be\s*動詞)/i;
+
 function _gnLessonPlan(topic, notes) {
   const t = String(topic || '').trim() || String(notes || '').slice(0, 200);
+  const all = t + ' ' + String(notes || '').slice(0, 600);
   // 「什麼是名詞」＝認出來／分類；「名詞的複數」「過去式」＝有規則可以違反，找錯字與排句子都合理
   const identify = _GN_IDENTIFY_RE.test(t) && !_GN_RULEY_RE.test(t + ' ' + String(notes || '').slice(0, 200));
   const ordery = _GN_ORDER_RE.test(t);
-  const ban = (identify && !ordery) ? ['order'] : [];
-  const text = identify && !ordery
+
+  /* v471：這一課可以用哪幾種會動的講解？時態才有時間軸、比較級才有長條圖、
+     有講到否定／疑問才有三種句型。都看「主題＋筆記」，不是只看標題。 */
+  const showTimeline = _GN_TENSE_RE.test(all);
+  const showDegree   = _GN_DEGREE_RE.test(all);
+  const showForms    = _GN_FORMS_RE.test(all) || _GN_TENSE_RE.test(all);   // 時態一定會教到否定與疑問
+  const SHOW = { timeline: showTimeline, forms: showForms, degree: showDegree };
+  const anim = Object.keys(SHOW).filter(k => SHOW[k]);
+  const ban = Object.keys(SHOW).filter(k => !SHOW[k]);                     // 不適用的直接當不合格
+
+  const animText = anim.length ? ('\n\nANIMATED EXPLANATIONS available for THIS grammar point: ' +
+    anim.map(k => '"' + k + '"').join(', ') + '.\n' +
+    'They are a richer kind of "learn" step — the site animates them, so the child SEES the change happen.\n' +
+    'Use one in place of a plain "learn" step for the round where SEEING the change matters most. ' +
+    'A second one is fine only if it teaches a genuinely different idea ' +
+    '(e.g. "degree" once for short adjectives and once for long more/most adjectives) — never the same idea twice.\n' +
+    'They have no right answer, so they still need an interaction step after them, exactly like "learn".\n' +
+    anim.map(k => _GN_ANIM_SHAPE[k]).join('\n')) : '';
+
+  if (identify && !ordery) ban.push('order');
+  const text = (identify && !ordery
     ? '\n\nLESSON PLAN: this grammar point is about RECOGNISING and CLASSIFYING words.\n' +
       'Use "tap" (find the target words inside a sentence) and "sort" (put words into 2-3 groups) for most rounds; "pick" is also fine.\n' +
       'Do NOT use "order" at all — rearranging a sentence does not show whether a child can recognise these words.\n' +
       'Use "fix" only if a word can really be WRONG because of this rule (e.g. a capital letter, a missing -s).'
     : '\n\nLESSON PLAN: choose for every round the interaction that really tests what that round just taught.\n' +
-      'Use at least two different interaction kinds, and prefer "tap" or "sort" whenever the idea is "find it" or "which group".';
-  return { ban, text };
+      'Use at least two different interaction kinds, and prefer "tap" or "sort" whenever the idea is "find it" or "which group".')
+    + animText;
+  return { ban, text, anim };
 }
 /* imgHint 要講的是「例句在說什麼」，不是抽象的文法概念——
    v442 的自動配圖抓的就是 imgHint，AI 給了「classroom」而例句在講公園，圖片就完全不相干。 */
@@ -4018,12 +4152,12 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
     valid = valid.filter(Boolean);
     // 最後一步是「學」＝學完沒得練就結束了，砍掉（互動教學的重點就是動手）
     let trimmed = false;
-    while (valid.length && valid[valid.length - 1].kind === 'learn') { valid.pop(); trimmed = true; }
+    while (valid.length && gnIsTeachStep(valid[valid.length - 1])) { valid.pop(); trimmed = true; }
     /* v445（Alan：「不需要這麼多頁講解，講解不是越多越好」）——最多 4 輪（8 步）。
        多出來的整輪砍掉，寧可少講兩頁也不要小朋友翻十頁。 */
     if (valid.length > 8) valid.length = 8;
-    while (valid.length && valid[valid.length - 1].kind === 'learn') valid.pop();
-    const l = valid.filter(s2 => s2.kind === 'learn').length >= 2 && valid.filter(s2 => s2.kind !== 'learn').length >= 2
+    while (valid.length && gnIsTeachStep(valid[valid.length - 1])) valid.pop();
+    const l = valid.filter(gnIsTeachStep).length >= 2 && valid.filter(s2 => !gnIsTeachStep(s2)).length >= 2
       ? { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() } : null;
     if (l) return l;
     if (!best || valid.length > best.steps.length) best = { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() };
@@ -4035,7 +4169,7 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
       return 'it breaks the RULES';
     };
     const bad = steps.map((st, k) => (keep(st) ? null : `- step ${k + 1} (${why(st)}): ${JSON.stringify(st).slice(0, 160)}`)).filter(Boolean);
-    if (trimmed) bad.push('- the lesson ended with a "learn" step: every "learn" must be followed by an interaction');
+    if (trimmed) bad.push('- the lesson ended with a teaching step: every "learn" (and every animated explanation) must be followed by an interaction');
     if (sortBad.length) bad.push('- a "sort" step used words that belong to TWO groups at once (a child who sorts them ' +
       `correctly would still be marked wrong): ${sortBad.join(', ')}. Sense verbs (smell/taste/feel/look/sound) are ` +
       'both linking and action verbs — never put them in a sorting question.');
@@ -4043,7 +4177,7 @@ async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', c
       'Fix them. You need at least 2 "learn" steps and 2 interaction steps, and every step must follow the RULES exactly.';
   }
   // 三次都不完美 → 只要有「學」也有「動手」，就先用驗過的那幾步（總比整個失敗好）
-  if (best && best.steps.some(s => s.kind === 'learn') && best.steps.some(s => s.kind !== 'learn')) return best;
+  if (best && best.steps.some(gnIsTeachStep) && best.steps.some(s => !gnIsTeachStep(s))) return best;
   throw new Error((lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗') + _aiUpstreamNote(lastErr));
 }
 
@@ -5808,7 +5942,9 @@ function lineRunLog(pass) { return _lineCall('/run-log', 'GET', pass); }
 function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
 
 Object.assign(window, {
-  aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep, gnValidRewrite, gnCleanStem,
+  aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidLesson, gnValidStep,
+  gnIsTeachStep, GN_TEACH_KINDS,                 // v471：「這一步是講解還是動手」只有一份判斷
+  gnValidRewrite, gnCleanStem,
   gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint,
   gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet,
   gnValidWrite, gnValidTransform, gnValidOrder,    // v462 ③造句 ②句型轉換 ①排順序
