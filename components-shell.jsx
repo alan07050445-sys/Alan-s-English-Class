@@ -1397,7 +1397,7 @@ function CheckinPanel({ user, checkin, onClose, onDone }) {
   );
 }
 
-function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, mx, onOpenDress }) {
+function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed, mx, onOpenDress }) {
   const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
@@ -1419,8 +1419,10 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, mx, o
     const a = window.computeAutoStars ? window.computeAutoStars(weeks || {}, weekOrder || [], progItems || {}) : { total: 0, entries: [] };
     // v362: 每日簽到的星星也算進來
     const c = window.computeCheckin ? window.computeCheckin(checkin) : { total: 0, entries: [] };
-    return { total: a.total + c.total, entries: [...a.entries, ...c.entries] };
-  }, [weeks, weekOrder, progItems, checkin]);
+    // v465：訂正錯題的星星也算進來（跟 header 右上角那顆 ⭐ 用同一組函式）
+    const f = window.computeFixedStars ? window.computeFixedStars(fixed) : { total: 0, entries: [] };
+    return { total: a.total + c.total + f.total, entries: [...a.entries, ...c.entries, ...f.entries] };
+  }, [weeks, weekOrder, progItems, checkin, fixed]);
   /* v431 ④：買吉祥物裝扮花掉的星星要扣掉。花了多少由「買到哪幾件」反算（data.js mxSpent），
      跟 header 右上角那顆 ⭐ 用的是同一個算法，兩邊不可能對不起來。 */
   const spent = window.mxSpent ? window.mxSpent(mx) : 0;

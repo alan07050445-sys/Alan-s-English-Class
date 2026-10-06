@@ -228,6 +228,7 @@ function App() {
   const [myProgressItems, setMyProgressItems] = useAppState({}); // raw Firestore items (incl. wrongQuestions)
   // v362: 每日簽到
   const [myCheckin, setMyCheckin] = useAppState(null);
+  const [myFixed, setMyFixed] = useAppState(null);   // v465：訂正錯題的紀錄（星星要用）
   const [checkinOpen, setCheckinOpen] = useAppState(false);
 
   // ── Access lock (firestore.rules 部署後，未在名單內 → 鎖定頁) ──
@@ -422,7 +423,8 @@ function App() {
     setMyProgressItems({});
     setMyCheckin(null);
     if (!user) return;
-    const unsub = window.subscribeMyProgress(user.uid, (firestoreItems, checkin) => {
+    const unsub = window.subscribeMyProgress(user.uid, (firestoreItems, checkin, fixed) => {
+      setMyFixed(fixed);   // v465
       setMyCheckin(checkin || null);   // v362
       // Convert Firestore format { itemId: {done, score?, time?} } → app format { itemId: timestamp }
       const appProgress = {};
@@ -697,8 +699,9 @@ function App() {
     if (!user) return 0;
     const a = window.computeAutoStars ? window.computeAutoStars(weeks, viewOrder, qmProgress) : { total: 0 };
     const c = window.computeCheckin   ? window.computeCheckin(myCheckin) : { total: 0 };
-    return (a.total || 0) + (c.total || 0);
-  }, [user, weeks, viewOrder, qmProgress, myCheckin]);
+    const f = window.computeFixedStars ? window.computeFixedStars(myFixed) : { total: 0 };   // v465：訂正錯題
+    return (a.total || 0) + (c.total || 0) + (f.total || 0);
+  }, [user, weeks, viewOrder, qmProgress, myCheckin, myFixed]);
 
   /* v431 ④：買裝扮花掉的星星要扣掉——由「買到哪幾件」反算，不是存一個數字（見 data.js mxSpent）。
      header、集點面板、裝扮室三個地方都用這一個數，不可能對不起來。 */
@@ -2124,6 +2127,7 @@ function App() {
               progressItems={myProgressItems}
               weeks={weeks}
               weekOrder={viewOrder}
+              fixed={myFixed}
               onClose={() => setMistakesOpen(false)}
             />
           )}
@@ -2131,7 +2135,7 @@ function App() {
           {/* v342: 我的星星 + 商店 */}
           {starsOpen && user && (
             <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}
-              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin}
+              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin} fixed={myFixed}
               mx={userProfile.mx} onOpenDress={() => { setStarsOpen(false); if (window.mxOpenDress) window.mxOpenDress(); }}/>
           )}
           {checkinOpen && window.CheckinPanel && (

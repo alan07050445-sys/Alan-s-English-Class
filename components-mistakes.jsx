@@ -120,6 +120,8 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
       setCleared(c => c + 1);
       if (user?.uid) {
         window.removeWrongQuestion(user.uid, current.itemId, current.q, current.answer);
+        // v465：訂正一題 +1⭐（一天上限在 computeFixedStars 裡套，這裡只負責記「真的訂正了一題」）
+        if (window.markMistakeFixed) window.markMistakeFixed(user.uid, user.displayName || '', user.email || '');
       }
     }
   };
@@ -139,6 +141,7 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
     window.playSound('correct');
     if (user?.uid) {
       window.removeWrongQuestion(user.uid, q.itemId, q.q, q.answer);
+      if (window.markMistakeFixed) window.markMistakeFixed(user.uid, user.displayName || '', user.email || '');   // v465
     }
     setRevealItems(items => items.filter(it => it !== q));
   };
@@ -284,7 +287,16 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
 }
 
 /* ── Main MistakesPanel ─────────────────────────────────── */
-function MistakesPanel({ user, progressItems, weeks, weekOrder, onClose }) {
+/* v465（Alan：「我覺得要加上獎勵比較合理」）：訂正一題 +1⭐，一天上限 10 顆。
+   順便把這張面板的三個問題一起修掉（都是實測看出來的）：
+     ① 一次丟「開始重練（18 題）」——看到數字就不想開始，而且真實學生可能累積 50+。
+        → 一次只給 5 題，做完再問「還要再 5 題嗎」。可完成、有節奏。
+     ② 照「週次」分，不是照「你哪裡不會」分——同一個字在聽寫、配對、填空都錯過，
+        現在是三筆不相干的紀錄。→ 照**答案**歸戶，一個答案一張卡，寫清楚在哪幾種練習裡錯過。
+     ③ 看不到獎勵。→ 標題寫「訂正一題 +1⭐」，今天還能拿幾顆也寫出來。 */
+const MK_BATCH = 5;   // 一次練幾題
+
+function MistakesPanel({ user, progressItems, weeks, weekOrder, fixed, onClose }) {
   const [drillMode,      setDrillMode]      = useMK(false);
   const [drillQuestions, setDrillQuestions] = useMK(null);
 
@@ -293,17 +305,28 @@ function MistakesPanel({ user, progressItems, weeks, weekOrder, onClose }) {
     [progressItems, weeks, weekOrder]
   );
 
-  // Group by weekLabel
-  const grouped = useMKM(() => {
-    const g = {};
+  /* 照「答案」歸戶：同一個答案在幾種練習裡錯過就併成一張卡。
+     ⚠ 用 gnNorm 正規化（大小寫、標點不算差別），不然 "pursued" 和 "Pursued" 會變兩張。 */
+  const byAnswer = useMKM(() => {
+    const norm = (t) => (window.gnNorm ? window.gnNorm(String(t || '')) : String(t || '').toLowerCase().trim());
+    const m = new Map();
     allWrong.forEach(q => {
-      (g[q.weekLabel] = g[q.weekLabel] || []).push(q);
+      const k = norm(q.answer) || ('__' + q.q);
+      if (!m.has(k)) m.set(k, { answer: q.answer, items: [], kinds: new Set(), weeks: new Set() });
+      const g = m.get(k);
+      g.items.push(q);
+      if (q.itemTitle) g.kinds.add(window.QM_TYPE_ZH_PUBLIC ? window.QM_TYPE_ZH_PUBLIC[q.type] || q.cat : (q.cat || ''));
+      if (q.weekLabel) g.weeks.add(q.weekLabel);
     });
-    return g;
+    // 錯過愈多次的排前面——那才是「他真的不會」的
+    return [...m.values()].sort((x, y) => y.items.length - x.items.length);
   }, [allWrong]);
 
+  const f = window.computeFixedStars ? window.computeFixedStars(fixed) : { todayLeft: 0, todayN: 0 };
+  const perStar = window.FIX_STAR || 1;
+
   const startDrill = () => {
-    setDrillQuestions([...allWrong]); // snapshot at click time
+    setDrillQuestions(allWrong.slice(0, MK_BATCH));   // v465：一次只練 5 題
     setDrillMode(true);
   };
 
@@ -337,22 +360,32 @@ function MistakesPanel({ user, progressItems, weeks, weekOrder, onClose }) {
         ) : (
           <>
             <div className="mk-summary">
-              共 <strong>{allWrong.length}</strong> 道錯題需要複習
+              還有 <strong>{allWrong.length}</strong> 題可以訂正
+              <span className="mk-reward">訂正一題 <b>+{perStar}⭐</b>
+                {f.todayLeft > 0 ? `　今天還可以拿 ${f.todayLeft} 顆` : '　今天的已經拿滿了，明天再來 👍'}</span>
             </div>
 
+            {/* v465：照「答案」歸戶——同一個字在幾種練習裡錯過就併成一張，
+                錯最多次的排最前面。這才回答得了「我到底哪裡不會」。 */}
             <div className="mk-list">
-              {Object.entries(grouped).map(([weekLabel, qs]) => (
-                <div key={weekLabel} className="mk-group">
-                  <div className="mk-group-label">{weekLabel}</div>
-                  {qs.map((q, i) => (
-                    <MistakeItem key={`${q.itemId}-${i}`} q={q}/>
-                  ))}
+              {byAnswer.slice(0, 12).map((g, i) => (
+                <div key={i} className="mk-ans">
+                  <div className="mk-ans-head">
+                    <b className="mk-ans-word">{g.answer || '（看題目）'}</b>
+                    {g.items.length > 1 && <span className="mk-ans-n">錯過 {g.items.length} 次</span>}
+                  </div>
+                  <div className="mk-ans-where">
+                    {[...g.weeks].slice(0, 3).join('、')}
+                    {g.items.length > 1 && <span>　·　{[...new Set(g.items.map(x => x.cat).filter(Boolean))].join('、')}</span>}
+                  </div>
                 </div>
               ))}
+              {byAnswer.length > 12 && <div className="mk-ans-more">…還有 {byAnswer.length - 12} 個</div>}
             </div>
 
             <button className="mk-drill-btn" onClick={startDrill}>
-              ↻ 開始重練（{allWrong.length} 題）
+              ↻ 先練 {Math.min(MK_BATCH, allWrong.length)} 題
+              {f.todayLeft > 0 && <span className="mk-drill-star">　最多 +{Math.min(MK_BATCH, allWrong.length, f.todayLeft) * perStar}⭐</span>}
             </button>
           </>
         )}

@@ -909,7 +909,8 @@ async function saveProgressItem(uid, displayName, email, itemId, data) {
 function subscribeMyProgress(uid, callback) {
   return _db.collection('progress').doc(uid).onSnapshot(snap => {
     const d = snap.exists ? (snap.data() || {}) : {};
-    callback(d.items || {}, d.checkin || null);   // v362: 第二個參數＝每日簽到紀錄
+    // v362: 第二個＝每日簽到；v465: 第三個＝訂正錯題的紀錄（星星要用）
+    callback(d.items || {}, d.checkin || null, d.fixed || null);
   });
 }
 
@@ -5959,6 +5960,62 @@ async function mxSetWear(uid, kind, id, mx) {
 Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v465（Alan：「錯題那個也幫我做，我覺得要加上獎勵比較合理」）
+   ──────────────────────────────────────────────────────────────────────────
+   錯題本其實 v394 就上線了（header 的 📕），但沒有任何獎勵——小朋友沒有理由去點它。
+   加上：訂正一題 +1⭐，一天最多 +10⭐。
+
+   ⚠ 為什麼要有上限：沒有上限就變成「錯愈多賺愈多」。
+     不過其實也很難刻意刷——故意答錯會讓那一份的分數掉到 80 以下，
+     直接少掉 +10~15 顆完成星，比訂正拿回來的多得多。上限只是保險。
+
+   ⚠ 為什麼要另外存一份紀錄：這個網站的星星是**從「做過什麼」反算**的（v409），
+     而「訂正」做完的動作是**把錯題刪掉**——刪掉就沒有東西可以反算了。
+     所以要留一筆 progress/{uid}.fixed.days['YYYY-MM-DD'] = 幾題。
+     它跟 items 一樣掛在人身上，換年級、封存都不會消失（v409 的教訓）。
+   ⚠ 紀錄存「真正訂正了幾題」，上限是算星星時才套用——
+     以後想調上限，歷史資料不用重算。
+   ══════════════════════════════════════════════════════════════════════════ */
+const FIX_STAR = 1;        // 訂正一題幾顆
+const FIX_DAILY_CAP = 10;  // 一天最多幾顆
+
+function computeFixedStars(fixed) {
+  const days = (fixed && fixed.days) || {};
+  const entries = [];
+  let total = 0, n = 0;
+  Object.keys(days).sort().forEach(d => {
+    const cnt = Math.max(0, Number(days[d]) || 0);
+    if (!cnt) return;
+    n += cnt;
+    total += Math.min(cnt * FIX_STAR, FIX_DAILY_CAP);
+  });
+  if (n > 0) {
+    entries.push({ id: 'fix:total', auto: true, date: Object.keys(days).sort().pop() || '',
+                   amount: total, note: `訂正錯題 ${n} 題` });
+  }
+  const today = checkinToday();
+  const todayN = Math.max(0, Number(days[today]) || 0);
+  return { total, entries, todayN,
+           todayLeft: Math.max(0, Math.floor(FIX_DAILY_CAP / FIX_STAR) - todayN) };
+}
+
+/* 訂正了一題 → 記一筆（雲端）。回傳今天還可以再拿幾顆，給畫面顯示。 */
+async function markMistakeFixed(uid, displayName, email) {
+  if (!uid) return;
+  try {
+    const ref = _db.collection('progress').doc(uid);
+    const profileFields = { updatedAt: Date.now() };
+    if (displayName && displayName.trim()) profileFields.name  = displayName.trim();
+    if (email      && email.trim())        profileFields.email = email.trim();
+    await ref.set(profileFields, { merge: true });
+    await ref.update({ [`fixed.days.${checkinToday()}`]: firebase.firestore.FieldValue.increment(1) });
+  } catch (e) { console.warn('markMistakeFixed:', e); }
+}
+/* ⚠ 一定要掛在這裡（定義之後）。FIX_STAR / FIX_DAILY_CAP 是 const，
+   寫進檔案上方那張匯出表會 TDZ 爆掉——v451 踩過同一個坑。 */
+Object.assign(window, { computeFixedStars, markMistakeFixed, FIX_STAR, FIX_DAILY_CAP });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};
