@@ -47,7 +47,21 @@ ok('認出來型的課：找出來與分一分開最大、句型轉換關掉', /
 ok('⭐ AI 說「沒有可找的／可分的」就關掉那一種（它比對照表知道得多）',
    /if \(!findWhat\) preset\.nCircle = 0;/.test(data) && /if \(!sortBy\)   preset\.nSort = 0;/.test(data));
 ok('判斷失敗不擋住老師（退回通用預設）', /判斷失敗不該擋住老師——退回通用的預設值/.test(data) && /guessed: !plan/.test(data));
-ok('老師端有按鈕，而且會把題數填好', /aiPlanGrammarKinds\(\{ topic: sheet\.topic/.test(ed) && /setNOrd\(pl\.nOrd\)/.test(ed));
+/* 🔴 v472：這一條本來比對的是 `topic: sheet.topic`——也就是把 bug 本身鎖起來了。
+   sheet 只存在於「讀作業」那個 async 函式裡，畫面上根本沒有，一打開就 ReferenceError。
+   而且邏輯上也不對：這顆按鈕是在**還沒生成之前**按的，那時候 AI 還沒讀過作業。
+   教訓：測試要照「應該有的行為」寫，不要照「現在的程式碼」寫，不然會把錯誤釘死。 */
+/* ⚠ 只切按鈕本體：上面那段說明文字裡本來就會提到 sheet（在講以前為什麼壞），
+   把註解也切進來的話，下面那條「不可以有 sheet」會自己打到自己。 */
+const btnAt = ed.indexOf('className="btn ghost gn-plan-btn"');
+const planBtn = ed.slice(btnAt, ed.indexOf("'判斷中…'", btnAt));
+ok('老師端有按鈕，而且會把題數填好',
+   /aiPlanGrammarKinds\(\{ topic: title\.trim\(\)/.test(planBtn) && /setNOrd\(pl\.nOrd\)/.test(ed));
+ok('⭐ 用的是老師自己打的主題與筆記，不是還不存在的 sheet',
+   !/\bsheet\b/.test(planBtn) && /notes: text\.trim\(\)/.test(planBtn));
+ok('什麼都沒打的時候按鈕是灰的，而且有講為什麼',
+   /disabled=\{planBusy \|\| !\(title\.trim\(\) \|\| text\.trim\(\)\)\}/.test(planBtn)
+   && /我才知道這一課在教什麼/.test(ed));
 ok('填好之後老師還是可以自己改（有寫在畫面上）', /下面的題數已經幫你填好了，不滿意直接改/.test(ed));
 
 console.log('\n【4】① 排順序：出題品質');

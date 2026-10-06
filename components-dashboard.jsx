@@ -1443,6 +1443,54 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
      每樣附的是「蝦皮搜尋連結」＝真實有效、永遠不會壞；老師要換成特定商品連結隨時可改。
    星星 = 估價 NT$ × 20（Alan 訂的換算）。 */
 /* ── 商店商品維護（v343）──────────────────────────────── */
+/* 🔴 v472：這個函式**從來沒有被寫出來**（v347 加了「批次貼上蝦皮連結」的畫面與
+   bulkAdd，但解析那一段漏掉了）——按「加入商品」就 ReferenceError，按鈕等於是死的。
+   是 v472 新的「用了但沒宣告」檢查撈出來的。
+
+   四種貼法都要認得（畫面上的提示就是這樣寫的）：
+     【日本百樂PILOT】Juice果汁筆 0.5mm $45 https://shopee.tw/aaa-i.1.2   蝦皮分享的整段
+     https://shopee.tw/卡皮巴拉玩偶-i.789.012  450                        網址＋價格
+     卡皮巴拉吊飾  150                                                    沒連結也可以
+     https://shopee.tw/xxx-i.1.2 | 自己打名稱 | 380                       用 | 分開
+   ⚠ 價格優先認 "$45"；沒有 $ 才認「結尾一個獨立的數字」——
+     不然「0.5mm」裡的 0.5 會被當成價格。 */
+function shopNameFromUrl(url) {
+  try {
+    const seg = String(url).split('?')[0].replace(/\/+$/, '').split('/').pop() || '';
+    return decodeURIComponent(seg).replace(/-i\.[\d.]+$/i, '').replace(/[-_]+/g, ' ').trim();
+  } catch (e) { return ''; }
+}
+function parseShopLines(text) {
+  const items = [], bad = [];
+  String(text || '').split(/\r?\n/).forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    let name = '', url = '', price = null;
+    if (line.indexOf('|') >= 0) {
+      line.split('|').map(x => x.trim()).filter(Boolean).forEach(part => {
+        if (/^https?:\/\//i.test(part)) url = url || part;
+        else if (/^\$?\s*\d+(?:\.\d+)?$/.test(part)) price = parseFloat(part.replace(/[^\d.]/g, ''));
+        else name = name || part;
+      });
+    } else {
+      let rest = line;
+      const u = rest.match(/https?:\/\/\S+/i);
+      if (u) { url = u[0]; rest = (rest.slice(0, u.index) + ' ' + rest.slice(u.index + u[0].length)).trim(); }
+      const d = rest.match(/\$\s*(\d+(?:\.\d+)?)/);
+      if (d) { price = parseFloat(d[1]); rest = (rest.slice(0, d.index) + ' ' + rest.slice(d.index + d[0].length)).trim(); }
+      else {
+        const t = rest.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*$/);
+        if (t) { price = parseFloat(t[1]); rest = rest.slice(0, t.index).trim(); }
+      }
+      name = rest.replace(/\s+/g, ' ').trim();
+    }
+    if (!name && url) name = shopNameFromUrl(url);
+    if (!name) { bad.push(line); return; }                 // 看不懂的行會回報給老師，不是默默吃掉
+    items.push({ name: name.slice(0, 60), price: (price != null && price > 0) ? price : null, url });
+  });
+  return { items, bad };
+}
+
 function ShopManager() {
   const [items, setItems] = useDash(null);   // null = 還沒載到
   const [err, setErr]     = useDash(null);

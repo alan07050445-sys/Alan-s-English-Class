@@ -5442,11 +5442,16 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                 ⚠ 只讓 AI 做「判斷類型」這件它擅長的事；題數由程式的對照表給，
                   不讓模型自己編數字。老師看完還是可以自己改。 */}
             <div className="gn-plan">
-              <button type="button" className="btn ghost gn-plan-btn" disabled={planBusy || !sheet}
+              {/* 🔴 v472：這裡本來寫 sheet.topic／sheet.notes，但 sheet 只存在於「讀作業」那個
+                  async 函式裡面，畫面上根本沒有這個東西 → 一打開就 ReferenceError，整個視窗是白的。
+                  而且邏輯上也不對：這顆按鈕是在**還沒生成之前**按的，那時候 AI 還沒讀過作業，
+                  本來就沒有 sheet。能用的只有老師自己打的主題與筆記。 */}
+              <button type="button" className="btn ghost gn-plan-btn"
+                disabled={planBusy || !(title.trim() || text.trim())}
                 onClick={async () => {
                   setPlanBusy(true);
                   try {
-                    const pl = await window.aiPlanGrammarKinds({ topic: sheet.topic, topicZh: sheet.topicZh, notes: sheet.notes, grade });
+                    const pl = await window.aiPlanGrammarKinds({ topic: title.trim(), topicZh: '', notes: text.trim(), grade });
                     setPlan(pl);
                     setNMcq(pl.nMcq); setNFill(pl.nFill); setNTr(pl.nTr); setNRw(pl.nRw);
                     setNCircle(pl.nCircle); setNSort(pl.nSort); setCSets(pl.nCircleSets); setSSets(pl.nSortSets);
@@ -5456,6 +5461,9 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
                 }}>
                 {planBusy ? '判斷中…' : '🤖 這一課該出哪些題型？幫我決定'}
               </button>
+              {!(title.trim() || text.trim()) && !plan && (
+                <div className="gn-plan-say guessed">先打上面的「單元名稱」或貼上教學重點，我才知道這一課在教什麼。</div>
+              )}
               {plan && (
                 <div className={'gn-plan-say' + (plan.guessed ? ' guessed' : '')}>
                   {plan.zh && <b>{plan.zh}</b>} {plan.why}
