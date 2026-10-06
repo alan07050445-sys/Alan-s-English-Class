@@ -785,7 +785,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -1432,6 +1432,16 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                           onClick={() => { setGrpMenu(null); onRegenGroup(cat.id, g.name, g.items); }}
                           title="用同一份設定再出一份新題目，直接加進這一組（不會變成另一組）">
                           ✨ 在這一組再出一份題目
+                        </button>
+                      )}
+                      {/* v466（Alan：「單字那一課只會在那一週出現，我想每隔一週就讓他們複習；
+                          單字卡不用再換，但 fill in the blank 或故事型的題目就可以換」）：
+                          同一批單字、重出一份不一樣的題目，排到之後的某一週。 */}
+                      {onReviewGroup && window.reviewWordsOf && window.reviewWordsOf(g.items).length >= 2 && (
+                        <button className="qm-grp-ghost"
+                          onClick={() => { setGrpMenu(null); onReviewGroup(cat.id, g.name, g.items); }}
+                          title="用同一批單字重出一份不一樣的題目，排到之後的某一週當複習">
+                          🔁 排一份複習到別週…
                         </button>
                       )}
                     </div>

@@ -205,6 +205,7 @@ function App() {
      不然又要重新生成並且又是不同 group」）：記住「要加進哪一組」，一鍵生成的標題就先填好，
      建出來的單元 group 一樣＝直接落在同一組底下。 */
   const [regenFor, setRegenFor] = useAppState(null);          // { catId, name }
+  const [reviewFor, setReviewFor] = useAppState(null);        // v466：{ catId, name, items } 排複習
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
   const getGridCols = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols').trim()) || 2;
@@ -1413,6 +1414,33 @@ function App() {
 
   /* v454：整組沿用到其他週（Alan：「功課要延續到下週當功課」）——
      一次把整組複製過去，dueDate 有值的話在目標週也直接設成作業。 */
+  /* v466（Alan：「我想製作一個複習的方式，但題目我又要重新生成」）：
+     同一批單字重出一份新題目 → 寫進目標週，組名加「· 複習」。
+     ⚠ 單字卡是**照抄**原本那一張（Alan：「單字卡當然不用再換」），
+       但 id 要換新的，不然跟原本那一週同 id，學生做完會互相蓋掉進度。 */
+  const handleCreateReview = ({ targetWeekId, catId, groupName, words, ai, story, kinds, dueDate }) => {
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[targetWeekId]) { showToast('找不到那一週'); return; }
+    const title = `${groupName} · 複習`;
+    const built = window.qsBuildItems({ words, title, kinds, ai, story });
+    if (!built.length) { showToast('沒有產生任何單元'); return; }
+    if (!w[targetWeekId].items) w[targetWeekId].items = { vocab: [], grammar: [], word: [], reading: [] };
+    if (!w[targetWeekId].items[catId]) w[targetWeekId].items[catId] = [];
+    if (dueDate && !w[targetWeekId].homework) w[targetWeekId].homework = {};
+    const taken = new Set(Object.values(w[targetWeekId].items).flat().map(it => it.id));
+    built.forEach(it => {
+      let id = it.id, n = 2;
+      while (taken.has(id)) { id = `${it.id}-${n}`; n++; }
+      taken.add(id);
+      w[targetWeekId].items[catId].push({ ...it, id });
+      if (dueDate) w[targetWeekId].homework[id] = { dueDate };
+    });
+    setWeeks(w);
+    saveWeeksSafe(w);
+    setReviewFor(null);
+    showToast(`已排 ${built.length} 個複習單元到「${w[targetWeekId].label || targetWeekId}」${dueDate ? '，並設成作業' : ''} ✓`);
+  };
+
   const handleCopyGroupToWeeks = (catId, items, targetWeekIds, dueDate) => {
     const list = (items || []).filter(x => x && x.id);
     if (!list.length || !(targetWeekIds || []).length) return;
@@ -1832,6 +1860,7 @@ function App() {
               onCopyToWeeks={(item, targetIds) => handleCopyItemToWeeks(catView.id, item, targetIds)}
               onCopyGroupToWeeks={(items, targetIds, due) => handleCopyGroupToWeeks(catView.id, items, targetIds, due)}
               onRegenGroup={(catId, name) => setRegenFor({ catId, name, pick: true })}
+              onReviewGroup={(catId, name, gItems) => setReviewFor({ catId, name, items: gItems })}
               onSetHomeworkMany={handleSetHomeworkMany}
               homework={week.homework || {}}
               onSetHomework={handleSetHomework}
@@ -2081,6 +2110,24 @@ function App() {
 
           {/* v454：「在這一組再出一份題目」——先問要出哪一種，名字已經幫你填好，出來就落在同一組 */}
           {/* v461：這一個沒有輸入欄位（只是選要重出哪一種），點背景關掉不會弄丟東西 */}
+          {/* v466：🔁 排一份複習到別週 */}
+          {reviewFor && window.ReviewGroupModal && (
+            <window.ReviewGroupModal
+              open={true}
+              groupName={reviewFor.name}
+              catId={reviewFor.catId}
+              items={reviewFor.items}
+              curWeekId={weekId}
+              grade={grade}
+              weekChoices={viewOrder.map(id => ({
+                id,
+                label: (weeks[id] && (weeks[id].label || weeks[id].id)) || id,
+              }))}
+              onClose={() => setReviewFor(null)}
+              onCreate={handleCreateReview}
+            />
+          )}
+
           {regenFor && regenFor.pick && (
             <div className="modal-backdrop" onClick={() => setRegenFor(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>

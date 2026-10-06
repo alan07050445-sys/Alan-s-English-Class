@@ -6741,3 +6741,9 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 
 /* v462 ②：句型轉換的題幹是「原句 → 要改成什麼」兩行 */
 .ta-prompt.tf { white-space: pre-line; line-height: 1.6; }
+
+/* v466：排複習 */
+.rv-kind { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.rv-kind input[disabled] + span { color: var(--ink-muted, #8a8270); }
+.rv-hw { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; cursor: pointer; }
+.rv-hw input[type=date] { margin-left: 4px; font-size: 12.5px; padding: 4px 8px; }

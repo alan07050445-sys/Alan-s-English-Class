@@ -1413,6 +1413,121 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v466：🔁 排一份複習到別週
+   ──────────────────────────────────────────────────────────────────────────
+   Alan：「單字那一課只會在那一週出現，我想每隔一週就讓他們複習。
+          單字卡當然不用再換，但 fill in the blank 或故事型的題目就可以換。」
+   做法：單字從這一組的單字卡拿（term/zh/example 都在），
+        把「上次出過的所有句子」餵進 prompt 說不可以再用，重出一份新題目放到目標週。
+   ⚠ 單字卡本身照抄一份過去（同一批字，學生複習前可以先看一遍）——Alan 明講不用換。
+   ══════════════════════════════════════════════════════════════════════════ */
+function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekId, grade, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const words = useS(() => [])[0];
+  const w = window.reviewWordsOf ? window.reviewWordsOf(items) : [];
+  const seen = window.reviewSeenSentences ? window.reviewSeenSentences(items) : [];
+  /* 預設排到「兩週後」——Alan 要的是「每隔一週複習一次」。
+     找不到就退回清單裡第一個比現在晚的週次。 */
+  const later = (weekChoices || []).filter(c => c.id !== curWeekId);
+  const curIx = (weekChoices || []).findIndex(c => c.id === curWeekId);
+  const defWeek = (weekChoices || [])[curIx + 2] || (weekChoices || [])[curIx + 1] || later[0] || null;
+  const [week, setWeek]   = useS(defWeek ? defWeek.id : '');
+  const [kinds, setKinds] = useS(['quiz', 'fillblank', 'story', 'def-match', 'spelling']);
+  const [asHw, setAsHw]   = useS(true);
+  const [due, setDue]     = useS('');
+  const [busy, setBusy]   = useS(0);
+  const [err, setErr]     = useS('');
+  const [note, setNote]   = useS('');
+
+  const KINDS = [
+    ['flashcard',  '🃏 單字卡（同一批字，不重出）', true],
+    ['quiz',       '📝 測驗（新題目）', false],
+    ['fillblank',  '✏️ 填空（新句子）', false],
+    ['story',      '📖 短文填空（新短文）', false],
+    ['def-match',  '🔗 配對連線', false],
+    ['spelling',   '🔊 聽寫', false],
+  ];
+  const toggle = (k) => setKinds(ks => ks.indexOf(k) >= 0 ? ks.filter(x => x !== k) : ks.concat(k));
+
+  const run = async () => {
+    if (!week) { setErr('請先選要排到哪一週'); return; }
+    setErr(''); setBusy(0.0001);
+    try {
+      const wantStory = kinds.indexOf('story') >= 0;
+      const exP = window.aiMakeVocabExercises(w, { hint: groupName, grade, teacherNote: note, avoid: seen,
+                                                   onProgress: (d) => setBusy(d) });
+      const stP = wantStory && window.aiMakeVocabStory
+        ? window.aiMakeVocabStory(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP }).catch(() => null)
+        : Promise.resolve(null);
+      const [ai, story] = await Promise.all([exP, stP]);
+      onCreate({
+        targetWeekId: week, catId, groupName, words: w, ai, story,
+        kinds: kinds.filter(k => k !== 'story'),
+        dueDate: asHw ? (due || null) : null,
+      });
+    } catch (e) { setErr((e && e.message) || '重出題目失敗，請再試一次。'); }
+    setBusy(0);
+  };
+
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>🔁 排一份複習 <em>{groupName}</em></h3>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="field-help" style={{ marginBottom: 12 }}>
+            用<b>同一批 {w.length} 個單字</b>重出一份<b>不一樣</b>的題目，排到之後的某一週。
+            上次出過的 {seen.length} 個句子會送進去告訴 AI「不可以再用」，所以小朋友沒辦法背答案。
+            <br/>單字卡會照抄一份過去（同一批字不用重出），複習前可以先看一遍。
+          </div>
+          {w.length < 2 && <div className="gr-warn">這一組找不到單字卡，沒辦法排複習。</div>}
+
+          <div className="field">
+            <label className="field-label">排到哪一週</label>
+            <select value={week} onChange={e => setWeek(e.target.value)}>
+              <option value="">（選一週）</option>
+              {later.map(c => <option key={c.id} value={c.id}>{c.label}{c.id === (defWeek && defWeek.id) ? '（建議・隔一週）' : ''}</option>)}
+            </select>
+          </div>
+
+          <div className="field">
+            <label className="field-label">要出哪些</label>
+            <div className="gn-count-grid">
+              {KINDS.map(([k, label, fixed]) => (
+                <label key={k} className="rv-kind">
+                  <input type="checkbox" checked={fixed || kinds.indexOf(k) >= 0} disabled={fixed}
+                    onChange={() => toggle(k)}/>
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <window.AiNoteBox value={note} onChange={setNote}
+            examples="這次的句子換成校園生活｜不要再用動物當主角｜句子長一點"/>
+
+          <label className="rv-hw">
+            <input type="checkbox" checked={asHw} onChange={e => setAsHw(e.target.checked)}/>
+            <span>順便設成那一週的作業</span>
+            {asHw && <input type="date" value={due} onChange={e => setDue(e.target.value)} onClick={e => e.stopPropagation()}/>}
+          </label>
+          {err && <div className="gr-warn">{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={!week || w.length < 2 || !!busy} onClick={run}>
+            {busy ? `重出題目中… ${Math.floor(busy)}/${w.length}` : `✨ 重出一份並排進去 →`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* 真正產生各個單元的資料。抽出來是為了好測。 */
 function qsBuildItems({ words, title, kinds, ai, story }) {
   const aiOf = (term) => (ai || []).find(r => r.term === term) || null;
@@ -5695,6 +5810,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             onCreate({
               title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
               lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [],
+              srcNotes: res.sheet ? res.sheet.notes : '',                     // v466：留著給「排複習」重出題目用
               write: res.write || [], tf: res.tf || [], ord: res.ord || [],   // v462 ③②①
               circle: res.circle || [], sort: soSets[0] || null,
               circleSets: ciSets, sortSets: soSets,          // v461：每一組各建一個單元
@@ -5709,7 +5825,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, write, tf, ord, circle, sort, circleSets, sortSets, caseMatters }) {
+function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write, tf, ord, circle, sort, circleSets, sortSets, caseMatters }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
@@ -5717,8 +5833,14 @@ function gnBuildItems({ title, topic, lesson, mcq, fill, tr, rw, write, tf, ord,
   const steps = ((lesson && lesson.steps) || []).map(window.gnValidStep).filter(Boolean);
   const lessonId = steps.length ? 'gn' + stamp + 'ls' + rnd() : null;
   if (lessonId) {
+    /* v466：把「這一課在教什麼」存進教學單元。
+       ⚠ 以前生成完就丟掉了——所以兩週後想重出一份不一樣的文法題，
+         手上只剩互動教學的內容，沒有老師原本的教學重點。
+       存了之後，複習就能用同一份教學重點重出題目（跟單字那邊一樣）。
+       只存前 4000 字，照片讀出來的長作業不會把整份課程撐爆。 */
     out.push({ id: lessonId, type: 'lesson', group: g, order: 0,
       title: `${g} · 先學一下`, zh: `互動教學 · ${steps.length} 步 · 學完才能開始練習`,
+      srcTopic: topic || g, srcNotes: String(srcNotes || '').slice(0, 4000),
       lead: lesson.lead || '', steps, outro: lesson.outro || '' });
   }
   const req = lessonId ? { requires: lessonId } : {};
@@ -6331,4 +6453,4 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background }) 
   return out;
 }
 
-Object.assign(window, { GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems });
+Object.assign(window, { GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal });   // v466：排複習

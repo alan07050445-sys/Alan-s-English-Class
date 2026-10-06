@@ -1714,6 +1714,17 @@ function storyBlanks(passage) {
 /* ══ v445（Alan：「一鍵生成都可以自己跟 AI 協調，這次我可能要客製化某一些地方」）══
    老師在每個一鍵生成的視窗裡都可以寫一段「特別要求」，原封不動送給 AI。
    ⚠ 放在 user 訊息裡、而且明講「不可以破壞 JSON 格式」——格式一壞整份就沒了。 */
+/* v466：把「上次已經出過的句子」攤給模型看，並明講不可以再用。
+   只放前 24 句——再多會把 prompt 撐大又沒有額外效果（真的要避開的就是最近那一批）。 */
+function _aiAvoidNote(avoid) {
+  const list = (avoid || []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 24);
+  if (!list.length) return '';
+  return `\nALREADY USED — this is a REVIEW round, so the student has seen these before.
+Every sentence you write must be about a DIFFERENT situation from all of these.
+Do not reuse their people, places, objects or verbs, and do not just swap one word:
+${list.map(x => '  × ' + x).join('\n')}\n\n`;
+}
+
 function _aiTeacherNote(t) {
   const s2 = String(t || '').trim().slice(0, 600);
   if (!s2) return '';
@@ -1940,7 +1951,7 @@ function storyPick(passage, n) {
   return out + p.slice(last);
 }
 
-async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3, blanks = _STORY_PICK, teacherNote = '' } = {}) {
+async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3, blanks = _STORY_PICK, teacherNote = '', avoid = [] } = {}) {
   const band = VOCAB_BANDS[vocabBandOf(grade)];   // v442：短文也跟著年級（低年級句子更短更白話）
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
@@ -1960,6 +1971,7 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
     `LEVEL: ${band.label}\n${band.note}\nEvery blank must still be findable from the words around it — that rule never changes.\n\n` +
     (hint ? `Story topic / lesson title: ${hint}\n` : '') +
     _aiTeacherNote(teacherNote) +
+    _aiAvoidNote(avoid) +          // v466：複習時不可以寫出跟上次一樣的短文
     'Target words (use each exactly once):\n' +
     list.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
 
@@ -2173,7 +2185,12 @@ async function _aiAsk(body, pick, timeoutMs) {
    20 個單字實測從 20.8 秒降到 3 秒上下。
    ⚠ 對回輸入順序的方式完全沒變（part.forEach((w,k) => parsed[k]），
    校稿頁看到的欄位、順序、中文解說都跟以前一樣。 */
-async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4', teacherNote = '' } = {}) {
+/* v466（Alan：「我想製作一個複習的方式，但題目我又要重新生成，
+   如果不生成題目又一樣，小朋友會背答案」）：
+   avoid ＝ 上一次出過的句子。不傳進去的話，同一批單字再出一次，
+   模型很可能寫出幾乎一樣的句子（v461 的分一分就實測過這件事：
+   只說「要不一樣」沒有用，要把「不可以用的」直接攤在它面前）。 */
+async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4', teacherNote = '', avoid = [] } = {}) {
   const band = VOCAB_BANDS[vocabBandOf(grade)];
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (!list.length) return [];
@@ -2188,6 +2205,7 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', g
       `LEVEL: ${band.label}\n${band.note}\nThe blank's sentence must ALWAYS contain a clue that makes the answer findable — that rule never changes.\n\n` +
       (hint ? `Context / topic: ${hint}\n` : '') +
       _aiTeacherNote(teacherNote) +
+      _aiAvoidNote(avoid) +
       'Target words:\n' +
       /* v461（Alan：「有時候老師會直接給相對應的 definition，就直接用就可以了，
          不需要 AI 生成；但如果沒有就還是需要」）：老師貼了定義就原封不動送進 prompt，
@@ -4977,6 +4995,41 @@ English: Write a better full Story Mountain version keeping the student's main i
 
 // Flatten all wrong questions from a student's progress items into a list,
 // reverse-lookup week/category, and deduplicate identical questions.
+/* ══════════════════════════════════════════════════════════════════════════
+   v466：複習——同一批單字，重出一份不一樣的題目
+   ──────────────────────────────────────────────────────────────────────────
+   Alan：「單字那一課只會在那一週出現，我想每隔一週就讓他們複習。
+          單字卡當然不用再換，但 fill in the blank 或故事型的題目就可以換。」
+   ⚠ 關鍵是「真的不一樣」：所以要把上一次出過的句子挖出來餵進 prompt（_aiAvoidNote）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 這一組的單字從哪來：單字卡本來就存了 term / zh / example，重出題目要的全都在。 */
+function reviewWordsOf(items) {
+  const fc = (items || []).find(it => it && it.type === 'flashcard' && (it.cards || []).length);
+  if (!fc) return [];
+  return (fc.cards || [])
+    .map(c => ({ term: String(c.term || '').trim(), zh: String(c.zh || '').trim(), example: String(c.example || '').trim() }))
+    .filter(w => w.term);
+}
+
+/* 上一次出過哪些句子——這一組所有單元裡「學生看得到的英文句子」都算。
+   漏掉任何一種，那一種就有機會原封不動再出一次。 */
+function reviewSeenSentences(items) {
+  const out = [];
+  const push = (t) => { const v = String(t || '').trim(); if (v && /[A-Za-z]/.test(v)) out.push(v); };
+  (items || []).forEach(it => {
+    if (!it) return;
+    (it.cards || []).forEach(c => push(c.example));                       // 單字卡例句
+    (it.questions || []).forEach(q => push(q.q || q.sentence));           // 選擇題／填空
+    (it.pairs || []).forEach(q => push(q.prompt));                        // 打字題（填空／改寫／中翻英的英文答案不算題目）
+    (it.circleQuestions || []).forEach(q => push(q.sentence));            // 找出來
+    (it.spellWords || []).forEach(w => push(w.sentence));                 // 聽寫的例句
+    if (it.passage) push(String(it.passage).replace(/\[[^\]]*\]/g, '___'));   // 短文填空（把答案拿掉再比對）
+    (it.orderQuestions || []).forEach(q => push((q.words || []).join(' ')));    // 排順序
+  });
+  return [...new Set(out)];
+}
+
 function collectWrongQuestions(progressItems, weeks, weekOrder) {
   const result = [];
   const seen = new Set();
@@ -5449,6 +5502,7 @@ Object.assign(window, {
   checkWriting, checkShortAnswer, checkEssay, checkStoryMountain,
   // Wrong questions
   collectWrongQuestions, removeWrongQuestion,
+  reviewWordsOf, reviewSeenSentences,          // v466：複習用（同一批字、不一樣的題目）
   // Weekly Report
   buildWeeklyReport, formatReportAsText,
 });

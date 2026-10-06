@@ -59,8 +59,10 @@ ok('學生端的指示語也改英文', /Tap every \$\{what\} in each sentence/.
 
 console.log('\n【7】點視窗外面不可以把打到一半的東西弄不見');
 ok('⭐ 有共用的「晃一下」工具', /function useModalNudge\(\)/.test(ed));
+// ⚠ 不要寫死數量——之後每加一個長表單這裡就會假性失敗（v466 加了「排複習」就中了）。
+// 真正要守的是：一個都不可以還在「點背景就關閉」。
 ok('⭐ 所有長表單的背景點擊都改成晃一下，沒有一個還在關閉',
-   (ed.match(/className="modal-backdrop" onClick=\{nudge\}/g) || []).length === 10
+   (ed.match(/className="modal-backdrop" onClick=\{nudge\}/g) || []).length >= 10
    && !/className="modal-backdrop" onClick=\{onClose\}/.test(ed));
 ok('晃動動畫存在，而且尊重「減少動態」', /@keyframes modalNudge/.test(auth) && /prefers-reduced-motion[\s\S]{0,120}\.modal-nudge \{ animation: none/.test(auth));
 ok('出口還在（✕ 與 取消 都沒被拿掉）', (ed.match(/className="modal-close"/g) || []).length >= 8);
