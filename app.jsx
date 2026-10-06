@@ -1418,11 +1418,22 @@ function App() {
      同一批單字重出一份新題目 → 寫進目標週，組名加「· 複習」。
      ⚠ 單字卡是**照抄**原本那一張（Alan：「單字卡當然不用再換」），
        但 id 要換新的，不然跟原本那一週同 id，學生做完會互相蓋掉進度。 */
-  const handleCreateReview = ({ targetWeekId, catId, groupName, words, ai, story, kinds, dueDate }) => {
+  const handleCreateReview = ({ targetWeekId, catId, groupName, words, ai, story, kinds, dueDate, grammar, topic }) => {
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     if (!w[targetWeekId]) { showToast('找不到那一週'); return; }
     const title = `${groupName} · 複習`;
-    const built = window.qsBuildItems({ words, title, kinds, ai, story });
+    /* v469：文法的複習走 gnBuildItems。
+       ⚠ lesson 傳 null＝不重出互動教學（那一課教的東西沒變），
+         所以也不會有 requires，學生進去就能直接練。 */
+    const built = grammar
+      ? window.gnBuildItems({ title, topic, srcNotes: '', lesson: null,
+          mcq: grammar.mcq, fill: grammar.fill, tr: grammar.tr, rw: grammar.rw,
+          write: grammar.write, tf: grammar.tf, ord: grammar.ord,
+          edit: grammar.edit, diag: grammar.diag,
+          circle: grammar.circle, sort: grammar.sort,
+          circleSets: grammar.circleSets, sortSets: grammar.sortSets,
+          caseMatters: grammar.caseMatters })
+      : window.qsBuildItems({ words, title, kinds, ai, story });
     if (!built.length) { showToast('沒有產生任何單元'); return; }
     if (!w[targetWeekId].items) w[targetWeekId].items = { vocab: [], grammar: [], word: [], reading: [] };
     if (!w[targetWeekId].items[catId]) w[targetWeekId].items[catId] = [];

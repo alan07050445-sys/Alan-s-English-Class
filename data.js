@@ -4133,9 +4133,11 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
                                    nCircle = 0, nSort = 0, nCircleSets = 1, nSortSets = 1,
                                    nWrite = 0, nTf = 0, nOrd = 0,             // v462 ③造句 ②句型轉換 ①排順序
                                    nEdit = 0, nDiag = 0,                     // v467 康橋：整段改錯（幾個錯）／先判斷再改正（幾題）
-                                   caseMatters = false, teacherNote = '', onProgress } = {}) {
+                                   caseMatters = false, teacherNote = '', avoid = [], onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
-  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote);
+  /* v469：複習時把「上次出過的句子」送進去說不可以再用（跟 v466 單字那邊同一套）。 */
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote)
+    + _aiAvoidNote(avoid);
   const cSets = nCircle > 0 ? Math.max(1, Math.min(3, +nCircleSets || 1)) : 0;
   const sSets = nSort   > 0 ? Math.max(1, Math.min(3, +nSortSets   || 1)) : 0;
   let done = 0;
@@ -5340,6 +5342,29 @@ function reviewWordsOf(items) {
     .filter(w => w.term);
 }
 
+/* v469：文法的複習素材。
+   v466 已經讓教學單元存下 srcTopic / srcNotes，所以之後出的文法都能重出。
+   ⚠ v466 之前出的沒有 srcNotes——那就退回用互動教學的內容反推教學重點。
+     會比較粗（它是「講解」不是「老師的原始筆記」），但總比不能複習好，
+     而且畫面上會老實告訴老師這一組是用反推的。 */
+function reviewGrammarOf(items) {
+  const ls = (items || []).find(it => it && it.type === 'lesson' && (it.steps || []).length);
+  if (!ls) return null;
+  const topic = String(ls.srcTopic || ls.group || ls.title || '').replace(/\s*·.*$/, '').trim();
+  const notes = String(ls.srcNotes || '').trim();
+  if (notes) return { topic, notes, fromNotes: true };
+  // 反推：把互動教學講過的話與例句接起來，當成教學重點
+  const bits = [String(ls.lead || '').trim()];
+  (ls.steps || []).forEach(st => {
+    if (st.say) bits.push(String(st.say).trim());
+    (st.examples || []).forEach(ex => { if (ex && ex.en) bits.push(String(ex.en).trim()); });
+    if (st.q) bits.push(String(st.q).trim());
+    if (st.why) bits.push(String(st.why).trim());
+  });
+  const back = bits.filter(Boolean).join('\n').slice(0, 3000);
+  return back ? { topic, notes: back, fromNotes: false } : null;
+}
+
 /* 上一次出過哪些句子——這一組所有單元裡「學生看得到的英文句子」都算。
    漏掉任何一種，那一種就有機會原封不動再出一次。 */
 function reviewSeenSentences(items) {
@@ -5832,6 +5857,7 @@ Object.assign(window, {
   // Wrong questions
   collectWrongQuestions, removeWrongQuestion,
   reviewWordsOf, reviewSeenSentences,          // v466：複習用（同一批字、不一樣的題目）
+  reviewGrammarOf,                             // v469：文法也能排複習
   aiMakeVocabSense, qsValidSense,              // v468 康橋：字義選擇題
   // Weekly Report
   buildWeeklyReport, formatReportAsText,

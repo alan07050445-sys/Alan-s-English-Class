@@ -1471,9 +1471,11 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
    ══════════════════════════════════════════════════════════════════════════ */
 function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekId, grade, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();
-  const words = useS(() => [])[0];
   const w = window.reviewWordsOf ? window.reviewWordsOf(items) : [];
   const seen = window.reviewSeenSentences ? window.reviewSeenSentences(items) : [];
+  /* v469：這一組是單字還是文法？單字看有沒有單字卡，文法看有沒有互動教學。 */
+  const gram = (w.length >= 2) ? null : (window.reviewGrammarOf ? window.reviewGrammarOf(items) : null);
+  const isGram = !!gram;
   /* 預設排到「兩週後」——Alan 要的是「每隔一週複習一次」。
      找不到就退回清單裡第一個比現在晚的週次。 */
   const later = (weekChoices || []).filter(c => c.id !== curWeekId);
@@ -1481,6 +1483,8 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
   const defWeek = (weekChoices || [])[curIx + 2] || (weekChoices || [])[curIx + 1] || later[0] || null;
   const [week, setWeek]   = useS(defWeek ? defWeek.id : '');
   const [kinds, setKinds] = useS(['quiz', 'fillblank', 'story', 'def-match', 'spelling']);
+  // v469：文法複習要出幾題（跟一鍵出文法同一組題型，只是不重出互動教學）
+  const [gN, setGN] = useS({ nMcq: 6, nFill: 6, nRw: 4, nTr: 3, nEdit: 5, nDiag: 0, nOrd: 0, nTf: 4, nWrite: 0, nCircle: 0, nSort: 0 });
   const [asHw, setAsHw]   = useS(true);
   const [due, setDue]     = useS('');
   const [busy, setBusy]   = useS(0);
@@ -1501,6 +1505,20 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
     if (!week) { setErr('請先選要排到哪一週'); return; }
     setErr(''); setBusy(0.0001);
     try {
+      if (isGram) {
+        /* v469 文法複習：用同一個教學重點重出一份題目，
+           並把上次出過的句子當 avoid 送進去（跟單字那邊同一套）。
+           ⚠ 互動教學不重出——那一課教的東西沒變，重出只會讓學生再看一次一樣的講解。 */
+        const pack = await window.aiMakeGrammarPack({
+          topic: gram.topic, notes: gram.notes, grade, teacherNote: note, avoid: seen,
+          ...gN,
+          onProgress: (d, t) => setBusy(Math.max(0.0001, d)),
+        });
+        onCreate({ targetWeekId: week, catId, groupName, grammar: pack, topic: gram.topic,
+                   dueDate: asHw ? (due || null) : null });
+        setBusy(0);
+        return;
+      }
       const wantStory = kinds.indexOf('story') >= 0;
       const exP = window.aiMakeVocabExercises(w, { hint: groupName, grade, teacherNote: note, avoid: seen,
                                                    onProgress: (d) => setBusy(d) });
@@ -1526,12 +1544,22 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
           <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div className="field-help" style={{ marginBottom: 12 }}>
-            用<b>同一批 {w.length} 個單字</b>重出一份<b>不一樣</b>的題目，排到之後的某一週。
-            上次出過的 {seen.length} 個句子會送進去告訴 AI「不可以再用」，所以小朋友沒辦法背答案。
-            <br/>單字卡會照抄一份過去（同一批字不用重出），複習前可以先看一遍。
-          </div>
-          {w.length < 2 && <div className="gr-warn">這一組找不到單字卡，沒辦法排複習。</div>}
+          {isGram ? (
+            <div className="field-help" style={{ marginBottom: 12 }}>
+              用<b>同一個文法重點</b>（{gram.topic}）重出一份<b>不一樣</b>的題目，排到之後的某一週。
+              上次出過的 {seen.length} 個句子會送進去告訴 AI「不可以再用」。
+              <br/><b>互動教學不會重出</b>——那一課教的東西沒變，再看一次一樣的講解沒意義。
+              {!gram.fromNotes && <><br/><b>⚠ 這一組是 v466 之前出的，沒有留下你原本的教學重點</b>，
+                我是從互動教學的內容反推的，出來的題目可能偏掉。不滿意就用「💬 這次的特別要求」補一句。</>}
+            </div>
+          ) : (
+            <div className="field-help" style={{ marginBottom: 12 }}>
+              用<b>同一批 {w.length} 個單字</b>重出一份<b>不一樣</b>的題目，排到之後的某一週。
+              上次出過的 {seen.length} 個句子會送進去告訴 AI「不可以再用」，所以小朋友沒辦法背答案。
+              <br/>單字卡會照抄一份過去（同一批字不用重出），複習前可以先看一遍。
+            </div>
+          )}
+          {!isGram && w.length < 2 && <div className="gr-warn">這一組找不到單字卡，也找不到互動教學，沒辦法排複習。</div>}
 
           <div className="field">
             <label className="field-label">排到哪一週</label>
@@ -1543,6 +1571,20 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
 
           <div className="field">
             <label className="field-label">要出哪些</label>
+            {isGram ? (
+              <div className="gn-count-grid">
+                {[['📝 選擇題', 'nMcq', 15], ['✏️ 填空題', 'nFill', 15], ['✍️ 改寫句子', 'nRw', 10],
+                  ['🔤 中翻英', 'nTr', 10], ['📝 整段改錯', 'nEdit', 8], ['🔎 錯在哪裡', 'nDiag', 8],
+                  ['🔄 句型轉換', 'nTf', 10], ['🧩 排順序', 'nOrd', 10]].map(([lb, key, max]) => (
+                  <div className="field" key={key}>
+                    <label className="field-label">{lb}</label>
+                    <select value={gN[key]} onChange={e => setGN(g => ({ ...g, [key]: +e.target.value }))}>
+                      {Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n ? n + ' 題' : '不要'}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="gn-count-grid">
               {KINDS.map(([k, label, fixed]) => (
                 <label key={k} className="rv-kind">
@@ -1552,6 +1594,7 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
                 </label>
               ))}
             </div>
+            )}
           </div>
 
           <window.AiNoteBox value={note} onChange={setNote}
@@ -1566,8 +1609,8 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
         </div>
         <div className="modal-foot">
           <button className="btn ghost" onClick={onClose}>取消</button>
-          <button className="btn primary" disabled={!week || w.length < 2 || !!busy} onClick={run}>
-            {busy ? `重出題目中… ${Math.floor(busy)}/${w.length}` : `✨ 重出一份並排進去 →`}
+          <button className="btn primary" disabled={!week || (!isGram && w.length < 2) || !!busy} onClick={run}>
+            {busy ? (isGram ? '重出題目中…' : `重出題目中… ${Math.floor(busy)}/${w.length}`) : `✨ 重出一份並排進去 →`}
           </button>
         </div>
       </div>

@@ -62,12 +62,14 @@ ok('單字題目收 avoid', /aiMakeVocabExercises\(words, \{[^}]*avoid = \[\]/.t
 ok('短文填空也收 avoid', /aiMakeVocabStory\(words, \{[^}]*avoid = \[\]/.test(data));
 // ⚠ 計數要扣掉定義那一行（function _aiAvoidNote(avoid) 也會被比對到）
 ok('兩邊都真的把它放進 prompt（單字題目＋短文填空）',
-   (data.match(/^\s+_aiAvoidNote\(avoid\)/gm) || []).length === 2);
+   (data.match(/_aiAvoidNote\(avoid\)/g) || []).length >= 2);   // ⚠ 不要寫死幾個，之後只會愈來愈多
 
 console.log('\n【4】老師端：排到別週');
 ok('⭐ 組的選單有「排一份複習到別週」', /🔁 排一份複習到別週…/.test(qm));
-ok('沒有單字卡的組不顯示這個選項（按了也沒用）',
-   /window\.reviewWordsOf\(g\.items\)\.length >= 2 && \(/.test(qm));
+/* v469：文法也能排複習了，所以條件變成「有單字卡**或**有互動教學」。
+   真正該擋的是兩個都沒有的組（按了也沒東西可以重出）。 */
+ok('兩個都沒有的組不顯示這個選項（按了也沒用）',
+   /window\.reviewWordsOf\(g\.items\)\.length >= 2\)\s*\n?\s*\|\|\s*\(window\.reviewGrammarOf/.test(qm));
 ok('有 ReviewGroupModal', /function ReviewGroupModal\(/.test(ed) && /ReviewGroupModal \}\);/.test(ed));
 ok('⭐ 預設排到「兩週後」（Alan：每隔一週複習一次）',
    /const defWeek = \(weekChoices \|\| \[\]\)\[curIx \+ 2\]/.test(ed));

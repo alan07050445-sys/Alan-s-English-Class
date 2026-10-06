@@ -29,8 +29,10 @@ _aiAskImpl.fn = async (body, pickFn) => {
   if (got == null) throw new Error('bad');
   return got;
 };
-// v445：_GN_BASE 會用到「老師特別要求」那個小工具（它住在短文那一區）
-const code = slice(data, 'function _aiTeacherNote', 'const _STORY_CJK_G') + '\n' +
+/* v445：_GN_BASE 會用到「老師特別要求」那個小工具（它住在短文那一區）
+   v469：也會用到「這些句子不可以再用」（_aiAvoidNote 就在它前面幾行），
+         所以切片要從 _aiAvoidNote 開始——少切一個，出文法整支就 ReferenceError。 */
+const code = slice(data, 'function _aiAvoidNote', 'const _STORY_CJK_G') + '\n' +
   slice(data, 'let _aiLastUpstream', 'async function _aiAsk') + '\n' +
   slice(data, 'const GN_MODEL', 'function grCountBlanks');
 const W = new Function('_aiAsk', '_aiStripFence', '_AI_MINIFY',

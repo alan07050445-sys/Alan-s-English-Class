@@ -1437,10 +1437,12 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       {/* v466（Alan：「單字那一課只會在那一週出現，我想每隔一週就讓他們複習；
                           單字卡不用再換，但 fill in the blank 或故事型的題目就可以換」）：
                           同一批單字、重出一份不一樣的題目，排到之後的某一週。 */}
-                      {onReviewGroup && window.reviewWordsOf && window.reviewWordsOf(g.items).length >= 2 && (
+                      {/* v469：文法也可以排複習（看這一組有沒有互動教學） */}
+                      {onReviewGroup && ((window.reviewWordsOf && window.reviewWordsOf(g.items).length >= 2)
+                        || (window.reviewGrammarOf && window.reviewGrammarOf(g.items))) && (
                         <button className="qm-grp-ghost"
                           onClick={() => { setGrpMenu(null); onReviewGroup(cat.id, g.name, g.items); }}
-                          title="用同一批單字重出一份不一樣的題目，排到之後的某一週當複習">
+                          title="用同一批單字／同一個文法重點重出一份不一樣的題目，排到之後的某一週當複習">
                           🔁 排一份複習到別週…
                         </button>
                       )}
