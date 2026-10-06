@@ -7320,7 +7320,10 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               <div className="gnl-zh">{cur.zh}</div>
               <div className={'gnl-line' + (st.ok ? ' ok' : st.bad ? ' no' : '')}>
                 {built.length ? built.map((w, i) => (
-                  <button key={i} className="gnl-tile in" disabled={st.ok}
+                  /* v470：key 用固定的池子編號，不是陣列位置。
+                     用位置的話，拿掉中間一個字會讓後面的字全部重新掛載＝
+                     「積木落位」那段動畫整排莫名其妙重播一次。 */
+                  <button key={picked[i]} className="gnl-tile in" disabled={st.ok}
                     onClick={() => setSt(s0 => ({ ...s0, bad: false, picked: picked.filter((_, j) => j !== i) }))}>{w}</button>
                 )) : <span className="gnl-line-ph">點下面的字，排成英文句子</span>}
               </div>
@@ -7393,7 +7396,9 @@ function StepLesson({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               <div className="ls-kicker">🗂 分一分</div>
               <div className="gnl-sub">{cur.q}</div>
               {curItem
-                ? <div className={'gnl-chip-now' + (st.bad ? ' no' : '')}>{curItem.x}</div>
+                /* v470：key 帶上「第幾個」，下一個字才會重新掛載＝滑進來的動畫才會播。
+                   同一個 <div> 只換文字的話，CSS 動畫不會重新觸發。 */
+                ? <div key={done2} className={'gnl-chip-now' + (st.bad ? ' no' : '')}>{curItem.x}</div>
                 : <div className="gnl-chip-now ok">全部分完了！</div>}
               <div className="gnl-bins">
                 {cur.groups.map((g, gi) => (

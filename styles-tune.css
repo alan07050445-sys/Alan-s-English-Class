@@ -3920,3 +3920,114 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .gn-step-head { margin-bottom: 2px; }
 .gn-row3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 @media (max-width: 820px) { .gq-row { padding: 12px 10px; } }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v470：互動教學的動畫層（Alan 要「更智慧化的解說」）
+   ──────────────────────────────────────────────────────────────────────────
+   刻意只用 CSS、只掛在「已經存在的狀態類別」上（.gnl-tile.in、.gnl-word.fixed、
+   .gnl-blank.ok…），一行判斷邏輯都不動——所以**已經出好的文法單元全部直接變
+   成動畫版**，老師不用重新生成，也不會引進新的出錯風險。
+
+   守四條規則：
+   ① 每一段 150~300ms（小朋友的注意力，久了就變成在等動畫）
+   ② 動畫**不可以蓋住字**——只動元素自己的 transform / opacity / 背景，
+      不做任何浮層，也沒有任何一段結束在「看不見」的狀態
+   ③ 動完之後講解要留在畫面上（小朋友看完還要能回頭讀）
+   ④ prefers-reduced-motion 一律關掉（檔案最後面那一段）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 🧩 積木落位：點一個字，它掉進句子裡
+   ⚠ 搭配 JSX 把 key 換成 picked[i]（固定的池子編號）。本來 key 是陣列位置，
+     拿掉中間一個字會讓後面的字全部重新掛載＝整排動畫莫名其妙重播一次。 */
+.gnl-tile.in { animation: gnlTileIn .22s cubic-bezier(.34, 1.4, .64, 1); }
+@keyframes gnlTileIn {
+  from { transform: translateY(-9px) scale(.9); opacity: .35; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* 🧩 排對了：整句從左到右一個一個定下來（＝「句子成形」）
+   排句子最多 9 個字（gnValidStep 擋著），所以列到 9 就夠。 */
+.gnl-line.ok .gnl-tile.in { animation: gnlSettle .24s ease-out both; }
+.gnl-line.ok .gnl-tile.in:nth-child(1) { animation-delay: 0s; }
+.gnl-line.ok .gnl-tile.in:nth-child(2) { animation-delay: .045s; }
+.gnl-line.ok .gnl-tile.in:nth-child(3) { animation-delay: .09s; }
+.gnl-line.ok .gnl-tile.in:nth-child(4) { animation-delay: .135s; }
+.gnl-line.ok .gnl-tile.in:nth-child(5) { animation-delay: .18s; }
+.gnl-line.ok .gnl-tile.in:nth-child(6) { animation-delay: .225s; }
+.gnl-line.ok .gnl-tile.in:nth-child(7) { animation-delay: .27s; }
+.gnl-line.ok .gnl-tile.in:nth-child(8) { animation-delay: .315s; }
+.gnl-line.ok .gnl-tile.in:nth-child(9) { animation-delay: .36s; }
+@keyframes gnlSettle {
+  0%   { transform: translateY(0); }
+  45%  { transform: translateY(-7px); }
+  100% { transform: translateY(0); }
+}
+
+/* 👆 答案落進空格裡 */
+.gnl-blank.ok { animation: gnlDrop .24s cubic-bezier(.34, 1.4, .64, 1); }
+@keyframes gnlDrop {
+  from { transform: translateY(-11px) scale(.82); opacity: 0; }
+  60%  { opacity: 1; }
+  to   { transform: none; opacity: 1; }
+}
+/* 選對的那一顆微微彈一下（不是整頁亂跳） */
+.gnl-opt.ok { animation: gnlPop .2s ease-out; }
+@keyframes gnlPop { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+
+/* 🔍 句子變形：錯的字收掉、對的字長出來
+   這是規格裡的「sentence morphing」——現成的 fix 步驟本來就是
+   <s>錯的</s> <b>對的</b>，只是以前一瞬間就換完，小朋友看不到「變」。 */
+.gnl-word.fixed   { animation: gnlFixFlash .26s ease-out; }
+.gnl-word.fixed s { display: inline-block; animation: gnlStrike .26s ease-out both; }
+.gnl-word.fixed b { display: inline-block; animation: gnlMorphIn .26s cubic-bezier(.34, 1.4, .64, 1) .12s both; }
+@keyframes gnlStrike {
+  from { transform: scale(1);   opacity: 1; }
+  to   { transform: scale(.88); opacity: .55; }
+}
+@keyframes gnlMorphIn {
+  from { transform: translateY(7px) scale(.75); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes gnlFixFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(27, 122, 62, .45); }
+  100% { box-shadow: 0 0 0 7px rgba(27, 122, 62, 0); }
+}
+
+/* 👉 找出來：螢光筆從左掃到右（掃的是背景，字一直看得見） */
+.gnl-word.got {
+  background-image: linear-gradient(#CDEBD6, #CDEBD6);
+  background-repeat: no-repeat; background-size: 100% 100%;
+  animation: gnlSweep .26s ease-out;
+}
+@keyframes gnlSweep { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+
+/* 🗂 分一分：下一個字滑進來、分對的字掉進籃子裡 */
+.gnl-chip-now { animation: gnlChipIn .2s ease-out; }
+@keyframes gnlChipIn {
+  from { transform: translateY(-8px) scale(.9); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.gnl-bin-items em { animation: gnlLand .24s cubic-bezier(.34, 1.4, .64, 1); }
+@keyframes gnlLand {
+  from { transform: translateY(-12px) scale(.55); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ✓ 講解浮出來（但只淡入位移，動完完整留在畫面上——規格第 ③ 條） */
+.gnl-why.ok { animation: gnlWhyIn .22s ease-out; }
+@keyframes gnlWhyIn {
+  from { transform: translateY(5px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ④ 會動暈的小朋友（或系統設了減少動態）一律不要動。
+   ⚠ 答錯的晃動 gnlShake 也一起關掉——它本來就沒有被關過。 */
+@media (prefers-reduced-motion: reduce) {
+  .gnl-tile.in, .gnl-line.ok .gnl-tile.in, .gnl-blank.ok, .gnl-opt.ok,
+  .gnl-word.fixed, .gnl-word.fixed s, .gnl-word.fixed b, .gnl-word.got,
+  .gnl-chip-now, .gnl-bin-items em, .gnl-why.ok,
+  .gnl-opt.no, .gnl-line.no, .gnl-word.no, .gnl-chip-now.no {
+    animation: none !important;
+  }
+  .gnl-word.got { background-size: 100% 100%; }
+}
