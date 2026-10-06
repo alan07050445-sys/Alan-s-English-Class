@@ -5137,6 +5137,9 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [nWrite, setNWrite] = useS(0);   // ③ 造句（AI 批改）
   const [nTf, setNTf]       = useS(0);   // ② 句型轉換
   const [nOrd, setNOrd]     = useS(0);   // ① 排順序
+  // v467 康橋的兩種招牌題型（2026-10-06 Alan 給了 G3/G4 真實考卷）
+  const [nEdit, setNEdit] = useS(0);     // 整段改錯：段落裡種幾個錯
+  const [nDiag, setNDiag] = useS(0);     // 先判斷錯誤類型再改正：幾題
   const [plan, setPlan]     = useS(null);  // ⑦ AI 判斷出來的「這是哪一類文法」
   const [planBusy, setPlanBusy] = useS(false);
   const [aiNote, setAiNote] = useS('');        // v445：這次的特別要求（直接寫給 AI）
@@ -5209,6 +5212,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
         topic: sheet.topic || title, topicZh: sheet.topicZh, notes: sheet.notes || text, teacherQs: sheet.questions,
         grade, nMcq, nFill, nTr, nRw, nCircle, nSort, nCircleSets: cSets, nSortSets: sSets,
         nWrite, nTf, nOrd,                                    // v462
+        nEdit, nDiag,                                         // v467 康橋
         caseMatters: !!sheet.caseMatters, teacherNote: aiNote,
         onProgress: (d, t, label) => { if (live()) setBusy({ done: 1 + d, total: 1 + t, label }); },
       });
@@ -5358,7 +5362,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
             <div className="gr-num-row">
               {[['👉 找出來', nCircle, setNCircle, 12], ['🗂 分一分', nSort, setNSort, 12], ['📝 選擇題', nMcq, setNMcq, 15], ['✏️ 填空題', nFill, setNFill, 15], ['✍️ 改寫句子', nRw, setNRw, 10], ['🔤 中翻英', nTr, setNTr, 10],
-                ['🧩 排順序', nOrd, setNOrd, 10], ['🔄 句型轉換', nTf, setNTf, 10], ['✍ 造句', nWrite, setNWrite, 8]].map(([lb, v, set, max]) => (
+                ['🧩 排順序', nOrd, setNOrd, 10], ['🔄 句型轉換', nTf, setNTf, 10], ['✍ 造句', nWrite, setNWrite, 8],
+                ['📝 整段改錯', nEdit, setNEdit, 8], ['🔎 錯在哪裡', nDiag, setNDiag, 8]].map(([lb, v, set, max]) => (
                 <div className="field" key={lb}>
                   <label className="field-label">{lb}</label>
                   <select value={v} onChange={e => set(+e.target.value)}>
@@ -5451,12 +5456,16 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
     ['sort', '🗂 分一分', soSets.reduce((a, x) => a + ((x && x.words) || []).length, 0)], ['mcq', '📝 選擇題', res.mcq.length], ['fill', '✏️ 填空題', res.fill.length],
     ['rw', '✍️ 改寫句子', (res.rw || []).length], ['tr', '🔤 中翻英', res.tr.length],
     ['ord', '🧩 排順序', (res.ord || []).length], ['tf', '🔄 句型轉換', (res.tf || []).length],
-    ['write', '✍ 造句', (res.write || []).length]].filter(t => t[0] === 'lesson' || t[2] > 0);
+    ['write', '✍ 造句', (res.write || []).length],
+    ['edit', '📝 整段改錯', res.edit ? (res.edit.errors || []).length : 0],
+    ['diag', '🔎 錯在哪裡', (res.diag || []).length]].filter(t => t[0] === 'lesson' || t[2] > 0);
   // v461：每一組找出來／分一分各自是一個單元
   const unitsN = (steps.length ? 1 : 0)
     + soSets.filter(x => x && (x.words || []).length >= 4).length
     + ciSets.filter(x => (x || []).length).length
-    + ['mcq', 'fill', 'rw', 'tr', 'ord', 'tf', 'write'].filter(k => (res[k] || []).length).length;
+    + ['mcq', 'fill', 'rw', 'tr', 'ord', 'tf', 'write'].filter(k => (res[k] || []).length).length
+    + (res.edit && (res.edit.errors || []).length >= 2 ? 2 : 0)      // v467：找出錯誤＋改成正確的
+    + ((res.diag || []).length ? 2 : 0);                             //      錯在哪裡＋改成正確的句子
   return (
     <div className="modal-backdrop" onClick={nudge}>
       <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
@@ -5730,6 +5739,77 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
           )}
 
+          {/* v467 ① 整段改錯：最怕「段落裡還有沒列進答案的錯」，所以已經用第二個 AI 交叉檢查過；
+              這裡再讓老師把整段唸一遍確認 */}
+          {tab === 'edit' && res.edit && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                學生會看到整段文章，<b>先把錯的地方圈出來</b>，再<b>寫出正確的</b>（跟康橋考卷一樣兩步）。
+                出題時已經讓第二個 AI 重讀一次段落、自己把錯找出來比對過；
+                <b>還是請你唸一遍，確認段落裡沒有「沒列進答案的錯」</b>——那會讓學生找到卻被判錯。
+              </div>
+              <div className="field">
+                <label className="field-label">標題</label>
+                <input value={res.edit.title || ''} onChange={e => setRes(r => ({ ...r, edit: { ...r.edit, title: e.target.value } }))}/>
+              </div>
+              <div className="field">
+                <label className="field-label">段落（共 {(res.edit.errors || []).length} 個錯）</label>
+                <textarea rows={5} value={res.edit.paragraph || ''}
+                  onChange={e => setRes(r => ({ ...r, edit: { ...r.edit, paragraph: e.target.value } }))}/>
+              </div>
+              {(res.edit.errors || []).map((e, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <div className="gq-row-2">
+                      <div><label>錯的地方</label><input value={e.wrong}
+                        onChange={ev => setRes(r => ({ ...r, edit: { ...r.edit, errors: r.edit.errors.map((x, j) => j === i ? { ...x, wrong: ev.target.value } : x) } }))}/></div>
+                      <div><label>改成</label><input value={e.right}
+                        onChange={ev => setRes(r => ({ ...r, edit: { ...r.edit, errors: r.edit.errors.map((x, j) => j === i ? { ...x, right: ev.target.value } : x) } }))}/></div>
+                      <div><label>為什麼</label><input value={e.why || ''}
+                        onChange={ev => setRes(r => ({ ...r, edit: { ...r.edit, errors: r.edit.errors.map((x, j) => j === i ? { ...x, why: ev.target.value } : x) } }))}/></div>
+                    </div>
+                    {e.sentence && <div className="field-help" style={{ marginTop: 4 }}>在這一句：{e.sentence}</div>}
+                  </div>
+                  <button type="button" className="gn-del"
+                    onClick={() => setRes(r => ({ ...r, edit: { ...r.edit, errors: r.edit.errors.filter((_, j) => j !== i) } }))}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* v467 ② 先判斷錯誤類型，再改正 */}
+          {tab === 'diag' && (
+            <div className="gr-proof">
+              <div className="field-help" style={{ marginBottom: 8 }}>
+                兩步：先選「這是哪一種錯」，選對了才解鎖「把句子改對」（跟康橋 G3 那一題一樣）。
+                <b>每一題的選項都要是這一課真的會出現的錯誤類型</b>，不要有明顯亂湊的。
+              </div>
+              {(res.diag || []).map((x, i) => (
+                <div key={i} className="gq-row">
+                  <span className="gq-row-n">{i + 1}</span>
+                  <div className="gq-row-f">
+                    <input value={x.broken} onChange={e => upd('diag', i, { broken: e.target.value })}/>
+                    <div className="gq-row-2">
+                      <div><label>錯誤類型（/ 分開，正解打 ✔ 的那一個放第 {x.answer + 1} 個）</label>
+                        <input value={csv(x.kinds)} onChange={e => upd('diag', i, { kinds: uncsv(e.target.value) })}/></div>
+                      <div><label>正解是第幾個</label>
+                        <select value={x.answer} onChange={e => upd('diag', i, { answer: +e.target.value })}>
+                          {x.kinds.map((k, j) => <option key={j} value={j}>{j + 1}. {k}</option>)}
+                        </select></div>
+                    </div>
+                    <div className="gq-row-2">
+                      <div><label>改對的句子</label><input value={x.fixed} onChange={e => upd('diag', i, { fixed: e.target.value })}/></div>
+                      <div><label>為什麼</label><input value={x.why || ''} onChange={e => upd('diag', i, { why: e.target.value })}/></div>
+                    </div>
+                    {!window.gnValidDiagnose(x) && <div className="gr-warn">⚠ 這一題學生端會略過：原句與改對的句子要不一樣、2–3 個不重複的選項、都不能有中文</div>}
+                  </div>
+                  <button type="button" className="gn-del" onClick={() => del('diag', i)}>刪</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* v462 ② 句型轉換 */}
           {tab === 'tf' && (
             <div className="gr-proof">
@@ -5812,6 +5892,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
               lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [],
               srcNotes: res.sheet ? res.sheet.notes : '',                     // v466：留著給「排複習」重出題目用
               write: res.write || [], tf: res.tf || [], ord: res.ord || [],   // v462 ③②①
+              edit: res.edit || null, diag: res.diag || [],                   // v467 康橋
               circle: res.circle || [], sort: soSets[0] || null,
               circleSets: ciSets, sortSets: soSets,          // v461：每一組各建一個單元
               caseMatters: !!res.caseMatters,
@@ -5825,7 +5906,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write, tf, ord, circle, sort, circleSets, sortSets, caseMatters }) {
+function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write, tf, ord, edit, diag, circle, sort, circleSets, sortSets, caseMatters }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
@@ -5886,6 +5967,53 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
   if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 5, ...req, ...cs,
     title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把句子改對`, instruction: '把句子裡錯的地方改對',
     pairs: goodRw.map((x, i) => ({ id: 'p' + stamp + 'r' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) });
+  /* ══ v467：康橋的兩種招牌題型 ══
+     ① 整段改錯 → 拆成兩個單元，跟康橋考卷一模一樣的兩步：
+        （a）circle-answer：讀整段、把錯的字圈出來（v444 的圈選題本來就支援複選）
+        （b）type-answer：把正確的字寫出來
+        ⚠ 不新增題型——v414 的教訓：新題型要註冊 20 個地方，漏一個就沒星星。
+     ② 先判斷再改正 → quiz（選錯誤類型）＋ type-answer（改寫），用 requires 串成兩步。 */
+  if (edit && (edit.errors || []).length >= 2) {
+    const n = edit.errors.length;
+    const head = edit.title ? `${edit.title} — ` : '';
+    // （a）圈出錯的地方：一句一題，答案＝那一句裡錯的那幾個字
+    const rows = edit.errors.filter(e => e.sentence);
+    if (rows.length) {
+      out.push({ id: 'gn' + stamp + 'ed' + rnd(), type: 'circle-answer', group: g, order: 10, ...req,
+        title: `${g} · 找出錯誤`, zh: `${n} 個錯 · ${head}把寫錯的地方圈出來`,
+        circleInstruction: `There are ${n} mistakes in this paragraph. Tap the words that are wrong.`,
+        passage: edit.paragraph,
+        circleQuestions: rows.map((e, i) => ({ id: 'e' + stamp + i + rnd(), sentence: e.sentence,
+          answers: e.wrong.split(/\s+/).filter(Boolean),
+          answer: e.wrong.split(/\s+/)[0], explain: e.why || '' })) });
+    }
+    // （b）寫出正確的字（康橋：Write the corrected words in the boxes）
+    out.push({ id: 'gn' + stamp + 'ec' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 11, ...req, ...cs,
+      title: `${g} · 改成正確的`, zh: `${n} 題 · 把圈出來的地方改對`,
+      instruction: 'Write the corrected words.',
+      pairs: edit.errors.map((e, i) => ({ id: 'p' + stamp + 'e' + i + rnd(),
+        prompt: e.sentence || edit.paragraph, answer: (e.sentence || '').replace(e.wrong, e.right) || e.right,
+        accept: [e.right], explain: e.why || '' })) });
+  }
+
+  /* ② 先判斷錯誤類型，再改正（康橋 G3 的 Subjects and Predicates） */
+  const goodDiag = (diag || []).filter(x => x && x.broken && x.fixed && (x.kinds || []).length >= 2);
+  if (goodDiag.length) {
+    const dxId = 'gn' + stamp + 'dx' + rnd();
+    out.push({ id: dxId, type: 'quiz', group: g, order: 12, ...req,
+      title: `${g} · 錯在哪裡`, zh: `${goodDiag.length} 題 · 先看出是哪一種錯`, shuffle: true,
+      questions: goodDiag.map((x, i) => ({ id: 'q' + stamp + 'd' + i + rnd(),
+        q: `What is wrong with this sentence?\n"${x.broken}"`,
+        options: x.kinds, answer: x.answer, explain: x.why || '' })) });
+    // 看出錯在哪，才解鎖「改正」——跟康橋的兩段式一樣
+    out.push({ id: 'gn' + stamp + 'df' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 13,
+      requires: dxId, ...cs,
+      title: `${g} · 改成正確的句子`, zh: `${goodDiag.length} 題 · 把句子改完整`,
+      instruction: 'Rewrite each sentence correctly.',
+      pairs: goodDiag.map((x, i) => ({ id: 'p' + stamp + 'x' + i + rnd(),
+        prompt: x.broken, answer: x.fixed, accept: [], explain: x.why || '' })) });
+  }
+
   /* v462 ③ 造句 → 沿用 writing-practice（AI 批改、五星、星星規則都現成）。
      writingPrompts 的 word 欄位就是「要檢查什麼」，checkWriting 會拿它當批改依據，
      所以放「一定要用到的文法特徵」而不是單字。 */

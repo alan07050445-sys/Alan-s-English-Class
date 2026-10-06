@@ -3110,6 +3110,51 @@ RULES
 ${GN_EN_ONLY}
 ${_AI_MINIFY}`,
 
+  /* ══ v467：康橋的三種招牌題型（2026-10-06 Alan 給了 G3/G4 真實考卷）══
+     拆解見 memory/kangchiao-exam-format.md。這三種是他的考卷一直在考、而網站以前做不出來的。
+
+     ① editpara ＝「整段改錯，而且明講錯幾個」
+        兩份考卷出現三次：最高級 blog post、Run-on 段落（There are five mistakes）、
+        大小寫段落（Find the 5 capitalization errors）。
+        ⚠ 跟現有的「改寫句子」不一樣——那是單句，這是**一整段**，而且學生事先知道有幾個錯。 */
+  editpara: `You write ONE "edit the paragraph" exercise, exactly like a Kang Chiao formative assessment:
+the child reads a short paragraph that contains a stated number of mistakes, finds them, and writes the corrections.
+Output ONLY JSON: {"title":"","paragraph":"","errors":[{"wrong":"","right":"","why":""}]}
+RULES
+- paragraph: 4-7 short sentences, ONE connected story a 9-year-old would enjoy
+  (a school trip, a pet, a weekend, a festival). 45-90 words. Give it a short "title".
+- EVERY mistake must be the grammar point being taught — nothing else in the paragraph may be wrong.
+  Spelling, punctuation and other grammar must be perfect, or the child cannot tell which N are the mistakes.
+- errors: list EVERY mistake you planted, in paragraph order. Aim for about the number asked for —
+  getting the exact count is less important than every listed item being a REAL mistake.
+- Each "wrong" is 1 to 3 words, copied EXACTLY as it appears in the paragraph
+  (a superlative mistake is often two words: "most tallest", "most good").
+- ⚠⚠ That exact wording must appear in the paragraph EXACTLY ONCE, and each of its words must appear
+  only once in ITS OWN sentence — the child crosses the words out, so a repeat makes the question unanswerable.
+  If something would repeat, rewrite that sentence with different words.
+- "right" is the corrected wording. It must be DIFFERENT from "wrong".
+- Every error must be a REAL mistake. Never list something that is already correct.
+- why: very simple ENGLISH, ≤12 words, explaining the fix. Never write notes to yourself in this field.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* ② diagnose ＝「先判斷錯在哪一類，再改正」（康橋 G3 的 Subjects and Predicates 那一題）
+        圈 (Missing Subject / Missing Predicate) → 再把句子改完整。兩段式。 */
+  diagnose: `You write "what is wrong with this sentence?" questions, exactly like a Kang Chiao
+formative assessment: the child first picks WHAT KIND of mistake it is, then rewrites the sentence correctly.
+Output ONLY JSON: [{"broken":"","kinds":["",""],"answer":0,"fixed":"","why":""}]
+RULES
+- broken: ONE sentence that is wrong in exactly ONE way, 4-12 words, everyday child topics.
+- kinds: 2 or 3 short ENGLISH labels for the possible problems, ≤3 words each
+  (e.g. "Missing Subject" / "Missing Predicate", or "Run-on" / "Fragment").
+  Use the labels the notes actually teach. Exactly ONE is right; the others must be real,
+  plausible labels for this lesson — never a silly option.
+- answer: 0-based index of the correct label. Vary which position is correct.
+- fixed: the corrected sentence. It must still be about the same thing, and must fix ONLY that problem.
+- why: very simple ENGLISH, ≤12 words.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
   /* v462 ①（Alan 挑的第四個）：排順序。
      語序類文法（疑問句、形容詞順序、there is/are、副詞位置）用選擇題練不到。
      ⚠ 出題時最怪的失敗是「打散之後其實有兩種排法都對」
@@ -3415,6 +3460,80 @@ function gnValidWrite(x) {
 
 /* v462 ②：句型轉換。原句一定要跟答案不一樣，而且長度不能差太多
    （差太多通常是模型自己寫了一句不相干的）。 */
+/* v467 ①：整段改錯。這一種最容易出的兩個問題，都要程式擋：
+     ① 錯字在段落裡出現不只一次 → 學生點了也不知道算不算到
+     ② 錯的數量跟題目說的不一樣 → 題目寫「有 5 個錯」卻只有 4 個，學生會一直找
+   ⚠ 回傳的是「一整包」不是一題一題，所以不走 _gnMakeKind。 */
+function gnValidEditPara(x, want) {
+  const paragraph = String((x && x.paragraph) || '').trim();
+  const title = String((x && x.title) || '').trim().slice(0, 40);
+  const seenW = new Set();
+  const errs = (Array.isArray(x && x.errors) ? x.errors : [])
+    .map(e => ({ wrong: String((e && e.wrong) || '').trim(),
+                 right: String((e && e.right) || '').trim(),
+                 why:   String((e && e.why) || '').trim() }))
+    .filter(e => e.wrong && e.right && e.wrong !== e.right)
+    /* right 要像「改好的字」，不是一句解釋——實測模型會把 why 寫進 right
+       （"good is irregular; use best, not most good."）。 */
+    .filter(e => e.right.split(/\s+/).length <= 4 && !/[.;:!?]$/.test(e.right))
+    /* ⚠ 實測：模型常常把冠詞一起框進來（"the most good" → "the best"）。
+       康橋的答案欄寫的是「most high」不是「the most high」，而且 the 在一句裡通常不只一個，
+       會害下面「句內唯一」那一關誤殺。兩邊一起把開頭的冠詞拿掉。 */
+    .map(e => {
+      const strip = (t) => t.replace(/^(the|a|an)\s+/i, '').trim();
+      const w = strip(e.wrong), r = strip(e.right);
+      return (w && r && w !== r) ? { ...e, wrong: w, right: r } : e;
+    })
+    .filter(e => e.wrong !== e.right)
+    .filter(e => { const k = e.wrong.toLowerCase(); if (seenW.has(k)) return false; seenW.add(k); return true; });
+  if (!paragraph || _gnCJK.test(paragraph)) return null;
+  if (errs.some(e => _gnCJK.test(e.wrong + e.right))) return null;
+  /* ⚠ 2026-10-06 實測的教訓：一開始我寫死「一個錯＝一個字」，結果最高級整個出不來——
+     「most tallest → tallest」本來就是兩個字，康橋考卷上也是（most high → highest）。
+     規則不能跟考點打架。改成詞組（1~3 個字）。 */
+  if (errs.some(e => e.wrong.split(/\s+/).length > 3)) return null;
+  const words = paragraph.split(/\s+/).map(_GN_TOK).filter(Boolean);
+  if (words.length < 35 || words.length > 120) return null;
+  const low = ' ' + words.map(w => w.toLowerCase()).join(' ') + ' ';
+  const phr = (e) => e.wrong.split(/\s+/).map(_GN_TOK).filter(Boolean).map(w => w.toLowerCase()).join(' ');
+  // 這個詞組在整段裡只能出現一次（不然學生劃掉哪一處都說不準）
+  const countIn = (hay, needle) => hay.split(' ' + needle + ' ').length - 1;
+  if (!errs.every(e => phr(e) && countIn(low, phr(e)) === 1)) return null;
+  // 而且它的每一個字在「自己那一句」裡也只能出現一次（學生端是一個字一個字點的）
+  const sents = paragraph.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const sentOf = (e) => sents.find(x => (' ' + x.split(/\s+/).map(_GN_TOK).join(' ').toLowerCase() + ' ').indexOf(' ' + phr(e) + ' ') >= 0) || '';
+  const okInSent = errs.every(e => {
+    const st = sentOf(e); if (!st) return false;
+    const tk = st.split(/\s+/).map(_GN_TOK).filter(Boolean).map(w => w.toLowerCase());
+    return e.wrong.split(/\s+/).map(_GN_TOK).filter(Boolean)
+      .every(w => tk.filter(t => t === w.toLowerCase()).length === 1);
+  });
+  if (!okInSent) return null;
+  if (new Set(errs.map(e => e.wrong.toLowerCase())).size !== errs.length) return null;
+  const n = Math.max(2, Math.min(8, +want || errs.length));
+  if (want && errs.length !== n) return null;                            // want=0 ＝ 數量交給呼叫端決定
+  // 照在段落裡出現的順序排（學生端是照順序亮起來的）
+  errs.sort((p, q) => low.indexOf(' ' + phr(p) + ' ') - low.indexOf(' ' + phr(q) + ' '));
+  errs.forEach(e => { e.sentence = sentOf(e); });                        // 學生端一句一題
+  return { title, paragraph, errors: errs };
+}
+
+/* v467 ②：先判斷錯誤類型再改正。 */
+function gnValidDiagnose(x) {
+  const broken = String((x && x.broken) || '').trim();
+  const fixed = String((x && x.fixed) || '').trim();
+  const kinds = (Array.isArray(x && x.kinds) ? x.kinds : []).map(k => String(k || '').trim()).filter(Boolean);
+  const ai = Number(x && x.answer);
+  if (!broken || !fixed || gnNorm(broken) === gnNorm(fixed)) return null;   // 沒改就不是題目
+  if (_gnCJK.test(broken + fixed + kinds.join(''))) return null;
+  if (kinds.length < 2 || kinds.length > 3) return null;
+  if (new Set(kinds.map(k => k.toLowerCase())).size !== kinds.length) return null;
+  if (!(ai >= 0 && ai < kinds.length)) return null;
+  const nb = broken.split(/\s+/).length, nf = fixed.split(/\s+/).length;
+  if (nb > 16 || nf > 20) return null;
+  return { broken, kinds, answer: ai, fixed, why: String((x && x.why) || '').trim() };
+}
+
 /* v462 ①：排順序。能程式驗的：字塊數量、沒有中文、沒有重複的字塊
    （重複的字塊會讓「哪一塊排哪裡」變成有兩種答案都對）。 */
 function gnValidOrder(x) {
@@ -3540,7 +3659,7 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   if (!n || n <= 0) return [];
   const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite,
                circle: gnValidCircle, write: gnValidWrite, transform: gnValidTransform,
-               order: gnValidOrder }[kind];   // v462
+               order: gnValidOrder, diagnose: gnValidDiagnose }[kind];   // v462 / v467
   // 大寫單元的填空：答案一定要有大寫字母（實測 AI 會出「My friend ____ lives in Taipei. → teacher」這種跟大寫無關、答案又不唯一的題）
   const valid = (kind === 'fill' && caseMatters) ? (x) => { const v = v0(x); return v && /[A-Z]/.test(v.answer) ? v : null; } : v0;
   // v430：老師題目各段輪流挑（不然 8 題全出自第一段）；「底線畫出名詞」這種 identify 題改成選擇題
@@ -3548,7 +3667,16 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   const hasId = tq.some(q => q.kind === 'identify');
   const out = [], seen = new Set();
   // 選擇題的題幹常常一模一樣（「Circle the sentence with the correct capital letters.」）→ 連選項一起比
-  const key = (x) => (String(x.q || x.prompt || x.zh || x.wrong || x.sentence || (x.words || []).join(' ') || '') + '|' + (x.options || []).join('|') + '|' + (x.task || '')).replace(/\s+/g, ' ');   // v462：轉換題同一句可以換不同 task
+  /* ⚠ v467 實測踩到：新題型如果沒有被這一行認出來，所有題目的 key 都會變成空字串、
+     然後被「去重」砍到只剩一題（diagnose 要 3 題只出 1 題就是這樣）。
+     加新題型時，它的題幹欄位一定要列進來；最後再加一道保險，認不出來就用整個物件當 key。 */
+  const key = (x) => {
+    const stem = String(x.q || x.prompt || x.zh || x.wrong || x.sentence || x.broken
+      || (x.words || []).join(' ') || '');
+    const rest = (x.options || x.kinds || []).join('|') + '|' + (x.task || '') + '|' + (x.fixed || '');
+    const k = (stem + '|' + rest).replace(/\s+/g, ' ').trim();
+    return k === '|' ? JSON.stringify(x) : k;
+  };
   const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
     const v = valid(x); if (!v) return;
     const k = key(v); if (!k || seen.has(k)) return;
@@ -3587,6 +3715,70 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
   }
   return out.slice(0, n);
 }
+
+/* v467：整段改錯也是「一整包」（一段文章＋N 個錯），跟分一分同理，自己一支。
+   出不來就帶著回饋重試——這一種對模型比較難（要剛好 N 個錯、每個錯字只能出現一次）。 */
+/* ⚠⚠ 2026-10-06 實測，這一種有三個真實的失敗模式，三個都要程式處理：
+     ① 叫它「剛好 5 個」它給 4 個——模型數不準。
+        → 不要逼它數。改成「大概幾個」，**真正的題數由驗證過的結果決定**。
+     ② 同一個錯列兩次（一次的 right 還寫成一句解釋）。→ 程式去重＋丟掉不像答案的。
+     ③ 把沒錯的當成錯（「the prettiest girl」→「the prettiest girl in her class」）。
+        → 這個程式看不出來，要**第二個 AI 重讀一次段落、自己列出所有錯**再比對
+        （跟 v444 找出來、v452 分一分同一招：單一正解的題型都要有「還有沒有別的答案」的檢查）。 */
+const GN_EDIT_CHECK_SYS = `You proofread ONE short paragraph for a single kind of grammar mistake.
+Output ONLY JSON: {"mistakes":[""]}
+- List the exact wording of EVERY place in the paragraph that is wrong for THAT grammar point, in order.
+- Copy the wording exactly as it appears. 1-3 words each.
+- Do not list anything that is already correct, and do not list other kinds of mistakes.
+- If the paragraph has none, output {"mistakes":[]}.
+${_AI_MINIFY}`;
+
+async function aiMakeGrammarEditPara({ base, n = 5, rounds = 3, topic = '' } = {}) {
+  let feedback = '', lastErr = null;
+  for (let i = 0; i < Math.max(1, rounds); i++) {
+    let raw;
+    try {
+      raw = await _gnCall(GN_Q_SYS.editpara,
+        /* ⚠ 多種幾個：實測模型種 5 個、能用的常常只剩 2~3 個
+           （有的是別種文法的錯、有的 right 寫成一句解釋）。多種一點，過濾完才夠數。 */
+        `${base}${feedback}\n\nPlant about ${n + 2} mistakes in the paragraph.`, 1600);
+    } catch (e) { lastErr = e; continue; }
+    const v = gnValidEditPara(raw, 0);          // 0 ＝ 不檢查數量，先看格式
+    if (v) {
+      /* 交叉檢查：另一個 AI 重讀段落、自己把錯找出來。
+         它找到的必須跟我們的答案「完全一樣」——它少找到表示我們列了沒錯的，
+         它多找到表示段落裡還有沒列進答案的錯（學生會找到卻被判錯）。 */
+      let seen = null;
+      try {
+        const chk = await _gnCall(GN_EDIT_CHECK_SYS,
+          `GRAMMAR POINT: ${topic || 'the lesson above'}\n\nPARAGRAPH:\n${v.paragraph}`, 700);
+        seen = (chk && Array.isArray(chk.mistakes)) ? chk.mistakes.map(m => _gnNormPhrase(m)).filter(Boolean) : null;
+      } catch (e) { seen = null; }               // 檢查器掛掉不要擋住老師，就當作沒意見
+      if (seen) {
+        const mine = v.errors.map(e => _gnNormPhrase(e.wrong));
+        const same = seen.length === mine.length && mine.every(m => seen.indexOf(m) >= 0);
+        if (!same) {
+          feedback = `\n\nYour last paragraph was rejected: a second proofreader found these mistakes in it — ` +
+            `${seen.map(x => '"' + x + '"').join(', ') || '(none)'} — but your answer key listed ` +
+            `${mine.map(x => '"' + x + '"').join(', ')}. Every mistake in the paragraph must be in the key, ` +
+            `and nothing in the key may already be correct. Write a NEW paragraph and be exact.`;
+          continue;
+        }
+      }
+      if (v.errors.length >= 3 && v.errors.length <= 8) return v;   // 題數＝驗證過的真實數量
+      feedback = `\n\nYour last attempt had ${v.errors.length} usable mistakes. Write a new paragraph with about ${n}.`;
+      continue;
+    }
+    feedback = `\n\nYour last attempt was rejected: a listed mistake did not appear in the paragraph exactly once, ` +
+      `or a "right" value was an explanation instead of the corrected wording, ` +
+      `or something other than the grammar point was wrong. Rewrite the whole paragraph.`;
+  }
+  throw lastErr || new Error('整段改錯出不來，請再試一次。');
+}
+/* 比對兩邊的用詞時，冠詞要一起拿掉——不然檢查器說「the goodest」、我們說「goodest」
+   會被當成不一樣，明明是同一個錯。 */
+const _gnNormPhrase = (t) => String(t || '').split(/\s+/).map(_GN_TOK).filter(Boolean).join(' ')
+  .toLowerCase().replace(/^(the|a|an)\s+/, '').trim();
 
 /* v444：分一分是「一整組」而不是一題一題，所以不走 _gnMakeKind，自己一個小迴圈。 */
 async function aiMakeGrammarSortSet({ base, n = 8, rounds = 3 } = {}) {
@@ -3810,13 +4002,14 @@ Do not use words or names from outside that area, and do not use the textbook's 
 async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
                                    nCircle = 0, nSort = 0, nCircleSets = 1, nSortSets = 1,
                                    nWrite = 0, nTf = 0, nOrd = 0,             // v462 ③造句 ②句型轉換 ①排順序
+                                   nEdit = 0, nDiag = 0,                     // v467 康橋：整段改錯（幾個錯）／先判斷再改正（幾題）
                                    caseMatters = false, teacherNote = '', onProgress } = {}) {
   if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
   const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote);
   const cSets = nCircle > 0 ? Math.max(1, Math.min(3, +nCircleSets || 1)) : 0;
   const sSets = nSort   > 0 ? Math.max(1, Math.min(3, +nSortSets   || 1)) : 0;
   let done = 0;
-  const total = 1 + [nMcq, nFill, nTr, nRw, nWrite, nTf, nOrd].filter(Boolean).length + cSets + sSets;
+  const total = 1 + [nMcq, nFill, nTr, nRw, nWrite, nTf, nOrd, nEdit, nDiag].filter(Boolean).length + cSets + sSets;
   const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
   // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
   const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
@@ -3825,7 +4018,7 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
     settle(_gnMakeKind('circle', { n: nCircle, base: base + _gnSetHint(k, cSets), teacherQs, caseMatters }), nm('找出來', k, cSets), nCircle));
   const sortJobs = Array.from({ length: sSets }, (_, k) =>
     settle(aiMakeGrammarSortSet({ base: base + _gnSetHint(k, sSets), n: nSort }), nm('分一分', k, sSets), nSort));
-  const [L, M, F, T, R, W, X, O, Cs, Ss] = await Promise.all([
+  const [L, M, F, T, R, W, X, O, E, D, Cs, Ss] = await Promise.all([
     settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters, teacherNote }), '互動教學'),
     settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
     settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
@@ -3834,13 +4027,16 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
     settle(_gnMakeKind('write', { n: nWrite, base, teacherQs, caseMatters }), '造句', nWrite),
     settle(_gnMakeKind('transform', { n: nTf, base, teacherQs, caseMatters }), '句型轉換', nTf),
     settle(_gnMakeKind('order', { n: nOrd, base, teacherQs, caseMatters }), '排順序', nOrd),
+    settle(nEdit > 0 ? aiMakeGrammarEditPara({ base, n: nEdit, topic: topic + (topicZh ? `（${topicZh}）` : '') }) : Promise.resolve(null), '整段改錯', nEdit),
+    settle(_gnMakeKind('diagnose', { n: nDiag, base, teacherQs, caseMatters }), '先判斷再改正', nDiag),
     Promise.all(circleJobs),
     Promise.all(sortJobs),
   ]);
   const errors = [];
   if (L.e) errors.push('互動教學');
   [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw],
-   [W, '造句', nWrite], [X, '句型轉換', nTf], [O, '排順序', nOrd]]
+   [W, '造句', nWrite], [X, '句型轉換', nTf], [O, '排順序', nOrd],
+   [E, '整段改錯', nEdit], [D, '先判斷再改正', nDiag]]
     .forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
   Cs.forEach((x, k) => { if (x.e) errors.push(nm('找出來', k, cSets)); });
   Ss.forEach((x, k) => { if (x.e) errors.push(nm('分一分', k, sSets)); });
@@ -3849,10 +4045,12 @@ async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], g
   const sortSets   = Ss.map(x => x.v || null).filter(Boolean);
   const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [],
                 write: W.v || [], tf: X.v || [], ord: O.v || [],   // v462
+                edit: E.v || null, diag: D.v || [],                // v467 康橋
                 circle: circleSets[0] || [], sort: sortSets[0] || null,
                 circleSets, sortSets, caseMatters, errors };
   if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length
-      && !out.write.length && !out.tf.length && !out.ord.length && !circleSets.length && !sortSets.length) {
+      && !out.write.length && !out.tf.length && !out.ord.length && !out.edit && !out.diag.length
+      && !circleSets.length && !sortSets.length) {
     throw new Error('全部都沒有產生成功，請再試一次。');
   }
   return out;
@@ -5459,6 +5657,7 @@ Object.assign(window, {
   gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint,
   gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet,
   gnValidWrite, gnValidTransform, gnValidOrder,    // v462 ③造句 ②句型轉換 ①排順序
+  gnValidEditPara, gnValidDiagnose,               // v467 康橋：整段改錯／先判斷再改正
   aiPlanGrammarKinds, GN_PLAN_PRESET, GN_PLAN_ZH,   // v462 ⑦ 依主題自動挑題型
   CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS,
   // v342: 集點（星星）
