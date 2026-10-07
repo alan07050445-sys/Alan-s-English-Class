@@ -1139,10 +1139,15 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
     fillblank: (useAI ? words.length : withEx.length) >= 2,
     // v406: 短文填空一定要 AI（要寫一整篇故事），而且太少字寫不成故事
     story: useAI && words.length >= 3,
+    /* 🔴 v473：v468 做了「字義選擇」卻漏了這一行 → canDo.sense 是 undefined
+       → 選項永遠是灰的、寫著「資料不夠」，做出來到現在一次都按不下去。
+       它要 AI（干擾項是同一個字的其他語意，程式生不出來），
+       而且 qsBuildItems 至少要 2 題才會建單元。 */
+    sense: useAI && words.length >= 2,
   };
   const chosen = QS_KINDS.filter(k => picked[k.id] && canDo[k.id]);
   const ready = title.trim() && words.length >= 1 && chosen.length >= 1;
-  const wantAI = useAI && (picked['def-match'] || picked.fillblank || picked.story);
+  const wantAI = useAI && (picked['def-match'] || picked.fillblank || picked.story || picked.sense);
 
   const runAI = async () => {
     setAiErr(''); setBusy(0.0001);
@@ -1153,16 +1158,23 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
          v407：短文的第三層保底要用到「填空題」的例句，所以把同一個 promise
          當 rescue 傳進去——它只在真的漏字時才會 await，並行完全沒被打斷。 */
       const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), grade, teacherNote: aiNote, onProgress: (done) => setBusy(done) });
-      const seP = (picked.sense && window.aiMakeVocabSense)
-        ? window.aiMakeVocabSense(words, { hint: title.trim(), grade, teacherNote: aiNote }).catch(() => null)
+      const seP = (picked.sense && canDo.sense && window.aiMakeVocabSense)
+        ? window.aiMakeVocabSense(words, { hint: title.trim(), grade, teacherNote: aiNote }).catch(e => e)
         : Promise.resolve(null);
       const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
-        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP }).catch(() => null)
+        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP }).catch(e => e)
         : Promise.resolve(null);
-      const [r, st, se] = await Promise.all([exP, stP, seP]);
+      const [r, st0, se0] = await Promise.all([exP, stP, seP]);
+      /* 🔴 v473：本來是 .catch(() => null)——短文或字義選擇失敗時**悄悄少一個單元**，
+         老師只看得到「短文填空不見了」，完全不知道發生什麼事（Alan 就是這樣回報的）。
+         它們失敗不該拖垮其他已經出好的練習，但一定要講出來。 */
+      const soft = [];
+      const st = (st0 instanceof Error) ? (soft.push('短文填空'), null) : st0;
+      const se = (se0 instanceof Error) ? (soft.push('字義選擇'), null) : se0;
       setRows(r);
       setStory(st);
       setSense(se || []);
+      if (soft.length) setAiErr(`其他都出好了，只有${soft.join('、')}這次沒出來（AI 回得不乾淨）。想要的話再按一次。`);
     } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
     setBusy(0);
   };
@@ -1482,7 +1494,7 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
   const curIx = (weekChoices || []).findIndex(c => c.id === curWeekId);
   const defWeek = (weekChoices || [])[curIx + 2] || (weekChoices || [])[curIx + 1] || later[0] || null;
   const [week, setWeek]   = useS(defWeek ? defWeek.id : '');
-  const [kinds, setKinds] = useS(['quiz', 'fillblank', 'story', 'def-match', 'spelling']);
+  const [kinds, setKinds] = useS(['quiz', 'fillblank', 'story', 'sense', 'def-match', 'spelling']);
   // v469：文法複習要出幾題（跟一鍵出文法同一組題型，只是不重出互動教學）
   const [gN, setGN] = useS({ nMcq: 6, nFill: 6, nRw: 4, nTr: 3, nEdit: 5, nDiag: 0, nOrd: 0, nTf: 4, nWrite: 0, nCircle: 0, nSort: 0 });
   const [asHw, setAsHw]   = useS(true);
@@ -1491,13 +1503,21 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
   const [err, setErr]     = useS('');
   const [note, setNote]   = useS('');
 
+  /* 🔴 v473（Alan 回報三件事）：
+     ① 單字卡本來是「打勾且不能取消」，但 kinds 的預設值裡根本沒有 flashcard
+        → 畫面說「會照抄一份過去」，實際上**從來沒有抄**。說一套做一套。
+        Alan：「不需要出額外單字卡，但如果學生忘記，至少要給『是否複習單字卡』這個選項。」
+        → 改成真的選項，預設不勾；勾了才複製一份過去。
+     ② 短文填空出不來——見下面 run() 裡的說明（生出來又被丟掉）。
+     ③ 字義選擇（v468 的康橋第一大題）本來就沒有出現在這個清單裡。 */
   const KINDS = [
-    ['flashcard',  '🃏 單字卡（同一批字，不重出）', true],
     ['quiz',       '📝 測驗（新題目）', false],
     ['fillblank',  '✏️ 填空（新句子）', false],
     ['story',      '📖 短文填空（新短文）', false],
+    ['sense',      '🔎 字義選擇（康橋第一大題）', false],
     ['def-match',  '🔗 配對連線', false],
     ['spelling',   '🔊 聽寫', false],
+    ['flashcard',  '🃏 也放一份單字卡（怕學生忘記）', false],
   ];
   const toggle = (k) => setKinds(ks => ks.indexOf(k) >= 0 ? ks.filter(x => x !== k) : ks.concat(k));
 
@@ -1520,17 +1540,31 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
         return;
       }
       const wantStory = kinds.indexOf('story') >= 0;
+      const wantSense = kinds.indexOf('sense') >= 0;
       const exP = window.aiMakeVocabExercises(w, { hint: groupName, grade, teacherNote: note, avoid: seen,
                                                    onProgress: (d) => setBusy(d) });
       const stP = wantStory && window.aiMakeVocabStory
-        ? window.aiMakeVocabStory(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP }).catch(() => null)
+        ? window.aiMakeVocabStory(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP }).catch(e => e)
         : Promise.resolve(null);
-      const [ai, story] = await Promise.all([exP, stP]);
+      // v473：字義選擇也要能複習（avoid 一樣送進去，短文不會跟上次一樣）
+      const seP = wantSense && window.aiMakeVocabSense
+        ? window.aiMakeVocabSense(w, { hint: groupName, grade, teacherNote: note, avoid: seen }).catch(e => e)
+        : Promise.resolve(null);
+      const [ai, story0, sense0] = await Promise.all([exP, stP, seP]);
+      /* ⚠ 這兩種失敗了不該整份停掉（其他練習都好了），但也**不可以默默消失**——
+         本來是 .catch(() => null)，老師只會看到「短文填空不見了」卻不知道為什麼。 */
+      const soft = [];
+      const story = (story0 instanceof Error) ? (soft.push('短文填空'), null) : story0;
+      const sense = (sense0 instanceof Error) ? (soft.push('字義選擇'), null) : sense0;
       onCreate({
-        targetWeekId: week, catId, groupName, words: w, ai, story,
-        kinds: kinds.filter(k => k !== 'story'),
+        targetWeekId: week, catId, groupName, words: w, ai, story, sense,
+        /* 🔴 v473：本來寫 kinds.filter(k => k !== 'story')，把 story 濾掉了——
+           但 qsBuildItems 要靠 kinds 裡有 'story' 才會建那個單元。
+           結果是：短文真的生出來了（花了一次 AI 請求），然後被丟掉。 */
+        kinds,
         dueDate: asHw ? (due || null) : null,
       });
+      if (soft.length) setErr(`其他都出好了，只有${soft.join('、')}這次沒出來（AI 回得不乾淨）。想要的話再按一次。`);
     } catch (e) { setErr((e && e.message) || '重出題目失敗，請再試一次。'); }
     setBusy(0);
   };
@@ -1556,7 +1590,7 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
             <div className="field-help" style={{ marginBottom: 12 }}>
               用<b>同一批 {w.length} 個單字</b>重出一份<b>不一樣</b>的題目，排到之後的某一週。
               上次出過的 {seen.length} 個句子會送進去告訴 AI「不可以再用」，所以小朋友沒辦法背答案。
-              <br/>單字卡會照抄一份過去（同一批字不用重出），複習前可以先看一遍。
+              <br/>預設<b>不</b>放單字卡（同一批字不用看兩次）。怕學生忘記的話，下面可以勾「也放一份單字卡」。
             </div>
           )}
           {!isGram && w.length < 2 && <div className="gr-warn">這一組找不到單字卡，也找不到互動教學，沒辦法排複習。</div>}
@@ -1664,7 +1698,10 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
      ⚠ 不能 shuffle 選項：正解位置已經由程式攤平過（_qsSpreadAnswers），
        再洗一次會把那份安排打亂。 */
   if (kinds.indexOf('sense') >= 0 && (sense || []).length >= 2) {
-    out.push({ ...base, id: 'qs' + stamp + 'se', type: 'quiz', title, linkedFlashcardId: fcId,
+    /* 🔴 v473：本來標題跟「測驗」那個單元一模一樣（兩個都是 type:'quiz'），
+       側欄會並排兩個「測驗」，老師與學生都分不出哪個是哪個。
+       ⚠ 加了字尾就要同時補 QM_TYPE_WORDS，否則側欄歸戶會把它當成另一組。 */
+    out.push({ ...base, id: 'qs' + stamp + 'se', type: 'quiz', title: `${title} · 字義選擇`, linkedFlashcardId: fcId,
       zh: `${sense.length} 題 · 讀短文，選出這個字在這裡的意思`,
       instruction: 'Read each passage, then choose what the word means there.',
       questions: sense.map((x, i) => ({ id: 'q' + stamp + 's' + i + rnd(),

@@ -73,8 +73,13 @@ ok('兩個都沒有的組不顯示這個選項（按了也沒用）',
 ok('有 ReviewGroupModal', /function ReviewGroupModal\(/.test(ed) && /ReviewGroupModal \}\);/.test(ed));
 ok('⭐ 預設排到「兩週後」（Alan：每隔一週複習一次）',
    /const defWeek = \(weekChoices \|\| \[\]\)\[curIx \+ 2\]/.test(ed));
-ok('⭐ 單字卡不給取消（Alan：單字卡當然不用再換）',
-   /\['flashcard',\s*'🃏 單字卡（同一批字，不重出）', true\]/.test(ed) && /disabled=\{fixed\}/.test(ed));
+/* v473：Alan 看了實際結果之後改了主意——「不需要出額外單字卡，但如果學生忘記，
+   至少還是要給『是否複習單字卡』這個選項」。所以改成可勾可不勾、預設不勾。
+   ⚠ 這一條本來只檢查「畫面上有沒有打勾且不能取消」，所以「打勾但其實沒做」
+     （kinds 預設值裡根本沒有 flashcard）它完全看不出來。
+     教訓：要守的是**結果**，不是畫面長相。真正的檢查在 t-review-kinds。 */
+ok('⭐ 單字卡是選項，預設不放（Alan：不需要出額外單字卡）',
+   /\['flashcard',\s*'🃏 也放一份單字卡（怕學生忘記）', false\]/.test(ed));
 ok('可以順便設成那一週的作業', /順便設成那一週的作業/.test(ed));
 ok('也可以寫這次的特別要求（v445 的那個框）', /<window\.AiNoteBox value=\{note\}/.test(ed));
 
