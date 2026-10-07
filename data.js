@@ -3852,6 +3852,26 @@ function _gnSameWord(a, b) {
     return (hit(bx, c1) && hit(by, c2)) || (hit(bx, c2) && hit(by, c1));
   });
 }
+/* 🔴 v481：診斷題（「這句哪裡錯？」）的那一關要比改寫題鬆一點，但不能鬆到沒有。
+   康橋真的有「Missing Subject」：ran across the line. → My dad ran across the line.
+   ——那是**補**一個實詞，句子本來就缺，合法。
+   但「My sister's shoes are the most expensive toy. → …expensive shoes.」
+   （理由寫「shoes are not toys」）是**換掉**一個實詞——那是在改意思，不是改文法。
+   → 判準：原句的實詞必須原封不動、照原順序出現在改好的句子裡（只准插入，不准換、不准對調）。 */
+function _gnOnlyAdds(wrong, answer) {
+  const tok = (t) => String(t || '').toLowerCase().match(/[a-z']+/g) || [];
+  const A = tok(wrong).filter(w => !_GN_FN_WORDS.has(w));
+  const B = tok(answer).filter(w => !_GN_FN_WORDS.has(w));
+  if (!A.length) return true;
+  let j = 0;
+  for (let i = 0; i < A.length; i++) {
+    while (j < B.length && !_gnSameWord(A[i], B[j])) j++;
+    if (j >= B.length) return false;      // 這個實詞不見了＝被換掉或被調走
+    j++;
+  }
+  return true;
+}
+
 function _gnFixableFromSentence(wrong, answer) {
   const tok = (t) => String(t || '').toLowerCase().match(/[a-z']+/g) || [];
   const content = (arr) => arr.filter(w => !_GN_FN_WORDS.has(w));
@@ -3975,6 +3995,9 @@ function gnValidDiagnose(x) {
        主詞本來就要學生自己想，**那是合法的「看出錯在哪」題**。
        但它不能用「標準答案比對」來改（學生寫 "The boy ran…" 也對）。
      → 所以：判斷題照出，改寫那一步只收「從句子本身就改得回來」的。 */
+  /* 🔴 v481：實詞被**換掉**（shoes are not toys）＝在考常識不是考文法，整題丟掉。
+     只是**補**一個實詞（Missing Subject）則照收——它是合法的「看出錯在哪」題。 */
+  if (!_gnOnlyAdds(broken, fixed)) return null;
   const canRewrite = _gnFixableFromSentence(broken, fixed);
   return { broken, kinds, answer: ai, fixed, canRewrite, why: String((x && x.why) || '').trim() };
 }

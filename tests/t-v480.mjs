@@ -95,5 +95,27 @@ ok('⭐ 直接把 Alan 截到的那兩題當反例寫進去',
    /My fish is more beautiful than yours/.test(data) && /that is an opinion about food, not a grammar mistake/.test(data));
 ok('   也給了正例', /GOOD: "My bag is bigger yours\." -> "My bag is bigger than yours\."/.test(data));
 
+console.log('\n【8】v481：診斷題「只准補，不准換」');
+/* 真 AI 漏網的一題：「My sister's shoes are the most expensive toy.」
+   →「…the most expensive shoes.」理由寫「shoes are not toys」。
+   那不是文法錯，是常識——跟 Alan 圖2 同一個毛病。
+   但不能一律擋：康橋的 Missing Subject 是**補**一個實詞，那是合法的。
+   判準＝原句的實詞要原封不動、照原順序出現在改好的句子裡。 */
+const Wm = (() => { const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
+  const W = {}; new Function('window', 'document', 'firebase', 'localStorage', data)(W, stub, stub, stub); return W; })();
+const dg = (b, f) => Wm.gnValidDiagnose({ broken: b, kinds: ['A', 'B'], answer: 0, fixed: f });
+ok('⭐ 換掉實詞（shoes are not toys）→ 擋掉，那是常識題',
+   dg("My sister's shoes are the most expensive toy.", "My sister's shoes are the most expensive shoes.") === null);
+ok('⭐ 對調（cake↔candy）→ 擋掉', dg('The cake is sweeter than the candy.', 'The candy is sweeter than the cake.') === null);
+ok('⭐ Missing Subject（補主詞）→ 收下，但不叫他重寫', (() => {
+  const r = dg('ran across the line.', 'My dad ran across the line.'); return !!r && r.canRewrite === false; })());
+ok('⭐ 一般文法錯照收，而且可以重寫', (() => {
+  const r = dg('My dog is more big than your dog.', 'My dog is bigger than your dog.'); return !!r && r.canRewrite === true; })());
+ok('少了 than／the 這種「補功能詞」要收得下，而且可以重寫', (() => {
+  const r = dg('Tom is tallest student in our school.', 'Tom is the tallest student in our school.');
+  const r2 = dg('My brother is taller I am.', 'My brother is taller than I am.');
+  return !!r && r.canRewrite === true && !!r2 && r2.canRewrite === true; })());
+ok('有寫下為什麼（補 vs 換的差別）', /那是\*\*補\*\*一個實詞/.test(data) && /是\*\*換掉\*\*一個實詞/.test(data));
+
 console.log(`\n${fail ? '❌' : '✅'} t-v480：${pass} 過 / ${fail} 失敗`);
 process.exit(fail ? 1 : 0);
