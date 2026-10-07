@@ -1887,7 +1887,14 @@ function App() {
                 if (ws.length >= 2) {
                   // 單字組：單字表照 QuickSetModal 吃的格式組回去（英文 - 中文 - 例句 - 英文定義）
                   const text = ws.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
-                  setRegenFor({ catId, name, pick: false, text });
+                  /* v475（Alan：「我只是這一組忘記生成哪一個，不應該全部重刪掉再生成一次」）：
+                     已經有的題型先取消勾選，預設只補還沒有的。
+                     ⚠ 圖片沒辦法用文字帶（單字表是純文字），所以另外給一張「單字→圖片」對照表，
+                       解析完再貼回去——不然補出來的單字卡又是白的。 */
+                  const imgs = {};
+                  ws.forEach(x => { if (x.imageUrl) imgs[String(x.term).toLowerCase()] = x.imageUrl; });
+                  setRegenFor({ catId, name, pick: false, text, images: imgs,
+                                have: (window.qsKindsInGroup && window.qsKindsInGroup(gItems)) || [] });
                   setQuickSetOpen(true);
                   return;
                 }
@@ -2122,6 +2129,8 @@ function App() {
             defaultGrade={grade}
             defaultTitle={regenFor ? regenFor.name : ''}
             defaultText={(regenFor && regenFor.text) || ''}      /* v474：現成的單字先填好，不用再貼一次 */
+            defaultImages={(regenFor && regenFor.images) || null}  /* v475：圖片照抄 */
+            alreadyHave={(regenFor && regenFor.have) || null}      /* v475：已經有的題型先取消勾選 */
             onClose={() => { setQuickSetOpen(false); setRegenFor(null); }}
             onCreate={handleQuickSet}
           />

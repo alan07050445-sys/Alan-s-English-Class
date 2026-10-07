@@ -351,6 +351,47 @@ function qmSyllables(word) {
   return chunks.filter(Boolean);
 }
 
+/* v475：字義選擇的題目＝一段短文 ＋ 一個「這個字在這裡是什麼意思」。
+   以前整串塞進 q，用 52px 的題目字級印出來＝一整屏的大字（Alan 截圖）。
+   v475 之後的新單元有 q.passage；**v475 以前建好的沒有，就從 q 切出來**
+   （最後一個空行之後是問題，前面是標題＋短文）——這樣舊單元不用重出也會變乾淨。 */
+function qmSenseParts(q) {
+  if (!q) return null;
+  if (q.passage) {
+    return { title: q.passageTitle || '', passage: q.passage, ask: q.ask || q.q || '', word: q.word || '' };
+  }
+  const t = String(q.q || '');
+  const i = t.lastIndexOf('\n\n');
+  if (i < 0) return null;
+  const head = t.slice(0, i).trim(), ask = t.slice(i + 2).trim();
+  if (!head || !ask) return null;
+  // 只有「讀短文選字義」這一種長這樣；別的題型不要被誤判
+  if (!/what does\s+(.+?)\s+mean/i.test(ask)) return null;
+  const nl = head.indexOf('\n');
+  const m = ask.match(/what does\s+(.+?)\s+mean/i);
+  return { title: nl > 0 ? head.slice(0, nl).trim() : '',
+           passage: nl > 0 ? head.slice(nl + 1).trim() : head,
+           ask, word: m ? m[1].trim().replace(/^["'“”]|["'“”]$/g, '') : '' };
+}
+/* 把短文裡的目標字標起來（Alan：「螢光筆或是粗體之類的都可以」）。
+   字會變形（pursue → pursued），所以用字首比對，至少抓得到。 */
+function qmMarkWord(text, word) {
+  const w = String(word || '').trim();
+  if (!w) return text;
+  const stem = w.length > 4 ? w.slice(0, w.length - 1) : w;
+  const re = new RegExp('(' + stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\w*)', 'gi');
+  const out = [];
+  let last = 0, m2;
+  while ((m2 = re.exec(text)) !== null) {
+    if (m2.index > last) out.push(text.slice(last, m2.index));
+    out.push(<mark key={m2.index} className="qm-sense-mark">{m2[0]}</mark>);
+    last = m2.index + m2[0].length;
+    if (re.lastIndex === m2.index) re.lastIndex++;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.length ? out : text;
+}
+
 function qmShortLabel(item, groupName) {
   const title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
@@ -3019,7 +3060,18 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
             <span className="qm-listen-label">點擊重聽 · Tap to replay</span>
           </button>
         ) : (
-          <div className="qm-question-text">{(item && /^gn/.test(String(item.id || '')) && window.gnCleanStem) ? window.gnCleanStem(q.q, q.options) : q.q}</div>
+          (() => {
+            // v475：字義選擇＝短文排小、目標字標起來、問題才用題目的字級
+            const sp = qmSenseParts(q);
+            if (sp) return (
+              <div className="qm-sense">
+                {sp.title && <div className="qm-sense-title">{sp.title}</div>}
+                <div className="qm-sense-passage">{qmMarkWord(sp.passage, sp.word)}</div>
+                <div className="qm-sense-ask">{sp.ask}</div>
+              </div>
+            );
+            return <div className="qm-question-text">{(item && /^gn/.test(String(item.id || '')) && window.gnCleanStem) ? window.gnCleanStem(q.q, q.options) : q.q}</div>;
+          })()
         )}
       </div>
 

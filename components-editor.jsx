@@ -1090,7 +1090,7 @@ function grBuildItems({ tense, zh, lesson, A, B, check }) {
   return out;
 }
 
-function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, defaultTitle, defaultText, onClose, onCreate }) {
+function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, defaultTitle, defaultText, defaultImages, alreadyHave, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
@@ -1116,7 +1116,15 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [due, setDue]       = useS('');
   const [who, setWho]       = useS([]);       // 只有 perStudent 模式用得到
   useE(() => {
-    if (open) { setText(defaultText || '');   /* v474：連現成的單字也先填好，不用再貼一次 */ setTitle(defaultTitle || '');   /* v454：在同一組再出一份＝名字先填好 */ setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
+    if (open) { setText(defaultText || '');   /* v474：連現成的單字也先填好，不用再貼一次 */ setTitle(defaultTitle || '');   /* v454：在同一組再出一份＝名字先填好 */
+      /* 🔴 v475（Alan：「我只是這一組忘記生成哪一個，不應該全部重刪掉再生成一次」）：
+         這一組已經有的題型先取消勾選 → 按下去就只補漏掉的那幾個。
+         老師還是可以自己勾回去（他可能就是想重出一份不一樣的）。 */
+      if (alreadyHave && alreadyHave.length) {
+        setPicked(QS_KINDS.reduce((a3, k) => { a3[k.id] = alreadyHave.indexOf(k.id) < 0; return a3; }, {}));
+      } else {
+        setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true, story: true });
+      } setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
@@ -1179,7 +1187,13 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
     setBusy(0);
   };
   const updRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r));
-  const payload = (extra) => ({ words, title: title.trim(), cat, kinds: chosen.map(k => k.id), story, sense,
+  /* v475：單字表是純文字帶不了圖片，所以用「單字→圖片」對照表解析完再貼回去。
+     不然「再出一份」補出來的單字卡又是白的。 */
+  const withImgs = defaultImages
+    ? words.map(w => { const u = defaultImages[String(w.term || '').toLowerCase()];
+                       return u && !w.imageUrl ? { ...w, imageUrl: u } : w; })
+    : words;
+  const payload = (extra) => ({ words: withImgs, title: title.trim(), cat, kinds: chosen.map(k => k.id), story, sense,
     assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null, ...extra });
 
   /* ⚠ 不要寫成 `const AssignBox = () => …` 再用 <AssignBox/> 那種寫法：
@@ -1411,14 +1425,24 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
               </div>
               <div className="field">
                 <label className="field-label">要建立哪些練習</label>
+                {/* v475：從「在這一組再出一份」進來時，已經有的題型先取消勾選，
+                    老師只要按下去就補漏掉的那幾個，不用整組刪掉重生成。 */}
+                {alreadyHave && alreadyHave.length > 0 && (
+                  <div className="field-help qs-have">
+                    這一組已經有：<b>{QS_KINDS.filter(k => alreadyHave.indexOf(k.id) >= 0).map(k => k.zh).join('、')}</b>。
+                    下面只先勾<b>還沒有的</b>——按下去就只補那幾個，原本的一題都不會動。
+                    想重出一份不一樣的，自己勾回去就好。
+                  </div>
+                )}
                 <div className="qs-kinds">
                   {QS_KINDS.map(k => {
                     const ok = canDo[k.id];
+                    const has = !!(alreadyHave && alreadyHave.indexOf(k.id) >= 0);
                     return (
                       <label key={k.id} className={'qs-kind' + (picked[k.id] && ok ? ' on' : '') + (ok ? '' : ' off')}>
                         <input type="checkbox" disabled={!ok} checked={!!picked[k.id] && ok}
                           onChange={e => setPicked(p => ({ ...p, [k.id]: e.target.checked }))}/>
-                        <span className="qs-kind-zh">{k.zh}</span>
+                        <span className="qs-kind-zh">{k.zh}{has && <em className="qs-kind-has">已經有了</em>}</span>
                         <span className="qs-kind-note">{ok ? k.note : '資料不夠：' + k.note}</span>
                       </label>
                     );
@@ -1666,7 +1690,9 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
       cards: words.map((w, i) => {
         const a = aiOf(w.term);
         return { id: 'c' + stamp + i + rnd(), term: w.term, zh: w.zh || (a && a.zh) || '',
-                 example: w.example || ((a && a.sentence) ? a.sentence.replace('___', w.term) : '') };
+                 example: w.example || ((a && a.sentence) ? a.sentence.replace('___', w.term) : ''),
+                 // v475：圖片照抄（複習／再出一份時不用重挑一次圖）
+                 imageUrl: w.imageUrl || '' };
       }) });
   }
   if (kinds.indexOf('def-match') >= 0) {
@@ -1704,8 +1730,13 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
     out.push({ ...base, id: 'qs' + stamp + 'se', type: 'quiz', title: `${title} · 字義選擇`, linkedFlashcardId: fcId,
       zh: `${sense.length} 題 · 讀短文，選出這個字在這裡的意思`,
       instruction: 'Read each passage, then choose what the word means there.',
+      /* 🔴 v475（Alan：「字體小一點、排版好一點，該單字要特別標起來」）：
+         本來把「標題＋整段短文＋問題」塞成一整串 q，而題目的字級是 52px
+         ——一整屏的大字。改成分開存，播放器才能把短文排小、把目標字標出來。
+         ⚠ q 還是留著完整內容：舊版播放器（和複習／沿用時的其他路徑）看得懂。 */
       questions: sense.map((x, i) => ({ id: 'q' + stamp + 's' + i + rnd(),
         q: `${x.title ? x.title + '\n' : ''}${x.passage}\n\n${x.q}`,
+        passage: x.passage, passageTitle: x.title || '', word: x.word || '', ask: x.q,
         options: x.options, answer: x.answer, explain: x.explain || '' })) });
   }
 

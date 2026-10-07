@@ -5472,8 +5472,12 @@ function reviewWordsOf(items) {
   const fc = (items || []).find(it => it && it.type === 'flashcard' && (it.cards || []).length);
   if (fc) {
     return (fc.cards || [])
+      /* 🔴 v475（Alan：「複製過去的單字卡怎麼沒有圖片？這很簡單吧？」）：
+         圖片欄位叫 imageUrl，本來沒帶出來 → 複習那一份的單字卡全是白的。
+         圖片是老師自己挑或 AI 配好的，照抄最省事也最正確。 */
       .map(c => ({ term: String(c.term || '').trim(), zh: String(c.zh || '').trim(),
-                   example: String(c.example || '').trim(), def: String(c.def || '').trim() }))
+                   example: String(c.example || '').trim(), def: String(c.def || '').trim(),
+                   imageUrl: String(c.imageUrl || '').trim() }))
       .filter(w => w.term);
   }
   /* 🔴 v474：沒有單字卡也要找得出這一組在教哪些字。
@@ -5501,6 +5505,25 @@ function reviewWordsOf(items) {
     String(it.passage || '').replace(/\[([^\]]+)\]/g, (m, w) => { put(String(w).split('|')[0], {}); return m; });
   });
   return [...by.values()];
+}
+
+/* v475（Alan：「我只是這一組忘記生成哪一個，不應該全部重刪掉再生成一次」）：
+   這一組已經有哪些題型。回傳的是「一鍵出單字」那張清單上的 id，
+   所以畫面可以直接把「已經有的」取消勾選、只補還沒有的。
+   ⚠ 字義選擇與測驗都是 type:'quiz'，只能靠標題分（v473 加的「· 字義選擇」字尾）。 */
+function qsKindsInGroup(items) {
+  const have = new Set();
+  (items || []).forEach(it => {
+    if (!it) return;
+    const t = it.type;
+    if (t === 'flashcard' && (it.cards || []).length) have.add('flashcard');
+    else if (t === 'def-match' && (it.defPairs || []).length) have.add('def-match');
+    else if (t === 'spelling' && (it.spellWords || []).length) have.add('spelling');
+    else if (t === 'fillblank') have.add('fillblank');
+    else if (t === 'cloze') have.add('story');
+    else if (t === 'quiz') have.add(/字義選擇\s*$/.test(String(it.title || '')) ? 'sense' : 'quiz');
+  });
+  return [...have];
 }
 
 /* v469：文法的複習素材。
@@ -6021,6 +6044,7 @@ Object.assign(window, {
   collectWrongQuestions, removeWrongQuestion,
   reviewWordsOf, reviewSeenSentences,          // v466：複習用（同一批字、不一樣的題目）
   reviewGrammarOf,                             // v469：文法也能排複習
+  qsKindsInGroup,                              // v475：這一組已經有哪些題型（只補漏掉的）
   aiMakeVocabSense, qsValidSense,              // v468 康橋：字義選擇題
   // Weekly Report
   buildWeeklyReport, formatReportAsText,
