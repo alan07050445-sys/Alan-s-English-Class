@@ -716,6 +716,23 @@ function App() {
   useAppEffect(() => {
     window.__mxStars = starsTotal;
     window.__mxData  = userProfile.mx || {};
+    /* v477：吉祥物要講「跟現在的你有關」的話，就得知道現在的你是什麼狀況。
+       ⚠ 只放「網站這一層才算得出來」的東西——連對幾題是吉祥物自己數的，不要重複。
+       「剩幾個整組完成」在單元列表那一層才知道，由它自己寫進這同一包。 */
+    try {
+      const ci = window.computeCheckin ? window.computeCheckin(myCheckin) : null;
+      const fx = (myFixed && myFixed.days) || {};
+      const today = window.checkinToday ? window.checkinToday() : '';
+      const dates = Object.keys((myCheckin && myCheckin.dates) || {}).filter(k => k).sort();
+      const last = dates.filter(d => d !== today).pop() || '';
+      const dayNum = (d) => Math.floor(new Date(d + 'T00:00:00').getTime() / 86400000);
+      window.__mxCtx = Object.assign({}, window.__mxCtx, {
+        checkinDays: (ci && ci.streak) || 0,
+        fixedToday: Number(fx[today] || 0),
+        firstToday: !!(ci && !ci.signedToday),      // 今天還沒簽到＝今天第一次見面
+        daysAway: (last && today) ? Math.max(0, dayNum(today) - dayNum(last)) : 0,
+      });
+    } catch (e) {}
     window.__mxBuy   = (id) => (user && window.mxBuy
       ? window.mxBuy(user.uid, id, starsTotal, userProfile.mx)
       : Promise.resolve({ ok: false, reason: 'no-user' }));
@@ -726,7 +743,7 @@ function App() {
     window.__mxRename = (name) => (user && window.mxRename
       ? window.mxRename(user.uid, name, starsTotal, userProfile.mx)
       : Promise.resolve({ ok: false, reason: 'no-user' }));
-  }, [user, starsTotal, userProfile.mx]);
+  }, [user, starsTotal, userProfile.mx, myCheckin, myFixed]);   // v477：簽到／訂正變了，吉祥物要知道
 
   // v311 (#21): 只計「真的完成」——qmProgress 記錄存在不代表完成（未達 80 分 done 會是 0）；一律看 .done
   const qmIsDone = (id) => { const p = qmProgress[`${weekId}_${id}`]; return !!(p && p.done); };
@@ -1361,6 +1378,28 @@ function App() {
     saveWeeksSafe(w);
   };
 
+  /* v477：把「從某一週拿掉這些單元」抽出來——刪掉整組、搬到別週都要做同一件事。
+     🔴 v460（Alan：「家長說作業都做完了，為什麼還在傳未交提醒」）：
+       單元拿掉了，homework 裡那一筆 id 要一起拿掉，不然會變成孤兒。
+       網站自己到處都會略過這種孤兒（學生看不到、點不進去），所以在網站上完全看不出問題，
+       但 LINE 的作業提醒是照 homework 清單算的 → 變成學生**永遠做不掉**的作業，天天催。
+       2026-09-29 查線上資料：六個年級共有 38 份這種幽靈（G1 的 34 份裡有 21 份是）。
+     ⚠ 只改傳進來的那一週，不存檔——呼叫端做完自己的事再一起存一次。 */
+  const stripItemsFrom = (wk, ids) => {
+    if (!wk || !wk.items || !ids || !ids.size) return;
+    Object.keys(wk.items).forEach(k => {
+      wk.items[k] = (wk.items[k] || []).filter(it => !ids.has(it.id));
+    });
+    ids.forEach(id => { if (wk.homework && wk.homework[id]) delete wk.homework[id]; });
+    // 別的單元若「需要先學完這一個」，那個鎖也要解掉（不然學生被一個不存在的教學卡鎖住）
+    Object.keys(wk.items).forEach(k => {
+      (wk.items[k] || []).forEach(it => {
+        if (it && ids.has(it.requires)) delete it.requires;
+        if (it && ids.has(it.linkedFlashcardId)) delete it.linkedFlashcardId;
+      });
+    });
+  };
+
   /* v474：整組刪掉也走這裡（Alan：「整組無法直接刪掉」）。
      ⚠ 不要寫成「迴圈呼叫 handleDeleteItem」——那會存 N 次，
        而且每次都重讀 weeksRef，中間的 setWeeks 還沒生效就會互相蓋掉。
@@ -1369,22 +1408,7 @@ function App() {
     const ids = new Set((itemIds || []).filter(Boolean));
     if (!ids.size) return;
     const w = JSON.parse(JSON.stringify(weeksRef.current));
-    Object.keys(w[weekId].items).forEach(k => {
-      w[weekId].items[k] = w[weekId].items[k].filter(it => !ids.has(it.id));
-    });
-    /* 🔴 v460（Alan：「家長說作業都做完了，為什麼還在傳未交提醒」）：
-       單元刪掉了，homework 裡那一筆 id 要一起拿掉，不然會變成孤兒。
-       網站自己到處都會略過這種孤兒（學生看不到、點不進去），所以在網站上完全看不出問題，
-       但 LINE 的作業提醒是照 homework 清單算的 → 變成學生**永遠做不掉**的作業，天天催。
-       2026-09-29 查線上資料：六個年級共有 38 份這種幽靈（G1 的 34 份裡有 21 份是）。 */
-    ids.forEach(id => { if (w[weekId].homework && w[weekId].homework[id]) delete w[weekId].homework[id]; });
-    // 別的單元若「需要先學完這一個」，那個鎖也要解掉（不然學生被一個不存在的教學卡鎖住）
-    Object.keys(w[weekId].items).forEach(k => {
-      (w[weekId].items[k] || []).forEach(it => {
-        if (it && ids.has(it.requires)) delete it.requires;
-        if (it && ids.has(it.linkedFlashcardId)) delete it.linkedFlashcardId;
-      });
-    });
+    stripItemsFrom(w[weekId], ids);   // 單元＋孤兒作業＋別人指向它的鎖，一起清
     setWeeks(w);
     saveWeeksSafe(w);
     setEditorOpen(false);
@@ -1459,7 +1483,12 @@ function App() {
     showToast(`已排 ${built.length} 個複習單元到「${w[targetWeekId].label || targetWeekId}」${dueDate ? '，並設成作業' : ''} ✓`);
   };
 
-  const handleCopyGroupToWeeks = (catId, items, targetWeekIds, dueDate) => {
+  /* v477（Alan：「我出錯 week 了，我想整組調整到 week6」）：
+     本來只有「沿用」＝複製一份過去、原本那一週照樣留著。
+     加上 move＝搬過去（複製完把原本那一週的拿掉）。
+     ⚠ 一定要在同一個 w 上做完再存一次——分成兩次存的話，
+       中間 setWeeks 還沒生效就會互相蓋掉（v474 已經踩過）。 */
+  const handleCopyGroupToWeeks = (catId, items, targetWeekIds, dueDate, move) => {
     const list = (items || []).filter(x => x && x.id);
     if (!list.length || !(targetWeekIds || []).length) return;
     const w = JSON.parse(JSON.stringify(weeksRef.current));
@@ -1495,9 +1524,13 @@ function App() {
       if (any) weeksTouched++;
     });
     if (!copied) { showToast('沒有可沿用的週'); return; }
+    if (move) stripItemsFrom(w[weekId], new Set(list.map(it => it.id)));
     setWeeks(w);
     saveWeeksSafe(w);
-    showToast(`整組 ${list.length} 個單元已沿用到 ${weeksTouched} 週${dueDate ? '，並設成作業' : ''} ✓`);
+    const toLabel = (w[targetWeekIds[0]] && (w[targetWeekIds[0]].label || targetWeekIds[0])) || targetWeekIds[0];
+    showToast(move
+      ? `整組 ${list.length} 個單元已搬到「${toLabel}」✓`
+      : `整組 ${list.length} 個單元已沿用到 ${weeksTouched} 週${dueDate ? '，並設成作業' : ''} ✓`);
   };
 
   // v294: 沿用題目到其他週——深拷貝一份（各週獨立；進度分開算，因 key = weekId_itemId）。
@@ -1876,7 +1909,7 @@ function App() {
                 sub: weeks[id] ? [weeks[id].dateRange, weeks[id].theme].filter(Boolean).join(' · ') : '',
               }))}
               onCopyToWeeks={(item, targetIds) => handleCopyItemToWeeks(catView.id, item, targetIds)}
-              onCopyGroupToWeeks={(items, targetIds, due) => handleCopyGroupToWeeks(catView.id, items, targetIds, due)}
+              onCopyGroupToWeeks={(items, targetIds, due, move) => handleCopyGroupToWeeks(catView.id, items, targetIds, due, move)}
               /* 🔴 v474（Alan：「這份很明顯就是單字，幹嘛還要選？」
                      「選完之後我還要再貼一次單字？這太笨了，因為我本來就有單字了啊」）：
                  看得出這一組在教什麼，就直接開那一個生成視窗，而且把現成的內容先填好。

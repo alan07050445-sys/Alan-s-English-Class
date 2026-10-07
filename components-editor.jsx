@@ -1760,6 +1760,23 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
      沿用 quiz（不新增題型——v414 的教訓）。短文放在題幹裡，學生先讀再選。
      ⚠ 不能 shuffle 選項：正解位置已經由程式攤平過（_qsSpreadAnswers），
        再洗一次會把那份安排打亂。 */
+  if (kinds.indexOf('quiz') >= 0) {
+    const pool = words.map(w => ({ ...w, zh: w.zh || ((aiOf(w.term) || {}).zh || '') })).filter(w => w.zh);
+    const qs = pool.map((w, i) => {
+      const others = pool.filter(x => x.term !== w.term).map(x => x.term);
+      // 洗牌後取 3 個當誘答
+      for (let j = others.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); const t = others[j]; others[j] = others[k]; others[k] = t; }
+      const opts = [w.term].concat(others.slice(0, 3));
+      if (opts.length < 2) return null;
+      return { id: 'q' + stamp + i + rnd(), q: `「${w.zh}」的英文是哪一個？`, options: opts, answer: 0, explain: w.example || '' };
+    }).filter(Boolean);
+    if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'qz', type: 'quiz', title, linkedFlashcardId: fcId, questions: qs });
+  }
+  /* v406: 短文填空 → cloze 題型。passage 裡的 [答案](提示) 就是空格，
+     格式跟 components-quiz-mode.jsx 的 parseClozePassage 完全一致。 */
+  /* v477（Alan：「字義選擇和測驗順序幫我顛倒，我想要先測驗再字義選擇」）：
+     側欄的順序就是這裡 push 的順序。字義選擇要讀一段短文、比較難，
+     排在一般測驗後面比較合理。 */
   if (kinds.indexOf('sense') >= 0 && (sense || []).length >= 2) {
     /* 🔴 v473：本來標題跟「測驗」那個單元一模一樣（兩個都是 type:'quiz'），
        側欄會並排兩個「測驗」，老師與學生都分不出哪個是哪個。
@@ -1777,20 +1794,6 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
         options: x.options, answer: x.answer, explain: x.explain || '' })) });
   }
 
-  if (kinds.indexOf('quiz') >= 0) {
-    const pool = words.map(w => ({ ...w, zh: w.zh || ((aiOf(w.term) || {}).zh || '') })).filter(w => w.zh);
-    const qs = pool.map((w, i) => {
-      const others = pool.filter(x => x.term !== w.term).map(x => x.term);
-      // 洗牌後取 3 個當誘答
-      for (let j = others.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); const t = others[j]; others[j] = others[k]; others[k] = t; }
-      const opts = [w.term].concat(others.slice(0, 3));
-      if (opts.length < 2) return null;
-      return { id: 'q' + stamp + i + rnd(), q: `「${w.zh}」的英文是哪一個？`, options: opts, answer: 0, explain: w.example || '' };
-    }).filter(Boolean);
-    if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'qz', type: 'quiz', title, linkedFlashcardId: fcId, questions: qs });
-  }
-  /* v406: 短文填空 → cloze 題型。passage 裡的 [答案](提示) 就是空格，
-     格式跟 components-quiz-mode.jsx 的 parseClozePassage 完全一致。 */
   if (kinds.indexOf('story') >= 0 && story && String(story.passage || '').indexOf('[') >= 0) {
     const nBlank = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
     /* v408（Alan：「頭上要給 word bank，這樣小朋友才知道有什麼單字可以填入」）

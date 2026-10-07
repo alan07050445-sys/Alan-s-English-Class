@@ -6078,6 +6078,7 @@ Object.assign(window, {
   reviewWordsOf, reviewSeenSentences,          // v466：複習用（同一批字、不一樣的題目）
   reviewGrammarOf,                             // v469：文法也能排複習
   qsKindsInGroup,                              // v475：這一組已經有哪些題型（只補漏掉的）
+  mxSmartLine,                                 // v477：吉祥物看情況說話
   aiMakeVocabSense, qsValidSense,              // v468 康橋：字義選擇題
   // Weekly Report
   buildWeeklyReport, formatReportAsText,
@@ -6219,6 +6220,70 @@ function autoStarsForItem(item, prog, cloudShape) {
 }
 // weeks/weekOrder＝這位學生看得到的週次（暑假要先用 filterWeeksForPlan 過濾）
 // progItems＝進度 map；opts.cloudShape=true 代表直接吃 progress 文件的 items
+/* ══ v477：吉祥物「看情況說話」（Alan：「我的吉祥物可以再智能化一點，更像 AI，
+   可以跟你的舉動互動，而不是固定的幾套台詞」）══════════════════════════════
+   做法**不是**每句話都去叫 AI：那很慢（一句話等兩秒）、要花錢、而且對小朋友講的話
+   不該是每次都不一樣的即興句。真正讓人覺得「牠知道我在幹嘛」的，是**講的事情跟我
+   現在的狀況有關、而且帶真實數字**——「連對 7 題」「再 20 顆就買得起小兔」
+   「只剩 1 個就整組完成」。這個用規則做得又快又穩，而且永遠不會講出奇怪的話。
+
+   回傳 { key, text, act }；key 給呼叫端做「同一件事不要連講兩次」。
+   沒有任何情況成立就回 null → 退回原本的固定台詞（照 v451 的語音包）。
+   ⚠ 順序＝優先權：愈「此時此刻跟我有關」的愈前面。 */
+function mxSmartLine(ctx) {
+  const c = ctx || {};
+  const n = (v) => Number(v || 0);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const R = [];
+
+  // ① 正在發生的事（答題中）——最有感
+  if (n(c.streak) >= 10) R.push({ key: 'streak10', act: 'cheer',
+    text: pick([`連對 ${n(c.streak)} 題！你今天手感超好`, `${n(c.streak)} 題全對，我都看傻了`, `哇…連對 ${n(c.streak)} 題，繼續！`]) });
+  else if (n(c.streak) >= 5) R.push({ key: 'streak5', act: 'nod',
+    text: pick([`連對 ${n(c.streak)} 題了！`, `${n(c.streak)} 題沒錯過，穩`, `一口氣對 ${n(c.streak)} 題，厲害`]) });
+  if (n(c.wrongRun) >= 3) R.push({ key: 'wrongRun', act: 'idle',
+    text: pick(['這一段有點難齁…慢慢來，我陪你', '錯幾題沒關係，想清楚再按', '先深呼吸一下，再看一次題目']) });
+
+  // ② 快完成了——差一點點最有動力
+  const left = n(c.groupLeft);
+  if (left === 1) R.push({ key: 'grp1', act: 'jump',
+    text: pick([`只剩 1 個就整組完成了，會多拿星星喔！`, `最後一個了！撐住`, `剩一個！做完整組有獎勵`]) });
+  else if (left === 2 || left === 3) R.push({ key: 'grpN', act: 'nod',
+    text: pick([`再 ${left} 個就整組完成，會多拿星星`, `還剩 ${left} 個，快了`]) });
+
+  // ③ 星星快夠了——他自己正在存的那樣東西
+  if (c.nearBuy && n(c.nearBuy.need) > 0 && n(c.nearBuy.need) <= 60) R.push({ key: 'nearBuy', act: 'nod',
+    text: pick([`再 ${n(c.nearBuy.need)} 顆就買得起${c.nearBuy.label}了`,
+                `${c.nearBuy.label} 只差 ${n(c.nearBuy.need)} 顆⭐`,
+                `存到 ${n(c.stars) + n(c.nearBuy.need)} 顆就能換${c.nearBuy.label}`]) });
+
+  // ④ 今天第一次見面
+  if (c.firstToday) {
+    const d = n(c.daysAway);
+    /* ⚠ 每一句都要帶真實數字——「你終於來了」那種泛泛的話，
+       跟原本的固定台詞沒兩樣，就白做了。 */
+    if (d >= 7) R.push({ key: 'longAway', act: 'jump', text: pick([`好久不見！我等你 ${d} 天了`, `${d} 天沒看到你…我都生灰塵了`]) });
+    else if (d >= 3) R.push({ key: 'away', act: 'jump', text: pick([`${d} 天沒看到你了，想你`, `欸，${d} 天不見！`]) });
+    else if (n(c.checkinDays) >= 3) R.push({ key: 'checkin', act: 'cheer',
+      text: pick([`連續 ${n(c.checkinDays)} 天來報到，厲害`, `${n(c.checkinDays)} 天了，這個習慣很棒`]) });
+    else {
+      const h = n(c.hour);
+      if (h >= 5 && h < 11) R.push({ key: 'morning', act: 'idle', text: pick(['早安！今天先做哪一個？', '早起的人最強']) });
+      else if (h >= 21 || h < 5) R.push({ key: 'night', act: 'idle', text: pick(['這麼晚還在練，認真', '做完這個就去睡喔']) });
+    }
+  }
+
+  // ⑤ 訂正錯題——最值得被看見的努力
+  if (n(c.fixedToday) >= 3) R.push({ key: 'fixed', act: 'cheer',
+    text: pick([`今天訂正了 ${n(c.fixedToday)} 題，這才是真的進步`, `錯的都改掉了 ${n(c.fixedToday)} 題，很可以`]) });
+
+  if (!R.length) return null;
+  /* 同一件事剛講過就換下一個；**真的沒得換就閉嘴**（回 null → 退回原本的固定台詞）。
+     連講兩次同一類比講一句普通的話更像壞掉。 */
+  const fresh = R.filter(x => x.key !== c.lastKey);
+  return fresh.length ? fresh[0] : null;
+}
+
 function computeAutoStars(weeks, weekOrder, progItems, opts) {
   const cloudShape = !!(opts && opts.cloudShape);
   const entries = [];
@@ -6252,6 +6317,28 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
                        amount: n, note: `完成「${it.title || it.id}」` });
       }
     });
+    /* ✨ v477（Alan：「一整組單字或是文法都完成並且通過門檻，有沒有額外加分？」）
+       ——本來沒有，只有下面那個「整週作業」獎金。現在補上「整組」。
+       一組＝同一個 item.group（一鍵生成時就寫進去了）。
+       ⚠ 只算生成時有分組的；老師手捏、沒有 group 的單元不要被硬湊成一組。
+       ⚠ 至少要 3 個單元才算一組——兩個單元就給獎金太好賺。
+       ⚠ 用的是 autoStarItemOk（跟作業獎金同一把尺）：不是「做完」就好，是要**過門檻**。 */
+    const byGroup = {};
+    all.forEach(it => {
+      const g = String((it && it.group) || '').trim();
+      if (!g) return;
+      (byGroup[g] = byGroup[g] || []).push(it);
+    });
+    Object.keys(byGroup).forEach(g => {
+      const gItems = byGroup[g];
+      if (gItems.length < 3) return;
+      if (!gItems.every(it => autoStarItemOk(it, getProg(wid, it.id), cloudShape))) return;
+      const bonus = gItems.length >= 6 ? 15 : 10;
+      total += bonus;
+      entries.push({ id: `auto:grp_${wid}_${g}`, auto: true, date: '',
+                     amount: bonus, note: `「${g}」整組完成 🏅` });
+    });
+
     // 本週作業獎金：有設作業（暑假＝發派即作業）才算，而且每一項都要達標
     const hwIds = Object.keys(wk.homework || {});
     const hwItems = all.filter(it => hwIds.indexOf(it.id) >= 0);

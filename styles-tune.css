@@ -4152,8 +4152,21 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 761px) {
   .qm-player-shell .dm-wrap, .dm-wrap {
     /* ⚠ 左欄要留一個最小寬度：只寫 0.5fr 的話，螢幕一窄
-       「miraculous (adj.)」就被擠成兩行——那比線短還難看。 */
-    grid-template-columns: minmax(262px, 0.55fr) minmax(0, 1.45fr);
-    column-gap: clamp(90px, 18vw, 300px);
+       「miraculous (adj.)」就被擠成兩行——那比線短還難看。
+       v477（Alan：「間隔再開一點，整體再置中一點」）：
+       右欄本來吃掉 1.45fr，但定義是靠左排的、長度不一 →
+       右邊永遠空一大塊，整體看起來偏左。改成右欄**照內容收**，
+       再用 justify-content 把兩欄一起置中，右邊的空白就不見了。 */
+    grid-template-columns: minmax(262px, max-content) minmax(0, max-content);
+    justify-content: center;
+    column-gap: clamp(110px, 20vw, 340px);
   }
 }
+
+/* v477：「沿用一份過去」／「搬過去」二選一 */
+.qm-copy-mode { display: flex; gap: 8px; margin: 2px 0 12px; }
+.qm-copy-mode-b { flex: 1 1 0; min-height: 44px; padding: 9px 10px; border-radius: 12px;
+  border: 2px solid var(--border); background: var(--surface, #fff);
+  font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink-muted); cursor: pointer;
+  transition: border-color .2s ease-out, background .2s ease-out, color .2s ease-out; }
+.qm-copy-mode-b.on { border-color: #E0A100; background: #FFF6E0; color: var(--ink); }

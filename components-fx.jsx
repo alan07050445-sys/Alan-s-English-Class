@@ -789,6 +789,12 @@ function MascotLayer() {
   const [bubble, setBubble] = useFx('');
   const [wear, setWear]   = useFx(() => (window.mxWearOf ? window.mxWearOf(window.__mxData) : { hat: '', item: '', fx: 'fx_confetti', voice: 'vo_default' }));
   const [stars, setStars] = useFx(0);           // v431: 現在有幾顆星星（app.jsx 算好放 window.__mxStars）
+  /* v477（Alan：「吉祥物可以再智能化一點，更像 AI，跟你的舉動互動」）：
+     牠要講跟「此時此刻的你」有關的話，就得記得幾件事。
+     判斷寫在 data.js 的 mxSmartLine（純邏輯、測得到），這裡只負責收集與播報。 */
+  const wrongRunRef = useFxR(0);     // 連錯幾題
+  const lastKeyRef  = useFxR('');    // 上一句講的是哪一類（同一件事不連講兩次）
+  const smartAtRef  = useFxR(0);     // 上一次開口的時間（不要變話癆）
   const [dress, setDress] = useFx(false);       // v431: 裝扮室
   const [dressTab, setDressTab] = useFx('hat');
   const [name, setName]   = useFx(mxGetName());
@@ -1202,6 +1208,32 @@ function MascotLayer() {
        咕咕還在做 roll（翻滾是小焰池子裡的，咕咕沒有）。 */
   }, [alive, hidden, shown, allowed, petId]);
 
+  /* v477：看情況說一句。有話講就講（並做對應的動作）、回 true；
+     沒有特別的事就回 false，讓呼叫端照原本的固定台詞走。
+     ⚠ 兩句之間至少隔 25 秒——「很懂你」跟「很吵」只差在頻率。 */
+  const smartSay = (extra, minGap) => {
+    try {
+      if (!window.mxSmartLine) return false;
+      if (Date.now() - smartAtRef.current < (minGap == null ? 25000 : minGap)) return false;
+      const cheapest = (window.MX_SHOP || [])
+        .filter(it => it && it.cost > stars && !(window.mxHasItem && window.mxHasItem({ owned }, it.id)))
+        .sort((x, y) => x.cost - y.cost)[0];
+      const line = window.mxSmartLine(Object.assign({
+        stars,
+        nearBuy: cheapest ? { label: `${cheapest.emoji || ''}${cheapest.zh || cheapest.name || ''}`.trim(), need: cheapest.cost - stars } : null,
+        wrongRun: wrongRunRef.current,
+        hour: new Date().getHours(),
+        lastKey: lastKeyRef.current,
+      }, window.__mxCtx || {}, extra || {}));
+      if (!line) return false;
+      lastKeyRef.current = line.key;
+      smartAtRef.current = Date.now();
+      if (line.act && Date.now() >= busyUntil.current) { setAct(line.act); later(() => setAct('idle'), 1800); }
+      say(line.text, 3000);
+      return true;
+    } catch (e) { return false; }
+  };
+
   /* 答題反應——攔 playSound，全站不用改任何一行就有反應 */
   useFxE(() => {
     if (!alive || hidden || !shown) return;   // ⚠ 不看 allowed：答題本來就發生在作答畫面裡
@@ -1219,6 +1251,9 @@ function MascotLayer() {
       try {
         if (type === 'correct') {
           runRef.current++;
+          wrongRunRef.current = 0;
+          // v477：連對 5／10 題這種「正在發生的事」自己會講，不受語音包有沒有買影響
+          if (runRef.current >= 5 && runRef.current % 5 === 0 && smartSay({ streak: runRef.current })) return;
           /* v457：正在表演（點一下觸發的大跳／舞蹈）就不要插隊點頭——
              一換動畫，CSS 動畫整個重來，看起來就是「跳到一半掉下來」。 */
           if (runRef.current % 5 === 0 && Date.now() >= busyUntil.current) {
@@ -1229,11 +1264,19 @@ function MascotLayer() {
             if (vo && vo !== 'vo_default') say(mxLine('correct', petRef.current, vo), 1800);
           }
         }
-        else if (type === 'wrong') { runRef.current = 0; }   // 答錯＝連勝歸零，完全不反應
+        else if (type === 'wrong') {
+          runRef.current = 0;                       // 答錯＝連勝歸零
+          wrongRunRef.current++;
+          /* ⚠ 答錯的當下本來就不該有東西抖一下（v392 的教訓）。
+             只有「連錯三題」才開口，而且是安慰不是提醒。 */
+          if (wrongRunRef.current >= 3 && wrongRunRef.current % 3 === 0) smartSay({ wrongRun: wrongRunRef.current }, 60000);
+        }
         else if (type === 'complete' || type === 'fanfare') {
           // 做完了本來就該有大慶祝——這條維持不動（但表演到一半就等牠演完）
           const wait = Math.max(0, busyUntil.current - Date.now());
           later(() => {
+            // v477：做完一份之後，如果「只剩一個就整組完成」之類的事成立，就講那件事
+            if (smartSay({}, 0)) return;
             setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000);
             later(() => setAct('idle'), 2200);
           }, wait);

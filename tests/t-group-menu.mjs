@@ -32,10 +32,15 @@ ok('⭐ 跟刪單一單元共用同一份清理邏輯（孤兒作業、練習鎖
    /const handleDeleteItem = \(itemId\) => handleDeleteItems\(\[itemId\]\);/.test(app));
 ok('⭐ 一次處理完只存一次（不是迴圈呼叫、每次重讀 weeksRef）',
    !/\.forEach\(\s*\w+\s*=>\s*handleDeleteItem\(/.test(app) && /不要寫成「迴圈呼叫 handleDeleteItem」/.test(app));
+/* v477：清理那一段抽成 stripItemsFrom 了（刪整組、搬到別週都要做同一件事），
+   所以要去那裡比，不是比 handleDeleteItems 的函式本體。守的事情沒變。 */
+const strip = app.slice(app.indexOf('const stripItemsFrom'), app.indexOf('const handleDeleteItems'));
 const del = app.slice(app.indexOf('const handleDeleteItems'), app.indexOf('const handleDeleteItem = (itemId)'));
-ok('整組刪掉時，孤兒作業一樣會清掉（v460 那個天天催的坑）', /delete w\[weekId\]\.homework\[id\]/.test(del));
-ok('別人的「要先學完這一個」鎖也要解掉', /ids\.has\(it\.requires\)/.test(del) && /ids\.has\(it\.linkedFlashcardId\)/.test(del));
-ok('空的不會爆', /if \(!ids\.size\) return;/.test(del));
+ok('整組刪掉時，孤兒作業一樣會清掉（v460 那個天天催的坑）', /delete wk\.homework\[id\]/.test(strip));
+ok('別人的「要先學完這一個」鎖也要解掉', /ids\.has\(it\.requires\)/.test(strip) && /ids\.has\(it\.linkedFlashcardId\)/.test(strip));
+ok('空的不會爆', /if \(!ids\.size\) return;/.test(del) && /if \(!wk \|\| !wk\.items \|\| !ids \|\| !ids\.size\) return;/.test(strip));
+ok('⭐ 刪整組與搬到別週共用同一份清理（漏一邊就會留下孤兒作業）',
+   /stripItemsFrom\(w\[weekId\], ids\)/.test(del) && /if \(move\) stripItemsFrom\(w\[weekId\]/.test(app));
 
 console.log('\n【2】白字配白底');
 ok('⭐ 白底彈窗有自己的一組顏色', /\.modal \.edit-make-btn \{/.test(css));

@@ -24,9 +24,13 @@ let pass = 0, fail = 0;
 const ok = (m, c) => { if (c) { pass++; console.log('  ✅ ' + m); } else { fail++; console.log('  ❌ ' + m); } };
 
 console.log('\n【1】配對連線：線拉長');
-ok('⭐ 桌機／平板的欄距拉開了', /@media \(min-width: 761px\)[\s\S]{0,400}column-gap: clamp\(90px, 18vw, 300px\)/.test(tune));
+/* ⚠ 不要把數值寫死——v477 又拉得更開了（Alan：「間隔再開一點」）。
+   守的是「有拉開」與「左欄有最小寬度」這兩件事。 */
+const gap = (tune.match(/@media \(min-width: 761px\)[\s\S]{0,700}?column-gap: clamp\((\d+)px, (\d+)vw, (\d+)px\)/) || []);
+ok(`⭐ 桌機／平板的欄距拉開了（現在是 clamp(${gap[1]}px, ${gap[2]}vw, ${gap[3]}px)，原本上限 220px）`,
+   gap.length === 4 && +gap[3] >= 300);
 ok('⭐ 左欄有最小寬度（只寫 fr 的話「miraculous (adj.)」會被擠成兩行）',
-   /grid-template-columns: minmax\(262px, 0\.55fr\)/.test(tune));
+   /grid-template-columns: minmax\(262px,/.test(tune));
 ok('有寫下為什麼', /那比線短還難看/.test(tune));
 ok('⭐ 手機那一段不要碰（本來就擠）', /@media \(max-width: 760px\)/.test(fs.readFileSync(new URL('styles-quiz-mode.css', ROOT), 'utf8')));
 

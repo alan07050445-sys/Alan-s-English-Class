@@ -833,6 +833,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const [playerKey,    setPlayerKey]    = useQM(0);
   const [progVersion,  setProgVersion]  = useQM(0);      // bumped after quiz completes → refreshes sidebar scores
   const [copyItem,     setCopyItem]     = useQM(null);   // v294: 「沿用到其他週」的題目
+  /* v477（Alan：「我出錯 week 了，我想整組調整到 week6，但沒有這個選項」）：
+     本來只有「沿用」＝複製一份過去、原本那一週照樣留著。加上「搬過去」。
+     ⚠ 搬只能搬到一個地方，所以切成搬的時候只保留最後點的那一週。 */
+  const [copyMove,     setCopyMove]     = useQM(false);
   const [copySel,      setCopySel]      = useQM([]);     // v294: 勾選的目標週 id
   const [dueEditFor,   setDueEditFor]   = useQM(null);   // v306+: 正在編輯截止日的 item.id（老師端 inline 日期選擇）
   /* v454（Alan：「我只能一個一個去改日期…但我也希望可以一整包一起去改，因為這是一整包一起生成的」）
@@ -1010,6 +1014,25 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     return base.filter(it => assignedOf.has(it.id) && assignedOf.get(it.id).has(stuFilter));
   }, [sidebarItems, libAdminView, stuFilter, assignedOf, isTeacherView, ownerFilter, myEmail]);
   const grouped = useQMM(() => (groupsView ? qmGroupByArticle(viewItems) : null), [groupsView, viewItems]);
+  /* v477（Alan：「吉祥物可以再智能化一點，跟你的舉動互動」）：
+     「再 1 個就整組完成」這件事只有這裡知道（要同時有這一組的單元與進度）。
+     把「最接近完成的那一組還差幾個」寫給吉祥物——牠才講得出
+     「只剩 1 個就整組完成了，會多拿星星喔！」這種真的跟你有關的話。
+     ⚠ 只算學生端（編輯模式下老師不需要被鼓勵）。 */
+  useQME(() => {
+    if (editMode) return;
+    try {
+      let best = 0;
+      (grouped || []).forEach(g => {
+        const its = (g && g.items) || [];
+        if (its.length < 3) return;                       // 跟整組獎金同一條線
+        const left = its.filter(it => !(qmProg[`${weekId}_${it.id}`] || {}).done).length;
+        if (left > 0 && (best === 0 || left < best)) best = left;
+      });
+      window.__mxCtx = Object.assign({}, window.__mxCtx, { groupLeft: best });
+    } catch (e) {}
+    return () => { try { window.__mxCtx = Object.assign({}, window.__mxCtx, { groupLeft: 0 }); } catch (e) {} };
+  }, [grouped, qmProg, weekId, editMode]);
   /* v364: 分段閱讀可以綁「單字」分類的單字卡，而且可以設成「必須先練完學習模式」。
      這裡算出「擋住現在這篇文章的那份單字卡」——null＝沒擋（沒綁、沒設必須、或已經練完）。 */
   const fcGate = useQMM(() => {
@@ -1918,12 +1941,22 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             </div>
             <div className="qm-copy-sub">
               {copyItem.__group
-                ? <>把「{copyItem.name}」這一組的 <b>{copyItem.items.length} 個單元</b>整包複製到你勾選的週。</>
+                ? (copyMove
+                    ? <>把「{copyItem.name}」這一組的 <b>{copyItem.items.length} 個單元</b><b>搬</b>到你選的那一週——<b>這一週就不留了</b>。學生做過的紀錄會留著。</>
+                    : <>把「{copyItem.name}」這一組的 <b>{copyItem.items.length} 個單元</b>整包複製到你勾選的週（這一週照樣留著）。</>)
                 : <>把「{copyItem.title}」複製到你勾選的週。</>}
               <b>各週獨立</b>——哪一週想微調就改哪週，成績也分開算。
             </div>
             {/* v454：整組沿用時，可以順便在目標週就設好截止日（Alan：「功課要延續到下週當功課」） */}
             {copyItem.__group && (
+              <div className="qm-copy-mode">
+                <button type="button" className={'qm-copy-mode-b' + (!copyMove ? ' on' : '')}
+                  onClick={() => setCopyMove(false)}>📄 沿用一份過去</button>
+                <button type="button" className={'qm-copy-mode-b' + (copyMove ? ' on' : '')}
+                  onClick={() => { setCopyMove(true); setCopySel(x => x.slice(-1)); }}>📦 搬過去（出錯週了）</button>
+              </div>
+            )}
+            {copyItem.__group && !copyMove && (
               <label className="qm-copy-due">
                 <span>到了那一週也直接設成作業（選填）</span>
                 <input type="date" value={grpDue} onChange={(e) => setGrpDue(e.target.value)}/>
@@ -1934,7 +1967,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 const on = copySel.includes(wc.id);
                 return (
                   <button key={wc.id} type="button" className={'qm-copy-wk' + (on ? ' on' : '')}
-                    onClick={() => setCopySel(s => on ? s.filter(x => x !== wc.id) : [...s, wc.id])}>
+                    onClick={() => setCopySel(s => on ? s.filter(x => x !== wc.id) : (copyMove ? [wc.id] : [...s, wc.id]))}>
                     <span className="qm-copy-wk-check">{on ? '✓' : ''}</span>
                     <span className="qm-copy-wk-info">
                       <span className="qm-copy-wk-label">{wc.label}</span>
@@ -1945,14 +1978,16 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               })}
             </div>
             <div className="qm-copy-actions">
-              <button className="qm-copy-cancel" onClick={() => setCopyItem(null)}>取消</button>
+              <button className="qm-copy-cancel" onClick={() => { setCopyItem(null); setCopyMove(false); }}>取消</button>
               <button className="qm-copy-go" disabled={!copySel.length}
                 onClick={() => {
-                  if (copyItem.__group) onCopyGroupToWeeks(copyItem.items, copySel, grpDue || '');
-                  else onCopyToWeeks(copyItem, copySel);
-                  setCopyItem(null); setGrpDue('');
+                  if (copyItem.__group) {
+                    if (copyMove && !confirm(`把「${copyItem.name}」整組 ${copyItem.items.length} 個單元搬過去？\n\n這一週就不會再有這一組了。`)) return;
+                    onCopyGroupToWeeks(copyItem.items, copySel, copyMove ? '' : (grpDue || ''), copyMove);
+                  } else onCopyToWeeks(copyItem, copySel);
+                  setCopyItem(null); setGrpDue(''); setCopyMove(false);
                 }}>
-                沿用到 {copySel.length || ''} 週
+                {copyMove ? '搬過去 →' : `沿用到 ${copySel.length || ''} 週`}
               </button>
             </div>
           </div>
