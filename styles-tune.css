@@ -4157,9 +4157,14 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
        右欄本來吃掉 1.45fr，但定義是靠左排的、長度不一 →
        右邊永遠空一大塊，整體看起來偏左。改成右欄**照內容收**，
        再用 justify-content 把兩欄一起置中，右邊的空白就不見了。 */
-    grid-template-columns: minmax(262px, max-content) minmax(0, max-content);
+    /* v478（Alan：「再置中一點點、再開一點點就好」）：
+       🔴 偏左的真正原因是**左欄那個 262px 最小寬度**——單字只需要約 205px，
+       而文字是靠右排的，多出來的 57px 就變成左邊憑空多一塊空白。
+       改成兩欄都照內容收（max-content 本來就不會換行，所以也不需要最小寬度）。
+       右欄留 minmax(0, …)，螢幕太窄時讓它自己折行，不會把版面撐爆。 */
+    grid-template-columns: max-content minmax(0, max-content);
     justify-content: center;
-    column-gap: clamp(110px, 20vw, 340px);
+    column-gap: clamp(120px, 22vw, 380px);
   }
 }
 

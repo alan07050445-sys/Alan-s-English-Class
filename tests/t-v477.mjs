@@ -37,11 +37,18 @@ ok('搬過去不要順便設成作業（那是沿用才有的選項）', /copyMo
 ok('搬完的提示要講搬去哪一週', /已搬到「\$\{toLabel\}」/.test(app));
 
 console.log('\n【2】配對：間隔再開、整體置中');
-ok('⭐ 右欄改成照內容收（本來吃掉 1.45fr，右邊永遠空一塊）',
-   /grid-template-columns: minmax\(262px, max-content\) minmax\(0, max-content\)/.test(tune));
+/* v478（Alan 再回報「再置中一點點、再開一點點」）：
+   🔴 偏左的真正原因是**左欄的 262px 最小寬度**——單字只需要約 205px，
+   而文字靠右排，多出來的 57px 就變成左邊憑空多一塊。
+   兩欄都改成照內容收之後，實測 1024px 左右各 87（交卷後各 43），偏差 0。 */
+ok('⭐ 兩欄都照內容收（左欄不可以再有寫死的最小寬度，那正是偏左的原因）',
+   /grid-template-columns: max-content minmax\(0, max-content\)/.test(tune)
+   && !/minmax\(262px/.test(tune));
 ok('⭐ 兩欄一起置中', /justify-content: center;/.test(tune.slice(tune.indexOf('@media (min-width: 761px)'))));
-ok('⭐ 間隔又拉開了（220 → 340）', /column-gap: clamp\(110px, 20vw, 340px\)/.test(tune));
-ok('左欄的最小寬度要留著（不然長單字換行）', /minmax\(262px,/.test(tune));
+ok('⭐ 間隔又拉開了（220 → 380）', /column-gap: clamp\(120px, 22vw, 380px\)/.test(tune));
+ok('右欄要留 minmax(0,…)，螢幕太窄才折得了行', /minmax\(0, max-content\)/.test(tune));
+ok('有寫下為什麼（max-content 本來就不會換行，所以不需要最小寬度）',
+   /max-content 本來就不會換行/.test(tune));
 
 console.log('\n【3】先測驗，再字義選擇');
 ok('⭐ 測驗排在字義選擇前面（側欄順序＝push 的順序）',

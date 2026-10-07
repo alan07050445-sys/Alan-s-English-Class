@@ -29,8 +29,10 @@ console.log('\n【1】配對連線：線拉長');
 const gap = (tune.match(/@media \(min-width: 761px\)[\s\S]{0,700}?column-gap: clamp\((\d+)px, (\d+)vw, (\d+)px\)/) || []);
 ok(`⭐ 桌機／平板的欄距拉開了（現在是 clamp(${gap[1]}px, ${gap[2]}vw, ${gap[3]}px)，原本上限 220px）`,
    gap.length === 4 && +gap[3] >= 300);
-ok('⭐ 左欄有最小寬度（只寫 fr 的話「miraculous (adj.)」會被擠成兩行）',
-   /grid-template-columns: minmax\(262px,/.test(tune));
+/* v478：改成兩欄都 max-content 之後就不需要寫死最小寬度了
+   （max-content 本來就不會換行），而且那個最小寬度正是「整體偏左」的原因。 */
+ok('⭐ 長單字不會被擠成兩行（max-content 不換行）',
+   /grid-template-columns: max-content minmax\(0, max-content\)/.test(tune));
 ok('有寫下為什麼', /那比線短還難看/.test(tune));
 ok('⭐ 手機那一段不要碰（本來就擠）', /@media \(max-width: 760px\)/.test(fs.readFileSync(new URL('styles-quiz-mode.css', ROOT), 'utf8')));
 
