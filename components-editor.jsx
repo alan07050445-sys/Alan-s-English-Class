@@ -6225,7 +6225,7 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
     pairs: goodFill.map((x, i) => ({ id: 'p' + stamp + 'f' + i + rnd(), prompt: x.prompt, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
   const goodRw = (rw || []).filter(x => x && x.wrong && x.answer && x.wrong !== x.answer);
   if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 5, ...req, ...cs,
-    title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把句子改對`, instruction: '把句子裡錯的地方改對',
+    title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把整句重寫一次`, instruction: '把句子裡錯的地方改對，整句重寫一次',
     pairs: goodRw.map((x, i) => ({ id: 'p' + stamp + 'r' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) });
   /* ══ v467：康橋的兩種招牌題型 ══
      ① 整段改錯 → 拆成兩個單元，跟康橋考卷一模一樣的兩步：
@@ -6243,17 +6243,29 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
         title: `${g} · 找出錯誤`, zh: `${n} 個錯 · ${head}把寫錯的地方圈出來`,
         circleInstruction: `There are ${n} mistakes in this paragraph. Tap the words that are wrong.`,
         passage: edit.paragraph,
-        circleQuestions: rows.map((e, i) => ({ id: 'e' + stamp + i + rnd(), sentence: e.sentence,
-          answers: e.wrong.split(/\s+/).filter(Boolean),
-          answer: e.wrong.split(/\s+/)[0], explain: e.why || '' })) });
+        /* 🔴 v479：只圈「真的改到的那幾個字」（e.mark）。
+           本來是把整個詞組拆開全部當答案 → 「more crunchier」連沒錯的 crunchier
+           也要圈、「good than」連 than 也要圈（Alan 回報）。 */
+        circleQuestions: rows.map((e, i) => {
+          const mk = (e.mark && e.mark.length ? e.mark : e.wrong.split(/\s+/)).filter(Boolean);
+          return { id: 'e' + stamp + i + rnd(), sentence: e.sentence,
+                   answers: mk, answer: mk[0], explain: e.why || '' };
+        }) });
     }
-    // （b）寫出正確的字（康橋：Write the corrected words in the boxes）
-    out.push({ id: 'gn' + stamp + 'ec' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 11, ...req, ...cs,
-      title: `${g} · 改成正確的`, zh: `${n} 題 · 把圈出來的地方改對`,
-      instruction: 'Write the corrected words.',
+    /* （b）寫出正確的字（康橋原卷：Write the corrected words in the boxes）
+       🔴 v479（Alan：「改成正確的跟改寫句子有什麼差別？怎麼長一樣」「怎麼有三個一樣」）：
+         本來要學生打**整句**，所以跟「改寫句子」「改成正確的句子」三個長得一模一樣，
+         而且一個小框要塞一整句（Alan：「這麼小誰看得到」）。
+         康橋原卷本來就只要寫**改好的那幾個字**——改回去，三種題型就真的不一樣了：
+           · 改成正確的　　（這個）＝只寫改好的那幾個字
+           · 改寫句子　　　　　　　＝照指示把整句重寫
+           · 改成正確的句子（診斷）＝先看出錯在哪，再把整句寫對 */
+    out.push({ id: 'gn' + stamp + 'ec' + rnd(), type: 'type-answer', variant: 'word', group: g, order: 11, ...req, ...cs,
+      title: `${g} · 改成正確的`, zh: `${n} 題 · 只要寫改對的那幾個字`,
+      instruction: '把圈出來的地方改對——只要寫那幾個字，不用寫整句',
       pairs: edit.errors.map((e, i) => ({ id: 'p' + stamp + 'e' + i + rnd(),
-        prompt: e.sentence || edit.paragraph, answer: (e.sentence || '').replace(e.wrong, e.right) || e.right,
-        accept: [e.right], explain: e.why || '' })) });
+        prompt: e.sentence || edit.paragraph, wrongPart: e.wrong,
+        answer: e.right, accept: [e.right], explain: e.why || '' })) });
   }
 
   /* ② 先判斷錯誤類型，再改正（康橋 G3 的 Subjects and Predicates） */
@@ -6268,8 +6280,8 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
     // 看出錯在哪，才解鎖「改正」——跟康橋的兩段式一樣
     out.push({ id: 'gn' + stamp + 'df' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 13,
       requires: dxId, ...cs,
-      title: `${g} · 改成正確的句子`, zh: `${goodDiag.length} 題 · 把句子改完整`,
-      instruction: 'Rewrite each sentence correctly.',
+      title: `${g} · 改成正確的句子`, zh: `${goodDiag.length} 題 · 你剛剛看出錯在哪了——把整句寫對`,
+      instruction: '把整句重寫一次（剛剛那一題已經告訴你錯在哪一類）',
       pairs: goodDiag.map((x, i) => ({ id: 'p' + stamp + 'x' + i + rnd(),
         prompt: x.broken, answer: x.fixed, accept: [], explain: x.why || '' })) });
   }

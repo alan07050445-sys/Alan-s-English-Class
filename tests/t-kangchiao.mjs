@@ -68,8 +68,12 @@ ok('⭐ 認不出來時用整個物件當 key（最後一道保險）', /return 
 ok('有寫下教訓給下一個加題型的人', /加新題型時，它的題幹欄位一定要列進來/.test(data));
 
 console.log('\n【6】建立成學生做得到的單元（不新增題型——v414 的教訓）');
+/* v479：第二步的 variant 從 'rewrite' 改成 'word'——康橋原卷
+   「Write the corrected words in the boxes」本來就只要寫改好的那幾個字，
+   打整句才是「改寫句子」那一種。守的是「兩步」這件事，不是哪個 variant。 */
 ok('⭐ 整段改錯 → circle-answer（圈出來）＋ type-answer（寫正確的），兩步',
-   /type: 'circle-answer', group: g, order: 10/.test(ed) && /type: 'type-answer', variant: 'rewrite', group: g, order: 11/.test(ed));
+   /type: 'circle-answer', group: g, order: 10/.test(ed) && /type: 'type-answer', variant: 'word', group: g, order: 11/.test(ed));
+ok('⭐ 第二步只要寫改好的那幾個字（康橋原卷的寫法）', /只要寫改對的那幾個字/.test(ed));
 ok('指示語寫出有幾個錯（康橋：There are five mistakes）', /There are \$\{n\} mistakes in this paragraph/.test(ed));
 ok('整段文章帶進單元（學生要看得到上下文）', /passage: edit\.paragraph/.test(ed));
 ok('⭐ 先判斷 → quiz，改正 → type-answer，用 requires 串成兩步',

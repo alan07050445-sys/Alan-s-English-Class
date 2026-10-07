@@ -392,6 +392,16 @@ function qmMarkWord(text, word) {
   return out.length ? out : text;
 }
 
+/* v479：題幹裡把「要改的那一段」標出來（不是整句都標）。
+   找不到就原樣顯示——寧可沒標，也不要把句子弄壞。 */
+function taMarkWrong(text, part) {
+  const t = String(text || ''), p = String(part || '').trim();
+  if (!p) return t;
+  const i = t.toLowerCase().indexOf(p.toLowerCase());
+  if (i < 0) return t;
+  return [t.slice(0, i), <mark key="m" className="ta-wrong-mark">{t.slice(i, i + p.length)}</mark>, t.slice(i + p.length)];
+}
+
 function qmShortLabel(item, groupName) {
   const title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
@@ -1327,7 +1337,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs||[]).length} 題改寫` : item.variant === 'transform' ? `🔄 ${(item.pairs||[]).length} 題句型轉換` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isSentOrder ? `🧩 ${(item.orderQuestions||[]).length} 句排順序` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs||[]).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs||[]).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs||[]).length} 題句型轉換` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isSentOrder ? `🧩 ${(item.orderQuestions||[]).length} 句排順序` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -2504,9 +2514,9 @@ function TypeAnswerIntro({ item, onStart, resumeAt, onRestart, prog }) {
   const count = (item.pairs || []).length;
   return (
     <div className="qm-intro">
-      <div className="qm-intro-icon">{item.variant === 'translate' ? '🔤' : item.variant === 'fill' ? '✏️' : item.variant === 'rewrite' ? '✍️' : item.variant === 'transform' ? '🔄' : '⌨'}</div>
+      <div className="qm-intro-icon">{item.variant === 'translate' ? '🔤' : item.variant === 'fill' ? '✏️' : item.variant === 'rewrite' ? '✍️' : item.variant === 'word' ? '🖊' : item.variant === 'transform' ? '🔄' : '⌨'}</div>
       <div className="qm-intro-title">{item.title}</div>
-      <div className="qm-intro-meta">{item.variant === 'translate' ? `${count} 題中翻英` : item.variant === 'fill' ? `${count} 題填空` : item.variant === 'rewrite' ? `${count} 題改寫` : item.variant === 'transform' ? `${count} 題句型轉換` : `${count} words`}</div>
+      <div className="qm-intro-meta">{item.variant === 'translate' ? `${count} 題中翻英` : item.variant === 'fill' ? `${count} 題填空` : item.variant === 'rewrite' ? `${count} 題改寫` : item.variant === 'word' ? `${count} 題改成正確的` : item.variant === 'transform' ? `${count} 題句型轉換` : `${count} words`}</div>
       <div className="qm-intro-rules">
         {item.instruction && (
           <div className="qm-intro-rule-row"><span>📋</span><span>{item.instruction}</span></div>
@@ -2521,6 +2531,10 @@ function TypeAnswerIntro({ item, onStart, resumeAt, onRestart, prog }) {
         </> : item.variant === 'fill' ? <>
           <div className="qm-intro-rule-row"><span>✏️</span><span>把 ________ 填上正確的字</span></div>
           <div className="qm-intro-rule-row"><span>✅</span><span>{item.caseSensitive ? '大寫小寫要寫對喔！' : "不分大小寫；isn't 和 is not 都算對"}</span></div>
+        </> : item.variant === 'word' ? <>
+          <div className="qm-intro-rule-row"><span>🖊</span><span>句子裡標起來的那一段寫錯了——把它改對</span></div>
+          <div className="qm-intro-rule-row"><span>✏️</span><span><b>只要寫那幾個字</b>，不用把整句重打一次</span></div>
+          <div className="qm-intro-rule-row"><span>⭐</span><span>大小寫、標點不算錯；答錯會告訴你正確寫法</span></div>
         </> : item.variant === 'rewrite' ? <>
           <div className="qm-intro-rule-row"><span>✍️</span><span>句子已經幫你打好了，把錯的地方改對就好</span></div>
           <div className="qm-intro-rule-row"><span>✅</span><span>{item.caseSensitive ? '大寫小寫要改對才算對！' : '改對就算對'}</span></div>
@@ -2566,6 +2580,10 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   const isTr = item.variant === 'translate';
   const isRw = item.variant === 'rewrite';                 // v429：把句子改對
   const isTf = item.variant === 'transform';              // v462 ②：把句子換一種說法（題幹是「原句 → 要改成什麼」兩行）
+  /* 🔴 v479（Alan：「改成正確的跟改寫句子有什麼差別？怎麼長一樣」）：
+     康橋原卷的「整段改錯」第二步只要寫**改好的那幾個字**，不是整句。
+     所以題幹裡把錯的地方標出來，輸入框也只放一個詞——跟「整句重寫」一眼就分得出來。 */
+  const isWd = item.variant === 'word';
   const cs = { caseSensitive: !!item.caseSensitive };      // v429：大小寫是考點的單元
   const inputRef = React.useRef(null);
   const wrongsRef = React.useRef(rz && Array.isArray(rz.wrongs) ? rz.wrongs.slice() : []); // v258: 錯題記錄（老師端＋錯題本）
@@ -2582,6 +2600,8 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
   }, [idx, result]);
   // v429：改寫題——有錯的句子先打在輸入框裡，孩子只要改錯的地方（不用整句重打）
   React.useEffect(() => { if (isRw && current) setInput(current.prompt || ''); }, [idx, item.id]);
+  // v479：只寫幾個字的那一種不要預填整句（要寫的本來就只有一小段）
+  React.useEffect(() => { if (isWd) setInput(''); }, [idx, item.id]);
 
   const check = async () => {
     if (!input.trim() || judging) return;
@@ -2689,8 +2709,13 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
         {isTr && <div className="qm-question-hint">翻成英文：</div>}
         {isRw && <div className="qm-question-hint">把句子裡錯的地方改對{item.caseSensitive ? '（大寫小寫要注意！）' : ''}：</div>}
         {isTf && <div className="qm-question-hint">把句子換一種說法：</div>}
+        {isWd && <div className="qm-question-hint">標起來的地方該怎麼寫？<b>只要寫那幾個字</b>，不用寫整句</div>}
         {/* v462 ②：轉換題的題幹是「原句 \n → 要改成什麼」兩行，要讓換行看得出來 */}
-        <div className={'ta-prompt' + (isTr ? ' tr' : '') + (isTf ? ' tf' : '')}>{current?.prompt}</div>
+        <div className={'ta-prompt' + (isTr ? ' tr' : '') + (isTf ? ' tf' : '') + (isWd ? ' wd' : '')}>
+          {isWd && current?.wrongPart
+            ? taMarkWrong(current.prompt, current.wrongPart)
+            : current?.prompt}
+        </div>
         {isTr && (current?.hint || current?.answer) && result === null && (
           showHint
             ? <div className="ta-hint">💡 {current.hint || ''}{current.hint ? '　' : ''}（共 {String(current.answer || '').split(/\s+/).length} 個字）</div>
@@ -2701,11 +2726,11 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
       <div className="ta-input-wrap">
         <input
           ref={inputRef}
-          className={`ta-input${isTr || isRw || isTf ? ' tr' : ''}${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
+          className={`ta-input${isTr || isRw || isTf ? ' tr long' : ''}${isWd ? ' wd' : ''}${result === 'correct' ? ' correct' : result === 'wrong' ? ' wrong' : ''}`}
           value={input}
           onChange={e => { if (result === null) setInput(e.target.value); }}
           onKeyDown={handleKey}
-          placeholder={isTr ? 'Type the English sentence…' : isRw ? 'Rewrite the sentence…' : isTf ? 'Type the new sentence…' : 'Type your answer…'}
+          placeholder={isTr ? 'Type the English sentence…' : isRw ? 'Rewrite the sentence…' : isTf ? 'Type the new sentence…' : isWd ? '只寫改好的那幾個字…' : 'Type your answer…'}
           disabled={result !== null || judging}
           autoComplete="off" autoCapitalize="none" spellCheck={false}
         />

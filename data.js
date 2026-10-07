@@ -3071,7 +3071,14 @@ const _GN_BASE = (grade, topic, notes, caseMatters, teacherNote) => `${_aiTeache
 Grammar point: ${topic}
 The teacher's notes (stay inside them — do not teach anything the notes do not cover):
 ${String(notes || '').slice(0, 9000)}
-Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.${_gnMultiSec(notes) ? `
+Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.
+⚠ COMPARATIVES — get this right, a checker rejects the whole batch otherwise:
+  -er/-est ONLY for 1-syllable words (big, sweet, tall) and 2-syllable words ending in
+  -y / -er / -ow / -le (happy->happier, clever, narrow, simple).
+  more/most for EVERYTHING ELSE, including every 3-syllable word
+  (more delicious, more beautiful, more expensive, more careful, more famous).
+  "more delicious" and "the most beautiful" are CORRECT English — never present them as mistakes.
+  Irregular: good/better/best, bad/worse/worst, far/farther/farthest.${_gnMultiSec(notes) ? `
 The notes have ${_gnMultiSec(notes)} sections (each starts with 【…】). Cover EVERY section, spread evenly — do not stay on the first one.` : ''}${caseMatters ? `
 IMPORTANT: this lesson is about CAPITAL LETTERS. Every question and interaction must test capitalization,
 and every answer must be written with exactly the right capital letters.` : ''}`;
@@ -3702,6 +3709,99 @@ function gnValidWrite(x) {
      ① 錯字在段落裡出現不只一次 → 學生點了也不知道算不算到
      ② 錯的數量跟題目說的不一樣 → 題目寫「有 5 個錯」卻只有 4 個，學生會一直找
    ⚠ 回傳的是「一整包」不是一題一題，所以不走 _gnMakeKind。 */
+/* ══ 🔴 v479：比較級／最高級的「真的錯了嗎」把關 ═══════════════════════════
+   Alan 2026-10-07 截到一題：句子是 "That pizza is more delicious than this pizza."
+   ——這句**完全正確**，AI 卻說它錯，理由還寫「Delicious is short, so add -er, not more.」
+   delicious 是三音節，本來就該用 more。這種錯不能允許：它教的是錯的文法。
+
+   模型對「短形容詞加 -er、長形容詞用 more」這條規則不可靠，所以程式自己判一次。
+   規則（小學課本的版本）：
+     · 一音節 → -er（big, sweet, tall）
+     · 兩音節且字尾 y / er / ow / le → -er（happy, clever, narrow, simple）
+     · 其他兩音節、三音節以上 → more（careful, delicious, beautiful）
+     · 不規則另記（good/better、bad/worse…）
+   ⚠ 音節用母音群粗估就夠（silent e 要扣掉）。判不出來就回 null＝不擋，
+     寧可放過也不要把正確的題目誤殺。 */
+const _GN_IRREG_CMP = { good: 'better', bad: 'worse', far: 'farther', little: 'less', many: 'more', much: 'more' };
+const _GN_CMP_MORE = new Set(('careful famous modern helpful useful honest boring tired afraid common active '
+  + 'polite nervous eager cruel certain public private fluent patient').split(' '));
+function _gnSyl(w) {
+  let t = String(w || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!t) return 0;
+  t = t.replace(/e$/, '');                               // silent e
+  const m = t.match(/[aeiouy]+/g);
+  return m ? m.length : 1;
+}
+/* 'er' / 'more' / null（判不出來）。 */
+function _gnDegreeKind(adj) {
+  const w = String(adj || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!w) return null;
+  if (_GN_IRREG_CMP[w]) return 'irregular';
+  if (_GN_CMP_MORE.has(w)) return 'more';
+  const n = _gnSyl(w);
+  if (n <= 1) return 'er';
+  if (n === 2) return /(y|er|ow|le)$/.test(w) ? 'er' : 'more';
+  return 'more';
+}
+/* 一句話裡「比較級的寫法」有沒有被改錯方向。
+   回傳 false＝這一題在教錯的東西，整題丟掉。判不出來一律回 true（不擋）。 */
+function _gnCmpClaimOk(broken, fixed) {
+  const B = String(broken || '').toLowerCase().match(/[a-z]+/g) || [];
+  const F = String(fixed || '').toLowerCase().match(/[a-z]+/g) || [];
+  if (!B.length || !F.length) return true;
+  const has = (arr, w) => arr.indexOf(w) >= 0;
+  // ① 原句是「more X」，改完卻變成 -er 形（或 more 被整個拿掉）＝主張「X 該用 -er」
+  for (let i = 0; i < B.length - 1; i++) {
+    if (B[i] !== 'more' && B[i] !== 'most') continue;
+    const adj = B[i + 1];
+    /* ⚠ 「more crunchier」「the most yummiest」＝雙重比較級，那是**真的錯**，
+       而且後面那個字已經是 -er／-est 形，不是基本形容詞——這條規則不適用，跳過。
+       （沒跳過的話，整段改錯最常出的這一類會被我自己誤殺光。） */
+    if (/(er|est)$/.test(adj)) continue;
+    if (_gnDegreeKind(adj) !== 'more') continue;     // 本來就該用 -er，那 AI 說得對
+    /* ⚠ 加 -er 的拼字會變：happy→happier、expensive→expensiver（字尾 e 要去掉）。
+       少算一種，那一種的錯題就擋不住。 */
+    const y = adj.replace(/y$/, 'i'), e = adj.replace(/e$/, '');
+    if ([adj, y, e].reduce((a2, x) => a2.concat([x + 'er', x + 'est']), []).some(f => has(F, f))) return false;
+    /* ⚠ 「more → most」只是從比較級換成最高級，不是在主張用法錯，不要誤殺。
+       只有 more／most 兩個都不見、形容詞還光禿禿地留著，才是「叫他拿掉 more」。 */
+    if (!has(F, 'more') && !has(F, 'most') && has(F, adj)) return false;
+  }
+  // ② 原句是「Xer / Xest」，改成「more X / most X」＝主張「X 該用 more」
+  for (let i = 0; i < B.length; i++) {
+    const m = B[i].match(/^(.+?)(er|est)$/);
+    if (!m) continue;
+    if (!has(F, 'more') && !has(F, 'most')) continue;
+    /* ⚠ happier 還原是 happi，不是 happy——不還原回去就認不出它是 -er 派的字。 */
+    const cands = [m[1], m[1] + 'e', m[1].replace(/i$/, 'y')];
+    const base = cands.find(x => has(F, x));
+    if (!base) continue;
+    if (_gnDegreeKind(base) === 'er') return false;  // 本來就該用 -er，卻被改成 more
+  }
+  return true;
+}
+
+/* 🔴 v479（Alan：「第一題應該是圈 more 就好，crunchier 沒錯啊；
+   第二題只要把 good 圈起來就好，than 沒錯啊」）：
+   以前把整個詞組的每一個字都當成「錯的字」→ 正確的字也被要求圈起來。
+   真正錯的是「wrong 改成 right 時，**真的變動到的那幾個字**」，
+   所以直接比對前後，把兩頭沒變的字剝掉。
+     more crunchier → crunchier   ：剝掉共同結尾 → 只有 more 要圈
+     good than      → better than ：剝掉共同結尾 → 只有 good 要圈
+     more sweet     → sweeter     ：兩頭都不一樣 → more 跟 sweet 都要圈（本來就兩個字都得改）
+   ⚠ 圈選用 mark，寫答案還是用整個詞組（康橋的答案欄寫的是改好的整個詞組）。 */
+function _gnChangedWords(wrong, right) {
+  const A = String(wrong || '').split(/\s+/).filter(Boolean);
+  const B = String(right || '').split(/\s+/).filter(Boolean);
+  const same = (x, y) => String(x).toLowerCase().replace(/[^a-z0-9']/g, '')
+                      === String(y).toLowerCase().replace(/[^a-z0-9']/g, '');
+  let i = 0, j = 0;
+  while (i < A.length && i < B.length && same(A[i], B[i])) i++;                       // 共同開頭
+  while (j < A.length - i && j < B.length - i && same(A[A.length - 1 - j], B[B.length - 1 - j])) j++;  // 共同結尾
+  const mid = A.slice(i, A.length - j);
+  return mid.length ? mid : A;        // 整個都一樣（理論上不會）就退回原本的
+}
+
 function gnValidEditPara(x, want) {
   const paragraph = String((x && x.paragraph) || '').trim();
   const title = String((x && x.title) || '').trim().slice(0, 40);
@@ -3753,6 +3853,14 @@ function gnValidEditPara(x, want) {
   // 照在段落裡出現的順序排（學生端是照順序亮起來的）
   errs.sort((p, q) => low.indexOf(' ' + phr(p) + ' ') - low.indexOf(' ' + phr(q) + ' '));
   errs.forEach(e => { e.sentence = sentOf(e); });                        // 學生端一句一題
+  /* 🔴 v479：圈選只圈「真的改到的那幾個字」（crunchier、than 本來就沒錯）。 */
+  errs.forEach(e => { e.mark = _gnChangedWords(e.wrong, e.right); });
+  /* 🔴 v479：比較級的主張要先對過——「more delicious → deliciouser」整題丟掉。
+     ⚠ 用整句比（e.sentence vs 改好的那一句），不是只比詞組：
+       「more sweet → sweeter」單看詞組是對的，要放在句子裡才看得出沒問題。 */
+  const bad = errs.filter(e => !_gnCmpClaimOk(e.sentence || e.wrong,
+                                              (e.sentence || e.wrong).replace(e.wrong, e.right)));
+  if (bad.length) return null;
   return { title, paragraph, errors: errs };
 }
 
@@ -3769,6 +3877,8 @@ function gnValidDiagnose(x) {
   if (!(ai >= 0 && ai < kinds.length)) return null;
   const nb = broken.split(/\s+/).length, nf = fixed.split(/\s+/).length;
   if (nb > 16 || nf > 20) return null;
+  /* 🔴 v479：「more delicious」被說成錯的——整題丟掉。教錯的文法比少一題嚴重得多。 */
+  if (!_gnCmpClaimOk(broken, fixed)) return null;
   return { broken, kinds, answer: ai, fixed, why: String((x && x.why) || '').trim() };
 }
 
