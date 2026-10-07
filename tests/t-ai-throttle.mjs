@@ -43,15 +43,38 @@ console.log('\n【2】被擋一次還是要把結果交出來');
 reset([{ status: 403 }, { status: 200 }]);
 eq('第一發被擋、第二發成功 → 使用者拿得到結果', await W._aiAsk({}, askOK), 'OK');
 eq('真的重打了兩次', calls.length, 2);
-ok('⭐ 403 的等待是「短的」（幾百毫秒，不是 3 秒）——它 0.17 秒就回來，等久沒意義', sleeps[0] < 500);
+ok('⭐ 403 第一次重試等得短（它 0.17 秒就回來，先快試一次）', sleeps[0] < 600);
 
 reset([{ status: 403 }, { status: 403 }, { status: 403 }, { status: 200 }]);
 eq('連被擋三次，第四次成功也還是交得出來', await W._aiAsk({}, askOK), 'OK');
 
-reset([{ status: 403 }, { status: 403 }, { status: 403 }, { status: 403 }]);
+/* 🔴 v483：403 的重試次數 4 → 8。
+   2026-10-08 查出真正原因：403 跟**機房**有關，不是跟時間有關
+   （NRT 東京 → 到得了 Anthropic；HKG 香港 → 根本出不去，cf-ray 與結果 100% 對應）。
+   Worker 在哪個機房執行，對外的 fetch 就從那裡出去 → 在 Worker 裡重試完全沒用；
+   **只有網站重新發一次請求才會重抽機房**。被擋約 44% 時，4 次會漏 3.7%，
+   一次一鍵生成要打 ~20 發 → 超過一半會失敗；8 次降到 0.14%／整份約 2.8%。 */
+/* ⚠ 每次都要生一份新的——reset 是直接用這個陣列，plan.shift() 會把它吃光，
+   共用同一個陣列的話第二次測試拿到的是空計畫（會假性通過）。 */
+const blocked8 = () => Array.from({ length: 8 }, () => ({ status: 403 }));
+reset(blocked8().slice(0, 7).concat([{ status: 200 }]));
+eq('⭐ 被擋七次，第八次成功也還是交得出來', await W._aiAsk({}, askOK), 'OK');
+
+/* 🔴 v483：403 的間隔要**愈等愈久**。
+   量過：同時打 12 發（間隔 150ms）全部落在同一個機房、成功 0/12；
+   間隔 6 秒單發則 HKG→HKG→TPE，第三發就換到台北。
+   anycast 的路由在短時間內是穩定的，所以連打等於白打。 */
+reset(blocked8());
+await W._aiAsk({}, askOK).catch(() => {});
+ok('⭐ 403 的等待一次比一次久（要給 anycast 機會換機房）',
+   sleeps.length >= 4 && sleeps[0] < sleeps[2] && sleeps[2] < sleeps[4]);
+ok('   最後幾次要等到好幾秒（間隔太短永遠同一個機房）', sleeps[sleeps.length - 1] > 4000);
+
+reset(blocked8());
 let err = null;
 try { await W._aiAsk({}, askOK); } catch (e) { err = e; }
-ok('四次都被擋才放棄', !!err);
+ok('⭐ 八次都被擋才放棄', !!err);
+eq('   而且真的打滿八次', calls.length, 8);
 ok('⭐ 錯誤訊息要講清楚「已經自動重試過」，不要叫老師去換金鑰', /自動重試/.test(err.message));
 eq('錯誤物件帶著上游狀態（畫面才知道是 403 還是逾時）', err.upstream.status, 403);
 

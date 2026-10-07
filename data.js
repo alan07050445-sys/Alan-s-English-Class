@@ -2387,6 +2387,24 @@ function fetchT(url, opts, ms = 60000) {
 /* v458：多一段退避（本來 3 段＝3 次機會）。實測代理會間歇性回 403，
    量過 30 發有 10 發被擋（約 1/3），3 次機會還是會漏掉約 3.6%；4 次就降到 1.2%。 */
 const _AI_BACKOFF = [400, 1200, 3000, 6000];
+/* 🔴 v483：2026-10-08 終於查出 403 的真正原因——**跟機房有關，不是跟時間有關**。
+   直接打代理 12 次，cf-ray 的機房代碼與結果 100% 對應：
+     NRT（東京）→ 400 ＋ 有 request_id ＝ 真的送到 Anthropic
+     HKG（香港）→ 403、沒有 request_id ＝ 根本沒出得去
+   Cloudflare Worker 在哪個機房執行，它對外的 fetch 就從那裡出去 →
+   **在香港重試幾次都一樣**（Worker 內那 4 次重試對這個狀況完全沒用）。
+   台灣的流量本來就常被導到香港，所以老師與學生會常常踩到。
+   ⚠ v458b 我猜「沒帶 user-agent 被當成機器人」——**那個猜測是錯的**，跟 UA 無關。
+   ⚠ 2026-10-08 開了 Cloudflare Smart Placement 也沒有改善（量過兩輪，被擋比例還是 1/3~1/2）。
+
+   真正有機會換到別的機房的，是**網站重新發一次請求**。
+   ⚠⚠ 但那不是「八次獨立抽籤」——anycast 的路由在短時間內是穩定的：
+     · 同時打 12 發（間隔 150ms）→ 全部落在同一個機房，成功 0/12
+     · 間隔 6 秒單發 → HKG、HKG、TPE，第三發就換到台北了
+   所以 403 的重試**要把間隔拉開**才有意義，一直用 150ms 連打是白打。
+   代價只落在「倒楣的那一發」身上（第一次就成功的完全不受影響）。 */
+const _AI_403_TRIES = 8;
+const _AI_403_WAIT = [250, 700, 1600, 3000, 5000, 7000, 9000];   // 第 1~7 次失敗後各等多久
 const _aiSleep = (ms) => new Promise(r => setTimeout(r, ms));
 /* 只有「連線／逾時例外」或「403 / 429 / 500 / 529」才值得等一下再試；
    400 那種是我們自己的格式錯誤，等再久也一樣，直接進下一輪。
@@ -2449,7 +2467,10 @@ function _aiRelease() { if (_aiInflight > 0) _aiInflight--; }
 
 async function _aiAsk(body, pick, timeoutMs) {
   let timedOut = false, upstream = null;
-  for (let attempt = 0; attempt < _AI_BACKOFF.length; attempt++) {
+  /* v483：一般的失敗照原本 4 次；**只要遇到 403 就把次數加到 8**
+     ——那是「這一發落在被擋的機房」，換一次連線就有機會過，而且失敗只要 0.17 秒。 */
+  let max = _AI_BACKOFF.length;
+  for (let attempt = 0; attempt < max; attempt++) {
     let wait = false;
     await _aiGate();                                    // v458：全站同時最多 4 個請求
     try {
@@ -2465,19 +2486,22 @@ async function _aiAsk(body, pick, timeoutMs) {
         if (got != null) { _aiLastUpstream = null; return got; }   // finally 會把名額還回去
       } catch (e) { if (!res.ok) upstream = _aiNoteUpstream(res.status, null); }
       // v458：被擋了就讓「所有」還沒送出去的請求也跟著等一下，不要一起撞上去
-      if (res.status === 403) _aiCoolUntil = Math.max(_aiCoolUntil, Date.now() + 900);
+      if (res.status === 403) { _aiCoolUntil = Math.max(_aiCoolUntil, Date.now() + 900); max = _AI_403_TRIES; }
       wait = !res.ok && _aiShouldBackoff(res.status);   // 403/429/500/529 值得等
     } catch (e) {
       if (e && e.name === 'AbortError') timedOut = true;
       wait = true;                                      // 連線失敗／逾時 → 退避後再試
     } finally { _aiRelease(); }
-    if (wait && attempt < _AI_BACKOFF.length - 1) {
+    if (wait && attempt < max - 1) {
       /* v458：403 是「這一發被擋」，0.17 秒就回來、根本沒送到模型——
          等 3 秒沒有意義（測過同一秒內重送就會過），等太久反而讓一鍵生成整組變慢。
          429／5xx 才是真的塞車，照原本的階梯等。 */
       const quick = upstream && upstream.status === 403;
-      await _aiSleep(quick ? 140 + Math.floor(Math.random() * 220)
-                           : _AI_BACKOFF[attempt] + Math.floor(Math.random() * 300));
+      /* v483：403 的間隔要**愈等愈久**——不是為了讓對方喘口氣，
+         是為了讓 anycast 有機會把下一發送到別的機房（量過：150ms 連打永遠同一個機房）。 */
+      await _aiSleep(quick
+        ? _AI_403_WAIT[Math.min(attempt, _AI_403_WAIT.length - 1)] + Math.floor(Math.random() * 250)
+        : _AI_BACKOFF[Math.min(attempt, _AI_BACKOFF.length - 1)] + Math.floor(Math.random() * 300));
     }
   }
   const err = new Error((timedOut

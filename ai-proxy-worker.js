@@ -1,13 +1,25 @@
 // alan-ai-proxy —— Cloudflare Worker
 // 改這個檔案之後，要自己貼到 Cloudflare → Workers → alan-ai-proxy → 編輯 → Deploy
 //
-// v458b：修「有時候晚上 AI 不能用」
+// 🔴 v483（2026-10-08）終於查出 403 的真正原因——**跟機房有關，不是跟時間有關**。
+//   直接打代理 12 次，cf-ray 的機房代碼與結果 100% 對應：
+//     NRT（東京）、TPE（台北）→ 400 ＋ 有 request_id ＝ 真的送到 Anthropic
+//     HKG（香港）            → 403、沒有 request_id ＝ 根本沒出得去
+//   Worker 在哪個機房執行，它對外的 fetch 就從那裡出去 →
+//   **下面那段 Worker 內的重試對這個狀況完全沒用**（在香港重試幾次都還是從香港出去）。
+//   台灣的流量本來就常被導到香港，所以老師與學生會常常踩到。
+//   ⚠ 2026-10-08 開了 Cloudflare Smart Placement 也沒有改善（量過兩輪，被擋比例還是 1/3~1/2）。
+//   → 真正的對策做在**網站那一端**（data.js 的 _AI_403_WAIT）：403 時把重試間隔愈拉愈長，
+//     因為 anycast 的路由短時間內是穩定的——150ms 連打永遠落在同一個機房，
+//     間隔 6 秒才會換（實測 HKG→HKG→TPE）。
+//
+// ⚠ v458b 我曾經猜「Worker 的 fetch 沒帶 user-agent，被當成機器人擋掉」——**那個猜測是錯的**。
+//   下面補 UA 的程式留著（帶著沒壞處），但它不是解法。
+//
+// v458b：原本的說明（已證實為誤判，保留當紀錄）
 //   實測：代理會間歇性回 403 {"error":{"type":"forbidden","message":"Request not allowed"}}
 //   這個 body 是 api.anthropic.com 原樣轉回來的（本 Worker 沒有任何擋人的程式），
-//   而且沒有 request_id ＝ 根本沒進到模型，是上游的邊緣防護擋掉的。
-//   兩個對策：
-//     ① 轉出去的請求補上 user-agent（Worker 的 fetch 預設不帶，沒有 UA 的請求最容易被擋）
-//     ② 被擋就在 Worker 裡面直接重試（伺服器對伺服器，比較快，學生端完全看不到）
+//   而且沒有 request_id ＝ 根本沒進到模型。
 
 const UA = 'alans-english-class/1.0 (+https://alan07050445-sys.github.io/Alan-s-English-Class/)';
 
