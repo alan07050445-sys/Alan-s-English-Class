@@ -1691,7 +1691,9 @@ const AI_SENSE_SYS = `You write "which meaning is it here?" vocabulary questions
 elementary students, exactly like a Kang Chiao formative assessment.
 Output ONLY a JSON array: [{"word":"","passage":"","title":"","q":"","options":["","","",""],"answer":0,"explain":""}]
 RULES
-- passage: 2-4 short sentences (25-55 words) that a 9-year-old enjoys, with a short "title".
+- title: a SHORT headline, 2-5 words. Put it ONLY here.
+- passage: 2-4 short sentences (25-55 words) that a 9-year-old enjoys.
+  Do NOT repeat the title inside it and never start it with "Title:" — the site shows the title separately.
   The target word must appear in it EXACTLY ONCE, used in ONE clear meaning, and the sentences
   around it must make that meaning findable. Never define the word inside the passage.
   ⚠ Use the word NATURALLY — change its form if the sentence needs it (trap -> trapped, soar -> soaring).
@@ -1769,7 +1771,16 @@ Read the passage, decide what the word means THERE, and give the 0-based index o
 
 function qsValidSense(x) {
   const word = String((x && x.word) || '').trim();
-  const passage = String((x && x.passage) || '').trim();
+  /* 🔴 v476（Alan：「文章內部又寫了一次標題」）：提示詞本來寫
+     「passage … with a short "title"」，AI 就把標題寫進短文裡
+     → 畫面上方一個標題、短文開頭又一個「Title: The Kind Neighbors」。
+     提示詞已經改掉，這裡再清一次（AI 偶爾還是會寫，而且舊的也救得回來）。 */
+  let passage = String((x && x.passage) || '').trim()
+    .replace(/^\s*(title|標題)\s*[:：]\s*/i, '');
+  const t0 = String((x && x.title) || '').trim();
+  if (t0 && passage.toLowerCase().indexOf(t0.toLowerCase()) === 0) {
+    passage = passage.slice(t0.length).replace(/^[\s.:：,，、-]+/, '');
+  }
   const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o || '').trim()).filter(Boolean);
   const ai = Number(x && x.answer);
   if (!word || !passage || opts.length !== 4) return null;
@@ -2320,7 +2331,7 @@ async function _aiAsk(body, pick, timeoutMs) {
    avoid ＝ 上一次出過的句子。不傳進去的話，同一批單字再出一次，
    模型很可能寫出幾乎一樣的句子（v461 的分一分就實測過這件事：
    只說「要不一樣」沒有用，要把「不可以用的」直接攤在它面前）。 */
-async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4', teacherNote = '', avoid = [] } = {}) {
+async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4', teacherNote = '', avoid = [], _noRetry = false } = {}) {
   const band = VOCAB_BANDS[vocabBandOf(grade)];
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (!list.length) return [];
@@ -2391,6 +2402,22 @@ async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', g
       });
     });
   });
+  /* 🔴 v476（Alan：「為什麼我的配對連線有一個是中文？」）：
+     AI 偶爾會漏掉某個字的 def（Alan 那次是 remains）。下游 qsBuildItems 的退路是
+     「沒有英文定義就用中文」→ 八個英文定義裡夾一個「n. 遺骸；殘留物」。
+     與其在下游補一個不一致的東西，不如**把漏掉的那幾個再問一次**（跟 v468 同一招）。 */
+  const missing = _noRetry ? [] : out.filter(r => !r.def);
+  if (missing.length && missing.length < out.length) {
+    try {
+      const again = await aiMakeVocabExercises(missing.map(r => ({ term: r.term, zh: r.zh })),
+        { chunk: Math.max(1, +chunk || 1), hint, grade, teacherNote, avoid, _noRetry: true });
+      again.forEach(r2 => {
+        if (!r2 || !r2.def) return;
+        const hit = out.find(r => r.term === r2.term && !r.def);
+        if (hit) { hit.def = r2.def; if (!hit.sentence) hit.sentence = r2.sentence; }
+      });
+    } catch (e) { /* 再問一次也失敗就算了——下游還有退路，不該整份出題跟著失敗 */ }
+  }
   return out;
 }
 
@@ -5499,7 +5526,13 @@ function reviewWordsOf(items) {
   };
   (items || []).forEach(it => {
     if (!it) return;
-    (it.defPairs || []).forEach(p => { if (p) put(p.word, { def: p.def }); });        // 配對連線
+    /* ⚠ v476：配對連線的定義**可能是中文**（AI 漏給 def 時的舊退路）。
+       把它當成「老師寫的英文定義」餵回去，下一份又會多一個中文——錯誤會一直傳下去。
+       中文的就不要當 def，讓 AI 重新寫一句英文的。 */
+    (it.defPairs || []).forEach(p => {
+      if (!p) return;
+      put(p.word, /[\u4e00-\u9fff]/.test(String(p.def || '')) ? {} : { def: p.def });
+    });                                                                    // 配對連線
     (it.spellWords || []).forEach(x => { if (x) put(x.word, { zh: x.zh, example: x.sentence }); });  // 聽寫
     // 短文填空：[word] 或 [word|提示]
     String(it.passage || '').replace(/\[([^\]]+)\]/g, (m, w) => { put(String(w).split('|')[0], {}); return m; });

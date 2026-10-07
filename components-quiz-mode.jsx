@@ -5900,6 +5900,19 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         如果游標留在剛填好的那一格，第二個字就會把第一個字蓋掉（實測過）。 */
   const putBankWord = (w) => {
     if (submitted) return;
+    /* 🔴 v476（Alan：「我選了 skeleton，它被劃掉了，但還是可以繼續選」）：
+       本來「已經用過」只是把按鈕畫上刪除線，按鈕照樣按得下去
+       → 連點五下，五個空格全變成同一個字（Alan 截圖）。
+       改成：這個字已經填在某一格了 → 再點一下是**拿回來**，不是再填一次。
+       （比直接鎖住好：小朋友填錯想換位置，一下就拿得回來。） */
+    const usedAt = blanks.find(b => bankSame(w, inputs[b.num]));
+    if (usedAt) {
+      handleInput(usedAt.num, '');
+      const el0 = inputRefs.current[usedAt.num];
+      if (el0) el0.focus();
+      if (window.playSound) window.playSound('tap');
+      return;
+    }
     const active = blanks.find(b => inputRefs.current[b.num] === document.activeElement);
     const target = (active && (inputs[active.num] || '').trim())
       ? active
@@ -6017,7 +6030,7 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         <div className="cloze-bank">
           <div className="cloze-bank-head">
             <span className="cloze-bank-lab">🔤 Word Bank</span>
-            {!submitted && <span className="cloze-bank-hint">點一下就填進空格 · 空格後面的 (ing)、(s) 要自己改成正確的形式</span>}
+            {!submitted && <span className="cloze-bank-hint">點一下就填進空格，再點一下可以拿回來 · 空格後面的 (ing)、(s) 要自己改成正確的形式</span>}
           </div>
           <div className="cloze-bank-words">
             {bank.map((w, i) => {
@@ -6031,8 +6044,8 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => putBankWord(w)}
                   disabled={submitted}
-                  aria-label={(used ? '已使用：' : '填入：') + w}
-                  title={submitted ? '' : '點一下填進空格'}>
+                  aria-label={(used ? '拿回來：' : '填入：') + w}
+                  title={submitted ? '' : (used ? '已經填進去了——點一下拿回來' : '點一下填進空格')}>
                   {w}
                 </button>
               );

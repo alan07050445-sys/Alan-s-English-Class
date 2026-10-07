@@ -4127,8 +4127,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
    真正的問題才用大一點的字，而且跟短文分開，一眼看得出要回答什麼。
    ⚠ 不要用 .qm-question-text 的 52px：那是給「追求」這種兩個字的題目用的。 */
 .qm-sense { display: flex; flex-direction: column; gap: 14px; text-align: left; width: 100%; }
-.qm-sense-title { font-family: var(--sans); font-size: 13px; font-weight: 800; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--ink-muted); }
+/* v476（Alan：「title 大一點才清楚」）：13px 的小標太像裝飾，看不出是文章標題 */
+.qm-sense-title { font-family: var(--sans); font-size: clamp(17px, 2.1vw, 21px); font-weight: 800;
+  letter-spacing: .01em; color: var(--ink); }
 .qm-sense-passage { font-family: var(--serif, Georgia, serif);
   font-size: clamp(17px, 2.1vw, 21px); line-height: 1.75; color: var(--ink);
   padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border);
@@ -4143,3 +4144,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .qm-sense-passage { padding: 11px 12px; line-height: 1.7; }
 }
 @media (prefers-reduced-motion: reduce) { .qm-sense { animation: none !important; } }
+
+/* v476（Alan：「配對的右邊英文 definition 靠右邊一點，讓線的距離拉開一點」）：
+   線愈長愈好連、也愈看得出是哪一條。做法是把欄距拉開、左欄再收窄一點
+   （左邊只放單字，本來就用不到那麼寬）。
+   ⚠ 只動 ≥761px 的桌機／平板；手機那一段（≤760px）原本就擠，不要碰。 */
+@media (min-width: 761px) {
+  .qm-player-shell .dm-wrap, .dm-wrap {
+    /* ⚠ 左欄要留一個最小寬度：只寫 0.5fr 的話，螢幕一窄
+       「miraculous (adj.)」就被擠成兩行——那比線短還難看。 */
+    grid-template-columns: minmax(262px, 0.55fr) minmax(0, 1.45fr);
+    column-gap: clamp(90px, 18vw, 300px);
+  }
+}

@@ -1104,6 +1104,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
      但一定都要給 context clue」）：句子的難度跟著年級走，線索一律都要有。 */
   const [grade, setGrade]   = useS(defaultGrade || 'g4');
   const [busy, setBusy]     = useS(0);       // 0=沒在跑，否則是已完成的字數
+  // v476：單字題目做完之後，短文填空／字義選擇還在跑——畫面要講出來，不要停在 8/8
+  const [slow, setSlow]     = useS([]);
   const [aiErr, setAiErr]   = useS('');
   const [aiNote, setAiNote] = useS('');            // v445：這次的特別要求（直接寫給 AI）
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
@@ -1166,13 +1168,20 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
          v407：短文的第三層保底要用到「填空題」的例句，所以把同一個 promise
          當 rescue 傳進去——它只在真的漏字時才會 await，並行完全沒被打斷。 */
       const exP = window.aiMakeVocabExercises(words, { hint: title.trim(), grade, teacherNote: aiNote, onProgress: (done) => setBusy(done) });
+      const drop = (n2) => setSlow(xs => xs.filter(x => x !== n2));
       const seP = (picked.sense && canDo.sense && window.aiMakeVocabSense)
-        ? window.aiMakeVocabSense(words, { hint: title.trim(), grade, teacherNote: aiNote }).catch(e => e)
+        ? window.aiMakeVocabSense(words, { hint: title.trim(), grade, teacherNote: aiNote })
+            .catch(e => e).then(x => { drop('字義選擇'); return x; })
         : Promise.resolve(null);
       const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
-        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP }).catch(e => e)
+        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP })
+            .catch(e => e).then(x => { drop('短文填空'); return x; })
         : Promise.resolve(null);
+      exP.then(() => setSlow([
+        (picked.story && canDo.story) && '短文填空',
+        (picked.sense && canDo.sense) && '字義選擇'].filter(Boolean)));
       const [r, st0, se0] = await Promise.all([exP, stP, seP]);
+      setSlow([]);
       /* 🔴 v473：本來是 .catch(() => null)——短文或字義選擇失敗時**悄悄少一個單元**，
          老師只看得到「短文填空不見了」，完全不知道發生什麼事（Alan 就是這樣回報的）。
          它們失敗不該拖垮其他已經出好的練習，但一定要講出來。 */
@@ -1184,7 +1193,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
       setSense(se || []);
       if (soft.length) setAiErr(`其他都出好了，只有${soft.join('、')}這次沒出來（AI 回得不乾淨）。想要的話再按一次。`);
     } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
-    setBusy(0);
+    setSlow([]); setBusy(0);   // v476：失敗也要歸零，不然按鈕永遠卡在「還在出…」
   };
   const updRow = (i, k, v) => setRows(rs => rs.map((r, j) => j === i ? { ...r, [k]: v } : r));
   /* v475：單字表是純文字帶不了圖片，所以用「單字→圖片」對照表解析完再貼回去。
@@ -1482,7 +1491,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
           <button className="btn ghost" onClick={onClose}>取消</button>
           {wantAI ? (
             <button className="btn primary" disabled={!ready || !!busy} onClick={runAI}>
-              {busy ? `AI 出題中… ${Math.floor(busy)}/${words.length}`
+              {busy ? (slow.length ? `${slow.join('、')}還在出…（要多檢查一輪）` : `AI 出題中… ${Math.floor(busy)}/${words.length}`)
                     : ready ? `✨ AI 出題（${words.length} 個字）→` : '先貼單字並取個名字'}
             </button>
           ) : (
@@ -1524,6 +1533,11 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
   const [asHw, setAsHw]   = useS(true);
   const [due, setDue]     = useS('');
   const [busy, setBusy]   = useS(0);
+  /* 🔴 v476（Alan：「重出題目中卡在 8/8 也太久」）：busy 只數「單字題目」做到第幾個字，
+     8/8 之後還在等短文填空與字義選擇——那兩個都要「出題 → 另一個 AI 交叉檢查 →
+     沒過的再出一次」，本來就比較久，但畫面什麼都不說，看起來就像當掉。
+     改成明講還在等誰，等完一個就從清單裡拿掉。 */
+  const [slow, setSlow]   = useS([]);
   const [err, setErr]     = useS('');
   const [note, setNote]   = useS('');
 
@@ -1567,14 +1581,20 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
       const wantSense = kinds.indexOf('sense') >= 0;
       const exP = window.aiMakeVocabExercises(w, { hint: groupName, grade, teacherNote: note, avoid: seen,
                                                    onProgress: (d) => setBusy(d) });
+      const drop = (n2) => setSlow(xs => xs.filter(x => x !== n2));
       const stP = wantStory && window.aiMakeVocabStory
-        ? window.aiMakeVocabStory(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP }).catch(e => e)
+        ? window.aiMakeVocabStory(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP })
+            .catch(e => e).then(r => { drop('短文填空'); return r; })
         : Promise.resolve(null);
       // v473：字義選擇也要能複習（avoid 一樣送進去，短文不會跟上次一樣）
       const seP = wantSense && window.aiMakeVocabSense
-        ? window.aiMakeVocabSense(w, { hint: groupName, grade, teacherNote: note, avoid: seen }).catch(e => e)
+        ? window.aiMakeVocabSense(w, { hint: groupName, grade, teacherNote: note, avoid: seen })
+            .catch(e => e).then(r => { drop('字義選擇'); return r; })
         : Promise.resolve(null);
+      // 單字題目一做完，就換成「還在等這幾種」——不要讓畫面停在 8/8 不動
+      exP.then(() => setSlow([wantStory && '短文填空', wantSense && '字義選擇'].filter(Boolean)));
       const [ai, story0, sense0] = await Promise.all([exP, stP, seP]);
+      setSlow([]);
       /* ⚠ 這兩種失敗了不該整份停掉（其他練習都好了），但也**不可以默默消失**——
          本來是 .catch(() => null)，老師只會看到「短文填空不見了」卻不知道為什麼。 */
       const soft = [];
@@ -1590,7 +1610,7 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
       });
       if (soft.length) setErr(`其他都出好了，只有${soft.join('、')}這次沒出來（AI 回得不乾淨）。想要的話再按一次。`);
     } catch (e) { setErr((e && e.message) || '重出題目失敗，請再試一次。'); }
-    setBusy(0);
+    setSlow([]); setBusy(0);   // v476：失敗也要歸零
   };
 
   if (!open) return null;
@@ -1668,7 +1688,11 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
         <div className="modal-foot">
           <button className="btn ghost" onClick={onClose}>取消</button>
           <button className="btn primary" disabled={!week || (!isGram && w.length < 2) || !!busy} onClick={run}>
-            {busy ? (isGram ? '重出題目中…' : `重出題目中… ${Math.floor(busy)}/${w.length}`) : `✨ 重出一份並排進去 →`}
+            {busy
+              ? (isGram ? '重出題目中…'
+                : slow.length ? `${slow.join('、')}還在出…（要多檢查一輪）`
+                : `重出題目中… ${Math.floor(busy)}/${w.length}`)
+              : `✨ 重出一份並排進去 →`}
           </button>
         </div>
       </div>
@@ -1705,6 +1729,19 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
       const def = w.def || (a && a.def) || w.zh;
       return def ? { id: 'p' + stamp + i + rnd(), word: (a && a.word) || w.term, def } : null;
     }).filter(Boolean);
+    /* 🔴 v476（Alan：「為什麼我的配對連線有一個是中文？」）：
+       上面的退路是「沒有英文定義就用中文」。大部分都是英文時，夾一個中文
+       看起來就是壞掉的（而且那一題變成送分——它一眼就跟其他的不一樣）。
+       → 整組要嘛全英文、要嘛全中文；少數派直接拿掉，寧可少一組配對。
+       ⚠ 真正的修在 data.js：漏掉 def 的字會再問 AI 一次。這裡是最後一道。 */
+    const cjk = (t) => /[\u4e00-\u9fff]/.test(String(t || ''));
+    const nZh = pairs.filter(p => cjk(p.def)).length;
+    if (nZh > 0 && nZh < pairs.length) {
+      const dropZh = nZh <= pairs.length / 2;      // 少數派是哪一邊，就拿掉哪一邊
+      for (let k = pairs.length - 1; k >= 0; k--) {
+        if (cjk(pairs[k].def) === dropZh) pairs.splice(k, 1);
+      }
+    }
     if (pairs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'dm', type: 'def-match', title, linkedFlashcardId: fcId, defPairs: pairs });
   }
   if (kinds.indexOf('fillblank') >= 0) {
