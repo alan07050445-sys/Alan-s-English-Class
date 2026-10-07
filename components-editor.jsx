@@ -6278,11 +6278,15 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
         q: `What is wrong with this sentence?\n"${x.broken}"`,
         options: x.kinds, answer: x.answer, explain: x.why || '' })) });
     // 看出錯在哪，才解鎖「改正」——跟康橋的兩段式一樣
-    out.push({ id: 'gn' + stamp + 'df' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 13,
+    /* 🔴 v480：改寫那一步只收「從句子本身就改得回來」的題目。
+       「ran across the line.」→「My dad ran across the line.」那種（Missing Subject）
+       主詞要學生自己想，用標準答案比對一定誤判——判斷題照出，但不要叫他重寫。 */
+    const rwDiag = goodDiag.filter(x => x.canRewrite !== false);
+    if (rwDiag.length) out.push({ id: 'gn' + stamp + 'df' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 13,
       requires: dxId, ...cs,
-      title: `${g} · 改成正確的句子`, zh: `${goodDiag.length} 題 · 你剛剛看出錯在哪了——把整句寫對`,
+      title: `${g} · 改成正確的句子`, zh: `${rwDiag.length} 題 · 你剛剛看出錯在哪了——把整句寫對`,
       instruction: '把整句重寫一次（剛剛那一題已經告訴你錯在哪一類）',
-      pairs: goodDiag.map((x, i) => ({ id: 'p' + stamp + 'x' + i + rnd(),
+      pairs: rwDiag.map((x, i) => ({ id: 'p' + stamp + 'x' + i + rnd(),
         prompt: x.broken, answer: x.fixed, accept: [], explain: x.why || '' })) });
   }
 

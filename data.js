@@ -3232,6 +3232,17 @@ RULES
 - wrong: one short English sentence (≤12 words) with 1-3 mistakes of EXACTLY the kind the notes teach
   (e.g. missing capital letters). Nothing else in the sentence may be wrong.
 - answer: the same sentence, fully corrected. Change ONLY the mistakes.
+⚠⚠ THE MISTAKE MUST BE FIXABLE FROM THE SENTENCE ITSELF. A checker rejects anything else.
+  The corrected sentence must keep EXACTLY the same content words in the SAME order — only the
+  grammar machinery may change (word endings, than/the/is, more/most, capital letters).
+  You may NOT make the child invent information, and you may NOT ask about facts of the world.
+  BAD: "My fish is more beautiful." -> "My fish is more beautiful than yours."
+       (nothing in the sentence says what it is compared to — the child cannot know)
+  BAD: "The cake is sweeter than the candy." -> "The candy is sweeter than the cake."
+       (that is an opinion about food, not a grammar mistake)
+  GOOD: "My dog is more big than your dog." -> "My dog is bigger than your dog."
+  GOOD: "She is the happier student in class." -> "She is the happiest student in class."
+  GOOD: "My bag is bigger yours." -> "My bag is bigger than yours."   (only "than" is added)
 - explain: very simple ENGLISH, ≤14 words, what was fixed.
 ${GN_EN_ONLY}
 ${_AI_MINIFY}`,
@@ -3687,8 +3698,14 @@ function gnValidRewrite(x) {
   const wrong = String((x && (x.wrong || x.q || x.prompt)) || '').trim();
   const answer = String((x && x.answer) || '').trim();
   const nw = wrong.split(/\s+/).length, na = answer.split(/\s+/).length;
-  return wrong && answer && wrong !== answer && !_gnCJK.test(wrong + answer) && nw <= 18 && Math.abs(nw - na) <= 2
-    ? { wrong, answer, explain: String(x.explain || '').trim() } : null;
+  if (!(wrong && answer && wrong !== answer && !_gnCJK.test(wrong + answer) && nw <= 18 && Math.abs(nw - na) <= 2)) return null;
+  /* 🔴 v480（Alan 截到兩題都無解）：錯的地方一定要**從句子本身就改得回來**。
+     「My fish is more beautiful.」→「…than yours.」：句子裡沒說跟誰比，學生不可能知道。
+     「The cake is sweeter than the candy.」→「The candy is sweeter than the cake.」：
+       那是在比哪個比較甜，是常識題不是文法題。 */
+  if (!_gnFixableFromSentence(wrong, answer)) return null;
+  if (!_gnCmpClaimOk(wrong, answer)) return null;          // v479：比較級的方向也要對
+  return { wrong, answer, explain: String(x.explain || '').trim() };
 }
 /* v462 ③：造句。沒有標準答案（AI 批改），所以能驗的就是「題目本身像不像一題」：
    要有情境、要講清楚必須用到什麼、而且不可以出現中文（v461 的規則）。 */
@@ -3778,6 +3795,79 @@ function _gnCmpClaimOk(broken, fixed) {
     if (!base) continue;
     if (_gnDegreeKind(base) === 'er') return false;  // 本來就該用 -er，卻被改成 more
   }
+  return true;
+}
+
+/* ══ 🔴 v480：改寫題「從句子本身就要改得回來」══════════════════════════════
+   Alan 2026-10-07 截到兩題，兩題都無解：
+     ① "My fish is more beautiful." → 正解 "My fish is more beautiful than yours."
+        句子裡**沒有任何線索**說是跟誰比，學生不可能知道要補 "than yours"。
+     ② "The cake is sweeter than the candy." → 正解 "The candy is sweeter than the cake."
+        理由還寫「Candy is actually sweeter than cake」——那是**常識題，不是文法題**。
+
+   Alan 的原則（而且他說要套用到所有文法點）：
+   改寫題只能改「句子裡本來就看得出來的文法錯」——比較級的形式、than、the、more/most…
+   → 程式判得出來的版本：
+     · 加進去的字只能是**功能詞**（than／the／is…），不可以憑空多一個實詞（yours）
+     · 實詞的**順序不可以換**（cake↔candy 對調＝在改內容，不是在改文法）
+     · 實詞只能變形（sweet→sweeter、good→better），不可以換成別的字
+   判不出來就放行——寧可放過，也不要把正常的題目誤殺。 */
+const _GN_FN_WORDS = new Set(('a an the this that these those my your his her its our their '
+  + 'is am are was were be been being do does did have has had will would can could shall should may might must '
+  + 'than then as of to in on at by for from with and or but so not no yes very too also just only '
+  + 'more most less least much many few little there here it he she they we you i me him them us'
+).split(' '));
+function _gnStem(w) {
+  let t = String(w || '').toLowerCase().replace(/[^a-z']/g, '');
+  if (_GN_IRREG_CMP[t]) return t;
+  for (const [a, b] of [[/iest$/, 'y'], [/ier$/, 'y'], [/est$/, ''], [/er$/, ''], [/ies$/, 'y'],
+                        [/es$/, ''], [/s$/, ''], [/ed$/, ''], [/ing$/, '']]) {
+    if (a.test(t) && t.replace(a, b).length >= 3) { t = t.replace(a, b); break; }
+  }
+  /* ⚠ big→bigger、hot→hotter、sad→sadder：加 -er 時最後一個子音會重複，
+     剝掉 -er 之後剩 "bigg"，跟 "big" 對不起來。收掉重複的那一個。 */
+  t = t.replace(/([bdfglmnprt])\1$/, '$1');
+  return t.replace(/e$/, '');
+}
+function _gnSameWord(a, b) {
+  const x = String(a || '').toLowerCase().replace(/[^a-z']/g, '');
+  const y = String(b || '').toLowerCase().replace(/[^a-z']/g, '');
+  if (!x || !y) return false;
+  if (x === y) return true;
+  // good/better/best、far/farther 這種比較級家族，算同一個字的不同形式
+  const fam = [['good', 'better', 'best'], ['bad', 'worse', 'worst'], ['far', 'farther', 'farthest', 'further', 'furthest'],
+               ['many', 'more', 'most'], ['much', 'more', 'most'], ['little', 'less', 'least']];
+  if (fam.some(f => f.indexOf(x) >= 0 && f.indexOf(y) >= 0)) return true;
+  const sx = _gnStem(x), sy = _gnStem(y);
+  if (sx === sy) return true;
+  /* 不規則動詞／名詞（buy/bought、child/children…）直接用現成那一份對照表，
+     不要在這裡再寫第二份——兩份遲早會走鐘。 */
+  /* ⚠ 學生寫錯的形式五花八門（goed / buyed / childs），詞幹規則不一定剝得回去
+     （goed 去掉 -ed 只剩兩個字母，會被長度保護擋下）。查表時多試幾種還原形。 */
+  const bases = (w) => [w, _gnStem(w), w.replace(/(ed|s|es)$/, ''), w.replace(/ed$/, 'e')].filter(Boolean);
+  const bx = bases(x), by = bases(y);
+  return _GN_FIX_IRREG.some(([p1, p2]) => {
+    const c1 = bases(p1), c2 = bases(p2);
+    const hit = (u, v) => u.some(t => v.indexOf(t) >= 0);
+    return (hit(bx, c1) && hit(by, c2)) || (hit(bx, c2) && hit(by, c1));
+  });
+}
+function _gnFixableFromSentence(wrong, answer) {
+  const tok = (t) => String(t || '').toLowerCase().match(/[a-z']+/g) || [];
+  const content = (arr) => arr.filter(w => !_GN_FN_WORDS.has(w));
+  let A = content(tok(wrong));
+  const B = content(tok(answer));
+  if (!A.length || !B.length) return true;                 // 判不出來就放行
+  /* ⚠ 「This toy is the best toy I have.」→「This is the best toy I have.」
+     ——刪掉重複的 toy 是合法的，而且從句子本身就看得出來。
+     所以允許「少一個**重複**的實詞」，但**不允許憑空多一個新的**（🔴 than yours）。 */
+  if (A.length === B.length + 1) {
+    const dup = A.findIndex((w, i) => A.some((v, j) => j !== i && _gnSameWord(w, v)));
+    if (dup < 0) return false;
+    A = A.slice(0, dup).concat(A.slice(dup + 1));
+  }
+  if (A.length !== B.length) return false;                 // 憑空多／少一個實詞
+  for (let i = 0; i < A.length; i++) if (!_gnSameWord(A[i], B[i])) return false;  // 換字或換順序（🔴 cake↔candy）
   return true;
 }
 
@@ -3879,7 +3969,14 @@ function gnValidDiagnose(x) {
   if (nb > 16 || nf > 20) return null;
   /* 🔴 v479：「more delicious」被說成錯的——整題丟掉。教錯的文法比少一題嚴重得多。 */
   if (!_gnCmpClaimOk(broken, fixed)) return null;
-  return { broken, kinds, answer: ai, fixed, why: String((x && x.why) || '').trim() };
+  /* 🔴 v480：這一題「改成正確的句子」那一步出不出得來。
+     ⚠ 不可以直接整題丟掉——康橋真的有「Missing Subject」這種題
+       （"ran across the line." → "My dad ran across the line."），
+       主詞本來就要學生自己想，**那是合法的「看出錯在哪」題**。
+       但它不能用「標準答案比對」來改（學生寫 "The boy ran…" 也對）。
+     → 所以：判斷題照出，改寫那一步只收「從句子本身就改得回來」的。 */
+  const canRewrite = _gnFixableFromSentence(broken, fixed);
+  return { broken, kinds, answer: ai, fixed, canRewrite, why: String((x && x.why) || '').trim() };
 }
 
 /* v462 ①：排順序。能程式驗的：字塊數量、沒有中文、沒有重複的字塊
@@ -4025,8 +4122,24 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
     const k = (stem + '|' + rest).replace(/\s+/g, ' ').trim();
     return k === '|' ? JSON.stringify(x) : k;
   };
+  /* 🔴 v480：被擋掉的要**告訴 AI 為什麼**。
+     本來重試第二輪送的是一模一樣的提示詞 → 它當然再犯一次同樣的錯，
+     然後整個題型就「產生失敗」。Alan 說得對：給它合理的提示就好。 */
+  const dropped = [];
+  const whyBad = (x) => {
+    const a1 = String((x && (x.wrong || x.broken)) || '').trim();
+    const b1 = String((x && (x.answer || x.fixed)) || '').trim();
+    if (a1 && b1) {
+      if (!_gnFixableFromSentence(a1, b1))
+        return 'the child cannot fix it from the sentence alone — your correction adds, removes or swaps a content word';
+      if (!_gnCmpClaimOk(a1, b1))
+        return 'the comparative rule is backwards (remember: -er only for short adjectives; more/most for long ones)';
+    }
+    return 'it breaks the RULES';
+  };
   const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
-    const v = valid(x); if (!v) return;
+    const v = valid(x);
+    if (!v) { if (dropped.length < 4) dropped.push(`- ${JSON.stringify(x).slice(0, 170)}\n  WHY: ${whyBad(x)}`); return; }
     const k = key(v); if (!k || seen.has(k)) return;
     seen.add(k); out.push(Object.assign(v, { from }));
   });
@@ -4040,8 +4153,12 @@ async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
           ' If an item asks for two kinds (e.g. common and proper nouns), ask about only ONE kind — alternate between them.' : '') +
         `\nTHEN write ${Math.max(0, need - tq.length)} NEW questions of the same kind.`
       : `Write ${need + 2} questions.`;
+    // v480：第二輪把「上一輪被擋掉的那幾題＋原因」一起送回去
+    const fb = (round > 0 && dropped.length)
+      ? `\n\nYour previous answer was REJECTED by a checker. These were thrown away:\n${dropped.join('\n')}\nDo not make those mistakes again.`
+      : '';
     try {
-      const arr = await _gnCall(GN_Q_SYS[kind], `${base}\n\n${teacherPart}`, 2600);
+      const arr = await _gnCall(GN_Q_SYS[kind], `${base}\n\n${teacherPart}${fb}`, 2600);
       const before = out.length;
       take(arr, round === 0 && tq.length ? 'mixed' : 'ai');
       if (kind === 'mcq' && out.length > before) {
