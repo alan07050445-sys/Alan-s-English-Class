@@ -70,7 +70,10 @@ ok('⭐ 組的選單有「排一份複習到別週」', /🔁 排一份複習到
    真正該擋的是兩個都沒有的組（按了也沒東西可以重出）。 */
 ok('兩個都沒有的組不顯示這個選項（按了也沒用）',
    /window\.reviewWordsOf\(g\.items\)\.length >= 2\)\s*\n?\s*\|\|\s*\(window\.reviewGrammarOf/.test(qm));
-ok('有 ReviewGroupModal', /function ReviewGroupModal\(/.test(ed) && /ReviewGroupModal \}\);/.test(ed));
+/* ⚠ 不要比對匯出表那一行的結尾——後面再掛一個東西上去就假性失敗（v471 已經踩過一次）。
+   要守的是「有沒有真的掛出去」，所以切出匯出區塊比名字。 */
+const edExport = ed.slice(ed.indexOf('Object.assign(window, { GrammarNotesModal'));
+ok('有 ReviewGroupModal', /function ReviewGroupModal\(/.test(ed) && /\bReviewGroupModal\b/.test(edExport));
 ok('⭐ 預設排到「兩週後」（Alan：每隔一週複習一次）',
    /const defWeek = \(weekChoices \|\| \[\]\)\[curIx \+ 2\]/.test(ed));
 /* v473：Alan 看了實際結果之後改了主意——「不需要出額外單字卡，但如果學生忘記，

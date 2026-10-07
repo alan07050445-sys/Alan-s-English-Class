@@ -1,0 +1,125 @@
+/* t-wordstudy — v482 📘 一鍵出 Word Study
+ * （Alan 2026-10-07 給了康橋課本 p5~p13＋他自己出的「短文找字」那一張）
+ *
+ * 康橋每一課的 Word Study 主題都不同（VCe 音節、後綴 -ty/-ity/-ic/-ment、
+ * 母音組合 ai/ay/ea…），但**題型永遠是那幾種**，所以做成一個通用的一鍵生成。
+ *
+ * ⭐ 這個題型跟文法最大的差別：**答案程式驗得出來**（是不是 VCe、有沒有那個字尾、
+ *   含不含那個母音組合都是拼字規則）。所以 AI 只負責想題材，對錯一律程式說了算。
+ */
+import fs from 'fs';
+const ROOT = new URL('..', import.meta.url);
+const data  = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
+const ed    = fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8');
+const app   = fs.readFileSync(new URL('app.jsx', ROOT), 'utf8');
+const shell = fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
+
+const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
+const W = {}; new Function('window', 'document', 'firebase', 'localStorage', data)(W, stub, stub, stub);
+const fnEnd = (s, a) => { const i = s.indexOf(a); const j = s.indexOf('\n}\n', i); return s.slice(i, j + 2); };
+const build = new Function('window', fnEnd(ed, 'function wsBuildItems') + '\nreturn wsBuildItems;')({});
+
+let pass = 0, fail = 0;
+const ok = (m, c) => { if (c) { pass++; console.log('  ✅ ' + m); } else { fail++; console.log('  ❌ ' + m); } };
+const C = W.wsCheck;
+
+console.log('\n【1】VCe：跟課本 p5 那張表的標準答案要完全一樣');
+const TABLE = 'together imitate thirsty calendar emphasize outside contribute Internet sequence fascinate impose pause satisfied tissue survive cyclone teach evaporate advertise bathroom'.split(' ');
+const got = TABLE.filter(w => C(w, { kind: 'vce' }));
+ok('⭐ 挑出來的就是課本要的那 10 個',
+   got.join(',') === 'imitate,emphasize,outside,contribute,fascinate,impose,survive,cyclone,evaporate,advertise');
+ok('⭐ pause 不是 VCe（au 是母音組合，不是 V-C-e）', !C('pause', { kind: 'vce' }));
+ok('⭐ tissue 不是（ue 不是子音＋e）', !C('tissue', { kind: 'vce' }));
+ok('⭐ sequence 不是（-ence 的母音不長）', !C('sequence', { kind: 'vce' }));
+ok('沒有字尾 e 的都不是', ['teach', 'together', 'Internet', 'bathroom'].every(w => !C(w, { kind: 'vce' })));
+
+console.log('\n【2】其他三種規則');
+ok('⭐ 字尾：-ment', ['enjoyment', 'payment', 'excitement'].every(w => C(w, { kind: 'suffix', arg: '-ment' }))
+   && !C('history', { kind: 'suffix', arg: '-ment' }));
+ok('   -ity 不會把 -ty 的字也算進去', C('community', { kind: 'suffix', arg: '-ity' }) && !C('safety', { kind: 'suffix', arg: '-ity' }));
+ok('   字尾本身不算（"ment" 不是加了 -ment 的字）', !C('ment', { kind: 'suffix', arg: '-ment' }));
+ok('⭐ 母音組合：ea', ['meadow', 'increase', 'appeal'].every(w => C(w, { kind: 'team', arg: 'ea' }))
+   && !C('betray', { kind: 'team', arg: 'ea' }));
+ok('⭐ 字首：un-', C('unhappy', { kind: 'prefix', arg: 'un-' }) && !C('under', { kind: 'prefix', arg: 'in-' }));
+ok('⭐ 不認得的規則回 null（＝程式不會判，整份退回）', C('x', { kind: 'nonsense' }) === null);
+
+console.log('\n【3】AI 的產出整個被程式重驗一次');
+const V = W.wsValidPack;
+const good = { topic: 'VCe', rule: 'A VCe word ends with vowel, consonant, e.', ruleZh: 'VCe 結尾的母音唸長音，e 不發音',
+  check: { kind: 'vce' },
+  groups: [{ label: 'long a', words: ['imitate', 'evaporate', 'fascinate'] },
+           { label: 'long i', words: ['survive', 'advertise', 'emphasize'] }],
+  yes: ['impose', 'cyclone', 'outside', 'contribute', 'survive', 'advertise'],
+  no: ['pause', 'teach', 'together', 'thirsty', 'tissue', 'bathroom'],
+  mcq: [{ q: 'Which word has the VCe pattern?', options: ['impose', 'pause', 'teach', 'thirsty'], answer: 0 }],
+  build: [], story: { title: 'The Kite', text: 'We went outside to fly a kite. The wind made it rise high above the trees. My sister said she would advertise our kite club at school. Then a cyclone of leaves spun past us. We did not impose on anyone. It was a fine day and we hope the club will survive until winter comes again.' } };
+const p = V(good);
+ok('⭐ 正常的收得下', !!p);
+ok('⭐ 不符合規則的字會被踢出 yes', (() => {
+  const r = V({ ...good, yes: good.yes.concat(['pause', 'teach']) });
+  return r && r.yes.indexOf('pause') < 0 && r.yes.indexOf('teach') < 0; })());
+ok('⭐ 分籃裡混進不符合的字也會被踢掉', (() => {
+  const r = V({ ...good, groups: [{ label: 'x', words: ['imitate', 'pause', 'evaporate'] }, good.groups[1]] });
+  return r && r.groups[0].words.indexOf('pause') < 0; })());
+ok('⭐ 同一個字不可以出現在兩籃（分到哪都對）', (() => {
+  const r = V({ ...good, groups: [{ label: 'a', words: ['imitate', 'survive', 'impose'] },
+                                  { label: 'b', words: ['survive', 'advertise', 'cyclone'] }] });
+  if (!r) return false;
+  const all = r.groups.reduce((x, g) => x.concat(g.words.map(w => w.toLowerCase())), []);
+  return new Set(all).size === all.length && all.filter(w => w === 'survive').length === 1; })());
+ok('   去重之後不夠兩個字的那一籃就整籃不要（一個字的籃子不成題）', (() => {
+  const r = V({ ...good, groups: [{ label: 'a', words: ['imitate', 'survive'] }, { label: 'b', words: ['survive', 'advertise'] }] });
+  return !r || r.groups.every(g => g.words.length >= 2); })());
+ok('⭐ 選擇題：四個選項裡有兩個符合規則 → 整題丟掉（不然兩個答案都對）',
+   (V({ ...good, mcq: [{ q: 'x', options: ['impose', 'cyclone', 'teach', 'pause'], answer: 0 }] }) || {}).mcq.length === 0);
+ok('⭐ 選擇題：一個符合的都沒有 → 也丟掉',
+   (V({ ...good, mcq: [{ q: 'x', options: ['teach', 'pause', 'thirsty', 'together'], answer: 0 }] }) || {}).mcq.length === 0);
+ok('⭐ 正解指錯了也會被改對（程式自己算答案）', (() => {
+  const r = V({ ...good, mcq: [{ q: 'x', options: ['pause', 'impose', 'teach', 'thirsty'], answer: 0 }] });
+  return r && r.mcq[0].answer === 1; })());
+ok('⭐ 短文的答案是程式自己從文章裡找的，不是 AI 說的', p.story && p.story.answers.every(a => C(a, { kind: 'vce' })));
+ok('⭐ 只收「整篇只出現一次」的字（出現兩次就不知道要點哪個）', (() => {
+  const r = V({ ...good, story: { title: 't', text: good.story.text + ' We will survive the storm and survive the rain and have a good time outside today.' } });
+  return !r || !r.story || r.story.answers.indexOf('survive') < 0; })());
+ok('程式不會判的規則整份退回（寧可不出，也不要出錯的答案）', V({ ...good, check: { kind: 'magic' } }) === null);
+ok('規則寫成中文也退回（學生看的是英文）', V({ ...good, rule: '母音子音 e' }) === null);
+ok('加字尾題：答案不等於「base ＋ 詞綴」就丟掉', (() => {
+  const r = V({ topic: 's', rule: 'Add -ment.', ruleZh: '加 -ment', check: { kind: 'suffix', arg: '-ment' },
+    groups: [], yes: ['enjoyment', 'payment', 'movement', 'agreement'], no: ['history', 'basic', 'safety', 'rarity'],
+    mcq: [], build: [{ clue: 'the act of moving', base: 'move', answer: 'movement' },
+                     { clue: 'the act of paying', base: 'pay', answer: 'payable' }], story: null });
+  return r && r.build.length === 1 && r.build[0].answer === 'movement'; })());
+
+console.log('\n【4】組成單元（全部沿用既有題型，不新增）');
+const items = build({ pack: p, title: 'Unit 1 · VCe', kinds: ['lesson', 'circle', 'sort', 'mcq', 'build', 'story'] });
+ok('⭐ 建得出東西', items.length >= 3);
+ok('⭐ 沒有新題型（v414 的教訓：新題型要補 AUTO_STAR_KIND、QM_TYPE_WORDS…）',
+   items.every(i => ['lesson', 'circle-answer', 'word-sort', 'quiz', 'type-answer'].indexOf(i.type) >= 0));
+ok('⭐ 先學一下是程式直接拼的，不是 AI 生的（所以不會教錯）',
+   /互動教學是\*\*程式直接拼的\*\*/.test(ed) && (items.find(i => i.type === 'lesson') || {}).steps.length >= 2);
+ok('⭐ 其他單元都被教學卡鎖住（學完才能練）',
+   items.filter(i => i.type !== 'lesson').every(i => i.requires === items[0].id));
+ok('⭐ 圈出來：每一列都有正確答案，而且答案真的符合規則', (() => {
+  const ci = items.find(i => i.type === 'circle-answer' && !i.passage);
+  return ci && ci.circleQuestions.every(q => q.answers.length && q.answers.every(a => C(a, { kind: 'vce' }))); })());
+ok('   而且答案不會永遠排在前面（有洗過）', /洗一下，不然答案永遠在前面/.test(ed));
+ok('⭐ 短文找字：一句一題，答案來自那一句', (() => {
+  const st = items.find(i => i.type === 'circle-answer' && i.passage);
+  return st && st.circleQuestions.every(q => q.answers.every(a => q.sentence.toLowerCase().indexOf(a.toLowerCase()) >= 0)); })());
+ok('只勾一種就只出一種', build({ pack: p, title: 't', kinds: ['mcq'] }).every(i => i.type === 'quiz'));
+ok('什麼都沒勾就不出東西', build({ pack: p, title: 't', kinds: [] }).length === 0);
+
+console.log('\n【5】整條路有接起來');
+ok('⭐ data.js 掛出去了', typeof W.aiMakeWordStudy === 'function' && typeof W.wsValidPack === 'function' && typeof W.wsCheck === 'function');
+ok('⭐ 老師端有視窗', /function WordStudyModal\(/.test(ed) && /WordStudyModal, wsBuildItems, WS_KINDS \}\)/.test(ed));
+ok('⭐ 編輯列有第四顆按鈕', /一鍵出 Word Study/.test(shell) && /onWordStudy/.test(shell));
+ok('⭐ app.jsx 有接上', /const handleWordStudy = /.test(app) && /onWordStudy=\{/.test(app) && /window\.WordStudyModal/.test(app));
+ok('⭐ 指派走跟一鍵出單字同一套（學期設作業／暑假派給學生）',
+   /不要另寫一份——那兩段邏輯一分家就會有一邊忘了更新/.test(app)
+   && /items\.forEach\(it => \{ w\[weekId\]\.homework\[it\.id\] = \{ dueDate: assign\.dueDate \}; \}\);/.test(app.slice(app.indexOf('const handleWordStudy'))));
+ok('⭐ 指派那一段用函式不是元件（v380 踩過：用元件會每次重掛，勾第二個學生時第一個點不到）',
+   /const assignBox = \(\) => \(/.test(ed.slice(ed.indexOf('function WordStudyModal'))));
+ok('被擋掉會告訴 AI 原因（v480 的教訓）', /Your previous answer was REJECTED by a checker/.test(data.slice(data.indexOf('async function aiMakeWordStudy'))));
+
+console.log(`\n${fail ? '❌' : '✅'} t-wordstudy：${pass} 過 / ${fail} 失敗`);
+process.exit(fail ? 1 : 0);

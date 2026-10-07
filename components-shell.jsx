@@ -159,7 +159,7 @@ function findUnitsIn(weekOrder, weeks, q) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -358,6 +358,13 @@ function Header({
                 <button className="edit-make-btn gn" onClick={onGrammarNotes}>
                   <span className="emk-ico">✏️</span>
                   <span className="emk-txt"><b>一鍵出文法</b><em>上傳作業照片／貼文字 → 互動教學・選擇・填空・中翻英</em></span>
+                </button>
+              )}
+              {/* v482：📘 Word Study——康橋每一課都有，主題每次不同但題型固定那幾種 */}
+              {onWordStudy && (
+                <button className="edit-make-btn ws" onClick={onWordStudy}>
+                  <span className="emk-ico">📘</span>
+                  <span className="emk-txt"><b>一鍵出 Word Study</b><em>打上這次的規則 → 圈出來・分一分・選擇・短文找字</em></span>
                 </button>
               )}
               {onReadingGen && (

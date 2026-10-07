@@ -4197,3 +4197,8 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .ta-input.long { padding: 15px 14px; font-size: 18px; }
   .ta-input.wd   { font-size: 21px; }
 }
+
+/* v482：📘 一鍵出 Word Study（第四顆按鈕；編輯列從三欄變四欄） */
+.edit-make-btn.ws { border-color: rgba(120,160,120,.5); }
+.modal .edit-make-btn.ws { border-color: rgba(120,160,120,.75); }
+@media (min-width: 901px) { .edit-make { grid-template-columns: repeat(4, 1fr); } }

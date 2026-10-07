@@ -205,6 +205,7 @@ function App() {
      不然又要重新生成並且又是不同 group」）：記住「要加進哪一組」，一鍵生成的標題就先填好，
      建出來的單元 group 一樣＝直接落在同一組底下。 */
   const [regenFor, setRegenFor] = useAppState(null);          // { catId, name }
+  const [wsGenOpen, setWsGenOpen] = useAppState(false);       // v482：📘 一鍵出 Word Study
   const [reviewFor, setReviewFor] = useAppState(null);        // v466：{ catId, name, items } 排複習
   const [weekEditOpen,  setWeekEditOpen]  = useAppState(false);
   const [toast, setToast] = useAppState(null);
@@ -1068,6 +1069,42 @@ function App() {
 
   /* v377③: 貼一次單字 → 一次建立整套練習（單字卡／配對連線／聽寫／選擇題／填空）
      全部掛同一個 group，並綁到那份單字卡上，學生端會自動排成一組。 */
+  /* v482 📘 一鍵出 Word Study：視窗已經把單元組好、也驗過了，這裡只負責放進週次。
+     ⚠ 刻意跟 handleQuickSet 走同一套「寫進去＋指派」的流程（學期＝設作業、暑假＝派給學生），
+       不要另寫一份——那兩段邏輯一分家就會有一邊忘了更新。 */
+  const handleWordStudy = ({ items, cat, assign }) => {
+    if (!items || !items.length) { showToast('沒有產生任何單元'); return; }
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) { showToast('請先選一個週次'); return; }
+    if (!w[weekId].items) w[weekId].items = {};
+    if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
+    w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+    let note = '';
+    if (assign && assign.dueDate) {
+      if (!w[weekId].homework) w[weekId].homework = {};
+      items.forEach(it => { w[weekId].homework[it.id] = { dueDate: assign.dueDate }; });
+      note = ` · 已設為作業（${assign.dueDate} 到期）`;
+    }
+    setWeeks(w);
+    saveWeeksSafe(w);
+    if (assign && assign.students && assign.students.length && window.saveSummerStudent) {
+      const suffix = String(weekId).split('-').pop();
+      const metaNow = (summerMetaRef.current && summerMetaRef.current.students) || {};
+      Promise.all(assign.students.map(email => {
+        const key = String(email).toLowerCase();
+        const prev = metaNow[key] || { name: '', weeks: {} };
+        const weeksMap = { ...(prev.weeks || {}) };
+        const have = Array.isArray(weeksMap[suffix]) ? weeksMap[suffix] : [];
+        weeksMap[suffix] = have.concat(items.map(it => it.id).filter(id => have.indexOf(id) < 0));
+        return window.saveSummerStudent(key, { ...prev, weeks: weeksMap });
+      })).then(() => showToast(`已指派給 ${assign.students.length} 位學生`))
+        .catch(() => showToast('指派失敗，請到後台再指派一次'));
+      note = ' · 指派中…';
+    }
+    setWsGenOpen(false);
+    showToast(`📘 Word Study：建立了 ${items.length} 個單元${note}`);
+  };
+
   const handleQuickSet = ({ words, title, cat, kinds, ai, story, assign }) => {
     // 校稿時改過的中文要回填（老師沒貼中文、AI 補的那種）
     const merged = (words || []).map(w => {
@@ -1832,6 +1869,7 @@ function App() {
             onGrammarGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? () => setGrGenOpen(true) : null}
             onReadingGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setRcGenOpen(true)}
             onGrammarNotes={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setGnGenOpen(true)}
+            onWordStudy={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setWsGenOpen(true)}
             onDeleteWeek={handleDeleteWeek}
             onArchiveWeek={handleArchiveWeek}
             onExport={() => setExportOpen(true)}
@@ -2131,6 +2169,16 @@ function App() {
             onClose={() => setGrGenOpen(false)}
             onCreate={handleGrammarCreate}
           />
+          {window.WordStudyModal && <window.WordStudyModal
+            open={wsGenOpen}
+            categories={activeCategories}
+            defaultGrade={/^g[1-6]$/.test(String(grade)) ? grade : 'g4'}
+            perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
+            roster={qsRoster}
+            defaultCat={openCat || (activeCategories.find(c => c.id === 'word') ? 'word' : (activeCategories[0] && activeCategories[0].id)) || 'word'}
+            onClose={() => setWsGenOpen(false)}
+            onCreate={handleWordStudy}
+          />}
           {window.GrammarNotesModal && <window.GrammarNotesModal
             open={gnGenOpen}
             categories={activeCategories}

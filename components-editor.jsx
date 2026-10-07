@@ -1701,6 +1701,293 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
 }
 
 /* 真正產生各個單元的資料。抽出來是為了好測。 */
+/* ══ v482 📘 一鍵出 Word Study ════════════════════════════════════════════
+   Alan：「老師都會出給一個 story 要學生圈出這次的 word study 的單字，
+   但不一定會給有幾個——主要就是要知道這次的 word study 是什麼並且找出來。」
+   老師只要打「這次教什麼」（＋選填課本的 spelling list），剩下全自動。 */
+const WS_KINDS = [
+  { id: 'lesson',  zh: '📘 先學一下', note: '用一句話講清楚這次的規則，學完才解鎖練習' },
+  { id: 'circle',  zh: '⭕ 圈出來',   note: '一列字裡，把符合規則的點出來（課本的第一題）' },
+  { id: 'sort',    zh: '🗂 分一分',   note: '照子類分籃：long a／long i…、-ty／-ity／-ic／-ment…' },
+  { id: 'mcq',     zh: '📝 選擇題',   note: '四選一「哪一個符合規則」（康橋測驗頁就是這種）' },
+  { id: 'build',   zh: '✏️ 加字尾',   note: '看意思寫出加了字尾的字（只有字首字尾類才有）' },
+  { id: 'story',   zh: '📖 短文找字', note: '讀一篇短文，把這次的 word study 單字找出來' },
+];
+
+function WordStudyModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const [topic, setTopic] = useS('');
+  const [words, setWords] = useS('');
+  const [title, setTitle] = useS('');
+  const [cat, setCat]     = useS(defaultCat || 'word');
+  const [grade, setGrade] = useS(defaultGrade || 'g4');
+  const [note, setNote]   = useS('');
+  const [picked, setPicked] = useS(WS_KINDS.reduce((a, k) => (a[k.id] = true, a), {}));
+  const [busy, setBusy]   = useS(0);
+  const [err, setErr]     = useS('');
+  const [res, setRes]     = useS(null);
+  const [assign, setAssign] = useS(true);
+  const [due, setDue]     = useS('');
+  const [who, setWho]     = useS([]);
+
+  useE(() => {
+    if (!open) return;
+    setTopic(''); setWords(''); setTitle(defaultTitle || ''); setCat(defaultCat || 'word');
+    setGrade(defaultGrade || 'g4'); setNote(''); setBusy(0); setErr(''); setRes(null);
+    setPicked(WS_KINDS.reduce((a, k) => (a[k.id] = true, a), {}));
+    setAssign(true); setWho([]);
+    const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+    setDue(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  }, [open]);
+  if (!open) return null;
+
+  const run = async () => {
+    if (!topic.trim()) { setErr('先打「這次教什麼」，例如 Syllable Pattern VCe'); return; }
+    setErr(''); setBusy(0.0001);
+    try {
+      const pack = await window.aiMakeWordStudy({ topic: topic.trim(), words, grade, teacherNote: note,
+        onProgress: (d) => setBusy(d) });
+      setRes(pack);
+      if (!title.trim()) setTitle(pack.topic || topic.trim());
+    } catch (e) { setErr((e && e.message) || 'Word Study 題目產生失敗，請再試一次。'); }
+    setBusy(0);
+  };
+
+  const kinds = WS_KINDS.filter(k => picked[k.id]).map(k => k.id);
+  const built = res ? window.wsBuildItems({ pack: res, title: (title.trim() || res.topic || topic.trim()), kinds }) : [];
+
+  /* ⚠ 不要寫成 `const AssignBox = () => …` 再用 <AssignBox/>（v380 踩過）：
+     每次重繪都是新的元件型別，React 會整段拆掉重掛，勾第二個學生時第一個就點不到。 */
+  const assignBox = () => (
+    <div className={'qs-assign' + (assign ? ' on' : '')}>
+      <label className="qs-assign-head">
+        <input type="checkbox" checked={assign} onChange={e => setAssign(e.target.checked)}/>
+        <span>建立後<b>整組直接指派</b></span>
+      </label>
+      {assign && (perStudent ? (
+        <div className="qs-who">
+          <div className="qs-who-bar">
+            <span>指派給（{who.length}/{(roster || []).length}）</span>
+            <button type="button" onClick={() => setWho((roster || []).map(r => r.email))}>全選</button>
+            <button type="button" onClick={() => setWho([])}>全不選</button>
+          </div>
+          <div className="qs-who-list">
+            {(roster || []).map(r => (
+              <label key={r.email} className={'qs-who-item' + (who.indexOf(r.email) >= 0 ? ' on' : '')}>
+                <input type="checkbox" checked={who.indexOf(r.email) >= 0}
+                  onChange={e => setWho(w => e.target.checked ? w.concat(r.email) : w.filter(x => x !== r.email))}/>
+                {r.name || r.email}
+              </label>
+            ))}
+            {!(roster || []).length && <span className="qs-who-empty">名單還沒載入</span>}
+          </div>
+        </div>
+      ) : (
+        <div className="qs-due">
+          <label>截止日</label>
+          <input type="date" value={due} onChange={e => setDue(e.target.value)}/>
+          <span className="qs-due-n">整組會出現在學生的「今天的任務」</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={'modal wide' + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>📘 一鍵出 Word Study</h3>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {!res ? (
+            <>
+              <div className="field-help" style={{ marginBottom: 12 }}>
+                打上<b>這次教什麼</b>就好——VCe 音節、後綴 -ty/-ity/-ic/-ment、母音組合 ai/ay/ea…都可以。
+                <br/>課本的 spelling list 貼上來的話，出來的題目會直接用那些字。
+                <br/><b>答案全部由程式檢查</b>（是不是 VCe、有沒有那個字尾、含不含那個母音組合），不是靠 AI 說了算。
+              </div>
+              <div className="field">
+                <label className="field-label">這次教什麼</label>
+                <input value={topic} onChange={e => setTopic(e.target.value)}
+                  placeholder="例：Syllable Pattern VCe／Suffixes -ty, -ity, -ic, -ment／Vowel Teams ai, ay, ea, ee"/>
+              </div>
+              <div className="field">
+                <label className="field-label">課本的 spelling list（選填）</label>
+                <textarea rows={4} value={words} onChange={e => setWords(e.target.value)}
+                  placeholder="一行一個或用逗號分開：cooperate, acquire, envelope, participate…"/>
+                <div className="field-help">不填也可以，AI 會自己挑這個年級讀得懂的字。</div>
+              </div>
+              <div className="gn-row3">
+                <div className="field">
+                  <label className="field-label">年級</label>
+                  <select value={grade} onChange={e => setGrade(e.target.value)}>
+                    {['g1','g2','g3','g4','g5','g6'].map(x => <option key={x} value={x}>{x.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">放在哪一類</label>
+                  <select value={cat} onChange={e => setCat(e.target.value)}>
+                    {(categories || []).map(c => <option key={c.id} value={c.id}>{c.zh || c.titleZh || c.title || c.id}</option>)}
+                  </select>
+                </div>
+              </div>
+              <window.AiNoteBox value={note} onChange={setNote}
+                placeholder="例：只用課本那 20 個字／短文請寫學校生活"/>
+            </>
+          ) : (
+            <>
+              <div className="field-help" style={{ marginBottom: 12 }}>
+                <b>{res.rule}</b><br/>{res.ruleZh}
+                <br/>程式怎麼判：<code>{res.check.kind}{res.check.arg ? `(${res.check.arg})` : ''}</code>
+                　符合的 {res.yes.length} 個、不符合的 {res.no.length} 個
+                {res.story && <>　短文裡要找 <b>{res.story.answers.length}</b> 個字</>}
+              </div>
+              <div className="field">
+                <label className="field-label">這一組叫什麼</label>
+                <input value={title} onChange={e => setTitle(e.target.value)}/>
+              </div>
+              <div className="field">
+                <label className="field-label">要出哪些</label>
+                <div className="qs-kinds">
+                  {WS_KINDS.map(k => {
+                    const can = k.id === 'build' ? (res.build || []).length >= 2
+                      : k.id === 'sort' ? (res.groups || []).length >= 2
+                      : k.id === 'story' ? !!res.story
+                      : k.id === 'mcq' ? (res.mcq || []).length >= 2
+                      : k.id === 'circle' ? (res.yes.length >= 4 && res.no.length >= 4) : true;
+                    return (
+                      <label key={k.id} className={'qs-kind' + (picked[k.id] && can ? ' on' : '') + (can ? '' : ' off')}>
+                        <input type="checkbox" disabled={!can} checked={!!picked[k.id] && can}
+                          onChange={e => setPicked(x => ({ ...x, [k.id]: e.target.checked }))}/>
+                        <span className="qs-kind-zh">{k.zh}</span>
+                        <span className="qs-kind-note">{can ? k.note : '這一次出不了：' + k.note}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="field-help">會建立 <b>{built.length}</b> 個單元：{built.map(b => b.title.replace(/^.*· /, '')).join('、') || '（還沒勾）'}</div>
+              {assignBox()}
+            </>
+          )}
+          {err && <div className="gr-warn">{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={onClose}>取消</button>
+          {!res
+            ? <button className="btn primary" disabled={!topic.trim() || !!busy} onClick={run}>
+                {busy ? `出題中…（${Math.min(3, Math.ceil(busy))}/3）` : '✨ 出題 →'}
+              </button>
+            : <>
+                <button className="btn ghost" onClick={() => { setRes(null); setErr(''); }}>↻ 重出一次</button>
+                <button className="btn primary" disabled={!built.length}
+                  onClick={() => { onCreate({ items: built, cat,
+                    assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null }); onClose(); }}>
+                  建立 {built.length} 個單元 →
+                </button>
+              </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══ v482 📘 Word Study：把驗過的產出組成單元 ══════════════════════════════
+   全部沿用既有題型（圈選／分一分／選擇題／打字／教學卡），
+   不新增題型——v414 的教訓：新題型要補 AUTO_STAR_KIND、QM_TYPE_WORDS…漏一個就沒星星。
+   ⭐ 這裡的互動教學是**程式直接拼的**，不是 AI 生的：規則與字都已經被程式驗過，
+     所以不會有「教錯」的風險（跟一鍵出文法最大的差別）。 */
+function wsBuildItems({ pack, title, kinds }) {
+  const stamp = Date.now();
+  const rnd = () => Math.random().toString(36).slice(2, 6);
+  const g = title;
+  const base = { group: g, zh: '', duration: '' };
+  const out = [];
+  const on = (k) => (kinds || []).indexOf(k) >= 0;
+  const p = pack || {};
+
+  // 📘 先學一下：規則＋例子＋（有分組就）分一分一步
+  if (on('lesson') && p.rule) {
+    const ex = (p.yes || []).slice(0, 2).map(w => ({ en: w, hl: [w], zh: '' }));
+    const steps = [{ kind: 'learn', say: (p.ruleZh || p.rule).slice(0, 60), examples: ex.length ? ex : [{ en: (p.yes || [''])[0] || '', hl: [], zh: '' }] }];
+    if ((p.groups || []).length >= 2) {
+      steps.push({ kind: 'sort', q: '把這些字分到正確的地方',
+        groups: p.groups.slice(0, 3).map(x => ({ label: x.label, items: x.words.slice(0, 3) })), why: p.ruleZh || '' });
+    } else if ((p.yes || []).length && (p.no || []).length) {
+      steps.push({ kind: 'pick', q: `Which word follows the pattern?`,
+        options: [p.yes[0], p.no[0], p.no[1] || p.no[0]].filter((v, i, a) => v && a.indexOf(v) === i),
+        answer: 0, why: p.ruleZh || '' });
+    }
+    if (steps.length >= 2) {
+      out.push({ ...base, id: 'ws' + stamp + 'ls' + rnd(), type: 'lesson', order: 0,
+        title: `${g} · 先學一下`, zh: `互動教學 · ${steps.length} 步 · 學完才能開始練習`,
+        srcTopic: p.topic || g, srcNotes: p.rule || '',
+        lead: p.ruleZh || '', steps, outro: '' });
+    }
+  }
+  const lsId = (out[0] && out[0].type === 'lesson') ? out[0].id : null;
+  const req = lsId ? { requires: lsId } : {};
+
+  // ⭕ 圈出來：一列五個字，把符合規則的點出來（課本 p5 那張表）
+  if (on('circle') && (p.yes || []).length >= 4 && (p.no || []).length >= 4) {
+    const rows = [];
+    const ys = p.yes.slice(0, 10), ns = p.no.slice(0, 10);
+    for (let i = 0; i < Math.min(5, Math.ceil((ys.length + ns.length) / 5)); i++) {
+      const pickY = ys.slice(i * 2, i * 2 + 2), pickN = ns.slice(i * 3, i * 3 + 3);
+      const row = [...pickY, ...pickN];
+      if (pickY.length < 1 || row.length < 4) break;
+      // 洗一下，不然答案永遠在前面兩格
+      for (let j = row.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); [row[j], row[k]] = [row[k], row[j]]; }
+      rows.push({ id: 'c' + stamp + i + rnd(), sentence: row.join(' '), answers: pickY, answer: pickY[0], explain: p.rule });
+    }
+    if (rows.length >= 2) out.push({ ...base, id: 'ws' + stamp + 'ci' + rnd(), type: 'circle-answer', order: 1, ...req,
+      title: `${g} · 圈出來`, zh: `${rows.length} 題 · ${p.rule}`,
+      circleInstruction: `Tap every word that follows the pattern. ${p.rule}`,
+      circleQuestions: rows });
+  }
+
+  // 🗂 分一分（課本 p8／p12 的分類）
+  if (on('sort') && (p.groups || []).length >= 2) {
+    const ws = [];
+    p.groups.forEach(x => x.words.forEach(w => ws.push({ id: 'w' + stamp + ws.length + rnd(), word: w, category: x.label })));
+    if (ws.length >= 4) out.push({ ...base, id: 'ws' + stamp + 'so' + rnd(), type: 'word-sort', order: 2, ...req,
+      title: `${g} · 分一分`, zh: `${ws.length} 個字 · Sort the words`,
+      sortCategories: p.groups.map(x => x.label), sortWords: ws });
+  }
+
+  // 📝 選擇題（課本 p7／p13）
+  if (on('mcq') && (p.mcq || []).length >= 2) {
+    out.push({ ...base, id: 'ws' + stamp + 'mc' + rnd(), type: 'quiz', order: 3, ...req,
+      title: `${g} · 選擇題`, zh: `${p.mcq.length} 題 · 哪一個符合規則？`,
+      questions: p.mcq.map((q, i) => ({ id: 'q' + stamp + i + rnd(), q: q.q, options: q.options, answer: q.answer, explain: p.rule })) });
+  }
+
+  // ✏️ 加詞綴：看定義寫出那個字（課本 p8 下半）
+  if (on('build') && (p.build || []).length >= 2) {
+    out.push({ ...base, id: 'ws' + stamp + 'bd' + rnd(), type: 'type-answer', variant: 'fill', order: 4, ...req,
+      title: `${g} · 加字尾`, zh: `${p.build.length} 題 · 看意思寫出正確的字`,
+      instruction: 'Write the word that matches the meaning.',
+      pairs: p.build.map((b, i) => ({ id: 'p' + stamp + i + rnd(),
+        prompt: `${b.clue}  (${b.base} + ?)`, answer: b.answer, accept: [b.answer], explain: p.rule })) });
+  }
+
+  // 📖 短文找字（Alan 自己出的那一張：給一篇文章，把這次的 word study 單字找出來）
+  if (on('story') && p.story && (p.story.answers || []).length >= 4) {
+    const st = p.story;
+    const sents = String(st.text).split(/(?<=[.!?])\s+/).filter(Boolean);
+    const rows = sents.map((sen, i) => {
+      const ans = st.answers.filter(a => (' ' + sen.toLowerCase() + ' ').indexOf(a.toLowerCase()) >= 0);
+      return ans.length ? { id: 'p' + stamp + i + rnd(), sentence: sen, answers: ans, answer: ans[0], explain: p.rule } : null;
+    }).filter(Boolean);
+    if (rows.length >= 2) out.push({ ...base, id: 'ws' + stamp + 'st' + rnd(), type: 'circle-answer', order: 5, ...req,
+      title: `${g} · 短文找字`, zh: `${st.answers.length} 個字 · ${st.title || 'Find the words'}`,
+      circleInstruction: `Read the passage and tap every word that follows the pattern. ${p.rule}`,
+      passage: st.text, circleQuestions: rows });
+  }
+  return out;
+}
+
 function qsBuildItems({ words, title, kinds, ai, story, sense }) {
   const aiOf = (term) => (ai || []).find(r => r.term === term) || null;
   const rnd = () => Math.random().toString(36).slice(2, 6);
@@ -6857,4 +7144,5 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background }) 
   return out;
 }
 
-Object.assign(window, { GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal });   // v466：排複習
+Object.assign(window, { GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+  WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

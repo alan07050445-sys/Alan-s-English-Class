@@ -1687,6 +1687,178 @@ ${_AI_MINIFY}`;
      配對是「字 ↔ 它的定義」，這一種是「同一個字的好幾個語意裡，挑出在這個語境用的那一個」。
      干擾項如果換成別的單字的定義，就變回配對題了，考點整個不見。
    ══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   v482 📘 一鍵出 Word Study（Alan 2026-10-07 給了康橋課本第 5~13 頁）
+   ──────────────────────────────────────────────────────────────────────────
+   康橋每一課都有 Word Study，主題每次不同（VCe 音節、後綴 -ty/-ity/-ic/-ment、
+   母音組合 ai/ay/ea/ee…），但**題型永遠是那幾種**：
+     ① 從一張字表裡圈出符合規則的字（p5）
+     ② 把字分到子類（long a / long i…、-ty / -ity / -ic / -ment、ai / ay / ea…）（p8、p12）
+     ③ 四選一「哪個字符合規則」（p7、p13）
+     ④ 看定義寫出加了後綴的字（p8）／base word ↔ word with suffix 對照（p9）
+     ⑤ 讀一篇短文，把符合規則的字找出來（Alan 自己出的那一張）
+
+   ⭐ 這個題型跟文法最大的不同：**答案程式驗得出來**。
+     「impose 是不是 VCe」「enjoyment 是不是 -ment」「meadow 有沒有 ea」
+     都是拼字規則，不需要靠 AI 的判斷。所以這裡的把關比文法那邊硬得多——
+     AI 只負責想題材（挑哪些字、寫短文），**是非對錯一律程式說了算**。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 規則檢查器。AI 回傳 check:{kind, arg}，程式自己判每個字符不符合。
+   判不出來的（kind 不認得）就整份退回——寧可不出，也不要出錯的答案。 */
+const WS_CHECKS = {
+  /* VCe：母音-子音-e 結尾，而且那個母音前面不能再有母音
+     （pause 的 au 是母音組合，不是 VCe；tissue 的 ue 也不是）。
+     ⚠ w/x/y 不算這裡的子音（owe、axe、eye 都不是課本要的那種）。 */
+  vce: (w) => /[^aeiou][aeiou][^aeiouwxy]e$/i.test(String(w || '').trim()),
+  // 後綴：-ty / -ity / -ic / -ment / -ful / -less…
+  suffix: (w, arg) => {
+    const a = String(arg || '').replace(/^-/, '').toLowerCase();
+    const x = String(w || '').trim().toLowerCase();
+    return !!a && x.length > a.length && x.endsWith(a);
+  },
+  // 字首：un- / re- / pre-…
+  prefix: (w, arg) => {
+    const a = String(arg || '').replace(/-$/, '').toLowerCase();
+    const x = String(w || '').trim().toLowerCase();
+    return !!a && x.length > a.length && x.startsWith(a);
+  },
+  // 母音組合／雙字母：ai / ay / ea / ee / ei / ie / oa / ue / aw / oo…
+  team: (w, arg) => {
+    const a = String(arg || '').toLowerCase();
+    return !!a && String(w || '').toLowerCase().indexOf(a) >= 0;
+  },
+  // 子音連綴／雙字母子音：ch / sh / th / ph / ck…（位置不限）
+  digraph: (w, arg) => WS_CHECKS.team(w, arg),
+};
+function wsCheck(word, check) {
+  const fn = WS_CHECKS[String((check && check.kind) || '').toLowerCase()];
+  return fn ? !!fn(word, check && check.arg) : null;   // null＝這條規則程式不會判
+}
+
+const WS_SYS = `You design a Word Study worksheet for Taiwanese elementary students,
+in the style of a Kang Chiao (康橋) textbook Word Study page.
+Output ONLY JSON:
+{"topic":"","rule":"","ruleZh":"","check":{"kind":"vce|suffix|prefix|team|digraph","arg":""},
+ "groups":[{"label":"","words":[""]}],
+ "yes":[""],"no":[""],
+ "mcq":[{"q":"","options":["","","",""],"answer":0}],
+ "build":[{"clue":"","base":"","answer":""}],
+ "story":{"title":"","text":""}}
+RULES
+- check: how a computer can test the pattern. "vce" needs no arg. For "suffix"/"prefix" the arg is
+  the affix itself ("-ment", "un-"). For "team"/"digraph" the arg is the letters ("ai", "ea", "ch").
+  ⚠ If the topic needs MORE than one affix or team (e.g. "-ty, -ity, -ic, -ment"), still pick ONE
+  for "check" — the groups below carry the rest.
+- rule: ONE sentence of simple English a 9-year-old reads, explaining the pattern.
+- ruleZh: the same thing in spoken Traditional Chinese, ≤30 characters, keeping the English terms in English.
+- groups: 2-4 sub-groups of the pattern, each with 3-5 real words that belong ONLY to that group.
+  (long a / long i / long o / long u … or -ty / -ity / -ic / -ment … or ai / ay / ea / ee …)
+- yes: 8-12 words that DO follow the pattern. no: 8-12 that clearly do NOT.
+  Mix them from everyday school words a 9-year-old meets.
+- mcq: 4-6 questions. q is one short English question ("Which word has the VCe pattern?").
+  options: four real words where EXACTLY ONE follows the pattern. answer: 0-based index.
+- build: 4-6 items, only when the pattern is an affix. clue = the meaning in simple English
+  ("relating to history"), base = the base word ("history"), answer = base + affix ("historic").
+  If the pattern is not an affix, return an empty array.
+- story: ONE short passage (60-110 words) a 9-year-old enjoys, containing 6-10 words that follow
+  the pattern, spread across the whole passage. Give it a short title.
+  ⚠ Every word in the passage must be spelled correctly and the English must be natural.
+- Everything the student sees is ENGLISH. Only "ruleZh" is Chinese.
+${_AI_MINIFY}`;
+
+/* 程式把 AI 的產出整個驗一遍。AI 只負責「想題材」，對錯一律程式說了算。 */
+function wsValidPack(x) {
+  const str = (v) => String(v == null ? '' : v).trim();
+  const words = (a) => (Array.isArray(a) ? a : []).map(str).filter(w => /^[A-Za-z][A-Za-z'-]*$/.test(w));
+  const check = { kind: str(x && x.check && x.check.kind).toLowerCase(), arg: str(x && x.check && x.check.arg) };
+  if (!WS_CHECKS[check.kind]) return null;                       // 程式不會判的規則，整份退回
+  const hit = (w) => wsCheck(w, check) === true;
+
+  const rule = str(x && x.rule), ruleZh = _zhTW(str(x && x.ruleZh));
+  if (!rule || _gnCJK.test(rule)) return null;
+
+  // ① 圈出來：符合的留下、不符合的留下，兩邊都要程式驗過
+  const yes = [...new Set(words(x && x.yes).filter(hit))];
+  const no  = [...new Set(words(x && x.no).filter(w => !hit(w)))].filter(w => yes.indexOf(w) < 0);
+
+  // ② 分一分：每個字都要真的符合規則，而且每一籃至少 2 個
+  const groups = (Array.isArray(x && x.groups) ? x.groups : []).map(g => ({
+    label: str(g && g.label).slice(0, 16),
+    words: [...new Set(words(g && g.words).filter(hit))],
+  })).filter(g => g.label && g.words.length >= 2);
+  // 同一個字不可以出現在兩籃（不然分到哪都對）
+  const seenG = new Set();
+  groups.forEach(g => { g.words = g.words.filter(w => { const k = w.toLowerCase(); if (seenG.has(k)) return false; seenG.add(k); return true; }); });
+  const goodGroups = groups.filter(g => g.words.length >= 2).slice(0, 4);
+
+  // ③ 選擇題：四個選項裡**只能有一個**符合規則，而且正解要指對
+  const mcq = (Array.isArray(x && x.mcq) ? x.mcq : []).map(q => {
+    const opts = words(q && q.options);
+    if (opts.length !== 4) return null;
+    if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;
+    const ok = opts.map(hit);
+    if (ok.filter(Boolean).length !== 1) return null;            // 只能有一個對
+    const ai2 = ok.indexOf(true);
+    const qq = str(q && q.q);
+    return qq && !_gnCJK.test(qq) ? { q: qq, options: opts, answer: ai2 } : null;
+  }).filter(Boolean);
+
+  // ④ 加字首字尾：答案一定要真的等於「base ＋ 那個詞綴」才收
+  const build = (Array.isArray(x && x.build) ? x.build : []).map(b => {
+    const clue = str(b && b.clue), base = str(b && b.base), ans = str(b && b.answer);
+    if (!clue || !base || !ans || _gnCJK.test(clue + base + ans)) return null;
+    if (!hit(ans)) return null;
+    if (ans.toLowerCase() === base.toLowerCase()) return null;
+    return { clue, base, answer: ans };
+  }).filter(Boolean);
+
+  // ⑤ 短文找字：程式自己從短文裡找出符合的字＝答案不可能錯
+  const st = x && x.story;
+  const text = str(st && st.text);
+  let story = null;
+  if (text && !_gnCJK.test(text)) {
+    const toks = text.split(/\s+/).map(_GN_TOK).filter(Boolean);
+    const found = [...new Set(toks.filter(hit).map(w => w.toLowerCase()))];
+    // 只留「整篇只出現一次」的（學生是一個字一個字點的，出現兩次就說不準點哪個）
+    const once = found.filter(w => toks.filter(t => t.toLowerCase() === w).length === 1);
+    const n = toks.length;
+    if (once.length >= 4 && n >= 40 && n <= 160) {
+      story = { title: str(st.title).slice(0, 40), text, answers: once.slice(0, 10) };
+    }
+  }
+
+  const enough = (yes.length >= 4 && no.length >= 4) || goodGroups.length >= 2 || mcq.length >= 2 || !!story;
+  if (!enough) return null;
+  return { topic: str(x && x.topic).slice(0, 60), rule, ruleZh, check,
+           yes: yes.slice(0, 12), no: no.slice(0, 12), groups: goodGroups, mcq: mcq.slice(0, 8), build: build.slice(0, 8), story };
+}
+
+async function aiMakeWordStudy({ topic, words = '', grade = 'g4', teacherNote = '', onProgress } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const list = String(words || '').split(/[\n,、，]+/).map(w => w.trim()).filter(Boolean).slice(0, 40);
+  const base = `LEVEL: ${band.label}\n${band.note}\n\n` +
+    `WORD STUDY TOPIC: ${String(topic || '').trim()}\n` +
+    _aiTeacherNote(teacherNote) +
+    (list.length ? `The teacher's own spelling list for this lesson — use these words first, and add more of your own if you need:\n${list.join(', ')}\n` : '');
+  let last = null, feedback = '';
+  for (let round = 0; round < 3; round++) {
+    if (onProgress) onProgress(round + 1, 3);
+    let raw;
+    try { raw = await _gnCall(WS_SYS, base + feedback, 3000); } catch (e) { last = e; continue; }
+    const pack = wsValidPack(raw);
+    if (pack) return pack;
+    /* 跟 v480 同一個道理：擋掉就要講原因，不然重試只是再犯一次。 */
+    feedback = '\n\nYour previous answer was REJECTED by a checker. Common reasons:\n' +
+      '- "check" was missing or not one of vce / suffix / prefix / team / digraph\n' +
+      '- a word you put in "yes" or in a group does NOT actually follow the pattern\n' +
+      '- an MCQ had zero or more than one option following the pattern (exactly one must)\n' +
+      '- the story had fewer than 4 pattern words that appear exactly once\n' +
+      'Check every single word against the pattern yourself before answering.';
+  }
+  throw new Error('Word Study 題目產生失敗' + _aiUpstreamNote(last));
+}
+
 const AI_SENSE_SYS = `You write "which meaning is it here?" vocabulary questions for Taiwanese
 elementary students, exactly like a Kang Chiao formative assessment.
 Output ONLY a JSON array: [{"word":"","passage":"","title":"","q":"","options":["","","",""],"answer":0,"explain":""}]
@@ -6330,6 +6502,7 @@ Object.assign(window, {
   qsKindsInGroup,                              // v475：這一組已經有哪些題型（只補漏掉的）
   mxSmartLine,                                 // v477：吉祥物看情況說話
   aiMakeVocabSense, qsValidSense,              // v468 康橋：字義選擇題
+  aiMakeWordStudy, wsValidPack, wsCheck, WS_CHECKS,   // v482 📘 一鍵出 Word Study
   // Weekly Report
   buildWeeklyReport, formatReportAsText,
 });
