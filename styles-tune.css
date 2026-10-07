@@ -3787,6 +3787,21 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .edit-make-btn.gn    { border-color: rgba(214,131,60,.5); }
 .edit-make-btn.rc    { border-color: rgba(110,160,200,.5); }
 .edit-banner-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.12); }
+
+/* 🔴 v474：上面那一組顏色是給**深色的老師編輯列**用的（白字配深底）。
+   v454 的「在這一組再出一份題目」把同一組 class 搬進**白底的彈窗**裡
+   → 白字配白底，整個看不見（Alan：「怎麼是白色字體，完全看不到」）。
+   ⚠ 同一組 class 用在兩種底色上，就一定要分開寫，不能只靠透明度。 */
+.modal .edit-make-btn {
+  border-color: var(--border); background: var(--surface-2, #FAF7F0); color: var(--ink);
+}
+.modal .edit-make-btn:hover { background: #F2EADA; border-color: #C9A84C; }
+.modal .edit-make-btn em { color: var(--ink-muted); }
+.modal .edit-make-btn.quick { border-color: rgba(201,168,76,.75); }
+.modal .edit-make-btn.gn    { border-color: rgba(214,131,60,.75); }
+.modal .edit-make-btn.rc    { border-color: rgba(110,160,200,.75); }
+/* 彈窗比編輯列窄，三欄會擠成一團 */
+@media (max-width: 760px) { .modal .edit-make { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .edit-make { grid-template-columns: 1fr; } }
 
 /* v442：一鍵出單字的難度分級（G1–G2／G3–G4／G5–G6） */
@@ -4097,3 +4112,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .gnl-tl-ico, .gnl-ftab, .gnl-bar { transition: none !important; }
   .gnl-word.got { background-size: 100% 100%; }
 }
+
+/* v474：整組刪掉——收不回來的動作要長得不一樣，不會跟旁邊的手滑按錯 */
+.qm-grp-ghost.danger { color: #C62828; border-color: rgba(198,40,40,.4); }
+.qm-grp-ghost.danger:hover { background: #FBEAEA; border-color: #C62828; }

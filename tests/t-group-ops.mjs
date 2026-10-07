@@ -91,11 +91,16 @@ ok('選單有整組設作業／取消作業', /整組設為作業/.test(qm) && /
 ok('選單有整組沿用到其他週', /整組沿用到其他週/.test(qm));
 ok('沿用視窗認得「整組」', /copyItem\.__group/.test(qm));
 ok('⭐ 整組沿用可以順便設成作業', /到了那一週也直接設成作業/.test(qm));
-ok('app.jsx 有接上三個新 handler', /onSetHomeworkMany=\{handleSetHomeworkMany\}/.test(app) && /onCopyGroupToWeeks=\{\(items/.test(app) && /onRegenGroup=\{\(catId, name\)/.test(app));
+/* ⚠ v474 起 onRegenGroup 多收第三個參數 gItems（本來收了沒用），
+   所以不要比對完整簽名——要守的是「有沒有接上」。 */
+ok('app.jsx 有接上三個新 handler', /onSetHomeworkMany=\{handleSetHomeworkMany\}/.test(app) && /onCopyGroupToWeeks=\{\(items/.test(app) && /onRegenGroup=\{\(catId, name/.test(app));
 
 console.log('\n【5】在同一組底下再出一份題目');
 ok('有「在這一組再出一份題目」', /在這一組再出一份題目/.test(qm));
-ok('⭐ 會先問要出哪一種', /再出一份題目 <em>加進/.test(app));
+/* v474（Alan：「這份很明顯就是單字，幹嘛還要選？」）：認得出是單字組／文法組
+   就直接開那一個生成視窗；這個選單只留給真的認不出來的組。 */
+ok('⭐ 認不出來時才問要出哪一種', /再出一份題目 <em>加進/.test(app) && /pick: true/.test(app));
+ok('⭐ 認得出來就不要問（而且內容先填好）', /setQuickSetOpen\(true\);\s*\n\s*return;/.test(app));
 ok('⭐ 三個一鍵生成都收得到「標題先填好」', (editor.match(/defaultTitle/g) || []).length >= 6);
 ok('標題就是那一組的名字（出來才會落在同一組）', /defaultTitle=\{regenFor \? regenFor\.name : ''\}/.test(app));
 ok('分類也跟著那一組', /\(regenFor && regenFor\.catId\) \|\| openCat/.test(app));

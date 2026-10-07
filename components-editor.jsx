@@ -1090,7 +1090,7 @@ function grBuildItems({ tense, zh, lesson, A, B, check }) {
   return out;
 }
 
-function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, defaultTitle, onClose, onCreate }) {
+function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, perStudent, defaultGrade, defaultTitle, defaultText, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [text, setText]   = useS('');
   const [title, setTitle] = useS('');
@@ -1116,7 +1116,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [due, setDue]       = useS('');
   const [who, setWho]       = useS([]);       // 只有 perStudent 模式用得到
   useE(() => {
-    if (open) { setText(''); setTitle(defaultTitle || '');   /* v454：在同一組再出一份＝名字先填好 */ setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
+    if (open) { setText(defaultText || '');   /* v474：連現成的單字也先填好，不用再貼一次 */ setTitle(defaultTitle || '');   /* v454：在同一組再出一份＝名字先填好 */ setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
@@ -5259,7 +5259,7 @@ async function gnFileToImage(file) {
   return { media_type: 'image/jpeg', data: url.split(',')[1], preview: url };
 }
 
-function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, onClose, onCreate }) {
+function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, defaultText, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [title, setTitle]   = useS('');
   const [text, setText]     = useS('');
@@ -5317,7 +5317,7 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 
   useE(() => {
     if (!open) return;
-    setTitle(defaultTitle || ''); setText(''); setImgs([]); setCat(defaultCat || 'grammar'); setGrade(defaultGrade || 'g4');   // v454
+    setTitle(defaultTitle || ''); setText(defaultText || '');   /* v474：原本的教學重點先填好 */ setImgs([]); setCat(defaultCat || 'grammar'); setGrade(defaultGrade || 'g4');   // v454
     setNMcq(8); setNFill(8); setNTr(5); setNRw(5); setBusy(null); setErr(''); setRes(null); setTab('lesson'); setLsBusy(false);
     runRef.current++;
     setAssign(true); setWho([]);

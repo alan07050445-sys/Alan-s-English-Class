@@ -785,7 +785,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -1444,6 +1444,19 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                           onClick={() => { setGrpMenu(null); onReviewGroup(cat.id, g.name, g.items); }}
                           title="用同一批單字／同一個文法重點重出一份不一樣的題目，排到之後的某一週當複習">
                           🔁 排一份複習到別週…
+                        </button>
+                      )}
+                      {/* v474（Alan：「整組無法直接刪掉」）：整組刪掉。
+                          ⚠ 刪掉是收不回來的，所以要問清楚「刪哪一組、幾個單元」，
+                            而且刻意排在最後面、用紅色，不會跟上面那些手滑按錯。 */}
+                      {onDeleteGroup && (
+                        <button className="qm-grp-ghost danger"
+                          onClick={() => {
+                            if (!confirm(`刪掉「${g.name}」整組 ${g.items.length} 個單元？\n\n學生做過的紀錄會留著，但這些單元會從這一週消失，而且救不回來。`)) return;
+                            setGrpMenu(null); onDeleteGroup(g.name, g.items);
+                          }}
+                          title="把這一組所有單元從這一週刪掉">
+                          🗑 整組刪掉
                         </button>
                       )}
                     </div>

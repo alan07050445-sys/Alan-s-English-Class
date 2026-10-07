@@ -5470,10 +5470,37 @@ English: Write a better full Story Mountain version keeping the student's main i
 /* 這一組的單字從哪來：單字卡本來就存了 term / zh / example，重出題目要的全都在。 */
 function reviewWordsOf(items) {
   const fc = (items || []).find(it => it && it.type === 'flashcard' && (it.cards || []).length);
-  if (!fc) return [];
-  return (fc.cards || [])
-    .map(c => ({ term: String(c.term || '').trim(), zh: String(c.zh || '').trim(), example: String(c.example || '').trim() }))
-    .filter(w => w.term);
+  if (fc) {
+    return (fc.cards || [])
+      .map(c => ({ term: String(c.term || '').trim(), zh: String(c.zh || '').trim(),
+                   example: String(c.example || '').trim(), def: String(c.def || '').trim() }))
+      .filter(w => w.term);
+  }
+  /* 🔴 v474：沒有單字卡也要找得出這一組在教哪些字。
+     v473 之後「複習組」預設就不放單字卡——結果複習組自己不能再排複習，
+     也不能「在這一組再出一份題目」（因為找不到單字）。
+     → 退而從其他單元反推：配對連線有「字＋英文定義」、聽寫有「字＋中文」、
+       短文填空的 [挖空] 也是字。合起來通常比單字卡少一個例句，但夠用。 */
+  const by = new Map();
+  const put = (term, extra) => {
+    const t = String(term || '').trim();
+    if (!t) return;
+    const k = t.toLowerCase();
+    const cur = by.get(k) || { term: t, zh: '', example: '', def: '' };
+    Object.keys(extra || {}).forEach(f => {
+      const v = String(extra[f] == null ? '' : extra[f]).trim();
+      if (!cur[f] && v) cur[f] = v;
+    });
+    by.set(k, cur);
+  };
+  (items || []).forEach(it => {
+    if (!it) return;
+    (it.defPairs || []).forEach(p => { if (p) put(p.word, { def: p.def }); });        // 配對連線
+    (it.spellWords || []).forEach(x => { if (x) put(x.word, { zh: x.zh, example: x.sentence }); });  // 聽寫
+    // 短文填空：[word] 或 [word|提示]
+    String(it.passage || '').replace(/\[([^\]]+)\]/g, (m, w) => { put(String(w).split('|')[0], {}); return m; });
+  });
+  return [...by.values()];
 }
 
 /* v469：文法的複習素材。

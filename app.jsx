@@ -1361,29 +1361,36 @@ function App() {
     saveWeeksSafe(w);
   };
 
-  const handleDeleteItem = (itemId) => {
+  /* v474：整組刪掉也走這裡（Alan：「整組無法直接刪掉」）。
+     ⚠ 不要寫成「迴圈呼叫 handleDeleteItem」——那會存 N 次，
+       而且每次都重讀 weeksRef，中間的 setWeeks 還沒生效就會互相蓋掉。
+       同一份清理邏輯只留一份，一次處理完再存一次。 */
+  const handleDeleteItems = (itemIds) => {
+    const ids = new Set((itemIds || []).filter(Boolean));
+    if (!ids.size) return;
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     Object.keys(w[weekId].items).forEach(k => {
-      w[weekId].items[k] = w[weekId].items[k].filter(it => it.id !== itemId);
+      w[weekId].items[k] = w[weekId].items[k].filter(it => !ids.has(it.id));
     });
     /* 🔴 v460（Alan：「家長說作業都做完了，為什麼還在傳未交提醒」）：
        單元刪掉了，homework 裡那一筆 id 要一起拿掉，不然會變成孤兒。
        網站自己到處都會略過這種孤兒（學生看不到、點不進去），所以在網站上完全看不出問題，
        但 LINE 的作業提醒是照 homework 清單算的 → 變成學生**永遠做不掉**的作業，天天催。
        2026-09-29 查線上資料：六個年級共有 38 份這種幽靈（G1 的 34 份裡有 21 份是）。 */
-    if (w[weekId].homework && w[weekId].homework[itemId]) delete w[weekId].homework[itemId];
+    ids.forEach(id => { if (w[weekId].homework && w[weekId].homework[id]) delete w[weekId].homework[id]; });
     // 別的單元若「需要先學完這一個」，那個鎖也要解掉（不然學生被一個不存在的教學卡鎖住）
     Object.keys(w[weekId].items).forEach(k => {
       (w[weekId].items[k] || []).forEach(it => {
-        if (it && it.requires === itemId) delete it.requires;
-        if (it && it.linkedFlashcardId === itemId) delete it.linkedFlashcardId;
+        if (it && ids.has(it.requires)) delete it.requires;
+        if (it && ids.has(it.linkedFlashcardId)) delete it.linkedFlashcardId;
       });
     });
     setWeeks(w);
     saveWeeksSafe(w);
     setEditorOpen(false);
-    showToast("Item deleted");
+    showToast(ids.size > 1 ? `已刪掉 ${ids.size} 個單元` : 'Item deleted');
   };
+  const handleDeleteItem = (itemId) => handleDeleteItems([itemId]);
 
   // ── Homework handler ────────────────────────────────────
   const handleSetHomework = (itemId, hwData) => {
@@ -1870,7 +1877,28 @@ function App() {
               }))}
               onCopyToWeeks={(item, targetIds) => handleCopyItemToWeeks(catView.id, item, targetIds)}
               onCopyGroupToWeeks={(items, targetIds, due) => handleCopyGroupToWeeks(catView.id, items, targetIds, due)}
-              onRegenGroup={(catId, name) => setRegenFor({ catId, name, pick: true })}
+              /* 🔴 v474（Alan：「這份很明顯就是單字，幹嘛還要選？」
+                     「選完之後我還要再貼一次單字？這太笨了，因為我本來就有單字了啊」）：
+                 看得出這一組在教什麼，就直接開那一個生成視窗，而且把現成的內容先填好。
+                 ⚠ 真的認不出來才退回「要出哪一種」那個選單。 */
+              onDeleteGroup={(gName, gItems) => handleDeleteItems((gItems || []).map(it => it.id))}
+              onRegenGroup={(catId, name, gItems) => {
+                const ws = (window.reviewWordsOf && window.reviewWordsOf(gItems)) || [];
+                if (ws.length >= 2) {
+                  // 單字組：單字表照 QuickSetModal 吃的格式組回去（英文 - 中文 - 例句 - 英文定義）
+                  const text = ws.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
+                  setRegenFor({ catId, name, pick: false, text });
+                  setQuickSetOpen(true);
+                  return;
+                }
+                const gm = (window.reviewGrammarOf && window.reviewGrammarOf(gItems)) || null;
+                if (gm) {
+                  setRegenFor({ catId, name, pick: false, text: gm.notes || '' });
+                  setGnGenOpen(true);
+                  return;
+                }
+                setRegenFor({ catId, name, pick: true });
+              }}
               onReviewGroup={(catId, name, gItems) => setReviewFor({ catId, name, items: gItems })}
               onSetHomeworkMany={handleSetHomeworkMany}
               homework={week.homework || {}}
@@ -2071,6 +2099,7 @@ function App() {
             roster={qsRoster}
             defaultCat={(regenFor && regenFor.catId) || openCat || (activeCategories.find(c => c.id === 'grammar') ? 'grammar' : (activeCategories[0] && activeCategories[0].id)) || 'grammar'}
             defaultTitle={regenFor ? regenFor.name : ''}
+            defaultText={(regenFor && regenFor.text) || ''}      /* v474：原本的教學重點先填好 */
             onClose={() => { setGnGenOpen(false); setRegenFor(null); }}
             onCreate={handleGrammarNotesCreate}
           />}
@@ -2092,6 +2121,7 @@ function App() {
             defaultCat={(regenFor && regenFor.catId) || openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab'}
             defaultGrade={grade}
             defaultTitle={regenFor ? regenFor.name : ''}
+            defaultText={(regenFor && regenFor.text) || ''}      /* v474：現成的單字先填好，不用再貼一次 */
             onClose={() => { setQuickSetOpen(false); setRegenFor(null); }}
             onCreate={handleQuickSet}
           />
