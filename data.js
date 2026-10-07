@@ -1731,29 +1731,48 @@ const WS_CHECKS = {
   // 子音連綴／雙字母子音：ch / sh / th / ph / ck…（位置不限）
   digraph: (w, arg) => WS_CHECKS.team(w, arg),
 };
-function wsCheck(word, check) {
+/* 🔴 v484：一課可以有**好幾個** pattern——康橋的 Word Study 本來就是
+   「Suffixes -ty, -ity, -ic, -ment」「Vowel Teams ai, ay, ea, ee, oa」這種。
+   v482 我逼 AI「只能挑一個」，結果：
+     · 後綴那課只認 -ment → ability／basic／economic 全被當成「不符合」
+     · 母音那課只認 ai → 題目問「ea」但程式照 ai 算答案 → **出了錯的正解**
+   所以 check 改成帶一串 args，符合其中**任何一個**就算。 */
+function _wsArgs(check) {
+  const a = (check && (Array.isArray(check.args) ? check.args : [check.arg])) || [];
+  return a.map(x => String(x || '').trim()).filter(Boolean);
+}
+/* one＝只比這一個 pattern（分籃、題目指名某一個時用）；不給就是「任何一個都算」 */
+function wsCheck(word, check, one) {
   const fn = WS_CHECKS[String((check && check.kind) || '').toLowerCase()];
-  return fn ? !!fn(word, check && check.arg) : null;   // null＝這條規則程式不會判
+  if (!fn) return null;                                 // null＝這條規則程式不會判
+  if (one) return !!fn(word, one);
+  const args = _wsArgs(check);
+  if (!args.length) return !!fn(word, '');              // vce 這種不需要參數
+  return args.some(a => fn(word, a));
 }
 
 const WS_SYS = `You design a Word Study worksheet for Taiwanese elementary students,
 in the style of a Kang Chiao (康橋) textbook Word Study page.
 Output ONLY JSON:
-{"topic":"","rule":"","ruleZh":"","check":{"kind":"vce|suffix|prefix|team|digraph","arg":""},
- "groups":[{"label":"","words":[""]}],
+{"topic":"","rule":"","ruleZh":"","check":{"kind":"vce|suffix|prefix|team|digraph","args":[""]},
+ "groups":[{"label":"","arg":"","words":[""]}],
  "yes":[""],"no":[""],
  "mcq":[{"q":"","options":["","","",""],"answer":0}],
  "build":[{"clue":"","base":"","answer":""}],
  "story":{"title":"","text":""}}
 RULES
-- check: how a computer can test the pattern. "vce" needs no arg. For "suffix"/"prefix" the arg is
-  the affix itself ("-ment", "un-"). For "team"/"digraph" the arg is the letters ("ai", "ea", "ch").
-  ⚠ If the topic needs MORE than one affix or team (e.g. "-ty, -ity, -ic, -ment"), still pick ONE
-  for "check" — the groups below carry the rest.
+- check: how a computer can test the pattern. "vce" needs no args.
+  For "suffix"/"prefix", args are the affixes ("-ty", "-ity", "-ic", "-ment").
+  For "team"/"digraph", args are the letter groups ("ai", "ay", "ea", "ee", "oa").
+  ⚠ LIST EVERY affix or team the topic covers — a word counts as following the pattern when it
+  matches ANY of them. Missing one makes the whole worksheet wrong.
 - rule: ONE sentence of simple English a 9-year-old reads, explaining the pattern.
 - ruleZh: the same thing in spoken Traditional Chinese, ≤30 characters, keeping the English terms in English.
-- groups: 2-4 sub-groups of the pattern, each with 3-5 real words that belong ONLY to that group.
+- groups: 2-4 sub-groups, each with 3-5 real words that belong ONLY to that group.
   (long a / long i / long o / long u … or -ty / -ity / -ic / -ment … or ai / ay / ea / ee …)
+  "arg" is which one of your "check" args that group is for ("-ity", "ea"); leave it "" for vce groups.
+- mcq: when a question names ONE affix or team ("Which word has the ea vowel team?"), every option is
+  judged against THAT one only — so exactly one option must have it and the others must not.
 - yes: 8-12 words that DO follow the pattern. no: 8-12 that clearly do NOT.
   Mix them from everyday school words a 9-year-old meets.
 - mcq: 4-6 questions. q is one short English question ("Which word has the VCe pattern?").
@@ -1771,22 +1790,32 @@ ${_AI_MINIFY}`;
 function wsValidPack(x) {
   const str = (v) => String(v == null ? '' : v).trim();
   const words = (a) => (Array.isArray(a) ? a : []).map(str).filter(w => /^[A-Za-z][A-Za-z'-]*$/.test(w));
-  const check = { kind: str(x && x.check && x.check.kind).toLowerCase(), arg: str(x && x.check && x.check.arg) };
+  const check = { kind: str(x && x.check && x.check.kind).toLowerCase(), args: _wsArgs(x && x.check) };
   if (!WS_CHECKS[check.kind]) return null;                       // 程式不會判的規則，整份退回
-  const hit = (w) => wsCheck(w, check) === true;
+  if (check.kind !== 'vce' && !check.args.length) return null;    // 除了 vce，一定要講明是哪些詞綴／字母
+  const hit = (w, one) => wsCheck(w, check, one) === true;
 
   const rule = str(x && x.rule), ruleZh = _zhTW(str(x && x.ruleZh));
   if (!rule || _gnCJK.test(rule)) return null;
 
   // ① 圈出來：符合的留下、不符合的留下，兩邊都要程式驗過
-  const yes = [...new Set(words(x && x.yes).filter(hit))];
+  /* ⚠ 一定要寫成 `w => hit(w)`，不可以直接 `.filter(hit)`——
+     Array.filter 會把「索引」當第二個參數傳進去，而 hit 的第二個參數是
+     「只比哪一個 pattern」→ 第 2 個字以後都拿索引去比，全部判成不符合。 */
+  const yes = [...new Set(words(x && x.yes).filter(w => hit(w)))];
   const no  = [...new Set(words(x && x.no).filter(w => !hit(w)))].filter(w => yes.indexOf(w) < 0);
 
   // ② 分一分：每個字都要真的符合規則，而且每一籃至少 2 個
-  const groups = (Array.isArray(x && x.groups) ? x.groups : []).map(g => ({
-    label: str(g && g.label).slice(0, 16),
-    words: [...new Set(words(g && g.words).filter(hit))],
-  })).filter(g => g.label && g.words.length >= 2);
+  /* 每一籃可以指名自己的 pattern（「-ity」那一籃就只收 -ity 的字）。
+     沒指名就從籃子名稱猜，猜不到才退回「符合任何一個」。 */
+  const groups = (Array.isArray(x && x.groups) ? x.groups : []).map(g => {
+    const lab = str(g && g.label);
+    const one = str(g && g.arg)
+      || check.args.find(a2 => lab.toLowerCase().indexOf(String(a2).replace(/^-|-$/g, '').toLowerCase()) >= 0)
+      || '';
+    return { label: lab.slice(0, 16), arg: one,
+             words: [...new Set(words(g && g.words).filter(w => hit(w, one || undefined)))] };
+  }).filter(g => g.label && g.words.length >= 2);
   // 同一個字不可以出現在兩籃（不然分到哪都對）
   const seenG = new Set();
   groups.forEach(g => { g.words = g.words.filter(w => { const k = w.toLowerCase(); if (seenG.has(k)) return false; seenG.add(k); return true; }); });
@@ -1797,11 +1826,20 @@ function wsValidPack(x) {
     const opts = words(q && q.options);
     if (opts.length !== 4) return null;
     if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;
-    const ok = opts.map(hit);
-    if (ok.filter(Boolean).length !== 1) return null;            // 只能有一個對
-    const ai2 = ok.indexOf(true);
     const qq = str(q && q.q);
-    return qq && !_gnCJK.test(qq) ? { q: qq, options: opts, answer: ai2 } : null;
+    if (!qq || _gnCJK.test(qq)) return null;
+    /* 🔴 v484：**題目問哪一個 pattern，就要照那一個算答案**。
+       v482 只用「符合任何一個」算，實測出現
+       「Which word has the ea vowel team? → straight」——straight 是 ai 不是 ea，正解是錯的。 */
+    const lowQ = ' ' + qq.toLowerCase() + ' ';
+    const named = check.args.filter(a2 => {
+      const bare = String(a2).replace(/^-|-$/g, '').toLowerCase();
+      return bare && (lowQ.indexOf('-' + bare) >= 0 || lowQ.indexOf(' ' + bare + ' ') >= 0 || lowQ.indexOf('"' + bare) >= 0);
+    });
+    if (named.length > 1) return null;                           // 一題問兩種，說不清楚要哪個
+    const ok = opts.map(o => hit(o, named[0]));
+    if (ok.filter(Boolean).length !== 1) return null;            // 只能有一個對
+    return { q: qq, options: opts, answer: ok.indexOf(true) };
   }).filter(Boolean);
 
   // ④ 加字首字尾：答案一定要真的等於「base ＋ 那個詞綴」才收
@@ -1819,7 +1857,7 @@ function wsValidPack(x) {
   let story = null;
   if (text && !_gnCJK.test(text)) {
     const toks = text.split(/\s+/).map(_GN_TOK).filter(Boolean);
-    const found = [...new Set(toks.filter(hit).map(w => w.toLowerCase()))];
+    const found = [...new Set(toks.filter(w => hit(w)).map(w => w.toLowerCase()))];   // ⚠ 同上，不可以直接 .filter(hit)
     // 只留「整篇只出現一次」的（學生是一個字一個字點的，出現兩次就說不準點哪個）
     const once = found.filter(w => toks.filter(t => t.toLowerCase() === w).length === 1);
     const n = toks.length;

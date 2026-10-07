@@ -34,19 +34,19 @@ ok('⭐ sequence 不是（-ence 的母音不長）', !C('sequence', { kind: 'vce
 ok('沒有字尾 e 的都不是', ['teach', 'together', 'Internet', 'bathroom'].every(w => !C(w, { kind: 'vce' })));
 
 console.log('\n【2】其他三種規則');
-ok('⭐ 字尾：-ment', ['enjoyment', 'payment', 'excitement'].every(w => C(w, { kind: 'suffix', arg: '-ment' }))
-   && !C('history', { kind: 'suffix', arg: '-ment' }));
-ok('   -ity 不會把 -ty 的字也算進去', C('community', { kind: 'suffix', arg: '-ity' }) && !C('safety', { kind: 'suffix', arg: '-ity' }));
-ok('   字尾本身不算（"ment" 不是加了 -ment 的字）', !C('ment', { kind: 'suffix', arg: '-ment' }));
-ok('⭐ 母音組合：ea', ['meadow', 'increase', 'appeal'].every(w => C(w, { kind: 'team', arg: 'ea' }))
-   && !C('betray', { kind: 'team', arg: 'ea' }));
-ok('⭐ 字首：un-', C('unhappy', { kind: 'prefix', arg: 'un-' }) && !C('under', { kind: 'prefix', arg: 'in-' }));
+ok('⭐ 字尾：-ment', ['enjoyment', 'payment', 'excitement'].every(w => C(w, { kind: 'suffix', args: ['-ment'] }))
+   && !C('history', { kind: 'suffix', args: ['-ment'] }));
+ok('   -ity 不會把 -ty 的字也算進去', C('community', { kind: 'suffix', args: ['-ity'] }) && !C('safety', { kind: 'suffix', args: ['-ity'] }));
+ok('   字尾本身不算（"ment" 不是加了 -ment 的字）', !C('ment', { kind: 'suffix', args: ['-ment'] }));
+ok('⭐ 母音組合：ea', ['meadow', 'increase', 'appeal'].every(w => C(w, { kind: 'team', args: ['ea'] }))
+   && !C('betray', { kind: 'team', args: ['ea'] }));
+ok('⭐ 字首：un-', C('unhappy', { kind: 'prefix', args: ['un-'] }) && !C('under', { kind: 'prefix', args: ['in-'] }));
 ok('⭐ 不認得的規則回 null（＝程式不會判，整份退回）', C('x', { kind: 'nonsense' }) === null);
 
 console.log('\n【3】AI 的產出整個被程式重驗一次');
 const V = W.wsValidPack;
 const good = { topic: 'VCe', rule: 'A VCe word ends with vowel, consonant, e.', ruleZh: 'VCe 結尾的母音唸長音，e 不發音',
-  check: { kind: 'vce' },
+  check: { kind: 'vce', args: [] },
   groups: [{ label: 'long a', words: ['imitate', 'evaporate', 'fascinate'] },
            { label: 'long i', words: ['survive', 'advertise', 'emphasize'] }],
   yes: ['impose', 'cyclone', 'outside', 'contribute', 'survive', 'advertise'],
@@ -84,11 +84,49 @@ ok('⭐ 只收「整篇只出現一次」的字（出現兩次就不知道要點
 ok('程式不會判的規則整份退回（寧可不出，也不要出錯的答案）', V({ ...good, check: { kind: 'magic' } }) === null);
 ok('規則寫成中文也退回（學生看的是英文）', V({ ...good, rule: '母音子音 e' }) === null);
 ok('加字尾題：答案不等於「base ＋ 詞綴」就丟掉', (() => {
-  const r = V({ topic: 's', rule: 'Add -ment.', ruleZh: '加 -ment', check: { kind: 'suffix', arg: '-ment' },
+  const r = V({ topic: 's', rule: 'Add -ment.', ruleZh: '加 -ment', check: { kind: 'suffix', args: ['-ment'] },
     groups: [], yes: ['enjoyment', 'payment', 'movement', 'agreement'], no: ['history', 'basic', 'safety', 'rarity'],
     mcq: [], build: [{ clue: 'the act of moving', base: 'move', answer: 'movement' },
                      { clue: 'the act of paying', base: 'pay', answer: 'payable' }], story: null });
   return r && r.build.length === 1 && r.build[0].answer === 'movement'; })());
+
+console.log('\n【3.5】v484：一課可以有好幾個 pattern（康橋本來就是這樣出的）');
+/* 🔴 真 AI 實測撈到的兩個問題：
+   ① 主題是「-ty, -ity, -ic, -ment」四個，但只認 -ment
+      → ability／basic／economic 全被當成「不符合」，但它們明明就是這一課的字
+   ② 題目問「ea」，程式卻照「ai」算答案 → **正解是錯的**（straight 不是 ea） */
+const MULTI = { topic: 'Vowel Teams', rule: 'Two vowels make one sound.', ruleZh: '兩個母音發一個音',
+  check: { kind: 'team', args: ['ai', 'ay', 'ea', 'ee', 'oa'] },
+  groups: [{ label: 'ai words', arg: 'ai', words: ['straight', 'campaign', 'acquaint'] },
+           { label: 'ea words', arg: 'ea', words: ['meadow', 'increase', 'appeal'] }],
+  yes: ['straight', 'meadow', 'betray', 'proceed', 'reproach', 'increase', 'appeal', 'array'],
+  no: ['virtue', 'continue', 'revenue', 'marrow', 'acquire', 'module', 'cyclone', 'envelope'],
+  mcq: [{ q: 'Which word has the ea vowel team?', options: ['straight', 'meadow', 'display', 'always'], answer: 0 }],
+  build: [], story: null };
+const m = V(MULTI);
+ok('⭐ 符合「任何一個」pattern 的字都算（本來只認第一個）', !!m && m.yes.length === 8);
+ok('⭐ 題目問 ea 就照 ea 算答案（v482 會標成 straight，那是 ai）',
+   m && m.mcq.length === 1 && m.mcq[0].options[m.mcq[0].answer] === 'meadow');
+ok('⭐ 每一籃只收自己那一個 pattern 的字',
+   m && m.groups[0].arg === 'ai' && m.groups[1].arg === 'ea'
+   && m.groups[1].words.every(w => C(w, { kind: 'team', args: ['ea'] })));
+ok('籃子沒寫 arg 就從名稱猜', (() => {
+  const r = V({ ...MULTI, groups: [{ label: 'ai words', words: ['straight', 'campaign'] },
+                                   { label: 'ea words', words: ['meadow', 'increase'] }] });
+  return r && r.groups[0].arg === 'ai' && r.groups[1].arg === 'ea'; })());
+ok('⭐ 一題問兩種 pattern 就丟掉（說不清楚要哪個）',
+   (V({ ...MULTI, mcq: [{ q: 'Which word has the ea or oa vowel team?', options: ['straight', 'meadow', 'display', 'always'], answer: 0 }] }) || {}).mcq.length === 0);
+ok('⭐ 除了 vce，沒講明是哪些詞綴／字母就整份退回',
+   V({ ...MULTI, check: { kind: 'team', args: [] } }) === null);
+ok('vce 不需要 args', !!V({ ...MULTI, check: { kind: 'vce', args: [] },
+  groups: [{ label: 'long i', words: ['survive', 'advertise'] }, { label: 'long o', words: ['impose', 'cyclone'] }],
+  yes: ['survive', 'advertise', 'impose', 'cyclone', 'outside', 'contribute'],
+  no: ['pause', 'teach', 'together', 'thirsty', 'tissue', 'bathroom'],
+  mcq: [{ q: 'Which word has the VCe pattern?', options: ['impose', 'pause', 'teach', 'thirsty'], answer: 0 }] }));
+/* ⚠ 比對前要先把註解拿掉——說明裡本來就會引用那個錯誤寫法，不拿掉會自己打到自己。 */
+const noComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+ok('⭐ 不可以寫 .filter(hit)——Array.filter 會把「索引」當第二個參數，第 2 個字以後全判錯',
+   !/\.filter\(hit\)/.test(noComments(data)) && /不可以直接 `\.filter\(hit\)`/.test(data));
 
 console.log('\n【4】組成單元（全部沿用既有題型，不新增）');
 const items = build({ pack: p, title: 'Unit 1 · VCe', kinds: ['lesson', 'circle', 'sort', 'mcq', 'build', 'story'] });
