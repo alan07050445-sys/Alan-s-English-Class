@@ -788,6 +788,10 @@ const QS_KINDS = [
      干擾項是**同一個字的其他語意**。⚠ 跟「配對連線」不是同一件事。 */
   { id: 'sense',     zh: '字義選擇', note: '短文＋「這個字在這裡是什麼意思」，像康橋考卷第一大題', ai: true },
 ];
+/* 🔴 v487：預設勾哪些，本來是手寫的一份清單，新增題型時沒人記得補
+   → 「字義選擇」從 v468 做好到現在一次都沒有被預設勾起來。
+   改成**從 QS_KINDS 自己長出來**，以後加新題型不會再漏。 */
+const QS_DEFAULT_KINDS = QS_KINDS.map(k => k.id);
 
 /* 一行一個字：英文 [Tab | ｜ | 逗號 | " - "] 中文 [同樣分隔] 例句 */
 /* ══ v445（Alan：「一鍵生成都可以在自己跟 AI 協調和溝通，這次我可能要客製化某一些地方」）══
@@ -1122,16 +1126,21 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
       /* 🔴 v475（Alan：「我只是這一組忘記生成哪一個，不應該全部重刪掉再生成一次」）：
          這一組已經有的題型先取消勾選 → 按下去就只補漏掉的那幾個。
          老師還是可以自己勾回去（他可能就是想重出一份不一樣的）。 */
+      /* 🔴 v487：這個 setPicked 本來在同一個 effect 的**最後面又寫了一次**
+         （`setPicked({flashcard:true, …})`），把上面這段無條件蓋掉 →
+         v475 的「只補漏掉的那一個題型」從上線起就沒生效過，
+         而且那份預設清單裡沒有 sense，所以「字義選擇」永遠是沒勾的。
+         ⚠ 同一個狀態在同一個 effect 裡設兩次，後面那次一定贏；
+           jsxcheck 抓不到這種（兩行都是合法的）。 */
       if (alreadyHave && alreadyHave.length) {
         setPicked(QS_KINDS.reduce((a3, k) => { a3[k.id] = alreadyHave.indexOf(k.id) < 0; return a3; }, {}));
       } else {
-        setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true, story: true });
-      } setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
+        setPicked(QS_DEFAULT_KINDS.reduce((a3, k) => { a3[k] = true; return a3; }, {}));
+      } setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setSense([]); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
-      setDue(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
-      setPicked({ flashcard: true, 'def-match': true, spelling: true, quiz: true, fillblank: true, story: true }); }
+      setDue(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); }
   }, [open]);
   if (!open) return null;
 

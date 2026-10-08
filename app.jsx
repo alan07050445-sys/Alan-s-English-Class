@@ -1133,14 +1133,26 @@ function App() {
     showToast(`📘 Word Study：建立了 ${items.length} 個單元${note}`);
   };
 
-  const handleQuickSet = ({ words, title, cat, kinds, ai, story, assign }) => {
+  /* 🔴 v487（Alan：「我新增字義選擇，結果按完確認沒有顯示」）：
+     視窗把 sense 算好交出來了，但這裡**沒有解構出來**，傳下去就是 undefined
+     → qsBuildItems 的 `(sense||[]).length >= 2` 永遠不成立 → 單元靜靜地不見。
+     ⚠ 複習那條路（handleCreateReview）v473 就補過了，主路一直漏著，
+       所以「字義選擇」從 v468 做好到現在，只有排複習生得出來。
+     通用原則：資料從視窗交到 handler 要「一路點名」，中間少一個欄位沒有人會報錯。 */
+  const handleQuickSet = ({ words, title, cat, kinds, ai, story, sense, assign }) => {
     // 校稿時改過的中文要回填（老師沒貼中文、AI 補的那種）
     const merged = (words || []).map(w => {
       const a = (ai || []).find(r => r.term === w.term);
       return (!w.zh && a && a.zh) ? { ...w, zh: a.zh } : w;
     });
-    const items = window.qsBuildItems({ words: merged, title, kinds, ai, story });   // v406: story = 短文填空
-    if (!items.length) { setQuickSetOpen(false); return; }
+    const items = window.qsBuildItems({ words: merged, title, kinds, ai, story, sense });   // v406: story＝短文填空／v487: sense＝字義選擇
+    /* 🔴 v487：本來一聲不吭就關掉——老師看到的就是「按了確認，什麼都沒發生」。
+       跟 v473 同一個教訓：生不出來不可以安靜地少一個單元，一定要講出來。 */
+    if (!items.length) {
+      setQuickSetOpen(false); setRegenFor(null);
+      showToast('這次沒有生出任何單元——勾的題型都還沒有題目，請先按「AI 出題」再建立');
+      return;
+    }
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     if (!w[weekId]) { showToast('請先選一個週次'); return; }
     if (!w[weekId].items) w[weekId].items = {};

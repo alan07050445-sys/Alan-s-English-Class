@@ -66,8 +66,18 @@ ok('⭐ 字義選擇與測驗都是 quiz，要靠標題分得開',
 ok('空的單元不算（有殼沒內容）', D.qsKindsInGroup([{ type: 'flashcard', cards: [] }]).length === 0);
 ok('什麼都沒有不會爆', D.qsKindsInGroup(null).length === 0);
 ok('⭐ 已經有的題型預設取消勾選', /alreadyHave\.indexOf\(k\.id\) < 0/.test(ed));
-ok('⭐ 沒有從「再出一份」進來時，維持原本的預設（全勾）',
-   /} else \{\s*\n\s*setPicked\(\{ flashcard: true/.test(ed));
+/* ⚠ 這一條本來釘的是「程式長這樣」（setPicked({ flashcard: true…）。
+   它通過了九個版本，卻完全沒發現同一個 effect 後面還有第二個 setPicked
+   把它整個蓋掉——v475 這個功能其實一天都沒生效過（v487 才抓到）。
+   改成釘**結果**：每一種題型都要被勾起來，而且清單不可以是另外手寫的一份。 */
+ok('⭐ 沒有從「再出一份」進來時，維持原本的預設（全勾、含之後新增的題型）', (() => {
+   const noC = ed.replace(/\/\*[\s\S]*?\*\//g, '');
+   const i = noC.indexOf('if (open) { setText(defaultText');
+   const eff = noC.slice(i, noC.indexOf('}, [open]);', i));
+   // 同一個狀態在一個 effect 裡只能設一次（if / else 各一次）
+   if ((eff.match(/setPicked\(/g) || []).length !== 2) return false;
+   return /QS_DEFAULT_KINDS\.reduce/.test(eff)
+       && /const QS_DEFAULT_KINDS = QS_KINDS\.map/.test(noC); })());
 ok('⭐ 畫面要講清楚（不然老師以為少勾了）',
    /這一組已經有：/.test(ed) && /只補那幾個，原本的一題都不會動/.test(ed));
 ok('⭐ 每一個已經有的題型自己也標「已經有了」', /qs-kind-has/.test(ed) && /\.qs-kind-has \{/.test(css));
