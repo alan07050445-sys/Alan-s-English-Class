@@ -1916,16 +1916,33 @@ function wsBuildItems({ pack, title, kinds }) {
   if (on('lesson') && p.rule) {
     const steps = [];
     const gs = (p.groups || []).filter(x => x && x.words && x.words.length);
+    /* v486（Alan：「講解定義的時候除了中文你一定要放英文，因為老師就是考英文，
+       老師不會考試的時候還給你中文解釋；而且這種類型一定要都給 base word，
+       這樣小朋友才知道原來是從這個字變過來的」）：
+       ① 標題中英一起給（英文在前，中文只是幫他讀懂）
+       ② 例字底下寫「safe + -ty」——base word 是 wsValidPack 驗過的才會有，
+          驗不過的字就只顯示那個字，不要編一個假的拆解。 */
+    const bases = (p.bases || {});
+    const exOf = (w, affix) => {
+      const b = bases[w] || bases[String(w).toLowerCase()];
+      const a = String(affix || '').trim();
+      return { en: w, hl: [w], zh: (b && a) ? `${b} + ${a}` : (b ? b : '') };
+    };
+    const headOf = (label, means, zh) => {
+      const en = means ? `${label} = ${means}` : String(label || '');
+      return (zh ? `${en}　${zh}` : en).slice(0, 80);
+    };
     if (gs.length >= 2) {
       gs.slice(0, 5).forEach(x => {
-        // 這一組怎麼講：優先用 AI 寫的中文口語，沒有就自己拼一句
-        const say = (x.zh || `${x.label}${x.means ? `：${x.means}` : ''}`).slice(0, 60);
-        steps.push({ kind: 'learn', say,
-          examples: x.words.slice(0, 3).map(w => ({ en: w, hl: [w], zh: '' })) });
+        steps.push({ kind: 'learn', say: headOf(x.label, x.means, x.zh),
+          examples: x.words.slice(0, 3).map(w => exOf(w, x.arg || x.label)) });
       });
     } else {
-      steps.push({ kind: 'learn', say: (p.ruleZh || p.rule).slice(0, 60),
-        examples: (p.yes || []).slice(0, 3).map(w => ({ en: w, hl: [w], zh: '' })) });
+      const one = gs[0];
+      steps.push({ kind: 'learn',
+        say: one ? headOf(one.label, one.means, one.zh) : `${p.rule}　${p.ruleZh || ''}`.trim().slice(0, 80),
+        examples: ((one && one.words) || p.yes || []).slice(0, 3)
+          .map(w => exOf(w, one ? (one.arg || one.label) : '')) });
     }
     // 講完每一種之後，才動手分分看
     if (gs.length >= 2) {

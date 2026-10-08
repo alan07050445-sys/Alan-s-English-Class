@@ -558,11 +558,39 @@ function App() {
     try { localStorage.setItem('alan-unsaved-weeks', JSON.stringify({ t: Date.now(), grade, weeks: w })); } catch (x) {}
     setSaveFail({ msg, at: Date.now(), weeks: w });
   };
+  /* 🔴 v486（Alan 截到聯絡簿整排都是 qs1791348746400sp 這種亂碼）：
+     那些是「幽靈作業」——單元早就刪了，week.homework 裡那一筆 id 還留著。
+     2026-10-08 查線上資料：六個年級共 73 筆，G4 Week 6 的 41 筆裡有 35 筆是。
+
+     v460 已經在「刪單元」那條路清過一次，v474／v477 新增的批次刪除也都有清，
+     但昨天（10/07）還是又長出 7 整批——代表**還有一條我找不到的路**會把單元弄不見。
+     與其一條一條去堵，不如把判斷收到唯一的出口：
+     **「作業指向一個不存在的單元」本身就永遠是錯的**，所以每次存檔前掃一次。
+     這樣不管是誰弄掉的，下一次存檔就自己好了。
+
+     ⚠ 只掃「還有單元的週次」。週次整個是空的有兩種可能——真的清空了，
+       或是資料還沒載完；後者把作業清掉就回不來了，寧可不動。 */
+  const pruneGhostHomework = (w) => {
+    let n = 0;
+    Object.values(w || {}).forEach(wk => {
+      const hw = wk && wk.homework;
+      if (!hw || !Object.keys(hw).length) return;
+      const ids = new Set();
+      Object.values((wk && wk.items) || {}).forEach(arr => {
+        (arr || []).forEach(it => { if (it && it.id) ids.add(it.id); });
+      });
+      if (!ids.size) return;                    // 空週次不動（可能只是還沒載完）
+      Object.keys(hw).forEach(id => { if (!ids.has(id)) { delete hw[id]; n++; } });
+    });
+    return n;
+  };
+
   const saveWeeksSafe = (w) => {
     if (!cloudReadyRef.current) {
       alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
       return false;
     }
+    pruneGhostHomework(w);   // v486：存進去的永遠不帶幽靈作業
     try {
       const p = window.saveWeeks(w);
       if (p && p.then) p.then(() => {

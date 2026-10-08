@@ -5571,6 +5571,13 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
   const pickedOf = q => selectedWords[q._circleKey] || [];
   const isQuestionComplete = q => pickedOf(q).length === answersOf(q).length && (!q.label || !!selectedLabels[q._circleKey]);
   const completedCount = questions.filter(isQuestionComplete).length;
+  /* 🔴 v486：整篇文章模式的「進度」不能用 x/7——
+     那個 x 是「有幾句**剛好圈對個數**」，等於一邊作答一邊告訴學生每句有幾個，
+     而且交卷鈕要 7 句全中才解鎖＝沒猜對個數就永遠交不出去（Alan 圖2 的灰色 Submit）。
+     整篇找字只要「圈了幾個字」，圈到至少一個就能交卷，對不對交卷才算。 */
+  const proseMode  = !!item.circleProse;
+  const prosePicks = proseMode ? questions.reduce((n, q) => n + pickedOf(q).length, 0) : 0;
+  const canSubmit  = proseMode ? prosePicks > 0 : completedCount >= questions.length;
 
   const isCircleCorrect = q => {
     const tokens = tokenizeCircleSentence(q.sentence);
@@ -5631,7 +5638,9 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
         <span className="circle-instruction">
           {item.circleInstruction || 'Circle the correct answer in each sentence.'}
         </span>
-        <span className="circle-progress">{submitted ? `${score}/${questions.length}` : `${completedCount}/${questions.length}`}</span>
+        <span className="circle-progress">{submitted
+          ? `${score}/${questions.length}`
+          : proseMode ? `已圈 ${prosePicks} 個字` : `${completedCount}/${questions.length}`}</span>
       </div>
 
       {/* 🔴 v485（Alan：「短文找字是真的一整個文章，不是一句一句…就用正常文章的格式，
@@ -5653,15 +5662,22 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
                     const selected = picked.indexOf(tokenIndex) >= 0;
                     const want = answersOf(q).map(normalizeCircleValue);
                     const correctAnswer = submitted && want.indexOf(normalizeCircleValue(token)) >= 0;
-                    const need = want.length;
                     return (
                       <button key={tokenIndex}
                         className={`circle-word${selected ? ' selected' : ''}${submitted && selected ? (correctAnswer ? ' correct' : ' wrong') : ''}${correctAnswer ? ' answer' : ''}`}
+                        /* 🔴 v486（Alan：「只能螢光一個，按第二個前一個會取消，有時候又不會」）：
+                           整篇文章模式不能沿用「一句一題」的選法。那一套是
+                           `need === 1 ? [tokenIndex] : cur.length >= need ? cur : …`——
+                           ① 那一句只有 1 個答案時，按第二個字會**把第一個換掉**（＝只能圈一個）；
+                           ② 剛好有 2 個答案的句子就不會 → 同一篇裡時好時壞；
+                           ③ 圈滿就按不動，等於偷偷告訴學生這一句有幾個
+                              （Alan 一開始就說「不一定會給有幾個」）。
+                           整篇找字就是**想圈幾個圈幾個、再按一下取消**，對不對交卷才算。 */
                         onClick={() => !submitted && setSelectedWords(prev => {
                           const cur = prev[q._circleKey] || [];
-                          if (cur.indexOf(tokenIndex) >= 0) return { ...prev, [q._circleKey]: cur.filter(i => i !== tokenIndex) };
-                          const next = need === 1 ? [tokenIndex] : cur.length >= need ? cur : cur.concat(tokenIndex);
-                          return { ...prev, [q._circleKey]: next };
+                          return { ...prev, [q._circleKey]: cur.indexOf(tokenIndex) >= 0
+                            ? cur.filter(i => i !== tokenIndex)
+                            : cur.concat(tokenIndex) };
                         })}
                         disabled={submitted}>{token}</button>
                     );
@@ -5747,8 +5763,8 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
 
       <div className="circle-footer">
         {!submitted ? (
-          <button className="qm-btn primary" onClick={handleSubmit} disabled={completedCount < questions.length}>
-            Submit · 交卷 ({completedCount}/{questions.length})
+          <button className="qm-btn primary" onClick={handleSubmit} disabled={!canSubmit}>
+            Submit · 交卷 ({proseMode ? `已圈 ${prosePicks} 個字` : `${completedCount}/${questions.length}`})
           </button>
         ) : (
           <>
@@ -6679,13 +6695,19 @@ function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnter
   const itemById = {};
   (allItems || []).forEach(it => { itemById[it.id] = it; });
 
-  const assignments = hwIds.map(id => {
+  /* 🔴 v486（Alan：「如圖1 這是什麼？太醜了吧」）：
+     整排 qs1791348746400sp 這種亂碼＝幽靈作業（單元刪了、homework 裡的 id 還在）。
+     任務清單與逾期清單早就 `if (!it) return null` 略過了，只有這裡還拿 id 當標題頂上去。
+     ⭐ 原則跟別的清單一致：**找不到單元就不是一件作業**，直接不算。
+     老師看得到有幾筆（學生／家長看不到），按一下就清掉。 */
+  const ghostIds = hwIds.filter(id => !itemById[id]);
+  const assignments = hwIds.filter(id => itemById[id]).map(id => {
     const it   = itemById[id];
     const prog = (qmProg || {})[`${weekId}_${id}`];
     const done = !!(prog && prog.done);
     const pct  = (prog && prog.score != null && prog.total) ? Math.round(prog.score / prog.total * 100) : null; // v270
     const cat  = (categories || []).find(c => c.id === (it && it._cat));
-    return { id, title: it ? it.title : id, catTitle: cat ? cat.title : '', cat, dueDate: hw[id] && hw[id].dueDate, done, pct };
+    return { id, title: it.title, catTitle: cat ? cat.title : '', cat, dueDate: hw[id] && hw[id].dueDate, done, pct };
   });
   const total     = assignments.length;
   const doneCount = assignments.filter(a => a.done).length;
@@ -6731,6 +6753,13 @@ function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnter
               {editMode
                 ? <ET value={note} editMode multiline placeholder="給家長的話…（例：星期五前完成造句，下週小考會考）" onChange={v => onUpdateWeek({ parentNote: v })} className="cb-note-input"/>
                 : <span className="cb-note-text">{note}</span>}
+            </div>
+          )}
+          {editMode && ghostIds.length > 0 && (
+            <div className="cb-ghost">
+              <span>⚠️ 有 <b>{ghostIds.length}</b> 筆作業指向已經刪掉的單元（學生看不到，但 LINE 還是會催）</span>
+              <button className="cb-ghost-btn" onClick={() => onUpdateWeek({ homework: Object.fromEntries(
+                Object.entries(hw).filter(([k]) => !ghostIds.includes(k))) })}>清掉</button>
             </div>
           )}
           {total === 0 ? (

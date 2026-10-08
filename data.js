@@ -1759,6 +1759,7 @@ Output ONLY JSON:
  "yes":[""],"no":[""],
  "mcq":[{"q":"","options":["","","",""],"answer":0}],
  "build":[{"clue":"","base":"","answer":""}],
+ "bases":{"safety":"safe"},
  "story":{"title":"","text":""}}
 RULES
 - check: how a computer can test the pattern. "vce" needs no args.
@@ -1783,6 +1784,18 @@ RULES
   Mix them from everyday school words a 9-year-old meets.
 - mcq: 4-6 questions. q is one short English question ("Which word has the VCe pattern?").
   options: four real words where EXACTLY ONE follows the pattern. answer: 0-based index.
+- ⚠ For an AFFIX topic, every word inside "groups" must really be BASE + AFFIX
+  (safety = safe + -ty). Words that merely END in those letters are NOT allowed there:
+  "dirty", "empty", "plenty", "twenty", "music", "comic" have no base word, so they teach the
+  wrong idea in a lesson about building words. Put look-alikes in "no" if you want them.
+- ⚠ Each group's "means" must be different from the other groups'.
+  For a sound topic (vce / team / digraph), "means" must be "the sound in <word>" where <word>
+  is one of THAT group's own words — naming a word from another group teaches the wrong sound.
+- bases: ONLY when the pattern is an affix (suffix/prefix). For EVERY word you listed in "groups",
+  give the base word it was built from ("safety":"safe", "ability":"able", "basic":"base",
+  "historic":"history", "enjoyment":"enjoy"). The children are shown "safe + -ty", so they can
+  see where the word came from. Spell the base word as a real English word on its own.
+  If the pattern is not an affix (vce / team / digraph), return {}.
 - build: 4-6 items, only when the pattern is an affix. clue = the meaning in simple English
   ("relating to history"), base = the base word ("history"), answer = base + affix ("historic").
   If the pattern is not an affix, return an empty array.
@@ -1793,6 +1806,28 @@ RULES
 ${_AI_MINIFY}`;
 
 /* 程式把 AI 的產出整個驗一遍。AI 只負責「想題材」，對錯一律程式說了算。 */
+/* v486（Alan：「這種類型一定要都給 base word，這樣小朋友才知道原來是從這個字變過來的」）：
+   base word 不能純靠程式推——safety→safe 砍掉字尾就有，但 basic→base（要補 e）、
+   historic→history（要補 y）、ability→able（il→le 的母音變化）都推不出來。
+   所以照老規矩：**AI 給、程式驗**。驗不過的那一個字就不顯示 base，不要整份退回
+   （少一個拆解只是少一點提示，給錯的拆解才是教錯）。 */
+function _wsBaseOk(word, affix, base) {
+  const w = String(word || '').toLowerCase();
+  const b = String(base || '').toLowerCase();
+  const a = String(affix || '').replace(/-/g, '').toLowerCase();
+  if (!/^[a-z]{2,}$/.test(b) || !w || !a || b === w) return false;
+  // 字尾／字首剝掉之後剩下的「字幹」
+  const stem = w.endsWith(a) ? w.slice(0, -a.length) : (w.startsWith(a) ? w.slice(a.length) : '');
+  if (stem.length < 2) return false;
+  if (b === stem) return true;                                   // loyalty → loyal
+  if (b === stem + 'e') return true;                             // basic → base、creativity → creative
+  if (b === stem + 'y') return true;                             // historic → history
+  if (stem.endsWith('i') && b === stem.slice(0, -1) + 'y') return true;   // happiness → happy
+  if (stem.endsWith('il') && b === stem.slice(0, -2) + 'le') return true; // ability → able、possibility → possible
+  if (stem.endsWith('ic') && b === stem.slice(0, -2) + 'y') return true;  // -ity 接在 -ic 後
+  return false;
+}
+
 function wsValidPack(x) {
   const str = (v) => String(v == null ? '' : v).trim();
   const words = (a) => (Array.isArray(a) ? a : []).map(str).filter(w => /^[A-Za-z][A-Za-z'-]*$/.test(w));
@@ -1832,6 +1867,45 @@ function wsValidPack(x) {
   // 同一個字不可以出現在兩籃（不然分到哪都對）
   const seenG = new Set();
   groups.forEach(g => { g.words = g.words.filter(w => { const k = w.toLowerCase(); if (seenG.has(k)) return false; seenG.add(k); return true; }); });
+  /* ⑥ v486 base word（Alan：「這種類型一定要都給 base word」）：
+     AI 給、程式驗，驗不過的不收——`safety←safari` 這種假拆解比沒有還糟。
+     ⚠ 順便擋掉「只是剛好那樣結尾」的字：dirty／empty／plenty 沒有 base word，
+       放進「加 -ty 造新字」的籃子裡會教成錯的觀念（真 AI 第一次就塞了 dirty、empty）。
+     不是詞綴的主題（VCe／母音組合）本來就沒有 base word，整段跳過。 */
+  const bases = {};
+  const affix = (check.kind === 'suffix' || check.kind === 'prefix');
+  if (affix) {
+    const src = (x && x.bases && typeof x.bases === 'object') ? x.bases : {};
+    (Array.isArray(x && x.build) ? x.build : []).forEach(b => {
+      const ans = str(b && b.answer); if (ans && !src[ans]) src[ans] = str(b && b.base);
+    });
+    /* ⚠ 只有「AI 真的有給 bases」時才拿它當門檻。整份都沒給就只是少了拆解提示，
+       不該因此把分籃清空、連分一分都生不出來（第一版寫太嚴，整組單元就不見了）。
+       沒給的情況交給下面的重試回饋去要。 */
+    const strict = Object.keys(src).length > 0;
+    groups.forEach(g => {
+      g.words = g.words.filter(w => {
+        if (!strict) return true;
+        const got = str(src[w] || src[w.toLowerCase()]);
+        const aff = g.arg || check.args.find(a => wsCheck(w, check, a) === true) || '';
+        if (!got || !_wsBaseOk(w, aff, got)) return false;
+        bases[w] = got.toLowerCase();
+        return true;
+      });
+    });
+  }
+
+  /* v486：聲音類的 means 要用**這一籃自己的字**（真 AI 給過
+     `long e → the sound in mile`——mile 是 long i，說明直接標錯）。
+     AI 講的字不在這一籃裡就不要它，改用這一籃的第一個字自己拼。 */
+  if (!affix) {
+    groups.forEach(g => {
+      const own = g.words.map(w => w.toLowerCase());
+      const named = (g.means.toLowerCase().match(/[a-z']+/g) || []).some(t => own.indexOf(t) >= 0);
+      if (!named && g.words.length) g.means = `the sound in ${g.words[0]}`;
+    });
+  }
+
   const goodGroups = groups.filter(g => g.words.length >= 2).slice(0, 4);
 
   // ③ 選擇題：四個選項裡**只能有一個**符合規則，而且正解要指對
@@ -1881,7 +1955,7 @@ function wsValidPack(x) {
 
   const enough = (yes.length >= 4 && no.length >= 4) || goodGroups.length >= 2 || mcq.length >= 2 || !!story;
   if (!enough) return null;
-  return { topic: str(x && x.topic).slice(0, 60), rule, ruleZh, check,
+  return { topic: str(x && x.topic).slice(0, 60), rule, ruleZh, check, bases,
            yes: yes.slice(0, 12), no: no.slice(0, 12), groups: goodGroups, mcq: mcq.slice(0, 8), build: build.slice(0, 8), story };
 }
 

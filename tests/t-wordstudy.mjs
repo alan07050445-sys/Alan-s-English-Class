@@ -245,6 +245,78 @@ console.log('\n【4.6】三種主題都要能用（Alan：「確認是用在每�
     return !t || t.circleQuestions.every(q => q.answers.every(a => C(a, chk))); })());
 });
 
+console.log('\n【4.7】v486：Alan 回報的三件');
+/* ② 短文找字只能圈一個、時好時壞 ③ 講解要英文定義＋base word */
+const V2 = W.wsValidPack;
+const sufPack2 = V2({ ...SUF, bases: { safety: 'safe', loyalty: 'loyal', ability: 'able',
+  community: 'commune', creativity: 'creative', basic: 'base', economic: 'economy',
+  historic: 'history', enjoyment: 'enjoy', payment: 'pay', management: 'manage' } });
+const it486 = build({ pack: sufPack2, title: 'u', kinds: ['lesson'] })[0];
+const learn486 = it486.steps.filter(st => st.kind === 'learn');
+
+ok('⭐ ③ 講解標題中英一起給（老師考英文，不能只有中文）',
+   learn486.every(st => /[A-Za-z]/.test(st.say)) && learn486.some(st => /[\u4e00-\u9fff]/.test(st.say)));
+ok('   英文定義真的放進去了（quality of / relating to 不再不見）',
+   learn486.some(st => st.say.indexOf('quality of') >= 0) && learn486.some(st => st.say.indexOf('relating to') >= 0));
+ok('⭐ ③ 例字底下寫得出 base word（safe + -ty）',
+   learn486.some(st => st.examples.some(e => e.zh === 'safe + -ty')));
+ok('⭐ ③ base word 要程式驗過才給（AI 亂給的不收）', (() => {
+   const bad = V2({ ...SUF, bases: { safety: 'safari', loyalty: 'dog' } });
+   return bad && !bad.bases.safety && !bad.bases.loyalty; })());
+ok('   推不出來就不給，不要編一個（majesty 沒有乾淨的 base）', (() => {
+   const r = V2({ ...SUF, bases: { majesty: 'majest' } });
+   return r && !r.bases.majesty; })());
+ok('   不是詞綴的主題沒有 base word（VCe／母音組合）', (() => {
+   const r = V2({ ...SUF, check: { kind: 'vce', args: [] },
+     groups: [{ label: 'long a', words: ['imitate', 'evaporate'] }, { label: 'long i', words: ['survive', 'advertise'] }],
+     bases: { imitate: 'imit' } });
+   return r && Object.keys(r.bases).length === 0; })());
+
+ok('⭐ ② 整篇文章模式：點字是「想圈幾個圈幾個」，不會把前一個取消', (() => {
+   /* ⚠ 一定要先去掉註解——我在程式裡的註解引用了舊的錯誤寫法，
+      不去掉的話這條測試會打到自己的註解（這個坑踩第三次了）。 */
+   const q2 = noComments(qm);
+   const i = q2.indexOf('item.circleProse ? (');
+   const j = q2.indexOf('<div className="circle-question-list">', i);
+   const prose = q2.slice(i, j);
+   return prose.indexOf('need === 1') < 0 && prose.indexOf('cur.length >= need') < 0
+       && /cur\.indexOf\(tokenIndex\) >= 0[\s\S]{0,120}cur\.concat\(tokenIndex\)/.test(prose); })());
+ok('⭐ ② 圈了就能交卷（不必每一句都剛好猜中個數，否則永遠交不出去）',
+   /const canSubmit\s+= proseMode \? prosePicks > 0 :/.test(qm)
+   && /disabled=\{!canSubmit\}/.test(qm));
+ok('   進度不再寫 x/7（那等於告訴學生每一句有幾個）',
+   /proseMode \? `已圈 \$\{prosePicks\} 個字`/.test(qm));
+
+/* ⬇ 這兩條是真 AI 跑出來的，不是我想像的 */
+ok('⭐ ③ 只是剛好那樣結尾的字不准放進詞綴籃（真 AI 塞了 dirty、empty）', (() => {
+   const r = V2({ ...SUF,
+     groups: [{ label: '-ty', arg: '-ty', means: 'state of', zh: 'x', words: ['safety', 'loyalty', 'dirty', 'empty'] },
+              { label: '-ment', arg: '-ment', means: 'act of', zh: 'y', words: ['payment', 'enjoyment'] }],
+     bases: { safety: 'safe', loyalty: 'loyal', payment: 'pay', enjoyment: 'enjoy' } });
+   const ty = r.groups.find(g => g.label === '-ty');
+   return ty && ty.words.indexOf('dirty') < 0 && ty.words.indexOf('empty') < 0
+       && ty.words.indexOf('safety') >= 0; })());
+ok('   整份都沒給 bases 時不要把分籃清空（只是少了拆解提示）', (() => {
+   const r = V2({ ...SUF, build: [] });
+   return r && r.groups.length >= 2 && Object.keys(r.bases).length === 0; })());
+ok('⭐ 聲音類的說明要用自己這一籃的字（真 AI 給過 long e → the sound in mile）', (() => {
+   const r = V2({ ...SUF, check: { kind: 'vce', args: [] }, build: [], bases: {},
+     groups: [{ label: 'long e', arg: '', means: 'the sound in mile', zh: 'x', words: ['these', 'compete'] },
+              { label: 'long i', arg: '', means: 'the sound in like', zh: 'y', words: ['survive', 'advertise'] }] });
+   const e = r.groups.find(g => g.label === 'long e');
+   return e && e.means.indexOf('mile') < 0 && e.means.indexOf('these') >= 0; })());
+
+console.log('\n【4.8】v486：幽靈作業不可以把 id 當標題頂上去');
+ok('⭐ ① 聯絡簿跟別的清單一樣——找不到單元就不算一件作業',
+   /const ghostIds = hwIds\.filter\(id => !itemById\[id\]\)/.test(qm)
+   && /hwIds\.filter\(id => itemById\[id\]\)\.map/.test(qm)
+   && !/title: it \? it\.title : id/.test(qm));
+ok('   老師看得到有幾筆、可以一鍵清掉', /className="cb-ghost-btn"/.test(qm));
+ok('⭐ 存檔前一律掃掉幽靈作業（不管是哪條路弄掉的單元）',
+   /const pruneGhostHomework/.test(app) && /pruneGhostHomework\(w\);\s+\/\/ v486/.test(app));
+ok('   空的週次不動（可能只是還沒載完，清掉就回不來）',
+   /if \(!ids\.size\) return;\s+\/\/ 空週次不動/.test(app));
+
 console.log('\n【5】整條路有接起來');
 ok('⭐ data.js 掛出去了', typeof W.aiMakeWordStudy === 'function' && typeof W.wsValidPack === 'function' && typeof W.wsCheck === 'function');
 ok('⭐ 老師端有視窗', /function WordStudyModal\(/.test(ed) && /WordStudyModal, wsBuildItems, WS_KINDS \}\)/.test(ed));

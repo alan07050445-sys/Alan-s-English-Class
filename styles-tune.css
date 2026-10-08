@@ -4241,3 +4241,18 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   font-size: .72em; font-weight: 600; opacity: .72; letter-spacing: 0;
   text-transform: none; overflow-wrap: anywhere; white-space: normal;
 }
+
+/* v486：幽靈作業提示（只有老師看得到） */
+.cb-ghost {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 2px 0 12px; padding: 9px 13px; border-radius: 10px;
+  background: #FDF3E2; border: 1px solid rgba(190,130,40,.3);
+  font-family: var(--sans); font-size: 13.5px; color: #7A5312;
+}
+.cb-ghost b { font-size: 15px; }
+.cb-ghost-btn {
+  margin-left: auto; padding: 5px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(190,130,40,.5); background: #fff; color: #7A5312;
+  font-family: var(--sans); font-size: 13px; font-weight: 700;
+}
+.cb-ghost-btn:hover { background: #F6E6C8; }
