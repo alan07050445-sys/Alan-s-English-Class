@@ -101,6 +101,19 @@ ok('⭐ 沒有去動單字卡／短文／題目文字的底色與字色', (() =>
 ok('   星星維持金色（那是集點的視覺識別，不能為了過節換掉）',
    !/\.(mx-)?star[^{]*\{[^}]*color/.test(css.replace(/\/\*[\s\S]*?\*\//g, '')));
 
+console.log('\n【5b】v491：Alan 截到「太白了根本看不到」與「都沒改到」');
+ok('⭐ 頂欄的淺底按鈕要指名還原深色字（不然白底白字＝一塊白斑）', (() => {
+   /* 🔴 第一版寫 `.header button { color:#fff }` 一視同仁，
+      把本來就有白底的按鈕（週次箭頭、登入／Report）也翻成白字 → 整顆看不見。
+      CSS 問不到「我的底色是淺的嗎」，所以淺底的一定要一條一條指名。 */
+   const c = css.replace(/\/\*[\s\S]*?\*\//g, '');
+   return /\.week-nav button/.test(c) && /\.signin-btn/.test(c)
+       && /color: var\(--fest-blue-d\)/.test(c); })());
+ok('⭐ 大廳整頁的暖色漸層要蓋掉（.page-lobby 有自己不透明的底，body 換色沒用）',
+   /html\.fest-1010 \.page-lobby \{/.test(css));
+ok('⭐ 門口頁的「進入 →」是實心按鈕，只改 color 沒用、要連背景一起換',
+   /html\.fest-1010 \.gs-card-cta \{[\s\S]{0,120}background:/.test(css));
+
 console.log('\n【6】有真的接上去');
 ok('⭐ index.html 載入了，而且排在 styles-tune.css 後面（它的工作是覆寫）', (() => {
    const a = html.indexOf('styles-tune.css'), b = html.indexOf('styles-holiday.css');

@@ -55,7 +55,12 @@ html.fest-1010 .header::after {
     radial-gradient(circle at 18% 150%, rgba(255,255,255,.22) 0 26px, transparent 27px),
     radial-gradient(circle at 86% -60%, rgba(255,255,255,.17) 0 30px, transparent 31px);
 }
-/* 頂欄裡的字與圖示原本是深色的，底換成藍就要一起翻白 */
+/* 頂欄裡的字與圖示原本是深色的，底換成藍就要一起翻白。
+   🔴 v491（Alan 截到三張「太白了根本看不到」）：第一版寫成
+     `.header, .header a, .header button … { color: #fff }` 一視同仁，
+     結果把**本來就有白底的按鈕**也翻成白字 → 白底白字，整顆變成一塊白斑
+     （週次切換的兩顆箭頭、登入／Report 鈕）。
+   ⚠ CSS 沒辦法問「我的底色是淺的嗎」，所以淺底的要一個一個指名還原。 */
 html.fest-1010 .header,
 html.fest-1010 .header a,
 html.fest-1010 .header button,
@@ -65,6 +70,26 @@ html.fest-1010 .header .mono { color: #fff; }
 html.fest-1010 .header .brand-sub,
 html.fest-1010 .header .muted { color: rgba(255,255,255,.72); }
 html.fest-1010 .header svg { stroke: currentColor; }
+
+/* ↓ 淺底的按鈕：字與圖示改回深藍，而且底色給一點藍讓它在深藍上有層次 */
+html.fest-1010 .header .week-nav button,
+html.fest-1010 .header .signin-btn,
+html.fest-1010 .header .report-btn,
+html.fest-1010 .header .dash-btn,
+html.fest-1010 .header .mx-chip,
+html.fest-1010 .header [class*="-btn"]:not(.fs-btn) {
+  color: var(--fest-blue-d);
+  background: #fff;
+  border-color: rgba(255,255,255,.9);
+  box-shadow: 0 2px 10px -4px rgba(0,0,0,.35);
+}
+html.fest-1010 .header .week-nav button svg,
+html.fest-1010 .header .signin-btn svg,
+html.fest-1010 .header [class*="-btn"]:not(.fs-btn) svg { stroke: var(--fest-blue-d); }
+html.fest-1010 .header .week-nav button:hover,
+html.fest-1010 .header [class*="-btn"]:not(.fs-btn):hover { background: #EAF0FF; }
+/* 週次標籤（WEEK 6）在深藍上要夠亮 */
+html.fest-1010 .header .week-nav .label { color: #fff; letter-spacing: .14em; }
 
 /* ── 3. 門口頁（封面）＝裝飾最濃的地方 ───────────────────────
    ⚠ 這裡刻意只換顏色與圖案，版面一格都沒動——.gs-decor／.gs-blob／.gs-spark
@@ -395,3 +420,39 @@ html.fest-1010 .lc-cover::after {
     var(--fest-fw-r) 72% 90%/116px 116px no-repeat;
   opacity: .6;
 }
+
+/* ── 12. 🔴 v491：大廳整頁還是暖色（Alan：「圖4 這邊都沒改到」）────
+   `.page-lobby` 有自己**不透明的**暖色漸層（四層 radial + linear），
+   直接蓋在 body 上面 → body 換成冷白一點用都沒有。
+   ⚠ 我上一版只在窄視窗測，大廳那一塊剛好被卡片擋住沒看出來；
+     Alan 用 1440 寬的螢幕，整片暖色一覽無遺。**換膚要用真實尺寸看。** */
+html.fest-1010 .page-lobby {
+  background:
+    radial-gradient(900px 560px at 50% -6%, #FFFFFF 0%, rgba(255,255,255,0) 60%),
+    radial-gradient(760px 520px at 90% 108%, rgba(11,49,143,.10), transparent 60%),
+    radial-gradient(680px 480px at 6% 90%, rgba(214,0,28,.07), transparent 62%),
+    linear-gradient(180deg, #F8FAFE 0%, #EDF1F8 100%);
+}
+html.fest-1010 .page-mission,
+html.fest-1010 .page-summer,
+html.fest-1010 .page { background-color: transparent; }
+
+/* ── 13. 🔴 v491：門口頁的「進入 →」還是原本的深棕（Alan 圖1）──
+   .gs-card-cta 是一顆**實心按鈕**（不是文字），所以只改 color 沒有用。 */
+html.fest-1010 .gs-card-cta {
+  background: linear-gradient(100deg, var(--fest-red), var(--fest-red-d));
+  color: #fff; border-color: transparent;
+  box-shadow: 0 6px 16px -8px rgba(214,0,28,.6);
+}
+html.fest-1010 .gs-card:hover .gs-card-cta { filter: brightness(1.06); }
+/* 老師後台那張黑卡：圖示底色與「進入」改成國旗色 */
+html.fest-1010 .gs-card-admin { border-color: rgba(11,49,143,.5); }
+html.fest-1010 .gs-card-admin .gs-card-ico {
+  background: linear-gradient(140deg, var(--fest-red), var(--fest-blue));
+  color: #fff;
+}
+html.fest-1010 .gs-card-admin .gs-card-cta {
+  background: linear-gradient(100deg, var(--fest-red), var(--fest-red-d));
+}
+/* 年級卡的 G4 圖示底色 */
+html.fest-1010 .gs-card-ico { background: linear-gradient(140deg, #FFE7EA, #E4ECFF); }
