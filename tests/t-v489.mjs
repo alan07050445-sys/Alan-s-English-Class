@@ -114,6 +114,17 @@ ok('⭐ 大廳整頁的暖色漸層要蓋掉（.page-lobby 有自己不透明的
 ok('⭐ 門口頁的「進入 →」是實心按鈕，只改 color 沒用、要連背景一起換',
    /html\.fest-1010 \.gs-card-cta \{[\s\S]{0,120}background:/.test(css));
 
+console.log('\n【5c】v492：大廳剩下的深棕（Alan：「這邊怎麼沒有變？」）');
+ok('⭐ 定義 --g-c 一次就換掉全站 112 處深棕（不要一條一條列，列清單一定會漏）',
+   /html\.fest-1010 \{ --g-c: #D6001C; \}/.test(css));
+ok('   奶油色的面也要換（本週摘要的格子、頁尾）',
+   /html\.fest-1010 \.wk-tile \{/.test(css) && /html\.fest-1010 \.ll-foot2 \{/.test(css));
+ok('⭐ 但「語意色」不可以為了過節改掉（警告橫幅維持琥珀色）', (() => {
+   /* .tt-past-*（「之前還有 N 項沒完成」）與 .wh-task-cue 的金色箭頭
+      的工作是**提醒**，不是裝飾。改成紅藍會讓「這是提醒」變得不明顯。 */
+   const c = css.replace(/\/\*[\s\S]*?\*\//g, '');
+   return !/\.tt-past/.test(c) && !/\.wh-task-cue/.test(c); })());
+
 console.log('\n【6】有真的接上去');
 ok('⭐ index.html 載入了，而且排在 styles-tune.css 後面（它的工作是覆寫）', (() => {
    const a = html.indexOf('styles-tune.css'), b = html.indexOf('styles-holiday.css');

@@ -456,3 +456,44 @@ html.fest-1010 .gs-card-admin .gs-card-cta {
 }
 /* 年級卡的 G4 圖示底色 */
 html.fest-1010 .gs-card-ico { background: linear-gradient(140deg, #FFE7EA, #E4ECFF); }
+
+/* ── 14. 🔴 v492：大廳還有一堆深棕（Alan：「這邊怎麼沒有變？」）────
+   用程式掃整個大廳「底色或文字偏暖」的元素，撈到 35 個。
+   其中大部分是**暖灰色的內文**（#6b6455、#5c554a）——那種在冷白底上一樣好讀，
+   刻意不動；真正突兀的是**深棕的重點字**和**奶油色的面**。
+
+   ⭐ 關鍵發現：`--g-c`（全站的品牌強調色）**從來沒有定義在根層**，
+     112 處都是寫 `var(--g-c, #8B3120)` 用 fallback。
+     所以只要在國慶模式**定義它一次**，112 處深棕就一起換掉——
+     比一條一條列出來可靠得多（列清單一定會漏）。
+   ⚠ 年級卡自己有 `--g-c`（上面第 9 節），那一條會蓋過這裡，是對的。 */
+html.fest-1010 { --g-c: #D6001C; }
+
+/* 奶油色的「面」：程式掃出來的三個 */
+html.fest-1010 .wk-tile {
+  background: rgba(242,246,253,.8);
+  border-color: rgba(11,49,143,.14);
+}
+html.fest-1010 .wk-tile b { color: var(--fest-blue); }
+html.fest-1010 .wk-tile b.accent { color: var(--fest-red); }
+html.fest-1010 .ll-foot2 { background: #E7ECF6; }
+html.fest-1010 .ll-foot2-btn {
+  background: linear-gradient(100deg, var(--fest-red), var(--fest-red-d));
+}
+html.fest-1010 .growth-inline,
+html.fest-1010 .wk-summary { border-color: rgba(11,49,143,.14); }
+/* 標題用藍、動作用紅（跟全站一致：藍＝標題、紅＝要按的） */
+html.fest-1010 .tt-title,
+html.fest-1010 .wk-sum-title { color: var(--fest-blue); }
+
+/* 背景的巨大浮水印（Aa／read／✓）與品牌小點 */
+html.fest-1010 .deep-lite { color: rgba(11,49,143,.055); }
+html.fest-1010 .lc-mark span i,
+html.fest-1010 .brand-name em,
+html.fest-1010 .brand-name i,
+html.fest-1010 .lc-title i,
+html.fest-1010 .gs-kicker { color: var(--fest-red); }
+
+/* ⚠ 刻意不動：`.tt-past-*`（「之前還有 N 項沒完成」）維持琥珀色。
+   那是**語意色**——它的工作是提醒，不是裝飾；為了過節改成紅藍
+   反而會讓「這是提醒」這件事變得不明顯。`.wh-task-cue` 的金色箭頭同理。 */
