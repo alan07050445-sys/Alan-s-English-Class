@@ -660,6 +660,10 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
 
   return (
     <div className="grade-selector">
+      {/* v490（Alan：「門口頁也是！要有國慶的感覺」）——跟封面同一套飄帶 */}
+      {window.festOn && window.festOn() && (
+        <div className="fest-ribbon" aria-hidden="true"><i/></div>
+      )}
       <div className="gs-decor" aria-hidden="true">
         <span className="gs-blob gs-blob-a"/>
         <span className="gs-blob gs-blob-b"/>
@@ -1255,10 +1259,21 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
   };
   return (
     <div className="login-screen lc-cover lc-hero">
+      {/* v490（Alan：「登入封面也要很明顯國慶的感覺」）：
+          v489 只換了顏色，他看不出來在過節 → 加國旗飄帶＋青天白日＋日期徽章。
+          ⚠ 只在節慶期間才 render，平常這兩行等於不存在（跟外觀共用同一個 festOn）。 */}
+      {window.festOn && window.festOn() && (
+        <div className="fest-ribbon" aria-hidden="true"><i/></div>
+      )}
       {onBack && !enterMode && <button className="lc-back" onClick={onBack}>← 返回課程</button>}
       <h1 className="lc-title">Alan's English Class</h1>
       <div className="lc-under2" aria-hidden="true"/>
       <p className="lc-subtitle">康橋每週進度</p>
+      {window.festOn && window.festOn() && (
+        <div className="fest-day-wrap">
+          <span className="fest-day"><b>10.10</b> 雙十國慶快樂</span>
+        </div>
+      )}
       {/* v392: 扇形封面四張卡——只有第一張（單字）維持 loading="eager"，其餘三張改 lazy。
           原因：這四張在扇形排列裡本來就有大半被旁邊的卡片蓋住，而且實測時間軸顯示它們要到
           t=3113ms 才開始下載，等於一起搶頻寬卻沒有一起被看到。改 lazy 之後瀏覽器會把它們

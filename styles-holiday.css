@@ -219,3 +219,179 @@ html.fest-1010 .qm-sidebar-back { background: rgba(255,255,255,.82); }
 html.fest-1010 .mobile-nav { border-top-color: rgba(11,49,143,.16); }
 html.fest-1010 .qm-side-tab.on,
 html.fest-1010 .qm-tab.on { border-bottom-color: var(--fest-red); }
+
+
+/* ═══ v490：Alan：「要很明顯國慶的感覺」「教室頂藍，沒看到國旗」═══════
+   v489 只換了顏色，他看不出是國慶。這一版加**真的圖案**：
+   · 青天白日徽記（12 道光芒，比例照國徽畫的）
+   · 海報上那種線條煙火（長短交錯的放射線）
+   · 國旗紅飄帶（左上／右下，呼應他給的那張海報）
+   全部是 SVG data URI，**不多載入任何檔案**（學生那邊不會變慢）。
+   ⚠ 一樣整段掛在 html.fest-1010 底下，10/13 自動消失。 */
+
+html.fest-1010 {
+  --fest-sun:  url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50.0' cy='50.0' r='50.0' fill='%230B318F'/><path d='M67.0 47.8L96.0 50.0L67.0 52.2ZM65.8 56.6L89.8 73.0L63.6 60.4ZM60.4 63.6L73.0 89.8L56.6 65.8ZM52.2 67.0L50.0 96.0L47.8 67.0ZM43.4 65.8L27.0 89.8L39.6 63.6ZM36.4 60.4L10.2 73.0L34.2 56.6ZM33.0 52.2L4.0 50.0L33.0 47.8ZM34.2 43.4L10.2 27.0L36.4 39.6ZM39.6 36.4L27.0 10.2L43.4 34.2ZM47.8 33.0L50.0 4.0L52.2 33.0ZM56.6 34.2L73.0 10.2L60.4 36.4ZM63.6 39.6L89.8 27.0L65.8 43.4Z' fill='%23fff'/><circle cx='50.0' cy='50.0' r='17.5' fill='%23fff'/><circle cx='50.0' cy='50.0' r='22.4' fill='none' stroke='%230B318F' stroke-width='1.20'/></svg>");
+  --fest-sun-sm: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32.0' cy='32.0' r='32.0' fill='%230B318F'/><path d='M42.9 30.6L61.4 32.0L42.9 33.4ZM42.1 36.2L57.5 46.7L40.7 38.7ZM38.7 40.7L46.7 57.5L36.2 42.1ZM33.4 42.9L32.0 61.4L30.6 42.9ZM27.8 42.1L17.3 57.5L25.3 40.7ZM23.3 38.7L6.5 46.7L21.9 36.2ZM21.1 33.4L2.6 32.0L21.1 30.6ZM21.9 27.8L6.5 17.3L23.3 25.3ZM25.3 23.3L17.3 6.5L27.8 21.9ZM30.6 21.1L32.0 2.6L33.4 21.1ZM36.2 21.9L46.7 6.5L38.7 23.3ZM40.7 25.3L57.5 17.3L42.1 27.8Z' fill='%23fff'/><circle cx='32.0' cy='32.0' r='11.2' fill='%23fff'/><circle cx='32.0' cy='32.0' r='14.3' fill='none' stroke='%230B318F' stroke-width='0.77'/></svg>");
+  --fest-fw-r: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><g stroke='%23D6001C' stroke-width='2.64' stroke-linecap='round'><line x1='79.2' y1='60.0' x2='115.2' y2='60.0'/><line x1='77.7' y1='67.3' x2='97.7' y2='75.6'/><line x1='73.6' y1='73.6' x2='99.0' y2='99.0'/><line x1='67.3' y1='77.7' x2='75.6' y2='97.7'/><line x1='60.0' y1='79.2' x2='60.0' y2='115.2'/><line x1='52.7' y1='77.7' x2='44.4' y2='97.7'/><line x1='46.4' y1='73.6' x2='21.0' y2='99.0'/><line x1='42.3' y1='67.3' x2='22.3' y2='75.6'/><line x1='40.8' y1='60.0' x2='4.8' y2='60.0'/><line x1='42.3' y1='52.7' x2='22.3' y2='44.4'/><line x1='46.4' y1='46.4' x2='21.0' y2='21.0'/><line x1='52.7' y1='42.3' x2='44.4' y2='22.3'/><line x1='60.0' y1='40.8' x2='60.0' y2='4.8'/><line x1='67.3' y1='42.3' x2='75.6' y2='22.3'/><line x1='73.6' y1='46.4' x2='99.0' y2='21.0'/><line x1='77.7' y1='52.7' x2='97.7' y2='44.4'/></g></svg>");
+  --fest-fw-b: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><g stroke='%230B318F' stroke-width='2.64' stroke-linecap='round'><line x1='79.2' y1='60.0' x2='115.2' y2='60.0'/><line x1='77.7' y1='67.3' x2='97.7' y2='75.6'/><line x1='73.6' y1='73.6' x2='99.0' y2='99.0'/><line x1='67.3' y1='77.7' x2='75.6' y2='97.7'/><line x1='60.0' y1='79.2' x2='60.0' y2='115.2'/><line x1='52.7' y1='77.7' x2='44.4' y2='97.7'/><line x1='46.4' y1='73.6' x2='21.0' y2='99.0'/><line x1='42.3' y1='67.3' x2='22.3' y2='75.6'/><line x1='40.8' y1='60.0' x2='4.8' y2='60.0'/><line x1='42.3' y1='52.7' x2='22.3' y2='44.4'/><line x1='46.4' y1='46.4' x2='21.0' y2='21.0'/><line x1='52.7' y1='42.3' x2='44.4' y2='22.3'/><line x1='60.0' y1='40.8' x2='60.0' y2='4.8'/><line x1='67.3' y1='42.3' x2='75.6' y2='22.3'/><line x1='73.6' y1='46.4' x2='99.0' y2='21.0'/><line x1='77.7' y1='52.7' x2='97.7' y2='44.4'/></g></svg>");
+  --fest-fw-w: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><g stroke='%23FFFFFF' stroke-width='2.64' stroke-linecap='round'><line x1='79.2' y1='60.0' x2='115.2' y2='60.0'/><line x1='77.7' y1='67.3' x2='97.7' y2='75.6'/><line x1='73.6' y1='73.6' x2='99.0' y2='99.0'/><line x1='67.3' y1='77.7' x2='75.6' y2='97.7'/><line x1='60.0' y1='79.2' x2='60.0' y2='115.2'/><line x1='52.7' y1='77.7' x2='44.4' y2='97.7'/><line x1='46.4' y1='73.6' x2='21.0' y2='99.0'/><line x1='42.3' y1='67.3' x2='22.3' y2='75.6'/><line x1='40.8' y1='60.0' x2='4.8' y2='60.0'/><line x1='42.3' y1='52.7' x2='22.3' y2='44.4'/><line x1='46.4' y1='46.4' x2='21.0' y2='21.0'/><line x1='52.7' y1='42.3' x2='44.4' y2='22.3'/><line x1='60.0' y1='40.8' x2='60.0' y2='4.8'/><line x1='67.3' y1='42.3' x2='75.6' y2='22.3'/><line x1='73.6' y1='46.4' x2='99.0' y2='21.0'/><line x1='77.7' y1='52.7' x2='97.7' y2='44.4'/></g></svg>");
+}
+
+/* ── 頂欄：品牌名前面放一顆青天白日（Alan：「沒看到國旗」）── */
+html.fest-1010 .brand-name::before {
+  content: ""; display: inline-block; vertical-align: -3px;
+  width: 19px; height: 19px; margin-right: 8px;
+  background: var(--fest-sun-sm) center/contain no-repeat;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.55); border-radius: 50%;
+}
+/* 頂欄右上角再放兩朵白煙火，讓那條藍不只是「一塊藍」 */
+html.fest-1010 .header::after {
+  background:
+    var(--fest-fw-w) 86% 190%/92px 92px no-repeat,
+    var(--fest-fw-w) 70% -70%/64px 64px no-repeat,
+    radial-gradient(circle at 18% 150%, rgba(255,255,255,.2) 0 26px, transparent 27px);
+  opacity: .55;
+}
+
+/* ── 共用：角落的國旗紅飄帶（照 Alan 給的海報）──────────────
+   ⚠ 用 border-radius 做出「布在飄」的弧度，不要用圖片——
+     圖片在手機上會糊，而且多一個請求。 */
+.fest-ribbon { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.fest-ribbon::before, .fest-ribbon::after {
+  content: ""; position: absolute; display: block;
+}
+.fest-ribbon::before {          /* 左上：紅布 + 藍角 */
+  left: -14%; top: -30%; width: 46%; height: 42%;
+  background: linear-gradient(135deg, #0B318F 0 26%, #D6001C 26% 100%);
+  border-radius: 0 0 62% 34%;
+  transform: rotate(-8deg);
+  box-shadow: 0 10px 30px -12px rgba(11,49,143,.45);
+}
+.fest-ribbon::after {           /* 右下：紅布 */
+  right: -16%; bottom: -30%; width: 44%; height: 38%;
+  background: linear-gradient(315deg, #0B318F 0 18%, #D6001C 18% 100%);
+  border-radius: 46% 58% 0 0;
+  transform: rotate(-8deg);
+  box-shadow: 0 -10px 30px -12px rgba(214,0,28,.4);
+}
+/* 飄帶左上角那顆青天白日（就是國旗左上角那一塊） */
+.fest-ribbon i {
+  position: absolute; left: 4%; top: 2%; width: 68px; height: 68px;
+  background: var(--fest-sun, none) center/contain no-repeat;
+  box-shadow: 0 6px 18px -6px rgba(0,0,0,.35); border-radius: 50%;
+  z-index: 1;
+}
+@media (max-width: 560px) {
+  .fest-ribbon i { width: 46px; height: 46px; }
+}
+
+/* ── 登入封面：飄帶 + 煙火，而且要大 ── */
+html.fest-1010 .lc-cover::after {
+  background:
+    var(--fest-fw-r) 14% 18%/150px 150px no-repeat,
+    var(--fest-fw-b) 84% 26%/118px 118px no-repeat,
+    var(--fest-fw-b) 26% 82%/104px 104px no-repeat,
+    var(--fest-fw-r) 76% 88%/134px 134px no-repeat;
+  opacity: .62;
+  -webkit-mask-image: none; mask-image: none;
+}
+@media (max-width: 680px) {
+  html.fest-1010 .lc-cover::after {
+    background:
+      var(--fest-fw-r) 8% 14%/96px 96px no-repeat,
+      var(--fest-fw-b) 92% 86%/86px 86px no-repeat;
+  }
+}
+
+/* ── 門口頁：同一套 ── */
+html.fest-1010 .grade-selector::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: .55;
+  background:
+    var(--fest-fw-r) 10% 16%/128px 128px no-repeat,
+    var(--fest-fw-b) 90% 20%/100px 100px no-repeat,
+    var(--fest-fw-b) 16% 86%/92px 92px no-repeat,
+    var(--fest-fw-r) 86% 84%/116px 116px no-repeat;
+}
+@media (max-width: 680px) {
+  html.fest-1010 .grade-selector::after {
+    background:
+      var(--fest-fw-r) 6% 12%/84px 84px no-repeat,
+      var(--fest-fw-b) 94% 88%/76px 76px no-repeat;
+  }
+}
+
+/* ── 「10.10」日期徽章（封面與門口頁都放一顆）── */
+.fest-day {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 16px 6px 8px; border-radius: 999px;
+  background: #fff; border: 1.5px solid rgba(11,49,143,.22);
+  box-shadow: 0 8px 22px -10px rgba(11,49,143,.4);
+  font-family: var(--sans); font-weight: 900; letter-spacing: .02em;
+  color: #0B318F; font-size: 14.5px; white-space: nowrap;
+}
+.fest-day::before {
+  content: ""; width: 26px; height: 26px; flex: none; border-radius: 50%;
+  background: var(--fest-sun, none) center/contain no-repeat;
+}
+.fest-day b { color: #D6001C; font-size: 16px; }
+
+/* 日期徽章的位置：封面頁在副標下面、門口頁在問候語旁邊 */
+.fest-day-wrap { position: relative; z-index: 3; margin: 14px 0 2px; text-align: center; }
+html.fest-1010 .lc-title { position: relative; z-index: 3; }
+html.fest-1010 .lc-subtitle,
+html.fest-1010 .lc-fan,
+html.fest-1010 .lc-cta { position: relative; z-index: 3; }
+/* ⚠ .lc-back 本來就是 position:absolute（釘在左上角）。
+   第一版我連它一起寫成 relative，按鈕就掉到標題中間去了——
+   這種只需要「浮上來」的，只動 z-index，不要碰 position。 */
+html.fest-1010 .lc-back { z-index: 4; }
+/* 門口頁的內容要浮在飄帶上面 */
+html.fest-1010 .grade-selector-inner { z-index: 3; }
+
+/* 飄帶收斂一點：第一版兩塊紅色太大、像色塊不像旗子。
+   縮小、加上「布的弧度」與陰影，並讓左上那塊露出青天白日。 */
+html.fest-1010 .fest-ribbon::before {
+  left: -10%; top: -26%; width: 38%; height: 34%;
+  border-radius: 0 0 70% 40%;
+}
+html.fest-1010 .fest-ribbon::after {
+  right: -12%; bottom: -26%; width: 36%; height: 30%;
+  border-radius: 50% 64% 0 0;
+}
+html.fest-1010 .fest-ribbon i { left: 3.5%; top: 1.5%; }
+
+/* ── 再調一輪（Alan：「要很明顯」）────────────────────────
+   第一版旗子太小、而且左上角那顆青天白日剛好被「← 返回課程」壓住
+   （兩個都釘在左上角，只有真的畫出來才看得到這種事）。
+   → 旗子放大、太陽往右下挪開按鈕、煙火加密。 */
+html.fest-1010 .fest-ribbon::before {
+  left: -9%; top: -24%; width: 48%; height: 42%;
+  border-radius: 0 0 68% 44%;
+  background: linear-gradient(132deg, #0B318F 0 34%, #D6001C 34% 100%);
+}
+html.fest-1010 .fest-ribbon::after {
+  right: -11%; bottom: -24%; width: 44%; height: 36%;
+  border-radius: 52% 66% 0 0;
+}
+/* ⚠ 太陽要避開左上角的返回鈕（它釘在 top:20px left:20px） */
+html.fest-1010 .fest-ribbon i { left: 7.5%; top: 9%; width: 76px; height: 76px; }
+@media (max-width: 680px) {
+  html.fest-1010 .fest-ribbon i { left: 6%; top: 11%; width: 52px; height: 52px; }
+}
+/* 返回鈕要看得見（它現在壓在紅布上） */
+html.fest-1010 .lc-back {
+  background: #fff; border-color: rgba(11,49,143,.3);
+  box-shadow: 0 6px 18px -8px rgba(0,0,0,.4);
+}
+
+/* 煙火加密一點 */
+html.fest-1010 .lc-cover::after {
+  background:
+    var(--fest-fw-r) 20% 14%/128px 128px no-repeat,
+    var(--fest-fw-b) 84% 20%/104px 104px no-repeat,
+    var(--fest-fw-b) 10% 52%/76px 76px no-repeat,
+    var(--fest-fw-r) 92% 58%/88px 88px no-repeat,
+    var(--fest-fw-b) 30% 86%/96px 96px no-repeat,
+    var(--fest-fw-r) 72% 90%/116px 116px no-repeat;
+  opacity: .6;
+}

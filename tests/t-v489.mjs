@@ -47,13 +47,34 @@ ok('⭐ styles-holiday.css 的每一條規則都掛在 html.fest-1010 底下', (
    const sels = body.split('}').map(b => b.split('{')[0].trim())
      .filter(s => s && !s.startsWith('@') && !s.startsWith('html.fest-1010')
                   && s !== '' && !/^\s*$/.test(s));
-   // 只允許 .fest-badge（那是 JSX 自己掛的節慶標籤，平常根本不會被 render）
-   const bad = sels.filter(s => !/\.fest-badge/.test(s) && !/^\s*$/.test(s));
+   /* 允許 .fest-* 開頭的「元素自己的 class」——那些是 JSX **只在節慶期間才 render** 的
+      （.fest-badge 問候標籤、.fest-ribbon 國旗飄帶、.fest-day 日期徽章）。
+      它們不掛 html.fest-1010 是對的：平常那些元素根本不存在。
+      ⚠ 但光是放行不算數——下面【2b】會去 JSX 裡確認它們真的被 festOn 擋住。 */
+   const bad = sels.filter(s => !/\.fest-(badge|ribbon|day)/.test(s) && !/^\s*$/.test(s));
    if (bad.length) console.log('      漏網的選擇器：', bad.slice(0, 5));
    return bad.length === 0; })());
 ok('   class 真的是掛在 <html> 上（body 蓋不到自己的背景）', (() => {
    toggled = null; W.festApply();
    return toggled && toggled.c === 'fest-1010'; })());
+
+console.log('\n【2b】裝飾元素本身也要被擋住（不然 10/13 之後旗子還掛在那）');
+[['.fest-ribbon', '國旗飄帶'], ['fest-day', '10.10 徽章'], ['fest-badge', '門口頁問候標籤']].forEach(([cls, zh]) => {
+  ok(`⭐ ${zh} 只在節慶期間 render`, (() => {
+     const key = cls.replace('.', '');
+     const i = shell.indexOf(key);
+     if (i < 0) return false;
+     /* 往前找最近的 300 字，裡面一定要有 window.festOn 的判斷 */
+     return /window\.festOn && window\.festOn\(\)/.test(shell.slice(Math.max(0, i - 300), i)); })());
+});
+ok('⭐ 旗子與煙火都是 SVG data URI，沒有多載入任何檔案（學生端不會變慢）', (() => {
+   const n = (css.match(/url\("data:image\/svg\+xml,/g) || []).length;
+   return n >= 5 && !/url\(['"]?(?!data:)[^)]*\.(png|jpg|jpeg|gif|svg|webp)/i.test(css); })());
+ok('⭐ data URI 裡不可以有裸雙引號或 #（會把 CSS 字串提早截斷）', (() => {
+   /* 🔴 第一版就是踩這個：url("data:…<svg xmlns="http…" 在第二個 " 就斷了，
+      整條 background 變成 none，旗子和煙火全部沒出現，而且**完全不報錯**。 */
+   const uris = [...css.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g)].map(m => m[1]);
+   return uris.length >= 5 && uris.every(u => u.indexOf('#') < 0); })());
 
 console.log('\n【3】日期判斷只能有一份');
 ok('⭐ 門口頁的問候標籤用的是同一個 window.festOn，沒有自己再寫一次日期',
