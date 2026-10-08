@@ -1,0 +1,221 @@
+/* ═══════════════════════════════════════════════════════════════
+   styles-holiday.css — 🇹🇼 雙十國慶限定外觀（v489）
+   Alan 2026-10-08：「這幾天是台灣國慶日，我想幫我的網站換個風格」→ 他選了 C（全套）。
+
+   ⚠ 整份都包在 `html.fest-1010` 底下，class 沒掛上去時這個檔案**完全不作用**，
+     所以 10/13 之後不需要任何動作，網站自己變回原本的樣子。
+   ⚠ 這個檔案最後載入（排在 styles-tune.css 後面），用途就是覆寫，
+     所以裡面不應該出現 !important——真的覆寫不掉再往下寫一層選擇器。
+
+   設計取捨（Alan 的網站是小朋友一次看半小時的地方）：
+   · 外殼（門口頁／頂欄／本週卡）＝熱鬧，第一眼就知道在過節
+   · 閱讀面（單字卡、短文、文章、題目）＝**維持白底**，不要動
+     ——節慶感來自進出場，不是來自他們盯著的那塊字。
+═══════════════════════════════════════════════════════════════ */
+
+html.fest-1010 {
+  --fest-red:   #D6001C;
+  --fest-red-d: #A8001A;
+  --fest-blue:  #0B318F;
+  --fest-blue-d:#071F5C;
+  --fest-blue-l:#13409F;
+  --fest-tint:  #EEF1F7;   /* 海報的冷白 */
+  --fest-tint-2:#F6F8FC;
+}
+
+/* ── 1. 底色換成海報的冷白斜紋（卡片仍是純白＝閱讀不受影響）── */
+html.fest-1010 body {
+  background:
+    linear-gradient(104deg, rgba(255,255,255,.75) 0 24%, rgba(255,255,255,0) 24% 30%,
+                            rgba(255,255,255,.62) 30% 52%, rgba(255,255,255,0) 52% 60%,
+                            rgba(255,255,255,.7) 60% 84%, rgba(255,255,255,0) 84%),
+    var(--fest-tint);
+  background-attachment: fixed;
+}
+html.fest-1010 {
+  --bg: #EEF1F7;
+  --bg-paper: #F6F8FC;
+  --border: #D3D9E8;
+  --border-soft: #E2E7F2;
+  --accent: #D6001C;
+  --accent-soft: #E8213C;
+}
+
+/* ── 2. 頂欄：國旗藍漸層＋遠處煙火 ── */
+html.fest-1010 .header {
+  background: linear-gradient(100deg, var(--fest-blue) 0 58%, var(--fest-blue-l) 100%);
+  border-bottom: none;
+  box-shadow: 0 2px 0 var(--fest-red), 0 10px 30px -18px rgba(7,31,92,.8);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  position: relative; overflow: hidden;
+}
+html.fest-1010 .header::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background:
+    radial-gradient(circle at 18% 150%, rgba(255,255,255,.22) 0 26px, transparent 27px),
+    radial-gradient(circle at 86% -60%, rgba(255,255,255,.17) 0 30px, transparent 31px);
+}
+/* 頂欄裡的字與圖示原本是深色的，底換成藍就要一起翻白 */
+html.fest-1010 .header,
+html.fest-1010 .header a,
+html.fest-1010 .header button,
+html.fest-1010 .header .brand,
+html.fest-1010 .header .brand-name,
+html.fest-1010 .header .mono { color: #fff; }
+html.fest-1010 .header .brand-sub,
+html.fest-1010 .header .muted { color: rgba(255,255,255,.72); }
+html.fest-1010 .header svg { stroke: currentColor; }
+
+/* ── 3. 門口頁（封面）＝裝飾最濃的地方 ───────────────────────
+   ⚠ 這裡刻意只換顏色與圖案，版面一格都沒動——.gs-decor／.gs-blob／.gs-spark
+     本來就是裝飾層（v402 做的），換皮最安全。 */
+html.fest-1010 .grade-selector {
+  background:
+    linear-gradient(118deg, rgba(255,255,255,.55) 0 48%, rgba(255,255,255,0) 48% 56%,
+                            rgba(255,255,255,.4) 56% 100%),
+    var(--fest-tint);
+}
+html.fest-1010 .gs-blob-a {
+  background: radial-gradient(circle, rgba(214,0,28,.18), transparent 66%);
+}
+html.fest-1010 .gs-blob-b {
+  background: radial-gradient(circle, rgba(11,49,143,.17), transparent 66%);
+}
+html.fest-1010 .gs-spark { fill: var(--fest-red); }
+html.fest-1010 .gs-spark-2 { fill: var(--fest-blue); }
+html.fest-1010 .gs-kicker { color: var(--fest-red); }
+html.fest-1010 .grade-sel-title { color: var(--fest-blue); }
+
+/* 國慶標籤（門口頁問候那一行） */
+.fest-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-left: 8px; padding: 2px 10px; border-radius: 999px;
+  background: var(--fest-blue, #0B318F); color: #fff;
+  font-family: var(--sans); font-size: 12.5px; font-weight: 800; letter-spacing: .01em;
+  vertical-align: middle; white-space: nowrap;
+}
+@media (max-width: 480px) { .fest-badge { margin-left: 0; margin-top: 6px; } }
+
+/* ── 4. 本週卡／聯絡簿：白底不動，只換重點色 ── */
+html.fest-1010 .wh-kicker,
+html.fest-1010 .cb-bar-title { color: var(--fest-red); }
+html.fest-1010 .wh-title { color: var(--fest-blue); }
+html.fest-1010 .cb-bar { border-color: rgba(11,49,143,.18); }
+html.fest-1010 .cb-bar:hover { border-color: rgba(11,49,143,.38); }
+
+/* ── 5. 主要按鈕＝國旗紅 ── */
+html.fest-1010 .btn.primary {
+  background: linear-gradient(100deg, var(--fest-red), var(--fest-red-d));
+  color: #fff; border-color: transparent;
+}
+html.fest-1010 .btn.primary:hover {
+  background: linear-gradient(100deg, var(--fest-red-d), var(--fest-red));
+  border-color: transparent;
+}
+
+/* ── 6. 單元卡左側色條：藍紅交替（原本是單一棕色）── */
+html.fest-1010 .qm-unit-row.active { border-left-color: var(--fest-red); }
+
+/* ── 7. 星星維持金色 ─────────────────────────────
+   ⚠ 刻意不動：星星是集點系統的視覺識別，小朋友認的是「金色星星」，
+     為了過節把它換成紅色會讓「我有幾顆星」這件事變得不好認。 */
+
+/* ── 8. 登入封面頁（.lc-cover）─────────────────────────────
+   🔴 實測才發現的：封面頁有自己寫死的奶油色底，主題變數**完全管不到它**
+     （第一次套上去跑 localhost 看，封面頁一點都沒變）。
+     這正是「網站有 2,900 處寫死顏色」的代價——换膚一定要真的開起來看。
+   ⚠ .lc-cover 的 background 原本就帶 !important，所以這裡也得帶，
+     不是偷懶（檔頭說的「不要用 !important」在這一條是例外，原因就是這個）。 */
+html.fest-1010 .lc-cover {
+  background:
+    radial-gradient(860px 540px at 50% -8%, #FFFFFF 0%, rgba(255,255,255,0) 64%),
+    radial-gradient(520px 420px at 8% 4%, rgba(214,0,28,.13), transparent 62%),
+    radial-gradient(560px 460px at 94% 104%, rgba(11,49,143,.14), transparent 62%),
+    var(--fest-tint) !important;
+}
+html.fest-1010 .lc-wm { color: rgba(11,49,143,.045); }
+html.fest-1010 .lc-spark { color: var(--fest-red); opacity: .6; }
+html.fest-1010 .lc-s2 { color: var(--fest-blue); }
+html.fest-1010 .lc-mark { border-color: rgba(11,49,143,.22); }
+html.fest-1010 .lc-mark span i { color: var(--fest-red); }
+html.fest-1010 .lc-est { border-color: rgba(11,49,143,.22); }
+html.fest-1010 .lc-under {
+  width: 96px; height: 3px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--fest-red) 22%, var(--fest-blue) 78%, transparent);
+}
+html.fest-1010 .lc-tag { color: var(--fest-blue); }
+html.fest-1010 .lc-cta {
+  background: linear-gradient(100deg, var(--fest-red), var(--fest-red-d));
+  box-shadow: 0 10px 26px -8px rgba(214,0,28,.5);
+}
+html.fest-1010 .lc-cta:hover { box-shadow: 0 16px 34px -8px rgba(214,0,28,.56); }
+html.fest-1010 .lc-gg { color: var(--fest-red); }
+html.fest-1010 .lc-back:hover,
+html.fest-1010 .lc-logout:hover { color: var(--fest-blue); border-color: var(--fest-blue); }
+
+/* 封面頁的煙火（純 CSS，不載入任何圖片） */
+html.fest-1010 .lc-cover::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: .5;
+  background:
+    radial-gradient(circle at 14% 22%, rgba(214,0,28,.5) 0 1.5px, transparent 2px) 0 0/58px 58px,
+    radial-gradient(circle at 86% 74%, rgba(11,49,143,.45) 0 1.5px, transparent 2px) 0 0/74px 74px;
+  -webkit-mask-image: radial-gradient(circle at 14% 20%, #000 0 120px, transparent 150px),
+                      radial-gradient(circle at 87% 78%, #000 0 140px, transparent 170px);
+          mask-image: radial-gradient(circle at 14% 20%, #000 0 120px, transparent 150px),
+                      radial-gradient(circle at 87% 78%, #000 0 140px, transparent 170px);
+  -webkit-mask-composite: source-over; mask-composite: add;
+}
+
+/* ── 9. 門口頁的年級卡：頂部那條彩帶改成國旗紅藍 ──────────
+   🔴 又一個實測才看到的：卡片頂端的棕色條是 .grade-sel-card::before，
+     而 --g-c（卡片自己的主色）是寫死在 .grade-sel-card 裡的 #8B3120，
+     不是全站變數 → 主題換了它一點反應都沒有。
+   ⚠ 改 --g-c 一行就能同時吃到數字顏色（.grade-sel-badge 用 var(--g-c)）
+     與 hover 外框，不用一條一條覆寫。 */
+html.fest-1010 .grade-sel-card { --g-c: var(--fest-blue); }
+html.fest-1010 .grade-sel-card::before {
+  background: linear-gradient(90deg, var(--fest-red) 0 50%, var(--fest-blue) 50% 100%);
+  opacity: .92;
+}
+html.fest-1010 .grade-sel-card:nth-child(even)::before {
+  background: linear-gradient(90deg, var(--fest-blue) 0 50%, var(--fest-red) 50% 100%);
+}
+html.fest-1010 .grade-sel-card:hover { box-shadow: 0 12px 32px rgba(11,49,143,.16); }
+
+/* 門口頁的「教室卡 / 其他題庫 / 老師後台」 */
+html.fest-1010 .gs-card { border-color: rgba(11,49,143,.18); }
+html.fest-1010 .gs-card:hover { border-color: rgba(11,49,143,.42); }
+html.fest-1010 .gs-card-cta { color: var(--fest-red); }
+
+/* ── 10. 本週卡（.wh）──────────────────────────────────────
+   🔴 第三個實測才看到的：整張卡是寫死的奶油漸層、進度環是寫死的棕色，
+     所以頂欄已經變國旗藍了，它底下那張大卡還是暖色＝看起來像沒做完。
+   ⚠ 這張卡佔第一屏一半，是「進教室第一眼」，一定要跟著換。 */
+html.fest-1010 .wh {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F2F6FD 100%);
+  border-color: rgba(11,49,143,.16);
+}
+html.fest-1010 .wh::before {
+  background: radial-gradient(circle, rgba(214,0,28,.13), transparent 68%);
+}
+html.fest-1010 .wh-pill { background: var(--fest-red); }
+html.fest-1010 .wh-kicker { color: var(--fest-red); }
+html.fest-1010 .wh-title { color: var(--fest-blue); }
+html.fest-1010 .wh-ring-bg { stroke: #DCE3F2; }
+html.fest-1010 .wh-ring-fill { stroke: var(--fest-red); }
+html.fest-1010 .wh-ring-num b { color: var(--fest-red); }
+html.fest-1010 .wh-stat { border-color: rgba(11,49,143,.16); background: rgba(255,255,255,.8); }
+html.fest-1010 .wh-stat b { color: var(--fest-blue); }
+
+/* 今天的任務 / 自由練習等白卡：邊框從暖棕換成冷藍，不然白卡邊會偏黃 */
+html.fest-1010 .tt-wrap,
+html.fest-1010 .tt-card,
+html.fest-1010 .qm-cat-card { border-color: rgba(11,49,143,.14); }
+
+/* ── 11. 收尾：幾顆還寫死棕色的小按鈕 ──────────────────────
+   都是實際點進去一頁一頁看才發現的（程式裡找不出來——它們散在三個 CSS 檔）。 */
+html.fest-1010 .qm-sidebar-reopen { background: var(--fest-blue); }
+html.fest-1010 .qm-sidebar-back { background: rgba(255,255,255,.82); }
+html.fest-1010 .mobile-nav { border-top-color: rgba(11,49,143,.16); }
+html.fest-1010 .qm-side-tab.on,
+html.fest-1010 .qm-tab.on { border-bottom-color: var(--fest-red); }

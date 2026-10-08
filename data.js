@@ -7381,3 +7381,58 @@ Object.assign(window, {
   checkInToday, computeCheckin, checkinToday,
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
+
+/* ══ v489 🇹🇼 雙十國慶限定外觀 ══════════════════════════════════
+   Alan 2026-10-08：「這幾天是台灣國慶日，我想幫我的網站換個風格」。
+   ⭐ 關鍵設計：**它自己會關掉**。只在 10/08–10/12 出現，過了就恢復原狀，
+     Alan 不用記得去關（忘記關的話，學生十一月還在看國旗）。
+   ⚠ 用本地時間判斷（學生都在台灣），不要用 UTC——UTC 的 10/08 00:00
+     在台灣已經是 10/08 早上 8 點，等於少了整整一個早上。 */
+const FEST_1010 = { from: '10-08', to: '10-12', cls: 'fest-1010' };
+const FEST_KEY  = 'alan-fest-override';          // 老師自己的開關（只影響這台裝置）
+
+function festOn(now) {
+  /* 老師可以在自己的裝置上強制開／關（提早預覽、或自己看膩了）。
+     學生不會動到這個，他們看到的永遠是日期判斷的結果。 */
+  let ov = null;
+  try { ov = localStorage.getItem(FEST_KEY); } catch (e) {}
+  if (ov === 'on')  return true;
+  if (ov === 'off') return false;
+  const d = now || new Date();
+  const md = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return md >= FEST_1010.from && md <= FEST_1010.to;
+}
+
+/* 掛在 <html> 上，整個 styles-holiday.css 才會生效。
+   ⚠ 掛在 <html> 不是 <body>：有些浮層（放大圖、裝扮室）是 createPortal 到 body 的，
+     掛 body 也會吃到，但 <html> 連 body 自己的背景都蓋得到。 */
+function festApply() {
+  try {
+    const on = festOn();
+    document.documentElement.classList.toggle(FEST_1010.cls, on);
+    return on;
+  } catch (e) { return false; }
+}
+
+/* 老師端的開關：'auto'（跟日期走）／'on'／'off' */
+function festSetOverride(mode) {
+  try {
+    if (mode === 'auto') localStorage.removeItem(FEST_KEY);
+    else localStorage.setItem(FEST_KEY, mode === 'on' ? 'on' : 'off');
+  } catch (e) {}
+  return festApply();
+}
+function festOverride() {
+  try { return localStorage.getItem(FEST_KEY) || 'auto'; } catch (e) { return 'auto'; }
+}
+/* 今天是不是國慶日當天（10/10）——門口頁的問候語要用 */
+function festIsDay() {
+  const d = new Date();
+  return d.getMonth() === 9 && d.getDate() === 10;
+}
+
+Object.assign(window, { festOn, festApply, festSetOverride, festOverride, festIsDay, FEST_1010 });
+
+/* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。
+   data.js 比 app.jsx 早載入，所以這裡是最早能動手的地方。 */
+festApply();

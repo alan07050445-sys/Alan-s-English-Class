@@ -173,6 +173,9 @@ function Header({
 }) {
   // v442：編輯列的「⋯ 更多」預設收起來（其他老師最常用的是三顆一鍵生成）
   const [moreOpen, setMoreOpen] = React.useState(false);
+  /* v489：國慶外觀的開關是寫在 <html> 的 class 上（不是 React state），
+     按完 React 不知道要重畫 → 用這個計數器逼它重畫一次按鈕文字。 */
+  const [festTick, setFestTick] = React.useState(0);
   /* ══ v446（Alan：「我原本有製作 G3 living in the desert 的一鍵生成，但現在不見了」）══
      東西沒有不見——它在第 1 週，而網站開起來會停在「今天這一週」，那一週剛好是空的。
      所以補兩件事：① 空的一週直接告訴老師最近有內容的是哪一週 ② 用名字搜尋整個年級的單元。 */
@@ -390,6 +393,18 @@ function Header({
                 {onArchiveWeek && (
                   <button className="banner-btn arch" onClick={onArchiveWeek}>
                     {weekArchived ? '↩ 取消封存' : '📦 封存這一週'}
+                  </button>
+                )}
+                {/* v489：國慶外觀的開關。平常不顯示——只有「現在是節慶期間」或
+                    「老師自己強制開著」時才出現，免得一年到頭掛著一顆沒用的按鈕。
+                    ⚠ 只影響按的人這台裝置（學生看到的永遠是日期判斷的結果）。 */}
+                {window.festOn && (window.festOn() || (window.festOverride && window.festOverride() !== 'auto')) && (
+                  <button className="banner-btn fest" onClick={() => {
+                    const now = window.festOn();
+                    window.festSetOverride(now ? 'off' : 'on');
+                    setFestTick(t => t + 1);
+                  }}>
+                    {window.festOn() ? '🇹🇼 國慶外觀：開（按一下關掉）' : '🇹🇼 國慶外觀：關（按一下打開）'}
                   </button>
                 )}
                 <button className="banner-btn danger" onClick={onDeleteWeek}><Icon name="trash" size={12}/> 刪除這一週</button>
@@ -661,7 +676,13 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
         <h1 className="grade-sel-title">{doorMode ? (who ? `${greet}，${who}！` : `${greet}！`) : '現在讀幾年級呢？'}</h1>
         <p className="grade-sel-sub">
           {doorMode
-            ? <><span className="gs-date">{dateLine}</span><span className="gs-date-dot">·</span>今天要從哪裡開始呢？</>
+            /* v489：國慶期間問候語換成節慶版（10/10 當天講「今天」，前後幾天講「快樂」）。
+               ⚠ 這個標籤跟主題外觀綁同一個判斷（window.festOn），
+                 不要另外再寫一份日期判斷——兩份一定會走鐘。 */
+            ? <><span className="gs-date">{dateLine}</span><span className="gs-date-dot">·</span>
+                {(window.festOn && window.festOn())
+                  ? <>今天要從哪裡開始呢？<span className="fest-badge">🇹🇼 {window.festIsDay && window.festIsDay() ? '今天是雙十國慶' : '雙十國慶快樂'}</span></>
+                  : '今天要從哪裡開始呢？'}</>
             : '選好就直接帶你進入這一週的練習。'}
         </p>
         {onOpenAdmin && (

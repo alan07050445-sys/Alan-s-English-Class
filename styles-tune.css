@@ -4256,3 +4256,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   font-family: var(--sans); font-size: 13px; font-weight: 700;
 }
 .cb-ghost-btn:hover { background: #F6E6C8; }
+
+/* v489：國慶外觀開關（老師編輯列）——用國旗色讓它一眼認得出來 */
+.banner-btn.fest {
+  border-color: rgba(11,49,143,.55);
+  background: linear-gradient(100deg, rgba(214,0,28,.14), rgba(11,49,143,.14));
+}
+.banner-btn.fest:hover { border-color: rgba(11,49,143,.85); }
