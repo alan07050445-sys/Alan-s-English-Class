@@ -2005,12 +2005,24 @@ RULES
   (too wide, too narrow, or the opposite).
 - All four options must be about the SAME part of speech and similar length, so the longest one
   is not always the answer.
-- answer: 0-based index. Put the correct one in a DIFFERENT position each time.
+- options[0] is ALWAYS the correct definition, and "answer" is ALWAYS 0.
+  Do NOT move it around — the website shuffles the positions itself afterwards.
 - explain: very simple ENGLISH, ≤16 words, quoting the clue words from YOUR passage.
 ${_AI_MINIFY}`;
 
 /* 回傳 [{word, title, passage, q, options, answer, explain}]。
-   驗證的重點：目標字在短文裡只出現一次、四個選項不重複、答案位置要分散。 */
+   驗證的重點：目標字在短文裡只出現一次、四個選項不重複、答案位置要分散。
+
+   🔴 v488（Alan：「我單字卡有 8 個，字義選擇只有 4 題」）：
+   實測 8 個字只出 4~5 題，被擋掉的全是「出題者說 2、覆核說 0」。
+   一度以為是覆核在亂判，但把同一題的正解輪流放到四個位置去問，
+   覆核 12/12 全對——**沒有位置偏誤，是出題者自己標錯**。
+   根因在提示詞：`Put the correct one in a DIFFERENT position each time`
+   → 模型把正確定義寫在第 0 格，卻為了「換位置」宣稱答案是第 2 格。
+   而位置**程式本來就會攤平**（_qsSpreadAnswers，v468 做的）＝這行指令既多餘又有害。
+   改成「正解一律放第 0 格」，位置交給程式。
+   ⭐ 通用原則：**程式自己會做的隨機化，不要再叫模型做一次**——
+      模型為了服從而謊報，而那是程式看不出來的錯（跟 v417「選最長的就對」同一類）。 */
 async function aiMakeVocabSense(words, { grade = 'g4', hint = '', teacherNote = '', avoid = [], onProgress } = {}) {
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (!list.length) return [];
@@ -2043,8 +2055,13 @@ async function _senseRound(list, { grade = 'g4', hint = '', teacherNote = '', av
         (d) => { const a = JSON.parse(_aiStripFence(d?.content?.[0]?.text || '')); return Array.isArray(a) ? a : null; });
     } finally { done += part.length; if (onProgress) onProgress(Math.min(done, list.length), list.length); }
   }, 10);
-  const cand = [];
-  (packs || []).forEach(arr => (arr || []).forEach(x => { const v = qsValidSense(x); if (v) cand.push(v); }));
+  const cand0 = [];
+  (packs || []).forEach(arr => (arr || []).forEach(x => { const v = qsValidSense(x); if (v) cand0.push(v); }));
+  /* ⚠ v488：**先攤平位置、再送去覆核**。
+     提示詞現在要求正解一律放第 0 格（見 aiMakeVocabSense 上面的說明），
+     如果就這樣拿去問覆核，它每一題都只要回答「0」——萬一它偏好第一個選項，
+     整個交叉檢查就變成蓋橡皮章。攤平之後正解平均落在 ABCD，它才真的要讀短文。 */
+  const cand = _qsSpreadAnswers(cand0);
   /* ⚠⚠ 2026-10-06 實測：模型會**把答案標錯**（trapping 的正解是「catching or holding」，
      它標成「making a sound」）。這種錯程式看不出來——四個選項都像定義。
      所以讓另一個 AI 自己讀短文作答，對不上就丟掉那一題。
