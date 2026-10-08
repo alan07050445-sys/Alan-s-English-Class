@@ -4862,6 +4862,8 @@ function WordSortIntro({ item, onStart, prog }) {
 ══════════════════════════════════════════════════════ */
 function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const categories  = item.sortCategories || [];
+  /* v485：欄位的小字說明（-ity → quality of…）。名稱塞不下就切掉，所以分開放。 */
+  const sortHints   = item.sortHints || {};
   const suffixMode  = !!item.sortSuffixMode;
   const [redoWrongIds, setRedoWrongIds] = useQM(null); // v306+: 非 null＝只重做這些錯的（ephemeral，不覆蓋最佳成績）
   const allWords    = useQMM(() => {
@@ -4959,7 +4961,7 @@ function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
           <div className="ws-grid" style={{gridTemplateColumns: colCount}}>
             {categories.map(cat => (
               <div key={cat} className="ws-col">
-                <div className="ws-col-head">{cat}</div>
+                <div className="ws-col-head">{cat}{sortHints[cat] ? <span className="ws-col-hint">{sortHints[cat]}</span> : null}</div>
                 <div className="ws-col-body">
                   {allWords.filter(w => w.category === cat).map(w => {
                     const placed = placements[w.id] === cat;
@@ -4985,7 +4987,7 @@ function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
           <div className="ws-grid" style={{gridTemplateColumns: colCount}}>
             {categories.map(cat => (
               <div key={cat} className="ws-col">
-                <div className="ws-col-head">{cat}</div>
+                <div className="ws-col-head">{cat}{sortHints[cat] ? <span className="ws-col-hint">{sortHints[cat]}</span> : null}</div>
                 <div className="ws-col-body">
                   {allWords.filter(w => w.category === cat).map(w => (
                     <div key={w.id} className="ws-word-chip result correct">
@@ -5051,7 +5053,7 @@ function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
             className={`ws-col${selected ? ' droppable' : ''}`}
             onClick={() => clickCategory(cat)}
           >
-            <div className="ws-col-head">{cat}</div>
+            <div className="ws-col-head">{cat}{sortHints[cat] ? <span className="ws-col-hint">{sortHints[cat]}</span> : null}</div>
             <div className="ws-col-body">
               {wordsInCat(cat).map(w => (
                 <button
@@ -5632,6 +5634,44 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
         <span className="circle-progress">{submitted ? `${score}/${questions.length}` : `${completedCount}/${questions.length}`}</span>
       </div>
 
+      {/* 🔴 v485（Alan：「短文找字是真的一整個文章，不是一句一句…就用正常文章的格式，
+          不要很突兀的每個字分那麼開」）：circleProse ＝ 整篇排成一段文章。
+          點字的邏輯完全沿用下面那一套，只是不給每一句一個框、也不加編號。 */}
+      {item.circleProse ? (
+        <div className="circle-prose-wrap">
+          {item.storyTitle && <div className="circle-prose-title">{item.storyTitle}</div>}
+          <div className="circle-prose">
+            {questions.map((q, qIndex) => {
+              const tokens = tokenizeCircleSentence(q.sentence);
+              return (
+                <React.Fragment key={q._circleKey}>
+                  {qIndex > 0 && ' '}
+                  {tokens.map((token, tokenIndex) => {
+                    if (/^\s+$/.test(token)) return <span key={tokenIndex}>{token}</span>;
+                    if (!/[\p{L}\p{N}]/u.test(token)) return <span key={tokenIndex}>{token}</span>;
+                    const picked = pickedOf(q);
+                    const selected = picked.indexOf(tokenIndex) >= 0;
+                    const want = answersOf(q).map(normalizeCircleValue);
+                    const correctAnswer = submitted && want.indexOf(normalizeCircleValue(token)) >= 0;
+                    const need = want.length;
+                    return (
+                      <button key={tokenIndex}
+                        className={`circle-word${selected ? ' selected' : ''}${submitted && selected ? (correctAnswer ? ' correct' : ' wrong') : ''}${correctAnswer ? ' answer' : ''}`}
+                        onClick={() => !submitted && setSelectedWords(prev => {
+                          const cur = prev[q._circleKey] || [];
+                          if (cur.indexOf(tokenIndex) >= 0) return { ...prev, [q._circleKey]: cur.filter(i => i !== tokenIndex) };
+                          const next = need === 1 ? [tokenIndex] : cur.length >= need ? cur : cur.concat(tokenIndex);
+                          return { ...prev, [q._circleKey]: next };
+                        })}
+                        disabled={submitted}>{token}</button>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
       <div className="circle-question-list">
         {questions.map((q, qIndex) => {
           const tokens = tokenizeCircleSentence(q.sentence);
@@ -5703,6 +5743,7 @@ function CircleAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
           );
         })}
       </div>
+      )}
 
       <div className="circle-footer">
         {!submitted ? (

@@ -1907,16 +1907,35 @@ function wsBuildItems({ pack, title, kinds }) {
   const on = (k) => (kinds || []).indexOf(k) >= 0;
   const p = pack || {};
 
-  // 📘 先學一下：規則＋例子＋（有分組就）分一分一步
+  /* 📘 先學一下
+     🔴 v485（Alan：「根本沒有全部解釋完，還有 ic、ment 以及很多的 examples 呢？
+       都要講解出來啊，這樣小朋友才能跟著念跟學」）：
+       v482 只有**一步**，而且只給兩個例子 → 四種字尾只講到前面那一種。
+       改成**一組一步**：-ty 一步、-ity 一步、-ic 一步、-ment 一步，
+       每一步都用那一組自己的字當例子，最後才是分一分與小試身手。 */
   if (on('lesson') && p.rule) {
-    const ex = (p.yes || []).slice(0, 2).map(w => ({ en: w, hl: [w], zh: '' }));
-    const steps = [{ kind: 'learn', say: (p.ruleZh || p.rule).slice(0, 60), examples: ex.length ? ex : [{ en: (p.yes || [''])[0] || '', hl: [], zh: '' }] }];
-    if ((p.groups || []).length >= 2) {
+    const steps = [];
+    const gs = (p.groups || []).filter(x => x && x.words && x.words.length);
+    if (gs.length >= 2) {
+      gs.slice(0, 5).forEach(x => {
+        // 這一組怎麼講：優先用 AI 寫的中文口語，沒有就自己拼一句
+        const say = (x.zh || `${x.label}${x.means ? `：${x.means}` : ''}`).slice(0, 60);
+        steps.push({ kind: 'learn', say,
+          examples: x.words.slice(0, 3).map(w => ({ en: w, hl: [w], zh: '' })) });
+      });
+    } else {
+      steps.push({ kind: 'learn', say: (p.ruleZh || p.rule).slice(0, 60),
+        examples: (p.yes || []).slice(0, 3).map(w => ({ en: w, hl: [w], zh: '' })) });
+    }
+    // 講完每一種之後，才動手分分看
+    if (gs.length >= 2) {
       steps.push({ kind: 'sort', q: '把這些字分到正確的地方',
-        groups: p.groups.slice(0, 3).map(x => ({ label: x.label, items: x.words.slice(0, 3) })), why: p.ruleZh || '' });
-    } else if ((p.yes || []).length && (p.no || []).length) {
-      steps.push({ kind: 'pick', q: `Which word follows the pattern?`,
-        options: [p.yes[0], p.no[0], p.no[1] || p.no[0]].filter((v, i, a) => v && a.indexOf(v) === i),
+        groups: gs.slice(0, 3).map(x => ({ label: x.label, items: x.words.slice(0, 3) })), why: p.ruleZh || '' });
+    }
+    // 最後一題小試身手：挑出符合規則的那一個
+    if ((p.yes || []).length && (p.no || []).length >= 2) {
+      steps.push({ kind: 'pick', q: 'Which word follows the pattern?',
+        options: [p.yes[0], p.no[0], p.no[1]].filter((v, i, a2) => v && a2.indexOf(v) === i),
         answer: 0, why: p.ruleZh || '' });
     }
     if (steps.length >= 2) {
@@ -1953,7 +1972,14 @@ function wsBuildItems({ pack, title, kinds }) {
     p.groups.forEach(x => x.words.forEach(w => ws.push({ id: 'w' + stamp + ws.length + rnd(), word: w, category: x.label })));
     if (ws.length >= 4) out.push({ ...base, id: 'ws' + stamp + 'so' + rnd(), type: 'word-sort', order: 2, ...req,
       title: `${g} · 分一分`, zh: `${ws.length} 個字 · Sort the words`,
-      sortCategories: p.groups.map(x => x.label), sortWords: ws });
+      sortCategories: p.groups.map(x => x.label), sortWords: ws,
+      /* v485：欄位名稱只放詞綴（-ity），意思（quality of…）另外放小字。
+         以前整句塞在名稱裡，窄欄位切成「-ity (qu」——Alan 截到了。 */
+      sortHints: p.groups.reduce((a, x) => {
+        const h = (x.means || x.zh || '').trim();
+        if (h) a[x.label] = h.slice(0, 40);
+        return a;
+      }, {}) });
   }
 
   // 📝 選擇題（課本 p7／p13）
@@ -1980,9 +2006,13 @@ function wsBuildItems({ pack, title, kinds }) {
       const ans = st.answers.filter(a => (' ' + sen.toLowerCase() + ' ').indexOf(a.toLowerCase()) >= 0);
       return ans.length ? { id: 'p' + stamp + i + rnd(), sentence: sen, answers: ans, answer: ans[0], explain: p.rule } : null;
     }).filter(Boolean);
+    /* 🔴 v485（Alan：「短文找字是真的一整個文章，不是一句一句，就用正常文章的格式，
+       不要很突兀的每個字分那麼開」）：circleProse ＝ 學生端把整篇排成一段文章，
+       不要一句一個框、也不要把每個字撐開。 */
     if (rows.length >= 2) out.push({ ...base, id: 'ws' + stamp + 'st' + rnd(), type: 'circle-answer', order: 5, ...req,
       title: `${g} · 短文找字`, zh: `${st.answers.length} 個字 · ${st.title || 'Find the words'}`,
-      circleInstruction: `Read the passage and tap every word that follows the pattern. ${p.rule}`,
+      circleInstruction: `Read the passage and tap every word that follows the pattern.`,
+      circleProse: true, storyTitle: st.title || '',
       passage: st.text, circleQuestions: rows });
   }
   return out;

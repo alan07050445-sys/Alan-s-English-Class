@@ -1755,7 +1755,7 @@ const WS_SYS = `You design a Word Study worksheet for Taiwanese elementary stude
 in the style of a Kang Chiao (康橋) textbook Word Study page.
 Output ONLY JSON:
 {"topic":"","rule":"","ruleZh":"","check":{"kind":"vce|suffix|prefix|team|digraph","args":[""]},
- "groups":[{"label":"","arg":"","words":[""]}],
+ "groups":[{"label":"","arg":"","means":"","zh":"","words":[""]}],
  "yes":[""],"no":[""],
  "mcq":[{"q":"","options":["","","",""],"answer":0}],
  "build":[{"clue":"","base":"","answer":""}],
@@ -1771,6 +1771,12 @@ RULES
 - groups: 2-4 sub-groups, each with 3-5 real words that belong ONLY to that group.
   (long a / long i / long o / long u … or -ty / -ity / -ic / -ment … or ai / ay / ea / ee …)
   "arg" is which one of your "check" args that group is for ("-ity", "ea"); leave it "" for vce groups.
+  ⚠ "label" must be SHORT — just the affix or the letters ("-ity", "ea", "long a"), at most 10 characters.
+  Put the meaning in "means" instead (English, ≤4 words: "quality of", "the sound in rain").
+  "zh": how a teacher says that group out loud in Traditional Chinese, ≤20 characters, keeping the
+  English part in English (「-ity 是『品質、狀態』，把動詞或形容詞變成名詞」).
+  ⚠ EVERY group needs "means" and "zh" — the site reads them out in the lesson, so a missing one
+  means the children never get told what that group is.
 - mcq: when a question names ONE affix or team ("Which word has the ea vowel team?"), every option is
   judged against THAT one only — so exactly one option must have it and the others must not.
 - yes: 8-12 words that DO follow the pattern. no: 8-12 that clearly do NOT.
@@ -1813,7 +1819,14 @@ function wsValidPack(x) {
     const one = str(g && g.arg)
       || check.args.find(a2 => lab.toLowerCase().indexOf(String(a2).replace(/^-|-$/g, '').toLowerCase()) >= 0)
       || '';
-    return { label: lab.slice(0, 16), arg: one,
+    /* 🔴 v485：籃子名稱**只放詞綴／字母**，意思放 means。
+       v484 讓 AI 自己決定 label，它寫成「-ity (quality of)」→ 畫面上被切成「-ity (qu」。
+       ⚠ 光靠提示詞擋不住，程式自己拆：括號裡的東西搬去 means，名稱只留前面那一段。 */
+    const m = lab.match(/^([^(（]+)[(（]([^)）]*)[)）]?\s*$/);
+    const short = (m ? m[1] : lab).trim().slice(0, 12);
+    const means = str(g && g.means) || (m ? m[2].trim() : '');
+    return { label: short, arg: one,
+             means: means.slice(0, 40), zh: _zhTW(str(g && g.zh)).slice(0, 40),
              words: [...new Set(words(g && g.words).filter(w => hit(w, one || undefined)))] };
   }).filter(g => g.label && g.words.length >= 2);
   // 同一個字不可以出現在兩籃（不然分到哪都對）

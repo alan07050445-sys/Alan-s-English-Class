@@ -12,7 +12,9 @@ const ROOT = new URL('..', import.meta.url);
 const data  = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
 const ed    = fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8');
 const app   = fs.readFileSync(new URL('app.jsx', ROOT), 'utf8');
+const tune  = fs.readFileSync(new URL('styles-tune.css', ROOT), 'utf8');
 const shell = fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
+const qm    = fs.readFileSync(new URL('components-quiz-mode.jsx', ROOT), 'utf8');
 
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
 const W = {}; new Function('window', 'document', 'firebase', 'localStorage', data)(W, stub, stub, stub);
@@ -146,6 +148,102 @@ ok('⭐ 短文找字：一句一題，答案來自那一句', (() => {
   return st && st.circleQuestions.every(q => q.answers.every(a => q.sentence.toLowerCase().indexOf(a.toLowerCase()) >= 0)); })());
 ok('只勾一種就只出一種', build({ pack: p, title: 't', kinds: ['mcq'] }).every(i => i.type === 'quiz'));
 ok('什麼都沒勾就不出東西', build({ pack: p, title: 't', kinds: [] }).length === 0);
+
+console.log('\n【4.5】v485：Alan 回報的三件');
+/* ① 短文找字要像一篇文章，不是一句一個框、每個字撐開
+   ② 互動教學要把**每一種**都講到（他截到只講了 -ty 就結束）
+   ③ 分籃名稱被切成「-ity (qu」 */
+const SUF = { topic: 'Suffixes', rule: 'We add -ty, -ity, -ic, or -ment to base words.',
+  ruleZh: '加 -ty、-ity、-ic、-ment 造新字', check: { kind: 'suffix', args: ['-ty', '-ity', '-ic', '-ment'] },
+  groups: [{ label: '-ty', arg: '-ty', means: 'state of', zh: '-ty 是「狀態」', words: ['safety', 'loyalty', 'majesty'] },
+           { label: '-ity', arg: '-ity', means: 'quality of', zh: '-ity 是「品質」', words: ['ability', 'community', 'creativity'] },
+           { label: '-ic', arg: '-ic', means: 'relating to', zh: '-ic 是「跟…有關」', words: ['basic', 'economic', 'historic'] },
+           { label: '-ment', arg: '-ment', means: 'act of', zh: '-ment 是「動作」', words: ['enjoyment', 'payment', 'management'] }],
+  yes: ['safety', 'ability', 'basic', 'enjoyment', 'loyalty', 'economic'],
+  no: ['microscope', 'envelope', 'acquire', 'module', 'cyclone', 'impose'],
+  mcq: [], build: [],
+  story: { title: 'A Day at School', text: 'Max had great creativity and ability to build things. His community school held a contest for the best invention. He created a basic microscopic camera to look at tiny bugs. His project showed economic thinking and excellent management skills. The judges gave him enjoyment by awarding first prize.' } };
+/* ⚠ 一定要先過 wsValidPack——短文的答案是**驗證器自己從文章裡找出來**的，
+   直接把生資料丟給 wsBuildItems 會因為沒有 answers 而不出短文單元。 */
+const sufPack = V(SUF);
+const sufItems = build({ pack: sufPack, title: 'Unit 2', kinds: ['lesson', 'story', 'sort'] });
+const lesson = sufItems.find(i => i.type === 'lesson');
+
+ok('⭐ ② 互動教學：一組一步，四種字尾全部講到',
+   ['-ty', '-ity', '-ic', '-ment'].every(x => lesson.steps.some(st => st.kind === 'learn' && st.say.indexOf(x) >= 0)));
+ok('⭐ ② 每一步都用那一組自己的字當例子（本來只有兩個例子就結束）',
+   lesson.steps.filter(st => st.kind === 'learn').every(st => st.examples.length >= 2)
+   && lesson.steps.filter(st => st.kind === 'learn').length === 4);
+ok('   講完每一種才動手（分一分排在所有講解後面）', (() => {
+   const lastLearn = lesson.steps.map(st => st.kind).lastIndexOf('learn');
+   const sortAt = lesson.steps.map(st => st.kind).indexOf('sort');
+   return sortAt > lastLearn; })());
+ok('   最後有一題小試身手', lesson.steps[lesson.steps.length - 1].kind === 'pick');
+ok('只有一組時也要能出（退回用整條規則講一次）', (() => {
+   const one = build({ pack: { ...SUF, groups: [SUF.groups[0]] }, title: 't', kinds: ['lesson'] })[0];
+   return one && one.steps.filter(st => st.kind === 'learn').length >= 1; })());
+
+const st2 = sufItems.find(i => i.type === 'circle-answer' && i.passage);
+ok('⭐ ① 短文找字標成「整篇文章」模式', !!st2 && st2.circleProse === true);
+ok('   文章標題帶過去（學生要知道在讀什麼）', st2.storyTitle === 'A Day at School');
+ok('⭐ ① 學生端真的有一條「整篇文章」的畫面，不是一句一個框',
+   /item\.circleProse \? \(/.test(qm) && /className="circle-prose"/.test(qm));
+ok('   點字的邏輯沿用同一套（沒有另寫一份判分）',
+   (qm.match(/setSelectedWords\(prev => \{/g) || []).length === 2);
+ok('   排版是正常文章（不是每個字一個框）',
+   /\.circle-prose \.circle-word \{[\s\S]{0,160}display: inline;/.test(tune)
+   && /margin: 0 -3px/.test(tune));
+
+ok('⭐ ③ 籃子名稱只放詞綴，括號裡的意思被拆到 means', (() => {
+   const r = V({ ...SUF, groups: [{ label: '-ity (quality of)', arg: '-ity', words: ['ability', 'community'] },
+                                  { label: '-ment', arg: '-ment', means: 'act of', words: ['payment', 'enjoyment'] }] });
+   return r && r.groups[0].label === '-ity' && r.groups[0].means === 'quality of'; })());
+ok('   中文括號也拆得掉', (() => {
+   const r = V({ ...SUF, groups: [{ label: '-ity（品質）', arg: '-ity', words: ['ability', 'community'] },
+                                  { label: '-ment', arg: '-ment', words: ['payment', 'enjoyment'] }] });
+   return r && r.groups[0].label === '-ity'; })());
+ok('   名稱再長也不會被切（畫面會折行，不裁切）',
+   /\.ws-col-head \{[^}]*overflow-wrap: anywhere/.test(tune)
+   && !/\.ws-col-head \{[^}]*text-overflow: ellipsis/.test(tune));
+/* ⚠ 拆掉括號只做一半——意思被抽出來卻沒人顯示，等於「quality of 還是不見了」，
+   那正是 Alan 抱怨的事。所以要一路驗到學生端畫得出來。 */
+ok('⭐ ③ 拆出來的意思要真的出現在畫面上（不是被丟掉）', (() => {
+   const it = build({ pack: sufPack, title: 'u', kinds: ['sort'] }).find(i => i.type === 'word-sort');
+   return it && it.sortHints && it.sortHints['-ity'] === 'quality of' && it.sortHints['-ic'] === 'relating to'; })());
+ok('   學生端三個地方（作答／你的答案／正確答案）都畫小字',
+   (qm.match(/className="ws-col-hint"/g) || []).length === 3
+   && /\.ws-col-hint \{/.test(tune));
+
+console.log('\n【4.6】三種主題都要能用（Alan：「確認是用在每一個 word study 主題上面」）');
+/* ⚠ 測試資料要跟真 AI 的量級一樣（8~12 個字、短文 60~110 字）。
+   給太少的話「圈出來」排不出兩列、短文也會因為太短被擋掉——
+   那是我的 fixture 太薄，不是程式有問題（第一次寫就踩到了）。 */
+[['VCe', { kind: 'vce', args: [] },
+  [{ label: 'long a', words: ['imitate', 'evaporate', 'fascinate'] }, { label: 'long i', words: ['survive', 'advertise', 'emphasize'] }],
+  ['impose', 'cyclone', 'outside', 'contribute', 'escape', 'complete', 'invite', 'decide'],
+  ['pause', 'teach', 'together', 'tissue', 'thirsty', 'calendar', 'bathroom', 'sequence'],
+  'We went outside to ride a bike beside the lake. The water was fine and the sun made the whole place shine. Jake did not want to impose on anyone, so he took a rope and tied it to a pine tree. Later we had to escape a sudden storm and drive home. It was a fine day and nobody wanted it to come to an end so soon.'],
+ ['後綴', { kind: 'suffix', args: ['-ty', '-ity', '-ic', '-ment'] }, SUF.groups, SUF.yes, SUF.no, SUF.story.text],
+ ['母音組合', { kind: 'team', args: ['ai', 'ay', 'ea', 'ee', 'oa'] },
+  [{ label: 'ai', arg: 'ai', words: ['rain', 'paint', 'trail'] }, { label: 'ea', arg: 'ea', words: ['meadow', 'beach', 'dream'] }],
+  ['betray', 'proceed', 'increase', 'array', 'reproach', 'appeal', 'yesterday', 'straight'],
+  ['virtue', 'module', 'cyclone', 'acquire', 'continue', 'revenue', 'impose', 'envelope'],
+  'The team walked down a long road to reach the green meadow. Light rain fell on the trail, so they had to wait under an oak tree and play a quiet game. Later the sun came out and they could see a boat sail past on the deep blue sea. On the way home they found a coin in the sand and agreed to keep it safe until the next day.'],
+].forEach(([name, chk, gs, yes, no, text]) => {
+  const pk = V({ topic: name, rule: 'Follow the pattern.', ruleZh: '照規則找字', check: chk,
+    groups: gs, yes, no, mcq: [], build: [], story: { title: 'T', text } });
+  const items = pk ? build({ pack: pk, title: name, kinds: ['lesson', 'circle', 'sort', 'mcq', 'build', 'story'] }) : [];
+  ok(`⭐ ${name}：驗得過、而且建得出單元`, !!pk && items.length >= 3);
+  ok(`   ${name}：互動教學每一組都講到`, (() => {
+    const l = items.find(i => i.type === 'lesson');
+    return l && l.steps.filter(x => x.kind === 'learn').length === Math.min(5, pk.groups.length); })());
+  ok(`   ${name}：短文是整篇文章模式`, (() => {
+    const t = items.find(i => i.type === 'circle-answer' && i.passage);
+    return !pk.story || (t && t.circleProse === true); })());
+  ok(`   ${name}：短文的答案都真的符合規則`, (() => {
+    const t = items.find(i => i.type === 'circle-answer' && i.passage);
+    return !t || t.circleQuestions.every(q => q.answers.every(a => C(a, chk))); })());
+});
 
 console.log('\n【5】整條路有接起來');
 ok('⭐ data.js 掛出去了', typeof W.aiMakeWordStudy === 'function' && typeof W.wsValidPack === 'function' && typeof W.wsCheck === 'function');
