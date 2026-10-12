@@ -7755,3 +7755,121 @@ function subscribePacing(gradeKey, cb) {
 
 Object.assign(window, { pacingParse, pacingFill, pacingForWeek, pacingWeekNo, pacingReadXlsx, pacingFromRows, pacingBoldPages,
                         pacingNextFormative, savePacing, loadPacing, subscribePacing });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   📒 v496 上課紀錄（Lesson Log）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 2026-10-12：「我是一對一，給我自己看就好，三個年級都要，之後也要出家長
+   可以看的，而且還要寫這次上課這位小朋友掌握度幾 percentage、以及有什麼功課、
+   以及下次上課進度。」
+
+   資料長相：lessons/{學生email}
+     { slot: { day: 3, time: '17:00' },      // 固定時段（0=日 … 6=六）
+       log: { '2026-10-15': {
+                wk, kind, pct, did, hw, next, note, at } } }
+
+   ⚠ 一個學生一份文件（不是一堂課一份）：一學期約 40 堂、資料很小，
+     一次讀完、一個訂閱就夠，比開一個 collection 簡單太多。
+
+   ⭐ 設計重點（省 Alan 的時間，不是堆欄位）：
+     1. 新增一堂時，日期**自動帶出下一個固定時段**（他說「學生通常都是每週固定時間」）
+     2. **上一堂寫的「下次進度」→ 自動填進這一堂的「這次上了什麼」**
+        ——這是整個功能最省力的地方，課堂之間自己接起來
+     3. 學校那一週在教什麼自動帶出來（接 v493 的進度表）
+     4. 連假會提醒（進度表的 note），那正是會打亂固定時段的日子
+
+   ⚠⚠ 家長頁面（Alan：「之後也要出家長可以看的」）**不能直接把這份開給家長讀**：
+     note 是老師的私人備註，而 Firestore 的規則**沒辦法只擋某幾個欄位**——
+     開了 read 就是整份都給。正確做法是另開 lessonsPublic/{email}
+     （存檔時同時寫一份不含 note 的），家長只讀那一份。
+     現在先不做（他說「之後」），但 firestore.rules 裡已經寫下這條限制。
+     要做的時候：saveLesson 多寫一份 ＋ 把既有紀錄補寫過去（量很小，一次跑完）。
+═══════════════════════════════════════════════════════════════════════════ */
+
+const LESSON_KINDS = [
+  { id: 'normal', zh: '正常上課', ico: '📘' },
+  { id: 'makeup', zh: '補課',     ico: '🔁' },
+  { id: 'extra',  zh: '加課',     ico: '➕' },
+  { id: 'off',    zh: '請假／停課', ico: '🏖️' },
+];
+
+const _LS_TERM_START = new Date(2026, 7, 31);   // 2026-08-31 開學（跟 app.jsx 的 TERM_START 同一天）
+const _lsDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+/* 'YYYY-MM-DD'。⚠ 不要用 toISOString()——那是 UTC，台灣早上會算成前一天。 */
+function lessonISO(d) {
+  const x = d instanceof Date ? d : new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+/* 日期 → 學校第幾週（W1 = 開學那一週）。開學前回 0。 */
+function lessonWeekOf(dateISO) {
+  const d = _lsDay(new Date(dateISO + 'T00:00:00'));
+  const diff = Math.floor((d - _lsDay(_LS_TERM_START)) / 86400000);
+  return diff < 0 ? 0 : Math.floor(diff / 7) + 1;
+}
+/* 下一個固定時段的日期（含今天）。沒設時段就回今天。 */
+function lessonNextDate(slot, from) {
+  const base = _lsDay(from ? new Date(from) : new Date());
+  if (!slot || slot.day == null) return lessonISO(base);
+  const want = Number(slot.day);
+  const d = new Date(base);
+  d.setDate(d.getDate() + ((want - d.getDay() + 7) % 7));
+  return lessonISO(d);
+}
+/* 排好序的課堂清單（新的在前）。 */
+function lessonRows(doc) {
+  const log = (doc && doc.log) || {};
+  return Object.keys(log).sort().reverse().map(date => ({ date, ...log[date] }));
+}
+/* 上一堂（比 dateISO 早的最近一堂，且不是請假）——用來接「下次進度」。 */
+function lessonPrev(doc, dateISO) {
+  return lessonRows(doc).find(r => r.date < dateISO && r.kind !== 'off') || null;
+}
+/* 平均掌握度（只算有填 pct 的正常/補課/加課）。 */
+function lessonAvgPct(doc, lastN) {
+  const got = lessonRows(doc).filter(r => r.kind !== 'off' && typeof r.pct === 'number');
+  const use = lastN ? got.slice(0, lastN) : got;
+  if (!use.length) return null;
+  return Math.round(use.reduce((a, r) => a + r.pct, 0) / use.length);
+}
+
+async function saveLesson(email, dateISO, rec) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('lessons').doc(id)
+    .set({ log: { [dateISO]: { ...rec, at: Date.now() } } }, { merge: true });
+}
+async function deleteLesson(email, dateISO) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('lessons').doc(id)
+    .set({ log: { [dateISO]: firebase.firestore.FieldValue.delete() } }, { merge: true });
+}
+async function saveLessonSlot(email, slot) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('lessons').doc(id).set({ slot: slot || null }, { merge: true });
+}
+function subscribeLessons(email, cb) {
+  const id = String(email || '').trim().toLowerCase();
+  try {
+    return _db.collection('lessons').doc(id)
+      .onSnapshot(s => cb(s.exists ? s.data() : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+
+/* 給家長看的摘要（Alan：「之後也要出家長可以看的」）。
+   ⚠ **刻意不含 note**——那是老師自己的備註。
+   先做成「一鍵複製的文字」，他貼到 LINE 就好；之後要做家長頁面再用同一份資料。 */
+function lessonParentText(rec, who, pace) {
+  if (!rec) return '';
+  const L = [];
+  const k = LESSON_KINDS.find(x => x.id === rec.kind);
+  L.push(`${who ? who + ' · ' : ''}${rec.date}${k && k.id !== 'normal' ? `（${k.zh}）` : ''}`);
+  if (pace && pace.it && pace.it.reading) L.push(`🏫 學校進度：${pace.it.reading}${pace.it.vocab ? ' · ' + pace.it.vocab : ''}`);
+  if (rec.did)  L.push(`\n📘 今天上了\n${rec.did}`);
+  if (typeof rec.pct === 'number') L.push(`\n📊 掌握度：${rec.pct}%`);
+  if (rec.hw)   L.push(`\n📕 回家功課\n${rec.hw}`);
+  if (rec.next) L.push(`\n➡️ 下次進度\n${rec.next}`);
+  return L.join('\n');
+}
+
+Object.assign(window, { LESSON_KINDS, lessonISO, lessonWeekOf, lessonNextDate, lessonRows,
+                        lessonPrev, lessonAvgPct, saveLesson, deleteLesson, saveLessonSlot,
+                        subscribeLessons, lessonParentText });

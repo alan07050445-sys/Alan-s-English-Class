@@ -739,6 +739,226 @@ function SummerAdmin() {
 }
 
 /* ── Roster management tab (學生名單) ──────────────────── */
+/* ══ 📒 v496 上課紀錄 ═══════════════════════════════════════════════════
+   Alan 一對一教學，每個學生固定時段上課。他要記的是：
+   這次上了什麼／掌握度幾 %／功課／下次進度。
+
+   ⭐ 這個畫面的重點是**少打字**，不是欄位多：
+     · 日期自動帶下一個固定時段
+     · **上一堂寫的「下次進度」自動填進這一堂的「這次上了什麼」**
+     · 學校那一週在教什麼自動顯示（接 v493 的進度表，照學生的年級抓）
+   ⚠ 老師私人備註（note）跟其他欄位分開——之後要給家長看時不給看。 */
+function LessonLog({ roster, myEmail }) {
+  const mine = (roster || []).filter(st => st.active !== false
+    && String(st.teacher || '').toLowerCase() === String(myEmail || '').toLowerCase());
+  const list = mine.length ? mine : (roster || []).filter(st => st.active !== false);
+  const [who, setWho] = useDash(null);
+  const [doc, setDoc] = useDash(null);
+  const [pace, setPace] = useDash(null);
+  const [editing, setEditing] = useDash(null);   // 正在編的那一堂（date）
+  const [draft, setDraft] = useDash(null);
+  const [msg, setMsg] = useDash('');
+
+  const stu = list.find(x => x.email === who) || null;
+  useDashE(() => {
+    setDoc(null); setEditing(null); setDraft(null);
+    if (!who || !window.subscribeLessons) return;
+    return window.subscribeLessons(who, setDoc);
+  }, [who]);
+  useDashE(() => {
+    setPace(null);
+    const g = stu && stu.grade;
+    if (!g || !window.subscribePacing) return;
+    return window.subscribePacing(g, setPace);
+  }, [stu && stu.grade]);
+
+  const rows = window.lessonRows ? window.lessonRows(doc) : [];
+  const avg = window.lessonAvgPct ? window.lessonAvgPct(doc, 5) : null;
+  const slot = (doc && doc.slot) || null;
+  const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+  const paceOf = (dateISO) => {
+    if (!pace || !window.lessonWeekOf) return null;
+    const n = window.lessonWeekOf(dateISO);
+    return pace.find(w => w.n === n) || null;
+  };
+
+  const openNew = () => {
+    const date = window.lessonNextDate(slot);
+    const prev = window.lessonPrev(doc, date);
+    setEditing(date);
+    /* ⭐ 上一堂的「下次進度」自動變成這一堂的「這次上了什麼」——
+       課堂之間自己接起來，Alan 不用再翻上一次寫了什麼。 */
+    setDraft({ kind: 'normal', pct: 80, did: (prev && prev.next) || '', hw: '', next: '', note: '' });
+  };
+  const openEdit = (r) => { setEditing(r.date); setDraft({ ...r }); };
+  const save = async () => {
+    if (!editing || !draft) return;
+    try {
+      await window.saveLesson(who, editing, {
+        wk: window.lessonWeekOf(editing), kind: draft.kind, pct: draft.kind === 'off' ? null : Number(draft.pct),
+        did: draft.did || '', hw: draft.hw || '', next: draft.next || '', note: draft.note || '',
+      });
+      setEditing(null); setDraft(null); setMsg('已儲存 ✓'); setTimeout(() => setMsg(''), 1800);
+    } catch (e) { setMsg('存檔失敗：' + ((e && e.message) || '')); }
+  };
+  const copyParent = (r) => {
+    const t = window.lessonParentText(r, stu && stu.name, paceOf(r.date));
+    try { navigator.clipboard.writeText(t); setMsg('已複製給家長的摘要 ✓'); setTimeout(() => setMsg(''), 2200); }
+    catch (e) { setMsg('複製失敗，請手動選取'); }
+  };
+  const pctCls = (p) => p >= 85 ? 'hi' : p >= 60 ? 'mid' : 'lo';
+
+  return (
+    <div className="ll2">
+      <div className="ll2-side">
+        <div className="ll2-side-h">學生（{list.length}）</div>
+        {list.length === 0 && <div className="ll2-empty">名單裡還沒有學生——先到「學生名單」加。</div>}
+        {list.map(st => (
+          <button key={st.email} className={'ll2-stu' + (who === st.email ? ' on' : '')}
+            onClick={() => setWho(st.email)}>
+            <b>{st.name || st.email}</b>
+            <em>{String(st.grade || '').toUpperCase()}</em>
+          </button>
+        ))}
+      </div>
+
+      <div className="ll2-main">
+        {!stu ? (
+          <div className="ll2-pick">← 左邊選一位學生</div>
+        ) : (
+          <>
+            <div className="ll2-head">
+              <div className="ll2-head-l">
+                <h3>{stu.name || stu.email}</h3>
+                <span className="ll2-grade">{String(stu.grade || '').toUpperCase()}</span>
+                {avg != null && <span className={'ll2-avg ' + pctCls(avg)}>近 5 堂平均 {avg}%</span>}
+                {!pace && stu.grade && <span className="ll2-nopace">這個年級還沒匯入學校進度表</span>}
+              </div>
+              <div className="ll2-head-r">
+                <label className="ll2-slot">
+                  固定時段
+                  <select value={slot ? slot.day : ''} onChange={e => {
+                    const v = e.target.value;
+                    window.saveLessonSlot(who, v === '' ? null : { day: Number(v), time: (slot && slot.time) || '' });
+                  }}>
+                    <option value="">未設定</option>
+                    {DAYS.map((d, i) => <option key={i} value={i}>週{d}</option>)}
+                  </select>
+                  <input type="time" value={(slot && slot.time) || ''} disabled={!slot}
+                    onChange={e => window.saveLessonSlot(who, { day: slot.day, time: e.target.value })}/>
+                </label>
+                <button className="btn primary" onClick={openNew}>＋ 新增一堂</button>
+              </div>
+            </div>
+            {msg && <div className="ll2-msg">{msg}</div>}
+
+            {editing && draft && (() => {
+              const p = paceOf(editing);
+              return (
+                <div className="ll2-form">
+                  <div className="ll2-form-h">
+                    <input type="date" value={editing} onChange={e => {
+                      const d = e.target.value; if (!d) return;
+                      const prev = window.lessonPrev(doc, d);
+                      setEditing(d);
+                      setDraft(x => ({ ...x, did: x.did || (prev && prev.next) || '' }));
+                    }}/>
+                    <span className="ll2-wk">第 {window.lessonWeekOf(editing)} 週</span>
+                    <span className="ll2-gap"/>
+                    {window.LESSON_KINDS.map(k => (
+                      <button key={k.id} className={'ll2-kind' + (draft.kind === k.id ? ' on' : '')}
+                        onClick={() => setDraft(x => ({ ...x, kind: k.id }))}>{k.ico} {k.zh}</button>
+                    ))}
+                  </div>
+
+                  {/* 🏫 學校那一週在教什麼——免得 Alan 還要自己翻 */}
+                  {p && (
+                    <div className="ll2-pace">
+                      <div><b>外師</b> {p.it.reading || '—'}{p.it.vocab ? ` · ${p.it.vocab}` : ''}
+                        {p.it.wordStudy ? ` · ${p.it.wordStudy}` : ''}
+                        {(p.it.law || p.it.wsWb) && <span className="ll2-hw">📕 {[p.it.law, p.it.wsWb].filter(x => x && x !== '-').join(' · ')}</span>}</div>
+                      <div><b>中師</b> {p.lt.grammar || '—'}
+                        {p.lt._carry && p.lt.grammarHw ? ` ↩ 作業：${p.lt.grammarHw}` : ''}
+                        {p.lt.grammarBold ? <span className="ll2-bold">只教 pp. {p.lt.grammarBold.join(', ')}</span> : null}
+                        {(p.lt.law || p.lt.gramWb) && <span className="ll2-hw">📕 {[p.lt.law, p.lt.gramWb].filter(x => x && x !== '-').join(' · ')}</span>}</div>
+                      {p.note && <div className="ll2-note">📅 {p.note}</div>}
+                      <button className="ll2-use" onClick={() => setDraft(x => ({
+                        ...x, did: (x.did ? x.did + '\n' : '') + [p.it.reading && `${p.it.reading}${p.it.vocab ? ' ' + p.it.vocab : ''}`,
+                          p.it.wordStudy, p.lt.grammarHw].filter(Boolean).join('、'),
+                      }))}>↓ 帶進「這次上了什麼」</button>
+                    </div>
+                  )}
+
+                  {draft.kind !== 'off' && (
+                    <div className="ll2-pct">
+                      <label>掌握度</label>
+                      <input type="range" min="0" max="100" step="5" value={draft.pct}
+                        onChange={e => setDraft(x => ({ ...x, pct: Number(e.target.value) }))}/>
+                      <b className={pctCls(draft.pct)}>{draft.pct}%</b>
+                      <span className="ll2-quick">
+                        {[50, 70, 85, 95].map(v => (
+                          <button key={v} onClick={() => setDraft(x => ({ ...x, pct: v }))}>{v}</button>
+                        ))}
+                      </span>
+                    </div>
+                  )}
+
+                  {[['did', '📘 這次上了什麼', '上一堂的「下次進度」會自動帶進來'],
+                    ['hw', '📕 回家功課', '例：LAW p20-23、單字卡 8 個字'],
+                    ['next', '➡️ 下次進度', '寫在這裡，下一堂會自動帶進「這次上了什麼」'],
+                    ['note', '🔒 我的備註（家長看不到）', '例：prefix 跟 suffix 還是會搞混']].map(([k, lab, ph]) => (
+                    <label key={k} className="ll2-f">
+                      <span>{lab}</span>
+                      <textarea value={draft[k] || ''} placeholder={ph}
+                        onChange={e => setDraft(x => ({ ...x, [k]: e.target.value }))}/>
+                    </label>
+                  ))}
+
+                  <div className="ll2-form-foot">
+                    <button className="btn ghost" onClick={() => { setEditing(null); setDraft(null); }}>取消</button>
+                    {doc && doc.log && doc.log[editing] && (
+                      <button className="btn danger" onClick={async () => {
+                        if (!confirm(`刪掉 ${editing} 這一堂？`)) return;
+                        await window.deleteLesson(who, editing);
+                        setEditing(null); setDraft(null);
+                      }}>刪掉這一堂</button>
+                    )}
+                    <button className="btn primary" onClick={save}>儲存</button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {rows.length === 0 && !editing && <div className="ll2-empty2">還沒有任何紀錄——按「＋ 新增一堂」開始。</div>}
+            <div className="ll2-rows">
+              {rows.map(r => {
+                const k = window.LESSON_KINDS.find(x => x.id === r.kind) || window.LESSON_KINDS[0];
+                return (
+                  <div key={r.date} className={'ll2-row' + (r.kind === 'off' ? ' off' : '')}>
+                    <div className="ll2-row-h">
+                      <b>{r.date}</b>
+                      <span className="ll2-wk2">第 {r.wk || window.lessonWeekOf(r.date)} 週</span>
+                      <span className="ll2-kind2">{k.ico} {k.zh}</span>
+                      {typeof r.pct === 'number' && <span className={'ll2-p ' + pctCls(r.pct)}>{r.pct}%</span>}
+                      <span className="ll2-gap"/>
+                      <button className="ll2-mini" onClick={() => copyParent(r)}>📋 複製給家長</button>
+                      <button className="ll2-mini" onClick={() => openEdit(r)}>修改</button>
+                    </div>
+                    {r.did  && <div className="ll2-row-f"><em>📘 上了</em>{r.did}</div>}
+                    {r.hw   && <div className="ll2-row-f"><em>📕 功課</em>{r.hw}</div>}
+                    {r.next && <div className="ll2-row-f"><em>➡️ 下次</em>{r.next}</div>}
+                    {r.note && <div className="ll2-row-f priv"><em>🔒 備註</em>{r.note}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RosterManager() {
   const [rosterAll, setRoster] = useDash([]);
   const [email, setEmail]     = useDash('');
@@ -2368,6 +2588,9 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   const NAV = [
     { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題', sec: '每天用' },
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理',     sec: '每天用' },
+    /* v496（Alan：「我是一對一…要寫這次上課這位小朋友掌握度幾 percentage、
+       以及有什麼功課、以及下次上課進度」）*/
+    { id: 'lessons',  ico: '📒', label: '上課紀錄', sub: '掌握度／功課／下次進度', sec: '每天用' },
     { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點', sec: '每天用' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告',    sec: '每天用' },
     { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程', sec: '設定一次' },
@@ -2451,6 +2674,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
           <div className="dash-body tdash-content">
           {tab === 'roster' ? (
             <RosterManager/>
+          ) : tab === 'lessons' ? (
+            <LessonLog roster={rosterAll} myEmail={myEmailD}/>
           ) : tab === 'notify' ? (
             <LineNotify/>
           ) : tab === 'linelink' ? (

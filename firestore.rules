@@ -82,6 +82,18 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    // ── 📒 v496 上課紀錄（老師一對一的教學紀錄）─────────────
+    // Alan：「我是一對一，給我自己看就好」→ 目前只有老師讀寫。
+    //
+    // ⚠⚠ 他也說「之後也要出家長可以看的」，到時候**不能直接把這裡開給家長讀**：
+    //   每一筆裡的 note 是老師的私人備註（例「prefix 跟 suffix 還是會搞混」），
+    //   而 Firestore 的規則**沒辦法只擋某幾個欄位**——開了 read 就是整份都給。
+    //   正確做法是另開一份 lessonsPublic/{email}（存檔時同時寫一份不含 note 的），
+    //   家長只讀那一份。等 Alan 要做家長頁面時再加，順便把既有紀錄補寫過去。
+    match /lessons/{studentEmail} {
+      allow read, write: if isTeacher();
+    }
+
     // ── 全班合作目標（coop）────────────────────────────────
     match /coop/{docId} {
       allow read: if request.auth != null;
