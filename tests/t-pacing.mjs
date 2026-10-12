@@ -110,9 +110,24 @@ ok('⭐ 只挑出粗體的頁碼：1, 6, 139（整格列了 25/1/3/4/6/139 六�
    !!gb && JSON.stringify(gb[0].lt.grammarBold) === JSON.stringify(['1', '6', '139']));
 ok('⭐ 類別名稱（NOUNS）是粗體但不是頁碼，不可以被當成頁數',
    gb[0].lt.grammarBold.indexOf('NOUNS') < 0);
-ok('   整格都沒有粗體時就不要宣稱「只教某幾頁」', (() => {
+ok('⭐ 整格都沒有粗體 ＝「列出來的全部都教」→ 不要宣稱「只教某幾頁」', (() => {
+   /* Alan 2026-10-12 確認：有粗體＝只教粗體那幾頁；沒粗體＝全部都教。
+      所以沒粗體時要回空（整格文字本來就都看得到），不另外宣稱才是對的。
+      ⚠ 真表 G6 的 W11/W13/W15 就是這種：只有類別名稱粗體、頁碼一個都沒粗。 */
    rowsG6[2]['V'] = cellOf('PHRASES- 介系詞片語 (GPW pp. 56, 57, 58)', ['PHRASES']);
    return !W.pacingFromRows(rowsG6)[0].lt.grammarBold; })());
+ok('   粗體頁數不可以沿用到下一週（沿用的只有主題；在 Writing Activity 那格宣稱要教某幾頁是沒根據的）', (() => {
+   const H = HEAD.g6, R = { 1: {}, 2: {}, 3: {} };
+   H.forEach((h, i) => { let c = '', n = i + 1;
+     while (n > 0) { c = String.fromCharCode(65 + (n - 1) % 26) + c; n = Math.floor((n - 1) / 26); }
+     R[1][c] = cellOf(h); R[2][c] = cellOf(''); R[3][c] = cellOf(''); });
+   R[2]['J'] = cellOf('W1'); R[2]['R'] = cellOf('W1');
+   R[3]['J'] = cellOf('W2'); R[3]['R'] = cellOf('W2');
+   R[2]['V'] = cellOf('NOUNS- 名詞 (GPW pp. 1, 3)', ['NOUNS', '1']);
+   R[3]['V'] = cellOf('Unit 1 Writing Activity', []);
+   const r = W.pacingFromRows(R);
+   return r[1].lt.grammarHw === 'NOUNS- 名詞 (GPW pp. 1, 3)'   // 主題有沿用
+       && !r[1].lt.grammarBold; })());                          // 粗體頁數沒有
 ok('   頁碼範圍（61-64）也收得到', (() => {
    rowsG6[2]['V'] = cellOf('X (GPW pp. 61-64)', ['61-64']);
    return JSON.stringify(W.pacingFromRows(rowsG6)[0].lt.grammarBold) === JSON.stringify(['61-64']); })());

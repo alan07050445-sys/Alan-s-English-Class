@@ -1839,7 +1839,8 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
               </div>
               <div className="field-help" style={{ marginTop: 8 }}>
                 灰字＝表上那一格是空的、我照規則沿用前一週；<b>↩</b>＝那週課堂在上 Writing Activity，作業沿用上一個文法主題。
-                {anyBold && <> <b className="pb">只教 pp.</b> ＝那一格裡<b>加粗</b>的頁數（整格列的其他頁沒有加粗）。</>}
+                {anyBold && <> <b className="pb">只教 pp.</b> ＝那一格裡<b>加粗</b>的頁數；
+                  <b>整格都沒有加粗的那幾週＝列出來的全部都要教</b>（Alan 2026-10-12 確認）。</>}
                 {' '}考試只列 Formative（Summative 依你的指示忽略）。
               </div>
             </>
