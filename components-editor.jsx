@@ -1723,7 +1723,106 @@ const WS_KINDS = [
   { id: 'story',   zh: '📖 短文找字', note: '讀一篇短文，把這次的 word study 單字找出來' },
 ];
 
-function WordStudyModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, onClose, onCreate }) {
+/* v493：defaultTopic ＝ 學校進度表幫忙填好的主題（例 W7 的 Prefixes mis-, en-, & em-）。
+   老師還是可以改——它只是免得每次手打、打錯週次。 */
+/* ══ 🏫 v493 學校進度表匯入 ══════════════════════════════════════════════
+   Alan 每學期會收到學校發的 Excel（SY26-27 Grade 4 Term 1-2.xlsx）。
+   ⚠ 刻意做成「從 Excel 複製整張表貼過來」而不是上傳 .xlsx：
+     解析 xlsx 要多載一個 400KB 的函式庫，但這件事**一學期只做一次**。
+     Excel 複製出來的 TSV 會保留空格子，正好是「沿用」規則需要的資訊。
+   ⚠ 解析完先**把 20 週全部列給老師看**，他確認了才存——
+     學校哪天改版面，才不會靜靜地讀錯一整個學期。 */
+function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSave }) {
+  const [tsv, setTsv] = useS('');
+  const [pace, setPace] = useS(null);
+  const [err, setErr] = useS('');
+  const [busy, setBusy] = useS(false);
+  useE(() => { if (open) { setTsv(''); setPace(null); setErr(''); setBusy(false); } }, [open]);
+  if (!open) return null;
+
+  const read = () => {
+    setErr('');
+    const got = window.pacingParse(tsv);
+    if (!got) { setErr('讀不出來——請確認是「整張表一起複製」（含 WK / Unit / Reading 那一列標題）。'); setPace(null); return; }
+    setPace(got);
+  };
+  const cell = (v) => (v && v !== '-') ? v : '—';
+
+  return (
+    <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal pace-modal" onMouseDown={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>🏫 學校進度表 · {gradeName}</h3>
+          <button className="modal-x" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {!pace ? (
+            <>
+              <p className="field-help" style={{ marginBottom: 10 }}>
+                打開學校發的 Excel → <b>全選（Ctrl/⌘ + A）→ 複製</b> → 貼到下面。<br/>
+                我會自動補上「<b>Unit / 課文只寫在循環第一週</b>」和
+                「<b>上 Writing Activity 那週，文法作業沿用上一個主題</b>」這兩條規則。
+              </p>
+              <textarea className="field-input pace-in" value={tsv} onChange={e => setTsv(e.target.value)}
+                placeholder="在這裡貼上（會是一大堆用 Tab 分隔的文字，很正常）"/>
+              {existing && <div className="pace-warn">這個年級已經有一份進度表（{existing.length} 週）——存檔會整份蓋掉。</div>}
+              {err && <div className="notify-msg err" style={{ marginTop: 8 }}>⚠️ {err}</div>}
+            </>
+          ) : (
+            <>
+              <div className="pace-ok">✅ 讀到 <b>{pace.length}</b> 週。<b>請先確認下面這張表跟學校發的一樣</b>，再按儲存。</div>
+              <div className="pace-tbl-wrap">
+                <table className="pace-tbl">
+                  <thead><tr>
+                    <th>週</th><th>外師 · 課文</th><th>Part</th><th>外師 · Word Study</th><th>作業</th>
+                    <th>中師 · 課堂</th><th>中師 · 文法作業</th><th>作業</th><th>Formative</th>
+                  </tr></thead>
+                  <tbody>
+                    {pace.map(w => {
+                      const f = [w.it.assess && '外師 ' + w.it.assess, w.lt.assess && '中師 ' + w.lt.assess].filter(Boolean).join(' · ');
+                      return (
+                        <tr key={w.n} className={f ? 'has-f' : ''}>
+                          <td className="pw">W{w.n}</td>
+                          <td className={w.it._own_reading ? '' : 'carry'}>{cell(w.it.reading)}</td>
+                          <td>{cell(w.it.vocab)}</td>
+                          <td>{cell(w.it.wordStudy)}</td>
+                          <td className="pp">{[w.it.law, w.it.wsWb].filter(x => x && x !== '-').join(' · ') || '—'}</td>
+                          <td>{cell(w.lt.grammar)}</td>
+                          <td className={w.lt._carry ? 'carry' : ''}>{cell(w.lt.grammarHw)}{w.lt._carry ? ' ↩' : ''}</td>
+                          <td className="pp">{[w.lt.law, w.lt.gramWb].filter(x => x && x !== '-').join(' · ') || '—'}</td>
+                          <td className="pf">{f || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="field-help" style={{ marginTop: 8 }}>
+                灰字＝表上那一格是空的、我照規則沿用前一週；<b>↩</b>＝那週課堂在上 Writing Activity，作業沿用上一個文法主題。
+                考試只列 Formative（Summative 依你的指示忽略）。
+              </div>
+            </>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button className="btn ghost" onClick={onClose}>取消</button>
+          {!pace
+            ? <button className="btn primary" disabled={!tsv.trim()} onClick={read}>讀讀看 →</button>
+            : <>
+                <button className="btn" onClick={() => setPace(null)}>← 重貼一次</button>
+                <button className="btn primary" disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  try { await onSave(gradeKey, pace); onClose(); }
+                  catch (e) { setErr((e && e.message) || '存檔失敗'); setBusy(false); }
+                }}>{busy ? '存檔中…' : `沒問題，存起來（${pace.length} 週）`}</button>
+              </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WordStudyModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, defaultTopic, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();
   const [topic, setTopic] = useS('');
   const [words, setWords] = useS('');
@@ -1741,7 +1840,7 @@ function WordStudyModal({ open, categories, defaultCat, defaultGrade, perStudent
 
   useE(() => {
     if (!open) return;
-    setTopic(''); setWords(''); setTitle(defaultTitle || ''); setCat(defaultCat || 'word');
+    setTopic(defaultTopic || ''); setWords(''); setTitle(defaultTitle || ''); setCat(defaultCat || 'word');
     setGrade(defaultGrade || 'g4'); setNote(''); setBusy(0); setErr(''); setRes(null);
     setPicked(WS_KINDS.reduce((a, k) => (a[k.id] = true, a), {}));
     setAssign(true); setWho([]);
@@ -7200,5 +7299,5 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background }) 
   return out;
 }
 
-Object.assign(window, { GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+Object.assign(window, { PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

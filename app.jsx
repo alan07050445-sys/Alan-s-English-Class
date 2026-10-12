@@ -585,6 +585,22 @@ function App() {
     return n;
   };
 
+  /* ══ 🏫 v493 學校進度表 ══════════════════════════════════════════════
+     每個年級一份（class/pacing_g4）。訂閱而不是讀一次——Alan 可能在別台電腦重匯入。
+     ⚠ 沒匯入的年級 pacing 就是 null，畫面上完全不顯示（不要留一條空的）。 */
+  const [pacing, setPacing] = useAppState(null);
+  const [paceOpen, setPaceOpen] = useAppState(false);
+  useAppEffect(() => {
+    setPacing(null);
+    if (!window.subscribePacing || !grade) return;
+    return window.subscribePacing(grade, setPacing);
+  }, [grade]);
+  /* 這一週的進度 ＋ 下一次 Formative（Alan：Summative 不用看）。 */
+  const paceWeek = useAppMemo(
+    () => (window.pacingForWeek ? window.pacingForWeek(pacing, weekId) : null), [pacing, weekId]);
+  const paceNextF = useAppMemo(
+    () => (pacing && window.pacingNextFormative ? window.pacingNextFormative(pacing, weekId) : null), [pacing, weekId]);
+
   const saveWeeksSafe = (w) => {
     if (!cloudReadyRef.current) {
       alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
@@ -1910,6 +1926,9 @@ function App() {
             onReadingGen={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setRcGenOpen(true)}
             onGrammarNotes={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setGnGenOpen(true)}
             onWordStudy={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setWsGenOpen(true)}
+            pace={paceWeek}
+            nextF={paceNextF}
+            onPacing={/^g[1-6]$/.test(String(grade)) ? () => setPaceOpen(true) : null}
             onDeleteWeek={handleDeleteWeek}
             onArchiveWeek={handleArchiveWeek}
             onExport={() => setExportOpen(true)}
@@ -2209,6 +2228,14 @@ function App() {
             onClose={() => setGrGenOpen(false)}
             onCreate={handleGrammarCreate}
           />
+          {window.PacingImportModal && <window.PacingImportModal
+            open={paceOpen}
+            gradeKey={grade}
+            gradeName={String(grade).toUpperCase()}
+            existing={pacing}
+            onClose={() => setPaceOpen(false)}
+            onSave={async (g, weeks) => { await window.savePacing(g, weeks); showToast(`🏫 學校進度表已存（${weeks.length} 週）`); }}
+          />}
           {window.WordStudyModal && <window.WordStudyModal
             open={wsGenOpen}
             categories={activeCategories}
@@ -2216,6 +2243,9 @@ function App() {
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
             roster={qsRoster}
             defaultCat={openCat || (activeCategories.find(c => c.id === 'word') ? 'word' : (activeCategories[0] && activeCategories[0].id)) || 'word'}
+            /* v493：學校這週的 Word Study 主題先填好（例 W7 ＝ Prefixes mis-, en-, & em-）。
+               Alan 本來要自己開 Excel 查再手打，打錯週次就白生一次。 */
+            defaultTopic={(paceWeek && paceWeek.it.wordStudy) || ''}
             onClose={() => setWsGenOpen(false)}
             onCreate={handleWordStudy}
           />}
@@ -2227,7 +2257,10 @@ function App() {
             roster={qsRoster}
             defaultCat={(regenFor && regenFor.catId) || openCat || (activeCategories.find(c => c.id === 'grammar') ? 'grammar' : (activeCategories[0] && activeCategories[0].id)) || 'grammar'}
             defaultTitle={regenFor ? regenFor.name : ''}
-            defaultText={(regenFor && regenFor.text) || ''}      /* v474：原本的教學重點先填好 */
+            /* v474：原本的教學重點先填好／v493：沒有的話用學校這週的文法主題。
+               ⚠ 用 grammarHw 不是 grammar——上 Writing Activity 那週，
+                 要練的是沿用過來的那個文法主題（Alan 親自講解的規則）。 */
+            defaultText={(regenFor && regenFor.text) || (paceWeek && paceWeek.lt.grammarHw) || ''}
             onClose={() => { setGnGenOpen(false); setRegenFor(null); }}
             onCreate={handleGrammarNotesCreate}
           />}

@@ -159,7 +159,7 @@ function findUnitsIn(weekOrder, weeks, q) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, pace, nextF, onPacing,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -350,6 +350,45 @@ function Header({
               )}
             </div>
 
+            {/* ══ 🏫 v493：學校這週在教什麼 ══════════════════════════════
+                Alan 本來要自己開 Excel 查「這週外師教哪一課、中師的文法作業是哪個主題」。
+                週次已經跟學校 1:1 對上，所以直接長在這裡。
+                ⚠ 沒有匯入進度表的年級就完全不顯示（不要留一條空的）。 */}
+            {pace && (
+              <div className="sw-bar">
+                <div className="sw-row">
+                  <span className="sw-tag it">外師</span>
+                  <b className="sw-main">{pace.it.reading || '—'}</b>
+                  {pace.it.vocab && <span className="sw-part">{pace.it.vocab}</span>}
+                  {pace.it.wordStudy && <span className="sw-chip">{pace.it.wordStudy}</span>}
+                  {pace.it.skill && <span className="sw-dim">{pace.it.skill}</span>}
+                  {(pace.it.law || pace.it.wsWb) && (
+                    <span className="sw-hw">📕 {[pace.it.law, pace.it.wsWb].filter(x => x && x !== '-').join(' · ')}</span>
+                  )}
+                </div>
+                <div className="sw-row">
+                  <span className="sw-tag lt">中師</span>
+                  <b className="sw-main">{pace.lt.grammar || '—'}</b>
+                  {/* ⭐ Alan 特別講的眉角：上 Writing Activity 那週，作業是沿用上一個文法主題 */}
+                  {pace.lt._carry && pace.lt.grammarHw && (
+                    <span className="sw-chip carry">↩ 作業沿用：{pace.lt.grammarHw}</span>
+                  )}
+                  {(pace.lt.law || pace.lt.gramWb) && (
+                    <span className="sw-hw">📕 {[pace.lt.law, pace.lt.gramWb].filter(x => x && x !== '-').join(' · ')}</span>
+                  )}
+                </div>
+                {(pace.note || nextF) && (
+                  <div className="sw-row sw-foot">
+                    {nextF && nextF.it && <span className={'sw-f' + (nextF.it.in <= 1 ? ' near' : '')}>
+                      🧪 外師 {nextF.it.name}：{nextF.it.in === 0 ? '就是這週' : `還有 ${nextF.it.in} 週`}</span>}
+                    {nextF && nextF.lt && <span className={'sw-f' + (nextF.lt.in <= 1 ? ' near' : '')}>
+                      🧪 中師 {nextF.lt.name}：{nextF.lt.in === 0 ? '就是這週' : `還有 ${nextF.lt.in} 週`}</span>}
+                    {pace.note && <span className="sw-note">📅 {pace.note}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="edit-make">
               {onQuickSet && (
                 <button className="edit-make-btn quick" onClick={onQuickSet}>
@@ -405,6 +444,11 @@ function Header({
                     setFestTick(t => t + 1);
                   }}>
                     {window.festOn() ? '🇹🇼 國慶外觀：開（按一下關掉）' : '🇹🇼 國慶外觀：關（按一下打開）'}
+                  </button>
+                )}
+                {onPacing && (
+                  <button className="banner-btn pace" onClick={onPacing}>
+                    🏫 {pace ? '學校進度表' : '匯入學校進度表'}
                   </button>
                 )}
                 <button className="banner-btn danger" onClick={onDeleteWeek}><Icon name="trash" size={12}/> 刪除這一週</button>

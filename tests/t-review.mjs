@@ -72,7 +72,9 @@ ok('兩個都沒有的組不顯示這個選項（按了也沒用）',
    /window\.reviewWordsOf\(g\.items\)\.length >= 2\)\s*\n?\s*\|\|\s*\(window\.reviewGrammarOf/.test(qm));
 /* ⚠ 不要比對匯出表那一行的結尾——後面再掛一個東西上去就假性失敗（v471 已經踩過一次）。
    要守的是「有沒有真的掛出去」，所以切出匯出區塊比名字。 */
-const edExport = ed.slice(ed.indexOf('Object.assign(window, { GrammarNotesModal'));
+/* ⚠ 本來釘「匯出那行的開頭字串」，我在前面多掛一個新元件就整條失效（v493 踩到）。
+   改成抓最後一個 Object.assign(window, ——那才是「這個檔案匯出了什麼」。 */
+const edExport = ed.slice(ed.lastIndexOf('Object.assign(window,'));
 ok('有 ReviewGroupModal', /function ReviewGroupModal\(/.test(ed) && /\bReviewGroupModal\b/.test(edExport));
 ok('⭐ 預設排到「兩週後」（Alan：每隔一週複習一次）',
    /const defWeek = \(weekChoices \|\| \[\]\)\[curIx \+ 2\]/.test(ed));

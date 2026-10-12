@@ -7436,3 +7436,156 @@ Object.assign(window, { festOn, festApply, festSetOverride, festOverride, festIs
 /* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。
    data.js 比 app.jsx 早載入，所以這裡是最早能動手的地方。 */
 festApply();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   🏫 v493 學校進度表（Pacing Guide）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 2026-10-12：「我想要製作可以記錄學生進度的頁面，像是每次上課上了什麼，
+   以及這週的學校進度是什麼（學校都有發布每週進度）」，並給了
+   「SY26-27 Grade 4 Term 1-2.xlsx」＋逐欄講解。
+
+   ⭐ 最重要的發現：**網站的週次跟學校的週次已經 1:1 對上**
+     （網站 g4-2026F-W07 = Oct 12–18，學校 W7 也是 Oct 12–18，20 週全部吻合）
+     → 進度表直接掛在現有週次上，不需要另外做對照表。
+
+   表的長相（第 3 列是欄位名）：
+     A..I  行事曆（月／一~日／Notes＝連假與活動）
+     J..R  IT 外師：WK Unit Reading WordStudy Vocabulary ReadingSkills LAW WordStudyWB Assessments
+     S..AA LT 中師：WK Unit Reading Vocabulary LanguageAndConventions ReadingSkills LAW GrammarWB Assessments
+
+   🔑 兩條「沿用」規則（Alan 親自講解的，表上看不出來）：
+     1. Unit／Reading 只寫在循環的第一週 → 後面幾週要往回沿用
+        （外師 3 週一循環：Part 1 → Part 2 → Unit Review；中師 4 週 Part 1、4 週 Part 2）
+     2. 中師的「Language and Conventions」有時候寫 `-` 或 `Unit 1 Writing Activity`，
+        但 Grammar WB 還是有頁數 → **那份作業的文法主題要往回沿用最近一個真的文法主題**。
+        例：W7 課堂教 Writing Activity，但 Grammar WB P14-17 是 W6 的
+        「U2W2 - Complex Sentences & Subordinating Conjunctions」。
+
+   ⚠ Alan 2026-10-12 指定：**考試只看 Formative，Summative 一律忽略**
+     （外師 3 週一次 W3/W6/W9…，中師 4 週一次 W4/W8…）。
+═══════════════════════════════════════════════════════════════════════════ */
+
+const PACE_KEY = 'pacing';          // 存在 class/{pacing_g4} 之類的文件
+const _PACE_IT = ['wk', 'unit', 'reading', 'wordStudy', 'vocab', 'skill', 'law', 'wsWb', 'assess'];
+const _PACE_LT = ['wk', 'unit', 'reading', 'vocab', 'grammar', 'skill', 'law', 'gramWb', 'assess'];
+
+/* 只留 Formative（Alan：Summative 不用看）。
+   「Formative 1」「Grammar (Summative 1)」「-」都可能出現，認不出來就當沒有。 */
+function _paceFormative(s) {
+  const t = String(s || '').trim();
+  if (!t || t === '-') return '';
+  return /formative/i.test(t) ? t : '';
+}
+
+/* 從 Excel 複製整張表貼過來＝TSV。
+   ⚠ 刻意不解析 .xlsx 檔：那要多載一個 400KB 的函式庫，而這件事一學期只做一次。
+     Excel 複製一個範圍出來的 TSV 會**保留空格子**，正好是沿用規則需要的資訊。 */
+function pacingParse(tsv) {
+  const lines = String(tsv || '').replace(/\r\n?/g, '\n').split('\n');
+  const rows = lines.map(l => l.split('\t'));
+  /* 找標題列：同一列裡要出現兩個 WK（IT 一個、LT 一個）才是我們要的那一列。
+     不要用「第幾列」寫死——學校隨時可能在上面多加一行。 */
+  let h = -1;
+  for (let i = 0; i < rows.length && h < 0; i++) {
+    const wk = rows[i].map(c => String(c || '').trim().toLowerCase())
+      .reduce((a, c, k) => (c === 'wk' ? a.concat(k) : a), []);
+    if (wk.length >= 2) h = i;
+  }
+  if (h < 0) return null;
+  const head = rows[h].map(c => String(c || '').trim());
+  const wkCols = head.reduce((a, c, k) => (c.toLowerCase() === 'wk' ? a.concat(k) : a), []);
+  const itAt = wkCols[0], ltAt = wkCols[1];
+  const noteAt = head.findIndex(c => /^notes?$/i.test(c));
+
+  const cell = (r, i) => String((r && r[i]) || '').trim();
+  const out = [];
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const wk = cell(r, itAt) || cell(r, ltAt);
+    const m = /^W\s*(\d{1,2})$/i.exec(wk);
+    if (!m) continue;
+    const n = Number(m[1]);
+    const grab = (at, keys) => keys.reduce((o, k, j) => { o[k] = cell(r, at + j); return o; }, {});
+    const it = grab(itAt, _PACE_IT), lt = grab(ltAt, _PACE_LT);
+    it.assess = _paceFormative(it.assess);
+    lt.assess = _paceFormative(lt.assess);
+    out.push({ n, note: noteAt >= 0 ? cell(r, noteAt).replace(/\n+/g, ' ／ ') : '', it, lt });
+  }
+  return out.length ? pacingFill(out) : null;
+}
+
+/* 把兩條「沿用」規則套上去（見檔頭說明）。
+   ⚠ 一定要在存檔前做完，不要留到顯示時才算——
+     「同一件判斷只能有一份邏輯」（v460 的教訓）。 */
+function pacingFill(weeks) {
+  const carry = (side, keys) => {
+    const last = {};
+    weeks.forEach(w => {
+      const o = w[side];
+      keys.forEach(k => {
+        const v = String(o[k] || '').trim();
+        if (v && v !== '-') { last[k] = v; o['_own_' + k] = true; }
+        else if (last[k]) { o[k] = last[k]; o['_own_' + k] = false; }
+      });
+    });
+  };
+  // 規則 1：Unit／Reading 只寫在循環第一週
+  carry('it', ['unit', 'reading']);
+  carry('lt', ['unit', 'reading', 'vocab']);
+  // 規則 2：中師的文法主題——課堂在上 Writing Activity 時，作業還是沿用上一個文法主題
+  const isTopic = (s) => {
+    const t = String(s || '').trim();
+    return !!t && t !== '-' && !/writing activity/i.test(t);
+  };
+  let lastG = '';
+  weeks.forEach(w => {
+    const now = w.lt.grammar;
+    if (isTopic(now)) { lastG = now; w.lt.grammarHw = now; w.lt._carry = false; }
+    else { w.lt.grammarHw = lastG; w.lt._carry = !!lastG && !!w.lt.gramWb; }
+  });
+  return weeks;
+}
+
+/* 這一週的進度（weekId 例：g4-2026F-W07 → 第 7 週）。 */
+function pacingWeekNo(weekId) {
+  const m = /-W(\d{1,3})$/i.exec(String(weekId || ''));
+  return m ? Number(m[1]) : null;
+}
+function pacingForWeek(pace, weekId) {
+  const n = pacingWeekNo(weekId);
+  if (!n || !Array.isArray(pace)) return null;
+  return pace.find(w => w.n === n) || null;
+}
+
+/* 下一次 Formative 還有幾週（Alan：外師 3 週一次、中師 4 週一次，
+   那正是該加強複習的時間點）。回傳 { it: {in, name}, lt: {...} }，沒有就 null。 */
+function pacingNextFormative(pace, weekId) {
+  const n = pacingWeekNo(weekId);
+  if (!n || !Array.isArray(pace)) return null;
+  const find = (side) => {
+    for (const w of pace) {
+      if (w.n >= n && w[side] && w[side].assess) return { in: w.n - n, name: w[side].assess, wk: w.n };
+    }
+    return null;
+  };
+  return { it: find('it'), lt: find('lt') };
+}
+
+async function savePacing(gradeKey, weeks) {
+  await _db.collection('class').doc(PACE_KEY + '_' + String(gradeKey)).set({ weeks, at: Date.now() });
+}
+async function loadPacing(gradeKey) {
+  try {
+    const s = await _db.collection('class').doc(PACE_KEY + '_' + String(gradeKey)).get();
+    return s.exists ? (s.data().weeks || null) : null;
+  } catch (e) { return null; }
+}
+function subscribePacing(gradeKey, cb) {
+  try {
+    return _db.collection('class').doc(PACE_KEY + '_' + String(gradeKey))
+      .onSnapshot(s => cb(s.exists ? (s.data().weeks || null) : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+
+Object.assign(window, { pacingParse, pacingFill, pacingForWeek, pacingWeekNo,
+                        pacingNextFormative, savePacing, loadPacing, subscribePacing });
