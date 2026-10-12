@@ -1737,16 +1737,33 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
   const [pace, setPace] = useS(null);
   const [err, setErr] = useS('');
   const [busy, setBusy] = useS(false);
-  useE(() => { if (open) { setTsv(''); setPace(null); setErr(''); setBusy(false); } }, [open]);
+  const [paste, setPaste] = useS(false);   // 讀檔失敗時的後備
+  const fileRef = React.useRef(null);
+  useE(() => { if (open) { setTsv(''); setPace(null); setErr(''); setBusy(false); setPaste(false); } }, [open]);
   if (!open) return null;
 
-  const read = () => {
+  /* 🔴 v494：**讀檔才拿得到粗體**。
+     Alan：「G6 的 Grammar 那邊顯示很多頁數，但老師實際上只會教粗體的頁數」——
+     粗體是「一格裡面部分文字」才粗，從 Excel 複製出來的 TSV 一定丟掉。 */
+  const readFile = async (f) => {
+    if (!f) return;
+    setErr(''); setBusy(true);
+    try {
+      const rows = await window.pacingReadXlsx(await f.arrayBuffer());
+      const got = window.pacingFromRows(rows);
+      if (!got) throw new Error('讀不到進度表——這份 Excel 裡找不到「WK / Unit / Reading」那一列標題。');
+      setPace(got);
+    } catch (e) { setErr((e && e.message) || '讀檔失敗'); }
+    setBusy(false);
+  };
+  const readPaste = () => {
     setErr('');
     const got = window.pacingParse(tsv);
-    if (!got) { setErr('讀不出來——請確認是「整張表一起複製」（含 WK / Unit / Reading 那一列標題）。'); setPace(null); return; }
+    if (!got) { setErr('讀不出來——請確認是「整張表一起複製」（含 WK / Unit / Reading 那一列標題）。'); return; }
     setPace(got);
   };
   const cell = (v) => (v && v !== '-') ? v : '—';
+  const anyBold = pace && pace.some(w => w.lt.grammarBold);
 
   return (
     <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -1758,13 +1775,33 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
         <div className="modal-body">
           {!pace ? (
             <>
-              <p className="field-help" style={{ marginBottom: 10 }}>
-                打開學校發的 Excel → <b>全選（Ctrl/⌘ + A）→ 複製</b> → 貼到下面。<br/>
-                我會自動補上「<b>Unit / 課文只寫在循環第一週</b>」和
-                「<b>上 Writing Activity 那週，文法作業沿用上一個主題</b>」這兩條規則。
-              </p>
-              <textarea className="field-input pace-in" value={tsv} onChange={e => setTsv(e.target.value)}
-                placeholder="在這裡貼上（會是一大堆用 Tab 分隔的文字，很正常）"/>
+              <div className="pace-drop">
+                <div className="pace-drop-ico">📄</div>
+                <div className="pace-drop-txt">
+                  <b>把學校發的 Excel 選進來就好</b>
+                  <em>直接讀檔案——這樣才讀得到<b>粗體</b>（G6 的「只教粗體頁數」靠它）</em>
+                </div>
+                <button className="btn primary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}>
+                  {busy ? '讀取中…' : '選擇 .xlsx 檔'}
+                </button>
+                <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }}
+                  onChange={e => { readFile(e.target.files && e.target.files[0]); e.target.value = ''; }}/>
+              </div>
+              <div className="pace-alt">
+                <button className="link-btn" onClick={() => setPaste(v => !v)}>
+                  {paste ? '收起' : '讀不進去？改用複製貼上'}
+                </button>
+              </div>
+              {paste && (
+                <>
+                  <div className="pace-warn">
+                    ⚠️ 貼上的內容<b>沒有粗體</b>——G6「只教粗體頁數」這件事會拿不到，其他都一樣。
+                  </div>
+                  <textarea className="field-input pace-in" value={tsv} onChange={e => setTsv(e.target.value)}
+                    placeholder="在 Excel 全選（⌘/Ctrl + A）→ 複製 → 貼在這裡"/>
+                  <button className="btn" disabled={!tsv.trim()} onClick={readPaste}>讀讀看 →</button>
+                </>
+              )}
               {existing && <div className="pace-warn">這個年級已經有一份進度表（{existing.length} 週）——存檔會整份蓋掉。</div>}
               {err && <div className="notify-msg err" style={{ marginTop: 8 }}>⚠️ {err}</div>}
             </>
@@ -1788,7 +1825,10 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
                           <td>{cell(w.it.wordStudy)}</td>
                           <td className="pp">{[w.it.law, w.it.wsWb].filter(x => x && x !== '-').join(' · ') || '—'}</td>
                           <td>{cell(w.lt.grammar)}</td>
-                          <td className={w.lt._carry ? 'carry' : ''}>{cell(w.lt.grammarHw)}{w.lt._carry ? ' ↩' : ''}</td>
+                          <td className={w.lt._carry ? 'carry' : ''}>
+                            {cell(w.lt.grammarHw)}{w.lt._carry ? ' ↩' : ''}
+                            {w.lt.grammarBold && <b className="pb">只教 pp. {w.lt.grammarBold.join(', ')}</b>}
+                          </td>
                           <td className="pp">{[w.lt.law, w.lt.gramWb].filter(x => x && x !== '-').join(' · ') || '—'}</td>
                           <td className="pf">{f || '—'}</td>
                         </tr>
@@ -1799,23 +1839,22 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
               </div>
               <div className="field-help" style={{ marginTop: 8 }}>
                 灰字＝表上那一格是空的、我照規則沿用前一週；<b>↩</b>＝那週課堂在上 Writing Activity，作業沿用上一個文法主題。
-                考試只列 Formative（Summative 依你的指示忽略）。
+                {anyBold && <> <b className="pb">只教 pp.</b> ＝那一格裡<b>加粗</b>的頁數（整格列的其他頁沒有加粗）。</>}
+                {' '}考試只列 Formative（Summative 依你的指示忽略）。
               </div>
             </>
           )}
         </div>
         <div className="modal-foot">
           <button className="btn ghost" onClick={onClose}>取消</button>
-          {!pace
-            ? <button className="btn primary" disabled={!tsv.trim()} onClick={read}>讀讀看 →</button>
-            : <>
-                <button className="btn" onClick={() => setPace(null)}>← 重貼一次</button>
-                <button className="btn primary" disabled={busy} onClick={async () => {
-                  setBusy(true);
-                  try { await onSave(gradeKey, pace); onClose(); }
-                  catch (e) { setErr((e && e.message) || '存檔失敗'); setBusy(false); }
-                }}>{busy ? '存檔中…' : `沒問題，存起來（${pace.length} 週）`}</button>
-              </>}
+          {pace && <>
+            <button className="btn" onClick={() => setPace(null)}>← 換一份</button>
+            <button className="btn primary" disabled={busy} onClick={async () => {
+              setBusy(true);
+              try { await onSave(gradeKey, pace); onClose(); }
+              catch (e) { setErr((e && e.message) || '存檔失敗'); setBusy(false); }
+            }}>{busy ? '存檔中…' : `沒問題，存起來（${pace.length} 週）`}</button>
+          </>}
         </div>
       </div>
     </div>

@@ -7466,8 +7466,39 @@ festApply();
 ═══════════════════════════════════════════════════════════════════════════ */
 
 const PACE_KEY = 'pacing';          // 存在 class/{pacing_g4} 之類的文件
-const _PACE_IT = ['wk', 'unit', 'reading', 'wordStudy', 'vocab', 'skill', 'law', 'wsWb', 'assess'];
-const _PACE_LT = ['wk', 'unit', 'reading', 'vocab', 'grammar', 'skill', 'law', 'gramWb', 'assess'];
+
+/* 🔴 v494（Alan 給了 G3 與 G6 的表）：**三個年級的欄位都不一樣**，
+   v493 照 G4 的欄位位置寫死，拿去讀 G3／G6 會整排錯位。
+     · G3 多一欄 High Frequency Words（Alan：不用管），中師作業欄叫 Homework
+     · G6 外師是 Writing（沒有 LAW／Word Study WB），中師叫 Grammar Skills
+   → 改成**照欄位名稱對**。下面是「我們要的東西」→「學校可能怎麼寫」的對照表。
+   ⚠ 比對時一律去掉空白與括號內容（`LAW (E1&E2)` → `law`），
+     學校改括號裡的字不會害我們讀不到。 */
+const _PACE_COLS = {
+  it: {
+    unit:      ['unit'],
+    reading:   ['reading'],
+    wordStudy: ['wordstudy'],
+    vocab:     ['vocabulary'],
+    skill:     ['readingskills', 'readingskill'],
+    law:       ['law', 'writing'],              // G6 這一欄叫 Writing
+    wsWb:      ['wordstudywb'],
+    assess:    ['assessments', 'assessment'],
+  },
+  lt: {
+    unit:    ['unit'],
+    reading: ['reading'],
+    vocab:   ['vocabulary'],
+    grammar: ['languageandconventions', 'grammarskills'],   // G6 叫 Grammar Skills
+    skill:   ['readingskills', 'readingskill'],
+    law:     ['law', 'homework'],                            // G3 這一欄叫 Homework
+    gramWb:  ['grammarwb'],
+    assess:  ['assessments', 'assessment'],
+  },
+};
+/* Alan：「G3 不用管 high frequency word 那一欄」 */
+const _PACE_SKIP = ['highfrequencywords', 'highfrequencyword'];
+const _paceNorm = (s) => String(s || '').replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 
 /* 只留 Formative（Alan：Summative 不用看）。
    「Formative 1」「Grammar (Summative 1)」「-」都可能出現，認不出來就當沒有。 */
@@ -7477,41 +7508,168 @@ function _paceFormative(s) {
   return /formative/i.test(t) ? t : '';
 }
 
-/* 從 Excel 複製整張表貼過來＝TSV。
-   ⚠ 刻意不解析 .xlsx 檔：那要多載一個 400KB 的函式庫，而這件事一學期只做一次。
-     Excel 複製一個範圍出來的 TSV 會**保留空格子**，正好是沿用規則需要的資訊。 */
+/* ══ 讀 .xlsx ══════════════════════════════════════════════════════════
+   🔴 v494：**一定要讀檔，不能貼上。**
+   Alan：「G6 的 Grammar 那邊顯示很多頁數，但老師實際上只會教粗體的頁數」
+   → 粗體是**一格裡面部分文字**才粗（G6 有 19 格是這樣），
+     從 Excel 複製出來的 TSV 會把粗體整個丟掉＝那份資訊救不回來。
+   xlsx 本身就是一個 zip，瀏覽器內建 DecompressionStream 解得開，
+   所以**不用載 SheetJS（400KB）**，只要抓兩個檔案出來。 */
+async function _paceUnzip(buf, want) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eo = -1;
+  for (let i = u8.length - 22; i >= 0 && i > u8.length - 66000; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eo = i; break; }
+  }
+  if (eo < 0) throw new Error('這不像是 Excel 檔（.xlsx）');
+  const n = dv.getUint16(eo + 10, true);
+  let p = dv.getUint32(eo + 16, true);
+  const out = {};
+  for (let k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    const lho = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+    p += 46 + nl + el + cl;
+    if (want.indexOf(name) < 0) continue;
+    /* ⚠ 本地檔頭的「名稱長度／extra 長度」可能跟中央目錄不同，一定要重讀，
+       不然起點會算錯幾個 byte，解壓就整個爛掉。 */
+    const lnl = dv.getUint16(lho + 26, true), lel = dv.getUint16(lho + 28, true);
+    const raw = u8.subarray(lho + 30 + lnl + lel, lho + 30 + lnl + lel + csize);
+    if (method === 0) { out[name] = new TextDecoder().decode(raw); continue; }
+    const ab = await new Response(new Blob([raw]).stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+    out[name] = new TextDecoder().decode(ab);
+  }
+  return out;
+}
+
+const _paceXML = (t) => new DOMParser().parseFromString(t, 'application/xml');
+
+/* 把 .xlsx 讀成「每一列 → {欄位字母: {t, bold}}」。
+   bold ＝ 這一格裡面「有被加粗的那幾段文字」（G6 的重點）。 */
+async function pacingReadXlsx(arrayBuffer) {
+  const f = await _paceUnzip(arrayBuffer, ['xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml']);
+  if (!f['xl/worksheets/sheet1.xml']) throw new Error('Excel 裡找不到工作表');
+  const sst = [];
+  if (f['xl/sharedStrings.xml']) {
+    const d = _paceXML(f['xl/sharedStrings.xml']);
+    Array.from(d.getElementsByTagName('si')).forEach(si => {
+      const runs = Array.from(si.getElementsByTagName('r'));
+      if (runs.length) {
+        const parts = runs.map(r => {
+          const tt = r.getElementsByTagName('t')[0];
+          const pr = r.getElementsByTagName('rPr')[0];
+          return { t: (tt && tt.textContent) || '', b: !!(pr && pr.getElementsByTagName('b').length) };
+        });
+        sst.push({ t: parts.map(x => x.t).join(''), bold: parts.filter(x => x.b).map(x => x.t) });
+      } else {
+        sst.push({ t: Array.from(si.getElementsByTagName('t')).map(x => x.textContent).join(''), bold: [] });
+      }
+    });
+  }
+  const sd = _paceXML(f['xl/worksheets/sheet1.xml']);
+  const rows = {};
+  Array.from(sd.getElementsByTagName('c')).forEach(c => {
+    const ref = c.getAttribute('r') || '';
+    const m = /^([A-Z]+)(\d+)$/.exec(ref);
+    const v = c.getElementsByTagName('v')[0];
+    if (!m || !v) return;
+    const cell = c.getAttribute('t') === 's'
+      ? (sst[Number(v.textContent)] || { t: '', bold: [] })
+      : { t: v.textContent, bold: [] };
+    (rows[Number(m[2])] = rows[Number(m[2])] || {})[m[1]] = cell;
+  });
+  return rows;
+}
+
+/* 從一格裡抓出「被加粗的頁碼」。
+   G6 例：`**NOUNS**- … (GPW pp. **1**, 3, 4, **6**, **139**)` → ['1','6','139']
+   ⚠ 類別名稱（NOUNS／VERBS…）也是粗體，但那只是標題樣式不是頁碼 → 只收純數字那幾段。 */
+function pacingBoldPages(bold) {
+  const out = [];
+  (bold || []).forEach(seg => {
+    (String(seg).match(/\d+(?:\s*-\s*\d+)?/g) || []).forEach(x => {
+      const v = x.replace(/\s+/g, '');
+      if (out.indexOf(v) < 0) out.push(v);
+    });
+  });
+  return out;
+}
+
+/* 共用的「一列一列讀出來」——吃的是 {列: {欄: {t,bold}}}。
+   ⭐ v494 改成**照欄位名稱對**（_PACE_COLS），不再照位置，
+     因為 G3／G4／G6 的欄位根本不一樣。
+   分左右兩半：兩個 WK 之間是外師，第二個 WK 之後是中師。 */
+function pacingFromRows(rows) {
+  const at = (r, c) => (rows[r] && rows[r][c]) || null;
+  const txt = (r, c) => { const x = at(r, c); return x ? String(x.t || '').trim() : ''; };
+  const colsOf = (r) => Object.keys(rows[r] || {});
+  const cnum = (c) => c.split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+  const byNum = (a, b) => cnum(a) - cnum(b);
+
+  let hRow = -1, wkCols = [];
+  for (const r of Object.keys(rows).map(Number).sort((a, b) => a - b)) {
+    const w = colsOf(r).filter(c => _paceNorm(txt(r, c)) === 'wk').sort(byNum);
+    if (w.length >= 2) { hRow = r; wkCols = w; break; }
+  }
+  if (hRow < 0) return null;
+
+  const allCols = colsOf(hRow).sort(byNum);
+  const noteCol = allCols.find(c => /^notes?$/.test(_paceNorm(txt(hRow, c))));
+  const itStart = cnum(wkCols[0]), ltStart = cnum(wkCols[1]);
+  /* 欄位名稱 → 我們的欄位 key。同一個名稱在左右兩半各出現一次（Unit、Reading…），
+     所以要先決定這一欄屬於哪一半，再去那一半的對照表找。 */
+  const map = { it: {}, lt: {} };
+  allCols.forEach(c => {
+    const n = _paceNorm(txt(hRow, c));
+    if (!n || n === 'wk' || _PACE_SKIP.indexOf(n) >= 0) return;
+    const side = cnum(c) > ltStart ? 'lt' : (cnum(c) > itStart ? 'it' : null);
+    if (!side) return;
+    for (const key of Object.keys(_PACE_COLS[side])) {
+      if (_PACE_COLS[side][key].indexOf(n) >= 0 && !map[side][key]) { map[side][key] = c; return; }
+    }
+  });
+
+  const out = [];
+  Object.keys(rows).map(Number).sort((a, b) => a - b).forEach(r => {
+    if (r <= hRow) return;
+    const wk = txt(r, wkCols[0]) || txt(r, wkCols[1]);
+    const m = /^W\s*(\d{1,2})$/i.exec(wk);
+    if (!m) return;
+    const grab = (side) => {
+      const o = {};
+      Object.keys(_PACE_COLS[side]).forEach(k => { o[k] = map[side][k] ? txt(r, map[side][k]) : ''; });
+      /* G6 的重點：中師文法那一格裡，老師實際上只教**粗體**的頁數 */
+      const gc = map[side].grammar && at(r, map[side].grammar);
+      if (gc) { const b = pacingBoldPages(gc.bold); if (b.length) o.grammarBold = b; }
+      o.assess = _paceFormative(o.assess);
+      return o;
+    };
+    out.push({ n: Number(m[1]), note: noteCol ? txt(r, noteCol).replace(/\n+/g, ' ／ ') : '',
+               it: grab('it'), lt: grab('lt') });
+  });
+  return out.length ? pacingFill(out) : null;
+}
+
+/* 保留「貼上 TSV」當後備（讀檔失敗、或老師手上只有複製來的內容）。
+   ⚠ 貼上**一定沒有粗體**，所以 G6 的「只教粗體頁數」用貼的會拿不到——
+     介面上要講清楚，不要讓老師以為兩條路一樣。 */
 function pacingParse(tsv) {
   const lines = String(tsv || '').replace(/\r\n?/g, '\n').split('\n');
-  const rows = lines.map(l => l.split('\t'));
-  /* 找標題列：同一列裡要出現兩個 WK（IT 一個、LT 一個）才是我們要的那一列。
-     不要用「第幾列」寫死——學校隨時可能在上面多加一行。 */
-  let h = -1;
-  for (let i = 0; i < rows.length && h < 0; i++) {
-    const wk = rows[i].map(c => String(c || '').trim().toLowerCase())
-      .reduce((a, c, k) => (c === 'wk' ? a.concat(k) : a), []);
-    if (wk.length >= 2) h = i;
-  }
-  if (h < 0) return null;
-  const head = rows[h].map(c => String(c || '').trim());
-  const wkCols = head.reduce((a, c, k) => (c.toLowerCase() === 'wk' ? a.concat(k) : a), []);
-  const itAt = wkCols[0], ltAt = wkCols[1];
-  const noteAt = head.findIndex(c => /^notes?$/i.test(c));
-
-  const cell = (r, i) => String((r && r[i]) || '').trim();
-  const out = [];
-  for (let i = h + 1; i < rows.length; i++) {
-    const r = rows[i];
-    const wk = cell(r, itAt) || cell(r, ltAt);
-    const m = /^W\s*(\d{1,2})$/i.exec(wk);
-    if (!m) continue;
-    const n = Number(m[1]);
-    const grab = (at, keys) => keys.reduce((o, k, j) => { o[k] = cell(r, at + j); return o; }, {});
-    const it = grab(itAt, _PACE_IT), lt = grab(ltAt, _PACE_LT);
-    it.assess = _paceFormative(it.assess);
-    lt.assess = _paceFormative(lt.assess);
-    out.push({ n, note: noteAt >= 0 ? cell(r, noteAt).replace(/\n+/g, ' ／ ') : '', it, lt });
-  }
-  return out.length ? pacingFill(out) : null;
+  const rows = {};
+  lines.forEach((l, i) => {
+    const cells = l.split('\t');
+    const o = {};
+    cells.forEach((v, k) => {
+      let c = '', n = k + 1;
+      while (n > 0) { c = String.fromCharCode(65 + (n - 1) % 26) + c; n = Math.floor((n - 1) / 26); }
+      o[c] = { t: v, bold: [] };
+    });
+    rows[i + 1] = o;
+  });
+  return pacingFromRows(rows);
 }
 
 /* 把兩條「沿用」規則套上去（見檔頭說明）。
@@ -7587,5 +7745,5 @@ function subscribePacing(gradeKey, cb) {
   } catch (e) { cb(null); return () => {}; }
 }
 
-Object.assign(window, { pacingParse, pacingFill, pacingForWeek, pacingWeekNo,
+Object.assign(window, { pacingParse, pacingFill, pacingForWeek, pacingWeekNo, pacingReadXlsx, pacingFromRows, pacingBoldPages,
                         pacingNextFormative, savePacing, loadPacing, subscribePacing });

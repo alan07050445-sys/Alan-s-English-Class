@@ -1,100 +1,143 @@
-/* t-pacing — 🏫 學校進度表（v493）
+/* t-pacing — 🏫 學校進度表（v493 建立，v494 改成照欄位名稱對 ＋ 讀得到粗體）
  *
- * 用 **Alan 真的那份 G4 進度表**（SY26-27 Grade 4 Term 1-2.xlsx 轉成 TSV）當測資，
- * 不是我編的——兩條「沿用」規則是他親自講解的，編假資料驗不到真情況。
+ * ⚠ 測資刻意是**自己編的**，不是學校那三份真表：
+ *   那是康橋的內部課程規劃，這個 repo 是公開的（v493 我誤把 G4 整份提交進來，v494 移除）。
+ *   編的時候照著三個年級**真實的欄位長相**做，所以該驗的都驗得到。
+ *   真表怎麼跑？用 scratchpad 的腳本在本機跑，不要進 repo。
  *
- * 守的是「我有沒有照 Alan 講的方式讀這張表」：
- *   ① Unit／課文只寫在循環第一週 → 後面幾週要沿用
- *   ② 課堂上 Writing Activity 那週，文法作業沿用上一個真的文法主題
- *   ③ 考試只看 Formative（Alan 指定：Summative 不用看）
+ * 守三件事：
+ *   ① 三個年級欄位不一樣 → 要照**欄位名稱**對，不是照位置（v493 照 G4 寫死，G3/G6 會錯位）
+ *   ② 兩條「沿用」規則（Alan 親自講解）
+ *   ③ G6 的「只教粗體頁數」——貼上拿不到，一定要讀檔
  */
 import fs from 'fs';
+import { DOMParser } from './helpers-xml.mjs';
+globalThis.DOMParser = DOMParser;
+
 const ROOT = new URL('..', import.meta.url);
 const data = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
 const app  = fs.readFileSync(new URL('app.jsx', ROOT), 'utf8');
 const ed   = fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8');
 const shell= fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
-const tsv  = fs.readFileSync(new URL('tests/fixtures-pacing-g4.tsv', ROOT), 'utf8');
-
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
 const W = {}; new Function('window', 'document', 'firebase', 'localStorage',
   data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, stub);
 
 let pass = 0, fail = 0;
 const ok = (m, c) => { if (c) { pass++; console.log('  ✅ ' + m); } else { fail++; console.log('  ❌ ' + m); } };
-const P = W.pacingParse(tsv);
-const wk = n => P.find(w => w.n === n);
 
-console.log('\n【1】讀得進來');
-ok('⭐ 解析出 20 週', !!P && P.length === 20);
-ok('   標題列用「同一列有兩個 WK」找，不是寫死第幾列（學校在上面加一行也不會壞）', (() => {
-   const shifted = '垃圾\n又一行垃圾\n' + tsv;
-   const r = W.pacingParse(shifted);
-   return r && r.length === 20; })());
-ok('   讀不懂就回 null，不要吐半套出來', W.pacingParse('abc\ndef') === null);
+/* ── 三個年級真實的欄位長相（內容是編的，欄位名稱照抄真表）── */
+const CAL = ['Month', 'M', 'T', 'W', 'Th', 'F', 'Sa', 'Su', 'Notes'];
+const HEAD = {
+  g4: CAL.concat(
+    ['WK', 'Unit', 'Reading', 'Word Study', 'Vocabulary', 'Reading Skills', 'LAW (E1&E2)', 'Word Study WB (E1,E2+E3)', 'Assessments'],
+    ['WK', 'Unit', 'Reading ', 'Vocabulary', 'Language and Conventions', 'Reading Skills', 'LAW (E1&E2)', 'Grammar WB (E1,E2+E3)', 'Assessments']),
+  // G3：外師多一欄 High Frequency Words（Alan：不用管）；中師作業欄叫 Homework
+  g3: CAL.concat(
+    ['WK', 'Unit', 'Reading', 'Word Study', 'High Frequency Words', 'Vocabulary', 'Reading Skills', 'LAW (E1&E2)', 'Word Study WB (E1,E2+E3)', 'Assessments'],
+    ['WK', 'Unit', 'Reading ', 'Vocabulary', 'Language and Conventions', 'Reading Skills', 'Homework', 'Grammar WB (E1,E2+E3)', 'Assessments']),
+  // G6：外師是 Writing（沒有 LAW／Word Study WB）；中師叫 Grammar Skills
+  g6: CAL.concat(
+    ['WK', 'Unit', 'Reading', 'Word Study', 'Vocabulary', 'Reading Skills', 'Writing', 'Assessments'],
+    ['WK', 'Unit', 'Reading ', 'Vocabulary', 'Grammar Skills', 'Reading Skills', 'Assessments']),
+};
+const blank = (n) => Array(n).fill('');
+const tsvOf = (g, weeks) => [HEAD[g].join('\t')].concat(weeks.map(r => r.join('\t'))).join('\n');
 
-console.log('\n【2】Week 7＝Alan 親自講解的那一週');
-const w7 = wk(7);
-ok('⭐ 外師：U1W5 · Barbed Wire Baseball · Part 1',
-   w7.it.unit === 'U1W5' && w7.it.reading === 'Barbed Wire Baseball' && w7.it.vocab === 'Part 1');
-ok('⭐ 外師 Word Study ＝ Prefixes mis-, en-, & em-', /Prefixes mis-, en-, & em-/.test(w7.it.wordStudy));
-ok('   外師 Reading Skill ＝ Skill 1 Analyze Text Structure', /Analyze Text Structure/.test(w7.it.skill));
-ok('   外師作業 ＝ LAW p20-23 ＋ Word Study WB p14-16', w7.it.law === 'p20-23' && w7.it.wsWb === 'p14-16');
-ok('⭐⭐ 中師：課堂上 Writing Activity，但**作業的文法主題沿用上一週的 U2W2 複合句**',
-   /Writing Activity/.test(w7.lt.grammar)
-   && /U2W2 - Complex Sentences & Subordinating/.test(w7.lt.grammarHw)
-   && w7.lt._carry === true);
-ok('   中師作業 ＝ Grammar WB P14-17', w7.lt.gramWb === 'P14-17');
+console.log('\n【1】三個年級的欄位都不一樣，要照名稱對（v493 照位置寫死，G3/G6 會錯位）');
+const rowG4 = (wk, u, rd, ws, vo, sk, law, wswb, as, lu, lrd, lvo, lg, lsk, llaw, lgwb, las) =>
+  ['Oct', '', '', '', '', '', '', '', '', wk, u, rd, ws, vo, sk, law, wswb, as, wk, lu, lrd, lvo, lg, lsk, llaw, lgwb, las];
+const g4 = W.pacingParse(tsvOf('g4', [
+  rowG4('W1', 'U1W1', '課文甲', '字首 A', 'Part 1', 'Skill 1', 'p1-4', 'p1-2', '-', 'LU1', '長課文', 'Part 1', '文法甲', 'Skill 1', 'LAW1', 'P1-3', '-'),
+  rowG4('W2', '', '', '字首 B', 'Part 2', 'Skill 2', 'p5-8', 'p3-4', 'Summative 1', '', '', '', 'Unit 1 Writing Activity', 'Skill 2', 'LAW2', 'P4-6', '-'),
+  rowG4('W3', '', '', '課文甲複習', '', '', '', '', 'Formative 1', '', '', '', '-', '', 'LAW3', 'P7-9', 'Formative 1'),
+]));
+ok('⭐ G4 讀得出來', !!g4 && g4.length === 3);
 
-console.log('\n【3】規則①：Unit／課文只寫在循環第一週');
-ok('⭐ 外師 W8／W9 沿用 W7 的課文（表上那兩格是空的）',
-   wk(8).it.reading === 'Barbed Wire Baseball' && wk(9).it.reading === 'Barbed Wire Baseball'
-   && wk(7).it._own_reading === true && wk(8).it._own_reading === false);
-ok('   外師是 3 週一循環：Part 1 → Part 2 → 複習（複習週沒有 Part）',
-   wk(7).it.vocab === 'Part 1' && wk(8).it.vocab === 'Part 2' && !wk(9).it.vocab);
-ok('⭐ 中師 W7 的課文沿用 W1（一篇課文教八週）',
-   wk(7).lt.reading === 'Feathers: Not Just for Flying' && wk(7).lt._own_reading === false);
-ok('   中師是 4 週 Part 1、4 週 Part 2',
-   wk(1).lt.vocab === 'Part 1' && wk(5).lt.vocab === 'Part 2' && wk(7).lt.vocab === 'Part 2');
+const g3 = W.pacingParse(tsvOf('g3', [
+  ['Oct', '', '', '', '', '', '', '', '', 'W1', 'U1W1', '課文乙', '雙母音', 'unit, figure', 'Part 1', 'Skill 1', 'p1-4', 'p1-2', '-',
+   'W1', 'LU1', '長課文', 'Part 1', '文法乙', 'Skill 1', 'Skills 1', 'P1-3', '-'],
+]));
+ok('⭐ G3 的 High Frequency Words 要跳過，不可以被當成 Vocabulary',
+   !!g3 && g3[0].it.vocab === 'Part 1' && g3[0].it.wordStudy === '雙母音');
+ok('   G3 中師的作業欄叫 Homework，一樣要認得', g3[0].lt.law === 'Skills 1');
 
-console.log('\n【4】規則②：文法作業的沿用');
-ok('⭐ 有真的文法主題那幾週不要亂沿用（W6 自己就有）',
-   /U2W2 - Complex Sentences & Subordinating/.test(wk(6).lt.grammarHw) && wk(6).lt._carry === false);
-ok('⭐ 課堂寫「-」那幾週也要沿用（W3 有 Grammar WB P6-9 卻沒寫主題）',
-   wk(3).lt.gramWb === 'P6-9' && !!wk(3).lt.grammarHw && wk(3).lt._carry === true);
+const g6 = W.pacingParse(tsvOf('g6', [
+  ['Oct', '', '', '', '', '', '', '', '', 'W1', 'U1', '課文丙 (pp. 1-10)', '拉丁字首', 'Prince', 'Make Inferences', 'Writing 1', '-',
+   'W1', 'LU1', '長課文丙', 'Part 1', 'NOUNS- 名詞 (GPW pp. 1, 3, 6)', 'Skill 1', 'Formative 3 (Vocabulary + Reading)'],
+]));
+ok('⭐ G6 外師的 Writing 欄要當成作業欄（它沒有 LAW）', !!g6 && g6[0].it.law === 'Writing 1');
+ok('⭐ G6 中師的 Grammar Skills 要當成文法欄（它沒有 Language and Conventions）',
+   /NOUNS/.test(g6[0].lt.grammar));
+ok('   G6 的 Formative 寫成「Formative 3 (Vocabulary + Reading)」也要收',
+   /Formative 3/.test(g6[0].lt.assess));
+ok('   欄位名稱比對要忽略括號與空白（LAW (E1&E2) → law、"Reading " 尾巴有空格）',
+   g4[0].it.law === 'p1-4' && g4[0].lt.reading === '長課文');
 
-console.log('\n【5】考試只看 Formative（Alan：Summative 不用看）');
-ok('⭐ Summative 全部被濾掉', P.every(w => !/summative/i.test(w.it.assess + w.lt.assess)));
-ok('⭐ 外師 Formative 在 W3／W6／W9（3 週一次）',
-   /Formative/.test(wk(3).it.assess) && /Formative/.test(wk(6).it.assess) && /Formative/.test(wk(9).it.assess));
-ok('⭐ 中師 Formative 在 W4／W8（4 週一次）',
-   /Formative/.test(wk(4).lt.assess) && /Formative/.test(wk(8).lt.assess));
-ok('   W7 本身沒有 Formative（它那格是 Summative 3）', !wk(7).it.assess && !wk(7).lt.assess);
+console.log('\n【2】兩條「沿用」規則（Alan 親自講解的，表上看不出來）');
+ok('⭐ 規則①：Unit／課文只寫在循環第一週 → 後面沿用',
+   g4[1].it.reading === '課文甲' && g4[2].it.reading === '課文甲'
+   && g4[0].it._own_reading === true && g4[1].it._own_reading === false);
+ok('⭐⭐ 規則②：課堂上 Writing Activity 那週，文法作業沿用上一個真的文法主題',
+   /Writing Activity/.test(g4[1].lt.grammar) && g4[1].lt.grammarHw === '文法甲' && g4[1].lt._carry === true);
+ok('   課堂寫「-」那週也一樣沿用（還是有 Grammar WB）',
+   g4[2].lt.gramWb === 'P7-9' && g4[2].lt.grammarHw === '文法甲' && g4[2].lt._carry === true);
+ok('   本來就有文法主題那週不要亂標沿用', g4[0].lt._carry === false);
 
-console.log('\n【6】下一次 Formative 還有幾週');
-const nf = W.pacingNextFormative(P, 'g4-2026F-W07');
-ok('⭐ 站在 W7：外師還有 2 週（W9）、中師還有 1 週（W8）',
-   nf.it.in === 2 && nf.it.wk === 9 && nf.lt.in === 1 && nf.lt.wk === 8);
-ok('   當週就要考的話回 0（站在 W9 看外師）',
-   W.pacingNextFormative(P, 'g4-2026F-W09').it.in === 0);
-ok('   週次 id 對得上（g4-2026F-W07 → 7）', W.pacingWeekNo('g4-2026F-W07') === 7);
+console.log('\n【3】考試只看 Formative（Alan 指定：Summative 不用看）');
+ok('⭐ Summative 全部濾掉', g4.every(w => !/summative/i.test(w.it.assess + w.lt.assess)));
+ok('⭐ Formative 留著', /Formative 1/.test(g4[2].it.assess));
+const nf = W.pacingNextFormative(g4, 'x-W1');
+ok('⭐ 算得出「還有幾週」', nf.it.in === 2 && nf.it.wk === 3);
+ok('   當週就要考回 0', W.pacingNextFormative(g4, 'x-W3').it.in === 0);
 
-console.log('\n【7】連假也要讀進來（那正是會打亂固定上課時段的日子）');
-ok('⭐ W4 中秋＋教師節連假', /Moon Festival/.test(wk(4).note));
-ok('   W10 期中考週', /Midterm/i.test(wk(10).note));
+console.log('\n【4】⭐ G6：只教粗體的頁數（貼上拿不到，一定要讀檔）');
+/* 直接組 rows 來驗——TSV 沒有粗體這種東西，這正是「要讀檔」的原因。 */
+const cellOf = (t, bold) => ({ t, bold: bold || [] });
+const rowsG6 = { 1: {}, 2: {} };
+HEAD.g6.forEach((h, i) => {
+  let c = '', n = i + 1;
+  while (n > 0) { c = String.fromCharCode(65 + (n - 1) % 26) + c; n = Math.floor((n - 1) / 26); }
+  rowsG6[1][c] = cellOf(h);
+  rowsG6[2][c] = cellOf('');
+});
+rowsG6[2]['J'] = cellOf('W2'); rowsG6[2]['R'] = cellOf('W2');
+/* 真表長這樣：類別名稱也是粗體，但那只是標題樣式，不是頁碼 */
+rowsG6[2]['V'] = cellOf('NOUNS- Common, Proper, and Possessive Nouns pp. 25 (GPW pp. 1, 3, 4, 6, 139)',
+                        ['NOUNS', '1', '6', '139']);
+const gb = W.pacingFromRows(rowsG6);
+ok('⭐ 只挑出粗體的頁碼：1, 6, 139（整格列了 25/1/3/4/6/139 六個數字）',
+   !!gb && JSON.stringify(gb[0].lt.grammarBold) === JSON.stringify(['1', '6', '139']));
+ok('⭐ 類別名稱（NOUNS）是粗體但不是頁碼，不可以被當成頁數',
+   gb[0].lt.grammarBold.indexOf('NOUNS') < 0);
+ok('   整格都沒有粗體時就不要宣稱「只教某幾頁」', (() => {
+   rowsG6[2]['V'] = cellOf('PHRASES- 介系詞片語 (GPW pp. 56, 57, 58)', ['PHRASES']);
+   return !W.pacingFromRows(rowsG6)[0].lt.grammarBold; })());
+ok('   頁碼範圍（61-64）也收得到', (() => {
+   rowsG6[2]['V'] = cellOf('X (GPW pp. 61-64)', ['61-64']);
+   return JSON.stringify(W.pacingFromRows(rowsG6)[0].lt.grammarBold) === JSON.stringify(['61-64']); })());
 
-console.log('\n【8】有真的接上去');
-ok('⭐ 一鍵出 Word Study 自動帶這週的主題',
-   /defaultTopic=\{\(paceWeek && paceWeek\.it\.wordStudy\)/.test(app)
-   && /defaultTopic/.test(ed));
+console.log('\n【5】讀 .xlsx（不靠外部函式庫）');
+ok('⭐ 自己解 zip，不要載 SheetJS（400KB，而這件事一學期只做一次）', (() => {
+   /* ⚠ 一定要先去掉註解——我在 data.js 的註解裡就寫了「刻意不用 SheetJS」，
+      不去掉的話這條會打到自己的註解（這個坑這陣子踩第四次了）。 */
+   const noC = data.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+   return /DecompressionStream\('deflate-raw'\)/.test(noC)
+       && !/sheetjs|xlsx\.full|cdn[^\n]*xlsx/i.test(noC); })());
+ok('   本地檔頭的名稱／extra 長度要重讀（跟中央目錄可能不同，算錯幾個 byte 就解壓失敗）',
+   /lho \+ 26.*\n?.*lho \+ 28|const lnl = dv\.getUint16\(lho \+ 26/.test(data));
+ok('   讀不懂要講清楚，不要吐半套', /不像是 Excel 檔/.test(data));
+
+console.log('\n【6】接上去了嗎');
+ok('⭐ 一鍵出 Word Study 自動帶這週主題', /defaultTopic=\{\(paceWeek && paceWeek\.it\.wordStudy\)/.test(app));
 ok('⭐⭐ 一鍵出文法要用 grammarHw（沿用過來的），不是課堂的 grammar', (() => {
-   /* 上 Writing Activity 那週如果帶 grammar，就會去出「Writing Activity」的文法題＝錯的。 */
    const noC = app.replace(/\/\*[\s\S]*?\*\//g, '');
    return /paceWeek && paceWeek\.lt\.grammarHw/.test(noC) && !/paceWeek\.lt\.grammar\b(?!Hw)/.test(noC); })());
-ok('   老師編輯列看得到「學校這週」', /className="sw-bar"/.test(shell));
-ok('   沒匯入進度表的年級完全不顯示（不要留一條空的）', /\{pace && \(\s*<div className="sw-bar">/.test(shell));
-ok('   匯入要先給老師看過才存（學校改版面才不會靜靜讀錯）',
-   /請先確認下面這張表跟學校發的一樣/.test(ed));
+ok('   編輯列看得到「學校這週」＋粗體頁數', /className="sw-bar"/.test(shell) && /className="sw-bold"/.test(shell));
+ok('   沒匯入的年級完全不顯示', /\{pace && \(\s*<div className="sw-bar">/.test(shell));
+ok('⭐ 匯入以「讀檔」為主（貼上只是後備，而且要講明拿不到粗體）',
+   /選擇 \.xlsx 檔/.test(ed) && /貼上的內容<b>沒有粗體<\/b>/.test(ed));
+ok('   存之前先把整張表列給老師看', /請先確認下面這張表跟學校發的一樣/.test(ed));
 
 console.log(fail ? `\n❌ t-pacing：${pass} 過 / ${fail} 失敗` : `\n✅ t-pacing：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

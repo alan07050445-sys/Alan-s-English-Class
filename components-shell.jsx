@@ -373,6 +373,10 @@ function Header({
                   {pace.lt._carry && pace.lt.grammarHw && (
                     <span className="sw-chip carry">↩ 作業沿用：{pace.lt.grammarHw}</span>
                   )}
+                  {/* 🔴 v494（Alan：「G6 的 Grammar 顯示很多頁數，但老師實際上只會教粗體的頁數」） */}
+                  {pace.lt.grammarBold && (
+                    <span className="sw-bold">✏️ 只教 pp. {pace.lt.grammarBold.join(', ')}</span>
+                  )}
                   {(pace.lt.law || pace.lt.gramWb) && (
                     <span className="sw-hw">📕 {[pace.lt.law, pace.lt.gramWb].filter(x => x && x !== '-').join(' · ')}</span>
                   )}

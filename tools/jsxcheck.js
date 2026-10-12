@@ -29,6 +29,7 @@ const KNOWN = new Set((
   'React ReactDOM firebase Babel module exports require process __dirname ' +
   'caches ServiceWorkerRegistration arguments WebSocket Worker Notification ' +
   'HTMLElement Element Node Text DOMParser XMLHttpRequest MediaRecorder ' +
+  'DecompressionStream CompressionStream ' +   /* v494：瀏覽器內建的解壓縮（讀 .xlsx 用）*/
   'DOMMatrix DOMMatrixReadOnly DOMPoint Path2D OffscreenCanvas ' +
   'self clients skipWaiting registration importScripts'   // service worker 裡的全域
 ).split(' '));
