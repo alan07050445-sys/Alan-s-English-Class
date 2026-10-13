@@ -3018,7 +3018,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
           {tab === 'roster' ? (
             <RosterManager/>
           ) : tab === 'lessons' ? (
-            <LessonLog roster={rosterAll} myEmail={myEmailD}/>
+            /* v502：包一層，壞掉時顯示錯誤而不是整頁白掉 */
+            <window.Boom where="上課紀錄"><LessonLog roster={rosterAll} myEmail={myEmailD}/></window.Boom>
           ) : tab === 'notify' ? (
             <LineNotify/>
           ) : tab === 'linelink' ? (

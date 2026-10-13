@@ -592,6 +592,33 @@ function Hero({ week, totalItems, totalDone, editMode, onUpdateWeek }) {
 }
 
 /* ───────── Grade Selector ───────── */
+/* ══ 🛟 v502 不要整頁白掉 ═══════════════════════════════════════════════
+   Alan：「匯入進去直接跑出這個 bug」——畫面整片空白，只剩左上角一點殘影。
+   React 預設行為就是這樣：render 裡丟出例外 → **整棵樹卸載**＝全白，
+   使用者什麼線索都沒有，只能截一張白畫面給我。
+
+   ⭐ 這一層讓它改成：壞掉的那一塊顯示「哪裡壞了＋錯誤訊息＋怎麼繼續」，
+     其他地方照常能用。錯誤訊息直接印在畫面上，Alan 截圖就等於把 console 給我了。 */
+class Boom extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) {
+    try { console.error('[Boom]', this.props.where || '', err, info && info.componentStack); } catch (e) {}
+  }
+  render() {
+    if (!this.state.err) return this.props.children;
+    const msg = String((this.state.err && this.state.err.message) || this.state.err);
+    return (
+      <div className="boom">
+        <b>⚠️ 這一塊壞掉了{this.props.where ? `（${this.props.where}）` : ''}</b>
+        <code>{msg}</code>
+        <span>其他功能還能用。<b>把這段文字截圖給 Claude</b> 就能直接修。</span>
+        <button onClick={() => this.setState({ err: null })}>再試一次</button>
+      </div>
+    );
+  }
+}
+
 function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onViewLanding, onOpenGuide, onLogout, summerOnly, onOpenAdmin, lockedGrade }) {
   const grades = [
     { id: 'g1', n: 'G1', zh: '一年級' },
@@ -1658,4 +1685,4 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
 }
 
 // v392: 舊版行銷長頁的元件已從這份匯出名單移除（函式本體同時刪除，見檔案上方 v392 註解）
-Object.assign(window, { findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+Object.assign(window, { Boom, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

@@ -20,6 +20,7 @@ const app  = fs.readFileSync(new URL('app.jsx', ROOT), 'utf8');
 const ed   = fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8');
 const shell= fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
 const dash = fs.readFileSync(new URL('components-dashboard.jsx', ROOT), 'utf8');
+const tune = fs.readFileSync(new URL('styles-tune.css', ROOT), 'utf8');
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
 const W = {}; new Function('window', 'document', 'firebase', 'localStorage',
   data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, stub);
@@ -155,6 +156,20 @@ ok('   只訂閱學生實際用到的年級，不要六個全訂', (() => {
    const noC = dash.replace(/\/\*[\s\S]*?\*\//g, '');
    return /gradesInUse/.test(noC) && /g\[1-6\]/.test(noC); })());
 ok('   已匯入的也要能重匯（學校會改版）', /重新匯入/.test(dash));
+
+console.log('\n【5e】🔴 v502：匯入視窗開在後台底下＋整頁白掉');
+/* Alan：「匯入進去直接跑出這個 bug」——整片空白只剩左上角殘影。 */
+ok('⭐ 匯入視窗要 createPortal 到 body（後台是 z-index:900 的 fixed 容器）', (() => {
+   const i = ed.indexOf('function PacingImportModal(');
+   const seg = ed.slice(i, ed.indexOf('\nfunction ', i + 10));
+   return /ReactDOM\.createPortal\(/.test(seg) && /\), document\.body\);/.test(seg); })());
+ok('⭐ 而且 z-index 要壓過後台的 900', (() => {
+   const m = /\.modal-backdrop\.pace-top \{ z-index: (\d+)/.exec(tune);
+   return !!m && Number(m[1]) > 900; })());
+ok('⭐⭐ 壞掉時要顯示錯誤，不要整頁白掉', /class Boom extends React\.Component/.test(shell)
+   && /getDerivedStateFromError/.test(shell));
+ok('   錯誤訊息要印在畫面上（Alan 截圖就等於把 console 給我）', /\{msg\}<\/code>/.test(shell));
+ok('   上課紀錄有包起來', /<window\.Boom where="上課紀錄">/.test(dash));
 
 console.log('\n【6】接上去了嗎');
 ok('⭐ 一鍵出 Word Study 自動帶這週主題', /defaultTopic=\{\(paceWeek && paceWeek\.it\.wordStudy\)/.test(app));

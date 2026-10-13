@@ -1765,8 +1765,14 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
   const cell = (v) => (v && v !== '-') ? v : '—';
   const anyBold = pace && pace.some(w => w.lt.grammarBold);
 
-  return (
-    <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+  /* 🔴 v502（Alan：「匯入進去直接跑出這個 bug」）：
+     `.modal-backdrop` 是 z-index:100，但老師後台 `.dash-overlay.tdash` 是 z-index:900
+     → 從後台開這個視窗，它會開在後台**底下**，等於看不見。
+     ⚠ 光調 z-index 不夠：後台是 position:fixed 的全螢幕容器，
+       祖先只要有 transform 就會綁架子層的 fixed（v461 踩過）。
+     → 跟 v433 的裝扮室一樣，**一律 createPortal 到 body**。 */
+  return ReactDOM.createPortal((
+    <div className="modal-backdrop pace-top" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal pace-modal" onMouseDown={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>🏫 學校進度表 · {gradeName}</h3>
@@ -1859,7 +1865,7 @@ function PacingImportModal({ open, gradeKey, gradeName, existing, onClose, onSav
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 function WordStudyModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, defaultTopic, onClose, onCreate }) {
