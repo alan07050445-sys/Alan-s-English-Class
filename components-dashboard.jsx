@@ -902,6 +902,37 @@ function TimetableCard({ roster, tt, onSave }) {
   );
 }
 
+/* ══ 🏫 v501 三個年級的進度表狀態 ═══════════════════════════════════
+   Alan：「哪邊可以匯入三個年級進度表？」
+   本來只在網站的編輯模式裡（切年級→進編輯→⋯更多→🏫，三個年級要切三次）。
+   他的學生橫跨 G3／G4／G6，所以直接在這裡把三個年級的狀態一次列出來，
+   哪個沒匯就點哪個。 */
+function PacingStrip({ grades, onOpen }) {
+  const [map, setMap] = useDash({});
+  useDashE(() => {
+    if (!window.subscribePacing || !grades.length) return;
+    const offs = grades.map(g => window.subscribePacing(g, (p) =>
+      setMap(m => ({ ...m, [g]: p ? p.length : 0 }))));
+    return () => offs.forEach(f => { try { f && f(); } catch (e) {} });
+  }, [grades.join()]);
+  if (!grades.length) return null;
+  return (
+    <div className="pstrip">
+      <b>🏫 學校進度表</b>
+      {grades.map(g => {
+        const n = map[g];
+        return (
+          <button key={g} className={'pstrip-g' + (n ? ' ok' : ' no')} onClick={() => onOpen(g)}>
+            {g.toUpperCase()}
+            <em>{n == null ? '讀取中…' : n ? `${n} 週 ✓` : '未匯入'}</em>
+          </button>
+        );
+      })}
+      <span className="pstrip-tip">沒匯入的話，上課紀錄裡就看不到「學校這週在教什麼」</span>
+    </div>
+  );
+}
+
 /* ══ 📒 v496 上課紀錄 ═══════════════════════════════════════════════════
    Alan 一對一教學，每個學生固定時段上課。他要記的是：
    這次上了什麼／掌握度幾 %／功課／下次進度。
@@ -928,6 +959,7 @@ function LessonLog({ roster, myEmail }) {
   const [draft, setDraft] = useDash(null);
   const [msg, setMsg] = useDash('');
   const [tt, setTt] = useDash(null);            // v497 固定課表
+  const [paceFor, setPaceFor] = useDash(null); // v501：在這裡就能匯入學校進度表
   useDashE(() => {
     if (!window.subscribeTimetable) return;
     return window.subscribeTimetable(setTt);
@@ -1014,6 +1046,16 @@ function LessonLog({ roster, myEmail }) {
   };
   const pctCls = (p) => p >= 85 ? 'hi' : p >= 60 ? 'mid' : 'lo';
 
+  /* 學生實際橫跨哪幾個年級（Alan 現在是 G3／G4／G6）——只訂閱這幾個，不要全部六個。 */
+  const gradesInUse = useDashM(() => {
+    const g = new Set();
+    list.forEach(st => {
+      const k = (st.grade || (window.gradeFromEmail && window.gradeFromEmail(st.email)) || '').toLowerCase();
+      if (/^g[1-6]$/.test(k)) g.add(k);
+    });
+    return [...g].sort();
+  }, [list]);
+
   const todayISO = window.lessonISO(new Date());
   const todaySlots = tt && window.timetableOfDay ? window.timetableOfDay(tt, new Date().getDay()) : [];
 
@@ -1023,6 +1065,21 @@ function LessonLog({ roster, myEmail }) {
         所以貼課表時只比對得到那 4 個名字 → 12 個時段裡只有 2 位學生對上，
         其餘 10 位靜靜地沒有人。**比對名字一定要給完整名單。** */}
     <TimetableCard roster={all} tt={tt} onSave={(x) => window.saveTimetable(x)}/>
+    <PacingStrip grades={gradesInUse} onOpen={setPaceFor}/>
+    {window.PacingImportModal && (
+      <window.PacingImportModal
+        open={!!paceFor}
+        gradeKey={paceFor || ''}
+        gradeName={String(paceFor || '').toUpperCase()}
+        existing={paceFor === gradeKey ? pace : null}
+        onClose={() => setPaceFor(null)}
+        onSave={async (g, weeks) => {
+          await window.savePacing(g, weeks);
+          setMsg(`🏫 ${String(g).toUpperCase()} 進度表已存（${weeks.length} 週）`);
+          setTimeout(() => setMsg(''), 3000);
+        }}
+      />
+    )}
     {todaySlots.length > 0 && (
       <div className="ll2-today">
         <b>今天（週{window.TT_DAYS[new Date().getDay()]}）有 {todaySlots.length} 堂</b>
@@ -1075,7 +1132,16 @@ function LessonLog({ roster, myEmail }) {
                 <h3>{stu.name || stu.email}</h3>
                 <span className="ll2-grade">{gradeKey.toUpperCase() || '沒有年級'}</span>
                 {avg != null && <span className={'ll2-avg ' + pctCls(avg)}>近 5 堂平均 {avg}%</span>}
-                {!pace && gradeKey && <span className="ll2-nopace">{gradeKey.toUpperCase()} 還沒匯入學校進度表</span>}
+                {/* 🔴 v501（Alan：「哪邊可以匯入三個年級進度表？」）：
+                    本來只放在網站的編輯模式裡（要切年級→進編輯→⋯更多→🏫，三個年級切三次）。
+                    他人就站在這個畫面、而且畫面正在跟他說「還沒匯入」——按鈕就該在這裡。 */}
+                {gradeKey && (pace
+                  ? <button className="ll2-pace-ok" onClick={() => setPaceFor(gradeKey)}>
+                      🏫 {gradeKey.toUpperCase()} 進度表 {pace.length} 週 · 重新匯入
+                    </button>
+                  : <button className="ll2-nopace" onClick={() => setPaceFor(gradeKey)}>
+                      🏫 {gradeKey.toUpperCase()} 還沒匯入學校進度表 — 點這裡匯入
+                    </button>)}
               </div>
               <div className="ll2-head-r">
                 <label className="ll2-slot">

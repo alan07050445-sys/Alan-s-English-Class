@@ -19,6 +19,7 @@ const data = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
 const app  = fs.readFileSync(new URL('app.jsx', ROOT), 'utf8');
 const ed   = fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8');
 const shell= fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
+const dash = fs.readFileSync(new URL('components-dashboard.jsx', ROOT), 'utf8');
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
 const W = {}; new Function('window', 'document', 'firebase', 'localStorage',
   data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, stub);
@@ -142,6 +143,18 @@ ok('⭐ 自己解 zip，不要載 SheetJS（400KB，而這件事一學期只做�
 ok('   本地檔頭的名稱／extra 長度要重讀（跟中央目錄可能不同，算錯幾個 byte 就解壓失敗）',
    /lho \+ 26.*\n?.*lho \+ 28|const lnl = dv\.getUint16\(lho \+ 26/.test(data));
 ok('   讀不懂要講清楚，不要吐半套', /不像是 Excel 檔/.test(data));
+
+console.log('\n【5d】v501：Alan 問「哪邊可以匯入三個年級進度表？」');
+/* 本來只在網站的編輯模式裡（切年級→進編輯→⋯更多→🏫，三個年級要切三次）。
+   他人就站在上課紀錄那個畫面、而且畫面正在跟他說「還沒匯入」——按鈕就該在那裡。 */
+ok('⭐ 後台的上課紀錄裡也能匯入', /window\.PacingImportModal/.test(dash) && /setPaceFor/.test(dash));
+ok('⭐ 「還沒匯入」那行本身就是按鈕（他正在看著它）', /點這裡匯入/.test(dash));
+ok('⭐ 三個年級的狀態一次列出來，哪個沒匯就點哪個',
+   /function PacingStrip\(/.test(dash) && /<PacingStrip grades=/.test(dash));
+ok('   只訂閱學生實際用到的年級，不要六個全訂', (() => {
+   const noC = dash.replace(/\/\*[\s\S]*?\*\//g, '');
+   return /gradesInUse/.test(noC) && /g\[1-6\]/.test(noC); })());
+ok('   已匯入的也要能重匯（學校會改版）', /重新匯入/.test(dash));
 
 console.log('\n【6】接上去了嗎');
 ok('⭐ 一鍵出 Word Study 自動帶這週主題', /defaultTopic=\{\(paceWeek && paceWeek\.it\.wordStudy\)/.test(app));
