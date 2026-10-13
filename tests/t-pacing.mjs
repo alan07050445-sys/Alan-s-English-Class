@@ -171,6 +171,40 @@ ok('⭐⭐ 壞掉時要顯示錯誤，不要整頁白掉', /class Boom extends R
 ok('   錯誤訊息要印在畫面上（Alan 截圖就等於把 console 給我）', /\{msg\}<\/code>/.test(shell));
 ok('   上課紀錄有包起來', /<window\.Boom where="上課紀錄">/.test(dash));
 
+console.log('\n【5f】v503：Alan 看了實際畫面之後的兩個要求');
+/* ①「U1W1 這個不用特別寫出來，因為根本沒人看，我只需要看重點」
+   ②「請把什麼 book 寫清楚，像是 LAW、Word Study WB、Grammar WB」
+      ——`p20-23 · p14-16` 根本看不出是哪一本。 */
+ok('⭐ 編號前綴要拿掉（U1W5 - ／U2W2 - ／Skill 1 - ）', (() => {
+   const C = W.pacingClean;
+   return C('U1W5 - Prefixes mis-, en-, & em-') === 'Prefixes mis-, en-, & em-'
+       && C('U2W2 - Complex Sentences & Subordinating Conjunctions') === 'Complex Sentences & Subordinating Conjunctions'
+       && C('Skill 1 - Analyze Text Structure') === 'Analyze Text Structure'; })());
+ok('   沒有前綴的不要被動到', W.pacingClean('Latin Prefix: mal-') === 'Latin Prefix: mal-');
+ok('   只在顯示時拿掉，存的資料保持原樣（哪天要對回學校的表還找得到編號）', (() => {
+   const r = W.pacingParse(tsvOf('g4', [
+     rowG4('W1', 'U1W1', 'A', 'U1W5 - X', 'Part 1', 'Skill 1 - Y', 'p1-4', 'p1-2', '-',
+           'LU1', 'B', 'Part 1', 'U2W2 - Z', 'S', 'L1', 'P1-3', '-')]));
+   return r[0].it.wordStudy === 'U1W5 - X'; })());
+
+ok('⭐⭐ 頁數一定要帶書名，而且書名**從 Excel 的欄位標題來**', (() => {
+   /* 不可以寫死：G6 外師那欄叫 Writing、G3 中師那欄叫 Homework。 */
+   const r = W.pacingParse(tsvOf('g3', [
+     ['Oct','','','','','','','','', 'W1','U1','A','WS','hf','Part 1','SK','p20-23','p14-16','-',
+      'W1','LU','B','Part 1','G','SK2','Skills 2','P14-17','-']]));
+   const it = W.pacingBooks(r[0].it), lt = W.pacingBooks(r[0].lt);
+   return it.map(x => x.book + ' ' + x.pages).join('|') === 'LAW p20-23|Word Study WB p14-16'
+       && lt.map(x => x.book + ' ' + x.pages).join('|') === 'Homework Skills 2|Grammar WB P14-17'; })());
+ok('   G6 外師那欄叫 Writing，也要照抄', (() => {
+   const r = W.pacingParse(tsvOf('g6', [
+     ['Oct','','','','','','','','', 'W1','U1','A','WS','V','SK','寫作 p9','-',
+      'W1','LU','B','V2','G','SK2','-']]));
+   return W.pacingBooks(r[0].it).map(x => x.book).join() === 'Writing'; })());
+ok('   沒有頁數就不要生出空書名', W.pacingBooks({ law: '-', wsWb: '' }).length === 0);
+ok('⭐ 兩個畫面（後台上課紀錄／老師編輯列）用同一套規則',
+   /window\.pacingClean/.test(dash) && /window\.pacingBooks/.test(dash)
+   && /window\.pacingClean/.test(shell) && /window\.pacingBooks/.test(shell));
+
 console.log('\n【6】接上去了嗎');
 ok('⭐ 一鍵出 Word Study 自動帶這週主題', /defaultTopic=\{\(paceWeek && paceWeek\.it\.wordStudy\)/.test(app));
 ok('⭐⭐ 一鍵出文法要用 grammarHw（沿用過來的），不是課堂的 grammar', (() => {

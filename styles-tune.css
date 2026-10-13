@@ -4609,3 +4609,25 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   margin-top: 8px; font-family: var(--sans); font-size: 13px; font-weight: 700;
   border: 1px solid rgba(168,0,26,.4); border-radius: 8px; padding: 4px 14px; background: #fff; color: #8A1020;
 }
+
+/* v503：學校進度那一塊重排——拿掉編號、書名寫清楚 */
+.ll2-pl { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 2px 0; }
+.ll2-pl > b {
+  flex: none; font-size: 11.5px; font-weight: 800; background: var(--bg);
+  padding: 1px 8px; border-radius: 999px; color: var(--ink-2);
+}
+.ll2-main2 { font-weight: 800; color: var(--ink); font-size: 14.5px; }
+.ll2-part { font-size: 11.5px; font-weight: 800; background: #E8C86A; color: #0E1116; padding: 1px 8px; border-radius: 999px; }
+.ll2-tp { font-size: 13px; color: var(--ink-2); background: var(--bg); padding: 1px 9px; border-radius: 7px; }
+.ll2-tp.carry { background: #FDF3E2; color: #7A5312; }
+.ll2-pl.bk { padding-left: 2px; gap: 6px; }
+.ll2-bk { font-size: 12.5px; color: #1B5E2E; white-space: nowrap; }
+.ll2-bk em {
+  font-style: normal; font-weight: 800; font-size: 11px; letter-spacing: .02em;
+  background: #E3F3E8; padding: 1px 7px; border-radius: 6px; margin-right: 5px;
+}
+.sw-bk { white-space: nowrap; margin-right: 10px; }
+.sw-bk em {
+  font-style: normal; font-weight: 800; font-size: 10.5px; letter-spacing: .02em;
+  background: rgba(255,255,255,.16); padding: 1px 6px; border-radius: 5px; margin-right: 4px;
+}

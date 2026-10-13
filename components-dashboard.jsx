@@ -1181,22 +1181,44 @@ function LessonLog({ roster, myEmail }) {
                   </div>
 
                   {/* 🏫 學校那一週在教什麼——免得 Alan 還要自己翻 */}
-                  {p && (
+                  {/* 🔴 v503（Alan：「U1W1 這個不用特別寫出來，因為根本沒人看，我只需要看重點」
+                      ＋「請把什麼 book 寫清楚，像是 LAW、Word Study WB、Grammar WB」）：
+                      · 編號前綴（U1W5 - ／Skill 1 - ）一律拿掉，只留內容
+                      · 頁數一定要帶書名，而且書名**從 Excel 的欄位標題來**（G6 是 Writing、G3 是 Homework） */}
+                  {p && (() => {
+                    const C = window.pacingClean, B = window.pacingBooks;
+                    const books = (side) => B(side).map((x, i) => (
+                      <span key={i} className="ll2-bk"><em>{x.book}</em>{x.pages}</span>
+                    ));
+                    return (
                     <div className="ll2-pace">
-                      <div><b>外師</b> {p.it.reading || '—'}{p.it.vocab ? ` · ${p.it.vocab}` : ''}
-                        {p.it.wordStudy ? ` · ${p.it.wordStudy}` : ''}
-                        {(p.it.law || p.it.wsWb) && <span className="ll2-hw">📕 {[p.it.law, p.it.wsWb].filter(x => x && x !== '-').join(' · ')}</span>}</div>
-                      <div><b>中師</b> {p.lt.grammar || '—'}
-                        {p.lt._carry && p.lt.grammarHw ? ` ↩ 作業：${p.lt.grammarHw}` : ''}
-                        {p.lt.grammarBold ? <span className="ll2-bold">只教 pp. {p.lt.grammarBold.join(', ')}</span> : null}
-                        {(p.lt.law || p.lt.gramWb) && <span className="ll2-hw">📕 {[p.lt.law, p.lt.gramWb].filter(x => x && x !== '-').join(' · ')}</span>}</div>
+                      <div className="ll2-pl">
+                        <b>外師</b>
+                        <span className="ll2-main2">{p.it.reading || '—'}</span>
+                        {p.it.vocab && <span className="ll2-part">{p.it.vocab}</span>}
+                        {p.it.wordStudy && <span className="ll2-tp">{C(p.it.wordStudy)}</span>}
+                        {p.it.skill && <span className="ll2-tp">{C(p.it.skill)}</span>}
+                      </div>
+                      {B(p.it).length > 0 && <div className="ll2-pl bk">📕 {books(p.it)}</div>}
+                      <div className="ll2-pl">
+                        <b>中師</b>
+                        <span className="ll2-main2">{C(p.lt.grammar) || '—'}</span>
+                        {p.lt._carry && p.lt.grammarHw && (
+                          <span className="ll2-tp carry">↩ 作業是 {C(p.lt.grammarHw)}</span>
+                        )}
+                        {p.lt.grammarBold && <span className="ll2-bold">只教 pp. {p.lt.grammarBold.join(', ')}</span>}
+                      </div>
+                      {B(p.lt).length > 0 && <div className="ll2-pl bk">📕 {books(p.lt)}</div>}
                       {p.note && <div className="ll2-note">📅 {p.note}</div>}
                       <button className="ll2-use" onClick={() => setDraft(x => ({
-                        ...x, did: (x.did ? x.did + '\n' : '') + [p.it.reading && `${p.it.reading}${p.it.vocab ? ' ' + p.it.vocab : ''}`,
-                          p.it.wordStudy, p.lt.grammarHw].filter(Boolean).join('、'),
+                        ...x, did: (x.did ? x.did + '\n' : '') + [
+                          p.it.reading && `${p.it.reading}${p.it.vocab ? ' ' + p.it.vocab : ''}`,
+                          C(p.it.wordStudy), C(p.it.skill), C(p.lt.grammarHw),
+                        ].filter(Boolean).join('、'),
                       }))}>↓ 帶進「這次上了什麼」</button>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {(() => {
                     const mates = buddiesOf(editing);

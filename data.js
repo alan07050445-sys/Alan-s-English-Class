@@ -7499,6 +7499,28 @@ const _PACE_COLS = {
 /* Alan：「G3 不用管 high frequency word 那一欄」 */
 const _PACE_SKIP = ['highfrequencywords', 'highfrequencyword'];
 const _paceNorm = (s) => String(s || '').replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+/* 欄位標題 → 拿來當書名顯示：`LAW (E1&E2)` → `LAW`、`Word Study WB (E1,E2+E3)` → `Word Study WB` */
+const _paceLabel = (s) => String(s || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+
+/* 🔴 v503（Alan：「U1W1 這個不用特別寫出來，因為根本沒人看，我只需要看重點」）：
+   拿掉 `U1W5 - `、`U2W2 - `、`Skill 1 - ` 這種編號前綴，只留真正的內容。
+   ⚠ 只在**顯示**時拿掉，存的資料保持原樣——哪天要對回學校的表還找得到編號。 */
+function pacingClean(s) {
+  return String(s || '')
+    .replace(/^\s*U\s*\d+\s*W\s*\d+\s*[-–—:：]\s*/i, '')
+    .replace(/^\s*Skills?\s*\d+\s*[-–—:：]\s*/i, '')
+    .trim();
+}
+/* 這一側的作業：回傳 [{ book, pages }]，book 來自 Excel 的欄位標題。 */
+function pacingBooks(side) {
+  if (!side) return [];
+  const out = [];
+  [['law', 'LAW'], ['wsWb', 'Word Study WB'], ['gramWb', 'Grammar WB']].forEach(([k, dft]) => {
+    const v = String(side[k] || '').trim();
+    if (v && v !== '-') out.push({ book: side[k + 'Label'] || dft, pages: v });
+  });
+  return out;
+}
 
 /* 只留 Formative（Alan：Summative 不用看）。
    「Formative 1」「Grammar (Summative 1)」「-」都可能出現，認不出來就當沒有。 */
@@ -7649,6 +7671,12 @@ function pacingFromRows(rows) {
     const grab = (side) => {
       const o = {};
       Object.keys(_PACE_COLS[side]).forEach(k => { o[k] = map[side][k] ? txt(r, map[side][k]) : ''; });
+      /* 🔴 v503（Alan：「請把什麼 book 寫清楚，像是 LAW、Word Study WB、Grammar WB」）：
+         光寫 `p20-23 · p14-16` 根本看不出是哪一本。書名**從 Excel 的欄位標題帶**，
+         不要寫死——G6 外師那欄叫 Writing、G3 中師那欄叫 Homework。 */
+      ['law', 'wsWb', 'gramWb'].forEach(k => {
+        if (map[side][k]) o[k + 'Label'] = _paceLabel(txt(hRow, map[side][k]));
+      });
       /* G6 的重點：中師文法那一格裡，老師實際上只教**粗體**的頁數 */
       const gc = map[side].grammar && at(r, map[side].grammar);
       if (gc) { const b = pacingBoldPages(gc.bold); if (b.length) o.grammarBold = b; }
@@ -7754,6 +7782,7 @@ function subscribePacing(gradeKey, cb) {
 }
 
 Object.assign(window, { pacingParse, pacingFill, pacingForWeek, pacingWeekNo, pacingReadXlsx, pacingFromRows, pacingBoldPages,
+                        pacingClean, pacingBooks,
                         pacingNextFormative, savePacing, loadPacing, subscribePacing });
 
 /* ══════════════════════════════════════════════════════════════════════════

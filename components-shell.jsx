@@ -354,32 +354,37 @@ function Header({
                 Alan 本來要自己開 Excel 查「這週外師教哪一課、中師的文法作業是哪個主題」。
                 週次已經跟學校 1:1 對上，所以直接長在這裡。
                 ⚠ 沒有匯入進度表的年級就完全不顯示（不要留一條空的）。 */}
-            {pace && (
+            {pace && (() => {
+              /* v503：跟後台的上課紀錄用同一套顯示規則——
+                 拿掉 U1W5／Skill 1 這種編號前綴，頁數一律帶書名（書名來自 Excel 欄位標題）。
+                 ⚠ 兩邊顯示規則要一致，不然同一件事在兩個畫面長不一樣。 */
+              const C = window.pacingClean || (x => x);
+              const B = window.pacingBooks || (() => []);
+              const books = (side) => B(side).map((x, i) => (
+                <span key={i} className="sw-bk"><em>{x.book}</em>{x.pages}</span>
+              ));
+              return (
               <div className="sw-bar">
                 <div className="sw-row">
                   <span className="sw-tag it">外師</span>
                   <b className="sw-main">{pace.it.reading || '—'}</b>
                   {pace.it.vocab && <span className="sw-part">{pace.it.vocab}</span>}
-                  {pace.it.wordStudy && <span className="sw-chip">{pace.it.wordStudy}</span>}
-                  {pace.it.skill && <span className="sw-dim">{pace.it.skill}</span>}
-                  {(pace.it.law || pace.it.wsWb) && (
-                    <span className="sw-hw">📕 {[pace.it.law, pace.it.wsWb].filter(x => x && x !== '-').join(' · ')}</span>
-                  )}
+                  {pace.it.wordStudy && <span className="sw-chip">{C(pace.it.wordStudy)}</span>}
+                  {pace.it.skill && <span className="sw-dim">{C(pace.it.skill)}</span>}
+                  {B(pace.it).length > 0 && <span className="sw-hw">📕 {books(pace.it)}</span>}
                 </div>
                 <div className="sw-row">
                   <span className="sw-tag lt">中師</span>
-                  <b className="sw-main">{pace.lt.grammar || '—'}</b>
+                  <b className="sw-main">{C(pace.lt.grammar) || '—'}</b>
                   {/* ⭐ Alan 特別講的眉角：上 Writing Activity 那週，作業是沿用上一個文法主題 */}
                   {pace.lt._carry && pace.lt.grammarHw && (
-                    <span className="sw-chip carry">↩ 作業沿用：{pace.lt.grammarHw}</span>
+                    <span className="sw-chip carry">↩ 作業是 {C(pace.lt.grammarHw)}</span>
                   )}
                   {/* 🔴 v494（Alan：「G6 的 Grammar 顯示很多頁數，但老師實際上只會教粗體的頁數」） */}
                   {pace.lt.grammarBold && (
                     <span className="sw-bold">✏️ 只教 pp. {pace.lt.grammarBold.join(', ')}</span>
                   )}
-                  {(pace.lt.law || pace.lt.gramWb) && (
-                    <span className="sw-hw">📕 {[pace.lt.law, pace.lt.gramWb].filter(x => x && x !== '-').join(' · ')}</span>
-                  )}
+                  {B(pace.lt).length > 0 && <span className="sw-hw">📕 {books(pace.lt)}</span>}
                 </div>
                 {(pace.note || nextF) && (
                   <div className="sw-row sw-foot">
@@ -391,7 +396,8 @@ function Header({
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             <div className="edit-make">
               {onQuickSet && (
