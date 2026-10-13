@@ -751,6 +751,7 @@ function TimetableCard({ roster, tt, onSave }) {
   const [paste, setPaste] = useDash('');
   const [msg, setMsg] = useDash('');
   const [twins, setTwins] = useDash([]);   // 名單裡長得很像的名字，要人工確認
+  const [lost, setLost] = useDash([]);     // 貼上時沒對到人的名字（v500：這個一定要留在畫面上）
   const slots = (tt && tt.slots) || [];
   const nameOf = (e) => {
     const s = (roster || []).find(x => x.email === e);
@@ -784,9 +785,11 @@ function TimetableCard({ roster, tt, onSave }) {
     const r = window.timetableParse(paste, roster);
     if (!r) { setMsg('讀不出來——格式像這樣：「星期一」換行「Elroy：18:00–20:00」'); return; }
     put(r.slots);
-    setMsg(r.unknown.length
-      ? `建好 ${r.slots.length} 個時段，但名單裡找不到：${r.unknown.join('、')}（那幾堂先沒有學生，手動選一下）`
-      : `建好 ${r.slots.length} 個時段 ✓`);
+    /* 🔴 v500：本來只用一行 setMsg 帶過，Alan 整個滑過去——
+       結果 12 個時段裡有 10 位學生沒對上，而畫面看起來一切正常。
+       沒對到的名字要**留在畫面上**，而且要看得出來少了幾位。 */
+    setMsg(`建好 ${r.slots.length} 個時段 ✓`);
+    setLost(r.unknown || []);
     setTwins(r.twins || []);
     setPaste('');
   };
@@ -802,6 +805,23 @@ function TimetableCard({ roster, tt, onSave }) {
       {open && (
         <div className="tt-body">
           {msg && <div className="tt-msg">{msg}</div>}
+          {/* 🔴 v500：沒對到人的名字一定要留在畫面上——
+              滑過去的代價是「課表看起來建好了，但有一半的課沒有人」。 */}
+          {lost.length > 0 && (
+            <div className="tt-lost">
+              <b>⚠️ 有 {lost.length} 個名字在學生名單裡找不到：{lost.join('、')}</b>
+              <span>那幾堂現在沒有學生。要嘛到「學生名單」確認拼法，
+                要嘛在下面那一格直接用「＋ 加學生」選。</span>
+              <button onClick={() => setLost([])}>我處理好了</button>
+            </div>
+          )}
+          {/* 幫他一眼看出「有幾堂還沒有人」——這是最容易漏掉的狀態 */}
+          {(() => {
+            const empty = slots.filter(x => !(x.students || []).length).length;
+            return empty > 0 ? (
+              <div className="tt-lost soft">還有 <b>{empty}</b> 個時段沒有學生——那幾堂記不了課。</div>
+            ) : null;
+          })()}
           {/* ⚠⚠ Elroy（G6）／Elory（G4）這種只差一個字母的名字，打錯不會報錯，
               只會把課記到別的孩子身上，而且要等家長問起才會發現。 */}
           {twins.length > 0 && (
@@ -818,7 +838,7 @@ function TimetableCard({ roster, tt, onSave }) {
                 <div key={i} className="tt-day">
                   <div className="tt-day-h">週{d}{day.length === 0 && <em>沒有課</em>}</div>
                   {day.map(s => (
-                    <div key={s.id} className="tt-slot">
+                    <div key={s.id} className={'tt-slot' + ((s.students || []).length ? '' : ' empty')}>
                       <div className="tt-slot-t">
                         <input type="time" value={s.start} onChange={e => upd(s.id, { start: e.target.value })}/>
                         <span>–</span>
@@ -892,9 +912,15 @@ function TimetableCard({ roster, tt, onSave }) {
      · 學校那一週在教什麼自動顯示（接 v493 的進度表，照學生的年級抓）
    ⚠ 老師私人備註（note）跟其他欄位分開——之後要給家長看時不給看。 */
 function LessonLog({ roster, myEmail }) {
-  const mine = (roster || []).filter(st => st.active !== false
-    && String(st.teacher || '').toLowerCase() === String(myEmail || '').toLowerCase());
-  const list = mine.length ? mine : (roster || []).filter(st => st.active !== false);
+  /* 🔴 v500（Alan 截到「為什麼我的畫面只有這些學生？而且有些不是我的學生」）：
+     v496 用 roster 的 `teacher` 欄位篩「我的學生」——**那個欄位記的是「誰把他加進名單的」**
+     （addRosterStudent 寫的是 owner），不是「誰在教他」。
+     結果：別的老師加的學生跑進來、他自己真正的學生反而被擋掉。
+     ⭐ 改用**課表**判斷：排在課表裡的就是他在教的，這個訊號自己會維護
+       （加一個學生到課表，他就出現；不用再去維護一個欄位）。
+     課表還沒建時退回「全部在用中的學生」，不然第一次進來是空的。 */
+  const all = (roster || []).filter(st => st.active !== false);
+  const [showAll, setShowAll] = useDash(false);
   const [who, setWho] = useDash(null);
   const [doc, setDoc] = useDash(null);
   const [pace, setPace] = useDash(null);
@@ -906,6 +932,11 @@ function LessonLog({ roster, myEmail }) {
     if (!window.subscribeTimetable) return;
     return window.subscribeTimetable(setTt);
   }, []);
+  const inTT = useDashM(() => {
+    const ids = new Set(((tt && tt.slots) || []).flatMap(s => s.students || []));
+    return all.filter(st => ids.has(st.email));
+  }, [tt, roster]);
+  const list = (showAll || !inTT.length) ? all : inTT;
 
   const stu = list.find(x => x.email === who) || null;
   useDashE(() => {
@@ -988,7 +1019,10 @@ function LessonLog({ roster, myEmail }) {
 
   return (
     <>
-    <TimetableCard roster={list} tt={tt} onSave={(x) => window.saveTimetable(x)}/>
+    {/* 🔴 v500：這裡本來傳 `list`（篩過的 4 個人），
+        所以貼課表時只比對得到那 4 個名字 → 12 個時段裡只有 2 位學生對上，
+        其餘 10 位靜靜地沒有人。**比對名字一定要給完整名單。** */}
+    <TimetableCard roster={all} tt={tt} onSave={(x) => window.saveTimetable(x)}/>
     {todaySlots.length > 0 && (
       <div className="ll2-today">
         <b>今天（週{window.TT_DAYS[new Date().getDay()]}）有 {todaySlots.length} 堂</b>
@@ -1009,7 +1043,14 @@ function LessonLog({ roster, myEmail }) {
     )}
     <div className="ll2">
       <div className="ll2-side">
-        <div className="ll2-side-h">學生（{list.length}）</div>
+        <div className="ll2-side-h">
+          學生（{list.length}）
+          {inTT.length > 0 && inTT.length < all.length && (
+            <button className="ll2-all" onClick={() => setShowAll(v => !v)}>
+              {showAll ? '只看課表上的' : `全部 ${all.length}`}
+            </button>
+          )}
+        </div>
         {list.length === 0 && <div className="ll2-empty">名單裡還沒有學生——先到「學生名單」加。</div>}
         {list.map(st => (
           <button key={st.email} className={'ll2-stu' + (who === st.email ? ' on' : '')}

@@ -103,6 +103,31 @@ ok('⭐⭐ 存檔時只把 did／hw／next 給同伴', (() => {
        && /pct: null/.test(seg) && /note: ''/.test(seg); })());
 ok('   畫面上要先講清楚會同步什麼、不同步什麼', /掌握度與備註不會/.test(dash));
 
+console.log('\n【4b】🔴 v500：比對名字一定要給「完整名單」');
+/* Alan 實際踩到的：12 個時段貼進去，只有 2 位學生對上，其餘 10 位靜靜地沒有人，
+   而畫面看起來一切正常。原因是我把**篩選過的 4 人名單**傳給課表元件。 */
+ok('⭐⭐ 課表元件拿到的是完整名單（all），不是篩選過的 list', (() => {
+   const noC = dash.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+   return /<TimetableCard roster=\{all\}/.test(noC) && !/<TimetableCard roster=\{list\}/.test(noC); })());
+ok('⭐ 名單只給一半時，對不到的那些要被回報出來（不是靜靜略過）', (() => {
+   const half = R.slice(0, 2);          // 只給 Ann、Ben
+   const r = W.timetableParse(TXT, half);
+   return r.unknown.length >= 3 && r.unknown.indexOf('Fay') >= 0; })());
+ok('⭐⭐ 沒對到的名字要**留在畫面上**，不是一行訊息帶過', /setLost\(r\.unknown/.test(dash) && /tt-lost/.test(dash));
+ok('   還有幾個時段沒有學生也要講出來（最容易漏掉的狀態）',
+   /個時段沒有學生/.test(dash) && /tt-slot' \+ \(\(s\.students \|\| \[\]\)\.length \? '' : ' empty'\)/.test(dash));
+
+console.log('\n【4c】🔴 v500：「我的學生」不能用 roster.teacher 判斷');
+ok('⭐⭐ 改用「有沒有排在課表裡」判斷', (() => {
+   /* roster 的 teacher 欄記的是「誰把他加進名單的」（addRosterStudent 寫 owner），
+      不是「誰在教他」→ 別的老師加的會跑進來、自己的反而被擋掉。 */
+   const noC = dash.replace(/\/\*[\s\S]*?\*\//g, '');
+   return /const ids = new Set\(\(\(tt && tt\.slots\) \|\| \[\]\)\.flatMap\(s => s\.students/.test(noC)
+       && !/String\(st\.teacher \|\| ''\)\.toLowerCase\(\) === String\(myEmail/.test(noC); })());
+ok('   課表還沒建時要退回「全部」，不然第一次進來是空的',
+   /\(showAll \|\| !inTT\.length\) \? all : inTT/.test(dash));
+ok('   還是看得到全部（有切換）', /只看課表上的/.test(dash));
+
 console.log('\n【5】整週看得到 ＋ 今天有哪幾堂');
 ok('⭐ 一週總時數算得出來（26.5 小時那種）', (() => {
    const h = W.timetableHours(T);
