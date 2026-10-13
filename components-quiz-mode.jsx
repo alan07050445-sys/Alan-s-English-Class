@@ -6786,6 +6786,58 @@ function WeeklyContactBook({ week, allItems, qmProg, weekId, categories, onEnter
   );
 }
 
+/* ══ 📒 v499 老師的上課紀錄（學生／家長看的）═══════════════════════════
+   Alan：「然後家長也可以同步看到」。
+   家長在家用的就是孩子的帳號，所以直接長在學生的首頁上。
+   ⚠ 讀的是 **lessonsPublic**，那一份在**存檔時**就已經把老師的私人備註拿掉了
+     ——Firestore 的規則沒辦法只擋某幾個欄位，所以不能直接開 lessons。 */
+function TeacherLog({ email }) {
+  const [doc, setDoc] = React.useState(null);
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!email || !window.subscribeLessonsPublic) return;
+    return window.subscribeLessonsPublic(email, setDoc);
+  }, [email]);
+  const rows = window.lessonRows ? window.lessonRows(doc) : [];
+  if (!rows.length) return null;          // 老師還沒記就不要佔版面
+  const show = open ? rows : rows.slice(0, 2);
+  const avg = window.lessonAvgPct ? window.lessonAvgPct(doc, 5) : null;
+  const kindOf = (k) => (window.LESSON_KINDS || []).find(x => x.id === k) || null;
+  const revOf = (r) => (window.REVIEW_STATES || []).find(x => x.id === r) || null;
+  const pctCls = (p) => p >= 85 ? 'hi' : p >= 60 ? 'mid' : 'lo';
+
+  return (
+    <div className="tlog">
+      <div className="tlog-h">
+        <b>📒 老師的上課紀錄</b>
+        {avg != null && <span className={'tlog-avg ' + pctCls(avg)}>近 5 堂熟悉度 {avg}%</span>}
+      </div>
+      {show.map(r => {
+        const k = kindOf(r.kind), rv = revOf(r.review);
+        return (
+          <div key={r.date} className={'tlog-row' + (r.kind === 'off' ? ' off' : '')}>
+            <div className="tlog-top">
+              <b>{r.date}</b>
+              {k && k.id !== 'normal' && <span className="tlog-k">{k.ico} {k.zh}</span>}
+              {typeof r.pct === 'number' && <span className={'tlog-p ' + pctCls(r.pct)}>熟悉 {r.pct}%</span>}
+              {rv && <span className={'tlog-rv ' + r.review}>{rv.ico} 上次複習{rv.zh}</span>}
+            </div>
+            {r.did  && <div className="tlog-f"><em>📘 上課內容</em>{r.did}</div>}
+            {r.prev && <div className="tlog-f"><em>🔭 先預習了</em>{r.prev}</div>}
+            {r.hw   && <div className="tlog-f hw"><em>📕 回家功課</em>{r.hw}</div>}
+            {r.next && <div className="tlog-f"><em>➡️ 下次進度</em>{r.next}</div>}
+          </div>
+        );
+      })}
+      {rows.length > 2 && (
+        <button className="tlog-more" onClick={() => setOpen(v => !v)}>
+          {open ? '收起' : `看全部 ${rows.length} 堂 ⌄`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ── Growth data (shared by the full report + the inline learning-page card) ── */
 function computeGrowthData(weeks, weekOrder, qmProg, categories) {
   const perWeek = [];
@@ -8858,4 +8910,4 @@ function ReadingSkillPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
   );
 }
 
-Object.assign(window, { ReadingSkillPlayer, ReadingSkillIntro, rsBlocks, rsChipTotal, QmPassageDrawer, LessonPlayer, GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, qmItemRank, QM_TYPE_ORDER, qmGroupByArticle });
+Object.assign(window, { TeacherLog, ReadingSkillPlayer, ReadingSkillIntro, rsBlocks, rsChipTotal, QmPassageDrawer, LessonPlayer, GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, qmItemRank, QM_TYPE_ORDER, qmGroupByArticle });

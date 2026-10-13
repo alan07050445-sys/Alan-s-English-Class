@@ -2167,6 +2167,8 @@ function App() {
               )}
               {!editMode && viewOrder.length > 0 && (
                 <div className="growth-summary-row">
+                  {/* v499（Alan：「然後家長也可以同步看到」）：家長在家用的就是孩子的帳號 */}
+                  {!editMode && user && window.TeacherLog && <window.TeacherLog email={String(user.email || '').toLowerCase()}/>}
                   <window.GrowthInlineCard
                     weeks={weeks}
                     weekOrder={viewOrder}

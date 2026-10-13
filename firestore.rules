@@ -94,6 +94,18 @@ service cloud.firestore {
       allow read, write: if isTeacher();
     }
 
+    // ── 👨‍👩‍👧 v499 上課紀錄（給學生／家長看的那一份）──────────
+    // Alan：「然後家長也可以同步看到」。
+    // 這一份是 lessons 的鏡像，**存檔時就已經把老師的私人備註拿掉**——
+    // 因為 Firestore 的規則沒辦法只擋某幾個欄位（開 read 就是整份給），
+    // 所以「哪些能給家長看」必須在**寫入時**決定，不是讀取時。
+    // 只有本人（學生帳號，家長在家就是用它登入）與老師讀得到。
+    match /lessonsPublic/{studentEmail} {
+      allow read: if isTeacher()
+                  || (request.auth != null && request.auth.token.email.lower() == studentEmail);
+      allow write: if isTeacher();
+    }
+
     // ── 全班合作目標（coop）────────────────────────────────
     match /coop/{docId} {
       allow read: if request.auth != null;

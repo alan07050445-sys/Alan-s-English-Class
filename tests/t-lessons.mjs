@@ -12,6 +12,8 @@ import fs from 'fs';
 const ROOT = new URL('..', import.meta.url);
 const data = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
 const dash = fs.readFileSync(new URL('components-dashboard.jsx', ROOT), 'utf8');
+const qm    = fs.readFileSync(new URL('components-quiz-mode.jsx', ROOT), 'utf8');
+const rules = fs.readFileSync(new URL('firestore.rules', ROOT), 'utf8');
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
 const W = {}; new Function('window', 'document', 'firebase', 'localStorage',
   data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, stub);
@@ -64,7 +66,43 @@ ok('⭐⭐ 摘要裡**沒有**私人備註', txt.indexOf('私密乙') < 0);
 ok('   該有的都有：上了什麼／掌握度／功課／下次進度',
    /Rare Treasure P2/.test(txt) && /90%/.test(txt) && /p16-19/.test(txt) && /Barbed Wire Baseball P1/.test(txt));
 ok('   學校進度也帶進去（家長看得懂這堂在學校的哪個位置）', /學校進度/.test(txt) && /Rare Treasure/.test(txt));
-ok('   畫面上明講備註家長看不到', /家長看不到/.test(dash));
+/* ⚠ 不要釘標籤的確切字（v499 我把「家長看不到」改成「只有我看得到」就打到自己）。
+   要驗的是「那一欄有被標示成私密的」。 */
+ok('   畫面上明講備註是私密的', /'🔒 我的備註（[^']*）'/.test(dash));
+
+console.log('\n【5b】v499：複習狀況／預習／家長同步看得到');
+ok('⭐ 複習三態：完成／部分／沒做（Alan：「有沒有完成複習之類的」）',
+   W.REVIEW_STATES.map(r => r.id).join() === 'done,part,none');
+ok('⭐ 有「先預習了什麼」可以填（Alan：「有時候會先預習」）', /先預習了什麼/.test(dash));
+ok('   上次交代的功課會顯示出來，不用自己回想', /上次交代：/.test(dash));
+ok('⭐⭐ 存檔時**同時寫一份給家長的**，而且那一份沒有 note', (() => {
+   /* Firestore 的規則擋不了單一欄位 → 「哪些給家長看」必須在**寫入時**決定。 */
+   const noC = data.replace(/\/\*[\s\S]*?\*\//g, '');
+   return /const \{ note, \.\.\.pub \} = full;/.test(noC)
+       && /collection\('lessonsPublic'\)\.doc\(id\)\.set\(\{ log: \{ \[dateISO\]: pub \}/.test(noC); })());
+ok('⭐ 刪掉一堂時，家長那份也要一起刪（不然老師刪了家長還看得到）', (() => {
+   const noC = data.replace(/\/\*[\s\S]*?\*\//g, '');
+   const i = noC.indexOf('async function deleteLesson');
+   const seg = noC.slice(i, i + 420);
+   return /collection\('lessons'\)/.test(seg) && /collection\('lessonsPublic'\)/.test(seg); })());
+ok('   v499 之前存的紀錄可以補寫過去（backfill）', /async function backfillLessonsPublic/.test(data));
+ok('⭐ 學生端有「老師的上課紀錄」，讀的是 lessonsPublic 不是 lessons',
+   /function TeacherLog\(/.test(qm) && /subscribeLessonsPublic/.test(qm) && !/subscribeLessons\(/.test(qm));
+ok('   老師還沒記任何一堂時不要佔版面', /if \(!rows\.length\) return null;/.test(qm));
+ok('⭐ firestore.rules 只讓本人與老師讀 lessonsPublic', (() => {
+   const seg = rules.slice(rules.indexOf('match /lessonsPublic/'));
+   return /allow read: if isTeacher\(\)/.test(seg)
+       && /request\.auth\.token\.email\.lower\(\) == studentEmail/.test(seg)
+       && /allow write: if isTeacher\(\)/.test(seg); })());
+ok('⭐ 家長摘要也帶上複習與預習', (() => {
+   const t = W.lessonParentText({ date: '2026-10-07', kind: 'normal', pct: 90,
+     review: 'part', prev: '下週的 Word Study', did: 'x', hw: 'y', next: 'z', note: '私密' }, '小明', null);
+   return /上次的複習/.test(t) && /部分/.test(t) && /先預習了/.test(t) && t.indexOf('私密') < 0; })());
+
+console.log('\n【5c】年級：名單沒填就用學號 email 算（Alan：「年級都放在網站上面」）');
+ok('⭐ 不回退的話進度表會對不到年級而整個不顯示，**而且不會報錯**',
+   /window\.gradeFromEmail && window\.gradeFromEmail\(e\)/.test(dash)
+   && /window\.gradeFromEmail\(stu\.email\)/.test(dash));
 
 console.log('\n【6】四種課別（Alan 提到連假／請假／補課／加課）');
 ok('⭐ 正常／補課／加課／請假停課 四種都有',
@@ -74,9 +112,9 @@ console.log('\n【7】接上去了嗎');
 ok('⭐ 後台有「上課紀錄」分頁', /id: 'lessons'/.test(dash) && /<LessonLog /.test(dash));
 ok('⭐ 一個學生一份文件（lessons/{email}），不是一堂一份',
    /collection\('lessons'\)\.doc\(id\)/.test(data));
-ok('⭐ 三個年級都吃得到學校進度（照學生的 grade 訂閱，不是寫死 g4）',
-   /subscribePacing\(g, setPace\)/.test(dash) && /stu && stu\.grade/.test(dash));
-ok('   沒匯進度表的年級要講出來，不要靜靜地空白', /這個年級還沒匯入學校進度表/.test(dash));
+ok('⭐ 三個年級都吃得到學校進度（照學生的年級訂閱，不是寫死 g4）',
+   /subscribePacing\([A-Za-z]+, setPace\)/.test(dash) && !/subscribePacing\('g\d'/.test(dash));
+ok('   沒匯進度表的年級要講出來，不要靜靜地空白', /還沒匯入學校進度表/.test(dash));
 ok('   學校這週的內容可以一鍵帶進「這次上了什麼」', /帶進「這次上了什麼」/.test(dash));
 
 console.log(fail ? `\n❌ t-lessons：${pass} 過 / ${fail} 失敗` : `\n✅ t-lessons：${pass} 過 / 0 失敗`);

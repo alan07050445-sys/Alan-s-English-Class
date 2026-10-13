@@ -7832,20 +7832,58 @@ function lessonAvgPct(doc, lastN) {
   return Math.round(use.reduce((a, r) => a + r.pct, 0) / use.length);
 }
 
+/* 上次交代的複習／功課做了沒（Alan：「以及有沒有完成複習之類的」）。 */
+const REVIEW_STATES = [
+  { id: 'done', zh: '完成', ico: '✅' },
+  { id: 'part', zh: '部分',  ico: '◐' },
+  { id: 'none', zh: '沒做',  ico: '✗' },
+];
+
+/* 存一堂課。
+   ⭐ v499：**同時寫一份給家長看的**（lessonsPublic/{email}）。
+     Firestore 的規則沒辦法只擋某幾個欄位，所以「不給家長看 note」只能靠
+     **另存一份不含 note 的**——這是 v496 就寫在 firestore.rules 裡的結論。
+   ⚠ 兩份都要寫成功才算數：家長那份失敗的話要講出來，
+     不然老師以為家長看得到、家長其實看到舊的。 */
 async function saveLesson(email, dateISO, rec) {
   const id = String(email || '').trim().toLowerCase();
-  await _db.collection('lessons').doc(id)
-    .set({ log: { [dateISO]: { ...rec, at: Date.now() } } }, { merge: true });
+  const full = { ...rec, at: Date.now() };
+  await _db.collection('lessons').doc(id).set({ log: { [dateISO]: full } }, { merge: true });
+  const { note, ...pub } = full;          // 家長那份：把老師私人備註拿掉
+  await _db.collection('lessonsPublic').doc(id).set({ log: { [dateISO]: pub } }, { merge: true });
 }
 async function deleteLesson(email, dateISO) {
   const id = String(email || '').trim().toLowerCase();
-  await _db.collection('lessons').doc(id)
-    .set({ log: { [dateISO]: firebase.firestore.FieldValue.delete() } }, { merge: true });
+  const gone = firebase.firestore.FieldValue.delete();
+  await _db.collection('lessons').doc(id).set({ log: { [dateISO]: gone } }, { merge: true });
+  // ⚠ 家長那份也要一起刪——不然老師刪掉了，家長還看得到
+  await _db.collection('lessonsPublic').doc(id).set({ log: { [dateISO]: gone } }, { merge: true });
 }
 async function saveLessonSlot(email, slot) {
   const id = String(email || '').trim().toLowerCase();
   await _db.collection('lessons').doc(id).set({ slot: slot || null }, { merge: true });
 }
+/* 學生／家長自己看的那一份（不含老師備註）。 */
+function subscribeLessonsPublic(email, cb) {
+  const id = String(email || '').trim().toLowerCase();
+  try {
+    return _db.collection('lessonsPublic').doc(id)
+      .onSnapshot(s => cb(s.exists ? s.data() : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+/* 把既有紀錄補寫一份到 lessonsPublic（v499 之前存的那些沒有鏡像）。 */
+async function backfillLessonsPublic(email) {
+  const id = String(email || '').trim().toLowerCase();
+  const snap = await _db.collection('lessons').doc(id).get();
+  if (!snap.exists) return 0;
+  const log = (snap.data() || {}).log || {};
+  const pub = {};
+  Object.keys(log).forEach(d => { const { note, ...rest } = log[d] || {}; pub[d] = rest; });
+  if (!Object.keys(pub).length) return 0;
+  await _db.collection('lessonsPublic').doc(id).set({ log: pub }, { merge: true });
+  return Object.keys(pub).length;
+}
+
 function subscribeLessons(email, cb) {
   const id = String(email || '').trim().toLowerCase();
   try {
@@ -7864,13 +7902,19 @@ function lessonParentText(rec, who, pace) {
   L.push(`${who ? who + ' · ' : ''}${rec.date}${k && k.id !== 'normal' ? `（${k.zh}）` : ''}`);
   if (pace && pace.it && pace.it.reading) L.push(`🏫 學校進度：${pace.it.reading}${pace.it.vocab ? ' · ' + pace.it.vocab : ''}`);
   if (rec.did)  L.push(`\n📘 今天上了\n${rec.did}`);
-  if (typeof rec.pct === 'number') L.push(`\n📊 掌握度：${rec.pct}%`);
+  if (typeof rec.pct === 'number') L.push(`\n📊 熟悉程度：${rec.pct}%`);
+  if (rec.review) {
+    const r = REVIEW_STATES.find(x => x.id === rec.review);
+    if (r) L.push(`\n🔁 上次的複習：${r.ico} ${r.zh}`);
+  }
+  if (rec.prev) L.push(`\n🔭 先預習了\n${rec.prev}`);
   if (rec.hw)   L.push(`\n📕 回家功課\n${rec.hw}`);
   if (rec.next) L.push(`\n➡️ 下次進度\n${rec.next}`);
   return L.join('\n');
 }
 
-Object.assign(window, { LESSON_KINDS, lessonISO, lessonWeekOf, lessonNextDate, lessonRows,
+Object.assign(window, { LESSON_KINDS, REVIEW_STATES, subscribeLessonsPublic, backfillLessonsPublic,
+                        lessonISO, lessonWeekOf, lessonNextDate, lessonRows,
                         lessonPrev, lessonAvgPct, saveLesson, deleteLesson, saveLessonSlot,
                         subscribeLessons, lessonParentText });
 

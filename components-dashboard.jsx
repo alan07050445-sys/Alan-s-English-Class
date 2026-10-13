@@ -758,9 +758,13 @@ function TimetableCard({ roster, tt, onSave }) {
   };
   /* ⚠ Alan 的名單裡有 Elroy（G6）跟 Elory（G4）——只差一個字母的位置。
      名字旁邊一律標年級，才看得出來那一格對到的是哪一個。 */
+  /* ⚠ v499：名單的 grade 欄常常是空的——康橋學號 email（le12…＝G4）才是唯一依據
+     （data.js 的 gradeFromEmail，v399 之後學生端就是靠它分班）。
+     不回退的話，進度表會對不到年級而整個不顯示，而且**不會報錯**。 */
   const gradeOf = (e) => {
     const s = (roster || []).find(x => x.email === e);
-    return s && s.grade ? String(s.grade).toUpperCase() : '';
+    const g = (s && s.grade) || (window.gradeFromEmail && window.gradeFromEmail(e)) || '';
+    return g ? String(g).toUpperCase() : '';
   };
   const put = (next) => onSave({ slots: next });
   const upd = (id, patch) => put(slots.map(s => s.id === id ? { ...s, ...patch } : s));
@@ -909,12 +913,15 @@ function LessonLog({ roster, myEmail }) {
     if (!who || !window.subscribeLessons) return;
     return window.subscribeLessons(who, setDoc);
   }, [who]);
+  /* 年級：名單沒填就用學號 email 算（見 TimetableCard 的 gradeOf 說明）。 */
+  const gradeKey = stu
+    ? ((stu.grade || (window.gradeFromEmail && window.gradeFromEmail(stu.email)) || '') || '')
+    : '';
   useDashE(() => {
     setPace(null);
-    const g = stu && stu.grade;
-    if (!g || !window.subscribePacing) return;
-    return window.subscribePacing(g, setPace);
-  }, [stu && stu.grade]);
+    if (!gradeKey || !window.subscribePacing) return;
+    return window.subscribePacing(gradeKey, setPace);
+  }, [gradeKey]);
 
   const rows = window.lessonRows ? window.lessonRows(doc) : [];
   const avg = window.lessonAvgPct ? window.lessonAvgPct(doc, 5) : null;
@@ -948,7 +955,8 @@ function LessonLog({ roster, myEmail }) {
     try {
       const base = {
         wk: window.lessonWeekOf(editing), kind: draft.kind, pct: draft.kind === 'off' ? null : Number(draft.pct),
-        did: draft.did || '', hw: draft.hw || '', next: draft.next || '', note: draft.note || '',
+        review: draft.review || '', did: draft.did || '', prev: draft.prev || '',
+        hw: draft.hw || '', next: draft.next || '', note: draft.note || '',
       };
       await window.saveLesson(who, editing, base);
       /* ⭐ v497（Alan：「只有 Elvis & Elory、Joyce & Lydia 一起上課」）：
@@ -957,8 +965,8 @@ function LessonLog({ roster, myEmail }) {
       const mates = buddiesOf(editing);
       for (const m of mates) {
         await window.saveLesson(m, editing, {
-          wk: base.wk, kind: base.kind, did: base.did, hw: base.hw, next: base.next,
-          pct: null, note: '',
+          wk: base.wk, kind: base.kind, did: base.did, prev: base.prev,
+          hw: base.hw, next: base.next, pct: null, review: '', note: '',
         });
       }
       setEditing(null); setDraft(null);
@@ -1024,9 +1032,9 @@ function LessonLog({ roster, myEmail }) {
             <div className="ll2-head">
               <div className="ll2-head-l">
                 <h3>{stu.name || stu.email}</h3>
-                <span className="ll2-grade">{String(stu.grade || '').toUpperCase()}</span>
+                <span className="ll2-grade">{gradeKey.toUpperCase() || '沒有年級'}</span>
                 {avg != null && <span className={'ll2-avg ' + pctCls(avg)}>近 5 堂平均 {avg}%</span>}
-                {!pace && stu.grade && <span className="ll2-nopace">這個年級還沒匯入學校進度表</span>}
+                {!pace && gradeKey && <span className="ll2-nopace">{gradeKey.toUpperCase()} 還沒匯入學校進度表</span>}
               </div>
               <div className="ll2-head-r">
                 <label className="ll2-slot">
@@ -1106,10 +1114,29 @@ function LessonLog({ roster, myEmail }) {
                     </div>
                   )}
 
+                  {/* 🔁 v499（Alan：「以及有沒有完成複習之類的」）：
+                      上一堂交代的複習／功課，這次來有沒有做。 */}
+                  {draft.kind !== 'off' && (
+                    <div className="ll2-rev">
+                      <label>上次的複習／功課</label>
+                      {window.REVIEW_STATES.map(r => (
+                        <button key={r.id} className={'ll2-rv' + (draft.review === r.id ? ' on ' + r.id : '')}
+                          onClick={() => setDraft(x => ({ ...x, review: x.review === r.id ? '' : r.id }))}>
+                          {r.ico} {r.zh}
+                        </button>
+                      ))}
+                      {(() => {
+                        const pv = window.lessonPrev(doc, editing);
+                        return pv && pv.hw ? <em className="ll2-rev-hw">上次交代：{pv.hw}</em> : null;
+                      })()}
+                    </div>
+                  )}
+
                   {[['did', '📘 這次上了什麼', '上一堂的「下次進度」會自動帶進來'],
+                    ['prev', '🔭 先預習了什麼', '有時候會超前——寫在這裡，家長也看得到'],
                     ['hw', '📕 回家功課', '例：LAW p20-23、單字卡 8 個字'],
                     ['next', '➡️ 下次進度', '寫在這裡，下一堂會自動帶進「這次上了什麼」'],
-                    ['note', '🔒 我的備註（家長看不到）', '例：prefix 跟 suffix 還是會搞混']].map(([k, lab, ph]) => (
+                    ['note', '🔒 我的備註（只有我看得到）', '例：prefix 跟 suffix 還是會搞混']].map(([k, lab, ph]) => (
                     <label key={k} className="ll2-f">
                       <span>{lab}</span>
                       <textarea value={draft[k] || ''} placeholder={ph}
@@ -1147,7 +1174,12 @@ function LessonLog({ roster, myEmail }) {
                       <button className="ll2-mini" onClick={() => copyParent(r)}>📋 複製給家長</button>
                       <button className="ll2-mini" onClick={() => openEdit(r)}>修改</button>
                     </div>
+                    {r.review && (() => {
+                      const rv = window.REVIEW_STATES.find(x => x.id === r.review);
+                      return rv ? <div className={'ll2-row-f rv ' + r.review}><em>🔁 上次複習</em>{rv.ico} {rv.zh}</div> : null;
+                    })()}
                     {r.did  && <div className="ll2-row-f"><em>📘 上了</em>{r.did}</div>}
+                    {r.prev && <div className="ll2-row-f"><em>🔭 預習</em>{r.prev}</div>}
                     {r.hw   && <div className="ll2-row-f"><em>📕 功課</em>{r.hw}</div>}
                     {r.next && <div className="ll2-row-f"><em>➡️ 下次</em>{r.next}</div>}
                     {r.note && <div className="ll2-row-f priv"><em>🔒 備註</em>{r.note}</div>}
