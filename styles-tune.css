@@ -4491,3 +4491,13 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   font-size: 12.5px; line-height: 1.7; color: #7A5312; background: #FFF7E6;
   border: 1px solid rgba(190,150,40,.3); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px;
 }
+.tt-chip i { font-style: normal; font-size: 10px; font-weight: 800; color: var(--ink-faint); margin-left: 2px; }
+.tt-twin {
+  font-size: 13px; line-height: 1.7; background: #FDEEEF; color: #8A1020;
+  border: 1px solid rgba(168,0,26,.25); border-radius: 10px; padding: 9px 13px; margin-bottom: 10px;
+}
+.tt-twin b { font-weight: 800; }
+.tt-twin button {
+  margin-left: 8px; font-family: var(--sans); font-size: 12px; font-weight: 700;
+  border: 1px solid rgba(168,0,26,.4); border-radius: 7px; padding: 2px 10px; background: #fff; color: #8A1020;
+}

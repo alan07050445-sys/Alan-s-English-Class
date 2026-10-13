@@ -64,6 +64,26 @@ ok('⭐ 標著「一起上」才算同伴', (() => {
 ok('   畫面上可以切（不是只有程式判斷）', /一起上（記一次、兩人共用內容）/.test(dash));
 ok('   分開上的時段可以「拆成兩堂」（我不去猜他怎麼切時間）', /拆成兩堂/.test(dash));
 
+console.log('\n【2b】⚠⚠ 名單裡有長得很像的名字（Alan 真的有這個狀況）');
+/* Elroy（G6，自己上）／Elory（G4，跟 Elvis 一起）——只差一個字母的位置。
+   打錯不會報錯，只會把課記到別的孩子身上，而且要等家長問起才會發現。 */
+const R2 = [['Elroy', 'g6'], ['Elory', 'g4'], ['Elvis', 'g4'], ['Nick', 'g3']]
+  .map(([n, g]) => ({ name: n, grade: g, email: n.toLowerCase() + '@x', active: true }));
+const T2 = W.timetableParse('星期一\nElroy：18:00–20:00\nElvis & Elory：20:00–22:00', R2);
+ok('⭐⭐ 「Elroy / Elory」這種相鄰字母對調要抓出來', (T2.twins || []).join() === 'elory / elroy');
+ok('⭐ 但還是要對到正確的人（不是因為像就亂配）',
+   W.timetableOfDay(T2, 1).find(s => s.start === '18:00').students.join() === 'elroy@x'
+   && W.timetableOfDay(T2, 1).find(s => s.start === '20:00').students.sort().join() === 'elory@x,elvis@x');
+ok('   沒有相似名字時不要亂報（Nick 自己一個不該被挑出來）', (() => {
+   const r = W.timetableParse('星期一\nNick：18:00–20:00', R2);
+   return (r.twins || []).length === 0; })());
+ok('   差一個字母（Elroy/Elro）也算像', (() => {
+   const r = W.timetableParse('星期一\nElroy：18:00–20:00',
+     R2.concat([{ name: 'Elro', grade: 'g5', email: 'elro@x', active: true }]));
+   return (r.twins || []).some(x => /elro\b/.test(x)); })());
+ok('⭐ 畫面上要**講出來**要老師一格一格確認，不是靜靜地配好', /名單裡有長得很像的名字/.test(dash));
+ok('⭐ 每個名字旁邊標年級，才分得出 Elroy(G6) 與 Elory(G4)', /gradeOf\(e\) &&/.test(dash));
+
 console.log('\n【3】⭐ 一週兩堂（v496 假設一堂，錯了）');
 ok('⭐ Ann 一週兩堂（週一＋週日）', W.timetableOfStudent(T, 'ann@x').length === 2);
 ok('⭐ 下次上課要在**所有**時段裡挑最近的那一個', (() => {

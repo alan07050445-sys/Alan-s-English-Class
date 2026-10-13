@@ -7937,7 +7937,43 @@ function timetableParse(text, roster) {
   });
   if (!out.length) return null;
   out.sort((a, b) => a.day - b.day || (a.start < b.start ? -1 : 1));
-  return { slots: out, unknown: [...new Set(unknown)] };
+  /* ⚠⚠ Alan 的名單裡真的有 **Elroy（G6，自己上）** 和 **Elory（G4，跟 Elvis 一起）**——
+     只差一個字母的位置。這種名字打錯不會報錯，只會**把課記到別的孩子身上**，
+     而且要等家長問起來才會發現。
+     → 課表裡只要出現「名單中有長得很像的名字」，就把那組挑出來請老師確認。 */
+  const twins = _ttLookAlikes((roster || []).map(r => String(r.name || '').trim()).filter(Boolean),
+                              out.flatMap(s => s.names));
+  return { slots: out, unknown: [...new Set(unknown)], twins };
+}
+
+/* 找出「用到的名字」裡，有沒有跟名單中另一個名字長得很像的（距離 1 以內）。
+   ⚠ 只比對**真的被用到**的名字，不然整份名單兩兩比會吵死人。 */
+function _ttLookAlikes(all, used) {
+  const norm = (x) => String(x || '').trim().toLowerCase();
+  const near = (a, b) => {
+    if (a === b) return false;
+    if (Math.abs(a.length - b.length) > 1) return false;
+    if (a.length === b.length) {
+      // 換一個字母（Elroy/Elrey）或相鄰兩個字母對調（Elroy/Elory）
+      const d = [];
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d.push(i);
+      if (d.length === 1) return true;
+      return d.length === 2 && d[1] === d[0] + 1 && a[d[0]] === b[d[1]] && a[d[1]] === b[d[0]];
+    }
+    const [lo, hi] = a.length < b.length ? [a, b] : [b, a];   // 差一個字母
+    for (let i = 0; i <= lo.length; i++) {
+      if (lo.slice(0, i) + hi[i] + lo.slice(i) === hi) return true;
+    }
+    return false;
+  };
+  const out = [];
+  [...new Set(used.map(norm))].forEach(u => {
+    all.forEach(n => { if (near(u, norm(n))) {
+      const pair = [u, norm(n)].sort().join(' / ');
+      if (out.indexOf(pair) < 0) out.push(pair);
+    } });
+  });
+  return out;
 }
 
 /* 某一天有哪幾堂（0=日 … 6=六）。 */

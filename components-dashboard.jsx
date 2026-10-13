@@ -750,10 +750,17 @@ function TimetableCard({ roster, tt, onSave }) {
   const [open, setOpen] = useDash(false);
   const [paste, setPaste] = useDash('');
   const [msg, setMsg] = useDash('');
+  const [twins, setTwins] = useDash([]);   // 名單裡長得很像的名字，要人工確認
   const slots = (tt && tt.slots) || [];
   const nameOf = (e) => {
     const s = (roster || []).find(x => x.email === e);
     return (s && s.name) || e;
+  };
+  /* ⚠ Alan 的名單裡有 Elroy（G6）跟 Elory（G4）——只差一個字母的位置。
+     名字旁邊一律標年級，才看得出來那一格對到的是哪一個。 */
+  const gradeOf = (e) => {
+    const s = (roster || []).find(x => x.email === e);
+    return s && s.grade ? String(s.grade).toUpperCase() : '';
   };
   const put = (next) => onSave({ slots: next });
   const upd = (id, patch) => put(slots.map(s => s.id === id ? { ...s, ...patch } : s));
@@ -776,6 +783,7 @@ function TimetableCard({ roster, tt, onSave }) {
     setMsg(r.unknown.length
       ? `建好 ${r.slots.length} 個時段，但名單裡找不到：${r.unknown.join('、')}（那幾堂先沒有學生，手動選一下）`
       : `建好 ${r.slots.length} 個時段 ✓`);
+    setTwins(r.twins || []);
     setPaste('');
   };
   const hrs = window.timetableHours ? window.timetableHours(tt) : 0;
@@ -790,6 +798,15 @@ function TimetableCard({ roster, tt, onSave }) {
       {open && (
         <div className="tt-body">
           {msg && <div className="tt-msg">{msg}</div>}
+          {/* ⚠⚠ Elroy（G6）／Elory（G4）這種只差一個字母的名字，打錯不會報錯，
+              只會把課記到別的孩子身上，而且要等家長問起才會發現。 */}
+          {twins.length > 0 && (
+            <div className="tt-twin">
+              ⚠️ 名單裡有長得很像的名字：<b>{twins.join('、')}</b>——
+              請一格一格確認對到的是正確的人（名字旁邊有年級可以對照）。
+              <button onClick={() => setTwins([])}>我確認過了</button>
+            </div>
+          )}
           <div className="tt-grid">
             {window.TT_DAYS.map((d, i) => {
               const day = window.timetableOfDay(tt, i);
@@ -809,6 +826,7 @@ function TimetableCard({ roster, tt, onSave }) {
                       <div className="tt-slot-s">
                         {(s.students || []).map(e => (
                           <span key={e} className="tt-chip">{nameOf(e)}
+                            {gradeOf(e) && <i>{gradeOf(e)}</i>}
                             <button onClick={() => upd(s.id, { students: s.students.filter(x => x !== e) })}>✕</button>
                           </span>
                         ))}
@@ -818,7 +836,8 @@ function TimetableCard({ roster, tt, onSave }) {
                         }}>
                           <option value="">＋ 加學生</option>
                           {(roster || []).filter(x => x.active !== false && (s.students || []).indexOf(x.email) < 0)
-                            .map(x => <option key={x.email} value={x.email}>{x.name || x.email}</option>)}
+                            .map(x => <option key={x.email} value={x.email}>
+                              {x.name || x.email}{x.grade ? `（${String(x.grade).toUpperCase()}）` : ''}</option>)}
                         </select>
                       </div>
                       <div className="tt-slot-f">
