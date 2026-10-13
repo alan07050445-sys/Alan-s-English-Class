@@ -7873,3 +7873,129 @@ function lessonParentText(rec, who, pace) {
 Object.assign(window, { LESSON_KINDS, lessonISO, lessonWeekOf, lessonNextDate, lessonRows,
                         lessonPrev, lessonAvgPct, saveLesson, deleteLesson, saveLessonSlot,
                         subscribeLessons, lessonParentText });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   📅 v497 固定課表（Timetable）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 2026-10-13 給了整份固定課表，裡面有兩件事打掉 v496 的假設：
+     ① 他說「我是一對一」，但實際上**有三組是兩個人一起**
+        （Elvis & Elory／Eric & Tayler／Joyce & Lydia）
+     ② v496 假設每人每週一堂，實際上**多數人每週兩堂**
+        （Eric & Tayler 二＋四、Nick 三＋日、Elroy 一＋日、Elvis & Elory 一＋六）
+
+   → 課表另外存一份 class/timetable（整週一份，不是每人一份）：
+     一次讀完就能畫出整週、也能算「今天有哪幾堂」。
+     { slots: [{ id, day, start, end, students: ['a@x','b@x'] }] }
+   上課紀錄仍然是 lessons/{email} 一人一份——
+   **同一個時段的兩個人，共用的內容一樣，但掌握度與備註各自記**。
+═══════════════════════════════════════════════════════════════════════════ */
+
+const TT_DOC = 'timetable';
+const TT_DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+/* 貼上課表就建好（Alan 自己就是用這個格式寫給我的）：
+     星期一
+     Elroy：18:00–20:00
+     Elvis & Elory：20:00–22:00
+   ⚠ 時間的分隔符號可能是 – — ~ - 任何一種；冒號可能是全形。
+   ⚠ 名字用 & 或 、或 + 分隔；比對名單時**不分大小寫、去掉空白**。 */
+function timetableParse(text, roster) {
+  const byName = {};
+  (roster || []).forEach(s => {
+    const k = String(s.name || '').trim().toLowerCase();
+    if (k) byName[k] = s.email;
+    // 「王小明Elroy Wang」這種中英混寫：也用第一個英文字當 key
+    const en = String(s.name || '').match(/[A-Za-z][A-Za-z'-]*/);
+    if (en) { const k2 = en[0].toLowerCase(); if (!byName[k2]) byName[k2] = s.email; }
+  });
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = []; let day = null; const unknown = [];
+  lines.forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    const dm = /^(?:星期|週|禮拜)\s*([日一二三四五六天])/.exec(line);
+    if (dm) { const c = dm[1] === '天' ? '日' : dm[1]; day = TT_DAYS.indexOf(c); return; }
+    if (day == null || day < 0) return;
+    /* 名字：起–迄 */
+    const m = /^(.+?)\s*[:：]\s*(\d{1,2})\s*[:：]\s*(\d{2})\s*[–—~\-到至]+\s*(\d{1,2})\s*[:：]\s*(\d{2})/.exec(line);
+    if (!m) return;
+    const names = m[1].split(/\s*[&、＋+和]\s*/).map(x => x.trim()).filter(Boolean);
+    const hhmm = (h, mi) => String(Number(h)).padStart(2, '0') + ':' + mi;
+    const emails = [];
+    names.forEach(n => {
+      const hit = byName[n.toLowerCase()];
+      if (hit) emails.push(hit); else unknown.push(n);
+    });
+    /* ⚠ Alan 2026-10-13 更正：「這邊只有 Elvis & Elory、Joyce & Lydia 一起上課」
+       ——同一個時段寫兩個名字**不一定是一起上**（Eric & Tayler 排在同一個
+       3 小時的區塊裡，但是分開上的）。
+       所以 together 只是**預設值**，每個時段都能在畫面上切換；
+       一起上＝記一次、共用內容複製給兩人（掌握度與備註仍各自填）。 */
+    out.push({ id: 's' + day + m[2] + m[3] + Math.random().toString(36).slice(2, 5),
+               day, start: hhmm(m[2], m[3]), end: hhmm(m[4], m[5]),
+               names, students: emails, together: emails.length > 1 });
+  });
+  if (!out.length) return null;
+  out.sort((a, b) => a.day - b.day || (a.start < b.start ? -1 : 1));
+  return { slots: out, unknown: [...new Set(unknown)] };
+}
+
+/* 某一天有哪幾堂（0=日 … 6=六）。 */
+function timetableOfDay(tt, day) {
+  return ((tt && tt.slots) || []).filter(s => Number(s.day) === Number(day))
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
+}
+/* 這位學生每週有哪幾堂（v496 的單一 slot 換成這個）。 */
+function timetableOfStudent(tt, email) {
+  const id = String(email || '').toLowerCase();
+  return ((tt && tt.slots) || []).filter(s => (s.students || []).indexOf(id) >= 0)
+    .sort((a, b) => a.day - b.day || (a.start < b.start ? -1 : 1));
+}
+/* 這位學生「下一次上課」是哪一天（含今天）。
+   ⚠ v496 只看一個固定時段，但他多數學生一週兩堂 → 要在所有時段裡挑最近的那一個。 */
+function timetableNextDate(tt, email, from) {
+  const slots = timetableOfStudent(tt, email);
+  if (!slots.length) return window.lessonISO(from ? new Date(from) : new Date());
+  const base = from ? new Date(from + 'T00:00:00') : new Date();
+  const b = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  let best = null;
+  slots.forEach(s => {
+    const d = new Date(b);
+    d.setDate(d.getDate() + ((Number(s.day) - d.getDay() + 7) % 7));
+    if (!best || d < best) best = d;
+  });
+  return window.lessonISO(best);
+}
+/* 這一堂跟誰一起上（只有標記 together 的才算）。 */
+function timetableBuddies(tt, email, slotId) {
+  const id = String(email || '').toLowerCase();
+  const s = ((tt && tt.slots) || []).find(x => x.id === slotId);
+  if (!s || !s.together) return [];
+  return (s.students || []).filter(e => e !== id);
+}
+/* 這位學生在某一天的那一堂（用來知道「今天這堂跟誰一起」）。 */
+function timetableSlotOn(tt, email, dateISO) {
+  const d = new Date(dateISO + 'T00:00:00').getDay();
+  const id = String(email || '').toLowerCase();
+  return timetableOfDay(tt, d).find(s => (s.students || []).indexOf(id) >= 0) || null;
+}
+
+/* 一週總時數——Alan 可以一眼看出這學期排了多少課。 */
+function timetableHours(tt) {
+  const mins = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
+  return (((tt && tt.slots) || []).reduce((a, s) => a + Math.max(0, mins(s.end) - mins(s.start)), 0) / 60);
+}
+
+async function saveTimetable(tt) {
+  await _db.collection('class').doc(TT_DOC).set({ slots: (tt && tt.slots) || [], at: Date.now() });
+}
+function subscribeTimetable(cb) {
+  try {
+    return _db.collection('class').doc(TT_DOC)
+      .onSnapshot(s => cb(s.exists ? s.data() : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+
+Object.assign(window, { TT_DAYS, timetableParse, timetableOfDay, timetableOfStudent,
+                        timetableNextDate, timetableHours, timetableBuddies, timetableSlotOn,
+                        saveTimetable, subscribeTimetable });

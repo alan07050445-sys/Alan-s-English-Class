@@ -739,6 +739,126 @@ function SummerAdmin() {
 }
 
 /* ── Roster management tab (學生名單) ──────────────────── */
+/* ══ 📅 v497 固定課表 ═══════════════════════════════════════════════════
+   Alan 2026-10-13 給了整份課表，連著兩次更正打掉我的假設：
+     ① 他先說「我是一對一」→ 實際上 Elvis & Elory、Joyce & Lydia 是**兩人一起上**
+     ② 我以為同一行就是一起上 → 「Eric & Tayler 只是兄弟我寫在一起，時間是分開的」
+   所以：**同一個時段寫兩個名字，不代表一起上**。
+   每個時段都能切「一起上／分開上」，而且整列都能直接改（含把一個時段拆成兩堂），
+   我不去猜他怎麼切時間。 */
+function TimetableCard({ roster, tt, onSave }) {
+  const [open, setOpen] = useDash(false);
+  const [paste, setPaste] = useDash('');
+  const [msg, setMsg] = useDash('');
+  const slots = (tt && tt.slots) || [];
+  const nameOf = (e) => {
+    const s = (roster || []).find(x => x.email === e);
+    return (s && s.name) || e;
+  };
+  const put = (next) => onSave({ slots: next });
+  const upd = (id, patch) => put(slots.map(s => s.id === id ? { ...s, ...patch } : s));
+  const del = (id) => put(slots.filter(s => s.id !== id));
+  const add = () => put(slots.concat([{ id: 's' + Date.now().toString(36), day: 1, start: '18:00', end: '20:00', students: [], together: false }]));
+  /* 把一個時段切成前後兩堂——Eric & Tayler 那種「同一個區塊但分開上」用得到。
+     ⚠ 平分只是起點，Alan 自己再把時間調成實際的。 */
+  const split = (s) => {
+    const mins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const fmt = (v) => String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
+    const mid = fmt(Math.round((mins(s.start) + mins(s.end)) / 2 / 5) * 5);
+    const a = { ...s, end: mid, students: s.students.slice(0, 1), together: false };
+    const b = { ...s, id: s.id + 'b', start: mid, students: s.students.slice(1), together: false };
+    put(slots.flatMap(x => x.id === s.id ? [a, b] : [x]));
+  };
+  const doPaste = () => {
+    const r = window.timetableParse(paste, roster);
+    if (!r) { setMsg('讀不出來——格式像這樣：「星期一」換行「Elroy：18:00–20:00」'); return; }
+    put(r.slots);
+    setMsg(r.unknown.length
+      ? `建好 ${r.slots.length} 個時段，但名單裡找不到：${r.unknown.join('、')}（那幾堂先沒有學生，手動選一下）`
+      : `建好 ${r.slots.length} 個時段 ✓`);
+    setPaste('');
+  };
+  const hrs = window.timetableHours ? window.timetableHours(tt) : 0;
+
+  return (
+    <div className="tt">
+      <button className="tt-bar" onClick={() => setOpen(v => !v)}>
+        <b>📅 固定課表</b>
+        <span className="tt-sum">{slots.length} 個時段 · 一週 {hrs.toFixed(1)} 小時</span>
+        <span className="tt-chev">{open ? '收起 ⌃' : '展開 ⌄'}</span>
+      </button>
+      {open && (
+        <div className="tt-body">
+          {msg && <div className="tt-msg">{msg}</div>}
+          <div className="tt-grid">
+            {window.TT_DAYS.map((d, i) => {
+              const day = window.timetableOfDay(tt, i);
+              return (
+                <div key={i} className="tt-day">
+                  <div className="tt-day-h">週{d}{day.length === 0 && <em>沒有課</em>}</div>
+                  {day.map(s => (
+                    <div key={s.id} className="tt-slot">
+                      <div className="tt-slot-t">
+                        <input type="time" value={s.start} onChange={e => upd(s.id, { start: e.target.value })}/>
+                        <span>–</span>
+                        <input type="time" value={s.end} onChange={e => upd(s.id, { end: e.target.value })}/>
+                        <select value={s.day} onChange={e => upd(s.id, { day: Number(e.target.value) })}>
+                          {window.TT_DAYS.map((x, k) => <option key={k} value={k}>週{x}</option>)}
+                        </select>
+                      </div>
+                      <div className="tt-slot-s">
+                        {(s.students || []).map(e => (
+                          <span key={e} className="tt-chip">{nameOf(e)}
+                            <button onClick={() => upd(s.id, { students: s.students.filter(x => x !== e) })}>✕</button>
+                          </span>
+                        ))}
+                        <select value="" onChange={e => {
+                          const v = e.target.value; if (!v) return;
+                          upd(s.id, { students: (s.students || []).concat([v]) });
+                        }}>
+                          <option value="">＋ 加學生</option>
+                          {(roster || []).filter(x => x.active !== false && (s.students || []).indexOf(x.email) < 0)
+                            .map(x => <option key={x.email} value={x.email}>{x.name || x.email}</option>)}
+                        </select>
+                      </div>
+                      <div className="tt-slot-f">
+                        {(s.students || []).length > 1 && (
+                          <>
+                            <label className="tt-tog">
+                              <input type="checkbox" checked={!!s.together}
+                                onChange={e => upd(s.id, { together: e.target.checked })}/>
+                              一起上（記一次、兩人共用內容）
+                            </label>
+                            {!s.together && <button className="tt-mini" onClick={() => split(s)}>拆成兩堂</button>}
+                          </>
+                        )}
+                        <span className="tt-gap"/>
+                        <button className="tt-mini del" onClick={() => del(s.id)}>刪掉</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+          <div className="tt-foot">
+            <button className="btn" onClick={add}>＋ 新增時段</button>
+            <details className="tt-paste">
+              <summary>整份貼上（每學期調整時最快）</summary>
+              <textarea value={paste} onChange={e => setPaste(e.target.value)}
+                placeholder={'星期一\nElroy：18:00–20:00\nElvis & Elory：20:00–22:00\n\n星期二\n…'}/>
+              <div className="tt-paste-f">
+                <span>⚠ 會整份取代現有課表。同一行寫兩個名字時，預設當成「一起上」，貼完再自己切掉。</span>
+                <button className="btn primary" disabled={!paste.trim()} onClick={doPaste}>建立課表</button>
+              </div>
+            </details>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══ 📒 v496 上課紀錄 ═══════════════════════════════════════════════════
    Alan 一對一教學，每個學生固定時段上課。他要記的是：
    這次上了什麼／掌握度幾 %／功課／下次進度。
@@ -758,6 +878,11 @@ function LessonLog({ roster, myEmail }) {
   const [editing, setEditing] = useDash(null);   // 正在編的那一堂（date）
   const [draft, setDraft] = useDash(null);
   const [msg, setMsg] = useDash('');
+  const [tt, setTt] = useDash(null);            // v497 固定課表
+  useDashE(() => {
+    if (!window.subscribeTimetable) return;
+    return window.subscribeTimetable(setTt);
+  }, []);
 
   const stu = list.find(x => x.email === who) || null;
   useDashE(() => {
@@ -783,7 +908,9 @@ function LessonLog({ roster, myEmail }) {
   };
 
   const openNew = () => {
-    const date = window.lessonNextDate(slot);
+    /* ⚠ v497：本來用 lessonNextDate(單一固定時段)，但 Alan 多數學生**一週兩堂**
+       （Eric 二＋四、Nick 三＋日…）→ 要在他所有時段裡挑最近的那一個。 */
+    const date = (tt && window.timetableNextDate) ? window.timetableNextDate(tt, who) : window.lessonNextDate(slot);
     const prev = window.lessonPrev(doc, date);
     setEditing(date);
     /* ⭐ 上一堂的「下次進度」自動變成這一堂的「這次上了什麼」——
@@ -791,14 +918,35 @@ function LessonLog({ roster, myEmail }) {
     setDraft({ kind: 'normal', pct: 80, did: (prev && prev.next) || '', hw: '', next: '', note: '' });
   };
   const openEdit = (r) => { setEditing(r.date); setDraft({ ...r }); };
+  /* 這一堂跟誰一起上（只有課表標記「一起上」的才算）。 */
+  const buddiesOf = (dateISO) => {
+    if (!tt || !window.timetableSlotOn) return [];
+    const sl = window.timetableSlotOn(tt, who, dateISO);
+    return (sl && sl.together) ? (sl.students || []).filter(e => e !== who) : [];
+  };
   const save = async () => {
     if (!editing || !draft) return;
     try {
-      await window.saveLesson(who, editing, {
+      const base = {
         wk: window.lessonWeekOf(editing), kind: draft.kind, pct: draft.kind === 'off' ? null : Number(draft.pct),
         did: draft.did || '', hw: draft.hw || '', next: draft.next || '', note: draft.note || '',
-      });
-      setEditing(null); setDraft(null); setMsg('已儲存 ✓'); setTimeout(() => setMsg(''), 1800);
+      };
+      await window.saveLesson(who, editing, base);
+      /* ⭐ v497（Alan：「只有 Elvis & Elory、Joyce & Lydia 一起上課」）：
+         一起上的那一堂，**共用的內容複製給同伴**（上了什麼／功課／下次進度），
+         但 **掌握度與備註不複製**——那是每個孩子各自的，要分別填。 */
+      const mates = buddiesOf(editing);
+      for (const m of mates) {
+        await window.saveLesson(m, editing, {
+          wk: base.wk, kind: base.kind, did: base.did, hw: base.hw, next: base.next,
+          pct: null, note: '',
+        });
+      }
+      setEditing(null); setDraft(null);
+      setMsg(mates.length ? `已儲存 ✓ 共用內容也記給了 ${mates.map(e => {
+        const st = list.find(x => x.email === e); return (st && st.name) || e;
+      }).join('、')}（掌握度與備註請各自填）` : '已儲存 ✓');
+      setTimeout(() => setMsg(''), 4200);
     } catch (e) { setMsg('存檔失敗：' + ((e && e.message) || '')); }
   };
   const copyParent = (r) => {
@@ -808,7 +956,30 @@ function LessonLog({ roster, myEmail }) {
   };
   const pctCls = (p) => p >= 85 ? 'hi' : p >= 60 ? 'mid' : 'lo';
 
+  const todayISO = window.lessonISO(new Date());
+  const todaySlots = tt && window.timetableOfDay ? window.timetableOfDay(tt, new Date().getDay()) : [];
+
   return (
+    <>
+    <TimetableCard roster={list} tt={tt} onSave={(x) => window.saveTimetable(x)}/>
+    {todaySlots.length > 0 && (
+      <div className="ll2-today">
+        <b>今天（週{window.TT_DAYS[new Date().getDay()]}）有 {todaySlots.length} 堂</b>
+        {todaySlots.map(sl => (
+          <span key={sl.id} className="ll2-today-s">
+            {sl.start}–{sl.end}
+            {(sl.students || []).map(e => {
+              const st = list.find(x => x.email === e);
+              return (
+                <button key={e} className={'ll2-today-b' + (who === e ? ' on' : '')}
+                  onClick={() => setWho(e)}>{(st && st.name) || e}</button>
+              );
+            })}
+            {sl.together && <em>一起</em>}
+          </span>
+        ))}
+      </div>
+    )}
     <div className="ll2">
       <div className="ll2-side">
         <div className="ll2-side-h">學生（{list.length}）</div>
@@ -817,7 +988,11 @@ function LessonLog({ roster, myEmail }) {
           <button key={st.email} className={'ll2-stu' + (who === st.email ? ' on' : '')}
             onClick={() => setWho(st.email)}>
             <b>{st.name || st.email}</b>
-            <em>{String(st.grade || '').toUpperCase()}</em>
+            <em>{String(st.grade || '').toUpperCase()}
+              {(() => {
+                const n = tt && window.timetableOfStudent ? window.timetableOfStudent(tt, st.email).length : 0;
+                return n ? ` · 週${n}堂` : '';
+              })()}</em>
           </button>
         ))}
       </div>
@@ -889,6 +1064,15 @@ function LessonLog({ roster, myEmail }) {
                     </div>
                   )}
 
+                  {(() => {
+                    const mates = buddiesOf(editing);
+                    if (!mates.length) return null;
+                    const nm = mates.map(e => { const st = list.find(x => x.email === e); return (st && st.name) || e; });
+                    return <div className="ll2-mate">👥 這一堂跟 <b>{nm.join('、')}</b> 一起上——
+                      存檔時「上了什麼／功課／下次進度」會一起記給他，
+                      <b>掌握度與備註不會</b>（那要各自填）。</div>;
+                  })()}
+
                   {draft.kind !== 'off' && (
                     <div className="ll2-pct">
                       <label>掌握度</label>
@@ -956,6 +1140,7 @@ function LessonLog({ roster, myEmail }) {
         )}
       </div>
     </div>
+    </>
   );
 }
 
