@@ -211,7 +211,17 @@ ok('⭐⭐ 一鍵出文法要用 grammarHw（沿用過來的），不是課堂�
    const noC = app.replace(/\/\*[\s\S]*?\*\//g, '');
    return /paceWeek && paceWeek\.lt\.grammarHw/.test(noC) && !/paceWeek\.lt\.grammar\b(?!Hw)/.test(noC); })());
 ok('   編輯列看得到「學校這週」＋粗體頁數', /className="sw-bar"/.test(shell) && /className="sw-bold"/.test(shell));
-ok('   沒匯入的年級完全不顯示', /\{pace && \(\s*<div className="sw-bar">/.test(shell));
+/* ⚠ 本來釘 `{pace && (<div className="sw-bar">` ——那是釘寫法。
+   v503 把它改成 `{pace && (() => { … })()}`（為了算共用的顯示函式），
+   功能一模一樣但字串對不上（這陣子第五次踩同一個坑）。
+   要驗的是「沒有 pace 就不渲染」，不是它長什麼樣子。 */
+ok('   沒匯入的年級完全不顯示', (() => {
+   const i = shell.indexOf('className="sw-bar"');
+   if (i < 0) return false;
+   /* 找「sw-bar 前面最近的 {pace &&」，中間不可以又開一個新的 JSX 區塊。
+      ⚠ 不要用固定字數的視窗——我加了一段註解就抓不到了。 */
+   const g = shell.lastIndexOf('{pace &&', i);
+   return g > 0 && shell.slice(g, i).indexOf('className="edit-make"') < 0; })());
 ok('⭐ 匯入以「讀檔」為主（貼上只是後備，而且要講明拿不到粗體）',
    /選擇 \.xlsx 檔/.test(ed) && /貼上的內容<b>沒有粗體<\/b>/.test(ed));
 ok('   存之前先把整張表列給老師看', /請先確認下面這張表跟學校發的一樣/.test(ed));
