@@ -4517,29 +4517,130 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .ll2-row-f.rv.part em, .ll2-row-f.rv.part { color: #8A5A00; }
 .ll2-row-f.rv.none em, .ll2-row-f.rv.none { color: #A8331F; }
 
-/* ══ 📒 v499 老師的上課紀錄（學生／家長端）═══════════════════════ */
+/* ══ 📒 v499 老師的上課紀錄（學生／家長端）═══════════════════════
+   v504（Alan：「不夠有質感」）：家長打開看到的第一份「成果」，照雜誌內頁排——
+   標題／統計分左右（卡片很寬，統計靠右才不會整片空在右邊）、日期排成真的像日期、
+   四個欄位用兩欄網格＋標題在上（第二行才對得齊，原本換行會掉回最左邊）、
+   左側一條時間軸把好幾堂課串起來。
+   ⚠ 小字顏色都挑過對比（#2FA56B 這種亮綠在 10.5px 讀不動 → 用深一階的）。
+   ══════════════════════════════════════════════════════════════ */
 .tlog {
-  grid-column: 1 / -1; background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: 18px; padding: 16px 20px; margin-bottom: 14px;
+  grid-column: 1 / -1;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FDFCF8 100%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px 24px 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(21,19,14,.05), 0 2px 8px -2px rgba(21,19,14,.06));
 }
-.tlog-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-.tlog-h b { font-family: var(--serif); font-size: 17px; font-weight: 600; color: var(--ink); }
-.tlog-avg { font-size: 12.5px; font-weight: 800; padding: 2px 10px; border-radius: 999px; }
-.tlog-avg.hi, .tlog-p.hi { background: #E3F3E8; color: #1B5E2E; }
-.tlog-avg.mid, .tlog-p.mid { background: #FDF3E2; color: #8A5A00; }
-.tlog-avg.lo, .tlog-p.lo { background: #FBE6E2; color: #A8331F; }
-.tlog-row { border-left: 3px solid var(--border); padding: 8px 0 8px 13px; margin-bottom: 6px; }
-.tlog-row.off { opacity: .66; }
-.tlog-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
-.tlog-top b { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
-.tlog-k { font-size: 11.5px; color: var(--ink-3); }
-.tlog-p { font-size: 11.5px; font-weight: 800; padding: 1px 9px; border-radius: 999px; }
-.tlog-rv { font-size: 11.5px; font-weight: 700; }
-.tlog-rv.done { color: #1B5E2E; } .tlog-rv.part { color: #8A5A00; } .tlog-rv.none { color: #A8331F; }
-.tlog-f { font-size: 13.5px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; padding: 1px 0; }
-.tlog-f em { font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--ink-3); margin-right: 8px; }
-.tlog-f.hw { color: #1B5E2E; }
-.tlog-more { font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: underline; text-underline-offset: 3px; margin-top: 4px; }
+
+/* ── 抬頭：左標題、右統計 ── */
+.tlog-h {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding-bottom: 13px; margin-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.tlog-ttl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tlog-kicker {
+  font-family: var(--sans); font-size: 9.5px; font-weight: 800;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); opacity: .72;
+}
+.tlog-ttl b {
+  font-family: var(--serif); font-size: 20px; font-weight: 600;
+  letter-spacing: -.01em; color: var(--ink); line-height: 1.2;
+}
+.tlog-avg { text-align: right; flex: none; }
+.tlog-avg > span {
+  display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .1em;
+  color: var(--ink-3); margin-bottom: 1px;
+}
+.tlog-avg > b {
+  display: block; font-family: var(--serif); font-size: 27px; font-weight: 700;
+  line-height: 1; letter-spacing: -.02em;
+}
+.tlog-avg > b i { font-style: normal; font-size: 14px; margin-left: 1px; opacity: .72; }
+.tlog-bar {                            /* 細長的量尺，讓那個數字有個依據 */
+  width: 86px; height: 3px; margin: 7px 0 0 auto;
+  border-radius: 999px; background: var(--border); overflow: hidden;
+}
+.tlog-bar > div { height: 100%; border-radius: 999px; }
+.tlog-avg.hi > b  { color: #1B5E2E; }  .tlog-avg.hi .tlog-bar > div  { background: #2E7D43; }
+.tlog-avg.mid > b { color: #8A5A00; }  .tlog-avg.mid .tlog-bar > div { background: #B8821F; }
+.tlog-avg.lo > b  { color: #A8331F; }  .tlog-avg.lo .tlog-bar > div  { background: #C2543D; }
+
+/* ── 一堂一堂串成時間軸 ── */
+.tlog-row { position: relative; padding: 0 0 20px 24px; }
+.tlog-row:last-child { padding-bottom: 6px; }
+.tlog-row::before {                     /* 節點 */
+  content: ''; position: absolute; left: 0; top: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--bg-card); border: 2px solid var(--border); box-sizing: border-box;
+}
+.tlog-row.now::before {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(139,49,32,.13);
+}
+.tlog-row::after {                      /* 串起來的那條線 */
+  content: ''; position: absolute; left: 4px; top: 19px; bottom: 0; width: 1px;
+  background: linear-gradient(180deg, var(--border), rgba(221,214,196,.2));
+}
+.tlog-row:last-child::after { display: none; }
+.tlog-row.off { opacity: .6; }
+
+.tlog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tlog-date { display: flex; align-items: baseline; gap: 8px; }
+.tlog-date b {
+  font-family: var(--serif); font-size: 19px; font-weight: 600;
+  letter-spacing: -.01em; color: var(--ink);
+}
+.tlog-date span { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; color: var(--ink-3); }
+.tlog-tags { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.tlog-k { font-size: 11px; font-weight: 700; color: var(--ink-3); }
+.tlog-p, .tlog-rv {
+  font-size: 11px; font-weight: 800; letter-spacing: .02em;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.tlog-p.hi { background: #E3F3E8; color: #1B5E2E; }
+.tlog-p.mid { background: #FDF3E2; color: #8A5A00; }
+.tlog-p.lo { background: #FBE6E2; color: #A8331F; }
+.tlog-rv { font-weight: 700; }
+.tlog-rv.done { background: #F1F7F2; color: #1B5E2E; }
+.tlog-rv.part { background: #FBF6EB; color: #8A5A00; }
+.tlog-rv.none { background: #FBF1EE; color: #A8331F; }
+
+/* ── 四個欄位：標題在上、內容在下，寬一點就排成兩欄 ── */
+.tlog-fs { display: grid; grid-template-columns: 1fr; gap: 13px 28px; margin-top: 12px; }
+@media (min-width: 900px) { .tlog-fs { grid-template-columns: 1fr 1fr; } }
+.tlog-f { padding-left: 12px; border-left: 2px solid var(--border); min-width: 0; }
+.tlog-f em {
+  display: block; font-style: normal; font-size: 10.5px; font-weight: 800;
+  letter-spacing: .15em; color: var(--ink-3); margin-bottom: 5px;
+}
+.tlog-f em i { font-style: normal; font-size: 11.5px; letter-spacing: 0; margin-right: 6px; }
+.tlog-f p {
+  margin: 0; font-size: 14px; line-height: 1.72; color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.tlog-f.did  { border-left-color: #6FA8D0; } .tlog-f.did em  { color: #1E6FA8; }
+.tlog-f.prev { border-left-color: #9A8FDC; } .tlog-f.prev em { color: #5544B5; }
+.tlog-f.hw   { border-left-color: #7CC79D; } .tlog-f.hw em   { color: #1B7047; }
+.tlog-f.next { border-left-color: #C98A78; } .tlog-f.next em { color: var(--accent); }
+
+.tlog-more {
+  display: block; width: 100%; margin-top: 2px; padding: 11px 0 3px;
+  border: 0; border-top: 1px solid var(--border); background: none;
+  font-family: var(--sans); font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
+  color: var(--ink-3); cursor: pointer; transition: color .15s;
+}
+.tlog-more:hover { color: var(--ink); }
+.tlog-more i { font-style: normal; margin-left: 6px; }
+
+@media (max-width: 560px) {
+  .tlog { padding: 16px 16px 12px; border-radius: 16px; }
+  .tlog-ttl b { font-size: 18px; }
+  .tlog-avg > b { font-size: 23px; }
+}
 
 /* v500：沒對到人的名字／沒有學生的時段，一定要看得出來 */
 .tt-lost {

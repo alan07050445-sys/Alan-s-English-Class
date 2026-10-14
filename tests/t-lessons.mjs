@@ -14,6 +14,7 @@ const data = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
 const dash = fs.readFileSync(new URL('components-dashboard.jsx', ROOT), 'utf8');
 const qm    = fs.readFileSync(new URL('components-quiz-mode.jsx', ROOT), 'utf8');
 const rules = fs.readFileSync(new URL('firestore.rules', ROOT), 'utf8');
+const css   = fs.readFileSync(new URL('styles-tune.css', ROOT), 'utf8');
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
 const W = {}; new Function('window', 'document', 'firebase', 'localStorage',
   data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, stub);
@@ -116,6 +117,34 @@ ok('⭐ 三個年級都吃得到學校進度（照學生的年級訂閱，不是
    /subscribePacing\([A-Za-z]+, setPace\)/.test(dash) && !/subscribePacing\('g\d'/.test(dash));
 ok('   沒匯進度表的年級要講出來，不要靜靜地空白', /還沒匯入學校進度表/.test(dash));
 ok('   學校這週的內容可以一鍵帶進「這次上了什麼」', /帶進「這次上了什麼」/.test(dash));
+
+console.log('\n【8】v504 家長那張卡的質感（Alan：「不夠有質感」）');
+ok('⭐ 日期拆成 10/14・週三，不是一行 2026-10-14', (() => {
+   const d = W.lessonDateParts('2026-10-14');
+   return d.md === '10/14' && d.wd === '週三' && d.y === '2026' && d.ok === true; })());
+ok('   月份／日子不補 0（9/7 不要寫成 09/07）', W.lessonDateParts('2026-09-07').md === '9/7');
+ok('   壞掉的字串原樣退回去，不要算出 NaN', (() => {
+   const d = W.lessonDateParts('x');
+   return d.ok === false && d.md === 'x' && !/NaN/.test(JSON.stringify(d)); })());
+ok('⭐ 四個欄位排得成兩欄（寬卡片右半邊不要整片空著）', (() => {
+   const seg = qm.slice(qm.indexOf('function TeacherLog('), qm.indexOf('function computeGrowthData'));
+   return /tlog-fs/.test(seg) && /\.filter\(Boolean\)/.test(seg); })());
+ok('⭐ 標題在上、內容在下——換行的第二行才對得齊第一行', (() => {
+   const seg = css.slice(css.indexOf('.tlog-f {'), css.indexOf('.tlog-more'));
+   return /\.tlog-f em \{[^}]*display:\s*block/.test(seg); })());
+ok('   ⚠ 小字顏色要讀得動：欄位標題不可以用亮綠 #2FA56B 這種等級', (() => {
+   const seg = css.slice(css.indexOf('.tlog-f.did'), css.indexOf('.tlog-more'));
+   const bright = (seg.match(/em\s*\{\s*color:\s*(#[0-9A-Fa-f]{6})/g) || [])
+     .map(m => m.slice(-6))
+     .filter(h => {                                   // 相對亮度（WCAG），白底要夠暗
+       const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+         .map(v => v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4));
+       const L = .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+       return 1.05 / (L + .05) < 4.5;
+     });
+   return bright.length === 0; })());
+ok('   老師的私人備註依然沒有出現在這張卡上',
+   !/r\.note/.test(qm.slice(qm.indexOf('function TeacherLog('), qm.indexOf('function computeGrowthData'))));
 
 console.log(fail ? `\n❌ t-lessons：${pass} 過 / ${fail} 失敗` : `\n✅ t-lessons：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

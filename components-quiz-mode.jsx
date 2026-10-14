@@ -6806,32 +6806,65 @@ function TeacherLog({ email }) {
   const revOf = (r) => (window.REVIEW_STATES || []).find(x => x.id === r) || null;
   const pctCls = (p) => p >= 85 ? 'hi' : p >= 60 ? 'mid' : 'lo';
 
+  const dparts = window.lessonDateParts || ((x) => ({ md: String(x || ''), wd: '', y: '' }));
+
   return (
     <div className="tlog">
       <div className="tlog-h">
-        <b>📒 老師的上課紀錄</b>
-        {avg != null && <span className={'tlog-avg ' + pctCls(avg)}>近 5 堂熟悉度 {avg}%</span>}
-      </div>
-      {show.map(r => {
-        const k = kindOf(r.kind), rv = revOf(r.review);
-        return (
-          <div key={r.date} className={'tlog-row' + (r.kind === 'off' ? ' off' : '')}>
-            <div className="tlog-top">
-              <b>{r.date}</b>
-              {k && k.id !== 'normal' && <span className="tlog-k">{k.ico} {k.zh}</span>}
-              {typeof r.pct === 'number' && <span className={'tlog-p ' + pctCls(r.pct)}>熟悉 {r.pct}%</span>}
-              {rv && <span className={'tlog-rv ' + r.review}>{rv.ico} 上次複習{rv.zh}</span>}
-            </div>
-            {r.did  && <div className="tlog-f"><em>📘 上課內容</em>{r.did}</div>}
-            {r.prev && <div className="tlog-f"><em>🔭 先預習了</em>{r.prev}</div>}
-            {r.hw   && <div className="tlog-f hw"><em>📕 回家功課</em>{r.hw}</div>}
-            {r.next && <div className="tlog-f"><em>➡️ 下次進度</em>{r.next}</div>}
+        <div className="tlog-ttl">
+          <span className="tlog-kicker">Lesson Record</span>
+          <b>老師的上課紀錄</b>
+        </div>
+        {avg != null && (
+          <div className={'tlog-avg ' + pctCls(avg)}>
+            <span>近 5 堂熟悉度</span>
+            <b>{avg}<i>%</i></b>
+            <div className="tlog-bar"><div style={{ width: Math.max(0, Math.min(100, avg)) + '%' }}/></div>
           </div>
-        );
-      })}
+        )}
+      </div>
+
+      <div className="tlog-list">
+        {show.map((r, i) => {
+          const k = kindOf(r.kind), rv = revOf(r.review), d = dparts(r.date);
+          // v504：欄位先收成一份清單，版面才排得成兩欄（不然只能一行一行往下長）
+          const fields = [
+            r.did  && { id: 'did',  ico: '📘', zh: '上課內容', v: r.did },
+            r.prev && { id: 'prev', ico: '🔭', zh: '先預習了', v: r.prev },
+            r.hw   && { id: 'hw',   ico: '📕', zh: '回家功課', v: r.hw },
+            r.next && { id: 'next', ico: '➡️', zh: '下次進度', v: r.next },
+          ].filter(Boolean);
+          return (
+            <div key={r.date} className={'tlog-row' + (r.kind === 'off' ? ' off' : '') + (i === 0 ? ' now' : '')}>
+              <div className="tlog-top">
+                <div className="tlog-date">
+                  <b>{d.md}</b>
+                  <span>{[d.wd, d.y].filter(Boolean).join(' · ')}</span>
+                </div>
+                <div className="tlog-tags">
+                  {k && k.id !== 'normal' && <span className="tlog-k">{k.ico} {k.zh}</span>}
+                  {typeof r.pct === 'number' && <span className={'tlog-p ' + pctCls(r.pct)}>熟悉度 {r.pct}%</span>}
+                  {rv && <span className={'tlog-rv ' + r.review}>{rv.ico} 上次複習{rv.zh}</span>}
+                </div>
+              </div>
+              {fields.length > 0 && (
+                <div className="tlog-fs">
+                  {fields.map(f => (
+                    <div key={f.id} className={'tlog-f ' + f.id}>
+                      <em><i>{f.ico}</i>{f.zh}</em>
+                      <p>{f.v}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       {rows.length > 2 && (
         <button className="tlog-more" onClick={() => setOpen(v => !v)}>
-          {open ? '收起' : `看全部 ${rows.length} 堂 ⌄`}
+          {open ? '收起' : `看全部 ${rows.length} 堂`}<i>{open ? '⌃' : '⌄'}</i>
         </button>
       )}
     </div>

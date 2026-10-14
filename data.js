@@ -7861,6 +7861,16 @@ function lessonAvgPct(doc, lastN) {
   return Math.round(use.reduce((a, r) => a + r.pct, 0) / use.length);
 }
 
+/* v504：家長那張卡上的日期要「看起來像日期」，不要像一行機器輸出。
+   把 2026-10-14 拆成 10 / 14 / 週二，讓版面自己排，壞掉的字串就原樣退回去。 */
+function lessonDateParts(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim());
+  if (!m) return { y: '', md: String(iso || ''), wd: '', ok: false };
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+  return { y: m[1], md: `${+m[2]}/${+m[3]}`, wd: `週${wd}`, ok: true };
+}
+
 /* 上次交代的複習／功課做了沒（Alan：「以及有沒有完成複習之類的」）。 */
 const REVIEW_STATES = [
   { id: 'done', zh: '完成', ico: '✅' },
@@ -7944,7 +7954,7 @@ function lessonParentText(rec, who, pace) {
 
 Object.assign(window, { LESSON_KINDS, REVIEW_STATES, subscribeLessonsPublic, backfillLessonsPublic,
                         lessonISO, lessonWeekOf, lessonNextDate, lessonRows,
-                        lessonPrev, lessonAvgPct, saveLesson, deleteLesson, saveLessonSlot,
+                        lessonPrev, lessonAvgPct, lessonDateParts, saveLesson, deleteLesson, saveLessonSlot,
                         subscribeLessons, lessonParentText });
 
 /* ══════════════════════════════════════════════════════════════════════════
