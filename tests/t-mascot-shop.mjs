@@ -27,16 +27,20 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
   const ids = W.MX_SHOP.map(i => i.id);
   ok('id 不重複', new Set(ids).size === ids.length);
   const kinds = W.MX_KINDS.map(k => k.kind);
-  ok('每一件都屬於五大類之一', W.MX_SHOP.every(i => kinds.indexOf(i.kind) >= 0));
-  ok('五大類都有東西可以買', kinds.every(k => W.MX_SHOP.some(i => i.kind === k && !i.free)));
+  ok('每一件都屬於現有的分類之一', W.MX_SHOP.every(i => kinds.indexOf(i.kind) >= 0));
+  ok('每一類都有東西可以買', kinds.every(k => W.MX_SHOP.some(i => i.kind === k && !i.free)));
+  /* 🔴 v505（Alan：「把特效跟語音都刪掉，沒有用的功能」） */
+  ok('⭐ 特效與語音整組下架，連分類都不留',
+     !kinds.some(k => k === 'fx' || k === 'voice')
+     && !W.MX_SHOP.some(i => i.kind === 'fx' || i.kind === 'voice'));
+  ok('⭐ 下架＝買過的孩子星星自己回去（mxSpent 只算認得出來的 id）',
+     W.mxSpent({ owned: ['hat_cap', 'fx_stars', 'vo_pirate'] }) === 100);
   ok('每一件都有中文名字與圖示', W.MX_SHOP.every(i => i.zh && i.emoji));
-  ok('要錢的都 > 0、免費的剛好是「彩帶」「原音」與 Claudius',
+  ok('要錢的都 > 0、唯一免費的是 Claudius',
      W.MX_SHOP.every(i => (i.free ? i.cost === 0 : i.cost > 0)) &&
-     W.MX_SHOP.filter(i => i.free).map(i => i.id).sort().join() === 'fx_confetti,pet_clay,vo_default');
-  ok('特效與語音一定各有一個免費的（不然答對就沒反應、也不會講話）',
-     ['fx', 'voice'].every(k => W.MX_SHOP.some(i => i.kind === k && i.free)));
-  ok('（v436 Alan 定價）裝備／特效／語音／動作 ≤ 300、夥伴 500（小焰 800）',
-     W.MX_SHOP.filter(i => ['hat', 'item', 'fx', 'voice', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
+     W.MX_SHOP.filter(i => i.free).map(i => i.id).sort().join() === 'pet_clay');
+  ok('（v436 Alan 定價）裝備／動作 ≤ 300、夥伴 500（小焰 800）',
+     W.MX_SHOP.filter(i => ['hat', 'item', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
      W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => [300, 500, 800].indexOf(i.cost) >= 0) &&   // v455：小兔 300
      Math.min(...W.MX_SHOP.filter(i => !i.free).map(i => i.cost)) === 100);
   ok('舊的兩頂帽子還在，而且對得回老師扣過點的名字',
@@ -53,7 +57,7 @@ log.push('\n【2】買到什麼、花了多少（星星一定要算得剛剛好�
   ok('看不懂的 id 一律忽略（將來下架也不會算錯）', W.mxOwnedList({ owned: ['hat_cap', 'ghost', 'hat_cap'] }).join() === 'hat_cap');
   ok('花掉的星星＝買到的東西的價錢總和', W.mxSpent({ owned: ['hat_cap', 'it_scarf'] }) === W.mxItemOf('hat_cap').cost + W.mxItemOf('it_scarf').cost);
   ok('⭐ 花掉的是「反算」出來的，不是存的數字（存數字＝可以改）', /mxSpent\(mx\) \{[\s\S]{0,200}reduce/.test(data));
-  ok('免費的不用買就有', W.mxHasItem({}, 'fx_confetti') && W.mxHasItem({}, 'vo_default'));
+  ok('免費的不用買就有（Claudius 永遠都在）', W.mxHasItem({}, 'pet_clay'));
   ok('沒買的就是沒有', !W.mxHasItem({ owned: [] }, 'hat_crown'));
   globalThis.window.__mxHats = ['crown'];
   ok('⭐ 以前老師扣點買的皇冠仍然算擁有（不會要小朋友再買一次）', W.mxHasItem({ owned: [] }, 'hat_crown'));
@@ -67,8 +71,8 @@ log.push('\n【3】身上穿什麼');
   const w = W.mxWearOf(mx);
   ok('沒買到的披風不會穿在身上（資料怪怪的也不會壞掉）', w.item === '');
   ok('買到的帽子照戴', w.hat === 'hat_cap');
-  ok('沒買的特效退回預設的彩帶', w.fx === 'fx_confetti');
-  ok('語音沒設就是原音', w.voice === 'vo_default');
+  ok('⭐ v505：身上只剩頭飾與配件，舊帳號殘留的 fx / voice 欄位直接不理它',
+     Object.keys(w).sort().join() === 'hat,item');
   ok('把帽子放到配件欄這種亂資料會被擋掉', W.mxWearOf({ owned: ['hat_cap'], wear: { item: 'hat_cap' } }).item === '');
 }
 

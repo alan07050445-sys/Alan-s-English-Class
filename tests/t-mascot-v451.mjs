@@ -12,32 +12,23 @@ const W = new Function('_db', 'window',
   slice(data, 'const MX_KINDS = [', 'Object.assign(window, { mxPurchases') +
   '\nreturn { MX_SHOP, MX_BY_ID, mxStarRows, mxSpent, MX_RENAME_COST };')(
   { collection: () => ({ doc: () => ({ set: async () => {} }) }) }, {});
-/* 語音台詞表住在 components-fx.jsx（純資料，直接 eval 出來） */
-const VOICE = new Function(slice(fx, 'const MX_VOICE = {', '\n/* ══ v404') + '\nreturn MX_VOICE;')();
-
 let pass = 0, fail = 0;
 const ok = (n, c) => { if (c) { pass++; console.log('  ✅ ' + n); } else { fail++; console.log('  ❌ ' + n); } };
 const eq = (n, a, b) => ok(n + (a === b ? '' : ` — 得到 ${JSON.stringify(a)}，應該是 ${JSON.stringify(b)}`), a === b);
 
-console.log('\n【1】語音包：更多元、每個場合都有自己的話');
-const voices = W.MX_SHOP.filter(x => x.kind === 'voice');
-ok('⭐ 語音包變多了（含免費的原音共 9 種）', voices.length >= 9);
-ok('新加的四種都在', ['vo_pirate', 'vo_baby', 'vo_sport', 'vo_alien'].every(id => voices.some(v => v.id === id)));
-ok('價格照 Alan 訂的 100~200', voices.every(v => v.free || (v.cost >= 100 && v.cost <= 200)));
-ok('每個都有中文名字與圖示', voices.every(v => v.zh && v.emoji));
-const KEYS = ['hello', 'correct', 'wrong', 'win', 'idle', 'tap', 'sleep', 'sig'];
-const packs = Object.keys(VOICE);
-eq('八包台詞（免費的原音不用寫）', packs.length, 8);
-packs.forEach(k => {
-  ok(`「${k}」八種場合都寫了`, KEYS.every(x => Array.isArray(VOICE[k][x]) && VOICE[k][x].length >= 2));
-});
-ok('⭐ 不同包不會講一樣的話（答對那一句互相比對）', (() => {
-  const all = packs.map(k => VOICE[k].correct[0]);
-  return new Set(all).size === all.length;
-})());
-ok('連對五題會用買到的語音講話', /if \(vo && vo !== 'vo_default'\) say\(mxLine\('correct'/.test(fx));
-ok('沒買語音包的維持安靜（不加干擾）', /沒買的維持 v392 的安靜/.test(fx));
-ok('⭐ 語音包也不會連講同一句（實測海盜連點五次都同一句）', /const kk = voice \+ ':' \+ k;/.test(fx));
+/* 🔴 v505（Alan：「把特效跟語音都刪掉，沒有用的功能」）
+   這一段本來守的是 v451「八包語音、八種場合都寫滿」。整組下架之後，
+   改成守「真的拿乾淨了」——留一半在那裡的話，下次有人看到 mxLine 的第三個參數
+   還會以為語音包還活著。 */
+console.log('\n【1】語音包與答對特效已經整組下架');
+ok('⭐ 商品表裡沒有 voice／fx 了', !W.MX_SHOP.some(x => x.kind === 'voice' || x.kind === 'fx'));
+ok('⭐ 台詞表 MX_VOICE 整份拿掉（不是只把商品藏起來）', !/MX_VOICE/.test(fx));
+ok('⭐ mxLine 不再吃「哪一包語音」這個參數', /const mxLine = \(k, pet\) => mxPick\(k, pet\);/.test(fx));
+ok('   沒有任何呼叫端還在傳語音包進去', !/mxLine\([^()]*,[^()]*,/.test(fx));
+ok('⭐ 答對特效的字元表 FX_CHARS 也拿掉了', !/FX_CHARS/.test(fx));
+ok('   吉祥物還是會講話（退回牠自己的台詞）', /mxPick\(k, pet\)/.test(fx) && /const MX_LINES = \{/.test(fx));
+ok('   答對還是會灑彩帶（只是不能換成星星雨了）', /function ConfettiBurst\(/.test(fx) && /fx-confetti/.test(fx));
+ok('⭐ 身上穿的只剩頭飾與配件', /\['hat', 'item'\]\.forEach/.test(data));
 
 console.log('\n【2】免費的只剩走路，把戲要用買的');
 ok('⭐ 共用動作池只剩 walk', /const MX_ACTS = \['walk'\];/.test(fx));

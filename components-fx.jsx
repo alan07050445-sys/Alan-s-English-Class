@@ -258,93 +258,6 @@ function MxAcc({ id, fit, layer }) {
   return g ? <g className={'mx-acc mx-acc-' + (layer || 'front')}>{g}</g> : null;
 }
 
-/* v431：語音包＝牠說話的口氣（買了就換一種講法）。答對、打招呼、耍寶都吃這一份。 */
-/* ══ v451（Alan：「語音也要再更明顯一點，整個語音包更多元」）════════════════
-   以前每一包只寫了 win／hello／idle 三種場合，其他場合（答對、答錯、被摸、睡覺、
-   招牌動作）都退回原本的口氣 → 買了感覺不出來。現在**八種場合全部寫滿**，
-   而且從 4 包變 8 包。⚠ 一包裡的每一個桶都要至少兩句，不然會一直重複同一句。 */
-const MX_VOICE = {
-  vo_cheer: {
-    hello:   ['我們開始吧！', '今天也要加油！', '熱身完畢，上場囉！'],
-    correct: ['漂亮！', '就是這樣！', '這球進了！', '好球！'],
-    wrong:   ['沒事沒事，下一題！', '再來一次，你可以的！', '差一點點而已！'],
-    win:     ['太棒了！再一題！', '你超強的！', '就是這樣！衝！'],
-    idle:    ['你可以的！', '保持節奏！', '我在旁邊看著你喔'],
-    tap:     ['一起喊！加油！', '擊個掌！✋', '好精神！'],
-    sleep:   ['休息也是訓練的一部分…', '小睡三分鐘…'],
-    sig:     ['看我的！', '認真模式，啟動！'],
-  },
-  vo_cat: {
-    hello:   ['喵～你來啦', '今天也要一起喵', '喵喵，開工了'],
-    correct: ['答對了喵～', '好厲害喵！', '喵嗚，可以喔'],
-    wrong:   ['沒關係喵，再一次', '差一點點喵…', '喵…再看一下下'],
-    win:     ['全部做完了喵！', '喵嗚～滿分！', '今天的你很棒喵'],
-    idle:    ['喵…', '在曬太陽喵', '想吃小魚乾喵'],
-    tap:     ['喵嗚！被摸到了', '呼嚕呼嚕～', '再摸一下下喵'],
-    sleep:   ['喵…zzz', '睡午覺喵…'],
-    sig:     ['看我的絕招喵！', '喵——！'],
-  },
-  vo_robot: {
-    hello:   ['嗶。啟動完成。', '偵測到同學一名', '系統：學習模式 ON'],
-    correct: ['嗶——正確——', '答案-正-確-', '資料比對：相符'],
-    wrong:   ['嗶。答案不符。重新計算。', '錯誤代碼 0-0-1：再試一次', '偵測到小失誤，可修正'],
-    win:     ['任務-完-成-', '系統顯示：很強', '效能評分：最高'],
-    idle:    ['嗶…嗶…', '待機中…', '掃描地板中…'],
-    tap:     ['偵測到觸碰', '嗶嗶！啟動', '感應器：癢'],
-    sleep:   ['進入-休-眠-', '電量不足…嗶…'],
-    sig:     ['執行特殊程式', '嗶！絕招載入中'],
-  },
-  vo_eng: {
-    hello:   ['Hi there!', "Let's study!", 'Ready? Go!'],
-    correct: ['Nice!', 'You got it!', 'Correct!'],
-    wrong:   ['Almost! Try again.', "It's okay, one more time.", 'Not yet — keep going!'],
-    win:     ['Great job!', 'Awesome!', 'You finished! 🎉'],
-    idle:    ['Nice work!', "I'm just walking.", 'Keep it up!'],
-    tap:     ['Hey! That tickles.', 'Hello!', 'You poked me!'],
-    sleep:   ['Zzz...', 'Nap time...'],
-    sig:     ['Watch this!', 'Ta-da!'],
-  },
-  vo_pirate: {
-    hello:   ['喲呵！水手，上船囉 🏴‍☠️', '今天要找寶藏嗎？', '船長我來了！'],
-    correct: ['喲呵！答對了', '好樣的，水手！', '這題是我們的寶藏！'],
-    wrong:   ['沒事，海上風浪本來就大', '再一次，穩住舵！', '差一點就靠岸了'],
-    win:     ['寶藏到手啦 💰', '全船歡呼！', '今天大豐收，喲呵！'],
-    idle:    ['在甲板上巡邏…', '海風真舒服', '我的鸚鵡呢？'],
-    tap:     ['喂！別碰船長的帽子', '喲呵！', '哈哈，好癢'],
-    sleep:   ['船長打個盹…', 'zzz…夢到寶藏了'],
-    sig:     ['看我的必殺技！', '揚帆——！'],
-  },
-  vo_baby: {
-    hello:   ['哈囉～是你耶 🍼', '我等你好久久', '一起玩一起學～'],
-    correct: ['哇——好棒棒', '答對對了！', '你好聰明喔～'],
-    wrong:   ['沒關係～再一次次', '差一點點點', '不哭不哭，再試試'],
-    win:     ['全部做完完了！', '好厲害害！', '要抱抱慶祝 🤗'],
-    idle:    ['走路走路～', '我在散步步', '肚肚有點餓'],
-    tap:     ['呀！被摸摸了', '嘻嘻～好癢癢', '再摸一下下'],
-    sleep:   ['睡覺覺…', '呼…呼…'],
-    sig:     ['看我的～', '登登登登！'],
-  },
-  vo_sport: {
-    hello:   ['各位觀眾，比賽開始！🎙️', '現場直播，今天的選手就是你', '哨音響起，出發！'],
-    correct: ['進球了！', '漂亮的一擊！', '完美示範，滿分！'],
-    wrong:   ['可惜！差一點點', '沒關係，下一球再來', '教練說：穩住，再一次'],
-    win:     ['全場歡聲雷動 🎉', '今天的 MVP 就是你！', '比賽結束，大獲全勝！'],
-    idle:    ['選手正在場邊熱身…', '賽況分析中…', '這裡是現場為您報導'],
-    tap:     ['哦！觀眾衝進場了', '來個賽後訪問？', '選手表示：好癢'],
-    sleep:   ['中場休息…', '選手補眠中…'],
-    sig:     ['精彩重播！', '這一球，值得回放！'],
-  },
-  vo_alien: {
-    hello:   ['我從 ZZ-3 星球來 👽', '地球同學，你好', '偵測到學習訊號'],
-    correct: ['ZZ！答案正確', '地球人好聰明', '這題已回報母星'],
-    wrong:   ['ZZ？資料有誤，再一次', '母星說：沒關係', '訊號干擾，重新傳送'],
-    win:     ['任務完成，準備回母星 🛸', 'ZZ——全部正確', '地球人，了不起'],
-    idle:    ['研究地球地板中…', '我的飛碟停在樓上', 'ZZ…ZZ…'],
-    tap:     ['ZZ！觸碰偵測', '地球人的手好溫暖', '這是地球的打招呼嗎'],
-    sleep:   ['充電中…ZZ…', '進入太空睡眠'],
-    sig:     ['啟動外星科技！', 'ZZ——變身！'],
-  },
-};
 
 /* ══ v404（Alan：「我讓小寵物去休息，其他人的帳號也跟著休息——我都用同一台電腦」）══
    吉祥物的四樣設定（帽子／名字／休息到哪天／挑了哪一隻）本來全部存在
@@ -651,21 +564,9 @@ const MX_LINES = {
 const lastSaid = {};
 /* v401：第二個參數是「現在是哪一隻夥伴」。牠自己有寫這一類的台詞就用牠的，
    沒寫就退回共用的那組（correct/wrong/win/tap 全部共用，不必每隻都重寫一遍）。 */
-/* v431：買了語音包就換一種口氣講話；沒有買（或這一句語音包沒寫）就照原本的。 */
-const mxLine = (k, pet, voice) => {
-  const v = MX_VOICE[voice];
-  const arr = v && v[k];
-  /* v451：語音包也要避免連講同一句（本來只有預設台詞有這個保護，
-     實測買了海盜語音之後連點五次都是「喂！別碰船長的帽子」）。 */
-  if (arr && arr.length) {
-    const kk = voice + ':' + k;
-    let s2 = arr[Math.floor(Math.random() * arr.length)];
-    if (s2 === lastSaid[kk] && arr.length > 1) s2 = arr[Math.floor(Math.random() * arr.length)];
-    lastSaid[kk] = s2;
-    return s2;
-  }
-  return mxPick(k, pet);
-};
+/* 🔴 v505（Alan：「把特效跟語音都刪掉，沒有用的功能」）：語音包整組下架，
+   牠一律講自己的台詞（mxPick 本來就有「不要連講同一句」的保護）。 */
+const mxLine = (k, pet) => mxPick(k, pet);
 const mxPick = (k, pet) => {
   const a = (pet && pet.lines && pet.lines[k]) || MX_LINES[k] || MX_LINES.idle;
   let s = a[Math.floor(Math.random() * a.length)];
@@ -787,7 +688,7 @@ function MascotLayer() {
   const [act,    setAct]    = useFx('idle');
   const [moveMs, setMoveMs] = useFx(0);
   const [bubble, setBubble] = useFx('');
-  const [wear, setWear]   = useFx(() => (window.mxWearOf ? window.mxWearOf(window.__mxData) : { hat: '', item: '', fx: 'fx_confetti', voice: 'vo_default' }));
+  const [wear, setWear]   = useFx(() => (window.mxWearOf ? window.mxWearOf(window.__mxData) : { hat: '', item: '' }));
   const [stars, setStars] = useFx(0);           // v431: 現在有幾顆星星（app.jsx 算好放 window.__mxStars）
   /* v477（Alan：「吉祥物可以再智能化一點，更像 AI，跟你的舉動互動」）：
      牠要講跟「此時此刻的你」有關的話，就得記得幾件事。
@@ -906,7 +807,7 @@ function MascotLayer() {
       pendRef.current = pendRef.current.filter(id => srv.indexOf(id) < 0);
       const own = srv.concat(pendRef.current);
       setOwned(prev => (prev.join() === own.join() ? prev : own));
-      const w = window.mxWearOf ? window.mxWearOf(mx) : { hat: '', item: '', fx: 'fx_confetti', voice: 'vo_default' };
+      const w = window.mxWearOf ? window.mxWearOf(mx) : { hat: '', item: '' };
       /* v385 買過帽子、但還沒進過裝扮室的人：照舊自動幫他戴上（不然會覺得帽子不見了） */
       if (!w.hat) {
         const legacy = mxOwnedHats(), want = mxGetHat();
@@ -916,11 +817,11 @@ function MascotLayer() {
       }
       const pend = wearPendRef.current;
       if (pend) {
-        const same = ['hat', 'item', 'fx', 'voice'].every(k => (w[k] || '') === (pend.wear[k] || ''));
+        const same = ['hat', 'item'].every(k => (w[k] || '') === (pend.wear[k] || ''));
         if (same || Date.now() - pend.t > 6000) wearPendRef.current = null;
         else Object.assign(w, pend.wear);
       }
-      setWear(prev => ((prev.hat === w.hat && prev.item === w.item && prev.fx === w.fx && prev.voice === w.voice) ? prev : w));
+      setWear(prev => ((prev.hat === w.hat && prev.item === w.item) ? prev : w));
       setStars(prev => (prev === (window.__mxStars || 0) ? prev : (window.__mxStars || 0)));
       // v442：名字改成跟著帳號（雲端有就用雲端的；訪客仍然只存在這台裝置）
       const cloudName = String((mx && mx.name) || '').trim();
@@ -953,14 +854,14 @@ function MascotLayer() {
     // 表演的時候順便灑一次「你買的那個特效」——按下去有反應，才像在表演
     if (window.spawnConfetti) window.spawnConfetti({});
     const it = window.mxItemOf ? window.mxItemOf(id) : null;
-    if (it) say(mxLine('sig', petRef.current, wearRef.current.voice) || `${it.zh}！`, 2200);
+    if (it) say(mxLine('sig', petRef.current) || `${it.zh}！`, 2200);
     if (window.playSound) window.playSound('pop');
   };
   /* v435：換夥伴（買到才換得了）。sig 是走位類的招牌動作就不在這裡放，會跟走路打架。 */
   const usePet = (pid) => {
     const p = mxPetOf(pid);
     mxSetPet(pid); setPetId(pid); setAct('idle');
-    say(mxLine('hello', p, wearRef.current.voice), 2600);
+    say(mxLine('hello', p), 2600);
     if (MX_MOVE_ACTS.indexOf(p.sig) < 0 && !reduce.current) {
       later(() => { setAct(p.sig); if (p.sig === 'hop') hopSideways(); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
     }
@@ -972,8 +873,7 @@ function MascotLayer() {
       if (it.kind === 'dance') { setDress(false); playDance(it.id); return; }
       if (it.kind === 'pet')   { setDress(false); usePet(it.pet); return; }
       const off = wear[it.kind] === it.id;
-      // 特效與語音一定要留一個（預設那個是免費的），不然答對就沒有反應了
-      const next = off ? (it.kind === 'fx' ? 'fx_confetti' : it.kind === 'voice' ? 'vo_default' : '') : it.id;
+      const next = off ? '' : it.id;
       const nextWear = Object.assign({}, wear, { [it.kind]: next });
       wearPendRef.current = { wear: nextWear, t: Date.now() };
       setWear(nextWear);
@@ -1157,7 +1057,7 @@ function MascotLayer() {
         setMoveMs(ms);
         setX(target);
         setAct(pick);
-        if (Math.random() < 0.08) say(mxLine(pick === pet.sig ? 'sig' : 'idle', pet, wearRef.current.voice));   // v392（D）：0.25 → 0.08
+        if (Math.random() < 0.08) say(mxLine(pick === pet.sig ? 'sig' : 'idle', pet));   // v392（D）：0.25 → 0.08
         /* v407：衝刺改成「衝到底 → 煞車 → 再衝回來」。
            速度是比較出來的：中間那 0.36 秒的煞車停格就是參考點，
            有它才看得出牠剛剛橫越了整個畫面，沒有它只是一路滑過去。 */
@@ -1185,12 +1085,12 @@ function MascotLayer() {
       /* v392（D）：泡泡是文字（font-weight:700、最寬 190px），比動作更會搶走視線。
          實測 1180px 是 4.50 泡泡/分鐘、390px 是 6.01 → 出現率腰斬。
          睡覺以前是「無條件講一句」，也改成一半機率。 */
-      if (pick === 'sleep') { if (Math.random() < 0.5) say(mxLine('sleep', pet, wearRef.current.voice), 3800); }
+      if (pick === 'sleep') { if (Math.random() < 0.5) say(mxLine('sleep', pet), 3800); }
       /* v401：招牌動作的泡泡機率拉高到 40%——它一個 session 才出現幾次，
          而且「牠在做什麼」要靠這句話才看得懂（打電腦、看書、裝石頭）。
          其他動作維持 v392 調低後的 15%，整體泡泡量不會回到當初被嫌吵的程度。 */
-      else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxLine('sig', pet, wearRef.current.voice)); }
-      else if (Math.random() < 0.15) say(mxLine('idle', pet, wearRef.current.voice));   // v392（D）：0.45 → 0.15
+      else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxLine('sig', pet)); }
+      else if (Math.random() < 0.15) say(mxLine('idle', pet));   // v392（D）：0.45 → 0.15
       busyUntil.current = Date.now() + (HOLD[pick] || 1200);
       later(() => { setAct('idle'); later(doAct, 1200 + Math.random() * 3000); }, HOLD[pick] || 1200);
     };
@@ -1199,7 +1099,7 @@ function MascotLayer() {
        來回切換——以前每重跑一次就再說一次 hello，學生做完一個練習回到清單，
        700ms 後就被重新打招呼。A 做完之後切換更頻繁，所以這條必須跟 A 一起做。 */
     const first = later(() => {
-      if (!greetedRef.current) { greetedRef.current = true; say(mxLine('hello', pet, wearRef.current.voice)); }
+      if (!greetedRef.current) { greetedRef.current = true; say(mxLine('hello', pet)); }
       later(doAct, 1600);
     }, 700);
     return () => { stopped = true; clearTimeout(first); clearAll(); };
@@ -1258,10 +1158,6 @@ function MascotLayer() {
              一換動畫，CSS 動畫整個重來，看起來就是「跳到一半掉下來」。 */
           if (runRef.current % 5 === 0 && Date.now() >= busyUntil.current) {
             setAct('nod'); later(() => setAct('idle'), 620);
-            /* v451：買了語音包才會順便講一句（沒買的維持 v392 的安靜，不加干擾）——
-               答對是最常發生的場合，牠在這裡開口，語音包才「看得出來換過」。 */
-            const vo = wearRef.current && wearRef.current.voice;
-            if (vo && vo !== 'vo_default') say(mxLine('correct', petRef.current, vo), 1800);
           }
         }
         else if (type === 'wrong') {
@@ -1277,7 +1173,7 @@ function MascotLayer() {
           later(() => {
             // v477：做完一份之後，如果「只剩一個就整組完成」之類的事成立，就講那件事
             if (smartSay({}, 0)) return;
-            setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000);
+            setAct('cheer'); say(mxLine('win', petRef.current), 3000);
             later(() => setAct('idle'), 2200);
           }, wait);
         }
@@ -1294,7 +1190,7 @@ function MascotLayer() {
     window.mxOpenDress = () => { mxSetOff(''); setHidden(false); setDress(true); };
     window.mascotSay = (t) => say(String(t || ''), 2600);
     window.mascotDo  = (a) => { setAct(a); later(() => setAct('idle'), 1600); };
-    window.mascotCheer = () => { setAct('cheer'); say(mxLine('win', petRef.current, wearRef.current.voice), 3000); later(() => setAct('idle'), 2200); };
+    window.mascotCheer = () => { setAct('cheer'); say(mxLine('win', petRef.current), 3000); later(() => setAct('idle'), 2200); };
   }, []);
 
   /* 點一下＝耍寶；長按＝去睡覺（這次不再出現）。
@@ -1369,7 +1265,7 @@ function MascotLayer() {
       const isSig = t2 === pet.sig;
       setAct(t2);
       if (t2 === 'hop') hopSideways();          // v459
-      say(mxLine(isSig ? 'sig' : 'tap', pet, wearRef.current.voice), 2400);
+      say(mxLine(isSig ? 'sig' : 'tap', pet), 2400);
       if (window.playSound) window.playSound('match');
       const HOLD_TAP2 = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 };
       busyUntil.current = Date.now() + (MX_SIG_HOLD[t2] || HOLD_TAP2[t2] || 1600);
@@ -1379,7 +1275,7 @@ function MascotLayer() {
     /* v451：點一下不再免費送「跳／轉圈／跳舞／翻滾」。
        走到這裡＝這一隻沒有原地招牌（小焰）又還沒買動作，就只是點個頭。 */
     const t = reduce.current ? 'think' : 'nod';
-    setAct(t); say(mxLine('tap', pet, wearRef.current.voice), 2000);
+    setAct(t); say(mxLine('tap', pet), 2000);
     if (window.playSound) window.playSound('match');
     busyUntil.current = Date.now() + (t === 'think' ? 1600 : 620);
     later(() => setAct('idle'), t === 'think' ? 1600 : 620);
@@ -1535,10 +1431,13 @@ function MascotLayer() {
               {(window.MX_SHOP || []).filter(it => it.kind === dressTab).map(it => {
                 const have = hasItem(it.id);
                 const on   = have && (it.kind === 'pet' ? it.pet === petId : it.kind === 'dance' ? false : wear[it.kind] === it.id);
+                /* v505（Alan：「圖片要是本人的照片啦，比較好看」）：夥伴那一格畫牠本人，
+                   不要用 🪨🌱🦉 這種代打的 emoji——牠長什麼樣子本來就畫得出來。 */
+                const PetArt = it.kind === 'pet' ? ((MX_PETS.find(p => p.id === it.pet) || {}).art || null) : null;
                 return (
-                  <button key={it.id} className={'mx-dz' + (have ? ' have' : '') + (on ? ' on' : '')}
+                  <button key={it.id} className={'mx-dz' + (have ? ' have' : '') + (on ? ' on' : '') + (PetArt ? ' mx-dz-pet' : '')}
                     onClick={() => pickItem(it)}>
-                    <span className="mx-dz-ico">{it.emoji}</span>
+                    <span className="mx-dz-ico">{PetArt ? <PetArt size={38}/> : it.emoji}</span>
                     <span className="mx-dz-name">{it.zh}</span>
                     <span className="mx-dz-tag">
                       {!have ? `${it.cost.toLocaleString()}⭐`
@@ -1551,9 +1450,7 @@ function MascotLayer() {
               })}
             </div>
             <div className="mx-dress-note">
-              {dressTab === 'fx' ? '答對題目的時候會放這個特效 ✨'
-                : dressTab === 'voice' ? '牠講話的口氣會變成這一種 🔊'
-                : dressTab === 'dance' ? '買了之後，長按牠就可以叫牠表演 💃'
+              {dressTab === 'dance' ? '買了之後，長按牠就可以叫牠表演 💃'
                 : dressTab === 'pet' ? 'Claudius 一開始就在；其他夥伴要用星星請牠來 🐾'
                 : '星星是做練習賺來的；買了以後隨時可以換 · 再按一次可以脫下來'}
             </div>
@@ -1594,16 +1491,8 @@ function MascotLayer() {
 /* ── 彩帶 ─────────────────────────────────────────────────── */
 const FX_COLORS = ['#C1785A', '#C9A84C', '#2E7D5B', '#2E6F9E', '#8A5FA8', '#D6533C', '#E8C86A'];
 
-/* v431：買了特效就換掉答對時灑下來的東西（預設仍然是彩帶）。
-   一律用同一支 fxFall 動畫，只是把「紙片」換成字——不用另外寫動畫，也不會變慢。 */
-const FX_CHARS = {
-  fx_stars:  ['⭐', '✨', '🌟'],
-  fx_hearts: ['💗', '💖', '❤️'],
-  fx_bubble: ['🫧', '◦', '○'],
-  fx_fire:   ['🎆', '🎇', '✨'],
-};
 function ConfettiBurst({ big, onDone }) {
-  const chars = useFxR(FX_CHARS[(window.mxWearOf ? window.mxWearOf(window.__mxData).fx : '')] || null).current;
+  const chars = useFxR(null).current;   // v505：特效商品下架，答對一律灑原本的彩帶紙片
   const pieces = useFxR(
     Array.from({ length: big ? 84 : 26 }, (_, i) => ({   // 沒達標時只放一點點（是「你做完了」不是「你贏了」）
       id: i,

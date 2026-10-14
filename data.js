@@ -7035,8 +7035,6 @@ async function checkInToday(uid, displayName, email) {
 const MX_KINDS = [
   { kind: 'hat',   zh: '頭飾', ico: '🎩', tip: '戴在頭上' },
   { kind: 'item',  zh: '配件', ico: '🧣', tip: '穿在身上' },
-  { kind: 'fx',    zh: '特效', ico: '✨', tip: '答對的時候放' },
-  { kind: 'voice', zh: '語音', ico: '🔊', tip: '牠說話的口氣' },
   { kind: 'dance', zh: '動作', ico: '💃', tip: '按一下就表演' },
   { kind: 'pet',   zh: '夥伴', ico: '🐾', tip: '換一隻陪你' },
 ];
@@ -7057,26 +7055,14 @@ const MX_SHOP = [
   { id: 'it_bag',     kind: 'item',  zh: '小書包',   emoji: '🎒', cost: 150 },
   { id: 'it_cape',    kind: 'item',  zh: '英雄披風', emoji: '🦸', cost: 200 },
   { id: 'it_wand',    kind: 'item',  zh: '魔法棒',   emoji: '🪄', cost: 250 },
-  /* 答對特效 */
-  { id: 'fx_confetti', kind: 'fx',   zh: '彩帶',     emoji: '🎊', cost: 0, free: true },
-  { id: 'fx_stars',   kind: 'fx',    zh: '星星雨',   emoji: '✨', cost: 150 },
-  { id: 'fx_hearts',  kind: 'fx',    zh: '愛心雨',   emoji: '💗', cost: 150 },
-  { id: 'fx_bubble',  kind: 'fx',    zh: '泡泡',     emoji: '🫧', cost: 200 },
-  { id: 'fx_fire',    kind: 'fx',    zh: '煙火',     emoji: '🎆', cost: 300 },
-  /* 語音（牠講話的口氣） */
-  /* v451（Alan：「語音也要再更明顯一點，整個語音包更多元」）：
-     ① 每一包都把八種場合（打招呼／答對／答錯／全部完成／散步／被摸／睡覺／招牌動作）寫滿——
-        以前只寫了三種，其他場合又講回原本的口氣，所以買了幾乎感覺不出來。
-     ② 從 4 包加到 8 包。 */
-  { id: 'vo_default', kind: 'voice', zh: '原本的聲音', emoji: '🗨️', cost: 0, free: true },
-  { id: 'vo_cheer',   kind: 'voice', zh: '加油隊長', emoji: '📣', cost: 100 },
-  { id: 'vo_cat',     kind: 'voice', zh: '貓貓語',   emoji: '🐱', cost: 150 },
-  { id: 'vo_robot',   kind: 'voice', zh: '機器人',   emoji: '🤖', cost: 150 },
-  { id: 'vo_eng',     kind: 'voice', zh: '全英文',   emoji: '🗣️', cost: 200 },
-  { id: 'vo_pirate',  kind: 'voice', zh: '海盜船長', emoji: '🏴‍☠️', cost: 150 },
-  { id: 'vo_baby',    kind: 'voice', zh: '奶音寶寶', emoji: '🍼', cost: 150 },
-  { id: 'vo_sport',   kind: 'voice', zh: '運動主播', emoji: '🎙️', cost: 200 },
-  { id: 'vo_alien',   kind: 'voice', zh: '外星人',   emoji: '👽', cost: 200 },
+  /* 🔴 v505（Alan：「把特效跟語音都刪掉，沒有用的功能」）
+     答對特效（彩帶／星星雨／愛心雨／泡泡／煙火）與語音包（八種口氣）整組下架。
+     答對照樣灑彩帶、吉祥物照樣講自己的台詞——那本來就是「什麼都沒買時的樣子」，
+     只是不再是可以買的東西，所以連 fx / voice 這兩個分類都不留。
+     ⚠ 下架之後，本來買過 fx_* / vo_* 的孩子**星星會自己回去**：
+       星星是「賺到的 − 花掉的」算出來的，而 mxOwnedList 只認得出來的 id，
+       認不得的那幾筆就不再算進 mxSpent。這是 v431 當初就設計好的行為，不用另外退費。
+     ⚠ 舊帳號 mx.wear 裡殘留的 fx / voice 欄位不用清，mxWearOf 不再讀它。 */
   /* 動作（買了就能叫牠表演） */
   { id: 'dc_wave',    kind: 'dance', zh: '揮揮手',   emoji: '👋', cost: 100 },
   { id: 'dc_spin',    kind: 'dance', zh: '轉圈圈',   emoji: '🌀', cost: 100 },
@@ -7137,13 +7123,11 @@ function mxPetItem(petId) {
 function mxWearOf(mx) {
   const w = (mx && mx.wear) || {};
   const out = {};
-  ['hat', 'item', 'fx', 'voice'].forEach(k => {
+  ['hat', 'item'].forEach(k => {       // v505：fx / voice 下架，身上只剩頭飾與配件
     const id = w[k];
     const it = id && MX_BY_ID[id];
     out[k] = (it && it.kind === k && mxHasItem(mx, id)) ? id : '';
   });
-  if (!out.fx) out.fx = 'fx_confetti';
-  if (!out.voice) out.voice = 'vo_default';
   return out;
 }
 /* 買一件。balance＝現在有幾顆星星（含自動集點，由 app.jsx 算好傳進來）。

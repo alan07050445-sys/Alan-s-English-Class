@@ -1642,9 +1642,12 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
                   {cosmetics.map(it => {
                     const have = !!(window.mxHasItem && window.mxHasItem(mx, it.id));
                     const ok2  = have || bal >= (it.cost || 0);
+                    /* v505（Alan：「圖片要是本人的照片啦」）：夥伴畫牠本人，不要用 emoji 代打 */
+                    const PetArt = it.kind === 'pet'
+                      ? (((window.MX_PETS || []).find(p => p.id === it.pet) || {}).art || null) : null;
                     return (
                       <div key={it.id} className={'sp-item' + (ok2 ? '' : ' locked')}>
-                        <div className="sp-item-img" aria-hidden="true">{it.emoji}</div>
+                        <div className="sp-item-img" aria-hidden="true">{PetArt ? <PetArt size={46}/> : it.emoji}</div>
                         <div className="sp-item-name">{it.zh}</div>
                         <div className="sp-item-cost">{have ? '已擁有' : Number(it.cost || 0).toLocaleString() + '⭐'}</div>
                         <button className="sp-item-btn" onClick={() => buyCosmetic(it)}>
