@@ -12,6 +12,7 @@ const data = fs.readFileSync(new URL('data.js', ROOT), 'utf8');
 const mk = fs.readFileSync(new URL('components-mistakes.jsx', ROOT), 'utf8');
 const app = fs.readFileSync(new URL('app.jsx', ROOT), 'utf8');
 const shell = fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
+const css = fs.readFileSync(new URL('styles-home.css', ROOT), 'utf8');
 
 // 把算星的函式切出來真的跑
 const pick = (a, b) => data.slice(data.indexOf(a), data.indexOf(b));
@@ -61,14 +62,32 @@ ok('⚠ 有寫下「為什麼不怕刷星星」（故意答錯會先掉 10~15 �
    /故意答錯會讓那一份的分數掉到 80 以下/.test(data));
 
 console.log('\n【5】面板本身：一次 5 題、照答案歸戶、看得到獎勵');
-ok('⭐ 一次只練 5 題', /const MK_BATCH = 5;/.test(mk) && /allWrong\.slice\(0, MK_BATCH\)/.test(mk));
-ok('⭐ 照「答案」歸戶（不是照週次）', /const byAnswer = useMKM/.test(mk));
+ok('⭐ 一次只練 5 題（而且是從目前選到的那一批抽，不是全部）',
+   /const MK_BATCH = 5;/.test(mk) && /setDrillQuestions\([A-Za-z]+\.slice\(0, MK_BATCH\)\)/.test(mk));
+ok('⭐ 照「答案」歸戶（不是照週次）', /function mkByAnswer\(/.test(mk) && /mkByAnswer\(/.test(mk.replace('function mkByAnswer(', '')));
 ok('⭐ 錯最多次的排前面（那才是他真的不會的）',
    /sort\(\(x, y\) => y\.items\.length - x\.items\.length\)/.test(mk));
 ok('⚠ 用 gnNorm 正規化，pursued / Pursued 不會變兩張', /window\.gnNorm \? window\.gnNorm/.test(mk));
 ok('寫出「錯過幾次」', /錯過 \{g\.items\.length\} 次/.test(mk));
 ok('標題寫出獎勵與今天還能拿幾顆', /訂正一題 <b>\+\{perStar\}⭐<\/b>/.test(mk) && /今天還可以拿 \$\{f\.todayLeft\} 顆/.test(mk));
-ok('按鈕寫「先練 5 題 · 最多 +5⭐」', /先練 \{Math\.min\(MK_BATCH, allWrong\.length\)\} 題/.test(mk));
+ok('按鈕寫得出「練幾題、最多幾顆星」', /練 \{Math\.min\(MK_BATCH, [A-Za-z]+\.length\)\} 題/.test(mk)
+   && /最多 \+\{Math\.min\(MK_BATCH, [A-Za-z]+\.length, f\.todayLeft\) \* perStar\}⭐/.test(mk));
+
+console.log('\n【v505】分主題（Alan：「全部都擠在一起，小朋友哪會想要做」）');
+ok('⭐ 用 catId 分，不是用中文名（G4 的 word 叫「字彙學習」、預設那份叫「字根字首」）',
+   /const mkSubjOf = \(q\) => \(q\.catId \|\| '_other'\)/.test(mk) && /catId/.test(data));
+ok('⭐ collectWrongQuestions 真的帶 catId 出來', /catId = c\.id;/.test(data) && /weekLabel, cat, catId, type/.test(data));
+ok('⭐ 分類清單可以傳進來——文法軌 t1~t5 本來完全對不到，錯題的 cat 一直是空的',
+   /function collectWrongQuestions\(progressItems, weeks, weekOrder, categories\)/.test(data)
+   && /collectWrongQuestions\(progressItems, weeks, weekOrder, categories\)/.test(mk)
+   && /categories=\{activeCategories\}/.test(app));
+ok('⭐ 對不到分類的錯題不可以消失，要落到「其他練習」',
+   /'_other'/.test(mk) && /q\.cat \|\| '其他練習'/.test(mk));
+ok('⭐ 重練時畫面上寫得出是哪一科', /subjLabel/.test(mk) && /mk-drill-subj/.test(mk) && /\.mk-drill-subj/.test(css));
+ok('   選到的那一科被訂正完就要回到「全部」，不要留在空畫面',
+   /if \(subj !== 'all' && !subjects\.some\(x => x\.id === subj\)\) setSubj\('all'\);/.test(mk));
+ok('   沒錯題的科目不要佔一個按鈕（科目是從錯題算出來的）',
+   /allWrong\.forEach\(q => \{[\s\S]{0,200}mkSubjOf\(q\)/.test(mk));
 ok('拿滿了要講清楚，不要騙他還有', /今天的已經拿滿了，明天再來/.test(mk));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);

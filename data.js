@@ -6188,26 +6188,33 @@ function reviewSeenSentences(items) {
   return [...new Set(out)];
 }
 
-function collectWrongQuestions(progressItems, weeks, weekOrder) {
+/* v505（Alan：「錯題本要分成單字錯題、文法錯題，以此類推去做分類，
+     不然小朋友哪會想要做，全部都擠在一起，讓小朋友知道這次的主題是什麼」）：
+   ⭐ 多帶一個 catId 出來。本來只有 cat（中文名），但中文名每個年級軌不一樣
+     （G4 的 word 叫「字彙學習」、預設那份叫「字根字首」），拿中文名分類會分成兩堆。
+   ⭐ categories 改成可以傳進來——本來寫死全域 CATEGORIES，
+     文法軌（t1~t5）完全對不到，那些錯題的 cat 一直是空字串。 */
+function collectWrongQuestions(progressItems, weeks, weekOrder, categories) {
+  const cats = (categories && categories.length) ? categories : (CATEGORIES || []);
   const result = [];
   const seen = new Set();
   Object.entries(progressItems || {}).forEach(([itemKey, prog]) => {
     if (!prog?.wrongQuestions?.length) return;
-    let weekLabel = '過往內容', cat = '', itemTitle = itemKey;
+    let weekLabel = '過往內容', cat = '', catId = '', itemTitle = itemKey;
     if (itemKey.startsWith('review_')) {
       weekLabel = '🏆 總複習'; itemTitle = '總複習';
     } else
     outer: for (const wid of (weekOrder || [])) {
       const w = weeks && weeks[wid];
       if (!w) continue;
-      for (const c of (CATEGORIES || [])) {
+      for (const c of cats) {
         const items = (w.items && w.items[c.id]) || [];
         const found = items.find(it =>
           itemKey === `${wid}_${it.id}` || itemKey === it.id || itemKey.endsWith('_' + it.id)
         );
         if (found) {
           weekLabel = w.label || wid;
-          cat = c.titleZh;
+          cat = c.titleZh; catId = c.id;
           itemTitle = found.title || found.zh || found.id;
           break outer;
         }
@@ -6217,7 +6224,7 @@ function collectWrongQuestions(progressItems, weeks, weekOrder) {
       const key = `${wq.q}|||${wq.answer}`;
       if (seen.has(key)) return;
       seen.add(key);
-      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat, type: prog.itemType || '',
+      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat, catId, type: prog.itemType || '',
         // v318 (#3): 帶出原始選項給重練用（舊資料沒有就 undefined，重練那邊會退回舊做法）
         ...(Array.isArray(wq.options) && typeof wq.correct === 'number' ? { options: wq.options, correct: wq.correct } : {}) });
     });

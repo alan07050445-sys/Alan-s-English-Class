@@ -4529,7 +4529,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   background: linear-gradient(180deg, #FFFFFF 0%, #FDFCF8 100%);
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 20px 24px 14px;
+  padding: 22px 26px 16px;
   margin-bottom: 14px;
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(21,19,14,.05), 0 2px 8px -2px rgba(21,19,14,.06));
 }
@@ -4543,25 +4543,25 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
 .tlog-ttl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .tlog-kicker {
-  font-family: var(--sans); font-size: 9.5px; font-weight: 800;
-  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); opacity: .72;
+  font-family: var(--sans); font-size: 11px; font-weight: 800;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); opacity: .75;
 }
 .tlog-ttl b {
-  font-family: var(--serif); font-size: 20px; font-weight: 600;
+  font-family: var(--serif); font-size: 23px; font-weight: 600;
   letter-spacing: -.01em; color: var(--ink); line-height: 1.2;
 }
 .tlog-avg { text-align: right; flex: none; }
 .tlog-avg > span {
-  display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .1em;
-  color: var(--ink-3); margin-bottom: 1px;
+  display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em;
+  color: var(--ink-3); margin-bottom: 2px;
 }
 .tlog-avg > b {
-  display: block; font-family: var(--serif); font-size: 27px; font-weight: 700;
+  display: block; font-family: var(--serif); font-size: 32px; font-weight: 700;
   line-height: 1; letter-spacing: -.02em;
 }
-.tlog-avg > b i { font-style: normal; font-size: 14px; margin-left: 1px; opacity: .72; }
+.tlog-avg > b i { font-style: normal; font-size: 16px; margin-left: 1px; opacity: .72; }
 .tlog-bar {                            /* 細長的量尺，讓那個數字有個依據 */
-  width: 86px; height: 3px; margin: 7px 0 0 auto;
+  width: 96px; height: 3px; margin: 8px 0 0 auto;
   border-radius: 999px; background: var(--border); overflow: hidden;
 }
 .tlog-bar > div { height: 100%; border-radius: 999px; }
@@ -4591,15 +4591,15 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .tlog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .tlog-date { display: flex; align-items: baseline; gap: 8px; }
 .tlog-date b {
-  font-family: var(--serif); font-size: 19px; font-weight: 600;
+  font-family: var(--serif); font-size: 22px; font-weight: 600;
   letter-spacing: -.01em; color: var(--ink);
 }
-.tlog-date span { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; color: var(--ink-3); }
+.tlog-date span { font-size: 13px; font-weight: 700; letter-spacing: .06em; color: var(--ink-3); }
 .tlog-tags { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.tlog-k { font-size: 11px; font-weight: 700; color: var(--ink-3); }
+.tlog-k { font-size: 12.5px; font-weight: 700; color: var(--ink-3); }
 .tlog-p, .tlog-rv {
-  font-size: 11px; font-weight: 800; letter-spacing: .02em;
-  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
+  padding: 4px 12px; border-radius: 999px; white-space: nowrap;
 }
 .tlog-p.hi { background: #E3F3E8; color: #1B5E2E; }
 .tlog-p.mid { background: #FDF3E2; color: #8A5A00; }
@@ -4610,16 +4610,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .tlog-rv.none { background: #FBF1EE; color: #A8331F; }
 
 /* ── 四個欄位：標題在上、內容在下，寬一點就排成兩欄 ── */
-.tlog-fs { display: grid; grid-template-columns: 1fr; gap: 13px 28px; margin-top: 12px; }
+.tlog-fs { display: grid; grid-template-columns: 1fr; gap: 16px 30px; margin-top: 14px; }
 @media (min-width: 900px) { .tlog-fs { grid-template-columns: 1fr 1fr; } }
 .tlog-f { padding-left: 12px; border-left: 2px solid var(--border); min-width: 0; }
 .tlog-f em {
-  display: block; font-style: normal; font-size: 10.5px; font-weight: 800;
-  letter-spacing: .15em; color: var(--ink-3); margin-bottom: 5px;
+  display: block; font-style: normal; font-size: 13px; font-weight: 800;
+  letter-spacing: .1em; color: var(--ink-3); margin-bottom: 6px;
 }
-.tlog-f em i { font-style: normal; font-size: 11.5px; letter-spacing: 0; margin-right: 6px; }
+.tlog-f em i { font-style: normal; font-size: 14px; letter-spacing: 0; margin-right: 6px; }
 .tlog-f p {
-  margin: 0; font-size: 14px; line-height: 1.72; color: var(--ink);
+  margin: 0; font-size: 16.5px; line-height: 1.7; color: var(--ink);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .tlog-f.did  { border-left-color: #6FA8D0; } .tlog-f.did em  { color: #1E6FA8; }
@@ -4630,7 +4630,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .tlog-more {
   display: block; width: 100%; margin-top: 2px; padding: 11px 0 3px;
   border: 0; border-top: 1px solid var(--border); background: none;
-  font-family: var(--sans); font-size: 12.5px; font-weight: 800; letter-spacing: .06em;
+  font-family: var(--sans); font-size: 14px; font-weight: 800; letter-spacing: .06em;
   color: var(--ink-3); cursor: pointer; transition: color .15s;
 }
 .tlog-more:hover { color: var(--ink); }
@@ -4638,8 +4638,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 
 @media (max-width: 560px) {
   .tlog { padding: 16px 16px 12px; border-radius: 16px; }
-  .tlog-ttl b { font-size: 18px; }
-  .tlog-avg > b { font-size: 23px; }
+  .tlog-ttl b { font-size: 20px; }
+  .tlog-avg > b { font-size: 27px; }
+  .tlog-f p { font-size: 15.5px; }
 }
 
 /* v500：沒對到人的名字／沒有學生的時段，一定要看得出來 */

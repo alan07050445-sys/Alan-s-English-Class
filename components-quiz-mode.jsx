@@ -584,40 +584,16 @@ function CatIcon({ catId, className }) {
    MAIN SCREEN — 4 blocks
    editMode=true → show edit controls + week metadata editing
 ══════════════════════════════════════════════════════ */
-function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem, categories, cloudProg, weeks, weekOrder, onOpenWeekCat }) {
+function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAddItem, categories, cloudProg }) {
   const activeCats = categories || window.CATEGORIES;
   // v265: 優先用 app.jsx 傳下來的「本機＋雲端合併」進度——只看本機會漏掉
   // 換裝置（或 v257 本機 key 換新）之前做完、只存在雲端的紀錄
   const qmProg = cloudProg || loadQMProg();
   const ET = window.EditableText;
 
-  /* 🔴 v464（Alan：「空分類的死卡片也幫我改掉」）：
-     這一類這週沒有安排時，本來只寫「即將開放 · 老師正在準備本週內容」，而且**點不進去**。
-     實測 G3 Week 6：學生能做的只有 2 個單元，畫面上卻有 3 張這種點不動的卡片。
-     改成往回找「這一類最近一次有內容的那一週」，變成「可以先複習 Week 5」並且點得進去。
-     ⚠ 跟逾期提醒用同一組規則：不看封存的週（v400 ①）、不跨學期（v400 ②）、
-       空單元不算（v460 幽靈作業），不然會指到一個點進去是空的週次。 */
-  const lastSeenOf = useQMM(() => {
-    const out = {};
-    if (!weeks || !weekOrder || !weekOrder.length) return out;
-    const curIdx = weekOrder.indexOf(weekId);
-    if (curIdx <= 0) return out;
-    const curTerm = qmTermKey(weekId);
-    (categories || window.CATEGORIES || []).forEach(cat => {
-      for (let i = curIdx - 1; i >= 0; i--) {          // 由近到遠，找到就停
-        const wid = weekOrder[i], w = weeks[wid];
-        if (!w || w.archived) continue;
-        const wTerm = qmTermKey(wid);
-        if (curTerm && wTerm && wTerm !== curTerm) continue;
-        const items = getQuizItems((w.items || {})[cat.id] || []);
-        if (!items.length) continue;
-        const left = items.filter(it => { const p = qmProg[`${wid}_${it.id}`]; return !(p && p.done); }).length;
-        out[cat.id] = { wid, label: w.label || wid, n: items.length, left };
-        break;
-      }
-    });
-    return out;
-  }, [weeks, weekOrder, weekId, categories, qmProg]);
+  /* v505（Alan：「把可以先複習這個功能刪掉，不需要，小朋友要複習自己會回去；
+     如果我要他們複習，我會再設置作業」）：v464 的「可以先複習 Week N」整組拿掉。
+     空分類就老實寫「這週還沒有安排」，不要自作主張把學生帶回舊的一週。 */
 
   return (
     <>
@@ -682,10 +658,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             return s + starsFromScore(sp);
           }, 0);
           const maxStars = quizItems.length * 3;
-          // v464：這週沒安排、但以前有 → 卡片一樣點得進去（去那一週複習）
-          const lastSeen = (total > 0 || editMode) ? null : (lastSeenOf[cat.id] || null);
-          const canReview = !!(lastSeen && onOpenWeekCat);
-          const clickable = total > 0 || editMode || canReview;
+          const clickable = total > 0 || editMode;
           const countLabel = getCategoryCountLabel(cat);
           const BlockTag = editMode ? 'div' : 'button';
           const blockProps = editMode ? {} : {
@@ -693,20 +666,14 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
             disabled: !clickable,
             'aria-label': total > 0
               ? `${cat.titleZh || cat.title} ${cat.title}, ${quizItems.length} units, ${total} ${countLabel}, ${pct}% complete`
-              : canReview
-                ? `${cat.titleZh || cat.title} ${cat.title}，這週還沒有安排，可以複習 ${lastSeen.label} 的 ${lastSeen.n} 個練習`
-                : `${cat.titleZh || cat.title} ${cat.title}, coming soon`,
+              : `${cat.titleZh || cat.title} ${cat.title}, coming soon`,
           };
 
           return (
             <BlockTag
               key={cat.id}
               className={`qm-block${!clickable ? ' empty' : ''}`}
-              onClick={() => {
-                if (!clickable) return;
-                if (total > 0 || editMode) return onEnterCat(cat);
-                onOpenWeekCat(lastSeen.wid, cat);        // v464：帶他回那一週複習
-              }}
+              onClick={() => { if (clickable) onEnterCat(cat); }}
               {...blockProps}
             >
               <CatIcon catId={cat.id} className="qm-block-icon"/>
@@ -744,18 +711,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                 ) : editMode ? (
                   <div className="qm-block-count">{allCatItems.length} items · no quiz yet</div>
                 ) : (
-                  canReview ? (
-                    /* v464：點得進去的「先複習上次的」——比一張點不動的「即將開放」有用 */
-                    <>
-                      <div className="qm-block-empty">這週還沒有安排</div>
-                      <div className="qm-block-review">
-                        可以先複習 <b>{lastSeen.label}</b> 的 {lastSeen.n} 個練習
-                        {lastSeen.left > 0 && <span>（還有 {lastSeen.left} 個沒完成）</span>}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'}</div>
-                  )
+                  <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'}</div>
                 )}
               </div>
               {editMode ? (
@@ -764,7 +720,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                   onClick={(e) => { e.stopPropagation(); onAddItem(cat.id); }}
                   title={`Add item to ${cat.title}`}
                 >＋</button>
-              ) : (total > 0 || canReview) ? (
+              ) : total > 0 ? (
                 <div className="qm-block-arrow">›</div>
               ) : null}
             </BlockTag>
@@ -1107,11 +1063,20 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     setAssignItem(it);
     if (onAssignOpened) onAssignOpened();
   }, [openAssignFor, sidebarItems.length, libAdminView]);
+  /* 🔴 v505（Alan：「每次點開每個 item 都是被點開的狀態，不要這樣，預設縮起來，
+       不然如果今天有很多題目那不就太滿了？之前被打開一旦跳出去一樣回到縮回去狀態」）
+     本來 openGroups 是**只進不出**的：從作業點進某一課 → 那一組自動展開，
+     退回清單時沒有人關掉它；再點下一課 → 又展開一組。
+     一個下午做下來整個側欄就全開了，正是他看到的畫面。
+     改兩件事：
+       ① 手風琴——同一時間只有一組是開的（展開新的就關掉舊的）
+       ② 換分類／換週次就全部收回去（＝他說的「跳出去就回到縮回去狀態」）
+     ⚠ 自動展開「選中單元所在的組」要留著，否則從作業點進來會看不到自己在哪。 */
+  useQME(() => { setOpenGroups({}); }, [cat && cat.id, weekId]);
   useQME(() => {
-    // 選中單元時自動展開它所在的組
     if (!grouped || !selectedItem) return;
     const g = grouped.find(x => x.items && x.items.some(it => it.id === selectedItem.id));
-    if (g && !openGroups[g.key]) setOpenGroups(o => ({ ...o, [g.key]: true }));
+    if (g && !openGroups[g.key]) setOpenGroups({ [g.key]: true });
   }, [selectedItem && selectedItem.id, grouped]);
   const filterStudents = useQMM(() => {
     if (!libAdminView || !libMeta) return [];
@@ -1446,7 +1411,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                 <div className="qm-ugroup-headrow">
                   <button
                     className="qm-ugroup-head"
-                    onClick={() => setOpenGroups(o => ({ ...o, [g.key]: !o[g.key] }))}
+                    onClick={() => setOpenGroups(o => (o[g.key] ? {} : { [g.key]: true }))}
                     aria-expanded={!!openGroups[g.key]}
                   >
                     <span className="qm-ugroup-chev">{openGroups[g.key] ? '▾' : '▸'}</span>

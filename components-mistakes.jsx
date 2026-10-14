@@ -65,7 +65,7 @@ function MistakeReview({ q, onReviewed }) {
 }
 
 /* ── Drill mode ─────────────────────────────────────────── */
-function MistakesDrill({ questions, user, onClose, onAllCleared }) {
+function MistakesDrill({ questions, subjLabel, user, onClose, onAllCleared }) {
   // Snapshot questions at mount — prevents live Firestore updates from
   // changing the question list mid-drill.
   // MC-drillable subset only (legacy/unknown types included — see MK_REVEAL_ONLY).
@@ -159,6 +159,7 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
         <div className="mk-panel">
           {/* Header */}
           <div className="mk-drill-head">
+            {subjLabel && <span className="mk-drill-subj">{subjLabel}</span>}
             <span className="mk-drill-progress">{idx + 1} / {mcQuestions.length}</span>
             <div className="mk-drill-bar">
               <div className="mk-drill-bar-fill" style={{width: `${(idx / mcQuestions.length) * 100}%`}}/>
@@ -296,37 +297,75 @@ function MistakesDrill({ questions, user, onClose, onAllCleared }) {
      ③ 看不到獎勵。→ 標題寫「訂正一題 +1⭐」，今天還能拿幾顆也寫出來。 */
 const MK_BATCH = 5;   // 一次練幾題
 
-function MistakesPanel({ user, progressItems, weeks, weekOrder, fixed, onClose }) {
+/* v505（Alan：「錯題本要分成單字錯題、文法錯題，以此類推去做分類，
+     不然小朋友哪會想要做，全部都擠在一起，讓小朋友知道這次的主題是什麼」）
+   ⚠ 用 catId 分（不是中文名）：同一個 word 分類在 G4 叫「字彙學習」、
+     在預設那份叫「字根字首」，拿中文名分會分成兩堆。
+   ⚠ 對不到分類的（文法軌、總複習、已經被刪掉的單元）統一落到 '_other'，
+     不要靜靜地消失——學生還是要看得到那些錯題。 */
+const MK_CAT_ORDER = ['vocab', 'grammar', 'word', 'reading'];
+const MK_CAT_ICO   = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
+const mkSubjOf = (q) => (q.catId || '_other');
+
+/* 照「答案」歸戶：同一個答案在幾種練習裡錯過就併成一張卡。
+   ⚠ 用 gnNorm 正規化（大小寫、標點不算差別），不然 "pursued" 和 "Pursued" 會變兩張。 */
+function mkByAnswer(list) {
+  const norm = (t) => (window.gnNorm ? window.gnNorm(String(t || '')) : String(t || '').toLowerCase().trim());
+  const m = new Map();
+  (list || []).forEach(q => {
+    const k = norm(q.answer) || ('__' + q.q);
+    if (!m.has(k)) m.set(k, { answer: q.answer, items: [], kinds: new Set(), weeks: new Set() });
+    const g = m.get(k);
+    g.items.push(q);
+    if (q.itemTitle) g.kinds.add(window.QM_TYPE_ZH_PUBLIC ? window.QM_TYPE_ZH_PUBLIC[q.type] || q.cat : (q.cat || ''));
+    if (q.weekLabel) g.weeks.add(q.weekLabel);
+  });
+  // 錯過愈多次的排前面——那才是「他真的不會」的
+  return [...m.values()].sort((x, y) => y.items.length - x.items.length);
+}
+
+function MistakesPanel({ user, progressItems, weeks, weekOrder, categories, fixed, onClose }) {
   const [drillMode,      setDrillMode]      = useMK(false);
   const [drillQuestions, setDrillQuestions] = useMK(null);
+  const [subj,           setSubj]           = useMK('all');
 
   const allWrong = useMKM(
-    () => window.collectWrongQuestions(progressItems, weeks, weekOrder),
-    [progressItems, weeks, weekOrder]
+    () => window.collectWrongQuestions(progressItems, weeks, weekOrder, categories),
+    [progressItems, weeks, weekOrder, categories]
   );
 
-  /* 照「答案」歸戶：同一個答案在幾種練習裡錯過就併成一張卡。
-     ⚠ 用 gnNorm 正規化（大小寫、標點不算差別），不然 "pursued" 和 "Pursued" 會變兩張。 */
-  const byAnswer = useMKM(() => {
-    const norm = (t) => (window.gnNorm ? window.gnNorm(String(t || '')) : String(t || '').toLowerCase().trim());
+  // 有錯題的科目才列出來（沒有錯的科目不該佔一個按鈕）
+  const subjects = useMKM(() => {
     const m = new Map();
     allWrong.forEach(q => {
-      const k = norm(q.answer) || ('__' + q.q);
-      if (!m.has(k)) m.set(k, { answer: q.answer, items: [], kinds: new Set(), weeks: new Set() });
-      const g = m.get(k);
-      g.items.push(q);
-      if (q.itemTitle) g.kinds.add(window.QM_TYPE_ZH_PUBLIC ? window.QM_TYPE_ZH_PUBLIC[q.type] || q.cat : (q.cat || ''));
-      if (q.weekLabel) g.weeks.add(q.weekLabel);
+      const id = mkSubjOf(q);
+      if (!m.has(id)) m.set(id, { id, label: q.cat || '其他練習', n: 0 });
+      m.get(id).n++;
     });
-    // 錯過愈多次的排前面——那才是「他真的不會」的
-    return [...m.values()].sort((x, y) => y.items.length - x.items.length);
+    const rank = (id) => { const i = MK_CAT_ORDER.indexOf(id); return i < 0 ? 99 : i; };
+    return [...m.values()].sort((a, b) => rank(a.id) - rank(b.id) || b.n - a.n);
   }, [allWrong]);
+
+  // 答對完某一科之後那一科會消失 → 選取要跟著回到「全部」，不然畫面會空掉
+  useMKE(() => {
+    if (subj !== 'all' && !subjects.some(x => x.id === subj)) setSubj('all');
+  }, [subjects, subj]);
+
+  const pool = useMKM(
+    () => (subj === 'all' ? allWrong : allWrong.filter(q => mkSubjOf(q) === subj)),
+    [allWrong, subj]
+  );
+  const sections = useMKM(() => (subj === 'all' ? subjects : subjects.filter(x => x.id === subj))
+    .map(sec => ({ ...sec, rows: mkByAnswer(allWrong.filter(q => mkSubjOf(q) === sec.id)) })),
+    [allWrong, subjects, subj]);
+  const subjLabel = subj === 'all' ? '' : ((subjects.find(x => x.id === subj) || {}).label || '');
+  const perSection = subj === 'all' ? 4 : 12;   // 看全部時每科只先露幾個，不要又變成一長串
 
   const f = window.computeFixedStars ? window.computeFixedStars(fixed) : { todayLeft: 0, todayN: 0 };
   const perStar = window.FIX_STAR || 1;
 
   const startDrill = () => {
-    setDrillQuestions(allWrong.slice(0, MK_BATCH));   // v465：一次只練 5 題
+    setDrillQuestions(pool.slice(0, MK_BATCH));   // v465：一次只練 5 題；v505：只抽選到的那一科
     setDrillMode(true);
   };
 
@@ -334,6 +373,7 @@ function MistakesPanel({ user, progressItems, weeks, weekOrder, fixed, onClose }
     return (
       <MistakesDrill
         questions={drillQuestions}
+        subjLabel={subjLabel}
         user={user}
         onClose={() => { setDrillMode(false); setDrillQuestions(null); }}
         onAllCleared={onClose}
@@ -365,27 +405,54 @@ function MistakesPanel({ user, progressItems, weeks, weekOrder, fixed, onClose }
                 {f.todayLeft > 0 ? `　今天還可以拿 ${f.todayLeft} 顆` : '　今天的已經拿滿了，明天再來 👍'}</span>
             </div>
 
+            {/* v505：先選主題再開始——小朋友要知道「這次是在練什麼」 */}
+            {subjects.length > 1 && (
+              <div className="mk-subj">
+                <button className={'mk-subj-chip' + (subj === 'all' ? ' on' : '')}
+                  onClick={() => setSubj('all')}>全部<i>{allWrong.length}</i></button>
+                {subjects.map(x => (
+                  <button key={x.id} className={'mk-subj-chip' + (subj === x.id ? ' on' : '')}
+                    onClick={() => setSubj(x.id)}>
+                    <span>{MK_CAT_ICO[x.id] || '📕'}</span>{x.label}<i>{x.n}</i>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* v465：照「答案」歸戶——同一個字在幾種練習裡錯過就併成一張，
                 錯最多次的排最前面。這才回答得了「我到底哪裡不會」。 */}
             <div className="mk-list">
-              {byAnswer.slice(0, 12).map((g, i) => (
-                <div key={i} className="mk-ans">
-                  <div className="mk-ans-head">
-                    <b className="mk-ans-word">{g.answer || '（看題目）'}</b>
-                    {g.items.length > 1 && <span className="mk-ans-n">錯過 {g.items.length} 次</span>}
+              {sections.map(sec => (
+                <div className="mk-sec" key={sec.id}>
+                  <div className="mk-sec-head">
+                    <span className="mk-sec-ico">{MK_CAT_ICO[sec.id] || '📕'}</span>
+                    <b>{sec.label}</b>
+                    <i>{sec.n} 題</i>
                   </div>
-                  <div className="mk-ans-where">
-                    {[...g.weeks].slice(0, 3).join('、')}
-                    {g.items.length > 1 && <span>　·　{[...new Set(g.items.map(x => x.cat).filter(Boolean))].join('、')}</span>}
-                  </div>
+                  {sec.rows.slice(0, perSection).map((g, i) => (
+                    <div key={i} className="mk-ans">
+                      <div className="mk-ans-head">
+                        <b className="mk-ans-word">{g.answer || '（看題目）'}</b>
+                        {g.items.length > 1 && <span className="mk-ans-n">錯過 {g.items.length} 次</span>}
+                      </div>
+                      <div className="mk-ans-where">
+                        {[...g.weeks].slice(0, 3).join('、')}
+                        {g.items.length > 1 && <span>　·　{[...new Set(g.items.map(x => x.cat).filter(Boolean))].join('、')}</span>}
+                      </div>
+                    </div>
+                  ))}
+                  {sec.rows.length > perSection && (
+                    <button className="mk-ans-more" onClick={() => setSubj(sec.id)}>
+                      …還有 {sec.rows.length - perSection} 個，只看{sec.label} →
+                    </button>
+                  )}
                 </div>
               ))}
-              {byAnswer.length > 12 && <div className="mk-ans-more">…還有 {byAnswer.length - 12} 個</div>}
             </div>
 
             <button className="mk-drill-btn" onClick={startDrill}>
-              ↻ 先練 {Math.min(MK_BATCH, allWrong.length)} 題
-              {f.todayLeft > 0 && <span className="mk-drill-star">　最多 +{Math.min(MK_BATCH, allWrong.length, f.todayLeft) * perStar}⭐</span>}
+              ↻ 練 {Math.min(MK_BATCH, pool.length)} 題{subjLabel ? `：${subjLabel}` : ''}
+              {f.todayLeft > 0 && <span className="mk-drill-star">　最多 +{Math.min(MK_BATCH, pool.length, f.todayLeft) * perStar}⭐</span>}
             </button>
           </>
         )}
