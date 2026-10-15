@@ -7264,6 +7264,137 @@ Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   v512（Alan 的 AI 清單第二順位）🪄 上課紀錄自動擬草稿
+   ──────────────────────────────────────────────────────────────────────────
+   他一週要填 20 筆（10 個孩子 × 2 堂），全部手打。材料其實全都已經在系統裡：
+     · 上一堂寫的「下次進度」          （v496 已經自動帶進「這次上了什麼」）
+     · 學校那一週的進度表              （v493~v503，含書名與頁碼、粗體只教那幾頁）
+     · 下一週的學校進度                （拿來寫「下次進度」）
+     · 上一堂交代的功課 ＋ 這次複習做了沒
+   以前是把這些用「、」串起來貼進去；現在讓 AI 寫成老師會寫的句子，
+   而且**連回家功課與下次進度一起擬**——那兩欄本來每次都要重打。
+
+   🔴 這個功能最危險的地方不是寫得好不好，是**頁碼編出來**。
+      「LAW p20-23」寫成「LAW p99-105」，家長照著做、小孩寫錯整份，
+      而且畫面上看起來完全正常。
+   → lessonDraftBadPages()：把草稿裡提到的頁碼跟學校進度表比對，
+     對不上的直接標紅給 Alan 看。不自動刪（刪了會把句子弄壞），但絕不放它安靜過去。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 一段頁碼字串（"20-23"、"p.8, 10"）裡所有「被涵蓋到」的頁數 */
+function _paceNums(s) {
+  const out = new Set();
+  String(s || '').replace(/(\d+)\s*[-–—~]\s*(\d+)|(\d+)/g, (m, a, b, c) => {
+    if (a && b) {
+      const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
+      if (hi - lo <= 80) for (let i = lo; i <= hi; i++) out.add(i);
+    } else if (c) out.add(+c);
+    return m;
+  });
+  return out;
+}
+/* 學校進度表「允許出現」的頁碼。可以給一週，也可以給好幾週
+   （「下次進度」本來就會寫到下一週的頁數——只比對這一週會誤報）。 */
+function pacingPageSet(wk) {
+  const set = new Set();
+  const weeks = Array.isArray(wk) ? wk : [wk];
+  weeks.forEach(w => [w && w.it, w && w.lt].forEach(side => {
+    if (!side) return;
+    pacingBooks(side).forEach(b => _paceNums(b.pages).forEach(n => set.add(n)));
+    (side.grammarBold || []).forEach(n => set.add(+n));
+  }));
+  return set;
+}
+/* 草稿裡提到、但學校進度表上沒有的頁碼 */
+function lessonDraftBadPages(text, wk) {
+  const allow = pacingPageSet(wk);
+  if (!allow.size) return [];                       // 沒進度表可比對就不要亂標紅
+  const bad = [];
+  String(text || '').replace(/(?:pp?\.?\s*|頁\s*)(\d+)(?:\s*[-–—~]\s*(\d+))?/gi, (m, a, b) => {
+    [a, b].filter(Boolean).map(Number).forEach(n => {
+      if (!allow.has(n) && bad.indexOf(n) < 0) bad.push(n);
+    });
+    return m;
+  });
+  return bad;
+}
+
+const AI_LESSON_SYS = `You are helping a Taiwanese one-on-one English tutor write his own lesson record,
+in Traditional Chinese, in his own terse style. You are writing a DRAFT he will edit — not a report.
+
+His style (copy it):
+  這次上了什麼: "Prefixes mis-, en-, & em-\\nComplex Sentences & Subordinating Conjunctions"
+  回家功課:     "Prefixes mis-, en-, & em- 學習單\\nLAW p20-23"
+  下次進度:     "複習Feathers Not Just For Flying 單字\\n文法\\nUnseen Reading about informational text"
+
+Rules:
+- Keep English book titles, unit names and grammar terms in ENGLISH exactly as given.
+  Only the connecting words are Chinese. Never translate a unit name.
+- One item per line. No bullets, no numbering, no full sentences, no praise, no filler.
+- 回家功課 must be things a child can actually go home and do: a worksheet, a workbook page range,
+  vocabulary to memorise. Use the book names and page numbers you were given.
+- 🔴 NEVER invent a page number. Only use page numbers that appear in SCHOOL PROGRESS below.
+  If you are not given a page number for something, just name the book or the worksheet without pages.
+- 下次進度 should continue from this lesson and look at NEXT WEEK's school progress.
+- If the child did not finish last time's homework, carry it into 下次進度.
+
+Output ONLY JSON: {"did":"…","hw":"…","next":"…"}`;
+
+/* ctx = { name, grade, dateISO, weekNo, cur, nextWk, prev, review } */
+async function aiDraftLesson(ctx) {
+  const c = ctx || {};
+  const side = (lab, sd) => {
+    if (!sd) return '';
+    const bk = pacingBooks(sd).map(b => `${b.book} ${b.pages}`).join('、');
+    const bits = [
+      sd.reading && `課文 ${pacingClean(sd.reading)}`,
+      sd.vocab && `單字 ${pacingClean(sd.vocab)}`,
+      sd.wordStudy && `Word Study ${pacingClean(sd.wordStudy)}`,
+      sd.skill && `技巧 ${pacingClean(sd.skill)}`,
+      sd.grammar && `文法 ${pacingClean(sd.grammar)}`,
+      sd.grammarHw && sd._carry && `（文法作業沿用 ${pacingClean(sd.grammarHw)}）`,
+      (sd.grammarBold || []).length && `只教 pp. ${sd.grammarBold.join(', ')}`,
+      bk && `書本頁數：${bk}`,
+    ].filter(Boolean);
+    return bits.length ? `${lab}\n  ` + bits.join('\n  ') : '';
+  };
+  const msg = [
+    `STUDENT: ${c.name || ''}  (${c.grade || ''})`,
+    `THIS LESSON: ${c.dateISO || ''}${c.weekNo ? `  = school week ${c.weekNo}` : ''}`,
+    '',
+    'SCHOOL PROGRESS — THIS WEEK',
+    side('外師 (foreign teacher)', c.cur && c.cur.it),
+    side('中師 (local teacher)', c.cur && c.cur.lt),
+    '',
+    'SCHOOL PROGRESS — NEXT WEEK',
+    side('外師 (foreign teacher)', c.nextWk && c.nextWk.it),
+    side('中師 (local teacher)', c.nextWk && c.nextWk.lt),
+    '',
+    'LAST LESSON',
+    c.prev ? `  上了: ${c.prev.did || '—'}\n  功課: ${c.prev.hw || '—'}\n  當時寫的下次進度: ${c.prev.next || '—'}` : '  （沒有上一堂）',
+    c.review ? `  這次來，上次的複習／功課: ${c.review}` : '',
+  ].filter(x => x !== '').join('\n');
+
+  let got = null;
+  try { got = await _gnCall(AI_LESSON_SYS, msg, 900); } catch (e) { return null; }
+  if (!got || typeof got !== 'object') return null;
+  const clean = (t) => String(t == null ? '' : t).replace(/\r/g, '').split('\n')
+    .map(l => l.replace(/^\s*[-•*\d.、]+\s*/, '').trim()).filter(Boolean).slice(0, 6).join('\n').slice(0, 400);
+  const out = { did: clean(got.did), hw: clean(got.hw), next: clean(got.next) };
+  if (!out.did && !out.hw && !out.next) return null;
+  /* 🔴 頁碼對不上學校進度表就標出來。
+     ⚠ 分開比：「這次上了什麼／回家功課」只能用**這一週**的頁數，
+       「下次進度」本來就會提到下一週的頁數——混在一起比會把對的也標成錯的
+       （實測第一版就是這樣誤報下一週的 Grammar WB p13-16）。 */
+  const bad = lessonDraftBadPages([out.did, out.hw].join('\n'), c.cur)
+    .concat(lessonDraftBadPages(out.next, [c.cur, c.nextWk]));
+  out.badPages = [...new Set(bad)];
+  return out;
+}
+
+Object.assign(window, { aiDraftLesson, lessonDraftBadPages, pacingPageSet });
+
+/* ══════════════════════════════════════════════════════════════════════════
    v511（Alan：「有哪些也可以使用到 AI 的地方 可以幫助學習」→ 第一順位）
    🎯 錯題 → 針對性練習
    ──────────────────────────────────────────────────────────────────────────

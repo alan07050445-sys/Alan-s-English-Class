@@ -1234,6 +1234,9 @@ function LessonLog({
   var [msg, setMsg] = useDash('');
   var [tt, setTt] = useDash(null); // v497 固定課表
   var [paceFor, setPaceFor] = useDash(null); // v501：在這裡就能匯入學校進度表
+  var [aiBusy, setAiBusy] = useDash(false); // v512：AI 擬草稿
+  var [aiWarn, setAiWarn] = useDash(null); // v512：草稿裡對不上學校進度表的頁碼
+  var [aiUndo, setAiUndo] = useDash(null); // v512：套用前的內容（按錯了可以還原）
   useDashE(() => {
     if (!window.subscribeTimetable) return;
     return window.subscribeTimetable(setTt);
@@ -1268,6 +1271,8 @@ function LessonLog({
     return pace.find(w => w.n === n) || null;
   };
   var openNew = () => {
+    setAiWarn(null);
+    setAiUndo(null);
     /* ⚠ v497：本來用 lessonNextDate(單一固定時段)，但 Alan 多數學生**一週兩堂**
        （Eric 二＋四、Nick 三＋日…）→ 要在他所有時段裡挑最近的那一個。 */
     var date = tt && window.timetableNextDate ? window.timetableNextDate(tt, who) : window.lessonNextDate(slot);
@@ -1289,6 +1294,53 @@ function LessonLog({
     setDraft({
       ...r
     });
+  };
+  /* 🪄 v512：擬草稿。材料全都是系統裡現成的——學校這週／下週的進度、上一堂寫了什麼、
+     上次交代的功課做了沒。AI 只負責寫成他會寫的句子，以及把功課與下次進度一起擬出來
+     （那兩欄本來每次都要重打）。
+     🔴 頁碼一定要跟學校進度表對過：編出來的頁碼看起來完全正常，但小孩會整份寫錯。 */
+  var aiDraft = async () => {
+    if (!editing || !draft || !window.aiDraftLesson) return;
+    setAiBusy(true);
+    setAiWarn(null);
+    setMsg('');
+    try {
+      var n = window.lessonWeekOf(editing);
+      var cur = paceOf(editing);
+      var nextWk = pace ? pace.find(w => w.n === n + 1) || null : null;
+      var pv = window.lessonPrev(doc, editing);
+      var rv = (window.REVIEW_STATES || []).find(x => x.id === draft.review);
+      var got = await window.aiDraftLesson({
+        name: stu && stu.name || '',
+        grade: gradeKey,
+        dateISO: editing,
+        weekNo: n,
+        cur,
+        nextWk,
+        prev: pv,
+        review: rv ? rv.zh : ''
+      });
+      if (!got) {
+        setMsg('擬不出來——通常是這一週還沒有學校進度表，或網路不穩。');
+        setAiBusy(false);
+        return;
+      }
+      setAiUndo({
+        did: draft.did || '',
+        hw: draft.hw || '',
+        next: draft.next || ''
+      });
+      setDraft(x => ({
+        ...x,
+        did: got.did || x.did,
+        hw: got.hw || x.hw,
+        next: got.next || x.next
+      }));
+      if ((got.badPages || []).length) setAiWarn(got.badPages);
+    } catch (e) {
+      setMsg('擬不出來，等一下再試一次。');
+    }
+    setAiBusy(false);
   };
   /* 這一堂跟誰一起上（只有課表標記「一起上」的才算）。 */
   var buddiesOf = dateISO => {
@@ -1575,7 +1627,25 @@ function LessonLog({
       return pv && pv.hw ? /*#__PURE__*/React.createElement("em", {
         className: "ll2-rev-hw"
       }, "\u4E0A\u6B21\u4EA4\u4EE3\uFF1A", pv.hw) : null;
-    })()), [['did', '📘 這次上了什麼', '上一堂的「下次進度」會自動帶進來'], ['prev', '🔭 先預習了什麼', '有時候會超前——寫在這裡，家長也看得到'], ['hw', '📕 回家功課', '例：LAW p20-23、單字卡 8 個字'], ['next', '➡️ 下次進度', '寫在這裡，下一堂會自動帶進「這次上了什麼」'], ['note', '🔒 我的備註（只有我看得到）', '例：prefix 跟 suffix 還是會搞混']].map(([k, lab, ph]) => /*#__PURE__*/React.createElement("label", {
+    })()), draft.kind !== 'off' && window.aiDraftLesson && /*#__PURE__*/React.createElement("div", {
+      className: "ll2-ai"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "ll2-ai-go",
+      disabled: aiBusy,
+      onClick: aiDraft
+    }, aiBusy ? '擬草稿中…' : '🪄 幫我擬草稿'), aiUndo && !aiBusy && /*#__PURE__*/React.createElement("button", {
+      className: "ll2-ai-undo",
+      onClick: () => {
+        setDraft(x => ({
+          ...x,
+          ...aiUndo
+        }));
+        setAiUndo(null);
+        setAiWarn(null);
+      }
+    }, "\u21A9 \u9084\u539F"), /*#__PURE__*/React.createElement("em", null, "\u4E0A\u4E86\u4EC0\u9EBC\uFF0F\u529F\u8AB2\uFF0F\u4E0B\u6B21\u9032\u5EA6\u4E00\u8D77\u64EC\uFF0C\u638C\u63E1\u5EA6\u8207\u5099\u8A3B\u4E0D\u78B0")), aiWarn && aiWarn.length > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "ll2-ai-warn"
+    }, "\u26A0 \u8349\u7A3F\u88E1\u7684 ", /*#__PURE__*/React.createElement("b", null, "p.", aiWarn.join('、p.')), " \u4E0D\u5728\u9019\u4E00\u9031\u7684\u5B78\u6821\u9032\u5EA6\u8868\u4E0A\u2014\u2014 AI \u53EF\u80FD\u81EA\u5DF1\u7DE8\u4E86\u9801\u78BC\uFF0C\u5B58\u6A94\u524D\u8ACB\u5C0D\u4E00\u4E0B\u3002"), [['did', '📘 這次上了什麼', '上一堂的「下次進度」會自動帶進來'], ['prev', '🔭 先預習了什麼', '有時候會超前——寫在這裡，家長也看得到'], ['hw', '📕 回家功課', '例：LAW p20-23、單字卡 8 個字'], ['next', '➡️ 下次進度', '寫在這裡，下一堂會自動帶進「這次上了什麼」'], ['note', '🔒 我的備註（只有我看得到）', '例：prefix 跟 suffix 還是會搞混']].map(([k, lab, ph]) => /*#__PURE__*/React.createElement("label", {
       key: k,
       className: "ll2-f"
     }, /*#__PURE__*/React.createElement("span", null, lab), /*#__PURE__*/React.createElement("textarea", {

@@ -960,6 +960,9 @@ function LessonLog({ roster, myEmail }) {
   const [msg, setMsg] = useDash('');
   const [tt, setTt] = useDash(null);            // v497 固定課表
   const [paceFor, setPaceFor] = useDash(null); // v501：在這裡就能匯入學校進度表
+  const [aiBusy, setAiBusy] = useDash(false);  // v512：AI 擬草稿
+  const [aiWarn, setAiWarn] = useDash(null);   // v512：草稿裡對不上學校進度表的頁碼
+  const [aiUndo, setAiUndo] = useDash(null);   // v512：套用前的內容（按錯了可以還原）
   useDashE(() => {
     if (!window.subscribeTimetable) return;
     return window.subscribeTimetable(setTt);
@@ -997,6 +1000,7 @@ function LessonLog({ roster, myEmail }) {
   };
 
   const openNew = () => {
+    setAiWarn(null); setAiUndo(null);
     /* ⚠ v497：本來用 lessonNextDate(單一固定時段)，但 Alan 多數學生**一週兩堂**
        （Eric 二＋四、Nick 三＋日…）→ 要在他所有時段裡挑最近的那一個。 */
     const date = (tt && window.timetableNextDate) ? window.timetableNextDate(tt, who) : window.lessonNextDate(slot);
@@ -1007,6 +1011,30 @@ function LessonLog({ roster, myEmail }) {
     setDraft({ kind: 'normal', pct: 80, did: (prev && prev.next) || '', hw: '', next: '', note: '' });
   };
   const openEdit = (r) => { setEditing(r.date); setDraft({ ...r }); };
+  /* 🪄 v512：擬草稿。材料全都是系統裡現成的——學校這週／下週的進度、上一堂寫了什麼、
+     上次交代的功課做了沒。AI 只負責寫成他會寫的句子，以及把功課與下次進度一起擬出來
+     （那兩欄本來每次都要重打）。
+     🔴 頁碼一定要跟學校進度表對過：編出來的頁碼看起來完全正常，但小孩會整份寫錯。 */
+  const aiDraft = async () => {
+    if (!editing || !draft || !window.aiDraftLesson) return;
+    setAiBusy(true); setAiWarn(null); setMsg('');
+    try {
+      const n = window.lessonWeekOf(editing);
+      const cur = paceOf(editing);
+      const nextWk = pace ? (pace.find(w => w.n === n + 1) || null) : null;
+      const pv = window.lessonPrev(doc, editing);
+      const rv = (window.REVIEW_STATES || []).find(x => x.id === draft.review);
+      const got = await window.aiDraftLesson({
+        name: (stu && stu.name) || '', grade: gradeKey, dateISO: editing, weekNo: n,
+        cur, nextWk, prev: pv, review: rv ? rv.zh : '',
+      });
+      if (!got) { setMsg('擬不出來——通常是這一週還沒有學校進度表，或網路不穩。'); setAiBusy(false); return; }
+      setAiUndo({ did: draft.did || '', hw: draft.hw || '', next: draft.next || '' });
+      setDraft(x => ({ ...x, did: got.did || x.did, hw: got.hw || x.hw, next: got.next || x.next }));
+      if ((got.badPages || []).length) setAiWarn(got.badPages);
+    } catch (e) { setMsg('擬不出來，等一下再試一次。'); }
+    setAiBusy(false);
+  };
   /* 這一堂跟誰一起上（只有課表標記「一起上」的才算）。 */
   const buddiesOf = (dateISO) => {
     if (!tt || !window.timetableSlotOn) return [];
@@ -1258,6 +1286,27 @@ function LessonLog({ roster, myEmail }) {
                         const pv = window.lessonPrev(doc, editing);
                         return pv && pv.hw ? <em className="ll2-rev-hw">上次交代：{pv.hw}</em> : null;
                       })()}
+                    </div>
+                  )}
+
+                  {/* 🪄 v512：一鍵把上了什麼／功課／下次進度都擬好，他只要改 */}
+                  {draft.kind !== 'off' && window.aiDraftLesson && (
+                    <div className="ll2-ai">
+                      <button className="ll2-ai-go" disabled={aiBusy} onClick={aiDraft}>
+                        {aiBusy ? '擬草稿中…' : '🪄 幫我擬草稿'}
+                      </button>
+                      {aiUndo && !aiBusy && (
+                        <button className="ll2-ai-undo" onClick={() => {
+                          setDraft(x => ({ ...x, ...aiUndo })); setAiUndo(null); setAiWarn(null);
+                        }}>↩ 還原</button>
+                      )}
+                      <em>上了什麼／功課／下次進度一起擬，掌握度與備註不碰</em>
+                    </div>
+                  )}
+                  {aiWarn && aiWarn.length > 0 && (
+                    <div className="ll2-ai-warn">
+                      ⚠ 草稿裡的 <b>p.{aiWarn.join('、p.')}</b> 不在這一週的學校進度表上——
+                      AI 可能自己編了頁碼，存檔前請對一下。
                     </div>
                   )}
 
