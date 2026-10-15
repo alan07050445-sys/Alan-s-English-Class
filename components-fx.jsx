@@ -35,8 +35,12 @@ const MX_FIT = {
   flame:  { hat: { x: 9,   y: 3.4,  s: 0.86 }, eye: { y: 7,   h: 4,   x0: 3, x1: 15 }, neck: { y: 10.6 }, side: { y: 8.5 } },
   rock:   { hat: { x: 9.5, y: -0.2, s: 0.85 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 10   }, side: { y: 6 } },
   sprout: { hat: { x: 9,   y: 0,    s: 0.96 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 9.6  }, side: { y: 6 } },
-  /* v455 小兔：耳朵一路畫到 y=−4，帽子要壓到頭頂（y=1）並縮小，才不會蓋掉兩隻耳朵 */
-  bun:    { hat: { x: 9,   y: 1.2,  s: 0.82 }, eye: { y: 4,   h: 4,   x0: 2, x1: 16 }, neck: { y: 11   }, side: { y: 6 } },
+  /* v507 小兔：帽子改畫在耳朵前面（見 BunnyMascot 裡的註解）之後，
+     就不用再為了「不要蓋掉耳朵」把它縮到 0.82——那隻會讓帽子整個看不見。
+     s 回到跟其他夥伴同一個量級（0.92），y 往上提到 0.6＝剛好坐在頭頂上。
+     ⚠ 眼睛的範圍本來寫 2~16，實際上兔子的眼睛是 3~7 與 11~15，
+       墨鏡照 2~16 畫會比臉還寬。 */
+  bun:    { hat: { x: 9,   y: 0.6,  s: 0.92 }, eye: { y: 4,   h: 4,   x0: 3, x1: 15 }, neck: { y: 8.6 }, side: { y: 6 } },
 };
 const MX_FIT_DEF = MX_FIT.clay;
 /* 帽子的畫法（標準空間：頭頂 y=0、往上到 y=−4.6、頭寬 18）。
@@ -137,11 +141,24 @@ const MX_HAT_ART = {
     </g>
   ),
 };
+/* 🔴 v507（Alan：「所有頭飾和配件都要試穿到每個吉祥物身上試穿，並且客製化才行，
+     跟著縮放比例以及動態效果」）：本來一隻夥伴只有**一組** hat {x,y,s}，八頂帽子吃同一組。
+   但八頂的高矮差很多（派對帽高到 y=−9.2、鴨舌帽只到 −5），
+   而六隻的頭也完全不一樣（小兔有兩隻豎起來的耳朵、小焰頭是尖的、阿石是方的），
+   所以「一隻一組」一定會有幾格怪怪的——實際把 8×6 排出來看就知道。
+   改成可以針對單一組合微調：MX_FIT[pet].hats[hatId] = { x?, y?, s? }（疊在基準值上面）。
+   沒有特別寫的就照基準走，所以大部分格子一行設定都不用。 */
+function mxFitHat(fit, key) {
+  const base = (fit && fit.hat) || MX_FIT_DEF.hat;
+  const ov = (fit && fit.hats && fit.hats[key]) || null;
+  if (!ov) return base;
+  return { x: ov.x != null ? ov.x : base.x, y: ov.y != null ? ov.y : base.y, s: ov.s != null ? ov.s : base.s };
+}
 function MxHat({ id, fit }) {
   const key = id === 'party' ? 'hat_party' : id === 'crown' ? 'hat_crown' : id;
   const art = MX_HAT_ART[key];
   if (!art) return null;
-  const f = (fit && fit.hat) || MX_FIT_DEF.hat;
+  const f = mxFitHat(fit, key);
   // 標準空間的中心是 9；搬到這一隻的頭頂中心、再照頭寬縮放
   return <g transform={`translate(${f.x - 9 * f.s} ${f.y}) scale(${f.s})`}>{art}</g>;
 }
@@ -155,6 +172,7 @@ function MxHat({ id, fit }) {
    位置一樣照每一隻的 eye／neck／side 錨點算，所以五隻都對得準。 */
 function mxAccArt(id, fit) {
   const f = fit || MX_FIT_DEF;
+
   const eye = f.eye, neck = f.neck.y, side = f.side.y;
   if (id === 'it_glass') {                      /* 墨鏡：蓋住那一隻的兩顆眼睛（v441 加大加粗） */
     const w = (eye.x1 - eye.x0) / 2 + 0.2, h = eye.h + 1.4;
@@ -251,11 +269,19 @@ function mxAccArt(id, fit) {
   }
   return null;
 }
+/* v507：配件本來只能靠 eye／neck／side 三個錨點自動對位，對不準就沒救。
+   多給一層 MX_FIT[pet].accs[accId] = { dx?, dy?, s? }（繞著身體中心 x=9 縮放），
+   個別組合對不準時可以再推一下。 */
 function MxAcc({ id, fit, layer }) {
   const art = mxAccArt(id, fit);
   const g = art && art[layer || 'front'];
+  if (!g) return null;
+  const ov = (fit && fit.accs && fit.accs[id]) || null;
+  const inner = ov
+    ? <g transform={`translate(${(ov.dx || 0) + 9 * (1 - (ov.s != null ? ov.s : 1))} ${ov.dy || 0}) scale(${ov.s != null ? ov.s : 1})`}>{g}</g>
+    : g;
   // 包一層 class 只是為了好認（測試會檢查它在 .mx-svg 裡面＝真的會跟著動）
-  return g ? <g className={'mx-acc mx-acc-' + (layer || 'front')}>{g}</g> : null;
+  return <g className={'mx-acc mx-acc-' + (layer || 'front')}>{inner}</g>;
 }
 
 
@@ -493,7 +519,6 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat} fit={MX_FIT.bun}/>
       <MxAcc id={acc} fit={MX_FIT.bun} layer="back"/>
       {/* 耳朵：外圈奶油色、內圈粉紅（參考圖的紅棕內耳） */}
       <g className="mx-ear mx-ear-l">
@@ -504,6 +529,14 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect x="11" y="-4" width="4" height="6" fill={FUR}/>
         <rect x="12" y="-3" width="2" height="4" fill={INNER}/>
       </g>
+      {/* 🔴 v507：**帽子畫在耳朵後面**是小兔專屬的 bug。其他五隻的頭是一整塊，
+          帽子畫在身體後面＝只露出頭頂以上那一截，看起來就是「戴在頭上」。
+          小兔的頭上還多了兩隻豎起來的耳朵（x 3~7、11~15，整整八個單位寬），
+          帽子被它們切成三片，只剩中間 x 7~11 那四個單位看得到＝畫面上一小塊色塊。
+          （v455 當時以為是帽子太大，把它縮到 0.82 —— 其實愈縮愈看不到。）
+          改成畫在耳朵**前面**、身體後面：帽子正常地蓋在頭上，比帽子高的耳朵（兔耳朵、
+          小鹿角、星星髮箍）照樣露在外面。 */}
+      <MxHat id={hat} fit={MX_FIT.bun}/>
       <g className="mx-torso">
         {/* 頭與身體連成一塊（跟其他夥伴一樣的塊狀剪影；地板在 y=16，所以身體畫到 12、腳 12~16） */}
         <rect x="1" y="1" width="16" height="2" fill={FUR}/>
@@ -524,14 +557,37 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect x="8" y="8" width="2" height="4" fill={BOW_D}/>
       </g>
       {/* v457（Alan：「胡蘿蔔太小」）：整根放大一倍多，橫著拿到嘴邊（尖端對著鼻子）。
+          v507（Alan：「吃紅蘿蔔特效再做逼真一點」）：本來是一根長方形，改成真的紅蘿蔔——
+          尖端細、根部粗的梯形，身上有一圈一圈的紋路，葉子分三叉。
           啃的時候從左邊（尖端）愈來愈短——所以 CSS 的縮放原點在右邊。 */}
       <g className="mx-carrot" aria-hidden="true">
-        <rect x="7.6" y="7.2" width="6.6" height="3.2" fill="#E0813C"/>
-        <rect x="7.6" y="7.8" width="6.6" height="1" fill="#F09A55"/>
-        <rect x="6.2" y="7.8" width="1.4" height="2" fill="#C96B2C"/>
-        <rect x="14.2" y="6" width="2" height="1.8" fill="#5E9B4B"/>
-        <rect x="14.2" y="9.8" width="2" height="1.8" fill="#5E9B4B"/>
-        <rect x="13.8" y="7.6" width="2.4" height="2.4" fill="#4F8540"/>
+        {/* 本體：四段愈往右愈粗 */}
+        <rect x="5.9"  y="8.5" width="1.7" height="1.4" fill="#C96B2C"/>
+        <rect x="7.4"  y="8.0" width="2.1" height="2.4" fill="#E0813C"/>
+        <rect x="9.3"  y="7.6" width="2.4" height="3.2" fill="#E0813C"/>
+        <rect x="11.5" y="7.2" width="2.8" height="4.0" fill="#E0813C"/>
+        {/* 上緣亮面＋下緣暗面＝有圓柱感 */}
+        <rect x="7.4"  y="8.0" width="2.1" height="0.7" fill="#F4A868"/>
+        <rect x="9.3"  y="7.6" width="2.4" height="0.8" fill="#F4A868"/>
+        <rect x="11.5" y="7.2" width="2.8" height="0.9" fill="#F4A868"/>
+        <rect x="9.3"  y="10.1" width="2.4" height="0.7" fill="#BF5F22"/>
+        <rect x="11.5" y="10.4" width="2.8" height="0.8" fill="#BF5F22"/>
+        {/* 一圈一圈的紋路 */}
+        <rect x="8.6"  y="8.4" width="0.4" height="1.6" fill="#C96B2C"/>
+        <rect x="10.6" y="8.0" width="0.4" height="2.4" fill="#C96B2C"/>
+        {/* 葉子：三叉 */}
+        <rect x="14.3" y="5.2" width="1.1" height="2.6" fill="#5E9B4B"/>
+        <rect x="15.2" y="6.0" width="1.6" height="1.1" fill="#6FAE58"/>
+        <rect x="14.3" y="11.0" width="1.1" height="2.4" fill="#5E9B4B"/>
+        <rect x="15.2" y="11.6" width="1.6" height="1.1" fill="#6FAE58"/>
+        <rect x="15.0" y="7.8" width="2.4" height="1.2" fill="#4F8540"/>
+        <rect x="14.2" y="7.3" width="1.4" height="3.0" fill="#4F8540"/>
+      </g>
+      {/* v507：啃下去的碎屑——每一口噴三粒出來，才看得出「真的咬到了」 */}
+      <g className="mx-crumbs" aria-hidden="true">
+        <rect className="mx-crumb mx-crumb-1" x="7.0" y="8.6" width="1" height="1" fill="#E0813C"/>
+        <rect className="mx-crumb mx-crumb-2" x="7.2" y="9.4" width="0.8" height="0.8" fill="#F4A868"/>
+        <rect className="mx-crumb mx-crumb-3" x="6.6" y="8.2" width="0.8" height="0.8" fill="#C96B2C"/>
       </g>
       {/* v457（Alan：「尾巴做可愛一點」）：圓圓的毛球尾巴，掛在身體後面（左邊） */}
       <g className="mx-tail" aria-hidden="true">
@@ -737,6 +793,54 @@ function MascotLayer() {
     return t;
   };
 
+  /* ══ 🔴 v507（Alan：「兔子會瞬間跳上去又瞬移回來，動作沒做完；尤其被點擊的時候，
+       感覺很多動作會卡在一起」）═══════════════════════════════════════════════
+     真正的原因不是跳躍動畫寫壞了，是**沒有人負責「現在是誰在演」**：
+     每一個開始動作的地方都各自 later(() => setAct('idle'), 自己的秒數)。
+     點一下兔子 → 開始 3.6 秒的大跳、排了一個 3.6 秒後關掉的 timer；
+     在牠落地前再點一下 → 又開始一次大跳、又排一個 timer，
+     但**第一個 timer 還活著**，時間到就把 act 從 'hop' 改成 'idle'。
+     mxHop 是 `animation: ... both`，class 一消失，transform 立刻回到 translateY(0)
+     ＝ 牠在半空中瞬間掉回地面；而 hopSideways 排的橫移還在跑 ＝ 看起來像瞬移。
+     （同樣的事也會發生在「走路走到一半被點」「連對五題的點頭」「拖曳放開的落地」。）
+
+     解法：一個 ref 當號碼牌。每次開始動作就 ++，收尾的 timer 只有在
+     「號碼還是我」的時候才把牠關掉——別人接手了就自己閉嘴。
+     ⚠ busyUntil 保留原本的意思（正在表演），但現在由 startAct 統一維護。 */
+  const actT   = useFxR(null);   // 目前這個動作的收尾 timer
+  const actSeq = useFxR(0);      // 號碼牌
+  const hopT   = useFxR(null);   // 大跳的橫移（一次只能排一個）
+  const stopActTimer = () => { if (actT.current) { clearTimeout(actT.current); actT.current = null; } };
+  /* 開始一個動作。force＝一定要插隊（點一下、拖曳落地、做完大慶祝）。
+     回傳號碼牌；被擋下來（正在表演）回 0。 */
+  const startAct = (name, ms, opts) => {
+    const o = opts || {};
+    if (!o.force && Date.now() < busyUntil.current) return 0;
+    const my = ++actSeq.current;
+    stopActTimer();
+    setAct(name);
+    busyUntil.current = Date.now() + ms;
+    actT.current = later(() => {
+      actT.current = null;
+      if (actSeq.current !== my) return;        // 已經有新的動作接手，不要把它關掉
+      busyUntil.current = 0;
+      setAct('idle');
+      if (o.then) o.then();
+    }, ms);
+    return my;
+  };
+  /* 走路／衝刺是 CSS transition，光清 timer 停不下來——要當場量目前的位置凍住牠，
+     不然被點的時候牠會一邊跳一邊繼續滑過去。（這段邏輯本來只在「進作答畫面」用。） */
+  const freezeMove = () => {
+    if (hopT.current) { clearTimeout(hopT.current); hopT.current = null; }
+    if (!moveMs) return;
+    const el = slotRef.current;
+    let cur = null;
+    try { if (el) cur = new DOMMatrixReadOnly(getComputedStyle(el).transform).m41; } catch (e) {}
+    setMoveMs(0);
+    if (cur != null && isFinite(cur)) setX(Math.round(cur));
+  };
+
   const pet = mxPetOf(petId);
   const Art = pet.art;
   /* window.mascotCheer 與攔 playSound 的那兩個 effect 不會因為換夥伴而重建
@@ -850,7 +954,7 @@ function MascotLayer() {
   const playDance = (id) => {
     const d = MX_DANCE_ACT[id] || ['party', 2000];
     if (reduce.current) { say('動畫關起來了，我先不動 🙂', 2400); return; }
-    setAct(d[0]); later(() => setAct('idle'), d[1]);
+    freezeMove(); startAct(d[0], d[1], { force: true });
     // 表演的時候順便灑一次「你買的那個特效」——按下去有反應，才像在表演
     if (window.spawnConfetti) window.spawnConfetti({});
     const it = window.mxItemOf ? window.mxItemOf(id) : null;
@@ -863,7 +967,9 @@ function MascotLayer() {
     mxSetPet(pid); setPetId(pid); setAct('idle');
     say(mxLine('hello', p), 2600);
     if (MX_MOVE_ACTS.indexOf(p.sig) < 0 && !reduce.current) {
-      later(() => { setAct(p.sig); if (p.sig === 'hop') hopSideways(); later(() => setAct('idle'), MX_SIG_HOLD[p.sig] || 1600); }, 700);
+      later(() => {
+        if (startAct(p.sig, MX_SIG_HOLD[p.sig] || 1600, { force: true }) && p.sig === 'hop') hopSideways();
+      }, 700);
     }
     if (window.playSound) window.playSound('pop');
   };
@@ -962,6 +1068,8 @@ function MascotLayer() {
     /* 立刻安靜下來——不要等下一輪 doAct（effect 重建後最久會拖到 2.3 秒，
        實測就是這樣讓一段 sleep／dance 拖進作答畫面）。
        nod／cheer／land 是「剛剛才發生的正向回饋」，不砍。 */
+    actSeq.current++; stopActTimer(); busyUntil.current = 0;   // v507：舊動作的收尾 timer 作廢
+    if (hopT.current) { clearTimeout(hopT.current); hopT.current = null; }
     setAct(a => (a === 'nod' || a === 'cheer' || a === 'land') ? a : 'idle');
     if (!moveMs) return;
     const el = slotRef.current;
@@ -994,11 +1102,17 @@ function MascotLayer() {
     if (target < 0 || target > W) target = Math.round(cur * 2 - target);   // 快撞牆就往另一邊跳
     target = Math.max(0, Math.min(W, target));
     if (Math.abs(target - cur) < 45) return;               // 太短看不出來，就乖乖直上直下
-    later(() => {
+    /* v507：一次只能排一個橫移。本來連點兩下會排到兩段 transition，
+       第二段從第一段的中途起跳，看起來就是「瞬移」。 */
+    if (hopT.current) return;
+    const my = actSeq.current;
+    hopT.current = later(() => {
+      hopT.current = null;
+      if (actSeq.current !== my) return;                   // 這一跳已經被別的動作接手了
       setDir(target > cur ? 1 : -1);
       setMoveMs(HOP_AIR_MS);
       setX(target);
-      later(() => setMoveMs(0), HOP_AIR_MS + 80);
+      later(() => { if (actSeq.current === my) setMoveMs(0); }, HOP_AIR_MS + 80);
     }, HOP_AIR_AT);
   };
 
@@ -1056,6 +1170,11 @@ function MascotLayer() {
         setDir(target > x ? 1 : -1);
         setMoveMs(ms);
         setX(target);
+        /* v507：走位類不佔用 busyUntil（走路本來就該被點斷），但一樣要拿號碼牌——
+           被點斷之後，下面這些收尾 timer 才知道「已經不是我了」要閉嘴。 */
+        const myWalk = ++actSeq.current;
+        const mine = () => actSeq.current === myWalk;
+        stopActTimer();
         setAct(pick);
         if (Math.random() < 0.08) say(mxLine(pick === pet.sig ? 'sig' : 'idle', pet));   // v392（D）：0.25 → 0.08
         /* v407：衝刺改成「衝到底 → 煞車 → 再衝回來」。
@@ -1065,22 +1184,26 @@ function MascotLayer() {
           const back = target === 0 ? W : 0;
           const ms2  = Math.max(200, Math.round(Math.abs(back - target) / speed * 1000));
           later(() => {
+            if (!mine()) return;
             setMoveMs(0); setAct('skid');                       // 煞車：原地滑一下、腳往前撐
             later(() => {
+              if (!mine()) return;
               setDir(back > target ? 1 : -1);
               setMoveMs(ms2); setX(back); setAct('dash');
-              later(() => { setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms2 + 120);
+              later(() => { if (!mine()) return; setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms2 + 120);
             }, 360);
           }, ms + 60);
           return;
         }
-        later(() => { setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms + 120);
+        later(() => { if (!mine()) return; setAct('idle'); setMoveMs(0); later(doAct, 900 + Math.random() * 2200); }, ms + 120);
         return;
       }
 
       const HOLD = Object.assign({ jump: 1000, spin: 950, dance: 2000, peek: 1700, sleep: 4200, think: 2200,
         wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 }, MX_SIG_HOLD);   // v451：買來的動作
-      setAct(pick);
+      /* v507：doAct 開頭已經確認過沒人在演，所以這裡 force——
+         真正的重點是「收尾只有一個 timer，而且認號碼牌」。 */
+      startAct(pick, HOLD[pick] || 1200, { force: true, then: () => later(doAct, 1200 + Math.random() * 3000) });
       if (pick === 'hop') hopSideways();        // v459：小兔的大跳偶爾往左右飛
       /* v392（D）：泡泡是文字（font-weight:700、最寬 190px），比動作更會搶走視線。
          實測 1180px 是 4.50 泡泡/分鐘、390px 是 6.01 → 出現率腰斬。
@@ -1091,8 +1214,6 @@ function MascotLayer() {
          其他動作維持 v392 調低後的 15%，整體泡泡量不會回到當初被嫌吵的程度。 */
       else if (pick === pet.sig) { if (Math.random() < 0.4) say(mxLine('sig', pet)); }
       else if (Math.random() < 0.15) say(mxLine('idle', pet));   // v392（D）：0.45 → 0.15
-      busyUntil.current = Date.now() + (HOLD[pick] || 1200);
-      later(() => { setAct('idle'); later(doAct, 1200 + Math.random() * 3000); }, HOLD[pick] || 1200);
     };
 
     /* v392（C）：這個 effect 的 deps 有 allowed，而 allowed 會隨「進入／離開作答畫面」
@@ -1128,7 +1249,7 @@ function MascotLayer() {
       if (!line) return false;
       lastKeyRef.current = line.key;
       smartAtRef.current = Date.now();
-      if (line.act && Date.now() >= busyUntil.current) { setAct(line.act); later(() => setAct('idle'), 1800); }
+      if (line.act) startAct(line.act, 1800);
       say(line.text, 3000);
       return true;
     } catch (e) { return false; }
@@ -1156,9 +1277,7 @@ function MascotLayer() {
           if (runRef.current >= 5 && runRef.current % 5 === 0 && smartSay({ streak: runRef.current })) return;
           /* v457：正在表演（點一下觸發的大跳／舞蹈）就不要插隊點頭——
              一換動畫，CSS 動畫整個重來，看起來就是「跳到一半掉下來」。 */
-          if (runRef.current % 5 === 0 && Date.now() >= busyUntil.current) {
-            setAct('nod'); later(() => setAct('idle'), 620);
-          }
+          if (runRef.current % 5 === 0) startAct('nod', 620);
         }
         else if (type === 'wrong') {
           runRef.current = 0;                       // 答錯＝連勝歸零
@@ -1173,8 +1292,7 @@ function MascotLayer() {
           later(() => {
             // v477：做完一份之後，如果「只剩一個就整組完成」之類的事成立，就講那件事
             if (smartSay({}, 0)) return;
-            setAct('cheer'); say(mxLine('win', petRef.current), 3000);
-            later(() => setAct('idle'), 2200);
+            startAct('cheer', 2200, { force: true }); say(mxLine('win', petRef.current), 3000);
           }, wait);
         }
       } catch (e) {}
@@ -1189,8 +1307,8 @@ function MascotLayer() {
     /* v431：商店（StarsPanel）按「去裝扮室」會叫這個；牠在睡覺就順便叫醒 */
     window.mxOpenDress = () => { mxSetOff(''); setHidden(false); setDress(true); };
     window.mascotSay = (t) => say(String(t || ''), 2600);
-    window.mascotDo  = (a) => { setAct(a); later(() => setAct('idle'), 1600); };
-    window.mascotCheer = () => { setAct('cheer'); say(mxLine('win', petRef.current), 3000); later(() => setAct('idle'), 2200); };
+    window.mascotDo  = (a) => { startAct(a, 1600, { force: true }); };
+    window.mascotCheer = () => { startAct('cheer', 2200, { force: true }); say(mxLine('win', petRef.current), 3000); };
   }, []);
 
   /* 點一下＝耍寶；長按＝去睡覺（這次不再出現）。
@@ -1230,7 +1348,7 @@ function MascotLayer() {
       setX(Math.max(0, Math.min(maxX, Math.round(d.x - 23))));
       setMoveMs(0);
     }
-    setAct('land'); later(() => setAct('idle'), 620);
+    startAct('land', 620, { force: true });
     if (window.playSound) window.playSound('pop');
   };
   const onUp = (e) => {
@@ -1257,28 +1375,36 @@ function MascotLayer() {
        招牌動作與「買到的動作」一起抽（招牌權重 2），沒有招牌也沒買動作才點頭。
        ⚠ 走位類的招牌（小焰的 dash）不能在這裡做：這裡不設定 moveMs/x，
          套上去只會原地抽動，所以那一隻退回買來的動作或點頭。 */
+    /* 🔴 v507（Alan：「動作沒做完…尤其是被點擊的時候，感覺很多動作會卡在一起」）
+       正在表演就**不要重新開始**——只回一句話。
+       以前每點一下就重排一次收尾 timer，前一個 timer 時間到照樣把 act 改成 'idle'，
+       `animation: … both` 的 class 一消失，牠就在半空中瞬間掉回地面。 */
+    if (Date.now() < busyUntil.current) {
+      say(mxLine('tap', pet), 1800);
+      if (window.playSound) window.playSound('match');
+      return;
+    }
+    freezeMove();        // 走到一半被點：先把牠停在當下的位置，不要一邊跳一邊滑走
+
     const sigOk = !reduce.current && pet.sig && MX_MOVE_ACTS.indexOf(pet.sig) < 0;
     const boughtActs = ownedActsRef.current || [];
     const picks = (sigOk ? [pet.sig, pet.sig] : []).concat(reduce.current ? [] : boughtActs);
     if (picks.length) {
       const t2 = picks[Math.floor(Math.random() * picks.length)];
       const isSig = t2 === pet.sig;
-      setAct(t2);
+      const HOLD_TAP2 = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 };
+      startAct(t2, MX_SIG_HOLD[t2] || HOLD_TAP2[t2] || 1600, { force: true });
       if (t2 === 'hop') hopSideways();          // v459
       say(mxLine(isSig ? 'sig' : 'tap', pet), 2400);
       if (window.playSound) window.playSound('match');
-      const HOLD_TAP2 = { wave: 1600, twirl: 1500, party: 2800, flip: 1100, moon: 2800 };
-      busyUntil.current = Date.now() + (MX_SIG_HOLD[t2] || HOLD_TAP2[t2] || 1600);
-      later(() => setAct('idle'), MX_SIG_HOLD[t2] || HOLD_TAP2[t2] || 1600);
       return;
     }
     /* v451：點一下不再免費送「跳／轉圈／跳舞／翻滾」。
        走到這裡＝這一隻沒有原地招牌（小焰）又還沒買動作，就只是點個頭。 */
     const t = reduce.current ? 'think' : 'nod';
-    setAct(t); say(mxLine('tap', pet), 2000);
+    startAct(t, t === 'think' ? 1600 : 620, { force: true });
+    say(mxLine('tap', pet), 2000);
     if (window.playSound) window.playSound('match');
-    busyUntil.current = Date.now() + (t === 'think' ? 1600 : 620);
-    later(() => setAct('idle'), t === 'think' ? 1600 : 620);
   };
 
   /* v392（A）：作答時不再整隻消失（那本身就是一個變化），只是安靜下來；
@@ -1342,6 +1468,9 @@ function MascotLayer() {
           {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
               永遠留在「牠的身後」，不用另外算方向。 */}
           <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
+          {/* v507：大跳的塵土——蹬地噴一次、落地再噴一次。
+              有塵土才看得出牠是「踩著地板彈起來」，不是被吊上去。 */}
+          <span className="mx-dust" aria-hidden="true"><i/><i/><i/><i/></span>
         </div>
         {/* v459：長按的替代入口。只在剛點過牠的五秒內出現，不會一直佔著畫面。 */}
         {handle && !menu && !dress && !petPick && (

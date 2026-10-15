@@ -293,9 +293,20 @@
 .mx-menu button:hover { background: #f4efe1; }
 .mx-menu .mx-menu-x { color: var(--ink-3, #8a8270); font-weight: 600; font-size: 13.5px; }
 
-/* 帽子跟著身體一起動（跟 torso 同一個群組外面，所以要自己套動畫） */
-.act-walk  .mx-hat { animation: mxWalkBob .34s ease-in-out infinite; }
-.act-dance .mx-hat { animation: mxDance .42s ease-in-out infinite; }
+/* 🔴 v507（Alan：「所有頭飾和配件都要試穿到每個吉祥物身上…跟著縮放比例以及動態效果」）
+   這裡本來有兩條：
+     .act-walk  .mx-hat { animation: mxWalkBob … }
+     .act-dance .mx-hat { animation: mxDance   … }
+   註解寫「帽子跟 torso 同一個群組外面，所以要自己套動畫」——那是帽子還是**另一個疊在上面的
+   <svg>** 的年代。v441 把配件、帽子都搬進同一個 <svg> 之後，`.act-walk .mx-svg`
+   已經帶著帽子一起動了，這兩條變成**疊第二次**。
+   而且疊得很誇張：掛在 .mx-svg 上的 translateY(-1.4px) 是真的 1.4 個螢幕像素，
+   掛在 <g>（.mx-hat）上的 -1.4px 是 **1.4 個 SVG 使用者單位**＝身體寬度的 1/13，
+   在 46px 的身體上約 3.6px。所以一走路帽子就會比頭多飄起來一截＝「浮在頭上沒黏住」。
+   小兔最明顯：.pet-bun.act-walk .mx-hat 用的是 mxBunHop（-11px＝-11 單位≒28px），
+   帽子直接飛到耳朵上面。
+   ⚠ .act-type 的那一對要留著：打電腦只動 .mx-torso、沒有動 .mx-svg，
+     所以帽子確實需要自己跟著 torso 抖。 */
 @media (prefers-reduced-motion: reduce) { .mx-hat { animation: none !important; } }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -801,34 +812,108 @@
 .pet-bun.act-hop .mx-carrot { animation: mxCarrot 3.6s linear both; }
 .pet-bun.act-hop .mx-ear { animation: mxEarFlop 3.6s linear both; transform-origin: 50% 100%; }
 .pet-bun.act-hop .mx-leg { animation: none; }
+/* ══ 🔴 v507（Alan：「兔子吃紅蘿蔔特效再做逼真一點，以及跳躍動畫也是」）══════
+   以前整支 mxHop 是 `linear`——等速上升、等速下降，看起來像電梯不像跳躍。
+   重力的感覺來自「上升愈來愈慢、下降愈來愈快」，所以改成**每一段各自的 easing**
+   （CSS 允許把 animation-timing-function 寫在 keyframe 裡，它管的是「從這一格開始」那一段）。
+   另外補了三個動畫片最基本的東西：
+     ① 預備動作（蓄力蹲得更深，而且停住一格）——蹲愈久，跳起來愈有力
+     ② 擠壓與拉伸（起跳時身體拉長、著地那一格壓到 scaleY .62）
+     ③ 落地有塵土、有小彈跳，不是「停」而是「停下來」
+   ⚠ 時間軸要跟 components-fx.jsx 的 HOP_AIR_AT(1480ms≒41%)／HOP_AIR_MS(1180ms≒33%) 對齊：
+     41% 起跳、74% 落地，橫向位移才會跟垂直的拋物線疊成一條弧線。 */
 @keyframes mxHop {
-  /* v457（Alan：「吃胡蘿蔔動作大一點」）：啃三口的幅度加大一倍多，而且會一邊啃一邊點頭 */
-  0%,  4%   { transform: translateY(0)     scaleY(1)    scaleX(1)    rotate(0deg); }
-  10%       { transform: translateY(2.4px) scaleY(.84)  scaleX(1.14) rotate(-3deg); }  /* 啃第一口 */
-  16%       { transform: translateY(-1px)  scaleY(1.05) scaleX(.97)  rotate(1.5deg); }
-  22%       { transform: translateY(2.4px) scaleY(.84)  scaleX(1.14) rotate(3deg); }   /* 第二口 */
-  28%       { transform: translateY(-1px)  scaleY(1.05) scaleX(.97)  rotate(-1.5deg); }
-  33%       { transform: translateY(2.6px) scaleY(.82)  scaleX(1.16) rotate(0deg); }   /* 第三口 */
-  38%       { transform: translateY(1.5px) scaleY(.76)  scaleX(1.16) rotate(0deg); }        /* 蹲下蓄力 */
-  43%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.32)) scaleY(1.18) scaleX(.86); } /* 起跳（拉長） */
-  50%, 62%  { transform: translateY(calc(var(--mx-jump, 44vh) * -1))   scaleY(1.04) scaleX(.98); } /* 最高點＝畫面一半，停久一點 */
-  70%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.34)) scaleY(1.12) scaleX(.9); }  /* 掉下來 */
-  76%       { transform: translateY(0)      scaleY(.74)  scaleX(1.2); }                      /* 落地壓扁 */
-  82%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.14)) scaleY(1.06) scaleX(.96); } /* 再彈一小下 */
-  90%       { transform: translateY(0)      scaleY(.9)   scaleX(1.08); }
-  100%      { transform: translateY(0)      scaleY(1)    scaleX(1); }
+  0%,  4%   { transform: translateY(0) scaleY(1) scaleX(1) rotate(0deg); animation-timing-function: cubic-bezier(.4,0,.7,1); }
+  /* ── 啃三口：低頭咬下去 → 嚼一下抬起來（頭會左右偏，像真的在嚼） ── */
+  9%        { transform: translateY(2.6px) scaleY(.82) scaleX(1.16) rotate(-4deg); animation-timing-function: cubic-bezier(.3,0,.4,1); }
+  14%       { transform: translateY(-.6px) scaleY(1.06) scaleX(.96) rotate(2deg);  animation-timing-function: cubic-bezier(.4,0,.7,1); }
+  20%       { transform: translateY(2.6px) scaleY(.82) scaleX(1.16) rotate(4deg);  animation-timing-function: cubic-bezier(.3,0,.4,1); }
+  25%       { transform: translateY(-.6px) scaleY(1.06) scaleX(.96) rotate(-2deg); animation-timing-function: cubic-bezier(.4,0,.7,1); }
+  31%       { transform: translateY(2.8px) scaleY(.8)  scaleX(1.18) rotate(0deg);  animation-timing-function: cubic-bezier(.3,0,.4,1); }
+  36%       { transform: translateY(0)     scaleY(1.03) scaleX(.98) rotate(0deg);  animation-timing-function: cubic-bezier(.5,0,.9,.55); }
+  /* ── ① 蓄力：蹲到最低並停住一格（40%→42%），這一格就是「牠要跳了」 ── */
+  40%, 42%  { transform: translateY(3.2px) scaleY(.66) scaleX(1.28) rotate(0deg);  animation-timing-function: cubic-bezier(.05,.85,.22,1); }
+  /* ── ② 起跳：身體拉長，一口氣衝掉六成高度，然後被重力拉住 ── */
+  47%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.62)) scaleY(1.28) scaleX(.79) rotate(-3deg); animation-timing-function: cubic-bezier(.33,.45,.5,1); }
+  /* ── 最高點：停久一點（滯空感），身體回到接近正常比例 ── */
+  54%, 60%  { transform: translateY(calc(var(--mx-jump, 44vh) * -1))   scaleY(1.02) scaleX(.99) rotate(-5deg); animation-timing-function: cubic-bezier(.5,0,.85,.42); }
+  /* ── ③ 掉下來：愈掉愈快 ── */
+  68%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.48)) scaleY(1.2)  scaleX(.85) rotate(-2deg); animation-timing-function: cubic-bezier(.6,0,.96,.5); }
+  73%       { transform: translateY(0)      scaleY(1.12) scaleX(.9)  rotate(0deg);  animation-timing-function: cubic-bezier(.2,0,.35,1); }
+  77%       { transform: translateY(1.8px)  scaleY(.7)   scaleX(1.26) rotate(0deg); animation-timing-function: cubic-bezier(.08,.8,.28,1); }   /* 著地壓扁＝整支最誇張的一格（實測 .62 太扁，像素角色會看不出是誰） */
+  84%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.11)) scaleY(1.12) scaleX(.93); animation-timing-function: cubic-bezier(.6,0,.9,.5); }
+  90%       { transform: translateY(0)      scaleY(.86)  scaleX(1.12); animation-timing-function: cubic-bezier(.2,.9,.3,1); }
+  95%       { transform: translateY(0)      scaleY(1.05) scaleX(.97); }
+  100%      { transform: translateY(0)      scaleY(1)    scaleX(1)   rotate(0deg); }
 }
-/* 紅蘿蔔：拿出來 → 啃三口愈來愈短 → 吃完收起來（transform-origin 在底部，從上面啃） */
-.pet-bun.act-hop .mx-carrot { transform-origin: 92% 50%; }   /* 從尖端（左邊）啃，所以原點在右邊 */
+/* 紅蘿蔔：拿出來 → 啃三口愈來愈短 → 吃完收起來（縮放原點在右邊＝從尖端啃） */
+.pet-bun.act-hop .mx-carrot { transform-origin: 92% 50%; }
 @keyframes mxCarrot {
-  0%        { opacity: 0; transform: translateX(2px) scale(.6) rotate(-8deg); }
-  4%        { opacity: 1; transform: translateX(0)   scale(1)  rotate(0deg); }
-  9%        { opacity: 1; transform: scaleX(1)  rotate(-5deg); }            /* 送到嘴邊 */
-  11%, 15%  { opacity: 1; transform: scaleX(.72) rotate(2deg); }            /* 咬掉一截 */
-  21%       { opacity: 1; transform: scaleX(.72) rotate(-4deg); }
-  23%, 27%  { opacity: 1; transform: scaleX(.44) rotate(2deg); }
-  33%       { opacity: 1; transform: scaleX(.2)  rotate(0deg); }
-  36%, 100% { opacity: 0; transform: scaleX(.08); }
+  0%        { opacity: 0; transform: translateX(3px) translateY(-1px) scale(.5) rotate(-14deg); }
+  4%        { opacity: 1; transform: translateX(0)   translateY(0)    scale(1)  rotate(0deg); }
+  8%        { opacity: 1; transform: scaleX(1)   rotate(-6deg); }           /* 送到嘴邊 */
+  9%, 13%   { opacity: 1; transform: scaleX(.74) rotate(3deg); }            /* 咬掉一截 */
+  19%       { opacity: 1; transform: scaleX(.74) rotate(-5deg); }
+  20%, 24%  { opacity: 1; transform: scaleX(.46) rotate(3deg); }
+  30%       { opacity: 1; transform: scaleX(.46) rotate(-4deg); }
+  31%, 34%  { opacity: 1; transform: scaleX(.18) rotate(2deg); }
+  36%, 100% { opacity: 0; transform: scaleX(.06); }
+}
+/* v507：咬下去噴出來的碎屑（三粒，每一口都噴一次） */
+.mx-crumb { opacity: 0; }
+.pet-bun.act-hop .mx-crumb { animation: mxCrumb 3.6s linear both; }
+.pet-bun.act-hop .mx-crumb-2 { animation-name: mxCrumb2; }
+.pet-bun.act-hop .mx-crumb-3 { animation-name: mxCrumb3; }
+@keyframes mxCrumb {
+  0%, 8%    { opacity: 0; transform: translate(0, 0); }
+  9%        { opacity: 1; transform: translate(-.4px, 0); }
+  13%       { opacity: 0; transform: translate(-2.6px, 2.4px); }
+  19%       { opacity: 0; transform: translate(0, 0); }
+  20%       { opacity: 1; transform: translate(-.4px, 0); }
+  24%       { opacity: 0; transform: translate(-2.2px, 2.8px); }
+  30%       { opacity: 0; transform: translate(0, 0); }
+  31%       { opacity: 1; transform: translate(-.4px, 0); }
+  35%, 100% { opacity: 0; transform: translate(-2.8px, 2.2px); }
+}
+@keyframes mxCrumb2 {
+  0%, 9%    { opacity: 0; transform: translate(0, 0); }
+  10%       { opacity: 1; transform: translate(0, .2px); }
+  14%       { opacity: 0; transform: translate(-1.8px, 3px); }
+  20%, 21%  { opacity: 0; transform: translate(0, 0); }
+  22%       { opacity: 1; transform: translate(0, .2px); }
+  26%       { opacity: 0; transform: translate(-2.4px, 2.6px); }
+  32%       { opacity: 1; transform: translate(0, .2px); }
+  36%, 100% { opacity: 0; transform: translate(-1.6px, 3.2px); }
+}
+@keyframes mxCrumb3 {
+  0%, 10%   { opacity: 0; transform: translate(0, 0); }
+  11%       { opacity: 1; transform: translate(0, -.2px); }
+  16%       { opacity: 0; transform: translate(-3px, 1.6px); }
+  22%, 23%  { opacity: 0; transform: translate(0, 0); }
+  24%       { opacity: 1; transform: translate(0, -.2px); }
+  28%       { opacity: 0; transform: translate(-2.6px, 2px); }
+  33%       { opacity: 1; transform: translate(0, -.2px); }
+  37%, 100% { opacity: 0; transform: translate(-3.2px, 1.4px); }
+}
+/* v507：蹬地與落地的塵土。放在 .mx-body 裡（跟衝刺的速度線同一招），
+   所以會跟著 scaleX(--mx-dir) 翻面，不用另外算方向。 */
+.mx-dust { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; pointer-events: none; }
+.mx-dust i {
+  position: absolute; bottom: 0; left: 0; width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(124, 107, 84, .32); opacity: 0;
+}
+.pet-bun.act-hop .mx-dust i { animation: mxDust 3.6s linear both; }
+.pet-bun.act-hop .mx-dust i:nth-child(1) { --dx: -20px; width: 8px; height: 8px; }
+.pet-bun.act-hop .mx-dust i:nth-child(2) { --dx: -9px;  animation-delay: 40ms; }
+.pet-bun.act-hop .mx-dust i:nth-child(3) { --dx: 11px;  animation-delay: 25ms; }
+.pet-bun.act-hop .mx-dust i:nth-child(4) { --dx: 22px;  width: 8px; height: 8px; animation-delay: 60ms; }
+@keyframes mxDust {
+  0%, 40%   { opacity: 0;   transform: translate(0, 0) scale(.3); }
+  43%       { opacity: .85; transform: translate(calc(var(--dx) * .35), -2px) scale(.75); }
+  52%       { opacity: 0;   transform: translate(var(--dx), -12px) scale(1.5); }
+  53%, 74%  { opacity: 0;   transform: translate(0, 0) scale(.3); }
+  78%       { opacity: 1;   transform: translate(calc(var(--dx) * .45), -3px) scale(.95); }
+  92%, 100% { opacity: 0;   transform: translate(calc(var(--dx) * 1.35), -14px) scale(1.8); }
 }
 /* 尾巴：跳起來的時候跟著彈一下（毛球尾巴才會有重量感） */
 .pet-bun.act-walk .mx-tail { animation: mxTailBob .46s cubic-bezier(.33, .02, .55, 1) infinite; transform-origin: 50% 40%; }
@@ -840,35 +925,41 @@
   84%, 100% { transform: translateY(0) scale(1); }
 }
 @keyframes mxTailHop {
-  0%, 33%  { transform: translateY(0) scale(1); }
-  43%      { transform: translateY(1.6px) scale(1.18); }
-  50%, 62% { transform: translateY(2.2px) scale(1.14); }
-  76%      { transform: translateY(-.6px) scale(.92); }
-  100%     { transform: translateY(0) scale(1); }
+  0%, 36%   { transform: translateY(0) scale(1); }
+  42%       { transform: translateY(2.2px) scale(1.2); }      /* 蓄力：尾巴壓下去 */
+  47%       { transform: translateY(2.6px) scale(1.1); }
+  54%, 60%  { transform: translateY(2.4px) scale(1.16); }     /* 騰空：被風壓在後面 */
+  73%       { transform: translateY(-1.2px) scale(.88); }
+  77%       { transform: translateY(1.8px) scale(1.24); }     /* 著地：壓扁 */
+  90%       { transform: translateY(-.4px) scale(.96); }
+  100%      { transform: translateY(0) scale(1); }
 }
 /* 耳朵：起跳時往後飄，落地時甩一下（SVG 使用者單位，不是 px） */
 @keyframes mxEarFlop {
   0%, 36%   { transform: rotate(0deg); }
-  43%       { transform: rotate(-16deg) translateY(.6px); }
-  50%, 62%  { transform: rotate(-9deg); }
-  70%       { transform: rotate(14deg); }
-  76%       { transform: rotate(20deg) translateY(.4px); }
-  84%       { transform: rotate(-6deg); }
+  42%       { transform: rotate(6deg) translateY(.5px); }      /* 蓄力：耳朵先往前垂 */
+  47%       { transform: rotate(-22deg) translateY(.8px); }    /* 起跳：被甩到後面 */
+  54%, 60%  { transform: rotate(-11deg); }
+  68%       { transform: rotate(16deg); }
+  77%       { transform: rotate(26deg) translateY(.5px); }     /* 落地：往前甩一大下 */
+  84%       { transform: rotate(-9deg); }
+  92%       { transform: rotate(4deg); }
   100%      { transform: rotate(0deg); }
 }
 /* 泡泡跟著一起飛（不然牠跳到半空、話還留在地板上） */
 .mx-bubble-hop { animation: mxBubbleHop 3.6s linear both; }
 @keyframes mxBubbleHop {
-  0%, 38%   { transform: translateY(0); }
-  43%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.32)); }
-  50%, 62%  { transform: translateY(calc(var(--mx-jump, 44vh) * -1)); }
-  70%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.34)); }
-  76%       { transform: translateY(0); }
-  82%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.14)); }
+  0%, 42%   { transform: translateY(0); animation-timing-function: cubic-bezier(.33,.45,.5,1); }
+  47%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.62)); }
+  54%, 60%  { transform: translateY(calc(var(--mx-jump, 44vh) * -1)); animation-timing-function: cubic-bezier(.5,0,.85,.42); }
+  68%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.48)); }
+  73%, 77%  { transform: translateY(0); }
+  84%       { transform: translateY(calc(var(--mx-jump, 44vh) * -.11)); }
   100%      { transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pet-bun.act-hop .mx-svg, .pet-bun.act-hop .mx-carrot, .pet-bun.act-hop .mx-ear, .mx-bubble-hop { animation: none; }
+  .pet-bun.act-hop .mx-svg, .pet-bun.act-hop .mx-carrot, .pet-bun.act-hop .mx-ear, .mx-bubble-hop,
+  .pet-bun.act-hop .mx-crumb, .pet-bun.act-hop .mx-dust i { animation: none; }
   .pet-bun.act-hop .mx-carrot { opacity: 1; }
 }
 
@@ -878,7 +969,6 @@
    ⚠ 只覆蓋 .pet-bun，其他五隻的走路一個像素都沒動。
    ⚠ 掛在 .mx-svg 上的位移是真的 px；掛在 <g>（腳、耳朵）上的是 SVG 使用者單位（--mx-w/18）。 */
 .pet-bun.act-walk .mx-svg   { animation: mxBunHop .46s cubic-bezier(.33, .02, .55, 1) infinite; }
-.pet-bun.act-walk .mx-hat   { animation: mxBunHop .46s cubic-bezier(.33, .02, .55, 1) infinite; }
 .pet-bun.act-walk .mx-leg-a,
 .pet-bun.act-walk .mx-leg-c { animation: mxBunHind .46s cubic-bezier(.33, .02, .55, 1) infinite; }
 .pet-bun.act-walk .mx-leg-b { animation: mxBunFore .46s cubic-bezier(.33, .02, .55, 1) infinite; }
@@ -925,26 +1015,26 @@
 .pet-bun.act-hop .mx-leg-c { animation: mxHopHind 3.6s linear both; }
 .pet-bun.act-hop .mx-leg-b { animation: mxHopFore 3.6s linear both; }
 @keyframes mxHopHind {
-  0%, 33%  { transform: translateY(0) rotate(0deg); }
-  38%      { transform: translateY(1.2px) rotate(0deg) scaleY(.8); }    /* 蹲 */
-  43%      { transform: translateY(3px)  rotate(-16deg); }              /* 蹬地（腳往後下方伸） */
-  50%, 62% { transform: translateY(-3.2px) rotate(12deg); }             /* 騰空縮起來 */
-  70%      { transform: translateY(1.4px) rotate(-6deg); }              /* 準備著地 */
-  76%      { transform: translateY(.6px) rotate(0deg) scaleY(.78); }    /* 著地張開 */
-  90%      { transform: translateY(-1px) rotate(4deg); }                /* 小彈跳 */
-  100%     { transform: translateY(0) rotate(0deg); }
+  0%, 36%   { transform: translateY(0) rotate(0deg); }
+  40%, 42%  { transform: translateY(1.6px) rotate(0deg) scaleY(.72); }   /* 蹲到最低 */
+  47%       { transform: translateY(3.6px) rotate(-20deg); }             /* 蹬地：腳往後下方伸直 */
+  54%, 60%  { transform: translateY(-3.6px) rotate(14deg); }             /* 騰空：縮成一團 */
+  68%       { transform: translateY(1.6px) rotate(-8deg); }              /* 伸腳準備著地 */
+  77%       { transform: translateY(.8px) rotate(0deg) scaleY(.72); }    /* 著地張開壓扁 */
+  90%       { transform: translateY(-1.2px) rotate(5deg); }
+  100%      { transform: translateY(0) rotate(0deg); }
 }
 @keyframes mxHopFore {
-  0%, 33%  { transform: translateY(0) rotate(0deg); }
-  38%      { transform: translateY(1px) scaleY(.82); }
-  43%      { transform: translateY(-2.4px) rotate(14deg); }             /* 前腳先收到胸前 */
-  50%, 62% { transform: translateY(-3.6px) rotate(18deg); }
-  70%      { transform: translateY(1.6px) rotate(-8deg); }              /* 伸出來著地 */
-  76%      { transform: translateY(.8px) scaleY(.8); }
-  90%      { transform: translateY(-1.2px) rotate(3deg); }
-  100%     { transform: translateY(0) rotate(0deg); }
+  0%, 36%   { transform: translateY(0) rotate(0deg); }
+  40%, 42%  { transform: translateY(1.2px) scaleY(.78); }
+  47%       { transform: translateY(-2.8px) rotate(16deg); }            /* 前腳先收到胸前 */
+  54%, 60%  { transform: translateY(-4px)   rotate(20deg); }
+  68%       { transform: translateY(1.8px) rotate(-10deg); }            /* 伸出來著地 */
+  77%       { transform: translateY(1px) scaleY(.74); }
+  90%       { transform: translateY(-1.4px) rotate(4deg); }
+  100%      { transform: translateY(0) rotate(0deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pet-bun.act-walk .mx-svg, .pet-bun.act-walk .mx-hat, .pet-bun.act-walk .mx-leg,
+  .pet-bun.act-walk .mx-svg, .pet-bun.act-walk .mx-leg,
   .pet-bun.act-walk .mx-ear, .pet-bun.act-hop .mx-leg, .pet-bun.act-walk .mx-tail, .pet-bun.act-hop .mx-tail { animation: none; }
 }
