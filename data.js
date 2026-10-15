@@ -7052,7 +7052,8 @@ const MX_SHOP = [
   { id: 'it_bow',     kind: 'item',  zh: '蝴蝶結',   emoji: '🎀', cost: 100 },
   { id: 'it_scarf',   kind: 'item',  zh: '圍巾',     emoji: '🧣', cost: 100 },
   { id: 'it_glass',   kind: 'item',  zh: '墨鏡',     emoji: '🕶️', cost: 150 },
-  { id: 'it_bag',     kind: 'item',  zh: '小書包',   emoji: '🎒', cost: 150 },
+  /* v508（Alan：「書包這個裝飾刪掉」）：下架。買過的孩子那 150 顆星星會自己回去
+     （mxOwnedList 只認得出來的 id，認不得的就不再算進 mxSpent）。 */
   { id: 'it_cape',    kind: 'item',  zh: '英雄披風', emoji: '🦸', cost: 200 },
   { id: 'it_wand',    kind: 'item',  zh: '魔法棒',   emoji: '🪄', cost: 250 },
   /* 🔴 v505（Alan：「把特效跟語音都刪掉，沒有用的功能」）

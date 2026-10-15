@@ -126,11 +126,21 @@ ok('⭐ 但「語意色」不可以為了過節改掉（警告橫幅維持琥珀
    return !/\.tt-past/.test(c) && !/\.wh-task-cue/.test(c); })());
 
 console.log('\n【6】有真的接上去');
-ok('⭐ index.html 載入了，而且排在 styles-tune.css 後面（它的工作是覆寫）', (() => {
-   const a = html.indexOf('styles-tune.css'), b = html.indexOf('styles-holiday.css');
-   return a > 0 && b > a; })());
-ok('⭐ Service Worker 也要快取它（不然離線時整頁沒有樣式）',
-   /styles-holiday\.css/.test(sw));
+/* 🔴 v508（Alan：「轉換畫面還是會卡卡的」）：這張樣式表 28.5KB／112 條規則，
+   全部包在 html.fest-1010 底下——一年裡有 360 天是每個學生每次載入都下載、
+   解析、然後一條都不生效的死重量。改成「只有節慶那幾天才載」。 */
+ok('⭐ 不再無條件 <link> 進來（360 天的死重量）',
+   !/<link[^>]*styles-holiday\.css/.test(html));
+ok('⭐⭐ 改成節慶期間才插進去，而且要排在 styles-tune.css 後面（它的工作是覆寫）', (() => {
+   const a = html.indexOf('styles-tune.css'), b = html.indexOf("l.href = 'styles-holiday.css");
+   return a > 0 && b > a && /document\.head\.appendChild\(l\)/.test(html); })());
+ok('⭐⭐ <head> 裡那份日期判斷要跟 data.js 的 festOn() 一致（兩份寫死的區間不可以走鐘）', (() => {
+   const m = /FEST_1010 = \{ from: '([\d-]+)', to: '([\d-]+)'/.exec(data);
+   const h = /var FROM = '([\d-]+)', TO = '([\d-]+)';/.exec(html);
+   return m && h && m[1] === h[1] && m[2] === h[2]; })());
+ok('⭐ 老師自己那台的強制開關一樣有效（提早預覽／看膩了關掉）',
+   /alan-fest-override/.test(html) && /ov === 'on'/.test(html) && /ov === 'off'/.test(html));
+ok('   節慶沒開就不要讓 Service Worker 先去抓它', !/styles-holiday\.css\?v=/.test(sw));
 ok('   data.js 一載入就套用（在 React 之前，才不會閃一下才變色）',
    /\nfestApply\(\);/.test(data));
 

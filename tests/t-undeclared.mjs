@@ -27,9 +27,12 @@ console.log('\n【1】工具要在 repo 裡，不是臨時下載的');
 ok('⭐ tools/jsxcheck.js 在', fs.existsSync(CHECK));
 ok('⭐ tools/babel.min.js 也在（少了它，換一台電腦這個關卡就等於不存在）',
    fs.existsSync(path.join(ROOT, 'tools', 'babel.min.js')));
-ok('工具不會被送給學生（index.html 與 sw.js 都沒提到）',
-   !fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').includes('tools/') &&
-   !fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').includes('tools/'));
+/* v508：index.html 的註解會提到 tools/build-jsx.js（那是給人看的、也該寫）。
+   真正要守的是「不會被**載進**網頁」，所以改成看 src／href。 */
+ok('工具不會被送給學生（沒有任何 src／href 指到 tools/）', (() => {
+   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+   return !/(src|href)=["'][^"']*tools\//.test(html) && !/['"][^'"]*tools\/[^'"]*['"]/.test(sw); })());
 
 console.log('\n【2】現在全站是乾淨的');
 const SITE = ['app.jsx', 'data.js', 'sw.js']

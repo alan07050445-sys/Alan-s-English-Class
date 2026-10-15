@@ -232,27 +232,6 @@ function mxAccArt(id, fit) {
       ),
     };
   }
-  if (id === 'it_bag') {                        /* 小書包：本體背在後面（兩側露出來），前面只有背帶 */
-    const top = side + 0.4;
-    return {
-      back: (
-        <g>
-          <rect x="-1.4" y={top - 0.6} width="20.8" height="9.6" rx="1.5" fill={OUTLINE}/>
-          <rect x="-0.8" y={top} width="19.6" height="8.4" rx="1.2" fill="#2E7D5B"/>
-          <rect x="-0.8" y={top + 3.2} width="19.6" height="1.6" fill="#1F5B41"/>
-          <rect x="6" y={top + 4.6} width="6" height="2.6" rx="0.7" fill="#1F5B41"/>
-        </g>
-      ),
-      front: (
-        <g>
-          <rect x="3.6" y={top - 1.6} width="1.9" height="8.6" rx="0.8" fill={OUTLINE}/>
-          <rect x="12.5" y={top - 1.6} width="1.9" height="8.6" rx="0.8" fill={OUTLINE}/>
-          <rect x="3.85" y={top - 1.3} width="1.4" height="8" fill="#1F5B41"/>
-          <rect x="12.75" y={top - 1.3} width="1.4" height="8" fill="#1F5B41"/>
-        </g>
-      ),
-    };
-  }
   if (id === 'it_wand') {                       /* 魔法棒：手拿起來的樣子（斜握在身體右邊、星星在上面） */
     const gripY = side + 3;
     return { front: (

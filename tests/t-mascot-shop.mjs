@@ -149,7 +149,11 @@ log.push('\n【7c】（v441）配件要跟著吉祥物動、整體要大一點�
      (fx.match(/layer="back"/g) || []).length === 6 && (fx.match(/layer="front"/g) || []).length === 6);
   ok('⭐ 不再是疊在上面的另一個 svg（那就是它會留在原地的原因）', fx.indexOf('<svg className="mx-acc"') < 0);
   ok('CSS 也把「自己補動畫」那段拿掉（不然會動兩次）', !/\.act-walk\s+\.mx-acc/.test(css) && !/\.act-dance\s+\.mx-acc/.test(css));
-  ok('⭐ 書包、披風畫在身體後面（back 層）＝真的背在後面', /if \(id === 'it_bag'\)[\s\S]{0,900}back:/.test(fx) && /if \(id === 'it_cape'\)[\s\S]{0,900}back:/.test(fx));
+  ok('⭐ 披風畫在身體後面（back 層）＝真的披在背上', /if \(id === 'it_cape'\)[\s\S]{0,900}back:/.test(fx));
+  /* v508（Alan：「書包這個裝飾刪掉」） */
+  ok('⭐ 小書包下架了（商品表與畫法都要收乾淨）',
+     !W.MX_SHOP.some(i => i.id === 'it_bag') && !/it_bag/.test(fx));
+  ok('⭐ 買過的孩子那 150 顆星星自己回去', W.mxSpent({ owned: ['it_scarf', 'it_bag'] }) === W.mxItemOf('it_scarf').cost);
   ok('⭐ 魔法棒是「拿起來」的（有握把、斜的）', /id === 'it_wand'[\s\S]{0,400}rotate\(-18/.test(fx));
   ok('⭐ SVG 的 overflow 要 visible（不然兔耳朵、星星會被切掉）', /\.mx-svg \{[^}]*overflow: visible/.test(css));
   ok('帽子整體放大（五隻的 scale 都調過）',

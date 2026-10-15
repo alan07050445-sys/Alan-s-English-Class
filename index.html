@@ -6,7 +6,7 @@
 <title>Alan's English Class — Weekly</title>
 
 <!-- PWA / Home Screen Icon -->
-<link rel="manifest" href="manifest.json?v=507"/>
+<link rel="manifest" href="manifest.json?v=508"/>
 <link rel="icon" type="image/svg+xml" href="icon.svg"/>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
@@ -26,21 +26,49 @@
      「iPad 橫式 1180×760 一個畫面裝得下」的保證。 -->
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet"/>
 
-<link rel="stylesheet" href="styles.css?v=507"/>
-<link rel="stylesheet" href="styles-part2.css?v=507"/>
-<link rel="stylesheet" href="styles-quiz.css?v=507"/>
-<link rel="stylesheet" href="styles-flashcard.css?v=507"/>
-<link rel="stylesheet" href="styles-auth.css?v=507"/>
-<link rel="stylesheet" href="styles-quiz-mode.css?v=507"/>
-<link rel="stylesheet" href="styles-mistakes.css?v=507"/>
-<link rel="stylesheet" href="styles-home.css?v=507"/>
-<link rel="stylesheet" href="styles-theme.css?v=507"/>
-<link rel="stylesheet" href="styles-fx.css?v=507"/>
+<link rel="stylesheet" href="styles.css?v=508"/>
+<link rel="stylesheet" href="styles-part2.css?v=508"/>
+<link rel="stylesheet" href="styles-quiz.css?v=508"/>
+<link rel="stylesheet" href="styles-flashcard.css?v=508"/>
+<link rel="stylesheet" href="styles-auth.css?v=508"/>
+<link rel="stylesheet" href="styles-quiz-mode.css?v=508"/>
+<link rel="stylesheet" href="styles-mistakes.css?v=508"/>
+<link rel="stylesheet" href="styles-home.css?v=508"/>
+<link rel="stylesheet" href="styles-theme.css?v=508"/>
+<link rel="stylesheet" href="styles-fx.css?v=508"/>
 <!-- styles-tune.css 一定要放最後：手機/平板瘦身＋桌機小字放大，靠載入順序覆蓋前面的規則 -->
-<link rel="stylesheet" href="styles-tune.css?v=507"/>
+<link rel="stylesheet" href="styles-tune.css?v=508"/>
 <!-- v489 🇹🇼 國慶限定外觀：整份包在 html.fest-1010 底下，沒掛上去就完全不作用。
      一定要排在最後——它的工作就是覆寫前面所有樣式。 -->
-<link rel="stylesheet" href="styles-holiday.css?v=507"/>
+<!-- 🎊 節慶外觀（雙十）：v508 改成「只有節慶那幾天才載」。
+     整張 28.5KB／112 條規則全部包在 html.fest-1010 底下，一年裡有 360 天
+     是每個學生每次載入都下載、解析、然後一條都不生效的死重量。
+     判斷條件跟 data.js 的 festOn() 完全一樣（日期區間 ＋ 老師自己那台裝置的強制開關），
+     只是提早到 <head> 做，因為 CSS 必須在 React 掛載前就到位。
+     ⚠ 這一段不可以依賴 data.js（它比這裡晚載入），所以日期區間寫死在這裡；
+       tests/t-v508.mjs 會比對兩邊的區間有沒有走鐘。 -->
+<script>
+  (function () {
+    try {
+      var FROM = '10-08', TO = '10-12';
+      var ov = null;
+      try { ov = localStorage.getItem('alan-fest-override'); } catch (e) {}
+      var on;
+      if (ov === 'on') on = true;
+      else if (ov === 'off') on = false;
+      else {
+        var d = new Date();
+        var md = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        on = md >= FROM && md <= TO;
+      }
+      if (on) {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet'; l.href = 'styles-holiday.css?v=508';
+        document.head.appendChild(l);
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   /* Boot splash — shown while Babel transpiles the JSX (removed by React on mount) */
   #__boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f6f1e6;z-index:9999}
@@ -72,7 +100,6 @@
      雜湊用 sha384 對 unpkg 上 18.3.1 的 production build 實算出來的。 -->
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <!-- Firebase compat SDK (must load before data.js) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -80,54 +107,46 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-<script src="data.js?v=507"></script>
-<script src="data-g1.js?v=507"></script>
-<script src="data-g2.js?v=507"></script>
-<script src="data-g4.js?v=507"></script>
-<script src="data-g5.js?v=507"></script>
-<script src="data-g6.js?v=507"></script>
-<script src="data-summer.js?v=507"></script>
-<script src="data-grammar.js?v=507"></script>
-<!-- ⚡ 載入速度最大的一刀：叫 Babel 只做 JSX 轉換，不要降轉到 ES5。
-     @babel/standalone 對沒帶 data-presets 的 text/babel tag，預設是 presets:['react','env']
-     ＋ class-properties / object-rest-spread / flow-strip-types ＋ sourceMaps:'inline'，
-     targets 又是空的 ＝ 全部降轉到 ES5 並內嵌一大包 base64 sourcemap。
-     實測轉譯這 9 個檔（同一支 babel.min.js，M2 / node 22）：
-        預設（react+env）                6050ms／4,609,804 bytes
-        presets=react                    1397ms／3,962,296 bytes
-        presets=react + block-scoping    1460ms／3,957,523 bytes  ← 本檔採用
-     瀏覽器端「畫面真的出來」的時間（本機同一台、各跑數次）：改前 3661／2989ms，
-     改後 1537／997／998ms，大約快 3 倍。省下來的全是 Babel 佔住主執行緒的時間。
-     安全性：全站只用到 optional chaining（142 處）與 async/await（59 處），沒有 class、
-     decorator、private field、TS/Flow 型別、import/export；這兩種語法 Safari 13.4 /
-     Chrome 80（2020）以上都原生支援，學生用的裝置遠比這新。
+<script src="data.js?v=508"></script>
+<script src="data-g1.js?v=508"></script>
+<script src="data-g2.js?v=508"></script>
+<script src="data-g4.js?v=508"></script>
+<script src="data-g5.js?v=508"></script>
+<script src="data-g6.js?v=508"></script>
+<script src="data-summer.js?v=508"></script>
+<script src="data-grammar.js?v=508"></script>
+<!-- ⚡ v508（Alan：「有小朋友反應登入頁面跟到第二頁以及第三頁…轉換畫面還是會卡卡的」）
+     這裡本來是 9 個 <script type="text/babel">，由瀏覽器端的 @babel/standalone 即時轉譯。
+     實測（線上站台、它自己那份 babel.min.js）：9 個檔 1,290KB，轉譯佔住主執行緒 10.9 秒（Mac）。
+     v391 已經把參數調到最好（預設的 react+env 6,050ms → react+block-scoping 1,460ms），
+     但這件事本來就不該在學生的 iPad 上做。
 
-     ⚠ 為什麼 data-plugins 不是空字串，而是留下 transform-block-scoping 這一個：
-     這 9 個檔轉譯完是「9 個獨立 <script> 掛在同一個全域範圍」。preset-env 本來會把
-     頂層的 const/let 全部變成 var，而 var 允許重複宣告，所以底下這組既有的撞名一直被蓋住：
-        components-quiz.jsx:3       const { useMemo:  useQM } = React;
-        components-quiz-mode.jsx:3  const { useState: useQM } = React;
-     一旦頂層維持 const，第二個檔就會丟
-     「SyntaxError: Identifier 'useQM' has already been declared」，整個 app 直接掛掉
-     （已在瀏覽器實測撞到）。transform-block-scoping 把 const/let 還原成 var，
-     等於完整保留 v391 的作用域行為，實測只多 63ms（1397ms → 1460ms），
-     跟原本的 6050ms 相比仍然是 4 倍以上的改善。
-     ＊真正的根治是把 components-quiz.jsx 的 useQM 改名，那要動 .jsx，另外排。 -->
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-shell.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-quiz.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-flashcard.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-editor.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-quiz-mode.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-dashboard.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-mistakes.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="app.jsx?v=507"></script>
-<script type="text/babel" data-presets="react" data-plugins="transform-block-scoping" src="components-fx.jsx?v=507"></script>
+     改成提交前先轉譯好（tools/build-jsx.js → dist/*.js）：
+       · 原始碼還是 .jsx，改程式的方式一個字都沒變
+       · 網頁上不再需要 @babel/standalone（約 2.8MB）
+       · dist/*.js 是普通的 <script src>，瀏覽器的 preload scanner 一開始就看得到
+         （本來 Babel 要先下載完、執行完才去抓那 9 個 .jsx，實測 1,386ms 才開始下載）
+
+     ⚠ 轉譯參數跟以前完全一致，尤其 transform-block-scoping：這 9 個檔共用同一個全域範圍，
+       頂層維持 const 的話，components-quiz.jsx 與 components-quiz-mode.jsx 都宣告的 useQM
+       會丟「Identifier 'useQM' has already been declared」，整個 app 掛掉。
+     ⚠ 改完 .jsx 一定要重跑 node tools/build-jsx.js，不然線上跑的是舊程式**而且畫面完全正常**。
+       tests/t-dist.mjs 會重算一次逐字比對，忘了重跑就是紅燈。 -->
+<script src="dist/components-shell.js?v=508"></script>
+<script src="dist/components-quiz.js?v=508"></script>
+<script src="dist/components-flashcard.js?v=508"></script>
+<script src="dist/components-editor.js?v=508"></script>
+<script src="dist/components-quiz-mode.js?v=508"></script>
+<script src="dist/components-dashboard.js?v=508"></script>
+<script src="dist/components-mistakes.js?v=508"></script>
+<script src="dist/app.js?v=508"></script>
+<script src="dist/components-fx.js?v=508"></script>
 
 <script>
   // Register Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=507').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=508').catch(() => {});
     });
   }
 </script>
