@@ -3173,6 +3173,153 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
 }
 
 /* ── Per-student detail view ───────────────────────────── */
+
+/* ══ 🎯 v511：這孩子的弱點 → 針對性練習 ════════════════════════════════════
+   Alan：「有哪些也可以使用到 AI 的地方 可以幫助學習」→ 這是第一順位。
+   網站本來 13 個 AI 功能全部在「出題」那一端，沒有一個在看「這個小孩做得怎麼樣」。
+
+   三層，由便宜到貴：
+     ① 程式分群（免費、即時）——先給老師看得到的東西，不用等 AI
+     ② AI 診斷「他為什麼錯」——⭐ 舉的例子必須真的在他的錯題裡，否則整條丟掉
+     ③ 針對那個毛病出 5 題——程式驗 ＋ 第二個 AI 交叉檢查
+   存進 practice/{email}（個人收件匣），不碰整個年級共用的週次內容。 */
+function WeakSpotModal({ student, weeks, weekOrder, onClose }) {
+  const [rows, setRows]   = useDash([]);
+  const [pats, setPats]   = useDash(null);     // null = 還沒診斷
+  const [busy, setBusy]   = useDash('');
+  const [err,  setErr]    = useDash('');
+  const [made, setMade]   = useDash({});       // patternIdx → 出好的題目
+  const [sent, setSent]   = useDash({});       // patternIdx → 已送出
+  const email = String(student.email || '').toLowerCase();
+  const grade = (window.gradeFromEmail && window.gradeFromEmail(email)) || 'g4';
+
+  useDashE(() => {
+    const cats = window.CATEGORIES || [];
+    const r = window.collectWrongQuestions
+      ? window.collectWrongQuestions(student.items || {}, weeks, weekOrder, cats) : [];
+    setRows(r);
+  }, [student, weeks, weekOrder]);
+
+  const stats = window.mkStats ? window.mkStats(rows) : { n: 0, byCat: {}, repeats: [] };
+  const catName = (id) => ((window.CATEGORIES || []).find(c => c.id === id) || {}).titleZh || '其他';
+
+  const diagnose = async () => {
+    setErr(''); setBusy('diag');
+    try {
+      const got = await window.aiDiagnoseMistakes(rows, { grade });
+      setPats(got);
+      if (!got.length) setErr('看不出固定的毛病——可能是錯得太散，或錯題還不夠多（至少要 3 題）。');
+    } catch (e) { setErr('診斷失敗，等一下再試一次。'); }
+    setBusy('');
+  };
+
+  const makeSet = async (p, i) => {
+    setErr(''); setBusy('fix' + i);
+    try {
+      const qs = await window.aiMakeFixSet(p, { grade, n: 5 });
+      if (!qs.length) setErr('這一輪出的題目都沒通過檢查（答案不只一個、或正解一看就太長）。再按一次試試。');
+      setMade(m => ({ ...m, [i]: qs }));
+    } catch (e) { setErr('出題失敗，等一下再試一次。'); }
+    setBusy('');
+  };
+
+  const send = async (p, i) => {
+    setBusy('send' + i);
+    try {
+      const ok = await window.savePracticeSet(email, {
+        zh: p.zh, why: p.why, catId: p.catId || '', cat: p.cat || '',
+        questions: (made[i] || []).map((q, k) => ({ id: 'fx' + k, ...q })),
+      });
+      if (ok) setSent(x => ({ ...x, [i]: true }));
+      else setErr('沒存成功。');
+    } catch (e) {
+      setErr('沒存成功——如果一直失敗，多半是 firestore.rules 還沒貼新版（practice 那一段）。');
+    }
+    setBusy('');
+  };
+
+  return ReactDOM.createPortal(
+    <div className="modal-backdrop ws-top" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ws-panel" onClick={e => e.stopPropagation()}>
+        <div className="ws-head">
+          <div>
+            <span className="ws-kicker">Weak Spots</span>
+            <h3>🎯 {friendlyName(student)} 的弱點</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}><window.Icon name="close" size={16}/></button>
+        </div>
+
+        {/* ① 程式先算的——不用等 AI，打開就有 */}
+        <div className="ws-stats">
+          <div className="ws-stat"><b>{stats.n}</b><span>累積錯題</span></div>
+          {Object.entries(stats.byCat).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c, n]) => (
+            <div className="ws-stat" key={c}><b>{n}</b><span>{catName(c)}</span></div>
+          ))}
+        </div>
+        {stats.repeats.length > 0 && (
+          <div className="ws-rep">
+            <em>一錯再錯</em>
+            {stats.repeats.slice(0, 8).map((r, i) => (
+              <span className="ws-rep-w" key={i}>{r.answer}<i>×{r.n}</i>
+                {r.picked.length > 0 && <u>他寫成 {r.picked.slice(0, 2).join('、')}</u>}</span>
+            ))}
+          </div>
+        )}
+
+        {err && <div className="ws-err">{err}</div>}
+
+        {pats === null ? (
+          <button className="ws-go" disabled={stats.n < 3 || busy === 'diag'} onClick={diagnose}>
+            {busy === 'diag' ? '讀他的錯題中…' : stats.n < 3 ? '錯題還太少（至少 3 題）' : '🔍 找出他的毛病'}
+          </button>
+        ) : (
+          <div className="ws-pats">
+            {pats.map((p, i) => (
+              <div className="ws-pat" key={i}>
+                <div className="ws-pat-h"><b>{p.zh}</b>{p.cat && <span>{p.cat}</span>}</div>
+                {p.why && <p className="ws-pat-why">{p.why}</p>}
+                <div className="ws-pat-ex">
+                  {p.examples.map((e, k) => <span key={k}>{e}</span>)}
+                  <i>← 這些是他真的錯過的</i>
+                </div>
+                {!made[i] ? (
+                  <button className="ws-make" disabled={busy === 'fix' + i} onClick={() => makeSet(p, i)}>
+                    {busy === 'fix' + i ? '出題中…' : '🎯 針對這個出 5 題'}
+                  </button>
+                ) : (
+                  <>
+                    <ol className="ws-qs">
+                      {made[i].map((q, k) => (
+                        <li key={k}>
+                          <b>{q.q}</b>
+                          <span className="ws-opts">
+                            {q.options.map((o, oi) => (
+                              <em key={oi} className={oi === q.answer ? 'ok' : ''}>{o}</em>
+                            ))}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    {sent[i]
+                      ? <div className="ws-sent">✅ 已經送到 {friendlyName(student)} 的「我的錯題」裡了</div>
+                      : <button className="ws-send" disabled={busy === 'send' + i} onClick={() => send(p, i)}>
+                          {busy === 'send' + i ? '送出中…' : `📤 送給 ${friendlyName(student)}（${made[i].length} 題）`}
+                        </button>}
+                    <button className="ws-again" onClick={() => makeSet(p, i)} disabled={busy === 'fix' + i}>↻ 再出一份</button>
+                  </>
+                )}
+              </div>
+            ))}
+            {!pats.length && <div className="ws-none">這次看不出固定的毛病。</div>}
+          </div>
+        )}
+        <p className="ws-note">
+          AI 只負責「看出他錯在哪」與「想題材」；答案是程式驗的，而且另一個 AI 會重讀一次確認只有一個選項對。
+        </p>
+      </div>
+    </div>, document.body);
+}
+
 function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack }) {
   const [reportOpen, setReportOpen] = useDash(false);
   const [wrongOpen, setWrongOpen] = useDash(null); // v251: 展開中的錯題單元 id
@@ -3180,6 +3327,7 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
   const [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
   const [commentDraft, setCommentDraft] = useDash({}); // v266: 評語草稿
   const [growthOpen, setGrowthOpen] = useDash(false);  // v307 (F7): 成長曲線 modal
+  const [weakOpen, setWeakOpen] = useDash(false);      // v511: 弱點分析 → 針對性練習
 
   const its = student.items || {};
   const progFor = (it) => {
@@ -3221,6 +3369,12 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
           <window.Icon name="arrow-left" size={14}/> Back
         </button>
         <div style={{display:'flex',gap:8}}>
+          {window.aiDiagnoseMistakes && (
+            <button className="report-gen-btn ws-btn" onClick={() => setWeakOpen(true)}
+              title="讀他累積的錯題，找出固定的毛病，針對那個毛病出題給他">
+              🎯 弱點分析
+            </button>
+          )}
           {window.GrowthReport && (
             <button className="report-gen-btn" onClick={() => setGrowthOpen(true)} title="看這位學生的每週分數趨勢">
               📈 成長曲線
@@ -3260,6 +3414,10 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
           initialWeekId={selWeekId}
           onClose={() => setReportOpen(false)}
         />
+      )}
+
+      {weakOpen && (
+        <WeakSpotModal student={student} weeks={weeks} weekOrder={weekOrder} onClose={() => setWeakOpen(false)}/>
       )}
 
       {growthOpen && window.GrowthReport && (

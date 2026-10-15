@@ -106,6 +106,17 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
+    // ── 🎯 v511 針對性練習（老師照這個孩子的錯題出的那幾題）──────
+    // 老師寫、學生只讀自己那一份。跟 lessonsPublic 同一個模式。
+    // ⚠ 為什麼不寫進那一週的課程內容：一般週次是整個年級共用一份文件，
+    //   寫進去同年級的其他孩子也會看到「某某的加強練習」，
+    //   而這個功能的賣點正是「專門為你出的」。
+    match /practice/{studentEmail} {
+      allow read: if isTeacher()
+                  || (request.auth != null && request.auth.token.email.lower() == studentEmail);
+      allow write: if isTeacher();
+    }
+
     // ── 全班合作目標（coop）────────────────────────────────
     match /coop/{docId} {
       allow read: if request.auth != null;

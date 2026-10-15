@@ -1499,6 +1499,10 @@ async function saveQuizMistakes(uid, displayName, email, itemId, wrongList) {
       q: String(q.q || '').slice(0, 180),
       answer: String((q.options || [])[q.correct] || '').slice(0, 120),
     };
+    // v511：他當下選的那一個（針對性出題就是靠這個看出「錯的方向」）
+    if (typeof q._picked === 'number' && (q.options || [])[q._picked] != null) {
+      o.picked = String(q.options[q._picked]).slice(0, 120);
+    }
     // v318 (#3): 一併存「原始選項＋正解索引」，錯題重練才能用原題原選項（不再亂湊干擾項）
     if (Array.isArray(q.options) && q.options.length >= 2 &&
         typeof q.correct === 'number' && q.correct >= 0 && q.correct < q.options.length) {
@@ -6224,7 +6228,7 @@ function collectWrongQuestions(progressItems, weeks, weekOrder, categories) {
       const key = `${wq.q}|||${wq.answer}`;
       if (seen.has(key)) return;
       seen.add(key);
-      result.push({ q: wq.q, answer: wq.answer, itemId: itemKey, itemTitle, weekLabel, cat, catId, type: prog.itemType || '',
+      result.push({ q: wq.q, answer: wq.answer, picked: wq.picked || '', itemId: itemKey, itemTitle, weekLabel, cat, catId, type: prog.itemType || '',
         // v318 (#3): 帶出原始選項給重練用（舊資料沒有就 undefined，重練那邊會退回舊做法）
         ...(Array.isArray(wq.options) && typeof wq.correct === 'number' ? { options: wq.options, correct: wq.correct } : {}) });
     });
@@ -7258,6 +7262,212 @@ async function mxSetWear(uid, kind, id, mx) {
 Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v511（Alan：「有哪些也可以使用到 AI 的地方 可以幫助學習」→ 第一順位）
+   🎯 錯題 → 針對性練習
+   ──────────────────────────────────────────────────────────────────────────
+   做這個之前，網站上 13 個 AI 功能**全部都在「出題」這一端**
+   （aiMakeVocabExercises / aiMakeGrammarPack / aiMakeWordStudy …），
+   沒有任何一個 AI 在看「這個小孩實際做得怎麼樣」。這一組是第一個。
+
+   三層，由便宜到貴：
+     ① mkStats()           程式分群：哪一科、同一個答案錯幾次、哪一種題型。免費、即時。
+     ② aiDiagnoseMistakes() AI 看**真實的錯答**說出「他為什麼錯」。
+     ③ aiMakeFixSet()      針對那個毛病出 5 題新的。
+
+   ⭐ 跟全站同一條規矩：**AI 產出一律程式驗**。
+      ② 的把關：AI 舉的例子必須真的出現在他的錯題裡（比對 answer），
+        至少兩筆才算數——不然它會「說得頭頭是道但其實是編的」。
+      ③ 的把關：選項數／不重複／答案在範圍／rcOptionLenOk（正解不能最長），
+        再加 _gnCheckMcq 第二個 AI 交叉檢查（單一正解的題型一律要有，v431/v444/v452）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ① 程式先分群——不花錢、不會錯，而且本身就看得出東西 */
+function mkStats(rows) {
+  const list = (rows || []).filter(r => r && r.answer);
+  const byCat = {}, byAnswer = {}, byType = {};
+  list.forEach(r => {
+    const c = r.catId || '_other';
+    byCat[c] = (byCat[c] || 0) + 1;
+    byType[r.type || '_'] = (byType[r.type || '_'] || 0) + 1;
+    const k = String(r.answer).toLowerCase().trim();
+    (byAnswer[k] = byAnswer[k] || { answer: r.answer, n: 0, picked: [] }).n++;
+    if (r.picked && byAnswer[k].picked.indexOf(r.picked) < 0) byAnswer[k].picked.push(r.picked);
+  });
+  const repeats = Object.values(byAnswer).filter(x => x.n >= 2).sort((a, b) => b.n - a.n);
+  return { n: list.length, byCat, byType, repeats };
+}
+
+const AI_DIAG_SYS = `You are an experienced elementary-school English teacher in Taiwan looking at ONE child's
+actual wrong answers, to work out WHAT KIND of mistake they keep making.
+
+You get rows of: the question, the correct answer, and (when available) what the child actually chose.
+What the child chose is the most important signal — it tells you the DIRECTION of the error.
+
+Find at most 3 patterns. A pattern is a teachable weakness, not a list of words.
+  GOOD: "過去式動詞一律加 -ed，不規則動詞沒有背起來"（he picked eated / runned / goed）
+  GOOD: "母音組合 ea 與 ee 分不出來"
+  BAD : "單字不熟"（too vague to practise）
+  BAD : "他錯了 5 題"（that is a count, not a pattern）
+
+Rules:
+- "examples" MUST be copied EXACTLY from the "correct answer" column of the rows you were given.
+  Never invent a word that is not in the rows. If you cannot find at least 2 real rows for a
+  pattern, do not report that pattern at all.
+- "zh" is what the teacher reads: one short Traditional-Chinese phrase (<= 18 characters).
+- "why" is one Traditional-Chinese sentence explaining the misunderstanding behind it.
+- "drill" is a short English instruction describing exactly what kind of practice would fix it.
+
+Output ONLY JSON:
+[{"zh":"…","why":"…","examples":["ate","ran"],"drill":"Irregular past-tense verbs: give the base form, ask for the past form."}]`;
+
+/* ② 診斷。回傳 [{ zh, why, examples, drill, rows }]；驗不過的直接不回。 */
+async function aiDiagnoseMistakes(rows, { grade = 'g4', max = 3 } = {}) {
+  const list = (rows || []).filter(r => r && r.q && r.answer).slice(0, 60);
+  if (list.length < 3) return [];                 // 太少看不出模式，不要硬掰
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const body = list.map((r, i) =>
+    `${i + 1}. Q: ${r.q}\n   correct: ${r.answer}${r.picked ? `\n   child chose: ${r.picked}` : ''}${r.cat ? `\n   subject: ${r.cat}` : ''}`
+  ).join('\n');
+  let got = null;
+  try {
+    got = await _gnCall(AI_DIAG_SYS, `LEVEL: ${band.label}\n${band.note}\n\nTHIS CHILD'S WRONG ANSWERS\n${body}`, 1200);
+  } catch (e) { return []; }
+  if (!Array.isArray(got)) return [];
+
+  /* ⭐ 把關：AI 舉的例子必須真的在他的錯題裡。
+     不驗的話它會講出一套很有道理、但例子是編的診斷——老師照著出題就全錯方向。 */
+  const have = new Map();
+  list.forEach(r => have.set(String(r.answer).toLowerCase().trim(), r));
+  const out = [];
+  got.forEach(p => {
+    if (!p || !p.zh || !Array.isArray(p.examples)) return;
+    const real = [], hitRows = [];
+    p.examples.forEach(e => {
+      const r = have.get(String(e || '').toLowerCase().trim());
+      if (r && real.indexOf(r.answer) < 0) { real.push(r.answer); hitRows.push(r); }
+    });
+    if (real.length < 2) return;                  // 舉不出兩個真的例子 → 這個診斷不算數
+    out.push({
+      zh: String(p.zh).slice(0, 40),
+      why: String(p.why || '').slice(0, 120),
+      drill: String(p.drill || '').slice(0, 300),
+      examples: real.slice(0, 6),
+      rows: hitRows,
+      catId: hitRows[0].catId || '',
+      cat: hitRows[0].cat || '',
+    });
+  });
+  return out.slice(0, max);
+}
+
+const AI_FIXSET_SYS = `You write short multiple-choice practice for ONE Taiwanese elementary student who keeps
+making a specific mistake. You are told exactly what the mistake is.
+
+Every question must practise THAT mistake. Do not drift to general vocabulary.
+Use the child's own trouble words where it helps, but also include NEW words of the same kind,
+so they learn the rule rather than memorising those words.
+
+Hard rules (the website checks these and throws away anything that breaks them):
+- Exactly 4 options. Exactly ONE is acceptable. The other three must be clearly wrong to a teacher.
+- options[0] is ALWAYS the correct one and "answer" is ALWAYS 0.
+  Do NOT move it around — the website shuffles the positions itself afterwards.
+- Do not make the correct option the longest one; keep all four a similar length.
+- The wrong options should be the mistake the child actually makes (e.g. "eated" for "ate"),
+  not random unrelated words.
+- "explain" is ONE short Traditional-Chinese sentence saying why, written to the child.
+
+Output ONLY JSON:
+[{"q":"…","options":["correct","wrong","wrong","wrong"],"answer":0,"explain":"…"}]`;
+
+/* ③ 針對一個診斷出 n 題。程式驗 → 第二個 AI 交叉檢查 → 攤平正解位置。 */
+async function aiMakeFixSet(pattern, { grade = 'g4', n = 5 } = {}) {
+  if (!pattern || !pattern.drill) return [];
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const ex = (pattern.rows || []).slice(0, 8).map(r =>
+    `- correct: ${r.answer}${r.picked ? `  (the child wrote: ${r.picked})` : ''}`).join('\n');
+  const msg = `LEVEL: ${band.label}\n${band.note}\n\n` +
+    `THE MISTAKE: ${pattern.zh}\n${pattern.why ? pattern.why + '\n' : ''}` +
+    `WHAT TO PRACTISE: ${pattern.drill}\n\n` +
+    `THE CHILD'S OWN WRONG ANSWERS ON THIS:\n${ex}\n\n` +
+    `Write ${n} questions.`;
+  let got = null;
+  try { got = await _gnCall(AI_FIXSET_SYS, msg, Math.max(900, n * 260)); } catch (e) { return []; }
+  if (!Array.isArray(got)) return [];
+
+  // 程式驗
+  const seen = new Set();
+  let ok = got.map(x => {
+    if (!x || !x.q || !Array.isArray(x.options)) return null;
+    const opts = x.options.map(o => String(o == null ? '' : o).trim());
+    if (opts.length !== 4 || opts.some(o => !o)) return null;
+    if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;   // 選項不可重複
+    const q = String(x.q).trim();
+    const key = q.toLowerCase();
+    if (seen.has(key)) return null; seen.add(key);                          // 題目不可重複
+    const item = { q, options: opts, answer: 0, explain: String(x.explain || '').slice(0, 120) };
+    if (!rcOptionLenOk(item)) return null;                                  // 正解不可以是最長的那個
+    return item;
+  }).filter(Boolean);
+  if (!ok.length) return [];
+
+  // 第二個 AI：單一正解的題型一律要有（v431/v444/v452 都是這樣抓到「兩個都對」的）
+  const bad = await _gnCheckMcq(ok, `The student is practising: ${pattern.zh}`);
+  ok = ok.filter((_, i) => !bad.has(i));
+  return _mkSpread(ok);
+}
+
+/* 正解一律在第 0 格出題、位置由程式攤平（跟 v488 字義選擇同一招：
+   叫模型自己隨機化，它會為了服從而謊報位置）。 */
+function _mkSpread(items) {
+  return items.map((it, i) => {
+    const to = i % 4;
+    if (to === 0) return it;
+    const opts = it.options.slice();
+    const t = opts[0]; opts[0] = opts[to]; opts[to] = t;
+    return { ...it, options: opts, answer: to };
+  });
+}
+
+/* ══ 存／讀：針對性練習的「個人收件匣」 ═══════════════════════════════════
+   ⚠ 為什麼不直接寫進那一週的單元？
+     一般週次的內容是整個年級共用一份文件（class/data…），寫進去的話
+     同年級的其他孩子也會看到「Eric 的加強練習」——而這個功能的賣點
+     正是「專門為你出的」。而且從後台寫那份文件，一手滑就會蓋掉整週的課程
+     （data.js 有 guardWeekSave 擋空白覆蓋就是因為出過事）。
+   → 另開 practice/{email}：老師寫、學生只讀自己那一份。跟 lessonsPublic 同一個模式。
+   ⚠ 要先貼新版 firestore.rules，不然老師存不進去、學生也讀不到。 */
+async function savePracticeSet(email, set) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !set || !(set.questions || []).length) return false;
+  const key = 'p' + Date.now().toString(36);
+  await _db.collection('practice').doc(id).set({
+    sets: { [key]: { ...set, id: key, at: Date.now() } },
+  }, { merge: true });
+  return key;
+}
+async function deletePracticeSet(email, key) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !key) return;
+  await _db.collection('practice').doc(id).update({ [`sets.${key}`]: firebase.firestore.FieldValue.delete() });
+}
+function subscribePractice(email, cb) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id) { cb(null); return () => {}; }
+  return _db.collection('practice').doc(id)
+    .onSnapshot(d => cb(d.exists ? d.data() : null), () => cb(null));
+}
+/* 收件匣 → 畫面要的清單（新的排前面） */
+function practiceSets(doc) {
+  const sets = (doc && doc.sets) || {};
+  return Object.values(sets)
+    .filter(s => s && (s.questions || []).length)
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+
+Object.assign(window, { mkStats, aiDiagnoseMistakes, aiMakeFixSet,
+  savePracticeSet, deletePracticeSet, subscribePractice, practiceSets });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v465（Alan：「錯題那個也幫我做，我覺得要加上獎勵比較合理」）

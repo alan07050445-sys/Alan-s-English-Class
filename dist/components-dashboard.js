@@ -3880,6 +3880,173 @@ function TeacherDashboard({
 }
 
 /* ── Per-student detail view ───────────────────────────── */
+
+/* ══ 🎯 v511：這孩子的弱點 → 針對性練習 ════════════════════════════════════
+   Alan：「有哪些也可以使用到 AI 的地方 可以幫助學習」→ 這是第一順位。
+   網站本來 13 個 AI 功能全部在「出題」那一端，沒有一個在看「這個小孩做得怎麼樣」。
+
+   三層，由便宜到貴：
+     ① 程式分群（免費、即時）——先給老師看得到的東西，不用等 AI
+     ② AI 診斷「他為什麼錯」——⭐ 舉的例子必須真的在他的錯題裡，否則整條丟掉
+     ③ 針對那個毛病出 5 題——程式驗 ＋ 第二個 AI 交叉檢查
+   存進 practice/{email}（個人收件匣），不碰整個年級共用的週次內容。 */
+function WeakSpotModal({
+  student,
+  weeks,
+  weekOrder,
+  onClose
+}) {
+  var [rows, setRows] = useDash([]);
+  var [pats, setPats] = useDash(null); // null = 還沒診斷
+  var [busy, setBusy] = useDash('');
+  var [err, setErr] = useDash('');
+  var [made, setMade] = useDash({}); // patternIdx → 出好的題目
+  var [sent, setSent] = useDash({}); // patternIdx → 已送出
+  var email = String(student.email || '').toLowerCase();
+  var grade = window.gradeFromEmail && window.gradeFromEmail(email) || 'g4';
+  useDashE(() => {
+    var cats = window.CATEGORIES || [];
+    var r = window.collectWrongQuestions ? window.collectWrongQuestions(student.items || {}, weeks, weekOrder, cats) : [];
+    setRows(r);
+  }, [student, weeks, weekOrder]);
+  var stats = window.mkStats ? window.mkStats(rows) : {
+    n: 0,
+    byCat: {},
+    repeats: []
+  };
+  var catName = id => ((window.CATEGORIES || []).find(c => c.id === id) || {}).titleZh || '其他';
+  var diagnose = async () => {
+    setErr('');
+    setBusy('diag');
+    try {
+      var got = await window.aiDiagnoseMistakes(rows, {
+        grade
+      });
+      setPats(got);
+      if (!got.length) setErr('看不出固定的毛病——可能是錯得太散，或錯題還不夠多（至少要 3 題）。');
+    } catch (e) {
+      setErr('診斷失敗，等一下再試一次。');
+    }
+    setBusy('');
+  };
+  var makeSet = async (p, i) => {
+    setErr('');
+    setBusy('fix' + i);
+    try {
+      var qs = await window.aiMakeFixSet(p, {
+        grade,
+        n: 5
+      });
+      if (!qs.length) setErr('這一輪出的題目都沒通過檢查（答案不只一個、或正解一看就太長）。再按一次試試。');
+      setMade(m => ({
+        ...m,
+        [i]: qs
+      }));
+    } catch (e) {
+      setErr('出題失敗，等一下再試一次。');
+    }
+    setBusy('');
+  };
+  var send = async (p, i) => {
+    setBusy('send' + i);
+    try {
+      var ok = await window.savePracticeSet(email, {
+        zh: p.zh,
+        why: p.why,
+        catId: p.catId || '',
+        cat: p.cat || '',
+        questions: (made[i] || []).map((q, k) => ({
+          id: 'fx' + k,
+          ...q
+        }))
+      });
+      if (ok) setSent(x => ({
+        ...x,
+        [i]: true
+      }));else setErr('沒存成功。');
+    } catch (e) {
+      setErr('沒存成功——如果一直失敗，多半是 firestore.rules 還沒貼新版（practice 那一段）。');
+    }
+    setBusy('');
+  };
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop ws-top",
+    onClick: e => {
+      if (e.target === e.currentTarget) onClose();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ws-panel",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ws-head"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "ws-kicker"
+  }, "Weak Spots"), /*#__PURE__*/React.createElement("h3", null, "\uD83C\uDFAF ", friendlyName(student), " \u7684\u5F31\u9EDE")), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(window.Icon, {
+    name: "close",
+    size: 16
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "ws-stats"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ws-stat"
+  }, /*#__PURE__*/React.createElement("b", null, stats.n), /*#__PURE__*/React.createElement("span", null, "\u7D2F\u7A4D\u932F\u984C")), Object.entries(stats.byCat).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c, n]) => /*#__PURE__*/React.createElement("div", {
+    className: "ws-stat",
+    key: c
+  }, /*#__PURE__*/React.createElement("b", null, n), /*#__PURE__*/React.createElement("span", null, catName(c))))), stats.repeats.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "ws-rep"
+  }, /*#__PURE__*/React.createElement("em", null, "\u4E00\u932F\u518D\u932F"), stats.repeats.slice(0, 8).map((r, i) => /*#__PURE__*/React.createElement("span", {
+    className: "ws-rep-w",
+    key: i
+  }, r.answer, /*#__PURE__*/React.createElement("i", null, "\xD7", r.n), r.picked.length > 0 && /*#__PURE__*/React.createElement("u", null, "\u4ED6\u5BEB\u6210 ", r.picked.slice(0, 2).join('、'))))), err && /*#__PURE__*/React.createElement("div", {
+    className: "ws-err"
+  }, err), pats === null ? /*#__PURE__*/React.createElement("button", {
+    className: "ws-go",
+    disabled: stats.n < 3 || busy === 'diag',
+    onClick: diagnose
+  }, busy === 'diag' ? '讀他的錯題中…' : stats.n < 3 ? '錯題還太少（至少 3 題）' : '🔍 找出他的毛病') : /*#__PURE__*/React.createElement("div", {
+    className: "ws-pats"
+  }, pats.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    className: "ws-pat",
+    key: i
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ws-pat-h"
+  }, /*#__PURE__*/React.createElement("b", null, p.zh), p.cat && /*#__PURE__*/React.createElement("span", null, p.cat)), p.why && /*#__PURE__*/React.createElement("p", {
+    className: "ws-pat-why"
+  }, p.why), /*#__PURE__*/React.createElement("div", {
+    className: "ws-pat-ex"
+  }, p.examples.map((e, k) => /*#__PURE__*/React.createElement("span", {
+    key: k
+  }, e)), /*#__PURE__*/React.createElement("i", null, "\u2190 \u9019\u4E9B\u662F\u4ED6\u771F\u7684\u932F\u904E\u7684")), !made[i] ? /*#__PURE__*/React.createElement("button", {
+    className: "ws-make",
+    disabled: busy === 'fix' + i,
+    onClick: () => makeSet(p, i)
+  }, busy === 'fix' + i ? '出題中…' : '🎯 針對這個出 5 題') : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("ol", {
+    className: "ws-qs"
+  }, made[i].map((q, k) => /*#__PURE__*/React.createElement("li", {
+    key: k
+  }, /*#__PURE__*/React.createElement("b", null, q.q), /*#__PURE__*/React.createElement("span", {
+    className: "ws-opts"
+  }, q.options.map((o, oi) => /*#__PURE__*/React.createElement("em", {
+    key: oi,
+    className: oi === q.answer ? 'ok' : ''
+  }, o)))))), sent[i] ? /*#__PURE__*/React.createElement("div", {
+    className: "ws-sent"
+  }, "\u2705 \u5DF2\u7D93\u9001\u5230 ", friendlyName(student), " \u7684\u300C\u6211\u7684\u932F\u984C\u300D\u88E1\u4E86") : /*#__PURE__*/React.createElement("button", {
+    className: "ws-send",
+    disabled: busy === 'send' + i,
+    onClick: () => send(p, i)
+  }, busy === 'send' + i ? '送出中…' : `📤 送給 ${friendlyName(student)}（${made[i].length} 題）`), /*#__PURE__*/React.createElement("button", {
+    className: "ws-again",
+    onClick: () => makeSet(p, i),
+    disabled: busy === 'fix' + i
+  }, "\u21BB \u518D\u51FA\u4E00\u4EFD")))), !pats.length && /*#__PURE__*/React.createElement("div", {
+    className: "ws-none"
+  }, "\u9019\u6B21\u770B\u4E0D\u51FA\u56FA\u5B9A\u7684\u6BDB\u75C5\u3002")), /*#__PURE__*/React.createElement("p", {
+    className: "ws-note"
+  }, "AI \u53EA\u8CA0\u8CAC\u300C\u770B\u51FA\u4ED6\u932F\u5728\u54EA\u300D\u8207\u300C\u60F3\u984C\u6750\u300D\uFF1B\u7B54\u6848\u662F\u7A0B\u5F0F\u9A57\u7684\uFF0C\u800C\u4E14\u53E6\u4E00\u500B AI \u6703\u91CD\u8B80\u4E00\u6B21\u78BA\u8A8D\u53EA\u6709\u4E00\u500B\u9078\u9805\u5C0D\u3002"))), document.body);
+}
 function StudentDetail({
   student,
   allItems,
@@ -3894,6 +4061,7 @@ function StudentDetail({
   var [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
   var [commentDraft, setCommentDraft] = useDash({}); // v266: 評語草稿
   var [growthOpen, setGrowthOpen] = useDash(false); // v307 (F7): 成長曲線 modal
+  var [weakOpen, setWeakOpen] = useDash(false); // v511: 弱點分析 → 針對性練習
 
   var its = student.items || {};
   var progFor = it => {
@@ -3959,7 +4127,11 @@ function StudentDetail({
       display: 'flex',
       gap: 8
     }
-  }, window.GrowthReport && /*#__PURE__*/React.createElement("button", {
+  }, window.aiDiagnoseMistakes && /*#__PURE__*/React.createElement("button", {
+    className: "report-gen-btn ws-btn",
+    onClick: () => setWeakOpen(true),
+    title: "\u8B80\u4ED6\u7D2F\u7A4D\u7684\u932F\u984C\uFF0C\u627E\u51FA\u56FA\u5B9A\u7684\u6BDB\u75C5\uFF0C\u91DD\u5C0D\u90A3\u500B\u6BDB\u75C5\u51FA\u984C\u7D66\u4ED6"
+  }, "\uD83C\uDFAF \u5F31\u9EDE\u5206\u6790"), window.GrowthReport && /*#__PURE__*/React.createElement("button", {
     className: "report-gen-btn",
     onClick: () => setGrowthOpen(true),
     title: "\u770B\u9019\u4F4D\u5B78\u751F\u7684\u6BCF\u9031\u5206\u6578\u8DA8\u52E2"
@@ -3999,6 +4171,11 @@ function StudentDetail({
     weekOrder: weekOrder,
     initialWeekId: selWeekId,
     onClose: () => setReportOpen(false)
+  }), weakOpen && /*#__PURE__*/React.createElement(WeakSpotModal, {
+    student: student,
+    weeks: weeks,
+    weekOrder: weekOrder,
+    onClose: () => setWeakOpen(false)
   }), growthOpen && window.GrowthReport && /*#__PURE__*/React.createElement(window.GrowthReport, {
     weeks: weeks,
     weekOrder: weekOrder,

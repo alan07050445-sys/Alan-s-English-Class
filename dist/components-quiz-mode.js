@@ -3592,7 +3592,14 @@ function QuizModePlayer({
       if (!isLast) scheduleAuto(goToNextQuestion, q.explain ? QM_AUTO_MS_EXPLAIN : QM_AUTO_MS_PLAIN);
       return;
     }
-    var nextWrongList = !q._retry ? [...wrongList, q] : wrongList;
+
+    /* v511：連「他選了哪一個」一起記下來。
+       「他把 ate 寫成 eated」比「他答錯了 ate」有用太多——
+       針對性出題要診斷的是**錯的方向**，不是錯的次數。 */
+    var nextWrongList = !q._retry ? [...wrongList, {
+      ...q,
+      _picked: optIdx
+    }] : wrongList;
     setWrongList(nextWrongList);
     var nextDeck = [...deck];
     nextDeck.splice(Math.min(deckPos + QM_RETRY_GAP, nextDeck.length), 0, {

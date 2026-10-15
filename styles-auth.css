@@ -6759,3 +6759,59 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .qs-sense-opt { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .qs-sense-opt input[type=text], .qs-sense-opt input:not([type=radio]) { flex: 1; font-size: 13px; }
 .qs-sense-opt.on input:not([type=radio]) { border-color: #1B7A3E; background: #F2F7F3; }
+
+/* ══ 🎯 v511：弱點分析（老師端） ═════════════════════════════════════════ */
+.modal-backdrop.ws-top { z-index: 1200; }
+.ws-panel {
+  width: min(760px, 94vw); max-height: 88vh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--bg-card, #fff); border: 1px solid var(--border, #DDD6C4);
+  border-radius: 20px; padding: 22px 26px 18px;
+  box-shadow: 0 24px 56px -16px rgba(21,19,14,.3);
+}
+.ws-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.ws-kicker { display: block; font-family: var(--sans); font-size: 10px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3, #6b6455); }
+.ws-head h3 { margin: 3px 0 0; font-family: var(--serif, Lora, serif); font-size: 22px; font-weight: 600; color: var(--ink, #15130E); }
+.ws-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.ws-stat {
+  flex: 1 1 86px; text-align: center; padding: 9px 6px; border-radius: 12px;
+  background: var(--bg, #F4F0E7); border: 1px solid var(--border, #DDD6C4);
+}
+.ws-stat b { display: block; font-family: var(--serif, Lora, serif); font-size: 22px; font-weight: 700; color: var(--ink, #15130E); }
+.ws-stat span { font-size: 11.5px; font-weight: 700; color: var(--ink-3, #6b6455); }
+.ws-rep { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+.ws-rep em { font-style: normal; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; color: var(--ink-3, #6b6455); }
+.ws-rep-w {
+  display: inline-flex; align-items: baseline; gap: 5px; padding: 4px 10px; border-radius: 999px;
+  background: #FBE6E2; color: #A8331F; font-size: 13px; font-weight: 800;
+}
+.ws-rep-w i { font-style: normal; font-size: 11px; opacity: .8; }
+.ws-rep-w u { text-decoration: none; font-size: 11px; font-weight: 600; opacity: .85; }
+.ws-err { padding: 9px 12px; border-radius: 10px; background: #FBE6E2; color: #A8331F; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+.ws-go, .ws-make, .ws-send {
+  display: block; width: 100%; padding: 12px; border: 0; border-radius: 12px; cursor: pointer;
+  background: var(--accent, #8B3120); color: #fff;
+  font-family: var(--sans); font-size: 15px; font-weight: 800;
+}
+.ws-go:disabled, .ws-make:disabled, .ws-send:disabled { background: var(--border, #DDD6C4); color: var(--ink-3, #6b6455); cursor: default; }
+.ws-pats { display: flex; flex-direction: column; gap: 14px; }
+.ws-pat { padding: 14px 16px; border: 1px solid var(--border, #DDD6C4); border-radius: 14px; background: var(--bg, #F4F0E7); }
+.ws-pat-h { display: flex; align-items: baseline; gap: 9px; }
+.ws-pat-h b { font-family: var(--serif, Lora, serif); font-size: 17.5px; font-weight: 600; color: var(--ink, #15130E); }
+.ws-pat-h span { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: #EDF6FD; color: #1E6FA8; }
+.ws-pat-why { margin: 5px 0 9px; font-size: 13.5px; line-height: 1.65; color: var(--ink-2, #5c554a); }
+.ws-pat-ex { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 11px; }
+.ws-pat-ex span { padding: 3px 10px; border-radius: 999px; background: #fff; border: 1px solid var(--border, #DDD6C4); font-size: 13px; font-weight: 700; }
+.ws-pat-ex i { font-style: normal; font-size: 11.5px; color: var(--ink-3, #6b6455); }
+.ws-qs { margin: 0 0 10px; padding-left: 20px; display: flex; flex-direction: column; gap: 9px; }
+.ws-qs li b { display: block; font-size: 14px; font-weight: 700; color: var(--ink, #15130E); margin-bottom: 4px; }
+.ws-opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.ws-opts em {
+  font-style: normal; font-size: 12.5px; padding: 3px 9px; border-radius: 8px;
+  background: #fff; border: 1px solid var(--border, #DDD6C4); color: var(--ink-2, #5c554a);
+}
+.ws-opts em.ok { background: #E3F3E8; border-color: #2E7D43; color: #1B5E2E; font-weight: 800; }
+.ws-sent { padding: 10px; border-radius: 10px; background: #E3F3E8; color: #1B5E2E; font-size: 13.5px; font-weight: 800; text-align: center; }
+.ws-again { display: block; width: 100%; margin-top: 7px; border: 0; background: none; cursor: pointer; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--ink-3, #6b6455); }
+.ws-again:hover { color: var(--ink, #15130E); }
+.ws-none { padding: 14px; text-align: center; color: var(--ink-3, #6b6455); font-size: 13.5px; }
+.ws-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--ink-3, #6b6455); }

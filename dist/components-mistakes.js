@@ -340,6 +340,15 @@ function MistakesPanel({
   var [drillMode, setDrillMode] = useMK(false);
   var [drillQuestions, setDrillQuestions] = useMK(null);
   var [subj, setSubj] = useMK('all');
+  /* 🎯 v511：老師照這孩子的錯題出的練習（practice/{email}，老師寫、他只讀自己那一份）。
+     刻意放在「我的錯題」裡：他會來這裡，就是因為知道自己哪裡不會。 */
+  var [fixSets, setFixSets] = useMK([]);
+  var [fixLabel, setFixLabel] = useMK('');
+  useMKE(() => {
+    var em = String(user && user.email || '').toLowerCase();
+    if (!em || !window.subscribePractice) return;
+    return window.subscribePractice(em, doc => setFixSets(window.practiceSets ? window.practiceSets(doc) : []));
+  }, [user && user.email]);
   var allWrong = useMKM(() => window.collectWrongQuestions(progressItems, weeks, weekOrder, categories), [progressItems, weeks, weekOrder, categories]);
 
   // 有錯題的科目才列出來（沒有錯的科目不該佔一個按鈕）
@@ -379,13 +388,32 @@ function MistakesPanel({
   };
   var perStar = window.FIX_STAR || 1;
   var startDrill = () => {
+    setFixLabel('');
     setDrillQuestions(pool.slice(0, MK_BATCH)); // v465：一次只練 5 題；v505：只抽選到的那一科
+    setDrillMode(true);
+  };
+  /* v511：老師出的那一份直接用現成的重練畫面播——它本來就吃
+     { q, answer, options, correct }，格式對得上就不用再寫一套播放器。
+     ⚠ type 要給一個「不在 MK_REVEAL_ONLY 裡」的值，否則會被當成不適合選擇題而只顯示答案。 */
+  var startFixSet = set => {
+    setFixLabel(set.zh || '老師出的練習');
+    setDrillQuestions((set.questions || []).map((q, i) => ({
+      q: q.q,
+      options: q.options,
+      correct: q.answer,
+      answer: (q.options || [])[q.answer] || '',
+      explain: q.explain || '',
+      type: 'quiz',
+      itemId: 'practice_' + (set.id || 'x') + '_' + i,
+      cat: set.cat || '',
+      weekLabel: '老師出的'
+    })));
     setDrillMode(true);
   };
   if (drillMode && drillQuestions) {
     return /*#__PURE__*/React.createElement(MistakesDrill, {
       questions: drillQuestions,
-      subjLabel: subjLabel,
+      subjLabel: fixLabel || subjLabel,
       user: user,
       onClose: () => {
         setDrillMode(false);
@@ -411,7 +439,19 @@ function MistakesPanel({
   }, /*#__PURE__*/React.createElement(window.Icon, {
     name: "close",
     size: 16
-  }))), allWrong.length === 0 ?
+  }))), allWrong.length === 0 && fixSets.length > 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "mk-fix"
+  }, fixSets.map(set => /*#__PURE__*/React.createElement("button", {
+    key: set.id,
+    className: "mk-fix-card",
+    onClick: () => startFixSet(set)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mk-fix-ico"
+  }, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("span", {
+    className: "mk-fix-tx"
+  }, /*#__PURE__*/React.createElement("b", null, "\u8001\u5E2B\u91DD\u5C0D\u4F60\u51FA\u7684\u7DF4\u7FD2"), /*#__PURE__*/React.createElement("span", null, set.zh, "\u3000\xB7\u3000", (set.questions || []).length, " \u984C")), /*#__PURE__*/React.createElement("span", {
+    className: "mk-fix-go"
+  }, "\u958B\u59CB \u2192")))) : allWrong.length === 0 ?
   /*#__PURE__*/
   /* Empty state */
   React.createElement("div", {
@@ -423,7 +463,19 @@ function MistakesPanel({
     className: "mk-empty-msg"
   }, "\u592A\u68D2\u4E86\uFF01\u76EE\u524D\u6C92\u6709\u932F\u984C"), /*#__PURE__*/React.createElement("p", {
     className: "mk-empty-sub"
-  }, "\u7B54\u932F\u7684\u984C\u76EE\u6703\u81EA\u52D5\u6536\u9032\u4F86\uFF0C\u65B9\u4FBF\u96A8\u6642\u8907\u7FD2")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "\u7B54\u932F\u7684\u984C\u76EE\u6703\u81EA\u52D5\u6536\u9032\u4F86\uFF0C\u65B9\u4FBF\u96A8\u6642\u8907\u7FD2")) : /*#__PURE__*/React.createElement(React.Fragment, null, fixSets.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "mk-fix"
+  }, fixSets.map(set => /*#__PURE__*/React.createElement("button", {
+    key: set.id,
+    className: "mk-fix-card",
+    onClick: () => startFixSet(set)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mk-fix-ico"
+  }, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("span", {
+    className: "mk-fix-tx"
+  }, /*#__PURE__*/React.createElement("b", null, "\u8001\u5E2B\u91DD\u5C0D\u4F60\u51FA\u7684\u7DF4\u7FD2"), /*#__PURE__*/React.createElement("span", null, set.zh, "\u3000\xB7\u3000", (set.questions || []).length, " \u984C")), /*#__PURE__*/React.createElement("span", {
+    className: "mk-fix-go"
+  }, "\u958B\u59CB \u2192")))), /*#__PURE__*/React.createElement("div", {
     className: "mk-summary"
   }, "\u9084\u6709 ", /*#__PURE__*/React.createElement("strong", null, allWrong.length), " \u984C\u53EF\u4EE5\u8A02\u6B63", /*#__PURE__*/React.createElement("span", {
     className: "mk-reward"

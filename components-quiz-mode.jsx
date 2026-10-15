@@ -3021,7 +3021,10 @@ function QuizModePlayer({ cat, item, questions, progressKey, weekId, allQuizItem
       return;
     }
 
-    const nextWrongList = !q._retry ? [...wrongList, q] : wrongList;
+    /* v511：連「他選了哪一個」一起記下來。
+       「他把 ate 寫成 eated」比「他答錯了 ate」有用太多——
+       針對性出題要診斷的是**錯的方向**，不是錯的次數。 */
+    const nextWrongList = !q._retry ? [...wrongList, { ...q, _picked: optIdx }] : wrongList;
     setWrongList(nextWrongList);
     const nextDeck = [...deck];
     nextDeck.splice(Math.min(deckPos + QM_RETRY_GAP, nextDeck.length), 0, { ...q, _retry: true });
