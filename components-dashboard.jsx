@@ -2347,8 +2347,10 @@ function HwBubble({ name, secs, title, note }) {
 
 function HwRemind() {
   // v426：Alan「自動提醒是自動提醒 但我主動提醒是主動提醒 不要混在一起」
-  //   ⏰ 自動提醒：每天 18:00 系統自己照規則發，這裡只能「看今晚會發什麼」
-  //   📣 主動提醒：老師自己挑對象、寫一句話、按下去就發；完全不影響自動提醒的紀錄
+  // 🔴 v514（Alan：「固定自動提醒幫我關閉，現在全部改成我手動提醒，家長覺得很吵」）：
+  //   每天 18:00 的自動提醒已經停掉（Worker 的 scheduled() 不再發送）。
+  //   這一區沒有整個拿掉，是因為「誰還沒完成」這份清單本身很有用——
+  //   改成老師自己決定要不要照它發，按下去才會發。
   const [pass, setPass]     = useDash(() => { try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; } });
   const [roster, setRoster] = useDash([]);
   useDashE(() => window.subscribeRoster(setRoster, () => {}), []);
@@ -2392,6 +2394,23 @@ function HwRemind() {
     setABusy(false);
   };
 
+  /* v514：本來這份清單只有系統自己會發。自動提醒停掉之後，
+     改成老師看完預覽、自己決定要不要發——按下去才會送出去。 */
+  const [aSendBusy, setASendBusy] = useDash(false);
+  const sendAuto = async () => {
+    const p = usePass();
+    if (!p) { setAMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
+    const n = (aRes && (aRes.sent || []).length) || 0;
+    if (!confirm(`確定現在發出去嗎？\n\n會傳給 ${n} 位家長，內容就是上面預覽的那些。`)) return;
+    setASendBusy(true); setAMsg(null);
+    try {
+      const d = await window.lineRunReminders(false, p);
+      setARes(d);
+      setAMsg({ type: 'ok', text: `✅ 發出去了：${(d.sent || []).length} 位家長` });
+    } catch (e) { setAMsg({ type: 'err', text: '⚠️ ' + errText(e) }); }
+    setASendBusy(false);
+  };
+
   const loadLogs = async () => {
     const p = usePass();
     if (!p) { setAMsg({ type: 'err', text: '請先輸入管理密碼' }); return; }
@@ -2428,15 +2447,23 @@ function HwRemind() {
           <input className="notify-pass" type="password" placeholder="管理密碼（ADMIN_PASS）" value={pass} onChange={e => setPass(e.target.value)} />
         </div>
 
-        {/* ── ⏰ 自動提醒 ── */}
+        {/* ── 📋 還沒完成的清單（v514：自動發已停用，改成老師自己發）── */}
         <section className="hwr-sec auto">
           <div className="hwr-sec-head">
-            <b>⏰ 自動提醒</b>
-            <span>每天 18:00 系統自己發、照固定規則。這裡只能看，不會發。</span>
+            <b>📋 誰還沒完成</b>
+            <span>每天 18:00 的自動提醒<b className="hwr-off">已經關掉</b>了。這份清單還在，但要你按才會發。</span>
+          </div>
+          <div className="hwr-offnote">
+            家長想知道功課，請他們在官方 LINE 輸入「<b>作業</b>」就查得到——那條路沒有關。
           </div>
           <button className="notify-send hwr-preview" onClick={previewAuto} disabled={aBusy}>
-            {aBusy ? '讀取中…' : '🔍 看今晚 18:00 會發什麼'}
+            {aBusy ? '讀取中…' : '🔍 看現在誰還沒完成'}
           </button>
+          {aRes && (aRes.sent || []).length > 0 && (
+            <button className="notify-send hwr-sendnow" onClick={sendAuto} disabled={aSendBusy} style={{ marginTop: 8 }}>
+              {aSendBusy ? '發送中…' : `📤 就照這份發出去（${(aRes.sent || []).length} 位家長）`}
+            </button>
+          )}
           <button className="notify-send hwr-preview" onClick={loadLogs} disabled={lBusy} style={{ marginTop: 8 }}>
             {lBusy ? '讀取中…' : '📜 看實際發出去的紀錄'}
           </button>
@@ -2532,7 +2559,7 @@ function HwRemind() {
       </div>
 
       <aside className="notify-side">
-        <h4>⏰ 自動提醒（每天 18:00）</h4>
+        <h4>📋 作業提醒紀錄（v514 起只有手動發的）</h4>
         <ol>
           <li>出現<b>沒被通知過的新作業</b></li>
           <li>有家長<b>剛綁定</b>、還沒收過這位孩子的提醒</li>
@@ -3007,7 +3034,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'lessons',  ico: '📒', label: '上課紀錄', sub: '掌握度／功課／下次進度', sec: '每天用' },
     { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點', sec: '每天用' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告',    sec: '每天用' },
-    { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '自動提醒排程', sec: '設定一次' },
+    { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '手動發（自動已關）', sec: '每天用' },
     { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態', sec: '設定一次' },
     { id: 'shop',     ico: '🛍️', label: '商店', sub: '兌換商品維護',     sec: '設定一次' },
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單', sec: '設定一次' },

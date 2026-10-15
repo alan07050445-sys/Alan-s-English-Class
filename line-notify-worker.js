@@ -1,7 +1,8 @@
 /*
  * Alan's English Class — LINE 通知 Worker（v7：關鍵字秒回＋AI 每次都回但範圍寫死＋快速按鈕）
  * ────────────────────────────────────────────────────────────
- * 獨立 Worker。負責：發公告 + 家長自助綁定 + 作業沒完成自動提醒。
+ * 獨立 Worker。負責：發公告 + 家長自助綁定 + 家長自己查作業 + 老師手動提醒。
+ * ⚠ v9 起「每天 18:00 自動提醒」已停用（Alan：家長覺得很吵）——scheduled() 什麼都不做。
  *
  * ▍需要的環境變數 / 綁定
  *   Secret  LINE_TOKEN    = Channel access token
@@ -9,7 +10,7 @@
  *   Secret  ADMIN_PASS    = 管理密碼
  *   Secret  FIREBASE_SA   = Firebase 服務帳號 JSON 整包（功能B 讀進度用）
  *   KV      LINKS         = Workers KV，變數名稱【 LINKS 】
- *   Cron    0 10 * * *    = 每天 UTC 10:00 = 台灣 18:00（Settings → Triggers）
+ *   Cron    ❌ 不再需要（v9 起 scheduled() 不發送；Triggers 刪不刪都可以）
  *
  * ▍路由
  *   GET  /                健康檢查
@@ -19,7 +20,7 @@
  *   POST /sync-roster     {roster}
  *   GET  /links
  *   POST /unlink          {lineUserId, email?}
- *   POST /run-reminders   自動提醒（?dry=1 只預覽「今晚會發什麼」）
+ *   POST /run-reminders   照「還沒完成」清單提醒（?dry=1 預覽）——v9 起只有老師按才會跑
  *   GET  /run-log         最近 10 次自動提醒實際發了什麼（LINE 後台看不到 API 推播）
  *   POST /manual          老師主動提醒 {target, note}（?dry=1 預覽）——跟自動提醒的紀錄完全分開
  *   GET  /diag            最近 30 則 LINE 訊息的處理紀錄
@@ -259,7 +260,7 @@ function welcomeText(english, ex, displayName) {
   const hi = displayName ? `${displayName} 您好，歡迎加入 Alan's English Class 👋` : "歡迎加入 Alan's English Class 👋";
   return (
     hi + '\n\n' +
-    '這裡會發班級通知，也會提醒孩子還沒完成的作業。\n' +
+    '這裡會發班級通知，也可以隨時查孩子的作業。\n' +
     '開始之前，先讓我把您和孩子的帳號連起來 🔗\n\n' +
     askNameLine(english, ex) + '\n\n' +
     `有兩位孩子的話，可以一次輸入，例如：\n${ex.two}\n\n` +
@@ -269,8 +270,8 @@ function welcomeText(english, ex, displayName) {
 function doneText(children, english) {
   return (
     '綁定完成 🎉\n\n目前這個 LINE 已綁定：\n' + listChildren(children) + '\n\n' +
-    '之後班級通知與作業提醒都會傳到這裡 📩\n' +
-    '隨時輸入「作業」就能查孩子還有哪些沒完成 📚\n' +
+    '之後老師的班級通知都會傳到這裡 📩\n' +
+    '想知道功課的話，隨時輸入「作業」就能查孩子還有哪些沒完成 📚\n' +
     `（要再新增孩子，隨時回覆他的${english ? '英文名字' : '姓名'}就可以；一個 LINE 最多 ${MAX_CHILDREN} 位）`
   );
 }
@@ -1721,15 +1722,22 @@ export default {
     return json({ ok: false, error: 'not_found' }, 404, origin);
   },
 
-  // 每日 Cron（Settings → Triggers 設 0 10 * * *）
+  /* 🔴 v9（Alan：「固定自動提醒幫我關閉，現在全部改成我手動提醒，家長覺得很吵。
+       他們如果想要知道功課，就自己問官方 LINE 就可以；如果我有重要訊息我再主動通知」）
+
+     每天 18:00 的自動提醒**停掉**。這裡故意留一個什麼都不做的 scheduled()，
+     而不是整個刪掉——就算 Cloudflare 上的 Cron Trigger 忘了移除、時間到了還是會觸發，
+     觸發到這裡也不會發出任何訊息。（Alan 可以順手去 Settings → Triggers 把它刪掉，
+     但忘了也不會有事。）
+
+     ⚠ runReminders 本身留著，沒有刪：
+       · 老師端「預覽今晚會發什麼」還在用（?dry=1）
+       · 老師想手動照那份清單發一次時也是走它
+       差別只在「沒有人會自動呼叫它了」。
+     ⚠ 家長查作業的那條路完全不動——他們在聊天室輸入「作業」照樣查得到，
+       這正是 Alan 說的「他們想知道功課就自己問官方 LINE」。 */
   async scheduled(event, env, ctx) {
-    /* v8（Alan：「自動推播不會出現在官方 LINE 的聊天裡，我看不到發了什麼」）：
-       用 Messaging API 推出去的訊息不會進 LINE 官方帳號後台的聊天室
-       ——那裡只留「從聊天室手動打的」與「家長傳進來的」。
-       以前這份報告跑完就丟掉了，所以老師手上等於沒有任何紀錄。
-       現在把每一次自動提醒的結果存起來（留最近 10 次），老師端就看得到
-       「幾點發的、發給誰、內容一字不差是什麼、誰被跳過又為什麼」。 */
-    ctx.waitUntil(runReminders(env, false).then((R) => saveRunLog(env, R, 'cron')).catch(() => {}));
+    return;   // 自動提醒已停用（v9）
   },
 };
 

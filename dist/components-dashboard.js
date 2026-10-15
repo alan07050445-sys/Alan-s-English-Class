@@ -2859,8 +2859,10 @@ function HwBubble({
 }
 function HwRemind() {
   // v426：Alan「自動提醒是自動提醒 但我主動提醒是主動提醒 不要混在一起」
-  //   ⏰ 自動提醒：每天 18:00 系統自己照規則發，這裡只能「看今晚會發什麼」
-  //   📣 主動提醒：老師自己挑對象、寫一句話、按下去就發；完全不影響自動提醒的紀錄
+  // 🔴 v514（Alan：「固定自動提醒幫我關閉，現在全部改成我手動提醒，家長覺得很吵」）：
+  //   每天 18:00 的自動提醒已經停掉（Worker 的 scheduled() 不再發送）。
+  //   這一區沒有整個拿掉，是因為「誰還沒完成」這份清單本身很有用——
+  //   改成老師自己決定要不要照它發，按下去才會發。
   var [pass, setPass] = useDash(() => {
     try {
       return localStorage.getItem('lineAdminPass') || '';
@@ -2922,6 +2924,38 @@ function HwRemind() {
       });
     }
     setABusy(false);
+  };
+
+  /* v514：本來這份清單只有系統自己會發。自動提醒停掉之後，
+     改成老師看完預覽、自己決定要不要發——按下去才會送出去。 */
+  var [aSendBusy, setASendBusy] = useDash(false);
+  var sendAuto = async () => {
+    var p = usePass();
+    if (!p) {
+      setAMsg({
+        type: 'err',
+        text: '請先輸入管理密碼'
+      });
+      return;
+    }
+    var n = aRes && (aRes.sent || []).length || 0;
+    if (!confirm(`確定現在發出去嗎？\n\n會傳給 ${n} 位家長，內容就是上面預覽的那些。`)) return;
+    setASendBusy(true);
+    setAMsg(null);
+    try {
+      var d = await window.lineRunReminders(false, p);
+      setARes(d);
+      setAMsg({
+        type: 'ok',
+        text: `✅ 發出去了：${(d.sent || []).length} 位家長`
+      });
+    } catch (e) {
+      setAMsg({
+        type: 'err',
+        text: '⚠️ ' + errText(e)
+      });
+    }
+    setASendBusy(false);
   };
   var loadLogs = async () => {
     var p = usePass();
@@ -3015,11 +3049,22 @@ function HwRemind() {
     className: "hwr-sec auto"
   }, /*#__PURE__*/React.createElement("div", {
     className: "hwr-sec-head"
-  }, /*#__PURE__*/React.createElement("b", null, "\u23F0 \u81EA\u52D5\u63D0\u9192"), /*#__PURE__*/React.createElement("span", null, "\u6BCF\u5929 18:00 \u7CFB\u7D71\u81EA\u5DF1\u767C\u3001\u7167\u56FA\u5B9A\u898F\u5247\u3002\u9019\u88E1\u53EA\u80FD\u770B\uFF0C\u4E0D\u6703\u767C\u3002")), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("b", null, "\uD83D\uDCCB \u8AB0\u9084\u6C92\u5B8C\u6210"), /*#__PURE__*/React.createElement("span", null, "\u6BCF\u5929 18:00 \u7684\u81EA\u52D5\u63D0\u9192", /*#__PURE__*/React.createElement("b", {
+    className: "hwr-off"
+  }, "\u5DF2\u7D93\u95DC\u6389"), "\u4E86\u3002\u9019\u4EFD\u6E05\u55AE\u9084\u5728\uFF0C\u4F46\u8981\u4F60\u6309\u624D\u6703\u767C\u3002")), /*#__PURE__*/React.createElement("div", {
+    className: "hwr-offnote"
+  }, "\u5BB6\u9577\u60F3\u77E5\u9053\u529F\u8AB2\uFF0C\u8ACB\u4ED6\u5011\u5728\u5B98\u65B9 LINE \u8F38\u5165\u300C", /*#__PURE__*/React.createElement("b", null, "\u4F5C\u696D"), "\u300D\u5C31\u67E5\u5F97\u5230\u2014\u2014\u90A3\u689D\u8DEF\u6C92\u6709\u95DC\u3002"), /*#__PURE__*/React.createElement("button", {
     className: "notify-send hwr-preview",
     onClick: previewAuto,
     disabled: aBusy
-  }, aBusy ? '讀取中…' : '🔍 看今晚 18:00 會發什麼'), /*#__PURE__*/React.createElement("button", {
+  }, aBusy ? '讀取中…' : '🔍 看現在誰還沒完成'), aRes && (aRes.sent || []).length > 0 && /*#__PURE__*/React.createElement("button", {
+    className: "notify-send hwr-sendnow",
+    onClick: sendAuto,
+    disabled: aSendBusy,
+    style: {
+      marginTop: 8
+    }
+  }, aSendBusy ? '發送中…' : `📤 就照這份發出去（${(aRes.sent || []).length} 位家長）`), /*#__PURE__*/React.createElement("button", {
     className: "notify-send hwr-preview",
     onClick: loadLogs,
     disabled: lBusy,
@@ -3142,7 +3187,7 @@ function HwRemind() {
     nameOf: nameOf
   }))), /*#__PURE__*/React.createElement("aside", {
     className: "notify-side"
-  }, /*#__PURE__*/React.createElement("h4", null, "\u23F0 \u81EA\u52D5\u63D0\u9192\uFF08\u6BCF\u5929 18:00\uFF09"), /*#__PURE__*/React.createElement("ol", null, /*#__PURE__*/React.createElement("li", null, "\u51FA\u73FE", /*#__PURE__*/React.createElement("b", null, "\u6C92\u88AB\u901A\u77E5\u904E\u7684\u65B0\u4F5C\u696D")), /*#__PURE__*/React.createElement("li", null, "\u6709\u5BB6\u9577", /*#__PURE__*/React.createElement("b", null, "\u525B\u7D81\u5B9A"), "\u3001\u9084\u6C92\u6536\u904E\u9019\u4F4D\u5B69\u5B50\u7684\u63D0\u9192"), /*#__PURE__*/React.createElement("li", null, "\u6BCF\u9031", /*#__PURE__*/React.createElement("b", null, "\u661F\u671F\u4E00"), "\u56FA\u5B9A\u56DE\u5831\u4E00\u6B21"), /*#__PURE__*/React.createElement("li", null, "\u672C\u9031\u6709\u4F5C\u696D", /*#__PURE__*/React.createElement("b", null, "\u660E\u5929\u5230\u671F"))), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("h4", null, "\uD83D\uDCCB \u4F5C\u696D\u63D0\u9192\u7D00\u9304\uFF08v514 \u8D77\u53EA\u6709\u624B\u52D5\u767C\u7684\uFF09"), /*#__PURE__*/React.createElement("ol", null, /*#__PURE__*/React.createElement("li", null, "\u51FA\u73FE", /*#__PURE__*/React.createElement("b", null, "\u6C92\u88AB\u901A\u77E5\u904E\u7684\u65B0\u4F5C\u696D")), /*#__PURE__*/React.createElement("li", null, "\u6709\u5BB6\u9577", /*#__PURE__*/React.createElement("b", null, "\u525B\u7D81\u5B9A"), "\u3001\u9084\u6C92\u6536\u904E\u9019\u4F4D\u5B69\u5B50\u7684\u63D0\u9192"), /*#__PURE__*/React.createElement("li", null, "\u6BCF\u9031", /*#__PURE__*/React.createElement("b", null, "\u661F\u671F\u4E00"), "\u56FA\u5B9A\u56DE\u5831\u4E00\u6B21"), /*#__PURE__*/React.createElement("li", null, "\u672C\u9031\u6709\u4F5C\u696D", /*#__PURE__*/React.createElement("b", null, "\u660E\u5929\u5230\u671F"))), /*#__PURE__*/React.createElement("p", {
     className: "notify-note"
   }, "\u540C\u4E00\u500B\u5B69\u5B50\u4E00\u5929\u6700\u591A\u4E00\u5247\u3002\u53EA\u5269\u300C\u53EF\u4EE5\u5148\u9810\u7FD2\u300D\u6642\u4E0D\u767C\u3002"), /*#__PURE__*/React.createElement("h4", null, "\uD83D\uDCE3 \u4E3B\u52D5\u63D0\u9192"), /*#__PURE__*/React.createElement("p", {
     className: "notify-note"
@@ -3680,8 +3725,8 @@ function TeacherDashboard({
     id: 'hwremind',
     ico: '🔔',
     label: '作業提醒',
-    sub: '自動提醒排程',
-    sec: '設定一次'
+    sub: '手動發（自動已關）',
+    sec: '每天用'
   }, {
     id: 'linelink',
     ico: '🔗',

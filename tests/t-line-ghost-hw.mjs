@@ -64,8 +64,27 @@ const workerTypes = new Set([...src.slice(src.indexOf('function playableItem'), 
 const missing = [...siteTypes].filter(t => !workerTypes.has(t));
 ok('⭐ 網站算得出來的題型，Worker 都認得：' + (missing.length ? '缺 ' + missing.join('、') : '全部都有'), missing.length === 0);
 
-console.log('\n【4】v460：自動提醒要留下「實際發了什麼」的紀錄');
-ok('⭐ Cron 跑完會存紀錄（以前跑完就丟掉了）', /runReminders\(env, false\)\.then\(\(R\) => saveRunLog\(env, R, 'cron'\)\)/.test(src));
+console.log('\n【4】v460：提醒要留下「實際發了什麼」的紀錄');
+/* 🔴 v514（Alan：「固定自動提醒幫我關閉，現在全部改成我手動提醒，家長覺得很吵」）：
+   這一條本來守「Cron 跑完會存紀錄」。自動提醒停掉之後，要守的變成
+   **Cron 不可以再發出任何訊息**——而且是「停在 Worker 裡」，
+   不是只靠 Alan 記得去 Cloudflare 把 Trigger 刪掉。 */
+// ⚠ 行尾的 // 註解也要拿掉（`return;   // …` 這種），不然比對會卡在註解上
+const noC = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+ok('⭐⭐ 每天 18:00 的自動提醒已停用（scheduled 什麼都不做）',
+   /async scheduled\([^)]*\)\s*\{\s*return;\s*\}/.test(noC));
+ok('⭐⭐ Cron 不會再呼叫 runReminders（就算 Trigger 忘了刪也不會發）', (() => {
+   // ⚠ 只看 scheduled 的函式主體——檔尾的 export 清單裡也有 runReminders 這個字，
+   //   用「附近幾百個字元」比會被它打到（第一版就是）。
+   const i = noC.indexOf('async scheduled');
+   const body = noC.slice(i, noC.indexOf('},', i));
+   return i > 0 && !/runReminders/.test(body); })());
+ok('⭐ 但 runReminders 本身留著——老師要手動發、或看「誰還沒完成」都還要用它',
+   /async function runReminders\(env, dryRun\)/.test(src) && /path === '\/run-reminders'/.test(src));
+ok('⭐ 家長自己查作業那條路沒有關（Alan：「他們想知道功課就自己問官方 LINE」）',
+   /輸入「作業」/.test(src));
+ok('⭐ 綁定訊息不可以再承諾會自動提醒（承諾了卻不發＝騙家長）',
+   !/也會提醒孩子還沒完成的作業/.test(src) && !/班級通知與作業提醒都會傳到這裡/.test(src));
 ok('手動跑的也會留', /if \(!dry\) await saveRunLog\(env, R, 'manual'\);/.test(src));
 ok('只留最近 10 次（KV 不要無限長大）', /list\.slice\(0, 10\)/.test(src));
 ok('⭐ 老師端讀得到（/run-log，要密碼）',
