@@ -861,9 +861,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
     })();
   };
 
+  const autoPickRef = React.useRef(false);   // v510：這次的選取是「自動選的」還是人點的
   useQME(() => {
     if (editMode || selectedItem || sidebarItems.length === 0) return;
-    // 從「今天的任務」點進來 → 直接打開那一個單元
+    // 從「今天的任務」點進來 → 直接打開那一個單元（這算「人點的」，要展開讓他看到自己在哪）
     const wanted = initialItemId && sidebarItems.find(it => it.id === initialItemId);
     if (wanted) { selectItem(wanted); return; }
     // v261: 題庫視角不自動選第一個單元——自動選會連帶展開它的分組，Alan 要「進來時全部收合」
@@ -876,6 +877,14 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
       homeworkMainIds.has(it.id) ||
       it.id === fallbackMainId
     );
+    /* 🔴 v510（Alan：「側邊欄還是沒改」）：這一行就是原因。
+       桌機進分類時會**自動**選第一個單元，而「選中就展開它所在的組」的規則
+       緊接著把那一組打開——所以一進來永遠是展開的，跟 v505 改的預設值無關。
+       （同一個坑 v261 在題庫視角就踩過，上面那行註解寫得清清楚楚：
+         「自動選會連帶展開它的分組，Alan 要『進來時全部收合』」，
+         我 v505 只看預設值沒看這裡。）
+       做記號：自動選的不要展開分組；學生自己點、或從作業點進來的才展開。 */
+    autoPickRef.current = true;
     selectItem(firstMain || sidebarItems[0]);
   }, [cat.id, editMode, sidebarItems.length, fallbackMainId]);
 
@@ -1075,6 +1084,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   useQME(() => { setOpenGroups({}); }, [cat && cat.id, weekId]);
   useQME(() => {
     if (!grouped || !selectedItem) return;
+    // v510：自動選的那一次不展開——不然「預設收起來」永遠看不到效果
+    if (autoPickRef.current) { autoPickRef.current = false; return; }
     const g = grouped.find(x => x.items && x.items.some(it => it.id === selectedItem.id));
     if (g && !openGroups[g.key]) setOpenGroups({ [g.key]: true });
   }, [selectedItem && selectedItem.id, grouped]);

@@ -30,6 +30,23 @@ ok('   自動展開選中單元那一組要留著，不然從作業點進來看�
    /grouped\.find\(x => x\.items && x\.items\.some\(it => it\.id === selectedItem\.id\)\)/.test(qm));
 ok('   初始值是「全部收起來」', /const \[openGroups, setOpenGroups\] = useQM\(\{\}\);/.test(qm));
 
+/* 🔴 v510（Alan 第三次回報「側邊欄還是沒改」）：前兩次都沒找到真正的原因。
+   不是預設值寫錯（openGroups 一開始就是 {}），是**桌機一進分類就自動選第一個單元**，
+   而「選中就展開它所在的組」緊接著把那一組打開——所以永遠是展開的。
+   同一個坑 v261 在題庫視角踩過，那行註解就寫著「自動選會連帶展開它的分組」，
+   我前兩次都沒讀到那裡。 */
+ok('⭐⭐ 自動選第一個單元時要做記號（autoPickRef）',
+   /const autoPickRef = React\.useRef\(false\);/.test(qm)
+   && /autoPickRef\.current = true;\s*\n\s*selectItem\(firstMain \|\| sidebarItems\[0\]\);/.test(qm));
+ok('⭐⭐ 自動選的那一次不展開分組（否則「預設收起來」永遠看不到效果）',
+   /if \(autoPickRef\.current\) \{ autoPickRef\.current = false; return; \}/.test(qm));
+ok('⭐ 從「今天的任務」點進來仍然要展開（不然看不到自己在哪）', (() => {
+   // wanted 那條路在設記號之前就 return 了，所以 flag 還是 false
+   const i = qm.indexOf('const wanted = initialItemId');
+   const j = qm.indexOf('autoPickRef.current = true;', i);
+   const k = qm.indexOf('if (wanted) { selectItem(wanted); return; }', i);
+   return k > i && j > k; })());
+
 console.log('\n【1b】v509：真正每天會看到的那一張——「今天的任務」');
 /* ⚠ v505 我修錯地方了：Alan 給的圖是側欄，我只改了側欄的 qm-ugroup，
    但他每天看到的是 TodayTasks 的 tt-group，兩套各自有自己的收合狀態。
