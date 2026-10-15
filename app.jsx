@@ -589,6 +589,7 @@ function App() {
      每個年級一份（class/pacing_g4）。訂閱而不是讀一次——Alan 可能在別台電腦重匯入。
      ⚠ 沒匯入的年級 pacing 就是 null，畫面上完全不顯示（不要留一條空的）。 */
   const [pacing, setPacing] = useAppState(null);
+  const [examSide, setExamSide] = useAppState(null);   // v513：考前複習包（'it' / 'lt'）
   const [paceOpen, setPaceOpen] = useAppState(false);
   useAppEffect(() => {
     setPacing(null);
@@ -1929,6 +1930,8 @@ function App() {
             pace={paceWeek}
             nextF={paceNextF}
             onPacing={/^g[1-6]$/.test(String(grade)) ? () => setPaceOpen(true) : null}
+            /* 📝 v513：formative 那兩塊點下去＝考前複習包 */
+            onExamPrep={(pacing && window.ExamPrepModal) ? (sd => setExamSide(sd)) : null}
             onDeleteWeek={handleDeleteWeek}
             onArchiveWeek={handleArchiveWeek}
             onExport={() => setExportOpen(true)}
@@ -2267,6 +2270,23 @@ function App() {
             onClose={() => { setRcGenOpen(false); setRegenFor(null); }}
             onCreate={handleReadingCreate}
           />
+          {/* 📝 v513：考前複習包——算範圍、撈字，題目交給下面的 QuickSetModal 出 */}
+          {window.ExamPrepModal && (
+            <window.ExamPrepModal
+              open={!!examSide} side={examSide}
+              pace={pacing} weeks={weeks} weekOrder={viewOrder} weekId={weekId}
+              categories={activeCategories}
+              onClose={() => setExamSide(null)}
+              onGenerate={({ words, title }) => {
+                setExamSide(null);
+                /* 走「在這一組再出一份」那條既有的路：單字先填好，題型預設全開。
+                   ⚠ 用 regenFor 是因為 QuickSetModal 的 defaultText／defaultTitle 都吃它。 */
+                setRegenFor({ name: title, catId: 'vocab',
+                  text: window.examPasteText ? window.examPasteText(words) : '' });
+                setQuickSetOpen(true);
+              }}
+            />
+          )}
           <window.QuickSetModal
             open={quickSetOpen}
             categories={activeCategories}

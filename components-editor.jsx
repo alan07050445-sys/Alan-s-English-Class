@@ -7345,5 +7345,98 @@ function rcBuildItems({ title, passage, mcq, sa, blocks, skillQs, background }) 
   return out;
 }
 
-Object.assign(window, { PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+
+/* ══ 📝 v513：考前複習包 ═══════════════════════════════════════════════════
+   Alan：外師每 3 週、中師每 4 週一次 formative。pacingNextFormative 早就知道
+   下一次在第幾週——缺的只是「那次考試涵蓋哪幾週、那幾週教過哪些字」。
+
+   ⭐ 這裡刻意**不新寫一套出題 AI**：撈完字之後直接交給 QuickSetModal
+     （一鍵出單字 7 種題型，而且 v466 的 avoid 會讓題目跟原本那幾週不一樣）。
+     AI 做不好、程式做得準的那一段（算範圍、把字撈齊）才是這個元件在做的事。 */
+function ExamPrepModal({ open, side, pace, weeks, weekOrder, weekId, categories, onClose, onGenerate }) {
+  const [drop, setDrop] = useS({});     // 取消勾選的字（有些字他不想再考）
+  useE(() => { if (open) setDrop({}); }, [open, side]);
+  if (!open) return null;
+
+  const range = window.examRange ? window.examRange(pace, weekId, side) : null;
+  const src = (range && window.examSource) ? window.examSource(weeks, weekOrder, range, categories)
+                                           : { words: [], topics: [], weeks: [], dup: 0 };
+  const sideZh = side === 'it' ? '外師' : '中師';
+  const keep = src.words.filter(w => !drop[w.term.toLowerCase()]);
+
+  return ReactDOM.createPortal(
+    <div className="modal-backdrop ep-top" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="ep-panel" onClick={e => e.stopPropagation()}>
+        <div className="ep-head">
+          <div>
+            <span className="ep-kicker">Exam Prep</span>
+            <h3>📝 {sideZh}{range ? ` ${range.name}` : ''} 考前複習</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}><window.Icon name="close" size={16}/></button>
+        </div>
+
+        {!range ? (
+          <div className="ep-none">這個年級的進度表上，{sideZh}後面沒有排 formative 了。</div>
+        ) : (
+          <>
+            <div className="ep-range">
+              <b>第 {range.from}–{range.to} 週</b>
+              <span>{range.in === 0 ? '就是這週考' : `還有 ${range.in} 週`}</span>
+            </div>
+
+            {src.weeks.length === 0 ? (
+              <div className="ep-none">這個範圍裡還沒有建任何單元——先把那幾週的課建起來，這裡才撈得到字。</div>
+            ) : (
+              <>
+                <div className="ep-weeks">
+                  {src.weeks.map(w => (
+                    <span key={w.wid} className={'ep-wk' + (w.n_words ? '' : ' empty')}>
+                      {w.label}<i>{w.n_words ? `${w.n_words} 字` : '沒有單字'}</i>
+                    </span>
+                  ))}
+                </div>
+                {src.topics.length > 0 && (
+                  <div className="ep-topics">
+                    <em>涵蓋的課</em>
+                    {src.topics.slice(0, 10).map((t, i) => <span key={i}>{t}</span>)}
+                  </div>
+                )}
+
+                <div className="ep-words">
+                  <div className="ep-words-h">
+                    <b>{keep.length} 個字</b>
+                    {src.dup > 0 && <span>（跨週重複的 {src.dup} 個已經合併）</span>}
+                    <button className="ep-all" onClick={() => setDrop({})}>全選</button>
+                  </div>
+                  <div className="ep-chips">
+                    {src.words.map(w => {
+                      const k = w.term.toLowerCase();
+                      return (
+                        <button key={k} className={'ep-chip' + (drop[k] ? ' off' : '')}
+                          onClick={() => setDrop(d => ({ ...d, [k]: !d[k] }))}
+                          title={w.zh || ''}>{w.term}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button className="ep-go" disabled={keep.length < 2}
+                  onClick={() => onGenerate({
+                    words: keep,
+                    title: `考前複習 · ${sideZh} ${range.name}`,
+                  })}>
+                  {keep.length < 2 ? '至少要 2 個字' : `🪄 用這 ${keep.length} 個字出一份複習題`}
+                </button>
+                <p className="ep-note">
+                  題目交給「一鍵出單字」生成——它會避開那幾週原本出過的句子，所以是**新題目**不是重播。
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>, document.body);
+}
+
+Object.assign(window, { ExamPrepModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

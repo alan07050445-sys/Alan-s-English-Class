@@ -6815,3 +6815,53 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .ws-again:hover { color: var(--ink, #15130E); }
 .ws-none { padding: 14px; text-align: center; color: var(--ink-3, #6b6455); font-size: 13.5px; }
 .ws-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--ink-3, #6b6455); }
+
+/* ══ 📝 v513：考前複習包 ═════════════════════════════════════════════════ */
+.sw-f.go { cursor: pointer; border: 0; font: inherit; transition: filter .15s, transform .15s; }
+.sw-f.go:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.sw-f.go i { font-style: normal; font-weight: 800; opacity: .9; }
+.modal-backdrop.ep-top { z-index: 1200; }
+.ep-panel {
+  width: min(680px, 94vw); max-height: 88vh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--bg-card, #fff); border: 1px solid var(--border, #DDD6C4);
+  border-radius: 20px; padding: 22px 26px 18px;
+  box-shadow: 0 24px 56px -16px rgba(21,19,14,.3);
+}
+.ep-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.ep-kicker { display: block; font-family: var(--sans); font-size: 10px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3, #6b6455); }
+.ep-head h3 { margin: 3px 0 0; font-family: var(--serif, Lora, serif); font-size: 22px; font-weight: 600; color: var(--ink, #15130E); }
+.ep-none { padding: 20px 4px; text-align: center; color: var(--ink-3, #6b6455); font-size: 14px; line-height: 1.75; }
+.ep-range { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.ep-range b { font-family: var(--serif, Lora, serif); font-size: 20px; font-weight: 700; color: var(--accent, #8B3120); }
+.ep-range span { font-size: 13px; font-weight: 700; color: var(--ink-3, #6b6455); }
+.ep-weeks { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 11px; }
+.ep-wk {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 11px; border-radius: 999px;
+  background: var(--bg, #F4F0E7); border: 1px solid var(--border, #DDD6C4);
+  font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a);
+}
+.ep-wk i { font-style: normal; font-size: 11px; color: var(--ink-3, #6b6455); }
+.ep-wk.empty { opacity: .55; }
+.ep-topics { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.ep-topics em { font-style: normal; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; color: var(--ink-3, #6b6455); }
+.ep-topics span { padding: 3px 10px; border-radius: 8px; background: #EDF6FD; color: #1E6FA8; font-size: 12.5px; font-weight: 700; }
+.ep-words { border: 1px solid var(--border, #DDD6C4); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
+.ep-words-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 9px; }
+.ep-words-h b { font-size: 15px; font-weight: 800; color: var(--ink, #15130E); }
+.ep-words-h span { font-size: 12px; color: var(--ink-3, #6b6455); }
+.ep-all { margin-left: auto; border: 0; background: none; cursor: pointer; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--accent, #8B3120); }
+.ep-chips { display: flex; gap: 6px; flex-wrap: wrap; max-height: 210px; overflow-y: auto; overscroll-behavior: contain; }
+.ep-chip {
+  padding: 4px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border, #DDD6C4); background: var(--bg-card, #fff);
+  font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink, #15130E);
+}
+.ep-chip:hover { border-color: #C9A84C; }
+.ep-chip.off { opacity: .4; text-decoration: line-through; }
+.ep-go {
+  display: block; width: 100%; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
+  background: var(--accent, #8B3120); color: #fff;
+  font-family: var(--sans); font-size: 15px; font-weight: 800;
+}
+.ep-go:disabled { background: var(--border, #DDD6C4); color: var(--ink-3, #6b6455); cursor: default; }
+.ep-note { margin: 11px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--ink-3, #6b6455); }

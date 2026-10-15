@@ -7264,6 +7264,81 @@ Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   v513（Alan 的 AI 清單第三順位）📝 考前複習包
+   ──────────────────────────────────────────────────────────────────────────
+   外師每 3 週、中師每 4 週一次 formative（Alan 親口講的），
+   而 pacingNextFormative 早就知道下一次在第幾週。缺的只是
+   「那一次考試涵蓋哪幾週、那幾週教過哪些字」——把它接起來，考前複習就幾乎免費。
+
+   ⭐ 這一版刻意**不新寫一套出題 AI**：
+     題目交給已經驗過很多次的 QuickSetModal（一鍵出單字 7 種題型，
+     而且 v466 的 avoid 機制會讓題目跟原本那幾週不一樣）。
+     這裡只負責 AI 做不好、程式做得準的那一段：**算範圍、把字撈齊**。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 下一次 formative 涵蓋哪幾週。
+   涵蓋範圍＝「上一次 formative 之後」到「這一次」為止；
+   前面沒有考過就從第 1 週算起。 */
+function examRange(pace, weekId, side) {
+  const n = pacingWeekNo(weekId);
+  if (!n || !Array.isArray(pace)) return null;
+  const rows = pace.filter(w => w[side] && w[side].assess).sort((a, b) => a.n - b.n);
+  const next = rows.find(w => w.n >= n);
+  if (!next) return null;
+  const prev = rows.filter(w => w.n < next.n).pop();
+  return {
+    side, wk: next.n, name: next[side].assess,
+    from: prev ? prev.n + 1 : 1, to: next.n,
+    in: next.n - n,
+  };
+}
+
+/* 那幾週教過的字與主題——純程式，不花錢也不會編。
+   單字從每一週每一類的單元反推（reviewWordsOf 本來就會：
+   沒有單字卡時從配對／聽寫／短文填空挖出來）。 */
+function examSource(weeks, weekOrder, range, categories) {
+  const out = { words: [], topics: [], weeks: [], dup: 0 };
+  if (!range || !weeks || !weekOrder) return out;
+  const cats = (categories && categories.length) ? categories : (CATEGORIES || []);
+  const seen = new Map();
+  weekOrder.forEach(wid => {
+    const n = pacingWeekNo(wid);
+    if (!n || n < range.from || n > range.to) return;
+    const w = weeks[wid];
+    if (!w || w.archived) return;
+    let got = 0;
+    cats.forEach(c => {
+      const items = (w.items || {})[c.id] || [];
+      if (!items.length) return;
+      /* 一週一類裡可能有好幾組（一課一組），照組收才不會只拿到第一組 */
+      const groups = (window.qmGroupByArticle ? window.qmGroupByArticle(items) : [{ items }]);
+      groups.forEach(g => {
+        const list = g.items || (g.single ? [g.single] : []);
+        if (!list.length) return;
+        if (g.name && out.topics.indexOf(g.name) < 0) out.topics.push(g.name);
+        (reviewWordsOf(list) || []).forEach(x => {
+          const k = String(x.term || '').toLowerCase().trim();
+          if (!k) return;
+          if (seen.has(k)) { out.dup++; return; }        // 同一個字跨週重複出現只收一次
+          seen.set(k, x); out.words.push(x); got++;
+        });
+      });
+    });
+    out.weeks.push({ wid, n, label: w.label || wid, n_words: got });
+  });
+  return out;
+}
+
+/* 丟給 QuickSetModal 的貼上格式：英文 - 中文 - 例句 - 英文定義
+   （跟 app.jsx「在這一組再出一份」用的格式一模一樣，不另外發明一種） */
+function examPasteText(words) {
+  return (words || []).map(w => [w.term, w.zh, w.example, w.def]
+    .map(x => String(x || '').trim()).filter(Boolean).join(' - ')).join('\n');
+}
+
+Object.assign(window, { examRange, examSource, examPasteText });
+
+/* ══════════════════════════════════════════════════════════════════════════
    v512（Alan 的 AI 清單第二順位）🪄 上課紀錄自動擬草稿
    ──────────────────────────────────────────────────────────────────────────
    他一週要填 20 筆（10 個孩子 × 2 堂），全部手打。材料其實全都已經在系統裡：

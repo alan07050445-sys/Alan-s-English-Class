@@ -159,7 +159,7 @@ function findUnitsIn(weekOrder, weeks, q) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, pace, nextF, onPacing,
+  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, pace, nextF, onPacing, onExamPrep,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -388,10 +388,24 @@ function Header({
                 </div>
                 {(pace.note || nextF) && (
                   <div className="sw-row sw-foot">
-                    {nextF && nextF.it && <span className={'sw-f' + (nextF.it.in <= 1 ? ' near' : '')}>
-                      🧪 外師 {nextF.it.name}：{nextF.it.in === 0 ? '就是這週' : `還有 ${nextF.it.in} 週`}</span>}
-                    {nextF && nextF.lt && <span className={'sw-f' + (nextF.lt.in <= 1 ? ' near' : '')}>
-                      🧪 中師 {nextF.lt.name}：{nextF.lt.in === 0 ? '就是這週' : `還有 ${nextF.lt.in} 週`}</span>}
+                    {/* v513：這兩塊本來只是文字。點下去 → 考前複習包
+                        （範圍跟那幾週教過的字，程式自己算得出來）。 */}
+                    {nextF && nextF.it && (
+                      <button className={'sw-f' + (nextF.it.in <= 1 ? ' near' : '') + (onExamPrep ? ' go' : '')}
+                        onClick={onExamPrep ? () => onExamPrep('it') : null} disabled={!onExamPrep}
+                        title={onExamPrep ? '把這次考試範圍的單字撈出來，一鍵出複習題' : ''}>
+                        🧪 外師 {nextF.it.name}：{nextF.it.in === 0 ? '就是這週' : `還有 ${nextF.it.in} 週`}
+                        {onExamPrep && <i>　📝 出複習</i>}
+                      </button>
+                    )}
+                    {nextF && nextF.lt && (
+                      <button className={'sw-f' + (nextF.lt.in <= 1 ? ' near' : '') + (onExamPrep ? ' go' : '')}
+                        onClick={onExamPrep ? () => onExamPrep('lt') : null} disabled={!onExamPrep}
+                        title={onExamPrep ? '把這次考試範圍的單字撈出來，一鍵出複習題' : ''}>
+                        🧪 中師 {nextF.lt.name}：{nextF.lt.in === 0 ? '就是這週' : `還有 ${nextF.lt.in} 週`}
+                        {onExamPrep && <i>　📝 出複習</i>}
+                      </button>
+                    )}
                     {pace.note && <span className="sw-note">📅 {pace.note}</span>}
                   </div>
                 )}

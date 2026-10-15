@@ -11940,7 +11940,105 @@ function rcBuildItems({
   }
   return out;
 }
+
+/* ══ 📝 v513：考前複習包 ═══════════════════════════════════════════════════
+   Alan：外師每 3 週、中師每 4 週一次 formative。pacingNextFormative 早就知道
+   下一次在第幾週——缺的只是「那次考試涵蓋哪幾週、那幾週教過哪些字」。
+
+   ⭐ 這裡刻意**不新寫一套出題 AI**：撈完字之後直接交給 QuickSetModal
+     （一鍵出單字 7 種題型，而且 v466 的 avoid 會讓題目跟原本那幾週不一樣）。
+     AI 做不好、程式做得準的那一段（算範圍、把字撈齊）才是這個元件在做的事。 */
+function ExamPrepModal({
+  open,
+  side,
+  pace,
+  weeks,
+  weekOrder,
+  weekId,
+  categories,
+  onClose,
+  onGenerate
+}) {
+  var [drop, setDrop] = useS({}); // 取消勾選的字（有些字他不想再考）
+  useE(() => {
+    if (open) setDrop({});
+  }, [open, side]);
+  if (!open) return null;
+  var range = window.examRange ? window.examRange(pace, weekId, side) : null;
+  var src = range && window.examSource ? window.examSource(weeks, weekOrder, range, categories) : {
+    words: [],
+    topics: [],
+    weeks: [],
+    dup: 0
+  };
+  var sideZh = side === 'it' ? '外師' : '中師';
+  var keep = src.words.filter(w => !drop[w.term.toLowerCase()]);
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop ep-top",
+    onClick: e => {
+      if (e.target === e.currentTarget) onClose();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ep-panel",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ep-head"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "ep-kicker"
+  }, "Exam Prep"), /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDCDD ", sideZh, range ? ` ${range.name}` : '', " \u8003\u524D\u8907\u7FD2")), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(window.Icon, {
+    name: "close",
+    size: 16
+  }))), !range ? /*#__PURE__*/React.createElement("div", {
+    className: "ep-none"
+  }, "\u9019\u500B\u5E74\u7D1A\u7684\u9032\u5EA6\u8868\u4E0A\uFF0C", sideZh, "\u5F8C\u9762\u6C92\u6709\u6392 formative \u4E86\u3002") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "ep-range"
+  }, /*#__PURE__*/React.createElement("b", null, "\u7B2C ", range.from, "\u2013", range.to, " \u9031"), /*#__PURE__*/React.createElement("span", null, range.in === 0 ? '就是這週考' : `還有 ${range.in} 週`)), src.weeks.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "ep-none"
+  }, "\u9019\u500B\u7BC4\u570D\u88E1\u9084\u6C92\u6709\u5EFA\u4EFB\u4F55\u55AE\u5143\u2014\u2014\u5148\u628A\u90A3\u5E7E\u9031\u7684\u8AB2\u5EFA\u8D77\u4F86\uFF0C\u9019\u88E1\u624D\u6488\u5F97\u5230\u5B57\u3002") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "ep-weeks"
+  }, src.weeks.map(w => /*#__PURE__*/React.createElement("span", {
+    key: w.wid,
+    className: 'ep-wk' + (w.n_words ? '' : ' empty')
+  }, w.label, /*#__PURE__*/React.createElement("i", null, w.n_words ? `${w.n_words} 字` : '沒有單字')))), src.topics.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "ep-topics"
+  }, /*#__PURE__*/React.createElement("em", null, "\u6DB5\u84CB\u7684\u8AB2"), src.topics.slice(0, 10).map((t, i) => /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, t))), /*#__PURE__*/React.createElement("div", {
+    className: "ep-words"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ep-words-h"
+  }, /*#__PURE__*/React.createElement("b", null, keep.length, " \u500B\u5B57"), src.dup > 0 && /*#__PURE__*/React.createElement("span", null, "\uFF08\u8DE8\u9031\u91CD\u8907\u7684 ", src.dup, " \u500B\u5DF2\u7D93\u5408\u4F75\uFF09"), /*#__PURE__*/React.createElement("button", {
+    className: "ep-all",
+    onClick: () => setDrop({})
+  }, "\u5168\u9078")), /*#__PURE__*/React.createElement("div", {
+    className: "ep-chips"
+  }, src.words.map(w => {
+    var k = w.term.toLowerCase();
+    return /*#__PURE__*/React.createElement("button", {
+      key: k,
+      className: 'ep-chip' + (drop[k] ? ' off' : ''),
+      onClick: () => setDrop(d => ({
+        ...d,
+        [k]: !d[k]
+      })),
+      title: w.zh || ''
+    }, w.term);
+  }))), /*#__PURE__*/React.createElement("button", {
+    className: "ep-go",
+    disabled: keep.length < 2,
+    onClick: () => onGenerate({
+      words: keep,
+      title: `考前複習 · ${sideZh} ${range.name}`
+    })
+  }, keep.length < 2 ? '至少要 2 個字' : `🪄 用這 ${keep.length} 個字出一份複習題`), /*#__PURE__*/React.createElement("p", {
+    className: "ep-note"
+  }, "\u984C\u76EE\u4EA4\u7D66\u300C\u4E00\u9375\u51FA\u55AE\u5B57\u300D\u751F\u6210\u2014\u2014\u5B83\u6703\u907F\u958B\u90A3\u5E7E\u9031\u539F\u672C\u51FA\u904E\u7684\u53E5\u5B50\uFF0C\u6240\u4EE5\u662F**\u65B0\u984C\u76EE**\u4E0D\u662F\u91CD\u64AD\u3002"))))), document.body);
+}
 Object.assign(window, {
+  ExamPrepModal,
   PacingImportModal,
   GrammarNotesModal,
   gnBuildItems,

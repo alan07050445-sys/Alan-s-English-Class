@@ -330,6 +330,7 @@ function Header({
   pace,
   nextF,
   onPacing,
+  onExamPrep,
   progress,
   // Auth props
   user,
@@ -613,11 +614,17 @@ function Header({
       className: "sw-hw"
     }, "\uD83D\uDCD5 ", books(pace.lt))), (pace.note || nextF) && /*#__PURE__*/React.createElement("div", {
       className: "sw-row sw-foot"
-    }, nextF && nextF.it && /*#__PURE__*/React.createElement("span", {
-      className: 'sw-f' + (nextF.it.in <= 1 ? ' near' : '')
-    }, "\uD83E\uDDEA \u5916\u5E2B ", nextF.it.name, "\uFF1A", nextF.it.in === 0 ? '就是這週' : `還有 ${nextF.it.in} 週`), nextF && nextF.lt && /*#__PURE__*/React.createElement("span", {
-      className: 'sw-f' + (nextF.lt.in <= 1 ? ' near' : '')
-    }, "\uD83E\uDDEA \u4E2D\u5E2B ", nextF.lt.name, "\uFF1A", nextF.lt.in === 0 ? '就是這週' : `還有 ${nextF.lt.in} 週`), pace.note && /*#__PURE__*/React.createElement("span", {
+    }, nextF && nextF.it && /*#__PURE__*/React.createElement("button", {
+      className: 'sw-f' + (nextF.it.in <= 1 ? ' near' : '') + (onExamPrep ? ' go' : ''),
+      onClick: onExamPrep ? () => onExamPrep('it') : null,
+      disabled: !onExamPrep,
+      title: onExamPrep ? '把這次考試範圍的單字撈出來，一鍵出複習題' : ''
+    }, "\uD83E\uDDEA \u5916\u5E2B ", nextF.it.name, "\uFF1A", nextF.it.in === 0 ? '就是這週' : `還有 ${nextF.it.in} 週`, onExamPrep && /*#__PURE__*/React.createElement("i", null, "\u3000\uD83D\uDCDD \u51FA\u8907\u7FD2")), nextF && nextF.lt && /*#__PURE__*/React.createElement("button", {
+      className: 'sw-f' + (nextF.lt.in <= 1 ? ' near' : '') + (onExamPrep ? ' go' : ''),
+      onClick: onExamPrep ? () => onExamPrep('lt') : null,
+      disabled: !onExamPrep,
+      title: onExamPrep ? '把這次考試範圍的單字撈出來，一鍵出複習題' : ''
+    }, "\uD83E\uDDEA \u4E2D\u5E2B ", nextF.lt.name, "\uFF1A", nextF.lt.in === 0 ? '就是這週' : `還有 ${nextF.lt.in} 週`, onExamPrep && /*#__PURE__*/React.createElement("i", null, "\u3000\uD83D\uDCDD \u51FA\u8907\u7FD2")), pace.note && /*#__PURE__*/React.createElement("span", {
       className: "sw-note"
     }, "\uD83D\uDCC5 ", pace.note)));
   })(), /*#__PURE__*/React.createElement("div", {
