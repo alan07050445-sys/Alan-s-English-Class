@@ -6,26 +6,26 @@
 // 為什麼要分：Alan 一個月內從 v375 跳到 v391（16 次 deploy），舊版 activate 會刪掉所有
 // key !== CACHE 的快取，等於每次 deploy 都把每個學生的圖片也一起清空重新冷啟動。
 // 圖片其實一整年都沒變，沒有理由跟著版本號陪葬。
-const CACHE = 'alans-english-v508';
+const CACHE = 'alans-english-v509';
 const STATIC = 'alans-static-v1';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
 const asset = path => BASE + path;
 
-// 跟版本走的檔案：URL 上都帶 ?v=508，所以 cache-first 是安全的（改版就換 URL）。
+// 跟版本走的檔案：URL 上都帶 ?v=509，所以 cache-first 是安全的（改版就換 URL）。
 const PRECACHE = [
-  asset('/'), asset('/index.html'), asset('/manifest.json?v=508'),
-  asset('/styles.css?v=508'), asset('/styles-part2.css?v=508'), asset('/styles-quiz.css?v=508'),
-  asset('/styles-flashcard.css?v=508'), asset('/styles-auth.css?v=508'), asset('/styles-quiz-mode.css?v=508'),
-  asset('/data.js?v=508'), asset('/data-g1.js?v=508'), asset('/data-g2.js?v=508'), asset('/data-g4.js?v=508'), asset('/data-g5.js?v=508'), asset('/data-g6.js?v=508'), asset('/data-summer.js?v=508'), asset('/data-grammar.js?v=508'),
-  asset('/dist/components-shell.js?v=508'), asset('/dist/components-quiz.js?v=508'),
-  asset('/dist/components-flashcard.js?v=508'), asset('/dist/components-editor.js?v=508'),
-  asset('/dist/components-quiz-mode.js?v=508'), asset('/dist/components-dashboard.js?v=508'),
-  asset('/dist/components-mistakes.js?v=508'), asset('/styles-mistakes.css?v=508'),
-  asset('/styles-theme.css?v=508'), asset('/styles-home.css?v=508'),
-  asset('/dist/app.js?v=508'), asset('/dist/components-fx.js?v=508'),
-  asset('/styles-fx.css?v=508'), asset('/styles-tune.css?v=508'),
-  asset('/summer-booking.html'), asset('/summer-booking.css?v=508'), asset('/summer-booking-admin.css?v=508'), asset('/summer-booking.js?v=508'),
+  asset('/'), asset('/index.html'), asset('/manifest.json?v=509'),
+  asset('/styles.css?v=509'), asset('/styles-part2.css?v=509'), asset('/styles-quiz.css?v=509'),
+  asset('/styles-flashcard.css?v=509'), asset('/styles-auth.css?v=509'), asset('/styles-quiz-mode.css?v=509'),
+  asset('/data.js?v=509'), asset('/data-g1.js?v=509'), asset('/data-g2.js?v=509'), asset('/data-g4.js?v=509'), asset('/data-g5.js?v=509'), asset('/data-g6.js?v=509'), asset('/data-summer.js?v=509'), asset('/data-grammar.js?v=509'),
+  asset('/dist/components-shell.js?v=509'), asset('/dist/components-quiz.js?v=509'),
+  asset('/dist/components-flashcard.js?v=509'), asset('/dist/components-editor.js?v=509'),
+  asset('/dist/components-quiz-mode.js?v=509'), asset('/dist/components-dashboard.js?v=509'),
+  asset('/dist/components-mistakes.js?v=509'), asset('/styles-mistakes.css?v=509'),
+  asset('/styles-theme.css?v=509'), asset('/styles-home.css?v=509'),
+  asset('/dist/app.js?v=509'), asset('/dist/components-fx.js?v=509'),
+  asset('/styles-fx.css?v=509'), asset('/styles-tune.css?v=509'),
+  asset('/summer-booking.html'), asset('/summer-booking.css?v=509'), asset('/summer-booking-admin.css?v=509'), asset('/summer-booking.js?v=509'),
 ];
 
 // 跟版本無關的圖片／icon（合計約 417KB）。原本完全沒進快取，而 GitHub Pages 全站
@@ -82,7 +82,12 @@ self.addEventListener('fetch', e => {
                 (e.request.method === 'GET' && e.request.headers.get('accept')?.includes('text/html'));
   if (isNav) {
     e.respondWith(
-      fetch(e.request)
+      /* v509：連 HTTP 快取也要跳過。GitHub Pages 回 cache-control: max-age=600，
+         所以就算這裡是 network-first，deploy 完的前 10 分鐘 fetch 仍可能從瀏覽器的
+         HTTP 快取拿到**舊的 index.html**（Alan 實測：v505 上線後他看到的還是舊畫面，
+         以為功能沒改）。'no-cache' ＝ 一定跟伺服器對一次（If-None-Match），
+         沒變就回 304，幾乎不花流量。 */
+      fetch(e.request, { cache: 'no-cache' })
         .then(res => { const c = res.clone(); caches.open(CACHE).then(ch => ch.put(e.request, c)); return res; })
         .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
     );

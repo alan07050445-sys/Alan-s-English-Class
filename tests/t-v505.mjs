@@ -30,6 +30,17 @@ ok('   自動展開選中單元那一組要留著，不然從作業點進來看�
    /grouped\.find\(x => x\.items && x\.items\.some\(it => it\.id === selectedItem\.id\)\)/.test(qm));
 ok('   初始值是「全部收起來」', /const \[openGroups, setOpenGroups\] = useQM\(\{\}\);/.test(qm));
 
+console.log('\n【1b】v509：真正每天會看到的那一張——「今天的任務」');
+/* ⚠ v505 我修錯地方了：Alan 給的圖是側欄，我只改了側欄的 qm-ugroup，
+   但他每天看到的是 TodayTasks 的 tt-group，兩套各自有自己的收合狀態。
+   這一段守「兩套都預設收起來」，免得下次又只修一半。 */
+ok('⭐⭐ 任務清單的分組一律預設收起來（本來是「沒全做完就展開」＝幾乎永遠展開）',
+   /const open  = !!ttOpen\[gKey\];/.test(qm) && !/ttOpen\[gKey\] !== undefined/.test(qm));
+ok('⭐ 換週次就全部收回去', /useQME\(\(\) => \{ setTtOpen\(\{\}\); \}, \[weekId\]\);/.test(qm));
+ok('   收起來時標題列還是寫得出進度（不然會以為作業不見了）',
+   /tt-group-count">\{gDone\} \/ \{e\.tasks\.length\}/.test(qm));
+ok('   點一下照樣打開', /setTtOpen\(o => \(\{ \.\.\.o, \[gKey\]: !open \}\)\)/.test(qm));
+
 console.log('\n【2】上課紀錄的字級（Alan：「字體太小」）');
 ok('⭐ 內容字比 v504 的 14px 大', num(/\.tlog-f p \{[^}]*font-size: ([\d.]+)px/) >= 16);
 ok('⭐ 欄位標籤比 v504 的 10.5px 大', num(/\.tlog-f em \{[^}]*font-size: ([\d.]+)px/) >= 12.5);

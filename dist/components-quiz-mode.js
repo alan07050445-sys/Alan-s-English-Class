@@ -7604,7 +7604,16 @@ function TodayTasks({
   weekOrder,
   onOpenPastTask
 }) {
-  var [ttOpen, setTtOpen] = useQM({}); // v267: 分組收合狀態（未動過＝全完成收、未完成開）
+  /* 🔴 v509（Alan：「一樣預設都是合起來的，不然太長了，小朋友自己點開即可；
+       以及如果跳出頁面再回來，一樣要合起來」）
+     ⚠ v505 我修錯地方了：Alan 給的圖是**側欄**，我就只改了側欄的 qm-ugroup，
+       但他真正每天看到的是這張「今天的任務」清單，用的是另一套 tt-group，
+       預設值寫 `!gAll`＝只要還沒全做完就展開——也就是**永遠展開**。
+     現在一律預設收起來，標題列照樣寫著 0/7，點一下才打開。 */
+  var [ttOpen, setTtOpen] = useQM({});
+  useQME(() => {
+    setTtOpen({});
+  }, [weekId]); // 換週次就全部收回去
   /* 🔴 v463（a）（實測 G3：一個還沒開始做的學生會看到 42 項、預設展開）：
      量過了——逾期區在桌機 1180×820 佔 2.7 個畫面、iPad 直式佔 2.1 個，
      「今天的任務」被推到第 2.6～3.2 個畫面，整頁 4.1 個畫面。收起來之後整頁剩 2.1 個。
@@ -7994,11 +8003,11 @@ function TodayTasks({
     className: "tt-list"
   }, flat.map((e, i) => {
     if (!e.group) return renderRow(e.tasks[0], null);
-    // v267: 分組可收合——全部完成的組預設收起來（一行帶 ✓），任務再多也不會佔滿頁面
+    // v509：一律預設收起來（本來是「沒全做完就展開」＝幾乎永遠展開）
     var gDone = e.tasks.filter(t => t.done).length;
     var gAll = gDone === e.tasks.length && e.tasks.length > 0;
     var gKey = 'g:' + (e.name || i);
-    var open = ttOpen[gKey] !== undefined ? ttOpen[gKey] : !gAll;
+    var open = !!ttOpen[gKey];
     return /*#__PURE__*/React.createElement("div", {
       className: `tt-group${open ? ' open' : ''}`,
       key: `g${i}`
