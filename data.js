@@ -6745,6 +6745,7 @@ const AUTO_STAR_KIND = {
   quiz: 'pct', spelling: 'pct', fillblank: 'pct', cloze: 'pct', 'def-match': 'pct',
   'reading-skill': 'pct', 'type-answer': 'pct', 'circle-answer': 'pct',
   'syllable-div': 'pct', 'word-sort': 'pct', 'sentence-order': 'pct', 'guided-reading': 'pct',   // v462 ①
+  exam: 'pct',   // v515 📄 模擬考卷
   // ② AI 批改的五星型：3 星 +10、4 星 +20（沿用原本閱讀簡答的標準）
   'short-answer': 'stars', 'writing-practice': 'stars', essay: 'stars', 'story-mountain': 'stars',
   // ③ 沒有分數可言的：做完就給
@@ -6754,6 +6755,7 @@ const AUTO_STAR_KIND = {
 const AUTO_STAR_RULES = {
   flashcard: '學習＋測驗（選擇題）完成 +10；測驗的手寫題也全部答完再 +20',
   quiz: '80 分 +10／100 分 +15',
+  exam: '自動計分的部分 80 分 +10／100 分 +15（老師手改的那幾題不算）',
   spelling: '80 分 +10／100 分 +15',
   fillblank: '80 分 +10／100 分 +15',
   cloze: '80 分 +10／100 分 +15',
@@ -7262,6 +7264,230 @@ async function mxSetWear(uid, kind, id, mx) {
 Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v515 📄 模擬考卷（Alan 給了兩張真的 G4 Formative，要做成互動版）
+   ──────────────────────────────────────────────────────────────────────────
+   他缺的不是題型——圈 -VCe 字、Word Bank 填空、閱讀選擇題，站上**本來就有**。
+   缺的是「一份考卷」這個容器：
+
+     現在的單元                    一份 Formative
+     隨時做、分開做、順序隨意   →  一次坐下來做完
+     每個單元各自一個分數       →  一個 100 分，分區加權 30/32/38
+     做完馬上對答案             →  交卷才知道
+
+   Nick 那張 95/100 才是他跟家長真正在看的數字。
+
+   ⚠ 配分照學校的寫法：每一大題有自己的滿分（Part 2 是 20 分、2 分一題）。
+     不要自己發明百分比——老師要能把網站的分數跟紙本對起來。
+   ⚠ 申論題（Part 5 那題 15 分）這一版**不自動給分**：學校是老師拿 rubric 手改的，
+     網站假裝改得出來只會給出一個假分數。先收答案、標成「老師會親自改」，
+     自動分與手改分在結果頁分開寫清楚。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 一份考卷能放哪幾種大題（都對得上站上現成的題型） */
+const EXAM_KINDS = {
+  circle: { zh: '圈出符合的字', auto: true },   // Part 2：短文裡圈 N 個 -VCe／vowel team
+  cloze:  { zh: 'Word Bank 填空', auto: true }, // Part 3：給詞庫，一句一格
+  quiz:   { zh: '選擇題', auto: true },         // Part 4：閱讀理解
+  short:  { zh: '問答（老師改）', auto: false },// Part 5：申論，照 rubric 手改
+};
+
+/* 一大題有幾小題（算分用） */
+function examPartN(part) {
+  if (!part) return 0;
+  if (part.kind === 'circle') return +part.need || (part.answers || []).length || 0;
+  if (part.kind === 'cloze')  return (part.items || []).length;
+  if (part.kind === 'quiz')   return (part.questions || []).length;
+  if (part.kind === 'short')  return (part.questions || []).length;
+  return 0;
+}
+
+/* 整份考卷的配分盤點——老師要能一眼看出「這份加起來是不是 100 分」 */
+function examTotals(item) {
+  const secs = (item && item.sections) || [];
+  let auto = 0, manual = 0, parts = 0;
+  secs.forEach(sec => (sec.parts || []).forEach(pt => {
+    parts++;
+    const pts = +pt.pts || 0;
+    if ((EXAM_KINDS[pt.kind] || {}).auto) auto += pts; else manual += pts;
+  }));
+  return { auto, manual, total: auto + manual, sections: secs.length, parts };
+}
+
+/* 一大題算幾分。回傳 { got, max, n, right, detail }
+   detail 是每一小題對不對，結果頁要逐題標。 */
+function examScorePart(part, ans) {
+  const max = +part.pts || 0;
+  const n = examPartN(part);
+  const out = { got: 0, max, n, right: 0, detail: [] };
+  if (!n) return out;
+  const norm = (t) => String(t == null ? '' : t).toLowerCase().replace(/[^a-z0-9']/g, '');
+
+  if (part.kind === 'circle') {
+    /* 圈選：圈對幾個就幾分。⚠ 圈錯的要扣回來，不然整篇全部圈起來就滿分。
+       ⚠ wsCheck 的簽名是 (word, check, one)，而且 check 是**物件**不是字串
+         —— 傳錯會一路回 null，然後每一個字都被當成圈錯（第一版就是這樣 0 分）。
+       ⚠ null ＝「這條規則程式判不出來」，那種不能算學生錯。 */
+    const picked = Array.isArray(ans) ? ans : [];
+    const chk = { kind: part.check, args: part.checkArg || '' };
+    const ok = (w) => (window.wsCheck ? window.wsCheck(w, chk, part.checkArg || '') : null);
+    let right = 0, wrong = 0;
+    picked.forEach(w => { const v = ok(w); if (v === true) right++; else if (v === false) wrong++; });
+    out.right = Math.max(0, right - wrong);
+    out.detail = picked.map(w => ({ text: w, ok: ok(w) }));
+  } else if (part.kind === 'cloze') {
+    (part.items || []).forEach((q, i) => {
+      const good = norm((ans || [])[i]) === norm(q.answer);
+      if (good) out.right++;
+      out.detail.push({ text: q.answer, ok: good, got: (ans || [])[i] || '' });
+    });
+  } else if (part.kind === 'quiz') {
+    (part.questions || []).forEach((q, i) => {
+      const good = (ans || [])[i] === q.answer;
+      if (good) out.right++;
+      out.detail.push({ text: (q.options || [])[q.answer], ok: good,
+                        got: (q.options || [])[(ans || [])[i]] || '' });
+    });
+  } else {
+    // short：收答案，不給分（老師拿 rubric 手改）
+    out.detail = (part.questions || []).map((q, i) => ({ text: '', ok: null, got: (ans || [])[i] || '' }));
+    return out;
+  }
+  out.got = Math.round(max * (out.right / n));
+  return out;
+}
+
+/* 整份考卷。回傳每一大題的結果 ＋ 自動分／手改分分開。 */
+function examScore(item, answers) {
+  const secs = (item && item.sections) || [];
+  const res = { parts: [], auto: 0, autoMax: 0, manualMax: 0, bySection: [] };
+  secs.forEach((sec, si) => {
+    let sGot = 0, sMax = 0, sManual = 0;
+    (sec.parts || []).forEach((pt, pi) => {
+      const key = si + '_' + pi;
+      const r = examScorePart(pt, (answers || {})[key]);
+      res.parts.push({ si, pi, key, part: pt, ...r, auto: !!(EXAM_KINDS[pt.kind] || {}).auto });
+      if ((EXAM_KINDS[pt.kind] || {}).auto) { sGot += r.got; sMax += r.max; res.auto += r.got; res.autoMax += r.max; }
+      else { sManual += r.max; res.manualMax += r.max; }
+    });
+    res.bySection.push({ name: sec.name || `Section ${si + 1}`, got: sGot, max: sMax, manual: sManual });
+  });
+  res.pct = res.autoMax ? Math.round(res.auto / res.autoMax * 100) : 0;
+  return res;
+}
+
+/* 考卷的短文要能點字——把一段文章切成「字」與「不是字」的小塊。
+   ⚠ 標點要留在自己的塊裡，不然圈起來會把句號一起圈進去（v485 踩過）。 */
+function examTokens(passage) {
+  const out = [];
+  String(passage || '').split(/(\s+)/).forEach(chunk => {
+    if (!chunk) return;
+    if (/^\s+$/.test(chunk)) { out.push({ t: chunk, w: false }); return; }
+    const m = /^([^A-Za-z']*)([A-Za-z][A-Za-z']*)([^A-Za-z']*)$/.exec(chunk);
+    if (!m) { out.push({ t: chunk, w: false }); return; }
+    if (m[1]) out.push({ t: m[1], w: false });
+    out.push({ t: m[2], w: true });
+    if (m[3]) out.push({ t: m[3], w: false });
+  });
+  return out;
+}
+
+/* ── 大題內容的文字格式（編輯器用）────────────────────────────────────
+   站上其他編輯器都是「一行一筆」的純文字，考卷沿用同一套習慣，
+   老師可以直接貼、直接改，不用面對一堆巢狀表單。
+
+     circle   第一行＝要圈什麼（vce / team / digraph / suffix:-ing）
+              第二行以後＝短文
+     cloze    第一行＝詞庫（逗號分隔）
+              之後每行＝ 句子（用 ___ 當空格） | 答案
+     quiz     每行＝ 題目 | 選項1 | 選項2 | 選項3 | 正解編號(從1算)
+     short    每行＝ 題目 | 配分 | 評分重點(可省略)
+   ⚠ 一律用「|」分欄：康橋的題目裡逗號很多，用逗號分欄一定出事。 */
+function examPartText(part) {
+  const p = part || {};
+  if (p.kind === 'circle') return [p.check + (p.checkArg ? ':' + p.checkArg : ''), p.passage || ''].join('\n');
+  if (p.kind === 'cloze') return [(p.bank || []).join(', ')]
+    .concat((p.items || []).map(q => `${q.text || ''} | ${q.answer || ''}`)).join('\n');
+  if (p.kind === 'quiz') return (p.questions || [])
+    .map(q => [q.q].concat(q.options || []).concat([(+q.answer || 0) + 1]).join(' | ')).join('\n');
+  if (p.kind === 'short') return (p.questions || [])
+    .map(q => [q.q, q.pts || '', q.rubric || ''].join(' | ').replace(/\s*\|\s*$/, '')).join('\n');
+  return '';
+}
+function examParsePart(kind, text) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/\s+$/, ''));
+  const nonEmpty = lines.filter(l => l.trim());
+  if (kind === 'circle') {
+    const head = (nonEmpty[0] || '').trim();
+    const i = head.indexOf(':');
+    return { check: (i >= 0 ? head.slice(0, i) : head).trim().toLowerCase(),
+             checkArg: i >= 0 ? head.slice(i + 1).trim() : '',
+             passage: lines.slice(lines.indexOf(nonEmpty[0]) + 1).join('\n').trim() };
+  }
+  if (kind === 'cloze') {
+    const bank = (nonEmpty[0] || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
+    const items = nonEmpty.slice(1).map(l => {
+      const c = l.split('|');
+      return { text: (c[0] || '').trim(), answer: (c[1] || '').trim() };
+    }).filter(q => q.text && q.answer);
+    return { bank, items };
+  }
+  if (kind === 'quiz') {
+    const questions = nonEmpty.map(l => {
+      const c = l.split('|').map(x => x.trim());
+      const ansNo = parseInt(c[c.length - 1], 10);
+      const opts = c.slice(1, -1).filter(Boolean);
+      if (!c[0] || opts.length < 2 || !(ansNo >= 1 && ansNo <= opts.length)) return null;
+      return { q: c[0], options: opts, answer: ansNo - 1 };
+    }).filter(Boolean);
+    return { questions };
+  }
+  if (kind === 'short') {
+    const questions = nonEmpty.map(l => {
+      const c = l.split('|').map(x => x.trim());
+      if (!c[0]) return null;
+      return { q: c[0], pts: +c[1] || 0, rubric: c[2] || '' };
+    }).filter(Boolean);
+    return { questions };
+  }
+  return {};
+}
+/* 出卷時的自我檢查——老師最常犯的三件事，直接寫在畫面上 */
+function examWarnings(item) {
+  const w = [];
+  const T = examTotals(item);
+  if (!T.parts) { w.push('這份卷子還沒有任何大題。'); return w; }
+  if (T.total !== 100) w.push(`配分加起來是 ${T.total} 分，不是 100 分。`);
+  (item.sections || []).forEach((sec, si) => (sec.parts || []).forEach((pt, pi) => {
+    const where = `${sec.name || '第 ' + (si + 1) + ' 區'} 的第 ${pi + 1} 大題`;
+    const n = examPartN(pt);
+    if (!n) w.push(`${where}一題都沒有。`);
+    if (!(+pt.pts > 0)) w.push(`${where}沒有配分。`);
+    if (pt.kind === 'circle') {
+      if (!WS_CHECKS[String(pt.check || '').toLowerCase()]) w.push(`${where}的「要圈什麼」程式看不懂：${pt.check || '(空的)'}`);
+      else {
+        /* ⭐ 真的拿檢查器去數短文裡有幾個符合——老師說要圈 10 個，
+           文章裡只有 7 個的話，學生永遠圈不滿。 */
+        const words = examTokens(pt.passage).filter(t => t.w).map(t => t.t);
+        const hit = words.filter(x => wsCheck(x, { kind: pt.check, args: pt.checkArg || '' }, pt.checkArg || '') === true);
+        const need = +pt.need || n;
+        if (hit.length < need) w.push(`${where}要圈 ${need} 個，但短文裡只有 ${hit.length} 個符合。`);
+      }
+    }
+    if (pt.kind === 'cloze') {
+      (pt.items || []).forEach((q, i) => {
+        if (String(q.text || '').indexOf('___') < 0) w.push(`${where}第 ${i + 1} 句沒有 ___ 空格。`);
+        if ((pt.bank || []).every(b => String(b).toLowerCase() !== String(q.answer).toLowerCase()))
+          w.push(`${where}第 ${i + 1} 句的答案「${q.answer}」不在詞庫裡。`);
+      });
+    }
+  }));
+  return w;
+}
+
+Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
+  examPartText, examParsePart, examWarnings });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v513（Alan 的 AI 清單第三順位）📝 考前複習包

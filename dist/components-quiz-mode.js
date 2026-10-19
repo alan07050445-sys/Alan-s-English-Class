@@ -242,7 +242,9 @@ function grTotalQ(item) {
 
 // All quiz-able items in a category
 function getQuizItems(items) {
-  return (items || []).filter(item => item.type === 'lesson' ||
+  return (items || []).filter(item => item.type === 'exam' && (item.sections || []).some(x => (x.parts || []).length) ||
+  // v515 📄 模擬考卷
+  item.type === 'lesson' ||
   // v383: 教學卡＝讀完＋小試身手，也是一件要完成的事
   item.type === 'flashcard' && (item.cards || []).length >= 1 ||
   // v233: 單字卡也是可完成的練習
@@ -410,7 +412,8 @@ var QM_TYPE_ZH = {
   upload: '上傳作業',
   'guided-reading': '分段閱讀',
   'def-match': '配對連線',
-  'reading-skill': '閱讀技巧'
+  'reading-skill': '閱讀技巧',
+  exam: '模擬考卷'
 };
 var QM_TYPE_ICO = {
   lesson: '📘',
@@ -432,7 +435,8 @@ var QM_TYPE_ICO = {
   upload: '📎',
   'guided-reading': '📖',
   'def-match': '🔗',
-  'reading-skill': '🔍'
+  'reading-skill': '🔍',
+  exam: '📄'
 };
 /* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
    任務清單與學生側欄都按這個順序排；老師編輯模式維持原始順序 */
@@ -457,7 +461,8 @@ var QM_TYPE_ORDER = {
   'writing-practice': 6,
   essay: 7,
   'story-mountain': 7,
-  upload: 8
+  upload: 8,
+  exam: 9 // v515：考卷是整合性的，排最後
 };
 var qmTypeRank = t => QM_TYPE_ORDER[t] !== undefined ? QM_TYPE_ORDER[t] : 9;
 /* v383: 單元可以自己指定順序（item.order）——同一組裡「先教 → 單句 → 短文 → 驗收」
@@ -637,6 +642,9 @@ function getQuizItemTotal(item) {
   if (item.type === 'def-match') return (item.defPairs || []).filter(p => p && p.word && p.def).length;
   if (item.type === 'reading-skill') return rsChipTotal(item); // v386
   if (item.type === 'guided-reading' && grTotalQ(item) === 0) return Math.max(1, grSegs(item).length); // v387: 純閱讀
+  /* v515：考卷的「幾題」＝有幾個**自動計分**的大題。
+     ⚠ 不要用小題總數——那會讓側欄寫「60 題」，看起來像做不完。 */
+  if (item.type === 'exam') return (item.sections || []).reduce((n, sc) => n + (sc.parts || []).filter(p => (window.EXAM_KINDS || {})[p.kind] && window.EXAM_KINDS[p.kind].auto).length, 0);
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
@@ -934,7 +942,7 @@ function QuizModeBlocks({
      「配對」若排在「配對連線」前面，就會先吃掉「配對」、留下沒人認得的「連線」。
    ⚠ 拿掉之後只剩不到 3 個字的標題會被 qmGroupByArticle 判成「單張卡」平鋪，
      所以就算某個標題整個被吃光也不會亂分組。 */
-var QM_TYPE_WORDS = /(單字聽寫|單字練習|單字測驗|單字分類|字義選擇|短文填空|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|改寫句子|排順序|句型轉換|造句|互動教學|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|找出來|分一分|中翻英|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
+var QM_TYPE_WORDS = /(模擬考卷|考卷|單字聽寫|單字練習|單字測驗|單字分類|字義選擇|短文填空|手寫練習|打字練習|閱讀理解|閱讀技巧|分段閱讀|配對連線|上傳作業|音節切分|音節切割|改寫句子|排順序|句型轉換|造句|互動教學|選擇題|簡答題|短答題|填空題|圈選題|克漏字|故事山|教學卡|單字卡|找出來|分一分|中翻英|聽寫|拼字|配對|連線|圈選|寫作|造句|填空|練習|測驗|教學|上傳|單字|文法|閱讀|quiz|flashcards?|matching|dictation|spelling|short answer|writing|reading|lesson|cloze|essay|test)/gi;
 /* v400：週次 id 是「學期代碼-W週數」（2026-W16 → 2026、g4-2026F-W03 → g4-2026F）。
    v464：本來只寫在 TodayTasks 裡面，現在大廳的空分類也要用——同一個判斷只留一份。 */
 function qmTermKey(id) {
@@ -1537,7 +1545,8 @@ function QuizModeCategoryView({
       var isGuided = item.type === 'guided-reading'; // v276
       var isSyllableDiv = item.type === 'syllable-div';
       var isWordSort = item.type === 'word-sort';
-      var isSentOrder = item.type === 'sentence-order'; // v462 ①
+      var isSentOrder = item.type === 'sentence-order';
+      var isExam = item.type === 'exam'; // v515 📄 模擬考卷   // v462 ①
       var isEssay = item.type === 'essay';
       var isStoryMtn = item.type === 'story-mountain';
       var isCloze = item.type === 'cloze';
@@ -1547,7 +1556,7 @@ function QuizModeCategoryView({
       var isDefMatch = item.type === 'def-match'; // v366
       var isLesson = item.type === 'lesson'; // v386: v383 漏掉這一行 → 教學卡顯示 0 題、整列變灰點不進去
       var isReadSkill = item.type === 'reading-skill'; // v386
-      var hasQuiz = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isSentOrder || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || isFlashcard && (item.cards || []).length > 0;
+      var hasQuiz = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isSentOrder || isExam || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || isFlashcard && (item.cards || []).length > 0;
       var hw = (homework || {})[item.id]; // { dueDate }
       var isMainMission = !editMode && (explicitMainIds.has(item.id) || homeworkMainIds.has(item.id) || item.id === fallbackMainId);
       var dueLabel = hw?.dueDate ? (() => {
@@ -1583,7 +1592,7 @@ function QuizModeCategoryView({
       })()), getQuizItems([item]).length === 0 && /*#__PURE__*/React.createElement("span", {
         className: "qm-empty-badge",
         title: "\u9019\u500B\u55AE\u5143\u9084\u6C92\u6709\u984C\u76EE\uFF0C\u5B78\u751F\u9801\u4E0D\u6703\u986F\u793A\u3002\u9EDE\u925B\u7B46\u9032\u53BB\u65B0\u589E\u984C\u76EE\u3002"
-      }, "\u26A0 \u6C92\u6709\u984C\u76EE \xB7 \u5B78\u751F\u770B\u4E0D\u5230")) : /*#__PURE__*/React.createElement(React.Fragment, null, isFlashcard ? `🃏 ${(item.cards || []).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? item.variant === 'translate' ? `🔤 ${(item.pairs || []).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs || []).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs || []).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs || []).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs || []).length} 題句型轉換` : `⌨ ${(item.pairs || []).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords || []).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions || []).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords || []).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords || []).length} 個單字` : isSentOrder ? `🧩 ${(item.orderQuestions || []).length} 句排順序` : isCloze ? `📝 ${((item.passage || '').match(/\[[^\]]+\]/g) || []).length} 格` : isCircle ? `⭕ ${(item.circleQuestions || []).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check || []).length} 題小試身手` : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`, scorePct !== null && !isWriting && /*#__PURE__*/React.createElement("span", {
+      }, "\u26A0 \u6C92\u6709\u984C\u76EE \xB7 \u5B78\u751F\u770B\u4E0D\u5230")) : /*#__PURE__*/React.createElement(React.Fragment, null, isFlashcard ? `🃏 ${(item.cards || []).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? item.variant === 'translate' ? `🔤 ${(item.pairs || []).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs || []).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs || []).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs || []).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs || []).length} 題句型轉換` : `⌨ ${(item.pairs || []).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords || []).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions || []).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords || []).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords || []).length} 個單字` : isExam ? `📄 ${window.examTotals ? window.examTotals(item).total : 0} 分 · ${(item.sections || []).length} 大題` : isSentOrder ? `🧩 ${(item.orderQuestions || []).length} 句排順序` : isCloze ? `📝 ${((item.passage || '').match(/\[[^\]]+\]/g) || []).length} 格` : isCircle ? `⭕ ${(item.circleQuestions || []).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check || []).length} 題小試身手` : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`, scorePct !== null && !isWriting && /*#__PURE__*/React.createElement("span", {
         className: "qm-unit-score-badge"
       }, scorePct, "%"), scorePct !== null && !isWriting && /*#__PURE__*/React.createElement(StarMastery, {
         pct: scorePct
@@ -1996,6 +2005,17 @@ function QuizModeCategoryView({
     item: selectedItem,
     prog: qmProg[`${weekId}_${selectedItem.id}`],
     onStart: () => setPhase('quiz')
+  }) : selectedItem?.type === 'exam' ?
+  /*#__PURE__*/
+  /* 📄 v515：考卷沒有 intro —— 真的考試不會先給你一頁「準備好了嗎」。
+     開場的心情／目標那兩題就長在卷子最上面，跟學校的一模一樣。 */
+  React.createElement(ExamPlayer, {
+    key: playerKey,
+    item: selectedItem,
+    progressKey: `${weekId}_${selectedItem.id}`,
+    onBack: () => setSelectedItem(null),
+    onBackToTasks: onBackToTasksShared,
+    onNextTask: onNextTask
   }) : selectedItem?.type === 'sentence-order' && phase === 'quiz' ? /*#__PURE__*/React.createElement(SentenceOrderPlayer, {
     onBackToTasks: onBackToTasksShared,
     onNextTask: onNextTask,
@@ -8311,6 +8331,284 @@ function TeacherLog({
   }, open ? '收起' : `看全部 ${rows.length} 堂`, /*#__PURE__*/React.createElement("i", null, open ? '⌃' : '⌄')));
 }
 
+/* ══ 📄 v515 模擬考卷 ════════════════════════════════════════════════════
+   Alan 給了兩張真的 G4 Formative，要做成互動版。
+   跟站上其他題型最大的不同：**這是一份卷子，不是一個練習**
+     · 整份在同一頁往下捲（像紙本），不是一題一畫面
+     · 中途不給任何對錯回饋 —— 交卷才結算
+     · 一個 100 分，分區加權；自動計分與老師手改分開寫清楚
+   ⚠ 所以沒有沿用現成的播放器：它們都是「一題一畫面＋立刻回饋」，
+     硬塞進考卷只會兩邊都彆扭。這裡自己畫，但計分全部交給 data.js 的 examScore。 */
+function ExamPlayer({
+  item,
+  progressKey,
+  onBack,
+  onBackToTasks,
+  onNextTask
+}) {
+  var [ans, setAns] = useQM({});
+  var [mood, setMood] = useQM(null);
+  var [goals, setGoals] = useQM({});
+  var [focus, setFocus] = useQM(null); // cloze：現在在填哪一格（點詞庫要知道填去哪）
+  var focusRef = React.useRef(null); // 同上，但「永遠是最新的」——見下面 put 的說明
+  var [sent, setSent] = useQM(false);
+  var [res, setRes] = useQM(null);
+  var topRef = React.useRef(null);
+  var secs = item.sections || [];
+  var T = window.examTotals ? window.examTotals(item) : {
+    auto: 0,
+    manual: 0,
+    total: 0
+  };
+  /* 🔴 作答一律用「函式版」更新，不可以用這一輪 render 拿到的值去算下一個值。
+     實測：連點五個字只留下最後一個、填空填到別格去、選擇題只記得最後一題——
+     因為五次點擊發生在同一個 render 週期裡，每一次都拿到**同一份舊的** ans，
+     後面的蓋掉前面的。小朋友手快一點就會遇到，而且畫面上看起來像「點了沒反應」。 */
+  var put = (key, fn) => setAns(a => ({
+    ...a,
+    [key]: typeof fn === 'function' ? fn(a[key]) : fn
+  }));
+  var setFocusBoth = i => {
+    focusRef.current = i;
+    setFocus(i);
+  };
+
+  /* 作答了幾大題——交卷前提醒用（不強制，紙本也可以空著交） */
+  var answered = window.examScore ? window.examScore(item, ans).parts.filter(p => {
+    var v = ans[p.key];
+    return Array.isArray(v) ? v.some(x => x !== undefined && x !== '') : v != null;
+  }).length : 0;
+  var submit = () => {
+    var r = window.examScore(item, ans);
+    setRes(r);
+    setSent(true);
+    try {
+      if (topRef.current) topRef.current.scrollIntoView({
+        block: 'start'
+      });
+    } catch (e) {}
+    /* 寫進度：⚠ 用「自動計分的部分」當分數。把老師還沒改的 20 分算成 0
+       會讓每個孩子的成績看起來都很慘，而且星星也會算錯。 */
+    var wrongList = [];
+    r.parts.forEach(pp => {
+      if (!pp.auto) return;
+      pp.detail.forEach(d => {
+        if (d.ok === false) wrongList.push({
+          q: pp.part.title || '',
+          answer: d.text || ''
+        });
+      });
+    });
+    saveQuizModeCompletion(progressKey, item, {
+      doneCount: r.parts.filter(p => p.auto).length,
+      score: r.auto,
+      total: r.autoMax,
+      wrongQuestions: wrongList
+    });
+    if (window._onQuizComplete) window._onQuizComplete(r.auto, r.autoMax, wrongList, {
+      itemId: progressKey
+    });
+  };
+
+  /* ── 一大題 ── */
+  var renderPart = (pt, key, pr) => {
+    var n = window.examPartN ? window.examPartN(pt) : 0;
+    var v = ans[key];
+    return /*#__PURE__*/React.createElement("div", {
+      className: 'ex-part' + (sent ? ' done' : ''),
+      key: key
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "ex-part-h"
+    }, /*#__PURE__*/React.createElement("b", null, pt.title || (window.EXAM_KINDS[pt.kind] || {}).zh), /*#__PURE__*/React.createElement("span", {
+      className: "ex-pts"
+    }, sent && pr ? pr.auto ? `${pr.got} / ${pt.pts}` : `__ / ${pt.pts}` : `${pt.pts} 分`, !sent && n > 1 ? `（${Math.round((+pt.pts || 0) / n * 10) / 10} 分一題）` : '')), pt.instruction && /*#__PURE__*/React.createElement("p", {
+      className: "ex-inst"
+    }, pt.instruction), pt.kind === 'circle' && (() => {
+      var picked = Array.isArray(v) ? v : [];
+      var toks = window.examTokens ? window.examTokens(pt.passage) : [];
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+        className: "ex-need"
+      }, "\u5708\u51FA ", /*#__PURE__*/React.createElement("b", null, pt.need || n), " \u500B\u3000", /*#__PURE__*/React.createElement("i", null, "\u5DF2\u5708 ", picked.length)), /*#__PURE__*/React.createElement("p", {
+        className: "ex-passage"
+      }, toks.map((tk, i) => {
+        if (!tk.w) return /*#__PURE__*/React.createElement("span", {
+          key: i
+        }, tk.t);
+        var on = picked.indexOf(tk.t) >= 0;
+        var mark = sent && on ? (pr.detail.find(d => d.text === tk.t) || {}).ok ? ' ok' : ' bad' : '';
+        return /*#__PURE__*/React.createElement("button", {
+          key: i,
+          className: 'ex-w' + (on ? ' on' : '') + mark,
+          disabled: sent,
+          onClick: () => put(key, prev => {
+            var p = Array.isArray(prev) ? prev : [];
+            return p.indexOf(tk.t) >= 0 ? p.filter(x => x !== tk.t) : p.concat([tk.t]);
+          })
+        }, tk.t);
+      })));
+    })(), pt.kind === 'cloze' && (() => {
+      var got = Array.isArray(v) ? v : [];
+      var used = new Set(got.filter(Boolean).map(x => String(x).toLowerCase()));
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+        className: "ex-bank"
+      }, (pt.bank || []).map((w, i) => /*#__PURE__*/React.createElement("button", {
+        key: i,
+        className: 'ex-bw' + (used.has(String(w).toLowerCase()) ? ' used' : ''),
+        disabled: sent,
+        onClick: () => {
+          var at = focusRef.current;
+          if (at == null) return;
+          put(key, prev => {
+            var g = Array.isArray(prev) ? prev.slice() : [];
+            g[at] = w;
+            return g;
+          });
+          setFocusBoth(null);
+        }
+      }, w))), /*#__PURE__*/React.createElement("ol", {
+        className: "ex-cl"
+      }, (pt.items || []).map((q, i) => {
+        var d = sent ? pr.detail[i] || {} : null;
+        var parts2 = String(q.text || '').split('___');
+        return /*#__PURE__*/React.createElement("li", {
+          key: i,
+          className: sent ? d.ok ? 'ok' : 'bad' : ''
+        }, parts2[0], /*#__PURE__*/React.createElement("button", {
+          className: 'ex-blank' + (focus === i && !sent ? ' focus' : '') + (got[i] ? ' filled' : ''),
+          disabled: sent,
+          onClick: () => {
+            put(key, prev => {
+              var g = Array.isArray(prev) ? prev.slice() : [];
+              if (g[i]) g[i] = '';
+              return g;
+            });
+            setFocusBoth(i);
+          }
+        }, got[i] || '＿＿＿＿'), parts2.slice(1).join('___'), sent && !d.ok && /*#__PURE__*/React.createElement("em", {
+          className: "ex-fix"
+        }, "\u6B63\u89E3\uFF1A", d.text));
+      })), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u9EDE\u4E00\u4E0B\u7A7A\u683C\uFF0C\u518D\u9EDE\u4E0A\u9762\u7684\u5B57\u5C31\u586B\u9032\u53BB\uFF1B\u518D\u9EDE\u7A7A\u683C\u4E00\u4E0B\u53EF\u4EE5\u62FF\u56DE\u4F86\u3002"));
+    })(), pt.kind === 'quiz' && /*#__PURE__*/React.createElement("ol", {
+      className: "ex-q"
+    }, (pt.questions || []).map((q, i) => {
+      var d = sent ? pr.detail[i] || {} : null;
+      return /*#__PURE__*/React.createElement("li", {
+        key: i,
+        className: sent ? d.ok ? 'ok' : 'bad' : ''
+      }, /*#__PURE__*/React.createElement("p", {
+        className: "ex-qt"
+      }, q.q), (q.options || []).map((o, oi) => {
+        var on = (Array.isArray(v) ? v[i] : undefined) === oi;
+        var isAns = sent && oi === q.answer;
+        return /*#__PURE__*/React.createElement("button", {
+          key: oi,
+          className: 'ex-opt' + (on ? ' on' : '') + (isAns ? ' ans' : ''),
+          disabled: sent,
+          onClick: () => put(key, prev => {
+            var g = Array.isArray(prev) ? prev.slice() : [];
+            g[i] = oi;
+            return g;
+          })
+        }, /*#__PURE__*/React.createElement("i", null, on ? '●' : '○'), o);
+      }));
+    })), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+      className: "ex-read"
+    }, pt.passage), (pt.questions || []).map((q, i) => /*#__PURE__*/React.createElement("div", {
+      className: "ex-sa",
+      key: i
+    }, /*#__PURE__*/React.createElement("p", {
+      className: "ex-qt"
+    }, q.q, q.pts ? /*#__PURE__*/React.createElement("span", {
+      className: "ex-sapts"
+    }, "\uFF08", q.pts, " \u5206\uFF09") : null), /*#__PURE__*/React.createElement("textarea", {
+      rows: q.rows || 4,
+      disabled: sent,
+      value: (Array.isArray(v) ? v[i] : '') || '',
+      placeholder: sent ? '' : '寫在這裡…',
+      onChange: e => {
+        var t = e.target.value;
+        put(key, prev => {
+          var g = Array.isArray(prev) ? prev.slice() : [];
+          g[i] = t;
+          return g;
+        });
+      }
+    }), q.rubric && /*#__PURE__*/React.createElement("div", {
+      className: "ex-rub"
+    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), /*#__PURE__*/React.createElement("div", {
+      className: "ex-manual"
+    }, "\u270D\uFE0F \u9019\u4E00\u984C\u8001\u5E2B\u6703\u89AA\u81EA\u6539\uFF0C\u4E0D\u6703\u81EA\u52D5\u7D66\u5206\u3002")));
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "ex-paper",
+    ref: topRef
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ex-head"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "ex-kicker"
+  }, item.examKicker || '康橋國際學校'), /*#__PURE__*/React.createElement("h2", null, item.title)), /*#__PURE__*/React.createElement("div", {
+    className: "ex-score"
+  }, sent && res ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", {
+    className: res.pct >= 80 ? 'hi' : res.pct >= 60 ? 'mid' : 'lo'
+  }, res.auto), /*#__PURE__*/React.createElement("span", null, "/ ", res.autoMax)) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", null, T.total), /*#__PURE__*/React.createElement("span", null, "\u5206")))), sent && res && /*#__PURE__*/React.createElement("div", {
+    className: "ex-result"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ex-res-rows"
+  }, res.bySection.map((sc, i) => /*#__PURE__*/React.createElement("div", {
+    className: "ex-res-row",
+    key: i
+  }, /*#__PURE__*/React.createElement("b", null, sc.name), /*#__PURE__*/React.createElement("span", null, sc.max ? `${sc.got} / ${sc.max}` : '—'), sc.manual > 0 && /*#__PURE__*/React.createElement("i", null, "\uFF0B", sc.manual, " \u5206\u8001\u5E2B\u6539")))), res.manualMax > 0 && /*#__PURE__*/React.createElement("p", {
+    className: "ex-res-note"
+  }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), item.examMood && !sent && /*#__PURE__*/React.createElement("div", {
+    className: "ex-mood"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ex-mood-q"
+  }, /*#__PURE__*/React.createElement("span", null, "1. How are you feeling right now?"), /*#__PURE__*/React.createElement("span", {
+    className: "ex-faces"
+  }, ['😟', '😐', '🙂'].map((f, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    className: 'ex-face' + (mood === i ? ' on' : ''),
+    onClick: () => setMood(i)
+  }, f)))), /*#__PURE__*/React.createElement("div", {
+    className: "ex-mood-q col"
+  }, /*#__PURE__*/React.createElement("span", null, "2. What is your goal for this test?"), ['Read every question carefully.', 'Take my time and do not rush.', 'Stay calm and do my best.'].map((g, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    className: 'ex-goal' + (goals[i] ? ' on' : ''),
+    onClick: () => setGoals(x => ({
+      ...x,
+      [i]: !x[i]
+    }))
+  }, /*#__PURE__*/React.createElement("i", null, goals[i] ? '☑' : '☐'), g)))), secs.map((sec, si) => /*#__PURE__*/React.createElement("section", {
+    className: "ex-sec",
+    key: si
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ex-sec-h"
+  }, /*#__PURE__*/React.createElement("b", null, sec.name || `Section ${si + 1}`), sec.pct ? /*#__PURE__*/React.createElement("span", null, "(", sec.pct, "%)") : null), (sec.parts || []).map((pt, pi) => {
+    var key = si + '_' + pi;
+    var pr = sent && res ? res.parts.find(x => x.key === key) : null;
+    return renderPart(pt, key, pr);
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "ex-foot"
+  }, !sent ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    className: "ex-submit",
+    onClick: () => {
+      var tot = res ? res.parts.length : window.examScore ? window.examScore(item, ans).parts.length : 0;
+      if (answered < tot && !confirm(`還有 ${tot - answered} 大題沒作答，確定要交卷嗎？`)) return;
+      submit();
+    }
+  }, "\u4EA4\u5377"), /*#__PURE__*/React.createElement("span", {
+    className: "ex-foot-n"
+  }, "\u4EA4\u5377\u4E4B\u5F8C\u624D\u6703\u77E5\u9053\u5206\u6578\uFF0C\u4E2D\u9014\u4E0D\u6703\u544A\u8A34\u4F60\u5C0D\u4E0D\u5C0D\u2014\u2014\u8DDF\u771F\u7684\u8003\u8A66\u4E00\u6A23\u3002")) : /*#__PURE__*/React.createElement(React.Fragment, null, onNextTask && /*#__PURE__*/React.createElement("button", {
+    className: "ex-submit",
+    onClick: onNextTask
+  }, "\u4E0B\u4E00\u500B\u7DF4\u7FD2 \u2192"), /*#__PURE__*/React.createElement("button", {
+    className: "qm-btn",
+    onClick: onBackToTasks || onBack
+  }, "\u56DE\u6E05\u55AE"))));
+}
+
 /* ── Growth data (shared by the full report + the inline learning-page card) ── */
 function computeGrowthData(weeks, weekOrder, qmProg, categories) {
   var perWeek = [];
@@ -11076,6 +11374,7 @@ function ReadingSkillPlayer({
   }, bi + 1 >= blocks.length ? '完成 · 看成績 →' : '下一個技巧 →')));
 }
 Object.assign(window, {
+  ExamPlayer,
   TeacherLog,
   ReadingSkillPlayer,
   ReadingSkillIntro,

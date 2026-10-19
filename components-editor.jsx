@@ -27,6 +27,7 @@ const TYPE_ZH = {
   'reading-skill': '閱讀技巧',
   essay: '意見文寫作', 'syllable-div': '切音節', 'word-sort': '分類排序',
   'story-mountain': '故事山脈', 'circle-answer': '圈出答案', 'sentence-order': '排順序',   // v462 ①
+  exam: '模擬考卷',   // v515 📄
 };
 const TYPE_OPTIONS = [
   { id: "quiz",      label: "Quiz",       hint: "Build a multiple-choice quiz with explanations" },
@@ -44,6 +45,7 @@ const TYPE_OPTIONS = [
   { id: "cloze",            label: "Cloze Test",       hint: "📝 段落填空 — 貼入完整文章，用 [答案] 或 [答案](提示) 標記空格，學生一次看整段填空並打字作答" },
   { id: "circle-answer",    label: "Circle Answer",    hint: "⭕ 圈出答案 — 學生點選句子中的正確單字，可選擇再回答分類題" },
   { id: "sentence-order",   label: "Sentence Order",   hint: "🧩 排順序 — 一句話打散成字塊，學生點成正確順序；語序類文法（疑問句、形容詞順序）用這個練最直接" },
+  { id: "exam",             label: "Exam Paper",      hint: "📄 模擬考卷 — 把圈選／Word Bank 填空／選擇題／問答串成一份有配分的卷子；交卷才給分，格式照康橋 Formative" },
   { id: "def-match",        label: "配對連線 🔗",       hint: "🔗 配對連線 — 左邊單字、右邊解釋（自動打亂），學生點一點連起來，系統自動批改" },
   { id: "lesson",           label: "教學卡 📘",        hint: "📘 教學卡 — 單元開頭的「先教再練」：這是什麼／什麼時候用／形式表／常見錯誤／老師示範／小試身手" },
   { id: "reading-skill",    label: "閱讀技巧 🔍",       hint: "🔍 閱讀技巧 — 學校會考的 Cause & Effect／Problem & Solution／Sequencing／Compare & Contrast（Venn 圖）。點一下卡片、再點格子放進去，自動批改。" },
@@ -64,7 +66,8 @@ function edDraftHasContent(form) {
   if (!form) return false;
   if (String(form.title || '').trim()) return true;
   return ['grSegments', 'grFinal', 'cards', 'questions', 'pairs', 'saQuestions', 'spellWords', 'defPairs',
-          'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts', 'orderQuestions']
+          'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts', 'orderQuestions',
+          'sections', 'examMood', 'examKicker']   // v515 📄 模擬考卷
     .some(k => Array.isArray(form[k]) && form[k].length > 0) ||
     !!String(form.passage || form.essayPrompt || form.smPrompt || '').trim();
 }
@@ -416,6 +419,103 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
               wordBank={form.wordBank || []}
               onChangeWordBank={v => update("wordBank", (v && v.length) ? v : undefined)}
             />
+          ) : form.type === "exam" ? (
+            /* ══ 📄 v515 模擬考卷 ══════════════════════════════════════════
+               沿用站上其他編輯器的習慣：一行一筆的純文字，老師可以直接貼、直接改，
+               不用面對一堆巢狀表單。格式說明寫在每個框底下。
+               ⚠ 真正好用的出卷方式是「📸 拍照變考卷」（下一版），這裡是手改與校稿。 */
+            (() => {
+              const secs = form.sections || [];
+              const setSecs = (next) => update('sections', next);
+              const patchPart = (si, pi, patch) => setSecs(secs.map((sc, i) => i !== si ? sc : {
+                ...sc, parts: (sc.parts || []).map((pt, k) => k !== pi ? pt : { ...pt, ...patch }),
+              }));
+              const T = window.examTotals ? window.examTotals(form) : { total: 0, auto: 0, manual: 0 };
+              const warns = window.examWarnings ? window.examWarnings(form) : [];
+              const HINT = {
+                circle: '第一行＝要圈什麼（vce／team／digraph／suffix:-ing），第二行以後＝短文',
+                cloze: '第一行＝詞庫（逗號分隔）；之後每行＝ 句子（用 ___ 當空格） | 答案',
+                quiz: '每行＝ 題目 | 選項1 | 選項2 | 選項3 | 正解編號（從 1 算）。⚠ 不用自己加題號，畫面會自己編。',
+                short: '每行＝ 題目 | 配分 | 評分重點（可省略）。這一種不自動給分，老師自己改。',
+              };
+              return (
+                <div className="field">
+                  <div className="exed-top">
+                    <label className="exed-chk">
+                      <input type="checkbox" checked={!!form.examMood}
+                        onChange={e => update('examMood', e.target.checked)}/>
+                      開頭放「今天心情／這次的目標」（學校卷子上就有）
+                    </label>
+                    <span className={'exed-total' + (T.total === 100 ? ' ok' : '')}>
+                      合計 {T.total} 分（自動 {T.auto}／老師改 {T.manual}）
+                    </span>
+                  </div>
+
+                  {warns.length > 0 && (
+                    <div className="exed-warn">
+                      {warns.map((w, i) => <div key={i}>⚠ {w}</div>)}
+                    </div>
+                  )}
+
+                  {secs.map((sc, si) => (
+                    <div className="exed-sec" key={si}>
+                      <div className="exed-sec-h">
+                        <input value={sc.name || ''} placeholder="Section 1: Word Study"
+                          onChange={e => setSecs(secs.map((x, i) => i === si ? { ...x, name: e.target.value } : x))}/>
+                        <input className="exed-pct" type="number" value={sc.pct || ''} placeholder="30"
+                          onChange={e => setSecs(secs.map((x, i) => i === si ? { ...x, pct: +e.target.value || 0 } : x))}/>
+                        <span>%</span>
+                        <button className="exed-x" title="刪掉這一區"
+                          onClick={() => { if (confirm('刪掉這一區？')) setSecs(secs.filter((_, i) => i !== si)); }}>✕</button>
+                      </div>
+
+                      {(sc.parts || []).map((pt, pi) => (
+                        <div className="exed-part" key={pi}>
+                          <div className="exed-part-h">
+                            <select value={pt.kind} onChange={e => patchPart(si, pi, { kind: e.target.value })}>
+                              {Object.keys(window.EXAM_KINDS || {}).map(k => (
+                                <option key={k} value={k}>{window.EXAM_KINDS[k].zh}</option>
+                              ))}
+                            </select>
+                            <input value={pt.title || ''} placeholder="Part 2: Read and Circle 10 -VCe words"
+                              onChange={e => patchPart(si, pi, { title: e.target.value })}/>
+                            <input className="exed-pts" type="number" value={pt.pts || ''} placeholder="20"
+                              onChange={e => patchPart(si, pi, { pts: +e.target.value || 0 })}/>
+                            <span>分</span>
+                            {pt.kind === 'circle' && (
+                              <>
+                                <input className="exed-pts" type="number" value={pt.need || ''} placeholder="10"
+                                  onChange={e => patchPart(si, pi, { need: +e.target.value || 0 })}/>
+                                <span>個</span>
+                              </>
+                            )}
+                            <button className="exed-x" title="刪掉這一大題"
+                              onClick={() => setSecs(secs.map((x, i) => i !== si ? x : { ...x, parts: x.parts.filter((_, k) => k !== pi) }))}>✕</button>
+                          </div>
+                          <textarea rows={pt.kind === 'circle' ? 5 : 6}
+                            value={window.examPartText ? window.examPartText(pt) : ''}
+                            onChange={e => patchPart(si, pi, window.examParsePart(pt.kind, e.target.value))}
+                            placeholder={HINT[pt.kind]}/>
+                          <div className="field-help">{HINT[pt.kind]}</div>
+                        </div>
+                      ))}
+
+                      <button className="exed-add" onClick={() => setSecs(secs.map((x, i) => i !== si ? x : {
+                        ...x, parts: (x.parts || []).concat([{ kind: 'quiz', title: '', pts: 0, questions: [] }]),
+                      }))}>＋ 加一大題</button>
+                    </div>
+                  ))}
+
+                  <button className="exed-add sec" onClick={() => setSecs(secs.concat([{ name: '', pct: 0, parts: [] }]))}>
+                    ＋ 加一個 Section
+                  </button>
+                  <div className="field-help">
+                    ⚠ 配分照學校的寫法（Part 2 是 20 分、2 分一題），不要自己換算成百分比——
+                    老師要能把網站的分數跟紙本對起來。
+                  </div>
+                </div>
+              );
+            })()
           ) : form.type === "sentence-order" ? (
             /* v462 ①：一行一句，每一句用空白分開每一塊。
                ⚠ 不要做成「輸入整句再自動切」——標點要跟著前面那個字（basketball.），

@@ -6,26 +6,26 @@
 // 為什麼要分：Alan 一個月內從 v375 跳到 v391（16 次 deploy），舊版 activate 會刪掉所有
 // key !== CACHE 的快取，等於每次 deploy 都把每個學生的圖片也一起清空重新冷啟動。
 // 圖片其實一整年都沒變，沒有理由跟著版本號陪葬。
-const CACHE = 'alans-english-v514';
+const CACHE = 'alans-english-v515';
 const STATIC = 'alans-static-v1';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
 const asset = path => BASE + path;
 
-// 跟版本走的檔案：URL 上都帶 ?v=514，所以 cache-first 是安全的（改版就換 URL）。
+// 跟版本走的檔案：URL 上都帶 ?v=515，所以 cache-first 是安全的（改版就換 URL）。
 const PRECACHE = [
-  asset('/'), asset('/index.html'), asset('/manifest.json?v=514'),
-  asset('/styles.css?v=514'), asset('/styles-part2.css?v=514'), asset('/styles-quiz.css?v=514'),
-  asset('/styles-flashcard.css?v=514'), asset('/styles-auth.css?v=514'), asset('/styles-quiz-mode.css?v=514'),
-  asset('/data.js?v=514'), asset('/data-g1.js?v=514'), asset('/data-g2.js?v=514'), asset('/data-g4.js?v=514'), asset('/data-g5.js?v=514'), asset('/data-g6.js?v=514'), asset('/data-summer.js?v=514'), asset('/data-grammar.js?v=514'),
-  asset('/dist/components-shell.js?v=514'), asset('/dist/components-quiz.js?v=514'),
-  asset('/dist/components-flashcard.js?v=514'), asset('/dist/components-editor.js?v=514'),
-  asset('/dist/components-quiz-mode.js?v=514'), asset('/dist/components-dashboard.js?v=514'),
-  asset('/dist/components-mistakes.js?v=514'), asset('/styles-mistakes.css?v=514'),
-  asset('/styles-theme.css?v=514'), asset('/styles-home.css?v=514'),
-  asset('/dist/app.js?v=514'), asset('/dist/components-fx.js?v=514'),
-  asset('/styles-fx.css?v=514'), asset('/styles-tune.css?v=514'),
-  asset('/summer-booking.html'), asset('/summer-booking.css?v=514'), asset('/summer-booking-admin.css?v=514'), asset('/summer-booking.js?v=514'),
+  asset('/'), asset('/index.html'), asset('/manifest.json?v=515'),
+  asset('/styles.css?v=515'), asset('/styles-part2.css?v=515'), asset('/styles-quiz.css?v=515'),
+  asset('/styles-flashcard.css?v=515'), asset('/styles-auth.css?v=515'), asset('/styles-quiz-mode.css?v=515'),
+  asset('/data.js?v=515'), asset('/data-g1.js?v=515'), asset('/data-g2.js?v=515'), asset('/data-g4.js?v=515'), asset('/data-g5.js?v=515'), asset('/data-g6.js?v=515'), asset('/data-summer.js?v=515'), asset('/data-grammar.js?v=515'),
+  asset('/dist/components-shell.js?v=515'), asset('/dist/components-quiz.js?v=515'),
+  asset('/dist/components-flashcard.js?v=515'), asset('/dist/components-editor.js?v=515'),
+  asset('/dist/components-quiz-mode.js?v=515'), asset('/dist/components-dashboard.js?v=515'),
+  asset('/dist/components-mistakes.js?v=515'), asset('/styles-mistakes.css?v=515'),
+  asset('/styles-theme.css?v=515'), asset('/styles-home.css?v=515'),
+  asset('/dist/app.js?v=515'), asset('/dist/components-fx.js?v=515'),
+  asset('/styles-fx.css?v=515'), asset('/styles-tune.css?v=515'),
+  asset('/summer-booking.html'), asset('/summer-booking.css?v=515'), asset('/summer-booking-admin.css?v=515'), asset('/summer-booking.js?v=515'),
 ];
 
 // 跟版本無關的圖片／icon（合計約 417KB）。原本完全沒進快取，而 GitHub Pages 全站

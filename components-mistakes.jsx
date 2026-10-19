@@ -18,7 +18,8 @@ function _mkShuffle(arr) {
 const MK_REVEAL_ONLY = [
   'spelling', 'syllable-div', 'cloze', 'essay',
   'story-mountain', 'short-answer', 'writing-practice', 'word-sort', 'sentence-order',
-  'reading-skill'   // v386: 答案是「該放哪一格」，做成四選一會誤導
+  'reading-skill',  // v386: 答案是「該放哪一格」，做成四選一會誤導
+  'exam'            // v515: 考卷的錯題是「某一大題錯了」，湊成四選一沒有意義
 ];
 
 /* ── Single wrong-question row (answer hidden until tap) ── */
