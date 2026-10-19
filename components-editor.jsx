@@ -6081,22 +6081,42 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                       /* v519：五種都能在這裡做完了（剩下兩種住在後台，照樣是開後台指路）。 */
                       const canHere = !!onGenerate
                         && ['vocab', 'reading', 'wordstudy', 'grammar', 'exam'].indexOf(m.plan.intent) >= 0;
-                      if (m.saved) return <div className="ask-done">✅ 已經存進本週了</div>;
+                      if (m.saved) return <div className="ask-done">✅ 已經存進本週了{m.hw ? `，而且設成作業（${m.hw} 到期）` : ''}</div>;
                       if (m.done) return <div className="ask-done">✅ 開好了，接下來照原本的流程走</div>;
-                      if (g.items) return (
+                      if (g.items) {
+                        /* 📌 v521：出完順手指派。預設開著（他每次都要設），日期可以直接改。
+                           ⚠ 他如果說「先不要指派」，路由器會給 due: 'none'，這裡就預設關掉。 */
+                        const noAssign = m.plan.due === 'none';
+                        const hw = g.hw !== undefined ? g.hw
+                          : (noAssign ? '' : (window.askDueDate(m.plan.due) || window.askDueDefault()));
+                        return (
                         <>
                           <AskPreview items={g.items}/>
+                          <div className="ask-hw">
+                            <label>
+                              <input type="checkbox" checked={!!hw}
+                                onChange={e => setGen(x => ({ ...x, [i]: { ...g,
+                                  hw: e.target.checked ? (window.askDueDate(m.plan.due) || window.askDueDefault()) : '' } }))}/>
+                              設成這週作業
+                            </label>
+                            {hw && (
+                              <input type="date" value={hw}
+                                onChange={e => setGen(x => ({ ...x, [i]: { ...g, hw: e.target.value } }))}/>
+                            )}
+                            {hw ? <em>{hw} 到期</em> : <em>只建立，不設作業</em>}
+                          </div>
                           <div className="ask-plan-btn">
                             <button className="btn primary" onClick={() => {
-                              onSave(g.items, m.plan);
-                              setMsgs(x => x.map((y, k) => k === i ? { ...y, saved: true } : y));
+                              onSave(g.items, m.plan, hw);
+                              setMsgs(x => x.map((y, k) => k === i ? { ...y, saved: true, hw } : y));
                             }}>就這些，存進本週</button>
                             <button className="btn ghost" onClick={() => {
                               setGen(x => ({ ...x, [i]: {} }));
                             }}>↻ 重出一份</button>
                           </div>
                         </>
-                      );
+                        );
+                      }
                       if (g.busy) return <div className="ask-gen">⏳ {g.label || '出題中…'}</div>;
                       return (
                         <div className="ask-plan-btn">

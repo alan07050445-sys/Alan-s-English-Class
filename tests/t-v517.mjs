@@ -138,7 +138,34 @@ ok('⚠ 短文填空／字義選擇失敗不可以拖垮其他已經出好的（
    && /aiMakeVocabSense\([\s\S]{0,120}\.catch\(\(\) => null\)/.test(app));
 ok('⭐ 出一半失敗要講出來，不要安靜關掉', /出題失敗：/.test(ed));
 ok('   預覽看得到每個單元幾題、前兩題長什麼樣', /function AskPreview/.test(ed) && /getQuizItemTotal/.test(ed));
-ok('⭐⭐ 存是最後一步——按了才寫進週次', /onSave\(g\.items, m\.plan\)/.test(ed) && /handleAddBuiltItems\(items, cat\)/.test(app));
+ok('⭐⭐ 存是最後一步——按了才寫進週次',
+   /onSave\(g\.items, m\.plan[^)]*\)/.test(ed) && /handleAddBuiltItems\(items, cat[^)]*\)/.test(app));
+
+console.log('\n【9】📌 v521：出完順手指派');
+/* ⚠ 日期一律由程式算，AI 只回一個受控的詞——模型算日期常差一天，
+   而「到期日差一天」家長跟小孩都會被影響。 */
+const WED = new Date(2026, 9, 21);   // 2026-10-21 是週三
+ok('⭐⭐ 日期是程式算的，AI 只回詞', /Do NOT work out the actual date yourself/.test(data)
+   && /function askDueDate\(hint, now\)/.test(data));
+ok('   today / tomorrow / +3d', W.askDueDate('today', WED) === '2026-10-21'
+   && W.askDueDate('tomorrow', WED) === '2026-10-22' && W.askDueDate('+3d', WED) === '2026-10-24');
+ok('⭐ 這週五 = 10/23', W.askDueDate('this-fri', WED) === '2026-10-23');
+ok('⭐⭐ 今天就是週三時，「這週三」指下一個週三（差一天就是作業到期日錯一天）',
+   W.askDueDate('this-wed', WED) === '2026-10-28');
+ok('   下週三 = 再加七天', W.askDueDate('next-wed', WED) === '2026-11-04');
+ok('⭐ 明確日期照收', W.askDueDate('2026-12-01', WED) === '2026-12-01');
+ok('⭐ 「先不要指派」→ none → 不設作業', W.askDueDate('none', WED) === '');
+ok('⭐⭐ 受控詞彙以外一律當「沒講」（模型回「下週吧」不要亂解讀）',
+   W.askVerify({ intent: 'vocab', words: [{ term: 'a' }], due: '下週吧' }, { roster }).due === ''
+   && W.askDueDate('下週吧', WED) === '');
+ok('   沒講時有預設（下一個週日，跟視窗裡一致）', W.askDueDefault(WED) === '2026-11-01');
+ok('⚠ 用本地時間算，不可以用 toISOString（v496 的教訓）',
+   /絕不用 toISOString/.test(data) && !/toISOString/.test(data.slice(data.indexOf('function askDueDate'), data.indexOf('function askDueDefault'))));
+ok('⭐ 畫面上看得到、而且改得了', /設成這週作業/.test(ed) && /type="date"/.test(ed));
+ok('⭐⭐ 寫進 week.homework，跟 handleQuickSet 同一個地方（不要另外發明一種存法）',
+   /w\[weekId\]\.homework\[it\.id\] = \{ dueDate \};/.test(app)
+   && /const handleAddBuiltItems = \(list, cat, dueDate\)/.test(app));
+ok('   存完要講清楚有沒有設成作業', /已經存進本週了\$\{m\.hw \? /.test(ed) || /而且設成作業/.test(ed));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
 process.exit(fail ? 1 : 0);

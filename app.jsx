@@ -1328,7 +1328,7 @@ function App() {
     setAskOpen(false);
   };
 
-  const handleAddBuiltItems = (list, cat) => {
+  const handleAddBuiltItems = (list, cat, dueDate) => {
     /* ⚠ _warn 是給聊天室畫面看的校稿提醒，不可以跟著寫進課程資料。 */
     const items = (list || []).filter(Boolean).map(({ _warn, ...it }) => it);
     if (!items.length) { showToast('沒有東西可以存'); return; }
@@ -1337,10 +1337,18 @@ function App() {
     if (!w[weekId].items) w[weekId].items = {};
     if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
     w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+    /* 📌 v521：出完順手指派——跟 handleQuickSet 寫同一個地方（week.homework），
+       不要另外發明一種存法。 */
+    let note = '';
+    if (dueDate) {
+      if (!w[weekId].homework) w[weekId].homework = {};
+      items.forEach(it => { w[weekId].homework[it.id] = { dueDate }; });
+      note = ` · 已設為作業（${dueDate} 到期）`;
+    }
     setWeeks(w);
     saveWeeksSafe(w);
     setOpenCat(cat);
-    showToast(`已建立 ${items.length} 個單元`);
+    showToast(`已建立 ${items.length} 個單元${note}`);
   };
 
   /* v382: 時態出題完成 → 建立成多個單元（Type A→type-answer、Type B→cloze），
@@ -2421,11 +2429,11 @@ function App() {
               onClose={() => setAskOpen(false)}
               onRun={runAskPlan}
               onGenerate={askGenerate}
-              onSave={(items, plan) => {
+              onSave={(items, plan, dueDate) => {
                 const cat = openCat
                   || (plan.intent === 'reading' && activeCategories.find(c => c.id === 'reading') ? 'reading' : '')
                   || (activeCategories[0] && activeCategories[0].id) || 'vocab';
-                handleAddBuiltItems(items, cat);
+                handleAddBuiltItems(items, cat, dueDate);
               }}
             />
           )}

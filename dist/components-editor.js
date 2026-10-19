@@ -9441,32 +9441,61 @@ function AskPanel({
       var canHere = !!onGenerate && ['vocab', 'reading', 'wordstudy', 'grammar', 'exam'].indexOf(m.plan.intent) >= 0;
       if (m.saved) return /*#__PURE__*/React.createElement("div", {
         className: "ask-done"
-      }, "\u2705 \u5DF2\u7D93\u5B58\u9032\u672C\u9031\u4E86");
+      }, "\u2705 \u5DF2\u7D93\u5B58\u9032\u672C\u9031\u4E86", m.hw ? `，而且設成作業（${m.hw} 到期）` : '');
       if (m.done) return /*#__PURE__*/React.createElement("div", {
         className: "ask-done"
       }, "\u2705 \u958B\u597D\u4E86\uFF0C\u63A5\u4E0B\u4F86\u7167\u539F\u672C\u7684\u6D41\u7A0B\u8D70");
-      if (g.items) return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(AskPreview, {
-        items: g.items
-      }), /*#__PURE__*/React.createElement("div", {
-        className: "ask-plan-btn"
-      }, /*#__PURE__*/React.createElement("button", {
-        className: "btn primary",
-        onClick: () => {
-          onSave(g.items, m.plan);
-          setMsgs(x => x.map((y, k) => k === i ? {
-            ...y,
-            saved: true
-          } : y));
-        }
-      }, "\u5C31\u9019\u4E9B\uFF0C\u5B58\u9032\u672C\u9031"), /*#__PURE__*/React.createElement("button", {
-        className: "btn ghost",
-        onClick: () => {
-          setGen(x => ({
+      if (g.items) {
+        /* 📌 v521：出完順手指派。預設開著（他每次都要設），日期可以直接改。
+           ⚠ 他如果說「先不要指派」，路由器會給 due: 'none'，這裡就預設關掉。 */
+        var noAssign = m.plan.due === 'none';
+        var hw = g.hw !== undefined ? g.hw : noAssign ? '' : window.askDueDate(m.plan.due) || window.askDueDefault();
+        return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(AskPreview, {
+          items: g.items
+        }), /*#__PURE__*/React.createElement("div", {
+          className: "ask-hw"
+        }, /*#__PURE__*/React.createElement("label", null, /*#__PURE__*/React.createElement("input", {
+          type: "checkbox",
+          checked: !!hw,
+          onChange: e => setGen(x => ({
             ...x,
-            [i]: {}
-          }));
-        }
-      }, "\u21BB \u91CD\u51FA\u4E00\u4EFD")));
+            [i]: {
+              ...g,
+              hw: e.target.checked ? window.askDueDate(m.plan.due) || window.askDueDefault() : ''
+            }
+          }))
+        }), "\u8A2D\u6210\u9019\u9031\u4F5C\u696D"), hw && /*#__PURE__*/React.createElement("input", {
+          type: "date",
+          value: hw,
+          onChange: e => setGen(x => ({
+            ...x,
+            [i]: {
+              ...g,
+              hw: e.target.value
+            }
+          }))
+        }), hw ? /*#__PURE__*/React.createElement("em", null, hw, " \u5230\u671F") : /*#__PURE__*/React.createElement("em", null, "\u53EA\u5EFA\u7ACB\uFF0C\u4E0D\u8A2D\u4F5C\u696D")), /*#__PURE__*/React.createElement("div", {
+          className: "ask-plan-btn"
+        }, /*#__PURE__*/React.createElement("button", {
+          className: "btn primary",
+          onClick: () => {
+            onSave(g.items, m.plan, hw);
+            setMsgs(x => x.map((y, k) => k === i ? {
+              ...y,
+              saved: true,
+              hw
+            } : y));
+          }
+        }, "\u5C31\u9019\u4E9B\uFF0C\u5B58\u9032\u672C\u9031"), /*#__PURE__*/React.createElement("button", {
+          className: "btn ghost",
+          onClick: () => {
+            setGen(x => ({
+              ...x,
+              [i]: {}
+            }));
+          }
+        }, "\u21BB \u91CD\u51FA\u4E00\u4EFD")));
+      }
       if (g.busy) return /*#__PURE__*/React.createElement("div", {
         className: "ask-gen"
       }, "\u23F3 ", g.label || '出題中…');

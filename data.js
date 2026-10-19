@@ -7296,6 +7296,41 @@ const ASK_JOBS = {
   weak:      { zh: '弱點分析 → 針對性練習', ico: '🎯', need: 'student', where: 'dash' },
 };
 
+/* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
+   Alan：「出完順手指派」——那是他每天都在做、最機械的一步。
+   ⚠ **日期一律由程式算**，AI 只負責回一個受控的詞。
+     模型算日期常常差一天（時區、週幾的定義），而「到期日差一天」
+     家長跟小孩都會被影響。這裡跟 lessonISO 一樣用本地時間，絕不用 toISOString。 */
+const ASK_DUE_WORDS = ['none', 'today', 'tomorrow',
+  'this-mon', 'this-tue', 'this-wed', 'this-thu', 'this-fri', 'this-sat', 'this-sun',
+  'next-mon', 'next-tue', 'next-wed', 'next-thu', 'next-fri', 'next-sat', 'next-sun'];
+const _ASK_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function askDueDate(hint, now) {
+  const h = String(hint || '').trim().toLowerCase();
+  const base = now instanceof Date ? new Date(now) : new Date();
+  base.setHours(0, 0, 0, 0);
+  if (!h || h === 'none') return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(h)) return h;              // 他直接講了日期
+  if (h === 'today') return lessonISO(base);
+  if (h === 'tomorrow') { base.setDate(base.getDate() + 1); return lessonISO(base); }
+  const plus = /^\+(\d{1,2})d$/.exec(h);
+  if (plus) { base.setDate(base.getDate() + Math.min(60, +plus[1])); return lessonISO(base); }
+  const wk = /^(this|next)-(sun|mon|tue|wed|thu|fri|sat)$/.exec(h);
+  if (wk) {
+    const want = _ASK_DOW[wk[2]];
+    let add = (want - base.getDay() + 7) % 7;
+    /* ⚠「這週三」如果今天已經是週三或更後面，指的是**下一個**週三——
+       不是今天，也不是上週。差一天就是作業到期日錯一天。 */
+    if (add === 0) add = 7;
+    if (wk[1] === 'next') add += 7;
+    base.setDate(base.getDate() + add);
+    return lessonISO(base);
+  }
+  return '';
+}
+/* 沒特別講時的預設：下一個週日（跟 ReadingGenModal 的預設一致） */
+function askDueDefault(now) { return askDueDate('next-sun', now) || ''; }
+
 /* 一鍵出單字真的做得出來的題型（跟 components-editor.jsx 的 QS_KINDS 同一份 id）。
    ⚠ 這裡寫死是為了程式驗得到——AI 自己發明的 id 丟進 qsBuildItems 會安靜地少一個單元。 */
 const ASK_VOCAB_KINDS = ['flashcard', 'def-match', 'spelling', 'quiz', 'fillblank', 'story', 'sense'];
@@ -7334,6 +7369,12 @@ Rules:
   question-writing AI. If he did not ask for anything special, leave it "".
 - "nMcq" / "nSa": ONLY for reading, when he said how many ("出 8 題選擇、3 題問答").
   Otherwise 0 and the website uses its defaults.
+- "due": when he said the homework is due. ONE of:
+    none | today | tomorrow | +3d (any number of days)
+    this-mon…this-sun | next-mon…next-sun | or an exact 2026-10-26
+  🔴 Do NOT work out the actual date yourself — the website does that. Just pass the word.
+  If he did not mention a deadline at all, use "" and the website uses its own default.
+  If he said he does NOT want it set as homework ("先不要指派"), use "none".
 - "say": one short friendly Traditional-Chinese sentence telling him what you are about to do.
 
 Output ONLY JSON:
@@ -7368,6 +7409,14 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     note: String(o.note || '').trim().slice(0, 600),
     nMcq: Math.max(0, Math.min(20, +o.nMcq || 0)),
     nSa: Math.max(0, Math.min(10, +o.nSa || 0)),
+    /* v521：只收受控的詞或 +Nd 或明確日期；其他一律當「沒講」，由畫面用預設。 */
+    due: (() => {
+      const d = String(o.due || '').trim().toLowerCase();
+      if (ASK_DUE_WORDS.indexOf(d) >= 0) return d;
+      if (/^\+\d{1,2}d$/.test(d)) return d;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      return '';
+    })(),
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
   if (out.student) {
@@ -7421,7 +7470,8 @@ async function aiRouteCommand({ text = '', images = [], categories = [], roster 
   return askVerify(got, { categories, roster, nImages: imgs.length });
 }
 
-Object.assign(window, { ASK_JOBS, ASK_SYS, ASK_VOCAB_KINDS, askVerify, aiRouteCommand });
+Object.assign(window, { ASK_JOBS, ASK_SYS, ASK_VOCAB_KINDS, ASK_DUE_WORDS,
+  askDueDate, askDueDefault, askVerify, aiRouteCommand });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v516 📸 拍考卷照片 → 變成互動版
