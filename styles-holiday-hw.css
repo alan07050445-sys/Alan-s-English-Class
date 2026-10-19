@@ -238,25 +238,36 @@ html.fest-hw .lc-cover::after {
   /* ⚠ 位置是**畫出來量**才定下來的，不是估的：第一版月亮和一隻蝙蝠
      正好壓在「Alan's English Class」上面。裝飾一律避開中間那條內容帶
      （標題、副標、扇形卡片、登入鈕），只放在四邊。 */
+  /* ⚠⚠ 角落的裝飾一律**釘在邊緣（px）**，不要用百分比。
+     百分比是「圖的 x% 對齊容器的 x%」，剩餘空間一變（換一個視窗比例、
+     標題換行）位置就跟著漂——1440×900 排好的月亮，到 800×600 就壓在
+     「Class」上面了（上線後才看到的）。px 釘住角落，什麼比例都一樣。
+     ⚠ 中場那三隻蝙蝠維持百分比是故意的：它們本來就要跟著版面散開，
+       而且位置都避開了中間的內容帶。 */
   background:
-    var(--hw-moon)  94% 4%/116px 116px no-repeat,
+    var(--hw-moon)  right 12px top 14px/88px 88px no-repeat,
     var(--hw-bat)   22% 30%/60px 60px no-repeat,
-    var(--hw-bat)   88% 44%/72px 72px no-repeat,
+    var(--hw-bat)   88% 46%/72px 72px no-repeat,
     var(--hw-bat)   50% 96%/46px 46px no-repeat,
-    var(--hw-ghost) 9% 62%/92px 92px no-repeat,
-    var(--hw-jack)  91% 86%/104px 104px no-repeat,
-    var(--hw-jack)  79% 93%/62px 62px no-repeat,
-    var(--hw-web-w) 0 0/140px 140px no-repeat;
+    var(--hw-ghost) left 24px bottom 96px/88px 88px no-repeat,
+    var(--hw-jack)  right 34px bottom 18px/100px 100px no-repeat,
+    var(--hw-jack)  right 132px bottom 6px/58px 58px no-repeat,
+    var(--hw-web-w) left 0 top 0/140px 140px no-repeat;
   opacity: .92;
   -webkit-mask-image: none; mask-image: none;
+}
+/* 標題在窄一點的視窗會往右長到接近月亮 → 月亮先縮小讓位 */
+@media (max-width: 1100px) {
+  html.fest-hw .lc-cover::after { background-size: 72px 72px, 54px 54px, 62px 62px, 40px 40px,
+    78px 78px, 88px 88px, 52px 52px, 118px 118px; }
 }
 @media (max-width: 680px) {
   html.fest-hw .lc-cover::after {
     background:
-      var(--hw-moon)  88% 8%/72px 72px no-repeat,
-      var(--hw-bat)   60% 13%/64px 64px no-repeat,
-      var(--hw-jack)  90% 93%/68px 68px no-repeat,
-      var(--hw-ghost) 8% 90%/58px 58px no-repeat;
+      var(--hw-moon)  right 10px top 10px/64px 64px no-repeat,
+      var(--hw-bat)   58% 16%/52px 52px no-repeat,
+      var(--hw-jack)  right 12px bottom 10px/64px 64px no-repeat,
+      var(--hw-ghost) left 14px bottom 70px/54px 54px no-repeat;
   }
 }
 
@@ -423,13 +434,13 @@ html.fest-hw .fest-ribbon::after {
 /* ⚠ 南瓜要避開左上角的返回鈕（它釘在 top:20px left:20px）——v490 那次
    青天白日剛好被「← 返回課程」壓住，只有真的畫出來才看得到這種事。 */
 html.fest-hw .fest-ribbon i {
-  position: absolute; left: 7.5%; top: 9%; width: 78px; height: 72px;
+  position: absolute; left: 18px; top: 62px; width: 72px; height: 66px;
   background: var(--hw-jack) center/contain no-repeat;
   filter: drop-shadow(0 6px 18px rgba(0,0,0,.4));
   z-index: 1;
 }
 @media (max-width: 680px) {
-  html.fest-hw .fest-ribbon i { left: 6%; top: 11%; width: 52px; height: 48px; }
+  html.fest-hw .fest-ribbon i { left: 12px; top: 56px; width: 50px; height: 46px; }
 }
 
 /* 封面與門口頁的內容要浮在飄帶上面。
