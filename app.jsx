@@ -1220,6 +1220,44 @@ function App() {
     return window.subscribeRoster(setAskRoster, () => {});
   }, [askOpen]);
 
+  /* 💬 v518（Alan：「他要先回答我檢查沒問題，確定這些題目沒問題，我就會說幫我直接出出來」）
+     在聊天室裡直接出題。⭐ 一樣**不新寫出題邏輯**——呼叫的是視窗裡本來就在用的那幾支，
+     組單元用的也是同一支 qsBuildItems／rcBuildItems。
+     ⚠ 出完只是放在畫面上，他按「存進本週」才真的寫。 */
+  const askGenerate = async (plan, say) => {
+    const g = /^g[1-6]$/.test(String(grade)) ? grade : 'g4';
+    const note = plan.note || '';
+    if (plan.intent === 'vocab') {
+      const words = plan.words.map(w => ({ term: w.term, zh: w.zh || '' }));
+      const title = plan.title || words[0].term;
+      const kinds = plan.kinds.length ? plan.kinds : ['flashcard', 'quiz', 'def-match', 'fillblank', 'spelling'];
+      say('出題中…（單字練習）');
+      const ai = await window.aiMakeVocabExercises(words, { hint: title, grade: g, teacherNote: note });
+      /* 短文填空與字義選擇比較慢，而且**失敗不可以拖垮其他已經出好的**（v473 的教訓）。 */
+      let story = null, sense = null;
+      if (kinds.indexOf('story') >= 0 && window.aiMakeVocabStory) {
+        say('出題中…（短文填空）');
+        story = await window.aiMakeVocabStory(words, { hint: title, grade: g, teacherNote: note }).catch(() => null);
+      }
+      if (kinds.indexOf('sense') >= 0 && window.aiMakeVocabSense) {
+        say('出題中…（字義選擇）');
+        sense = await window.aiMakeVocabSense(words, { hint: title, grade: g, teacherNote: note }).catch(() => null);
+      }
+      return window.qsBuildItems({ words, title, kinds, ai, story, sense });
+    }
+    if (plan.intent === 'reading') {
+      const title = plan.title || '閱讀理解';
+      say('出題中…（讀文章、出題目）');
+      const r = await window.aiMakeReadingSet({
+        passage: plan.text, title, grade: g,
+        mcq: plan.nMcq || 8, sa: plan.nSa || 3, teacherNote: note,
+      });
+      return window.rcBuildItems({ title, passage: plan.text, mcq: r.mcq, sa: r.sa,
+        blocks: r.blocks, skillQs: r.skillQs, background: null });
+    }
+    return [];
+  };
+
   /* 💬 v517：聽懂之後**只做一件事**——打開現成的那個視窗並填好。
      這裡刻意不碰任何出題邏輯，也不直接寫進週次。 */
   const runAskPlan = (plan) => {
@@ -1232,9 +1270,9 @@ function App() {
     } else if (plan.intent === 'wordstudy') {
       setAskTopic(plan.topic); setWsGenOpen(true);
     } else if (plan.intent === 'grammar') {
-      setAskText({ text: plan.text, title: plan.title }); setGnGenOpen(true);
+      setAskText({ text: plan.text, title: plan.title, note: plan.note }); setGnGenOpen(true);
     } else if (plan.intent === 'reading') {
-      setAskText({ text: plan.text, title: plan.title }); setRcGenOpen(true);
+      setAskText({ text: plan.text, title: plan.title, note: plan.note }); setRcGenOpen(true);
     } else if (plan.intent === 'exam') {
       setExamScanOpen(true);
     } else if (plan.intent === 'lesson' || plan.intent === 'weak') {
@@ -2333,8 +2371,16 @@ function App() {
               open={askOpen}
               categories={activeCategories}
               roster={askRoster}
+              grade={grade}
               onClose={() => setAskOpen(false)}
               onRun={runAskPlan}
+              onGenerate={askGenerate}
+              onSave={(items, plan) => {
+                const cat = openCat
+                  || (plan.intent === 'reading' && activeCategories.find(c => c.id === 'reading') ? 'reading' : '')
+                  || (activeCategories[0] && activeCategories[0].id) || 'vocab';
+                handleAddBuiltItems(items, cat);
+              }}
             />
           )}
 

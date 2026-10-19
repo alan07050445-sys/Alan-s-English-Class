@@ -73,7 +73,7 @@ ok('⭐ 單字 → QuickSetModal', /setRegenFor\(\{ name: plan\.title[\s\S]{0,20
 ok('⭐ Word Study → WordStudyModal（主題帶進去）',
    /setAskTopic\(plan\.topic\); setWsGenOpen\(true\)/.test(app) && /defaultTopic=\{askTopic \|\|/.test(app));
 ok('⭐ 文法 → GrammarNotesModal（文字帶進去）',
-   /setAskText\(\{ text: plan\.text, title: plan\.title \}\); setGnGenOpen\(true\)/.test(app)
+   /setAskText\(\{ text: plan\.text, title: plan\.title[^}]*\}\); setGnGenOpen\(true\)/.test(app)
    && /defaultText=\{\(askText && askText\.text\)/.test(app));
 ok('⭐ 閱讀 → ReadingGenModal（本來沒有貼文章的入口，這一版補上）',
    /function ReadingGenModal\(\{ open, categories, defaultCat, perStudent, roster, defaultTitle, defaultText/.test(ed)
@@ -89,6 +89,40 @@ ok('⭐ app.jsx 掛上面板', /<window\.AskPanel/.test(app) && /onRun=\{runAskP
 ok('⭐ 可以丟截圖（讀圖的機制 v428 就有了）', /type: 'image'/.test(data) && /ask-clip/.test(ed));
 ok('   名單只在打開時才訂閱（平常不花錢）', /if \(!askOpen \|\| !window\.subscribeRoster\) return;/.test(app));
 ok('   記得前幾句（「再多五個字」要知道在講什麼）', /history: msgs\.slice\(-4\)/.test(ed) && /const hist = \(history \|\| \[\]\)/.test(data));
+
+console.log('\n【7】v518：聽得懂「要哪幾種題型」與「我的特別要求」');
+ok('⭐⭐ 題型只收真的做得出來的那幾種（模型自己發明的 id 丟進去會安靜少一個單元）', (() => {
+   const r = W.askVerify({ intent: 'vocab', words: [{ term: 'apple' }],
+     kinds: ['quiz', 'fillblank', 'matching2', '亂講'] }, { roster });
+   return r.kinds.join() === 'quiz,fillblank'; })());
+ok('⭐⭐ 清單跟編輯器的 QS_KINDS 是同一份 id（兩份一定會走鐘）', (() => {
+   const seg = ed.slice(ed.indexOf('const QS_KINDS = ['), ed.indexOf('];', ed.indexOf('const QS_KINDS = [')));
+   const ids = [...seg.matchAll(/\{ id: '([a-z-]+)'/g)].map(m => m[1]);
+   return ids.length >= 6 && ids.every(id => (W.ASK_VOCAB_KINDS || []).indexOf(id) >= 0)
+     && (W.ASK_VOCAB_KINDS || []).every(id => ids.indexOf(id) >= 0); })());
+ok('⭐⭐ 抓得到「特別要求」（這就是他說的「我要求一些 prompt」）',
+   W.askVerify({ intent: 'vocab', words: [{ term: 'a' }], note: '例句要跟棒球有關' }, { roster }).note === '例句要跟棒球有關');
+ok('   要求會真的送到出題的 AI 手上（teacherNote）',
+   /teacherNote: note/.test(app) && /_aiTeacherNote\(teacherNote\)/.test(data));
+ok('   題數有上限（說「出 999 題」不要真的去跑）',
+   W.askVerify({ intent: 'reading', text: 'x'.repeat(50), nMcq: 999 }, { roster }).nMcq === 20);
+
+console.log('\n【8】⭐⭐ v518：聊天室裡直接出題 → 看過再存');
+ok('⭐⭐ 出完先給他看，不是直接存', /出題給我看/.test(ed) && /就這些，存進本週/.test(ed));
+ok('⭐⭐ 兩段確認：先確認要做什麼，再確認題目對不對',
+   /第一段確認「要做什麼」，第二段確認「題目對不對」/.test(ed));
+ok('⭐ 覺得方向不對可以重出一份', /↻ 重出一份/.test(ed));
+ok('⭐ 想自己調還是開得了視窗', /我自己開視窗調/.test(ed));
+ok('⭐⭐ 出題呼叫的是視窗裡本來就在用的那幾支（不新寫出題邏輯）',
+   /window\.aiMakeVocabExercises\(words, \{ hint: title, grade: g, teacherNote: note \}\)/.test(app)
+   && /window\.qsBuildItems\(\{ words, title, kinds, ai, story, sense \}\)/.test(app)
+   && /window\.aiMakeReadingSet\(\{/.test(app) && /window\.rcBuildItems\(\{/.test(app));
+ok('⚠ 短文填空／字義選擇失敗不可以拖垮其他已經出好的（v473 的教訓）',
+   /aiMakeVocabStory\([\s\S]{0,120}\.catch\(\(\) => null\)/.test(app)
+   && /aiMakeVocabSense\([\s\S]{0,120}\.catch\(\(\) => null\)/.test(app));
+ok('⭐ 出一半失敗要講出來，不要安靜關掉', /出題失敗：/.test(ed));
+ok('   預覽看得到每個單元幾題、前兩題長什麼樣', /function AskPreview/.test(ed) && /getQuizItemTotal/.test(ed));
+ok('⭐⭐ 存是最後一步——按了才寫進週次', /onSave\(g\.items, m\.plan\)/.test(ed) && /handleAddBuiltItems\(items, cat\)/.test(app));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
 process.exit(fail ? 1 : 0);

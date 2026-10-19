@@ -5936,11 +5936,56 @@ async function gnFileToImage(file) {
      ② 打開**現成的那個視窗**並且填好
    出題、校稿、存檔走的全是舊路。
    🔴 它不會自己存——中間一定有一張確認卡（週次是整個年級共用一份文件）。 */
-function AskPanel({ open, categories, roster, onClose, onRun }) {
+
+/* v518：出完的題目攤出來給 Alan 看——他說「檢查沒問題」才存。
+   ⚠ 不是完整校稿頁（那在各自的視窗裡），是「夠他判斷方向對不對」的份量：
+     每個單元幾題、前兩題長什麼樣。方向錯的話重出一份比校稿快。 */
+function AskPreview({ items }) {
+  const [open, setOpen] = useS({});
+  const peek = (it) => {
+    const q = it.questions || it.saQuestions || [];
+    if (q.length) return q.slice(0, 2).map(x => x.q || x.question).filter(Boolean);
+    if ((it.cards || []).length) return it.cards.slice(0, 4).map(c => `${c.term}${c.zh ? ' — ' + c.zh : ''}`);
+    if ((it.pairs || []).length) return it.pairs.slice(0, 2).map(p => `${p.q || p.word} → ${p.a || p.answer || ''}`);
+    if ((it.defPairs || []).length) return it.defPairs.slice(0, 2).map(p => `${p.word} — ${p.def}`);
+    if ((it.spellWords || []).length) return [it.spellWords.slice(0, 6).map(w => w.term || w).join('、')];
+    if (it.passage) return [String(it.passage).slice(0, 120) + '…'];
+    return [];
+  };
+  return (
+    <div className="ask-prev">
+      <div className="ask-prev-h">出好了：<b>{items.length}</b> 個單元</div>
+      {items.map((it, i) => {
+        const n = window.getQuizItemTotal ? window.getQuizItemTotal(it) : 0;
+        const lines = peek(it);
+        return (
+          <div className="ask-prev-it" key={i}>
+            <button className="ask-prev-t" onClick={() => setOpen(o => ({ ...o, [i]: !o[i] }))}>
+              <i>{(window.QM_TYPE_ICO || {})[it.type] || '•'}</i>
+              <b>{it.title}</b>
+              <span>{n} 題</span>
+              <em>{open[i] ? '⌃' : '⌄'}</em>
+            </button>
+            {open[i] && lines.length > 0 && (
+              <ul className="ask-prev-q">{lines.map((l, k) => <li key={k}>{l}</li>)}</ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* v518（Alan：「他要先回答我檢查沒問題，確定這些題目沒問題，我就會說幫我直接出出來」）：
+   確認卡按下去之後**直接在這裡出題**，把題目攤出來給他看，他說「存」才存。
+   ⚠ 兩段確認是故意的：第一段確認「要做什麼」，第二段確認「題目對不對」。
+     中間真的會花錢跑 AI，但不會動到他的課程——存是最後一步。 */
+function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate, onSave }) {
   const [msgs, setMsgs] = useS([]);          // { me, text, plan?, images? }
   const [text, setText] = useS('');
   const [imgs, setImgs] = useS([]);
   const [busy, setBusy] = useS(false);
+  const [gen, setGen] = useS({});        // i → { busy, label, items, err }
   const fileRef = React.useRef(null);
   const endRef = React.useRef(null);
   useE(() => { if (endRef.current) try { endRef.current.scrollIntoView({ block: 'end' }); } catch (e) {} }, [msgs, busy]);
@@ -6016,17 +6061,50 @@ function AskPanel({ open, categories, roster, onClose, onRun }) {
                       )}
                       {m.plan.text && <li>文字 <b>{m.plan.text.length}</b> 字</li>}
                     </ul>
-                    {m.done
-                      ? <div className="ask-done">✅ 開好了，接下來照原本的流程走</div>
-                      : (
+                    {(() => {
+                      const g = gen[i] || {};
+                      const canHere = !!onGenerate && (m.plan.intent === 'vocab' || m.plan.intent === 'reading');
+                      if (m.saved) return <div className="ask-done">✅ 已經存進本週了</div>;
+                      if (m.done) return <div className="ask-done">✅ 開好了，接下來照原本的流程走</div>;
+                      if (g.items) return (
+                        <>
+                          <AskPreview items={g.items}/>
+                          <div className="ask-plan-btn">
+                            <button className="btn primary" onClick={() => {
+                              onSave(g.items, m.plan);
+                              setMsgs(x => x.map((y, k) => k === i ? { ...y, saved: true } : y));
+                            }}>就這些，存進本週</button>
+                            <button className="btn ghost" onClick={() => {
+                              setGen(x => ({ ...x, [i]: {} }));
+                            }}>↻ 重出一份</button>
+                          </div>
+                        </>
+                      );
+                      if (g.busy) return <div className="ask-gen">⏳ {g.label || '出題中…'}</div>;
+                      return (
                         <div className="ask-plan-btn">
-                          <button className="btn primary" onClick={() => {
+                          {canHere && (
+                            <button className="btn primary" onClick={async () => {
+                              setGen(x => ({ ...x, [i]: { busy: true, label: '出題中…' } }));
+                              try {
+                                const items = await onGenerate(m.plan, (label) =>
+                                  setGen(x => ({ ...x, [i]: { busy: true, label } })));
+                                if (!items || !items.length) throw new Error('這次沒有出出任何題目。');
+                                setGen(x => ({ ...x, [i]: { items } }));
+                              } catch (e) {
+                                setGen(x => ({ ...x, [i]: {} }));
+                                setMsgs(y => y.concat([{ me: false, text: '出題失敗：' + (e.message || '再試一次') }]));
+                              }
+                            }}>出題給我看</button>
+                          )}
+                          <button className={'btn ' + (canHere ? 'ghost' : 'primary')} onClick={() => {
                             setMsgs(x => x.map((y, k) => k === i ? { ...y, done: true } : y));
                             onRun(m.plan);
-                          }}>就這樣做</button>
-                          <span>它不會自己存，打開之後你還能改</span>
+                          }}>{canHere ? '我自己開視窗調' : '就這樣做'}</button>
+                          <span>{canHere ? '出完給你看過，你說存才存' : '它不會自己存，打開之後你還能改'}</span>
                         </div>
-                      )}
+                      );
+                    })()}
                   </div>
                 );
               })()}

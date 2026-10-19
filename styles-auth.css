@@ -6952,3 +6952,17 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .ask-clip:disabled { opacity: .35; cursor: default; }
 .ask-send { flex: none; padding: 9px 15px; }
 @media (max-width: 560px) { .ask-wrap { right: 8px; left: 8px; bottom: 8px; width: auto; max-height: 82vh; } }
+
+/* ══ v518：聊天室裡直接出題 → 看過再存 ══════════════════════════════════ */
+.ask-gen { font-size: 13px; font-weight: 700; color: var(--accent, #8B3120); padding: 4px 0; }
+.ask-prev { margin: 8px 0 10px; border: 1px solid var(--border, #DDD6C4); border-radius: 10px; overflow: hidden; }
+.ask-prev-h { padding: 7px 11px; background: var(--bg, #F4F0E7); font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); }
+.ask-prev-h b { color: var(--accent, #8B3120); }
+.ask-prev-it { border-top: 1px solid var(--border, #DDD6C4); }
+.ask-prev-t { display: flex; align-items: center; gap: 7px; width: 100%; border: 0; background: none; cursor: pointer; padding: 7px 11px; font-family: var(--sans); text-align: left; }
+.ask-prev-t i { font-style: normal; font-size: 14px; }
+.ask-prev-t b { flex: 1; font-size: 13px; font-weight: 700; color: var(--ink, #15130E); min-width: 0; }
+.ask-prev-t span { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3, #6b6455); }
+.ask-prev-t em { font-style: normal; font-size: 11px; color: var(--ink-3, #6b6455); }
+.ask-prev-q { margin: 0; padding: 0 12px 9px 30px; display: flex; flex-direction: column; gap: 4px; }
+.ask-prev-q li { font-size: 12px; line-height: 1.6; color: var(--ink-2, #5c554a); }

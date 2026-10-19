@@ -9273,17 +9273,67 @@ async function gnFileToImage(file) {
      ② 打開**現成的那個視窗**並且填好
    出題、校稿、存檔走的全是舊路。
    🔴 它不會自己存——中間一定有一張確認卡（週次是整個年級共用一份文件）。 */
+
+/* v518：出完的題目攤出來給 Alan 看——他說「檢查沒問題」才存。
+   ⚠ 不是完整校稿頁（那在各自的視窗裡），是「夠他判斷方向對不對」的份量：
+     每個單元幾題、前兩題長什麼樣。方向錯的話重出一份比校稿快。 */
+function AskPreview({
+  items
+}) {
+  var [open, setOpen] = useS({});
+  var peek = it => {
+    var q = it.questions || it.saQuestions || [];
+    if (q.length) return q.slice(0, 2).map(x => x.q || x.question).filter(Boolean);
+    if ((it.cards || []).length) return it.cards.slice(0, 4).map(c => `${c.term}${c.zh ? ' — ' + c.zh : ''}`);
+    if ((it.pairs || []).length) return it.pairs.slice(0, 2).map(p => `${p.q || p.word} → ${p.a || p.answer || ''}`);
+    if ((it.defPairs || []).length) return it.defPairs.slice(0, 2).map(p => `${p.word} — ${p.def}`);
+    if ((it.spellWords || []).length) return [it.spellWords.slice(0, 6).map(w => w.term || w).join('、')];
+    if (it.passage) return [String(it.passage).slice(0, 120) + '…'];
+    return [];
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "ask-prev"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-prev-h"
+  }, "\u51FA\u597D\u4E86\uFF1A", /*#__PURE__*/React.createElement("b", null, items.length), " \u500B\u55AE\u5143"), items.map((it, i) => {
+    var n = window.getQuizItemTotal ? window.getQuizItemTotal(it) : 0;
+    var lines = peek(it);
+    return /*#__PURE__*/React.createElement("div", {
+      className: "ask-prev-it",
+      key: i
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "ask-prev-t",
+      onClick: () => setOpen(o => ({
+        ...o,
+        [i]: !o[i]
+      }))
+    }, /*#__PURE__*/React.createElement("i", null, (window.QM_TYPE_ICO || {})[it.type] || '•'), /*#__PURE__*/React.createElement("b", null, it.title), /*#__PURE__*/React.createElement("span", null, n, " \u984C"), /*#__PURE__*/React.createElement("em", null, open[i] ? '⌃' : '⌄')), open[i] && lines.length > 0 && /*#__PURE__*/React.createElement("ul", {
+      className: "ask-prev-q"
+    }, lines.map((l, k) => /*#__PURE__*/React.createElement("li", {
+      key: k
+    }, l))));
+  }));
+}
+
+/* v518（Alan：「他要先回答我檢查沒問題，確定這些題目沒問題，我就會說幫我直接出出來」）：
+   確認卡按下去之後**直接在這裡出題**，把題目攤出來給他看，他說「存」才存。
+   ⚠ 兩段確認是故意的：第一段確認「要做什麼」，第二段確認「題目對不對」。
+     中間真的會花錢跑 AI，但不會動到他的課程——存是最後一步。 */
 function AskPanel({
   open,
   categories,
   roster,
+  grade,
   onClose,
-  onRun
+  onRun,
+  onGenerate,
+  onSave
 }) {
   var [msgs, setMsgs] = useS([]); // { me, text, plan?, images? }
   var [text, setText] = useS('');
   var [imgs, setImgs] = useS([]);
   var [busy, setBusy] = useS(false);
+  var [gen, setGen] = useS({}); // i → { busy, label, items, err }
   var fileRef = React.useRef(null);
   var endRef = React.useRef(null);
   useE(() => {
@@ -9371,20 +9421,89 @@ function AskPanel({
       className: "ask-plan"
     }, /*#__PURE__*/React.createElement("div", {
       className: "ask-plan-h"
-    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57")), m.done ? /*#__PURE__*/React.createElement("div", {
-      className: "ask-done"
-    }, "\u2705 \u958B\u597D\u4E86\uFF0C\u63A5\u4E0B\u4F86\u7167\u539F\u672C\u7684\u6D41\u7A0B\u8D70") : /*#__PURE__*/React.createElement("div", {
-      className: "ask-plan-btn"
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "btn primary",
-      onClick: () => {
-        setMsgs(x => x.map((y, k) => k === i ? {
-          ...y,
-          done: true
-        } : y));
-        onRun(m.plan);
-      }
-    }, "\u5C31\u9019\u6A23\u505A"), /*#__PURE__*/React.createElement("span", null, "\u5B83\u4E0D\u6703\u81EA\u5DF1\u5B58\uFF0C\u6253\u958B\u4E4B\u5F8C\u4F60\u9084\u80FD\u6539")));
+    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57")), (() => {
+      var g = gen[i] || {};
+      var canHere = !!onGenerate && (m.plan.intent === 'vocab' || m.plan.intent === 'reading');
+      if (m.saved) return /*#__PURE__*/React.createElement("div", {
+        className: "ask-done"
+      }, "\u2705 \u5DF2\u7D93\u5B58\u9032\u672C\u9031\u4E86");
+      if (m.done) return /*#__PURE__*/React.createElement("div", {
+        className: "ask-done"
+      }, "\u2705 \u958B\u597D\u4E86\uFF0C\u63A5\u4E0B\u4F86\u7167\u539F\u672C\u7684\u6D41\u7A0B\u8D70");
+      if (g.items) return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(AskPreview, {
+        items: g.items
+      }), /*#__PURE__*/React.createElement("div", {
+        className: "ask-plan-btn"
+      }, /*#__PURE__*/React.createElement("button", {
+        className: "btn primary",
+        onClick: () => {
+          onSave(g.items, m.plan);
+          setMsgs(x => x.map((y, k) => k === i ? {
+            ...y,
+            saved: true
+          } : y));
+        }
+      }, "\u5C31\u9019\u4E9B\uFF0C\u5B58\u9032\u672C\u9031"), /*#__PURE__*/React.createElement("button", {
+        className: "btn ghost",
+        onClick: () => {
+          setGen(x => ({
+            ...x,
+            [i]: {}
+          }));
+        }
+      }, "\u21BB \u91CD\u51FA\u4E00\u4EFD")));
+      if (g.busy) return /*#__PURE__*/React.createElement("div", {
+        className: "ask-gen"
+      }, "\u23F3 ", g.label || '出題中…');
+      return /*#__PURE__*/React.createElement("div", {
+        className: "ask-plan-btn"
+      }, canHere && /*#__PURE__*/React.createElement("button", {
+        className: "btn primary",
+        onClick: async () => {
+          setGen(x => ({
+            ...x,
+            [i]: {
+              busy: true,
+              label: '出題中…'
+            }
+          }));
+          try {
+            var items = await onGenerate(m.plan, label => setGen(x => ({
+              ...x,
+              [i]: {
+                busy: true,
+                label
+              }
+            })));
+            if (!items || !items.length) throw new Error('這次沒有出出任何題目。');
+            setGen(x => ({
+              ...x,
+              [i]: {
+                items
+              }
+            }));
+          } catch (e) {
+            setGen(x => ({
+              ...x,
+              [i]: {}
+            }));
+            setMsgs(y => y.concat([{
+              me: false,
+              text: '出題失敗：' + (e.message || '再試一次')
+            }]));
+          }
+        }
+      }, "\u51FA\u984C\u7D66\u6211\u770B"), /*#__PURE__*/React.createElement("button", {
+        className: 'btn ' + (canHere ? 'ghost' : 'primary'),
+        onClick: () => {
+          setMsgs(x => x.map((y, k) => k === i ? {
+            ...y,
+            done: true
+          } : y));
+          onRun(m.plan);
+        }
+      }, canHere ? '我自己開視窗調' : '就這樣做'), /*#__PURE__*/React.createElement("span", null, canHere ? '出完給你看過，你說存才存' : '它不會自己存，打開之後你還能改'));
+    })());
   })()))), busy && /*#__PURE__*/React.createElement("div", {
     className: "ask-row"
   }, /*#__PURE__*/React.createElement("div", {

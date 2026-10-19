@@ -7296,6 +7296,10 @@ const ASK_JOBS = {
   weak:      { zh: '弱點分析 → 針對性練習', ico: '🎯', need: 'student', where: 'dash' },
 };
 
+/* 一鍵出單字真的做得出來的題型（跟 components-editor.jsx 的 QS_KINDS 同一份 id）。
+   ⚠ 這裡寫死是為了程式驗得到——AI 自己發明的 id 丟進 qsBuildItems 會安靜地少一個單元。 */
+const ASK_VOCAB_KINDS = ['flashcard', 'def-match', 'spelling', 'quiz', 'fillblank', 'story', 'sense'];
+
 const ASK_SYS = `You are the assistant inside a Taiwanese one-on-one English tutor's own teaching website.
 He talks to you in Traditional Chinese. Your ONLY job is to work out WHICH of his existing tools he wants
 and pull the parameters out of what he typed or pasted. You never write the exercises yourself.
@@ -7320,11 +7324,22 @@ Rules:
 - "text": the passage / worksheet text he pasted, copied verbatim. Never summarise or rewrite it.
 - "title": a short unit name, in the language he used. If he did not say one, leave it "".
 - "student": the child's name exactly as he typed it (usually an English first name).
+- "kinds": ONLY for vocab. Which exercise types he asked for, from exactly these ids:
+     flashcard（單字卡） def-match（配對連線） spelling（聽寫） quiz（選擇題）
+     fillblank（填空） story（短文填空） sense（字義選擇）
+  If he named specific ones ("我只要選擇題和填空") list just those.
+  If he did not say, leave it [] — the website will use its own default set.
+- "note": any extra instruction he gave about HOW the questions should be ("難一點",
+  "多出一些推論題", "例句要跟棒球有關"). Copy his own words. This goes straight to the
+  question-writing AI. If he did not ask for anything special, leave it "".
+- "nMcq" / "nSa": ONLY for reading, when he said how many ("出 8 題選擇、3 題問答").
+  Otherwise 0 and the website uses its defaults.
 - "say": one short friendly Traditional-Chinese sentence telling him what you are about to do.
 
 Output ONLY JSON:
 {"intent":"vocab","title":"Barbed Wire Baseball","words":[{"term":"pursued","zh":"追趕"}],
- "topic":"","text":"","student":"","ask":"","say":"好，我用這 8 個字出一整套單字練習。"}`;
+ "topic":"","text":"","student":"","kinds":["quiz","fillblank"],"note":"例句要跟棒球有關",
+ "nMcq":0,"nSa":0,"ask":"","say":"好，我用這 8 個字出選擇題和填空。"}`;
 
 /* 程式驗：AI 說的每一件事都要對得上真實的東西，對不上就降級成「我不確定」。 */
 function askVerify(got, { categories = [], roster = [] } = {}) {
@@ -7345,6 +7360,14 @@ function askVerify(got, { categories = [], roster = [] } = {}) {
     student: String(o.student || '').trim().slice(0, 40),
     say: String(o.say || '').trim().slice(0, 120),
     ask: String(o.ask || '').trim().slice(0, 120),
+    /* v518：題型只能是真的存在的那幾種——模型自己發明一個 'matching2' 之類的，
+       丟進 qsBuildItems 只會安靜地少一個單元（v473 的教訓）。 */
+    kinds: (Array.isArray(o.kinds) ? o.kinds : [])
+      .map(k => String(k || '').trim())
+      .filter(k => ASK_VOCAB_KINDS.indexOf(k) >= 0),
+    note: String(o.note || '').trim().slice(0, 600),
+    nMcq: Math.max(0, Math.min(20, +o.nMcq || 0)),
+    nSa: Math.max(0, Math.min(10, +o.nSa || 0)),
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
   if (out.student) {
@@ -7396,7 +7419,7 @@ async function aiRouteCommand({ text = '', images = [], categories = [], roster 
   return askVerify(got, { categories, roster });
 }
 
-Object.assign(window, { ASK_JOBS, ASK_SYS, askVerify, aiRouteCommand });
+Object.assign(window, { ASK_JOBS, ASK_SYS, ASK_VOCAB_KINDS, askVerify, aiRouteCommand });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v516 📸 拍考卷照片 → 變成互動版
