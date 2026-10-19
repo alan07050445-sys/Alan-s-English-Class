@@ -6966,3 +6966,5 @@ td.sa-mx-unitcol { display: flex; align-items: center; gap: 8px; border-bottom: 
 .ask-prev-t em { font-style: normal; font-size: 11px; color: var(--ink-3, #6b6455); }
 .ask-prev-q { margin: 0; padding: 0 12px 9px 30px; display: flex; flex-direction: column; gap: 4px; }
 .ask-prev-q li { font-size: 12px; line-height: 1.6; color: var(--ink-2, #5c554a); }
+.ask-prev-warn { padding: 9px 11px; background: #FDF3E2; border-top: 1px solid #B8821F; color: #7A5200; font-size: 12px; line-height: 1.7; font-weight: 600; }
+.ask-prev-warn em { display: block; margin-top: 5px; font-style: normal; opacity: .85; }

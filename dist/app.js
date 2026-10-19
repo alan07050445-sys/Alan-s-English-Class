@@ -1739,6 +1739,68 @@ function App() {
         background: null
       });
     }
+    if (plan.intent === 'wordstudy') {
+      say('出題中…（Word Study）');
+      var pack = await window.aiMakeWordStudy({
+        topic: plan.topic,
+        grade: g,
+        teacherNote: note
+      });
+      var _title2 = plan.title || plan.topic;
+      return window.wsBuildItems({
+        pack,
+        title: _title2,
+        kinds: ['lesson', 'circle', 'sort', 'mcq', 'build', 'story']
+      });
+    }
+    if (plan.intent === 'grammar') {
+      /* 文法是兩段：先把作業（文字或照片）讀成「教學重點＋老師原本的題目」，再出題。
+         ⚠ 照片走的是 v428~v430 那支 aiReadGrammarSheet，所以拍照也能直接在這裡做完。 */
+      say('讀作業中…');
+      var sheet = await window.aiReadGrammarSheet({
+        images: (plan.images || []).map(i => ({
+          media_type: i.media_type,
+          data: i.data
+        })),
+        text: plan.text || ''
+      });
+      if (!sheet.notes && !sheet.questions.length) throw new Error('讀不到教學重點或題目，換一張清楚的照片或直接貼文字。');
+      say(`讀到了：${sheet.topic || '文法'}，開始出題`);
+      var _pack = await window.aiMakeGrammarPack({
+        topic: sheet.topic || plan.title,
+        topicZh: sheet.topicZh,
+        notes: sheet.notes || plan.text,
+        teacherQs: sheet.questions,
+        grade: g,
+        caseMatters: !!sheet.caseMatters,
+        teacherNote: note
+      });
+      var _title3 = plan.title || (sheet.topicZh ? `${sheet.topic}（${sheet.topicZh}）` : sheet.topic || '文法練習');
+      return window.gnBuildItems({
+        title: _title3,
+        topic: sheet.topic,
+        srcNotes: sheet.notes,
+        ..._pack,
+        caseMatters: !!sheet.caseMatters
+      });
+    }
+    if (plan.intent === 'exam') {
+      /* 📸 考卷：aiReadExamSheet 本來就直接吐一份完整的 exam 單元，不用再出題。 */
+      say('讀考卷中…');
+      var _r = await window.aiReadExamSheet({
+        images: (plan.images || []).map(i => ({
+          media_type: i.media_type,
+          data: i.data
+        })),
+        onProgress: (a, b) => say(`讀考卷中… ${a}/${b} 張`)
+      });
+      var warn = (_r.warnings || []).concat((_r.skipped || []).map(x => '跳過：' + x));
+      return [{
+        ..._r.item,
+        id: 'ex' + Date.now().toString(36),
+        _warn: warn
+      }];
+    }
     return [];
   };
 
@@ -1786,7 +1848,11 @@ function App() {
     setAskOpen(false);
   };
   var handleAddBuiltItems = (list, cat) => {
-    var items = (list || []).filter(Boolean);
+    /* ⚠ _warn 是給聊天室畫面看的校稿提醒，不可以跟著寫進課程資料。 */
+    var items = (list || []).filter(Boolean).map(({
+      _warn,
+      ...it
+    }) => it);
     if (!items.length) {
       showToast('沒有東西可以存');
       return;

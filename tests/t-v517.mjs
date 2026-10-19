@@ -109,6 +109,17 @@ ok('   題數有上限（說「出 999 題」不要真的去跑）',
 
 console.log('\n【8】⭐⭐ v518：聊天室裡直接出題 → 看過再存');
 ok('⭐⭐ 出完先給他看，不是直接存', /出題給我看/.test(ed) && /就這些，存進本週/.test(ed));
+/* v519：五種都能在聊天室裡做完（剩下兩種住在後台，開後台指路） */
+ok('⭐⭐ 單字／閱讀／Word Study／文法／考卷五種都在聊天室做得完',
+   /\['vocab', 'reading', 'wordstudy', 'grammar', 'exam'\]\.indexOf\(m\.plan\.intent\) >= 0/.test(ed));
+ok('⭐ Word Study 走 aiMakeWordStudy + wsBuildItems', /window\.aiMakeWordStudy\(/.test(app) && /window\.wsBuildItems\(/.test(app));
+ok('⭐ 文法走 aiReadGrammarSheet → aiMakeGrammarPack → gnBuildItems',
+   /window\.aiReadGrammarSheet\(/.test(app) && /window\.aiMakeGrammarPack\(/.test(app) && /window\.gnBuildItems\(/.test(app));
+ok('⭐ 考卷走 aiReadExamSheet（本來就直接吐一份完整單元）', /window\.aiReadExamSheet\(/.test(app));
+ok('⭐⭐ 照片要留給產生器用原圖，不是靠路由器轉述', /plan\.images = shots;/.test(ed));
+ok('⭐ 只給照片不給文字也行（文法、考卷）',
+   /need === 'text' && !out\.text && !nImages/.test(data) && /need === 'images' && !nImages/.test(data));
+ok('⚠ 校稿提醒不可以跟著寫進課程資料', /map\(\(\{ _warn, \.\.\.it \}\) => it\)/.test(app));
 ok('⭐⭐ 兩段確認：先確認要做什麼，再確認題目對不對',
    /第一段確認「要做什麼」，第二段確認「題目對不對」/.test(ed));
 ok('⭐ 覺得方向不對可以重出一份', /↻ 重出一份/.test(ed));

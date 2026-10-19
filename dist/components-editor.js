@@ -9288,14 +9288,25 @@ function AskPreview({
     if ((it.pairs || []).length) return it.pairs.slice(0, 2).map(p => `${p.q || p.word} → ${p.a || p.answer || ''}`);
     if ((it.defPairs || []).length) return it.defPairs.slice(0, 2).map(p => `${p.word} — ${p.def}`);
     if ((it.spellWords || []).length) return [it.spellWords.slice(0, 6).map(w => w.term || w).join('、')];
+    if ((it.sections || []).length) return it.sections.flatMap(sc => (sc.parts || []).map(pt => `${sc.name || ''}｜${pt.title || ''}（${pt.pts} 分）`)).slice(0, 6);
     if (it.passage) return [String(it.passage).slice(0, 120) + '…'];
+    if ((it.steps || []).length) return it.steps.slice(0, 3).map(x => x.title || x.text || x.kind).filter(Boolean);
+    if ((it.circleQuestions || []).length) return it.circleQuestions.slice(0, 2).map(q => q.sentence).filter(Boolean);
+    if ((it.sortWords || []).length) return [it.sortWords.slice(0, 8).map(w => w.word || w.term || w).join('、')];
     return [];
   };
+  /* 考卷有自己的校稿檢查（配分對不對、圈幾個、答案在不在詞庫裡）——
+     那些比「前兩題長什麼樣」重要得多，要擺在最前面。 */
+  var warn = [].concat(...items.map(it => it._warn || []));
   return /*#__PURE__*/React.createElement("div", {
     className: "ask-prev"
   }, /*#__PURE__*/React.createElement("div", {
     className: "ask-prev-h"
-  }, "\u51FA\u597D\u4E86\uFF1A", /*#__PURE__*/React.createElement("b", null, items.length), " \u500B\u55AE\u5143"), items.map((it, i) => {
+  }, "\u51FA\u597D\u4E86\uFF1A", /*#__PURE__*/React.createElement("b", null, items.length), " \u500B\u55AE\u5143"), warn.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "ask-prev-warn"
+  }, warn.map((w, i) => /*#__PURE__*/React.createElement("div", {
+    key: i
+  }, "\u26A0 ", w)), /*#__PURE__*/React.createElement("em", null, "\u5B58\u8D77\u4F86\u4E4B\u5F8C\u5728\u300C\u7DE8\u8F2F\u55AE\u5143\u300D\u88E1\u53EF\u4EE5\u76F4\u63A5\u6539\u3002")), items.map((it, i) => {
     var n = window.getQuizItemTotal ? window.getQuizItemTotal(it) : 0;
     var lines = peek(it);
     return /*#__PURE__*/React.createElement("div", {
@@ -9355,18 +9366,18 @@ function AskPanel({
   var send = async () => {
     var t = text.trim();
     if (!t && !imgs.length || busy) return;
-    var mine = {
+    var shots = imgs.slice();
+    setMsgs(m => m.concat([{
       me: true,
       text: t || '（圖片）',
-      images: imgs.slice()
-    };
-    setMsgs(m => m.concat([mine]));
+      images: shots
+    }]));
     setText('');
     setImgs([]);
     setBusy(true);
     var plan = await window.aiRouteCommand({
       text: t,
-      images: imgs.map(i => ({
+      images: shots.map(i => ({
         media_type: i.media_type,
         data: i.data
       })),
@@ -9378,6 +9389,9 @@ function AskPanel({
       }))
     });
     setBusy(false);
+    /* ⚠ 照片要留給產生器用——文法與考卷是直接拿原圖再讀一次，
+       不是靠路由器轉述（轉述會掉細節，而且題目要照原文）。 */
+    plan.images = shots;
     setMsgs(m => m.concat([{
       me: false,
       text: plan.intent === 'unknown' ? plan.ask || '我不太確定你要做哪一件事。' : plan.say || '',
@@ -9423,7 +9437,8 @@ function AskPanel({
       className: "ask-plan-h"
     }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57")), (() => {
       var g = gen[i] || {};
-      var canHere = !!onGenerate && (m.plan.intent === 'vocab' || m.plan.intent === 'reading');
+      /* v519：五種都能在這裡做完了（剩下兩種住在後台，照樣是開後台指路）。 */
+      var canHere = !!onGenerate && ['vocab', 'reading', 'wordstudy', 'grammar', 'exam'].indexOf(m.plan.intent) >= 0;
       if (m.saved) return /*#__PURE__*/React.createElement("div", {
         className: "ask-done"
       }, "\u2705 \u5DF2\u7D93\u5B58\u9032\u672C\u9031\u4E86");

@@ -5949,12 +5949,24 @@ function AskPreview({ items }) {
     if ((it.pairs || []).length) return it.pairs.slice(0, 2).map(p => `${p.q || p.word} → ${p.a || p.answer || ''}`);
     if ((it.defPairs || []).length) return it.defPairs.slice(0, 2).map(p => `${p.word} — ${p.def}`);
     if ((it.spellWords || []).length) return [it.spellWords.slice(0, 6).map(w => w.term || w).join('、')];
+    if ((it.sections || []).length) return it.sections.flatMap(sc =>
+      (sc.parts || []).map(pt => `${sc.name || ''}｜${pt.title || ''}（${pt.pts} 分）`)).slice(0, 6);
     if (it.passage) return [String(it.passage).slice(0, 120) + '…'];
+    if ((it.steps || []).length) return it.steps.slice(0, 3).map(x => x.title || x.text || x.kind).filter(Boolean);
+    if ((it.circleQuestions || []).length) return it.circleQuestions.slice(0, 2).map(q => q.sentence).filter(Boolean);
+    if ((it.sortWords || []).length) return [it.sortWords.slice(0, 8).map(w => w.word || w.term || w).join('、')];
     return [];
   };
+  /* 考卷有自己的校稿檢查（配分對不對、圈幾個、答案在不在詞庫裡）——
+     那些比「前兩題長什麼樣」重要得多，要擺在最前面。 */
+  const warn = [].concat(...items.map(it => it._warn || []));
   return (
     <div className="ask-prev">
       <div className="ask-prev-h">出好了：<b>{items.length}</b> 個單元</div>
+      {warn.length > 0 && (
+        <div className="ask-prev-warn">{warn.map((w, i) => <div key={i}>⚠ {w}</div>)}
+          <em>存起來之後在「編輯單元」裡可以直接改。</em></div>
+      )}
       {items.map((it, i) => {
         const n = window.getQuizItemTotal ? window.getQuizItemTotal(it) : 0;
         const lines = peek(it);
@@ -6003,15 +6015,18 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
   const send = async () => {
     const t = text.trim();
     if ((!t && !imgs.length) || busy) return;
-    const mine = { me: true, text: t || '（圖片）', images: imgs.slice() };
-    setMsgs(m => m.concat([mine]));
+    const shots = imgs.slice();
+    setMsgs(m => m.concat([{ me: true, text: t || '（圖片）', images: shots }]));
     setText(''); setImgs([]); setBusy(true);
     const plan = await window.aiRouteCommand({
-      text: t, images: imgs.map(i => ({ media_type: i.media_type, data: i.data })),
+      text: t, images: shots.map(i => ({ media_type: i.media_type, data: i.data })),
       categories, roster,
       history: msgs.slice(-4).map(m => ({ me: m.me, text: m.text })),
     });
     setBusy(false);
+    /* ⚠ 照片要留給產生器用——文法與考卷是直接拿原圖再讀一次，
+       不是靠路由器轉述（轉述會掉細節，而且題目要照原文）。 */
+    plan.images = shots;
     setMsgs(m => m.concat([{ me: false, text: plan.intent === 'unknown' ? (plan.ask || '我不太確定你要做哪一件事。') : (plan.say || ''), plan }]));
   };
 
@@ -6063,7 +6078,9 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                     </ul>
                     {(() => {
                       const g = gen[i] || {};
-                      const canHere = !!onGenerate && (m.plan.intent === 'vocab' || m.plan.intent === 'reading');
+                      /* v519：五種都能在這裡做完了（剩下兩種住在後台，照樣是開後台指路）。 */
+                      const canHere = !!onGenerate
+                        && ['vocab', 'reading', 'wordstudy', 'grammar', 'exam'].indexOf(m.plan.intent) >= 0;
                       if (m.saved) return <div className="ask-done">✅ 已經存進本週了</div>;
                       if (m.done) return <div className="ask-done">✅ 開好了，接下來照原本的流程走</div>;
                       if (g.items) return (

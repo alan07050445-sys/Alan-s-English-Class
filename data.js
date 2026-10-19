@@ -7342,7 +7342,7 @@ Output ONLY JSON:
  "nMcq":0,"nSa":0,"ask":"","say":"好，我用這 8 個字出選擇題和填空。"}`;
 
 /* 程式驗：AI 說的每一件事都要對得上真實的東西，對不上就降級成「我不確定」。 */
-function askVerify(got, { categories = [], roster = [] } = {}) {
+function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   const o = got || {};
   const intent = ASK_JOBS[o.intent] ? o.intent : 'unknown';
   const words = (Array.isArray(o.words) ? o.words : [])
@@ -7381,11 +7381,13 @@ function askVerify(got, { categories = [], roster = [] } = {}) {
       out.ask = `名單裡找不到「${out.student}」——是哪一位？`;
     }
   }
-  /* 該有的東西沒有 → 不要硬做，改成問他 */
+  /* 該有的東西沒有 → 不要硬做，改成問他。
+     ⚠ 文法與考卷可以只給照片不給文字——照片本身就是內容（v428 讀作業、v516 讀考卷）。 */
   const need = (ASK_JOBS[out.intent] || {}).need;
   if (need === 'words' && !out.words.length) { out.intent = 'unknown'; out.ask = out.ask || '要出哪幾個單字？直接貼給我就好。'; }
   if (need === 'topic' && !out.topic)        { out.intent = 'unknown'; out.ask = out.ask || '這次的 Word Study 主題是什麼？'; }
-  if (need === 'text' && !out.text)          { out.intent = 'unknown'; out.ask = out.ask || '把文章或作業的內容貼給我，或拍一張照片。'; }
+  if (need === 'text' && !out.text && !nImages) { out.intent = 'unknown'; out.ask = out.ask || '把文章或作業的內容貼給我，或拍一張照片。'; }
+  if (need === 'images' && !nImages)         { out.intent = 'unknown'; out.ask = out.ask || '把考卷拍給我——一頁一張，整頁入鏡。'; }
   if (need === 'student' && !out.email)      { out.intent = 'unknown'; out.ask = out.ask || '要幫哪一位學生？'; }
   return out;
 }
@@ -7416,7 +7418,7 @@ async function aiRouteCommand({ text = '', images = [], categories = [], roster 
   } catch (e) {
     return { intent: 'unknown', ask: '我這邊連不上，等一下再說一次。', words: [], title: '', topic: '', text: '', student: '', say: '' };
   }
-  return askVerify(got, { categories, roster });
+  return askVerify(got, { categories, roster, nImages: imgs.length });
 }
 
 Object.assign(window, { ASK_JOBS, ASK_SYS, ASK_VOCAB_KINDS, askVerify, aiRouteCommand });
