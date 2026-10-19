@@ -1248,12 +1248,22 @@ function App() {
     if (plan.intent === 'reading') {
       const title = plan.title || '閱讀理解';
       say('出題中…（讀文章、出題目）');
-      const r = await window.aiMakeReadingSet({
-        passage: plan.text, title, grade: g,
-        mcq: plan.nMcq || 8, sa: plan.nSa || 3, teacherNote: note,
-      });
+      /* 🔴 v520：第一版這裡 background 寫死 null ——
+         ReadingGenModal 的「讀之前先知道」預設是**開著的**，所以用聊天室出的閱讀理解
+         會比按按鈕出的**少一個單元**，而且畫面上完全看不出來。
+         （v473 同一個教訓：安靜地少一個單元最難發現。）
+         ⚠ 背景知識失敗不可以拖垮題目——沒有就沒有，題目照常建立。 */
+      const [r, bg] = await Promise.all([
+        window.aiMakeReadingSet({
+          passage: plan.text, title, grade: g,
+          mcq: plan.nMcq || 8, sa: plan.nSa || 3, teacherNote: note,
+        }),
+        window.aiMakeReadingBackground
+          ? window.aiMakeReadingBackground({ passage: plan.text, title, grade: g, teacherNote: note }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       return window.rcBuildItems({ title, passage: plan.text, mcq: r.mcq, sa: r.sa,
-        blocks: r.blocks, skillQs: r.skillQs, background: null });
+        blocks: r.blocks, skillQs: r.skillQs, background: bg });
     }
     if (plan.intent === 'wordstudy') {
       say('出題中…（Word Study）');

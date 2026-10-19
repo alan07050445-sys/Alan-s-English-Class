@@ -120,6 +120,11 @@ ok('⭐⭐ 照片要留給產生器用原圖，不是靠路由器轉述', /plan\
 ok('⭐ 只給照片不給文字也行（文法、考卷）',
    /need === 'text' && !out\.text && !nImages/.test(data) && /need === 'images' && !nImages/.test(data));
 ok('⚠ 校稿提醒不可以跟著寫進課程資料', /map\(\(\{ _warn, \.\.\.it \}\) => it\)/.test(app));
+/* 🔴 v520：聊天室出的東西不可以比按按鈕出的少。 */
+ok('⭐⭐ 閱讀理解一樣要出「讀之前先知道」（視窗裡預設就是開的）',
+   /window\.aiMakeReadingBackground\(\{ passage: plan\.text/.test(app)
+   && !/background: null/.test(app));
+ok('⚠ 背景知識失敗不可以拖垮題目', /aiMakeReadingBackground\([^)]*\)[\s\S]{0,40}\.catch\(\(\) => null\)/.test(app));
 ok('⭐⭐ 兩段確認：先確認要做什麼，再確認題目對不對',
    /第一段確認「要做什麼」，第二段確認「題目對不對」/.test(ed));
 ok('⭐ 覺得方向不對可以重出一份', /↻ 重出一份/.test(ed));
