@@ -1153,7 +1153,7 @@ function GradeSelector({
     className: "gs-date-dot"
   }, "\xB7"), window.festOn && window.festOn() ? /*#__PURE__*/React.createElement(React.Fragment, null, "\u4ECA\u5929\u8981\u5F9E\u54EA\u88E1\u958B\u59CB\u5462\uFF1F", /*#__PURE__*/React.createElement("span", {
     className: "fest-badge"
-  }, (window.festNow() || {}).emoji, ' ', window.festIsDay && window.festIsDay() ? (window.festNow() || {}).hiDay : (window.festNow() || {}).hi)) : '今天要從哪裡開始呢？') : '選好就直接帶你進入這一週的練習。'), onOpenAdmin && /*#__PURE__*/React.createElement("button", {
+  }, (window.festNow() || {}).emoji, ' ', window.festCountText ? window.festCountText() : (window.festNow() || {}).hi)) : '今天要從哪裡開始呢？') : '選好就直接帶你進入這一週的練習。'), onOpenAdmin && /*#__PURE__*/React.createElement("button", {
     className: "gs-card gs-card-admin",
     onClick: onOpenAdmin
   }, /*#__PURE__*/React.createElement("span", {
@@ -1926,6 +1926,67 @@ function SpotlightTour({
 }
 
 // v296: 新首頁——單頁品牌封面＋登入（取代舊 8 段長頁）。登入後停在封面顯示「進入課程」。
+/* ───────── v525 ④ 首頁的滑鼠特效（Alan：「首頁滑鼠可以加一點特效」）─────────
+   滑過去會留下一串小蝙蝠／小鬼／星星，自己飄走。
+
+   ⚠ 三個條件都要擋，不然會變成「幫倒忙」：
+     ① 只在節慶期間（平常這個 effect 等於不存在）
+     ② `pointer: fine`＝有滑鼠才做。平板點一下會送一個 pointermove，
+        手指移動也會——在觸控裝置上等於一路噴圖案蓋住內容。
+     ③ prefers-reduced-motion 一律不做。
+   ⚠ 用節流**距離**不是節流時間：慢慢移動時時間節流一樣會一直噴，
+     但視覺上根本沒移動，結果是在原地疊一坨。
+   ⚠ 直接操作 DOM，不走 React state——這是每秒幾十次的事件，
+     進 state 會讓整個封面重新 render。 */
+function useFestCursor(ref) {
+  React.useEffect(() => {
+    if (!(window.festOn && window.festOn())) return;
+    var fine = false,
+      calm = true;
+    try {
+      fine = window.matchMedia('(pointer: fine)').matches;
+      calm = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (e) {}
+    var host = ref.current;
+    if (!host || !fine || !calm) return;
+    var KINDS = ['bat', 'ghost', 'star', 'bat', 'star'];
+    var last = null,
+      i = 0;
+    var timers = new Set();
+    var onMove = e => {
+      var r = host.getBoundingClientRect();
+      var x = e.clientX - r.left,
+        y = e.clientY - r.top;
+      if (last && Math.hypot(x - last[0], y - last[1]) < 46) return;
+      last = [x, y];
+      var sp = document.createElement('span');
+      sp.className = 'hw-trail hw-trail-' + KINDS[i++ % KINDS.length];
+      sp.style.left = x + 'px';
+      sp.style.top = y + 'px';
+      sp.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
+      sp.style.setProperty('--rot', (Math.random() * 50 - 25).toFixed(1) + 'deg');
+      host.appendChild(sp);
+      var t = setTimeout(() => {
+        try {
+          sp.remove();
+        } catch (er) {}
+        timers.delete(t);
+      }, 1200);
+      timers.add(t);
+    };
+    host.addEventListener('pointermove', onMove);
+    return () => {
+      host.removeEventListener('pointermove', onMove);
+      timers.forEach(clearTimeout);
+      /* ⚠ 卸載時要把還在飄的清掉：換頁之後它們會留在 DOM 上。 */
+      host.querySelectorAll('.hw-trail').forEach(n => {
+        try {
+          n.remove();
+        } catch (er) {}
+      });
+    };
+  }, [ref]);
+}
 function LoginScreen({
   onLogin,
   onSkip,
@@ -1937,6 +1998,8 @@ function LoginScreen({
   var [loading, setLoading] = React.useState(false);
   var [slow, setSlow] = React.useState(false);
   var enterMode = loggedIn && onBack; // 已登入且在封面 → 顯示「進入課程」
+  var coverRef = React.useRef(null);
+  useFestCursor(coverRef);
   var handleLogin = async () => {
     setLoading(true);
     setTimeout(() => {
@@ -1951,7 +2014,8 @@ function LoginScreen({
     }
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "login-screen lc-cover lc-hero"
+    className: "login-screen lc-cover lc-hero",
+    ref: coverRef
   }, window.festOn && window.festOn() && /*#__PURE__*/React.createElement("div", {
     className: "fest-ribbon",
     "aria-hidden": "true"
@@ -1967,9 +2031,15 @@ function LoginScreen({
     className: "lc-subtitle"
   }, "\u5EB7\u6A4B\u6BCF\u9031\u9032\u5EA6"), window.festOn && window.festOn() && /*#__PURE__*/React.createElement("div", {
     className: "fest-day-wrap"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "fest-day"
-  }, /*#__PURE__*/React.createElement("b", null, window.festNow().day), " ", window.festNow().hi)), /*#__PURE__*/React.createElement("div", {
+  }, (() => {
+    var n = window.festDaysTo ? window.festDaysTo() : null;
+    var f = window.festNow();
+    return n > 0 ? /*#__PURE__*/React.createElement("span", {
+      className: "fest-day fest-count"
+    }, /*#__PURE__*/React.createElement("b", null, n), /*#__PURE__*/React.createElement("i", null, "\u5929"), /*#__PURE__*/React.createElement("u", null, "\u8DDD\u96E2", f.name)) : /*#__PURE__*/React.createElement("span", {
+      className: "fest-day"
+    }, /*#__PURE__*/React.createElement("b", null, f.day), " ", f.hi);
+  })()), /*#__PURE__*/React.createElement("div", {
     className: "lc-fan",
     "aria-hidden": "true"
   }, /*#__PURE__*/React.createElement("div", {

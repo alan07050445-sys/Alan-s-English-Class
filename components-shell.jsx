@@ -807,9 +807,7 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
                 {(window.festOn && window.festOn())
                   ? <>今天要從哪裡開始呢？<span className="fest-badge">
                       {(window.festNow() || {}).emoji}{' '}
-                      {window.festIsDay && window.festIsDay()
-                        ? (window.festNow() || {}).hiDay
-                        : (window.festNow() || {}).hi}
+                      {window.festCountText ? window.festCountText() : (window.festNow() || {}).hi}
                     </span></>
                   : '今天要從哪裡開始呢？'}</>
             : '選好就直接帶你進入這一週的練習。'}
@@ -1373,17 +1371,70 @@ function SpotlightTour({ onClose, onEmpty }) {
 }
 
 // v296: 新首頁——單頁品牌封面＋登入（取代舊 8 段長頁）。登入後停在封面顯示「進入課程」。
+/* ───────── v525 ④ 首頁的滑鼠特效（Alan：「首頁滑鼠可以加一點特效」）─────────
+   滑過去會留下一串小蝙蝠／小鬼／星星，自己飄走。
+
+   ⚠ 三個條件都要擋，不然會變成「幫倒忙」：
+     ① 只在節慶期間（平常這個 effect 等於不存在）
+     ② `pointer: fine`＝有滑鼠才做。平板點一下會送一個 pointermove，
+        手指移動也會——在觸控裝置上等於一路噴圖案蓋住內容。
+     ③ prefers-reduced-motion 一律不做。
+   ⚠ 用節流**距離**不是節流時間：慢慢移動時時間節流一樣會一直噴，
+     但視覺上根本沒移動，結果是在原地疊一坨。
+   ⚠ 直接操作 DOM，不走 React state——這是每秒幾十次的事件，
+     進 state 會讓整個封面重新 render。 */
+function useFestCursor(ref) {
+  React.useEffect(() => {
+    if (!(window.festOn && window.festOn())) return;
+    let fine = false, calm = true;
+    try {
+      fine = window.matchMedia('(pointer: fine)').matches;
+      calm = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (e) {}
+    const host = ref.current;
+    if (!host || !fine || !calm) return;
+
+    const KINDS = ['bat', 'ghost', 'star', 'bat', 'star'];
+    let last = null, i = 0;
+    const timers = new Set();
+    const onMove = (e) => {
+      const r = host.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      if (last && Math.hypot(x - last[0], y - last[1]) < 46) return;
+      last = [x, y];
+      const sp = document.createElement('span');
+      sp.className = 'hw-trail hw-trail-' + KINDS[i++ % KINDS.length];
+      sp.style.left = x + 'px';
+      sp.style.top = y + 'px';
+      sp.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
+      sp.style.setProperty('--rot', (Math.random() * 50 - 25).toFixed(1) + 'deg');
+      host.appendChild(sp);
+      const t = setTimeout(() => { try { sp.remove(); } catch (er) {} timers.delete(t); }, 1200);
+      timers.add(t);
+    };
+    host.addEventListener('pointermove', onMove);
+    return () => {
+      host.removeEventListener('pointermove', onMove);
+      timers.forEach(clearTimeout);
+      /* ⚠ 卸載時要把還在飄的清掉：換頁之後它們會留在 DOM 上。 */
+      host.querySelectorAll('.hw-trail').forEach(n => { try { n.remove(); } catch (er) {} });
+    };
+  }, [ref]);
+}
+
 function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
   const [loading, setLoading] = React.useState(false);
   const [slow, setSlow] = React.useState(false);
   const enterMode = loggedIn && onBack;   // 已登入且在封面 → 顯示「進入課程」
+  const coverRef = React.useRef(null);
+  useFestCursor(coverRef);
   const handleLogin = async () => {
     setLoading(true);
     setTimeout(() => { setSlow(true); setLoading(false); }, 12000); // 卡住的備援（unmount 換頁即消失）
     try { await onLogin(); } catch (e) { console.error(e); setLoading(false); }
   };
   return (
-    <div className="login-screen lc-cover lc-hero">
+    <div className="login-screen lc-cover lc-hero" ref={coverRef}>
       {/* v490（Alan：「登入封面也要很明顯過節的感覺」）：
           v489 只換了顏色，他看不出來在過節 → 加飄帶＋主角圖案＋日期徽章。
           ⚠ 只在節慶期間才 render，平常這兩行等於不存在（跟外觀共用同一個 festOn）。 */}
@@ -1394,9 +1445,18 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       <h1 className="lc-title">Alan's English Class</h1>
       <div className="lc-under2" aria-hidden="true"/>
       <p className="lc-subtitle">康橋每週進度</p>
+      {/* v525（Alan：「改成倒數距離萬聖節，這樣小朋友比較喜歡」）
+          ⚠ 天數是每次 render 算的，不是存起來的——跨午夜不會停在昨天的數字。 */}
       {window.festOn && window.festOn() && (
         <div className="fest-day-wrap">
-          <span className="fest-day"><b>{window.festNow().day}</b> {window.festNow().hi}</span>
+          {(() => {
+            const n = window.festDaysTo ? window.festDaysTo() : null;
+            const f = window.festNow();
+            return n > 0
+              ? <span className="fest-day fest-count"><b>{n}</b><i>天</i>
+                  <u>距離{f.name}</u></span>
+              : <span className="fest-day"><b>{f.day}</b> {f.hi}</span>;
+          })()}
         </div>
       )}
       {/* v392: 扇形封面四張卡——只有第一張（單字）維持 loading="eager"，其餘三張改 lazy。

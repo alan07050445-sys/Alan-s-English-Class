@@ -83,9 +83,9 @@ ok('⭐ styles-holiday-hw.css 的每一條規則都掛在 html.fest-hw 底下', 
    const bad = sels.flatMap(s => s.split(',').map(x => x.trim()))
      .filter(s => s && !s.startsWith('@') && !s.startsWith('html.fest-hw')
                && !/^\d+%$/.test(s) && !/^(from|to)$/.test(s)
-               /* .fest-badge／.fest-ribbon／.fest-day 是裝飾元素本身，
-                  平常根本不會 render（下面【3b】確認），所以不用加前綴 */
-               && !/^\.fest-(badge|ribbon|day)/.test(s));
+               /* .fest-badge／.fest-ribbon／.fest-day／.hw-trail 是裝飾元素本身，
+                  平常根本不會被建出來（下面【3b】逐一確認），所以不用加前綴 */
+               && !/^\.fest-(badge|ribbon|day)/.test(s) && !/^\.hw-trail/.test(s));
    if (bad.length) console.log('      漏網的選擇器：', bad.slice(0, 5));
    return bad.length === 0; })());
 ok('⭐⭐ 三個共用裝飾 class 的「本體」要在這個檔案裡自己寫一份', (() => {
@@ -99,6 +99,20 @@ console.log('\n【3b】裝飾元素本身也要被擋住（不然 11/01 之後�
      const i = shell.indexOf(cls);
      return i > 0 && /window\.festOn && window\.festOn\(\)/.test(shell.slice(Math.max(0, i - 400), i)); })());
 });
+ok('⭐ 滑鼠拖尾也一樣——沒過節就一個元素都不建', (() => {
+   /* ⚠ 切到下一個 function 為止，不要用固定長度（t-lessons 踩過） */
+   const i = shell.indexOf('function useFestCursor');
+   const body = shell.slice(i, shell.indexOf('\nfunction ', i + 10));
+   /* 第一行就要 return，而且還要擋觸控裝置與 prefers-reduced-motion
+      （平板點一下也會送 pointermove，不擋等於一路噴圖案蓋住內容）。 */
+   return i > 0
+     && /if \(!\(window\.festOn && window\.festOn\(\)\)\) return;/.test(body)
+     && /pointer: fine/.test(body) && /prefers-reduced-motion/.test(body); })());
+ok('   拖尾不可以擋到點擊（會按不到登入鈕）', /\.hw-trail \{[\s\S]{0,220}pointer-events:\s*none/.test(css));
+ok('   換頁時要把還在飄的清乾淨', (() => {
+   const i = shell.indexOf('function useFestCursor');
+   return /querySelectorAll\('\.hw-trail'\)[\s\S]{0,80}remove\(\)/
+     .test(shell.slice(i, shell.indexOf('\nfunction ', i + 10))); })());
 
 console.log('\n【4】圖案真的畫得出來（這次兩個坑都是「完全不報錯但畫不出來」）');
 const uris = [...css.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g)].map(m => m[1]);

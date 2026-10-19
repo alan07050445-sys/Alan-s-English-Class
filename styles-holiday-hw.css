@@ -465,3 +465,225 @@ html.fest-hw .header::after { animation: hwBatDrift 9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   html.fest-hw .header::after { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v525 — Alan 看完 v524 之後的七項（「再大膽一點」）
+   ⚠ 底線沒變：**真正在讀的那塊字不碰**。這一版把夜色放進殼層（外框、
+     側欄、面板底、進場動畫），卡片本體與題目文字仍是白底黑字。
+═══════════════════════════════════════════════════════════════ */
+
+/* ── ① 泡泡轉場也要過節 ─────────────────────────────────────
+   .pw 是 v250 的「海綿寶寶泡泡轉場」，純 DOM 生成（components-shell.jsx
+   的 spawnPageWave）。⭐ 這裡一行 JSX 都不用改：泡泡本來就是一顆圓，
+   把它的底換成南瓜／小鬼／蝙蝠就好，升起的動畫原封不動沿用。
+   ⚠ 泡泡裡本來有字母（A、b、C…），底換成圖之後要把字藏起來，
+     不然圖上會壓一個咖啡色的字母。 */
+html.fest-hw .pw-veil {
+  background: radial-gradient(circle at 50% 62%, #4A3374 0%, #3D2A63 52%, #2A1B45 100%);
+}
+html.fest-hw .pwb {
+  border: none; box-shadow: none;
+  color: transparent;                      /* 藏掉原本的字母 */
+  background: var(--hw-jack) center/contain no-repeat;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
+}
+html.fest-hw .pwb::after { content: none; }   /* 原本的高光點 */
+html.fest-hw .pwb:nth-child(3n)   { background-image: var(--hw-ghost); }
+html.fest-hw .pwb:nth-child(5n+2) { background-image: var(--hw-bat); }
+html.fest-hw .pwb:nth-child(7n+4) { background-image: var(--hw-moon); }
+
+/* ── ② 倒數（Alan：「改成倒數距離萬聖節，小朋友比較喜歡」）──────
+   天數放大當主角，文字退到旁邊當說明。 */
+.fest-day.fest-count { gap: 9px; padding: 7px 18px 7px 9px; }
+.fest-day.fest-count b { font-size: 26px; line-height: 1; }
+.fest-day.fest-count i { font-style: normal; font-size: 12px; font-weight: 800; color: #6E5E8C;
+  align-self: flex-end; margin: 0 2px 2px -4px; }
+.fest-day.fest-count u { text-decoration: none; font-size: 13.5px; font-weight: 800; color: #3D2A63; }
+@media (max-width: 480px) {
+  .fest-day.fest-count b { font-size: 22px; }
+  .fest-day.fest-count u { font-size: 12.5px; }
+}
+
+/* ── ③ 本週卡整張變成夜空（Alan：「hero 可以再大膽一點」）────────
+   ⚠ 底一翻黑，裡面每一個字都要跟著翻白——.wh 裡有六組文字
+     （pill／kicker／title／meta／ring／兩個 stat），漏一個就是黑底黑字。 */
+html.fest-hw .wh {
+  background: linear-gradient(135deg, #4A3374 0%, #3D2A63 46%, #2A1B45 100%);
+  border-color: rgba(255,255,255,.16);
+  box-shadow: 0 22px 48px -26px rgba(42,27,69,.9);
+}
+html.fest-hw .wh::before { background: radial-gradient(circle, rgba(245,124,31,.3), transparent 66%); }
+html.fest-hw .wh::after { opacity: .85; }        /* 小鬼在夜色上看得更清楚 */
+html.fest-hw .wh-title { color: #fff; }
+html.fest-hw .wh-kick-txt { color: var(--hw-gold); }
+html.fest-hw .wh-pill { background: var(--hw-pump); color: #fff; }
+html.fest-hw .wh-meta,
+html.fest-hw .wh-date,
+html.fest-hw .wh-theme-en { color: rgba(255,255,255,.66); }
+html.fest-hw .wh-ring-bg { stroke: rgba(255,255,255,.18); }
+html.fest-hw .wh-ring-fill { stroke: var(--hw-pump); }
+html.fest-hw .wh-ring-num b { color: var(--hw-gold); }
+html.fest-hw .wh-ring-num i { color: rgba(255,255,255,.62); }
+html.fest-hw .wh-stat {
+  background: rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.2);
+}
+html.fest-hw .wh-stat b { color: #fff; }
+html.fest-hw .wh-stat i { color: rgba(255,255,255,.62); }
+html.fest-hw .wh-empty,
+html.fest-hw .wh-done-msg { color: rgba(255,255,255,.8); }
+html.fest-hw .wh-weeknav button { color: #fff; border-color: rgba(255,255,255,.3); }
+
+/* 下面的框框也跟著有個性：標題列加一條南瓜橘 */
+html.fest-hw .tt-wrap {
+  border-color: rgba(61,42,99,.18);
+  box-shadow: 0 16px 36px -30px rgba(42,27,69,.8);
+}
+html.fest-hw .tt-wrap::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+  background: linear-gradient(90deg, var(--hw-pump), var(--hw-pur-l));
+  border-radius: 14px 14px 0 0; pointer-events: none;
+}
+html.fest-hw .tt-wrap { position: relative; }
+html.fest-hw .qm-cat-card { border-color: rgba(61,42,99,.16); }
+html.fest-hw .qm-cat-card:hover { border-color: rgba(245,124,31,.45); }
+
+/* ── ⑤ 門口頁也換成夜晚（Alan：「圖3 也可以再大膽一點」）────────
+   ⚠ 這一頁的標題是「晚安，Eric！」——底翻黑之後 .grade-sel-title／
+     .grade-sel-sub／幽靈浮水印都要處理。 */
+html.fest-hw .grade-selector {
+  background:
+    radial-gradient(900px 560px at 50% -10%, #4A3374 0%, rgba(74,51,116,0) 62%),
+    radial-gradient(620px 460px at 8% 8%, rgba(245,124,31,.22), transparent 62%),
+    linear-gradient(180deg, #2A1B45 0%, #3D2A63 100%);
+}
+html.fest-hw .grade-sel-title { color: #fff; }
+html.fest-hw .grade-sel-sub,
+html.fest-hw .gs-date { color: rgba(255,255,255,.74); }
+html.fest-hw .gs-date-dot { color: rgba(255,255,255,.4); }
+html.fest-hw .deep-lite { color: rgba(255,255,255,.055); }
+html.fest-hw .gs-blob-a { background: radial-gradient(circle, rgba(245,124,31,.3), transparent 66%); }
+html.fest-hw .gs-blob-b { background: radial-gradient(circle, rgba(140,110,200,.3), transparent 66%); }
+html.fest-hw .gs-spark   { fill: var(--hw-gold); }
+html.fest-hw .gs-spark-2 { fill: var(--hw-pump); }
+/* 底變黑了，剪影就要換成白的那一版（深色蝙蝠在夜空上等於不見） */
+html.fest-hw .grade-selector::after {
+  opacity: .78;
+  background:
+    var(--hw-web-w) left 0 top 0/150px 150px no-repeat,
+    var(--hw-bat)   12% 15%/88px 88px no-repeat,
+    var(--hw-bat)   26% 31%/54px 54px no-repeat,
+    var(--hw-bat)   88% 76%/70px 70px no-repeat,
+    var(--hw-moon)  right 18px top 16px/96px 96px no-repeat,
+    var(--hw-ghost) left 24px bottom 90px/84px 84px no-repeat,
+    var(--hw-jack)  right 36px bottom 20px/92px 92px no-repeat;
+}
+@media (max-width: 680px) {
+  html.fest-hw .grade-selector::after {
+    background:
+      var(--hw-moon)  right 10px top 10px/64px 64px no-repeat,
+      var(--hw-bat)   58% 16%/52px 52px no-repeat,
+      var(--hw-jack)  right 12px bottom 10px/64px 64px no-repeat,
+      var(--hw-ghost) left 14px bottom 70px/54px 54px no-repeat;
+  }
+}
+/* 門口頁的白卡在夜色上要更立體一點 */
+html.fest-hw .gs-card { box-shadow: 0 18px 40px -22px rgba(0,0,0,.7); }
+html.fest-hw .gs-foot a,
+html.fest-hw .gs-foot button { color: rgba(255,255,255,.72); }
+
+/* ── ⑥ 每日簽到／錯題本／商店 ────────────────────────────────
+   ⚠ 綠色打勾（已簽到）刻意不動：那是**狀態**不是裝飾，小朋友靠它分辨
+     「哪幾天已經領過了」。同理商店裡的紅色「不夠星星」也不動。 */
+html.fest-hw .ci-panel {
+  background: linear-gradient(168deg, #FDFBFF 0%, #F2EBFA 100%);
+  border-color: #E2D8EE;
+}
+html.fest-hw .ci-panel::before {
+  content: ""; position: absolute; right: 16px; top: 54px;
+  width: 54px; height: 50px; pointer-events: none; opacity: .5;
+  background: var(--hw-jack) center/contain no-repeat;
+}
+html.fest-hw .ci-kicker { color: #9C8CBC; }
+html.fest-hw .ci-title { color: var(--hw-pur); }
+html.fest-hw .ci-sub b { color: var(--hw-pump-d); }
+html.fest-hw .ci-rail-line { background: #E6DCF3; }
+html.fest-hw .ci-rail-line i { background: linear-gradient(90deg, var(--hw-pump-d), var(--hw-pump)); }
+html.fest-hw .ci-mark-dot { border-color: #D7CBEC; }
+html.fest-hw .ci-mark.on .ci-mark-dot {
+  background: var(--hw-pump); border-color: var(--hw-pump);
+  box-shadow: 0 0 0 4px rgba(245,124,31,.2);
+}
+html.fest-hw .ci-mark-lab em { color: var(--hw-pump-d); }
+html.fest-hw .sp-head {
+  background: linear-gradient(135deg, rgba(245,124,31,.26), rgba(83,59,128,.12));
+  border-bottom-color: rgba(61,42,99,.16);
+}
+html.fest-hw .sp-panel,
+html.fest-hw .mk-panel { border-color: rgba(61,42,99,.18); }
+html.fest-hw .sp-shop-head { color: var(--hw-pur); }
+
+/* ── ⑦ 作答頁（Alan：「圖5 作答頁也是」）───────────────────────
+   🔴 跟 v491 的 .page-lobby 完全同一個坑：`.page-mission` 有自己的
+     **奶油色漸層**（radial + linear），我 v523 只寫了 background-color:transparent
+     —— 那只蓋得掉顏色，蓋不掉 background-image，所以整頁還是奶油色。
+   ⚠ 這一頁是學生真的在作答的地方：**只換殼**（整頁底、側欄、單元列），
+     單字卡本體、題目文字、選項一律維持白底黑字。 */
+html.fest-hw .page-mission {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(245,124,31,.1), transparent 60%),
+    linear-gradient(180deg, #FCFAFF 0%, #F2ECFA 100%);
+}
+html.fest-hw .page-mission .header {
+  background: linear-gradient(100deg, var(--hw-pur-d) 0 56%, var(--hw-pur-l) 100%);
+  border-bottom-color: transparent;
+}
+html.fest-hw .page-mission .qm-sidebar {
+  border-color: rgba(61,42,99,.18);
+  box-shadow: 0 18px 42px -30px rgba(42,27,69,.5);
+}
+html.fest-hw .page-mission .qm-sidebar-back {
+  background: rgba(243,237,250,.8);
+  border-bottom-color: rgba(61,42,99,.14);
+  color: var(--hw-pump-d);
+}
+html.fest-hw .page-mission .qm-sidebar-cat {
+  background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(243,237,250,.8));
+  border-bottom-color: rgba(61,42,99,.14);
+}
+html.fest-hw .page-mission .qm-unit-row { border-color: rgba(61,42,99,.16); }
+html.fest-hw .page-mission .qm-unit-row.active {
+  background: #FFF6EE;
+  border-color: rgba(245,124,31,.6);
+  border-left-color: var(--hw-pump);
+  box-shadow: 0 14px 26px -18px rgba(217,97,12,.45);
+}
+/* 單元清單的頂端掛一隻小蝙蝠（側欄是殼，不是閱讀面） */
+html.fest-hw .page-mission .qm-sidebar-cat { position: relative; }
+html.fest-hw .page-mission .qm-sidebar-cat::before {
+  content: ""; position: absolute; right: 12px; top: 10px;
+  width: 34px; height: 34px; pointer-events: none; opacity: .4;
+  background: var(--hw-bat-d) center/contain no-repeat;
+}
+
+/* ── ④ 首頁滑鼠拖尾（配合 useFestCursor）──────────────────────
+   ⚠ 這幾條不掛 html.fest-hw 是對的：元素只有在節慶期間才會被建出來
+     （useFestCursor 第一行就擋掉了）。
+   ⚠ pointer-events:none 一定要有，否則滑鼠會「踩到自己留下的圖案」，
+     登入鈕按不到。 */
+.hw-trail {
+  position: absolute; width: 26px; height: 26px;
+  margin: -13px 0 0 -13px;
+  pointer-events: none; z-index: 2;
+  background: center/contain no-repeat;
+  animation: hwTrail 1.2s cubic-bezier(.25,.6,.3,1) forwards;
+}
+.hw-trail-bat   { background-image: var(--hw-bat, none); width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+.hw-trail-ghost { background-image: var(--hw-ghost, none); width: 22px; height: 28px; margin: -14px 0 0 -11px; }
+.hw-trail-star  { background-image: var(--hw-moon, none); width: 18px; height: 18px; margin: -9px 0 0 -9px; }
+@keyframes hwTrail {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(.5) rotate(0deg); }
+  18%  { opacity: .95; transform: translate(0, -4px) scale(1) rotate(calc(var(--rot) * .4)); }
+  100% { opacity: 0;   transform: translate(var(--dx), -46px) scale(.72) rotate(var(--rot)); }
+}
+@media (prefers-reduced-motion: reduce) { .hw-trail { display: none; } }

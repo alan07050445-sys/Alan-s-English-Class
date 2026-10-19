@@ -8566,11 +8566,11 @@ Object.assign(window, {
 const FESTS = [
   { id: '1010', from: '10-08', to: '10-12', peak: '10-10',
     cls: 'fest-1010', css: 'styles-holiday.css',
-    emoji: '🇹🇼', zh: '國慶外觀', day: '10.10',
+    emoji: '🇹🇼', zh: '國慶外觀', day: '10.10', name: '雙十國慶',
     hi: '雙十國慶快樂', hiDay: '今天是雙十國慶' },
   { id: 'hw',   from: '10-20', to: '10-31', peak: '10-31',
     cls: 'fest-hw',   css: 'styles-holiday-hw.css',
-    emoji: '🎃', zh: '萬聖節外觀', day: '10.31',
+    emoji: '🎃', zh: '萬聖節外觀', day: '10.31', name: '萬聖節',
     hi: '萬聖節快樂', hiDay: '今天是萬聖節' },
 ];
 const FEST_1010 = FESTS[0];                      // 舊名字留著，別處還在用
@@ -8632,8 +8632,32 @@ function festIsDay(now) {
   return !!f && _festMD(now || new Date()) === f.peak;
 }
 
+/* 距離節慶當天還有幾天（Alan v525：「改成倒數距離萬聖節，小朋友比較喜歡」）。
+   ⚠ 一定要「把兩個日期都歸零到當天 00:00」再相減。
+     直接用毫秒差除以一天，下午四點看到的會是 10.x 天 → Math.floor 變 10，
+     但其實只剩 11 天——**差一天的 bug 在倒數上特別明顯**，小朋友會自己算。
+   ⚠ 不要用 toISOString()（那是 UTC，台灣的晚上八點在它眼中已經是明天）。 */
+function festDaysTo(now) {
+  const f = festNow(now);
+  if (!f) return null;
+  const d = now || new Date();
+  const [pm, pd] = f.peak.split('-').map(Number);
+  const today  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const target = new Date(d.getFullYear(), pm - 1, pd);
+  return Math.round((target - today) / 86400000);
+}
+/* 徽章上那行字。當天就不要再倒數了（倒數到 0 還寫「還有 0 天」很奇怪）。 */
+function festCountText(now) {
+  const n = festDaysTo(now);
+  const f = festNow(now);
+  if (!f || n === null) return '';
+  if (n > 0)  return `距離${f.name}還有 ${n} 天`;
+  if (n === 0) return `${f.name}快樂`;
+  return f.hi;                                  // 當天過了之後（例如 11/01 還開著）
+}
+
 Object.assign(window, { festOn, festIs, festNow, festApply, festSetOverride, festOverride,
-  festIsDay, FESTS, FEST_1010 });
+  festIsDay, festDaysTo, festCountText, FESTS, FEST_1010 });
 
 /* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。
    data.js 比 app.jsx 早載入，所以這裡是最早能動手的地方。 */
