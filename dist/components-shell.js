@@ -693,14 +693,24 @@ function Header({
   }, "\uD83D\uDCBE \u532F\u51FA\u5099\u4EFD"), onArchiveWeek && /*#__PURE__*/React.createElement("button", {
     className: "banner-btn arch",
     onClick: onArchiveWeek
-  }, weekArchived ? '↩ 取消封存' : '📦 封存這一週'), window.festOn && (window.festOn() || window.festOverride && window.festOverride() !== 'auto') && /*#__PURE__*/React.createElement("button", {
-    className: "banner-btn fest",
-    onClick: () => {
-      var now = window.festOn();
-      window.festSetOverride(now ? 'off' : 'on');
-      setFestTick(t => t + 1);
-    }
-  }, window.festOn() ? '🇹🇼 國慶外觀：開（按一下關掉）' : '🇹🇼 國慶外觀：關（按一下打開）'), onPacing && /*#__PURE__*/React.createElement("button", {
+  }, weekArchived ? '↩ 取消封存' : '📦 封存這一週'), window.festOn && (window.festOn() || window.festOverride && window.festOverride() !== 'auto') && (() => {
+    var f = window.festNow && window.festNow();
+    var season = f || (window.FESTS || []).find(x => {
+      var d = new Date();
+      var md = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      return md >= x.from && md <= x.to;
+    }) || (window.FESTS || [])[(window.FESTS || []).length - 1] || {
+      emoji: '🎊',
+      zh: '節慶外觀'
+    };
+    return /*#__PURE__*/React.createElement("button", {
+      className: "banner-btn fest",
+      onClick: () => {
+        window.festSetOverride(f ? 'off' : 'on');
+        setFestTick(t => t + 1);
+      }
+    }, season.emoji, " ", season.zh, "\uFF1A", f ? '開（按一下關掉）' : '關（按一下打開）');
+  })(), onPacing && /*#__PURE__*/React.createElement("button", {
     className: "banner-btn pace",
     onClick: onPacing
   }, "\uD83C\uDFEB ", pace ? '學校進度表' : '匯入學校進度表'), /*#__PURE__*/React.createElement("button", {
@@ -1143,7 +1153,7 @@ function GradeSelector({
     className: "gs-date-dot"
   }, "\xB7"), window.festOn && window.festOn() ? /*#__PURE__*/React.createElement(React.Fragment, null, "\u4ECA\u5929\u8981\u5F9E\u54EA\u88E1\u958B\u59CB\u5462\uFF1F", /*#__PURE__*/React.createElement("span", {
     className: "fest-badge"
-  }, "\uD83C\uDDF9\uD83C\uDDFC ", window.festIsDay && window.festIsDay() ? '今天是雙十國慶' : '雙十國慶快樂')) : '今天要從哪裡開始呢？') : '選好就直接帶你進入這一週的練習。'), onOpenAdmin && /*#__PURE__*/React.createElement("button", {
+  }, (window.festNow() || {}).emoji, ' ', window.festIsDay && window.festIsDay() ? (window.festNow() || {}).hiDay : (window.festNow() || {}).hi)) : '今天要從哪裡開始呢？') : '選好就直接帶你進入這一週的練習。'), onOpenAdmin && /*#__PURE__*/React.createElement("button", {
     className: "gs-card gs-card-admin",
     onClick: onOpenAdmin
   }, /*#__PURE__*/React.createElement("span", {
@@ -1959,7 +1969,7 @@ function LoginScreen({
     className: "fest-day-wrap"
   }, /*#__PURE__*/React.createElement("span", {
     className: "fest-day"
-  }, /*#__PURE__*/React.createElement("b", null, "10.10"), " \u96D9\u5341\u570B\u6176\u5FEB\u6A02")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("b", null, window.festNow().day), " ", window.festNow().hi)), /*#__PURE__*/React.createElement("div", {
     className: "lc-fan",
     "aria-hidden": "true"
   }, /*#__PURE__*/React.createElement("div", {

@@ -15,8 +15,8 @@ const shell= fs.readFileSync(new URL('components-shell.jsx', ROOT), 'utf8');
 const sw   = fs.readFileSync(new URL('sw.js', ROOT), 'utf8');
 
 const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
-let toggled = null;
-const doc = { documentElement: { classList: { toggle: (c, on) => { toggled = { c, on }; } } } };
+let toggled = [];
+const doc = { documentElement: { classList: { toggle: (c, on) => { toggled.push({ c, on }); } } } };
 /* ⚠ localStorage 要給一個「真的會回 null」的假物件。
    用 Proxy stub 的話 getItem 會回傳 Proxy（truthy），
    festOverride 的 `|| 'auto'` 就永遠走不到——測試會因為假資料而失敗，不是程式有問題。 */
@@ -28,7 +28,10 @@ const W = {}; new Function('window', 'document', 'firebase', 'localStorage', dat
 
 let pass = 0, fail = 0;
 const ok = (m, c) => { if (c) { pass++; console.log('  ✅ ' + m); } else { fail++; console.log('  ❌ ' + m); } };
-const on = (m, d) => W.festOn(new Date(2026, m - 1, d));
+/* ⚠ v523 起網站同時有兩套節慶（雙十、萬聖節），所以這一支要問的是
+   「**國慶這一套**今天開不開」，不是「有沒有任何節慶開著」——
+   用 festOn() 會把萬聖節那 12 天也算進來，測試就不是在守這件事了。 */
+const on = (m, d) => W.festIs('1010', new Date(2026, m - 1, d));
 
 console.log('\n【1】它自己會關掉（最重要的一條）');
 ok('⭐ 一年之中只有 10/08–10/12 這 5 天會開', (() => {
@@ -55,8 +58,11 @@ ok('⭐ styles-holiday.css 的每一條規則都掛在 html.fest-1010 底下', (
    if (bad.length) console.log('      漏網的選擇器：', bad.slice(0, 5));
    return bad.length === 0; })());
 ok('   class 真的是掛在 <html> 上（body 蓋不到自己的背景）', (() => {
-   toggled = null; W.festApply();
-   return toggled && toggled.c === 'fest-1010'; })());
+   /* ⚠ v523 起 festApply() 會把每一套節慶的 class 都 toggle 一次
+      （只加不減＝兩套會疊在一起），所以要看的是「有沒有把 fest-1010 打開」，
+      不是「最後一次 toggle 是誰」。 */
+   W.festSetOverride('1010'); toggled = []; W.festApply(); W.festSetOverride('auto');
+   return toggled.some(t => t.c === 'fest-1010' && t.on); })());
 
 console.log('\n【2b】裝飾元素本身也要被擋住（不然 10/13 之後旗子還掛在那）');
 [['.fest-ribbon', '國旗飄帶'], ['fest-day', '10.10 徽章'], ['fest-badge', '門口頁問候標籤']].forEach(([cls, zh]) => {
@@ -132,12 +138,15 @@ console.log('\n【6】有真的接上去');
 ok('⭐ 不再無條件 <link> 進來（360 天的死重量）',
    !/<link[^>]*styles-holiday\.css/.test(html));
 ok('⭐⭐ 改成節慶期間才插進去，而且要排在 styles-tune.css 後面（它的工作是覆寫）', (() => {
-   const a = html.indexOf('styles-tune.css'), b = html.indexOf("l.href = 'styles-holiday.css");
+   const a = html.indexOf('styles-tune.css'), b = html.indexOf("styles-holiday.css'");
    return a > 0 && b > a && /document\.head\.appendChild\(l\)/.test(html); })());
-ok('⭐⭐ <head> 裡那份日期判斷要跟 data.js 的 festOn() 一致（兩份寫死的區間不可以走鐘）', (() => {
-   const m = /FEST_1010 = \{ from: '([\d-]+)', to: '([\d-]+)'/.exec(data);
-   const h = /var FROM = '([\d-]+)', TO = '([\d-]+)';/.exec(html);
-   return m && h && m[1] === h[1] && m[2] === h[2]; })());
+ok('⭐⭐ <head> 裡那份日期判斷要跟 data.js 的節慶表一致（兩份寫死的區間不可以走鐘）', (() => {
+   /* <head> 那段不可以依賴 data.js（它比較晚載入），所以節慶表在兩邊各有一份。
+      ⚠ 兩份走鐘的話，CSS 會在某幾天載錯——而且完全不報錯。 */
+   const f = W.FESTS.find(x => x.id === '1010');
+   const h = [...html.matchAll(/\{ id: '([^']+)',\s*from: '([\d-]+)',\s*to: '([\d-]+)'/g)]
+     .find(m => m[1] === '1010');
+   return f && h && f.from === h[2] && f.to === h[3]; })());
 ok('⭐ 老師自己那台的強制開關一樣有效（提早預覽／看膩了關掉）',
    /alan-fest-override/.test(html) && /ov === 'on'/.test(html) && /ov === 'off'/.test(html));
 ok('   節慶沒開就不要讓 Service Worker 先去抓它', !/styles-holiday\.css\?v=/.test(sw));

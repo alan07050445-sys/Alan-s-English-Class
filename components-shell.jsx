@@ -472,18 +472,27 @@ function Header({
                     {weekArchived ? '↩ 取消封存' : '📦 封存這一週'}
                   </button>
                 )}
-                {/* v489：國慶外觀的開關。平常不顯示——只有「現在是節慶期間」或
+                {/* v489：節慶外觀的開關。平常不顯示——只有「現在是節慶期間」或
                     「老師自己強制開著」時才出現，免得一年到頭掛著一顆沒用的按鈕。
-                    ⚠ 只影響按的人這台裝置（學生看到的永遠是日期判斷的結果）。 */}
-                {window.festOn && (window.festOn() || (window.festOverride && window.festOverride() !== 'auto')) && (
-                  <button className="banner-btn fest" onClick={() => {
-                    const now = window.festOn();
-                    window.festSetOverride(now ? 'off' : 'on');
-                    setFestTick(t => t + 1);
-                  }}>
-                    {window.festOn() ? '🇹🇼 國慶外觀：開（按一下關掉）' : '🇹🇼 國慶外觀：關（按一下打開）'}
-                  </button>
-                )}
+                    ⚠ 只影響按的人這台裝置（學生看到的永遠是日期判斷的結果）。
+                    ⚠ v523：名稱跟著當季節慶走，不要再寫死「國慶」——
+                      關掉的時候 festNow() 是 null，所以名字要從節慶表裡撈。 */}
+                {window.festOn && (window.festOn() || (window.festOverride && window.festOverride() !== 'auto')) && (() => {
+                  const f = window.festNow && window.festNow();
+                  const season = f || (window.FESTS || []).find(x => {
+                    const d = new Date();
+                    const md = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                    return md >= x.from && md <= x.to;
+                  }) || (window.FESTS || [])[(window.FESTS || []).length - 1] || { emoji: '🎊', zh: '節慶外觀' };
+                  return (
+                    <button className="banner-btn fest" onClick={() => {
+                      window.festSetOverride(f ? 'off' : 'on');
+                      setFestTick(t => t + 1);
+                    }}>
+                      {season.emoji} {season.zh}：{f ? '開（按一下關掉）' : '關（按一下打開）'}
+                    </button>
+                  );
+                })()}
                 {onPacing && (
                   <button className="banner-btn pace" onClick={onPacing}>
                     🏫 {pace ? '學校進度表' : '匯入學校進度表'}
@@ -769,7 +778,9 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
 
   return (
     <div className="grade-selector">
-      {/* v490（Alan：「門口頁也是！要有國慶的感覺」）——跟封面同一套飄帶 */}
+      {/* v490（Alan：「門口頁也是！要有過節的感覺」）——跟封面同一套飄帶。
+          v523 起飄帶長相由當季的 CSS 決定（國慶＝國旗、萬聖節＝南瓜田），
+          這裡的 markup 一行都不用改。 */}
       {window.festOn && window.festOn() && (
         <div className="fest-ribbon" aria-hidden="true"><i/></div>
       )}
@@ -794,7 +805,12 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
                  不要另外再寫一份日期判斷——兩份一定會走鐘。 */
             ? <><span className="gs-date">{dateLine}</span><span className="gs-date-dot">·</span>
                 {(window.festOn && window.festOn())
-                  ? <>今天要從哪裡開始呢？<span className="fest-badge">🇹🇼 {window.festIsDay && window.festIsDay() ? '今天是雙十國慶' : '雙十國慶快樂'}</span></>
+                  ? <>今天要從哪裡開始呢？<span className="fest-badge">
+                      {(window.festNow() || {}).emoji}{' '}
+                      {window.festIsDay && window.festIsDay()
+                        ? (window.festNow() || {}).hiDay
+                        : (window.festNow() || {}).hi}
+                    </span></>
                   : '今天要從哪裡開始呢？'}</>
             : '選好就直接帶你進入這一週的練習。'}
         </p>
@@ -1368,8 +1384,8 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
   };
   return (
     <div className="login-screen lc-cover lc-hero">
-      {/* v490（Alan：「登入封面也要很明顯國慶的感覺」）：
-          v489 只換了顏色，他看不出來在過節 → 加國旗飄帶＋青天白日＋日期徽章。
+      {/* v490（Alan：「登入封面也要很明顯過節的感覺」）：
+          v489 只換了顏色，他看不出來在過節 → 加飄帶＋主角圖案＋日期徽章。
           ⚠ 只在節慶期間才 render，平常這兩行等於不存在（跟外觀共用同一個 festOn）。 */}
       {window.festOn && window.festOn() && (
         <div className="fest-ribbon" aria-hidden="true"><i/></div>
@@ -1380,7 +1396,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       <p className="lc-subtitle">康橋每週進度</p>
       {window.festOn && window.festOn() && (
         <div className="fest-day-wrap">
-          <span className="fest-day"><b>10.10</b> 雙十國慶快樂</span>
+          <span className="fest-day"><b>{window.festNow().day}</b> {window.festNow().hi}</span>
         </div>
       )}
       {/* v392: 扇形封面四張卡——只有第一張（單字）維持 loading="eager"，其餘三張改 lazy。

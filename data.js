@@ -8551,56 +8551,89 @@ Object.assign(window, {
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
 
-/* ══ v489 🇹🇼 雙十國慶限定外觀 ══════════════════════════════════
-   Alan 2026-10-08：「這幾天是台灣國慶日，我想幫我的網站換個風格」。
-   ⭐ 關鍵設計：**它自己會關掉**。只在 10/08–10/12 出現，過了就恢復原狀，
-     Alan 不用記得去關（忘記關的話，學生十一月還在看國旗）。
-   ⚠ 用本地時間判斷（學生都在台灣），不要用 UTC——UTC 的 10/08 00:00
-     在台灣已經是 10/08 早上 8 點，等於少了整整一個早上。 */
-const FEST_1010 = { from: '10-08', to: '10-12', cls: 'fest-1010' };
+/* ══ 🎊 節慶限定外觀 ══════════════════════════════════════════════
+   v489 雙十國慶（Alan：「這幾天是台灣國慶日，我想幫我的網站換個風格」）
+   v523 萬聖節（Alan 2026-10-20：「一直到 halloween 結束，全部都要改變」）
+
+   ⭐ 核心設計沒變：**它自己會開，也自己會關**。
+     Alan 不用記得十一月要去關掉——忘記的話學生會在聖誕節看到南瓜。
+   ⭐ v523 從「寫死一個節慶」改成**一張表**。理由很實際：
+     上一次換季是把整份 1010 的判斷複製一份出來改，兩份日期一定會走鐘；
+     現在加一個節慶＝表裡多一列 ＋ 一個 CSS 檔，其他一行都不用動。
+   ⚠ 用本地時間判斷（學生都在台灣），不要用 UTC——UTC 的 10/20 00:00
+     在台灣已經是早上 8 點，等於少了整整一個早上。
+   ⚠ 區間不可以重疊；重疊的話 find() 只會拿到第一個，另一個靜靜地不見。 */
+const FESTS = [
+  { id: '1010', from: '10-08', to: '10-12', peak: '10-10',
+    cls: 'fest-1010', css: 'styles-holiday.css',
+    emoji: '🇹🇼', zh: '國慶外觀', day: '10.10',
+    hi: '雙十國慶快樂', hiDay: '今天是雙十國慶' },
+  { id: 'hw',   from: '10-20', to: '10-31', peak: '10-31',
+    cls: 'fest-hw',   css: 'styles-holiday-hw.css',
+    emoji: '🎃', zh: '萬聖節外觀', day: '10.31',
+    hi: '萬聖節快樂', hiDay: '今天是萬聖節' },
+];
+const FEST_1010 = FESTS[0];                      // 舊名字留著，別處還在用
 const FEST_KEY  = 'alan-fest-override';          // 老師自己的開關（只影響這台裝置）
 
-function festOn(now) {
-  /* 老師可以在自己的裝置上強制開／關（提早預覽、或自己看膩了）。
-     學生不會動到這個，他們看到的永遠是日期判斷的結果。 */
-  let ov = null;
-  try { ov = localStorage.getItem(FEST_KEY); } catch (e) {}
-  if (ov === 'on')  return true;
-  if (ov === 'off') return false;
-  const d = now || new Date();
-  const md = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  return md >= FEST_1010.from && md <= FEST_1010.to;
+function _festMD(d) {
+  return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-/* 掛在 <html> 上，整個 styles-holiday.css 才會生效。
+/* 現在該用哪一套？回傳 FESTS 裡的那一筆，或 null（＝平常的樣子）。
+   老師可以在自己的裝置上強制開／關（提早預覽、或自己看膩了）：
+     'off'      永遠關　　'on' 強制開（日期沒中就用最後一套）
+     '1010'/'hw' 指定哪一套（他要先看看萬聖節長怎樣）
+   學生不會動到這個，他們看到的永遠是日期判斷的結果。 */
+function festNow(now) {
+  let ov = null;
+  try { ov = localStorage.getItem(FEST_KEY); } catch (e) {}
+  if (ov === 'off') return null;
+  const byDate = FESTS.find(f => {
+    const md = _festMD(now || new Date());
+    return md >= f.from && md <= f.to;
+  }) || null;
+  if (ov && ov !== 'auto' && ov !== 'on') {
+    const pick = FESTS.find(f => f.id === ov);
+    if (pick) return pick;
+  }
+  if (ov === 'on') return byDate || FESTS[FESTS.length - 1];
+  return byDate;
+}
+function festOn(now)      { return !!festNow(now); }
+function festIs(id, now)  { const f = festNow(now); return !!f && f.id === id; }
+
+/* 掛在 <html> 上，對應的 styles-holiday*.css 才會生效。
    ⚠ 掛在 <html> 不是 <body>：有些浮層（放大圖、裝扮室）是 createPortal 到 body 的，
-     掛 body 也會吃到，但 <html> 連 body 自己的背景都蓋得到。 */
+     掛 body 也會吃到，但 <html> 連 body 自己的背景都蓋得到。
+   ⚠ 每一套的 class 都要處理——只加不減的話，從國慶切到萬聖節會兩套疊在一起。 */
 function festApply() {
   try {
-    const on = festOn();
-    document.documentElement.classList.toggle(FEST_1010.cls, on);
-    return on;
+    const f = festNow();
+    FESTS.forEach(x => document.documentElement.classList.toggle(x.cls, !!f && x.id === f.id));
+    return !!f;
   } catch (e) { return false; }
 }
 
-/* 老師端的開關：'auto'（跟日期走）／'on'／'off' */
+/* 老師端的開關：'auto'（跟日期走）／'on'／'off'／節慶 id */
 function festSetOverride(mode) {
   try {
     if (mode === 'auto') localStorage.removeItem(FEST_KEY);
-    else localStorage.setItem(FEST_KEY, mode === 'on' ? 'on' : 'off');
+    else localStorage.setItem(FEST_KEY, String(mode));
   } catch (e) {}
   return festApply();
 }
 function festOverride() {
   try { return localStorage.getItem(FEST_KEY) || 'auto'; } catch (e) { return 'auto'; }
 }
-/* 今天是不是國慶日當天（10/10）——門口頁的問候語要用 */
-function festIsDay() {
-  const d = new Date();
-  return d.getMonth() === 9 && d.getDate() === 10;
+/* 今天是不是節慶當天（10/10、10/31）——問候語要用 */
+function festIsDay(now) {
+  const f = festNow(now);
+  return !!f && _festMD(now || new Date()) === f.peak;
 }
 
-Object.assign(window, { festOn, festApply, festSetOverride, festOverride, festIsDay, FEST_1010 });
+Object.assign(window, { festOn, festIs, festNow, festApply, festSetOverride, festOverride,
+  festIsDay, FESTS, FEST_1010 });
 
 /* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。
    data.js 比 app.jsx 早載入，所以這裡是最早能動手的地方。 */
