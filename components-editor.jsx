@@ -5918,6 +5918,161 @@ async function gnFileToImage(file) {
   return { media_type: 'image/jpeg', data: url.split(',')[1], preview: url };
 }
 
+
+/* ══ 📸 v516 拍考卷照片 → 變成互動版 ═══════════════════════════════════════
+   Alan 手上有一疊考過的 Formative。v515 做好了「考卷」這個容器，這裡把紙變成資料。
+   讀照片的機制沿用 v428~v430（一張一個請求、同時送、壞一頁只少一頁）。
+   ⭐ 讀完的校稿檢查直接用 examWarnings()——跟老師手打考卷吃同一組檢查，不另外寫一份。
+   🔴 這些照片上滿滿都是學生的手寫答案與老師的紅筆，而且有名字跟分數。
+     提示詞已經寫明「只讀印刷的、不要抓姓名與分數」，但校稿頁還是把讀到的東西
+     整個攤開讓 Alan 看過再存。 */
+function ExamScanModal({ open, categories, defaultCat, defaultGrade, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const [imgs, setImgs]   = useS([]);
+  const [busy, setBusy]   = useS(false);
+  const [prog, setProg]   = useS([0, 0]);
+  const [err, setErr]     = useS('');
+  const [got, setGot]     = useS(null);     // { item, skipped, missed, warnings }
+  const [cat, setCat]     = useS(defaultCat || 'reading');
+  const fileRef = React.useRef(null);
+
+  useE(() => { if (open) { setImgs([]); setGot(null); setErr(''); setBusy(false); setCat(defaultCat || 'reading'); } }, [open]);
+  if (!open) return null;
+
+  const addFiles = async (files) => {
+    const list = [...(files || [])].slice(0, 8 - imgs.length);
+    if (!list.length) return;
+    setErr('');
+    try {
+      const made = await Promise.all(list.map(f => gnFileToImage(f).then(x => ({ ...x, name: f.name }))));
+      setImgs(v => v.concat(made));
+    } catch (e) { setErr('這幾張照片讀不進來，換一張試試。'); }
+  };
+
+  const read = async () => {
+    if (!imgs.length) return;
+    setBusy(true); setErr(''); setGot(null);
+    try {
+      const r = await window.aiReadExamSheet({
+        images: imgs.map(i => ({ media_type: i.media_type, data: i.data })),
+        onProgress: (a, b) => setProg([a, b]),
+      });
+      setGot(r);
+    } catch (e) { setErr(e.message || '讀不懂這幾張照片。'); }
+    setBusy(false);
+  };
+
+  const save = () => {
+    if (!got) return;
+    const T = window.examTotals(got.item);
+    if (!T.parts) { setErr('沒有讀到任何大題。'); return; }
+    onCreate({ ...got.item, id: 'ex' + Date.now().toString(36), _cat: cat });
+  };
+
+  const T = got ? window.examTotals(got.item) : null;
+
+  return ReactDOM.createPortal(
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) nudge(); }}>
+      <div className={'modal wide ' + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>📸 拍考卷 <em>→ 互動版</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+        <div className="modal-body">
+
+          {/* ① 選照片 */}
+          <div className="field">
+            <label className="field-label">考卷照片（一頁一張，最多 8 張）</label>
+            <div className="exs-shots">
+              {imgs.map((im, i) => (
+                <div className="exs-shot" key={i}>
+                  <img src={im.preview} alt=""/>
+                  <button onClick={() => setImgs(v => v.filter((_, k) => k !== i))}>✕</button>
+                </div>
+              ))}
+              {imgs.length < 8 && (
+                <button className="exs-add" onClick={() => fileRef.current && fileRef.current.click()}>
+                  ＋<span>加照片</span>
+                </button>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+              onChange={e => { addFiles(e.target.files); e.target.value = ''; }}/>
+            <div className="field-help">
+              整頁都要入鏡、拍正一點。<b>學生寫的答案與老師的紅筆不會被讀進去</b>——
+              它讀的是印刷的題目，姓名與分數也不會存。
+            </div>
+          </div>
+
+          {err && <div className="exs-err">⚠ {err}</div>}
+
+          {!got && (
+            <button className="btn primary exs-go" disabled={!imgs.length || busy} onClick={read}>
+              {busy ? `讀取中… ${prog[0]}/${prog[1]} 張` : imgs.length ? `讀這 ${imgs.length} 張` : '先加幾張照片'}
+            </button>
+          )}
+
+          {/* ② 校稿 */}
+          {got && (
+            <>
+              <div className="exs-sum">
+                <b>{got.item.title}</b>
+                <span className={T.total === 100 ? 'ok' : ''}>
+                  {T.sections} 區 · {T.parts} 大題 · 合計 {T.total} 分（自動 {T.auto}／老師改 {T.manual}）
+                </span>
+              </div>
+
+              {got.missed.length > 0 && (
+                <div className="exs-warn">📄 這幾張沒讀出東西：{got.missed.join('、')}——可以單獨再拍一次補上。</div>
+              )}
+              {got.skipped.length > 0 && (
+                <div className="exs-warn skip">
+                  ⏭ 這幾大題網站還做不出來，先跳過了：
+                  <ul>{got.skipped.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </div>
+              )}
+              {got.warnings.length > 0 && (
+                <div className="exs-warn bad">
+                  {got.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+                  <em>存起來之後在「編輯單元」裡可以直接改。</em>
+                </div>
+              )}
+
+              {/* 讀到什麼就攤開什麼——Alan 要看過才存 */}
+              {(got.item.sections || []).map((sc, si) => (
+                <div className="exs-sec" key={si}>
+                  <div className="exs-sec-h"><b>{sc.name || `Section ${si + 1}`}</b>{sc.pct ? <span>({sc.pct}%)</span> : null}</div>
+                  {(sc.parts || []).map((pt, pi) => (
+                    <div className="exs-part" key={pi}>
+                      <div className="exs-part-h">
+                        <i>{(window.EXAM_KINDS[pt.kind] || {}).zh}</i>
+                        <b>{pt.title || '（沒讀到標題）'}</b>
+                        <span>{pt.pts} 分 · {window.examPartN(pt)} 題</span>
+                      </div>
+                      <pre className="exs-pre">{window.examPartText(pt)}</pre>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              <div className="field">
+                <label className="field-label">放到哪一類</label>
+                <select value={cat} onChange={e => setCat(e.target.value)}>
+                  {(categories || []).map(c => <option key={c.id} value={c.id}>{c.titleZh || c.title}</option>)}
+                </select>
+              </div>
+
+              <div className="exs-foot">
+                <button className="btn ghost" onClick={() => { setGot(null); setErr(''); }}>↩ 重讀</button>
+                <button className="btn primary" onClick={save}>存成一份考卷</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, defaultText, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [title, setTitle]   = useS('');
@@ -7538,5 +7693,5 @@ function ExamPrepModal({ open, side, pace, weeks, weekOrder, weekId, categories,
     </div>, document.body);
 }
 
-Object.assign(window, { ExamPrepModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+Object.assign(window, { ExamPrepModal, ExamScanModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

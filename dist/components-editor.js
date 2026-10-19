@@ -9255,6 +9255,191 @@ async function gnFileToImage(file) {
     preview: url
   };
 }
+
+/* ══ 📸 v516 拍考卷照片 → 變成互動版 ═══════════════════════════════════════
+   Alan 手上有一疊考過的 Formative。v515 做好了「考卷」這個容器，這裡把紙變成資料。
+   讀照片的機制沿用 v428~v430（一張一個請求、同時送、壞一頁只少一頁）。
+   ⭐ 讀完的校稿檢查直接用 examWarnings()——跟老師手打考卷吃同一組檢查，不另外寫一份。
+   🔴 這些照片上滿滿都是學生的手寫答案與老師的紅筆，而且有名字跟分數。
+     提示詞已經寫明「只讀印刷的、不要抓姓名與分數」，但校稿頁還是把讀到的東西
+     整個攤開讓 Alan 看過再存。 */
+function ExamScanModal({
+  open,
+  categories,
+  defaultCat,
+  defaultGrade,
+  onClose,
+  onCreate
+}) {
+  var [nudgeCls, nudge] = useModalNudge();
+  var [imgs, setImgs] = useS([]);
+  var [busy, setBusy] = useS(false);
+  var [prog, setProg] = useS([0, 0]);
+  var [err, setErr] = useS('');
+  var [got, setGot] = useS(null); // { item, skipped, missed, warnings }
+  var [cat, setCat] = useS(defaultCat || 'reading');
+  var fileRef = React.useRef(null);
+  useE(() => {
+    if (open) {
+      setImgs([]);
+      setGot(null);
+      setErr('');
+      setBusy(false);
+      setCat(defaultCat || 'reading');
+    }
+  }, [open]);
+  if (!open) return null;
+  var addFiles = async files => {
+    var list = [...(files || [])].slice(0, 8 - imgs.length);
+    if (!list.length) return;
+    setErr('');
+    try {
+      var made = await Promise.all(list.map(f => gnFileToImage(f).then(x => ({
+        ...x,
+        name: f.name
+      }))));
+      setImgs(v => v.concat(made));
+    } catch (e) {
+      setErr('這幾張照片讀不進來，換一張試試。');
+    }
+  };
+  var read = async () => {
+    if (!imgs.length) return;
+    setBusy(true);
+    setErr('');
+    setGot(null);
+    try {
+      var r = await window.aiReadExamSheet({
+        images: imgs.map(i => ({
+          media_type: i.media_type,
+          data: i.data
+        })),
+        onProgress: (a, b) => setProg([a, b])
+      });
+      setGot(r);
+    } catch (e) {
+      setErr(e.message || '讀不懂這幾張照片。');
+    }
+    setBusy(false);
+  };
+  var save = () => {
+    if (!got) return;
+    var T = window.examTotals(got.item);
+    if (!T.parts) {
+      setErr('沒有讀到任何大題。');
+      return;
+    }
+    onCreate({
+      ...got.item,
+      id: 'ex' + Date.now().toString(36),
+      _cat: cat
+    });
+  };
+  var T = got ? window.examTotals(got.item) : null;
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    onClick: e => {
+      if (e.target === e.currentTarget) nudge();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: 'modal wide ' + nudgeCls,
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDCF8 \u62CD\u8003\u5377 ", /*#__PURE__*/React.createElement("em", null, "\u2192 \u4E92\u52D5\u7248")), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "close",
+    size: 14
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "modal-body"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u8003\u5377\u7167\u7247\uFF08\u4E00\u9801\u4E00\u5F35\uFF0C\u6700\u591A 8 \u5F35\uFF09"), /*#__PURE__*/React.createElement("div", {
+    className: "exs-shots"
+  }, imgs.map((im, i) => /*#__PURE__*/React.createElement("div", {
+    className: "exs-shot",
+    key: i
+  }, /*#__PURE__*/React.createElement("img", {
+    src: im.preview,
+    alt: ""
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setImgs(v => v.filter((_, k) => k !== i))
+  }, "\u2715"))), imgs.length < 8 && /*#__PURE__*/React.createElement("button", {
+    className: "exs-add",
+    onClick: () => fileRef.current && fileRef.current.click()
+  }, "\uFF0B", /*#__PURE__*/React.createElement("span", null, "\u52A0\u7167\u7247"))), /*#__PURE__*/React.createElement("input", {
+    ref: fileRef,
+    type: "file",
+    accept: "image/*",
+    multiple: true,
+    style: {
+      display: 'none'
+    },
+    onChange: e => {
+      addFiles(e.target.files);
+      e.target.value = '';
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u6574\u9801\u90FD\u8981\u5165\u93E1\u3001\u62CD\u6B63\u4E00\u9EDE\u3002", /*#__PURE__*/React.createElement("b", null, "\u5B78\u751F\u5BEB\u7684\u7B54\u6848\u8207\u8001\u5E2B\u7684\u7D05\u7B46\u4E0D\u6703\u88AB\u8B80\u9032\u53BB"), "\u2014\u2014 \u5B83\u8B80\u7684\u662F\u5370\u5237\u7684\u984C\u76EE\uFF0C\u59D3\u540D\u8207\u5206\u6578\u4E5F\u4E0D\u6703\u5B58\u3002")), err && /*#__PURE__*/React.createElement("div", {
+    className: "exs-err"
+  }, "\u26A0 ", err), !got && /*#__PURE__*/React.createElement("button", {
+    className: "btn primary exs-go",
+    disabled: !imgs.length || busy,
+    onClick: read
+  }, busy ? `讀取中… ${prog[0]}/${prog[1]} 張` : imgs.length ? `讀這 ${imgs.length} 張` : '先加幾張照片'), got && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "exs-sum"
+  }, /*#__PURE__*/React.createElement("b", null, got.item.title), /*#__PURE__*/React.createElement("span", {
+    className: T.total === 100 ? 'ok' : ''
+  }, T.sections, " \u5340 \xB7 ", T.parts, " \u5927\u984C \xB7 \u5408\u8A08 ", T.total, " \u5206\uFF08\u81EA\u52D5 ", T.auto, "\uFF0F\u8001\u5E2B\u6539 ", T.manual, "\uFF09")), got.missed.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "exs-warn"
+  }, "\uD83D\uDCC4 \u9019\u5E7E\u5F35\u6C92\u8B80\u51FA\u6771\u897F\uFF1A", got.missed.join('、'), "\u2014\u2014\u53EF\u4EE5\u55AE\u7368\u518D\u62CD\u4E00\u6B21\u88DC\u4E0A\u3002"), got.skipped.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "exs-warn skip"
+  }, "\u23ED \u9019\u5E7E\u5927\u984C\u7DB2\u7AD9\u9084\u505A\u4E0D\u51FA\u4F86\uFF0C\u5148\u8DF3\u904E\u4E86\uFF1A", /*#__PURE__*/React.createElement("ul", null, got.skipped.map((x, i) => /*#__PURE__*/React.createElement("li", {
+    key: i
+  }, x)))), got.warnings.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "exs-warn bad"
+  }, got.warnings.map((w, i) => /*#__PURE__*/React.createElement("div", {
+    key: i
+  }, "\u26A0 ", w)), /*#__PURE__*/React.createElement("em", null, "\u5B58\u8D77\u4F86\u4E4B\u5F8C\u5728\u300C\u7DE8\u8F2F\u55AE\u5143\u300D\u88E1\u53EF\u4EE5\u76F4\u63A5\u6539\u3002")), (got.item.sections || []).map((sc, si) => /*#__PURE__*/React.createElement("div", {
+    className: "exs-sec",
+    key: si
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "exs-sec-h"
+  }, /*#__PURE__*/React.createElement("b", null, sc.name || `Section ${si + 1}`), sc.pct ? /*#__PURE__*/React.createElement("span", null, "(", sc.pct, "%)") : null), (sc.parts || []).map((pt, pi) => /*#__PURE__*/React.createElement("div", {
+    className: "exs-part",
+    key: pi
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "exs-part-h"
+  }, /*#__PURE__*/React.createElement("i", null, (window.EXAM_KINDS[pt.kind] || {}).zh), /*#__PURE__*/React.createElement("b", null, pt.title || '（沒讀到標題）'), /*#__PURE__*/React.createElement("span", null, pt.pts, " \u5206 \xB7 ", window.examPartN(pt), " \u984C")), /*#__PURE__*/React.createElement("pre", {
+    className: "exs-pre"
+  }, window.examPartText(pt)))))), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u653E\u5230\u54EA\u4E00\u985E"), /*#__PURE__*/React.createElement("select", {
+    value: cat,
+    onChange: e => setCat(e.target.value)
+  }, (categories || []).map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.titleZh || c.title)))), /*#__PURE__*/React.createElement("div", {
+    className: "exs-foot"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: () => {
+      setGot(null);
+      setErr('');
+    }
+  }, "\u21A9 \u91CD\u8B80"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: save
+  }, "\u5B58\u6210\u4E00\u4EFD\u8003\u5377")))))), document.body);
+}
 function GrammarNotesModal({
   open,
   categories,
@@ -12186,6 +12371,7 @@ function ExamPrepModal({
 }
 Object.assign(window, {
   ExamPrepModal,
+  ExamScanModal,
   PacingImportModal,
   GrammarNotesModal,
   gnBuildItems,

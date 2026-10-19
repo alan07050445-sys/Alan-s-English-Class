@@ -327,6 +327,7 @@ function Header({
   onReadingGen,
   onGrammarNotes,
   onWordStudy,
+  onExamScan,
   pace,
   nextF,
   onPacing,
@@ -643,7 +644,14 @@ function Header({
     className: "emk-ico"
   }, "\u270F\uFE0F"), /*#__PURE__*/React.createElement("span", {
     className: "emk-txt"
-  }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u6587\u6CD5"), /*#__PURE__*/React.createElement("em", null, "\u4E0A\u50B3\u4F5C\u696D\u7167\u7247\uFF0F\u8CBC\u6587\u5B57 \u2192 \u4E92\u52D5\u6559\u5B78\u30FB\u9078\u64C7\u30FB\u586B\u7A7A\u30FB\u4E2D\u7FFB\u82F1"))), onWordStudy && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u6587\u6CD5"), /*#__PURE__*/React.createElement("em", null, "\u4E0A\u50B3\u4F5C\u696D\u7167\u7247\uFF0F\u8CBC\u6587\u5B57 \u2192 \u4E92\u52D5\u6559\u5B78\u30FB\u9078\u64C7\u30FB\u586B\u7A7A\u30FB\u4E2D\u7FFB\u82F1"))), onExamScan && /*#__PURE__*/React.createElement("button", {
+    className: "edit-make-btn exs",
+    onClick: onExamScan
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "emk-ico"
+  }, "\uD83D\uDCF8"), /*#__PURE__*/React.createElement("span", {
+    className: "emk-txt"
+  }, /*#__PURE__*/React.createElement("b", null, "\u62CD\u8003\u5377"), /*#__PURE__*/React.createElement("em", null, "\u62CD\u5B78\u6821\u7684 Formative \u2192 \u4E00\u4EFD\u6709\u914D\u5206\u7684\u4E92\u52D5\u8003\u5377"))), onWordStudy && /*#__PURE__*/React.createElement("button", {
     className: "edit-make-btn ws",
     onClick: onWordStudy
   }, /*#__PURE__*/React.createElement("span", {

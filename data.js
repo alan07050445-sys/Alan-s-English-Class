@@ -7266,6 +7266,227 @@ Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   v516 📸 拍考卷照片 → 變成互動版
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 手上有一疊考過的 Formative。v515 做好了「考卷」這個容器，
+   這一版負責把紙變成資料。整套讀照片的機制沿用 v428~v430 的 aiReadGrammarSheet：
+     · 一張照片一個請求、全部同時送 → 再長也不會被 max_tokens 切斷（v430 的教訓）
+     · 某一頁讀不到只少那一頁，會告訴老師是哪一張，不是整份「讀不懂」
+
+   🔴 這份照片跟作業照片最大的不同：**上面滿滿都是學生的手寫答案與老師的紅筆**。
+      所以提示詞要很明確：讀印刷的題目，不要讀手寫的；
+      而且**不要抓學生姓名與分數**——那是別人家小孩的成績，沒有理由進我們的資料庫。
+
+   ⭐ 讀完不另外寫驗證：直接丟進 v515 的 examWarnings()。
+      同一件判斷只留一份——老師手打的卷子跟 AI 讀的卷子吃同一組檢查。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const EXAM_READ_SYS = `You convert a photo of a printed English exam paper (Kang Chiao / 康橋 elementary
+"Formative") into JSON so it can be re-taken on a website.
+
+🔴 READ THE PRINTED QUESTIONS ONLY.
+   These papers have a student's handwritten answers and a teacher's red marks all over them.
+   Ignore ALL handwriting and red pen. You are reconstructing the BLANK paper.
+🔴 NEVER output the student's name, class or score. Leave them out entirely.
+
+Output ONE page's worth. Keep every English word exactly as printed — never translate, never rewrite.
+
+"parts" may ONLY use these four kinds. Anything else goes in "skipped".
+  "circle"  — "Read and Circle N <pattern> words" over a passage.
+              "check" must be one of: vce | team | digraph | suffix | prefix
+                 "-VCe words"            -> "check":"vce"
+                 "vowel team inside"     -> "check":"team"
+                 "digraph"               -> "check":"digraph"
+                 "words ending in -ing"  -> "check":"suffix", "checkArg":"-ing"
+              "need" = how many they must circle. "passage" = the whole passage, exactly as printed.
+  "cloze"   — a word bank + sentences with a blank.
+              "bank" = every word in the box.
+              🔴 The sentences go in a field called "items" (NOT "sentences", NOT "questions").
+              Each item: {"text":"Mark ___ on the test.","answer":"struggled"} — write the blank as ___
+              and "answer" = the word from the bank that fits. YOU choose the answer from the bank
+              by reading the sentence — do not copy the student's handwriting.
+  "quiz"    — multiple choice. 🔴 ONE part holds ALL the questions of that Part, in a
+              "questions" ARRAY. Do NOT emit one part per question.
+              Each entry: {"q":"...","options":[...in printed order...],"answer":<0-based index>}
+              "pts" is the TOTAL for the whole Part (e.g. "/18"), not per question.
+              Do not number the questions; the website numbers them.
+  "short"   — any question the child writes a long answer to. Give "pts" and, if a marking
+              rubric is printed, a one-line "rubric".
+
+If a part is something else (e.g. "Make two words using these suffixes, then write a sentence"),
+do NOT guess — put a short description in "skipped".
+
+Points: copy the printed numbers ("(4 pts. each)", "/32", "(30%)"). Never invent them.
+If a number is not printed, use 0 and let the teacher fill it in.
+
+Output ONLY JSON. Note how ONE quiz part holds SIX questions:
+{"title":"Grade 4 Formative 1",
+ "sections":[
+   {"name":"Section 1: Word Study","pct":30,
+    "parts":[{"kind":"circle","title":"Part 2: Read and Circle 10 -VCe words","pts":20,"need":10,
+              "check":"vce","checkArg":"","instruction":"","passage":"Captain Jeff was ready ..."}]},
+   {"name":"Section 2: Vocabulary","pct":32,
+    "parts":[{"kind":"cloze","title":"Part 3: Fill in the blanks","pts":32,
+              "bank":["struggled","challenge"],
+              "items":[{"text":"Mark ___ on the test.","answer":"struggled"},
+                       {"text":"The hill was a hard ___.","answer":"challenge"}]}]},
+   {"name":"Section 3: Reading Skill and Comprehension","pct":38,
+    "parts":[{"kind":"quiz","title":"Part 4: Color the circle next to the most correct answer.","pts":18,
+              "questions":[
+                {"q":"What nickname did his sister give him?","options":["Ace","Buzz","Doc"],"answer":1},
+                {"q":"Which quality did Buzz worship?","options":["Determination","Sadness","Business"],"answer":0}
+              ]}]}
+ ],
+ "skipped":[]}`;
+
+function _examReadOne(content) {
+  return _aiAsk(
+    { model: GN_READ_MODEL, max_tokens: 4000, system: EXAM_READ_SYS, messages: [{ role: 'user', content }] },
+    (data) => {
+      const txt = (data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('')
+        || data?.content?.[0]?.text || '';
+      const o = _gnSalvageJson(_aiStripFence(txt));
+      if (!o || typeof o !== 'object') return null;
+      const secs = (Array.isArray(o.sections) ? o.sections : []).map(sc => ({
+        name: String((sc && sc.name) || '').trim(),
+        pct: +((sc && sc.pct) || 0) || 0,
+        parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(_examCleanPart).filter(Boolean),
+      })).filter(sc => sc.parts.length);
+      return { title: String(o.title || '').trim(), sections: secs,
+               skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean) };
+    }, 90000);
+}
+
+/* 一大題的清洗：型別不認得、或內容根本湊不成一題的，直接不要。
+   🔴 v516 實測：模型很愛把選擇題**一題拆成一個 part**，options／answer 直接放在 part 上
+     （沒有 questions 陣列）。照原本的寫法整頁會被清成 0 大題，然後回報「這一張讀不出東西」
+     ——一半的考卷就這樣消失，而且畫面上只說「讀不懂」。
+   → 提示詞已經把形狀講死；這裡再撿一次：形狀不對但東西都在的，包回陣列。 */
+function _examCleanPart(p) {
+  if (!p || !EXAM_KINDS[p.kind]) return null;
+  /* 🔴 實測兩種「型別對、形狀不對」的回法，都要撿回來而不是整段丟掉：
+       ① 選擇題一題一個 part，options／answer 直接掛在 part 上（沒有 questions 陣列）
+       ② 填空的句子放在 "sentences" 而不是 "items"
+     兩種都會讓整個 Section 被清成空的，然後回報「這一張讀不出東西」——
+     照片明明讀對了，東西卻在我自己的清洗裡消失。 */
+  if (p.kind === 'quiz' && !Array.isArray(p.questions) && Array.isArray(p.options)) {
+    p = { ...p, questions: [{ q: String(p.q || p.instruction || '').trim(), options: p.options, answer: p.answer }] };
+  }
+  if (p.kind === 'cloze' && !Array.isArray(p.items)) {
+    const alt = [p.sentences, p.questions, p.blanks].find(Array.isArray);
+    if (alt) p = { ...p, items: alt };
+  }
+  if (p.kind === 'circle' && !p.passage) {
+    const alt = [p.text, p.story, p.paragraph].find(x => typeof x === 'string' && x.trim());
+    if (alt) p = { ...p, passage: alt };
+  }
+  const base = { kind: p.kind, title: String(p.title || '').trim(),
+                 instruction: String(p.instruction || '').trim(), pts: +p.pts || 0 };
+  if (p.kind === 'circle') {
+    const check = String(p.check || '').trim().toLowerCase();
+    if (!WS_CHECKS[check]) return null;                    // 程式判不出來的規則不要收
+    const passage = String(p.passage || '').trim();
+    if (!passage) return null;
+    return { ...base, check, checkArg: String(p.checkArg || '').trim(), need: +p.need || 0, passage };
+  }
+  if (p.kind === 'cloze') {
+    const bank = (Array.isArray(p.bank) ? p.bank : []).map(x => String(x).trim()).filter(Boolean);
+    const items = (Array.isArray(p.items) ? p.items : []).map(q => ({
+      text: String((q && (q.text || q.sentence || q.q)) || '').trim(),
+      answer: String((q && (q.answer || q.word)) || '').trim(),
+    })).filter(q => q.text);
+    if (!bank.length || !items.length) return null;
+    return { ...base, bank, items };
+  }
+  if (p.kind === 'quiz') {
+    const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => {
+      const options = (Array.isArray(q && q.options) ? q.options : []).map(x => String(x).trim()).filter(Boolean);
+      const a = +((q && q.answer) || 0);
+      if (!q || !String(q.q || '').trim() || options.length < 2) return null;
+      if (!(a >= 0 && a < options.length)) return null;     // 正解超出範圍＝這題不要
+      return { q: String(q.q).trim(), options, answer: a };
+    }).filter(Boolean);
+    if (!questions.length) return null;
+    return { ...base, questions };
+  }
+  const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => ({
+    q: String((q && q.q) || '').trim(), pts: +((q && q.pts) || 0) || 0,
+    rubric: String((q && q.rubric) || '').trim(), rows: 4,
+  })).filter(q => q.q);
+  if (!questions.length) return null;
+  return { ...base, passage: String(p.passage || '').trim(), questions };
+}
+
+/* 把幾張照片讀成一份考卷。回傳 { item, skipped, missed, warnings } */
+async function aiReadExamSheet({ images = [], onProgress } = {}) {
+  const imgs = (images || []).slice(0, 8);
+  if (!imgs.length) throw new Error('請先選幾張考卷照片。');
+  const parts = imgs.map((im, i) => ({
+    label: `第 ${i + 1} 張`,
+    content: [{ type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } },
+              /* 🔴 v516 實測：Alan 是把攤開的卷子一次拍一張——**一張照片上有左右兩頁**。
+                 原本寫「this is page N, read only this page」，模型就真的只讀其中一邊，
+                 Section 2 的 Word Bank 填空（32 分）時有時無。
+                 改成「這張照片上看得到的全部都要讀，左頁先、右頁後」。 */
+              { type: 'text', text: `Read EVERYTHING visible in this photo${imgs.length > 1 ? ` (photo ${i + 1} of ${imgs.length} of one exam paper)` : ''}. `
+                + 'A photo often shows TWO facing pages of an open booklet — read the LEFT page first, then the RIGHT page, '
+                + 'and output every Section and Part you can see on either side.' }],
+  }));
+  let done = 0;
+  if (onProgress) onProgress(0, parts.length);
+  const got = await Promise.all(parts.map(p => _examReadOne(p.content)
+    .then(v => ({ v }), e => ({ e }))
+    .finally(() => { done++; if (onProgress) onProgress(done, parts.length); })));
+
+  const ok = got.filter(g => g.v && g.v.sections.length);
+  if (!ok.length) {
+    const to = got.some(g => g.e && g.e.timeout);
+    throw new Error(to ? '讀考卷太久沒有回應，請再試一次。'
+                       : '讀不懂這幾張照片——請拍正一點、光線亮一點，整頁都要入鏡。');
+  }
+  const missed = got.map((g, i) => (g.v && g.v.sections.length ? null : parts[i].label)).filter(Boolean);
+
+  /* 合併：同名的 Section 接起來（一個 Section 常常跨兩頁）。 */
+  const secs = [];
+  const skipped = [];
+  ok.forEach(({ v }) => {
+    skipped.push(...v.skipped);
+    v.sections.forEach(sc => {
+      const key = sc.name.toLowerCase().replace(/\s+/g, '');
+      const hit = key && secs.find(x => x.key === key);
+      if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; return; }
+      secs.push({ key, name: sc.name, pct: sc.pct, parts: sc.parts.slice() });
+    });
+  });
+  /* 模型把一個 Part 拆成好幾個（一題一個）時，連續的同型大題併回去。
+     ⚠ 只併「後面那個沒有自己的標題」的——真的有兩個 Part 4 / Part 5 的卷子不可以被併掉。 */
+  secs.forEach(sc => {
+    const merged = [];
+    sc.parts.forEach(pt => {
+      const last = merged[merged.length - 1];
+      const same = last && last.kind === pt.kind && (pt.kind === 'quiz' || pt.kind === 'short');
+      if (same && !pt.title) {
+        last.questions = (last.questions || []).concat(pt.questions || []);
+        last.pts = (+last.pts || 0) + (+pt.pts || 0);
+        if (!last.passage && pt.passage) last.passage = pt.passage;
+        return;
+      }
+      merged.push({ ...pt });
+    });
+    sc.parts = merged;
+  });
+  const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
+  const item = {
+    type: 'exam', title, examMood: true,
+    sections: secs.map(({ key, ...rest }) => rest),
+  };
+  /* ⭐ 不另外寫驗證——丟進 v515 老師手打考卷用的同一組檢查。 */
+  return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item) };
+}
+
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS });
+
+/* ══════════════════════════════════════════════════════════════════════════
    v515 📄 模擬考卷（Alan 給了兩張真的 G4 Formative，要做成互動版）
    ──────────────────────────────────────────────────────────────────────────
    他缺的不是題型——圈 -VCe 字、Word Bank 填空、閱讀選擇題，站上**本來就有**。

@@ -818,6 +818,7 @@ function App() {
      ⚠ 沒匯入的年級 pacing 就是 null，畫面上完全不顯示（不要留一條空的）。 */
   var [pacing, setPacing] = useAppState(null);
   var [examSide, setExamSide] = useAppState(null); // v513：考前複習包（'it' / 'lt'）
+  var [examScanOpen, setExamScanOpen] = useAppState(false); // v516：拍考卷
   var [paceOpen, setPaceOpen] = useAppState(false);
   useAppEffect(() => {
     setPacing(null);
@@ -1655,6 +1656,29 @@ function App() {
     setQuickSetOpen(false);
     setOpenCat(cat);
     showToast(`已建立 ${items.length} 個練習 · ${merged.length} 個單字${assignedNote}`);
+  };
+
+  /* 📸 v516：已經做好的單元直接寫進這一週（拍考卷用）。
+     ⚠ 刻意不借 handleQuickSet——那支是「單字表 → 生出一堆單元」，
+       借過來要塞一堆空參數，下一個看到的人會以為考卷也是從單字生出來的。 */
+  var handleAddBuiltItems = (list, cat) => {
+    var items = (list || []).filter(Boolean);
+    if (!items.length) {
+      showToast('沒有東西可以存');
+      return;
+    }
+    var w = JSON.parse(JSON.stringify(weeksRef.current));
+    if (!w[weekId]) {
+      showToast('請先選一個週次');
+      return;
+    }
+    if (!w[weekId].items) w[weekId].items = {};
+    if (!Array.isArray(w[weekId].items[cat])) w[weekId].items[cat] = [];
+    w[weekId].items[cat] = w[weekId].items[cat].concat(items);
+    setWeeks(w);
+    saveWeeksSafe(w);
+    setOpenCat(cat);
+    showToast(`已建立 ${items.length} 個單元`);
   };
 
   /* v382: 時態出題完成 → 建立成多個單元（Type A→type-answer、Type B→cloze），
@@ -2603,7 +2627,9 @@ function App() {
     onQuickSet: () => setQuickSetOpen(true),
     onGrammarGen: window.isGrammarTrack && window.isGrammarTrack(grade) ? () => setGrGenOpen(true) : null,
     onReadingGen: window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setRcGenOpen(true),
-    onGrammarNotes: window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setGnGenOpen(true),
+    onGrammarNotes: window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setGnGenOpen(true)
+    /* 📸 v516：拍考卷 → 互動版 */,
+    onExamScan: window.ExamScanModal ? () => setExamScanOpen(true) : null,
     onWordStudy: window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setWsGenOpen(true),
     pace: paceWeek,
     nextF: paceNextF,
@@ -2995,6 +3021,19 @@ function App() {
       setRegenFor(null);
     },
     onCreate: handleReadingCreate
+  }), window.ExamScanModal && /*#__PURE__*/React.createElement(window.ExamScanModal, {
+    open: examScanOpen,
+    categories: activeCategories,
+    defaultCat: openCat || 'reading',
+    defaultGrade: grade,
+    onClose: () => setExamScanOpen(false),
+    onCreate: ({
+      _cat,
+      ...item
+    }) => {
+      setExamScanOpen(false);
+      handleAddBuiltItems([item], _cat || 'reading');
+    }
   }), window.ExamPrepModal && /*#__PURE__*/React.createElement(window.ExamPrepModal, {
     open: !!examSide,
     side: examSide,
