@@ -83,18 +83,18 @@ ok('⭐ styles-holiday-hw.css 的每一條規則都掛在 html.fest-hw 底下', 
    const bad = sels.flatMap(s => s.split(',').map(x => x.trim()))
      .filter(s => s && !s.startsWith('@') && !s.startsWith('html.fest-hw')
                && !/^\d+%$/.test(s) && !/^(from|to)$/.test(s)
-               /* .fest-badge／.fest-ribbon／.fest-day／.hw-trail 是裝飾元素本身，
+               /* .fest-ribbon／.fest-day／.fest-tick／.hw-trail 是裝飾元素本身，
                   平常根本不會被建出來（下面【3b】逐一確認），所以不用加前綴 */
-               && !/^\.fest-(badge|ribbon|day)/.test(s) && !/^\.hw-trail/.test(s));
+               && !/^\.fest-(ribbon|day|tick)/.test(s) && !/^\.hw-trail/.test(s));
    if (bad.length) console.log('      漏網的選擇器：', bad.slice(0, 5));
    return bad.length === 0; })());
 ok('⭐⭐ 三個共用裝飾 class 的「本體」要在這個檔案裡自己寫一份', (() => {
    /* ⚠ 節慶期間只會載入當季那一個 CSS 檔——萬聖節時 styles-holiday.css
       根本沒載，不能靠它定義 .fest-badge／.fest-ribbon／.fest-day。 */
-   return /^\.fest-badge \{/m.test(css) && /^\.fest-ribbon \{/m.test(css) && /^\.fest-day \{/m.test(css); })());
+   return /^\.fest-tick \{/m.test(css) && /^\.fest-ribbon \{/m.test(css) && /^\.fest-day \{/m.test(css); })());
 
 console.log('\n【3b】裝飾元素本身也要被擋住（不然 11/01 之後南瓜還掛在那）');
-[['fest-ribbon', '飄帶'], ['fest-day', '10.31 徽章'], ['fest-badge', '門口頁問候標籤']].forEach(([cls, zh]) => {
+[['fest-ribbon', '飄帶'], ['fest-day-wrap', '倒數鐘']].forEach(([cls, zh]) => {
   ok(`⭐ ${zh} 只在節慶期間 render`, (() => {
      const i = shell.indexOf(cls);
      return i > 0 && /window\.festOn && window\.festOn\(\)/.test(shell.slice(Math.max(0, i - 400), i)); })());
@@ -162,9 +162,28 @@ console.log('\n【6】閱讀面不可以被換掉（小朋友一次看半小時�
 ok('⭐ 沒有去動單字卡／短文／文章／題目文字的底色與字色', (() => {
    const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
    return !/\.fc-(card|term|ex)|\.qm-question-text|\.gr-(text|para)|\.cloze-passage|\.circle-prose\b/.test(body); })());
-ok('⭐ 星星維持金色、提醒用的語意色也不動（.tt-past-／.wh-task-cue）', (() => {
+ok('⭐ 星星維持金色、金色箭頭提醒不動', (() => {
    const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
-   return !/\.tt-past-|\.wh-task-cue|\.stars-btn-ico/.test(body); })());
+   return !/\.wh-task-cue|\.stars-btn-ico/.test(body); })());
+ok('⭐⭐「之前還有 N 項沒完成」要維持是**警告色**（v526 Alan 要求這一塊也換，'
+ + '但只准在琥珀↔南瓜橘這個色相裡挪，不可以換成主題紫）', (() => {
+   /* 這一條從「不要碰」改成「碰了但角色不能變」——Alan 明確要求圖1 也要過節，
+      而萬聖節本來就是橘色的節日，所以往南瓜橘挪一階兩邊都成立。
+      ⚠ 真正不能發生的是它變成紫色／灰色＝看起來跟其他裝飾一樣＝不再是提醒。 */
+   const i = css.indexOf('html.fest-hw .tt-past-head {');
+   if (i < 0) return false;
+   const blk = css.slice(i, css.indexOf('html.fest-hw .tt-group-title'));
+   const hues = [...blk.matchAll(/#([0-9A-Fa-f]{6})/g)].map(m => {
+     const h = m[1];
+     const [r, g, b] = [0, 2, 4].map(k => parseInt(h.slice(k, k + 2), 16) / 255);
+     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+     if (mx === mn) return -1;
+     let hu = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+     hu *= 60; return hu < 0 ? hu + 360 : hu;
+   }).filter(x => x >= 0);
+   if (hues.length < 3) return false;
+   return hues.every(h => h >= 18 && h <= 52);     // 琥珀～南瓜橘
+   })());
 ok('⚠ 會動的東西只給頂欄，而且要尊重 prefers-reduced-motion', (() => {
    const anim = [...css.matchAll(/animation:\s*hw[A-Za-z]+/g)].length;
    return anim >= 1 && /prefers-reduced-motion[\s\S]{0,160}animation:\s*none/.test(css); })());

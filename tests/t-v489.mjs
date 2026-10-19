@@ -54,7 +54,7 @@ ok('⭐ styles-holiday.css 的每一條規則都掛在 html.fest-1010 底下', (
       （.fest-badge 問候標籤、.fest-ribbon 國旗飄帶、.fest-day 日期徽章）。
       它們不掛 html.fest-1010 是對的：平常那些元素根本不存在。
       ⚠ 但光是放行不算數——下面【2b】會去 JSX 裡確認它們真的被 festOn 擋住。 */
-   const bad = sels.filter(s => !/\.fest-(badge|ribbon|day)/.test(s) && !/^\s*$/.test(s));
+   const bad = sels.filter(s => !/\.fest-(ribbon|day|tick)/.test(s) && !/^\s*$/.test(s));
    if (bad.length) console.log('      漏網的選擇器：', bad.slice(0, 5));
    return bad.length === 0; })());
 ok('   class 真的是掛在 <html> 上（body 蓋不到自己的背景）', (() => {
@@ -65,7 +65,7 @@ ok('   class 真的是掛在 <html> 上（body 蓋不到自己的背景）', (()
    return toggled.some(t => t.c === 'fest-1010' && t.on); })());
 
 console.log('\n【2b】裝飾元素本身也要被擋住（不然 10/13 之後旗子還掛在那）');
-[['.fest-ribbon', '國旗飄帶'], ['fest-day', '10.10 徽章'], ['fest-badge', '門口頁問候標籤']].forEach(([cls, zh]) => {
+[['.fest-ribbon', '國旗飄帶'], ['fest-day-wrap', '倒數鐘']].forEach(([cls, zh]) => {
   ok(`⭐ ${zh} 只在節慶期間 render`, (() => {
      const key = cls.replace('.', '');
      const i = shell.indexOf(key);
@@ -81,6 +81,11 @@ ok('⭐ data URI 裡不可以有裸雙引號或 #（會把 CSS 字串提早截�
       整條 background 變成 none，旗子和煙火全部沒出現，而且**完全不報錯**。 */
    const uris = [...css.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g)].map(m => m[1]);
    return uris.length >= 5 && uris.every(u => u.indexOf('#') < 0); })());
+
+ok('⭐⭐ 倒數鐘的樣式在這一份也要有——雙十那五天只會載入這個檔案', (() => {
+   /* 🔴 v526 差點這樣上線：倒數鐘的 markup 是共用的，但樣式只寫在萬聖節那一份，
+      結果雙十期間整個倒數鐘裸奔（沒有任何樣式，而且完全不報錯）。 */
+   return /^\.fest-tick \{/m.test(css) && /^\.fest-tick-c \{/m.test(css); })());
 
 console.log('\n【3】日期判斷只能有一份');
 ok('⭐ 門口頁的問候標籤用的是同一個 window.festOn，沒有自己再寫一次日期',

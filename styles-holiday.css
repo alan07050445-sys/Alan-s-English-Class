@@ -111,15 +111,47 @@ html.fest-1010 .gs-spark-2 { fill: var(--fest-blue); }
 html.fest-1010 .gs-kicker { color: var(--fest-red); }
 html.fest-1010 .grade-sel-title { color: var(--fest-blue); }
 
-/* 國慶標籤（門口頁問候那一行） */
-.fest-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  margin-left: 8px; padding: 2px 10px; border-radius: 999px;
-  background: var(--fest-blue, #0B318F); color: #fff;
-  font-family: var(--sans); font-size: 12.5px; font-weight: 800; letter-spacing: .01em;
-  vertical-align: middle; white-space: nowrap;
+/* ── v526 ⏳ 倒數鐘（天／時／分／秒）────────────────────────────
+   ⚠⚠ 這一段**必須在每一個節慶 CSS 檔裡各寫一份**。原因：v508 之後
+     只會載入「當季那一個」節慶樣式表，所以雙十期間 styles-holiday-hw.css
+     根本不存在——倒數鐘的 markup 是共用的（components-shell.jsx 的
+     FestCountdown），它的樣式如果只寫在萬聖節那一份，雙十那五天會整個裸奔。
+     （v526 就是差點這樣上線，被 t-v489 擋下來。）
+   ⚠ 數字用等寬＋固定最小寬度，秒數 9→10 時整排才不會左右抽動。
+   ⚠ 原本句子裡那顆 .fest-badge 已經被倒數鐘取代，不留死碼。 */
+.fest-tick {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 9px;
+  position: relative; z-index: 3;
 }
-@media (max-width: 480px) { .fest-badge { margin-left: 0; margin-top: 6px; } }
+.fest-tick-lab {
+  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  letter-spacing: .1em; color: var(--fest-blue-d, #071F5C);
+}
+.fest-tick-row { display: inline-flex; gap: 9px; }
+.fest-tick-c {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 62px; padding: 9px 8px 7px;
+  border-radius: 14px;
+  background: linear-gradient(170deg, #E8233E 0%, #B8001E 100%);
+  box-shadow: 0 10px 24px -10px rgba(168,0,26,.8), inset 0 1px 0 rgba(255,255,255,.28);
+}
+.fest-tick-c b {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 30px; font-weight: 800; line-height: 1; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.fest-tick-c i {
+  font-style: normal; font-size: 11px; font-weight: 800;
+  letter-spacing: .08em; color: rgba(255,255,255,.88);
+}
+.fest-tick-big .fest-tick-c { min-width: 78px; padding: 12px 10px 9px; border-radius: 16px; }
+.fest-tick-big .fest-tick-c b { font-size: 40px; }
+.fest-tick-big .fest-tick-lab { font-size: 14px; }
+@media (max-width: 560px) {
+  .fest-tick-big .fest-tick-c { min-width: 60px; padding: 9px 7px 7px; }
+  .fest-tick-big .fest-tick-c b { font-size: 29px; }
+  .fest-tick-row { gap: 7px; }
+}
 
 /* ── 4. 本週卡／聯絡簿：白底不動，只換重點色 ── */
 html.fest-1010 .wh-kicker,

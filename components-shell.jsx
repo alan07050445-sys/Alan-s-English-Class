@@ -804,14 +804,14 @@ function GradeSelector({ onSelect, summer, homeGrade, who, onChangeGrade, onView
                ⚠ 這個標籤跟主題外觀綁同一個判斷（window.festOn），
                  不要另外再寫一份日期判斷——兩份一定會走鐘。 */
             ? <><span className="gs-date">{dateLine}</span><span className="gs-date-dot">·</span>
-                {(window.festOn && window.festOn())
-                  ? <>今天要從哪裡開始呢？<span className="fest-badge">
-                      {(window.festNow() || {}).emoji}{' '}
-                      {window.festCountText ? window.festCountText() : (window.festNow() || {}).hi}
-                    </span></>
-                  : '今天要從哪裡開始呢？'}</>
+                今天要從哪裡開始呢？</>
             : '選好就直接帶你進入這一週的練習。'}
         </p>
+        {/* v526：倒數從句子裡搬出來自己站一排（Alan 要「放大顯示」）。
+            ⚠ 跟外觀共用同一個 festOn，平常這一段等於不存在。 */}
+        {window.festOn && window.festOn() && (
+          <div className="fest-day-wrap"><FestCountdown big/></div>
+        )}
         {onOpenAdmin && (
           <button className="gs-card gs-card-admin" onClick={onOpenAdmin}>
             <span className="gs-card-ico" aria-hidden="true">
@@ -1371,6 +1371,55 @@ function SpotlightTour({ onClose, onEmpty }) {
 }
 
 // v296: 新首頁——單頁品牌封面＋登入（取代舊 8 段長頁）。登入後停在封面顯示「進入課程」。
+/* ───────── v526 ⏳ 倒數鐘（Alan：「改成明確時間倒數，比較酷，並且放大顯示」）─────────
+   ⚠ 每秒更新但**不重新 render**：數字直接寫進四個 ref 的 textContent。
+     走 state 的話整個封面（含四張扇形卡、滑鼠拖尾那層）每秒都會被 React 重算一次，
+     而且 useFestCursor 掛在同一個容器上、那些節點不是 React 建的，反覆 render 有風險。
+   ⚠ 只有「倒數結束」才真的換畫面（一次 setState），之後 interval 自己停。 */
+function FestCountdown({ big }) {
+  const f = window.festNow && window.festNow();
+  const dRef = React.useRef(null), hRef = React.useRef(null);
+  const mRef = React.useRef(null), sRef = React.useRef(null);
+  const first = React.useMemo(
+    () => (window.festCountParts ? window.festCountParts() : null), []);
+  const [over, setOver] = React.useState(!first);
+
+  React.useEffect(() => {
+    if (over || !window.festCountParts) return;
+    const pad = (n) => String(n).padStart(2, '0');
+    const id = setInterval(() => {
+      const p = window.festCountParts();
+      if (!p) { setOver(true); return; }
+      if (dRef.current) dRef.current.textContent = p.d;
+      if (hRef.current) hRef.current.textContent = pad(p.h);
+      if (mRef.current) mRef.current.textContent = pad(p.m);
+      if (sRef.current) sRef.current.textContent = pad(p.s);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [over]);
+
+  if (!f) return null;
+  if (over) return <span className="fest-day"><b>{f.day}</b> {f.hi}</span>;
+  const pad = (n) => String(n).padStart(2, '0');
+  const cells = [
+    [dRef, String(first.d), '天'], [hRef, pad(first.h), '時'],
+    [mRef, pad(first.m), '分'],    [sRef, pad(first.s), '秒'],
+  ];
+  return (
+    <div className={'fest-tick' + (big ? ' fest-tick-big' : '')}
+      role="timer" aria-label={`距離${f.name}的倒數`}>
+      <span className="fest-tick-lab">{f.emoji} 距離{f.name}</span>
+      <span className="fest-tick-row">
+        {cells.map(([ref, v, lab], i) => (
+          <span className="fest-tick-c" key={lab}>
+            <b ref={ref}>{v}</b><i>{lab}</i>
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 /* ───────── v525 ④ 首頁的滑鼠特效（Alan：「首頁滑鼠可以加一點特效」）─────────
    滑過去會留下一串小蝙蝠／小鬼／星星，自己飄走。
 
@@ -1448,16 +1497,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       {/* v525（Alan：「改成倒數距離萬聖節，這樣小朋友比較喜歡」）
           ⚠ 天數是每次 render 算的，不是存起來的——跨午夜不會停在昨天的數字。 */}
       {window.festOn && window.festOn() && (
-        <div className="fest-day-wrap">
-          {(() => {
-            const n = window.festDaysTo ? window.festDaysTo() : null;
-            const f = window.festNow();
-            return n > 0
-              ? <span className="fest-day fest-count"><b>{n}</b><i>天</i>
-                  <u>距離{f.name}</u></span>
-              : <span className="fest-day"><b>{f.day}</b> {f.hi}</span>;
-          })()}
-        </div>
+        <div className="fest-day-wrap"><FestCountdown big/></div>
       )}
       {/* v392: 扇形封面四張卡——只有第一張（單字）維持 loading="eager"，其餘三張改 lazy。
           原因：這四張在扇形排列裡本來就有大半被旁邊的卡片蓋住，而且實測時間軸顯示它們要到

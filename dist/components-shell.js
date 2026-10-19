@@ -1151,9 +1151,11 @@ function GradeSelector({
     className: "gs-date"
   }, dateLine), /*#__PURE__*/React.createElement("span", {
     className: "gs-date-dot"
-  }, "\xB7"), window.festOn && window.festOn() ? /*#__PURE__*/React.createElement(React.Fragment, null, "\u4ECA\u5929\u8981\u5F9E\u54EA\u88E1\u958B\u59CB\u5462\uFF1F", /*#__PURE__*/React.createElement("span", {
-    className: "fest-badge"
-  }, (window.festNow() || {}).emoji, ' ', window.festCountText ? window.festCountText() : (window.festNow() || {}).hi)) : '今天要從哪裡開始呢？') : '選好就直接帶你進入這一週的練習。'), onOpenAdmin && /*#__PURE__*/React.createElement("button", {
+  }, "\xB7"), "\u4ECA\u5929\u8981\u5F9E\u54EA\u88E1\u958B\u59CB\u5462\uFF1F") : '選好就直接帶你進入這一週的練習。'), window.festOn && window.festOn() && /*#__PURE__*/React.createElement("div", {
+    className: "fest-day-wrap"
+  }, /*#__PURE__*/React.createElement(FestCountdown, {
+    big: true
+  })), onOpenAdmin && /*#__PURE__*/React.createElement("button", {
     className: "gs-card gs-card-admin",
     onClick: onOpenAdmin
   }, /*#__PURE__*/React.createElement("span", {
@@ -1926,6 +1928,59 @@ function SpotlightTour({
 }
 
 // v296: 新首頁——單頁品牌封面＋登入（取代舊 8 段長頁）。登入後停在封面顯示「進入課程」。
+/* ───────── v526 ⏳ 倒數鐘（Alan：「改成明確時間倒數，比較酷，並且放大顯示」）─────────
+   ⚠ 每秒更新但**不重新 render**：數字直接寫進四個 ref 的 textContent。
+     走 state 的話整個封面（含四張扇形卡、滑鼠拖尾那層）每秒都會被 React 重算一次，
+     而且 useFestCursor 掛在同一個容器上、那些節點不是 React 建的，反覆 render 有風險。
+   ⚠ 只有「倒數結束」才真的換畫面（一次 setState），之後 interval 自己停。 */
+function FestCountdown({
+  big
+}) {
+  var f = window.festNow && window.festNow();
+  var dRef = React.useRef(null),
+    hRef = React.useRef(null);
+  var mRef = React.useRef(null),
+    sRef = React.useRef(null);
+  var first = React.useMemo(() => window.festCountParts ? window.festCountParts() : null, []);
+  var [over, setOver] = React.useState(!first);
+  React.useEffect(() => {
+    if (over || !window.festCountParts) return;
+    var pad = n => String(n).padStart(2, '0');
+    var id = setInterval(() => {
+      var p = window.festCountParts();
+      if (!p) {
+        setOver(true);
+        return;
+      }
+      if (dRef.current) dRef.current.textContent = p.d;
+      if (hRef.current) hRef.current.textContent = pad(p.h);
+      if (mRef.current) mRef.current.textContent = pad(p.m);
+      if (sRef.current) sRef.current.textContent = pad(p.s);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [over]);
+  if (!f) return null;
+  if (over) return /*#__PURE__*/React.createElement("span", {
+    className: "fest-day"
+  }, /*#__PURE__*/React.createElement("b", null, f.day), " ", f.hi);
+  var pad = n => String(n).padStart(2, '0');
+  var cells = [[dRef, String(first.d), '天'], [hRef, pad(first.h), '時'], [mRef, pad(first.m), '分'], [sRef, pad(first.s), '秒']];
+  return /*#__PURE__*/React.createElement("div", {
+    className: 'fest-tick' + (big ? ' fest-tick-big' : ''),
+    role: "timer",
+    "aria-label": `距離${f.name}的倒數`
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "fest-tick-lab"
+  }, f.emoji, " \u8DDD\u96E2", f.name), /*#__PURE__*/React.createElement("span", {
+    className: "fest-tick-row"
+  }, cells.map(([ref, v, lab], i) => /*#__PURE__*/React.createElement("span", {
+    className: "fest-tick-c",
+    key: lab
+  }, /*#__PURE__*/React.createElement("b", {
+    ref: ref
+  }, v), /*#__PURE__*/React.createElement("i", null, lab)))));
+}
+
 /* ───────── v525 ④ 首頁的滑鼠特效（Alan：「首頁滑鼠可以加一點特效」）─────────
    滑過去會留下一串小蝙蝠／小鬼／星星，自己飄走。
 
@@ -2031,15 +2086,9 @@ function LoginScreen({
     className: "lc-subtitle"
   }, "\u5EB7\u6A4B\u6BCF\u9031\u9032\u5EA6"), window.festOn && window.festOn() && /*#__PURE__*/React.createElement("div", {
     className: "fest-day-wrap"
-  }, (() => {
-    var n = window.festDaysTo ? window.festDaysTo() : null;
-    var f = window.festNow();
-    return n > 0 ? /*#__PURE__*/React.createElement("span", {
-      className: "fest-day fest-count"
-    }, /*#__PURE__*/React.createElement("b", null, n), /*#__PURE__*/React.createElement("i", null, "\u5929"), /*#__PURE__*/React.createElement("u", null, "\u8DDD\u96E2", f.name)) : /*#__PURE__*/React.createElement("span", {
-      className: "fest-day"
-    }, /*#__PURE__*/React.createElement("b", null, f.day), " ", f.hi);
-  })()), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(FestCountdown, {
+    big: true
+  })), /*#__PURE__*/React.createElement("div", {
     className: "lc-fan",
     "aria-hidden": "true"
   }, /*#__PURE__*/React.createElement("div", {

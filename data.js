@@ -8646,6 +8646,24 @@ function festDaysTo(now) {
   const target = new Date(d.getFullYear(), pm - 1, pd);
   return Math.round((target - today) / 86400000);
 }
+/* 明確到秒的倒數（Alan v526：「改成像那張圖右下角，明確時間倒數，比較酷」）。
+   目標＝節慶當天的 00:00。到了（或過了）就回 null＝不要再倒數。
+   ⚠ 這跟 festDaysTo 的「天」是**兩個不同的問題**，不要硬湊成同一個數字：
+     10/30 下午四點，festDaysTo 是 1 天（還要睡一覺），這裡是 0 天 8 小時。
+     兩個在各自的場合都是對的——徽章要講「還有幾天」，倒數鐘要講「還有多久」。 */
+function festCountParts(now) {
+  const f = festNow(now);
+  if (!f) return null;
+  const d = now || new Date();
+  const [pm, pd] = f.peak.split('-').map(Number);
+  let ms = new Date(d.getFullYear(), pm - 1, pd, 0, 0, 0, 0) - d;
+  if (ms <= 0) return null;
+  const day = Math.floor(ms / 86400000); ms -= day * 86400000;
+  const hr  = Math.floor(ms / 3600000);  ms -= hr * 3600000;
+  const min = Math.floor(ms / 60000);    ms -= min * 60000;
+  return { d: day, h: hr, m: min, s: Math.floor(ms / 1000) };
+}
+
 /* 徽章上那行字。當天就不要再倒數了（倒數到 0 還寫「還有 0 天」很奇怪）。 */
 function festCountText(now) {
   const n = festDaysTo(now);
@@ -8657,7 +8675,7 @@ function festCountText(now) {
 }
 
 Object.assign(window, { festOn, festIs, festNow, festApply, festSetOverride, festOverride,
-  festIsDay, festDaysTo, festCountText, FESTS, FEST_1010 });
+  festIsDay, festDaysTo, festCountText, festCountParts, FESTS, FEST_1010 });
 
 /* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。
    data.js 比 app.jsx 早載入，所以這裡是最早能動手的地方。 */

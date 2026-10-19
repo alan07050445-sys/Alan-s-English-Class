@@ -44,10 +44,19 @@ ok('⭐ 當天不要再寫「還有 0 天」', (() => {
    return !/0 天/.test(t) && /萬聖節快樂/.test(t); })());
 ok('   不是節慶的日子沒有倒數', W.festDaysTo(at(6, 1)) === null && W.festCountText(at(6, 1)) === '');
 ok('   國慶那套也能倒數（同一份程式）', W.festDaysTo(at(10, 8)) === 2 && /雙十國慶/.test(W.festCountText(at(10, 8))));
-ok('⭐ 天數是 render 當下算的，不是存起來的（跨午夜不會停在昨天）', (() => {
-   const i = shell.indexOf('fest-day-wrap');
-   return /window\.festDaysTo \? window\.festDaysTo\(\) : null/.test(shell.slice(i, i + 400)); })());
-ok('   倒數版與當天版都有（n>0 才倒數）', /fest-day fest-count/.test(shell) && /f\.day/.test(shell));
+ok('⭐⭐ 每秒更新但**不重新 render**（走 state 的話整個封面每秒重算一次）', (() => {
+   /* ⚠ useFestCursor 把節點直接 append 在同一個容器上、那些不是 React 建的，
+      每秒 render 一次是自找麻煩。→ 數字寫進 ref 的 textContent。 */
+   const body = fnBody(shell, 'function FestCountdown');
+   return /setInterval/.test(body) && /\.current\.textContent =/.test(body)
+     && !/setParts|useState\(\{/.test(body); })());
+ok('⭐ 倒數結束才換畫面，而且只換一次', (() => {
+   const body = fnBody(shell, 'function FestCountdown');
+   return /if \(!p\) \{ setOver\(true\); return; \}/.test(body)
+     && /if \(over\) return <span className="fest-day">/.test(body); })());
+ok('   interval 有收乾淨', /return \(\) => clearInterval\(id\);/.test(fnBody(shell, 'function FestCountdown')));
+ok('⭐ 封面與門口頁用的是同一顆倒數鐘（不要各寫一份）',
+   (shell.match(/<FestCountdown big\/>/g) || []).length === 2);
 
 console.log('\n【2】① 泡泡轉場');
 ok('⭐⭐ 一行 JSX 都不用改——泡泡本來就是圓的，只換底圖', (() => {
@@ -114,6 +123,36 @@ ok('⭐⭐ 綠色打勾刻意不動——那是「已經領過了」的狀態，
    const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
    return !/\.ci-cell\.(on|done)|\.ci-cell\s*\{/.test(body); })());
 ok('⭐ 商店的標頭換成南瓜橘', /html\.fest-hw \.sp-head \{[\s\S]{0,140}245,124,31/.test(css));
+
+ok('⭐⭐ 熟悉度那個大數字不可以統一翻白——綠/黃/紅是語意色（好/普通/要加強）', (() => {
+   /* ⚠ 抬頭翻成夜色之後很容易順手把所有字寫成 #fff，那就把「這孩子學得好不好」
+      這個訊息弄丟了。正解是**同一個色相提亮**：意思保留、在夜色上也讀得動。 */
+   const hue = (h) => {
+     const [r, g, b] = [0, 2, 4].map(k => parseInt(h.slice(k, k + 2), 16) / 255);
+     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+     if (mx === mn) return -1;
+     let u = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+     u *= 60; return u < 0 ? u + 360 : u;
+   };
+   const pick = (k) => {
+     const m = new RegExp('\\.tlog-avg\\.' + k + ' > b\\s*\\{ color: #([0-9A-Fa-f]{6})').exec(css);
+     return m ? hue(m[1]) : -1;
+   };
+   const hi = pick('hi'), mid = pick('mid'), lo = pick('lo');
+   /* 綠 ~90-160、黃橘 ~30-60、紅 ~0-25 或 >340 */
+   return hi >= 90 && hi <= 170
+     && mid >= 25 && mid <= 60
+     && (lo <= 25 || lo >= 340)
+     && !/\.tlog-avg > b \{ color: #fff/.test(css); })());
+ok('   量尺那一條也照同一套語意色', /\.tlog-avg\.hi \.tlog-bar > div/.test(css)
+   && /\.tlog-avg\.lo \.tlog-bar > div/.test(css));
+ok('⚠ 今天的任務那隻蝙蝠要跟著文字排，不可以絕對定位', (() => {
+   /* .wh 可以放浮在角落的小鬼是因為它有 `.wh > * { z-index: 1 }` 把內容墊高；
+      .tt-wrap 沒有那一層，而且清單長度每天都在變——今天沒壓到不代表明天沒有。 */
+   const i = css.indexOf('html.fest-hw .tt-title::after');
+   if (i < 0) return false;
+   const blk = css.slice(i, i + 300);
+   return /display: inline-block/.test(blk) && !/position: absolute/.test(blk); })());
 
 console.log('\n【6】④ 滑鼠特效不可以幫倒忙');
 ok('⭐⭐ 用「移動距離」節流，不是用時間', (() => {

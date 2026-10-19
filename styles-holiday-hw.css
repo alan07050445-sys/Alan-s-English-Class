@@ -385,19 +385,12 @@ html.fest-hw .gs-kicker { color: var(--hw-pump); }
    暖灰內文（#6b6455／#5c554a）在淡紫白底上一樣好讀，也不動。 */
 
 /* ── 13. 共用裝飾元素 ────────────────────────────────────
-   ⚠ 這三個 class 的「本體」必須寫在這裡**一份**：節慶期間只會載入當季那一個
+   ⚠ 這幾個 class 的「本體」必須寫在這裡**一份**：節慶期間只會載入當季那一個
      CSS 檔，萬聖節時 styles-holiday.css 根本沒載，不能靠它定義。
    ⚠ 它們不掛 html.fest-hw 是對的——平常這些元素根本不會 render
-     （components-shell.jsx 用 window.festOn() 擋住），t-v523【2b】會確認。 */
-.fest-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  margin-left: 8px; padding: 2px 10px; border-radius: 999px;
-  background: var(--hw-pur, #3D2A63); color: #fff;
-  font-family: var(--sans); font-size: 12.5px; font-weight: 800; letter-spacing: .01em;
-  vertical-align: middle; white-space: nowrap;
-}
-@media (max-width: 480px) { .fest-badge { margin-left: 0; margin-top: 6px; } }
-
+     （components-shell.jsx 用 window.festOn() 擋住），t-v523【3b】會確認。
+   ⚠ v526：原本句子裡那顆 .fest-badge 已經被倒數鐘取代，CSS 一起刪掉——
+     留著就是死碼，下一個人會以為還在用。 */
 .fest-ribbon { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .fest-ribbon::before, .fest-ribbon::after { content: ""; position: absolute; display: block; }
 
@@ -494,15 +487,44 @@ html.fest-hw .pwb:nth-child(7n+4) { background-image: var(--hw-moon); }
 
 /* ── ② 倒數（Alan：「改成倒數距離萬聖節，小朋友比較喜歡」）──────
    天數放大當主角，文字退到旁邊當說明。 */
-.fest-day.fest-count { gap: 9px; padding: 7px 18px 7px 9px; }
-.fest-day.fest-count b { font-size: 26px; line-height: 1; }
-.fest-day.fest-count i { font-style: normal; font-size: 12px; font-weight: 800; color: #6E5E8C;
-  align-self: flex-end; margin: 0 2px 2px -4px; }
-.fest-day.fest-count u { text-decoration: none; font-size: 13.5px; font-weight: 800; color: #3D2A63; }
-@media (max-width: 480px) {
-  .fest-day.fest-count b { font-size: 22px; }
-  .fest-day.fest-count u { font-size: 12.5px; }
+/* ── v526 ⏳ 倒數鐘：天／時／分／秒各自一格 ─────────────────────
+   ⚠ 數字用等寬字（var(--mono)）＋固定最小寬度，不然秒數從 9 跳到 10 時
+     整排會左右抽動——一秒抽一次，看久了很煩。 */
+.fest-tick {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 9px;
+  position: relative; z-index: 3;
 }
+.fest-tick-lab {
+  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  letter-spacing: .1em; color: rgba(255,255,255,.82);
+}
+.fest-tick-row { display: inline-flex; gap: 9px; }
+.fest-tick-c {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 62px; padding: 9px 8px 7px;
+  border-radius: 14px;
+  background: linear-gradient(170deg, #F79A3E 0%, #E8700F 100%);
+  box-shadow: 0 10px 24px -10px rgba(217,97,12,.85), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.fest-tick-c b {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 30px; font-weight: 800; line-height: 1; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.fest-tick-c i {
+  font-style: normal; font-size: 11px; font-weight: 800;
+  letter-spacing: .08em; color: rgba(255,255,255,.88);
+}
+.fest-tick-big .fest-tick-c { min-width: 78px; padding: 12px 10px 9px; border-radius: 16px; }
+.fest-tick-big .fest-tick-c b { font-size: 40px; }
+.fest-tick-big .fest-tick-lab { font-size: 14px; }
+@media (max-width: 560px) {
+  .fest-tick-big .fest-tick-c { min-width: 60px; padding: 9px 7px 7px; }
+  .fest-tick-big .fest-tick-c b { font-size: 29px; }
+  .fest-tick-row { gap: 7px; }
+}
+/* 門口頁那一顆底是白的（它在白卡上方的夜色裡），標籤要看得見 */
+html.fest-hw .grade-selector-inner .fest-tick-lab { color: rgba(255,255,255,.85); }
 
 /* ── ③ 本週卡整張變成夜空（Alan：「hero 可以再大膽一點」）────────
    ⚠ 底一翻黑，裡面每一個字都要跟著翻白——.wh 裡有六組文字
@@ -687,3 +709,129 @@ html.fest-hw .page-mission .qm-sidebar-cat::before {
   100% { opacity: 0;   transform: translate(var(--dx), -46px) scale(.72) rotate(var(--rot)); }
 }
 @media (prefers-reduced-motion: reduce) { .hw-trail { display: none; } }
+
+/* ═══════════════════════════════════════════════════════════════
+   v526 — Alan：「圖1、2、3 這些也都要改啊，可以參考圖4，但也不要太花俏」
+   他給的參考是深紫卡片＋亮色圖示。照做，但保留三件事：
+   · 每一類的身分色（紫/粉/藍/綠）不換掉，只調亮到在夜色上讀得動
+   · 熟悉度 85%／進度分數的綠黃紅是**語意色**，一律不動
+   · 大段文字（上課紀錄的四個欄位）維持白底——家長要讀完它
+═══════════════════════════════════════════════════════════════ */
+
+/* ── 圖2：自由練習四張卡 → 夜色卡 ──────────────────────────
+   ⚠ 卡片底翻黑之後，裡面七種文字都要處理：標題／英文副標／完成數／
+     百分比／接下來那行／「即將開放」／右邊的箭頭鈕。
+   ⚠ 原本的身分色是給白底配的（#6D5BD0 靛藍在 #2A1B45 上幾乎看不見），
+     所以要各自調亮一階——**不是換色，是同一個色相提亮**，身分不變。 */
+html.fest-hw .qm-block {
+  background: linear-gradient(165deg, #46316F 0%, #32214F 55%, #281840 100%);
+  border-color: rgba(255,255,255,.14);
+  box-shadow: 0 18px 40px -26px rgba(42,27,69,.95);
+}
+html.fest-hw .qm-blocks .qm-block:nth-of-type(1) { --cat-c: #A796FF; }   /* 單字 靛 */
+html.fest-hw .qm-blocks .qm-block:nth-of-type(2) { --cat-c: #FF86A8; }   /* 文法 粉 */
+html.fest-hw .qm-blocks .qm-block:nth-of-type(3) { --cat-c: #6EC6FF; }   /* 字彙 藍 */
+html.fest-hw .qm-blocks .qm-block:nth-of-type(4) { --cat-c: #63D996; }   /* 閱讀 綠 */
+html.fest-hw .qm-block-title { color: #fff; }
+html.fest-hw .qm-block-count { color: rgba(255,255,255,.76); }
+html.fest-hw .qm-block-meta  { color: rgba(255,255,255,.58); }
+html.fest-hw .qm-block-empty {
+  color: rgba(255,255,255,.72);
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.16);
+}
+html.fest-hw .qm-progress-bar { background: rgba(255,255,255,.14); }
+html.fest-hw .qm-block-arrow {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.22);
+  color: #fff;
+}
+html.fest-hw .qm-block:hover:not(.empty) .qm-block-arrow { color: #2A1B45; }
+html.fest-hw .qm-block.empty { opacity: .9; }
+html.fest-hw .qm-blocks-title { color: var(--hw-pur); }
+/* 圖示磚原本是淺色小圖，放在夜色上要有個底座才不會像浮在空中 */
+html.fest-hw .qm-block-icon {
+  background: rgba(255,255,255,.1);
+  box-shadow: 0 8px 20px -8px var(--cat-c), inset 0 0 0 1px rgba(255,255,255,.14);
+}
+
+/* ── 圖1：今天的任務 ────────────────────────────────────────
+   ⚠ 這張卡的主角是「之前還有 N 項沒完成」那一塊琥珀色。
+     它是**警告**不是裝飾，所以顏色的角色不能換掉——
+     但萬聖節本來就是橘色的節日，把琥珀往南瓜橘挪一階，
+     既仍然是「注意」的訊號，也變成主題的一部分。 */
+html.fest-hw .tt-wrap { background: linear-gradient(180deg, #FFFFFF 0%, #FBF8FF 100%); }
+html.fest-hw .tt-count {
+  background: rgba(61,42,99,.08);
+  border-color: rgba(61,42,99,.16);
+  color: var(--hw-pur);
+}
+html.fest-hw .tt-past-head {
+  background: linear-gradient(135deg, #FFF3E4 0%, #FFE8D2 100%);
+  border-color: rgba(217,97,12,.34);
+}
+html.fest-hw .tt-past-head b { color: #8A4A05; }
+html.fest-hw .tt-past-head span { color: #A96A20; }
+html.fest-hw .tt-past-chev { color: #A96A20; }
+html.fest-hw .tt-group-title { color: var(--hw-pur); }
+html.fest-hw .tt-group-count { background: rgba(61,42,99,.08); color: var(--hw-pur); }
+html.fest-hw .tt-name { color: var(--hw-pur-d); }
+html.fest-hw .tt-s-todo   { background: rgba(245,124,31,.14); color: #A5560C; }
+html.fest-hw .tt-s-resume { background: rgba(83,59,128,.14); color: var(--hw-pur); }
+/* 小蝙蝠掛在標題後面，**跟著文字排**不要用絕對定位。
+   ⚠ 本週卡可以放浮在角落的小鬼，是因為它有 `.wh > * { z-index: 1 }`
+     把內容墊在裝飾上面；`.tt-wrap` 沒有這一層保護，絕對定位的 ::after
+     會蓋在清單文字上（而且這張卡的內容長度是會變的，今天不壓到不代表明天不會）。 */
+html.fest-hw .tt-title::after {
+  content: ""; display: inline-block; vertical-align: -2px;
+  width: 30px; height: 30px; margin-left: 9px; opacity: .42;
+  background: var(--hw-bat-d) center/contain no-repeat;
+}
+
+/* ── 圖3：老師的上課紀錄／學習成長／本週摘要 ─────────────────
+   ⚠ 上課紀錄是**家長會從頭讀到尾**的一大段字（上課內容、功課、下次進度），
+     所以卡片本體維持白底——只把抬頭那一條做成夜色，四個欄位的標籤換色。
+   ⚠ 熟悉度 85% 的綠／黃／紅是語意色（好、普通、要加強），一個都不動。 */
+html.fest-hw .tlog {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FCFAFF 100%);
+  border-color: rgba(61,42,99,.16);
+}
+html.fest-hw .tlog-h {
+  margin: -22px -26px 15px; padding: 18px 26px 14px;
+  border-radius: 19px 19px 0 0;
+  background: linear-gradient(100deg, var(--hw-pur-d) 0 58%, var(--hw-pur-l) 100%);
+  border-bottom: none;
+  position: relative; overflow: hidden;
+}
+/* ⚠ 南瓜放中間那段空白，不要放右邊——右邊是「近 5 堂熟悉度 85%」，
+   放過去就直接壓在那個數字底下（實測截圖抓到的）。 */
+html.fest-hw .tlog-h::after {
+  content: ""; position: absolute; left: 50%; bottom: -16px;
+  width: 58px; height: 58px; pointer-events: none; opacity: .4;
+  background: var(--hw-jack) center/contain no-repeat;
+}
+html.fest-hw .tlog-kicker { color: rgba(255,255,255,.66); opacity: 1; }
+html.fest-hw .tlog-ttl b { color: #fff; }
+html.fest-hw .tlog-avg > span { color: rgba(255,255,255,.7); }
+html.fest-hw .tlog-bar { background: rgba(255,255,255,.22); }
+/* ⚠⚠ 熟悉度那個大數字**不可以統一翻白**：綠／黃／紅是語意色（好／普通／要加強），
+   翻白就把這個訊息弄丟了。原本的深綠 #1B5E2E 在夜色上又讀不動 →
+   **同一個色相提亮**，意思保留、看得見。量尺裡那一條照舊走語意色，只改它的底。 */
+html.fest-hw .tlog-avg.hi > b  { color: #7FE3A0; }
+html.fest-hw .tlog-avg.mid > b { color: #FFD27A; }
+html.fest-hw .tlog-avg.lo > b  { color: #FF9E8A; }
+html.fest-hw .tlog-avg.hi .tlog-bar > div  { background: #5FD98F; }
+html.fest-hw .tlog-avg.mid .tlog-bar > div { background: #FFC95C; }
+html.fest-hw .tlog-avg.lo .tlog-bar > div  { background: #FF8E78; }
+html.fest-hw .tlog-date b { color: var(--hw-pur); }
+html.fest-hw .tlog-row.now::before {
+  background: var(--hw-pump); border-color: var(--hw-pump);
+  box-shadow: 0 0 0 3px rgba(245,124,31,.2);
+}
+html.fest-hw .growth-inline,
+html.fest-hw .wk-summary {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FCFAFF 100%);
+}
+html.fest-hw .growth-chart-title,
+html.fest-hw .growth-kicker { color: var(--hw-pur); }
+html.fest-hw .growth-stat-num { color: var(--hw-pur); }
