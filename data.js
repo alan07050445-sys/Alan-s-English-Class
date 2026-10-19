@@ -7719,6 +7719,18 @@ const EXAM_KINDS = {
   circle: { zh: '圈出符合的字', auto: true },   // Part 2：短文裡圈 N 個 -VCe／vowel team
   cloze:  { zh: 'Word Bank 填空', auto: true }, // Part 3：給詞庫，一句一格
   quiz:   { zh: '選擇題', auto: true },         // Part 4：閱讀理解
+  /* v522：康橋 Formative 的 Part 1——從字尾表裡挑兩個，造字，再各造一個 5 字以上的句子。
+     ⭐ 這一題**程式全部驗得出來**，而且驗的就是考卷自己寫的規則：
+       · 造出來的字真的有那個字尾（WS_CHECKS.suffix／prefix）
+       · 兩個字尾要不一樣（考卷寫 "two of the suffixes"）
+       · 句子裡真的用到那個字
+       · 句子至少 N 個字（考卷寫 "5 or more words"）
+     ⚠ 拼字對不對、是不是真的英文字，程式判不了——那本來就是老師改的部分。 */
+  affix:  { zh: '造字＋造句', auto: true },
+  /* v522：Part 2 Generate Questions——「用剛讀的故事，自己出兩個**文章上沒有**的問題」。
+     程式驗得了最常見的三種失分（沒有問號、直接抄文章、太短），
+     「這個問題跟故事有沒有關」才需要 AI——所以這一題半自動，給老師一個建議分。 */
+  genq:   { zh: '自己出問題', auto: true },
   short:  { zh: '問答（老師改）', auto: false },// Part 5：申論，照 rubric 手改
 };
 
@@ -7729,7 +7741,58 @@ function examPartN(part) {
   if (part.kind === 'cloze')  return (part.items || []).length;
   if (part.kind === 'quiz')   return (part.questions || []).length;
   if (part.kind === 'short')  return (part.questions || []).length;
+  if (part.kind === 'affix' || part.kind === 'genq') return +part.need || 2;
   return 0;
+}
+
+/* ── v522 ① 造字＋造句：一格的評分 ──────────────────────────────────
+   回傳 { ok, why[] }。why 是「哪裡不符合考卷的規則」，結果頁要逐條寫給學生看。
+   ⚠ 一格兩件事（字、句子）各算一半——只造出字沒寫句子不該是 0 分，
+     那跟完全空白是不一樣的。 */
+function examAffixOne(slot, part) {
+  const minW = +part.minWords || 5;
+  const affix = String((slot && slot.affix) || '').trim();
+  const word = String((slot && slot.word) || '').trim();
+  const sent = String((slot && slot.sentence) || '').trim();
+  const why = [];
+  let half1 = false, half2 = false;
+
+  if (!affix) why.push('沒有選字尾');
+  else if (!word) why.push('沒有造字');
+  else {
+    const kind = /^-/.test(affix) ? 'suffix' : /-$/.test(affix) ? 'prefix' : 'suffix';
+    if (!/^[A-Za-z'-]{3,}$/.test(word)) why.push(`「${word}」看起來不是一個英文字`);
+    else if (!WS_CHECKS[kind](word, affix)) why.push(`「${word}」沒有 ${affix}`);
+    else half1 = true;
+  }
+
+  if (!sent) why.push('沒有造句');
+  else {
+    const n = sent.split(/\s+/).filter(Boolean).length;
+    const used = word && new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(sent);
+    if (!used) why.push(`句子裡沒有用到「${word || '那個字'}」`);
+    else if (n < minW) why.push(`句子只有 ${n} 個字，要 ${minW} 個字以上`);
+    else half2 = true;
+  }
+  return { ok: half1 && half2, half1, half2, why };
+}
+
+/* ── v522 ③ Generate Questions：程式驗得了的三件事 ──────────────────
+   沒有問號／直接抄文章／太短。剩下「跟故事有沒有關」要 AI，不在這裡判。 */
+function examGenqOne(text, part) {
+  const q = String(text || '').trim();
+  const why = [];
+  if (!q) return { ok: false, why: ['沒有寫'] };
+  if (!/[?？]\s*$/.test(q)) why.push('不是問句（要有問號）');
+  const n = q.split(/\s+/).filter(Boolean).length;
+  if (n < 4) why.push('太短了');
+  /* 「not on the page」＝不可以整句抄文章。
+     ⚠ 比對要把標點與大小寫拿掉，不然抄了只改一個逗號就躲過去。 */
+  const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const pg = norm(part && part.passage);
+  const qn = norm(q);
+  if (qn && pg && qn.length > 12 && pg.indexOf(qn.replace(/\s*\?*$/, '')) >= 0) why.push('這句話是直接從文章抄下來的');
+  return { ok: why.length === 0, why };
 }
 
 /* 整份考卷的配分盤點——老師要能一眼看出「這份加起來是不是 100 分」 */
@@ -7778,6 +7841,31 @@ function examScorePart(part, ans) {
       out.detail.push({ text: (q.options || [])[q.answer], ok: good,
                         got: (q.options || [])[(ans || [])[i]] || '' });
     });
+  } else if (part.kind === 'affix') {
+    /* 一格兩半：造字一半、造句一半。右邊那半要用到左邊造的字，所以順序不能顛倒。 */
+    let halves = 0;
+    for (let i = 0; i < n; i++) {
+      const r = examAffixOne((ans || [])[i], part);
+      halves += (r.half1 ? 1 : 0) + (r.half2 ? 1 : 0);
+      out.detail.push({ ok: r.ok, why: r.why, got: (ans || [])[i] || null });
+    }
+    /* 考卷寫 "two of the suffixes" ——兩格選同一個字尾不算兩種。
+       ⚠ 這是**整大題**的問題，不是某一格的問題，所以記在 note 上，
+         不要把兩格都標成錯（學生會以為自己兩個字都造錯了）。 */
+    const picked = (ans || []).map(x => String((x && x.affix) || '').trim()).filter(Boolean);
+    const dup = picked.length > new Set(picked).size;
+    if (dup) out.note = '這一大題要用「兩個不一樣的字尾」，你兩格選了同一個。';
+    out.right = Math.round(halves / 2 * 10) / 10;
+    out.got = Math.round(max * (halves / (n * 2)) * (dup ? 0.5 : 1));
+    return out;
+  } else if (part.kind === 'genq') {
+    for (let i = 0; i < n; i++) {
+      const r = examGenqOne((ans || [])[i], part);
+      if (r.ok) out.right++;
+      out.detail.push({ ok: r.ok, why: r.why, got: (ans || [])[i] || '' });
+    }
+    out.got = Math.round(max * (out.right / n));
+    return out;
   } else {
     // short：收答案，不給分（老師拿 rubric 手改）
     out.detail = (part.questions || []).map((q, i) => ({ text: '', ok: null, got: (ans || [])[i] || '' }));
@@ -7842,6 +7930,8 @@ function examPartText(part) {
     .map(q => [q.q].concat(q.options || []).concat([(+q.answer || 0) + 1]).join(' | ')).join('\n');
   if (p.kind === 'short') return (p.questions || [])
     .map(q => [q.q, q.pts || '', q.rubric || ''].join(' | ').replace(/\s*\|\s*$/, '')).join('\n');
+  if (p.kind === 'affix') return (p.affixes || []).join(' ');
+  if (p.kind === 'genq') return String(p.passage || '');
   return '';
 }
 function examParsePart(kind, text) {
@@ -7871,6 +7961,13 @@ function examParsePart(kind, text) {
       return { q: c[0], options: opts, answer: ansNo - 1 };
     }).filter(Boolean);
     return { questions };
+  }
+  if (kind === 'affix') {
+    /* 一行就是字尾表：-ing -ed -s -est（空白或逗號分開） */
+    return { affixes: (nonEmpty.join(' ').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean)).slice(0, 8) };
+  }
+  if (kind === 'genq') {
+    return { passage: lines.join('\n').trim() };
   }
   if (kind === 'short') {
     const questions = nonEmpty.map(l => {
@@ -7904,6 +8001,15 @@ function examWarnings(item) {
         if (hit.length < need) w.push(`${where}要圈 ${need} 個，但短文裡只有 ${hit.length} 個符合。`);
       }
     }
+    if (pt.kind === 'affix') {
+      const aff = pt.affixes || [];
+      if (aff.length < 2) w.push(`${where}的字尾表至少要兩個（考卷寫「two of the suffixes」）。`);
+      aff.forEach(a => { if (!/^-|-$/.test(String(a))) w.push(`${where}的「${a}」沒有寫成 -ing 或 un- 這種形式，程式判不出來是字首還是字尾。`); });
+      if ((+pt.need || 2) > aff.length) w.push(`${where}要造 ${+pt.need || 2} 個字，但字尾表只有 ${aff.length} 個。`);
+    }
+    if (pt.kind === 'genq' && !String(pt.passage || '').trim()) {
+      w.push(`${where}沒有文章——「自己出問題」要有東西可以讀。`);
+    }
     if (pt.kind === 'cloze') {
       (pt.items || []).forEach((q, i) => {
         if (String(q.text || '').indexOf('___') < 0) w.push(`${where}第 ${i + 1} 句沒有 ___ 空格。`);
@@ -7916,7 +8022,7 @@ function examWarnings(item) {
 }
 
 Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
-  examPartText, examParsePart, examWarnings });
+  examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v513（Alan 的 AI 清單第三順位）📝 考前複習包

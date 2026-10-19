@@ -143,8 +143,13 @@ ok('   ⚠ 小字顏色要讀得動：欄位標題不可以用亮綠 #2FA56B 這
        return 1.05 / (L + .05) < 4.5;
      });
    return bright.length === 0; })());
-ok('   老師的私人備註依然沒有出現在這張卡上',
-   !/r\.note/.test(qm.slice(qm.indexOf('function TeacherLog('), qm.indexOf('function computeGrowthData'))));
+ok('   老師的私人備註依然沒有出現在這張卡上', (() => {
+   /* ⚠ 兩個踩過的坑：①切到 computeGrowthData 會把後面好幾個元件一起切進來
+        （v522 的 ExamPlayer 剛好也在裡面）②`/r\.note/` 是子字串，別人的
+        `pr.note` 也會中→ 只切 TeacherLog 自己，且欄位名要前後都卡住。 */
+   const a = qm.indexOf('function TeacherLog(');
+   const body = qm.slice(a, qm.indexOf('\nfunction ', a + 10));
+   return !/[^A-Za-z0-9_$]r\.note\b/.test(body); })());
 
 console.log(fail ? `\n❌ t-lessons：${pass} 過 / ${fail} 失敗` : `\n✅ t-lessons：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

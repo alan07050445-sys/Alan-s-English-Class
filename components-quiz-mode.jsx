@@ -7044,6 +7044,84 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           </ol>
         )}
 
+        {/* ── ✏️ v522 造字＋造句（康橋 Part 1）── */}
+        {pt.kind === 'affix' && (() => {
+          const slots = Array.isArray(v) ? v : [];
+          const setSlot = (i, patch) => put(key, prev => {
+            const g = Array.isArray(prev) ? prev.map(x => ({ ...x })) : [];
+            g[i] = { ...(g[i] || {}), ...patch };
+            return g;
+          });
+          return (
+            <>
+              <div className="ex-affixbox">
+                {(pt.affixes || []).map((a, i) => <span key={i}>{a}</span>)}
+              </div>
+              {Array.from({ length: n }, (_, i) => {
+                const sl = slots[i] || {};
+                const d = sent ? (pr.detail[i] || {}) : null;
+                return (
+                  <div className={'ex-af' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={i}>
+                    <div className="ex-af-row">
+                      <label>Word:</label>
+                      <span className="ex-af-picks">
+                        {(pt.affixes || []).map((a, k) => (
+                          <button key={k} className={'ex-af-p' + (sl.affix === a ? ' on' : '')} disabled={sent}
+                            onClick={() => setSlot(i, { affix: sl.affix === a ? '' : a })}>{a}</button>
+                        ))}
+                      </span>
+                      <input className="ex-af-w" disabled={sent} value={sl.word || ''} placeholder="你造的字"
+                        onChange={e => setSlot(i, { word: e.target.value })}/>
+                    </div>
+                    <div className="ex-af-row">
+                      <label>Sentence:</label>
+                      <input className="ex-af-s" disabled={sent} value={sl.sentence || ''}
+                        placeholder={`用這個字造一個句子（${pt.minWords || 5} 個字以上）`}
+                        onChange={e => setSlot(i, { sentence: e.target.value })}/>
+                      {!sent && (
+                        <em className="ex-af-n">
+                          {String(sl.sentence || '').split(/\s+/).filter(Boolean).length} 字
+                        </em>
+                      )}
+                    </div>
+                    {sent && (d.why || []).length > 0 && (
+                      <ul className="ex-why">{d.why.map((w, k) => <li key={k}>{w}</li>)}</ul>
+                    )}
+                  </div>
+                );
+              })}
+              {sent && pr && pr.note && <div className="ex-partnote">⚠ {pr.note}</div>}
+            </>
+          );
+        })()}
+
+        {/* ── ❓ v522 自己出問題（康橋 Generate Questions）── */}
+        {pt.kind === 'genq' && (() => {
+          const got = Array.isArray(v) ? v : [];
+          return (
+            <>
+              {pt.passage && <div className="ex-read">{pt.passage}</div>}
+              <ol className="ex-genq">
+                {Array.from({ length: n }, (_, i) => {
+                  const d = sent ? (pr.detail[i] || {}) : null;
+                  return (
+                    <li className={sent ? (d.ok ? 'ok' : 'bad') : ''} key={i}>
+                      <input disabled={sent} value={got[i] || ''}
+                        placeholder="寫一個文章上沒有的問題…"
+                        onChange={e => { const t = e.target.value;
+                          put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[i] = t; return g; }); }}/>
+                      {sent && (d.why || []).length > 0 && (
+                        <ul className="ex-why">{d.why.map((w, k) => <li key={k}>{w}</li>)}</ul>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+              {!sent && <p className="ex-hint">問題要跟這個故事有關，而且<b>答案不能直接寫在文章上</b>。</p>}
+            </>
+          );
+        })()}
+
         {/* ── 申論（老師親自改）── */}
         {pt.kind === 'short' && (
           <>

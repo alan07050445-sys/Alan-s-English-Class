@@ -3933,3 +3933,27 @@
 .exed-add { border: 1px dashed var(--border, #DDD6C4); background: none; border-radius: 9px; padding: 7px 14px; margin-top: 10px; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink-2, #5c554a); }
 .exed-add.sec { display: block; width: 100%; }
 .exed-add:hover { border-color: var(--accent, #8B3120); color: var(--accent, #8B3120); }
+
+/* ══ ✏️❓ v522：造字＋造句 / 自己出問題 ═══════════════════════════════ */
+.ex-affixbox { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 14px; border: 1.5px solid var(--ink, #15130E); border-radius: 4px; }
+.ex-affixbox span { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--ink, #15130E); }
+.ex-af { padding: 10px 0 12px; border-bottom: 1px dotted var(--border, #DDD6C4); }
+.ex-af:last-of-type { border-bottom: 0; }
+.ex-af-row { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 7px; }
+.ex-af-row label { font-size: 14.5px; font-weight: 700; color: var(--ink, #15130E); min-width: 72px; }
+.ex-af-picks { display: flex; gap: 5px; flex-wrap: wrap; }
+.ex-af-p { padding: 3px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--border, #DDD6C4); background: var(--bg-card, #fff); font-family: var(--mono); font-size: 13px; font-weight: 700; }
+.ex-af-p.on { background: var(--accent, #8B3120); border-color: var(--accent, #8B3120); color: #fff; }
+.ex-af-p:disabled { opacity: .5; cursor: default; }
+.ex-af-w { width: 160px; border: 0; border-bottom: 2px solid var(--ink, #15130E); background: none; padding: 2px 5px; font-family: var(--sans); font-size: 15px; }
+.ex-af-s { flex: 1; min-width: 220px; border: 0; border-bottom: 2px solid var(--ink, #15130E); background: none; padding: 2px 5px; font-family: var(--sans); font-size: 15px; }
+.ex-af-n { font-style: normal; font-size: 11.5px; color: var(--ink-3, #6b6455); }
+.ex-af.ok .ex-af-w, .ex-af.ok .ex-af-s { border-bottom-color: #2E7D43; }
+.ex-af.bad .ex-af-w, .ex-af.bad .ex-af-s { border-bottom-color: #A8331F; }
+.ex-why { margin: 5px 0 0; padding-left: 20px; }
+.ex-why li { font-size: 12.5px; line-height: 1.7; color: #A8331F; font-weight: 600; }
+.ex-partnote { margin-top: 9px; padding: 8px 11px; border-radius: 9px; background: #FDF3E2; color: #7A5200; font-size: 13px; font-weight: 700; }
+.ex-genq { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 13px; }
+.ex-genq li input { width: 100%; border: 0; border-bottom: 2px solid var(--ink, #15130E); background: none; padding: 3px 5px; font-family: var(--sans); font-size: 15px; }
+.ex-genq li.ok input { border-bottom-color: #2E7D43; }
+.ex-genq li.bad input { border-bottom-color: #A8331F; }

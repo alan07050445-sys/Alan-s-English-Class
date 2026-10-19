@@ -8513,7 +8513,103 @@ function ExamPlayer({
           })
         }, /*#__PURE__*/React.createElement("i", null, on ? '●' : '○'), o);
       }));
-    })), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+    })), pt.kind === 'affix' && (() => {
+      var slots = Array.isArray(v) ? v : [];
+      var setSlot = (i, patch) => put(key, prev => {
+        var g = Array.isArray(prev) ? prev.map(x => ({
+          ...x
+        })) : [];
+        g[i] = {
+          ...(g[i] || {}),
+          ...patch
+        };
+        return g;
+      });
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+        className: "ex-affixbox"
+      }, (pt.affixes || []).map((a, i) => /*#__PURE__*/React.createElement("span", {
+        key: i
+      }, a))), Array.from({
+        length: n
+      }, (_, i) => {
+        var sl = slots[i] || {};
+        var d = sent ? pr.detail[i] || {} : null;
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'ex-af' + (sent ? d.ok ? ' ok' : ' bad' : ''),
+          key: i
+        }, /*#__PURE__*/React.createElement("div", {
+          className: "ex-af-row"
+        }, /*#__PURE__*/React.createElement("label", null, "Word:"), /*#__PURE__*/React.createElement("span", {
+          className: "ex-af-picks"
+        }, (pt.affixes || []).map((a, k) => /*#__PURE__*/React.createElement("button", {
+          key: k,
+          className: 'ex-af-p' + (sl.affix === a ? ' on' : ''),
+          disabled: sent,
+          onClick: () => setSlot(i, {
+            affix: sl.affix === a ? '' : a
+          })
+        }, a))), /*#__PURE__*/React.createElement("input", {
+          className: "ex-af-w",
+          disabled: sent,
+          value: sl.word || '',
+          placeholder: "\u4F60\u9020\u7684\u5B57",
+          onChange: e => setSlot(i, {
+            word: e.target.value
+          })
+        })), /*#__PURE__*/React.createElement("div", {
+          className: "ex-af-row"
+        }, /*#__PURE__*/React.createElement("label", null, "Sentence:"), /*#__PURE__*/React.createElement("input", {
+          className: "ex-af-s",
+          disabled: sent,
+          value: sl.sentence || '',
+          placeholder: `用這個字造一個句子（${pt.minWords || 5} 個字以上）`,
+          onChange: e => setSlot(i, {
+            sentence: e.target.value
+          })
+        }), !sent && /*#__PURE__*/React.createElement("em", {
+          className: "ex-af-n"
+        }, String(sl.sentence || '').split(/\s+/).filter(Boolean).length, " \u5B57")), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+          className: "ex-why"
+        }, d.why.map((w, k) => /*#__PURE__*/React.createElement("li", {
+          key: k
+        }, w))));
+      }), sent && pr && pr.note && /*#__PURE__*/React.createElement("div", {
+        className: "ex-partnote"
+      }, "\u26A0 ", pr.note));
+    })(), pt.kind === 'genq' && (() => {
+      var got = Array.isArray(v) ? v : [];
+      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+        className: "ex-read"
+      }, pt.passage), /*#__PURE__*/React.createElement("ol", {
+        className: "ex-genq"
+      }, Array.from({
+        length: n
+      }, (_, i) => {
+        var d = sent ? pr.detail[i] || {} : null;
+        return /*#__PURE__*/React.createElement("li", {
+          className: sent ? d.ok ? 'ok' : 'bad' : '',
+          key: i
+        }, /*#__PURE__*/React.createElement("input", {
+          disabled: sent,
+          value: got[i] || '',
+          placeholder: "\u5BEB\u4E00\u500B\u6587\u7AE0\u4E0A\u6C92\u6709\u7684\u554F\u984C\u2026",
+          onChange: e => {
+            var t = e.target.value;
+            put(key, prev => {
+              var g = Array.isArray(prev) ? prev.slice() : [];
+              g[i] = t;
+              return g;
+            });
+          }
+        }), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+          className: "ex-why"
+        }, d.why.map((w, k) => /*#__PURE__*/React.createElement("li", {
+          key: k
+        }, w))));
+      })), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u554F\u984C\u8981\u8DDF\u9019\u500B\u6545\u4E8B\u6709\u95DC\uFF0C\u800C\u4E14", /*#__PURE__*/React.createElement("b", null, "\u7B54\u6848\u4E0D\u80FD\u76F4\u63A5\u5BEB\u5728\u6587\u7AE0\u4E0A"), "\u3002"));
+    })(), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
       className: "ex-read"
     }, pt.passage), (pt.questions || []).map((q, i) => /*#__PURE__*/React.createElement("div", {
       className: "ex-sa",
