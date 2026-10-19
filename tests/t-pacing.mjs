@@ -206,7 +206,7 @@ ok('⭐ 兩個畫面（後台上課紀錄／老師編輯列）用同一套規則
    && /window\.pacingClean/.test(shell) && /window\.pacingBooks/.test(shell));
 
 console.log('\n【6】接上去了嗎');
-ok('⭐ 一鍵出 Word Study 自動帶這週主題', /defaultTopic=\{\(paceWeek && paceWeek\.it\.wordStudy\)/.test(app));
+ok('⭐ 一鍵出 Word Study 自動帶這週主題', /defaultTopic=\{[^}]*paceWeek && paceWeek\.it\.wordStudy/.test(app));
 ok('⭐⭐ 一鍵出文法要用 grammarHw（沿用過來的），不是課堂的 grammar', (() => {
    const noC = app.replace(/\/\*[\s\S]*?\*\//g, '');
    return /paceWeek && paceWeek\.lt\.grammarHw/.test(noC) && !/paceWeek\.lt\.grammar\b(?!Hw)/.test(noC); })());

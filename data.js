@@ -7266,6 +7266,139 @@ Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   v517 💬 用講的就好 —— 聽得懂老師在說什麼，去按對的那顆按鈕
+   ──────────────────────────────────────────────────────────────────────────
+   Alan：「我可以給他文字 或是截圖 不需要有任何匯入方式 我用對話的他就可以幫我生成
+          單字 文法 word study reading comprehension 之類的…我都有所有模板了對吧？」
+
+   ⭐ 他說得對：13 個產生器（＝「手」）早就做好了，而且都吃預填參數。
+     缺的只是一個**路由器**。所以這一版刻意**不新寫任何出題邏輯**：
+       AI 只決定「要做哪一件事、參數是什麼」
+       → 程式打開**現成的那個視窗**並且填好
+       → 出題、校稿、存檔走的全是已經驗過上百次的舊路。
+
+   🔴 它不會自己存。中間一定有一張確認卡。
+     週次的內容是整個年級共用一份文件，聽錯一句話就寫進去可能蓋掉別的東西
+     （v447「我做的單元不見了」）。多按一下，換「它絕對不會自己亂動課程」。
+
+   🔴 聽不懂就說聽不懂。寧可回一句「你是要出單字還是 Word Study？」
+     也不要亂猜一個最接近的去做——猜錯的成本是老師花十分鐘校稿完才發現方向就錯了。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 它會做的事就這幾件。AI 只能從這裡面挑，挑別的一律當 unknown。 */
+const ASK_JOBS = {
+  vocab:     { zh: '一鍵出單字', ico: '📚', need: 'words', where: 'editor' },
+  wordstudy: { zh: '一鍵出 Word Study', ico: '📘', need: 'topic', where: 'editor' },
+  grammar:   { zh: '一鍵出文法', ico: '✏️', need: 'text', where: 'editor' },
+  reading:   { zh: '出閱讀理解', ico: '📖', need: 'text', where: 'editor' },
+  exam:      { zh: '拍考卷 → 互動版', ico: '📸', need: 'images', where: 'editor' },
+  lesson:    { zh: '擬上課紀錄草稿', ico: '🪄', need: 'student', where: 'dash' },
+  weak:      { zh: '弱點分析 → 針對性練習', ico: '🎯', need: 'student', where: 'dash' },
+};
+
+const ASK_SYS = `You are the assistant inside a Taiwanese one-on-one English tutor's own teaching website.
+He talks to you in Traditional Chinese. Your ONLY job is to work out WHICH of his existing tools he wants
+and pull the parameters out of what he typed or pasted. You never write the exercises yourself.
+
+The tools:
+  vocab     — make a full vocabulary set (flashcards, quiz, matching, cloze, dictation…) from a WORD LIST.
+  wordstudy — make a Word Study worksheet from a TOPIC like "prefixes mis-, en-, & em-" or "-VCe words".
+  grammar   — make an interactive grammar lesson + practice from a worksheet's TEXT or PHOTO.
+  reading   — make reading-comprehension questions from a PASSAGE.
+  exam      — turn PHOTOS of a printed exam paper into an interactive exam.
+  lesson    — draft today's lesson record for ONE named student.
+  weak      — look at ONE named student's mistakes and make targeted practice.
+
+Rules:
+- "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak unknown
+- If you are not sure, use "unknown" and put ONE short Traditional-Chinese question in "ask".
+  Guessing wrong costs him ten minutes of proofreading before he notices, so ASK.
+- "words": only when he gave an actual word list. Each: {"term":"...","zh":"...(if he gave it)"}
+  Never invent words he did not give. If he only named a unit ("Barbed Wire Baseball"), leave words empty
+  and set intent "unknown" with ask "要出哪幾個單字？貼給我就好".
+- "topic": the Word Study focus, copied in English exactly as he wrote it.
+- "text": the passage / worksheet text he pasted, copied verbatim. Never summarise or rewrite it.
+- "title": a short unit name, in the language he used. If he did not say one, leave it "".
+- "student": the child's name exactly as he typed it (usually an English first name).
+- "say": one short friendly Traditional-Chinese sentence telling him what you are about to do.
+
+Output ONLY JSON:
+{"intent":"vocab","title":"Barbed Wire Baseball","words":[{"term":"pursued","zh":"追趕"}],
+ "topic":"","text":"","student":"","ask":"","say":"好，我用這 8 個字出一整套單字練習。"}`;
+
+/* 程式驗：AI 說的每一件事都要對得上真實的東西，對不上就降級成「我不確定」。 */
+function askVerify(got, { categories = [], roster = [] } = {}) {
+  const o = got || {};
+  const intent = ASK_JOBS[o.intent] ? o.intent : 'unknown';
+  const words = (Array.isArray(o.words) ? o.words : [])
+    .map(w => ({ term: String((w && w.term) || '').trim(), zh: String((w && w.zh) || '').trim() }))
+    /* ⚠ 只收看起來真的是英文單字的——模型偶爾會把句子或中文塞進來，
+       那種丟進 qsBuildItems 會生出一堆壞題目（單字卡正面出現一整句話）。
+       ⚠ 允許空白是為了 "ice cream" 這種，但**最多兩個字**——
+         第一版寫成 [A-Za-z '-]{0,38} 就把 "I ran fast today" 整句收進去了。 */
+    .filter(w => /^[A-Za-z][A-Za-z'-]{0,19}( [A-Za-z][A-Za-z'-]{0,19})?$/.test(w.term));
+  const out = {
+    intent, words,
+    title: String(o.title || '').trim().slice(0, 80),
+    topic: String(o.topic || '').trim().slice(0, 120),
+    text: String(o.text || '').trim().slice(0, 12000),
+    student: String(o.student || '').trim().slice(0, 40),
+    say: String(o.say || '').trim().slice(0, 120),
+    ask: String(o.ask || '').trim().slice(0, 120),
+  };
+  /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
+  if (out.student) {
+    const hit = (roster || []).find(r => {
+      const n = String((r && r.name) || '').toLowerCase();
+      return n && (n === out.student.toLowerCase() || n.split(/\s+/)[0] === out.student.toLowerCase());
+    });
+    out.email = hit ? hit.email : '';
+    if (!hit) {
+      out.intent = 'unknown';
+      out.ask = `名單裡找不到「${out.student}」——是哪一位？`;
+    }
+  }
+  /* 該有的東西沒有 → 不要硬做，改成問他 */
+  const need = (ASK_JOBS[out.intent] || {}).need;
+  if (need === 'words' && !out.words.length) { out.intent = 'unknown'; out.ask = out.ask || '要出哪幾個單字？直接貼給我就好。'; }
+  if (need === 'topic' && !out.topic)        { out.intent = 'unknown'; out.ask = out.ask || '這次的 Word Study 主題是什麼？'; }
+  if (need === 'text' && !out.text)          { out.intent = 'unknown'; out.ask = out.ask || '把文章或作業的內容貼給我，或拍一張照片。'; }
+  if (need === 'student' && !out.email)      { out.intent = 'unknown'; out.ask = out.ask || '要幫哪一位學生？'; }
+  return out;
+}
+
+/* 聽一句話（可以帶截圖）。回傳驗過的結果。 */
+async function aiRouteCommand({ text = '', images = [], categories = [], roster = [], history = [] } = {}) {
+  const imgs = (images || []).slice(0, 4);
+  const content = imgs.map(im => ({ type: 'image',
+    source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } }));
+  const names = (roster || []).map(r => r && r.name).filter(Boolean).slice(0, 40).join('、');
+  const hist = (history || []).slice(-4).map(h => `${h.me ? '老師' : '你'}：${h.text}`).join('\n');
+  content.push({ type: 'text', text:
+    (names ? `（他的學生名單：${names}）\n` : '')
+    + (hist ? `（前幾句）\n${hist}\n\n` : '')
+    + (imgs.length ? `（他附了 ${imgs.length} 張圖，先看圖再讀下面這句話）\n` : '')
+    + '老師說：\n' + String(text || '').trim() });
+
+  let got = null;
+  try {
+    got = await _aiAsk({ model: GN_READ_MODEL, max_tokens: 3000, system: ASK_SYS,
+      messages: [{ role: 'user', content }] },
+      (d) => {
+        const t = (d?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('')
+          || d?.content?.[0]?.text || '';
+        const o = _gnSalvageJson(_aiStripFence(t));
+        return (o && typeof o === 'object') ? o : null;
+      }, 60000);
+  } catch (e) {
+    return { intent: 'unknown', ask: '我這邊連不上，等一下再說一次。', words: [], title: '', topic: '', text: '', student: '', say: '' };
+  }
+  return askVerify(got, { categories, roster });
+}
+
+Object.assign(window, { ASK_JOBS, ASK_SYS, askVerify, aiRouteCommand });
+
+/* ══════════════════════════════════════════════════════════════════════════
    v516 📸 拍考卷照片 → 變成互動版
    ──────────────────────────────────────────────────────────────────────────
    Alan 手上有一疊考過的 Formative。v515 做好了「考卷」這個容器，

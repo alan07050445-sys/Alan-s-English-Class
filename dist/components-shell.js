@@ -315,6 +315,7 @@ function Header({
   canEdit,
   editMode,
   onToggleEdit,
+  onAsk,
   onAddWeek,
   onDeleteWeek,
   onArchiveWeek,
@@ -644,7 +645,14 @@ function Header({
     className: "emk-ico"
   }, "\u270F\uFE0F"), /*#__PURE__*/React.createElement("span", {
     className: "emk-txt"
-  }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u6587\u6CD5"), /*#__PURE__*/React.createElement("em", null, "\u4E0A\u50B3\u4F5C\u696D\u7167\u7247\uFF0F\u8CBC\u6587\u5B57 \u2192 \u4E92\u52D5\u6559\u5B78\u30FB\u9078\u64C7\u30FB\u586B\u7A7A\u30FB\u4E2D\u7FFB\u82F1"))), onExamScan && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u6587\u6CD5"), /*#__PURE__*/React.createElement("em", null, "\u4E0A\u50B3\u4F5C\u696D\u7167\u7247\uFF0F\u8CBC\u6587\u5B57 \u2192 \u4E92\u52D5\u6559\u5B78\u30FB\u9078\u64C7\u30FB\u586B\u7A7A\u30FB\u4E2D\u7FFB\u82F1"))), onAsk && /*#__PURE__*/React.createElement("button", {
+    className: "edit-make-btn ask",
+    onClick: onAsk
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "emk-ico"
+  }, "\uD83D\uDCAC"), /*#__PURE__*/React.createElement("span", {
+    className: "emk-txt"
+  }, /*#__PURE__*/React.createElement("b", null, "\u7528\u8B1B\u7684\u5C31\u597D"), /*#__PURE__*/React.createElement("em", null, "\u8AAA\u4E00\u53E5\u8A71\u6216\u4E1F\u622A\u5716 \u2192 \u5B83\u5E6B\u4F60\u6253\u958B\u5C0D\u7684\u5DE5\u5177\u3001\u586B\u597D"))), onExamScan && /*#__PURE__*/React.createElement("button", {
     className: "edit-make-btn exs",
     onClick: onExamScan
   }, /*#__PURE__*/React.createElement("span", {

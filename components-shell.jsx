@@ -159,7 +159,7 @@ function findUnitsIn(weekOrder, weeks, q) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, onExamScan, pace, nextF, onPacing, onExamPrep,
+  canEdit, editMode, onToggleEdit, onAsk, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, onExamScan, pace, nextF, onPacing, onExamPrep,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -424,6 +424,13 @@ function Header({
                 <button className="edit-make-btn gn" onClick={onGrammarNotes}>
                   <span className="emk-ico">✏️</span>
                   <span className="emk-txt"><b>一鍵出文法</b><em>上傳作業照片／貼文字 → 互動教學・選擇・填空・中翻英</em></span>
+                </button>
+              )}
+              {/* 💬 v517：不用找按鈕，直接講。它只負責挑工具＋填參數，不自己出題也不自己存 */}
+              {onAsk && (
+                <button className="edit-make-btn ask" onClick={onAsk}>
+                  <span className="emk-ico">💬</span>
+                  <span className="emk-txt"><b>用講的就好</b><em>說一句話或丟截圖 → 它幫你打開對的工具、填好</em></span>
                 </button>
               )}
               {/* 📸 v516：Alan 手上有一疊考過的 Formative，拍一拍就變成互動版 */}

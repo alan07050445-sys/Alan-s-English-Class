@@ -5926,6 +5926,140 @@ async function gnFileToImage(file) {
    🔴 這些照片上滿滿都是學生的手寫答案與老師的紅筆，而且有名字跟分數。
      提示詞已經寫明「只讀印刷的、不要抓姓名與分數」，但校稿頁還是把讀到的東西
      整個攤開讓 Alan 看過再存。 */
+
+/* ══ 💬 v517 用講的就好 ════════════════════════════════════════════════════
+   Alan：「我用對話的他就可以幫我生成 單字 文法 word study reading comprehension…
+          我都有所有模板了對吧？應該很容易做到」
+
+   ⭐ 他說得對，所以這裡**一行出題邏輯都沒有**。它只做兩件事：
+     ① 聽懂要做哪一件事、把參數抓出來（data.js 的 aiRouteCommand，程式再驗一次）
+     ② 打開**現成的那個視窗**並且填好
+   出題、校稿、存檔走的全是舊路。
+   🔴 它不會自己存——中間一定有一張確認卡（週次是整個年級共用一份文件）。 */
+function AskPanel({ open, categories, roster, onClose, onRun }) {
+  const [msgs, setMsgs] = useS([]);          // { me, text, plan?, images? }
+  const [text, setText] = useS('');
+  const [imgs, setImgs] = useS([]);
+  const [busy, setBusy] = useS(false);
+  const fileRef = React.useRef(null);
+  const endRef = React.useRef(null);
+  useE(() => { if (endRef.current) try { endRef.current.scrollIntoView({ block: 'end' }); } catch (e) {} }, [msgs, busy]);
+  if (!open) return null;
+
+  const addFiles = async (files) => {
+    const list = [...(files || [])].slice(0, 4 - imgs.length);
+    if (!list.length) return;
+    try {
+      const made = await Promise.all(list.map(f => gnFileToImage(f)));
+      setImgs(v => v.concat(made));
+    } catch (e) {}
+  };
+
+  const send = async () => {
+    const t = text.trim();
+    if ((!t && !imgs.length) || busy) return;
+    const mine = { me: true, text: t || '（圖片）', images: imgs.slice() };
+    setMsgs(m => m.concat([mine]));
+    setText(''); setImgs([]); setBusy(true);
+    const plan = await window.aiRouteCommand({
+      text: t, images: imgs.map(i => ({ media_type: i.media_type, data: i.data })),
+      categories, roster,
+      history: msgs.slice(-4).map(m => ({ me: m.me, text: m.text })),
+    });
+    setBusy(false);
+    setMsgs(m => m.concat([{ me: false, text: plan.intent === 'unknown' ? (plan.ask || '我不太確定你要做哪一件事。') : (plan.say || ''), plan }]));
+  };
+
+  const JOBS = window.ASK_JOBS || {};
+  return ReactDOM.createPortal(
+    <div className="ask-wrap">
+      <div className="ask-head">
+        <b>💬 跟我說一句話</b>
+        <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+      </div>
+
+      <div className="ask-body">
+        {!msgs.length && (
+          <div className="ask-hello">
+            <p>直接說你想做什麼，或把單字表／文章／作業照片丟進來。</p>
+            <div className="ask-eg">
+              {['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼',
+                '這週 Word Study 是 prefixes mis-, en-, & em-',
+                '幫我擬 Eric 今天的上課紀錄',
+                'Nick 最近哪裡最弱？'].map((x, i) => (
+                <button key={i} onClick={() => setText(x)}>{x}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {msgs.map((m, i) => (
+          <div className={'ask-row' + (m.me ? ' me' : '')} key={i}>
+            <div className="ask-bub">
+              {m.images && m.images.length > 0 && (
+                <div className="ask-thumbs">{m.images.map((im, k) => <img key={k} src={im.preview} alt=""/>)}</div>
+              )}
+              <span>{m.text}</span>
+              {/* 確認卡：它要做什麼，一清二楚，按了才會動 */}
+              {m.plan && m.plan.intent !== 'unknown' && (() => {
+                const J = JOBS[m.plan.intent] || {};
+                return (
+                  <div className="ask-plan">
+                    <div className="ask-plan-h"><i>{J.ico}</i><b>{J.zh}</b></div>
+                    <ul>
+                      {m.plan.title && <li>標題：<b>{m.plan.title}</b></li>}
+                      {m.plan.topic && <li>主題：<b>{m.plan.topic}</b></li>}
+                      {m.plan.student && <li>學生：<b>{m.plan.student}</b></li>}
+                      {m.plan.words.length > 0 && (
+                        <li>單字 <b>{m.plan.words.length}</b> 個：{m.plan.words.slice(0, 10).map(w => w.term).join('、')}
+                          {m.plan.words.length > 10 ? '…' : ''}</li>
+                      )}
+                      {m.plan.text && <li>文字 <b>{m.plan.text.length}</b> 字</li>}
+                    </ul>
+                    {m.done
+                      ? <div className="ask-done">✅ 開好了，接下來照原本的流程走</div>
+                      : (
+                        <div className="ask-plan-btn">
+                          <button className="btn primary" onClick={() => {
+                            setMsgs(x => x.map((y, k) => k === i ? { ...y, done: true } : y));
+                            onRun(m.plan);
+                          }}>就這樣做</button>
+                          <span>它不會自己存，打開之後你還能改</span>
+                        </div>
+                      )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        ))}
+        {busy && <div className="ask-row"><div className="ask-bub"><span className="ask-dots">在想…</span></div></div>}
+        <div ref={endRef}/>
+      </div>
+
+      <div className="ask-foot">
+        {imgs.length > 0 && (
+          <div className="ask-thumbs pend">
+            {imgs.map((im, i) => (
+              <span key={i}><img src={im.preview} alt=""/>
+                <button onClick={() => setImgs(v => v.filter((_, k) => k !== i))}>✕</button></span>
+            ))}
+          </div>
+        )}
+        <div className="ask-input">
+          <button className="ask-clip" title="加照片" disabled={imgs.length >= 4}
+            onClick={() => fileRef.current && fileRef.current.click()}>📎</button>
+          <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
+            onChange={e => { addFiles(e.target.files); e.target.value = ''; }}/>
+          <textarea rows={2} value={text} placeholder="例如：這課單字幫我出一份，然後把單字表貼在下面"
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } }}/>
+          <button className="btn primary ask-send" disabled={busy || (!text.trim() && !imgs.length)} onClick={send}>送出</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 function ExamScanModal({ open, categories, defaultCat, defaultGrade, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();
   const [imgs, setImgs]   = useS([]);
@@ -7156,7 +7290,7 @@ function BgStepsEditor({ bg, onChange, onRedo, busy, onErr }) {
   );
 }
 
-function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, defaultTitle, onClose, onCreate }) {
+function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, defaultTitle, defaultText, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const SK = window.RC_SKILLS || {};
   const [title, setTitle]   = useS('');
@@ -7185,7 +7319,7 @@ function ReadingGenModal({ open, categories, defaultCat, perStudent, roster, def
 
   useE(() => {
     if (!open) return;
-    setTitle(defaultTitle || ''); setText(''); setCat(defaultCat || 'reading'); setGrade('g4');   // v454
+    setTitle(defaultTitle || ''); setText(defaultText || '');   /* v517：💬 直接貼一篇文章進來就能出 */ setCat(defaultCat || 'reading'); setGrade('g4');   // v454
     setNMcq(10); setNSa(5); setKeepPassage(true); setBg(true); setBgBusy(false);
     setSkills({ 'problem-solution': true, 'cause-effect': true, 'sequence': true, 'compare-contrast': true });
     setQSkills({}); setQsN(2);
@@ -7693,5 +7827,5 @@ function ExamPrepModal({ open, side, pace, weeks, weekOrder, weekId, categories,
     </div>, document.body);
 }
 
-Object.assign(window, { ExamPrepModal, ExamScanModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+Object.assign(window, { AskPanel, ExamPrepModal, ExamScanModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

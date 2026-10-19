@@ -819,6 +819,10 @@ function App() {
   var [pacing, setPacing] = useAppState(null);
   var [examSide, setExamSide] = useAppState(null); // v513：考前複習包（'it' / 'lt'）
   var [examScanOpen, setExamScanOpen] = useAppState(false); // v516：拍考卷
+  var [askOpen, setAskOpen] = useAppState(false); // v517：💬 用講的就好
+  var [askRoster, setAskRoster] = useAppState([]); // 認名字用（「幫 Eric 寫紀錄」）
+  var [askTopic, setAskTopic] = useAppState(''); // 💬 帶進 Word Study 的主題
+  var [askText, setAskText] = useAppState(null); // 💬 帶進文法／閱讀的文字
   var [paceOpen, setPaceOpen] = useAppState(false);
   useAppEffect(() => {
     setPacing(null);
@@ -1661,6 +1665,52 @@ function App() {
   /* 📸 v516：已經做好的單元直接寫進這一週（拍考卷用）。
      ⚠ 刻意不借 handleQuickSet——那支是「單字表 → 生出一堆單元」，
        借過來要塞一堆空參數，下一個看到的人會以為考卷也是從單字生出來的。 */
+  useAppEffect(() => {
+    if (!askOpen || !window.subscribeRoster) return;
+    return window.subscribeRoster(setAskRoster, () => {});
+  }, [askOpen]);
+
+  /* 💬 v517：聽懂之後**只做一件事**——打開現成的那個視窗並填好。
+     這裡刻意不碰任何出題邏輯，也不直接寫進週次。 */
+  var runAskPlan = plan => {
+    if (!plan) return;
+    var cat0 = openCat || activeCategories[0] && activeCategories[0].id || 'vocab';
+    if (plan.intent === 'vocab') {
+      setRegenFor({
+        name: plan.title || '',
+        catId: cat0,
+        text: plan.words.map(w => [w.term, w.zh].filter(Boolean).join(' - ')).join('\n')
+      });
+      setQuickSetOpen(true);
+    } else if (plan.intent === 'wordstudy') {
+      setAskTopic(plan.topic);
+      setWsGenOpen(true);
+    } else if (plan.intent === 'grammar') {
+      setAskText({
+        text: plan.text,
+        title: plan.title
+      });
+      setGnGenOpen(true);
+    } else if (plan.intent === 'reading') {
+      setAskText({
+        text: plan.text,
+        title: plan.title
+      });
+      setRcGenOpen(true);
+    } else if (plan.intent === 'exam') {
+      setExamScanOpen(true);
+    } else if (plan.intent === 'lesson' || plan.intent === 'weak') {
+      /* 這兩件事住在後台（📒 上課紀錄 / 🎯 弱點分析）——開後台並指到那一頁。 */
+      setDashOpen(true);
+      try {
+        window.__dashGoto = {
+          tab: plan.intent === 'lesson' ? 'lessons' : 'roster',
+          email: plan.email || ''
+        };
+      } catch (e) {}
+    }
+    setAskOpen(false);
+  };
   var handleAddBuiltItems = (list, cat) => {
     var items = (list || []).filter(Boolean);
     if (!items.length) {
@@ -2625,6 +2675,7 @@ function App() {
     onAddWeek: () => setWeekModalOpen(true),
     onTermSetup: window.isSummerTrack && window.isSummerTrack(grade) || window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setTermOpen(true),
     onQuickSet: () => setQuickSetOpen(true),
+    onAsk: window.AskPanel ? () => setAskOpen(true) : null /* 💬 v517 */,
     onGrammarGen: window.isGrammarTrack && window.isGrammarTrack(grade) ? () => setGrGenOpen(true) : null,
     onReadingGen: window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setRcGenOpen(true),
     onGrammarNotes: window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setGnGenOpen(true)
@@ -2989,8 +3040,11 @@ function App() {
     defaultCat: openCat || (activeCategories.find(c => c.id === 'word') ? 'word' : activeCategories[0] && activeCategories[0].id) || 'word'
     /* v493：學校這週的 Word Study 主題先填好（例 W7 ＝ Prefixes mis-, en-, & em-）。
        Alan 本來要自己開 Excel 查再手打，打錯週次就白生一次。 */,
-    defaultTopic: paceWeek && paceWeek.it.wordStudy || '',
-    onClose: () => setWsGenOpen(false),
+    defaultTopic: askTopic || paceWeek && paceWeek.it.wordStudy || '' /* v517：💬 講的主題最優先 */,
+    onClose: () => {
+      setWsGenOpen(false);
+      setAskTopic('');
+    },
     onCreate: handleWordStudy
   }), window.GrammarNotesModal && /*#__PURE__*/React.createElement(window.GrammarNotesModal, {
     open: gnGenOpen,
@@ -2999,14 +3053,15 @@ function App() {
     perStudent: !!(window.isSummerTrack && window.isSummerTrack(grade)),
     roster: qsRoster,
     defaultCat: regenFor && regenFor.catId || openCat || (activeCategories.find(c => c.id === 'grammar') ? 'grammar' : activeCategories[0] && activeCategories[0].id) || 'grammar',
-    defaultTitle: regenFor ? regenFor.name : ''
+    defaultTitle: askText && askText.title || (regenFor ? regenFor.name : '')
     /* v474：原本的教學重點先填好／v493：沒有的話用學校這週的文法主題。
        ⚠ 用 grammarHw 不是 grammar——上 Writing Activity 那週，
          要練的是沿用過來的那個文法主題（Alan 親自講解的規則）。 */,
-    defaultText: regenFor && regenFor.text || paceWeek && paceWeek.lt.grammarHw || '',
+    defaultText: askText && askText.text || regenFor && regenFor.text || paceWeek && paceWeek.lt.grammarHw || '' /* v517：💬 貼的最優先 */,
     onClose: () => {
       setGnGenOpen(false);
       setRegenFor(null);
+      setAskText(null);
     },
     onCreate: handleGrammarNotesCreate
   }), /*#__PURE__*/React.createElement(window.ReadingGenModal, {
@@ -3015,12 +3070,21 @@ function App() {
     perStudent: !!(window.isSummerTrack && window.isSummerTrack(grade)),
     roster: qsRoster,
     defaultCat: regenFor && regenFor.catId || openCat || (activeCategories.find(c => c.id === 'reading') ? 'reading' : activeCategories[0] && activeCategories[0].id) || 'reading',
-    defaultTitle: regenFor ? regenFor.name : '',
+    defaultTitle: askText && askText.title || (regenFor ? regenFor.name : '')
+    /* v517：💬 直接貼一篇文章進來就能出閱讀理解（本來只能在視窗裡貼） */,
+    defaultText: askText && askText.text || '',
     onClose: () => {
       setRcGenOpen(false);
       setRegenFor(null);
+      setAskText(null);
     },
     onCreate: handleReadingCreate
+  }), window.AskPanel && /*#__PURE__*/React.createElement(window.AskPanel, {
+    open: askOpen,
+    categories: activeCategories,
+    roster: askRoster,
+    onClose: () => setAskOpen(false),
+    onRun: runAskPlan
   }), window.ExamScanModal && /*#__PURE__*/React.createElement(window.ExamScanModal, {
     open: examScanOpen,
     categories: activeCategories,

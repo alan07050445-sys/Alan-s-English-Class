@@ -9263,6 +9263,183 @@ async function gnFileToImage(file) {
    🔴 這些照片上滿滿都是學生的手寫答案與老師的紅筆，而且有名字跟分數。
      提示詞已經寫明「只讀印刷的、不要抓姓名與分數」，但校稿頁還是把讀到的東西
      整個攤開讓 Alan 看過再存。 */
+
+/* ══ 💬 v517 用講的就好 ════════════════════════════════════════════════════
+   Alan：「我用對話的他就可以幫我生成 單字 文法 word study reading comprehension…
+          我都有所有模板了對吧？應該很容易做到」
+
+   ⭐ 他說得對，所以這裡**一行出題邏輯都沒有**。它只做兩件事：
+     ① 聽懂要做哪一件事、把參數抓出來（data.js 的 aiRouteCommand，程式再驗一次）
+     ② 打開**現成的那個視窗**並且填好
+   出題、校稿、存檔走的全是舊路。
+   🔴 它不會自己存——中間一定有一張確認卡（週次是整個年級共用一份文件）。 */
+function AskPanel({
+  open,
+  categories,
+  roster,
+  onClose,
+  onRun
+}) {
+  var [msgs, setMsgs] = useS([]); // { me, text, plan?, images? }
+  var [text, setText] = useS('');
+  var [imgs, setImgs] = useS([]);
+  var [busy, setBusy] = useS(false);
+  var fileRef = React.useRef(null);
+  var endRef = React.useRef(null);
+  useE(() => {
+    if (endRef.current) try {
+      endRef.current.scrollIntoView({
+        block: 'end'
+      });
+    } catch (e) {}
+  }, [msgs, busy]);
+  if (!open) return null;
+  var addFiles = async files => {
+    var list = [...(files || [])].slice(0, 4 - imgs.length);
+    if (!list.length) return;
+    try {
+      var made = await Promise.all(list.map(f => gnFileToImage(f)));
+      setImgs(v => v.concat(made));
+    } catch (e) {}
+  };
+  var send = async () => {
+    var t = text.trim();
+    if (!t && !imgs.length || busy) return;
+    var mine = {
+      me: true,
+      text: t || '（圖片）',
+      images: imgs.slice()
+    };
+    setMsgs(m => m.concat([mine]));
+    setText('');
+    setImgs([]);
+    setBusy(true);
+    var plan = await window.aiRouteCommand({
+      text: t,
+      images: imgs.map(i => ({
+        media_type: i.media_type,
+        data: i.data
+      })),
+      categories,
+      roster,
+      history: msgs.slice(-4).map(m => ({
+        me: m.me,
+        text: m.text
+      }))
+    });
+    setBusy(false);
+    setMsgs(m => m.concat([{
+      me: false,
+      text: plan.intent === 'unknown' ? plan.ask || '我不太確定你要做哪一件事。' : plan.say || '',
+      plan
+    }]));
+  };
+  var JOBS = window.ASK_JOBS || {};
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "ask-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-head"
+  }, /*#__PURE__*/React.createElement("b", null, "\uD83D\uDCAC \u8DDF\u6211\u8AAA\u4E00\u53E5\u8A71"), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "close",
+    size: 14
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "ask-body"
+  }, !msgs.length && /*#__PURE__*/React.createElement("div", {
+    className: "ask-hello"
+  }, /*#__PURE__*/React.createElement("p", null, "\u76F4\u63A5\u8AAA\u4F60\u60F3\u505A\u4EC0\u9EBC\uFF0C\u6216\u628A\u55AE\u5B57\u8868\uFF0F\u6587\u7AE0\uFF0F\u4F5C\u696D\u7167\u7247\u4E1F\u9032\u4F86\u3002"), /*#__PURE__*/React.createElement("div", {
+    className: "ask-eg"
+  }, ['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼', '這週 Word Study 是 prefixes mis-, en-, & em-', '幫我擬 Eric 今天的上課紀錄', 'Nick 最近哪裡最弱？'].map((x, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    onClick: () => setText(x)
+  }, x)))), msgs.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    className: 'ask-row' + (m.me ? ' me' : ''),
+    key: i
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-bub"
+  }, m.images && m.images.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "ask-thumbs"
+  }, m.images.map((im, k) => /*#__PURE__*/React.createElement("img", {
+    key: k,
+    src: im.preview,
+    alt: ""
+  }))), /*#__PURE__*/React.createElement("span", null, m.text), m.plan && m.plan.intent !== 'unknown' && (() => {
+    var J = JOBS[m.plan.intent] || {};
+    return /*#__PURE__*/React.createElement("div", {
+      className: "ask-plan"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "ask-plan-h"
+    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57")), m.done ? /*#__PURE__*/React.createElement("div", {
+      className: "ask-done"
+    }, "\u2705 \u958B\u597D\u4E86\uFF0C\u63A5\u4E0B\u4F86\u7167\u539F\u672C\u7684\u6D41\u7A0B\u8D70") : /*#__PURE__*/React.createElement("div", {
+      className: "ask-plan-btn"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "btn primary",
+      onClick: () => {
+        setMsgs(x => x.map((y, k) => k === i ? {
+          ...y,
+          done: true
+        } : y));
+        onRun(m.plan);
+      }
+    }, "\u5C31\u9019\u6A23\u505A"), /*#__PURE__*/React.createElement("span", null, "\u5B83\u4E0D\u6703\u81EA\u5DF1\u5B58\uFF0C\u6253\u958B\u4E4B\u5F8C\u4F60\u9084\u80FD\u6539")));
+  })()))), busy && /*#__PURE__*/React.createElement("div", {
+    className: "ask-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-bub"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "ask-dots"
+  }, "\u5728\u60F3\u2026"))), /*#__PURE__*/React.createElement("div", {
+    ref: endRef
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "ask-foot"
+  }, imgs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "ask-thumbs pend"
+  }, imgs.map((im, i) => /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, /*#__PURE__*/React.createElement("img", {
+    src: im.preview,
+    alt: ""
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setImgs(v => v.filter((_, k) => k !== i))
+  }, "\u2715")))), /*#__PURE__*/React.createElement("div", {
+    className: "ask-input"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ask-clip",
+    title: "\u52A0\u7167\u7247",
+    disabled: imgs.length >= 4,
+    onClick: () => fileRef.current && fileRef.current.click()
+  }, "\uD83D\uDCCE"), /*#__PURE__*/React.createElement("input", {
+    ref: fileRef,
+    type: "file",
+    accept: "image/*",
+    multiple: true,
+    style: {
+      display: 'none'
+    },
+    onChange: e => {
+      addFiles(e.target.files);
+      e.target.value = '';
+    }
+  }), /*#__PURE__*/React.createElement("textarea", {
+    rows: 2,
+    value: text,
+    placeholder: "\u4F8B\u5982\uFF1A\u9019\u8AB2\u55AE\u5B57\u5E6B\u6211\u51FA\u4E00\u4EFD\uFF0C\u7136\u5F8C\u628A\u55AE\u5B57\u8868\u8CBC\u5728\u4E0B\u9762",
+    onChange: e => setText(e.target.value),
+    onKeyDown: e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        send();
+      }
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary ask-send",
+    disabled: busy || !text.trim() && !imgs.length,
+    onClick: send
+  }, "\u9001\u51FA")))), document.body);
+}
 function ExamScanModal({
   open,
   categories,
@@ -11560,6 +11737,7 @@ function ReadingGenModal({
   perStudent,
   roster,
   defaultTitle,
+  defaultText,
   onClose,
   onCreate
 }) {
@@ -11596,7 +11774,7 @@ function ReadingGenModal({
   useE(() => {
     if (!open) return;
     setTitle(defaultTitle || '');
-    setText('');
+    setText(defaultText || ''); /* v517：💬 直接貼一篇文章進來就能出 */
     setCat(defaultCat || 'reading');
     setGrade('g4'); // v454
     setNMcq(10);
@@ -12370,6 +12548,7 @@ function ExamPrepModal({
   }, "\u984C\u76EE\u4EA4\u7D66\u300C\u4E00\u9375\u51FA\u55AE\u5B57\u300D\u751F\u6210\u2014\u2014\u5B83\u6703\u907F\u958B\u90A3\u5E7E\u9031\u539F\u672C\u51FA\u904E\u7684\u53E5\u5B50\uFF0C\u6240\u4EE5\u662F**\u65B0\u984C\u76EE**\u4E0D\u662F\u91CD\u64AD\u3002"))))), document.body);
 }
 Object.assign(window, {
+  AskPanel,
   ExamPrepModal,
   ExamScanModal,
   PacingImportModal,

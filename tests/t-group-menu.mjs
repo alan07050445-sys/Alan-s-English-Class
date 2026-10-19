@@ -70,7 +70,10 @@ ok('⭐ 一鍵出文法也先填好原本的教學重點',
 /* ⚠ 本來釘整串 `defaultText={(regenFor && regenFor.text) || ''}` 要出現兩次＝釘寫法。
    v493 在其中一個後面接了「|| 學校這週的文法主題」，字串就對不上，
    但「把 regenFor.text 傳下去」這件事一點都沒變。只驗那件事。 */
-ok('⭐ app.jsx 兩邊都傳下去', (app.match(/defaultText=\{\(regenFor && regenFor\.text\)/g) || []).length === 2);
+/* ⚠ 這條本來釘「defaultText 一定以 (regenFor && regenFor.text) 開頭」。
+   v517 在前面多了一個優先序更高的來源（💬 貼進來的文字），整條就紅了——
+   但「兩邊都收得到 regenFor.text」這件事一點事都沒有。釘的是那一句，不是那件事。 */
+ok('⭐ app.jsx 兩邊都傳下去', (app.match(/defaultText=\{[^}]*regenFor && regenFor\.text/g) || []).length === 2);
 
 console.log('\n【5】複習組沒有單字卡也要找得到字（v473 之後預設就不放了）');
 const noFc = [
