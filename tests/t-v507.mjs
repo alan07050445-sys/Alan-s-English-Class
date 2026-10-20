@@ -38,9 +38,16 @@ ok('   沒有任何地方還在自己排 later(() => setAct(\'idle\'), …)',
 ok('⭐ 走路／衝刺的收尾也要認號碼牌（走到一半被點，走路的 timer 不能把大跳關掉）',
    /const mine = \(\) => actSeq\.current === myWalk;/.test(fx)
    && (fx.match(/if \(!mine\(\)\) return;/g) || []).length >= 4);
-ok('⭐ 被點斷時先把走路凍在當下的位置（不然會一邊跳一邊滑走）',
-   /const freezeMove = \(\) => \{/.test(fx)
-   && /freezeMove\(\);[\s\S]{0,120}const sigOk/.test(fx));
+ok('⭐ 被點斷時先把走路凍在當下的位置（不然會一邊跳一邊滑走）', (() => {
+   /* ⚠ 本來釘「freezeMove 之後 120 字內要出現 const sigOk」——那是在釘
+      *程式長什麼樣*。v529 在中間插了「變身成蝙蝠」的分支就失敗了，但行為完全正確。
+      真正要守的是：**點一下的處理裡，freezeMove 要排在任何 startAct 前面**。 */
+   if (!/const freezeMove = \(\) => \{/.test(fx)) return false;
+   const a = fx.indexOf('const onUp = (e) => {');
+   const body = fx.slice(a, fx.indexOf('\n  const ', a + 30));
+   const f = body.indexOf('freezeMove();');
+   const firstAct = body.indexOf('startAct(');
+   return f > 0 && firstAct > f; })());
 ok('⭐ 一次只能排一個橫移（連點兩下本來會疊成兩段 transition＝瞬移）',
    /if \(hopT\.current\) return;/.test(fx));
 ok('   橫移也認號碼牌（這一跳被接手就不要飛出去）',

@@ -2000,7 +2000,10 @@ function FestCountdown({
      改成一個全域監聽 ＋ 用 closest() 判斷滑鼠在不在這三頁上，
      而且圖案用 position:fixed 放進自己的層 → **不用管那三個容器是不是
      position:relative，也不會被 overflow:hidden 裁掉**。 */
-var FEST_CURSOR_ON = '.lc-cover, .grade-selector, .page-lobby';
+/* v529：加上作答頁；而且把「要移動多遠才生一個」從 46 調到 30
+   ——Alan 回報封面「鼠標沒了」，實測其實有在跑，只是慢慢移動時太稀疏，
+   看起來就像沒反應。密一點才看得出來是一串跟著走的東西。 */
+var FEST_CURSOR_ON = '.lc-cover, .grade-selector, .page-lobby, .page-mission';
 /* ⚠ 不做成 React hook：封面、門口頁、大廳是三個不同的元件，而且大廳是
    app.jsx 畫的——做成 hook 就要在三個地方各掛一次，而且元件一卸載就失效。
    它本來就不需要 React（只監聽 document ＋ 自己管 DOM），所以改成
@@ -2031,7 +2034,7 @@ function installFestCursor() {
       }
       var x = e.clientX,
         y = e.clientY;
-      if (last && Math.hypot(x - last[0], y - last[1]) < 46) return;
+      if (last && Math.hypot(x - last[0], y - last[1]) < 30) return;
       last = [x, y];
       var sp = document.createElement('span');
       sp.className = 'hw-trail hw-trail-' + KINDS[i++ % KINDS.length];

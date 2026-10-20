@@ -75,8 +75,11 @@ ok('   速度／招牌動作／講的話都沒動（只換長相）', (() => {
    return !/speed|acts|lines|sig:/.test(f); })());
 
 console.log('\n【3】🖱 滑鼠特效擴到三頁');
-ok('⭐ 封面、選年級、大廳都吃得到',
-   /FEST_CURSOR_ON = '\.lc-cover, \.grade-selector, \.page-lobby'/.test(shell));
+ok('⭐ 封面、選年級、大廳、作答頁都吃得到', (() => {
+   const m = /FEST_CURSOR_ON = '([^']+)'/.exec(shell);
+   if (!m) return false;
+   const want = ['.lc-cover', '.grade-selector', '.page-lobby', '.page-mission'];
+   return want.every(w => m[1].includes(w)); })());
 ok('⭐⭐ 不做成 React hook（大廳是 app.jsx 畫的，拿不到同一個 ref）', (() => {
    const b = fn(shell, 'function installFestCursor(');
    return b && !/React\.useEffect/.test(b) && /document\.addEventListener\('pointermove'/.test(b)

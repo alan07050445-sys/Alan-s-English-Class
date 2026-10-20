@@ -366,7 +366,54 @@ function ClaudeMascot({ size = 46, hat = 'none', acc = '' }) {
    ⚠ 招牌動作的道具（打電腦／看書）要一起帶過來：CSS 是用
      `.act-type .mx-prop-type` 控制顯示的，沒畫就等於那隻的招牌動作變成空的。
      兩個都畫，平常 `.mx-prop { opacity:0 }` 本來就會把沒用到的藏起來。 */
-function VampireMascot({ size = 46, hat = 'none', acc = '', tone = '#C1785A', fit }) {
+/* v529 🦇 蝙蝠型態：點一下吸血鬼就變成這個，再點一次變回來（Alan 指定）。
+   ⚠ 骨架規則跟其他夥伴完全一樣（.mx-torso ＋ 兩顆 .mx-eye ＋ 三個 .mx-leg），
+     不然變身之後走路、打瞌睡那些動畫全部失效。
+   ⚠ 變身時帽子與配件先收起來：蝙蝠沒有頭頂也沒有脖子，硬戴上去會飄在空中。 */
+function BatForm({ size = 46, tone = '#C1785A' }) {
+  /* ⚠ 不能太深：頁面底是 #1E1333，剪影要看得出來才像蝙蝠不是一團黑 */
+  const WING = '#403A52', BODY = '#4E4664', EYE = '#FFFFFF', PUP = '#15131A', FANG = '#FFFFFF';
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <g className="mx-torso">
+        {/* 翅膀：上緣平、下緣鋸齒（蝙蝠翅膀的識別就在那排尖角）。
+           ⚠ 要比身體寬、而且鋸齒要看得出來，不然會變成「有耳朵的黑球」。 */}
+        <rect x="0" y="3" width="5" height="4" fill={WING}/>
+        <rect x="13" y="3" width="5" height="4" fill={WING}/>
+        <rect x="0" y="7" width="1" height="1" fill={WING}/>
+        <rect x="2" y="7" width="1" height="1" fill={WING}/>
+        <rect x="4" y="7" width="1" height="1" fill={WING}/>
+        <rect x="13" y="7" width="1" height="1" fill={WING}/>
+        <rect x="15" y="7" width="1" height="1" fill={WING}/>
+        <rect x="17" y="7" width="1" height="1" fill={WING}/>
+        {/* 翅膀內側留一條原本那一隻的顏色＝變身了還認得出是誰 */}
+        <rect x="4" y="4" width="1" height="3" fill={tone}/>
+        <rect x="13" y="4" width="1" height="3" fill={tone}/>
+        {/* 耳朵 */}
+        <rect x="5" y="1" width="2" height="2" fill={BODY}/>
+        <rect x="11" y="1" width="2" height="2" fill={BODY}/>
+        {/* 身體 */}
+        <rect x="5" y="3" width="8" height="7" fill={BODY}/>
+        {/* 眼睛（會眨——class 一定要留著） */}
+        <rect className="mx-eye" x="6" y="5" width="2" height="2" fill={EYE}/>
+        <rect className="mx-eye" x="10" y="5" width="2" height="2" fill={EYE}/>
+        <rect x="7" y="6" width="1" height="1" fill={PUP}/>
+        <rect x="10" y="6" width="1" height="1" fill={PUP}/>
+        {/* 嘴＋兩顆小虎牙 */}
+        <rect x="8" y="7" width="2" height="1" fill={PUP}/>
+        <rect x="8" y="8" width="1" height="1" fill={FANG}/>
+        <rect x="9" y="8" width="1" height="1" fill={FANG}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="6" y="10" width="2" height="2" fill={WING}/></g>
+      <g className="mx-leg mx-leg-b"/>
+      <g className="mx-leg mx-leg-c"><rect x="10" y="10" width="2" height="2" fill={WING}/></g>
+    </svg>
+  );
+}
+
+function VampireMascot({ size = 46, hat = 'none', acc = '', tone = '#C1785A', fit, bat }) {
+  if (bat) return <BatForm size={size} tone={tone}/>;
   const CAPE = '#1E1B24', HAIR = '#15131A', SKIN = '#DCE9F4',
         BLUSH = '#F2A7B0', EYE = '#15131A', FANG = '#FFFFFF';
   const F = fit || MX_FIT_DEF;
@@ -692,6 +739,10 @@ const mxPick = (k, pet) => {
   lastSaid[k] = s;
   return s;
 };
+/* v529：萬聖節期間還沒取名字的話，顯示成 little Vampire。
+   ⚠ 只是**顯示**用的，不寫進 localStorage——寫進去就等於幫他取好名字了，
+     第一次取名的免費額度會被吃掉，而且 11/01 之後還會留著。 */
+const MX_HW_NAME = 'little Vampire';
 const MX_NAME_KEY = 'alan-mx-name';
 function mxGetName() { try { return localStorage.getItem(mxKey(MX_NAME_KEY)) || ''; } catch (e) { return ''; } }
 function mxSetName(n) { try { localStorage.setItem(mxKey(MX_NAME_KEY), String(n || '').slice(0, 8)); } catch (e) {} }
@@ -835,6 +886,15 @@ function MascotLayer() {
   const [dress, setDress] = useFx(false);       // v431: 裝扮室
   const [dressTab, setDressTab] = useFx('hat');
   const [name, setName]   = useFx(mxGetName());
+  /* v529 🦇 蝙蝠型態（Alan：「點他會變身成 Bat，再點一次變回來」）。
+     ⚠ 只存在記憶體裡，不寫 localStorage——重新整理就變回吸血鬼，
+       不然小朋友哪天忘了自己按過，會以為吉祥物壞掉了。 */
+  const [bat, setBat] = useFx(false);
+  const hwOn = !!(window.festIs && window.festIs('hw'));
+  /* 自動循環那個 effect 不會因為節慶而重建，直接引用 hwOn 會抓到舊值 → 用 ref 帶著走
+     （跟 petRef／wearRef 同一個理由）。 */
+  const hwOnRef = useFxR(hwOn);
+  useFxE(() => { hwOnRef.current = hwOn; }, [hwOn]);
   const [petId, setPetId] = useFx(mxGetPet);     // v401: 現在陪你的是哪一隻
   const [menu, setMenu]   = useFx(false);        // 長按叫出來的小選單
   const [petPick, setPetPick] = useFx(false);    // v401: 夥伴圖鑑（從小選單打開）
@@ -1227,7 +1287,12 @@ function MascotLayer() {
       /* v451：免費的池子只剩走路＋自己的招牌；**買到的動作會加進來**（一件一格），
          所以買了之後牠真的會自己表演——這就是花星星換到的東西。 */
       const bought = (ownedActsRef.current || []);
-      const pool = (pet.acts && pet.acts.length ? pet.acts : MX_ACTS).concat(bought);
+      /* 🦇 v529（Alan：「原本打電腦就改掉」）：萬聖節期間整個動作池收成「走路」，
+         不要讓牠自己跑去打電腦／看書／長高——這幾天牠的把戲只有一個：被點了會變蝙蝠。
+         ⚠ 只是換池子，`pet.acts` 一個字都沒動，11/01 之後原樣回來。 */
+      const pool = hwOnRef.current
+        ? ['walk']
+        : (pet.acts && pet.acts.length ? pet.acts : MX_ACTS).concat(bought);
       const pick = reduce.current
         ? (Math.random() < 0.5 ? 'think' : 'sleep')            // 減少動態＝只做原地的小動作
         : pool[Math.floor(Math.random() * pool.length)];
@@ -1466,6 +1531,18 @@ function MascotLayer() {
     }
     freezeMove();        // 走到一半被點：先把牠停在當下的位置，不要一邊跳一邊滑走
 
+    /* 🦇 v529：萬聖節期間，「點一下」整個換成變身（Alan 指定；原本的打電腦拿掉）。
+       ⚠ 這裡**直接 return**，不要讓它接著跑下面的招牌動作抽籤——
+         不然會變成「一邊變身一邊打電腦」，兩個動畫疊在一起。 */
+    if (hwOn) {
+      const toBat = !bat;
+      setBat(toBat);
+      startAct('twirl', 700, { force: true });     // 轉一圈當作變身的過場
+      say(toBat ? '變成蝙蝠！🦇' : '變回來了 🧛', 2000);
+      if (window.playSound) window.playSound('pop');
+      return;
+    }
+
     const sigOk = !reduce.current && pet.sig && MX_MOVE_ACTS.indexOf(pet.sig) < 0;
     const boughtActs = ownedActsRef.current || [];
     const picks = (sigOk ? [pet.sig, pet.sig] : []).concat(reduce.current ? [] : boughtActs);
@@ -1541,10 +1618,10 @@ function MascotLayer() {
             setMenu(true);
             if (window.playSound) window.playSound('pop');
           }}
-          role="img" aria-label={`吉祥物 ${name || pet.zh}`}>
+          role="img" aria-label={`吉祥物 ${name || (hwOn ? MX_HW_NAME : pet.zh)}`}>
           {/* v441：配件畫在同一個 SVG 裡（Art 內部分成「身體後面」與「身上」兩層）——
               翻滾、轉圈、跳舞都會跟著動；以前是疊在上面的另一個 svg，所以會留在原地。 */}
-          <Art hat={wear.hat || 'none'} acc={wear.item}/>
+          <Art hat={bat ? 'none' : (wear.hat || 'none')} acc={bat ? '' : wear.item} bat={bat}/>
           {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
               永遠留在「牠的身後」，不用另外算方向。 */}
           <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
@@ -1570,7 +1647,7 @@ function MascotLayer() {
           掛在滿版的 .mx-layer 上、水平置中，不管牠站在哪裡都完整看得到。 */}
         {menu && (
           <div className="mx-menu" onPointerDown={e => e.stopPropagation()}>
-            <div className="mx-menu-name">{name || '還沒有名字'}</div>
+            <div className="mx-menu-name">{name || (hwOn ? MX_HW_NAME : '還沒有名字')}</div>
             {/* v442（Alan：「一旦取了只能免費更改一次，如果要換要花 50 買改名卡」） */}
             <button onClick={async () => {
               setMenu(false);
@@ -1592,14 +1669,17 @@ function MascotLayer() {
               say(r.cost ? `我現在叫 ${nm} 了！（用了 ${r.cost} 顆星星）` : `我叫 ${nm}！`, 3000);
             }}>{(window.mxRenameCost && window.mxRenameCost(window.__mxData)) ? '✏️ 改名字（50⭐）' : '✏️ 取名字'}</button>
             {/* v431（Alan：「長按吉祥物可以直接購買和換裝」）：帽子／配件／特效／語音／動作都在這裡 */}
-            <button onClick={() => { setMenu(false); setDress(true); }}>👕 裝扮室</button>
-            {myDances.length > 0 && (
+            {/* v529（Alan：「吉祥物所有功能都關掉，只留下取名字，以及讓他睡覺」）
+                ⚠ 只是在萬聖節期間收起來，不是刪掉——11/01 之後原封不動回來，
+                  買過的裝扮與夥伴也都還在（資料一個字都沒動）。 */}
+            {!hwOn && <button onClick={() => { setMenu(false); setDress(true); }}>👕 裝扮室</button>}
+            {!hwOn && myDances.length > 0 && (
               <button onClick={() => { setMenu(false); playDance(myDances[Math.floor(Math.random() * myDances.length)].id); }}>
                 💃 表演一個
               </button>
             )}
             {/* v401：換夥伴——名冊做成一張小圖鑑，點頭像就換 */}
-            <button onClick={() => { setMenu(false); setPetPick(true); }}>🐾 換夥伴</button>
+            {!hwOn && <button onClick={() => { setMenu(false); setPetPick(true); }}>🐾 換夥伴</button>}
             {/* v392（E）：以前叫「先去睡覺」，但重新整理就跑回來了，文案跟行為對不上。
                 現在存「睡到哪一天」，文案也改成看得懂的樣子。 */}
             {/* v404：文案補上「隨時叫得回來」——按之前就知道這件事不是不可逆的 */}
@@ -1628,7 +1708,7 @@ function MascotLayer() {
             {/* 預覽：現在這一隻穿好的樣子，點一下就表演 */}
             <div className="mx-dress-prev" onClick={() => myDances.length && playDance(myDances[0].id)}>
               <span className="mx-dress-figure"><Art size={62} hat={wear.hat || 'none'} acc={wear.item}/></span>
-              <span className="mx-dress-who">{name || pet.zh}</span>
+              <span className="mx-dress-who">{name || (hwOn ? MX_HW_NAME : pet.zh)}</span>
             </div>
             <div className="mx-dress-tabs">
               {(window.MX_KINDS || []).map(k => (

@@ -1057,13 +1057,183 @@ function ClaudeMascot({
    ⚠ 招牌動作的道具（打電腦／看書）要一起帶過來：CSS 是用
      `.act-type .mx-prop-type` 控制顯示的，沒畫就等於那隻的招牌動作變成空的。
      兩個都畫，平常 `.mx-prop { opacity:0 }` 本來就會把沒用到的藏起來。 */
+/* v529 🦇 蝙蝠型態：點一下吸血鬼就變成這個，再點一次變回來（Alan 指定）。
+   ⚠ 骨架規則跟其他夥伴完全一樣（.mx-torso ＋ 兩顆 .mx-eye ＋ 三個 .mx-leg），
+     不然變身之後走路、打瞌睡那些動畫全部失效。
+   ⚠ 變身時帽子與配件先收起來：蝙蝠沒有頭頂也沒有脖子，硬戴上去會飄在空中。 */
+function BatForm({
+  size = 46,
+  tone = '#C1785A'
+}) {
+  /* ⚠ 不能太深：頁面底是 #1E1333，剪影要看得出來才像蝙蝠不是一團黑 */
+  var WING = '#403A52',
+    BODY = '#4E4664',
+    EYE = '#FFFFFF',
+    PUP = '#15131A',
+    FANG = '#FFFFFF';
+  return /*#__PURE__*/React.createElement("svg", {
+    className: "mx-svg",
+    width: size,
+    height: size * 10 / 9,
+    viewBox: "0 -4 18 20",
+    shapeRendering: "crispEdges",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("g", {
+    className: "mx-torso"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "0",
+    y: "3",
+    width: "5",
+    height: "4",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "13",
+    y: "3",
+    width: "5",
+    height: "4",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "0",
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "2",
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "13",
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "15",
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "17",
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: WING
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "4",
+    width: "1",
+    height: "3",
+    fill: tone
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "13",
+    y: "4",
+    width: "1",
+    height: "3",
+    fill: tone
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "5",
+    y: "1",
+    width: "2",
+    height: "2",
+    fill: BODY
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "11",
+    y: "1",
+    width: "2",
+    height: "2",
+    fill: BODY
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "5",
+    y: "3",
+    width: "8",
+    height: "7",
+    fill: BODY
+  }), /*#__PURE__*/React.createElement("rect", {
+    className: "mx-eye",
+    x: "6",
+    y: "5",
+    width: "2",
+    height: "2",
+    fill: EYE
+  }), /*#__PURE__*/React.createElement("rect", {
+    className: "mx-eye",
+    x: "10",
+    y: "5",
+    width: "2",
+    height: "2",
+    fill: EYE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "7",
+    y: "6",
+    width: "1",
+    height: "1",
+    fill: PUP
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "10",
+    y: "6",
+    width: "1",
+    height: "1",
+    fill: PUP
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8",
+    y: "7",
+    width: "2",
+    height: "1",
+    fill: PUP
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8",
+    y: "8",
+    width: "1",
+    height: "1",
+    fill: FANG
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "9",
+    y: "8",
+    width: "1",
+    height: "1",
+    fill: FANG
+  })), /*#__PURE__*/React.createElement("g", {
+    className: "mx-leg mx-leg-a"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "6",
+    y: "10",
+    width: "2",
+    height: "2",
+    fill: WING
+  })), /*#__PURE__*/React.createElement("g", {
+    className: "mx-leg mx-leg-b"
+  }), /*#__PURE__*/React.createElement("g", {
+    className: "mx-leg mx-leg-c"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "10",
+    y: "10",
+    width: "2",
+    height: "2",
+    fill: WING
+  })));
+}
 function VampireMascot({
   size = 46,
   hat = 'none',
   acc = '',
   tone = '#C1785A',
-  fit
+  fit,
+  bat
 }) {
+  if (bat) return /*#__PURE__*/React.createElement(BatForm, {
+    size: size,
+    tone: tone
+  });
   var CAPE = '#1E1B24',
     HAIR = '#15131A',
     SKIN = '#DCE9F4',
@@ -2198,6 +2368,10 @@ var mxPick = (k, pet) => {
   lastSaid[k] = s;
   return s;
 };
+/* v529：萬聖節期間還沒取名字的話，顯示成 little Vampire。
+   ⚠ 只是**顯示**用的，不寫進 localStorage——寫進去就等於幫他取好名字了，
+     第一次取名的免費額度會被吃掉，而且 11/01 之後還會留著。 */
+var MX_HW_NAME = 'little Vampire';
 var MX_NAME_KEY = 'alan-mx-name';
 function mxGetName() {
   try {
@@ -2436,6 +2610,17 @@ function MascotLayer() {
   var [dress, setDress] = useFx(false); // v431: 裝扮室
   var [dressTab, setDressTab] = useFx('hat');
   var [name, setName] = useFx(mxGetName());
+  /* v529 🦇 蝙蝠型態（Alan：「點他會變身成 Bat，再點一次變回來」）。
+     ⚠ 只存在記憶體裡，不寫 localStorage——重新整理就變回吸血鬼，
+       不然小朋友哪天忘了自己按過，會以為吉祥物壞掉了。 */
+  var [bat, setBat] = useFx(false);
+  var hwOn = !!(window.festIs && window.festIs('hw'));
+  /* 自動循環那個 effect 不會因為節慶而重建，直接引用 hwOn 會抓到舊值 → 用 ref 帶著走
+     （跟 petRef／wearRef 同一個理由）。 */
+  var hwOnRef = useFxR(hwOn);
+  useFxE(() => {
+    hwOnRef.current = hwOn;
+  }, [hwOn]);
   var [petId, setPetId] = useFx(mxGetPet); // v401: 現在陪你的是哪一隻
   var [menu, setMenu] = useFx(false); // 長按叫出來的小選單
   var [petPick, setPetPick] = useFx(false); // v401: 夥伴圖鑑（從小選單打開）
@@ -2927,7 +3112,10 @@ function MascotLayer() {
       /* v451：免費的池子只剩走路＋自己的招牌；**買到的動作會加進來**（一件一格），
          所以買了之後牠真的會自己表演——這就是花星星換到的東西。 */
       var bought = ownedActsRef.current || [];
-      var pool = (pet.acts && pet.acts.length ? pet.acts : MX_ACTS).concat(bought);
+      /* 🦇 v529（Alan：「原本打電腦就改掉」）：萬聖節期間整個動作池收成「走路」，
+         不要讓牠自己跑去打電腦／看書／長高——這幾天牠的把戲只有一個：被點了會變蝙蝠。
+         ⚠ 只是換池子，`pet.acts` 一個字都沒動，11/01 之後原樣回來。 */
+      var pool = hwOnRef.current ? ['walk'] : (pet.acts && pet.acts.length ? pet.acts : MX_ACTS).concat(bought);
       var pick = reduce.current ? Math.random() < 0.5 ? 'think' : 'sleep' // 減少動態＝只做原地的小動作
       : pool[Math.floor(Math.random() * pool.length)];
       if (MX_MOVE_ACTS.indexOf(pick) >= 0) {
@@ -3257,6 +3445,19 @@ function MascotLayer() {
     }
     freezeMove(); // 走到一半被點：先把牠停在當下的位置，不要一邊跳一邊滑走
 
+    /* 🦇 v529：萬聖節期間，「點一下」整個換成變身（Alan 指定；原本的打電腦拿掉）。
+       ⚠ 這裡**直接 return**，不要讓它接著跑下面的招牌動作抽籤——
+         不然會變成「一邊變身一邊打電腦」，兩個動畫疊在一起。 */
+    if (hwOn) {
+      var toBat = !bat;
+      setBat(toBat);
+      startAct('twirl', 700, {
+        force: true
+      }); // 轉一圈當作變身的過場
+      say(toBat ? '變成蝙蝠！🦇' : '變回來了 🧛', 2000);
+      if (window.playSound) window.playSound('pop');
+      return;
+    }
     var sigOk = !reduce.current && pet.sig && MX_MOVE_ACTS.indexOf(pet.sig) < 0;
     var boughtActs = ownedActsRef.current || [];
     var picks = (sigOk ? [pet.sig, pet.sig] : []).concat(reduce.current ? [] : boughtActs);
@@ -3357,10 +3558,11 @@ function MascotLayer() {
       if (window.playSound) window.playSound('pop');
     },
     role: "img",
-    "aria-label": `吉祥物 ${name || pet.zh}`
+    "aria-label": `吉祥物 ${name || (hwOn ? MX_HW_NAME : pet.zh)}`
   }, /*#__PURE__*/React.createElement(Art, {
-    hat: wear.hat || 'none',
-    acc: wear.item
+    hat: bat ? 'none' : wear.hat || 'none',
+    acc: bat ? '' : wear.item,
+    bat: bat
   }), /*#__PURE__*/React.createElement("span", {
     className: "mx-trail",
     "aria-hidden": "true"
@@ -3383,7 +3585,7 @@ function MascotLayer() {
     onPointerDown: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
     className: "mx-menu-name"
-  }, name || '還沒有名字'), /*#__PURE__*/React.createElement("button", {
+  }, name || (hwOn ? MX_HW_NAME : '還沒有名字')), /*#__PURE__*/React.createElement("button", {
     onClick: async () => {
       setMenu(false);
       var cost = window.mxRenameCost ? window.mxRenameCost(window.__mxData) : 0;
@@ -3418,17 +3620,17 @@ function MascotLayer() {
       setStars(v => Math.max(0, v - (r.cost || 0)));
       say(r.cost ? `我現在叫 ${nm} 了！（用了 ${r.cost} 顆星星）` : `我叫 ${nm}！`, 3000);
     }
-  }, window.mxRenameCost && window.mxRenameCost(window.__mxData) ? '✏️ 改名字（50⭐）' : '✏️ 取名字'), /*#__PURE__*/React.createElement("button", {
+  }, window.mxRenameCost && window.mxRenameCost(window.__mxData) ? '✏️ 改名字（50⭐）' : '✏️ 取名字'), !hwOn && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMenu(false);
       setDress(true);
     }
-  }, "\uD83D\uDC55 \u88DD\u626E\u5BA4"), myDances.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, "\uD83D\uDC55 \u88DD\u626E\u5BA4"), !hwOn && myDances.length > 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMenu(false);
       playDance(myDances[Math.floor(Math.random() * myDances.length)].id);
     }
-  }, "\uD83D\uDC83 \u8868\u6F14\u4E00\u500B"), /*#__PURE__*/React.createElement("button", {
+  }, "\uD83D\uDC83 \u8868\u6F14\u4E00\u500B"), !hwOn && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMenu(false);
       setPetPick(true);
@@ -3480,7 +3682,7 @@ function MascotLayer() {
     acc: wear.item
   })), /*#__PURE__*/React.createElement("span", {
     className: "mx-dress-who"
-  }, name || pet.zh)), /*#__PURE__*/React.createElement("div", {
+  }, name || (hwOn ? MX_HW_NAME : pet.zh))), /*#__PURE__*/React.createElement("div", {
     className: "mx-dress-tabs"
   }, (window.MX_KINDS || []).map(k => /*#__PURE__*/React.createElement("button", {
     key: k.kind,

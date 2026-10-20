@@ -6,7 +6,7 @@
 <title>Alan's English Class — Weekly</title>
 
 <!-- PWA / Home Screen Icon -->
-<link rel="manifest" href="manifest.json?v=528"/>
+<link rel="manifest" href="manifest.json?v=529"/>
 <link rel="icon" type="image/svg+xml" href="icon.svg"/>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
@@ -26,18 +26,18 @@
      「iPad 橫式 1180×760 一個畫面裝得下」的保證。 -->
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet"/>
 
-<link rel="stylesheet" href="styles.css?v=528"/>
-<link rel="stylesheet" href="styles-part2.css?v=528"/>
-<link rel="stylesheet" href="styles-quiz.css?v=528"/>
-<link rel="stylesheet" href="styles-flashcard.css?v=528"/>
-<link rel="stylesheet" href="styles-auth.css?v=528"/>
-<link rel="stylesheet" href="styles-quiz-mode.css?v=528"/>
-<link rel="stylesheet" href="styles-mistakes.css?v=528"/>
-<link rel="stylesheet" href="styles-home.css?v=528"/>
-<link rel="stylesheet" href="styles-theme.css?v=528"/>
-<link rel="stylesheet" href="styles-fx.css?v=528"/>
+<link rel="stylesheet" href="styles.css?v=529"/>
+<link rel="stylesheet" href="styles-part2.css?v=529"/>
+<link rel="stylesheet" href="styles-quiz.css?v=529"/>
+<link rel="stylesheet" href="styles-flashcard.css?v=529"/>
+<link rel="stylesheet" href="styles-auth.css?v=529"/>
+<link rel="stylesheet" href="styles-quiz-mode.css?v=529"/>
+<link rel="stylesheet" href="styles-mistakes.css?v=529"/>
+<link rel="stylesheet" href="styles-home.css?v=529"/>
+<link rel="stylesheet" href="styles-theme.css?v=529"/>
+<link rel="stylesheet" href="styles-fx.css?v=529"/>
 <!-- styles-tune.css 一定要放最後：手機/平板瘦身＋桌機小字放大，靠載入順序覆蓋前面的規則 -->
-<link rel="stylesheet" href="styles-tune.css?v=528"/>
+<link rel="stylesheet" href="styles-tune.css?v=529"/>
 <!-- 🎊 節慶限定外觀：整份包在 html.fest-XXXX 底下，class 沒掛上去就完全不作用。
      一定要排在最後——它的工作就是覆寫前面所有樣式。
      v508 起改成「只有節慶那幾天才載」：整張 CSS 全部包在節慶 class 底下，
@@ -65,7 +65,7 @@
       } else if (ov === 'on' && !hit) hit = F[F.length - 1];
       if (hit) {
         var l = document.createElement('link');
-        l.rel = 'stylesheet'; l.href = hit.css + '?v=528';
+        l.rel = 'stylesheet'; l.href = hit.css + '?v=529';
         document.head.appendChild(l);
       }
     } catch (e) {}
@@ -109,14 +109,14 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-<script src="data.js?v=528"></script>
-<script src="data-g1.js?v=528"></script>
-<script src="data-g2.js?v=528"></script>
-<script src="data-g4.js?v=528"></script>
-<script src="data-g5.js?v=528"></script>
-<script src="data-g6.js?v=528"></script>
-<script src="data-summer.js?v=528"></script>
-<script src="data-grammar.js?v=528"></script>
+<script src="data.js?v=529"></script>
+<script src="data-g1.js?v=529"></script>
+<script src="data-g2.js?v=529"></script>
+<script src="data-g4.js?v=529"></script>
+<script src="data-g5.js?v=529"></script>
+<script src="data-g6.js?v=529"></script>
+<script src="data-summer.js?v=529"></script>
+<script src="data-grammar.js?v=529"></script>
 <!-- ⚡ v508（Alan：「有小朋友反應登入頁面跟到第二頁以及第三頁…轉換畫面還是會卡卡的」）
      這裡本來是 9 個 <script type="text/babel">，由瀏覽器端的 @babel/standalone 即時轉譯。
      實測（線上站台、它自己那份 babel.min.js）：9 個檔 1,290KB，轉譯佔住主執行緒 10.9 秒（Mac）。
@@ -134,21 +134,21 @@
        會丟「Identifier 'useQM' has already been declared」，整個 app 掛掉。
      ⚠ 改完 .jsx 一定要重跑 node tools/build-jsx.js，不然線上跑的是舊程式**而且畫面完全正常**。
        tests/t-dist.mjs 會重算一次逐字比對，忘了重跑就是紅燈。 -->
-<script src="dist/components-shell.js?v=528"></script>
-<script src="dist/components-quiz.js?v=528"></script>
-<script src="dist/components-flashcard.js?v=528"></script>
-<script src="dist/components-editor.js?v=528"></script>
-<script src="dist/components-quiz-mode.js?v=528"></script>
-<script src="dist/components-dashboard.js?v=528"></script>
-<script src="dist/components-mistakes.js?v=528"></script>
-<script src="dist/app.js?v=528"></script>
-<script src="dist/components-fx.js?v=528"></script>
+<script src="dist/components-shell.js?v=529"></script>
+<script src="dist/components-quiz.js?v=529"></script>
+<script src="dist/components-flashcard.js?v=529"></script>
+<script src="dist/components-editor.js?v=529"></script>
+<script src="dist/components-quiz-mode.js?v=529"></script>
+<script src="dist/components-dashboard.js?v=529"></script>
+<script src="dist/components-mistakes.js?v=529"></script>
+<script src="dist/app.js?v=529"></script>
+<script src="dist/components-fx.js?v=529"></script>
 
 <script>
   // Register Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=528').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=529').catch(() => {});
     });
   }
 </script>

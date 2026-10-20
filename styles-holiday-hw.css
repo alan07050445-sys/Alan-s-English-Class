@@ -729,15 +729,15 @@ html.fest-hw .page-mission .qm-sidebar-cat::before {
   overflow: hidden;
 }
 .hw-trail {
-  position: fixed; width: 26px; height: 26px;
-  margin: -13px 0 0 -13px;
+  position: fixed; width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
   pointer-events: none; z-index: 2;
   background: center/contain no-repeat;
   animation: hwTrail 1.2s cubic-bezier(.25,.6,.3,1) forwards;
 }
-.hw-trail-bat   { background-image: var(--hw-bat, none); width: 30px; height: 30px; margin: -15px 0 0 -15px; }
-.hw-trail-ghost { background-image: var(--hw-ghost, none); width: 22px; height: 28px; margin: -14px 0 0 -11px; }
-.hw-trail-star  { background-image: var(--hw-moon, none); width: 18px; height: 18px; margin: -9px 0 0 -9px; }
+.hw-trail-bat   { background-image: var(--hw-bat, none); width: 36px; height: 36px; margin: -18px 0 0 -18px; }
+.hw-trail-ghost { background-image: var(--hw-ghost, none); width: 26px; height: 32px; margin: -16px 0 0 -13px; }
+.hw-trail-star  { background-image: var(--hw-moon, none); width: 22px; height: 22px; margin: -11px 0 0 -11px; }
 @keyframes hwTrail {
   0%   { opacity: 0;   transform: translate(0, 0) scale(.5) rotate(0deg); }
   18%  { opacity: .95; transform: translate(0, -4px) scale(1) rotate(calc(var(--rot) * .4)); }
@@ -1593,4 +1593,12 @@ html.fest-hw .mx-bubble::after { border-top-color: #33224F; }
 /* ── 倒數鐘：白字壓在 #F79A3E 上只有 2.18（--g-c 提亮造成的）── */
 html.fest-hw .fest-tick-c {
   background: linear-gradient(170deg, #E8700F 0%, #C85A08 100%);
+}
+
+/* ── v529 門口頁：倒數鐘與「進入教室」那張卡靠太近（Alan 圖1）──
+   ⚠ 倒數鐘是 inline-flex 的區塊，本來只靠 .fest-day-wrap 的 margin 撐開，
+     數字放大之後那點距離就不夠了。 */
+html.fest-hw .grade-selector-inner .fest-day-wrap { margin: 18px 0 30px; }
+@media (max-width: 560px) {
+  html.fest-hw .grade-selector-inner .fest-day-wrap { margin: 14px 0 22px; }
 }
