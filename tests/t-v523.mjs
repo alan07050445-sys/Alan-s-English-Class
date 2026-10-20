@@ -159,9 +159,35 @@ ok('⭐⭐ 畫面上的節慶字樣不可以寫死', (() => {
    return !/['"][^'"]*雙十[^'"]*['"]/.test(code) && !/>\s*10\.10\s*</.test(code); })());
 
 console.log('\n【6】閱讀面不可以被換掉（小朋友一次看半小時）');
-ok('⭐ 沒有去動單字卡／短文／文章／題目文字的底色與字色', (() => {
+ok('⭐⭐ v527 起作答面也跟著進夜色了（Alan：「整體都要協調」）——'
+ + '但凡是碰到的地方，字色一律要是**亮的**，不可以留下深色的字', (() => {
+   /* 這一條從「不准碰作答面」改成「碰了就要碰對」。
+      Alan 明確要求整站翻夜色，所以舊的禁令不再成立；真正不能發生的是
+      「底翻黑了、字還是深色」＝那一塊整個看不見（.fc-test-choice 就這樣壞過）。
+      ⚠ 靜態比對只看得到寫死的顏色；真正的把關是開起來跑對比度掃描。 */
    const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
-   return !/\.fc-(card|term|ex)|\.qm-question-text|\.gr-(text|para)|\.cloze-passage|\.circle-prose\b/.test(body); })());
+   const lum = (h) => {
+     h = h.replace('#', '');
+     if (h.length === 3) h = h.split('').map(c => c + c).join('');
+     const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+       .map(v => v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4));
+     return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+   };
+   const dark = [];
+   body.split('}').forEach(blk => {
+     const sel = (blk.split('{')[0] || '').trim();
+     const decl = blk.split('{')[1] || '';
+     if (!/fc-|qm-option|qm-question|gr-|cloze-|circle-|ws-|ex-|ta-/.test(sel)) return;
+     /* ⚠ ::placeholder 刻意是低強度的灰，不算「深色的字」——
+        它的對比在深色輸入框上是 4.5，開起來掃過。 */
+     if (/::placeholder/.test(sel)) return;
+     (decl.match(/(?<![-a-z])color:\s*(#[0-9A-Fa-f]{3,6})/g) || []).forEach(m => {
+       const hx = m.split(':')[1].trim();
+       if (lum(hx) < 0.33) dark.push(sel.slice(0, 40) + ' → ' + hx);
+     });
+   });
+   if (dark.length) console.log('      作答面上留著深色的字：', dark.slice(0, 5));
+   return dark.length === 0; })());
 ok('⭐ 星星維持金色、金色箭頭提醒不動', (() => {
    const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
    return !/\.wh-task-cue|\.stars-btn-ico/.test(body); })());

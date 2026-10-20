@@ -42,20 +42,43 @@ html.fest-hw {
 }
 
 /* ── 1. 底色：天亮一點的淡紫白（夜色留給頂欄與封面）── */
+/* ⚠⚠ v527（Alan：「顏色太深了，因為背景都是亮色」）：
+   v523~v526 是「深色卡片 ＋ 淺色頁面」，他看了覺得不協調——他是對的，
+   那本來就是兩種主題疊在一起。這一版**整個站翻成夜色**。
+   ⭐ 關鍵做法：先把全站的顏色變數整組換掉（它們是全站共用的，
+     一次換掉就蓋到幾百個地方），寫死顏色的再用「掃出來」的方式逐一補。
+     ⚠ 不要反過來做——從寫死的那 700 多個選擇器開始列，一定列不完。 */
 html.fest-hw body {
   background:
-    radial-gradient(900px 600px at 50% -10%, #FFFFFF 0%, rgba(255,255,255,0) 62%),
-    radial-gradient(700px 500px at 92% 104%, rgba(245,124,31,.08), transparent 60%),
-    var(--hw-tint);
+    radial-gradient(1100px 700px at 50% -12%, #3B2763 0%, rgba(59,39,99,0) 62%),
+    radial-gradient(800px 560px at 92% 106%, rgba(245,124,31,.14), transparent 60%),
+    radial-gradient(700px 520px at 4% 92%, rgba(110,80,190,.2), transparent 62%),
+    var(--hw-night);
   background-attachment: fixed;
 }
 html.fest-hw {
-  --bg: #F7F3FB;
-  --bg-paper: #FDFBFF;
-  --border: #E2D8EE;
-  --border-soft: #EEE7F6;
-  --accent: #F57C1F;
-  --accent-soft: #FF9440;
+  --hw-night:  #1E1333;   /* 頁面底 */
+  --hw-surf:   #2E1F4D;   /* 卡片面 */
+  --hw-surf-2: #3A2960;   /* 卡片裡再高一階（輸入框、小磚） */
+
+  --bg: #1E1333;
+  --bg-paper: #291A45;
+  --bg-card: #2E1F4D;
+  --ink: #F4EFFF;
+  --ink-soft: #E2D9F4;
+  --ink-muted: #B6A8D0;
+  --ink-faint: #8B7CAB;
+  --ink-2: #CFC3E6;
+  --ink-3: #AE9FCC;
+  --rule: #F4EFFF;
+  --border: rgba(255,255,255,.17);
+  --border-soft: rgba(255,255,255,.1);
+  --accent: #F79A3E;
+  --accent-soft: #FFB163;
+  --shadow-card: 0 1px 0 rgba(0,0,0,.3), 0 14px 34px -16px rgba(0,0,0,.6);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3), 0 2px 10px -2px rgba(0,0,0,.4);
+  --shadow-md: 0 10px 30px -12px rgba(0,0,0,.65);
+  color-scheme: dark;
 }
 
 /* ── 2. 頂欄：夜空紫＋月亮＋飛過去的蝙蝠 ── */
@@ -132,11 +155,7 @@ html.fest-hw .brand-name::before {
 /* ── 3. 門口頁（封面）＝裝飾最濃的地方 ───────────────────────
    ⚠ 只換顏色與圖案，版面一格都沒動——.gs-decor／.gs-blob／.gs-spark
      本來就是裝飾層（v402 做的），換皮最安全。 */
-html.fest-hw .grade-selector {
-  background:
-    radial-gradient(900px 560px at 50% -8%, #FFFFFF 0%, rgba(255,255,255,0) 62%),
-    var(--hw-tint);
-}
+/* （v523 這裡原本有一條淺色的 .grade-selector，v525 改成夜色版之後就是死碼，v527 清掉） */
 html.fest-hw .gs-blob-a { background: radial-gradient(circle, rgba(245,124,31,.20), transparent 66%); }
 html.fest-hw .gs-blob-b { background: radial-gradient(circle, rgba(83,59,128,.17), transparent 66%); }
 html.fest-hw .gs-spark   { fill: var(--hw-pump); }
@@ -171,12 +190,14 @@ html.fest-hw .cb-bar { border-color: rgba(61,42,99,.18); }
 html.fest-hw .cb-bar:hover { border-color: rgba(61,42,99,.38); }
 
 /* ── 5. 主要按鈕＝南瓜橘 ── */
+/* ⚠ 白字壓在 #F57C1F 上只有 2.7——主要按鈕整站都在用，壓深一階到 4.0 以上。
+   ⭐ 顏色看起來幾乎一樣，但「讀不讀得動」差很多。 */
 html.fest-hw .btn.primary {
-  background: linear-gradient(100deg, var(--hw-pump), var(--hw-pump-d));
+  background: linear-gradient(100deg, #D9610C, #B84E06);
   color: #fff; border-color: transparent;
 }
 html.fest-hw .btn.primary:hover {
-  background: linear-gradient(100deg, var(--hw-pump-d), var(--hw-pump));
+  background: linear-gradient(100deg, #E8700F, #C85A08);
   border-color: transparent;
 }
 html.fest-hw .qm-unit-row.active { border-left-color: var(--hw-pump); }
@@ -330,9 +351,8 @@ html.fest-hw .wh::after {
 }
 @media (max-width: 560px) { html.fest-hw .wh::after { width: 28px; height: 36px; right: 10px; } }
 
-html.fest-hw .tt-wrap,
 html.fest-hw .tt-card,
-html.fest-hw .qm-cat-card { border-color: rgba(61,42,99,.14); }
+html.fest-hw .qm-cat-card { border-color: rgba(255,255,255,.12); }
 
 /* ── 10. 幾顆還寫死棕色的小按鈕（上次是一頁一頁點出來的）── */
 html.fest-hw .qm-sidebar-reopen { background: var(--hw-pur); }
@@ -346,10 +366,10 @@ html.fest-hw .qm-tab.on { border-bottom-color: var(--hw-pump); }
    這次直接照抄那一版的修法。 */
 html.fest-hw .page-lobby {
   background:
-    radial-gradient(900px 560px at 50% -6%, #FFFFFF 0%, rgba(255,255,255,0) 60%),
-    radial-gradient(760px 520px at 90% 108%, rgba(83,59,128,.12), transparent 60%),
-    radial-gradient(680px 480px at 6% 90%, rgba(245,124,31,.09), transparent 62%),
-    linear-gradient(180deg, #FCFAFF 0%, #F3EDFA 100%);
+    radial-gradient(1000px 600px at 50% -8%, #432D6E 0%, rgba(67,45,110,0) 62%),
+    radial-gradient(760px 520px at 90% 108%, rgba(245,124,31,.16), transparent 60%),
+    radial-gradient(680px 480px at 6% 88%, rgba(110,80,190,.22), transparent 62%),
+    linear-gradient(180deg, #241741 0%, #1A1030 100%);
 }
 html.fest-hw .page-mission,
 html.fest-hw .page-summer,
@@ -361,7 +381,7 @@ html.fest-hw .page { background-color: transparent; }
    112 處深棕就一起換掉——比一條一條列出來可靠得多（列清單一定會漏，
    v489~v491 被 Alan 連抓三次就是這樣）。
    ⚠ 年級卡自己有 --g-c（上面第 8 節），那一條會蓋過這裡，是對的。 */
-html.fest-hw { --g-c: #D9610C; }
+html.fest-hw { --g-c: #F79A3E; }
 
 /* 奶油色的「面」：上次用程式掃大廳掃出來的那幾個 */
 html.fest-hw .wk-tile { background: rgba(247,241,253,.85); border-color: rgba(61,42,99,.14); }
@@ -554,19 +574,26 @@ html.fest-hw .wh-stat b { color: #fff; }
 html.fest-hw .wh-stat i { color: rgba(255,255,255,.62); }
 html.fest-hw .wh-empty,
 html.fest-hw .wh-done-msg { color: rgba(255,255,255,.8); }
-html.fest-hw .wh-weeknav button { color: #fff; border-color: rgba(255,255,255,.3); }
+/* ⚠ 手機版才出現的週次切換鈕：我 v526 只改了字色，底還是白的 → 白底白字。
+   桌機版它是 display:none，所以前面幾輪對比度掃描一次都沒掃到它。
+   ⭐ 教訓：**掃描要每個寬度各跑一次**，不然只會修到「現在看得見的那些」。 */
+html.fest-hw .wh-weeknav button {
+  color: #fff; background: rgba(255,255,255,.14);
+  border-color: rgba(255,255,255,.3);
+}
+html.fest-hw .wh-weeknav button:disabled { opacity: .4; }
 
 /* 下面的框框也跟著有個性：標題列加一條南瓜橘 */
-html.fest-hw .tt-wrap {
+html.fest-hw .tt {
   border-color: rgba(61,42,99,.18);
   box-shadow: 0 16px 36px -30px rgba(42,27,69,.8);
 }
-html.fest-hw .tt-wrap::before {
+html.fest-hw .tt::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px;
   background: linear-gradient(90deg, var(--hw-pump), var(--hw-pur-l));
   border-radius: 14px 14px 0 0; pointer-events: none;
 }
-html.fest-hw .tt-wrap { position: relative; }
+html.fest-hw .tt { position: relative; }
 html.fest-hw .qm-cat-card { border-color: rgba(61,42,99,.16); }
 html.fest-hw .qm-cat-card:hover { border-color: rgba(245,124,31,.45); }
 
@@ -577,7 +604,7 @@ html.fest-hw .grade-selector {
   background:
     radial-gradient(900px 560px at 50% -10%, #4A3374 0%, rgba(74,51,116,0) 62%),
     radial-gradient(620px 460px at 8% 8%, rgba(245,124,31,.22), transparent 62%),
-    linear-gradient(180deg, #2A1B45 0%, #3D2A63 100%);
+    linear-gradient(180deg, #241741 0%, #33215A 100%);
 }
 html.fest-hw .grade-sel-title { color: #fff; }
 html.fest-hw .grade-sel-sub,
@@ -653,8 +680,8 @@ html.fest-hw .sp-shop-head { color: var(--hw-pur); }
      單字卡本體、題目文字、選項一律維持白底黑字。 */
 html.fest-hw .page-mission {
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(245,124,31,.1), transparent 60%),
-    linear-gradient(180deg, #FCFAFF 0%, #F2ECFA 100%);
+    radial-gradient(1200px 620px at 50% -10%, rgba(245,124,31,.16), transparent 60%),
+    linear-gradient(180deg, #241741 0%, #1A1030 100%);
 }
 html.fest-hw .page-mission .header {
   background: linear-gradient(100deg, var(--hw-pur-d) 0 56%, var(--hw-pur-l) 100%);
@@ -674,11 +701,17 @@ html.fest-hw .page-mission .qm-sidebar-cat {
   border-bottom-color: rgba(61,42,99,.14);
 }
 html.fest-hw .page-mission .qm-unit-row { border-color: rgba(61,42,99,.16); }
+/* 🔴 選中的單元列不可以給淺底：它的標題色是 `color: var(--ink) !important`
+   （styles-theme.css），--ink 現在是亮的 → 淺底亮字＝整列看不見。 */
+html.fest-hw .page-mission .qm-unit-row {
+  background: rgba(255,255,255,.05);
+}
+html.fest-hw .page-mission .qm-unit-row:hover { background: rgba(255,255,255,.09); }
 html.fest-hw .page-mission .qm-unit-row.active {
-  background: #FFF6EE;
-  border-color: rgba(245,124,31,.6);
+  background: rgba(245,124,31,.17);
+  border-color: rgba(247,154,62,.55);
   border-left-color: var(--hw-pump);
-  box-shadow: 0 14px 26px -18px rgba(217,97,12,.45);
+  box-shadow: 0 14px 26px -18px rgba(0,0,0,.6);
 }
 /* 單元清單的頂端掛一隻小蝙蝠（側欄是殼，不是閱讀面） */
 html.fest-hw .page-mission .qm-sidebar-cat { position: relative; }
@@ -760,7 +793,7 @@ html.fest-hw .qm-block-icon {
      它是**警告**不是裝飾，所以顏色的角色不能換掉——
      但萬聖節本來就是橘色的節日，把琥珀往南瓜橘挪一階，
      既仍然是「注意」的訊號，也變成主題的一部分。 */
-html.fest-hw .tt-wrap { background: linear-gradient(180deg, #FFFFFF 0%, #FBF8FF 100%); }
+html.fest-hw .tt { background: linear-gradient(180deg, #FFFFFF 0%, #FBF8FF 100%); }
 html.fest-hw .tt-count {
   background: rgba(61,42,99,.08);
   border-color: rgba(61,42,99,.16);
@@ -835,3 +868,660 @@ html.fest-hw .wk-summary {
 html.fest-hw .growth-chart-title,
 html.fest-hw .growth-kicker { color: var(--hw-pur); }
 html.fest-hw .growth-stat-num { color: var(--hw-pur); }
+
+/* ═══════════════════════════════════════════════════════════════
+   v527 — 整站翻夜色（Alan：「顏色太深了，因為背景都是亮色，整體都要協調」）
+   他是對的：v523~v526 是「深卡片 ＋ 淺頁面」＝兩種主題疊在一起。
+
+   ⭐ 做法：①先把全站顏色變數整組換掉（上面那段）→ 蓋到幾百個地方
+            ②再**用程式掃真的頁面**，把「底色與字色打架」和「還是淺色的面」
+              撈出來逐一補。⚠ 不要反過來從 CSS 裡那 700 多個寫死的選擇器開始列。
+
+   🔴 掃描第一輪就抓到兩個我自己的錯：
+     · 今天的任務那張卡的 class 是 **`.tt`** 不是 `.tt-wrap`
+       —— v525/v526 寫的那些規則**從來沒有生效過**。
+       我的對照頁是自己手打的 markup、打成 .tt-wrap，所以看起來是好的。
+       ⚠⚠ 對照頁的 markup 一定要從 JSX 複製，不要憑印象打。
+     · 卡片標題用的是 `--cat-t`（tune.css 為了白底對比另外加的文字色），
+       不是 `--cat-c`。只改 --cat-c 等於沒改到字。
+═══════════════════════════════════════════════════════════════ */
+
+/* ── 分類卡：文字色也要換（--cat-t 才是字，--cat-c 是色條與進度）── */
+html.fest-hw .qm-blocks .qm-block { --cat-t: #E7DEFF; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(1) { --cat-t: #B3A4FF; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(2) { --cat-t: #FF93B2; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(3) { --cat-t: #7CCDFF; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(4) { --cat-t: #6FE0A0; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(3):last-child { --cat-t: #6FE0A0; }
+html.fest-hw .qm-blocks-title { color: #F4EFFF; }
+html.fest-hw .qm-blocks-head-view { border-bottom-color: rgba(255,255,255,.1); }
+
+/* ── 今天的任務（.tt）── */
+html.fest-hw .tt {
+  background: linear-gradient(180deg, #33224F 0%, #2A1B45 100%);
+  border-color: rgba(255,255,255,.14);
+  box-shadow: 0 18px 40px -26px rgba(0,0,0,.8);
+}
+html.fest-hw .tt-title { color: #F4EFFF; }
+html.fest-hw .tt-count { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #D9CEF2; }
+html.fest-hw .tt-name { color: #F0EAFF; }
+html.fest-hw .tt-meta, html.fest-hw .tt-note { color: #AE9FCC; }
+html.fest-hw .tt-group-title { color: #F4EFFF; }
+html.fest-hw .tt-group-count { background: rgba(255,255,255,.08); color: #D9CEF2; }
+html.fest-hw .tt-group-rows { border-left-color: rgba(255,255,255,.14); }
+html.fest-hw .tt-row:hover, html.fest-hw .tt-group-head:hover { background: rgba(255,255,255,.06); }
+html.fest-hw .tt-empty, html.fest-hw .tt-alldone { color: #C5B8E3; }
+html.fest-hw .tt-ic { background: rgba(255,255,255,.1); }
+html.fest-hw .tt-group-ico { background: transparent; }
+/* ⚠ 逾期提醒維持警告色，只是底換成在夜色上成立的深琥珀（字仍然是暖色系） */
+html.fest-hw .tt-past-head {
+  background: linear-gradient(135deg, rgba(245,124,31,.2) 0%, rgba(217,97,12,.14) 100%);
+  border-color: rgba(247,154,62,.45);
+}
+html.fest-hw .tt-past-head b { color: #FFC071; }
+html.fest-hw .tt-past-head span,
+html.fest-hw .tt-past-chev { color: #E0A463; }
+html.fest-hw .tt-past-wkhead { color: #E0A463; }
+html.fest-hw .tt-past-name { color: #F0EAFF; }
+html.fest-hw .tt-past-meta, html.fest-hw .tt-past-grpdoc { color: #AE9FCC; }
+html.fest-hw .tt-past-list { border-color: rgba(255,255,255,.12); }
+
+/* ── 上課紀錄／學習成長／本週摘要 ──────────────────────────
+   ⚠ v526 把這三塊寫成「淺色卡」，現在整頁是夜色，要一起翻過來。 */
+html.fest-hw .tlog,
+html.fest-hw .growth-inline,
+html.fest-hw .wk-summary {
+  background: linear-gradient(180deg, #33224F 0%, #2A1B45 100%);
+  border-color: rgba(255,255,255,.14);
+}
+html.fest-hw .tlog-h { margin: -22px -26px 15px; }
+html.fest-hw .tlog-f { border-left-color: rgba(255,255,255,.18); }
+html.fest-hw .tlog-f em { color: #AE9FCC; }
+html.fest-hw .tlog-row::before { background: #2A1B45; border-color: rgba(255,255,255,.26); }
+html.fest-hw .tlog-row::after { background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,.04)); }
+html.fest-hw .tlog-date span, html.fest-hw .tlog-k { color: #AE9FCC; }
+html.fest-hw .tlog-more { color: var(--hw-pump); }
+/* 熟悉度／複習狀態的小藥丸：維持語意，底改成在夜色上成立的半透明 */
+html.fest-hw .tlog-p.hi,  html.fest-hw .tlog-rv.done { background: rgba(95,217,143,.18); color: #7FE3A0; }
+html.fest-hw .tlog-p.mid, html.fest-hw .tlog-rv.part { background: rgba(255,201,92,.18);  color: #FFD27A; }
+html.fest-hw .tlog-p.lo,  html.fest-hw .tlog-rv.none { background: rgba(255,142,120,.18); color: #FF9E8A; }
+html.fest-hw .wk-tile { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); }
+html.fest-hw .wk-tile b { color: #F4EFFF; }
+html.fest-hw .wk-tile b.accent { color: var(--hw-pump); }
+html.fest-hw .wk-tile b em, html.fest-hw .wk-tile i { color: #AE9FCC; }
+html.fest-hw .wk-sum-title, html.fest-hw .growth-chart-title { color: #F4EFFF; }
+html.fest-hw .growth-grid line, html.fest-hw .growth-axis-y, html.fest-hw .growth-axis-x { stroke: rgba(255,255,255,.12); color: #AE9FCC; }
+html.fest-hw .growth-empty-title { color: #F4EFFF; }
+html.fest-hw .growth-empty-sub, html.fest-hw .gi-more { color: #AE9FCC; }
+
+/* ── 聯絡簿 ── */
+html.fest-hw .cb-body, html.fest-hw .cb-bar {
+  background: linear-gradient(180deg, #33224F 0%, #2A1B45 100%);
+  border-color: rgba(255,255,255,.14);
+}
+html.fest-hw .cb-row:hover { background: rgba(255,255,255,.06); }
+html.fest-hw .cb-note { background: rgba(245,124,31,.12); border-color: rgba(247,154,62,.3); }
+html.fest-hw .cb-note-text, html.fest-hw .cb-note-input { color: #FFD6A8; }
+html.fest-hw .cb-next { color: #AE9FCC; }
+html.fest-hw .cb-status { background: rgba(255,255,255,.1); color: #D9CEF2; }
+html.fest-hw .cb-status.done { background: rgba(95,217,143,.18); color: #7FE3A0; }
+html.fest-hw .cb-row-due { background: rgba(245,124,31,.14); color: #FFC071; }
+
+/* ── 頁尾 ── */
+html.fest-hw .ll-foot2, html.fest-hw .app-foot2 {
+  background: #170E28;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+html.fest-hw .ll-foot2 b, html.fest-hw .app-foot2 b { color: #F4EFFF; }
+html.fest-hw .ll-foot2-mini, html.fest-hw .ll-foot2 span { color: #9A8CBB; }
+
+/* ── 頂欄的年級小藥丸：--g-c 提亮之後白字壓在亮橘上只剩 2.18 ───
+   ⚠ 這是我自己提亮 --g-c 造成的副作用，不是本來就有的問題。
+     改成深橘底＋白字（對比 4.6）。 */
+/* ⚠ 要帶 !important：styles-theme.css 的 `.grade-chip { background: var(--accent) !important }`
+   會贏過我這條（!important 比選擇器權重大）。
+   ⭐ 查法：掃全站「顏色帶 !important」的規則——只有 34 條，一眼就看得完，
+     比一個一個試快得多。同一輪也撈到下面作答頁那條。 */
+html.fest-hw .header .grade-chip,
+html.fest-hw .header .grade-chip-fixed {
+  background: #C85A08 !important; color: #fff; border-color: rgba(255,255,255,.3);
+}
+
+/* ── 浮層／面板：全部跟著翻 ── */
+html.fest-hw .sp-panel, html.fest-hw .mk-panel, html.fest-hw .growth-sheet,
+html.fest-hw .ca-sheet, html.fest-hw .modal, html.fest-hw .modal-card {
+  background: linear-gradient(180deg, #33224F 0%, #281A42 100%);
+  border-color: rgba(255,255,255,.16);
+}
+html.fest-hw .ci-panel {
+  background: linear-gradient(168deg, #35234F 0%, #281A42 100%);
+  border-color: rgba(255,255,255,.16);
+}
+html.fest-hw .ci-kicker { color: #9C8CBC; }
+html.fest-hw .ci-title { color: #F4EFFF; }
+html.fest-hw .ci-sub { color: #C5B8E3; }
+html.fest-hw .ci-rail-line { background: rgba(255,255,255,.14); }
+html.fest-hw .ci-mark-dot { background: #2A1B45; border-color: rgba(255,255,255,.28); }
+html.fest-hw .ci-mark-lab { color: #AE9FCC; }
+html.fest-hw .ci-cell { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); color: #D9CEF2; }
+/* ⚠ 已簽到＝綠色打勾，維持語意（底改成夜色上成立的半透明綠） */
+html.fest-hw .ci-cell.done { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .ci-cell.bonus { background: rgba(255,201,92,.16); border-color: rgba(255,201,92,.4); }
+html.fest-hw .ci-x, html.fest-hw .growth-x {
+  background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); color: #F4EFFF;
+}
+
+/* ── 掃描抓到的最後幾個對比問題 ──────────────────────────────
+   ⚠ 白字壓在亮橘上只有 2.7。這幾顆是「要按的」按鈕與標籤，
+     把橘子壓深一階就到 4.0 以上，顏色感覺沒變但讀得動了。 */
+html.fest-hw .wh-pill { background: #D9610C; }
+html.fest-hw .ll-foot2-btn,
+html.fest-hw .app-foot2 .ll-foot2-btn { background: #C85A08; }
+html.fest-hw .ll-foot2-btn-line { background: #1E7A3C; }
+/* 頁尾品牌名裡那顆小點（寫死 #8B3120，在近黑底上等於不見） */
+html.fest-hw .ll-foot2 i,
+html.fest-hw .app-foot2 i,
+html.fest-hw .brand-name i,
+html.fest-hw .brand-name em { color: var(--hw-pump); }
+
+/* ── 作答頁（掃描抓到的）────────────────────────────────────
+   ⚠ v525 我只改了側欄的 border 與 shadow，**沒有改 background**
+     —— 所以整條側欄還是白的。掃描一跑就看出來了。 */
+html.fest-hw .page-mission .qm-sidebar,
+html.fest-hw .qm-sidebar {
+  background: linear-gradient(180deg, #33224F 0%, #2A1B45 100%);
+}
+html.fest-hw .page-mission .qm-sidebar-back,
+html.fest-hw .qm-sidebar-back { background: rgba(255,255,255,.07); }
+html.fest-hw .page-mission .qm-sidebar-cat,
+html.fest-hw .qm-sidebar-cat {
+  background: linear-gradient(135deg, rgba(255,255,255,.1), rgba(255,255,255,.04));
+}
+html.fest-hw .qm-sidebar-cat-name { color: #F4EFFF; }
+html.fest-hw .qm-sidebar-cat-zh,
+html.fest-hw .qm-sidebar-prog-lbl { color: #BCAEDC; }
+html.fest-hw .qm-unit-row-title { color: #F4EFFF; }
+html.fest-hw .qm-unit-row-meta { color: #BCAEDC; }
+html.fest-hw .qm-ugroup-head {
+  background: rgba(255,255,255,.07); color: #D9CEF2;
+  border-color: rgba(255,255,255,.12);
+}
+html.fest-hw .qm-collapse-lab,
+html.fest-hw .focus-btn { color: #D9CEF2; }
+html.fest-hw .qm-sidebar-prog { background: rgba(255,255,255,.12); }
+/* 單元的開場說明（🃏 卡片怎麼玩） */
+html.fest-hw .qm-intro-rules {
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.14);
+  color: #D9CEF2;
+}
+html.fest-hw .qm-intro-title { color: #F4EFFF; }
+html.fest-hw .qm-intro-sub { color: #BCAEDC; }
+/* 「開始練習 →」白字壓在亮橘上只有 2.18 → 壓深一階 */
+html.fest-hw .qm-btn.primary { background: #D9610C; border-color: transparent; color: #fff; }
+html.fest-hw .qm-btn.primary:hover { background: #C85A08; }
+html.fest-hw .qm-ugroup-name { color: #F4EFFF; }
+html.fest-hw .focus-btn,
+html.fest-hw .qm-player-shell .focus-btn {
+  color: #F4EFFF; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2);
+}
+/* 「還要完成：學習、測驗」是提醒用的琥珀 → 維持暖色，換成夜色上成立的版本 */
+html.fest-hw .qm-fc-need {
+  background: rgba(245,124,31,.16);
+  border-color: rgba(247,154,62,.42);
+  color: #FFC071;
+}
+
+/* ── 作答面裡寫死 #fff 的那些「面」──────────────────────────
+   🔴 掃描抓到的真正破綻：`.fc-test-choice` 是寫死 #fff 的選項鈕，
+     字色跟著 --ink 翻白了 → **白底白字，四個選項整個看不見**。
+     （這就是「換膚要真的一頁一頁點」的意思——程式裡看不出來。）
+   ⭐ 用程式把三個作答相關的 CSS 檔裡「背景寫死 #fff」的選擇器全撈出來，
+     逐一處理，而不是我自己憑印象列。 */
+html.fest-hw .fc-test-choice,
+html.fest-hw .fc-written-input,
+html.fest-hw .fc-scope-btn.ghost,
+html.fest-hw .cloze-bank-w,
+html.fest-hw .gr-seg,
+html.fest-hw .gr-rate-btn,
+html.fest-hw .gres-btn,
+html.fest-hw .gres-in,
+html.fest-hw .sa-passage,
+html.fest-hw .sm-stage-card,
+html.fest-hw .sm-prompt-card,
+html.fest-hw .sm-score-card,
+html.fest-hw .sm-tab-body,
+html.fest-hw .sm-review-stage,
+html.fest-hw .sf-score-card,
+html.fest-hw .essay-prompt-card,
+html.fest-hw .essay-score-card,
+html.fest-hw .essay-detail-section,
+html.fest-hw .ex-bw,
+html.fest-hw .ex-af-p,
+html.fest-hw .ex-head,
+html.fest-hw .rs-step,
+html.fest-hw .rs-mini,
+html.fest-hw .rs-chip,
+html.fest-hw .rs-intro-row,
+html.fest-hw .qm-read-btn,
+html.fest-hw .qm-ugroup-res,
+html.fest-hw .qm-due-popover,
+html.fest-hw .qm-copy-wk,
+html.fest-hw .uh-scan-toggle {
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.16);
+  color: #F0EAFF;
+}
+html.fest-hw .fc-test-choice:hover,
+html.fest-hw .gr-seg:hover,
+html.fest-hw .rs-step:hover { background: rgba(255,255,255,.13); }
+html.fest-hw .fc-test-choice.sel,
+html.fest-hw .rs-chip.sel,
+html.fest-hw .rs-step.on {
+  background: rgba(245,124,31,.2); border-color: rgba(247,154,62,.6); color: #FFD6A8;
+}
+html.fest-hw .fc-written-input,
+html.fest-hw .gres-in { background: rgba(0,0,0,.25); }
+html.fest-hw .fc-written-input::placeholder { color: #9A8CBB; }
+
+
+/* ── 狀態色的淺底：整批換成夜色版（對、錯、提醒、分數…）──────────
+   這 344 條是**用程式從七個 CSS 檔撈出來的**：凡是「背景寫死了很淺的顏色」，
+   在夜色上都會變成一塊發光的白斑，而且它們多半還配一個深色的字 → 看不見。
+   ⭐ 轉換規則照**色相家族**走，不是一條一條挑顏色：
+     綠(對) → 半透明綠 ＋ 亮綠字；紅(錯) → 半透明紅 ＋ 亮紅字；
+     琥珀(提醒) → 半透明琥珀；藍/紫(資訊) 同理；奶油色(中性) → 半透明白。
+     **語意完整保留**，只是換成在夜色上成立的版本。
+   ⚠⚠ 判斷順序是**先色相、再飽和度**：很淺的綠（#f0fdf4）飽和度只有 0.05，
+     第一版寫成「S<0.12 就算中性灰」→ 把「答對」整個判成沒有顏色（t-v527 抓到的）。
+   ⚠ 老師後台與編輯器那些（qe- / exed- / uh- / dm- …）刻意不自動處理：
+     學生看不到，欄位又多，自動改的風險大於好處。 */
+html.fest-hw .ai-note-in { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ai-note-tip b { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .boom { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .boom button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .boom code { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .ca-sheet { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .cb-bar { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .cb-body { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .cb-ghost { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .cb-ghost-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .cb-ghost-btn:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .cb-row:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .cb-status.muted { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .circle-label-option.answer { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .circle-label-option.selected.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .circle-label-option.selected.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .circle-prose .circle-word.selected { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .circle-prose .circle-word.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .circle-prose .circle-word:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .circle-word.answer { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .circle-word.selected.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .circle-word.selected.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .cloze-bank { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .cloze-bank-w { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .cloze-bank-w.used { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .cloze-blank-result.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .cloze-blank-result.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .cloze-score-badge.great { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .cloze-score-badge.low { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .cloze-score-badge.ok { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .dash-back { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ed-recover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .essay-col-card.improve { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .essay-col-card.strengths { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .essay-detail-section { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .essay-prompt-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .essay-score-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .essay-teacher-comment { background: rgba(179,164,255,.16); border-color: rgba(179,164,255,.34); color: #C3B5FF; }
+html.fest-hw .essay-version.better { background: rgba(179,164,255,.16); border-color: rgba(179,164,255,.34); }
+html.fest-hw .essay-version.corrected { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); }
+html.fest-hw .ex-af-p { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ex-blank.focus { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .ex-bw { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ex-face.on { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .ex-head { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ex-manual { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ex-partnote { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ex-read { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ex-result { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ex-w.on.bad { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .ex-w.on.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .ex-w:hover:not(:disabled) { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .fc-answer-row.correct { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-answer-row.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .fc-card-star.on { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .fc-choice.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .fc-lb-row.bronze { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-lb-row.gold { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .fc-lb-row.silver { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-match-best-badge { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .fc-retry-badge { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .fc-review-row.err { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .fc-scope-btn.ghost { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-test-choice { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-test-foot { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-test-q { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-theme-classroom .fc-theme-picker { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .fc-toggle::after { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-wrap.fc-theme-classroom { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .fc-written-input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-zoom-panel { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .fc-zoom-x { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .find-unit-res { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .find-unit-row:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .floating-avatar { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gn-ls-miss { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gn-step { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gn-thumb { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnb-ex { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnb-img { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnb-opt { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .gnb-opt.no { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .gnb-opt.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gnl-bin { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-bin-items em { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gnl-chip-now { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-chip-now.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gnl-ex { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-ftab { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-ftab.on { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gnl-hl { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gnl-img { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-line.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .gnl-lock-badge { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .gnl-opt { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-opt.no { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .gnl-opt.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gnl-tile { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-tile.in { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); }
+html.fest-hw .gnl-tl-dot.on .gnl-tl-ico { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gnl-tl-dot.seen .gnl-tl-ico { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .gnl-tl-ico { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-tl-say { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-why { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gnl-why.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gnl-word { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gnl-word.fixed { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gnl-word.got { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .gq-row { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gq-row-f input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gq-row-f textarea { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gq-row-n { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gq-row.bad { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .gr-ai-chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .gr-ai-chip:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gr-ai-grid select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .gr-ai-panel { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-audio { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-bk { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-busy-bar { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gr-extra label { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-extra label.on { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-num-row select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-passage { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-rate-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .gr-seg { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-tabs { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .gr-tabs button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .gr-tense-pick button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .gr-word-pop { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .growth-entry { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .growth-inline { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .growth-sheet { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .growth-stat { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .gs-card-ico-gr { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); color: #7CCDFF; }
+html.fest-hw .img-up-drop.over { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .img-up-drop:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-ai-warn { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-all { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-avg.hi { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ll2-avg.lo { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ll2-avg.mid { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-bk em { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .ll2-bold { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-f textarea { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-form-h input[type=date] { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-kind { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-mate { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-mini { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-msg { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ll2-nopace { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-nopace:hover { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .ll2-p.hi { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ll2-p.lo { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ll2-p.mid { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-pace { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-pace-ok { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-pct b.hi { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ll2-pct b.lo { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ll2-pct b.mid { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-quick button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-rv { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-rv.on.done { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ll2-rv.on.none { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ll2-rv.on.part { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-slot input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-slot select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-today { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .ll2-today-b { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ll2-tp.carry { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ll2-use { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ls-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ls-check-why { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FFD27A; }
+html.fest-hw .ls-check-why.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .ls-clues span { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ls-demo-a { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .ls-dot { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .ls-form { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ls-mis { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .ls-opt { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .ls-opt.no { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ls-opt.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ls-reveal { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .ls-use-n { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .mk-ans { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .mk-empty-check { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .mk-fix-card { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .mk-subj-chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .modal .edit-make-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .modal .edit-make-btn:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .pace-tbl th { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .pace-tbl tr.has-f td { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .pace-warn { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .page-lobby .qm-block { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .pstrip-g { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .pstrip-g.no { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .qm-due-popover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qm-feedback-banner.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .qm-feedback-banner.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .qm-grade-err { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .qm-grp-date { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qm-grp-ghost { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qm-grp-ghost.danger:hover { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .qm-grp-ghost:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .qm-grp-menu { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qm-hw-badge { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .qm-hw-badge.done { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .qm-intro-done { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .qm-intro-done-hint { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .qm-intro-fcdone { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .qm-intro-resume { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .qm-mission-badge.main { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .qm-mission-badge.side { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .qm-option.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .qm-option.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .qm-read-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qm-score-badge { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qm-sense-mark { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .qm-sense-passage { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qm-sidebar-prog-bar { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .qm-ugroup-more { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qm-ugroup-more.on { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .qm-ugroup-more:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .qs-ai { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-ai.on { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-assign { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-assign.on { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-band-b { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qs-band-b.on { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .qs-have { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .qs-kind { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-kind-has { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .qs-kind.on { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-proof-f input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-proof-f textarea { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-proof-row { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-proof-w input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-proof-zhin { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-sel { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-story { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-story input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qs-story textarea { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qs-story-lab code { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .qs-story-re { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .qs-story-re:hover:not(:disabled) { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .qs-ta { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-who-item { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .qs-who-item.on { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); }
+html.fest-hw .rc-addblock select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-bg-redo { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .rc-bgbox { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-bgbox.on { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .rc-block { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-in { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-lab input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-lab select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-q { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-qs-n { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .rc-skill { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rc-z { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .review-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .review-modal-head { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rs-chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .rs-chip.sel { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rs-intro-row { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rs-mini { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rs-pass { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rs-step { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .rs-step.on { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sa-para-num { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sa-passage { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .save-fail-bar button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .sd-answer-reveal { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .sd-done-row { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sf-score-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sf-section.sf-blue { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); }
+html.fest-hw .sf-section.sf-comment { background: rgba(179,164,255,.16); border-color: rgba(179,164,255,.34); }
+html.fest-hw .sf-section.sf-green { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .sf-section.sf-orange { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .sf-section.sf-purple { background: rgba(179,164,255,.16); border-color: rgba(179,164,255,.34); }
+html.fest-hw .sm-prompt-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sm-review-stage { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sm-revised { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); }
+html.fest-hw .sm-score-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sm-stage-card { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .sm-stage-hint { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .sm-tab-body { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .stars-buys { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .stars-refund-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .stars-refund-btn:hover { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
+html.fest-hw .stars-row-tag { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ta-ai-tip { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ta-ai-tip.ok { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ta-explain { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ta-hint { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .ta-input.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ta-input.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ta-wrong-mark { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .term-chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .term-chip.dup { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .term-preview { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .term-row input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .term-row select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tlog { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tlog-p.hi { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .tlog-p.lo { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .tlog-p.mid { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .tlog-rv.done { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #7FE3A0; }
+html.fest-hw .tlog-rv.none { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .tlog-rv.part { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .tt { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-alldone { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .tt-lost { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .tt-lost button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .tt-lost.soft { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .tt-mini { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-msg { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .tt-note { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .tt-past-row { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-paste textarea { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-pct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .tt-slot { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-slot-s select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-slot-t input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-slot-t select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-slot.empty { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .tt-twin { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .tt-twin button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FF9E8A; }
+html.fest-hw .week-empty-bar { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .week-empty-bar button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .week-empty-bar button:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .wf-tip { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); color: #FFD27A; }
+html.fest-hw .wf-verdict.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .wf-verdict.incorrect { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .wf-verdict.partial { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
+html.fest-hw .wf3-blue { background: rgba(124,205,255,.15); border-color: rgba(124,205,255,.34); }
+html.fest-hw .wf3-green { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); }
+html.fest-hw .wf3-orange { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .wf3-score { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
+html.fest-hw .wk-summary { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ws-word-chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
+html.fest-hw .ws-word-chip.result.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
+html.fest-hw .ws-word-chip.result.missing { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+html.fest-hw .ws-word-chip.result.wrong { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); color: #FF9E8A; }
+
+/* ── 「答對／答錯」那一組變數（styles-tune.css 的唯一真相）────────
+   ⭐⭐ 這一組非改不可，而且**只能從變數改**：
+     components-flashcard.jsx 的 .fc-learn-next-row 是用 inline style 畫的
+     （`background: var(--ok-bg)`）——inline 樣式贏過任何 CSS 選擇器，
+     所以我寫幾條 `html.fest-hw .fc-learn-next-row` 都沒有用。
+     還好當初是寫成變數，換變數就同時修好 CSS 那邊和 inline 那邊。
+   ⚠ 語意完全保留（綠＝對、紅＝錯、琥珀＝提醒），只是換成夜色上成立的值。 */
+html.fest-hw {
+  --ok:#5FD98F;  --ok-bg:rgba(95,217,143,.16);  --ok-ink:#7FE3A0;
+  --no:#FF8E78;  --no-bg:rgba(255,142,120,.16); --no-ink:#FF9E8A;
+  --warn-ink:#FFD27A; --warn-bg:rgba(255,201,92,.15);
+}
+
+/* ── 老師後台與編輯器：刻意**不進夜色** ─────────────────────────
+   ⚠ 這是風險判斷，不是偷懶：
+     · 學生一個都看不到（只有 Alan 自己開）
+     · 後台與編輯器有幾百個欄位、表格、彈窗，很多寫死白底配深字
+       —— 變數一翻，那些地方就是「白底白字」，而且我沒辦法一頁一頁點完
+     · 過節的意義在學生那一側，不在工作台
+   做法：在這幾個根容器上把顏色變數**原樣還原**，整個子樹就回到平常的樣子。 */
+html.fest-hw .dash-overlay,
+html.fest-hw .modal-backdrop,
+html.fest-hw .report-modal-overlay,
+html.fest-hw .rv-overlay {
+  --bg: #F4F0E7;
+  --bg-paper: #FBF8F1;
+  --bg-card: #FFFFFF;
+  --ink: #15130E;
+  --ink-soft: #3A372E;
+  --ink-muted: #807A6B;
+  --ink-faint: #B8B1A0;
+  --ink-2: #5c554a;
+  --ink-3: #6b6455;
+  --rule: #1A1814;
+  --border: #DDD6C4;
+  --border-soft: #E8E2D0;
+  --accent: #8B3120;
+  --accent-soft: #B85A45;
+  --g-c: #8B3120;
+  --ok:#1F6B4B; --ok-bg:#EAF3EE; --ok-ink:#1F6B4B;
+  --no:#A8331F; --no-bg:#FDECE8; --no-ink:#A8331F;
+  --warn-ink:#8A4B00; --warn-bg:#FFF3E0;
+  color: var(--ink);
+}

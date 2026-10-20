@@ -111,17 +111,25 @@ ok('⭐ 側欄、返回列、單元列都換了', (() => {
    const need = ['.page-mission .qm-sidebar', '.page-mission .qm-sidebar-back',
                  '.page-mission .qm-sidebar-cat', '.page-mission .qm-unit-row'];
    return need.every(n => css.includes('html.fest-hw ' + n)); })());
-ok('⭐⭐ 作答面本身一個字都沒碰（單字卡／題目／選項／短文）', (() => {
-   const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
-   return !/\.fc-(card|term|ex)|\.qm-question-text|\.qm-option|\.gr-(text|para)|\.cloze-passage|\.circle-prose\b/.test(body); })());
+ok('⭐⭐ v527：作答面也進夜色了，但寫死 #fff 的那些「面」一定要一起處理', (() => {
+   /* 🔴 這一條是 v527 真的壞過才加的：`.fc-test-choice` 是寫死 #fff 的選項鈕，
+      字色跟著變數翻白 → **白底白字，四個選項整個看不見**。
+      Alan 要求整站協調，所以舊的「作答面一個字都不碰」不再成立；
+      改成「碰了就要把寫死淺底的那些面一起帶走」。 */
+   const need = ['.fc-test-choice', '.fc-written-input', '.cloze-bank-w', '.sa-passage'];
+   return need.every(n => css.includes('html.fest-hw ' + n)); })());
 
 console.log('\n【5】⑥ 簽到／商店');
 ok('⭐ 每日簽到的面板、標題、進度條都換了',
    /html\.fest-hw \.ci-panel \{/.test(css) && /html\.fest-hw \.ci-title \{/.test(css)
    && /html\.fest-hw \.ci-rail-line i \{/.test(css));
-ok('⭐⭐ 綠色打勾刻意不動——那是「已經領過了」的狀態，不是裝飾', (() => {
-   const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
-   return !/\.ci-cell\.(on|done)|\.ci-cell\s*\{/.test(body); })());
+ok('⭐⭐ 綠色打勾的**語意**要留著——v527 底翻黑了，所以改成半透明綠，不是改成主題色', (() => {
+   /* 從「不准碰」改成「碰了但意思要留著」：整頁進夜色之後，淺綠底在夜色上是一塊白斑，
+      所以底換成 rgba 綠；小朋友仍然靠綠色分辨「哪幾天已經領過」。 */
+   const i = css.indexOf('html.fest-hw .ci-cell.done');
+   if (i < 0) return false;
+   const blk = css.slice(i, i + 160);
+   return /rgba\(95,217,143/.test(blk); })());
 ok('⭐ 商店的標頭換成南瓜橘', /html\.fest-hw \.sp-head \{[\s\S]{0,140}245,124,31/.test(css));
 
 ok('⭐⭐ 熟悉度那個大數字不可以統一翻白——綠/黃/紅是語意色（好/普通/要加強）', (() => {

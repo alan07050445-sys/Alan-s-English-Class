@@ -265,7 +265,10 @@ html.fest-1010 .wh-stat { border-color: rgba(11,49,143,.16); background: rgba(25
 html.fest-1010 .wh-stat b { color: var(--fest-blue); }
 
 /* 今天的任務 / 自由練習等白卡：邊框從暖棕換成冷藍，不然白卡邊會偏黃 */
-html.fest-1010 .tt-wrap,
+/* 🔴 v527：這裡本來寫 `.tt-wrap`——**那個 class 全站都不存在**
+   （「今天的任務」那張卡真正的 class 是 `.tt`），所以雙十期間它也
+   一次都沒有換過色。順手一起修。 */
+html.fest-1010 .tt,
 html.fest-1010 .tt-card,
 html.fest-1010 .qm-cat-card { border-color: rgba(11,49,143,.14); }
 
