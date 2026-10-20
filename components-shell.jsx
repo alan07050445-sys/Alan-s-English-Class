@@ -1420,8 +1420,8 @@ function FestCountdown({ big }) {
   );
 }
 
-/* ───────── v525 ④ 首頁的滑鼠特效（Alan：「首頁滑鼠可以加一點特效」）─────────
-   滑過去會留下一串小蝙蝠／小鬼／星星，自己飄走。
+/* ───────── v525 ④ 滑鼠特效（v528 擴到門口頁與大廳）─────────
+   滑過去會留下一串小蝙蝠／小鬼／月亮，自己飄走。
 
    ⚠ 三個條件都要擋，不然會變成「幫倒忙」：
      ① 只在節慶期間（平常這個 effect 等於不存在）
@@ -1431,24 +1431,41 @@ function FestCountdown({ big }) {
    ⚠ 用節流**距離**不是節流時間：慢慢移動時時間節流一樣會一直噴，
      但視覺上根本沒移動，結果是在原地疊一坨。
    ⚠ 直接操作 DOM，不走 React state——這是每秒幾十次的事件，
-     進 state 會讓整個封面重新 render。 */
-function useFestCursor(ref) {
-  React.useEffect(() => {
+     進 state 會讓整個畫面重新 render。
+
+   ⭐ v528 改成「裝在 document 上、圖案放進自己的固定層」：
+     本來是綁在封面那個容器上（useFestCursor(ref)），要擴到門口頁與大廳
+     就得三個地方各掛一次，而大廳是 app.jsx 畫的、拿不到同一個 ref。
+     改成一個全域監聽 ＋ 用 closest() 判斷滑鼠在不在這三頁上，
+     而且圖案用 position:fixed 放進自己的層 → **不用管那三個容器是不是
+     position:relative，也不會被 overflow:hidden 裁掉**。 */
+const FEST_CURSOR_ON = '.lc-cover, .grade-selector, .page-lobby';
+/* ⚠ 不做成 React hook：封面、門口頁、大廳是三個不同的元件，而且大廳是
+   app.jsx 畫的——做成 hook 就要在三個地方各掛一次，而且元件一卸載就失效。
+   它本來就不需要 React（只監聽 document ＋ 自己管 DOM），所以改成
+   「載入時裝一次」，剩下的交給 closest() 判斷滑鼠在不在這三頁上。 */
+function installFestCursor() {
+  {
     if (!(window.festOn && window.festOn())) return;
     let fine = false, calm = true;
     try {
       fine = window.matchMedia('(pointer: fine)').matches;
       calm = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     } catch (e) {}
-    const host = ref.current;
-    if (!host || !fine || !calm) return;
+    if (!fine || !calm) return;
+
+    const host = document.createElement('div');
+    host.className = 'hw-trail-layer';
+    host.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(host);
 
     const KINDS = ['bat', 'ghost', 'star', 'bat', 'star'];
     let last = null, i = 0;
     const timers = new Set();
     const onMove = (e) => {
-      const r = host.getBoundingClientRect();
-      const x = e.clientX - r.left, y = e.clientY - r.top;
+      const t = e.target;
+      if (!(t && t.closest && t.closest(FEST_CURSOR_ON))) { last = null; return; }
+      const x = e.clientX, y = e.clientY;
       if (last && Math.hypot(x - last[0], y - last[1]) < 46) return;
       last = [x, y];
       const sp = document.createElement('span');
@@ -1458,32 +1475,30 @@ function useFestCursor(ref) {
       sp.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
       sp.style.setProperty('--rot', (Math.random() * 50 - 25).toFixed(1) + 'deg');
       host.appendChild(sp);
-      const t = setTimeout(() => { try { sp.remove(); } catch (er) {} timers.delete(t); }, 1200);
-      timers.add(t);
+      const tm = setTimeout(() => { try { sp.remove(); } catch (er) {} timers.delete(tm); }, 1200);
+      timers.add(tm);
     };
-    host.addEventListener('pointermove', onMove);
-    return () => {
-      host.removeEventListener('pointermove', onMove);
+    document.addEventListener('pointermove', onMove, { passive: true });
+    /* 換頁時把還在飄的清掉，免得它們留在 DOM 上 */
+    window.addEventListener('pagehide', () => {
+      try { host.querySelectorAll('.hw-trail').forEach(n => n.remove()); } catch (er) {}
       timers.forEach(clearTimeout);
-      /* ⚠ 卸載時要把還在飄的清掉：換頁之後它們會留在 DOM 上。 */
-      host.querySelectorAll('.hw-trail').forEach(n => { try { n.remove(); } catch (er) {} });
-    };
-  }, [ref]);
+    });
+  }
 }
+try { installFestCursor(); } catch (e) {}
 
 function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
   const [loading, setLoading] = React.useState(false);
   const [slow, setSlow] = React.useState(false);
   const enterMode = loggedIn && onBack;   // 已登入且在封面 → 顯示「進入課程」
-  const coverRef = React.useRef(null);
-  useFestCursor(coverRef);
   const handleLogin = async () => {
     setLoading(true);
     setTimeout(() => { setSlow(true); setLoading(false); }, 12000); // 卡住的備援（unmount 換頁即消失）
     try { await onLogin(); } catch (e) { console.error(e); setLoading(false); }
   };
   return (
-    <div className="login-screen lc-cover lc-hero" ref={coverRef}>
+    <div className="login-screen lc-cover lc-hero">
       {/* v490（Alan：「登入封面也要很明顯過節的感覺」）：
           v489 只換了顏色，他看不出來在過節 → 加飄帶＋主角圖案＋日期徽章。
           ⚠ 只在節慶期間才 render，平常這兩行等於不存在（跟外觀共用同一個 festOn）。 */}

@@ -166,14 +166,17 @@ console.log('\n【6】④ 滑鼠特效不可以幫倒忙');
 ok('⭐⭐ 用「移動距離」節流，不是用時間', (() => {
    /* ⚠ 慢慢移動時，時間節流照樣每隔幾毫秒噴一個，但視覺上根本沒移動
       → 在原地疊成一坨。距離節流才對。 */
-   return /Math\.hypot\(x - last\[0\], y - last\[1\]\) < \d+\) return;/.test(fnBody(shell, 'function useFestCursor')); })());
+   return /Math\.hypot\(x - last\[0\], y - last\[1\]\) < \d+\) return;/.test(fnBody(shell, 'function installFestCursor')); })());
 ok('⭐ 不走 React state（每秒幾十次的事件，進 state 會讓整個封面重新 render）', (() => {
-   const body = fnBody(shell, 'function useFestCursor');
+   const body = fnBody(shell, 'function installFestCursor');
    return /document\.createElement/.test(body) && !/useState/.test(body); })());
 ok('   計時器與節點都有收乾淨（不然換頁後還在飄）', (() => {
-   const i = shell.indexOf('function useFestCursor');
-   const body = fnBody(shell, 'function useFestCursor');
-   return /timers\.forEach\(clearTimeout\)/.test(body) && /removeEventListener/.test(body); })());
+   const i = shell.indexOf('function installFestCursor');
+   const body = fnBody(shell, 'function installFestCursor');
+   /* v528 改成「載入時裝一次」的全域監聽（不再是 hook），
+      所以收尾改掛在 pagehide 上——重點沒變：還在飄的節點與計時器都要清掉。 */
+   return /timers\.forEach\(clearTimeout\)/.test(body)
+     && /pagehide/.test(body) && /\.hw-trail'\)[\s\S]{0,60}remove\(\)/.test(body); })());
 
 console.log(fail ? `\n❌ t-v525：${pass} 過 / ${fail} 失敗` : `\n✅ t-v525：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

@@ -101,7 +101,7 @@ console.log('\n【3b】裝飾元素本身也要被擋住（不然 11/01 之後�
 });
 ok('⭐ 滑鼠拖尾也一樣——沒過節就一個元素都不建', (() => {
    /* ⚠ 切到下一個 function 為止，不要用固定長度（t-lessons 踩過） */
-   const i = shell.indexOf('function useFestCursor');
+   const i = shell.indexOf('function installFestCursor');
    const body = shell.slice(i, shell.indexOf('\nfunction ', i + 10));
    /* 第一行就要 return，而且還要擋觸控裝置與 prefers-reduced-motion
       （平板點一下也會送 pointermove，不擋等於一路噴圖案蓋住內容）。 */
@@ -110,9 +110,9 @@ ok('⭐ 滑鼠拖尾也一樣——沒過節就一個元素都不建', (() => {
      && /pointer: fine/.test(body) && /prefers-reduced-motion/.test(body); })());
 ok('   拖尾不可以擋到點擊（會按不到登入鈕）', /\.hw-trail \{[\s\S]{0,220}pointer-events:\s*none/.test(css));
 ok('   換頁時要把還在飄的清乾淨', (() => {
-   const i = shell.indexOf('function useFestCursor');
-   return /querySelectorAll\('\.hw-trail'\)[\s\S]{0,80}remove\(\)/
-     .test(shell.slice(i, shell.indexOf('\nfunction ', i + 10))); })());
+   const i = shell.indexOf('function installFestCursor');
+   const b = shell.slice(i, shell.indexOf('\nfunction ', i + 10));
+   return /pagehide/.test(b) && /querySelectorAll\('\.hw-trail'\)[\s\S]{0,80}remove\(\)/.test(b); })());
 
 console.log('\n【4】圖案真的畫得出來（這次兩個坑都是「完全不報錯但畫不出來」）');
 const uris = [...css.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g)].map(m => m[1]);

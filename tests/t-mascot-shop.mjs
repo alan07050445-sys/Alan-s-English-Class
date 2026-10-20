@@ -145,8 +145,19 @@ log.push('\n【7c】（v441）配件要跟著吉祥物動、整體要大一點�
   ok('⭐ 配件畫在吉祥物同一個 <svg> 裡（翻滾／轉圈才會跟著動）',
      /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="back"\/>/.test(fx) &&
      /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="front"\/>/.test(fx));
-  ok('每一隻都收下 acc、而且都有前後兩層（v455：六隻）',
-     (fx.match(/layer="back"/g) || []).length === 6 && (fx.match(/layer="front"/g) || []).length === 6);
+  ok('每一隻都收下 acc、而且都有前後兩層', (() => {
+     /* ⚠ 本來是釘「正好 6 個 back ＋ 6 個 front」。那是在數「有幾隻」，
+        不是在守「每一隻都收得下配件」——v528 多了吸血鬼版就失敗了，
+        但功能完全沒問題。改成**逐一檢查每個 Mascot 元件自己有沒有兩層**。 */
+     const arts = [...fx.matchAll(/function (\w*Mascot)\(/g)].map(m => m[1]);
+     const missing = arts.filter(name => {
+       const a = fx.indexOf('function ' + name + '(');
+       const body = fx.slice(a, fx.indexOf('\nfunction ', a + 10));
+       return !/layer="back"/.test(body) || !/layer="front"/.test(body);
+     });
+     if (missing.length) log.push('      少了配件層的：' + missing.join());
+     return arts.length >= 6 && missing.length === 0;
+   })());
   ok('⭐ 不再是疊在上面的另一個 svg（那就是它會留在原地的原因）', fx.indexOf('<svg className="mx-acc"') < 0);
   ok('CSS 也把「自己補動畫」那段拿掉（不然會動兩次）', !/\.act-walk\s+\.mx-acc/.test(css) && !/\.act-dance\s+\.mx-acc/.test(css));
   ok('⭐ 披風畫在身體後面（back 層）＝真的披在背上', /if \(id === 'it_cape'\)[\s\S]{0,900}back:/.test(fx));

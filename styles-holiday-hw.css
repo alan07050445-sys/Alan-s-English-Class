@@ -307,7 +307,6 @@ html.fest-hw .grade-sel-card:nth-child(even)::before {
 html.fest-hw .grade-sel-card:hover { box-shadow: 0 12px 32px rgba(61,42,99,.18); }
 
 /* 門口頁的「教室卡 / 其他題庫 / 老師後台」 */
-html.fest-hw .gs-card { border-color: rgba(61,42,99,.18); }
 html.fest-hw .gs-card:hover { border-color: rgba(245,124,31,.55); }
 /* 🔴 .gs-card-cta 是一顆**實心按鈕**（不是文字），只改 color 沒有用（v491 踩過） */
 html.fest-hw .gs-card-cta {
@@ -637,7 +636,6 @@ html.fest-hw .grade-selector::after {
   }
 }
 /* 門口頁的白卡在夜色上要更立體一點 */
-html.fest-hw .gs-card { box-shadow: 0 18px 40px -22px rgba(0,0,0,.7); }
 html.fest-hw .gs-foot a,
 html.fest-hw .gs-foot button { color: rgba(255,255,255,.72); }
 
@@ -726,8 +724,12 @@ html.fest-hw .page-mission .qm-sidebar-cat::before {
      （useFestCursor 第一行就擋掉了）。
    ⚠ pointer-events:none 一定要有，否則滑鼠會「踩到自己留下的圖案」，
      登入鈕按不到。 */
+.hw-trail-layer {
+  position: fixed; inset: 0; pointer-events: none; z-index: 4;
+  overflow: hidden;
+}
 .hw-trail {
-  position: absolute; width: 26px; height: 26px;
+  position: fixed; width: 26px; height: 26px;
   margin: -13px 0 0 -13px;
   pointer-events: none; z-index: 2;
   background: center/contain no-repeat;
@@ -1524,4 +1526,71 @@ html.fest-hw .rv-overlay {
   --no:#A8331F; --no-bg:#FDECE8; --no-ink:#A8331F;
   --warn-ink:#8A4B00; --warn-bg:#FFF3E0;
   color: var(--ink);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v528 — Alan 回報「標題完全看不到」的三處
+   ⚠⚠ 這三個都是同一種病：**那塊面我留著淺色，但它的字吃 `--ink`**（已經翻亮了）
+     → 白底白字。而且三個都**不會出現在我前幾輪的掃描裡**，因為它們要先操作才看得到：
+       · 門口頁的教室卡要先回到選年級那一頁
+       · 單元群組的標題要先把群組**展開**（收合時是另一個狀態）
+       · 吉祥物的小選單要**長按**吉祥物才會出現
+     ⭐ 教訓：掃描只掃得到「現在畫面上有的東西」——展開、長按、彈窗這些
+       要自己先操作出來再掃。
+═══════════════════════════════════════════════════════════════ */
+
+/* ── ① 門口頁的教室卡（圖4）──────────────────────────────────
+   本來想「白卡放在夜色上」也成立，但它的標題吃 --ink ＝ 亮的 → 整行不見。
+   既然 Alan 要的是整體協調，就讓它跟其他卡一樣進夜色。 */
+html.fest-hw .gs-card {
+  background: linear-gradient(165deg, #3A2860 0%, #2C1D4A 100%);
+  border-color: rgba(255,255,255,.16);
+  box-shadow: 0 18px 40px -22px rgba(0,0,0,.7);
+}
+html.fest-hw .gs-card:hover { border-color: rgba(247,154,62,.6); }
+html.fest-hw .gs-card-text b { color: #F4EFFF; }
+html.fest-hw .gs-card-text span { color: #BCAEDC; }
+html.fest-hw .gs-card-ico,
+html.fest-hw .gs-card-badge {
+  background: rgba(247,154,62,.2); color: #FFC071;
+}
+html.fest-hw .gs-card-admin .gs-card-ico {
+  background: linear-gradient(140deg, var(--hw-pump), var(--hw-pur-l)); color: #fff;
+}
+/* 白字壓在亮橘上只有 2.7 → 壓深一階 */
+html.fest-hw .gs-card-cta,
+html.fest-hw .gs-card-cta-brand {
+  background: linear-gradient(100deg, #D9610C, #B84E06); color: #fff;
+}
+
+/* ── ② 單元群組展開後的標題（圖1）────────────────────────────
+   🔴 `.qm-ugroup.open .qm-ugroup-head { background:#f1e8d2 }` 是**三個 class**，
+     權重比我的 `html.fest-hw .qm-ugroup-head`（兩個 class）大 → 展開就變回奶油色，
+     而標題是白的。收合時看起來好好的，所以前幾輪完全沒發現。 */
+html.fest-hw .qm-ugroup.open .qm-ugroup-head {
+  background: rgba(247,154,62,.18);
+  border-color: rgba(247,154,62,.5);
+}
+html.fest-hw .qm-ugroup-head:hover { border-color: rgba(247,154,62,.5); }
+html.fest-hw .qm-ugroup-chev { color: #BCAEDC; }
+html.fest-hw .qm-ugroup-count { background: rgba(255,255,255,.12); color: #F0EAFF; }
+
+/* ── ③ 長按吉祥物的小選單（圖2）────────────────────────────── */
+html.fest-hw .mx-menu {
+  background: linear-gradient(180deg, #33224F 0%, #281A42 100%);
+  border-color: rgba(255,255,255,.18);
+  box-shadow: 0 14px 34px -12px rgba(0,0,0,.75);
+}
+html.fest-hw .mx-menu-name { color: #BCAEDC; border-bottom-color: rgba(255,255,255,.14); }
+html.fest-hw .mx-menu button { color: #F4EFFF; }
+html.fest-hw .mx-menu button:hover,
+html.fest-hw .mx-pets .mx-menu-x:hover { background: rgba(255,255,255,.1); }
+html.fest-hw .mx-menu .mx-menu-x { color: #BCAEDC; }
+html.fest-hw .mx-menu-hint { color: #9A8CBB; }
+html.fest-hw .mx-bubble { background: #33224F; color: #F4EFFF; border-color: rgba(255,255,255,.18); }
+html.fest-hw .mx-bubble::after { border-top-color: #33224F; }
+
+/* ── 倒數鐘：白字壓在 #F79A3E 上只有 2.18（--g-c 提亮造成的）── */
+html.fest-hw .fest-tick-c {
+  background: linear-gradient(170deg, #E8700F 0%, #C85A08 100%);
 }

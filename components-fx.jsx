@@ -353,6 +353,89 @@ function ClaudeMascot({ size = 46, hat = 'none', acc = '' }) {
   );
 }
 
+/* ══ v528 🧛 萬聖節：每一隻都變成吸血鬼 ══════════════════════════
+   Alan：「吉祥物幫我一律都改成 Vampire，幫我結合成我的吉祥物風格，
+   改成畫素畫素的感覺」。
+
+   ⭐ 做法是「同一套骨架、換一身裝」而不是另外畫一隻新的：
+     · 一樣的 18×20 網格、一樣的 viewBox、一樣的 .mx-torso / .mx-eye /
+       .mx-leg-a|b|c —— 所以走路、跳、翻滾、打瞌睡那十幾支 CSS 動畫
+       **一行都不用改**，帽子與配件的貼合（MX_FIT）也照舊。
+     · 披風內裡用「那一隻原本的主色」(tone)，所以五隻都是吸血鬼，
+       但你還是看得出來哪一隻是你的 —— 這就是「結合成我的吉祥物風格」。
+   ⚠ 招牌動作的道具（打電腦／看書）要一起帶過來：CSS 是用
+     `.act-type .mx-prop-type` 控制顯示的，沒畫就等於那隻的招牌動作變成空的。
+     兩個都畫，平常 `.mx-prop { opacity:0 }` 本來就會把沒用到的藏起來。 */
+function VampireMascot({ size = 46, hat = 'none', acc = '', tone = '#C1785A', fit }) {
+  const CAPE = '#1E1B24', HAIR = '#15131A', SKIN = '#DCE9F4',
+        BLUSH = '#F2A7B0', EYE = '#15131A', FANG = '#FFFFFF';
+  const F = fit || MX_FIT_DEF;
+  return (
+    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+      shapeRendering="crispEdges" aria-hidden="true">
+      <MxHat id={hat} fit={F}/>
+      <MxAcc id={acc} fit={F} layer="back"/>
+      <g className="mx-torso">
+        {/* ⚠ 頭身比例照參考圖走：頭佔 y0~10、身體只有 y11~13。
+           第一版頭身各半，黑色的量壓過臉，看起來是一塊黑方磚不是吸血鬼。 */}
+        {/* 披風（比身體寬，剪影才像披風） */}
+        <rect x="0" y="11" width="18" height="3" fill={CAPE}/>
+        <rect x="0" y="12" width="2" height="2" fill={tone}/>
+        <rect x="16" y="12" width="2" height="2" fill={tone}/>
+        {/* 尖耳朵（先畫，之後被頭髮壓住一角＝長在頭上不是黏上去的） */}
+        {/* ⚠ 耳朵要跟眼睛差不多高，太靠上會變成「角」不是耳朵 */}
+        <rect x="0" y="6" width="2" height="2" fill={SKIN}/>
+        <rect x="16" y="6" width="2" height="2" fill={SKIN}/>
+        <rect x="0" y="5" width="1" height="1" fill={SKIN}/>
+        <rect x="17" y="5" width="1" height="1" fill={SKIN}/>
+        {/* 臉 */}
+        <rect x="2" y="4" width="14" height="7" fill={SKIN}/>
+        {/* 頭髮：上窄下寬 ＋ 中間一個美人尖 ＋ 兩側的鬢角 */}
+        <rect x="5" y="0" width="8" height="1" fill={HAIR}/>
+        <rect x="3" y="1" width="12" height="1" fill={HAIR}/>
+        <rect x="2" y="2" width="14" height="2" fill={HAIR}/>
+        <rect x="2" y="4" width="2" height="2" fill={HAIR}/>
+        <rect x="14" y="4" width="2" height="2" fill={HAIR}/>
+        <rect x="8" y="4" width="2" height="1" fill={HAIR}/>
+        {/* 眼睛（會眨——class 一定要留著）＋一點高光 */}
+        <rect className="mx-eye" x="4" y="6" width="3" height="3" fill={EYE}/>
+        <rect className="mx-eye" x="11" y="6" width="3" height="3" fill={EYE}/>
+        <rect x="6" y="6" width="1" height="1" fill={FANG}/>
+        <rect x="13" y="6" width="1" height="1" fill={FANG}/>
+        {/* 腮紅 */}
+        <rect x="3" y="9" width="2" height="1" fill={BLUSH}/>
+        <rect x="13" y="9" width="2" height="1" fill={BLUSH}/>
+        {/* 嘴＋兩顆小虎牙 */}
+        <rect x="7" y="9" width="4" height="1" fill={EYE}/>
+        <rect x="7" y="10" width="1" height="1" fill={FANG}/>
+        <rect x="10" y="10" width="1" height="1" fill={FANG}/>
+        {/* 身體（黑西裝）＋高領露出內裡的顏色 */}
+        <rect x="5" y="11" width="8" height="3" fill={CAPE}/>
+        <rect x="4" y="11" width="3" height="1" fill={tone}/>
+        <rect x="11" y="11" width="3" height="1" fill={tone}/>
+        <rect x="8" y="12" width="2" height="1" fill={SKIN}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="4" y="14" width="4" height="2" fill={CAPE}/></g>
+      <g className="mx-leg mx-leg-b"/>
+      <g className="mx-leg mx-leg-c"><rect x="10" y="14" width="4" height="2" fill={CAPE}/></g>
+      {/* 招牌道具：兩個都畫（CSS 只會顯示當下那一個動作的） */}
+      <g className="mx-prop mx-prop-type">
+        <rect x="2" y="9" width="14" height="5" fill="#4A443A"/>
+        <rect x="3" y="10" width="12" height="3" fill="#9FD8BC"/>
+        <rect x="0" y="14" width="18" height="2" fill="#6B6355"/>
+      </g>
+      <g className="mx-prop mx-prop-read">
+        <rect x="2" y="10" width="14" height="6" fill="#6B1220"/>
+        <rect x="3" y="10" width="6" height="4" fill="#F3EEFF"/>
+        <rect x="10" y="10" width="6" height="4" fill="#F3EEFF"/>
+        <rect x="4" y="11" width="4" height="1" fill="#C7B9DE"/>
+        <rect x="11" y="11" width="4" height="1" fill="#C7B9DE"/>
+      </g>
+      <MxAcc id={acc} fit={F} layer="front"/>
+    </svg>
+  );
+}
+
 /* ② 咕咕（貓頭鷹）—— 眼睛大、愛看書，走得少想得多 */
 function OwlMascot({ size = 46, hat = 'none', acc = '' }) {
   const BODY = '#A9713F', DARK = '#7A4E27', RING = '#FBF6EA', BEAK = '#E8A33C',
@@ -711,6 +794,24 @@ function mxGetPet() {
 function mxSetPet(id) { try { localStorage.setItem(mxKey(MX_PET_KEY), id || ''); } catch (e) {} }
 function mxPetOf(id) { return MX_PETS.find(p => p.id === id) || MX_PETS[0]; }
 
+/* ── v528 🧛 節慶換裝：畫誰，由這裡決定 ───────────────────────
+   ⭐ 全站**只有這一個地方**在挑「要畫哪一隻的美術」——大夥伴、裝扮室的
+     試穿圖、商店清單、夥伴圖鑑全部走這裡，所以萬聖節一掛上去就整組跟著換。
+   ⚠ 只換「長相」，`pet` 物件本身（速度、招牌動作、講的話、MX_FIT 貼合）
+     完全沒動——小兔還是會跳、阿石還是慢吞吞，只是變成吸血鬼版本。
+   ⚠ 平常（非節慶）回傳 pet.art，等於這個函式不存在。 */
+const MX_TONE = { clay: '#C1785A', owl: '#A9713F', flame: '#E2663C',
+                  rock: '#8E8C86', bun: '#E8A0B4', sprout: '#6FA04A' };
+function mxArtOf(pet) {
+  const p = pet || MX_PETS[0];
+  if (!(window.festIs && window.festIs('hw'))) return p.art;
+  const tone = MX_TONE[p.id] || MX_TONE.clay;
+  const fit = MX_FIT[p.id] || MX_FIT_DEF;
+  const Vamp = (props) => <VampireMascot {...props} tone={tone} fit={fit}/>;
+  Vamp.displayName = 'Vampire_' + p.id;
+  return Vamp;
+}
+
 /* 招牌動作要停留多久（毫秒）。走位類的不在這裡，時間是照距離算的。 */
 const MX_SIG_HOLD = { type: 2800, read: 3000, hide: 2600, grow: 2600, hop: 3600 };   // v455：吃紅蘿蔔 1.4s ＋ 跳 2.2s
 
@@ -821,7 +922,7 @@ function MascotLayer() {
   };
 
   const pet = mxPetOf(petId);
-  const Art = pet.art;
+  const Art = mxArtOf(pet);
   /* window.mascotCheer 與攔 playSound 的那兩個 effect 不會因為換夥伴而重建
      （deps 沒有 petId），直接引用 pet 會抓到換之前的舊值 → 用 ref 帶著走。 */
   const petRef = useFxR(pet);
@@ -1541,7 +1642,7 @@ function MascotLayer() {
                 const on   = have && (it.kind === 'pet' ? it.pet === petId : it.kind === 'dance' ? false : wear[it.kind] === it.id);
                 /* v505（Alan：「圖片要是本人的照片啦，比較好看」）：夥伴那一格畫牠本人，
                    不要用 🪨🌱🦉 這種代打的 emoji——牠長什麼樣子本來就畫得出來。 */
-                const PetArt = it.kind === 'pet' ? ((MX_PETS.find(p => p.id === it.pet) || {}).art || null) : null;
+                const PetArt = it.kind === 'pet' ? mxArtOf(MX_PETS.find(p => p.id === it.pet)) : null;
                 return (
                   <button key={it.id} className={'mx-dz' + (have ? ' have' : '') + (on ? ' on' : '') + (PetArt ? ' mx-dz-pet' : '')}
                     onClick={() => pickItem(it)}>
@@ -1569,7 +1670,7 @@ function MascotLayer() {
           <div className="mx-pets" onPointerDown={e => e.stopPropagation()}>
             <div className="mx-menu-name">選一個夥伴陪你</div>
             {MX_PETS.map(p => {
-              const PArt = p.art;
+              const PArt = mxArtOf(p);
               /* v435：Claudius 以外都要用星星請來——沒買的顯示價錢，按下去就是買 */
               const shopIt = window.mxPetItem ? window.mxPetItem(p.id) : null;
               const have = !shopIt || hasItem(shopIt.id);

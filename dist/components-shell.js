@@ -1981,8 +1981,8 @@ function FestCountdown({
   }, v), /*#__PURE__*/React.createElement("i", null, lab)))));
 }
 
-/* ───────── v525 ④ 首頁的滑鼠特效（Alan：「首頁滑鼠可以加一點特效」）─────────
-   滑過去會留下一串小蝙蝠／小鬼／星星，自己飄走。
+/* ───────── v525 ④ 滑鼠特效（v528 擴到門口頁與大廳）─────────
+   滑過去會留下一串小蝙蝠／小鬼／月亮，自己飄走。
 
    ⚠ 三個條件都要擋，不然會變成「幫倒忙」：
      ① 只在節慶期間（平常這個 effect 等於不存在）
@@ -1992,9 +1992,21 @@ function FestCountdown({
    ⚠ 用節流**距離**不是節流時間：慢慢移動時時間節流一樣會一直噴，
      但視覺上根本沒移動，結果是在原地疊一坨。
    ⚠ 直接操作 DOM，不走 React state——這是每秒幾十次的事件，
-     進 state 會讓整個封面重新 render。 */
-function useFestCursor(ref) {
-  React.useEffect(() => {
+     進 state 會讓整個畫面重新 render。
+
+   ⭐ v528 改成「裝在 document 上、圖案放進自己的固定層」：
+     本來是綁在封面那個容器上（useFestCursor(ref)），要擴到門口頁與大廳
+     就得三個地方各掛一次，而大廳是 app.jsx 畫的、拿不到同一個 ref。
+     改成一個全域監聽 ＋ 用 closest() 判斷滑鼠在不在這三頁上，
+     而且圖案用 position:fixed 放進自己的層 → **不用管那三個容器是不是
+     position:relative，也不會被 overflow:hidden 裁掉**。 */
+var FEST_CURSOR_ON = '.lc-cover, .grade-selector, .page-lobby';
+/* ⚠ 不做成 React hook：封面、門口頁、大廳是三個不同的元件，而且大廳是
+   app.jsx 畫的——做成 hook 就要在三個地方各掛一次，而且元件一卸載就失效。
+   它本來就不需要 React（只監聽 document ＋ 自己管 DOM），所以改成
+   「載入時裝一次」，剩下的交給 closest() 判斷滑鼠在不在這三頁上。 */
+function installFestCursor() {
+  {
     if (!(window.festOn && window.festOn())) return;
     var fine = false,
       calm = true;
@@ -2002,16 +2014,23 @@ function useFestCursor(ref) {
       fine = window.matchMedia('(pointer: fine)').matches;
       calm = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     } catch (e) {}
-    var host = ref.current;
-    if (!host || !fine || !calm) return;
+    if (!fine || !calm) return;
+    var host = document.createElement('div');
+    host.className = 'hw-trail-layer';
+    host.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(host);
     var KINDS = ['bat', 'ghost', 'star', 'bat', 'star'];
     var last = null,
       i = 0;
     var timers = new Set();
     var onMove = e => {
-      var r = host.getBoundingClientRect();
-      var x = e.clientX - r.left,
-        y = e.clientY - r.top;
+      var t = e.target;
+      if (!(t && t.closest && t.closest(FEST_CURSOR_ON))) {
+        last = null;
+        return;
+      }
+      var x = e.clientX,
+        y = e.clientY;
       if (last && Math.hypot(x - last[0], y - last[1]) < 46) return;
       last = [x, y];
       var sp = document.createElement('span');
@@ -2021,27 +2040,29 @@ function useFestCursor(ref) {
       sp.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
       sp.style.setProperty('--rot', (Math.random() * 50 - 25).toFixed(1) + 'deg');
       host.appendChild(sp);
-      var t = setTimeout(() => {
+      var tm = setTimeout(() => {
         try {
           sp.remove();
         } catch (er) {}
-        timers.delete(t);
+        timers.delete(tm);
       }, 1200);
-      timers.add(t);
+      timers.add(tm);
     };
-    host.addEventListener('pointermove', onMove);
-    return () => {
-      host.removeEventListener('pointermove', onMove);
+    document.addEventListener('pointermove', onMove, {
+      passive: true
+    });
+    /* 換頁時把還在飄的清掉，免得它們留在 DOM 上 */
+    window.addEventListener('pagehide', () => {
+      try {
+        host.querySelectorAll('.hw-trail').forEach(n => n.remove());
+      } catch (er) {}
       timers.forEach(clearTimeout);
-      /* ⚠ 卸載時要把還在飄的清掉：換頁之後它們會留在 DOM 上。 */
-      host.querySelectorAll('.hw-trail').forEach(n => {
-        try {
-          n.remove();
-        } catch (er) {}
-      });
-    };
-  }, [ref]);
+    });
+  }
 }
+try {
+  installFestCursor();
+} catch (e) {}
 function LoginScreen({
   onLogin,
   onSkip,
@@ -2053,8 +2074,6 @@ function LoginScreen({
   var [loading, setLoading] = React.useState(false);
   var [slow, setSlow] = React.useState(false);
   var enterMode = loggedIn && onBack; // 已登入且在封面 → 顯示「進入課程」
-  var coverRef = React.useRef(null);
-  useFestCursor(coverRef);
   var handleLogin = async () => {
     setLoading(true);
     setTimeout(() => {
@@ -2069,8 +2088,7 @@ function LoginScreen({
     }
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "login-screen lc-cover lc-hero",
-    ref: coverRef
+    className: "login-screen lc-cover lc-hero"
   }, window.festOn && window.festOn() && /*#__PURE__*/React.createElement("div", {
     className: "fest-ribbon",
     "aria-hidden": "true"
