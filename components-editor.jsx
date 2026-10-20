@@ -6067,10 +6067,24 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
               {['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼',
                 '這週 Word Study 是 prefixes mis-, en-, & em-',
                 '幫我擬 Eric 今天的上課紀錄',
-                'Nick 最近哪裡最弱？'].map((x, i) => (
+                'Nick 最近哪裡最弱？',
+                /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
+                '這篇文章做成分段閱讀（貼上文章）',
+                '出一份外師的考前複習卷',
+                '把 Barbed Wire Baseball 排一份複習到第 9 週',
+                '把 Barbed Wire Baseball 那組沿用到第 10 週',
+                '我要改申論題'].map((x, i) => (
                 <button key={i} onClick={() => setText(x)}>{x}</button>
               ))}
             </div>
+            {/* v531：把「現在我做得到哪些事」直接列出來。
+                ⚠ 這是從 ASK_JOBS 撈的，不是另外手寫一份——手寫的那份一定會跟實際的走鐘。 */}
+            <details className="ask-can">
+              <summary>我現在會做這 {Object.keys(JOBS).length} 件事</summary>
+              <ul>{Object.keys(JOBS).map(k => (
+                <li key={k}>{JOBS[k].ico} {JOBS[k].zh}</li>
+              ))}</ul>
+            </details>
           </div>
         )}
 

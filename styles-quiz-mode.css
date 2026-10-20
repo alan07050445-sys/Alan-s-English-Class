@@ -4027,3 +4027,9 @@
 .ex-marked-note { flex: 1 0 100%; font-size: 13px; color: var(--ink-2); }
 .exed-rub { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .exed-rub .exed-pts { width: 46px; }
+.ask-can { margin-top: 10px; font-size: 12.5px; }
+.ask-can summary { cursor: pointer; color: var(--ink-3); font-weight: 700; }
+.ask-can ul { margin: 8px 0 0; padding-left: 4px; list-style: none;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.ask-can li { color: var(--ink-2); }
+@media (max-width: 460px) { .ask-can ul { grid-template-columns: 1fr; } }

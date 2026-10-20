@@ -9434,10 +9434,15 @@ function AskPanel({
     className: "ask-hello"
   }, /*#__PURE__*/React.createElement("p", null, "\u76F4\u63A5\u8AAA\u4F60\u60F3\u505A\u4EC0\u9EBC\uFF0C\u6216\u628A\u55AE\u5B57\u8868\uFF0F\u6587\u7AE0\uFF0F\u4F5C\u696D\u7167\u7247\u4E1F\u9032\u4F86\u3002"), /*#__PURE__*/React.createElement("div", {
     className: "ask-eg"
-  }, ['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼', '這週 Word Study 是 prefixes mis-, en-, & em-', '幫我擬 Eric 今天的上課紀錄', 'Nick 最近哪裡最弱？'].map((x, i) => /*#__PURE__*/React.createElement("button", {
+  }, ['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼', '這週 Word Study 是 prefixes mis-, en-, & em-', '幫我擬 Eric 今天的上課紀錄', 'Nick 最近哪裡最弱？', /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
+  '這篇文章做成分段閱讀（貼上文章）', '出一份外師的考前複習卷', '把 Barbed Wire Baseball 排一份複習到第 9 週', '把 Barbed Wire Baseball 那組沿用到第 10 週', '我要改申論題'].map((x, i) => /*#__PURE__*/React.createElement("button", {
     key: i,
     onClick: () => setText(x)
-  }, x)))), msgs.map((m, i) => /*#__PURE__*/React.createElement("div", {
+  }, x))), /*#__PURE__*/React.createElement("details", {
+    className: "ask-can"
+  }, /*#__PURE__*/React.createElement("summary", null, "\u6211\u73FE\u5728\u6703\u505A\u9019 ", Object.keys(JOBS).length, " \u4EF6\u4E8B"), /*#__PURE__*/React.createElement("ul", null, Object.keys(JOBS).map(k => /*#__PURE__*/React.createElement("li", {
+    key: k
+  }, JOBS[k].ico, " ", JOBS[k].zh))))), msgs.map((m, i) => /*#__PURE__*/React.createElement("div", {
     className: 'ask-row' + (m.me ? ' me' : ''),
     key: i
   }, /*#__PURE__*/React.createElement("div", {

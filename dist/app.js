@@ -1816,6 +1816,53 @@ function App() {
 
   /* 💬 v517：聽懂之後**只做一件事**——打開現成的那個視窗並填好。
      這裡刻意不碰任何出題邏輯，也不直接寫進週次。 */
+  /* v531：聊天室要找「那一組」——分組就是同一個 group 欄位（或同一個單元名）。
+     ⚠ 比對要寬鬆（忽略大小寫、全半形破折號、前後空白），Alan 不會一個字不差地打出來。 */
+  var askNorm = t => String(t || '').toLowerCase().replace(/[—–-]/g, '-').replace(/\s+/g, ' ').trim();
+  var askGroupNames = () => {
+    var w = weeksRef.current[weekId] || {};
+    var out = [];
+    Object.keys(w.items || {}).forEach(cid => (w.items[cid] || []).forEach(it => {
+      var g = (it.group || '').trim();
+      if (g && out.indexOf(g) < 0) out.push(g);
+    }));
+    return out;
+  };
+  /* 「第 9 週」→ 真正的 weekId。⚠ 只在目前這個年級的週次裡找，不跨學期。 */
+  var askFindWeek = n => {
+    if (!n) return '';
+    var hit = (weekOrder || []).find(id => {
+      var w = weeksRef.current[id] || {};
+      var m = /(\d+)/.exec(String(w.label || w.id || id));
+      return m && +m[1] === +n;
+    });
+    return hit && hit !== weekId ? hit : '';
+  };
+  var askFindGroup = name => {
+    var q = askNorm(name);
+    if (!q) return null;
+    var w = weeksRef.current[weekId] || {};
+    var best = null;
+    Object.keys(w.items || {}).forEach(cid => {
+      var groups = {};
+      (w.items[cid] || []).forEach(it => {
+        var g = (it.group || '').trim();
+        if (g) (groups[g] = groups[g] || []).push(it);
+      });
+      Object.keys(groups).forEach(g => {
+        var n = askNorm(g);
+        /* 完全一樣最好；其次是「包含」（他可能只講了前半段） */
+        if (!best && (n === q || n.indexOf(q) >= 0 || q.indexOf(n) >= 0)) {
+          best = {
+            catId: cid,
+            name: g,
+            items: groups[g]
+          };
+        }
+      });
+    });
+    return best;
+  };
   var runAskPlan = plan => {
     if (!plan) return;
     var cat0 = openCat || activeCategories[0] && activeCategories[0].id || 'vocab';
@@ -1845,15 +1892,103 @@ function App() {
       setRcGenOpen(true);
     } else if (plan.intent === 'exam') {
       setExamScanOpen(true);
-    } else if (plan.intent === 'lesson' || plan.intent === 'weak') {
-      /* 這兩件事住在後台（📒 上課紀錄 / 🎯 弱點分析）——開後台並指到那一頁。 */
+    } else if (plan.intent === 'lesson' || plan.intent === 'weak' || plan.intent === 'marking') {
+      /* 這三件事住在後台（📒 上課紀錄 / 🎯 弱點分析 / 📋 申論批改）——開後台並指到那一頁。 */
       setDashOpen(true);
+      var tab = plan.intent === 'lesson' ? 'lessons' : plan.intent === 'marking' ? 'marking' : 'roster';
       try {
         window.__dashGoto = {
-          tab: plan.intent === 'lesson' ? 'lessons' : 'roster',
+          tab,
           email: plan.email || ''
         };
       } catch (e) {}
+
+      /* ══ v531：剩下的 5 個也接進來 ══════════════════════════════
+         ⚠ 一律走「開既有的畫面、把欄位填好」，不要在這裡另外寫一套生成邏輯——
+           生成的程式只有一份，用講的跟用按的才會得到一模一樣的結果。 */
+    } else if (plan.intent === 'guided') {
+      /* 📑 分段閱讀：開單元編輯器，型別與文章先填好，✂ 分段與 🤖 出題在那裡做。 */
+      setEditorCat(cat0);
+      setEditorAssign(null);
+      setEditorGroups(null);
+      setEditorDraft({
+        id: cat0[0] + Date.now() + Math.random().toString(36).slice(2, 6),
+        _isNew: true,
+        type: 'guided-reading',
+        title: plan.title || '',
+        zh: '',
+        duration: '',
+        url: '',
+        embed: '',
+        body: '',
+        segments: [{
+          id: 'g' + Date.now().toString(36),
+          text: plan.text || '',
+          questions: []
+        }]
+      });
+      setEditorOpen(true);
+    } else if (plan.intent === 'exampaper') {
+      /* 📝 考前複習包：它自己會從學校進度表抓這幾週的單字與主題。 */
+      setExamSide(plan.side || 'it');
+    } else if (plan.intent === 'tense') {
+      setGrGenOpen(true);
+    } else if (plan.intent === 'review' || plan.intent === 'group') {
+      /* 🔁 排複習到別週 ／ 📦 整組操作：先在目前這一週把那一組找出來。
+         ⚠ 找不到不要安靜地什麼都不做——把這一週有哪些組列給他看（v500 的教訓：
+           「靜靜地少做一半比直接失敗更難發現」）。 */
+      var found = askFindGroup(plan.group);
+      if (!found) {
+        var names = askGroupNames();
+        showToast(names.length ? `這一週沒有「${plan.group}」這一組。有的是：${names.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
+      } else if (plan.intent === 'review') {
+        setReviewFor({
+          catId: found.catId,
+          name: found.name,
+          items: found.items
+        });
+      } else if (plan.op === 'again') {
+        /* 走「在這一組再出一份」那條既有的路（跟單元列的選單同一個 handler）。 */
+        var ws = window.reviewWordsOf && window.reviewWordsOf(found.items) || [];
+        if (ws.length >= 2) {
+          var text = ws.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
+          var imgs = {};
+          ws.forEach(x => {
+            if (x.imageUrl) imgs[String(x.term).toLowerCase()] = x.imageUrl;
+          });
+          setRegenFor({
+            catId: found.catId,
+            name: found.name,
+            pick: false,
+            text,
+            images: imgs,
+            have: window.qsKindsInGroup && window.qsKindsInGroup(found.items) || []
+          });
+          setQuickSetOpen(true);
+        } else {
+          setRegenFor({
+            catId: found.catId,
+            name: found.name,
+            pick: true
+          });
+        }
+      } else if (plan.op === 'delete') {
+        /* 🔴 唯一一件會把東西丟掉的事——一定要他自己按下去確認。
+           聊天室打錯一個字就刪掉一整組，那是救不回來的。 */
+        if (window.confirm(`要刪掉「${found.name}」這一組的 ${found.items.length} 個單元嗎？這個動作救不回來。`)) {
+          handleDeleteItems(found.items.map(it => it.id));
+        }
+      } else {
+        /* copy（沿用到別週）／ move（搬過去）：要知道搬去哪一週。
+           ⚠ 他沒講週次就不要自己挑一個——把可以選的列給他。 */
+        var target = askFindWeek(plan.toWeek);
+        if (!target) {
+          showToast(plan.toWeek ? `找不到第 ${plan.toWeek} 週。` : '要沿用到第幾週？跟我說週次就好。');
+        } else {
+          handleCopyGroupToWeeks(found.catId, found.items, [target], plan.due ? window.askDueDate ? window.askDueDate(plan.due) : '' : '', plan.op === 'move');
+          showToast(`${plan.op === 'move' ? '已搬到' : '已沿用到'}${weeksRef.current[target] && weeksRef.current[target].label || target}`);
+        }
+      }
     }
     setAskOpen(false);
   };

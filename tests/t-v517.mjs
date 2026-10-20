@@ -31,7 +31,21 @@ ok('⭐ 七件事都在', ['vocab', 'wordstudy', 'grammar', 'reading', 'exam', '
    .every(k => W.ASK_JOBS[k] && W.ASK_JOBS[k].zh));
 ok('⭐⭐ 清單以外的 intent 一律當 unknown（模型自己發明的不算數）',
    W.askVerify({ intent: '幫我做點什麼' }, { roster }).intent === 'unknown');
-ok('   提示詞也把清單寫死', /"intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak unknown/.test(data));
+ok('   提示詞裡的清單要跟 ASK_JOBS 對得上', (() => {
+   /* ⚠ 本來是把 v517 那七個**整串寫死**在測試裡，v531 多接 6 件事就失敗了，
+      但真正要守的是「兩邊不可以走鐘」——提示詞少一個，模型就永遠不會回那個 intent；
+      多一個，模型回了程式也不認得（按下去什麼都不會發生）。 */
+   /* ⚠ 這份清單在提示詞裡是**跨兩行**的，正規表示式不能只抓到換行為止
+      （第一版就是這樣，六個新的全被當成「少了」）。抓到下一個 `- "` 為止。 */
+   const a = data.indexOf('"intent" MUST be exactly one of:');
+   if (a < 0) return false;
+   const listed = data.slice(a + 32, data.indexOf('\n- "', a))
+     .replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+   const jobs = Object.keys(W.ASK_JOBS);
+   const missing = jobs.filter(j => listed.indexOf(j) < 0);
+   const extra = listed.filter(x => x !== 'unknown' && jobs.indexOf(x) < 0);
+   if (missing.length || extra.length) console.log('      少了：', missing, '　多了：', extra);
+   return !missing.length && !extra.length && listed.indexOf('unknown') >= 0; })());
 
 console.log('\n【2】⭐⭐ 聽不懂就問，不要亂猜');
 ok('⭐ 提示詞明講猜錯的代價', /Guessing wrong costs him ten minutes of proofreading before he notices, so ASK/.test(data));

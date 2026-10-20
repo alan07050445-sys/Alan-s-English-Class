@@ -3383,6 +3383,23 @@ function TeacherDashboard({
   var [refreshKey, setRefreshKey] = useDash(0);
   var [allReportOpen, setAllReportOpen] = useDash(false);
   var [tab, setTab] = useDash('overview'); // 'overview' | 'report' | 'roster'
+  /* 🔴 v531：聊天室說「幫 Eric 擬紀錄」「我要改申論」時，app.jsx 會先放一張字條
+     （window.__dashGoto）再把後台打開。**這張字條從 v517 起就沒有人讀**——
+     後台只是開起來，停在「總覽」，他還要自己再點一次。
+     ⚠ 讀完要清掉，不然下次自己開後台又會被帶走。 */
+  useDashE(() => {
+    var g = null;
+    try {
+      g = window.__dashGoto;
+      window.__dashGoto = null;
+    } catch (e) {}
+    if (g && g.tab) setTab(g.tab);
+    if (g && g.email) {
+      try {
+        window.__dashEmail = g.email;
+      } catch (e) {}
+    }
+  }, []);
   var [hotOpen, setHotOpen] = useDash(null); // v307 (F11): 展開哪一列常錯題看「哪些孩子錯」
 
   useDashE(() => window.subscribeAllStudents(setAllStudents), [refreshKey]);

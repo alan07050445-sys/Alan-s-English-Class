@@ -7294,6 +7294,17 @@ const ASK_JOBS = {
   exam:      { zh: '拍考卷 → 互動版', ico: '📸', need: 'images', where: 'editor' },
   lesson:    { zh: '擬上課紀錄草稿', ico: '🪄', need: 'student', where: 'dash' },
   weak:      { zh: '弱點分析 → 針對性練習', ico: '🎯', need: 'student', where: 'dash' },
+  /* ══ v531（Alan：「我要他做到任何事情，就要可以做到」）══════════════
+     把剩下的 6 個也接進來。做法跟前面 7 個一樣：**聊天室不自己生內容**，
+     它只負責聽懂要做哪一件事、把參數掏出來，然後把對應的畫面開起來、欄位填好。
+     ⚠ 這一點是刻意的——生成的程式只有一份，聊天室走的跟按按鈕走的是同一條路，
+       所以不會出現「用講的生出來的東西跟用按的不一樣」（v520 就是這樣漏了一個單元）。 */
+  guided:    { zh: '分段閱讀', ico: '📑', need: 'text', where: 'editor' },
+  exampaper: { zh: '出一份新考卷', ico: '📝', need: 'side', where: 'editor' },
+  tense:     { zh: '五大時態題庫出題', ico: '🎞', need: '', where: 'editor' },
+  review:    { zh: '排一份複習到別週', ico: '🔁', need: 'group', where: 'editor' },
+  group:     { zh: '整組操作', ico: '📦', need: 'group', where: 'editor' },
+  marking:   { zh: '申論批改', ico: '📋', need: '', where: 'dash' },
 };
 
 /* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
@@ -7347,9 +7358,24 @@ The tools:
   exam      — turn PHOTOS of a printed exam paper into an interactive exam.
   lesson    — draft today's lesson record for ONE named student.
   weak      — look at ONE named student's mistakes and make targeted practice.
+  guided    — split a LONG passage into chunks, question after each chunk (分段閱讀).
+  exampaper — build a NEW practice exam from the words/topics of the last few weeks (考前複習包).
+              He says which teacher's side: "外師" = it, "中師" = lt.
+  tense     — open the five-tenses question bank generator (only grades that have that track).
+  review    — take an EXISTING group of exercises and make a DIFFERENT set from the same words,
+              for another week ("把 Barbed Wire Baseball 排一份複習到第 9 週").
+  group     — do something to a whole EXISTING group: copy / move it to another week,
+              add one more exercise to it, or delete it.
+  marking   — open the marking screen for the written (申論) answers.
 
 Rules:
-- "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak unknown
+- "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
+  guided exampaper tense review group marking unknown
+- "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
+- "group": the name of the existing group he is talking about, copied exactly
+  (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
+- "op": ONLY for intent "group". One of: copy（沿用到別週）move（搬過去）again（再出一份）delete（刪掉）
+- "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
 - If you are not sure, use "unknown" and put ONE short Traditional-Chinese question in "ask".
   Guessing wrong costs him ten minutes of proofreading before he notices, so ASK.
 - "words": only when he gave an actual word list. Each: {"term":"...","zh":"...(if he gave it)"}
@@ -7376,6 +7402,8 @@ Rules:
   If he did not mention a deadline at all, use "" and the website uses its own default.
   If he said he does NOT want it set as homework ("先不要指派"), use "none".
 - "say": one short friendly Traditional-Chinese sentence telling him what you are about to do.
+- 🔴 "delete" is the only thing here that throws work away. If he was not clearly asking to delete
+  ("把那組刪掉"), do NOT use op "delete" — ask instead.
 
 Output ONLY JSON:
 {"intent":"vocab","title":"Barbed Wire Baseball","words":[{"term":"pursued","zh":"追趕"}],
@@ -7417,6 +7445,13 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
       return '';
     })(),
+    /* v531 新增的三個參數，一樣全部夾回受控的值——
+       模型亂填一個 side 或 op，程式照著做就會動到不該動的東西。 */
+    side: (o.side === 'it' || o.side === 'lt') ? o.side : '',
+    group: String(o.group || '').trim().slice(0, 120),
+    op: ['copy', 'move', 'again', 'delete'].indexOf(String(o.op || '').trim()) >= 0
+      ? String(o.op).trim() : '',
+    toWeek: Math.max(0, Math.min(40, Math.round(+o.toWeek || 0))),
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
   if (out.student) {
@@ -7432,12 +7467,19 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   }
   /* 該有的東西沒有 → 不要硬做，改成問他。
      ⚠ 文法與考卷可以只給照片不給文字——照片本身就是內容（v428 讀作業、v516 讀考卷）。 */
+  /* v531：整組操作沒說要做什麼就先問清楚——「把那組弄一下」不能自己猜。 */
+  if (out.intent === 'group' && !out.op) {
+    out.intent = 'unknown';
+    out.ask = `「${out.group || '那一組'}」要做什麼？沿用到別週／搬過去／再出一份／刪掉`;
+  }
   const need = (ASK_JOBS[out.intent] || {}).need;
   if (need === 'words' && !out.words.length) { out.intent = 'unknown'; out.ask = out.ask || '要出哪幾個單字？直接貼給我就好。'; }
   if (need === 'topic' && !out.topic)        { out.intent = 'unknown'; out.ask = out.ask || '這次的 Word Study 主題是什麼？'; }
   if (need === 'text' && !out.text && !nImages) { out.intent = 'unknown'; out.ask = out.ask || '把文章或作業的內容貼給我，或拍一張照片。'; }
   if (need === 'images' && !nImages)         { out.intent = 'unknown'; out.ask = out.ask || '把考卷拍給我——一頁一張，整頁入鏡。'; }
   if (need === 'student' && !out.email)      { out.intent = 'unknown'; out.ask = out.ask || '要幫哪一位學生？'; }
+  if (need === 'side' && !out.side)          { out.intent = 'unknown'; out.ask = out.ask || '要出外師還是中師那一份？'; }
+  if (need === 'group' && !out.group)        { out.intent = 'unknown'; out.ask = out.ask || '是哪一組？把那一組的名字講給我就好。'; }
   return out;
 }
 
