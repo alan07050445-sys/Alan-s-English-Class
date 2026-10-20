@@ -1349,6 +1349,20 @@ function App() {
           best = { catId: cid, name: g, items: groups[g] };
         }
       });
+      /* v534：他常常講的是**單元名**不是組名（「Barbed Wire Baseball 的單字卡
+         再加幾種題目」）——用單元名也找得到，回傳它所屬的那一組。 */
+      if (!best) {
+        (w.items[cid] || []).forEach(it => {
+          if (best) return;
+          const t = askNorm(it.title || '');
+          if (t && (t === q || t.indexOf(q) >= 0 || q.indexOf(t) >= 0)) {
+            const g = (it.group || '').trim();
+            best = g && groups[g]
+              ? { catId: cid, name: g, items: groups[g] }
+              : { catId: cid, name: it.title || '', items: [it] };
+          }
+        });
+      }
     });
     return best;
   };
@@ -1395,7 +1409,10 @@ function App() {
       setEditorOpen(true);
 
     } else if (plan.intent === 'exampaper') {
-      /* 📝 考前複習包：它自己會從學校進度表抓這幾週的單字與主題。 */
+      /* 📝 考前複習包：它自己會從學校進度表抓這幾週的單字與主題。
+         v534：他說「題目需包含…」的話，原話帶進去當這次的特別要求
+         （跟每一個一鍵生成的「💬 這次的特別要求」同一個欄位）。 */
+      if (plan.note) setAskText({ text: '', title: '', note: plan.note });
       setExamSide(plan.side || 'it');
 
     } else if (plan.intent === 'tense') {
@@ -1418,6 +1435,24 @@ function App() {
       /* 🧩 合併單字再出題：把字接起來、去重、（有講的話）裁到他要的題數，
          然後開「一鍵出單字」並把單字表填好。 */
       let ws = askMergeWords({ groups: plan.groups, weeks: plan.weeks });
+      /* v534（Alan：「文法題目再加上 或是合併」）：那幾組如果不是單字組，
+         就把它們的文法筆記接起來，開「一鍵出文法」。
+         ⚠ 文法沒有「單字」可以合併，能合併的是**出題的依據**（srcNotes）。 */
+      if (!ws.length) {
+        const notes = (plan.groups || []).map(g => {
+          const f = askFindGroup(g);
+          const gm = f && window.reviewGrammarOf ? window.reviewGrammarOf(f.items) : null;
+          return gm && gm.notes ? gm.notes : '';
+        }).filter(Boolean);
+        if (notes.length) {
+          setAskText({ text: notes.join('\n\n'), title: plan.title || (plan.groups || []).join(' + '),
+                       note: plan.note || '' });
+          setGnGenOpen(true);
+          showToast(`合併了 ${notes.length} 組的文法重點`);
+          setAskOpen(false);
+          return;
+        }
+      }
       if (!ws.length) {
         const names = askGroupNames();
         showToast(names.length
@@ -1434,6 +1469,32 @@ function App() {
         setQuickSetOpen(true);
         showToast(`合併了 ${ws.length} 個字${cut ? `（照你說的只取前 ${plan.nQ} 個）` : ''}`);
       }
+
+    } else if (plan.intent === 'assign') {
+      /* 📌 設定作業期限（Alan：「並且設定期限」）。
+         ⚠ 沒講日期就用預設（下一個週日），跟出完順手指派同一套規則。
+         ⚠ 他說「不要當作業」的話 due 會是 none → 取消指派。 */
+      const found = askFindGroup(plan.group);
+      if (!found) {
+        const names = askGroupNames();
+        showToast(names.length
+          ? `這一週沒有「${plan.group}」。有的是：${names.slice(0, 4).join('、')}`
+          : '這一週還沒有任何分組。');
+      } else {
+        const due = plan.due === 'none' ? ''
+          : (window.askDueDate && window.askDueDate(plan.due))
+            || (window.askDueDefault && window.askDueDefault()) || '';
+        handleSetHomeworkMany(found.items.map(it => it.id), due ? { dueDate: due } : null);
+      }
+
+    } else if (plan.intent === 'notify') {
+      /* 📢 LINE 公告：把稿子先打好、對象先選好，**送出那一下還是他自己按**。
+         ⚠ 這是會直接送到家長手機上的東西，不可以由聊天室替他送出去。 */
+      setDashOpen(true);
+      try {
+        window.__dashGoto = { tab: 'notify', notify: {
+          text: plan.text || '', target: plan.target || 'all', grade: plan.gradeId || '' } };
+      } catch (e) {}
 
     } else if (plan.intent === 'review' || plan.intent === 'group') {
       /* 🔁 排複習到別週 ／ 📦 整組操作：先在目前這一週把那一組找出來。

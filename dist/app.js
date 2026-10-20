@@ -1864,6 +1864,26 @@ function App() {
           };
         }
       });
+      /* v534：他常常講的是**單元名**不是組名（「Barbed Wire Baseball 的單字卡
+         再加幾種題目」）——用單元名也找得到，回傳它所屬的那一組。 */
+      if (!best) {
+        (w.items[cid] || []).forEach(it => {
+          if (best) return;
+          var t = askNorm(it.title || '');
+          if (t && (t === q || t.indexOf(q) >= 0 || q.indexOf(t) >= 0)) {
+            var g = (it.group || '').trim();
+            best = g && groups[g] ? {
+              catId: cid,
+              name: g,
+              items: groups[g]
+            } : {
+              catId: cid,
+              name: it.title || '',
+              items: [it]
+            };
+          }
+        });
+      }
     });
     return best;
   };
@@ -1937,7 +1957,14 @@ function App() {
       });
       setEditorOpen(true);
     } else if (plan.intent === 'exampaper') {
-      /* 📝 考前複習包：它自己會從學校進度表抓這幾週的單字與主題。 */
+      /* 📝 考前複習包：它自己會從學校進度表抓這幾週的單字與主題。
+         v534：他說「題目需包含…」的話，原話帶進去當這次的特別要求
+         （跟每一個一鍵生成的「💬 這次的特別要求」同一個欄位）。 */
+      if (plan.note) setAskText({
+        text: '',
+        title: '',
+        note: plan.note
+      });
       setExamSide(plan.side || 'it');
     } else if (plan.intent === 'tense') {
       setGrGenOpen(true);
@@ -1961,6 +1988,27 @@ function App() {
         groups: plan.groups,
         weeks: plan.weeks
       });
+      /* v534（Alan：「文法題目再加上 或是合併」）：那幾組如果不是單字組，
+         就把它們的文法筆記接起來，開「一鍵出文法」。
+         ⚠ 文法沒有「單字」可以合併，能合併的是**出題的依據**（srcNotes）。 */
+      if (!_ws.length) {
+        var notes = (plan.groups || []).map(g => {
+          var f = askFindGroup(g);
+          var gm = f && window.reviewGrammarOf ? window.reviewGrammarOf(f.items) : null;
+          return gm && gm.notes ? gm.notes : '';
+        }).filter(Boolean);
+        if (notes.length) {
+          setAskText({
+            text: notes.join('\n\n'),
+            title: plan.title || (plan.groups || []).join(' + '),
+            note: plan.note || ''
+          });
+          setGnGenOpen(true);
+          showToast(`合併了 ${notes.length} 組的文法重點`);
+          setAskOpen(false);
+          return;
+        }
+      }
       if (!_ws.length) {
         var names = askGroupNames();
         showToast(names.length ? `這幾組裡找不到單字。這一週有的是：${names.slice(0, 4).join('、')}` : '找不到可以合併的單字。');
@@ -1982,23 +2030,51 @@ function App() {
         setQuickSetOpen(true);
         showToast(`合併了 ${_ws.length} 個字${cut ? `（照你說的只取前 ${plan.nQ} 個）` : ''}`);
       }
+    } else if (plan.intent === 'assign') {
+      /* 📌 設定作業期限（Alan：「並且設定期限」）。
+         ⚠ 沒講日期就用預設（下一個週日），跟出完順手指派同一套規則。
+         ⚠ 他說「不要當作業」的話 due 會是 none → 取消指派。 */
+      var found = askFindGroup(plan.group);
+      if (!found) {
+        var _names = askGroupNames();
+        showToast(_names.length ? `這一週沒有「${plan.group}」。有的是：${_names.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
+      } else {
+        var due = plan.due === 'none' ? '' : window.askDueDate && window.askDueDate(plan.due) || window.askDueDefault && window.askDueDefault() || '';
+        handleSetHomeworkMany(found.items.map(it => it.id), due ? {
+          dueDate: due
+        } : null);
+      }
+    } else if (plan.intent === 'notify') {
+      /* 📢 LINE 公告：把稿子先打好、對象先選好，**送出那一下還是他自己按**。
+         ⚠ 這是會直接送到家長手機上的東西，不可以由聊天室替他送出去。 */
+      setDashOpen(true);
+      try {
+        window.__dashGoto = {
+          tab: 'notify',
+          notify: {
+            text: plan.text || '',
+            target: plan.target || 'all',
+            grade: plan.gradeId || ''
+          }
+        };
+      } catch (e) {}
     } else if (plan.intent === 'review' || plan.intent === 'group') {
       /* 🔁 排複習到別週 ／ 📦 整組操作：先在目前這一週把那一組找出來。
          ⚠ 找不到不要安靜地什麼都不做——把這一週有哪些組列給他看（v500 的教訓：
            「靜靜地少做一半比直接失敗更難發現」）。 */
-      var found = askFindGroup(plan.group);
-      if (!found) {
-        var _names = askGroupNames();
-        showToast(_names.length ? `這一週沒有「${plan.group}」這一組。有的是：${_names.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
+      var _found = askFindGroup(plan.group);
+      if (!_found) {
+        var _names2 = askGroupNames();
+        showToast(_names2.length ? `這一週沒有「${plan.group}」這一組。有的是：${_names2.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
       } else if (plan.intent === 'review') {
         setReviewFor({
-          catId: found.catId,
-          name: found.name,
-          items: found.items
+          catId: _found.catId,
+          name: _found.name,
+          items: _found.items
         });
       } else if (plan.op === 'again') {
         /* 走「在這一組再出一份」那條既有的路（跟單元列的選單同一個 handler）。 */
-        var _ws2 = window.reviewWordsOf && window.reviewWordsOf(found.items) || [];
+        var _ws2 = window.reviewWordsOf && window.reviewWordsOf(_found.items) || [];
         if (_ws2.length >= 2) {
           var _text = _ws2.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
           var _imgs = {};
@@ -2006,26 +2082,26 @@ function App() {
             if (x.imageUrl) _imgs[String(x.term).toLowerCase()] = x.imageUrl;
           });
           setRegenFor({
-            catId: found.catId,
-            name: found.name,
+            catId: _found.catId,
+            name: _found.name,
             pick: false,
             text: _text,
             images: _imgs,
-            have: window.qsKindsInGroup && window.qsKindsInGroup(found.items) || []
+            have: window.qsKindsInGroup && window.qsKindsInGroup(_found.items) || []
           });
           setQuickSetOpen(true);
         } else {
           setRegenFor({
-            catId: found.catId,
-            name: found.name,
+            catId: _found.catId,
+            name: _found.name,
             pick: true
           });
         }
       } else if (plan.op === 'delete') {
         /* 🔴 唯一一件會把東西丟掉的事——一定要他自己按下去確認。
            聊天室打錯一個字就刪掉一整組，那是救不回來的。 */
-        if (window.confirm(`要刪掉「${found.name}」這一組的 ${found.items.length} 個單元嗎？這個動作救不回來。`)) {
-          handleDeleteItems(found.items.map(it => it.id));
+        if (window.confirm(`要刪掉「${_found.name}」這一組的 ${_found.items.length} 個單元嗎？這個動作救不回來。`)) {
+          handleDeleteItems(_found.items.map(it => it.id));
         }
       } else {
         /* copy（沿用到別週）／ move（搬過去）：要知道搬去哪一週。
@@ -2034,7 +2110,7 @@ function App() {
         if (!target) {
           showToast(plan.toWeek ? `找不到第 ${plan.toWeek} 週。` : '要沿用到第幾週？跟我說週次就好。');
         } else {
-          handleCopyGroupToWeeks(found.catId, found.items, [target], plan.due ? window.askDueDate ? window.askDueDate(plan.due) : '' : '', plan.op === 'move');
+          handleCopyGroupToWeeks(_found.catId, _found.items, [target], plan.due ? window.askDueDate ? window.askDueDate(plan.due) : '' : '', plan.op === 'move');
           showToast(`${plan.op === 'move' ? '已搬到' : '已沿用到'}${weeksRef.current[target] && weeksRef.current[target].label || target}`);
         }
       }

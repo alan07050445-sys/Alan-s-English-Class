@@ -1834,7 +1834,18 @@ function RosterManager() {
 
 /* ── LINE 通知（發公告）分頁 ───────────────────────────── */
 function LineNotify() {
-  var [text, setText] = useDash('');
+  /* v534：聊天室擬好的稿子（app.jsx 放的字條）。讀完要清掉，
+     不然他下次自己開這一頁，上次那篇又會跑出來。 */
+  var draft = (() => {
+    try {
+      var d = window.__notifyDraft;
+      window.__notifyDraft = null;
+      return d || null;
+    } catch (e) {
+      return null;
+    }
+  })();
+  var [text, setText] = useDash(draft ? draft.text || '' : '');
   var [pass, setPass] = useDash(() => {
     try {
       return localStorage.getItem('lineAdminPass') || '';
@@ -1844,8 +1855,8 @@ function LineNotify() {
   });
   var [busy, setBusy] = useDash(false);
   var [msg, setMsg] = useDash(null); // { type:'ok'|'err', text }
-  var [target, setTarget] = useDash('all'); // 'all' | 'grade' | 'students'
-  var [grade, setGrade] = useDash(''); // 選定年級
+  var [target, setTarget] = useDash(draft ? draft.target || 'all' : 'all'); // 'all' | 'grade' | 'students'
+  var [grade, setGrade] = useDash(draft ? draft.grade || '' : ''); // 選定年級
   var [picked, setPicked] = useDash([]); // 選定學生 email
   var [roster, setRoster] = useDash([]);
   useDashE(() => window.subscribeRoster(setRoster, () => {}), []);
@@ -3397,6 +3408,13 @@ function TeacherDashboard({
     if (g && g.email) {
       try {
         window.__dashEmail = g.email;
+      } catch (e) {}
+    }
+    /* v534：公告的稿子先打好（LineNotify 自己會讀這張字條）。
+       ⚠ 只是填好——**送出那一下還是老師自己按**，這是會直接送到家長手機的東西。 */
+    if (g && g.notify) {
+      try {
+        window.__notifyDraft = g.notify;
       } catch (e) {}
     }
   }, []);

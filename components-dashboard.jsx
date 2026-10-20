@@ -1481,14 +1481,18 @@ function RosterManager() {
 
 /* ── LINE 通知（發公告）分頁 ───────────────────────────── */
 function LineNotify() {
-  const [text, setText]     = useDash('');
+  /* v534：聊天室擬好的稿子（app.jsx 放的字條）。讀完要清掉，
+     不然他下次自己開這一頁，上次那篇又會跑出來。 */
+  const draft = (() => { try { const d = window.__notifyDraft; window.__notifyDraft = null; return d || null; }
+                         catch (e) { return null; } })();
+  const [text, setText]     = useDash(draft ? (draft.text || '') : '');
   const [pass, setPass]     = useDash(() => {
     try { return localStorage.getItem('lineAdminPass') || ''; } catch (e) { return ''; }
   });
   const [busy, setBusy]     = useDash(false);
   const [msg,  setMsg]      = useDash(null);       // { type:'ok'|'err', text }
-  const [target, setTarget] = useDash('all');      // 'all' | 'grade' | 'students'
-  const [grade, setGrade]   = useDash('');         // 選定年級
+  const [target, setTarget] = useDash(draft ? (draft.target || 'all') : 'all'); // 'all' | 'grade' | 'students'
+  const [grade, setGrade]   = useDash(draft ? (draft.grade || '') : '');        // 選定年級
   const [picked, setPicked] = useDash([]);         // 選定學生 email
   const [roster, setRoster] = useDash([]);
 
@@ -2771,6 +2775,9 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     try { g = window.__dashGoto; window.__dashGoto = null; } catch (e) {}
     if (g && g.tab) setTab(g.tab);
     if (g && g.email) { try { window.__dashEmail = g.email; } catch (e) {} }
+    /* v534：公告的稿子先打好（LineNotify 自己會讀這張字條）。
+       ⚠ 只是填好——**送出那一下還是老師自己按**，這是會直接送到家長手機的東西。 */
+    if (g && g.notify) { try { window.__notifyDraft = g.notify; } catch (e) {} }
   }, []);
   const [hotOpen,        setHotOpen]       = useDash(null);       // v307 (F11): 展開哪一列常錯題看「哪些孩子錯」
 

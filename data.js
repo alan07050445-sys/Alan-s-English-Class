@@ -7309,6 +7309,9 @@ const ASK_JOBS = {
      我需要多少題目」）══ 前面兩個以前**整個網站都做不到**，不只是聊天室叫不動。 */
   copyweek:  { zh: '整週內容複製到別週', ico: '🗓', need: 'toWeek', where: 'editor' },
   merge:     { zh: '合併單字再出題', ico: '🧩', need: 'groups', where: 'editor' },
+  /* ══ v534（Alan 又加的五件）══════════════════════════════════════ */
+  assign:    { zh: '設定作業期限', ico: '📌', need: 'group', where: 'editor' },
+  notify:    { zh: '發 LINE 公告', ico: '📢', need: 'text', where: 'dash' },
 };
 
 /* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
@@ -7375,10 +7378,14 @@ The tools:
   merge     — collect the words from SEVERAL existing groups (or several weeks), merge them into
               one list (duplicates removed) and make a new set from it
               ("把 Unit 1 跟 Unit 2 的單字卡合併起來再出一份").
+  assign    — set (or clear) the homework deadline on an EXISTING group
+              ("Barbed Wire Baseball 那組設成下週三到期").
+  notify    — send a LINE announcement to parents
+              ("跟家長說這週三停課一次" / "跟 G4 的家長說…").
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper tense review group marking copyweek merge unknown
+  guided exampaper tense review group marking copyweek merge assign notify unknown
 - "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
@@ -7392,6 +7399,16 @@ Rules:
 - "weeks": ONLY for merge, a list of week NUMBERS when he named weeks rather than groups.
 - "nQ": how many questions / words he asked for ("出 10 題就好", "只要 12 個字").
   0 when he did not say. This trims the list; it never invents extra words.
+- "target": ONLY for notify. "all"（全班）/ "grade"（某個年級）/ "students"（指定的孩子）.
+  Default "all" when he did not say.
+- "gradeId": ONLY for notify with target "grade" — g1…g6, copied from what he said.
+- 🔴 For "notify", put the ANNOUNCEMENT HE WANTS SENT in "text", written the way a parent
+  should read it. Do NOT add anything he did not say — no greetings he did not write,
+  no times he did not give. He will see it and press send himself.
+- "group" also works when he names ONE unit instead of a whole group
+  ("Barbed Wire Baseball 的單字卡再加幾種題目") — just copy the name he said.
+- For "exampaper", anything he said the paper must contain goes in "note", in his own words
+  ("要包含現在完成式跟比較級，閱讀那一段用動物的主題").
 - If you are not sure, use "unknown" and put ONE short Traditional-Chinese question in "ask".
   Guessing wrong costs him ten minutes of proofreading before he notices, so ASK.
 - "words": only when he gave an actual word list. Each: {"term":"...","zh":"...(if he gave it)"}
@@ -7476,6 +7493,10 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     weeks: (Array.isArray(o.weeks) ? o.weeks : [])
       .map(n => Math.round(+n || 0)).filter(n => n > 0 && n <= 40).slice(0, 12),
     nQ: Math.max(0, Math.min(60, Math.round(+o.nQ || 0))),
+    target: ['all', 'grade', 'students'].indexOf(String(o.target || '').trim()) >= 0
+      ? String(o.target).trim() : 'all',
+    gradeId: /^g[1-6]$/.test(String(o.gradeId || '').trim().toLowerCase())
+      ? String(o.gradeId).trim().toLowerCase() : '',
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
   if (out.student) {
@@ -7505,6 +7526,10 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   if (need === 'side' && !out.side)          { out.intent = 'unknown'; out.ask = out.ask || '要出外師還是中師那一份？'; }
   if (need === 'group' && !out.group)        { out.intent = 'unknown'; out.ask = out.ask || '是哪一組？把那一組的名字講給我就好。'; }
   if (need === 'toWeek' && !out.toWeek)      { out.intent = 'unknown'; out.ask = out.ask || '要複製到第幾週？'; }
+  /* 📢 公告：他要發的字就是要送到家長手機上的東西——空的不可以放行。 */
+  if (out.intent === 'notify' && out.target === 'grade' && !out.gradeId) {
+    out.intent = 'unknown'; out.ask = '要發給哪一個年級？';
+  }
   if (need === 'groups' && !out.groups.length && !out.weeks.length) {
     out.intent = 'unknown';
     out.ask = out.ask || '要合併哪幾組的單字？講組名或週次都可以。';
