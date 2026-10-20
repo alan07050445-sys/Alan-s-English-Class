@@ -7336,18 +7336,40 @@ function askDueDate(hint, now) {
   const wk = /^(this|next)-(sun|mon|tue|wed|thu|fri|sat)$/.exec(h);
   if (wk) {
     const want = _ASK_DOW[wk[2]];
-    let add = (want - base.getDay() + 7) % 7;
-    /* ⚠「這週三」如果今天已經是週三或更後面，指的是**下一個**週三——
-       不是今天，也不是上週。差一天就是作業到期日錯一天。 */
-    if (add === 0) add = 7;
-    if (wk[1] === 'next') add += 7;
-    base.setDate(base.getDate() + add);
-    return lessonISO(base);
+    if (wk[1] === 'this') {
+      /* 「這週三」如果今天已經是週三或更後面，指的是**下一個**週三——
+         不是今天，也不是上週。差一天就是作業到期日錯一天。 */
+      let add = (want - base.getDay() + 7) % 7;
+      if (add === 0) add = 7;
+      base.setDate(base.getDate() + add);
+      return lessonISO(base);
+    }
+    /* 🔴 v535（實測抓到）：「下週一」本來是算成「接下來那個週一再加七天」——
+       今天是週三時會變成 11/02，但他說的是 **10/26**，整整差一週。
+       作業到期日晚一週，小孩就是晚一週才寫。
+       → 「下週X」＝**下一個日曆週（週一起算）的那一天**，這樣：
+         今天週三 → 下週一 = 10/26、下週五 = 10/30、下週三 = 10/28
+       ⚠ 那個星期幾如果這週已經過了，「這週X」與「下週X」會指到同一天
+         （今天週三說「這週一」跟「下週一」都是 10/26）——那是對的，
+         中文本來就這樣講。 */
+    const mondayDelta = (8 - base.getDay()) % 7 || 7;   // 到「下一個週一」要幾天
+    const nextMon = new Date(base);
+    nextMon.setDate(nextMon.getDate() + mondayDelta);
+    nextMon.setDate(nextMon.getDate() + ((want + 6) % 7));   // 週一=0、週二=1…週日=6
+    return lessonISO(nextMon);
   }
   return '';
 }
-/* 沒特別講時的預設：下一個週日（跟 ReadingGenModal 的預設一致） */
-function askDueDefault(now) { return askDueDate('next-sun', now) || ''; }
+/* 沒特別講時的預設：**這個週日**（大部分作業都是一週）。
+   🔴 v535（實測抓到）：本來寫成 askDueDate('next-sun') ＝下下個週日，
+     但按鈕那條路（QuickSetModal）用的是「這個週日」——
+     **用講的跟用按的差了一整週**。兩條路一定要給同一個答案。 */
+function askDueDefault(now) {
+  const d = now instanceof Date ? new Date(now) : new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+  return lessonISO(d);
+}
 
 /* 一鍵出單字真的做得出來的題型（跟 components-editor.jsx 的 QS_KINDS 同一份 id）。
    ⚠ 這裡寫死是為了程式驗得到——AI 自己發明的 id 丟進 qsBuildItems 會安靜地少一個單元。 */

@@ -166,13 +166,29 @@ ok('   today / tomorrow / +3d', W.askDueDate('today', WED) === '2026-10-21'
 ok('⭐ 這週五 = 10/23', W.askDueDate('this-fri', WED) === '2026-10-23');
 ok('⭐⭐ 今天就是週三時，「這週三」指下一個週三（差一天就是作業到期日錯一天）',
    W.askDueDate('this-wed', WED) === '2026-10-28');
-ok('   下週三 = 再加七天', W.askDueDate('next-wed', WED) === '2026-11-04');
+ok('⭐⭐ 下週三 = **下一個日曆週**的週三（10/28），不是「再加七天」', (() => {
+   /* 🔴 v535 實測抓到的：本來算成「接下來那個週X 再加七天」——
+      今天是週三時，「下週一」會變成 11/02，但他說的是 10/26，整整差一週。
+      作業到期日晚一週，小孩就是晚一週才寫。
+      ⚠ 這一條 v521 當初把**錯的行為**釘起來了，所以錯了九版都沒人發現。 */
+   return W.askDueDate('next-wed', WED) === '2026-10-28'
+     && W.askDueDate('next-mon', WED) === '2026-10-26'
+     && W.askDueDate('next-fri', WED) === '2026-10-30'; })());
 ok('⭐ 明確日期照收', W.askDueDate('2026-12-01', WED) === '2026-12-01');
 ok('⭐ 「先不要指派」→ none → 不設作業', W.askDueDate('none', WED) === '');
 ok('⭐⭐ 受控詞彙以外一律當「沒講」（模型回「下週吧」不要亂解讀）',
    W.askVerify({ intent: 'vocab', words: [{ term: 'a' }], due: '下週吧' }, { roster }).due === ''
    && W.askDueDate('下週吧', WED) === '');
-ok('   沒講時有預設（下一個週日，跟視窗裡一致）', W.askDueDefault(WED) === '2026-11-01');
+ok('⭐⭐ 沒講時的預設要跟視窗裡**同一天**（QuickSetModal 是「這個週日」）', (() => {
+   /* 🔴 v535 實測抓到的第二個：本來寫成 askDueDate('next-sun') ＝下下個週日，
+      但按鈕那條路用的是「這個週日」——**用講的跟用按的差了一整週**。
+      ⚠ 不要寫死日期，直接照視窗裡那條公式算一次比對——
+        這樣哪天視窗改了預設，這條會馬上紅燈。 */
+   const d = new Date(WED); d.setHours(0, 0, 0, 0);
+   d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+   const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+   return W.askDueDefault(WED) === iso && iso === '2026-10-25'
+     && /\(\(7 - d\.getDay\(\)\) % 7 \|\| 7\)/.test(ed); })());
 ok('⚠ 用本地時間算，不可以用 toISOString（v496 的教訓）',
    /絕不用 toISOString/.test(data) && !/toISOString/.test(data.slice(data.indexOf('function askDueDate'), data.indexOf('function askDueDefault'))));
 ok('⭐ 畫面上看得到、而且改得了', /設成這週作業/.test(ed) && /type="date"/.test(ed));
