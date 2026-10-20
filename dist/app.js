@@ -3284,7 +3284,17 @@ function App() {
     streak: localStreak.count || (user && userProfile.streak ? userProfile.streak.count : 0)
   })))), (!catView || editMode) && /*#__PURE__*/React.createElement(window.Footer, {
     onOpenGuide: () => setTourOpen(true)
-  }), (catView || editMode) && /*#__PURE__*/React.createElement(window.MobileNav, {
+  }), isTeacher && window.AskPanel && !askOpen && /*#__PURE__*/React.createElement("button", {
+    className: 'ask-fab' + (catView || editMode ? ' with-nav' : ''),
+    onClick: () => setAskOpen(true),
+    title: "\u8DDF\u5C0F\u52A9\u624B\u8AAA\u4E00\u53E5\u8A71",
+    "aria-label": "\u8DDF\u5C0F\u52A9\u624B\u8AAA\u4E00\u53E5\u8A71"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "ask-fab-ico",
+    "aria-hidden": "true"
+  }, "\uD83D\uDCAC"), /*#__PURE__*/React.createElement("span", {
+    className: "ask-fab-txt"
+  }, "\u5C0F\u52A9\u624B")), (catView || editMode) && /*#__PURE__*/React.createElement(window.MobileNav, {
     week: week,
     weekIdx: weekIdx,
     weekOrder: viewOrder,

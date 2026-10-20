@@ -2447,6 +2447,21 @@ function App() {
 
           {(!catView || editMode) && <window.Footer onOpenGuide={() => setTourOpen(true)}/>}
 
+          {/* ══ 💬 v532：小助手常駐在右下角（Alan：「不需要再按編輯再開起來」）══
+              ⚠ 只有老師看得到——學生不該有「幫我出一份考卷」這種入口。
+              ⚠ 面板打開時就把它收起來（.ask-wrap 本來就釘在同一個角落，
+                不收的話按鈕會從面板底下露出一角）。
+              ⭐ 13 個生成視窗本來就各自獨立 render（靠自己的 open 控制），
+                所以從這裡叫得動，不用先進編輯模式。 */}
+          {isTeacher && window.AskPanel && !askOpen && (
+            <button className={'ask-fab' + ((catView || editMode) ? ' with-nav' : '')}
+              onClick={() => setAskOpen(true)}
+              title="跟小助手說一句話" aria-label="跟小助手說一句話">
+              <span className="ask-fab-ico" aria-hidden="true">💬</span>
+              <span className="ask-fab-txt">小助手</span>
+            </button>
+          )}
+
           {(catView || editMode) && (
             <window.MobileNav
               week={week}

@@ -4033,3 +4033,31 @@
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
 .ask-can li { color: var(--ink-2); }
 @media (max-width: 460px) { .ask-can ul { grid-template-columns: 1fr; } }
+
+/* ══ 💬 v532 小助手浮動鈕 ═══════════════════════════════════════════
+   ⚠ 位置跟 .ask-wrap（聊天面板）同一個角落是故意的：按下去面板就從這裡長出來。
+   ⚠ z-index 要比吉祥物那一層（.mx-layer 60）高，但比面板（1300）低。 */
+.ask-fab {
+  position: fixed; right: 20px; bottom: 20px; z-index: 900;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 18px 11px 14px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid transparent;
+  background: linear-gradient(135deg, #6D5BD0, #8A5FA8);
+  color: #fff; font-family: var(--sans); font-size: 14.5px; font-weight: 800;
+  box-shadow: 0 14px 30px -10px rgba(109,91,208,.65), 0 2px 6px rgba(0,0,0,.14);
+  transition: transform .16s cubic-bezier(.34,1.4,.64,1), box-shadow .2s;
+  animation: askFabIn .36s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes askFabIn { from { opacity: 0; transform: translateY(14px) scale(.86); } }
+.ask-fab:hover  { transform: translateY(-3px) scale(1.04); box-shadow: 0 20px 38px -10px rgba(109,91,208,.7); }
+.ask-fab:active { transform: scale(.96); }
+.ask-fab-ico { font-size: 18px; line-height: 1; }
+/* 有底部導覽列的時候往上讓位，不然會疊在上面 */
+.ask-fab.with-nav { bottom: 84px; }
+@media (min-width: 861px) { .ask-fab.with-nav { bottom: 20px; } }
+/* 手機上只留圖示，不佔畫面 */
+@media (max-width: 520px) {
+  .ask-fab { padding: 13px; right: 14px; }
+  .ask-fab-txt { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ask-fab { animation: none; transition: none; } }
