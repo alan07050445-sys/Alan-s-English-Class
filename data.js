@@ -7305,6 +7305,10 @@ const ASK_JOBS = {
   review:    { zh: '排一份複習到別週', ico: '🔁', need: 'group', where: 'editor' },
   group:     { zh: '整組操作', ico: '📦', need: 'group', where: 'editor' },
   marking:   { zh: '申論批改', ico: '📋', need: '', where: 'dash' },
+  /* ══ v533（Alan：「把哪一週的內容複製到哪裡、合併哪些單字卡、合併之後再出題、
+     我需要多少題目」）══ 前面兩個以前**整個網站都做不到**，不只是聊天室叫不動。 */
+  copyweek:  { zh: '整週內容複製到別週', ico: '🗓', need: 'toWeek', where: 'editor' },
+  merge:     { zh: '合併單字再出題', ico: '🧩', need: 'groups', where: 'editor' },
 };
 
 /* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
@@ -7367,15 +7371,27 @@ The tools:
   group     — do something to a whole EXISTING group: copy / move it to another week,
               add one more exercise to it, or delete it.
   marking   — open the marking screen for the written (申論) answers.
+  copyweek  — copy EVERYTHING in one week to another week ("把第 7 週的內容複製到第 9 週").
+  merge     — collect the words from SEVERAL existing groups (or several weeks), merge them into
+              one list (duplicates removed) and make a new set from it
+              ("把 Unit 1 跟 Unit 2 的單字卡合併起來再出一份").
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper tense review group marking unknown
+  guided exampaper tense review group marking copyweek merge unknown
 - "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
 - "op": ONLY for intent "group". One of: copy（沿用到別週）move（搬過去）again（再出一份）delete（刪掉）
 - "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
+- "fromWeek": ONLY for copyweek, the SOURCE week number. If he did not say one, 0
+  (the website then uses the week he is looking at).
+- "groups": ONLY for merge. The names of the groups he wants merged, copied exactly, as a list.
+  If he said whole weeks instead ("第 5 到第 7 週的單字"), leave groups empty and put the
+  week numbers in "weeks" instead.
+- "weeks": ONLY for merge, a list of week NUMBERS when he named weeks rather than groups.
+- "nQ": how many questions / words he asked for ("出 10 題就好", "只要 12 個字").
+  0 when he did not say. This trims the list; it never invents extra words.
 - If you are not sure, use "unknown" and put ONE short Traditional-Chinese question in "ask".
   Guessing wrong costs him ten minutes of proofreading before he notices, so ASK.
 - "words": only when he gave an actual word list. Each: {"term":"...","zh":"...(if he gave it)"}
@@ -7452,6 +7468,14 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     op: ['copy', 'move', 'again', 'delete'].indexOf(String(o.op || '').trim()) >= 0
       ? String(o.op).trim() : '',
     toWeek: Math.max(0, Math.min(40, Math.round(+o.toWeek || 0))),
+    fromWeek: Math.max(0, Math.min(40, Math.round(+o.fromWeek || 0))),
+    /* ⚠ 一樣夾回受控值：組名最多 8 個、週次最多 12 週、題數最多 60。
+       模型回一個 500 題，程式照做就會把瀏覽器卡死。 */
+    groups: (Array.isArray(o.groups) ? o.groups : [])
+      .map(g => String(g || '').trim()).filter(Boolean).slice(0, 8),
+    weeks: (Array.isArray(o.weeks) ? o.weeks : [])
+      .map(n => Math.round(+n || 0)).filter(n => n > 0 && n <= 40).slice(0, 12),
+    nQ: Math.max(0, Math.min(60, Math.round(+o.nQ || 0))),
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
   if (out.student) {
@@ -7480,6 +7504,11 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   if (need === 'student' && !out.email)      { out.intent = 'unknown'; out.ask = out.ask || '要幫哪一位學生？'; }
   if (need === 'side' && !out.side)          { out.intent = 'unknown'; out.ask = out.ask || '要出外師還是中師那一份？'; }
   if (need === 'group' && !out.group)        { out.intent = 'unknown'; out.ask = out.ask || '是哪一組？把那一組的名字講給我就好。'; }
+  if (need === 'toWeek' && !out.toWeek)      { out.intent = 'unknown'; out.ask = out.ask || '要複製到第幾週？'; }
+  if (need === 'groups' && !out.groups.length && !out.weeks.length) {
+    out.intent = 'unknown';
+    out.ask = out.ask || '要合併哪幾組的單字？講組名或週次都可以。';
+  }
   return out;
 }
 

@@ -1828,15 +1828,19 @@ function App() {
     }));
     return out;
   };
+  /* weekId → 第幾週（label 裡的數字）。 */
+  var askWeekNo = id => {
+    var w = weeksRef.current[id] || {};
+    var m = /(\d+)/.exec(String(w.label || w.id || id));
+    return m ? +m[1] : 0;
+  };
   /* 「第 9 週」→ 真正的 weekId。⚠ 只在目前這個年級的週次裡找，不跨學期。 */
-  var askFindWeek = n => {
+  var askFindWeek = (n, allowCurrent) => {
     if (!n) return '';
-    var hit = (weekOrder || []).find(id => {
-      var w = weeksRef.current[id] || {};
-      var m = /(\d+)/.exec(String(w.label || w.id || id));
-      return m && +m[1] === +n;
-    });
-    return hit && hit !== weekId ? hit : '';
+    var hit = (weekOrder || []).find(id => askWeekNo(id) === +n);
+    /* ⚠ 搬家的目標不可以是「現在這一週」（搬了等於沒搬）；
+       但複製的**來源**可以是現在這一週，所以多一個開關。 */
+    return hit && (allowCurrent || hit !== weekId) ? hit : '';
   };
   var askFindGroup = name => {
     var q = askNorm(name);
@@ -1867,12 +1871,16 @@ function App() {
     if (!plan) return;
     var cat0 = openCat || activeCategories[0] && activeCategories[0].id || 'vocab';
     if (plan.intent === 'vocab') {
+      /* v533：「我只要 10 題」＝只用前 10 個字（單字題的題數是跟著字數走的）。
+         ⚠ 只會**裁短**，絕對不會去湊——湊出來的字不是他要教的。 */
+      var ws = plan.nQ && plan.words.length > plan.nQ ? plan.words.slice(0, plan.nQ) : plan.words;
       setRegenFor({
         name: plan.title || '',
         catId: cat0,
-        text: plan.words.map(w => [w.term, w.zh].filter(Boolean).join(' - ')).join('\n')
+        text: ws.map(w => [w.term, w.zh].filter(Boolean).join(' - ')).join('\n')
       });
       setQuickSetOpen(true);
+      if (ws.length < plan.words.length) showToast(`照你說的只用前 ${ws.length} 個字`);
     } else if (plan.intent === 'wordstudy') {
       setAskTopic(plan.topic);
       setWsGenOpen(true);
@@ -1933,14 +1941,55 @@ function App() {
       setExamSide(plan.side || 'it');
     } else if (plan.intent === 'tense') {
       setGrGenOpen(true);
+    } else if (plan.intent === 'copyweek') {
+      /* 🗓 整週複製。來源沒講就是現在這一週。 */
+      var from = plan.fromWeek ? askFindWeek(plan.fromWeek, true) : weekId;
+      var to = askFindWeek(plan.toWeek, true);
+      if (!from) {
+        showToast(`找不到第 ${plan.fromWeek} 週。`);
+      } else if (!to) {
+        showToast(`找不到第 ${plan.toWeek} 週。`);
+      } else if (from === to) {
+        showToast('來源跟目標是同一週。');
+      } else if (window.confirm(`要把「${(weeksRef.current[from] || {}).label || from}」的全部內容複製到「${(weeksRef.current[to] || {}).label || to}」嗎？（目標週原本的東西會保留）`)) {
+        handleCopyWholeWeek(from, to);
+      }
+    } else if (plan.intent === 'merge') {
+      /* 🧩 合併單字再出題：把字接起來、去重、（有講的話）裁到他要的題數，
+         然後開「一鍵出單字」並把單字表填好。 */
+      var _ws = askMergeWords({
+        groups: plan.groups,
+        weeks: plan.weeks
+      });
+      if (!_ws.length) {
+        var names = askGroupNames();
+        showToast(names.length ? `這幾組裡找不到單字。這一週有的是：${names.slice(0, 4).join('、')}` : '找不到可以合併的單字。');
+      } else {
+        var cut = plan.nQ && _ws.length > plan.nQ;
+        if (cut) _ws = _ws.slice(0, plan.nQ);
+        var text = _ws.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
+        var imgs = {};
+        _ws.forEach(x => {
+          if (x.imageUrl) imgs[String(x.term).toLowerCase()] = x.imageUrl;
+        });
+        setRegenFor({
+          catId: cat0,
+          name: plan.title || (plan.groups || []).join(' + ') || '合併複習',
+          pick: false,
+          text,
+          images: imgs
+        });
+        setQuickSetOpen(true);
+        showToast(`合併了 ${_ws.length} 個字${cut ? `（照你說的只取前 ${plan.nQ} 個）` : ''}`);
+      }
     } else if (plan.intent === 'review' || plan.intent === 'group') {
       /* 🔁 排複習到別週 ／ 📦 整組操作：先在目前這一週把那一組找出來。
          ⚠ 找不到不要安靜地什麼都不做——把這一週有哪些組列給他看（v500 的教訓：
            「靜靜地少做一半比直接失敗更難發現」）。 */
       var found = askFindGroup(plan.group);
       if (!found) {
-        var names = askGroupNames();
-        showToast(names.length ? `這一週沒有「${plan.group}」這一組。有的是：${names.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
+        var _names = askGroupNames();
+        showToast(_names.length ? `這一週沒有「${plan.group}」這一組。有的是：${_names.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
       } else if (plan.intent === 'review') {
         setReviewFor({
           catId: found.catId,
@@ -1949,19 +1998,19 @@ function App() {
         });
       } else if (plan.op === 'again') {
         /* 走「在這一組再出一份」那條既有的路（跟單元列的選單同一個 handler）。 */
-        var ws = window.reviewWordsOf && window.reviewWordsOf(found.items) || [];
-        if (ws.length >= 2) {
-          var text = ws.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
-          var imgs = {};
-          ws.forEach(x => {
-            if (x.imageUrl) imgs[String(x.term).toLowerCase()] = x.imageUrl;
+        var _ws2 = window.reviewWordsOf && window.reviewWordsOf(found.items) || [];
+        if (_ws2.length >= 2) {
+          var _text = _ws2.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
+          var _imgs = {};
+          _ws2.forEach(x => {
+            if (x.imageUrl) _imgs[String(x.term).toLowerCase()] = x.imageUrl;
           });
           setRegenFor({
             catId: found.catId,
             name: found.name,
             pick: false,
-            text,
-            images: imgs,
+            text: _text,
+            images: _imgs,
             have: window.qsKindsInGroup && window.qsKindsInGroup(found.items) || []
           });
           setQuickSetOpen(true);
@@ -2586,6 +2635,104 @@ function App() {
     saveWeeksSafe(w);
     var toLabel = w[targetWeekIds[0]] && (w[targetWeekIds[0]].label || targetWeekIds[0]) || targetWeekIds[0];
     showToast(move ? `整組 ${list.length} 個單元已搬到「${toLabel}」✓` : `整組 ${list.length} 個單元已沿用到 ${weeksTouched} 週${dueDate ? '，並設成作業' : ''} ✓`);
+  };
+
+  /* ══ 🗓 v533：整週內容複製到別週 ════════════════════════════════
+     Alan：「我說把哪一週的內容複製到哪裡」——以前**整個網站都做不到**，
+     只能一組一組沿用（v454）。
+     ⚠ 一次做完一次存：照著分類一個一個呼叫 handleCopyGroupToWeeks 的話，
+       會連存好幾次雲端，中間任何一次失敗就變成「複製到一半」。
+     ⚠ 組內互相指向的 id（教學卡的鎖 requires、單字卡的 linkedFlashcardId）
+       要跟著換成新 id——跟整組沿用同一個道理，少做這一步到了新的一週
+       就會鎖著一個不存在的單元。
+     ⚠ 目標週已經有的東西**不動**（是「加進去」不是「蓋掉」）——
+       蓋掉的話他一句話就能把一整週的課程洗掉。 */
+  var handleCopyWholeWeek = (fromId, toId) => {
+    var w = JSON.parse(JSON.stringify(weeksRef.current));
+    var src = w[fromId],
+      dst = w[toId];
+    if (!src || !dst) {
+      showToast('找不到那一週');
+      return 0;
+    }
+    if (!dst.items) dst.items = {
+      vocab: [],
+      grammar: [],
+      word: [],
+      reading: []
+    };
+    var n = 0;
+    Object.keys(src.items || {}).forEach(catId => {
+      var list = (src.items[catId] || []).filter(x => x && x.id);
+      if (!list.length) return;
+      if (!Array.isArray(dst.items[catId])) dst.items[catId] = [];
+      var taken = new Set(Object.values(dst.items).flat().map(it => it && it.id).filter(Boolean));
+      var map = {};
+      list.forEach(item => {
+        var id = item.id,
+          k = 2;
+        while (taken.has(id)) {
+          id = `${item.id}-${k}`;
+          k++;
+        }
+        taken.add(id);
+        var clone = JSON.parse(JSON.stringify(item));
+        clone.id = id;
+        map[item.id] = id;
+        dst.items[catId].push(clone);
+        n++;
+      });
+      dst.items[catId].forEach(it => {
+        if (it.requires && map[it.requires]) it.requires = map[it.requires];
+        if (it.linkedFlashcardId && map[it.linkedFlashcardId]) it.linkedFlashcardId = map[it.linkedFlashcardId];
+      });
+    });
+    if (!n) {
+      showToast('那一週沒有東西可以複製');
+      return 0;
+    }
+    setWeeks(w);
+    saveWeeksSafe(w);
+    showToast(`已把「${src.label || fromId}」的 ${n} 個單元複製到「${dst.label || toId}」✓`);
+    return n;
+  };
+
+  /* ══ 🧩 v533：把好幾組的單字合併起來，再出一份 ══════════════════
+     Alan：「合併哪些單字卡，合併之後再出題，然後我需要多少題目」。
+     ⭐ 零件本來就有：reviewWordsOf 會從任何一組反推出單字（沒有單字卡時
+       也會從配對／聽寫／短文填空挖出來），qsBuildItems 會把單字變成題目。
+       以前沒有的只是「把好幾組的字接起來、去掉重複」這一段。
+     ⚠ 去重要用小寫比對，不然 Pursued 跟 pursued 會變成兩個字。
+     ⚠ 中文／例句／圖片以**第一次出現**的那一份為準——後面同一個字再出現時
+       不要覆蓋，不然他後來補的翻譯會被舊的蓋回去。 */
+  var askMergeWords = ({
+    groups = [],
+    weeks: wkNos = []
+  }) => {
+    var all = [];
+    var seen = new Map();
+    var take = items => {
+      var ws = window.reviewWordsOf && window.reviewWordsOf(items) || [];
+      ws.forEach(x => {
+        var k = String(x.term || '').toLowerCase().trim();
+        if (!k || seen.has(k)) return;
+        seen.set(k, true);
+        all.push(x);
+      });
+    };
+    if (wkNos.length) {
+      wkNos.forEach(no => {
+        var wid = askFindWeek(no) || (weeksRef.current[weekId] && askWeekNo(weekId) === no ? weekId : '');
+        var w = weeksRef.current[wid] || null;
+        if (!w) return;
+        Object.keys(w.items || {}).forEach(cid => take(w.items[cid] || []));
+      });
+    }
+    groups.forEach(gName => {
+      var found = askFindGroup(gName);
+      if (found) take(found.items);
+    });
+    return all;
   };
 
   // v294: 沿用題目到其他週——深拷貝一份（各週獨立；進度分開算，因 key = weekId_itemId）。

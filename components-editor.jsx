@@ -6073,7 +6073,9 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                 '出一份外師的考前複習卷',
                 '把 Barbed Wire Baseball 排一份複習到第 9 週',
                 '把 Barbed Wire Baseball 那組沿用到第 10 週',
-                '我要改申論題'].map((x, i) => (
+                '我要改申論題',
+                '把第 7 週的內容複製到第 9 週',
+                '把 Unit 1 跟 Unit 2 的單字合併再出一份，只要 12 題'].map((x, i) => (
                 <button key={i} onClick={() => setText(x)}>{x}</button>
               ))}
             </div>
