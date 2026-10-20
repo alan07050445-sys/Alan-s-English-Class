@@ -7795,6 +7795,103 @@ function examGenqOne(text, part) {
   return { ok: why.length === 0, why };
 }
 
+/* ══ v530 📋 Rubric 三項評分（康橋 Formative 的申論題就是這樣改的）════
+   Alan 要的三項：Explanation（說明清楚）／Relevant（切題）／Effort（用心）。
+
+   ⭐ 分工說得很清楚：
+     · **程式**算總分（三項加起來照比例換算成這一題的分數）
+     · **AI** 只給「建議」——每一項幾分、為什麼，而且要引用孩子自己寫的字
+     · **老師**是最後一關，AI 的建議只是先填好，改幾分都可以
+   ⚠ AI 的建議在老師按下確認之前，學生一個字都看不到。申論題是會被拿去
+     跟家長討論的東西，不能讓沒人看過的機器分數直接變成成績。 */
+const EXAM_RUBRIC = [
+  { id: 'explain',  zh: '說明清楚', en: 'Explanation', tip: '有沒有把想法講完整、講得懂' },
+  { id: 'relevant', zh: '切題',     en: 'Relevant',    tip: '有沒有回答到題目問的事' },
+  { id: 'effort',   zh: '用心',     en: 'Effort',      tip: '有沒有認真寫、寫得夠' },
+];
+const EXAM_RUBRIC_MAX = 4;          // 每一項的滿分（老師可以在出卷時改）
+
+/* 一題的 rubric 分數 → 這一題拿幾分。
+   ⚠ 三項都沒給分（老師還沒改）回 null，不要回 0——「還沒改」跟「改完 0 分」
+     是兩件事，混在一起的話，沒改的孩子看起來就像被當掉了。 */
+function examRubricPoints(mark, pts, max) {
+  const m = max || EXAM_RUBRIC_MAX;
+  if (!mark) return null;
+  const vals = EXAM_RUBRIC.map(c => mark[c.id]);
+  if (vals.every(v => v == null || v === '')) return null;
+  const sum = vals.reduce((a, v) => a + Math.max(0, Math.min(m, +v || 0)), 0);
+  return Math.round((+pts || 0) * sum / (EXAM_RUBRIC.length * m) * 10) / 10;
+}
+
+/* 整個 short 大題：每一小題的 rubric 加起來。回傳 { got, max, done, per[] } */
+function examRubricPart(part, marks) {
+  const qs = (part && part.questions) || [];
+  const max = +part.rubricMax || EXAM_RUBRIC_MAX;
+  const each = qs.length ? (+part.pts || 0) / qs.length : 0;
+  const per = qs.map((q, i) => examRubricPoints((marks || {})[i], +q.pts || each, max));
+  const done = per.filter(v => v != null).length;
+  return {
+    got: Math.round(per.reduce((a, v) => a + (v || 0), 0) * 10) / 10,
+    max: +part.pts || 0, done, total: qs.length, per,
+  };
+}
+
+const AI_RUBRIC_SYS = `You help a Taiwanese elementary English teacher mark one short written answer.
+You give a SUGGESTION only; the teacher decides the final mark.
+
+Score these three, each 0 to {MAX} (whole numbers):
+- explain  : Explanation — is the idea complete and understandable?
+- relevant : Relevant — does it actually answer the question that was asked?
+- effort   : Effort — did the child really try (enough written, not one word)?
+
+RULES
+- The writer is 8-12 years old and learning English. Judge the THINKING, not spelling or grammar.
+- A short but correct and on-topic answer still scores well on "relevant".
+- "why" for each: ONE short Traditional Chinese sentence (≤22 characters), said kindly, to the teacher.
+- "quote": copy 3 to 8 words EXACTLY as the child wrote them (same spelling, even if wrong).
+  Pick the words your scores are based on. If the answer is too short to quote, use "".
+- "next": ONE short Traditional Chinese sentence (≤24 characters) — what to tell the child to do better.
+Return ONLY JSON:
+{"explain":{"n":0,"why":""},"relevant":{"n":0,"why":""},"effort":{"n":0,"why":""},"quote":"","next":""}`;
+
+/* AI 先改一題。回 null ＝「這題 AI 不給建議」，老師自己改。
+   ⚠⚠ 一定要驗 quote：把「引用孩子寫的字」當成**接地檢查**——
+     引不出孩子真的寫過的連續字串，就代表它在憑空評論，整份建議作廢。
+     （跟 v407 的分段閱讀出題用同一招。） */
+async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoints = '' } = {}) {
+  const ans = String(answer == null ? '' : answer).trim();
+  const words = ans.split(/\s+/).filter(Boolean);
+  /* 幾乎空白的就不要問 AI 了——問了也只會得到「請再寫多一點」，白花一次呼叫 */
+  if (words.length < 3) {
+    return { explain: { n: 0, why: '幾乎沒有寫' }, relevant: { n: 0, why: '沒有回答到題目' },
+             effort: { n: 0, why: '還沒開始寫' }, quote: '', next: '先試著寫一句完整的話。', ai: true };
+  }
+  const sys = AI_RUBRIC_SYS.replace(/\{MAX\}/g, String(max));
+  const msg = `QUESTION: ${question || ''}\n` +
+    (keyPoints ? `WHAT A GOOD ANSWER MENTIONS: ${keyPoints}\n` : '') +
+    `\nTHE CHILD WROTE:\n${ans}`;
+  let got = null;
+  try { got = await _gnCall(sys, msg, 500); } catch (e) { return null; }
+  if (!got || typeof got !== 'object') return null;
+
+  const out = { ai: true };
+  for (const c of EXAM_RUBRIC) {
+    const r = got[c.id];
+    if (!r || r.n == null) return null;
+    const n = Math.round(+r.n);
+    if (!isFinite(n) || n < 0 || n > max) return null;          // 分數超出範圍＝整份不要
+    out[c.id] = { n, why: String(r.why || '').trim().slice(0, 40) };
+    if (!out[c.id].why) return null;
+  }
+  /* 接地：引用的字要真的出現在孩子寫的東西裡（忽略大小寫與標點） */
+  const flat = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const q = flat(got.quote);
+  if (!q || q.split(' ').length < 3 || flat(ans).indexOf(q) < 0) return null;
+  out.quote = String(got.quote).trim();
+  out.next = String(got.next || '').trim().slice(0, 40);
+  return out;
+}
+
 /* 整份考卷的配分盤點——老師要能一眼看出「這份加起來是不是 100 分」 */
 function examTotals(item) {
   const secs = (item && item.sections) || [];
@@ -8022,7 +8119,8 @@ function examWarnings(item) {
 }
 
 Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
-  examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne });
+  examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
+  EXAM_RUBRIC, EXAM_RUBRIC_MAX, examRubricPoints, examRubricPart, aiGradeRubric });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v513（Alan 的 AI 清單第三順位）📝 考前複習包
@@ -8425,6 +8523,23 @@ function subscribePractice(email, cb) {
   return _db.collection('practice').doc(id)
     .onSnapshot(d => cb(d.exists ? d.data() : null), () => cb(null));
 }
+/* ── v530 📋 申論題的批改結果 ───────────────────────────────
+   也放 practice/{email}：老師寫、學生只讀自己那一份——跟加強練習同一條路，
+   **不用再加 Firestore 規則**（這條最重要，不然 Alan 又要去 Console 貼一次）。
+   ⚠ 學生寫的答案在 progress（他自己寫的），老師的分數在 practice（老師寫的）。
+     兩邊分開是故意的：規則上學生不能改自己的分數，老師也不能改學生的作答。 */
+async function saveExamMarks(email, progressKey, mark) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !progressKey) return false;
+  await _db.collection('practice').doc(id).set({
+    marks: { [progressKey]: { ...mark, at: Date.now() } },
+  }, { merge: true });
+  return true;
+}
+function examMarkOf(doc, progressKey) {
+  return ((doc && doc.marks) || {})[progressKey] || null;
+}
+
 /* 收件匣 → 畫面要的清單（新的排前面） */
 function practiceSets(doc) {
   const sets = (doc && doc.sets) || {};
@@ -8434,7 +8549,8 @@ function practiceSets(doc) {
 }
 
 Object.assign(window, { mkStats, aiDiagnoseMistakes, aiMakeFixSet,
-  savePracticeSet, deletePracticeSet, subscribePractice, practiceSets });
+  savePracticeSet, deletePracticeSet, subscribePractice, practiceSets,
+  saveExamMarks, examMarkOf });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v465（Alan：「錯題那個也幫我做，我覺得要加上獎勵比較合理」）

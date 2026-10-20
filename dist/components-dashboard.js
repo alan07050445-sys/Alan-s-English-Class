@@ -3715,6 +3715,13 @@ function TeacherDashboard({
     label: '集點',
     sub: '給星星／兌換扣點',
     sec: '每天用'
+  }, /* v530（Alan：「Rubri's 加上去吧」）——康橋 Formative 的申論題照 rubric 三項手改 */
+  {
+    id: 'marking',
+    ico: '📋',
+    label: '申論批改',
+    sub: '三項評分（AI 先給建議）',
+    sec: '每天用'
   }, {
     id: 'notify',
     ico: '📢',
@@ -3859,7 +3866,9 @@ function TeacherDashboard({
   }, /*#__PURE__*/React.createElement(LessonLog, {
     roster: rosterAll,
     myEmail: myEmailD
-  })) : tab === 'notify' ? /*#__PURE__*/React.createElement(LineNotify, null) : tab === 'linelink' ? /*#__PURE__*/React.createElement(LineLink, null) : tab === 'stars' ? /*#__PURE__*/React.createElement(StarsManager, {
+  })) : tab === 'notify' ? /*#__PURE__*/React.createElement(LineNotify, null) : tab === 'linelink' ? /*#__PURE__*/React.createElement(LineLink, null) : tab === 'marking' ? /*#__PURE__*/React.createElement(ExamMarking, {
+    students: visibleStudents
+  }) : tab === 'stars' ? /*#__PURE__*/React.createElement(StarsManager, {
     roster: rosterAll,
     myEmail: myEmailD,
     ownerEmail: ownerEmailD,
@@ -4005,6 +4014,248 @@ function TeacherDashboard({
      ② AI 診斷「他為什麼錯」——⭐ 舉的例子必須真的在他的錯題裡，否則整條丟掉
      ③ 針對那個毛病出 5 題——程式驗 ＋ 第二個 AI 交叉檢查
    存進 practice/{email}（個人收件匣），不碰整個年級共用的週次內容。 */
+/* ══ v530 📋 申論批改（Rubri：Explanation / Relevant / Effort）══════════
+   Alan 的康橋 Formative 最後一大題是申論，照 rubric 三項手改。
+
+   ⭐ 三方分工（這一版最重要的設計）：
+     · **學生**寫的字存在 progress（他自己寫的，老師只能讀）
+     · **AI** 只給「建議分數」，而且**老師按下存檔之前學生一個字都看不到**
+     · **老師**是最後一關，改幾分都可以，AI 的建議只是先把格子填好
+   ⚠ 申論題的分數是會被拿去跟家長討論的，不能讓沒有人看過的機器分數
+     直接變成成績——所以這裡刻意**沒有**「全部自動改完」這顆按鈕。
+   ⚠ 分數寫進 practice/{email}（老師寫、學生讀自己的），跟加強練習同一條路，
+     **不用再加 Firestore 規則**。 */
+function ExamMarking({
+  students
+}) {
+  var [sel, setSel] = useDash(null); // 選到的學生 email
+  var [mark, setMark] = useDash({}); // progressKey → { [partKey]: [ {explain,relevant,effort,note} ] }
+  var [busy, setBusy] = useDash('');
+  var [msg, setMsg] = useDash('');
+  var [saved, setSaved] = useDash({});
+
+  /* 哪些孩子有申論等著改——從他們的 progress 撈 examWritten */
+  var pending = useDashM(() => {
+    var out = [];
+    (students || []).forEach(st => {
+      var items = st.items || {};
+      Object.keys(items).forEach(k => {
+        var it = items[k];
+        if (!it || !it.examWritten) return;
+        out.push({
+          email: String(st.email || '').toLowerCase(),
+          name: st.name || st.email,
+          key: k,
+          title: it.examTitle || '考卷',
+          at: it.done || it.ts || 0,
+          written: it.examWritten
+        });
+      });
+    });
+    return out.sort((a, b) => (b.at || 0) - (a.at || 0));
+  }, [students]);
+
+  /* 老師已經改過哪些——讀 practice/{email}.marks */
+  useDashE(() => {
+    var emails = [...new Set(pending.map(p => p.email))];
+    if (!emails.length || !window.subscribePractice) return;
+    var offs = emails.map(em => window.subscribePractice(em, doc => {
+      setSaved(s => ({
+        ...s,
+        [em]: doc && doc.marks || {}
+      }));
+    }));
+    return () => offs.forEach(f => {
+      try {
+        f();
+      } catch (e) {}
+    });
+  }, [pending.map(p => p.email).join()]);
+  var cur = pending.find(p => p.email + '|' + p.key === sel) || null;
+  var R = window.EXAM_RUBRIC || [];
+  var maxOf = w => +w.rubricMax || window.EXAM_RUBRIC_MAX || 4;
+  var cell = (partKey, qi) => ((mark[sel] || {})[partKey] || [])[qi] || {};
+  var setCell = (partKey, qi, patch) => setMark(m => {
+    var one = {
+      ...(m[sel] || {})
+    };
+    var arr = (one[partKey] || []).slice();
+    arr[qi] = {
+      ...(arr[qi] || {}),
+      ...patch
+    };
+    one[partKey] = arr;
+    return {
+      ...m,
+      [sel]: one
+    };
+  });
+
+  /* 把老師已經存過的分數帶回畫面（不然每次點進來都是空的） */
+  useDashE(() => {
+    if (!cur) return;
+    var had = ((saved[cur.email] || {})[cur.key] || {}).byPart;
+    if (had && !mark[sel]) setMark(m => ({
+      ...m,
+      [sel]: had
+    }));
+  }, [sel, saved]);
+  var aiOne = async (partKey, qi, q, max) => {
+    setMsg('');
+    setBusy(partKey + qi);
+    try {
+      var got = await window.aiGradeRubric(q.q, q.a, {
+        max,
+        keyPoints: q.keyPoints
+      });
+      if (!got) {
+        setMsg('這一題 AI 沒有給出可靠的建議（它引用不到孩子真的寫過的字）——請直接自己改。');
+      } else {
+        var patch = {
+          note: got.next || '',
+          _ai: true
+        };
+        R.forEach(c => {
+          patch[c.id] = got[c.id] ? got[c.id].n : 0;
+        });
+        patch._why = R.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
+        patch._quote = got.quote || '';
+        setCell(partKey, qi, patch);
+      }
+    } catch (e) {
+      setMsg('AI 現在叫不動，等一下再試，或直接自己改。');
+    }
+    setBusy('');
+  };
+  var save = async () => {
+    if (!cur) return;
+    setMsg('');
+    setBusy('save');
+    try {
+      await window.saveExamMarks(cur.email, cur.key, {
+        byPart: mark[sel] || {},
+        title: cur.title
+      });
+      setMsg('存好了，學生那邊就看得到分數與評語了。');
+    } catch (e) {
+      setMsg('存不進去——可能是 Firestore 規則還沒更新。');
+    }
+    setBusy('');
+  };
+  var doneCount = p => {
+    var by = ((saved[p.email] || {})[p.key] || {}).byPart || {};
+    var n = 0,
+      t = 0;
+    Object.keys(p.written).forEach(pk => {
+      (p.written[pk].qs || []).forEach((_, i) => {
+        t++;
+        var m = (by[pk] || [])[i];
+        if (m && R.some(c => m[c.id] != null)) n++;
+      });
+    });
+    return {
+      n,
+      t
+    };
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mk-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mk-side"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mk-side-h"
+  }, "\u5F85\u6279\u6539 ", /*#__PURE__*/React.createElement("b", null, pending.filter(p => {
+    var d = doneCount(p);
+    return d.n < d.t;
+  }).length)), pending.length === 0 && /*#__PURE__*/React.createElement("p", {
+    className: "mk-empty"
+  }, "\u9084\u6C92\u6709\u4EBA\u4EA4\u7533\u8AD6\u984C\u3002\u8003\u5377\u88E1\u6709\u300C\u554F\u7B54\uFF08\u8001\u5E2B\u6539\uFF09\u300D\u90A3\u4E00\u5927\u984C\uFF0C\u5B78\u751F\u4EA4\u5377\u4E4B\u5F8C\u5C31\u6703\u51FA\u73FE\u5728\u9019\u88E1\u3002"), pending.map(p => {
+    var d = doneCount(p);
+    var k = p.email + '|' + p.key;
+    return /*#__PURE__*/React.createElement("button", {
+      key: k,
+      className: 'mk-stu' + (sel === k ? ' on' : '') + (d.n >= d.t ? ' done' : ''),
+      onClick: () => setSel(k)
+    }, /*#__PURE__*/React.createElement("b", null, p.name), /*#__PURE__*/React.createElement("span", null, p.title), /*#__PURE__*/React.createElement("em", null, d.n >= d.t ? '已改完' : `${d.n} / ${d.t}`));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "mk-main"
+  }, !cur ? /*#__PURE__*/React.createElement("p", {
+    className: "mk-empty"
+  }, "\u5DE6\u908A\u9078\u4E00\u4F4D\u5B78\u751F\u958B\u59CB\u6539\u3002") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "mk-head"
+  }, /*#__PURE__*/React.createElement("b", null, cur.name), /*#__PURE__*/React.createElement("span", null, cur.title)), Object.keys(cur.written).map(pk => {
+    var w = cur.written[pk];
+    var max = maxOf(w);
+    var rp = window.examRubricPart ? window.examRubricPart({
+      pts: w.pts,
+      questions: w.qs,
+      rubricMax: max
+    }, (mark[sel] || {})[pk]) : {
+      got: 0,
+      max: w.pts
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      className: "mk-part",
+      key: pk
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "mk-part-h"
+    }, /*#__PURE__*/React.createElement("b", null, w.title || '申論'), /*#__PURE__*/React.createElement("span", null, rp.got, " / ", w.pts, " \u5206")), (w.qs || []).map((q, i) => {
+      var c = cell(pk, i);
+      return /*#__PURE__*/React.createElement("div", {
+        className: "mk-q",
+        key: i
+      }, /*#__PURE__*/React.createElement("p", {
+        className: "mk-qt"
+      }, i + 1, ". ", q.q), /*#__PURE__*/React.createElement("div", {
+        className: "mk-ans"
+      }, q.a || /*#__PURE__*/React.createElement("i", null, "\uFF08\u7A7A\u767D\uFF09")), /*#__PURE__*/React.createElement("div", {
+        className: "mk-rub"
+      }, R.map(cr => /*#__PURE__*/React.createElement("label", {
+        className: "mk-cr",
+        key: cr.id
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "mk-cr-n"
+      }, cr.zh, /*#__PURE__*/React.createElement("i", null, cr.en)), /*#__PURE__*/React.createElement("span", {
+        className: "mk-cr-btns"
+      }, Array.from({
+        length: max + 1
+      }, (_, v) => /*#__PURE__*/React.createElement("button", {
+        key: v,
+        className: c[cr.id] === v ? 'on' : '',
+        title: cr.tip,
+        onClick: () => setCell(pk, i, {
+          [cr.id]: v,
+          _ai: false
+        })
+      }, v)))))), c._why && /*#__PURE__*/React.createElement("p", {
+        className: "mk-ai-why"
+      }, "\uD83E\uDD16 ", c._why, c._quote ? `　引用：「${c._quote}」` : ''), /*#__PURE__*/React.createElement("div", {
+        className: "mk-q-foot"
+      }, /*#__PURE__*/React.createElement("input", {
+        className: "mk-note",
+        placeholder: "\u7D66\u4ED6\u7684\u4E00\u53E5\u8A71\uFF08\u5B78\u751F\u770B\u5F97\u5230\uFF09",
+        value: c.note || '',
+        onChange: e => setCell(pk, i, {
+          note: e.target.value
+        })
+      }), /*#__PURE__*/React.createElement("button", {
+        className: "btn ghost",
+        disabled: !!busy,
+        onClick: () => aiOne(pk, i, q, max)
+      }, busy === pk + i ? '看一下…' : '🤖 AI 先改')));
+    }));
+  }), msg && /*#__PURE__*/React.createElement("p", {
+    className: "mk-msg"
+  }, msg), /*#__PURE__*/React.createElement("div", {
+    className: "mk-foot"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mk-foot-hint"
+  }, "AI \u53EA\u7D66\u5EFA\u8B70\uFF0C\u6309\u4E0B\u5B58\u6A94\u4E4B\u524D\u5B78\u751F\u770B\u4E0D\u5230\u4EFB\u4F55\u5206\u6578\u3002"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: save,
+    disabled: busy === 'save'
+  }, busy === 'save' ? '存檔中…' : '存檔並讓學生看到')))));
+}
 function WeakSpotModal({
   student,
   weeks,
@@ -4441,5 +4692,6 @@ function StudentDetail({
   }));
 }
 Object.assign(window, {
-  TeacherDashboard
-});
+  TeacherDashboard,
+  ExamMarking
+}); // ExamMarking 匯出給對照頁單獨跑

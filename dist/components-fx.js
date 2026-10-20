@@ -3560,8 +3560,8 @@ function MascotLayer() {
     role: "img",
     "aria-label": `吉祥物 ${name || (hwOn ? MX_HW_NAME : pet.zh)}`
   }, /*#__PURE__*/React.createElement(Art, {
-    hat: bat ? 'none' : wear.hat || 'none',
-    acc: bat ? '' : wear.item,
+    hat: hwOn || bat ? 'none' : wear.hat || 'none',
+    acc: hwOn || bat ? '' : wear.item,
     bat: bat
   }), /*#__PURE__*/React.createElement("span", {
     className: "mx-trail",
@@ -3678,8 +3678,8 @@ function MascotLayer() {
     className: "mx-dress-figure"
   }, /*#__PURE__*/React.createElement(Art, {
     size: 62,
-    hat: wear.hat || 'none',
-    acc: wear.item
+    hat: hwOn ? 'none' : wear.hat || 'none',
+    acc: hwOn ? '' : wear.item
   })), /*#__PURE__*/React.createElement("span", {
     className: "mx-dress-who"
   }, name || (hwOn ? MX_HW_NAME : pet.zh))), /*#__PURE__*/React.createElement("div", {

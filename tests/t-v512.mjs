@@ -58,9 +58,14 @@ ok('   程式再洗一次（模型還是會加 -、1.）', /replace\(\/\^\\s\*\[
 
 console.log('\n【4】接到畫面上');
 ok('⭐ 上課紀錄表單有「🪄 幫我擬草稿」', /🪄 幫我擬草稿/.test(dash) && /const aiDraft = async \(\)/.test(dash));
-ok('⭐ 只填三欄，掌握度與備註不碰（那是老師自己的判斷）',
-   /setDraft\(x => \(\{ \.\.\.x, did: got\.did \|\| x\.did, hw: got\.hw \|\| x\.hw, next: got\.next \|\| x\.next \}\)\)/.test(dash)
-   && !/pct: got\./.test(dash) && !/note: got\./.test(dash));
+ok('⭐ 只填三欄，掌握度與備註不碰（那是老師自己的判斷）', (() => {
+   /* ⚠ 本來是在**整支 components-dashboard.jsx** 裡找 `note: got.`——
+      v530 的申論批改也在同一個檔案、也有一行 `note: got.next`，就誤判了。
+      只看上課紀錄那一段（aiDraft 附近），不要掃整個檔案。 */
+   const i = dash.indexOf('const aiDraft = async');
+   const blk = dash.slice(i, dash.indexOf('\n  const ', i + 30));
+   return /setDraft\(x => \(\{ \.\.\.x, did: got\.did \|\| x\.did, hw: got\.hw \|\| x\.hw, next: got\.next \|\| x\.next \}\)\)/.test(dash)
+     && i > 0 && !/pct: got\./.test(blk) && !/note: got\./.test(blk); })());
 ok('⭐ 按錯了可以還原（它會蓋掉已經打好的字）', /setAiUndo\(\{ did: draft\.did/.test(dash) && /↩ 還原/.test(dash));
 ok('⭐⭐ 頁碼對不上要在畫面上講出來，不可以安靜放過',
    /aiWarn && aiWarn\.length > 0/.test(dash) && /不在這一週的學校進度表上/.test(dash));

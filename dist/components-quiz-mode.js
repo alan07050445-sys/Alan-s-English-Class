@@ -8347,6 +8347,17 @@ function ExamPlayer({
   onNextTask
 }) {
   var [ans, setAns] = useQM({});
+  /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
+     ⚠ 老師沒改之前這裡是 null，畫面上就維持「老師還沒改」——
+       不可以拿 AI 的建議先頂著，那還沒有人看過。 */
+  var [teacherMark, setTeacherMark] = useQM(null);
+  useQME(() => {
+    var em = String((window._currentUser || {}).email || '').toLowerCase();
+    if (!em || !window.subscribePractice) return;
+    return window.subscribePractice(em, doc => {
+      setTeacherMark(window.examMarkOf ? window.examMarkOf(doc, progressKey) : null);
+    });
+  }, [progressKey]);
   var [mood, setMood] = useQM(null);
   var [goals, setGoals] = useQM({});
   var [focus, setFocus] = useQM(null); // cloze：現在在填哪一格（點詞庫要知道填去哪）
@@ -8399,11 +8410,36 @@ function ExamPlayer({
         });
       });
     });
+    /* v530 📋 申論題：把孩子寫的字一起存起來，老師才改得到。
+       ⚠ 存在 progress 底下（學生寫自己的、老師讀得到）——這條路規則早就開好了，
+         開新的 collection 就要 Alan 再去 Firebase 貼一次 rules。
+       ⚠ 只存「老師要改的那幾大題」，自動計分的不用留（它們已經有分數了）。 */
+    var written = {};
+    r.parts.forEach(pp => {
+      if (pp.auto) return;
+      var v = ans[pp.key];
+      if (Array.isArray(v) && v.some(x => String(x || '').trim())) {
+        written[pp.key] = {
+          title: pp.part.title || '',
+          pts: +pp.part.pts || 0,
+          rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+          qs: (pp.part.questions || []).map((q, i) => ({
+            q: q.q || '',
+            keyPoints: q.keyPoints || q.rubric || '',
+            a: String(v[i] || '').trim()
+          }))
+        };
+      }
+    });
     saveQuizModeCompletion(progressKey, item, {
       doneCount: r.parts.filter(p => p.auto).length,
       score: r.auto,
       total: r.autoMax,
-      wrongQuestions: wrongList
+      wrongQuestions: wrongList,
+      extra: Object.keys(written).length ? {
+        examWritten: written,
+        examTitle: item.title || ''
+      } : null
     });
     if (window._onQuizComplete) window._onQuizComplete(r.auto, r.autoMax, wrongList, {
       itemId: progressKey
@@ -8633,9 +8669,43 @@ function ExamPlayer({
       }
     }), q.rubric && /*#__PURE__*/React.createElement("div", {
       className: "ex-rub"
-    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), /*#__PURE__*/React.createElement("div", {
-      className: "ex-manual"
-    }, "\u270D\uFE0F \u9019\u4E00\u984C\u8001\u5E2B\u6703\u89AA\u81EA\u6539\uFF0C\u4E0D\u6703\u81EA\u52D5\u7D66\u5206\u3002")));
+    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), (() => {
+      /* v530：老師改好了就把三項分數與評語攤開給學生看。 */
+      var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || null;
+      var R = window.EXAM_RUBRIC || [];
+      var max = +pt.rubricMax || window.EXAM_RUBRIC_MAX || 4;
+      var marked = by && by.some(m => m && R.some(c => m[c.id] != null));
+      if (!marked) {
+        return /*#__PURE__*/React.createElement("div", {
+          className: "ex-manual"
+        }, "\u270D\uFE0F \u9019\u4E00\u984C\u8001\u5E2B\u6703\u89AA\u81EA\u6539\uFF0C\u4E0D\u6703\u81EA\u52D5\u7D66\u5206\u3002");
+      }
+      var rp = window.examRubricPart({
+        pts: pt.pts,
+        questions: pt.questions || [],
+        rubricMax: max
+      }, by);
+      return /*#__PURE__*/React.createElement("div", {
+        className: "ex-marked"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "ex-marked-h"
+      }, "\u8001\u5E2B\u6539\u597D\u4E86 ", /*#__PURE__*/React.createElement("b", null, rp.got, " / ", pt.pts)), (pt.questions || []).map((q, i) => {
+        var m = by[i];
+        if (!m) return null;
+        return /*#__PURE__*/React.createElement("div", {
+          className: "ex-marked-q",
+          key: i
+        }, /*#__PURE__*/React.createElement("span", {
+          className: "ex-marked-n"
+        }, i + 1), /*#__PURE__*/React.createElement("span", {
+          className: "ex-marked-cr"
+        }, R.map(c => /*#__PURE__*/React.createElement("em", {
+          key: c.id
+        }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", max))), m.note && /*#__PURE__*/React.createElement("span", {
+          className: "ex-marked-note"
+        }, m.note));
+      }));
+    })()));
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "ex-paper",

@@ -1621,7 +1621,12 @@ function MascotLayer() {
           role="img" aria-label={`吉祥物 ${name || (hwOn ? MX_HW_NAME : pet.zh)}`}>
           {/* v441：配件畫在同一個 SVG 裡（Art 內部分成「身體後面」與「身上」兩層）——
               翻滾、轉圈、跳舞都會跟著動；以前是疊在上面的另一個 svg，所以會留在原地。 */}
-          <Art hat={bat ? 'none' : (wear.hat || 'none')} acc={bat ? '' : wear.item} bat={bat}/>
+          {/* v530（Alan：「吸血鬼所有額外裝扮都要脫掉，活動結束再調整回來」）：
+              萬聖節期間一律不戴帽子也不掛配件。
+              ⚠ 只是**畫的時候不畫**——wear 這份資料一個字都沒動，
+                所以 11/01 之後他原本戴的那頂帽子會自己回來。 */}
+          <Art hat={(hwOn || bat) ? 'none' : (wear.hat || 'none')}
+               acc={(hwOn || bat) ? '' : wear.item} bat={bat}/>
           {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
               永遠留在「牠的身後」，不用另外算方向。 */}
           <span className="mx-trail" aria-hidden="true"><i/><i/><i/></span>
@@ -1707,7 +1712,9 @@ function MascotLayer() {
             </div>
             {/* 預覽：現在這一隻穿好的樣子，點一下就表演 */}
             <div className="mx-dress-prev" onClick={() => myDances.length && playDance(myDances[0].id)}>
-              <span className="mx-dress-figure"><Art size={62} hat={wear.hat || 'none'} acc={wear.item}/></span>
+              <span className="mx-dress-figure">
+                <Art size={62} hat={hwOn ? 'none' : (wear.hat || 'none')} acc={hwOn ? '' : wear.item}/>
+              </span>
               <span className="mx-dress-who">{name || (hwOn ? MX_HW_NAME : pet.zh)}</span>
             </div>
             <div className="mx-dress-tabs">

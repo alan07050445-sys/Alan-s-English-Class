@@ -54,8 +54,12 @@ ok('⭐⭐ 變身狀態不寫 localStorage（重新整理要變回吸血鬼）',
    /* 小朋友哪天忘了自己按過，會以為吉祥物壞掉了。 */
    const i = fx.indexOf('const [bat, setBat]');
    return i > 0 && !/mxSetBat|localStorage/.test(fx.slice(i, i + 400)); })());
-ok('⭐ 變身時帽子與配件要收起來（蝙蝠沒有頭頂也沒有脖子）',
-   /<Art hat=\{bat \? 'none' : \(wear\.hat \|\| 'none'\)\} acc=\{bat \? '' : wear\.item\} bat=\{bat\}\/>/.test(fx));
+ok('⭐ 變身時帽子與配件要收起來（蝙蝠沒有頭頂也沒有脖子）', (() => {
+   /* v530 之後整個萬聖節期間都不戴（Alan：「所有額外裝扮都要脫掉」），
+      所以條件從 `bat` 變成 `hwOn || bat`——要守的事沒變：變成蝙蝠時不可以還戴著帽子。 */
+   const m = /<Art hat=\{([^}]*)\}[\s\S]{0,80}acc=\{([^}]*)\} bat=\{bat\}/.exec(fx);
+   return !!m && /bat/.test(m[1]) && /bat/.test(m[2])
+     && /'none'/.test(m[1]) && /''/.test(m[2]); })());
 ok('⭐⭐ 原本的打電腦拿掉：萬聖節期間自動循環只剩走路', (() => {
    const i = fx.indexOf('const pool = hwOnRef.current');
    return i > 0 && /\['walk'\]/.test(fx.slice(i, i + 160)); })());

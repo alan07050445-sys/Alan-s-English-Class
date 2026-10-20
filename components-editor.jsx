@@ -436,7 +436,8 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                 circle: '第一行＝要圈什麼（vce／team／digraph／suffix:-ing），第二行以後＝短文',
                 cloze: '第一行＝詞庫（逗號分隔）；之後每行＝ 句子（用 ___ 當空格） | 答案',
                 quiz: '每行＝ 題目 | 選項1 | 選項2 | 選項3 | 正解編號（從 1 算）。⚠ 不用自己加題號，畫面會自己編。',
-                short: '每行＝ 題目 | 配分 | 評分重點（可省略）。這一種不自動給分，老師自己改。',
+                short: '每行＝ 題目 | 配分 | 評分重點（可省略）。這一種不自動給分——'
+                     + '勾「三項評分」就照 Explanation／Relevant／Effort 在後台改，AI 會先給建議。',
                 affix: '一行就是字尾表，空白分開：-ing -ed -s -est（字首寫成 un- 這種）。上面的「個」＝要造幾個字。',
                 genq: '貼文章。學生要自己出「文章上沒有」的問題。上面的「個」＝要出幾個問題。',
 
@@ -485,6 +486,23 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                             <input className="exed-pts" type="number" value={pt.pts || ''} placeholder="20"
                               onChange={e => patchPart(si, pi, { pts: +e.target.value || 0 })}/>
                             <span>分</span>
+                            {/* v530 📋 申論題的 rubric：每一項滿分幾分 */}
+                            {pt.kind === 'short' && (
+                              <label className="exed-chk exed-rub">
+                                <input type="checkbox" checked={!!pt.rubricMax}
+                                  onChange={e => patchPart(si, pi, {
+                                    rubricMax: e.target.checked ? (window.EXAM_RUBRIC_MAX || 4) : 0 })}/>
+                                <span>三項評分</span>
+                                {!!pt.rubricMax && (
+                                  <>
+                                    <input className="exed-pts" type="number" min="1" max="10"
+                                      value={pt.rubricMax}
+                                      onChange={e => patchPart(si, pi, { rubricMax: Math.max(1, +e.target.value || 1) })}/>
+                                    <span>分滿</span>
+                                  </>
+                                )}
+                              </label>
+                            )}
                             {(pt.kind === 'circle' || pt.kind === 'affix' || pt.kind === 'genq') && (
                               <>
                                 <input className="exed-pts" type="number" value={pt.need || ''} placeholder="10"

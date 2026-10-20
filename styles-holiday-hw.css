@@ -1602,3 +1602,12 @@ html.fest-hw .grade-selector-inner .fest-day-wrap { margin: 18px 0 30px; }
 @media (max-width: 560px) {
   html.fest-hw .grade-selector-inner .fest-day-wrap { margin: 14px 0 22px; }
 }
+/* v530 申論批改／學生看到的評分：夜色版 */
+html.fest-hw .mk-stu { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+html.fest-hw .mk-stu.on { box-shadow: 0 0 0 3px rgba(247,154,62,.22); }
+html.fest-hw .mk-part { border-color: rgba(255,255,255,.14); }
+html.fest-hw .mk-ans,
+html.fest-hw .mk-note,
+html.fest-hw .mk-cr-btns button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); color: #F0EAFF; }
+html.fest-hw .mk-cr-btns button.on { background: var(--hw-pump); border-color: var(--hw-pump); color: #fff; }
+html.fest-hw .ex-marked { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); }

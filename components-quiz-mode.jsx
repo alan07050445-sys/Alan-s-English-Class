@@ -6886,6 +6886,17 @@ function TeacherLog({ email }) {
      硬塞進考卷只會兩邊都彆扭。這裡自己畫，但計分全部交給 data.js 的 examScore。 */
 function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [ans, setAns]       = useQM({});
+  /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
+     ⚠ 老師沒改之前這裡是 null，畫面上就維持「老師還沒改」——
+       不可以拿 AI 的建議先頂著，那還沒有人看過。 */
+  const [teacherMark, setTeacherMark] = useQM(null);
+  useQME(() => {
+    const em = String((window._currentUser || {}).email || '').toLowerCase();
+    if (!em || !window.subscribePractice) return;
+    return window.subscribePractice(em, (doc) => {
+      setTeacherMark(window.examMarkOf ? window.examMarkOf(doc, progressKey) : null);
+    });
+  }, [progressKey]);
   const [mood, setMood]     = useQM(null);
   const [goals, setGoals]   = useQM({});
   const [focus, setFocus]   = useQM(null);   // cloze：現在在填哪一格（點詞庫要知道填去哪）
@@ -6922,9 +6933,30 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       if (!pp.auto) return;
       pp.detail.forEach(d => { if (d.ok === false) wrongList.push({ q: pp.part.title || '', answer: d.text || '' }); });
     });
+    /* v530 📋 申論題：把孩子寫的字一起存起來，老師才改得到。
+       ⚠ 存在 progress 底下（學生寫自己的、老師讀得到）——這條路規則早就開好了，
+         開新的 collection 就要 Alan 再去 Firebase 貼一次 rules。
+       ⚠ 只存「老師要改的那幾大題」，自動計分的不用留（它們已經有分數了）。 */
+    const written = {};
+    r.parts.forEach(pp => {
+      if (pp.auto) return;
+      const v = ans[pp.key];
+      if (Array.isArray(v) && v.some(x => String(x || '').trim())) {
+        written[pp.key] = {
+          title: pp.part.title || '',
+          pts: +pp.part.pts || 0,
+          rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          qs: (pp.part.questions || []).map((q, i) => ({
+            q: q.q || '', keyPoints: q.keyPoints || q.rubric || '',
+            a: String(v[i] || '').trim(),
+          })),
+        };
+      }
+    });
     saveQuizModeCompletion(progressKey, item, {
       doneCount: r.parts.filter(p => p.auto).length,
       score: r.auto, total: r.autoMax, wrongQuestions: wrongList,
+      extra: Object.keys(written).length ? { examWritten: written, examTitle: item.title || '' } : null,
     });
     if (window._onQuizComplete) window._onQuizComplete(r.auto, r.autoMax, wrongList, { itemId: progressKey });
   };
@@ -7137,7 +7169,37 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                 {q.rubric && <div className="ex-rub">評分重點：{q.rubric}</div>}
               </div>
             ))}
-            <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>
+            {(() => {
+              /* v530：老師改好了就把三項分數與評語攤開給學生看。 */
+              const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || null;
+              const R = window.EXAM_RUBRIC || [];
+              const max = +pt.rubricMax || (window.EXAM_RUBRIC_MAX || 4);
+              const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
+              if (!marked) {
+                return <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>;
+              }
+              const rp = window.examRubricPart({ pts: pt.pts, questions: pt.questions || [], rubricMax: max }, by);
+              return (
+                <div className="ex-marked">
+                  <div className="ex-marked-h">老師改好了 <b>{rp.got} / {pt.pts}</b></div>
+                  {(pt.questions || []).map((q, i) => {
+                    const m = by[i];
+                    if (!m) return null;
+                    return (
+                      <div className="ex-marked-q" key={i}>
+                        <span className="ex-marked-n">{i + 1}</span>
+                        <span className="ex-marked-cr">
+                          {R.map(c => (
+                            <em key={c.id}>{c.zh} <b>{m[c.id] == null ? '—' : m[c.id]}</b>/{max}</em>
+                          ))}
+                        </span>
+                        {m.note && <span className="ex-marked-note">{m.note}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </>
         )}
       </div>

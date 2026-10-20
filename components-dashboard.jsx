@@ -3033,6 +3033,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
        以及有什麼功課、以及下次上課進度」）*/
     { id: 'lessons',  ico: '📒', label: '上課紀錄', sub: '掌握度／功課／下次進度', sec: '每天用' },
     { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點', sec: '每天用' },
+    /* v530（Alan：「Rubri's 加上去吧」）——康橋 Formative 的申論題照 rubric 三項手改 */
+    { id: 'marking',  ico: '📋', label: '申論批改', sub: '三項評分（AI 先給建議）', sec: '每天用' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告',    sec: '每天用' },
     { id: 'hwremind', ico: '🔔', label: '作業提醒', sub: '手動發（自動已關）', sec: '每天用' },
     { id: 'linelink', ico: '🔗', label: 'LINE 綁定', sub: '家長綁定狀態', sec: '設定一次' },
@@ -3122,6 +3124,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <LineNotify/>
           ) : tab === 'linelink' ? (
             <LineLink/>
+          ) : tab === 'marking' ? (
+            <ExamMarking students={visibleStudents}/>
           ) : tab === 'stars' ? (
             <StarsManager roster={rosterAll} myEmail={myEmailD} ownerEmail={ownerEmailD} stuScope={stuScope}
               students={students} weeksFor={weeksForStudent} weekOrder={dOrder} dataFor={dataForStudent}/>
@@ -3259,6 +3263,195 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
      ② AI 診斷「他為什麼錯」——⭐ 舉的例子必須真的在他的錯題裡，否則整條丟掉
      ③ 針對那個毛病出 5 題——程式驗 ＋ 第二個 AI 交叉檢查
    存進 practice/{email}（個人收件匣），不碰整個年級共用的週次內容。 */
+/* ══ v530 📋 申論批改（Rubri：Explanation / Relevant / Effort）══════════
+   Alan 的康橋 Formative 最後一大題是申論，照 rubric 三項手改。
+
+   ⭐ 三方分工（這一版最重要的設計）：
+     · **學生**寫的字存在 progress（他自己寫的，老師只能讀）
+     · **AI** 只給「建議分數」，而且**老師按下存檔之前學生一個字都看不到**
+     · **老師**是最後一關，改幾分都可以，AI 的建議只是先把格子填好
+   ⚠ 申論題的分數是會被拿去跟家長討論的，不能讓沒有人看過的機器分數
+     直接變成成績——所以這裡刻意**沒有**「全部自動改完」這顆按鈕。
+   ⚠ 分數寫進 practice/{email}（老師寫、學生讀自己的），跟加強練習同一條路，
+     **不用再加 Firestore 規則**。 */
+function ExamMarking({ students }) {
+  const [sel, setSel]   = useDash(null);     // 選到的學生 email
+  const [mark, setMark] = useDash({});       // progressKey → { [partKey]: [ {explain,relevant,effort,note} ] }
+  const [busy, setBusy] = useDash('');
+  const [msg,  setMsg]  = useDash('');
+  const [saved, setSaved] = useDash({});
+
+  /* 哪些孩子有申論等著改——從他們的 progress 撈 examWritten */
+  const pending = useDashM(() => {
+    const out = [];
+    (students || []).forEach(st => {
+      const items = st.items || {};
+      Object.keys(items).forEach(k => {
+        const it = items[k];
+        if (!it || !it.examWritten) return;
+        out.push({ email: String(st.email || '').toLowerCase(), name: st.name || st.email,
+                   key: k, title: it.examTitle || '考卷', at: it.done || it.ts || 0,
+                   written: it.examWritten });
+      });
+    });
+    return out.sort((a, b) => (b.at || 0) - (a.at || 0));
+  }, [students]);
+
+  /* 老師已經改過哪些——讀 practice/{email}.marks */
+  useDashE(() => {
+    const emails = [...new Set(pending.map(p => p.email))];
+    if (!emails.length || !window.subscribePractice) return;
+    const offs = emails.map(em => window.subscribePractice(em, (doc) => {
+      setSaved(s => ({ ...s, [em]: (doc && doc.marks) || {} }));
+    }));
+    return () => offs.forEach(f => { try { f(); } catch (e) {} });
+  }, [pending.map(p => p.email).join()]);
+
+  const cur = pending.find(p => p.email + '|' + p.key === sel) || null;
+  const R = window.EXAM_RUBRIC || [];
+  const maxOf = (w) => +w.rubricMax || (window.EXAM_RUBRIC_MAX || 4);
+
+  const cell = (partKey, qi) => ((mark[sel] || {})[partKey] || [])[qi] || {};
+  const setCell = (partKey, qi, patch) => setMark(m => {
+    const one = { ...(m[sel] || {}) };
+    const arr = (one[partKey] || []).slice();
+    arr[qi] = { ...(arr[qi] || {}), ...patch };
+    one[partKey] = arr;
+    return { ...m, [sel]: one };
+  });
+
+  /* 把老師已經存過的分數帶回畫面（不然每次點進來都是空的） */
+  useDashE(() => {
+    if (!cur) return;
+    const had = ((saved[cur.email] || {})[cur.key] || {}).byPart;
+    if (had && !mark[sel]) setMark(m => ({ ...m, [sel]: had }));
+  }, [sel, saved]);
+
+  const aiOne = async (partKey, qi, q, max) => {
+    setMsg(''); setBusy(partKey + qi);
+    try {
+      const got = await window.aiGradeRubric(q.q, q.a, { max, keyPoints: q.keyPoints });
+      if (!got) { setMsg('這一題 AI 沒有給出可靠的建議（它引用不到孩子真的寫過的字）——請直接自己改。'); }
+      else {
+        const patch = { note: got.next || '' , _ai: true };
+        R.forEach(c => { patch[c.id] = got[c.id] ? got[c.id].n : 0; });
+        patch._why = R.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
+        patch._quote = got.quote || '';
+        setCell(partKey, qi, patch);
+      }
+    } catch (e) { setMsg('AI 現在叫不動，等一下再試，或直接自己改。'); }
+    setBusy('');
+  };
+
+  const save = async () => {
+    if (!cur) return;
+    setMsg(''); setBusy('save');
+    try {
+      await window.saveExamMarks(cur.email, cur.key, { byPart: mark[sel] || {}, title: cur.title });
+      setMsg('存好了，學生那邊就看得到分數與評語了。');
+    } catch (e) { setMsg('存不進去——可能是 Firestore 規則還沒更新。'); }
+    setBusy('');
+  };
+
+  const doneCount = (p) => {
+    const by = ((saved[p.email] || {})[p.key] || {}).byPart || {};
+    let n = 0, t = 0;
+    Object.keys(p.written).forEach(pk => {
+      (p.written[pk].qs || []).forEach((_, i) => {
+        t++;
+        const m = (by[pk] || [])[i];
+        if (m && R.some(c => m[c.id] != null)) n++;
+      });
+    });
+    return { n, t };
+  };
+
+  return (
+    <div className="mk-wrap">
+      <div className="mk-side">
+        <div className="mk-side-h">待批改 <b>{pending.filter(p => { const d = doneCount(p); return d.n < d.t; }).length}</b></div>
+        {pending.length === 0 && <p className="mk-empty">還沒有人交申論題。考卷裡有「問答（老師改）」那一大題，學生交卷之後就會出現在這裡。</p>}
+        {pending.map(p => {
+          const d = doneCount(p);
+          const k = p.email + '|' + p.key;
+          return (
+            <button key={k} className={'mk-stu' + (sel === k ? ' on' : '') + (d.n >= d.t ? ' done' : '')}
+              onClick={() => setSel(k)}>
+              <b>{p.name}</b>
+              <span>{p.title}</span>
+              <em>{d.n >= d.t ? '已改完' : `${d.n} / ${d.t}`}</em>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mk-main">
+        {!cur ? <p className="mk-empty">左邊選一位學生開始改。</p> : (
+          <>
+            <div className="mk-head">
+              <b>{cur.name}</b><span>{cur.title}</span>
+            </div>
+            {Object.keys(cur.written).map(pk => {
+              const w = cur.written[pk];
+              const max = maxOf(w);
+              const rp = window.examRubricPart
+                ? window.examRubricPart({ pts: w.pts, questions: w.qs, rubricMax: max }, (mark[sel] || {})[pk])
+                : { got: 0, max: w.pts };
+              return (
+                <div className="mk-part" key={pk}>
+                  <div className="mk-part-h">
+                    <b>{w.title || '申論'}</b>
+                    <span>{rp.got} / {w.pts} 分</span>
+                  </div>
+                  {(w.qs || []).map((q, i) => {
+                    const c = cell(pk, i);
+                    return (
+                      <div className="mk-q" key={i}>
+                        <p className="mk-qt">{i + 1}. {q.q}</p>
+                        <div className="mk-ans">{q.a || <i>（空白）</i>}</div>
+                        <div className="mk-rub">
+                          {R.map(cr => (
+                            <label className="mk-cr" key={cr.id}>
+                              <span className="mk-cr-n">{cr.zh}<i>{cr.en}</i></span>
+                              <span className="mk-cr-btns">
+                                {Array.from({ length: max + 1 }, (_, v) => (
+                                  <button key={v} className={c[cr.id] === v ? 'on' : ''}
+                                    title={cr.tip}
+                                    onClick={() => setCell(pk, i, { [cr.id]: v, _ai: false })}>{v}</button>
+                                ))}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        {c._why && <p className="mk-ai-why">🤖 {c._why}{c._quote ? `　引用：「${c._quote}」` : ''}</p>}
+                        <div className="mk-q-foot">
+                          <input className="mk-note" placeholder="給他的一句話（學生看得到）"
+                            value={c.note || ''} onChange={e => setCell(pk, i, { note: e.target.value })}/>
+                          <button className="btn ghost" disabled={!!busy}
+                            onClick={() => aiOne(pk, i, q, max)}>
+                            {busy === pk + i ? '看一下…' : '🤖 AI 先改'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {msg && <p className="mk-msg">{msg}</p>}
+            <div className="mk-foot">
+              <span className="mk-foot-hint">AI 只給建議，按下存檔之前學生看不到任何分數。</span>
+              <button className="btn primary" onClick={save} disabled={busy === 'save'}>
+                {busy === 'save' ? '存檔中…' : '存檔並讓學生看到'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WeakSpotModal({ student, weeks, weekOrder, onClose }) {
   const [rows, setRows]   = useDash([]);
   const [pats, setPats]   = useDash(null);     // null = 還沒診斷
@@ -3650,4 +3843,4 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
   );
 }
 
-Object.assign(window, { TeacherDashboard });
+Object.assign(window, { TeacherDashboard, ExamMarking });   // ExamMarking 匯出給對照頁單獨跑

@@ -3957,3 +3957,73 @@
 .ex-genq li input { width: 100%; border: 0; border-bottom: 2px solid var(--ink, #15130E); background: none; padding: 3px 5px; font-family: var(--sans); font-size: 15px; }
 .ex-genq li.ok input { border-bottom-color: #2E7D43; }
 .ex-genq li.bad input { border-bottom-color: #A8331F; }
+
+/* ══ v530 📋 申論批改（老師端）＋ 學生看到的評分 ══════════════════ */
+.mk-wrap { display: grid; grid-template-columns: 260px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 860px) { .mk-wrap { grid-template-columns: 1fr; } }
+.mk-side { display: flex; flex-direction: column; gap: 6px; }
+.mk-side-h { font-size: 12.5px; font-weight: 800; color: var(--ink-3); padding: 2px 4px 6px; }
+.mk-side-h b { color: var(--accent); font-size: 15px; }
+.mk-stu {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 10px 12px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--bg-card); cursor: pointer;
+}
+.mk-stu:hover { border-color: var(--accent); }
+.mk-stu.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139,49,32,.12); }
+.mk-stu.done { opacity: .62; }
+.mk-stu b { font-size: 14.5px; }
+.mk-stu span { font-size: 12px; color: var(--ink-3); }
+.mk-stu em { font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--accent); }
+.mk-main { min-width: 0; }
+.mk-empty { font-size: 13.5px; color: var(--ink-3); padding: 18px 4px; line-height: 1.7; }
+.mk-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.mk-head b { font-family: var(--serif); font-size: 20px; }
+.mk-head span { font-size: 13px; color: var(--ink-3); }
+.mk-part { border: 1.5px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+.mk-part-h { display: flex; justify-content: space-between; align-items: baseline;
+  border-bottom: 1px solid var(--border-soft); padding-bottom: 8px; margin-bottom: 10px; }
+.mk-part-h b { font-size: 15px; }
+.mk-part-h span { font-family: var(--mono); font-size: 13px; font-weight: 800; color: var(--accent); }
+.mk-q { padding: 10px 0; border-bottom: 1px dashed var(--border-soft); }
+.mk-q:last-child { border-bottom: none; }
+.mk-qt { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.mk-ans {
+  font-size: 14.5px; line-height: 1.7; white-space: pre-wrap;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg-paper); border: 1px solid var(--border-soft); margin-bottom: 10px;
+}
+.mk-ans i { color: var(--ink-3); }
+.mk-rub { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.mk-cr { display: flex; align-items: center; gap: 8px; }
+.mk-cr-n { font-size: 12.5px; font-weight: 800; display: flex; flex-direction: column; line-height: 1.25; }
+.mk-cr-n i { font-style: normal; font-size: 10px; font-weight: 600; color: var(--ink-3); }
+.mk-cr-btns { display: inline-flex; gap: 3px; }
+.mk-cr-btns button {
+  width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+  border: 1.5px solid var(--border); background: var(--bg-card);
+  font-family: var(--mono); font-size: 12.5px; font-weight: 800;
+}
+.mk-cr-btns button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mk-ai-why { font-size: 12px; color: var(--ink-3); margin: 8px 0 0; line-height: 1.6; }
+.mk-q-foot { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.mk-note { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 9px;
+  border: 1.5px solid var(--border); background: var(--bg-card); font-size: 13px; }
+.mk-msg { font-size: 13px; color: var(--accent); margin: 8px 0; }
+.mk-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mk-foot-hint { font-size: 12px; color: var(--ink-3); }
+
+/* 學生端：老師改好的分數 */
+.ex-marked { margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--bg-paper); }
+.ex-marked-h { font-size: 13.5px; font-weight: 800; margin-bottom: 8px; }
+.ex-marked-h b { font-family: var(--mono); color: var(--accent); font-size: 16px; }
+.ex-marked-q { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; padding: 6px 0;
+  border-top: 1px dashed var(--border-soft); }
+.ex-marked-n { font-family: var(--mono); font-size: 12px; font-weight: 800; color: var(--ink-3); }
+.ex-marked-cr { display: inline-flex; gap: 12px; flex-wrap: wrap; }
+.ex-marked-cr em { font-style: normal; font-size: 12.5px; color: var(--ink-2); }
+.ex-marked-cr b { font-family: var(--mono); font-size: 14px; color: var(--accent); }
+.ex-marked-note { flex: 1 0 100%; font-size: 13px; color: var(--ink-2); }
+.exed-rub { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.exed-rub .exed-pts { width: 46px; }
