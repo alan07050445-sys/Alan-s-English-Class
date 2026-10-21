@@ -2379,6 +2379,63 @@ function _storyRescue(passage, missing, ex) {
 /* v445（Alan：「只抽五個單字填空，但 word bank 還是全部單字，這樣才有難度」）
    文章照樣每個字都挖（產生與驗證完全不變），最後只留 n 格、其他還原成原本的字。
    平均分散著留，不然五格會全擠在前面。 */
+/* ══ v542 🔢 一次練習最多幾題 ══════════════════════════════════════
+   Alan（合併 24 個單字之後）：
+     「字義選擇不可能一次的練習就 24 題，這樣也太久，小孩會沒耐心」
+     「短文填空肯定要多幾篇啊」
+   ⭐⭐ 這是**程式的工作，不是 AI 的**。他已經在「這次的特別要求」裡叫 AI
+     拆成三篇／三大題，AI 做不到——跟 v417／v488 同一類：
+     程式自己會做的事叫模型做，它為了服從會亂回報。
+     所以 AI 只負責「生足夠的題材」，切成幾份由程式決定。 */
+const QS_MAX_Q = 10;                 // 一般練習：一個單元最多 10 題
+const QS_SPLIT = {
+  /* 有自己規矩的題型（Alan 指名的兩種） */
+  story: { per: 6, bank: 10 },       // 一篇挖 6 格；Word Bank 給 10 個字（多的當誘答）
+  sense: { per: 8 },                 // 字義選擇要讀短文，比較累，一次 8 題
+};
+/* 切成每份最多 per 個，而且**盡量平均**（Alan：「幫我平均分散」）。
+   ⚠ 24 個、上限 10 → 要 8/8/8，不是 10/10/4。
+     直接 slice 會留下一個很短的尾巴，看起來像出錯了。 */
+function qsChunkEven(list, per) {
+  const arr = Array.isArray(list) ? list.slice() : [];
+  const cap = Math.max(1, +per || QS_MAX_Q);
+  if (arr.length <= cap) return arr.length ? [arr] : [];
+  const n = Math.ceil(arr.length / cap);
+  const out = [];
+  let at = 0;
+  for (let i = 0; i < n; i++) {
+    /* 剩下的平均分給還沒切的份數——餘數會被前面幾份各多吃一個，
+       所以每一份最多只差 1 個。 */
+    const take = Math.ceil((arr.length - at) / (n - i));
+    out.push(arr.slice(at, at + take));
+    at += take;
+  }
+  return out;
+}
+/* 一份 N 份的標題：只有一份時**完全不要加字尾**（不要動到原本就好好的流程）。
+   ⚠⚠ 加字尾就要同時提供「把字尾拿掉」——站上有好幾個地方是**用標題比對**
+     來認題型的（qsKindsInGroup 的 `/字義選擇$/` 就是），
+     標題後面多了「（1/3）」它就認不出來了，而且**不會報錯**，
+     只會讓「只補漏掉的題型」重複生一份字義選擇。 */
+function qsPartTitle(title, i, total) {
+  return total > 1 ? `${title}（${i + 1}/${total}）` : title;
+}
+function qsStripPart(title) {
+  return String(title || '').replace(/\s*[（(]\s*\d+\s*\/\s*\d+\s*[)）]\s*$/, '').trim();
+}
+/* 短文填空的 Word Bank：答案全放，再從整池抽誘答補到 want 個，然後洗牌。
+   ⚠ 不洗牌的話答案會整排排在前面＝直接送分。 */
+function qsStoryBank(answers, allTerms, want) {
+  const norm = (x) => String(x || '').trim();
+  const ans = (answers || []).map(norm).filter(Boolean);
+  const low = ans.map(x => x.toLowerCase());
+  const rest = (allTerms || []).map(norm).filter(x => x && low.indexOf(x.toLowerCase()) < 0);
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
+  const bank = ans.concat(rest.slice(0, Math.max(0, (+want || QS_SPLIT.story.bank) - ans.length)));
+  for (let i = bank.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = bank[i]; bank[i] = bank[j]; bank[j] = t; }
+  return bank;
+}
+
 const _STORY_PICK = 5;
 function storyPick(passage, n) {
   const p = String(passage || '');
@@ -2487,6 +2544,44 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
     }
   }
   return finish(best);
+}
+
+/* ══ v542 📄 短文填空出好幾篇 ═══════════════════════════════════════
+   Alan（合併 24 個單字）：「短文填空幫我出共三篇，都幫我挖空 6 格，
+   Word Bank 每一篇給隨機 10 個單字」。
+
+   ⭐⭐ **幾篇、哪幾個字、挖幾格，全部由程式決定**，AI 只負責把一篇寫好。
+     他已經試過在「特別要求」裡叫 AI 拆三篇——做不到。
+     （v417／v488 同一類：程式自己會做的事叫模型做，它為了服從會謊報。）
+   ⚠ 每一篇都要**不一樣**：前面寫過的整篇當 avoid 餵下去
+     （v466 學到的——只說「要不一樣」沒有用）。
+   ⚠ 一篇失敗不可以拖垮其他篇，但要回報出來（v473 的教訓：
+     .catch(()=>null) 會讓老師只看到「少一篇」卻不知道為什麼）。 */
+async function aiMakeVocabStories(words, opts = {}) {
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  const per = Math.max(2, +opts.per || QS_SPLIT.story.per);
+  /* 幾篇＝照「一篇挖幾格」去切。⚠ 一篇故事要寫得順，字太少寫不成，
+     所以每一批至少 3 個字（跟 canDo.story 的門檻一樣）。 */
+  const batches = qsChunkEven(list, Math.max(3, per));
+  const out = [];
+  const seen = (opts.avoid || []).slice();
+  for (let i = 0; i < batches.length; i++) {
+    try {
+      const st = await aiMakeVocabStory(batches[i], {
+        ...opts, avoid: seen,
+        /* 這一批有幾個字就挖幾格（最多 per 格）——
+           批次本來就是照 per 切的，所以通常剛好 */
+        blanks: Math.min(per, batches[i].length),
+      });
+      if (st && st.passage) {
+        out.push({ ...st, words: batches[i] });
+        seen.push(String(st.full || st.passage || '').replace(/[\[\]]/g, ''));
+      }
+    } catch (e) {
+      out.push({ error: (e && e.message) || '這一篇沒出來', words: batches[i] });
+    }
+  }
+  return out;
 }
 
 function _aiStripFence(t) {
@@ -6146,7 +6241,8 @@ function qsKindsInGroup(items) {
     else if (t === 'spelling' && (it.spellWords || []).length) have.add('spelling');
     else if (t === 'fillblank') have.add('fillblank');
     else if (t === 'cloze') have.add('story');
-    else if (t === 'quiz') have.add(/字義選擇\s*$/.test(String(it.title || '')) ? 'sense' : 'quiz');
+    /* ⚠ v542：標題可能帶「（1/3）」的字尾，比對前一定要先拿掉 */
+    else if (t === 'quiz') have.add(/字義選擇$/.test(qsStripPart(it.title)) ? 'sense' : 'quiz');
   });
   return [...have];
 }
@@ -6664,7 +6760,9 @@ Object.assign(window, {
   // Sound & TTS
   dictHas, prefetchDict, readWorthyWords,
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
-  aiMakeVocabExercises, aiMakeVocabStory, storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
+  aiMakeVocabExercises, aiMakeVocabStory, aiMakeVocabStories,
+  QS_MAX_Q, QS_SPLIT, qsChunkEven, qsPartTitle, qsStripPart, qsStoryBank,
+  storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
   vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,
   RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'),

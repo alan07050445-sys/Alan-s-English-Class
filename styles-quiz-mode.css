@@ -4161,3 +4161,16 @@ textarea.ex-essay {
   background: var(--accent); color: #fff; font-family: var(--sans); font-size: 13px; font-weight: 700;
 }
 .exed-paste-go button.ghost { background: none; border: 1px solid var(--border); color: var(--ink-2); }
+
+/* ══ v542 🔢 一個練習最多幾題 ══════════════════════════════════════ */
+.qs-split { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.qs-split-l { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.qs-split-n { width: 62px; padding: 5px 8px; border-radius: 8px; text-align: center;
+  border: 1.5px solid var(--border); background: var(--bg-card);
+  font-family: var(--mono); font-size: 14px; font-weight: 700; }
+.qs-split-n2 { flex: 1; min-width: 220px; font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+/* 短文填空一篇一塊 */
+.qs-story-one { padding: 10px 0 2px; border-top: 1px dashed var(--border); margin-top: 10px; }
+.qs-story-one:first-of-type { border-top: 0; margin-top: 4px; }
+.qs-story-i { font-size: 12.5px; font-weight: 800; color: var(--accent); }

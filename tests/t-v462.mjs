@@ -25,7 +25,12 @@ ok('驗證：太短（沒情境）不收', !V.gnValidWrite({ prompt: 'Write a se
 ok('驗證：沒寫「必須用到什麼」不收', !V.gnValidWrite({ prompt: 'Write one sentence about what you ate yesterday at home.', must: '' }));
 ok('驗證：有中文不收（v461 的全英文規則）', !V.gnValidWrite({ prompt: '寫一句關於你昨天吃了什麼的話好嗎', must: 'past tense' }));
 ok('⭐ 正常的題目收得下', !!V.gnValidWrite({ prompt: 'Write one sentence about where you went last weekend.', must: 'a proper noun', hint: 'Last Sunday I went to ___.' }));
-ok('沿用現成的 writing-practice 單元（星星、五星批改都現成）', /type: 'writing-practice', group: g, order: 7/.test(ed));
+ok('沿用現成的 writing-practice 單元（星星、五星批改都現成）',
+   /* ⚠ 本來連 `order: 7` 一起釘在同一行——v542 把造句拆成好幾份之後
+      order 改成由 pushSplit 給（7、7.001…），同一行就找不到了。
+      要守的是「用的是現成的 writing-practice」與「排在造句那一格」。 */
+   /type: 'writing-practice', group: g,/.test(ed)
+   && /pushSplit\(goodWrite, 7,/.test(ed));
 ok('⭐ 批改依據放進 word 欄位（checkWriting 拿它當標準）', /word: x\.must, zh: '', instruction: x\.prompt/.test(ed));
 
 console.log('\n【2】② 句型轉換（這句是對的，換一種說法）');

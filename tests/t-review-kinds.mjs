@@ -61,8 +61,13 @@ ok('⭐ 只勾字義選擇也要去叫 AI（wantAI 本來沒算它）',
 ok('⭐ 複習視窗也有字義選擇', /\['sense',\s*'🔎 字義選擇（康橋第一大題）'/.test(review));
 ok('⭐ 複習時會真的去生（而且帶 avoid，短文不會跟上次一樣）',
    /aiMakeVocabSense\(w, \{ hint: groupName[^)]*avoid: seen/.test(review));
-ok('⭐ sense 一路傳到 qsBuildItems', /qsBuildItems\(\{ words, title, kinds, ai, story, sense \}\)/.test(app)
-   && /groupName, words: w, ai, story, sense,/.test(review));
+ok('⭐ sense 一路傳到 qsBuildItems', (() => {
+   /* ⚠ 本來釘整串參數 `({ words, title, kinds, ai, story, sense })`——
+      v542 加了 stories／maxQ 就紅了，但行為完全正確。
+      要守的是「sense 有被傳下去」，不是「參數列長這樣」。 */
+   const calls = app.match(/qsBuildItems\(\{[^}]*\}\)/g) || [];
+   return calls.length >= 2 && calls.every(c => /\bsense\b/.test(c))
+     && /groupName, words: w, ai, stories, sense,/.test(review); })());
 ok('⭐ 建得出字義選擇單元', made(['sense']).length === 1 && made(['sense'])[0].type === 'quiz');
 
 console.log('\n【4】側欄分得出誰是誰（兩個都是 type:"quiz"）');

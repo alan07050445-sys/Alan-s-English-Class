@@ -144,12 +144,15 @@ ok('⭐⭐ 兩段確認：先確認要做什麼，再確認題目對不對',
 ok('⭐ 覺得方向不對可以重出一份', /↻ 重出一份/.test(ed));
 ok('⭐ 想自己調還是開得了視窗', /我自己開視窗調/.test(ed));
 ok('⭐⭐ 出題呼叫的是視窗裡本來就在用的那幾支（不新寫出題邏輯）',
-   /window\.aiMakeVocabExercises\(words, \{ hint: title, grade: g, teacherNote: note \}\)/.test(app)
-   && /window\.qsBuildItems\(\{ words, title, kinds, ai, story, sense \}\)/.test(app)
+   /* ⚠ 釘「有沒有叫那幾支」，不要釘參數列的字面長相——
+      v542 多傳了 stories／maxQ，行為一樣但舊斷言會紅。 */
+   /window\.aiMakeVocabExercises\(words, \{/.test(app)
+   && /window\.qsBuildItems\(\{[^}]*\bsense\b[^}]*\}\)/.test(app)
    && /window\.aiMakeReadingSet\(\{/.test(app) && /window\.rcBuildItems\(\{/.test(app));
 ok('⚠ 短文填空／字義選擇失敗不可以拖垮其他已經出好的（v473 的教訓）',
-   /aiMakeVocabStory\([\s\S]{0,120}\.catch\(\(\) => null\)/.test(app)
-   && /aiMakeVocabSense\([\s\S]{0,120}\.catch\(\(\) => null\)/.test(app));
+   /* 守的是「各自 catch 住」——catch 回什麼（null 還是空陣列）不重要 */
+   /aiMakeVocabStor(y|ies)\([\s\S]{0,160}\.catch\(/.test(app)
+   && /aiMakeVocabSense\([\s\S]{0,160}\.catch\(/.test(app));
 ok('⭐ 出一半失敗要講出來，不要安靜關掉', /出題失敗：/.test(ed));
 ok('   預覽看得到每個單元幾題、前兩題長什麼樣', /function AskPreview/.test(ed) && /getQuizItemTotal/.test(ed));
 ok('⭐⭐ 存是最後一步——按了才寫進週次',

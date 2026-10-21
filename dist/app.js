@@ -1586,7 +1586,9 @@ function App() {
     kinds,
     ai,
     story,
+    stories,
     sense,
+    maxQ,
     assign
   }) => {
     // 校稿時改過的中文要回填（老師沒貼中文、AI 補的那種）
@@ -1597,14 +1599,19 @@ function App() {
         zh: a.zh
       } : w;
     });
+    /* v406: story＝短文填空／v487: sense＝字義選擇
+       v542: stories＝好幾篇短文、maxQ＝一個練習最多幾題（程式照這個切）
+       ⚠ 這幾個欄位要「一路點名」——中間漏一個不會報錯，單元會安靜地不見（v487 的教訓）。 */
     var items = window.qsBuildItems({
       words: merged,
       title,
       kinds,
       ai,
       story,
-      sense
-    }); // v406: story＝短文填空／v487: sense＝字義選擇
+      stories,
+      sense,
+      maxQ
+    });
     /* 🔴 v487：本來一聲不吭就關掉——老師看到的就是「按了確認，什麼都沒發生」。
        跟 v473 同一個教訓：生不出來不可以安靜地少一個單元，一定要講出來。 */
     if (!items.length) {
@@ -1693,13 +1700,16 @@ function App() {
       /* 短文填空與字義選擇比較慢，而且**失敗不可以拖垮其他已經出好的**（v473 的教訓）。 */
       var story = null,
         sense = null;
-      if (kinds.indexOf('story') >= 0 && window.aiMakeVocabStory) {
+      /* v542：合併很多字的時候短文要出好幾篇（幾篇由程式算） */
+      var stories = [];
+      if (kinds.indexOf('story') >= 0 && window.aiMakeVocabStories) {
         say('出題中…（短文填空）');
-        story = await window.aiMakeVocabStory(words, {
+        stories = await window.aiMakeVocabStories(words, {
           hint: title,
           grade: g,
           teacherNote: note
-        }).catch(() => null);
+        }).catch(() => []);
+        stories = (stories || []).filter(x => x && !x.error);
       }
       if (kinds.indexOf('sense') >= 0 && window.aiMakeVocabSense) {
         say('出題中…（字義選擇）');
@@ -1715,6 +1725,7 @@ function App() {
         kinds,
         ai,
         story,
+        stories,
         sense
       });
     }
@@ -2570,6 +2581,7 @@ function App() {
     words,
     ai,
     story,
+    stories,
     sense,
     kinds,
     dueDate,
@@ -2610,8 +2622,9 @@ function App() {
       kinds,
       ai,
       story,
+      stories,
       sense
-    }); // v473：字義選擇也要傳下去
+    }); // v473：字義選擇也要傳下去／v542：短文好幾篇
     if (!built.length) {
       showToast('沒有產生任何單元');
       return;

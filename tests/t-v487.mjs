@@ -37,7 +37,10 @@ ok('⭐ 而且真的傳給了 qsBuildItems', (() => {
   const calls = appC.match(/qsBuildItems\(\{[^}]*\}\)/g) || [];
   return calls.length >= 2 && calls.every(c => /\bsense\b/.test(c)); })());
 ok('   複習那條路也還在傳（v473 修過的不要被我改壞）',
-  /qsBuildItems\(\{[^}]*words, title, kinds, ai, story, sense[^}]*\}\)/.test(appC));
+  /* ⚠ 釘的是「每一條路都有把 sense 傳下去」，不是參數列的字面長相
+     （v542 加了 stories／maxQ，行為沒變但舊寫法的斷言會紅）。 */
+  (appC.match(/qsBuildItems\(\{[^}]*\}\)/g) || []).length >= 2
+  && (appC.match(/qsBuildItems\(\{[^}]*\}\)/g) || []).every(c => /\bsense\b/.test(c)));
 
 console.log('\n【3】生不出來一定要講出來（v473 的教訓）');
 ok('⭐ 一個單元都沒生出來時會跳訊息，不是默默關掉',

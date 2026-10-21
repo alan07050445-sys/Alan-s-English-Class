@@ -1020,11 +1020,12 @@ const QS_KINDS = [
   { id: 'fillblank', zh: '填空',     note: '情境句子挖空＋中文解說' },
   /* v406（Alan：學校作業右半邊的 Part B 就長這樣）：一篇小故事，
      把這一課的每個單字各挖一格，學生讀上下文填回去。只有開 AI 才生得出來。 */
-  { id: 'story',     zh: '短文填空', note: '一篇小故事，每個單字各挖一格（像作業紙的 Part B）', ai: true },
+  /* v542：單字多的時候會自動拆成好幾篇（Alan 合併 24 個字那次） */
+  { id: 'story',     zh: '短文填空', note: '小故事挖空填回去（像作業紙的 Part B）；單字多就自動拆成好幾篇', ai: true },
   /* v468（Alan 2026-10-06 給的康橋考卷，Section I 的 A 一定是這一種）：
      短文裡一個目標字 →「在這篇文章裡這個字是什麼意思？」四個選項**全是定義**，
      干擾項是**同一個字的其他語意**。⚠ 跟「配對連線」不是同一件事。 */
-  { id: 'sense',     zh: '字義選擇', note: '短文＋「這個字在這裡是什麼意思」，像康橋考卷第一大題', ai: true },
+  { id: 'sense',     zh: '字義選擇', note: '短文＋「這個字在這裡是什麼意思」，像康橋考卷第一大題；一份最多 8 題', ai: true },
 ];
 /* 🔴 v487：預設勾哪些，本來是手寫的一份清單，新增題型時沒人記得補
    → 「字義選擇」從 v468 做好到現在一次都沒有被預設勾起來。
@@ -1351,9 +1352,13 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
   const [aiErr, setAiErr]   = useS('');
   const [aiNote, setAiNote] = useS('');            // v445：這次的特別要求（直接寫給 AI）
   const [rows, setRows]     = useS(null);    // AI 回來的結果（校稿中）
-  const [story, setStory]   = useS(null);    // v406: AI 出的短文填空（校稿中一起改）
+  /* v542：短文填空從「一篇」變成「一疊」——合併 24 個單字時要出好幾篇。
+     ⚠ 舊的 story 欄位還留在 qsBuildItems 收得到的範圍內（別條路還在用）。 */
+  const [stories, setStories] = useS([]);   // v406: AI 出的短文填空（校稿中一起改）
+  /* v542（Alan：「盡量每一次練習都是在 10 題內」）：一個練習最多幾題，程式照這個切 */
+  const [maxQ, setMaxQ] = useS(window.QS_MAX_Q || 10);
+  const [reStoryAt, setReStoryAt] = useS(-1);   // 正在重生第幾篇
   const [sense, setSense]   = useS([]);      // v468: 字義選擇題（康橋考卷第一大題）
-  const [reStory, setReStory] = useS(false); // v407: 校稿頁單獨重生短文（不用整組重出）
   /* v380（Alan：「不用一整包要一份一份指定」）：建立的同時就指派出去。
      學期＝整組設為本週作業（含截止日）；暑假題庫＝勾選要給哪些學生。 */
   const [assign, setAssign] = useS(true);
@@ -1374,7 +1379,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
         setPicked(QS_KINDS.reduce((a3, k) => { a3[k.id] = alreadyHave.indexOf(k.id) < 0; return a3; }, {}));
       } else {
         setPicked(QS_DEFAULT_KINDS.reduce((a3, k) => { a3[k] = true; return a3; }, {}));
-      } setCat(defaultCat || 'vocab'); setRows(null); setStory(null); setSense([]); setReStory(false); setAiErr(''); setBusy(0); setUseAI(true);
+      } setCat(defaultCat || 'vocab'); setRows(null); setStories([]); setSense([]); setReStoryAt(-1); setAiErr(''); setBusy(0); setUseAI(true);
       setAssign(true); setWho([]);
       // 預設截止日＝這個週日（大部分作業都是一週）
       const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
@@ -1420,8 +1425,12 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
         ? window.aiMakeVocabSense(words, { hint: title.trim(), grade, teacherNote: aiNote })
             .catch(e => e).then(x => { drop('字義選擇'); return x; })
         : Promise.resolve(null);
-      const stP = (picked.story && canDo.story && window.aiMakeVocabStory)
-        ? window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => exP })
+      /* v542：一次出好幾篇（幾篇由程式照單字數算，不是叫 AI 自己拆——
+         Alan 試過在「特別要求」裡叫 AI 拆三篇，做不到）。 */
+      const stP = (picked.story && canDo.story && window.aiMakeVocabStories)
+        ? window.aiMakeVocabStories(words, { hint: title.trim(), grade, teacherNote: aiNote,
+            per: Math.min(maxQ, (window.QS_SPLIT && window.QS_SPLIT.story.per) || 6),
+            rescue: () => exP })
             .catch(e => e).then(x => { drop('短文填空'); return x; })
         : Promise.resolve(null);
       exP.then(() => setSlow([
@@ -1433,10 +1442,13 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
          老師只看得到「短文填空不見了」，完全不知道發生什麼事（Alan 就是這樣回報的）。
          它們失敗不該拖垮其他已經出好的練習，但一定要講出來。 */
       const soft = [];
-      const st = (st0 instanceof Error) ? (soft.push('短文填空'), null) : st0;
+      const st = (st0 instanceof Error) ? (soft.push('短文填空'), []) : (st0 || []);
       const se = (se0 instanceof Error) ? (soft.push('字義選擇'), null) : se0;
+      /* ⚠ 一篇失敗不可以拖垮其他篇，但失敗的那幾篇要講出來（v473 的教訓） */
+      const bad = st.filter(x => x && x.error).length;
+      if (bad) soft.push(`短文填空有 ${bad} 篇`);
       setRows(r);
-      setStory(st);
+      setStories(st.filter(x => x && !x.error));
       setSense(se || []);
       if (soft.length) setAiErr(`其他都出好了，只有${soft.join('、')}這次沒出來（AI 回得不乾淨）。想要的話再按一次。`);
     } catch (e) { setAiErr((e && e.message) || 'AI 出題失敗，請再試一次。'); }
@@ -1449,7 +1461,8 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
     ? words.map(w => { const u = defaultImages[String(w.term || '').toLowerCase()];
                        return u && !w.imageUrl ? { ...w, imageUrl: u } : w; })
     : words;
-  const payload = (extra) => ({ words: withImgs, title: title.trim(), cat, kinds: chosen.map(k => k.id), story, sense,
+  const payload = (extra) => ({ words: withImgs, title: title.trim(), cat, kinds: chosen.map(k => k.id),
+    stories, sense, maxQ,
     assign: assign ? (perStudent ? { students: who } : { dueDate: due }) : null, ...extra });
 
   /* ⚠ 不要寫成 `const AssignBox = () => …` 再用 <AssignBox/> 那種寫法：
@@ -1508,69 +1521,85 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
             {/* v406：短文填空的校稿。AI 生出來的東西一律用程式驗一次再讓老師看
                 （這個專案吃過「AI 說有就當作有」的虧）——漏字／挖錯字／答案寫在
                 括號外面都直接標出來，老師改完就能用。 */}
-            {picked.story && canDo.story && (
-              <div className="qs-story">
-                <div className="qs-story-head">
-                  <b>📖 短文填空</b>
-                  {story ? <span className="qs-story-n">{(story.check || {}).blanks || 0} 個空格</span>
-                         : <span className="qs-story-n warn">這次沒生出來</span>}
-                  <span style={{flex:1}}/>
-                  {/* v407（Alan：「這個新增題型我要百分之百能夠成功」）：
-                      前面已經有三層（程式修 → 最多重生 3 輪 → 用填空題例句保底），
-                      這顆是最後的人工開關——真的很不滿意就再來一次，不用整組重出。 */}
-                  <button type="button" className="qs-story-re" disabled={!!reStory}
-                    onClick={async () => {
-                      setReStory(true);
-                      try {
-                        const st2 = await window.aiMakeVocabStory(words, { hint: title.trim(), grade, teacherNote: aiNote, rescue: () => rows });
-                        if (st2) setStory(st2);
-                      } catch (e) { /* 失敗就維持原本那一篇，不要把老師手上的東西弄不見 */ }
-                      setReStory(false);
-                    }}>{reStory ? '生成中…' : '🔁 換一篇'}</button>
-                </div>
-                {!story && (
-                  <div className="qs-story-warn">
-                    ⚠ 這次沒生出來（其他 {chosen.length - 1} 個練習不受影響）——按右上角的
-                    <b> 🔁 換一篇 </b>再試一次，或直接建立、之後再補。
+            {picked.story && canDo.story && (() => {
+              /* v542：短文填空變成**一疊**（合併 24 個字要出好幾篇）。
+                 每一篇各自校稿、各自「換一篇」——換掉一篇不要動到其他篇。 */
+              const nWant = window.qsChunkEven
+                ? window.qsChunkEven(words, Math.max(3, Math.min(maxQ,
+                    (window.QS_SPLIT && window.QS_SPLIT.story.per) || 6))).length
+                : 1;
+              const upd = (si, patch) => setStories(xs => xs.map((x, j) => j === si ? { ...x, ...patch } : x));
+              return (
+                <div className="qs-story">
+                  <div className="qs-story-head">
+                    <b>📖 短文填空</b>
+                    <span className={'qs-story-n' + (stories.length ? '' : ' warn')}>
+                      {stories.length ? `${stories.length} 篇` : '這次沒生出來'}
+                      {stories.length && stories.length < nWant ? `（少了 ${nWant - stories.length} 篇）` : ''}
+                    </span>
                   </div>
-                )}
-                {story && (
-                  <>
-                    <label className="qs-story-lab">標題</label>
-                    <input value={story.title || ''}
-                      onChange={e => setStory(s2 => ({ ...s2, title: e.target.value }))}/>
-                    <label className="qs-story-lab">
-                      短文（<code>[答案]</code> 是空格，後面可以加 <code>(提示)</code>，
-                      例：<code>[soaring](ing)</code>）
-                      <span className="qs-story-sub">
-                        · 只挖 {((story.passage || '').match(/\[[^\]]+\]/g) || []).length} 格，
-                        Word Bank 還是全部 {words.length} 個字（其他當誘答）——想多挖就自己加 <code>[ ]</code>
-                      </span>
-                    </label>
-                    <textarea rows={8} value={story.passage || ''}
-                      onChange={e => setStory(s2 => ({
-                        ...s2, passage: e.target.value,
-                        check: window.storyCheck ? window.storyCheck(e.target.value, words, { partial: true }) : s2.check,
-                      }))}/>
-                    {(() => {
-                      const c = story.check || {};
-                      const bad = [];
-                      if ((c.missing || []).length) bad.push(`短文裡沒有出現：${c.missing.join('、')}`);
-                      if ((c.extra || []).length)   bad.push(`挖到不是這一課的字：${c.extra.join('、')}`);
-                      if ((c.leaked || []).length)  bad.push(`答案出現在括號外面：${c.leaked.join('、')}`);
-                      const nb = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
-                      return bad.length
-                        ? <div className="qs-story-warn">⚠ {bad.join('；')}</div>
-                        : <div className="qs-story-ok">✓ 每個單字都在短文裡、挖了 {nb} 格，沒有洩漏答案</div>;
-                    })()}
-                    {/* v407：程式自動修過的地方要講出來，老師才知道這篇被動過哪裡 */}
-                    {(story.fixes || []).length > 0 && (
-                      <div className="qs-story-fix">🔧 已自動修好：{story.fixes.join('；')}</div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+                  {!stories.length && (
+                    <div className="qs-story-warn">
+                      ⚠ 這次沒生出來（其他 {Math.max(0, chosen.length - 1)} 個練習不受影響）——
+                      再按一次「AI 出題」，或直接建立、之後再補。
+                    </div>
+                  )}
+                  {stories.map((story, si) => {
+                    const mine = (story.words || []).length ? story.words : words;
+                    const nb = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
+                    const c = story.check || {};
+                    const bad = [];
+                    if ((c.missing || []).length) bad.push(`短文裡沒有出現：${c.missing.join('、')}`);
+                    if ((c.extra || []).length)   bad.push(`挖到不是這一課的字：${c.extra.join('、')}`);
+                    if ((c.leaked || []).length)  bad.push(`答案出現在括號外面：${c.leaked.join('、')}`);
+                    return (
+                      <div className="qs-story-one" key={si}>
+                        <div className="qs-story-head">
+                          <span className="qs-story-i">{stories.length > 1 ? `第 ${si + 1} 篇` : '短文'}</span>
+                          <span className="qs-story-n">{nb} 個空格</span>
+                          <span style={{flex:1}}/>
+                          {/* v407：程式修 → 重生 3 輪 → 填空題例句保底之後，最後的人工開關。
+                              v542 ⚠ 只換這一篇，而且只用**這一篇自己的那幾個字**。 */}
+                          <button type="button" className="qs-story-re" disabled={reStoryAt >= 0}
+                            onClick={async () => {
+                              setReStoryAt(si);
+                              try {
+                                const st2 = await window.aiMakeVocabStory(mine, {
+                                  hint: title.trim(), grade, teacherNote: aiNote,
+                                  blanks: Math.min(maxQ, (window.QS_SPLIT && window.QS_SPLIT.story.per) || 6),
+                                  avoid: stories.filter((_, j) => j !== si).map(x => String(x.full || x.passage || '')),
+                                  rescue: () => rows });
+                                if (st2) upd(si, { ...st2, words: mine });
+                              } catch (e) { /* 失敗就維持原本那一篇，不要把老師手上的東西弄不見 */ }
+                              setReStoryAt(-1);
+                            }}>{reStoryAt === si ? '生成中…' : '🔁 換一篇'}</button>
+                        </div>
+                        <label className="qs-story-lab">標題</label>
+                        <input value={story.title || ''} onChange={e => upd(si, { title: e.target.value })}/>
+                        <label className="qs-story-lab">
+                          短文（<code>[答案]</code> 是空格，後面可以加 <code>(提示)</code>，
+                          例：<code>[soaring](ing)</code>）
+                          <span className="qs-story-sub">
+                            · 挖 {nb} 格，Word Bank 給 {Math.min(
+                              (window.QS_SPLIT && window.QS_SPLIT.story.bank) || 10, words.length)} 個字
+                            （其他當誘答）——想多挖就自己加 <code>[ ]</code>
+                          </span>
+                        </label>
+                        <textarea rows={7} value={story.passage || ''}
+                          onChange={e => upd(si, { passage: e.target.value,
+                            check: window.storyCheck ? window.storyCheck(e.target.value, mine, { partial: true }) : c })}/>
+                        {bad.length
+                          ? <div className="qs-story-warn">⚠ {bad.join('；')}</div>
+                          : <div className="qs-story-ok">✓ 這一篇的單字都在、挖了 {nb} 格，沒有洩漏答案</div>}
+                        {(story.fixes || []).length > 0 && (
+                          <div className="qs-story-fix">🔧 已自動修好：{story.fixes.join('；')}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             {/* v468：字義選擇題的校稿（康橋考卷第一大題）。
                 出題時已經讓第二個 AI 自己讀短文作答、對不上就重出一次——
                 實測第一輪大約一半會被擋掉（都是真的把答案標錯），所以這一關不能省。 */}
@@ -1704,6 +1733,29 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                     );
                   })}
                 </div>
+                {/* ══ v542（Alan 合併 24 個單字之後）══
+                    「字義選擇不可能一次的練習就 24 題，這樣也太久，小孩會沒耐心」
+                    ⭐ 切幾份是**程式**算的（平均分，24 → 8/8/8 不是 10/10/4）。 */}
+                <div className="qs-split">
+                  <label className="qs-split-l">一個練習最多</label>
+                  <input className="qs-split-n" type="number" min="2" max="40" value={maxQ}
+                    onChange={e => setMaxQ(Math.max(2, Math.min(40, +e.target.value || 10)))}/>
+                  <span className="qs-split-l">題</span>
+                  <span className="qs-split-n2">{(() => {
+                    const n = words.length;
+                    if (!n) return '貼上單字之後會算給你看';
+                    const g = window.qsChunkEven ? window.qsChunkEven(words, maxQ) : [words];
+                    const sePer = Math.min(maxQ, (window.QS_SPLIT && window.QS_SPLIT.sense.per) || 8);
+                    const sg = window.qsChunkEven ? window.qsChunkEven(words, sePer) : [words];
+                    const stPer = Math.max(3, Math.min(maxQ, (window.QS_SPLIT && window.QS_SPLIT.story.per) || 6));
+                    const st = window.qsChunkEven ? window.qsChunkEven(words, stPer) : [words];
+                    const bits = [`${n} 個字 → 測驗／填空／聽寫各 ${g.length} 份（${g.map(x => x.length).join('+')} 題）`];
+                    if (picked.sense && canDo.sense) bits.push(`字義選擇 ${sg.length} 份`);
+                    if (picked.story && canDo.story) bits.push(`短文 ${st.length} 篇（每篇挖 ${Math.min(stPer, st[0].length)} 格）`);
+                    bits.push('單字卡不切');
+                    return bits.join('　·　');
+                  })()}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1829,8 +1881,9 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
       const exP = window.aiMakeVocabExercises(w, { hint: groupName, grade, teacherNote: note, avoid: seen,
                                                    onProgress: (d) => setBusy(d) });
       const drop = (n2) => setSlow(xs => xs.filter(x => x !== n2));
-      const stP = wantStory && window.aiMakeVocabStory
-        ? window.aiMakeVocabStory(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP })
+      /* v542：複習一整組（可能是合併來的好幾十個字）也要拆成好幾篇 */
+      const stP = wantStory && window.aiMakeVocabStories
+        ? window.aiMakeVocabStories(w, { hint: groupName, grade, teacherNote: note, avoid: seen, rescue: () => exP })
             .catch(e => e).then(r => { drop('短文填空'); return r; })
         : Promise.resolve(null);
       // v473：字義選擇也要能複習（avoid 一樣送進去，短文不會跟上次一樣）
@@ -1845,10 +1898,12 @@ function ReviewGroupModal({ open, groupName, catId, items, weekChoices, curWeekI
       /* ⚠ 這兩種失敗了不該整份停掉（其他練習都好了），但也**不可以默默消失**——
          本來是 .catch(() => null)，老師只會看到「短文填空不見了」卻不知道為什麼。 */
       const soft = [];
-      const story = (story0 instanceof Error) ? (soft.push('短文填空'), null) : story0;
+      const st = (story0 instanceof Error) ? (soft.push('短文填空'), []) : (story0 || []);
+      const stories = st.filter(x => x && !x.error);
+      if (st.length - stories.length) soft.push(`短文填空有 ${st.length - stories.length} 篇`);
       const sense = (sense0 instanceof Error) ? (soft.push('字義選擇'), null) : sense0;
       onCreate({
-        targetWeekId: week, catId, groupName, words: w, ai, story, sense,
+        targetWeekId: week, catId, groupName, words: w, ai, stories, sense,
         /* 🔴 v473：本來寫 kinds.filter(k => k !== 'story')，把 story 濾掉了——
            但 qsBuildItems 要靠 kinds 裡有 'story' 才會建那個單元。
            結果是：短文真的生出來了（花了一次 AI 請求），然後被丟掉。 */
@@ -2427,13 +2482,22 @@ function wsBuildItems({ pack, title, kinds }) {
   return out;
 }
 
-function qsBuildItems({ words, title, kinds, ai, story, sense }) {
+function qsBuildItems({ words, title, kinds, ai, story, stories, sense, maxQ }) {
   const aiOf = (term) => (ai || []).find(r => r.term === term) || null;
   const rnd = () => Math.random().toString(36).slice(2, 6);
   const stamp = Date.now();
   const out = [];
   const fcId = 'qs' + stamp + 'fc';
   const base = { group: title, zh: '', duration: '' };
+  /* ══ v542 一次練習最多幾題 ════════════════════════════════════════
+     Alan 合併 24 個單字之後：「字義選擇不可能一次的練習就 24 題，小孩會沒耐心」。
+     ⭐ 切幾份是**程式**算的（qsChunkEven 會平均分，24 → 8/8/8 不是 10/10/4）。
+     ⚠ 只有一份時完全不加字尾，原本就好好的流程一行都不要動。
+     ⚠ 單字卡**不切**：它是這一組的底本（所有練習都 linkedFlashcardId 指著它），
+       切開會讓複習／再出一份那幾條路找不到完整的單字表。 */
+  const cap = Math.max(1, +maxQ || window.QS_MAX_Q || 10);
+  const chunk = (list, per) => (window.qsChunkEven ? window.qsChunkEven(list, per || cap) : (list.length ? [list] : []));
+  const partTitle = (t, i, n) => (window.qsPartTitle ? window.qsPartTitle(t, i, n) : t);
 
   if (kinds.indexOf('flashcard') >= 0) {
     out.push({ ...base, id: fcId, type: 'flashcard', title,
@@ -2468,7 +2532,10 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
         if (cjk(pairs[k].def) === dropZh) pairs.splice(k, 1);
       }
     }
-    if (pairs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'dm', type: 'def-match', title, linkedFlashcardId: fcId, defPairs: pairs });
+    const dmParts = chunk(pairs.length >= 2 ? pairs : []);
+    dmParts.forEach((ps, k) => { if (ps.length >= 2) out.push({ ...base,
+      id: 'qs' + stamp + 'dm' + k, type: 'def-match', title: partTitle(title, k, dmParts.length),
+      linkedFlashcardId: fcId, defPairs: ps }); });
   }
   if (kinds.indexOf('fillblank') >= 0) {
     const qs = words.map((w, i) => {
@@ -2480,7 +2547,10 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
       const explain = (a && a.explain) || (w.zh ? `${w.term} = ${w.zh}` : '');
       return { id: 'q' + stamp + i + rnd(), sentence, answer, explain };
     }).filter(Boolean);
-    if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'fb', type: 'fillblank', title, linkedFlashcardId: fcId, questions: qs });
+    const fbParts = chunk(qs.length >= 2 ? qs : []);
+    fbParts.forEach((g, k) => { if (g.length >= 2) out.push({ ...base,
+      id: 'qs' + stamp + 'fb' + k, type: 'fillblank', title: partTitle(title, k, fbParts.length),
+      linkedFlashcardId: fcId, questions: g }); });
   }
   /* v468 康橋考卷第一大題：字義選擇。
      沿用 quiz（不新增題型——v414 的教訓）。短文放在題幹裡，學生先讀再選。
@@ -2496,7 +2566,10 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
       if (opts.length < 2) return null;
       return { id: 'q' + stamp + i + rnd(), q: `「${w.zh}」的英文是哪一個？`, options: opts, answer: 0, explain: w.example || '' };
     }).filter(Boolean);
-    if (qs.length >= 2) out.push({ ...base, id: 'qs' + stamp + 'qz', type: 'quiz', title, linkedFlashcardId: fcId, questions: qs });
+    const qzParts = chunk(qs.length >= 2 ? qs : []);
+    qzParts.forEach((g, k) => { if (g.length >= 2) out.push({ ...base,
+      id: 'qs' + stamp + 'qz' + k, type: 'quiz', title: partTitle(title, k, qzParts.length),
+      linkedFlashcardId: fcId, questions: g }); });
   }
   /* v406: 短文填空 → cloze 題型。passage 裡的 [答案](提示) 就是空格，
      格式跟 components-quiz-mode.jsx 的 parseClozePassage 完全一致。 */
@@ -2504,37 +2577,61 @@ function qsBuildItems({ words, title, kinds, ai, story, sense }) {
      側欄的順序就是這裡 push 的順序。字義選擇要讀一段短文、比較難，
      排在一般測驗後面比較合理。 */
   if (kinds.indexOf('sense') >= 0 && (sense || []).length >= 2) {
+    /* v542（Alan：「字義選擇也是幫我出三大題，不要一大題就 24 題」）
+       ⚠ 它要讀一段短文才能選，比一般測驗累——所以上限比別的更小（8）。 */
+    const sePer = Math.min(cap, (window.QS_SPLIT && window.QS_SPLIT.sense.per) || 8);
+    const seParts = chunk(sense, sePer);
     /* 🔴 v473：本來標題跟「測驗」那個單元一模一樣（兩個都是 type:'quiz'），
        側欄會並排兩個「測驗」，老師與學生都分不出哪個是哪個。
        ⚠ 加了字尾就要同時補 QM_TYPE_WORDS，否則側欄歸戶會把它當成另一組。 */
-    out.push({ ...base, id: 'qs' + stamp + 'se', type: 'quiz', title: `${title} · 字義選擇`, linkedFlashcardId: fcId,
-      zh: `${sense.length} 題 · 讀短文，選出這個字在這裡的意思`,
+    seParts.forEach((grp, k) => out.push({ ...base, id: 'qs' + stamp + 'se' + k, type: 'quiz',
+      title: partTitle(`${title} · 字義選擇`, k, seParts.length), linkedFlashcardId: fcId,
+      zh: `${grp.length} 題 · 讀短文，選出這個字在這裡的意思`,
       instruction: 'Read each passage, then choose what the word means there.',
       /* 🔴 v475（Alan：「字體小一點、排版好一點，該單字要特別標起來」）：
          本來把「標題＋整段短文＋問題」塞成一整串 q，而題目的字級是 52px
          ——一整屏的大字。改成分開存，播放器才能把短文排小、把目標字標出來。
          ⚠ q 還是留著完整內容：舊版播放器（和複習／沿用時的其他路徑）看得懂。 */
-      questions: sense.map((x, i) => ({ id: 'q' + stamp + 's' + i + rnd(),
+      questions: grp.map((x, i) => ({ id: 'q' + stamp + 's' + k + '_' + i + rnd(),
         q: `${x.title ? x.title + '\n' : ''}${x.passage}\n\n${x.q}`,
         passage: x.passage, passageTitle: x.title || '', word: x.word || '', ask: x.q,
-        options: x.options, answer: x.answer, explain: x.explain || '' })) });
+        options: x.options, answer: x.answer, explain: x.explain || '' })) }));
   }
 
-  if (kinds.indexOf('story') >= 0 && story && String(story.passage || '').indexOf('[') >= 0) {
+  /* v542（Alan：「我這次有 24 個單字，短文填空肯定要多幾篇啊」）
+     ⚠ 舊的呼叫端只給一篇（story），新的給一疊（stories）——兩種都要收，
+       不然複習／再出一份那幾條路會安靜地少一個單元。 */
+  const storyList = (stories && stories.length ? stories : (story ? [story] : []))
+    .filter(st => st && !st.error && String(st.passage || '').indexOf('[') >= 0);
+  if (kinds.indexOf('story') >= 0) storyList.forEach((story, k) => {
     const nBlank = ((story.passage || '').match(/\[[^\]]+\]/g) || []).length;
     /* v408（Alan：「頭上要給 word bank，這樣小朋友才知道有什麼單字可以填入」）
        ⚠ 存的是老師輸入的「原形」，不是文章裡的變化形——作業紙上的 word bank 就是原形，
        空格後面的 (ing)/(s) 才是叫學生自己變出正確形式的地方。
        只有這裡（一鍵出單字的短文填空）會寫 wordBank；文法時態的克漏字沒有這個欄位，
        所以它們不會突然冒出一排答案把時態送分掉。 */
-    out.push({ ...base, id: 'qs' + stamp + 'st', type: 'cloze', title: `${title} · 短文填空`,
+    /* v542 Word Bank：答案全放，再從整池抽誘答補到 10 個，然後洗牌。
+       ⚠ 本來是「這一組**全部**的字」——合併 24 個字的時候，
+         一篇挖 6 格卻給 24 個選項，小朋友根本挑不動。 */
+    const ansWords = ((story.passage || '').match(/\[([^\]]+)\]/g) || [])
+      .map(x => x.slice(1, -1));
+    const allTerms = words.map(w => String(w.term || '').trim()).filter(Boolean);
+    out.push({ ...base, id: 'qs' + stamp + 'st' + k, type: 'cloze',
+      title: partTitle(`${title} · 短文填空`, k, storyList.length),
       zh: `${nBlank} 個空格 · 讀短文把單字填回去`,
       linkedFlashcardId: fcId, passage: story.passage,
-      wordBank: words.map(w => String(w.term || '').trim()).filter(Boolean) });
-  }
+      wordBank: window.qsStoryBank
+        ? window.qsStoryBank((story.words || []).map(w => w.term).filter(Boolean).length
+            ? (story.words || []).map(w => w.term) : ansWords,
+            allTerms, (window.QS_SPLIT && window.QS_SPLIT.story.bank) || 10)
+        : allTerms });
+  });
   if (kinds.indexOf('spelling') >= 0) {
-    out.push({ ...base, id: 'qs' + stamp + 'sp', type: 'spelling', title, linkedFlashcardId: fcId,
-      spellWords: words.map((w, i) => ({ id: 'sp' + stamp + i + rnd(), word: w.term, zh: w.zh || ((aiOf(w.term) || {}).zh || '') })) });
+    const sw = words.map((w, i) => ({ id: 'sp' + stamp + i + rnd(), word: w.term,
+      zh: w.zh || ((aiOf(w.term) || {}).zh || '') }));
+    const spParts = chunk(sw);
+    spParts.forEach((g, k) => out.push({ ...base, id: 'qs' + stamp + 'sp' + k, type: 'spelling',
+      title: partTitle(title, k, spParts.length), linkedFlashcardId: fcId, spellWords: g }));
   }
   return out;
 }
@@ -6488,6 +6585,8 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
   const [grade, setGrade]   = useS(defaultGrade || 'g4');
   const [nMcq, setNMcq]     = useS(8);
   const [nFill, setNFill]   = useS(8);
+  /* v542：一個練習最多幾題（跟一鍵出單字同一個預設值、同一條切法） */
+  const [gnMaxQ, setGnMaxQ] = useS(window.QS_MAX_Q || 10);
   const [nTr, setNTr]       = useS(5);
   const [nRw, setNRw]       = useS(5);          // v429：改寫句子（例：把大小寫改對）
   const [nCircle, setNCircle] = useS(6);       // v444：找出來（在句子裡圈出名詞／動詞）
@@ -7292,11 +7391,32 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
             </div>
           )}
         </div>
+        {/* v542（Alan：「不然之後合併單字 或是文法 都全部出在一個練習 也太累」）
+            跟一鍵出單字用同一條切法、同一個預設值。 */}
+        <div className="qs-split" style={{ margin: '0 18px' }}>
+          <label className="qs-split-l">一個練習最多</label>
+          <input className="qs-split-n" type="number" min="2" max="40" value={gnMaxQ}
+            onChange={e => setGnMaxQ(Math.max(2, Math.min(40, +e.target.value || 10)))}/>
+          <span className="qs-split-l">題</span>
+          <span className="qs-split-n2">{(() => {
+            const n4 = (list, zh) => {
+              const L = (list || []).length;
+              if (!L) return null;
+              const g = window.qsChunkEven ? window.qsChunkEven(list, gnMaxQ) : [list];
+              return g.length > 1 ? `${zh} ${g.length} 份（${g.map(x => x.length).join('+')} 題）` : null;
+            };
+            const bits = [n4(res.mcq, '選擇題'), n4(res.fill, '填空題'),
+                          n4(res.rw, '改寫句子'), n4(res.tf, '句型轉換'),
+                          n4(res.write, '造句')].filter(Boolean);
+            return bits.length ? '會拆開：' + bits.join('　·　') : '這一份每種題型都在上限內，不會被拆開';
+          })()}</span>
+        </div>
         <div className="modal-foot">
           <button className="btn ghost" onClick={() => setRes(null)}>← 重新設定</button>
           <button className="btn primary" disabled={lsBusy || !unitsN} onClick={() => {
             if (!steps.length && !confirm('這一份沒有互動教學，練習就不會上鎖（學生可以直接做題）。\n確定要先建立嗎？')) return;
             onCreate({
+              maxQ: gnMaxQ,
               title: (title || res.sheet.topic || '文法練習').trim(), cat, grade, topic: res.sheet.topic,
               lesson: res.lesson, mcq: res.mcq, fill: res.fill, tr: res.tr, rw: res.rw || [],
               srcNotes: res.sheet ? res.sheet.notes : '',                     // v466：留著給「排複習」重出題目用
@@ -7315,11 +7435,23 @@ function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStud
 }
 
 /* 校稿完 → 真正的單元。練習三份都帶 requires（教學 id）：沒學完的學生會看到鎖 */
-function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write, tf, ord, edit, diag, circle, sort, circleSets, sortSets, caseMatters }) {
+function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write, tf, ord, edit, diag, circle, sort, circleSets, sortSets, caseMatters, maxQ }) {
   const stamp = Date.now();
   const rnd = () => Math.random().toString(36).slice(2, 5);
   const g = title;
   const out = [];
+  /* ══ v542（Alan：「不然之後合併單字 或是文法 都全部出在一個練習 也太累」）══
+     跟單字那邊用**同一個** qsChunkEven／qsPartTitle，不要各寫一份。
+     ⚠ 只有一份時完全不加字尾——文法平常一種就 8 題，本來就不會被切到。 */
+  const cap = Math.max(1, +maxQ || window.QS_MAX_Q || 10);
+  const chunk = (list) => (window.qsChunkEven ? window.qsChunkEven(list, cap) : (list.length ? [list] : []));
+  const partTitle = (t, i, n) => (window.qsPartTitle ? window.qsPartTitle(t, i, n) : t);
+  /* 一種題型切成好幾份：order 用小數排在一起，側欄順序不會亂掉 */
+  const pushSplit = (list, order, make) => {
+    const parts = chunk(list);
+    parts.forEach((grp, k) => out.push({ ...make(grp, k, parts.length),
+      order: order + k * 0.001 }));
+  };
   const steps = ((lesson && lesson.steps) || []).map(window.gnValidStep).filter(Boolean);
   const lessonId = steps.length ? 'gn' + stamp + 'ls' + rnd() : null;
   if (lessonId) {
@@ -7365,17 +7497,20 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
       sortWords: good.words.map((w, i) => ({ id: 'w' + stamp + k + i + rnd(), word: w.word, category: w.category })) });
   });
   const goodMcq = (mcq || []).filter(x => x && x.q && (x.options || []).length >= 2);
-  if (goodMcq.length) out.push({ id: 'gn' + stamp + 'qz' + rnd(), type: 'quiz', group: g, order: 3, ...req,
-    title: `${g} · 選擇題`, zh: `${goodMcq.length} 題 · 選出正確的答案`, shuffle: true,
-    questions: goodMcq.map((x, i) => ({ id: 'q' + stamp + i + rnd(), q: x.q, options: x.options, answer: x.answer, explain: x.explain || '' })) });
+  if (goodMcq.length) pushSplit(goodMcq, 3, (grp, k, n) => ({
+    id: 'gn' + stamp + 'qz' + k + rnd(), type: 'quiz', group: g, ...req,
+    title: partTitle(`${g} · 選擇題`, k, n), zh: `${grp.length} 題 · 選出正確的答案`, shuffle: true,
+    questions: grp.map((x, i) => ({ id: 'q' + stamp + k + '_' + i + rnd(), q: x.q, options: x.options, answer: x.answer, explain: x.explain || '' })) }));
   const goodFill = (fill || []).filter(x => x && x.prompt && x.answer);
-  if (goodFill.length) out.push({ id: 'gn' + stamp + 'fb' + rnd(), type: 'type-answer', variant: 'fill', group: g, order: 4, ...req, ...cs,
-    title: `${g} · 填空題`, zh: `${goodFill.length} 題 · 把空格填上正確的字`, instruction: '把 ________ 填上正確的字',
-    pairs: goodFill.map((x, i) => ({ id: 'p' + stamp + 'f' + i + rnd(), prompt: x.prompt, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
+  if (goodFill.length) pushSplit(goodFill, 4, (grp, k, n) => ({
+    id: 'gn' + stamp + 'fb' + k + rnd(), type: 'type-answer', variant: 'fill', group: g, ...req, ...cs,
+    title: partTitle(`${g} · 填空題`, k, n), zh: `${grp.length} 題 · 把空格填上正確的字`, instruction: '把 ________ 填上正確的字',
+    pairs: grp.map((x, i) => ({ id: 'p' + stamp + 'f' + k + '_' + i + rnd(), prompt: x.prompt, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) }));
   const goodRw = (rw || []).filter(x => x && x.wrong && x.answer && x.wrong !== x.answer);
-  if (goodRw.length) out.push({ id: 'gn' + stamp + 'rw' + rnd(), type: 'type-answer', variant: 'rewrite', group: g, order: 5, ...req, ...cs,
-    title: `${g} · 改寫句子`, zh: `${goodRw.length} 題 · 把整句重寫一次`, instruction: '把句子裡錯的地方改對，整句重寫一次',
-    pairs: goodRw.map((x, i) => ({ id: 'p' + stamp + 'r' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) });
+  if (goodRw.length) pushSplit(goodRw, 5, (grp, k, n) => ({
+    id: 'gn' + stamp + 'rw' + k + rnd(), type: 'type-answer', variant: 'rewrite', group: g, ...req, ...cs,
+    title: partTitle(`${g} · 改寫句子`, k, n), zh: `${grp.length} 題 · 把整句重寫一次`, instruction: '把句子裡錯的地方改對，整句重寫一次',
+    pairs: grp.map((x, i) => ({ id: 'p' + stamp + 'r' + k + '_' + i + rnd(), prompt: x.wrong, answer: x.answer, accept: [], explain: x.explain || '' })) }));
   /* ══ v467：康橋的兩種招牌題型 ══
      ① 整段改錯 → 拆成兩個單元，跟康橋考卷一模一樣的兩步：
         （a）circle-answer：讀整段、把錯的字圈出來（v444 的圈選題本來就支援複選）
@@ -7443,19 +7578,21 @@ function gnBuildItems({ title, topic, srcNotes, lesson, mcq, fill, tr, rw, write
      writingPrompts 的 word 欄位就是「要檢查什麼」，checkWriting 會拿它當批改依據，
      所以放「一定要用到的文法特徵」而不是單字。 */
   const goodWrite = (write || []).filter(x => x && x.prompt && x.must);
-  if (goodWrite.length) out.push({ id: 'gn' + stamp + 'wr' + rnd(), type: 'writing-practice', group: g, order: 7, ...req,
-    title: `${g} · 造句`, zh: `${goodWrite.length} 題 · 自己寫一句，AI 批改`,
+  if (goodWrite.length) pushSplit(goodWrite, 7, (grp, k, n) => ({
+    id: 'gn' + stamp + 'wr' + k + rnd(), type: 'writing-practice', group: g, ...req,
+    title: partTitle(`${g} · 造句`, k, n), zh: `${grp.length} 題 · 自己寫一句，AI 批改`,
     instruction: '每一題寫一個英文句子，一定要用到這一課的文法。',
-    writingPrompts: goodWrite.map((x, i) => ({ id: 'w' + stamp + i + rnd(),
-      word: x.must, zh: '', instruction: x.prompt + (x.hint ? `  (${x.hint})` : '') })) });
+    writingPrompts: grp.map((x, i) => ({ id: 'w' + stamp + k + '_' + i + rnd(),
+      word: x.must, zh: '', instruction: x.prompt + (x.hint ? `  (${x.hint})` : '') })) }));
 
   /* v462 ② 句型轉換 → type-answer 的新 variant 'transform'。
      題幹寫成「原句 → 要改成什麼」，學生打出轉換後的句子。 */
   const goodTf = (tf || []).filter(x => x && x.prompt && x.answer && x.task);
-  if (goodTf.length) out.push({ id: 'gn' + stamp + 'tf' + rnd(), type: 'type-answer', variant: 'transform', group: g, order: 8, ...req, ...cs,
-    title: `${g} · 句型轉換`, zh: `${goodTf.length} 題 · 把句子換一種說法`, instruction: 'Change each sentence as the task says.',
-    pairs: goodTf.map((x, i) => ({ id: 'p' + stamp + 'x' + i + rnd(),
-      prompt: `${x.prompt}\n→ ${x.task}`, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) });
+  if (goodTf.length) pushSplit(goodTf, 8, (grp, k, n) => ({
+    id: 'gn' + stamp + 'tf' + k + rnd(), type: 'type-answer', variant: 'transform', group: g, ...req, ...cs,
+    title: partTitle(`${g} · 句型轉換`, k, n), zh: `${grp.length} 題 · 把句子換一種說法`, instruction: 'Change each sentence as the task says.',
+    pairs: grp.map((x, i) => ({ id: 'p' + stamp + 'x' + k + '_' + i + rnd(),
+      prompt: `${x.prompt}\n→ ${x.task}`, answer: x.answer, accept: x.accept || [], explain: x.explain || '' })) }));
 
   /* v462 ① 排順序 → 新題型 sentence-order（字塊排句子）。 */
   const goodOrd = (ord || []).filter(x => x && (x.words || []).length >= 4);

@@ -13,7 +13,12 @@ const css  = fs.readFileSync(new URL('styles-tune.css', ROOT), 'utf8');
 const noComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 const pick = (a, b) => data.slice(data.indexOf(a), data.indexOf(b));
-const D = new Function(pick('function reviewWordsOf', 'function collectWrongQuestions')
+/* ⚠ 切一段程式出來單獨跑，它用到的**別的函式**不會跟著來。
+   v542 的 qsKindsInGroup 開始叫 qsStripPart（標題可能帶「（1/3）」的字尾），
+   這裡就會 ReferenceError——不是 production 壞了，是這個切法少帶一個相依。
+   → 把它要用到的一起切進來。 */
+const D = new Function(pick('function qsPartTitle', 'function qsStoryBank')
+  + pick('function reviewWordsOf', 'function collectWrongQuestions')
   + '\nreturn { reviewWordsOf, qsKindsInGroup };')();
 const fnEnd = (s, a) => { const i = s.indexOf(a); const j = s.indexOf('\n}\n', i); return s.slice(i, j + 2); };
 const build = new Function('window', fnEnd(ed, 'function qsBuildItems') + '\nreturn qsBuildItems;')({});

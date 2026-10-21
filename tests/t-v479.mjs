@@ -71,7 +71,11 @@ console.log('\n【3】【5】三種「改對」要看得出差別');
 ok('⭐ 「改成正確的」改成只寫那幾個字（康橋原卷就是這樣）',
    /variant: 'word'[\s\S]{0,200}改成正確的`, zh: `\$\{n\} 題 · 只要寫改對的那幾個字`/.test(ed));
 ok('⭐ 答案是改好的那幾個字，不是整句', /wrongPart: e\.wrong,\s*\n?\s*answer: e\.right, accept: \[e\.right\]/.test(ed));
-ok('⭐ 「改寫句子」講明是整句重寫', /改寫句子`, zh: `\$\{goodRw\.length\} 題 · 把整句重寫一次`/.test(ed));
+ok('⭐ 「改寫句子」講明是整句重寫',
+   /* ⚠ v542 拆成好幾份之後，題數從 goodRw.length 變成 grp.length——
+      要守的是「說明文字講的是整句重寫」，不是那個變數叫什麼。 */
+   /改寫句子`, k, n\), zh: `\$\{grp\.length\} 題 · 把整句重寫一次`/.test(ed)
+   && /instruction: '把句子裡錯的地方改對，整句重寫一次'/.test(ed));
 ok('⭐ 「改成正確的句子」講明是接在診斷之後', /你剛剛看出錯在哪了——把整句寫對/.test(ed));
 ok('⭐ 播放器認得新的 variant', /const isWd = item\.variant === 'word';/.test(qm));
 ok('⭐ 題幹會把要改的那一段標出來', /taMarkWrong\(current\.prompt, current\.wrongPart\)/.test(qm) && /function taMarkWrong/.test(qm));
