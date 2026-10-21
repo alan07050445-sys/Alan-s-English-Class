@@ -7401,7 +7401,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                 );
               })}
               {!sent && <p className="ex-hint">
-                每一格要<b>從文章裡找一句話當證據</b>，而且<b>兩格不可以講同一件事</b>。
+                每一格要<b>從文章裡找一句話當證據</b>，而且每一格要用<b>文章裡不同的句子</b>——
+                同一句話的前半和後半算同一個細節。
               </p>}
             </>
           );

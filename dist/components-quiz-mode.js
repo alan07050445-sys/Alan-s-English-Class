@@ -8950,7 +8950,7 @@ function ExamPlayer({
         }, x))));
       }), !sent && /*#__PURE__*/React.createElement("p", {
         className: "ex-hint"
-      }, "\u6BCF\u4E00\u683C\u8981", /*#__PURE__*/React.createElement("b", null, "\u5F9E\u6587\u7AE0\u88E1\u627E\u4E00\u53E5\u8A71\u7576\u8B49\u64DA"), "\uFF0C\u800C\u4E14", /*#__PURE__*/React.createElement("b", null, "\u5169\u683C\u4E0D\u53EF\u4EE5\u8B1B\u540C\u4E00\u4EF6\u4E8B"), "\u3002"));
+      }, "\u6BCF\u4E00\u683C\u8981", /*#__PURE__*/React.createElement("b", null, "\u5F9E\u6587\u7AE0\u88E1\u627E\u4E00\u53E5\u8A71\u7576\u8B49\u64DA"), "\uFF0C\u800C\u4E14\u6BCF\u4E00\u683C\u8981\u7528", /*#__PURE__*/React.createElement("b", null, "\u6587\u7AE0\u88E1\u4E0D\u540C\u7684\u53E5\u5B50"), "\u2014\u2014 \u540C\u4E00\u53E5\u8A71\u7684\u524D\u534A\u548C\u5F8C\u534A\u7B97\u540C\u4E00\u500B\u7D30\u7BC0\u3002"));
     })(), pt.kind === 'essay' && (() => {
       var text = typeof v === 'string' ? v : '';
       var st = window.examEssayStats ? window.examEssayStats(text, pt) : null;

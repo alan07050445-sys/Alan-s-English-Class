@@ -84,6 +84,21 @@ ok('⭐⭐ 兩格引用同一處不算兩個細節——⚠ 不能只比「字�
      'They have a thick layer of fat called blubber.',
      'They have a thick layer of fat under their skin.']);
    return a.right === 1 && /前面已經用過/.test(a.detail[1].why.join()); })());
+ok('⭐⭐ **同一句的前半＋後半**也算重複——這一條是出整份考卷時模擬作答才抓到的：'
+   + '「use the sun and the pull of the earth」＋「to find the same trees」'
+   + '兩段在原文裡根本不重疊（所以包含關係擋不掉），卻是同一件事→改成比「來自第幾句」', (() => {
+   const P = 'Every fall, monarch butterflies begin a long journey south. Scientists think the '
+     + 'butterflies use the sun and the pull of the earth to find the same trees. On the way they '
+     + 'must stop at flowers, because nectar is the only fuel they have.';
+   const part = { kind: 'evidence', pts: 20, need: 2, minWords: 5, passage: P };
+   const dup = W.examScorePart(part, ['They use the sun to find the same trees.',
+                                      'They use the sun and the pull of the earth.']);
+   const good = W.examScorePart(part, ['They use the sun and the pull of the earth to find the same trees.',
+                                       'They must stop at flowers, because nectar is the only fuel.']);
+   return dup.right === 1 && /前面已經用過/.test(dup.detail[1].why.join()) && good.right === 2; })());
+ok('⚠ 這條規則要**寫在學生看得到的地方**，不可以當暗樁'
+   + '（不然孩子只會覺得「我明明有寫為什麼不給分」）',
+   /文章裡不同的句子/.test(qm) && /同一句話的前半和後半算同一個細節/.test(qm));
 ok('   太短的要講「只有幾個字」（不是只說「不對」）', (() => {
    const r = W.examEvidenceOne('thick layer of fat', evid, new Set());
    return r.ok === false && /只有 4 個字/.test(r.why.join()); })());

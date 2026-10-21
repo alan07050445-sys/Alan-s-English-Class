@@ -8294,6 +8294,13 @@ function examFixBoxScore(part, ans) {
    ⭐ 程式驗得出來的正是這題的重點：**有沒有真的從文章裡抄出證據**
      （連續三個字以上出現在原文裡），以及是不是完整的句子。
    ⚠ 兩格引用同一句話不算兩個細節——「兩個」就是兩個。 */
+function _evSentences(passage) {
+  /* 把文章切成句子。⭐ 判「是不是同一個細節」要以**句子**為單位，
+     不是以字串像不像為單位——見下面 examEvidenceOne 的說明。 */
+  const flat = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(passage || '').split(/(?<=[.!?])\s+/)
+    .map(x => flat(x)).filter(Boolean);
+}
 function examEvidenceOne(text, part, usedQuotes) {
   const t = String(text == null ? '' : text).trim();
   const why = [];
@@ -8313,16 +8320,29 @@ function examEvidenceOne(text, part, usedQuotes) {
       if (seg.length > best.length) best = seg;
     }
   }
+  /* 這段引用是文章裡的**第幾句**——「兩個細節」就是兩句話講的兩件事。
+     🔴 這裡換過兩次做法，兩次都被真的作答打敗：
+       ① 只比字串相等：一句引到 …fat called blubber、一句引到 …fat，
+          字串不同就放過了。
+       ② 改成「有包含關係就算重複」：還是擋不掉**同一句的前半與後半**——
+          「use the sun and the pull of the earth」＋「to find the same trees」
+          兩段在原文裡根本不重疊，卻是同一件事。
+     ⭐ 所以改成問「你指的是文章裡的哪一句」：同一句＝同一個細節。
+     ⚠ 這是一條**要講出來**的規則（學生端寫了「兩個細節要來自不同的句子」），
+       不能當成暗樁——不然孩子只會覺得「我明明有寫為什麼不給分」。 */
+  const sents = _evSentences(part.passage);
+  const si = best ? sents.findIndex(x => x.indexOf(best) >= 0) : -1;
   if (!src) { /* 沒給文章就不驗引用 */ }
   else if (!best) why.push('這一句沒有從文章裡找證據');
-  else if (usedQuotes && [...usedQuotes].some(q => q.indexOf(best) >= 0 || best.indexOf(q) >= 0)) {
-    /* ⚠ 不能只比「字串一不一樣」：
-         第一句引「they have a thick layer of fat called blubber」、
-         第二句引「they have a thick layer of fat」——兩段文字不同，
-         但講的是**同一個細節**。有包含關係就算重複。 */
-    why.push('這個細節前面已經用過了');
+  else if (usedQuotes && [...usedQuotes].some(u => {
+    const q = typeof u === 'string' ? u : u.q;
+    const s2 = typeof u === 'string' ? -1 : u.si;
+    if (si >= 0 && s2 >= 0 && si === s2) return true;          // 同一句＝同一個細節
+    return q.indexOf(best) >= 0 || best.indexOf(q) >= 0;       // 一段包住另一段
+  })) {
+    why.push('這個細節前面已經用過了，要換文章裡另一句話');
   }
-  return { ok: why.length === 0, why, quote: best };
+  return { ok: why.length === 0, why, quote: best, si };
 }
 
 /* ══ v538 ✍️ 長文寫作：段落與句數（老師改，程式只幫忙數）═══════════
@@ -8459,7 +8479,7 @@ function examScorePart(part, ans) {
     const used = new Set();
     for (let i = 0; i < n; i++) {
       const r = examEvidenceOne((ans || [])[i], part, used);
-      if (r.quote) used.add(r.quote);
+      if (r.quote) used.add({ q: r.quote, si: r.si });
       if (r.ok) out.right++;
       out.detail.push({ ok: r.ok, why: r.why, got: (ans || [])[i] || '', quote: r.quote });
     }
@@ -8688,7 +8708,7 @@ function examWarnings(item) {
 Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
-  examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf,
+  examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,
   EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf,
   examRubricPoints, examRubricPart, aiGradeRubric });
 
