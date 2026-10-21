@@ -7650,6 +7650,24 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
   "storymap"— a Beginning / Middle / End chart (sometimes drawn as three boxes with arrows).
               "passage" = the text the chart is about.
               "need" = how many sentences per box ("Write 2 sentences per section" -> 2).
+  "fixbox"  — "Find the N mistakes and write the corrected words in the boxes" (usually
+              capitalization or punctuation). The answer sheet is a ROW OF BOXES, not a rewrite.
+              "answers" = the corrected words in the order they appear in the text,
+              WITH the correct capital letters: ["Taipei","I","Monday"].
+              "passage" = the paragraph exactly as printed (mistakes left in).
+  "evidence"— "Use N specific details from the text to explain/support ...".
+              "question" = the question they must answer, exactly as printed.
+              "passage" = the text the details must come from.
+              "need" = how many details. "minWords" = printed minimum sentence length, else 5.
+  "essay"   — one long piece of writing (a story, a letter, an opinion paragraph) with ONE prompt.
+              "prompt" = the printed writing task, exactly as printed.
+              "vocab" = any list of words they are told to use (else []).
+              "paras" / "sentsPerPara" = if the paper says "5 paragraphs" / "4 sentences each",
+              put 5 and 4. "pts" = the printed total. Add "rubricSet":"writing" when the Kang Chiao
+              writing criteria are printed. 🔴 Use "essay", not "short", when it is ONE long piece.
+  "checkin" — the warm-up at the top: "How are you feeling right now?" + "What is your goal
+              for this test?". "goals" = the printed goal choices, exactly as printed.
+              "pts" is 0 — it is not scored.
   "short"   — any question the child writes a long answer to. Give "pts" and, if a marking
               rubric is printed, a one-line "rubric".
               🔴 If the printed rubric has the Kang Chiao writing criteria (Content, Details,
@@ -7771,6 +7789,39 @@ function _examCleanPart(p) {
     if (!passage) return null;                             // 沒有文章，學生沒東西可以依據
     return { ...base, passage, need: Math.max(1, +p.need || 2),
              ...(p.kind === 'storymap' ? { minWords: +p.minWords || 4 } : {}) };
+  }
+  /* ══ v538：剩下的四種 ══════════════════════════════════════════ */
+  if (p.kind === 'fixbox') {
+    const answers = (Array.isArray(p.answers) ? p.answers : []).map(x => String(x).trim()).filter(Boolean);
+    const passage = String(p.passage || '').trim();
+    if (!answers.length || !passage) return null;
+    /* ⚠ 答案一定要真的出現在那段文章裡（大小寫不算）——
+         模型會「順手把句子改對」然後給一個文章裡沒有的字，
+         那樣孩子照文章找永遠找不到，而且老師看答案也看不出哪裡怪。 */
+    const low = passage.toLowerCase();
+    const ok = answers.filter(a => low.indexOf(a.toLowerCase()) >= 0);
+    if (ok.length < 2) return null;
+    return { ...base, answers: ok, passage, need: ok.length };
+  }
+  if (p.kind === 'evidence') {
+    const passage = String(p.passage || '').trim();
+    if (!passage) return null;                             // 沒有文章就沒有「證據」可以引用
+    return { ...base, passage, question: String(p.question || p.q || '').trim(),
+             need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5 };
+  }
+  if (p.kind === 'essay') {
+    const prompt = String(p.prompt || p.q || p.instruction || '').trim();
+    if (!prompt) return null;                              // 沒有題目，孩子不知道要寫什麼
+    const rsE = String(p.rubricSet || '').trim();
+    return { ...base, prompt,
+             vocab: (Array.isArray(p.vocab) ? p.vocab : []).map(x => String(x).trim()).filter(Boolean),
+             paras: +p.paras || 5, sentsPerPara: +p.sentsPerPara || 4,
+             rubric: String(p.rubric || '').trim(),
+             ...(EXAM_RUBRIC_SETS[rsE] ? { rubricSet: rsE, rubricMax: EXAM_RUBRIC_SETS[rsE].max } : {}) };
+  }
+  if (p.kind === 'checkin') {
+    const goals = (Array.isArray(p.goals) ? p.goals : []).map(x => String(x).trim()).filter(Boolean);
+    return { ...base, pts: 0, goals };                     // 不計分，配分一律歸零
   }
 
   const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => ({
@@ -7894,8 +7945,37 @@ const EXAM_KINDS = {
   /* ══ v536：Alan 的康橋考卷上還有這兩種 ══════════════════════════ */
   storymap: { zh: '故事結構圖（開頭／中間／結尾）', auto: true },
   usewords: { zh: '用詞庫的字造句', auto: true },
+  /* ══ v538：Alan 那疊卷子上剩下的四種 ══════════════════════════════ */
+  fixbox:   { zh: '找出錯的字，填進格子', auto: true },
+  evidence: { zh: '用文章裡的 N 個細節回答', auto: true },
+  essay:    { zh: '長文寫作（老師改）', auto: false },
+  checkin:  { zh: '開頭的心情與目標', auto: true, noScore: true },  // 不計分
   short:  { zh: '問答（老師改）', auto: false },// Part 5：申論，照 rubric 手改
 };
+
+/* v538 😊 開場的心情與目標。
+   ⚠ 這份清單只能有**一份**：item.examMood（v515 就有的開場區）
+     與 checkin 這一大題用的是同一個 EXAM_CHECKIN，
+     兩邊各寫一份的話，改了一邊另一邊不會動（v526 的倒數時鐘就是這樣）。 */
+const EXAM_CHECKIN = {
+  moodQ: 'How are you feeling right now?',
+  faces: ['😟', '😐', '🙂'],
+  goalQ: 'What is your goal for this test?',
+  goals: [
+    'Read every question carefully.',
+    'Take my time and do not rush.',
+    'Stay calm and do my best.',
+  ],
+};
+
+/* 一大題「算幾分」——⭐ 只能有這一份。
+   ⚠ 心情與目標不計分：examTotals（老師看到的合計）與 examScore（學生的滿分）
+     各自判一次的話，老師會看到 60 分、學生拿到的滿分卻是 55，
+     而且兩邊都「看起來正常」。 */
+function examPtsOf(part) {
+  if (!part || (EXAM_KINDS[part.kind] || {}).noScore) return 0;
+  return +part.pts || 0;
+}
 
 /* 一大題有幾小題（算分用） */
 function examPartN(part) {
@@ -7908,6 +7988,10 @@ function examPartN(part) {
   /* 故事結構圖：三個格子各寫 N 句 → 總格數 = 區塊數 × 每格句數 */
   if (part.kind === 'storymap') return ((part.sections || EXAM_STORY_SECTIONS).length) * (+part.need || 2);
   if (part.kind === 'usewords') return +part.need || 2;
+  if (part.kind === 'fixbox')   return (part.answers || []).length || +part.need || 5;
+  if (part.kind === 'evidence') return +part.need || 2;
+  if (part.kind === 'essay')    return 1;
+  if (part.kind === 'checkin')  return 0;          // 不是題目，不計入題數
   return 0;
 }
 
@@ -8185,13 +8269,87 @@ function examUseWordOne(slot, part) {
   return { ok: why.length === 0, why };
 }
 
+/* ══ v538 📦 找出錯的字，填進格子 ═════════════════════════════════
+   Alan 的文法卷 C：「找出 5 個大小寫錯誤，把改好的字寫進格子裡」。
+   跟 v467 的「整段改錯」不同——那個是整段重寫，這個的作答是**一排格子**。
+   ⚠ 比對要**不管順序**：孩子從頭讀下來，找到的順序不一定跟老師寫答案的順序一樣，
+     照順序比的話第一個找錯位置後面就全錯了（那不是他的錯）。
+   ⚠ 大小寫**要比**——這一題考的就是大小寫，忽略大小寫等於這題沒意義。 */
+function examFixBoxScore(part, ans) {
+  const want = (part.answers || []).map(x => String(x || '').trim()).filter(Boolean);
+  const got = (Array.isArray(ans) ? ans : []).map(x => String(x || '').trim());
+  const left = want.slice();
+  return got.map(g => {
+    if (!g) return { got: g, ok: false, why: ['沒有寫'] };
+    const i = left.findIndex(w => w === g);                 // ⚠ 這一題大小寫要一模一樣
+    if (i >= 0) { left.splice(i, 1); return { got: g, ok: true, why: [] }; }
+    const loose = want.findIndex(w => w.toLowerCase() === g.toLowerCase());
+    return { got: g, ok: false,
+             why: [loose >= 0 ? '這個字對了，但大小寫不對' : '這個字不在答案裡'] };
+  });
+}
+
+/* ══ v538 🔍 用文章裡的 N 個細節回答 ═══════════════════════════════
+   Alan 的企鵝卷：「Use two specific details from the text to explain…」
+   ⭐ 程式驗得出來的正是這題的重點：**有沒有真的從文章裡抄出證據**
+     （連續三個字以上出現在原文裡），以及是不是完整的句子。
+   ⚠ 兩格引用同一句話不算兩個細節——「兩個」就是兩個。 */
+function examEvidenceOne(text, part, usedQuotes) {
+  const t = String(text == null ? '' : text).trim();
+  const why = [];
+  if (!t) return { ok: false, why: ['沒有寫'], quote: '' };
+  const minW = +part.minWords || 5;
+  const n = t.split(/\s+/).filter(Boolean).length;
+  if (n < minW) why.push(`只有 ${n} 個字，要寫完整的句子（${minW} 個字以上）`);
+  /* 找出他引用了原文的哪一段（最長的那一段連續字） */
+  const flat = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const src = flat(part.passage);
+  const mine = flat(t).split(' ').filter(Boolean);
+  let best = '';
+  for (let i = 0; i < mine.length; i++) {
+    for (let j = i + 3; j <= mine.length; j++) {
+      const seg = mine.slice(i, j).join(' ');
+      if (src.indexOf(seg) < 0) break;
+      if (seg.length > best.length) best = seg;
+    }
+  }
+  if (!src) { /* 沒給文章就不驗引用 */ }
+  else if (!best) why.push('這一句沒有從文章裡找證據');
+  else if (usedQuotes && [...usedQuotes].some(q => q.indexOf(best) >= 0 || best.indexOf(q) >= 0)) {
+    /* ⚠ 不能只比「字串一不一樣」：
+         第一句引「they have a thick layer of fat called blubber」、
+         第二句引「they have a thick layer of fat」——兩段文字不同，
+         但講的是**同一個細節**。有包含關係就算重複。 */
+    why.push('這個細節前面已經用過了');
+  }
+  return { ok: why.length === 0, why, quote: best };
+}
+
+/* ══ v538 ✍️ 長文寫作：段落與句數（老師改，程式只幫忙數）═══════════
+   Alan 的 G5 寫作卷佔 45%，rubric 裡的 Length 寫的是「5 段 AND 每段 4 句」。
+   ⚠ 這一題**不自動給分**——寫得好不好是老師看的。程式只把「幾段、每段幾句、
+     用了幾個這一課的單字」算給他看，那正是 rubric 裡數得出來的那幾項。 */
+function examEssayStats(text, part) {
+  const paras = String(text || '').split(/\n\s*\n|\n/).map(x => x.trim()).filter(Boolean);
+  const sents = paras.map(p => (p.match(/[^.!?]+[.!?]/g) || (p ? [p] : [])).length);
+  const words = String(text || '').split(/\s+/).filter(Boolean).length;
+  const bank = (part.vocab || []).map(w => String(w || '').trim()).filter(Boolean);
+  const low = String(text || '').toLowerCase();
+  const used = bank.filter(w => new RegExp('\\b' + w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[a-z]{0,3}\\b').test(low));
+  return {
+    paras: paras.length, sents, words, used,
+    needParas: +part.paras || 5, needSents: +part.sentsPerPara || 4,
+    shortParas: sents.filter(n => n < (+part.sentsPerPara || 4)).length,
+  };
+}
+
 /* 整份考卷的配分盤點——老師要能一眼看出「這份加起來是不是 100 分」 */
 function examTotals(item) {
   const secs = (item && item.sections) || [];
   let auto = 0, manual = 0, parts = 0;
   secs.forEach(sec => (sec.parts || []).forEach(pt => {
     parts++;
-    const pts = +pt.pts || 0;
+    const pts = examPtsOf(pt);
     if ((EXAM_KINDS[pt.kind] || {}).auto) auto += pts; else manual += pts;
   }));
   return { auto, manual, total: auto + manual, sections: secs.length, parts };
@@ -8200,9 +8358,15 @@ function examTotals(item) {
 /* 一大題算幾分。回傳 { got, max, n, right, detail }
    detail 是每一小題對不對，結果頁要逐題標。 */
 function examScorePart(part, ans) {
-  const max = +part.pts || 0;
+  const max = examPtsOf(part);
   const n = examPartN(part);
   const out = { got: 0, max, n, right: 0, detail: [] };
+  /* ⚠ 心情與目標要寫在 `if (!n)` **前面**：它的題數本來就是 0
+     （不是題目），被那一行攔下來就等於這個分支永遠跑不到。 */
+  if (part.kind === 'checkin') {
+    out.detail = [{ ok: null, got: ans || null }];   // 收下來給老師看，不給分
+    return out;
+  }
   if (!n) return out;
   const norm = (t) => String(t == null ? '' : t).toLowerCase().replace(/[^a-z0-9']/g, '');
 
@@ -8286,6 +8450,25 @@ function examScorePart(part, ans) {
     }
     out.got = Math.round(max * (out.right / n));
     return out;
+  } else if (part.kind === 'fixbox') {
+    out.detail = examFixBoxScore(part, ans);
+    out.right = out.detail.filter(d => d.ok).length;
+    out.got = Math.round(max * (out.right / n));
+    return out;
+  } else if (part.kind === 'evidence') {
+    const used = new Set();
+    for (let i = 0; i < n; i++) {
+      const r = examEvidenceOne((ans || [])[i], part, used);
+      if (r.quote) used.add(r.quote);
+      if (r.ok) out.right++;
+      out.detail.push({ ok: r.ok, why: r.why, got: (ans || [])[i] || '', quote: r.quote });
+    }
+    out.got = Math.round(max * (out.right / n));
+    return out;
+  } else if (part.kind === 'essay') {
+    /* 長文：不自動給分，但把數得出來的（幾段、每段幾句、用了幾個單字）帶給老師 */
+    out.detail = [{ ok: null, got: String(ans || ''), stats: examEssayStats(ans, part) }];
+    return out;
   } else {
     // short：收答案，不給分（老師拿 rubric 手改）
     out.detail = (part.questions || []).map((q, i) => ({ text: '', ok: null, got: (ans || [])[i] || '' }));
@@ -8354,6 +8537,10 @@ function examPartText(part) {
   if (p.kind === 'genq') return String(p.passage || '');
   if (p.kind === 'storymap') return String(p.passage || '');
   if (p.kind === 'usewords') return (p.bank || []).join(' ');
+  if (p.kind === 'fixbox') return [(p.answers || []).join(', '), '', String(p.passage || '')].join('\n');
+  if (p.kind === 'evidence') return [String(p.question || ''), '', String(p.passage || '')].join('\n');
+  if (p.kind === 'essay') return [String(p.prompt || ''), '', (p.vocab || []).join(', ')].join('\n');
+  if (p.kind === 'checkin') return (p.goals || []).join('\n');
   return '';
 }
 function examParsePart(kind, text) {
@@ -8391,6 +8578,29 @@ function examParsePart(kind, text) {
   if (kind === 'genq' || kind === 'storymap') {
     return { passage: lines.join('\n').trim() };
   }
+  if (kind === 'fixbox') {
+    /* 第一行＝改好的那幾個字（逗號分開），空一行之後是那一段文章 */
+    const answers = (nonEmpty[0] || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
+    const i = lines.indexOf(nonEmpty[0]);
+    return { answers, passage: lines.slice(i + 1).join('\n').trim(), need: answers.length };
+  }
+  if (kind === 'evidence') {
+    /* 第一行＝要問的問題，空一行之後＝那篇文章。
+       ⚠ 只存 passage 的話，學生畫面上會變成「兩個空格、沒有題目」。 */
+    const gap = lines.findIndex((l, i) => i > 0 && !l.trim());
+    return { question: (gap > 0 ? lines.slice(0, gap) : [lines[0] || '']).join(' ').trim(),
+             passage: (gap > 0 ? lines.slice(gap + 1) : lines.slice(1)).join('\n').trim() };
+  }
+  if (kind === 'essay') {
+    /* 第一行（到空行為止）＝題目，空行之後那一行＝這一課的單字（逗號分開） */
+    const gap = lines.findIndex((l, i) => i > 0 && !l.trim());
+    const prompt = (gap > 0 ? lines.slice(0, gap) : lines).join('\n').trim();
+    const vocabLine = gap > 0 ? (lines.slice(gap + 1).find(l => l.trim()) || '') : '';
+    return { prompt, vocab: vocabLine.split(/[,，]/).map(x => x.trim()).filter(Boolean) };
+  }
+  if (kind === 'checkin') {
+    return { goals: nonEmpty.map(l => l.trim()) };
+  }
   if (kind === 'usewords') {
     /* 一行就是詞庫，空白或逗號分開 */
     return { bank: (nonEmpty[0] || '').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean) };
@@ -8414,11 +8624,27 @@ function examWarnings(item) {
   (item.sections || []).forEach((sec, si) => (sec.parts || []).forEach((pt, pi) => {
     const where = `${sec.name || '第 ' + (si + 1) + ' 區'} 的第 ${pi + 1} 大題`;
     const n = examPartN(pt);
-    if (!n) w.push(`${where}一題都沒有。`);
-    if (!(+pt.pts > 0)) w.push(`${where}沒有配分。`);
+    if (pt.kind !== 'checkin') {
+      if (!n) w.push(`${where}一題都沒有。`);
+      if (!(examPtsOf(pt) > 0)) w.push(`${where}沒有配分。`);
+    }
     /* v536 的兩種新題型 */
     if (pt.kind === 'storymap' && !String(pt.passage || '').trim()) {
       w.push(`${where}沒有文章——學生看不到故事，就沒辦法填開頭／中間／結尾。`);
+    }
+    if (pt.kind === 'fixbox') {
+      /* ⭐ 真的去文章裡找——老師說「改好是 Monday」，文章裡卻沒有 monday，
+         那學生永遠找不到（跟圈選那一題同一種檢查）。 */
+      const low = String(pt.passage || '').toLowerCase();
+      const miss = (pt.answers || []).filter(a => low.indexOf(String(a).toLowerCase()) < 0);
+      if (!String(pt.passage || '').trim()) w.push(`${where}沒有那一段文章。`);
+      else if (miss.length) w.push(`${where}的答案「${miss.join('、')}」在文章裡找不到。`);
+    }
+    if (pt.kind === 'evidence' && !String(pt.passage || '').trim()) {
+      w.push(`${where}沒有文章——學生沒辦法「從文章裡找細節」。`);
+    }
+    if (pt.kind === 'essay' && !String(pt.prompt || '').trim()) {
+      w.push(`${where}沒有寫作題目。`);
     }
     if (pt.kind === 'usewords') {
       const bank = (pt.bank || []).filter(Boolean);
@@ -8462,6 +8688,7 @@ function examWarnings(item) {
 Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
+  examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf,
   EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf,
   examRubricPoints, examRubricPart, aiGradeRubric });
 
@@ -9006,7 +9233,7 @@ function computeCheckin(checkin) {
   };
 }
 Object.assign(window, {
-  checkInToday, computeCheckin, checkinToday,
+  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN,
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
 

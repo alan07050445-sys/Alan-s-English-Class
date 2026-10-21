@@ -39,6 +39,17 @@ const CASES = {
   genq:     { kind:'genq', pts:14, need:2, passage:'Dr. Hu traveled all across Taiwan.' },
   storymap: { kind:'storymap', pts:15, need:2, passage:"Georgia O'Keeffe was born in Wisconsin." },
   short:    { kind:'short', pts:45, questions:[{q:'Write a 5-paragraph narrative.'}] },
+  /* ══ v538 的四種 ══ */
+  fixbox:   { kind:'fixbox', pts:10,
+              answers:['Taipei','I','Monday'],
+              passage:'last monday i went to taipei with my family.' },
+  evidence: { kind:'evidence', pts:6, need:2, minWords:5,
+              question:'Why can penguins live in the cold?',
+              passage:'Penguins have a thick layer of fat called blubber under their skin.' },
+  essay:    { kind:'essay', pts:45, prompt:'Write a narrative about a time you were brave.',
+              vocab:['curious','brave'], paras:5, sentsPerPara:4, rubricSet:'writing' },
+  checkin:  { kind:'checkin', pts:0,
+              goals:['Read every question carefully.','Stay calm and do my best.'] },
 };
 Object.keys(W.EXAM_KINDS).forEach(k => {
   ok(`⭐ ${k.padEnd(9)} 讀得進來（${W.EXAM_KINDS[k].zh}）`, (() => {

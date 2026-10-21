@@ -644,7 +644,10 @@ function getQuizItemTotal(item) {
   if (item.type === 'guided-reading' && grTotalQ(item) === 0) return Math.max(1, grSegs(item).length); // v387: 純閱讀
   /* v515：考卷的「幾題」＝有幾個**自動計分**的大題。
      ⚠ 不要用小題總數——那會讓側欄寫「60 題」，看起來像做不完。 */
-  if (item.type === 'exam') return (item.sections || []).reduce((n, sc) => n + (sc.parts || []).filter(p => (window.EXAM_KINDS || {})[p.kind] && window.EXAM_KINDS[p.kind].auto).length, 0);
+  /* v538 ⚠ 不計分的大題（開頭的心情與目標）不算一題。
+     側欄的「幾題」與交卷時寫的 doneCount 要用**同一條**判斷，
+     一邊算一邊不算就會變成 4/3 這種永遠做不完的進度。 */
+  if (item.type === 'exam') return (item.sections || []).reduce((n, sc) => n + (sc.parts || []).filter(p => examCountsAsTask(p)).length, 0);
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
@@ -657,6 +660,13 @@ function getQuizItemTotal(item) {
 function getCategoryCountLabel(cat) {
   var title = `${cat?.title || ''} ${cat?.titleZh || ''}`.toLowerCase();
   return title.includes('word study') || title.includes('字根') || title.includes('字首') ? 'words' : 'questions';
+}
+
+/* 考卷裡「算一題」的大題：自動計分的，而且不是不計分的那種（心情與目標）。
+   側欄的題數與交卷寫進度都走這一份。 */
+function examCountsAsTask(p) {
+  var K = (window.EXAM_KINDS || {})[p && p.kind];
+  return !!K && !!K.auto && !K.noScore;
 }
 function saveQuizModeCompletion(progressKey, item, {
   doneCount = 1,
@@ -8339,6 +8349,51 @@ function TeacherLog({
      · 一個 100 分，分區加權；自動計分與老師手改分開寫清楚
    ⚠ 所以沒有沿用現成的播放器：它們都是「一題一畫面＋立刻回饋」，
      硬塞進考卷只會兩邊都彆扭。這裡自己畫，但計分全部交給 data.js 的 examScore。 */
+/* v538 😊 心情與目標。
+   開場區（item.examMood，v515 就有）與 checkin 這一大題用的是**同一塊**，
+   題目與預設目標在 data.js 的 EXAM_CHECKIN 只寫一份。 */
+function ExamCheckin({
+  goals,
+  value,
+  onChange,
+  disabled
+}) {
+  var C = window.EXAM_CHECKIN || {
+    faces: ['😟', '😐', '🙂'],
+    goals: []
+  };
+  var list = (goals && goals.length ? goals : C.goals) || [];
+  var val = value && typeof value === 'object' ? value : {};
+  var picked = val.goals || {};
+  return /*#__PURE__*/React.createElement("div", {
+    className: "ex-mood"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ex-mood-q"
+  }, /*#__PURE__*/React.createElement("span", null, "1. ", C.moodQ), /*#__PURE__*/React.createElement("span", {
+    className: "ex-faces"
+  }, C.faces.map((f, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    className: 'ex-face' + (val.mood === i ? ' on' : ''),
+    disabled: disabled,
+    onClick: () => onChange({
+      ...val,
+      mood: val.mood === i ? null : i
+    })
+  }, f)))), /*#__PURE__*/React.createElement("div", {
+    className: "ex-mood-q col"
+  }, /*#__PURE__*/React.createElement("span", null, "2. ", C.goalQ), list.map((g, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    className: 'ex-goal' + (picked[i] ? ' on' : ''),
+    disabled: disabled,
+    onClick: () => onChange({
+      ...val,
+      goals: {
+        ...picked,
+        [i]: !picked[i]
+      }
+    })
+  }, /*#__PURE__*/React.createElement("i", null, picked[i] ? '☑' : '☐'), g))));
+}
 function ExamPlayer({
   item,
   progressKey,
@@ -8358,8 +8413,7 @@ function ExamPlayer({
       setTeacherMark(window.examMarkOf ? window.examMarkOf(doc, progressKey) : null);
     });
   }, [progressKey]);
-  var [mood, setMood] = useQM(null);
-  var [goals, setGoals] = useQM({});
+  var [mood, setMood] = useQM(null); // 開場區的心情與目標（{ mood, goals }）
   var [focus, setFocus] = useQM(null); // cloze：現在在填哪一格（點詞庫要知道填去哪）
   var focusRef = React.useRef(null); // 同上，但「永遠是最新的」——見下面 put 的說明
   var [sent, setSent] = useQM(false);
@@ -8418,6 +8472,24 @@ function ExamPlayer({
     r.parts.forEach(pp => {
       if (pp.auto) return;
       var v = ans[pp.key];
+      /* v538 ✍️ 長文寫作也是老師改的，但它的作答是**一段字串**不是陣列——
+         ⚠ 少了這一段，孩子寫滿五段交出去，老師端的批改清單裡什麼都沒有
+           （畫面上完全看不出來少了，因為那一大題本來就寫「老師會親自改」）。 */
+      if (pp.part.kind === 'essay') {
+        var t = String(v || '').trim();
+        if (t) written[pp.key] = {
+          title: pp.part.title || '',
+          pts: +pp.part.pts || 0,
+          rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+          rubricSet: pp.part.rubricSet || 'basic',
+          qs: [{
+            q: pp.part.prompt || '',
+            keyPoints: pp.part.rubric || '',
+            a: t
+          }]
+        };
+        return;
+      }
       if (Array.isArray(v) && v.some(x => String(x || '').trim())) {
         written[pp.key] = {
           title: pp.part.title || '',
@@ -8434,7 +8506,7 @@ function ExamPlayer({
       }
     });
     saveQuizModeCompletion(progressKey, item, {
-      doneCount: r.parts.filter(p => p.auto).length,
+      doneCount: r.parts.filter(p => examCountsAsTask(p.part)).length,
       score: r.auto,
       total: r.autoMax,
       wrongQuestions: wrongList,
@@ -8448,6 +8520,50 @@ function ExamPlayer({
     });
   };
 
+  /* ── 老師改好的分數與評語（申論與長文寫作共用）──
+     v530 做給申論、v538 長文寫作也要同一塊。
+     ⚠ 抽出來的原因不只是少打字：兩邊各寫一份，改了 rubric 的顯示方式
+       只有一邊會動（v526 的倒數時鐘就吃過這個虧）。 */
+  var examMarkBlock = (pt, key, qs) => {
+    var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || null;
+    /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
+    var RS = window.examRubricOf ? window.examRubricOf(pt) : {
+      criteria: window.EXAM_RUBRIC || [],
+      max: 4
+    };
+    var R = RS.criteria;
+    var max = RS.max;
+    var marked = by && by.some(m => m && R.some(c => m[c.id] != null));
+    if (!marked) return /*#__PURE__*/React.createElement("div", {
+      className: "ex-manual"
+    }, "\u270D\uFE0F \u9019\u4E00\u984C\u8001\u5E2B\u6703\u89AA\u81EA\u6539\uFF0C\u4E0D\u6703\u81EA\u52D5\u7D66\u5206\u3002");
+    var rp = window.examRubricPart({
+      pts: pt.pts,
+      questions: qs,
+      rubricMax: max
+    }, by);
+    return /*#__PURE__*/React.createElement("div", {
+      className: "ex-marked"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "ex-marked-h"
+    }, "\u8001\u5E2B\u6539\u597D\u4E86 ", /*#__PURE__*/React.createElement("b", null, rp.got, " / ", pt.pts)), qs.map((q, i) => {
+      var m = by[i];
+      if (!m) return null;
+      return /*#__PURE__*/React.createElement("div", {
+        className: "ex-marked-q",
+        key: i
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "ex-marked-n"
+      }, i + 1), /*#__PURE__*/React.createElement("span", {
+        className: "ex-marked-cr"
+      }, R.map(c => /*#__PURE__*/React.createElement("em", {
+        key: c.id
+      }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", max))), m.note && /*#__PURE__*/React.createElement("span", {
+        className: "ex-marked-note"
+      }, m.note));
+    }));
+  };
+
   /* ── 一大題 ── */
   var renderPart = (pt, key, pr) => {
     var n = window.examPartN ? window.examPartN(pt) : 0;
@@ -8457,9 +8573,18 @@ function ExamPlayer({
       key: key
     }, /*#__PURE__*/React.createElement("div", {
       className: "ex-part-h"
-    }, /*#__PURE__*/React.createElement("b", null, pt.title || (window.EXAM_KINDS[pt.kind] || {}).zh), /*#__PURE__*/React.createElement("span", {
-      className: "ex-pts"
-    }, sent && pr ? pr.auto ? `${pr.got} / ${pt.pts}` : `__ / ${pt.pts}` : `${pt.pts} 分`, !sent && n > 1 ? `（${Math.round((+pt.pts || 0) / n * 10) / 10} 分一題）` : '')), pt.instruction && /*#__PURE__*/React.createElement("p", {
+    }, /*#__PURE__*/React.createElement("b", null, pt.title || (window.EXAM_KINDS[pt.kind] || {}).zh), (() => {
+      var pts = window.examPtsOf ? window.examPtsOf(pt) : +pt.pts || 0;
+      /* ⚠ 只有「本來就不計分」的題型才寫不計分。
+         老師忘記填配分的那種要維持「0 分」——
+         寫成不計分就看不出來是漏填的了（出卷頁的警告也在講這件事）。 */
+      if ((window.EXAM_KINDS[pt.kind] || {}).noScore) return /*#__PURE__*/React.createElement("span", {
+        className: "ex-pts soft"
+      }, "\u4E0D\u8A08\u5206");
+      return /*#__PURE__*/React.createElement("span", {
+        className: "ex-pts"
+      }, sent && pr ? pr.auto ? `${pr.got} / ${pts}` : `__ / ${pts}` : `${pts} 分`, !sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : '');
+    })()), pt.instruction && /*#__PURE__*/React.createElement("p", {
       className: "ex-inst"
     }, pt.instruction), pt.kind === 'circle' && (() => {
       var picked = Array.isArray(v) ? v : [];
@@ -8754,7 +8879,117 @@ function ExamPlayer({
       }), !sent && /*#__PURE__*/React.createElement("p", {
         className: "ex-hint"
       }, "\u6BCF\u500B\u5B57\u53EA\u80FD\u7528", /*#__PURE__*/React.createElement("b", null, "\u4E00\u6B21"), "\uFF1B\u53EF\u4EE5\u52A0 when / because / and / but / so \u8B93\u53E5\u5B50\u9577\u4E00\u9EDE\u3002"));
-    })(), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+    })(), pt.kind === 'fixbox' && (() => {
+      var boxes = Array.isArray(v) ? v : [];
+      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+        className: "ex-read ex-read-fix"
+      }, pt.passage), /*#__PURE__*/React.createElement("div", {
+        className: "ex-fixgrid"
+      }, Array.from({
+        length: n
+      }, (_, i) => {
+        var d = sent ? pr && pr.detail[i] || {} : null;
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'ex-fixbox' + (sent ? d.ok ? ' ok' : ' bad' : ''),
+          key: i
+        }, /*#__PURE__*/React.createElement("i", {
+          className: "ex-fixn"
+        }, i + 1), /*#__PURE__*/React.createElement("input", {
+          disabled: sent,
+          value: boxes[i] || '',
+          placeholder: "\u2026",
+          onChange: e => {
+            var t = e.target.value;
+            put(key, prev => {
+              var g = Array.isArray(prev) ? prev.slice() : [];
+              g[i] = t;
+              return g;
+            });
+          }
+        }), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("u", null, d.why[0]));
+      })), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u628A", /*#__PURE__*/React.createElement("b", null, "\u6539\u597D\u7684\u5B57"), "\u5BEB\u9032\u683C\u5B50\u88E1\uFF08\u9806\u5E8F\u6C92\u95DC\u4FC2\uFF0C\u627E\u5230\u5C31\u5BEB\uFF09\u3002\u5927\u5C0F\u5BEB\u8981\u5BEB\u5C0D\u3002"), sent && pt.answers && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u6B63\u78BA\u7B54\u6848\uFF1A", /*#__PURE__*/React.createElement("b", null, (pt.answers || []).join('　'))));
+    })(), pt.kind === 'evidence' && (() => {
+      var rows = Array.isArray(v) ? v : [];
+      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+        className: "ex-read"
+      }, pt.passage), pt.question && /*#__PURE__*/React.createElement("p", {
+        className: "ex-qt"
+      }, pt.question), Array.from({
+        length: n
+      }, (_, i) => {
+        var d = sent ? pr && pr.detail[i] || {} : null;
+        var words = String(rows[i] || '').split(/\s+/).filter(Boolean).length;
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'ex-ev' + (sent ? d.ok ? ' ok' : ' bad' : ''),
+          key: i
+        }, /*#__PURE__*/React.createElement("label", null, "Detail ", i + 1), /*#__PURE__*/React.createElement("textarea", {
+          rows: 2,
+          disabled: sent,
+          value: rows[i] || '',
+          placeholder: sent ? '' : `用文章裡的話寫完整的句子（至少 ${pt.minWords || 5} 個字）`,
+          onChange: e => {
+            var t = e.target.value;
+            put(key, prev => {
+              var g = Array.isArray(prev) ? prev.slice() : [];
+              g[i] = t;
+              return g;
+            });
+          }
+        }), !sent && /*#__PURE__*/React.createElement("i", {
+          className: "ex-af-n"
+        }, words, " \u500B\u5B57"), sent && d.quote && /*#__PURE__*/React.createElement("u", {
+          className: "ex-ev-q"
+        }, "\u5F15\u7528\u5230\uFF1A\u2026", d.quote, "\u2026"), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+          className: "ex-why"
+        }, d.why.map((x, k) => /*#__PURE__*/React.createElement("li", {
+          key: k
+        }, x))));
+      }), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u6BCF\u4E00\u683C\u8981", /*#__PURE__*/React.createElement("b", null, "\u5F9E\u6587\u7AE0\u88E1\u627E\u4E00\u53E5\u8A71\u7576\u8B49\u64DA"), "\uFF0C\u800C\u4E14", /*#__PURE__*/React.createElement("b", null, "\u5169\u683C\u4E0D\u53EF\u4EE5\u8B1B\u540C\u4E00\u4EF6\u4E8B"), "\u3002"));
+    })(), pt.kind === 'essay' && (() => {
+      var text = typeof v === 'string' ? v : '';
+      var st = window.examEssayStats ? window.examEssayStats(text, pt) : null;
+      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.prompt && /*#__PURE__*/React.createElement("p", {
+        className: "ex-qt ex-essay-q"
+      }, pt.prompt), (pt.vocab || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+        className: "ex-affixbox"
+      }, (pt.vocab || []).map((w, i) => /*#__PURE__*/React.createElement("span", {
+        key: i,
+        className: st && st.used.indexOf(w) >= 0 ? 'used' : ''
+      }, w))), /*#__PURE__*/React.createElement("textarea", {
+        className: "ex-essay",
+        rows: 14,
+        disabled: sent,
+        value: text,
+        placeholder: sent ? '' : `寫 ${pt.paras || 5} 段，每段至少 ${pt.sentsPerPara || 4} 句。段落之間空一行。`,
+        onChange: e => put(key, e.target.value)
+      }), st &&
+      /*#__PURE__*/
+      /* ⭐ 這幾項就是 rubric 裡「數得出來」的那幾項，交卷前先讓他自己看到。
+         ⚠ 這不是分數——寫得好不好是老師看的，所以不給對錯顏色。 */
+      React.createElement("div", {
+        className: "ex-essay-stat"
+      }, /*#__PURE__*/React.createElement("span", {
+        className: st.paras >= st.needParas ? 'hit' : ''
+      }, st.paras, " / ", st.needParas, " \u6BB5"), /*#__PURE__*/React.createElement("span", {
+        className: st.shortParas === 0 && st.paras > 0 ? 'hit' : ''
+      }, "\u6BCF\u6BB5\u53E5\u6578 ", st.sents.join('·') || '—', "\uFF08\u8981 ", st.needSents, " \u53E5\uFF09"), /*#__PURE__*/React.createElement("span", null, st.words, " \u500B\u5B57"), (pt.vocab || []).length > 0 && /*#__PURE__*/React.createElement("span", {
+        className: st.used.length >= (pt.vocab || []).length ? 'hit' : ''
+      }, "\u7528\u5230 ", st.used.length, " / ", (pt.vocab || []).length, " \u500B\u55AE\u5B57")), examMarkBlock(pt, key, [{
+        q: pt.prompt || '',
+        rubric: pt.rubric || ''
+      }]));
+    })(), pt.kind === 'checkin' && /*#__PURE__*/React.createElement(ExamCheckin, {
+      goals: pt.goals,
+      value: v,
+      disabled: sent,
+      onChange: x => put(key, x)
+    }), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
       className: "ex-read"
     }, pt.passage), (pt.questions || []).map((q, i) => /*#__PURE__*/React.createElement("div", {
       className: "ex-sa",
@@ -8778,48 +9013,7 @@ function ExamPlayer({
       }
     }), q.rubric && /*#__PURE__*/React.createElement("div", {
       className: "ex-rub"
-    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), (() => {
-      /* v530：老師改好了就把三項分數與評語攤開給學生看。 */
-      var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || null;
-      /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
-      var RS = window.examRubricOf ? window.examRubricOf(pt) : {
-        criteria: window.EXAM_RUBRIC || [],
-        max: 4
-      };
-      var R = RS.criteria;
-      var max = RS.max;
-      var marked = by && by.some(m => m && R.some(c => m[c.id] != null));
-      if (!marked) {
-        return /*#__PURE__*/React.createElement("div", {
-          className: "ex-manual"
-        }, "\u270D\uFE0F \u9019\u4E00\u984C\u8001\u5E2B\u6703\u89AA\u81EA\u6539\uFF0C\u4E0D\u6703\u81EA\u52D5\u7D66\u5206\u3002");
-      }
-      var rp = window.examRubricPart({
-        pts: pt.pts,
-        questions: pt.questions || [],
-        rubricMax: max
-      }, by);
-      return /*#__PURE__*/React.createElement("div", {
-        className: "ex-marked"
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "ex-marked-h"
-      }, "\u8001\u5E2B\u6539\u597D\u4E86 ", /*#__PURE__*/React.createElement("b", null, rp.got, " / ", pt.pts)), (pt.questions || []).map((q, i) => {
-        var m = by[i];
-        if (!m) return null;
-        return /*#__PURE__*/React.createElement("div", {
-          className: "ex-marked-q",
-          key: i
-        }, /*#__PURE__*/React.createElement("span", {
-          className: "ex-marked-n"
-        }, i + 1), /*#__PURE__*/React.createElement("span", {
-          className: "ex-marked-cr"
-        }, R.map(c => /*#__PURE__*/React.createElement("em", {
-          key: c.id
-        }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", max))), m.note && /*#__PURE__*/React.createElement("span", {
-          className: "ex-marked-note"
-        }, m.note));
-      }));
-    })()));
+    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), examMarkBlock(pt, key, pt.questions || [])));
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "ex-paper",
@@ -8841,26 +9035,10 @@ function ExamPlayer({
     key: i
   }, /*#__PURE__*/React.createElement("b", null, sc.name), /*#__PURE__*/React.createElement("span", null, sc.max ? `${sc.got} / ${sc.max}` : '—'), sc.manual > 0 && /*#__PURE__*/React.createElement("i", null, "\uFF0B", sc.manual, " \u5206\u8001\u5E2B\u6539")))), res.manualMax > 0 && /*#__PURE__*/React.createElement("p", {
     className: "ex-res-note"
-  }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), item.examMood && !sent && /*#__PURE__*/React.createElement("div", {
-    className: "ex-mood"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "ex-mood-q"
-  }, /*#__PURE__*/React.createElement("span", null, "1. How are you feeling right now?"), /*#__PURE__*/React.createElement("span", {
-    className: "ex-faces"
-  }, ['😟', '😐', '🙂'].map((f, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    className: 'ex-face' + (mood === i ? ' on' : ''),
-    onClick: () => setMood(i)
-  }, f)))), /*#__PURE__*/React.createElement("div", {
-    className: "ex-mood-q col"
-  }, /*#__PURE__*/React.createElement("span", null, "2. What is your goal for this test?"), ['Read every question carefully.', 'Take my time and do not rush.', 'Stay calm and do my best.'].map((g, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    className: 'ex-goal' + (goals[i] ? ' on' : ''),
-    onClick: () => setGoals(x => ({
-      ...x,
-      [i]: !x[i]
-    }))
-  }, /*#__PURE__*/React.createElement("i", null, goals[i] ? '☑' : '☐'), g)))), secs.map((sec, si) => /*#__PURE__*/React.createElement("section", {
+  }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), item.examMood && !sent && /*#__PURE__*/React.createElement(ExamCheckin, {
+    value: mood,
+    onChange: setMood
+  }), secs.map((sec, si) => /*#__PURE__*/React.createElement("section", {
     className: "ex-sec",
     key: si
   }, /*#__PURE__*/React.createElement("div", {

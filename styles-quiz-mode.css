@@ -4079,3 +4079,56 @@
 .ex-story-row.bad textarea { border-color: var(--no); background: var(--no-bg); }
 /* 用詞庫造句：字數即時顯示 */
 .ex-af-n { font-size: 11.5px; color: var(--ink-3); margin-left: 6px; }
+
+/* ══ v538 📦🔍✍️😊 Alan 那疊卷子上剩下的四種 ══════════════════════════
+   ⚠ 顏色一律走變數（--ok / --no / --border / --bg-card）：
+     萬聖節那層是把變數整組翻成深色的，寫死 #fff 就會變成白底白字（v527 踩過）。 */
+
+/* 📦 找出錯的字，填進格子——紙本就是一排格子，這裡照排 */
+.ex-read-fix { font-family: var(--serif); font-size: 15.5px; }
+.ex-fixgrid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.ex-fixbox { display: flex; flex-direction: column; gap: 3px; min-width: 128px; flex: 1 1 128px; }
+.ex-fixbox i { font-style: normal; font-size: 11px; font-weight: 800; color: var(--ink-3); }
+.ex-fixbox input {
+  width: 100%; padding: 9px 10px; border-radius: 8px;
+  border: 1.5px solid var(--ink, #15130E); background: var(--bg-card, #fff);
+  font-family: var(--mono); font-size: 15.5px; font-weight: 700; text-align: center;
+}
+.ex-fixbox.ok input  { border-color: var(--ok, #2E7D43); background: var(--ok-bg, #f0fdf4); }
+.ex-fixbox.bad input { border-color: var(--no, #A8331F); background: var(--no-bg, #fef2f2); }
+.ex-fixbox u { text-decoration: none; font-size: 11px; font-weight: 700; color: var(--no, #A8331F); line-height: 1.4; }
+
+/* 🔍 用文章裡的細節回答 */
+.ex-ev { padding: 10px 0 12px; border-bottom: 1px dotted var(--border, #DDD6C4); }
+.ex-ev:last-of-type { border-bottom: 0; }
+.ex-ev > label { display: block; font-size: 13px; font-weight: 800; color: var(--ink-3); margin-bottom: 5px; }
+.ex-ev textarea {
+  width: 100%; resize: vertical; padding: 9px 11px; border-radius: 9px;
+  border: 1.5px solid var(--border, #DDD6C4); background: var(--bg-card, #fff);
+  font: inherit; font-size: 15px; line-height: 1.7;
+}
+.ex-ev.ok textarea  { border-color: var(--ok, #2E7D43); background: var(--ok-bg, #f0fdf4); }
+.ex-ev.bad textarea { border-color: var(--no, #A8331F); background: var(--no-bg, #fef2f2); }
+.ex-ev-q { display: block; margin-top: 5px; text-decoration: none; font-size: 12px; font-style: italic; color: var(--ink-3); }
+
+/* ✍️ 長文寫作 */
+.ex-essay-q { font-family: var(--serif); font-size: 16px; line-height: 1.75; }
+.ex-affixbox span.used { color: var(--ok, #2E7D43); text-decoration: line-through; }
+textarea.ex-essay {
+  width: 100%; resize: vertical; margin-top: 10px; padding: 14px 16px; border-radius: 12px;
+  border: 1.5px solid var(--border, #DDD6C4); background: var(--bg-card, #fff);
+  font: inherit; font-size: 15.5px; line-height: 2;
+}
+.ex-essay-stat { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ex-essay-stat span {
+  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border, #DDD6C4);
+  font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--ink-3);
+}
+/* ⚠ 達標只用「框變色」，不用對錯的綠底——這一題不是程式給分的，
+     給他一片綠色會以為自己答對了（寫得好不好是老師看的）。 */
+.ex-essay-stat span.hit { border-color: var(--ok, #2E7D43); color: var(--ok, #2E7D43); }
+
+/* 😊 心情與目標：開場區與 checkin 大題共用 .ex-mood（v515 就有樣式），
+   這裡只補「交卷後不給點」的灰掉狀態。 */
+.ex-face:disabled, .ex-goal:disabled { opacity: .62; cursor: default; }
+.ex-pts.soft { font-weight: 700; color: var(--ink-3); opacity: .8; }

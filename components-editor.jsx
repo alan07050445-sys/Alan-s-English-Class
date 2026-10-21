@@ -442,7 +442,14 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                 genq: '貼文章。學生要自己出「文章上沒有」的問題。上面的「個」＝要出幾個問題。',
                 storymap: '貼文章。學生要填開頭／中間／結尾三格。上面的「個」＝每一格寫幾句。',
                 usewords: '一行就是詞庫，空白或逗號分開：extreme protect shelter。上面的「個」＝要造幾個句子。',
-
+                /* ══ v538 ══ */
+                fixbox: '第一行＝改好的那幾個字（逗號分開）：Taipei, I, Monday, English, May。'
+                      + '空一行，再貼那一段文章。格子數＝答案的個數，大小寫要寫對才算對。',
+                evidence: '第一行＝要問的問題（Why can penguins live in the cold?）。'
+                        + '空一行，再貼那篇文章。上面的「個」＝要寫幾個細節，每一個都要引用文章裡的話。',
+                essay: '第一行（到空行為止）＝寫作題目。空一行，下一行＝這一課的單字（逗號分開，要他用進去）。'
+                     + '上面的「段／句」＝要幾段、每段幾句。這一種老師改，勾 Rubric 選「康橋寫作七項」。',
+                checkin: '一行一個目標，學生自己勾。留空就用預設的三個。這一種不計分，配分填 0。',
               };
               return (
                 <div className="field">
@@ -489,7 +496,9 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                               onChange={e => patchPart(si, pi, { pts: +e.target.value || 0 })}/>
                             <span>分</span>
                             {/* v530 📋 申論題的 rubric：每一項滿分幾分 */}
-                            {pt.kind === 'short' && (
+                            {/* v538：長文寫作也是老師改的，Rubric 要開給它
+                                （康橋寫作卷就是那七項，三項那一套不夠用） */}
+                            {(pt.kind === 'short' || pt.kind === 'essay') && (
                               <label className="exed-chk exed-rub">
                                 <input type="checkbox" checked={!!pt.rubricMax}
                                   onChange={e => patchPart(si, pi, {
@@ -518,16 +527,31 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                               </label>
                             )}
                             {/* v536：這兩種也要能設「每句至少幾個字」 */}
-                            {(pt.kind === 'affix' || pt.kind === 'usewords' || pt.kind === 'storymap') && (
+                            {(pt.kind === 'affix' || pt.kind === 'usewords' || pt.kind === 'storymap'
+                              || pt.kind === 'evidence') && (
                               <label className="exed-chk exed-rub">
                                 <input className="exed-pts" type="number" min="1" max="30"
-                                  value={pt.minWords || ''} placeholder={pt.kind === 'usewords' ? '6' : '4'}
+                                  value={pt.minWords || ''}
+                                  placeholder={pt.kind === 'usewords' ? '6' : pt.kind === 'evidence' ? '5' : '4'}
                                   onChange={e => patchPart(si, pi, { minWords: +e.target.value || 0 })}/>
                                 <span>字以上</span>
                               </label>
                             )}
+                            {/* v538 ✍️ 長文：要幾段、每段幾句（rubric 的 Length 就是數這兩個） */}
+                            {pt.kind === 'essay' && (
+                              <label className="exed-chk exed-rub">
+                                <input className="exed-pts" type="number" min="1" max="12"
+                                  value={pt.paras || ''} placeholder="5"
+                                  onChange={e => patchPart(si, pi, { paras: +e.target.value || 0 })}/>
+                                <span>段 ×</span>
+                                <input className="exed-pts" type="number" min="1" max="12"
+                                  value={pt.sentsPerPara || ''} placeholder="4"
+                                  onChange={e => patchPart(si, pi, { sentsPerPara: +e.target.value || 0 })}/>
+                                <span>句</span>
+                              </label>
+                            )}
                             {(pt.kind === 'circle' || pt.kind === 'affix' || pt.kind === 'genq'
-                              || pt.kind === 'usewords' || pt.kind === 'storymap') && (
+                              || pt.kind === 'usewords' || pt.kind === 'storymap' || pt.kind === 'evidence') && (
                               <>
                                 <input className="exed-pts" type="number" value={pt.need || ''} placeholder="10"
                                   onChange={e => patchPart(si, pi, { need: +e.target.value || 0 })}/>

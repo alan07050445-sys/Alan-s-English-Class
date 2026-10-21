@@ -488,8 +488,11 @@ function getQuizItemTotal(item) {
   if (item.type === 'guided-reading' && grTotalQ(item) === 0) return Math.max(1, grSegs(item).length); // v387: 純閱讀
   /* v515：考卷的「幾題」＝有幾個**自動計分**的大題。
      ⚠ 不要用小題總數——那會讓側欄寫「60 題」，看起來像做不完。 */
+  /* v538 ⚠ 不計分的大題（開頭的心情與目標）不算一題。
+     側欄的「幾題」與交卷時寫的 doneCount 要用**同一條**判斷，
+     一邊算一邊不算就會變成 4/3 這種永遠做不完的進度。 */
   if (item.type === 'exam') return (item.sections || [])
-    .reduce((n, sc) => n + (sc.parts || []).filter(p => (window.EXAM_KINDS || {})[p.kind] && window.EXAM_KINDS[p.kind].auto).length, 0);
+    .reduce((n, sc) => n + (sc.parts || []).filter(p => examCountsAsTask(p)).length, 0);
   if (item.type === 'essay') return 1;
   if (item.type === 'story-mountain') return 1;
   if (item.type === 'cloze') return ((item.passage || '').match(/\[[^\]]+\]/g) || []).length;
@@ -505,6 +508,13 @@ function getCategoryCountLabel(cat) {
   return (title.includes('word study') || title.includes('字根') || title.includes('字首'))
     ? 'words'
     : 'questions';
+}
+
+/* 考卷裡「算一題」的大題：自動計分的，而且不是不計分的那種（心情與目標）。
+   側欄的題數與交卷寫進度都走這一份。 */
+function examCountsAsTask(p) {
+  const K = (window.EXAM_KINDS || {})[p && p.kind];
+  return !!K && !!K.auto && !K.noScore;
 }
 
 function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null, total = 1, wrongQuestions = [], extra = null } = {}) {
@@ -6884,6 +6894,38 @@ function TeacherLog({ email }) {
      · 一個 100 分，分區加權；自動計分與老師手改分開寫清楚
    ⚠ 所以沒有沿用現成的播放器：它們都是「一題一畫面＋立刻回饋」，
      硬塞進考卷只會兩邊都彆扭。這裡自己畫，但計分全部交給 data.js 的 examScore。 */
+/* v538 😊 心情與目標。
+   開場區（item.examMood，v515 就有）與 checkin 這一大題用的是**同一塊**，
+   題目與預設目標在 data.js 的 EXAM_CHECKIN 只寫一份。 */
+function ExamCheckin({ goals, value, onChange, disabled }) {
+  const C = window.EXAM_CHECKIN || { faces: ['😟', '😐', '🙂'], goals: [] };
+  const list = (goals && goals.length ? goals : C.goals) || [];
+  const val = value && typeof value === 'object' ? value : {};
+  const picked = val.goals || {};
+  return (
+    <div className="ex-mood">
+      <div className="ex-mood-q">
+        <span>1. {C.moodQ}</span>
+        <span className="ex-faces">
+          {C.faces.map((f, i) => (
+            <button key={i} className={'ex-face' + (val.mood === i ? ' on' : '')} disabled={disabled}
+              onClick={() => onChange({ ...val, mood: val.mood === i ? null : i })}>{f}</button>
+          ))}
+        </span>
+      </div>
+      <div className="ex-mood-q col">
+        <span>2. {C.goalQ}</span>
+        {list.map((g, i) => (
+          <button key={i} className={'ex-goal' + (picked[i] ? ' on' : '')} disabled={disabled}
+            onClick={() => onChange({ ...val, goals: { ...picked, [i]: !picked[i] } })}>
+            <i>{picked[i] ? '☑' : '☐'}</i>{g}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [ans, setAns]       = useQM({});
   /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
@@ -6897,8 +6939,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       setTeacherMark(window.examMarkOf ? window.examMarkOf(doc, progressKey) : null);
     });
   }, [progressKey]);
-  const [mood, setMood]     = useQM(null);
-  const [goals, setGoals]   = useQM({});
+  const [mood, setMood]     = useQM(null);   // 開場區的心情與目標（{ mood, goals }）
   const [focus, setFocus]   = useQM(null);   // cloze：現在在填哪一格（點詞庫要知道填去哪）
   const focusRef = React.useRef(null);       // 同上，但「永遠是最新的」——見下面 put 的說明
   const [sent, setSent]     = useQM(false);
@@ -6941,6 +6982,20 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
     r.parts.forEach(pp => {
       if (pp.auto) return;
       const v = ans[pp.key];
+      /* v538 ✍️ 長文寫作也是老師改的，但它的作答是**一段字串**不是陣列——
+         ⚠ 少了這一段，孩子寫滿五段交出去，老師端的批改清單裡什麼都沒有
+           （畫面上完全看不出來少了，因為那一大題本來就寫「老師會親自改」）。 */
+      if (pp.part.kind === 'essay') {
+        const t = String(v || '').trim();
+        if (t) written[pp.key] = {
+          title: pp.part.title || '',
+          pts: +pp.part.pts || 0,
+          rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          rubricSet: pp.part.rubricSet || 'basic',
+          qs: [{ q: pp.part.prompt || '', keyPoints: pp.part.rubric || '', a: t }],
+        };
+        return;
+      }
       if (Array.isArray(v) && v.some(x => String(x || '').trim())) {
         written[pp.key] = {
           title: pp.part.title || '',
@@ -6956,11 +7011,46 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       }
     });
     saveQuizModeCompletion(progressKey, item, {
-      doneCount: r.parts.filter(p => p.auto).length,
+      doneCount: r.parts.filter(p => examCountsAsTask(p.part)).length,
       score: r.auto, total: r.autoMax, wrongQuestions: wrongList,
       extra: Object.keys(written).length ? { examWritten: written, examTitle: item.title || '' } : null,
     });
     if (window._onQuizComplete) window._onQuizComplete(r.auto, r.autoMax, wrongList, { itemId: progressKey });
+  };
+
+  /* ── 老師改好的分數與評語（申論與長文寫作共用）──
+     v530 做給申論、v538 長文寫作也要同一塊。
+     ⚠ 抽出來的原因不只是少打字：兩邊各寫一份，改了 rubric 的顯示方式
+       只有一邊會動（v526 的倒數時鐘就吃過這個虧）。 */
+  const examMarkBlock = (pt, key, qs) => {
+    const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || null;
+    /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
+    const RS = window.examRubricOf ? window.examRubricOf(pt) : { criteria: window.EXAM_RUBRIC || [], max: 4 };
+    const R = RS.criteria;
+    const max = RS.max;
+    const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
+    if (!marked) return <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>;
+    const rp = window.examRubricPart({ pts: pt.pts, questions: qs, rubricMax: max }, by);
+    return (
+      <div className="ex-marked">
+        <div className="ex-marked-h">老師改好了 <b>{rp.got} / {pt.pts}</b></div>
+        {qs.map((q, i) => {
+          const m = by[i];
+          if (!m) return null;
+          return (
+            <div className="ex-marked-q" key={i}>
+              <span className="ex-marked-n">{i + 1}</span>
+              <span className="ex-marked-cr">
+                {R.map(c => (
+                  <em key={c.id}>{c.zh} <b>{m[c.id] == null ? '—' : m[c.id]}</b>/{max}</em>
+                ))}
+              </span>
+              {m.note && <span className="ex-marked-note">{m.note}</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   /* ── 一大題 ── */
@@ -6971,10 +7061,21 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       <div className={'ex-part' + (sent ? ' done' : '')} key={key}>
         <div className="ex-part-h">
           <b>{pt.title || (window.EXAM_KINDS[pt.kind] || {}).zh}</b>
-          <span className="ex-pts">
-            {sent && pr ? (pr.auto ? `${pr.got} / ${pt.pts}` : `__ / ${pt.pts}`) : `${pt.pts} 分`}
-            {!sent && n > 1 ? `（${Math.round((+pt.pts || 0) / n * 10) / 10} 分一題）` : ''}
-          </span>
+          {/* v538 ⚠ 不計分的大題（心情與目標）不要寫「0 分」——
+              孩子會以為自己這一題被扣光了。配分用 examPtsOf，跟合計同一份。 */}
+          {(() => {
+            const pts = window.examPtsOf ? window.examPtsOf(pt) : (+pt.pts || 0);
+            /* ⚠ 只有「本來就不計分」的題型才寫不計分。
+               老師忘記填配分的那種要維持「0 分」——
+               寫成不計分就看不出來是漏填的了（出卷頁的警告也在講這件事）。 */
+            if ((window.EXAM_KINDS[pt.kind] || {}).noScore) return <span className="ex-pts soft">不計分</span>;
+            return (
+              <span className="ex-pts">
+                {sent && pr ? (pr.auto ? `${pr.got} / ${pts}` : `__ / ${pts}`) : `${pts} 分`}
+                {!sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : ''}
+              </span>
+            );
+          })()}
         </div>
         {pt.instruction && <p className="ex-inst">{pt.instruction}</p>}
 
@@ -7245,6 +7346,111 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           );
         })()}
 
+        {/* ── v538 📦 找出錯的字，填進格子 ── */}
+        {pt.kind === 'fixbox' && (() => {
+          const boxes = Array.isArray(v) ? v : [];
+          return (
+            <>
+              {pt.passage && <div className="ex-read ex-read-fix">{pt.passage}</div>}
+              <div className="ex-fixgrid">
+                {Array.from({ length: n }, (_, i) => {
+                  const d = sent ? ((pr && pr.detail[i]) || {}) : null;
+                  return (
+                    <div className={'ex-fixbox' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={i}>
+                      <i className="ex-fixn">{i + 1}</i>
+                      <input disabled={sent} value={boxes[i] || ''} placeholder="…"
+                        onChange={e => { const t = e.target.value;
+                          put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[i] = t; return g; }); }}/>
+                      {sent && (d.why || []).length > 0 && <u>{d.why[0]}</u>}
+                    </div>
+                  );
+                })}
+              </div>
+              {!sent && <p className="ex-hint">把<b>改好的字</b>寫進格子裡（順序沒關係，找到就寫）。大小寫要寫對。</p>}
+              {sent && pt.answers && (
+                <p className="ex-hint">正確答案：<b>{(pt.answers || []).join('　')}</b></p>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ── v538 🔍 用文章裡的 N 個細節回答 ── */}
+        {pt.kind === 'evidence' && (() => {
+          const rows = Array.isArray(v) ? v : [];
+          return (
+            <>
+              {pt.passage && <div className="ex-read">{pt.passage}</div>}
+              {pt.question && <p className="ex-qt">{pt.question}</p>}
+              {Array.from({ length: n }, (_, i) => {
+                const d = sent ? ((pr && pr.detail[i]) || {}) : null;
+                const words = String(rows[i] || '').split(/\s+/).filter(Boolean).length;
+                return (
+                  <div className={'ex-ev' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={i}>
+                    <label>Detail {i + 1}</label>
+                    <textarea rows={2} disabled={sent} value={rows[i] || ''}
+                      placeholder={sent ? '' : `用文章裡的話寫完整的句子（至少 ${pt.minWords || 5} 個字）`}
+                      onChange={e => { const t = e.target.value;
+                        put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[i] = t; return g; }); }}/>
+                    {!sent && <i className="ex-af-n">{words} 個字</i>}
+                    {/* ⭐ 對的時候也要講「你引用到哪一段」——孩子才知道這一題在練什麼 */}
+                    {sent && d.quote && <u className="ex-ev-q">引用到：…{d.quote}…</u>}
+                    {sent && (d.why || []).length > 0 && (
+                      <ul className="ex-why">{d.why.map((x, k) => <li key={k}>{x}</li>)}</ul>
+                    )}
+                  </div>
+                );
+              })}
+              {!sent && <p className="ex-hint">
+                每一格要<b>從文章裡找一句話當證據</b>，而且<b>兩格不可以講同一件事</b>。
+              </p>}
+            </>
+          );
+        })()}
+
+        {/* ── v538 ✍️ 長文寫作（老師改，程式只幫忙數段落與句數）── */}
+        {pt.kind === 'essay' && (() => {
+          const text = typeof v === 'string' ? v : '';
+          const st = window.examEssayStats ? window.examEssayStats(text, pt) : null;
+          return (
+            <>
+              {pt.prompt && <p className="ex-qt ex-essay-q">{pt.prompt}</p>}
+              {(pt.vocab || []).length > 0 && (
+                <div className="ex-affixbox">
+                  {(pt.vocab || []).map((w, i) => (
+                    <span key={i} className={st && st.used.indexOf(w) >= 0 ? 'used' : ''}>{w}</span>
+                  ))}
+                </div>
+              )}
+              <textarea className="ex-essay" rows={14} disabled={sent} value={text}
+                placeholder={sent ? '' : `寫 ${pt.paras || 5} 段，每段至少 ${pt.sentsPerPara || 4} 句。段落之間空一行。`}
+                onChange={e => put(key, e.target.value)}/>
+              {st && (
+                /* ⭐ 這幾項就是 rubric 裡「數得出來」的那幾項，交卷前先讓他自己看到。
+                   ⚠ 這不是分數——寫得好不好是老師看的，所以不給對錯顏色。 */
+                <div className="ex-essay-stat">
+                  <span className={st.paras >= st.needParas ? 'hit' : ''}>{st.paras} / {st.needParas} 段</span>
+                  <span className={st.shortParas === 0 && st.paras > 0 ? 'hit' : ''}>
+                    每段句數 {st.sents.join('·') || '—'}（要 {st.needSents} 句）
+                  </span>
+                  <span>{st.words} 個字</span>
+                  {(pt.vocab || []).length > 0 && (
+                    <span className={st.used.length >= (pt.vocab || []).length ? 'hit' : ''}>
+                      用到 {st.used.length} / {(pt.vocab || []).length} 個單字
+                    </span>
+                  )}
+                </div>
+              )}
+              {examMarkBlock(pt, key, [{ q: pt.prompt || '', rubric: pt.rubric || '' }])}
+            </>
+          );
+        })()}
+
+        {/* ── v538 😊 開場的心情與目標（不計分）── */}
+        {pt.kind === 'checkin' && (
+          <ExamCheckin goals={pt.goals} value={v} disabled={sent}
+            onChange={x => put(key, x)}/>
+        )}
+
         {/* ── 申論（老師親自改）── */}
         {pt.kind === 'short' && (
           <>
@@ -7260,39 +7466,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                 {q.rubric && <div className="ex-rub">評分重點：{q.rubric}</div>}
               </div>
             ))}
-            {(() => {
-              /* v530：老師改好了就把三項分數與評語攤開給學生看。 */
-              const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || null;
-              /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
-              const RS = window.examRubricOf ? window.examRubricOf(pt) : { criteria: window.EXAM_RUBRIC || [], max: 4 };
-              const R = RS.criteria;
-              const max = RS.max;
-              const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
-              if (!marked) {
-                return <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>;
-              }
-              const rp = window.examRubricPart({ pts: pt.pts, questions: pt.questions || [], rubricMax: max }, by);
-              return (
-                <div className="ex-marked">
-                  <div className="ex-marked-h">老師改好了 <b>{rp.got} / {pt.pts}</b></div>
-                  {(pt.questions || []).map((q, i) => {
-                    const m = by[i];
-                    if (!m) return null;
-                    return (
-                      <div className="ex-marked-q" key={i}>
-                        <span className="ex-marked-n">{i + 1}</span>
-                        <span className="ex-marked-cr">
-                          {R.map(c => (
-                            <em key={c.id}>{c.zh} <b>{m[c.id] == null ? '—' : m[c.id]}</b>/{max}</em>
-                          ))}
-                        </span>
-                        {m.note && <span className="ex-marked-note">{m.note}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            {examMarkBlock(pt, key, pt.questions || [])}
           </>
         )}
       </div>
@@ -7334,28 +7508,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         </div>
       )}
 
-      {/* 開場：心情與目標（學校卷子上就有這兩題） */}
-      {item.examMood && !sent && (
-        <div className="ex-mood">
-          <div className="ex-mood-q">
-            <span>1. How are you feeling right now?</span>
-            <span className="ex-faces">
-              {['😟', '😐', '🙂'].map((f, i) => (
-                <button key={i} className={'ex-face' + (mood === i ? ' on' : '')} onClick={() => setMood(i)}>{f}</button>
-              ))}
-            </span>
-          </div>
-          <div className="ex-mood-q col">
-            <span>2. What is your goal for this test?</span>
-            {['Read every question carefully.', 'Take my time and do not rush.', 'Stay calm and do my best.'].map((g, i) => (
-              <button key={i} className={'ex-goal' + (goals[i] ? ' on' : '')}
-                onClick={() => setGoals(x => ({ ...x, [i]: !x[i] }))}>
-                <i>{goals[i] ? '☑' : '☐'}</i>{g}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 開場：心情與目標（學校卷子上就有這兩題）*/}
+      {item.examMood && !sent && <ExamCheckin value={mood} onChange={setMood}/>}
 
       {secs.map((sec, si) => (
         <section className="ex-sec" key={si}>
