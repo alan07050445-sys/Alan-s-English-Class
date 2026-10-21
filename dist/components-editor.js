@@ -9674,7 +9674,9 @@ function AskPanel({
       className: "ask-plan"
     }, /*#__PURE__*/React.createElement("div", {
       className: "ask-plan-h"
-    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57")), (() => {
+    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && (m.plan.intent === 'lesson' ? /*#__PURE__*/React.createElement("li", null, "\u9019\u6B21\u4E0A\u4E86\u4EC0\u9EBC\uFF1A", /*#__PURE__*/React.createElement("b", {
+      className: "ask-plan-did"
+    }, m.plan.text)) : /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57"))), (() => {
       var g = gen[i] || {};
       /* v519：五種都能在這裡做完了（剩下兩種住在後台，照樣是開後台指路）。 */
       var canHere = !!onGenerate && ['vocab', 'reading', 'wordstudy', 'grammar', 'exam'].indexOf(m.plan.intent) >= 0;
@@ -9683,7 +9685,7 @@ function AskPanel({
       }, "\u2705 \u5DF2\u7D93\u5B58\u9032\u672C\u9031\u4E86", m.hw ? `，而且設成作業（${m.hw} 到期）` : '');
       if (m.done) return /*#__PURE__*/React.createElement("div", {
         className: "ask-done"
-      }, "\u2705 \u958B\u597D\u4E86\uFF0C\u63A5\u4E0B\u4F86\u7167\u539F\u672C\u7684\u6D41\u7A0B\u8D70");
+      }, m.plan.intent === 'lesson' ? '✅ 已經開好那一堂，內容也填進去了——功課與下次進度按 🪄 擬草稿' : '✅ 開好了，接下來照原本的流程走');
       if (g.items) {
         /* 📌 v521：出完順手指派。預設開著（他每次都要設），日期可以直接改。
            ⚠ 他如果說「先不要指派」，路由器會給 due: 'none'，這裡就預設關掉。 */

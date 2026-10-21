@@ -6328,7 +6328,11 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                         <li>單字 <b>{m.plan.words.length}</b> 個：{m.plan.words.slice(0, 10).map(w => w.term).join('、')}
                           {m.plan.words.length > 10 ? '…' : ''}</li>
                       )}
-                      {m.plan.text && <li>文字 <b>{m.plan.text.length}</b> 字</li>}
+                      {/* v543：上課紀錄要讓他**看到會填進去的內容**，
+                          不要只寫「文字 87 字」——他要確認的就是這一段。 */}
+                      {m.plan.text && (m.plan.intent === 'lesson'
+                        ? <li>這次上了什麼：<b className="ask-plan-did">{m.plan.text}</b></li>
+                        : <li>文字 <b>{m.plan.text.length}</b> 字</li>)}
                     </ul>
                     {(() => {
                       const g = gen[i] || {};
@@ -6336,7 +6340,9 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                       const canHere = !!onGenerate
                         && ['vocab', 'reading', 'wordstudy', 'grammar', 'exam'].indexOf(m.plan.intent) >= 0;
                       if (m.saved) return <div className="ask-done">✅ 已經存進本週了{m.hw ? `，而且設成作業（${m.hw} 到期）` : ''}</div>;
-                      if (m.done) return <div className="ask-done">✅ 開好了，接下來照原本的流程走</div>;
+                      if (m.done) return <div className="ask-done">{m.plan.intent === 'lesson'
+                        ? '✅ 已經開好那一堂，內容也填進去了——功課與下次進度按 🪄 擬草稿'
+                        : '✅ 開好了，接下來照原本的流程走'}</div>;
                       if (g.items) {
                         /* 📌 v521：出完順手指派。預設開著（他每次都要設），日期可以直接改。
                            ⚠ 他如果說「先不要指派」，路由器會給 due: 'none'，這裡就預設關掉。 */

@@ -4174,3 +4174,5 @@ textarea.ex-essay {
 .qs-story-one { padding: 10px 0 2px; border-top: 1px dashed var(--border); margin-top: 10px; }
 .qs-story-one:first-of-type { border-top: 0; margin-top: 4px; }
 .qs-story-i { font-size: 12.5px; font-weight: 800; color: var(--accent); }
+/* v543 上課紀錄：把會填進去的內容整段顯示出來（他要確認的就是這一段） */
+.ask-plan-did { display: block; margin-top: 3px; white-space: pre-wrap; font-weight: 600; line-height: 1.7; }

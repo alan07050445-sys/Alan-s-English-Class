@@ -1932,14 +1932,34 @@ function App() {
     } else if (plan.intent === 'exam') {
       setExamScanOpen(true);
     } else if (plan.intent === 'lesson' || plan.intent === 'weak' || plan.intent === 'marking') {
-      /* 這三件事住在後台（📒 上課紀錄 / 🎯 弱點分析 / 📋 申論批改）——開後台並指到那一頁。 */
+      /* 這三件事住在後台（📒 上課紀錄 / 🎯 弱點分析 / 📋 申論批改）——開後台並指到那一頁。
+         🔴 v543：這裡本來寫 `email: plan.email || ''`，但 **router 從來沒有產生過
+           plan.email**（它只給 plan.student 名字）——所以從 v517 到現在，
+           Alan 說「今天 Nick 的上課內容是…」，後台開起來**連 Nick 都沒選到**，
+           他打的內容也完全沒有被帶過去，等於什麼都沒做。 */
+      var found = plan.student && window.askFindStudent ? window.askFindStudent(plan.student, askRoster) : null;
+      if (plan.student && (!found || !found.email)) {
+        /* ⚠ 對不到就老實說，不要猜最像的那一個——
+           名單裡真的有 Elroy(G6) 跟 Elory(G4)，猜錯會把整堂課記到別的孩子身上。 */
+        showToast(found && found.many ? `名單裡有兩個「${plan.student}」，請自己點一下是哪一位` : `名單裡找不到「${plan.student}」`);
+      } else if (found && (found.twins || []).length) {
+        showToast(`⚠ 名單裡有「${found.twins.join('、')}」這種很像的名字，確認一下是不是 ${found.name}`);
+      }
       setDashOpen(true);
       var tab = plan.intent === 'lesson' ? 'lessons' : plan.intent === 'marking' ? 'marking' : 'roster';
       try {
         window.__dashGoto = {
           tab,
-          email: plan.email || ''
+          email: found && found.email || ''
         };
+        /* v543（Alan：「他卻不會幫我打好，我點進去還是要手動打，那我還要 AI 幹嘛？」）
+           把他打的上課內容一起帶過去，後台會**直接開一堂新的紀錄並填好「這次上了什麼」**。
+           ⚠ 只填他自己說的那段字——功課與下次進度維持空白，
+             那兩欄按「🪄 幫我擬草稿」才會由 AI 依學校進度表擬（有頁碼把關）。 */
+        window.__lessonDraft = plan.intent === 'lesson' && found && found.email ? {
+          email: found.email,
+          did: String(plan.text || '').trim()
+        } : null;
       } catch (e) {}
 
       /* ══ v531：剩下的 5 個也接進來 ══════════════════════════════
@@ -2045,13 +2065,13 @@ function App() {
       /* 📌 設定作業期限（Alan：「並且設定期限」）。
          ⚠ 沒講日期就用預設（下一個週日），跟出完順手指派同一套規則。
          ⚠ 他說「不要當作業」的話 due 會是 none → 取消指派。 */
-      var found = askFindGroup(plan.group);
-      if (!found) {
+      var _found = askFindGroup(plan.group);
+      if (!_found) {
         var _names = askGroupNames();
         showToast(_names.length ? `這一週沒有「${plan.group}」。有的是：${_names.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
       } else {
         var due = plan.due === 'none' ? '' : window.askDueDate && window.askDueDate(plan.due) || window.askDueDefault && window.askDueDefault() || '';
-        handleSetHomeworkMany(found.items.map(it => it.id), due ? {
+        handleSetHomeworkMany(_found.items.map(it => it.id), due ? {
           dueDate: due
         } : null);
       }
@@ -2073,19 +2093,19 @@ function App() {
       /* 🔁 排複習到別週 ／ 📦 整組操作：先在目前這一週把那一組找出來。
          ⚠ 找不到不要安靜地什麼都不做——把這一週有哪些組列給他看（v500 的教訓：
            「靜靜地少做一半比直接失敗更難發現」）。 */
-      var _found = askFindGroup(plan.group);
-      if (!_found) {
+      var _found2 = askFindGroup(plan.group);
+      if (!_found2) {
         var _names2 = askGroupNames();
         showToast(_names2.length ? `這一週沒有「${plan.group}」這一組。有的是：${_names2.slice(0, 4).join('、')}` : '這一週還沒有任何分組。');
       } else if (plan.intent === 'review') {
         setReviewFor({
-          catId: _found.catId,
-          name: _found.name,
-          items: _found.items
+          catId: _found2.catId,
+          name: _found2.name,
+          items: _found2.items
         });
       } else if (plan.op === 'again') {
         /* 走「在這一組再出一份」那條既有的路（跟單元列的選單同一個 handler）。 */
-        var _ws2 = window.reviewWordsOf && window.reviewWordsOf(_found.items) || [];
+        var _ws2 = window.reviewWordsOf && window.reviewWordsOf(_found2.items) || [];
         if (_ws2.length >= 2) {
           var _text = _ws2.map(x => [x.term, x.zh, x.example, x.def].filter(Boolean).join(' - ')).join('\n');
           var _imgs = {};
@@ -2093,26 +2113,26 @@ function App() {
             if (x.imageUrl) _imgs[String(x.term).toLowerCase()] = x.imageUrl;
           });
           setRegenFor({
-            catId: _found.catId,
-            name: _found.name,
+            catId: _found2.catId,
+            name: _found2.name,
             pick: false,
             text: _text,
             images: _imgs,
-            have: window.qsKindsInGroup && window.qsKindsInGroup(_found.items) || []
+            have: window.qsKindsInGroup && window.qsKindsInGroup(_found2.items) || []
           });
           setQuickSetOpen(true);
         } else {
           setRegenFor({
-            catId: _found.catId,
-            name: _found.name,
+            catId: _found2.catId,
+            name: _found2.name,
             pick: true
           });
         }
       } else if (plan.op === 'delete') {
         /* 🔴 唯一一件會把東西丟掉的事——一定要他自己按下去確認。
            聊天室打錯一個字就刪掉一整組，那是救不回來的。 */
-        if (window.confirm(`要刪掉「${_found.name}」這一組的 ${_found.items.length} 個單元嗎？這個動作救不回來。`)) {
-          handleDeleteItems(_found.items.map(it => it.id));
+        if (window.confirm(`要刪掉「${_found2.name}」這一組的 ${_found2.items.length} 個單元嗎？這個動作救不回來。`)) {
+          handleDeleteItems(_found2.items.map(it => it.id));
         }
       } else {
         /* copy（沿用到別週）／ move（搬過去）：要知道搬去哪一週。
@@ -2121,7 +2141,7 @@ function App() {
         if (!target) {
           showToast(plan.toWeek ? `找不到第 ${plan.toWeek} 週。` : '要沿用到第幾週？跟我說週次就好。');
         } else {
-          handleCopyGroupToWeeks(_found.catId, _found.items, [target], plan.due ? window.askDueDate ? window.askDueDate(plan.due) : '' : '', plan.op === 'move');
+          handleCopyGroupToWeeks(_found2.catId, _found2.items, [target], plan.due ? window.askDueDate ? window.askDueDate(plan.due) : '' : '', plan.op === 'move');
           showToast(`${plan.op === 'move' ? '已搬到' : '已沿用到'}${weeksRef.current[target] && weeksRef.current[target].label || target}`);
         }
       }

@@ -1394,11 +1394,34 @@ function App() {
     } else if (plan.intent === 'exam') {
       setExamScanOpen(true);
     } else if (plan.intent === 'lesson' || plan.intent === 'weak' || plan.intent === 'marking') {
-      /* 這三件事住在後台（📒 上課紀錄 / 🎯 弱點分析 / 📋 申論批改）——開後台並指到那一頁。 */
+      /* 這三件事住在後台（📒 上課紀錄 / 🎯 弱點分析 / 📋 申論批改）——開後台並指到那一頁。
+         🔴 v543：這裡本來寫 `email: plan.email || ''`，但 **router 從來沒有產生過
+           plan.email**（它只給 plan.student 名字）——所以從 v517 到現在，
+           Alan 說「今天 Nick 的上課內容是…」，後台開起來**連 Nick 都沒選到**，
+           他打的內容也完全沒有被帶過去，等於什麼都沒做。 */
+      const found = plan.student && window.askFindStudent
+        ? window.askFindStudent(plan.student, askRoster) : null;
+      if (plan.student && (!found || !found.email)) {
+        /* ⚠ 對不到就老實說，不要猜最像的那一個——
+           名單裡真的有 Elroy(G6) 跟 Elory(G4)，猜錯會把整堂課記到別的孩子身上。 */
+        showToast(found && found.many
+          ? `名單裡有兩個「${plan.student}」，請自己點一下是哪一位`
+          : `名單裡找不到「${plan.student}」`);
+      } else if (found && (found.twins || []).length) {
+        showToast(`⚠ 名單裡有「${found.twins.join('、')}」這種很像的名字，確認一下是不是 ${found.name}`);
+      }
       setDashOpen(true);
       const tab = plan.intent === 'lesson' ? 'lessons'
                 : plan.intent === 'marking' ? 'marking' : 'roster';
-      try { window.__dashGoto = { tab, email: plan.email || '' }; } catch (e) {}
+      try {
+        window.__dashGoto = { tab, email: (found && found.email) || '' };
+        /* v543（Alan：「他卻不會幫我打好，我點進去還是要手動打，那我還要 AI 幹嘛？」）
+           把他打的上課內容一起帶過去，後台會**直接開一堂新的紀錄並填好「這次上了什麼」**。
+           ⚠ 只填他自己說的那段字——功課與下次進度維持空白，
+             那兩欄按「🪄 幫我擬草稿」才會由 AI 依學校進度表擬（有頁碼把關）。 */
+        window.__lessonDraft = (plan.intent === 'lesson' && found && found.email)
+          ? { email: found.email, did: String(plan.text || '').trim() } : null;
+      } catch (e) {}
 
     /* ══ v531：剩下的 5 個也接進來 ══════════════════════════════
        ⚠ 一律走「開既有的畫面、把欄位填好」，不要在這裡另外寫一套生成邏輯——

@@ -1295,6 +1295,39 @@ function LessonLog({
       ...r
     });
   };
+  /* ══ v543 聊天室交下來的一堂 ═══════════════════════════════════════
+     Alan：「今天 Nick 我的上課內容是：中師 … 外師 …」
+     以前只是把後台開到這一頁（學生沒選、欄位全空），他還要整段重打一次。
+     ⭐ 現在：選好學生 → 開一堂新的 → 把他打的字直接放進「這次上了什麼」。
+     ⚠ 功課與下次進度**刻意留空**：那兩欄要照學校進度表擬（頁碼要把關），
+       按「🪄 幫我擬草稿」才生——AI 不可以憑空編頁碼給家長。 */
+  var fromAsk = React.useRef(null);
+  useDashE(() => {
+    var g = null;
+    try {
+      g = window.__lessonDraft;
+      window.__lessonDraft = null;
+    } catch (e) {}
+    if (!g || !g.email) return;
+    fromAsk.current = g;
+    setShowAll(true); // ⚠ 不在固定課表裡的孩子也要選得到
+    setWho(g.email);
+  }, []);
+  useDashE(() => {
+    var g = fromAsk.current;
+    if (!g || who !== g.email) return;
+    /* ⚠ 等課表或這個孩子的紀錄其中一邊回來再開——日期是從課表算的，
+       太早開會抓到預設時段（記到錯的日期比沒填還糟）。 */
+    if (tt === null && doc === null) return;
+    fromAsk.current = null;
+    openNew();
+    if (g.did) setDraft(x => x ? {
+      ...x,
+      did: g.did
+    } : x);
+    setMsg('已經把你說的內容填進「這次上了什麼」——功課與下次進度按 🪄 擬草稿，或自己打。');
+  }, [who, tt, doc]);
+
   /* 🪄 v512：擬草稿。材料全都是系統裡現成的——學校這週／下週的進度、上一堂寫了什麼、
      上次交代的功課做了沒。AI 只負責寫成他會寫的句子，以及把功課與下次進度一起擬出來
      （那兩欄本來每次都要重打）。
@@ -1651,6 +1684,7 @@ function LessonLog({
     }, /*#__PURE__*/React.createElement("span", null, lab), /*#__PURE__*/React.createElement("textarea", {
       value: draft[k] || '',
       placeholder: ph,
+      rows: Math.min(10, Math.max(2, String(draft[k] || '').split('\n').length + 1)),
       onChange: e => setDraft(x => ({
         ...x,
         [k]: e.target.value
@@ -3405,11 +3439,9 @@ function TeacherDashboard({
       window.__dashGoto = null;
     } catch (e) {}
     if (g && g.tab) setTab(g.tab);
-    if (g && g.email) {
-      try {
-        window.__dashEmail = g.email;
-      } catch (e) {}
-    }
+    /* 🔴 v543：`window.__dashEmail` 從 v531 寫到現在**沒有任何人讀**——
+       跟 v531 的 __dashGoto 是同一個坑（寫 window.__xxx 當字條一定要確認有人讀）。
+       → 這裡不再轉存一個沒人要的欄位；📒 上課紀錄那一頁自己去讀 __lessonDraft。 */
     /* v534：公告的稿子先打好（LineNotify 自己會讀這張字條）。
        ⚠ 只是填好——**送出那一下還是老師自己按**，這是會直接送到家長手機的東西。 */
     if (g && g.notify) {
@@ -4737,5 +4769,6 @@ function StudentDetail({
 }
 Object.assign(window, {
   TeacherDashboard,
-  ExamMarking
-}); // ExamMarking 匯出給對照頁單獨跑
+  ExamMarking,
+  LessonLog
+}); // 後兩個匯出給對照頁單獨跑

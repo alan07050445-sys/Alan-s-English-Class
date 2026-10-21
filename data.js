@@ -7483,7 +7483,12 @@ The tools:
   grammar   — make an interactive grammar lesson + practice from a worksheet's TEXT or PHOTO.
   reading   — make reading-comprehension questions from a PASSAGE.
   exam      — turn PHOTOS of a printed exam paper into an interactive exam.
-  lesson    — draft today's lesson record for ONE named student.
+  lesson    — write today's lesson record for ONE named student.
+              🔴 If he told you WHAT he taught, put it in "text" — that is the whole point of
+              the request. Keep his own wording and his own structure (中師 / 外師 on
+              separate lines, the numbered reading skills as he numbered them). Drop only the
+              chatty opening ("今天Nick我的上課內容是:"). Never summarise, never translate,
+              never add a topic he did not teach.
   weak      — look at ONE named student's mistakes and make targeted practice.
   guided    — split a LONG passage into chunks, question after each chunk (分段閱讀).
   exampaper — build a NEW practice exam from the words/topics of the last few weeks (考前複習包).
@@ -7536,6 +7541,7 @@ Rules:
   and set intent "unknown" with ask "要出哪幾個單字？貼給我就好".
 - "topic": the Word Study focus, copied in English exactly as he wrote it.
 - "text": the passage / worksheet text he pasted, copied verbatim. Never summarise or rewrite it.
+  For intent "lesson" this is WHAT HE TAUGHT TODAY, in his own words — see the tool note above.
 - "title": a short unit name, in the language he used. If he did not say one, leave it "".
 - "student": the child's name exactly as he typed it (usually an English first name).
 - "kinds": ONLY for vocab. Which exercise types he asked for, from exactly these ids:
@@ -9423,7 +9429,7 @@ function computeCheckin(checkin) {
   };
 }
 Object.assign(window, {
-  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN,
+  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent,
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
 
@@ -10147,6 +10153,29 @@ function timetableParse(text, roster) {
   const twins = _ttLookAlikes((roster || []).map(r => String(r.name || '').trim()).filter(Boolean),
                               out.flatMap(s => s.names));
   return { slots: out, unknown: [...new Set(unknown)], twins };
+}
+
+/* ══ v543 聊天室說的名字 → 名單裡的那個孩子 ════════════════════════
+   🔴 `plan.email` 從 v517 做好到現在**從來沒有被設定過**——router 只給 `plan.student`
+     （名字），app.jsx 卻寫 `email: plan.email || ''`，所以永遠是空的。
+     Alan 說「今天 Nick 的上課內容是…」，後台開起來但**連 Nick 都沒選到**。
+   ⚠⚠ 絕對不可以「猜最像的那一個」：名單裡真的有 Elroy(G6) 和 Elory(G4)，
+     只差一個字母的位置——猜錯會把整堂課記到別的孩子身上，而且不報錯。
+     → 對不到就回 null（讓畫面老實說找不到）；對到了但有長得像的，一起回報。 */
+function askFindStudent(name, roster) {
+  const norm = (x) => String(x || '').trim().toLowerCase();
+  const n = norm(name);
+  if (!n) return null;
+  const all = (roster || []).filter(r => r && r.email);
+  let hits = all.filter(r => norm(r.name) === n);
+  if (!hits.length) hits = all.filter(r => norm(r.email).split('@')[0] === n);
+  if (hits.length !== 1) {
+    /* 兩個人同名，或一個都沒有——都不要猜 */
+    return { email: '', name: String(name || ''), many: hits.length > 1,
+             twins: _ttLookAlikes(all.map(r => String(r.name || '')), [name]) };
+  }
+  return { email: hits[0].email, name: hits[0].name || hits[0].email,
+           many: false, twins: _ttLookAlikes(all.map(r => String(r.name || '')), [name]) };
 }
 
 /* 找出「用到的名字」裡，有沒有跟名單中另一個名字長得很像的（距離 1 以內）。
