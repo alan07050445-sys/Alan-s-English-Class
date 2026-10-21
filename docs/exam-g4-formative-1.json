@@ -1,0 +1,139 @@
+{
+ "type": "exam",
+ "title": "Grade 4 Formative Assessment 1",
+ "examKicker": "康橋國際學校",
+ "sections": [
+  {
+   "name": "Section 1: Before You Begin",
+   "pct": 0,
+   "parts": [
+    {
+     "kind": "checkin",
+     "title": "Part 1: Check In",
+     "pts": 0,
+     "goals": [
+      "Read every question carefully.",
+      "Underline the key words in each question.",
+      "Check my spelling before I hand it in.",
+      "Stay calm and do my best."
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Section 2: Word Study",
+   "pct": 20,
+   "parts": [
+    {
+     "kind": "circle",
+     "title": "Part 2: Read and circle 10 -VCe words.",
+     "pts": 20,
+     "need": 10,
+     "check": "vce",
+     "checkArg": "",
+     "passage": "Last June a young whale swam too close to a small town. The tide went out and left the huge animal on the wet sand. A girl named Jane saw it when she rode past on her old blue bicycle. She ran all the way back to tell her dad, and he made a plan. All night the people of the town worked hard to keep the animal safe. They poured sea water on its skin so the hot sun would not burn it. When the morning sun rose, the deep water slowly washed back in. The great tail slapped the waves, and then the sea was quiet again.",
+     "instruction": "A -VCe word has a long vowel sound and a silent e at the end, like cake or home."
+    }
+   ]
+  },
+  {
+   "name": "Section 3: Vocabulary",
+   "pct": 20,
+   "parts": [
+    {
+     "kind": "cloze",
+     "title": "Part 3: Fill in each blank with a word from the box.",
+     "pts": 20,
+     "bank": [
+      "journey",
+      "tide",
+      "huge",
+      "safe",
+      "nectar"
+     ],
+     "items": [
+      {
+       "text": "The butterflies make a long ___ to Mexico every fall.",
+       "answer": "journey"
+      },
+      {
+       "text": "When the ___ went out, the whale was left on the sand.",
+       "answer": "tide"
+      },
+      {
+       "text": "A blue whale is a ___ animal, far bigger than a bus.",
+       "answer": "huge"
+      },
+      {
+       "text": "Butterflies drink ___ from flowers to get energy.",
+       "answer": "nectar"
+      },
+      {
+       "text": "The town worked all night to keep the whale ___.",
+       "answer": "safe"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Section 4: Grammar",
+   "pct": 15,
+   "parts": [
+    {
+     "kind": "fixbox",
+     "title": "Part 4: Find the 5 capitalization mistakes. Write the corrected words in the boxes.",
+     "pts": 15,
+     "answers": [
+      "Friday",
+      "I",
+      "October",
+      "Amy",
+      "English"
+     ],
+     "passage": "Last friday i went to the beach with my class. Our teacher showed us a baby sea turtle. In october the turtles swim to warmer water. My friend amy wrote about the trip in english class.",
+     "instruction": "Days, months, names, languages and the word I always begin with a capital letter."
+    }
+   ]
+  },
+  {
+   "name": "Section 5: Reading Comprehension",
+   "pct": 20,
+   "parts": [
+    {
+     "kind": "evidence",
+     "title": "Part 5: Use two specific details from the text.",
+     "pts": 20,
+     "need": 2,
+     "minWords": 8,
+     "question": "How are monarch butterflies able to finish such a long journey? Use TWO specific details from the text to explain.",
+     "passage": "Every fall, monarch butterflies leave the cold north and begin a very long journey south. These small insects can fly more than two thousand miles to reach the warm forests of Mexico. They do not carry a map. Scientists think the butterflies use the sun and the pull of the earth to find the same trees their great-grandparents once used. On the way they must stop at flowers, because nectar is the only fuel they have. When they arrive, thousands of them rest together on one branch and keep each other warm until spring."
+    }
+   ]
+  },
+  {
+   "name": "Section 6: Writing",
+   "pct": 25,
+   "parts": [
+    {
+     "kind": "essay",
+     "title": "Part 6: Narrative Writing",
+     "pts": 25,
+     "prompt": "Write a narrative about a time you helped someone, or helped an animal. Tell what happened first, what the problem was, and how it ended.",
+     "vocab": [
+      "journey",
+      "safe",
+      "huge",
+      "brave",
+      "finally"
+     ],
+     "paras": 5,
+     "sentsPerPara": 4,
+     "rubricSet": "writing",
+     "rubricMax": 7,
+     "rubric": "Content / Details / Creativity / Text Structure / Length / Grammar / Vocabulary"
+    }
+   ]
+  }
+ ]
+}

@@ -8024,6 +8024,22 @@ const EXAM_CHECKIN = {
   ],
 };
 
+/* v541 圈選題「要圈什麼」——⭐ 只能有這一份（算分與出卷頁的檢查都用它）。
+   🔴 本來兩邊都寫 `wsCheck(w, { kind, args: checkArg }, checkArg)`，
+     而 wsCheck 的第三個參數是「**只**比這一個」——所以老師寫
+     「digraph:sh ch th」（康橋 G3 Word Study 最常見的寫法）時，
+     程式拿整串 'sh ch th' 去比對，**一個字都不符合**。
+   ⚠ 它不是安靜壞掉（出卷頁會說「短文裡只有 0 個符合」），
+     但老師看不出為什麼，所以這裡直接讓它支援。 */
+function examCircleCheck(part) {
+  const args = String((part && part.checkArg) || '').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean);
+  return { kind: String((part && part.check) || '').toLowerCase(), args };
+}
+function examCircleHit(word, part) {
+  /* ⚠ 一定要走 args 這條（不要傳第三個參數），否則又變成「只比這一整串」 */
+  return window.wsCheck ? window.wsCheck(word, examCircleCheck(part)) : null;
+}
+
 /* 一大題「算幾分」——⭐ 只能有這一份。
    ⚠ 心情與目標不計分：examTotals（老師看到的合計）與 examScore（學生的滿分）
      各自判一次的話，老師會看到 60 分、學生拿到的滿分卻是 55，
@@ -8452,8 +8468,7 @@ function examScorePart(part, ans) {
          —— 傳錯會一路回 null，然後每一個字都被當成圈錯（第一版就是這樣 0 分）。
        ⚠ null ＝「這條規則程式判不出來」，那種不能算學生錯。 */
     const picked = Array.isArray(ans) ? ans : [];
-    const chk = { kind: part.check, args: part.checkArg || '' };
-    const ok = (w) => (window.wsCheck ? window.wsCheck(w, chk, part.checkArg || '') : null);
+    const ok = (w) => examCircleHit(w, part);
     let right = 0, wrong = 0;
     picked.forEach(w => { const v = ok(w); if (v === true) right++; else if (v === false) wrong++; });
     out.right = Math.max(0, right - wrong);
@@ -8736,7 +8751,7 @@ function examWarnings(item) {
         /* ⭐ 真的拿檢查器去數短文裡有幾個符合——老師說要圈 10 個，
            文章裡只有 7 個的話，學生永遠圈不滿。 */
         const words = examTokens(pt.passage).filter(t => t.w).map(t => t.t);
-        const hit = words.filter(x => wsCheck(x, { kind: pt.check, args: pt.checkArg || '' }, pt.checkArg || '') === true);
+        const hit = words.filter(x => examCircleHit(x, pt) === true);
         const need = +pt.need || n;
         if (hit.length < need) w.push(`${where}要圈 ${need} 個，但短文裡只有 ${hit.length} 個符合。`);
       }
@@ -8765,6 +8780,7 @@ Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examSc
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
   examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,
+  examCircleCheck, examCircleHit,
   EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf,
   examRubricPoints, examRubricPart, aiGradeRubric });
 

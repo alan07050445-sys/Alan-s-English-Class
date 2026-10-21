@@ -1,0 +1,136 @@
+{
+ "type": "exam",
+ "title": "Grade 3 Formative Assessment 1",
+ "examKicker": "康橋國際學校",
+ "sections": [
+  {
+   "name": "Section 1: Before You Begin",
+   "pct": 0,
+   "parts": [
+    {
+     "kind": "checkin",
+     "title": "Part 1: Check In",
+     "pts": 0,
+     "goals": [
+      "Read the question two times.",
+      "Write neatly so my teacher can read it.",
+      "Check my capital letters.",
+      "Try my best and do not give up."
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Section 2: Word Study",
+   "pct": 25,
+   "parts": [
+    {
+     "kind": "circle",
+     "title": "Part 2: Read and circle 10 words with sh or ch.",
+     "pts": 25,
+     "need": 10,
+     "check": "digraph",
+     "checkArg": "sh ch",
+     "passage": "Mia had a new fish tank by her bed. Every morning Mia put a pinch of food on top of the water. One day the water went cloudy and her pet did not swim much. Mia told her mom, who showed her how to wash the small stones with a brush. They put in fresh water and one green plant with a shiny leaf. Mia sat on the floor and waited until lunch. Then her pet came up to the top, and Mia gave a happy shout.",
+     "instruction": "Two letters can work together to make one sound, like sh in shop or ch in chair."
+    }
+   ]
+  },
+  {
+   "name": "Section 3: Vocabulary",
+   "pct": 25,
+   "parts": [
+    {
+     "kind": "cloze",
+     "title": "Part 3: Fill in each blank with a word from the box.",
+     "pts": 25,
+     "bank": [
+      "hive",
+      "nectar",
+      "honey",
+      "store",
+      "winter"
+     ],
+     "items": [
+      {
+       "text": "Honey bees live together in a ___.",
+       "answer": "hive"
+      },
+      {
+       "text": "Bees bring back sweet ___ from the flowers.",
+       "answer": "nectar"
+      },
+      {
+       "text": "The bees turn the nectar into ___.",
+       "answer": "honey"
+      },
+      {
+       "text": "They ___ the honey in little rooms made of wax.",
+       "answer": "store"
+      },
+      {
+       "text": "In ___ no flowers grow outside.",
+       "answer": "winter"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Section 4: Grammar",
+   "pct": 20,
+   "parts": [
+    {
+     "kind": "fixbox",
+     "title": "Part 4: Find the 5 capital letter mistakes. Write the words in the boxes.",
+     "pts": 20,
+     "answers": [
+      "My",
+      "Max",
+      "Saturday",
+      "I",
+      "July"
+     ],
+     "passage": "my dog is named max. He likes to run in the park on saturday. i throw a ball and he brings it back. In july we take him to the beach.",
+     "instruction": "A sentence starts with a capital letter. Names, days, months and the word I use one too."
+    }
+   ]
+  },
+  {
+   "name": "Section 5: Reading",
+   "pct": 20,
+   "parts": [
+    {
+     "kind": "evidence",
+     "title": "Part 5: Use two details from the text.",
+     "pts": 20,
+     "need": 2,
+     "minWords": 6,
+     "question": "How does a hive make honey and save it for the winter? Use TWO details from the text.",
+     "passage": "Honey bees live together in a hive. Each bee has a job to do. Young bees clean the hive and feed the baby bees. Older bees fly out to find flowers. They bring back sweet nectar in their stomachs. Back at the hive, other bees turn the nectar into honey and store it in little rooms made of wax. In winter, when no flowers grow, the whole hive eats that honey."
+    }
+   ]
+  },
+  {
+   "name": "Section 6: Writing",
+   "pct": 10,
+   "parts": [
+    {
+     "kind": "essay",
+     "title": "Part 6: Writing",
+     "pts": 10,
+     "prompt": "Write about a pet you have, or a pet you would like to have. Tell what it looks like, what you do for it, and why you like it.",
+     "vocab": [
+      "feed",
+      "happy",
+      "every"
+     ],
+     "paras": 3,
+     "sentsPerPara": 3,
+     "rubricSet": "basic",
+     "rubricMax": 4
+    }
+   ]
+  }
+ ]
+}

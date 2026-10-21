@@ -1,0 +1,139 @@
+{
+ "type": "exam",
+ "title": "Grade 6 Formative Assessment 1",
+ "examKicker": "康橋國際學校",
+ "sections": [
+  {
+   "name": "Section 1: Before You Begin",
+   "pct": 0,
+   "parts": [
+    {
+     "kind": "checkin",
+     "title": "Part 1: Check In",
+     "pts": 0,
+     "goals": [
+      "Read every question carefully before I answer.",
+      "Underline the key words in each question.",
+      "Use evidence from the text, not just my own ideas.",
+      "Leave time to check my work at the end."
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Section 2: Word Study",
+   "pct": 15,
+   "parts": [
+    {
+     "kind": "circle",
+     "title": "Part 2: Read and circle 10 words that end in -ment, -tion or -ity.",
+     "pts": 15,
+     "need": 10,
+     "check": "suffix",
+     "checkArg": "-ment -tion -ity",
+     "passage": "The town council made an announcement last spring: the old playground would be closed, and no one knew when it would open again. For the students at Pine Middle School, that news felt unfair. They formed a small group and wrote a careful statement about the need for a safe place to play. Their argument was simple. Without that equipment, the younger children had no activity after school and nowhere to go. The group asked for a meeting and brought a clear solution of their own: a weekend clean-up run by the students themselves. The council paid attention. One member said the quality of the plan surprised her. By November the money was found, the repairs began, and the improvement was finished before the first snow. The whole community came to the opening.",
+     "instruction": "These suffixes turn a verb or an adjective into a noun: improve → improvement."
+    }
+   ]
+  },
+  {
+   "name": "Section 3: Vocabulary",
+   "pct": 20,
+   "parts": [
+    {
+     "kind": "cloze",
+     "title": "Part 3: Fill in each blank with a word from the box.",
+     "pts": 20,
+     "bank": [
+      "announcement",
+      "equipment",
+      "damaged",
+      "survive",
+      "spawn"
+     ],
+     "items": [
+      {
+       "text": "The council made an ___ about closing the playground.",
+       "answer": "announcement"
+      },
+      {
+       "text": "Without that ___, the younger children had nowhere to play.",
+       "answer": "equipment"
+      },
+      {
+       "text": "The young coral is glued onto a ___ reef.",
+       "answer": "damaged"
+      },
+      {
+       "text": "Not every piece of coral will ___ in the open water.",
+       "answer": "survive"
+      },
+      {
+       "text": "Corals that live long enough begin to ___ on their own.",
+       "answer": "spawn"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Section 4: Grammar",
+   "pct": 15,
+   "parts": [
+    {
+     "kind": "fixbox",
+     "title": "Part 4: Find the 5 capitalization mistakes. Write the corrected words in the boxes.",
+     "pts": 15,
+     "answers": [
+      "Japan",
+      "Mount",
+      "Fuji",
+      "Japanese",
+      "August"
+     ],
+     "passage": "Last summer my family flew to japan for two weeks. We stayed in a small town near mount fuji and ate noodles almost every day. My brother even tried to speak japanese with the shop owner. In august we flew home.",
+     "instruction": "Countries, place names, languages and months are proper nouns."
+    }
+   ]
+  },
+  {
+   "name": "Section 5: Reading Comprehension",
+   "pct": 25,
+   "parts": [
+    {
+     "kind": "evidence",
+     "title": "Part 5: Use three specific details from the text.",
+     "pts": 25,
+     "need": 3,
+     "minWords": 10,
+     "question": "How does the underwater nursery method help a damaged reef recover? Use THREE specific details from the text to explain.",
+     "passage": "Off the coast of Florida, a team of scientists is growing coral in underwater nurseries. They cut small pieces from healthy coral and hang them on plastic frames shaped like trees. Hanging in open water, the pieces grow up to five times faster than they would on the sea floor. After about six months the young coral is strong enough to be glued onto a damaged reef. The team has planted more than one hundred thousand corals this way. Not every piece survives, but the ones that do begin to spawn on their own within a few years, which means the reef can slowly repair itself."
+    }
+   ]
+  },
+  {
+   "name": "Section 6: Writing",
+   "pct": 25,
+   "parts": [
+    {
+     "kind": "essay",
+     "title": "Part 6: Opinion Writing",
+     "pts": 25,
+     "prompt": "Some people think students should be allowed to bring phones to school. Others disagree. Write a five-paragraph opinion essay: state your opinion, give three reasons with an example for each, and finish with a conclusion.",
+     "vocab": [
+      "announcement",
+      "equipment",
+      "community",
+      "solution",
+      "improvement"
+     ],
+     "paras": 5,
+     "sentsPerPara": 4,
+     "rubricSet": "writing",
+     "rubricMax": 7,
+     "rubric": "Content / Details / Creativity / Text Structure / Length / Grammar / Vocabulary"
+    }
+   ]
+  }
+ ]
+}
