@@ -1617,3 +1617,5 @@ html.fest-hw .ask-fab {
   box-shadow: 0 14px 30px -10px rgba(217,97,12,.7), 0 2px 6px rgba(0,0,0,.3);
 }
 html.fest-hw .ask-fab:hover { box-shadow: 0 20px 38px -10px rgba(217,97,12,.8); }
+html.fest-hw .ex-story-box { border-color: rgba(255,255,255,.16); }
+html.fest-hw .ex-story-row textarea { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); color: #F0EAFF; }

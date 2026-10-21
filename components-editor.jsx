@@ -440,6 +440,8 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                      + '勾「三項評分」就照 Explanation／Relevant／Effort 在後台改，AI 會先給建議。',
                 affix: '一行就是字尾表，空白分開：-ing -ed -s -est（字首寫成 un- 這種）。上面的「個」＝要造幾個字。',
                 genq: '貼文章。學生要自己出「文章上沒有」的問題。上面的「個」＝要出幾個問題。',
+                storymap: '貼文章。學生要填開頭／中間／結尾三格。上面的「個」＝每一格寫幾句。',
+                usewords: '一行就是詞庫，空白或逗號分開：extreme protect shelter。上面的「個」＝要造幾個句子。',
 
               };
               return (
@@ -491,10 +493,22 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                               <label className="exed-chk exed-rub">
                                 <input type="checkbox" checked={!!pt.rubricMax}
                                   onChange={e => patchPart(si, pi, {
-                                    rubricMax: e.target.checked ? (window.EXAM_RUBRIC_MAX || 4) : 0 })}/>
-                                <span>三項評分</span>
+                                    rubricMax: e.target.checked ? (window.EXAM_RUBRIC_MAX || 4) : 0,
+                                    rubricSet: e.target.checked ? (pt.rubricSet || 'basic') : '' })}/>
+                                <span>Rubric</span>
                                 {!!pt.rubricMax && (
                                   <>
+                                    {/* v536：康橋的寫作卷是七項四等第，三項那一套不夠用 */}
+                                    <select value={pt.rubricSet || 'basic'}
+                                      onChange={e => {
+                                        const k = e.target.value;
+                                        const set = (window.EXAM_RUBRIC_SETS || {})[k] || {};
+                                        patchPart(si, pi, { rubricSet: k, rubricMax: set.max || 4 });
+                                      }}>
+                                      {Object.keys(window.EXAM_RUBRIC_SETS || {}).map(k => (
+                                        <option key={k} value={k}>{window.EXAM_RUBRIC_SETS[k].zh}</option>
+                                      ))}
+                                    </select>
                                     <input className="exed-pts" type="number" min="1" max="10"
                                       value={pt.rubricMax}
                                       onChange={e => patchPart(si, pi, { rubricMax: Math.max(1, +e.target.value || 1) })}/>
@@ -503,7 +517,17 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                                 )}
                               </label>
                             )}
-                            {(pt.kind === 'circle' || pt.kind === 'affix' || pt.kind === 'genq') && (
+                            {/* v536：這兩種也要能設「每句至少幾個字」 */}
+                            {(pt.kind === 'affix' || pt.kind === 'usewords' || pt.kind === 'storymap') && (
+                              <label className="exed-chk exed-rub">
+                                <input className="exed-pts" type="number" min="1" max="30"
+                                  value={pt.minWords || ''} placeholder={pt.kind === 'usewords' ? '6' : '4'}
+                                  onChange={e => patchPart(si, pi, { minWords: +e.target.value || 0 })}/>
+                                <span>字以上</span>
+                              </label>
+                            )}
+                            {(pt.kind === 'circle' || pt.kind === 'affix' || pt.kind === 'genq'
+                              || pt.kind === 'usewords' || pt.kind === 'storymap') && (
                               <>
                                 <input className="exed-pts" type="number" value={pt.need || ''} placeholder="10"
                                   onChange={e => patchPart(si, pi, { need: +e.target.value || 0 })}/>

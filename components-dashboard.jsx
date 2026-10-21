@@ -3325,8 +3325,11 @@ function ExamMarking({ students }) {
   }, [pending.map(p => p.email).join()]);
 
   const cur = pending.find(p => p.email + '|' + p.key === sel) || null;
-  const R = window.EXAM_RUBRIC || [];
-  const maxOf = (w) => +w.rubricMax || (window.EXAM_RUBRIC_MAX || 4);
+  /* v536：準則與等第照那一大題自己的設定——康橋寫作卷是七項、只有 7/5/3/0 四個等第。
+     ⚠ 等第不是 0~max 的連續分，硬排成一排 0~7 的按鈕老師很容易點錯。 */
+  const rubOf = (w) => (window.examRubricOf ? window.examRubricOf(w)
+    : { criteria: window.EXAM_RUBRIC || [], max: 4, bands: [] });
+  const maxOf = (w) => rubOf(w).max;
 
   const cell = (partKey, qi) => ((mark[sel] || {})[partKey] || [])[qi] || {};
   const setCell = (partKey, qi, patch) => setMark(m => {
@@ -3344,15 +3347,16 @@ function ExamMarking({ students }) {
     if (had && !mark[sel]) setMark(m => ({ ...m, [sel]: had }));
   }, [sel, saved]);
 
-  const aiOne = async (partKey, qi, q, max) => {
+  const aiOne = async (partKey, qi, q, max, w) => {
     setMsg(''); setBusy(partKey + qi);
     try {
-      const got = await window.aiGradeRubric(q.q, q.a, { max, keyPoints: q.keyPoints });
+      const got = await window.aiGradeRubric(q.q, q.a, { max, keyPoints: q.keyPoints, part: w });
       if (!got) { setMsg('這一題 AI 沒有給出可靠的建議（它引用不到孩子真的寫過的字）——請直接自己改。'); }
       else {
+        const R2 = rubOf(w).criteria;
         const patch = { note: got.next || '' , _ai: true };
-        R.forEach(c => { patch[c.id] = got[c.id] ? got[c.id].n : 0; });
-        patch._why = R.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
+        R2.forEach(c => { patch[c.id] = got[c.id] ? got[c.id].n : 0; });
+        patch._why = R2.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
         patch._quote = got.quote || '';
         setCell(partKey, qi, patch);
       }
@@ -3374,10 +3378,11 @@ function ExamMarking({ students }) {
     const by = ((saved[p.email] || {})[p.key] || {}).byPart || {};
     let n = 0, t = 0;
     Object.keys(p.written).forEach(pk => {
+      const cs = rubOf(p.written[pk]).criteria;
       (p.written[pk].qs || []).forEach((_, i) => {
         t++;
         const m = (by[pk] || [])[i];
-        if (m && R.some(c => m[c.id] != null)) n++;
+        if (m && cs.some(c => m[c.id] != null)) n++;
       });
     });
     return { n, t };
@@ -3410,9 +3415,11 @@ function ExamMarking({ students }) {
             </div>
             {Object.keys(cur.written).map(pk => {
               const w = cur.written[pk];
-              const max = maxOf(w);
+              const RB = rubOf(w);
+              const max = RB.max;
               const rp = window.examRubricPart
-                ? window.examRubricPart({ pts: w.pts, questions: w.qs, rubricMax: max }, (mark[sel] || {})[pk])
+                ? window.examRubricPart({ pts: w.pts, questions: w.qs, rubricMax: max,
+                                          rubricSet: w.rubricSet }, (mark[sel] || {})[pk])
                 : { got: 0, max: w.pts };
               return (
                 <div className="mk-part" key={pk}>
@@ -3427,14 +3434,14 @@ function ExamMarking({ students }) {
                         <p className="mk-qt">{i + 1}. {q.q}</p>
                         <div className="mk-ans">{q.a || <i>（空白）</i>}</div>
                         <div className="mk-rub">
-                          {R.map(cr => (
+                          {RB.criteria.map(cr => (
                             <label className="mk-cr" key={cr.id}>
                               <span className="mk-cr-n">{cr.zh}<i>{cr.en}</i></span>
                               <span className="mk-cr-btns">
-                                {Array.from({ length: max + 1 }, (_, v) => (
-                                  <button key={v} className={c[cr.id] === v ? 'on' : ''}
-                                    title={cr.tip}
-                                    onClick={() => setCell(pk, i, { [cr.id]: v, _ai: false })}>{v}</button>
+                                {RB.bands.map(b => (
+                                  <button key={b.n} className={c[cr.id] === b.n ? 'on' : ''}
+                                    title={b.zh ? `${b.zh}（${cr.tip}）` : cr.tip}
+                                    onClick={() => setCell(pk, i, { [cr.id]: b.n, _ai: false })}>{b.n}</button>
                                 ))}
                               </span>
                             </label>
@@ -3445,7 +3452,7 @@ function ExamMarking({ students }) {
                           <input className="mk-note" placeholder="給他的一句話（學生看得到）"
                             value={c.note || ''} onChange={e => setCell(pk, i, { note: e.target.value })}/>
                           <button className="btn ghost" disabled={!!busy}
-                            onClick={() => aiOne(pk, i, q, max)}>
+                            onClick={() => aiOne(pk, i, q, max, w)}>
                             {busy === pk + i ? '看一下…' : '🤖 AI 先改'}
                           </button>
                         </div>

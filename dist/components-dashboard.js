@@ -4107,8 +4107,14 @@ function ExamMarking({
     });
   }, [pending.map(p => p.email).join()]);
   var cur = pending.find(p => p.email + '|' + p.key === sel) || null;
-  var R = window.EXAM_RUBRIC || [];
-  var maxOf = w => +w.rubricMax || window.EXAM_RUBRIC_MAX || 4;
+  /* v536：準則與等第照那一大題自己的設定——康橋寫作卷是七項、只有 7/5/3/0 四個等第。
+     ⚠ 等第不是 0~max 的連續分，硬排成一排 0~7 的按鈕老師很容易點錯。 */
+  var rubOf = w => window.examRubricOf ? window.examRubricOf(w) : {
+    criteria: window.EXAM_RUBRIC || [],
+    max: 4,
+    bands: []
+  };
+  var maxOf = w => rubOf(w).max;
   var cell = (partKey, qi) => ((mark[sel] || {})[partKey] || [])[qi] || {};
   var setCell = (partKey, qi, patch) => setMark(m => {
     var one = {
@@ -4135,25 +4141,27 @@ function ExamMarking({
       [sel]: had
     }));
   }, [sel, saved]);
-  var aiOne = async (partKey, qi, q, max) => {
+  var aiOne = async (partKey, qi, q, max, w) => {
     setMsg('');
     setBusy(partKey + qi);
     try {
       var got = await window.aiGradeRubric(q.q, q.a, {
         max,
-        keyPoints: q.keyPoints
+        keyPoints: q.keyPoints,
+        part: w
       });
       if (!got) {
         setMsg('這一題 AI 沒有給出可靠的建議（它引用不到孩子真的寫過的字）——請直接自己改。');
       } else {
+        var R2 = rubOf(w).criteria;
         var patch = {
           note: got.next || '',
           _ai: true
         };
-        R.forEach(c => {
+        R2.forEach(c => {
           patch[c.id] = got[c.id] ? got[c.id].n : 0;
         });
-        patch._why = R.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
+        patch._why = R2.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
         patch._quote = got.quote || '';
         setCell(partKey, qi, patch);
       }
@@ -4182,10 +4190,11 @@ function ExamMarking({
     var n = 0,
       t = 0;
     Object.keys(p.written).forEach(pk => {
+      var cs = rubOf(p.written[pk]).criteria;
       (p.written[pk].qs || []).forEach((_, i) => {
         t++;
         var m = (by[pk] || [])[i];
-        if (m && R.some(c => m[c.id] != null)) n++;
+        if (m && cs.some(c => m[c.id] != null)) n++;
       });
     });
     return {
@@ -4220,11 +4229,13 @@ function ExamMarking({
     className: "mk-head"
   }, /*#__PURE__*/React.createElement("b", null, cur.name), /*#__PURE__*/React.createElement("span", null, cur.title)), Object.keys(cur.written).map(pk => {
     var w = cur.written[pk];
-    var max = maxOf(w);
+    var RB = rubOf(w);
+    var max = RB.max;
     var rp = window.examRubricPart ? window.examRubricPart({
       pts: w.pts,
       questions: w.qs,
-      rubricMax: max
+      rubricMax: max,
+      rubricSet: w.rubricSet
     }, (mark[sel] || {})[pk]) : {
       got: 0,
       max: w.pts
@@ -4245,24 +4256,22 @@ function ExamMarking({
         className: "mk-ans"
       }, q.a || /*#__PURE__*/React.createElement("i", null, "\uFF08\u7A7A\u767D\uFF09")), /*#__PURE__*/React.createElement("div", {
         className: "mk-rub"
-      }, R.map(cr => /*#__PURE__*/React.createElement("label", {
+      }, RB.criteria.map(cr => /*#__PURE__*/React.createElement("label", {
         className: "mk-cr",
         key: cr.id
       }, /*#__PURE__*/React.createElement("span", {
         className: "mk-cr-n"
       }, cr.zh, /*#__PURE__*/React.createElement("i", null, cr.en)), /*#__PURE__*/React.createElement("span", {
         className: "mk-cr-btns"
-      }, Array.from({
-        length: max + 1
-      }, (_, v) => /*#__PURE__*/React.createElement("button", {
-        key: v,
-        className: c[cr.id] === v ? 'on' : '',
-        title: cr.tip,
+      }, RB.bands.map(b => /*#__PURE__*/React.createElement("button", {
+        key: b.n,
+        className: c[cr.id] === b.n ? 'on' : '',
+        title: b.zh ? `${b.zh}（${cr.tip}）` : cr.tip,
         onClick: () => setCell(pk, i, {
-          [cr.id]: v,
+          [cr.id]: b.n,
           _ai: false
         })
-      }, v)))))), c._why && /*#__PURE__*/React.createElement("p", {
+      }, b.n)))))), c._why && /*#__PURE__*/React.createElement("p", {
         className: "mk-ai-why"
       }, "\uD83E\uDD16 ", c._why, c._quote ? `　引用：「${c._quote}」` : ''), /*#__PURE__*/React.createElement("div", {
         className: "mk-q-foot"
@@ -4276,7 +4285,7 @@ function ExamMarking({
       }), /*#__PURE__*/React.createElement("button", {
         className: "btn ghost",
         disabled: !!busy,
-        onClick: () => aiOne(pk, i, q, max)
+        onClick: () => aiOne(pk, i, q, max, w)
       }, busy === pk + i ? '看一下…' : '🤖 AI 先改')));
     }));
   }), msg && /*#__PURE__*/React.createElement("p", {

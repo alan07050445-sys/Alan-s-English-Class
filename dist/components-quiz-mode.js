@@ -8423,6 +8423,8 @@ function ExamPlayer({
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+          /* v536：用哪一套 rubric 也要帶過去，不然老師端只看得到三項 */
+          rubricSet: pp.part.rubricSet || 'basic',
           qs: (pp.part.questions || []).map((q, i) => ({
             q: q.q || '',
             keyPoints: q.keyPoints || q.rubric || '',
@@ -8645,6 +8647,113 @@ function ExamPlayer({
       })), !sent && /*#__PURE__*/React.createElement("p", {
         className: "ex-hint"
       }, "\u554F\u984C\u8981\u8DDF\u9019\u500B\u6545\u4E8B\u6709\u95DC\uFF0C\u800C\u4E14", /*#__PURE__*/React.createElement("b", null, "\u7B54\u6848\u4E0D\u80FD\u76F4\u63A5\u5BEB\u5728\u6587\u7AE0\u4E0A"), "\u3002"));
+    })(), pt.kind === 'storymap' && (() => {
+      var secs = pt.sections || window.EXAM_STORY_SECTIONS || [];
+      var per = +pt.need || 2;
+      var got = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+      var di = 0; // detail 是攤平的，要照同樣順序對回去
+      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
+        className: "ex-read"
+      }, pt.passage), /*#__PURE__*/React.createElement("div", {
+        className: "ex-story"
+      }, secs.map(sec => /*#__PURE__*/React.createElement("div", {
+        className: "ex-story-box",
+        key: sec.id
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "ex-story-h"
+      }, /*#__PURE__*/React.createElement("b", null, sec.zh), /*#__PURE__*/React.createElement("span", null, sec.q)), Array.from({
+        length: per
+      }, (_, i) => {
+        var d = sent ? pr.detail[di] || {} : null;
+        di++;
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'ex-story-row' + (sent ? d.ok ? ' ok' : ' bad' : ''),
+          key: i
+        }, /*#__PURE__*/React.createElement("textarea", {
+          rows: 2,
+          disabled: sent,
+          value: (got[sec.id] || [])[i] || '',
+          placeholder: sent ? '' : '寫一句…',
+          onChange: e => {
+            var t = e.target.value;
+            put(key, prev => {
+              var o = prev && typeof prev === 'object' && !Array.isArray(prev) ? {
+                ...prev
+              } : {};
+              var arr = (o[sec.id] || []).slice();
+              arr[i] = t;
+              o[sec.id] = arr;
+              return o;
+            });
+          }
+        }), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+          className: "ex-why"
+        }, d.why.map((x, k) => /*#__PURE__*/React.createElement("li", {
+          key: k
+        }, x))));
+      })))), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u6BCF\u4E00\u683C\u5BEB ", /*#__PURE__*/React.createElement("b", null, "\u4E00\u53E5"), "\uFF0C\u81F3\u5C11 ", pt.minWords || 4, " \u500B\u5B57\uFF0C\u8981\u662F", /*#__PURE__*/React.createElement("b", null, "\u9019\u7BC7\u6587\u7AE0\u88E1\u7684\u4E8B"), "\u3002"));
+    })(), pt.kind === 'usewords' && (() => {
+      /* ⚠ 樣式照 affix 那一段原本的結構：.ex-affixbox 是詞庫整排、
+         .ex-af 是「一題」、.ex-af-picks 是選字那一排、.ex-af-p 是單一顆。
+         第一版我把 .ex-bw（單一個字塊）當成容器用，整排字就黏在一起了。 */
+      var bank = pt.bank || [];
+      var slots = Array.isArray(v) ? v : [];
+      var setSlot = (i, patch) => put(key, prev => {
+        var g = Array.isArray(prev) ? prev.map(x => ({
+          ...x
+        })) : [];
+        g[i] = {
+          ...(g[i] || {}),
+          ...patch
+        };
+        return g;
+      });
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+        className: "ex-affixbox"
+      }, bank.map((bw, i) => /*#__PURE__*/React.createElement("span", {
+        key: i
+      }, bw))), Array.from({
+        length: n
+      }, (_, i) => {
+        var sl = slots[i] || {};
+        var d = sent ? pr.detail[i] || {} : null;
+        var words = String(sl.sentence || '').split(/\s+/).filter(Boolean).length;
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'ex-af' + (sent ? d.ok ? ' ok' : ' bad' : ''),
+          key: i
+        }, /*#__PURE__*/React.createElement("div", {
+          className: "ex-af-row"
+        }, /*#__PURE__*/React.createElement("label", null, "\u6311\u4E00\u500B\u5B57\uFF1A"), /*#__PURE__*/React.createElement("span", {
+          className: "ex-af-picks"
+        }, bank.map((bw, k) => /*#__PURE__*/React.createElement("button", {
+          key: k,
+          className: 'ex-af-p' + (sl.word === bw ? ' on' : ''),
+          disabled: sent,
+          onClick: () => setSlot(i, {
+            word: sl.word === bw ? '' : bw
+          })
+        }, bw)))), /*#__PURE__*/React.createElement("div", {
+          className: "ex-af-row"
+        }, /*#__PURE__*/React.createElement("label", null, "Sentence:"), /*#__PURE__*/React.createElement("input", {
+          className: "ex-af-s",
+          disabled: sent,
+          value: sl.sentence || '',
+          placeholder: `用這個字造一句（至少 ${pt.minWords || 6} 個字）`,
+          onChange: e => setSlot(i, {
+            sentence: e.target.value
+          })
+        }), !sent && /*#__PURE__*/React.createElement("i", {
+          className: "ex-af-n"
+        }, words, " \u500B\u5B57")), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+          className: "ex-why"
+        }, d.why.map((x, k) => /*#__PURE__*/React.createElement("li", {
+          key: k
+        }, x))));
+      }), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u6BCF\u500B\u5B57\u53EA\u80FD\u7528", /*#__PURE__*/React.createElement("b", null, "\u4E00\u6B21"), "\uFF1B\u53EF\u4EE5\u52A0 when / because / and / but / so \u8B93\u53E5\u5B50\u9577\u4E00\u9EDE\u3002"));
     })(), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
       className: "ex-read"
     }, pt.passage), (pt.questions || []).map((q, i) => /*#__PURE__*/React.createElement("div", {
@@ -8672,8 +8781,13 @@ function ExamPlayer({
     }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), (() => {
       /* v530：老師改好了就把三項分數與評語攤開給學生看。 */
       var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || null;
-      var R = window.EXAM_RUBRIC || [];
-      var max = +pt.rubricMax || window.EXAM_RUBRIC_MAX || 4;
+      /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
+      var RS = window.examRubricOf ? window.examRubricOf(pt) : {
+        criteria: window.EXAM_RUBRIC || [],
+        max: 4
+      };
+      var R = RS.criteria;
+      var max = RS.max;
       var marked = by && by.some(m => m && R.some(c => m[c.id] != null));
       if (!marked) {
         return /*#__PURE__*/React.createElement("div", {

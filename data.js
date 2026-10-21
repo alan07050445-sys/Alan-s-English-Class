@@ -7849,6 +7849,9 @@ const EXAM_KINDS = {
      程式驗得了最常見的三種失分（沒有問號、直接抄文章、太短），
      「這個問題跟故事有沒有關」才需要 AI——所以這一題半自動，給老師一個建議分。 */
   genq:   { zh: '自己出問題', auto: true },
+  /* ══ v536：Alan 的康橋考卷上還有這兩種 ══════════════════════════ */
+  storymap: { zh: '故事結構圖（開頭／中間／結尾）', auto: true },
+  usewords: { zh: '用詞庫的字造句', auto: true },
   short:  { zh: '問答（老師改）', auto: false },// Part 5：申論，照 rubric 手改
 };
 
@@ -7860,6 +7863,9 @@ function examPartN(part) {
   if (part.kind === 'quiz')   return (part.questions || []).length;
   if (part.kind === 'short')  return (part.questions || []).length;
   if (part.kind === 'affix' || part.kind === 'genq') return +part.need || 2;
+  /* 故事結構圖：三個格子各寫 N 句 → 總格數 = 區塊數 × 每格句數 */
+  if (part.kind === 'storymap') return ((part.sections || EXAM_STORY_SECTIONS).length) * (+part.need || 2);
+  if (part.kind === 'usewords') return +part.need || 2;
   return 0;
 }
 
@@ -7929,24 +7935,67 @@ const EXAM_RUBRIC = [
 ];
 const EXAM_RUBRIC_MAX = 4;          // 每一項的滿分（老師可以在出卷時改）
 
+/* ══ v536 多準則 Rubric（Alan 的 G5 寫作卷佔 45%，有七項）══════════
+   ⭐ 康橋的寫作 rubric 不是 0~4 的連續分，是**四個等第**：
+     Working Above(7) / Working At(5) / Working Below(3) / None(0)。
+     硬塞成 0~7 的連續分，老師改的時候要自己換算，很容易點錯。
+   ⚠ 準則清單與等第都存在**那一大題身上**——不同卷子的 rubric 不一樣，
+     寫死在程式裡的話，下次他拿到別的格式又要改程式。 */
+const EXAM_RUBRIC_SETS = {
+  basic: {
+    zh: '三項（說明／切題／用心）', max: 4, criteria: EXAM_RUBRIC,
+  },
+  writing: {
+    zh: '康橋寫作七項', max: 7,
+    bands: [
+      { n: 7, zh: '很好',   en: 'Working Above' },
+      { n: 5, zh: '達標',   en: 'Working At' },
+      { n: 3, zh: '要加強', en: 'Working Below' },
+      { n: 0, zh: '沒作答', en: 'None' },
+    ],
+    criteria: [
+      { id: 'content',   zh: '內容',   en: 'Content',        tip: '旅程有沒有寫清楚' },
+      { id: 'details',   zh: '細節',   en: 'Details',        tip: '場景／人物／旅程三樣寫了幾樣' },
+      { id: 'creative',  zh: '創意',   en: 'Creativity',     tip: '讀起來有沒有吸引人' },
+      { id: 'structure', zh: '結構',   en: 'Text Structure', tip: '開頭、事件順序、結尾' },
+      { id: 'length',    zh: '長度',   en: 'Length',         tip: '五段，每段四句以上' },
+      { id: 'grammar',   zh: '文法拼字', en: 'Grammar',      tip: '錯誤有沒有影響讀懂' },
+      { id: 'vocab',     zh: '用字',   en: 'Vocabulary',     tip: '用到幾個這一課的單字' },
+    ],
+  },
+};
+/* 一大題要用哪一套 rubric。
+   ⚠ 認不得就回 basic——不要回 undefined，下游會整個炸掉。 */
+function examRubricOf(part) {
+  const set = EXAM_RUBRIC_SETS[(part && part.rubricSet) || 'basic'] || EXAM_RUBRIC_SETS.basic;
+  const max = +((part || {}).rubricMax) || set.max;
+  /* 等第：有給就用給的，沒給就是 0~max 的整數（舊的三項卷照舊） */
+  const bands = set.bands && set.bands.length
+    ? set.bands
+    : Array.from({ length: max + 1 }, (_, i) => ({ n: max - i, zh: '' }));
+  return { key: (part && part.rubricSet) || 'basic', zh: set.zh, max, bands, criteria: set.criteria };
+}
+
 /* 一題的 rubric 分數 → 這一題拿幾分。
    ⚠ 三項都沒給分（老師還沒改）回 null，不要回 0——「還沒改」跟「改完 0 分」
      是兩件事，混在一起的話，沒改的孩子看起來就像被當掉了。 */
-function examRubricPoints(mark, pts, max) {
+function examRubricPoints(mark, pts, max, criteria) {
+  const cs = (criteria && criteria.length) ? criteria : EXAM_RUBRIC;
   const m = max || EXAM_RUBRIC_MAX;
   if (!mark) return null;
-  const vals = EXAM_RUBRIC.map(c => mark[c.id]);
+  const vals = cs.map(c => mark[c.id]);
   if (vals.every(v => v == null || v === '')) return null;
   const sum = vals.reduce((a, v) => a + Math.max(0, Math.min(m, +v || 0)), 0);
-  return Math.round((+pts || 0) * sum / (EXAM_RUBRIC.length * m) * 10) / 10;
+  return Math.round((+pts || 0) * sum / (cs.length * m) * 10) / 10;
 }
 
 /* 整個 short 大題：每一小題的 rubric 加起來。回傳 { got, max, done, per[] } */
 function examRubricPart(part, marks) {
   const qs = (part && part.questions) || [];
-  const max = +part.rubricMax || EXAM_RUBRIC_MAX;
+  const R = examRubricOf(part);
+  const max = R.max;
   const each = qs.length ? (+part.pts || 0) / qs.length : 0;
-  const per = qs.map((q, i) => examRubricPoints((marks || {})[i], +q.pts || each, max));
+  const per = qs.map((q, i) => examRubricPoints((marks || {})[i], +q.pts || each, max, R.criteria));
   const done = per.filter(v => v != null).length;
   return {
     got: Math.round(per.reduce((a, v) => a + (v || 0), 0) * 10) / 10,
@@ -7954,13 +8003,11 @@ function examRubricPart(part, marks) {
   };
 }
 
-const AI_RUBRIC_SYS = `You help a Taiwanese elementary English teacher mark one short written answer.
+const AI_RUBRIC_SYS = `You help a Taiwanese elementary English teacher mark one piece of student writing.
 You give a SUGGESTION only; the teacher decides the final mark.
 
-Score these three, each 0 to {MAX} (whole numbers):
-- explain  : Explanation — is the idea complete and understandable?
-- relevant : Relevant — does it actually answer the question that was asked?
-- effort   : Effort — did the child really try (enough written, not one word)?
+Score each of these. Allowed scores: {BANDS}
+{CRITERIA}
 
 RULES
 - The writer is 8-12 years old and learning English. Judge the THINKING, not spelling or grammar.
@@ -7969,22 +8016,28 @@ RULES
 - "quote": copy 3 to 8 words EXACTLY as the child wrote them (same spelling, even if wrong).
   Pick the words your scores are based on. If the answer is too short to quote, use "".
 - "next": ONE short Traditional Chinese sentence (≤24 characters) — what to tell the child to do better.
-Return ONLY JSON:
-{"explain":{"n":0,"why":""},"relevant":{"n":0,"why":""},"effort":{"n":0,"why":""},"quote":"","next":""}`;
+Return ONLY JSON — one key per criterion id listed above, plus "quote" and "next":
+{"<id>":{"n":0,"why":""}, ..., "quote":"", "next":""}`;
 
 /* AI 先改一題。回 null ＝「這題 AI 不給建議」，老師自己改。
    ⚠⚠ 一定要驗 quote：把「引用孩子寫的字」當成**接地檢查**——
      引不出孩子真的寫過的連續字串，就代表它在憑空評論，整份建議作廢。
      （跟 v407 的分段閱讀出題用同一招。） */
-async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoints = '' } = {}) {
+async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoints = '', part = null } = {}) {
+  /* v536：準則不再寫死三項——那一大題用哪一套就照哪一套問。 */
+  const R = examRubricOf(part || { rubricMax: max });
   const ans = String(answer == null ? '' : answer).trim();
   const words = ans.split(/\s+/).filter(Boolean);
   /* 幾乎空白的就不要問 AI 了——問了也只會得到「請再寫多一點」，白花一次呼叫 */
   if (words.length < 3) {
-    return { explain: { n: 0, why: '幾乎沒有寫' }, relevant: { n: 0, why: '沒有回答到題目' },
-             effort: { n: 0, why: '還沒開始寫' }, quote: '', next: '先試著寫一句完整的話。', ai: true };
+    const zero = { ai: true, quote: '', next: '先試著寫一句完整的話。' };
+    R.criteria.forEach(c => { zero[c.id] = { n: 0, why: '幾乎沒有寫' }; });
+    return zero;
   }
-  const sys = AI_RUBRIC_SYS.replace(/\{MAX\}/g, String(max));
+  const sys = AI_RUBRIC_SYS
+    .replace('{BANDS}', R.bands.map(b => b.n + (b.en ? ` (${b.en})` : '')).join(' / '))
+    .replace('{CRITERIA}', R.criteria.map(c => `- ${c.id} : ${c.en} — ${c.tip}`).join('\n'))
+    .replace(/\{MAX\}/g, String(R.max));
   const msg = `QUESTION: ${question || ''}\n` +
     (keyPoints ? `WHAT A GOOD ANSWER MENTIONS: ${keyPoints}\n` : '') +
     `\nTHE CHILD WROTE:\n${ans}`;
@@ -7993,11 +8046,14 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
   if (!got || typeof got !== 'object') return null;
 
   const out = { ai: true };
-  for (const c of EXAM_RUBRIC) {
+  const allowed = new Set(R.bands.map(b => +b.n));
+  for (const c of R.criteria) {
     const r = got[c.id];
     if (!r || r.n == null) return null;
     const n = Math.round(+r.n);
-    if (!isFinite(n) || n < 0 || n > max) return null;          // 分數超出範圍＝整份不要
+    /* ⚠ 不只要在範圍內，還要是**允許的等第**——康橋寫作卷只有 7/5/3/0，
+       模型回一個 6 的話老師在畫面上根本點不到那一格。 */
+    if (!isFinite(n) || !allowed.has(n)) return null;
     out[c.id] = { n, why: String(r.why || '').trim().slice(0, 40) };
     if (!out[c.id].why) return null;
   }
@@ -8008,6 +8064,83 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
   out.quote = String(got.quote).trim();
   out.next = String(got.next || '').trim().slice(0, 40);
   return out;
+}
+
+/* ══ v536 📊 故事結構圖（Beginning / Middle / End）════════════════
+   Alan 的 G5 期中卷 Part II：三個格子，每格寫 2 句，佔 15%。
+   ⭐ 程式驗得出來的是**形式**：寫滿了沒、是不是完整的句子、夠不夠長，
+     以及「有沒有真的在講這篇文章」（句子裡至少要出現文章裡的一個實詞）。
+   ⚠ 「寫得對不對」程式判不了——那是老師看的，所以這一題的分數只給到
+     「有沒有照規則寫」，跟老師在紙上一格一個勾是同一件事。 */
+const EXAM_STORY_SECTIONS = [
+  { id: 'begin',  zh: '開頭', en: 'Beginning', q: 'What happens in the beginning?' },
+  { id: 'middle', zh: '中間', en: 'Middle',    q: 'What happens in the middle?' },
+  { id: 'end',    zh: '結尾', en: 'End',       q: 'What happens in the end?' },
+];
+/* 文章裡「值得當作接地依據」的字：去掉常見虛詞，只留實詞。 */
+const _EXAM_STOP = new Set(('a an the and or but so of to in on at for with from by as is are was were be been '
+  + 'this that these those it its he she they them his her their you your i we our not no do does did have has had '
+  + 'will would can could should may might there here when while after before then than').split(' '));
+/* ⚠⚠ 比對一定要用**字根**，不要用整個字。
+   實測：文章寫 painting / painted，孩子寫 "She became a famous painter."
+   用整字比對會判成「不是在講這篇文章」——但那是**他自己用話講出來**的，
+   正是摘要題要的東西。（v415 的「抽象型答案被 grounding 誤擋」同一類。） */
+function _examStem(w) {
+  return String(w).replace(/(iness|ingly|ness|ment|ing|ers|er|est|ed|es|s|y|ies)$/i, '')
+    .replace(/i$/, '') || String(w);
+}
+function _examContentWords(t) {
+  return [...new Set(String(t || '').toLowerCase().match(/[a-z']{3,}/g) || [])]
+    .filter(w => !_EXAM_STOP.has(w))
+    .map(_examStem)
+    .filter(w => w.length >= 3);
+}
+function examStoryOne(text, part) {
+  const t = String(text == null ? '' : text).trim();
+  const minW = +part.minWords || 4;
+  const why = [];
+  if (!t) return { ok: false, why: ['沒有寫'] };
+  const n = t.split(/\s+/).filter(Boolean).length;
+  if (n < minW) why.push(`只有 ${n} 個字，要 ${minW} 個字以上`);
+  /* ⚠ 一格只能寫**一句**——兩句擠在一格會讓老師沒辦法一句一句看。
+     判斷用句號/問號/驚嘆號，而且結尾那一個不算。 */
+  const ends = (t.replace(/[.!?]+\s*$/, '').match(/[.!?]/g) || []).length;
+  if (ends > 0) why.push('一格寫一句就好');
+  /* 接地：有給文章的話，句子裡至少要有文章裡的一個實詞（比字根）。
+     ⚠ 只有在「一個都對不上」而且他真的寫了幾個實詞時才算——
+       寫得太短本來就會被上面那條字數規則抓到，不要罰兩次。 */
+  const src = new Set(_examContentWords(part.passage));
+  if (src.size) {
+    const mine = _examContentWords(t);
+    if (mine.length >= 2 && !mine.some(w => src.has(w))) why.push('這句話好像不是在講這篇文章');
+  }
+  return { ok: why.length === 0, why };
+}
+
+/* ══ v536 ✍️ 用詞庫的字造句 ══════════════════════════════════════
+   Alan 的文法卷 C：從 extreme / protect / shelter 裡挑，每句至少 6 個字，
+   可以加連接詞。跟 v522 的「造字＋造句」不同——這裡**不用造字**。 */
+function examUseWordOne(slot, part) {
+  const minW = +part.minWords || 6;
+  const bank = (part.bank || []).map(w => String(w || '').trim()).filter(Boolean);
+  const word = String((slot && slot.word) || '').trim();
+  const sent = String((slot && slot.sentence) || '').trim();
+  const why = [];
+  if (!word) why.push('沒有挑字');
+  else if (bank.length && !bank.some(b => b.toLowerCase() === word.toLowerCase())) {
+    why.push(`「${word}」不在詞庫裡`);
+  }
+  if (!sent) why.push('沒有造句');
+  else {
+    const n = sent.split(/\s+/).filter(Boolean).length;
+    /* ⚠ 要比對的是「這個字的任何變化」——protect / protects / protected 都算，
+       不然孩子寫對了卻被判沒用到。 */
+    const stem = word.replace(/(ing|ed|es|s)$/i, '');
+    const used = word && new RegExp('\\b' + stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[a-z]{0,3}\\b', 'i').test(sent);
+    if (!used) why.push(`句子裡沒有用到「${word || '那個字'}」`);
+    else if (n < minW) why.push(`句子只有 ${n} 個字，要 ${minW} 個字以上`);
+  }
+  return { ok: why.length === 0, why };
 }
 
 /* 整份考卷的配分盤點——老師要能一眼看出「這份加起來是不是 100 分」 */
@@ -8081,6 +8214,36 @@ function examScorePart(part, ans) {
     }
     out.got = Math.round(max * (out.right / n));
     return out;
+  } else if (part.kind === 'storymap') {
+    /* 三個格子 × 每格 N 句，一格一分。ans = { begin:[...], middle:[...], end:[...] } */
+    const secs = part.sections || EXAM_STORY_SECTIONS;
+    const per = +part.need || 2;
+    secs.forEach(sec => {
+      const got = ((ans || {})[sec.id]) || [];
+      for (let i = 0; i < per; i++) {
+        const r = examStoryOne(got[i], part);
+        if (r.ok) out.right++;
+        out.detail.push({ sec: sec.id, ok: r.ok, why: r.why, got: got[i] || '' });
+      }
+    });
+    out.got = Math.round(max * (out.right / n));
+    return out;
+  } else if (part.kind === 'usewords') {
+    /* ⚠ 同一個字不可以用兩次（考卷寫的是「挑兩個」）——重複的那一格不給分。 */
+    const used = new Set();
+    for (let i = 0; i < n; i++) {
+      const slot = (ans || [])[i] || {};
+      const r = examUseWordOne(slot, part);
+      const key = String(slot.word || '').toLowerCase();
+      const dup = !!key && used.has(key);
+      if (key) used.add(key);
+      if (dup) r.why = (r.why || []).concat(['這個字前面已經用過了']);
+      const okk = r.ok && !dup;
+      if (okk) out.right++;
+      out.detail.push({ ok: okk, why: r.why, got: slot.sentence || '' });
+    }
+    out.got = Math.round(max * (out.right / n));
+    return out;
   } else {
     // short：收答案，不給分（老師拿 rubric 手改）
     out.detail = (part.questions || []).map((q, i) => ({ text: '', ok: null, got: (ans || [])[i] || '' }));
@@ -8147,6 +8310,8 @@ function examPartText(part) {
     .map(q => [q.q, q.pts || '', q.rubric || ''].join(' | ').replace(/\s*\|\s*$/, '')).join('\n');
   if (p.kind === 'affix') return (p.affixes || []).join(' ');
   if (p.kind === 'genq') return String(p.passage || '');
+  if (p.kind === 'storymap') return String(p.passage || '');
+  if (p.kind === 'usewords') return (p.bank || []).join(' ');
   return '';
 }
 function examParsePart(kind, text) {
@@ -8181,8 +8346,12 @@ function examParsePart(kind, text) {
     /* 一行就是字尾表：-ing -ed -s -est（空白或逗號分開） */
     return { affixes: (nonEmpty.join(' ').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean)).slice(0, 8) };
   }
-  if (kind === 'genq') {
+  if (kind === 'genq' || kind === 'storymap') {
     return { passage: lines.join('\n').trim() };
+  }
+  if (kind === 'usewords') {
+    /* 一行就是詞庫，空白或逗號分開 */
+    return { bank: (nonEmpty[0] || '').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean) };
   }
   if (kind === 'short') {
     const questions = nonEmpty.map(l => {
@@ -8205,6 +8374,18 @@ function examWarnings(item) {
     const n = examPartN(pt);
     if (!n) w.push(`${where}一題都沒有。`);
     if (!(+pt.pts > 0)) w.push(`${where}沒有配分。`);
+    /* v536 的兩種新題型 */
+    if (pt.kind === 'storymap' && !String(pt.passage || '').trim()) {
+      w.push(`${where}沒有文章——學生看不到故事，就沒辦法填開頭／中間／結尾。`);
+    }
+    if (pt.kind === 'usewords') {
+      const bank = (pt.bank || []).filter(Boolean);
+      const need = +pt.need || 2;
+      if (bank.length < need) w.push(`${where}要造 ${need} 個句子，但詞庫只有 ${bank.length} 個字。`);
+    }
+    if (pt.kind === 'short' && pt.rubricSet === 'writing' && (pt.questions || []).length > 1) {
+      w.push(`${where}用的是「寫作七項」rubric，通常只會有一題（整篇作文）。`);
+    }
     if (pt.kind === 'circle') {
       if (!WS_CHECKS[String(pt.check || '').toLowerCase()]) w.push(`${where}的「要圈什麼」程式看不懂：${pt.check || '(空的)'}`);
       else {
@@ -8238,7 +8419,9 @@ function examWarnings(item) {
 
 Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
-  EXAM_RUBRIC, EXAM_RUBRIC_MAX, examRubricPoints, examRubricPart, aiGradeRubric });
+  EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
+  EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf,
+  examRubricPoints, examRubricPart, aiGradeRubric });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v513（Alan 的 AI 清單第三順位）📝 考前複習包

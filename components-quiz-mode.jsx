@@ -6946,6 +6946,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          /* v536：用哪一套 rubric 也要帶過去，不然老師端只看得到三項 */
+          rubricSet: pp.part.rubricSet || 'basic',
           qs: (pp.part.questions || []).map((q, i) => ({
             q: q.q || '', keyPoints: q.keyPoints || q.rubric || '',
             a: String(v[i] || '').trim(),
@@ -7154,6 +7156,95 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           );
         })()}
 
+        {/* ── v536 📊 故事結構圖（開頭／中間／結尾）── */}
+        {pt.kind === 'storymap' && (() => {
+          const secs = pt.sections || window.EXAM_STORY_SECTIONS || [];
+          const per = +pt.need || 2;
+          const got = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+          let di = 0;                       // detail 是攤平的，要照同樣順序對回去
+          return (
+            <>
+              {pt.passage && <div className="ex-read">{pt.passage}</div>}
+              <div className="ex-story">
+                {secs.map((sec) => (
+                  <div className="ex-story-box" key={sec.id}>
+                    <div className="ex-story-h"><b>{sec.zh}</b><span>{sec.q}</span></div>
+                    {Array.from({ length: per }, (_, i) => {
+                      const d = sent ? (pr.detail[di] || {}) : null; di++;
+                      return (
+                        <div className={'ex-story-row' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={i}>
+                          <textarea rows={2} disabled={sent}
+                            value={(got[sec.id] || [])[i] || ''}
+                            placeholder={sent ? '' : '寫一句…'}
+                            onChange={e => { const t = e.target.value;
+                              put(key, prev => {
+                                const o = (prev && typeof prev === 'object' && !Array.isArray(prev)) ? { ...prev } : {};
+                                const arr = (o[sec.id] || []).slice(); arr[i] = t; o[sec.id] = arr; return o;
+                              }); }}/>
+                          {sent && (d.why || []).length > 0 && (
+                            <ul className="ex-why">{d.why.map((x, k) => <li key={k}>{x}</li>)}</ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              {!sent && <p className="ex-hint">每一格寫 <b>一句</b>，至少 {pt.minWords || 4} 個字，要是<b>這篇文章裡的事</b>。</p>}
+            </>
+          );
+        })()}
+
+        {/* ── v536 ✍️ 用詞庫的字造句 ── */}
+        {pt.kind === 'usewords' && (() => {
+          /* ⚠ 樣式照 affix 那一段原本的結構：.ex-affixbox 是詞庫整排、
+             .ex-af 是「一題」、.ex-af-picks 是選字那一排、.ex-af-p 是單一顆。
+             第一版我把 .ex-bw（單一個字塊）當成容器用，整排字就黏在一起了。 */
+          const bank = pt.bank || [];
+          const slots = Array.isArray(v) ? v : [];
+          const setSlot = (i, patch) => put(key, prev => {
+            const g = Array.isArray(prev) ? prev.map(x => ({ ...x })) : [];
+            g[i] = { ...(g[i] || {}), ...patch };
+            return g;
+          });
+          return (
+            <>
+              <div className="ex-affixbox">
+                {bank.map((bw, i) => <span key={i}>{bw}</span>)}
+              </div>
+              {Array.from({ length: n }, (_, i) => {
+                const sl = slots[i] || {};
+                const d = sent ? (pr.detail[i] || {}) : null;
+                const words = String(sl.sentence || '').split(/\s+/).filter(Boolean).length;
+                return (
+                  <div className={'ex-af' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={i}>
+                    <div className="ex-af-row">
+                      <label>挑一個字：</label>
+                      <span className="ex-af-picks">
+                        {bank.map((bw, k) => (
+                          <button key={k} className={'ex-af-p' + (sl.word === bw ? ' on' : '')} disabled={sent}
+                            onClick={() => setSlot(i, { word: sl.word === bw ? '' : bw })}>{bw}</button>
+                        ))}
+                      </span>
+                    </div>
+                    <div className="ex-af-row">
+                      <label>Sentence:</label>
+                      <input className="ex-af-s" disabled={sent} value={sl.sentence || ''}
+                        placeholder={`用這個字造一句（至少 ${pt.minWords || 6} 個字）`}
+                        onChange={e => setSlot(i, { sentence: e.target.value })}/>
+                      {!sent && <i className="ex-af-n">{words} 個字</i>}
+                    </div>
+                    {sent && (d.why || []).length > 0 && (
+                      <ul className="ex-why">{d.why.map((x, k) => <li key={k}>{x}</li>)}</ul>
+                    )}
+                  </div>
+                );
+              })}
+              {!sent && <p className="ex-hint">每個字只能用<b>一次</b>；可以加 when / because / and / but / so 讓句子長一點。</p>}
+            </>
+          );
+        })()}
+
         {/* ── 申論（老師親自改）── */}
         {pt.kind === 'short' && (
           <>
@@ -7172,8 +7263,10 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
             {(() => {
               /* v530：老師改好了就把三項分數與評語攤開給學生看。 */
               const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || null;
-              const R = window.EXAM_RUBRIC || [];
-              const max = +pt.rubricMax || (window.EXAM_RUBRIC_MAX || 4);
+              /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
+              const RS = window.examRubricOf ? window.examRubricOf(pt) : { criteria: window.EXAM_RUBRIC || [], max: 4 };
+              const R = RS.criteria;
+              const max = RS.max;
               const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
               if (!marked) {
                 return <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>;
