@@ -7617,7 +7617,7 @@ const EXAM_READ_SYS = `You convert a photo of a printed English exam paper (Kang
 
 Output ONE page's worth. Keep every English word exactly as printed — never translate, never rewrite.
 
-"parts" may ONLY use these four kinds. Anything else goes in "skipped".
+"parts" may ONLY use these kinds. Anything else goes in "skipped".
   "circle"  — "Read and Circle N <pattern> words" over a passage.
               "check" must be one of: vce | team | digraph | suffix | prefix
                  "-VCe words"            -> "check":"vce"
@@ -7636,11 +7636,27 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               Each entry: {"q":"...","options":[...in printed order...],"answer":<0-based index>}
               "pts" is the TOTAL for the whole Part (e.g. "/18"), not per question.
               Do not number the questions; the website numbers them.
+  "affix"   — "Make two words using two of the suffixes below, then write a sentence for each."
+              "affixes" = every suffix/prefix in the box, written WITH its hyphen: ["-ity","-ty","-ic","-ment"]
+              (a prefix is written the other way round: "un-", "mis-").
+              "need" = how many words they must make. "minWords" = the minimum sentence length
+              if one is printed ("5 or more words" -> 5).
+  "usewords"— "Write N sentences using words from the box" where they just USE the word
+              (they do NOT build a new word from a suffix — that is "affix").
+              "bank" = every word in the box. "need" = how many sentences.
+              "minWords" = the printed minimum ("at least six words long" -> 6).
+  "genq"    — "Using the story you just read, make two questions (not on the page)".
+              "passage" = the story they read. "need" = how many questions.
+  "storymap"— a Beginning / Middle / End chart (sometimes drawn as three boxes with arrows).
+              "passage" = the text the chart is about.
+              "need" = how many sentences per box ("Write 2 sentences per section" -> 2).
   "short"   — any question the child writes a long answer to. Give "pts" and, if a marking
               rubric is printed, a one-line "rubric".
+              🔴 If the printed rubric has the Kang Chiao writing criteria (Content, Details,
+              Creativity, Text Structure, Length, Grammar, Vocabulary) add "rubricSet":"writing".
+              If it has Explanation / Relevant / Effort, add "rubricSet":"basic".
 
-If a part is something else (e.g. "Make two words using these suffixes, then write a sentence"),
-do NOT guess — put a short description in "skipped".
+If a part is still something else, do NOT guess — put a short description in "skipped".
 
 Points: copy the printed numbers ("(4 pts. each)", "/32", "(30%)"). Never invent them.
 If a number is not printed, use 0 and let the teacher fill it in.
@@ -7735,12 +7751,38 @@ function _examCleanPart(p) {
     if (!questions.length) return null;
     return { ...base, questions };
   }
+  /* ══ v537：v522／v536 新增的四種也要收得進來 ══════════════════════
+     ⚠ 提示詞教會模型認這幾種之後，這裡一定要跟著收——不然它讀出來了，
+       在這一關被 return null 丟掉，畫面上還是少一大題（而且完全不報錯）。 */
+  if (p.kind === 'affix') {
+    const affixes = (Array.isArray(p.affixes) ? p.affixes : []).map(x => String(x).trim()).filter(Boolean);
+    /* 字尾要看得出是字首還是字尾（-ing／un-），寫成光禿禿的 ing 程式判不出來 */
+    if (affixes.length < 2 || !affixes.every(a => /^-|-$/.test(a))) return null;
+    return { ...base, affixes, need: Math.max(2, +p.need || 2), minWords: +p.minWords || 5 };
+  }
+  if (p.kind === 'usewords') {
+    const bank = (Array.isArray(p.bank) ? p.bank : []).map(x => String(x).trim()).filter(Boolean);
+    const need = Math.max(1, +p.need || 2);
+    if (bank.length < need) return null;                   // 詞庫比要造的句子少＝這題出不出來
+    return { ...base, bank, need, minWords: +p.minWords || 6 };
+  }
+  if (p.kind === 'genq' || p.kind === 'storymap') {
+    const passage = String(p.passage || '').trim();
+    if (!passage) return null;                             // 沒有文章，學生沒東西可以依據
+    return { ...base, passage, need: Math.max(1, +p.need || 2),
+             ...(p.kind === 'storymap' ? { minWords: +p.minWords || 4 } : {}) };
+  }
+
   const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => ({
     q: String((q && q.q) || '').trim(), pts: +((q && q.pts) || 0) || 0,
     rubric: String((q && q.rubric) || '').trim(), rows: 4,
   })).filter(q => q.q);
   if (!questions.length) return null;
-  return { ...base, passage: String(p.passage || '').trim(), questions };
+  /* 印在卷子上的 rubric 是哪一套（七項寫作／三項）——認不得就不設，用預設的三項 */
+  const rs = String(p.rubricSet || '').trim();
+  const rubricSet = EXAM_RUBRIC_SETS[rs] ? rs : '';
+  return { ...base, passage: String(p.passage || '').trim(), questions,
+           ...(rubricSet ? { rubricSet, rubricMax: EXAM_RUBRIC_SETS[rubricSet].max } : {}) };
 }
 
 /* 把幾張照片讀成一份考卷。回傳 { item, skipped, missed, warnings } */
