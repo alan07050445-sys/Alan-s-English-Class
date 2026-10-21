@@ -2128,6 +2128,11 @@ function App() {
             pick: true
           });
         }
+      } else if (plan.op === 'rename') {
+        /* v544：改名字（跟單元列的「✏️ 改名字…」走同一個 handler）。
+           ⚠ 他沒講新名字就不要自己取一個。 */
+        var b = String(plan.title || '').trim();
+        if (!b) showToast(`「${_found2.name}」要改叫什麼？跟我說新名字就好。`);else handleRenameGroup(_found2.catId, _found2.name, b);
       } else if (plan.op === 'delete') {
         /* 🔴 唯一一件會把東西丟掉的事——一定要他自己按下去確認。
            聊天室打錯一個字就刪掉一整組，那是救不回來的。 */
@@ -2487,6 +2492,42 @@ function App() {
     if (!next.yt && !next.fileUrl && !String(next.note || '').trim()) delete wk.groupRes[k];else wk.groupRes[k] = next;
     setWeeks(w);
     saveWeeksSafe(w);
+  };
+
+  /* v544（Alan：「群組缺少一個功能 就是改名字」）
+     他合併了 6 組，組名變成六個名字串在一起，連單元標題都是那一長串。
+     ⚠ 要一起搬的有三樣：單元的 group、單元的 title、以及**群組的參考資料**
+       （groupRes 的 key 是 `分類::組名`——不搬的話 📎 參考資料會整個消失，而且不報錯）。 */
+  var handleRenameGroup = (catId, oldName, newName) => {
+    var a = String(oldName || '').trim(),
+      b = String(newName || '').trim();
+    if (!a || !b || a === b) return;
+    var w = JSON.parse(JSON.stringify(weeksRef.current));
+    var wk = w[weekId];
+    if (!wk || !wk.items || !Array.isArray(wk.items[catId])) return;
+    /* ⚠ 同一週已經有同名的另一組＝兩組會被合在一起（側欄靠 group 歸戶）。
+       那不一定是他要的，所以先問一句。 */
+    var clash = wk.items[catId].some(it => it && String(it.group || '').trim() === b);
+    if (clash && !confirm(`這一週已經有一組叫「${b}」了。\n\n改下去兩組會變成同一組，確定嗎？`)) return;
+    var mine = wk.items[catId].filter(it => it && String(it.group || '').trim() === a);
+    var res = window.renameGroupItems(mine, a, b);
+    var byId = new Map(res.items.map(it => [it.id, it]));
+    wk.items[catId] = wk.items[catId].map(it => byId.get(it && it.id) || it);
+    /* 📎 參考資料跟著搬 */
+    if (wk.groupRes) {
+      var from = groupResKey(catId, a),
+        to = groupResKey(catId, b);
+      if (wk.groupRes[from]) {
+        wk.groupRes[to] = {
+          ...(wk.groupRes[to] || {}),
+          ...wk.groupRes[from]
+        };
+        delete wk.groupRes[from];
+      }
+    }
+    setWeeks(w);
+    saveWeeksSafe(w);
+    showToast(res.kept ? `改好了：${res.n} 個單元跟著改名，${res.kept} 個你自己取過名字的沒有動` : `改好了：${res.items.length} 個單元都改成「${b}」`);
   };
   var handleMoveItem = (catId, itemId, dir) => {
     var w = JSON.parse(JSON.stringify(weeksRef.current));
@@ -3335,6 +3376,7 @@ function App() {
        看得出這一組在教什麼，就直接開那一個生成視窗，而且把現成的內容先填好。
        ⚠ 真的認不出來才退回「要出哪一種」那個選單。 */,
     onDeleteGroup: (gName, gItems) => handleDeleteItems((gItems || []).map(it => it.id)),
+    onRenameGroup: (gName, newName) => handleRenameGroup(catView.id, gName, newName),
     onRegenGroup: (catId, name, gItems) => {
       var ws = window.reviewWordsOf && window.reviewWordsOf(gItems) || [];
       if (ws.length >= 2) {

@@ -7497,7 +7497,10 @@ The tools:
   review    — take an EXISTING group of exercises and make a DIFFERENT set from the same words,
               for another week ("把 Barbed Wire Baseball 排一份複習到第 9 週").
   group     — do something to a whole EXISTING group: copy / move it to another week,
-              add one more exercise to it, or delete it.
+              add one more exercise to it, RENAME it, or delete it.
+              Renaming is common right after merging several units — the merged name is the old
+              names joined together and he wants something short
+              ("把那組改名叫 Unit 1–3 期中複習").
   marking   — open the marking screen for the written (申論) answers.
   copyweek  — copy EVERYTHING in one week to another week ("把第 7 週的內容複製到第 9 週").
   merge     — collect the words from SEVERAL existing groups (or several weeks), merge them into
@@ -7514,7 +7517,10 @@ Rules:
 - "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
-- "op": ONLY for intent "group". One of: copy（沿用到別週）move（搬過去）again（再出一份）delete（刪掉）
+- "op": ONLY for intent "group". One of:
+    copy（沿用到別週）move（搬過去）again（再出一份）rename（改名字）delete（刪掉）
+  For "rename", put the NEW name in "title", exactly as he said it. If he asked to rename
+  but did not say the new name, use op "rename" and leave "title" empty — the website asks.
 - "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
 - "fromWeek": ONLY for copyweek, the SOURCE week number. If he did not say one, 0
   (the website then uses the week he is looking at).
@@ -7608,7 +7614,7 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
        模型亂填一個 side 或 op，程式照著做就會動到不該動的東西。 */
     side: (o.side === 'it' || o.side === 'lt') ? o.side : '',
     group: String(o.group || '').trim().slice(0, 120),
-    op: ['copy', 'move', 'again', 'delete'].indexOf(String(o.op || '').trim()) >= 0
+    op: ['copy', 'move', 'again', 'rename', 'delete'].indexOf(String(o.op || '').trim()) >= 0
       ? String(o.op).trim() : '',
     toWeek: Math.max(0, Math.min(40, Math.round(+o.toWeek || 0))),
     fromWeek: Math.max(0, Math.min(40, Math.round(+o.fromWeek || 0))),
@@ -9429,7 +9435,7 @@ function computeCheckin(checkin) {
   };
 }
 Object.assign(window, {
-  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent,
+  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent, renameGroupItems,
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
 
@@ -10153,6 +10159,35 @@ function timetableParse(text, roster) {
   const twins = _ttLookAlikes((roster || []).map(r => String(r.name || '').trim()).filter(Boolean),
                               out.flatMap(s => s.names));
   return { slots: out, unknown: [...new Set(unknown)], twins };
+}
+
+/* ══ v544 ✏️ 整組改名字 ═══════════════════════════════════════════
+   Alan 合併了 6 組單字，組名變成六個名字串在一起
+   （「Reaching for the moon - week1 + Reaching for the moon - week2 + …」），
+   連單元標題都是那一長串——學生點進去滿螢幕都是標題。
+
+   ⭐ 改名要改**三個地方**，少一個就會出現「看起來正常但其實壞掉」：
+     ① 每個單元的 group（側欄靠它歸戶）
+     ② 每個單元的 title（標題本來就是用組名拼出來的：
+        「組名」「組名 · 字義選擇（1/3）」「組名 · 選擇題」）
+     ③ 群組的參考資料 groupRes，它的 key 是 `分類::組名`
+        —— ⚠ 不搬的話 📎 參考資料會**整個消失**，而且不會報錯。
+   ⚠ 老師自己改過標題的單元（標題裡沒有舊組名）一律不動——那是他故意取的名字。 */
+function renameGroupItems(items, oldName, newName) {
+  const a = String(oldName || '').trim();
+  const b = String(newName || '').trim();
+  if (!a || !b || a === b) return { items: items || [], n: 0, kept: 0 };
+  let n = 0, kept = 0;
+  const out = (items || []).map(it => {
+    if (!it) return it;
+    const t = String(it.title || '');
+    let title = t;
+    if (t === a) { title = b; n++; }
+    else if (t.indexOf(a) === 0) { title = b + t.slice(a.length); n++; }   // 保留「 · 字義選擇（1/3）」這種字尾
+    else kept++;                                                           // 老師自己取的名字，不動
+    return { ...it, group: b, title };
+  });
+  return { items: out, n, kept };
 }
 
 /* ══ v543 聊天室說的名字 → 名單裡的那個孩子 ════════════════════════

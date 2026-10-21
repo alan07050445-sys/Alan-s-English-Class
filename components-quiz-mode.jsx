@@ -808,7 +808,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
@@ -1488,6 +1488,21 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </button>
                     </div>
                     <div className="qm-grp-menu-row">
+                      {/* v544（Alan：「群組缺少一個功能 就是改名字」）
+                          合併六組之後組名是六個名字串在一起，連標題都是那一長串。
+                          ⚠ 排在最前面——這是整組操作裡唯一「改完馬上看得到、而且改錯再改回來就好」的。 */}
+                      {onRenameGroup && (
+                        <button className="qm-grp-ghost"
+                          onClick={() => {
+                            const b = prompt(`這一組（${g.items.length} 個單元）要改叫什麼？`, g.name);
+                            if (b == null) return;
+                            if (!String(b).trim()) { alert('名字不能是空的。'); return; }
+                            setGrpMenu(null); onRenameGroup(g.name, String(b).trim());
+                          }}
+                          title="改這一組的名字——底下每個單元的標題也會跟著改">
+                          ✏️ 改名字…
+                        </button>
+                      )}
                       {onCopyGroupToWeeks && (weekChoices || []).length > 0 && (
                         <button className="qm-grp-ghost"
                           onClick={() => { setCopyItem({ __group: true, name: g.name, items: g.items }); setCopySel([]); setGrpMenu(null); }}>

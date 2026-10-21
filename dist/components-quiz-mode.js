@@ -1041,6 +1041,7 @@ function QuizModeCategoryView({
   onRegenGroup,
   onReviewGroup,
   onDeleteGroup,
+  onRenameGroup,
   weekQuizItems,
   initialItemId,
   cloudProg,
@@ -1800,7 +1801,20 @@ function QuizModeCategoryView({
       }
     }, "\u6574\u7D44\u53D6\u6D88\u4F5C\u696D")), /*#__PURE__*/React.createElement("div", {
       className: "qm-grp-menu-row"
-    }, onCopyGroupToWeeks && (weekChoices || []).length > 0 && /*#__PURE__*/React.createElement("button", {
+    }, onRenameGroup && /*#__PURE__*/React.createElement("button", {
+      className: "qm-grp-ghost",
+      onClick: () => {
+        var b = prompt(`這一組（${g.items.length} 個單元）要改叫什麼？`, g.name);
+        if (b == null) return;
+        if (!String(b).trim()) {
+          alert('名字不能是空的。');
+          return;
+        }
+        setGrpMenu(null);
+        onRenameGroup(g.name, String(b).trim());
+      },
+      title: "\u6539\u9019\u4E00\u7D44\u7684\u540D\u5B57\u2014\u2014\u5E95\u4E0B\u6BCF\u500B\u55AE\u5143\u7684\u6A19\u984C\u4E5F\u6703\u8DDF\u8457\u6539"
+    }, "\u270F\uFE0F \u6539\u540D\u5B57\u2026"), onCopyGroupToWeeks && (weekChoices || []).length > 0 && /*#__PURE__*/React.createElement("button", {
       className: "qm-grp-ghost",
       onClick: () => {
         setCopyItem({
