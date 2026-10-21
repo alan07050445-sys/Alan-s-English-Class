@@ -230,6 +230,8 @@ function EditorModal({
 }) {
   var [form, setForm] = useS(draft);
   var [moreTypes, setMoreTypes] = useS(false);
+  /* v540 📋 貼上整份考卷：null＝沒打開，否則 { text, res } */
+  var [pastePaper, setPastePaper] = useS(null);
   /* v447：沒存到的編輯，下次打開時接回來 */
   var [recover, setRecover] = useS(null);
   useE(() => {
@@ -575,8 +577,67 @@ function EditorModal({
         checked: !!form.examMood,
         onChange: e => update('examMood', e.target.checked)
       }), "\u958B\u982D\u653E\u300C\u4ECA\u5929\u5FC3\u60C5\uFF0F\u9019\u6B21\u7684\u76EE\u6A19\u300D\uFF08\u5B78\u6821\u5377\u5B50\u4E0A\u5C31\u6709\uFF09"), /*#__PURE__*/React.createElement("span", {
+        className: "exed-sp"
+      }), /*#__PURE__*/React.createElement("button", {
+        className: "exed-paste-btn",
+        onClick: () => setPastePaper(p => p ? null : {
+          text: '',
+          res: null
+        })
+      }, "\uD83D\uDCCB \u8CBC\u4E0A\u6574\u4EFD\u8003\u5377"), /*#__PURE__*/React.createElement("span", {
         className: 'exed-total' + (T.total === 100 ? ' ok' : '')
-      }, "\u5408\u8A08 ", T.total, " \u5206\uFF08\u81EA\u52D5 ", T.auto, "\uFF0F\u8001\u5E2B\u6539 ", T.manual, "\uFF09")), warns.length > 0 && /*#__PURE__*/React.createElement("div", {
+      }, "\u5408\u8A08 ", T.total, " \u5206\uFF08\u81EA\u52D5 ", T.auto, "\uFF0F\u8001\u5E2B\u6539 ", T.manual, "\uFF09")), pastePaper && /*#__PURE__*/React.createElement("div", {
+        className: "exed-paste"
+      }, /*#__PURE__*/React.createElement("textarea", {
+        rows: 6,
+        value: pastePaper.text,
+        placeholder: "\u628A\u6574\u4EFD\u8003\u5377\u7684\u8CC7\u6599\u8CBC\u9032\u4F86\uFF08\u524D\u5F8C\u9ECF\u8457\u8AAA\u660E\u6587\u5B57\u6216 ``` \u570D\u6B04\u90FD\u6C92\u95DC\u4FC2\uFF09",
+        onChange: e => {
+          var text = e.target.value;
+          var res = text.trim() && window.examPaperFromText ? window.examPaperFromText(text) : null;
+          setPastePaper({
+            text,
+            res
+          });
+        }
+      }), pastePaper.res && pastePaper.res.error && /*#__PURE__*/React.createElement("div", {
+        className: "exed-paste-bad"
+      }, "\u2717 ", pastePaper.res.error), pastePaper.res && !pastePaper.res.error && (() => {
+        var r = pastePaper.res;
+        var tot = window.examTotals ? window.examTotals(r.item) : {
+          total: 0
+        };
+        return /*#__PURE__*/React.createElement("div", {
+          className: "exed-paste-ok"
+        }, /*#__PURE__*/React.createElement("b", null, "\u8B80\u5230 ", r.sections.length, " \u500B Section\u3001", r.n, " \u5927\u984C\uFF0C\u5408\u8A08 ", tot.total, " \u5206"), /*#__PURE__*/React.createElement("ul", null, r.sections.map((sc, i) => /*#__PURE__*/React.createElement("li", {
+          key: i
+        }, sc.name, "\uFF08", sc.pct, "%\uFF09\uFF1A", sc.parts.map(pt => (window.EXAM_KINDS[pt.kind] || {}).zh).join('、')))), r.skipped.length > 0 && /*#__PURE__*/React.createElement("div", {
+          className: "exed-paste-skip"
+        }, "\u26A0 \u9019\u5E7E\u984C\u6C92\u6536\u9032\u4F86\uFF1A", r.skipped.map((x, i) => /*#__PURE__*/React.createElement("span", {
+          key: i
+        }, x))), r.warnings.length > 0 && /*#__PURE__*/React.createElement("div", {
+          className: "exed-paste-skip"
+        }, "\u26A0 ", r.warnings.join('　')), /*#__PURE__*/React.createElement("div", {
+          className: "exed-paste-go"
+        }, /*#__PURE__*/React.createElement("button", {
+          onClick: () => {
+            if (secs.length && !confirm(`現在這份卷子已經有 ${secs.length} 個 Section，要全部換成貼上的嗎？`)) return;
+            setSecs(r.sections);
+            if (r.title && !String(form.title || '').trim()) update('title', r.title);
+            if (r.examKicker) update('examKicker', r.examKicker);
+            setPastePaper(null);
+          }
+        }, secs.length ? '換成這一份' : '就用這一份'), secs.length > 0 && /*#__PURE__*/React.createElement("button", {
+          className: "ghost",
+          onClick: () => {
+            setSecs(secs.concat(r.sections));
+            setPastePaper(null);
+          }
+        }, "\u63A5\u5728\u5F8C\u9762"), /*#__PURE__*/React.createElement("button", {
+          className: "ghost",
+          onClick: () => setPastePaper(null)
+        }, "\u53D6\u6D88")));
+      })()), warns.length > 0 && /*#__PURE__*/React.createElement("div", {
         className: "exed-warn"
       }, warns.map((w, i) => /*#__PURE__*/React.createElement("div", {
         key: i

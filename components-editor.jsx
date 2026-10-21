@@ -123,6 +123,8 @@ function edDraftSummary(form) {
 function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, onClose, onSave, onDelete }) {
   const [form, setForm] = useS(draft);
   const [moreTypes, setMoreTypes] = useS(false);
+  /* v540 📋 貼上整份考卷：null＝沒打開，否則 { text, res } */
+  const [pastePaper, setPastePaper] = useS(null);
   /* v447：沒存到的編輯，下次打開時接回來 */
   const [recover, setRecover] = useS(null);
   useE(() => {
@@ -459,10 +461,77 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                         onChange={e => update('examMood', e.target.checked)}/>
                       開頭放「今天心情／這次的目標」（學校卷子上就有）
                     </label>
+                    <span className="exed-sp"/>
+                    <button className="exed-paste-btn" onClick={() => setPastePaper(p => p ? null : { text: '', res: null })}>
+                      📋 貼上整份考卷
+                    </button>
                     <span className={'exed-total' + (T.total === 100 ? ' ok' : '')}>
                       合計 {T.total} 分（自動 {T.auto}／老師改 {T.manual}）
                     </span>
                   </div>
+
+                  {/* ── v540 📋 一次貼完整份卷子 ──
+                      六大題一題一題設「題型／標題／配分」太久了。
+                      ⚠ 解析走的是**跟拍照讀考卷同一條**清洗路線（examPaperFromText → _examCleanPart），
+                        沒收進來的要一條一條講出來，不可以安靜地少一大題。 */}
+                  {pastePaper && (
+                    <div className="exed-paste">
+                      <textarea rows={6} value={pastePaper.text}
+                        placeholder="把整份考卷的資料貼進來（前後黏著說明文字或 ``` 圍欄都沒關係）"
+                        onChange={e => {
+                          const text = e.target.value;
+                          const res = text.trim() && window.examPaperFromText
+                            ? window.examPaperFromText(text) : null;
+                          setPastePaper({ text, res });
+                        }}/>
+                      {pastePaper.res && pastePaper.res.error && (
+                        <div className="exed-paste-bad">✗ {pastePaper.res.error}</div>
+                      )}
+                      {pastePaper.res && !pastePaper.res.error && (() => {
+                        const r = pastePaper.res;
+                        const tot = window.examTotals ? window.examTotals(r.item) : { total: 0 };
+                        return (
+                          <div className="exed-paste-ok">
+                            <b>讀到 {r.sections.length} 個 Section、{r.n} 大題，合計 {tot.total} 分</b>
+                            <ul>
+                              {r.sections.map((sc, i) => (
+                                <li key={i}>{sc.name}（{sc.pct}%）：{sc.parts.map(pt =>
+                                  (window.EXAM_KINDS[pt.kind] || {}).zh).join('、')}</li>
+                              ))}
+                            </ul>
+                            {r.skipped.length > 0 && (
+                              <div className="exed-paste-skip">
+                                ⚠ 這幾題沒收進來：{r.skipped.map((x, i) => <span key={i}>{x}</span>)}
+                              </div>
+                            )}
+                            {r.warnings.length > 0 && (
+                              <div className="exed-paste-skip">
+                                ⚠ {r.warnings.join('　')}
+                              </div>
+                            )}
+                            <div className="exed-paste-go">
+                              {/* ⚠ 蓋掉是會丟東西的事——卷子上已經有大題時才問，空白的就直接填 */}
+                              <button onClick={() => {
+                                if (secs.length && !confirm(
+                                  `現在這份卷子已經有 ${secs.length} 個 Section，要全部換成貼上的嗎？`)) return;
+                                setSecs(r.sections);
+                                if (r.title && !String(form.title || '').trim()) update('title', r.title);
+                                if (r.examKicker) update('examKicker', r.examKicker);
+                                setPastePaper(null);
+                              }}>{secs.length ? '換成這一份' : '就用這一份'}</button>
+                              {secs.length > 0 && (
+                                <button className="ghost" onClick={() => {
+                                  setSecs(secs.concat(r.sections));
+                                  setPastePaper(null);
+                                }}>接在後面</button>
+                              )}
+                              <button className="ghost" onClick={() => setPastePaper(null)}>取消</button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   {warns.length > 0 && (
                     <div className="exed-warn">

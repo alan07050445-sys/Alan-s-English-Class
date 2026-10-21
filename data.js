@@ -7903,7 +7903,63 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item) };
 }
 
-Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS });
+/* ══ v540 📋 貼上整份考卷 ═══════════════════════════════════════════
+   出一份卷子有六大題，一題一題貼要設六次「題型／標題／配分」。
+   ⭐ 走的是**跟拍照讀考卷完全同一條清洗路線**（_examCleanPart）——
+     不另寫一份驗證，不然哪天改了其中一邊，另一邊會安靜地放行壞資料。
+   ⚠ 貼進來的東西要當成「可能是任何東西」：不是 JSON、是一個陣列、
+     parts 包在別的地方、題型根本不存在——每一種都要講得出原因，
+     不可以只回「讀不到」（老師會不知道要改哪裡）。 */
+function examPaperFromText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return { error: '沒有貼上任何東西。' };
+  /* 連 ```json 圍欄一起貼進來是最常見的（從對話框複製就會帶著） */
+  const body = raw.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  /* ⚠ **先照原樣試一次**，失敗才去掐頭去尾。
+     第一版直接「抓第一個 { 到最後一個 }」，結果整份貼一個 **陣列**
+     （[{…},{…}]）會被切成 `{…},{…}` ＝本來讀得進來的東西反而壞掉。 */
+  const tries = [body];
+  const a = body.indexOf('{'), b = body.lastIndexOf('}');
+  if (a > 0 || (b >= 0 && b < body.length - 1)) tries.push(body.slice(a, b + 1));
+  const a2 = body.indexOf('['), b2 = body.lastIndexOf(']');
+  if (a2 >= 0 && b2 > a2) tries.push(body.slice(a2, b2 + 1));
+  let data = null, err = '';
+  for (const t of tries) {
+    if (!t || !t.trim()) continue;
+    try { data = JSON.parse(t); break; } catch (e) { err = err || (e.message || ''); }
+  }
+  if (data == null) return { error: '這不是一份完整的考卷資料（JSON 解析失敗）：' + err };
+  if (Array.isArray(data)) data = { sections: data };
+  if (!data || typeof data !== 'object') return { error: '讀到的東西不是一份考卷。' };
+  let secsIn = data.sections || data.Sections || data.item && data.item.sections;
+  if (!Array.isArray(secsIn)) return { error: '裡面沒有 sections（一份考卷至少要有一個 Section）。' };
+
+  const skipped = [];
+  const sections = secsIn.map((sc, si) => {
+    const partsIn = Array.isArray(sc && sc.parts) ? sc.parts : [];
+    const parts = partsIn.map(p => {
+      const got = _examCleanPart(p);
+      if (!got) {
+        const k = (p && p.kind) || '(沒寫題型)';
+        skipped.push(`第 ${si + 1} 區的「${(p && p.title) || k}」：`
+          + (EXAM_KINDS[k] ? '內容不完整，收不進來' : `沒有「${k}」這種題型`));
+      }
+      return got;
+    }).filter(Boolean);
+    return { name: String((sc && sc.name) || '').trim() || `Section ${si + 1}`,
+             pct: +(sc && sc.pct) || 0, parts };
+  }).filter(sc => sc.parts.length);
+
+  if (!sections.length) return { error: '一大題都沒收到。' + (skipped[0] ? '（' + skipped[0] + '）' : '') };
+  const item = { type: 'exam', title: String(data.title || '').trim(),
+                 examKicker: String(data.examKicker || '').trim(), sections };
+  /* ⭐ 一樣丟進老師手打考卷用的那組檢查，配分對不對馬上看得到 */
+  return { item, sections, title: item.title, examKicker: item.examKicker,
+           skipped, warnings: examWarnings(item),
+           n: sections.reduce((x, sc) => x + sc.parts.length, 0) };
+}
+
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v515 📄 模擬考卷（Alan 給了兩張真的 G4 Formative，要做成互動版）

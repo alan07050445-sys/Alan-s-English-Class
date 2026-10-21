@@ -4132,3 +4132,32 @@ textarea.ex-essay {
    這裡只補「交卷後不給點」的灰掉狀態。 */
 .ex-face:disabled, .ex-goal:disabled { opacity: .62; cursor: default; }
 .ex-pts.soft { font-weight: 700; color: var(--ink-3); opacity: .8; }
+
+/* ══ v540 📋 貼上整份考卷 ════════════════════════════════════════════ */
+.exed-sp { flex: 1; }
+.exed-paste-btn {
+  border: 1px solid var(--border); background: var(--bg-card); border-radius: 9px;
+  padding: 5px 12px; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700;
+  color: var(--ink-2);
+}
+.exed-paste-btn:hover { border-color: var(--accent); color: var(--accent); }
+.exed-paste { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.exed-paste textarea {
+  width: 100%; resize: vertical; padding: 9px 11px; border-radius: 9px;
+  border: 1.5px solid var(--border); background: var(--bg-card);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+}
+.exed-paste-bad { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--no, #A8331F); line-height: 1.7; }
+.exed-paste-ok { margin-top: 10px; font-size: 13px; line-height: 1.75; }
+.exed-paste-ok > b { color: var(--ok, #1B5E2E); }
+.exed-paste-ok ul { margin: 6px 0; padding-left: 20px; }
+.exed-paste-ok li { font-size: 12.5px; color: var(--ink-2); }
+.exed-paste-skip { margin-top: 6px; padding: 7px 10px; border-radius: 8px;
+  background: #FDF3E2; color: #7A5200; font-size: 12.5px; font-weight: 600; line-height: 1.7; }
+.exed-paste-skip span { display: block; }
+.exed-paste-go { display: flex; gap: 8px; margin-top: 10px; }
+.exed-paste-go button {
+  border: 0; border-radius: 9px; padding: 7px 16px; cursor: pointer;
+  background: var(--accent); color: #fff; font-family: var(--sans); font-size: 13px; font-weight: 700;
+}
+.exed-paste-go button.ghost { background: none; border: 1px solid var(--border); color: var(--ink-2); }
