@@ -13,6 +13,14 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const _db      = firebase.firestore();
+/* 🔴 v550（Alan：「用 iPad Safari 登入時，很常會跳回之前刪掉和封存的 week，要重新整理才會好」）
+   iPad／iPhone 的 Safari 有一個已知的毛病：Firestore 預設用的串流連線（WebChannel）
+   會被內容過濾、省電模式或某些網路**悄悄擋掉**——不報錯、onSnapshot 就是**永遠不回資料**。
+   這時畫面只能停在「本機快取，沒有快取就是種子資料」（G4 的種子就是 Week 1~8，全是空的），
+   重新整理換一條新連線才會好。
+   ⭐ 官方建議的解法：讓它自己偵測，串流不通就改用長輪詢（long polling）。
+   ⚠ 一定要在**第一次使用 Firestore 之前**設定（這裡就是第一行），晚了會直接丟錯。 */
+try { _db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) { console.warn('firestore settings:', e); }
 const _storage = firebase.storage();
 /* v387: 預設重試上限是 600 秒——一頁遇到爛網路就會把整個 PDF 匯入卡住十分鐘、
    而且畫面上什麼都不會說。縮到 90 秒，寧可快點報錯讓老師重來。 */

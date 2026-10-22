@@ -74,6 +74,10 @@ function weekRangeOf(w, id, today) {
    加了封存旗標之後三處只要有一處沒跟上，weekIdx 就會指到別週
    （weekIdx 是 viewOrder 的索引，不是 weekOrder 的）——所以集中成一個函式。
    老師（含編輯模式）一律拿到完整清單，行為完全沒變。 */
+/* v550：各年級課程資料在 localStorage 的快取 key（訂閱 effect 與載入畫面共用，不要各寫一份）。 */
+const _CLOUD_CACHE_KEYS = { g1: 'alans-english-g1-data-v1', g2: 'alans-english-g2-data-v1', g3: 'alans-english-data-v3',
+  g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1' };
+
 function visibleWeekOrder(isTeacher, order, weeks) {
   if (isTeacher) return order || [];
   return (order || []).filter(id => {
@@ -294,7 +298,25 @@ function App() {
   const loaderStartRef = useAppRef(Date.now());
   // v322: 揭曉條件＝Firebase 解析完 ＋（老師／或暑假清單已載入）。學生要等暑假清單才不會閃過選年級畫面；
   // 老師端門口頁本來就是完整版（含年級）＝不用等。summerMetaReady 有 3 秒防呆（見下方）＝永不卡死。
-  const revealReady = authReady && (window.isAdminUser(user) || summerMetaReady);
+  /* 🔴 v550：載入畫面本來只等「登入」，**不等課程資料**。
+     雲端資料晚到（或在 iPad Safari 上卡住），畫面就先露出本機快取；沒有快取時露出**種子資料**
+     （G4 的種子是 Week 1~8，全是空的「老師正在準備」）——看起來像是舊的週次又跳回來了。
+     ⭐ 沒有快取（沒東西可以先顯示）時，載入畫面要等到雲端資料回來，最多等 5 秒。
+     有快取就照舊立刻顯示（那份快取就是上次看到的雲端資料，通常是對的）。 */
+  const [cloudSeen, setCloudSeen]           = useAppState(false);   // 這個年級的雲端資料回來過了
+  const [cloudWaitedOut, setCloudWaitedOut] = useAppState(false);   // 等了 5 秒還沒回來——不再擋載入畫面
+  const [cloudSlow, setCloudSlow]           = useAppState(false);   // 等了 4 秒——畫面上要講
+  const [cloudRetry, setCloudRetry]         = useAppState(0);       // 重連次數
+  /* 沒有快取＝沒東西可以先顯示＝一定要等雲端。
+     ⚠ 在 render 時**直接算**，不放進 effect 裡 setState：effect 比 render 晚一步，
+       中間那一拍載入畫面可能已經開始淡出了。只管六個一般年級（暑假／文法有自己的載入流程）。 */
+  const cloudNeeded = useAppMemo(() => {
+    const k = _CLOUD_CACHE_KEYS[grade];
+    if (!k) return false;
+    try { return localStorage.getItem(k) == null; } catch (e) { return false; }
+  }, [grade, cloudSeen, cloudRetry]);
+  const revealReady = authReady && (window.isAdminUser(user) || summerMetaReady)
+    && (!cloudNeeded || cloudSeen || cloudWaitedOut);
   useAppEffect(() => {
     if (revealReady) {
       const elapsed = Date.now() - loaderStartRef.current;
@@ -463,13 +485,21 @@ function App() {
     window.saveWeekOrder = _gradeOf(grade, { g1: window.saveWeekOrderG1, g2: window.saveWeekOrderG2, g4: window.saveWeekOrderG4, g5: window.saveWeekOrderG5, g6: window.saveWeekOrderG6, g3: _saveWeekOrderG3, summer: (t) => window.summerApi(t).saveWeekOrder, grammar: () => window.saveWeekOrderGR });
 
     const subscribeFn = _gradeOf(grade, { g1: window.subscribeToClassDataG1, g2: window.subscribeToClassDataG2, g4: window.subscribeToClassDataG4, g5: window.subscribeToClassDataG5, g6: window.subscribeToClassDataG6, g3: _subscribeG3, summer: (t) => window.summerApi(t).subscribe, grammar: () => window.subscribeToClassDataGR });
-    const storageKey  = _gradeOf(grade, { g1: 'alans-english-g1-data-v1', g2: 'alans-english-g2-data-v1', g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1', g3: 'alans-english-data-v3', summer: (t) => window.summerApi(t).storageKey, grammar: window.GR_STORAGE_KEY });
+    const storageKey  = _gradeOf(grade, { ..._CLOUD_CACHE_KEYS, summer: (t) => window.summerApi(t).storageKey, grammar: window.GR_STORAGE_KEY });
     const orderKey    = _gradeOf(grade, { g1: 'alans-english-g1-order-v1', g2: 'alans-english-g2-order-v1', g4: 'alans-english-g4-order-v1', g5: 'alans-english-g5-order-v1', g6: 'alans-english-g6-order-v1', g3: 'alans-english-week-order-v1', summer: (t) => window.summerApi(t).orderKey, grammar: window.GR_ORDER_KEY });
 
     cloudReadyRef.current = false;          // v355: 換年級／換教室 → 重新等雲端
+    /* v550：換年級／重新訂閱時把等待狀態歸零（有沒有快取見 cloudNeeded）。
+       ⚠ 重連（cloudRetry > 0）時不要把狀態重設回去，不然會一直重新開始計時。 */
+    if (cloudRetry === 0) { setCloudSeen(false); setCloudSlow(false); setCloudWaitedOut(false); }
+    /* 4 秒沒回來：畫面上講出來並重連一次（最多兩次）；5 秒：不再擋載入畫面（永不卡死）。
+       ⚠ 重連＝取消舊的訂閱、重新訂一次——Safari 上卡住的那條連線不會自己活過來。 */
+    const slowT  = setTimeout(() => { if (!cloudReadyRef.current) { setCloudSlow(true); if (cloudRetry < 2) setCloudRetry(n => n + 1); } }, 4000 * (cloudRetry + 1));
+    const waitT  = setTimeout(() => setCloudWaitedOut(true), 5000);
     const unsub = subscribeFn((newWeeks, newOrder) => {
       setAccessLocked(false);
       cloudReadyRef.current = true;
+      setCloudSeen(true); setCloudSlow(false);
       setWeeks(newWeeks);
       setWeekOrder(newOrder);
       // v340: 只在「這個年級第一次載入」時自動跳到本週。
@@ -499,8 +529,8 @@ function App() {
         setAccessLocked(true);
       }
     });
-    return unsub;
-  }, [grade, user?.uid]);
+    return () => { clearTimeout(slowT); clearTimeout(waitT); try { unsub && unsub(); } catch (e) {} };
+  }, [grade, user?.uid, cloudRetry]);
 
   // ── 暑假 meta（每人一份派發清單；v209 題庫＋個人清單制）────
   const [summerMeta, setSummerMeta] = useAppState({ students: {} });
@@ -3086,6 +3116,13 @@ function App() {
           )}
           {toast && <div className="toast">{toast}</div>}
           {/* v447：存檔沒成功就一直掛著，不要讓老師以為存好了（他的分段閱讀就是這樣不見的） */}
+          {/* v550：雲端資料 4 秒還沒回來——畫面上要講，不要讓人以為這就是最新的課程 */}
+          {cloudSlow && !cloudSeen && (
+            <div className="save-fail-bar cloud-slow-bar">
+              <span><b>⚠ 還沒連上雲端</b>：現在看到的可能不是最新的週次與作業。</span>
+              <button onClick={() => { try { location.reload(); } catch (e) {} }}>重新載入</button>
+            </div>
+          )}
           {saveFail && (
             <div className="save-fail-bar">
               <span><b>⚠ 剛剛那次變更沒有存進雲端</b>：{saveFail.msg}</span>

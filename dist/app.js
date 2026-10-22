@@ -108,6 +108,15 @@ function weekRangeOf(w, id, today) {
    加了封存旗標之後三處只要有一處沒跟上，weekIdx 就會指到別週
    （weekIdx 是 viewOrder 的索引，不是 weekOrder 的）——所以集中成一個函式。
    老師（含編輯模式）一律拿到完整清單，行為完全沒變。 */
+/* v550：各年級課程資料在 localStorage 的快取 key（訂閱 effect 與載入畫面共用，不要各寫一份）。 */
+var _CLOUD_CACHE_KEYS = {
+  g1: 'alans-english-g1-data-v1',
+  g2: 'alans-english-g2-data-v1',
+  g3: 'alans-english-data-v3',
+  g4: 'alans-english-g4-data-v1',
+  g5: 'alans-english-g5-data-v1',
+  g6: 'alans-english-g6-data-v1'
+};
 function visibleWeekOrder(isTeacher, order, weeks) {
   if (isTeacher) return order || [];
   return (order || []).filter(id => {
@@ -428,7 +437,28 @@ function App() {
   var loaderStartRef = useAppRef(Date.now());
   // v322: 揭曉條件＝Firebase 解析完 ＋（老師／或暑假清單已載入）。學生要等暑假清單才不會閃過選年級畫面；
   // 老師端門口頁本來就是完整版（含年級）＝不用等。summerMetaReady 有 3 秒防呆（見下方）＝永不卡死。
-  var revealReady = authReady && (window.isAdminUser(user) || summerMetaReady);
+  /* 🔴 v550：載入畫面本來只等「登入」，**不等課程資料**。
+     雲端資料晚到（或在 iPad Safari 上卡住），畫面就先露出本機快取；沒有快取時露出**種子資料**
+     （G4 的種子是 Week 1~8，全是空的「老師正在準備」）——看起來像是舊的週次又跳回來了。
+     ⭐ 沒有快取（沒東西可以先顯示）時，載入畫面要等到雲端資料回來，最多等 5 秒。
+     有快取就照舊立刻顯示（那份快取就是上次看到的雲端資料，通常是對的）。 */
+  var [cloudSeen, setCloudSeen] = useAppState(false); // 這個年級的雲端資料回來過了
+  var [cloudWaitedOut, setCloudWaitedOut] = useAppState(false); // 等了 5 秒還沒回來——不再擋載入畫面
+  var [cloudSlow, setCloudSlow] = useAppState(false); // 等了 4 秒——畫面上要講
+  var [cloudRetry, setCloudRetry] = useAppState(0); // 重連次數
+  /* 沒有快取＝沒東西可以先顯示＝一定要等雲端。
+     ⚠ 在 render 時**直接算**，不放進 effect 裡 setState：effect 比 render 晚一步，
+       中間那一拍載入畫面可能已經開始淡出了。只管六個一般年級（暑假／文法有自己的載入流程）。 */
+  var cloudNeeded = useAppMemo(() => {
+    var k = _CLOUD_CACHE_KEYS[grade];
+    if (!k) return false;
+    try {
+      return localStorage.getItem(k) == null;
+    } catch (e) {
+      return false;
+    }
+  }, [grade, cloudSeen, cloudRetry]);
+  var revealReady = authReady && (window.isAdminUser(user) || summerMetaReady) && (!cloudNeeded || cloudSeen || cloudWaitedOut);
   useAppEffect(() => {
     if (revealReady) {
       var elapsed = Date.now() - loaderStartRef.current;
@@ -645,12 +675,7 @@ function App() {
       grammar: () => window.subscribeToClassDataGR
     });
     var storageKey = _gradeOf(grade, {
-      g1: 'alans-english-g1-data-v1',
-      g2: 'alans-english-g2-data-v1',
-      g4: 'alans-english-g4-data-v1',
-      g5: 'alans-english-g5-data-v1',
-      g6: 'alans-english-g6-data-v1',
-      g3: 'alans-english-data-v3',
+      ..._CLOUD_CACHE_KEYS,
       summer: t => window.summerApi(t).storageKey,
       grammar: window.GR_STORAGE_KEY
     });
@@ -665,9 +690,27 @@ function App() {
       grammar: window.GR_ORDER_KEY
     });
     cloudReadyRef.current = false; // v355: 換年級／換教室 → 重新等雲端
+    /* v550：換年級／重新訂閱時把等待狀態歸零（有沒有快取見 cloudNeeded）。
+       ⚠ 重連（cloudRetry > 0）時不要把狀態重設回去，不然會一直重新開始計時。 */
+    if (cloudRetry === 0) {
+      setCloudSeen(false);
+      setCloudSlow(false);
+      setCloudWaitedOut(false);
+    }
+    /* 4 秒沒回來：畫面上講出來並重連一次（最多兩次）；5 秒：不再擋載入畫面（永不卡死）。
+       ⚠ 重連＝取消舊的訂閱、重新訂一次——Safari 上卡住的那條連線不會自己活過來。 */
+    var slowT = setTimeout(() => {
+      if (!cloudReadyRef.current) {
+        setCloudSlow(true);
+        if (cloudRetry < 2) setCloudRetry(n => n + 1);
+      }
+    }, 4000 * (cloudRetry + 1));
+    var waitT = setTimeout(() => setCloudWaitedOut(true), 5000);
     var unsub = subscribeFn((newWeeks, newOrder) => {
       setAccessLocked(false);
       cloudReadyRef.current = true;
+      setCloudSeen(true);
+      setCloudSlow(false);
       setWeeks(newWeeks);
       setWeekOrder(newOrder);
       // v340: 只在「這個年級第一次載入」時自動跳到本週。
@@ -701,8 +744,14 @@ function App() {
         setAccessLocked(true);
       }
     });
-    return unsub;
-  }, [grade, user?.uid]);
+    return () => {
+      clearTimeout(slowT);
+      clearTimeout(waitT);
+      try {
+        unsub && unsub();
+      } catch (e) {}
+    };
+  }, [grade, user?.uid, cloudRetry]);
 
   // ── 暑假 meta（每人一份派發清單；v209 題庫＋個人清單制）────
   var [summerMeta, setSummerMeta] = useAppState({
@@ -4059,7 +4108,15 @@ function App() {
     className: "emk-txt"
   }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u95B1\u8B80\u7406\u89E3"), /*#__PURE__*/React.createElement("em", null, "\u8CBC\u6587\u7AE0 \u2192 \u80CC\u666F\u77E5\u8B58\u30FB\u9078\u64C7\u30FB\u7C21\u7B54\u30FB\u95B1\u8B80\u6280\u5DE7"))))))), toast && /*#__PURE__*/React.createElement("div", {
     className: "toast"
-  }, toast), saveFail && /*#__PURE__*/React.createElement("div", {
+  }, toast), cloudSlow && !cloudSeen && /*#__PURE__*/React.createElement("div", {
+    className: "save-fail-bar cloud-slow-bar"
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u26A0 \u9084\u6C92\u9023\u4E0A\u96F2\u7AEF"), "\uFF1A\u73FE\u5728\u770B\u5230\u7684\u53EF\u80FD\u4E0D\u662F\u6700\u65B0\u7684\u9031\u6B21\u8207\u4F5C\u696D\u3002"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      try {
+        location.reload();
+      } catch (e) {}
+    }
+  }, "\u91CD\u65B0\u8F09\u5165")), saveFail && /*#__PURE__*/React.createElement("div", {
     className: "save-fail-bar"
   }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u26A0 \u525B\u525B\u90A3\u6B21\u8B8A\u66F4\u6C92\u6709\u5B58\u9032\u96F2\u7AEF"), "\uFF1A", saveFail.msg), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
