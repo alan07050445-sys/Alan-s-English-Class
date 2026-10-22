@@ -2928,10 +2928,21 @@ function HwRemind() {
   var [lBusy, setLBusy] = useDash(false);
   var [lOpen, setLOpen] = useDash({});
   var [aMsg, setAMsg] = useDash(null);
-  var [target, setTarget] = useDash('all');
+
+  /* v548 聊天室「提醒這週沒做完的人」留下的字條：人選與附話先填好。
+     ⚠ 讀完要清掉；⚠ 只是選好——預覽與送出都還是他自己按（那是會響在家長手機上的東西）。 */
+  var draft0 = (() => {
+    var g = null;
+    try {
+      g = window.__remindDraft;
+      window.__remindDraft = null;
+    } catch (e) {}
+    return g;
+  })();
+  var [target, setTarget] = useDash(draft0 ? 'students' : 'all');
   var [grade, setGrade] = useDash('');
-  var [picked, setPicked] = useDash([]);
-  var [note, setNote] = useDash('');
+  var [picked, setPicked] = useDash(draft0 ? draft0.emails || [] : []);
+  var [note, setNote] = useDash(draft0 ? draft0.note || '' : '');
   var [mBusy, setMBusy] = useDash(false);
   var [mRes, setMRes] = useDash(null);
   var [mMsg, setMMsg] = useDash(null);
@@ -3447,6 +3458,12 @@ function TeacherDashboard({
     if (g && g.notify) {
       try {
         window.__notifyDraft = g.notify;
+      } catch (e) {}
+    }
+    /* v548：提醒那一頁的人選也先選好（HwRemind 自己會讀）。⚠ 一樣只是選好，送出是他按。 */
+    if (g && g.remind) {
+      try {
+        window.__remindDraft = g.remind;
       } catch (e) {}
     }
   }, []);
@@ -4771,5 +4788,6 @@ Object.assign(window, {
   TeacherDashboard,
   ExamMarking,
   LessonLog,
+  HwRemind,
   dashCurrentWeekId
 }); // 後兩個匯出給對照頁單獨跑

@@ -2075,6 +2075,115 @@ function App() {
           dueDate: due
         } : null);
       }
+    } else if (plan.intent === 'remind') {
+      /* 🔔 v548：把「這週沒做完」的孩子**選好**在提醒那一頁——送出一定是他按。
+         ⚠ 這是會直接響在家長手機上的東西，聊天室不可以替他送出去（跟 LINE 公告同一條規矩）。
+         ⚠ 人選是用 askQueryAnswer 算的，跟「這週誰沒做完」那個答案同一份——
+           他剛看到的名單跟這裡選好的一定一樣。 */
+      (async () => {
+        var emails = [],
+          names = [];
+        if (plan.student) {
+          var f = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
+          if (!f || !f.email) {
+            showToast(f && f.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);
+            return;
+          }
+          emails = [f.email];
+          names = [f.name];
+        } else {
+          var data = await window.askLoadQueryData();
+          var ans = window.askQueryAnswer({
+            qtype: 'unfinished',
+            gradeId: plan.gradeId || '',
+            student: ''
+          }, {
+            roster: askRoster,
+            students: data.students,
+            gradeData: data.gradeData,
+            currentWeekId: window.dashCurrentWeekId
+          });
+          emails = (ans.rows || []).map(r => r.email).filter(Boolean);
+          names = (ans.rows || []).map(r => r.name);
+        }
+        if (!emails.length) {
+          showToast('這週沒有人需要提醒 🎉');
+          return;
+        }
+        try {
+          window.__dashGoto = {
+            tab: 'hwremind',
+            remind: {
+              emails,
+              note: plan.note || ''
+            }
+          };
+        } catch (e) {}
+        setDashOpen(true);
+        showToast(`已選好 ${emails.length} 位（${names.slice(0, 4).join('、')}${names.length > 4 ? '…' : ''}）——到「作業提醒」按預覽，確認再發`);
+      })();
+      setAskOpen(false);
+    } else if (plan.intent === 'stars') {
+      /* ⭐ v548：給／扣一位孩子的星星。⚠ 星星是他們在乎的東西，寫之前一定確認一次。 */
+      var f = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
+      if (!f || !f.email) {
+        showToast(f && f.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);
+      } else {
+        var msg = [`${f.name}：${plan.amount > 0 ? '加' : '扣'} ${Math.abs(plan.amount)} 顆星星`, plan.note ? `原因：${plan.note}` : '', (f.twins || []).length ? `\n⚠ 名單裡有長得很像的名字（${f.twins.join('、')}），確認是 ${f.name} 沒錯。` : '', '\n確定嗎？'].filter(Boolean).join('\n');
+        if (window.confirm(msg)) {
+          window.addStarEntry(f.email, {
+            amount: plan.amount,
+            note: plan.note || '（聊天室）',
+            name: f.name
+          }).then(() => showToast(`${f.name} ${plan.amount > 0 ? '+' : ''}${plan.amount} ⭐ 已記下`)).catch(() => showToast('寫入失敗，星星沒有動。'));
+        }
+      }
+      setAskOpen(false);
+    } else if (plan.intent === 'roster') {
+      /* 👥 v548 學生名單。三種都先確認；⚠ 停用不是刪除（資料與進度都留著，隨時能恢復）。 */
+      var me = String(window._currentUser && window._currentUser.email || '').toLowerCase();
+      if (plan.rop === 'add') {
+        var exists = (askRoster || []).find(r => String(r.email || '').toLowerCase() === plan.newEmail);
+        if (exists) showToast(`${exists.name || plan.newEmail} 已經在名單裡了。`);else {
+          var g = plan.gradeId || (window.gradeFromEmail ? window.gradeFromEmail(plan.newEmail) : '') || '';
+          if (window.confirm(`新增學生：${plan.student}\n帳號：${plan.newEmail}\n年級：${g ? g.toUpperCase() : '（沒有，之後可以補）'}\n\n確定嗎？`)) {
+            window.addRosterStudent(plan.newEmail, plan.student, g, me).then(() => showToast(`已新增 ${plan.student}`)).catch(() => showToast('新增失敗。'));
+          }
+        }
+      } else {
+        var _f = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
+        if (!_f || !_f.email) showToast(_f && _f.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);else {
+          var on = plan.rop === 'activate';
+          if (window.confirm(`${on ? '恢復' : '停用'} ${_f.name}？\n\n${on ? '他會重新出現在名單與統計裡。' : '停用不是刪除：進度與星星都留著，隨時可以恢復。\n他不會再出現在名單、課表統計與提醒裡。'}`)) {
+            window.setRosterStudentActive(_f.email, on).then(() => showToast(`${_f.name} 已${on ? '恢復' : '停用'}`)).catch(() => showToast('沒有成功。'));
+          }
+        }
+      }
+      setAskOpen(false);
+    } else if (plan.intent === 'unit') {
+      /* ✏️ v548 改／刪**單一個**單元。⚠ 要**唯一**符合才動手——同一週常有「測驗（1/4）（2/4）…」，
+         他只說「測驗」就刪的話，刪錯一個是救不回來的。 */
+      var wk = weeksRef.current[weekId] || {};
+      var flat = [];
+      Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(it => flat.push({
+        catId: cid,
+        item: it
+      })));
+      var hits = window.askMatchUnits(flat, plan.group);
+      if (!hits.length) showToast(`這一週找不到「${plan.group}」`);else if (hits.length > 1) {
+        showToast(`符合的有 ${hits.length} 個：${hits.slice(0, 4).map(h => h.item.title).join('、')}${hits.length > 4 ? '…' : ''}——說清楚是哪一個`);
+      } else {
+        var h = hits[0];
+        if (plan.op === 'delete') {
+          if (window.confirm(`刪掉「${h.item.title}」這一個單元嗎？\n\n學生做過的紀錄會留著，但單元會從這一週消失，救不回來。`)) {
+            handleDeleteItem(h.item.id);
+            showToast(`已刪掉「${h.item.title}」`);
+          }
+        } else if (handleRenameUnit(h.catId, h.item.id, plan.title)) {
+          showToast(`改好了：${h.item.title} → ${plan.title}`);
+        }
+      }
+      setAskOpen(false);
     } else if (plan.intent === 'timetable') {
       /* 🗓 v547 改固定課表（Alan：「改時間」）。
          ⚠ 這會改到孩子的固定上課時段，所以**一定先問**——而且要把「一起上的還有誰」
@@ -2596,6 +2705,21 @@ function App() {
     setWeeks(w);
     saveWeeksSafe(w);
     showToast(res.kept ? `改好了：${res.n} 個單元跟著改名，${res.kept} 個你自己取過名字的沒有動` : `改好了：${res.items.length} 個單元都改成「${b}」`);
+  };
+
+  /* v548 只改**一個**單元的標題（聊天室「把測驗（2/4）改名叫…」）。
+     ⚠ 只動 title，不動 group——它還是留在原本那一組。 */
+  var handleRenameUnit = (catId, itemId, newTitle) => {
+    var b = String(newTitle || '').trim();
+    if (!b) return false;
+    var w = JSON.parse(JSON.stringify(weeksRef.current));
+    var list = w[weekId] && w[weekId].items && w[weekId].items[catId];
+    var it = Array.isArray(list) && list.find(x => x && x.id === itemId);
+    if (!it) return false;
+    it.title = b;
+    setWeeks(w);
+    saveWeeksSafe(w);
+    return true;
   };
   var handleMoveItem = (catId, itemId, dir) => {
     var w = JSON.parse(JSON.stringify(weeksRef.current));

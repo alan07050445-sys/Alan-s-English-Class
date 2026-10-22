@@ -158,10 +158,10 @@ console.log('\n【6】接到畫面上');
 ok('⭐ 聊天室收到 query 直接算、直接顯示答案（不走確認卡）',
    /plan\.intent === 'query' && window\.askQueryAnswer/.test(ed) && /m\.plan\.intent !== 'query'/.test(ed));
 ok('⭐ 算法用的是後台那支（dashCurrentWeekId 匯出給它）',
-   /currentWeekId: window\.dashCurrentWeekId/.test(ed) && /LessonLog, dashCurrentWeekId/.test(dash));
+   /currentWeekId: window\.dashCurrentWeekId/.test(ed) && /Object\.assign\(window, \{[^}]*\bdashCurrentWeekId\b[^}]*\}\)/.test(dash));   // ⚠ 不釘匯出列的順序（v548 又加了 HwRemind）
 ok('⭐ 讀資料要先放一則「查詢中」，不是畫面卡住', /好，我查一下…/.test(ed));
 ok('⭐⭐ 一句話「查＋做」（「誰沒做完，順便提醒他們」）：做不到的那一半要**講出來**，不可以安靜丟掉',
-   /\/提醒\|催\|通知\|傳給\|發給\/\.test\(t\)/.test(ed) && /這一半我還不會幫你做/.test(ed));
+   /\/提醒\|催\|通知\|傳給\|發給\/\.test\(t\)/.test(ed) && /提醒這週沒做完的人」，我幫你把人選好/.test(ed));
 ok('⭐⭐ 改課表一定先 confirm，而且寫出改前→改後', /window\.confirm\(msg\)/.test(app) && /\$\{r\.before\}  →  \$\{r\.after\}/.test(app));
 ok('⭐ 一起上的人與撞時間都寫在確認框裡', /一起上，他們也會一起改/.test(app) && /跟這幾堂時間重疊/.test(app));
 ok('⭐⭐ 「只改這一次」要老實說做不到，不可以偷偷改成固定的', /if \(plan\.once\)/.test(app) && /只改這一次」我還不會/.test(app));

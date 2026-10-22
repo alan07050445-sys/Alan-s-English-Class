@@ -7415,6 +7415,13 @@ const ASK_JOBS = {
      timetable＝改固定課表的某一堂（星期幾／幾點到幾點）。 */
   query:     { zh: '直接回答問題', ico: '🔎', need: '', where: 'chat' },
   timetable: { zh: '改固定課表', ico: '🗓', need: 'student', where: 'dash' },
+  /* ══ v548（Alan：「接續做」——v547 沒做完的那幾項）══════════════════
+     remind＝把「這週沒做完」的孩子**選好**在 LINE 提醒那一頁（送出由他按，這是會響家長手機的東西）
+     stars ＝給／扣一位孩子的星星　roster＝停用／恢復／新增學生　unit＝改／刪**單一個**單元 */
+  remind:    { zh: '提醒沒做完的家長', ico: '🔔', need: '', where: 'dash' },
+  stars:     { zh: '給／扣星星', ico: '⭐', need: 'student', where: 'chat' },
+  roster:    { zh: '學生名單', ico: '👥', need: '', where: 'chat' },
+  unit:      { zh: '改／刪單一個單元', ico: '✏️', need: 'group', where: 'editor' },
 };
 
 /* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
@@ -7525,6 +7532,21 @@ The tools:
               If he wants you to MAKE practice from the mistakes ("針對 Nick 的弱點出練習"),
               that is "weak", not "query". Asking WHAT / WHO / HOW MANY ＝ query.
               A grade ("G4 誰沒做完") goes in "gradeId".
+  remind    — get the parents of students who have NOT finished this week's work ready to be
+              reminded on LINE ("提醒這週沒做完的人" / "提醒 G4 沒做完的家長" / "提醒 Nick 的家長").
+              🔴 You never send anything. The website only selects the right children on the
+              reminder screen and HE presses send. "gradeId" limits to one grade; "student" to one
+              child (leave both empty for everyone who is unfinished). Put any extra line he wants
+              in the message in "note", in his own words.
+  stars     — give or take away stars for ONE student ("Nick 加 10 顆星星" / "扣 Eric 5 顆").
+              "student" = who; "amount" = a signed whole number (+10, -5); "note" = the reason
+              he gave ("上課表現好"), else "". Never invent an amount he did not say.
+  roster    — change the student list. "rop" is exactly one of: deactivate（停用）activate（恢復）
+              add（新增）. For add, "student" = the child's name, "newEmail" = the Google account
+              he gave, "gradeId" = the grade if he said. Never invent an email.
+  unit      — rename or delete ONE single exercise (not a whole set). "group" = the exercise's
+              title as he said it; "op" = rename（改名）or delete（刪掉）; for rename put the NEW
+              title in "title". If he is talking about the whole set of exercises, use "group".
   timetable — change ONE student's regular weekly lesson slot in the fixed timetable
               ("Nick 週三改成 17:30" / "把 Eric 週二的課改到週四 18:00 到 19:30").
               "student" = who; "fromDay" = the weekday he is moving FROM (0=日…6=六, -1 if he
@@ -7538,7 +7560,7 @@ The tools:
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper tense review group marking copyweek merge assign notify query timetable unknown
+  guided exampaper tense review group marking copyweek merge assign notify query timetable remind stars roster unit unknown
 - "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
@@ -7662,9 +7684,14 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     start: (() => { const t = String(o.start || '').trim(); return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
     end:   (() => { const t = String(o.end || '').trim();   return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
     once: o.once === true,
+    /* v548：金額只收整數且上限 200——模型寫成 10000 或 NaN，程式照做就會把某個孩子的星星弄壞。 */
+    amount: (() => { const n = Math.round(+o.amount); return (isFinite(n) && Math.abs(n) <= 200) ? n : 0; })(),
+    rop: ['deactivate', 'activate', 'add'].indexOf(String(o.rop || '').trim()) >= 0 ? String(o.rop).trim() : '',
+    newEmail: (() => { const e = String(o.newEmail || '').trim().toLowerCase();
+                       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : ''; })(),
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
-  if (out.student) {
+  if (out.student && !(out.intent === 'roster' && out.rop === 'add')) {
     const hit = (roster || []).find(r => {
       const n = String((r && r.name) || '').toLowerCase();
       return n && (n === out.student.toLowerCase() || n.split(/\s+/)[0] === out.student.toLowerCase());
@@ -7691,6 +7718,23 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
       out.intent = 'unknown';
       out.ask = '要查哪一位學生？';
     }
+  }
+  if (out.intent === 'stars') {
+    if (!out.amount) { out.intent = 'unknown'; out.ask = `要給 ${out.student || '他'} 幾顆？（加或扣都可以，一次最多 200）`; }
+  }
+  if (out.intent === 'roster') {
+    if (!out.rop) { out.intent = 'unknown'; out.ask = '要做什麼？停用／恢復／新增學生'; }
+    else if (out.rop === 'add' && (!out.student || !out.newEmail)) {
+      out.intent = 'unknown'; out.ask = '新增學生要有名字跟他的 Google 帳號（email），兩個都給我。';
+    } else if (out.rop !== 'add' && !out.email) {
+      out.intent = 'unknown'; out.ask = out.ask || '要停用／恢復哪一位？';
+    }
+  }
+  if (out.intent === 'unit' && ['rename', 'delete'].indexOf(out.op) < 0) {
+    out.intent = 'unknown'; out.ask = `「${out.group || '那個單元'}」要改名還是刪掉？`;
+  }
+  if (out.intent === 'unit' && out.op === 'rename' && !out.title) {
+    out.intent = 'unknown'; out.ask = `「${out.group}」要改叫什麼？`;
   }
   if (out.intent === 'timetable' && !out.once && out.toDay < 0 && !out.start && !out.end) {
     out.intent = 'unknown';
@@ -9482,7 +9526,7 @@ function computeCheckin(checkin) {
   };
 }
 Object.assign(window, {
-  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent, renameGroupItems, askQueryAnswer, askLoadQueryData, ttMoveSlot,
+  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent, renameGroupItems, askQueryAnswer, askLoadQueryData, ttMoveSlot, askMatchUnits,
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
 
@@ -10248,7 +10292,7 @@ function askQueryAnswer(plan, ctx) {
       if (!rep.totalItems) { noTask.push(r.name || r.email); return; }
       const done = rep.completed.length;
       const hit = plan.qtype === 'notstarted' ? done === 0 : done < rep.totalItems;
-      if (hit) rows.push({ name: r.name || r.email, grade: g, done, total: rep.totalItems, pct: rep.completionRate,
+      if (hit) rows.push({ name: r.name || r.email, email: r.email, grade: g, done, total: rep.totalItems, pct: rep.completionRate,
         text: `${done}/${rep.totalItems}（${rep.completionRate}%）${done < rep.totalItems ? ' · 還差 ' + catCount(rep.pending) : ''}`,
         noDoc: !!stuOf(r)._noDoc, tone: done === 0 ? 'bad' : 'warn' });
     });
@@ -10332,6 +10376,20 @@ function askLoadQueryData() {
     _askQueryCache = { at: Date.now(), v };
     return v;
   });
+}
+
+/* ══ v548 在這一週裡找「單一個單元」（「測驗（2/4）」「Unit 1 字義選擇」）══════════
+   ⚠ 比對一律要**唯一**才動手：同一週常常有「測驗（1/4）」「測驗（2/4）」…，
+     他只說「測驗」的話，刪錯一個是救不回來的。→ 多個符合就回候選清單叫他說清楚。
+   ⚠ 完全相同的優先（標題一樣就不是「包含」），不然「Unit 1」會同時命中「Unit 10」。 */
+function askMatchUnits(flat, name) {
+  const norm = (t) => String(t || '').toLowerCase().replace(/[—–-]/g, '-').replace(/[（）()]/g, m => m === '（' || m === '(' ? '(' : ')').replace(/\s+/g, ' ').trim();
+  const q = norm(name);
+  if (!q) return [];
+  const all = (flat || []).filter(x => x && x.item);
+  const exact = all.filter(x => norm(x.item.title) === q);
+  if (exact.length) return exact;
+  return all.filter(x => { const t = norm(x.item.title); return t && (t.indexOf(q) >= 0 || q.indexOf(t) >= 0); });
 }
 
 /* ══ v547 🗓 聊天室改固定課表 ═══════════════════════════════════════

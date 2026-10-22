@@ -6277,7 +6277,7 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
          查的這一半我做得到，做的那一半（提醒）聊天室還不會——
          如果什麼都不說，他會以為已經提醒了（安靜地少做一半是最難發現的）。 */
       if (/提醒|催|通知|傳給|發給/.test(t)) {
-        ans.foot = (ans.foot ? ans.foot + '\n' : '') + '你也提到要提醒／通知——這一半我還不會幫你做。後台「作業提醒」可以手動發給沒做完的家長。';
+        ans.foot = (ans.foot ? ans.foot + '\n' : '') + '你也提到要提醒——再跟我說一句「提醒這週沒做完的人」，我幫你把人選好（送出由你按）。';
       }
       setMsgs(m => m.filter(x => !x.pending).concat([{ me: false, text: ans.head, answer: ans }]));
       return;
@@ -6306,6 +6306,9 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                 'Nick 錯最多的是哪些？',
                 '針對 Nick 的弱點出練習',
                 'Nick 週三的課改成 17:30',
+                '提醒這週沒做完的人',
+                'Nick 加 10 顆星星，上課表現很好',
+                '把測驗（2/4）改名叫 期中複習 B',
                 /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
                 '這篇文章做成分段閱讀（貼上文章）',
                 '出一份外師的考前複習卷',

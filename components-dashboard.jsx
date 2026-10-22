@@ -2403,10 +2403,13 @@ function HwRemind() {
   const [lOpen, setLOpen] = useDash({});
   const [aMsg, setAMsg]   = useDash(null);
 
-  const [target, setTarget] = useDash('all');
+  /* v548 聊天室「提醒這週沒做完的人」留下的字條：人選與附話先填好。
+     ⚠ 讀完要清掉；⚠ 只是選好——預覽與送出都還是他自己按（那是會響在家長手機上的東西）。 */
+  const draft0 = (() => { let g = null; try { g = window.__remindDraft; window.__remindDraft = null; } catch (e) {} return g; })();
+  const [target, setTarget] = useDash(draft0 ? 'students' : 'all');
   const [grade, setGrade]   = useDash('');
-  const [picked, setPicked] = useDash([]);
-  const [note, setNote]     = useDash('');
+  const [picked, setPicked] = useDash(draft0 ? (draft0.emails || []) : []);
+  const [note, setNote]     = useDash(draft0 ? (draft0.note || '') : '');
   const [mBusy, setMBusy]   = useDash(false);
   const [mRes, setMRes]     = useDash(null);
   const [mMsg, setMMsg]     = useDash(null);
@@ -2812,6 +2815,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     /* v534：公告的稿子先打好（LineNotify 自己會讀這張字條）。
        ⚠ 只是填好——**送出那一下還是老師自己按**，這是會直接送到家長手機的東西。 */
     if (g && g.notify) { try { window.__notifyDraft = g.notify; } catch (e) {} }
+    /* v548：提醒那一頁的人選也先選好（HwRemind 自己會讀）。⚠ 一樣只是選好，送出是他按。 */
+    if (g && g.remind) { try { window.__remindDraft = g.remind; } catch (e) {} }
   }, []);
   const [hotOpen,        setHotOpen]       = useDash(null);       // v307 (F11): 展開哪一列常錯題看「哪些孩子錯」
 
@@ -3901,4 +3906,4 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
   );
 }
 
-Object.assign(window, { TeacherDashboard, ExamMarking, LessonLog, dashCurrentWeekId });   // 後兩個匯出給對照頁單獨跑
+Object.assign(window, { TeacherDashboard, ExamMarking, LessonLog, HwRemind, dashCurrentWeekId });   // 後兩個匯出給對照頁單獨跑
