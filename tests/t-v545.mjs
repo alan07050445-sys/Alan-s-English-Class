@@ -120,7 +120,9 @@ ok('⭐ 兩份以上才收，一份就照原樣畫',
    /if \(!sub\.base \|\| sub\.items\.length < 2\) return sub\.items\.map/.test(qmC));
 ok('⭐⭐ 正在做的那一份在裡面要自動打開（不然點進去會找不到自己在哪）',
    /const hasSel = sub\.items\.some\(it => selectedItem && selectedItem\.id === it\.id\);/.test(qmC)
-   && /const open = openSubs\[sk\] \|\| hasSel;/.test(qmC));
+   /* ⚠ v546：本來釘 `openSubs[sk] || hasSel`——那正是「點進練習就收不起來」的 bug。
+      要守的是「沒按過才看 hasSel」，寫法見 t-v546。 */
+   && /const open = openSubs\[sk\] !== undefined \? openSubs\[sk\] : hasSel;/.test(qmC));
 ok('⭐ 標頭要寫幾份、做完幾份（收起來也看得出進度）',
    /\{sub\.items\.length\} 份/.test(qm) && /qm-sub-done/.test(qm));
 ok('⭐ 整組同一個截止日才顯示一次，不同就讓每一份自己顯示',

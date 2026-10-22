@@ -497,7 +497,16 @@ html.fest-hw .pwb {
   border: none; box-shadow: none;
   color: transparent;                      /* 藏掉原本的字母 */
   background: var(--hw-jack) center/contain no-repeat;
-  filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
+  /* 🔴 v546（Alan：「萬聖節版本的泡泡轉場會有一點卡」）
+     這裡本來有 `filter: drop-shadow(0 6px 16px …)`。
+     ⚠ 這就是 v397 為了解泡泡卡頓**特地拿掉**的同一個東西（blur／陰影濾鏡每幀重繪，
+       36 顆一起就掉幀）——我做萬聖節時又加回來了，等於把已經修過的 bug 原樣放回去。
+     實測（同時放 8 次＝288 顆泡泡，把負載放大才看得出差別）：
+       有 drop-shadow ：平均 32.8ms、p95 117ms、掉 15 幀
+       拿掉           ：平均 16.7ms、p95 16.9ms、掉  0 幀（滿 60fps）
+     ⚠ 圖片（SVG）本身不是問題：只換成純色底，一樣卡 33ms。
+     ⭐ 動畫中的元素不可以掛 filter／backdrop-filter／大範圍 box-shadow。
+       泡泡是在近黑的夜色紗幕上飛，陰影本來就幾乎看不到，拿掉不影響畫面。 */
 }
 html.fest-hw .pwb::after { content: none; }   /* 原本的高光點 */
 html.fest-hw .pwb:nth-child(3n)   { background-image: var(--hw-ghost); }

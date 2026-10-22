@@ -65,12 +65,16 @@ ok('⭐⭐ 一行 JSX 都不用改——泡泡本來就是圓的，只換底圖'
    return i > 0 && !/fest|hw-/.test(shell.slice(i, i + 1800)); })());
 ok('⭐ 紗幕換成夜色', /html\.fest-hw \.pw-veil \{[\s\S]{0,180}#2A1B45/.test(css));
 ok('⭐ 泡泡換成南瓜／小鬼／蝙蝠', (() => {
-   const i = css.indexOf('html.fest-hw .pwb {');
-   const blk = css.slice(i, i + 700);
-   return /--hw-jack/.test(blk) && /--hw-ghost/.test(blk) && /--hw-bat/.test(blk); })());
+   /* ⚠ 本來是「從 .pwb 那一行往後取 700 個字元」——這種固定視窗一加長註解
+      （v546 解釋卡頓的那一段）就把後面的規則擠出去了，但行為完全沒變。
+      → 先把註解拿掉，改成各自確認有這條規則。 */
+   const c2 = css.replace(/\/\*[\s\S]*?\*\//g, '');
+   return /html\.fest-hw \.pwb \{[^}]*--hw-jack/.test(c2)
+     && /\.pwb:nth-child\(3n\)\s*\{[^}]*--hw-ghost/.test(c2)
+     && /\.pwb:nth-child\(5n\+2\)\s*\{[^}]*--hw-bat/.test(c2); })());
 ok('⚠ 泡泡裡原本有字母，換成圖之後要藏起來（不然圖上壓一個咖啡色的字）', (() => {
-   const i = css.indexOf('html.fest-hw .pwb {');
-   return /color:\s*transparent/.test(css.slice(i, i + 300)); })());
+   const c2 = css.replace(/\/\*[\s\S]*?\*\//g, '');
+   return /html\.fest-hw \.pwb \{[^}]*color:\s*transparent/.test(c2); })());
 ok('   原本的高光點也要拿掉', /html\.fest-hw \.pwb::after \{ content: none/.test(css));
 
 console.log('\n【3】③⑤ 底翻黑的地方，字有沒有跟著翻白');

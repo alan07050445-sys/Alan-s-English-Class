@@ -1218,6 +1218,19 @@ function QuizModeCategoryView({
      v542 之後一組可能有 4 份測驗、5 份字義選擇、4 篇短文……29 個單元攤開要捲很久。
      → 同一種題型的「（1/4）（2/4）…」收成一個小組，點一下才展開。 */
   var [openSubs, setOpenSubs] = useQM({});
+  /* 選了另一個練習（例如從「下一個」跳過去）：之前**明確收合**的記錄清掉，
+     讓新選的那份所在的小組自動打開。⚠ 只在「選的練習換了」才清——
+     停在同一個練習時，使用者自己按的收合要算數。 */
+  var selIdForSubs = selectedItem ? selectedItem.id : null;
+  useQME(() => {
+    setOpenSubs(x => {
+      var keep = {};
+      Object.keys(x).forEach(k => {
+        if (x[k] === true) keep[k] = true;
+      });
+      return Object.keys(keep).length === Object.keys(x).length ? x : keep;
+    });
+  }, [selIdForSubs]);
   var [libMeta, setLibMeta] = useQM(null);
   var [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
   // v350: 直接在單元列指派學生（不必透過「暑假發派」頁，也不必設成作業）
@@ -1902,7 +1915,11 @@ function QuizModeCategoryView({
         var sk = `${g.key}::${sub.base}`;
         /* 正在做的那一份在裡面就自動打開——不要讓他點進去之後找不到自己在哪 */
         var hasSel = sub.items.some(it => selectedItem && selectedItem.id === it.id);
-        var open = openSubs[sk] || hasSel;
+        /* 🔴 v546（Alan：「按下其中一個練習就無法收合了」）
+           本來寫 `openSubs[sk] || hasSel`：使用者按收合寫進去的 false，
+           被後面的「正在做的那份在裡面就強制打開」蓋掉——所以一點進練習就再也收不起來。
+           ⭐ 使用者**明確按過**的永遠贏；沒按過（undefined）才看 hasSel。 */
+        var open = openSubs[sk] !== undefined ? openSubs[sk] : hasSel;
         var done = sub.items.filter(it => (qmProg[`${weekId}_${it.id}`] || {}).done).length;
         /* 整組同一個截止日才顯示一次；不同就讓每一份自己顯示 */
         var dues = [...new Set(sub.items.map(it => ((homework || {})[it.id] || {}).dueDate).filter(Boolean))];
