@@ -51,5 +51,14 @@ function grab2(a, b) { return data.slice(data.indexOf(a), data.indexOf(b, data.i
 const pf = (w) => sb2.chk.prefix(w, 'en-') || sb2.chk.prefix(w, 'em-') || sb2.chk.prefix(w, 'mis-');
 ok('真的有字首的字照樣過：enlarge embed misplace misunderstand', ['enlarge', 'embed', 'misplace', 'misunderstand', 'endanger', 'empower'].every(pf));
 ok('enemy／energy／empty／mission 不算', ['enemy', 'energy', 'empty', 'mission'].every(w => !pf(w)));
+console.log('\n【拍考卷辨識的容錯（真的 AI 跑出來的問題）】');
+ok('short 沒帶 questions 也撿得回來（摘要題以前整題消失）', /p\.kind === 'short' && !\(Array\.isArray\(p\.questions\) && p\.questions\.length\)/.test(data));
+ok('認得摘要題並掛上摘要評分表', /sumLike[\s\S]{0,160}rubricSet: 'summary'/.test(data));
+ok('被清洗丟掉的大題會列進「跳過」，不再無聲消失', /讀到了但內容不完整，沒收進來/.test(data));
+ok('只有文章的那一頁不再被丟掉（section 帶 passage）', /\.filter\(sc => sc\.parts\.length \|\| sc\.passage\)/.test(data));
+ok('文章接到後面第一個要先讀的大題上', /NEEDS_READ[\s\S]{0,400}tgt\.readText = sc\.passage/.test(data));
+ok('被拆開的 Section 併回有編號的那個', /while \(secs\[i \+ 1\] && !\(\+secs\[i \+ 1\]\.pct\)/.test(data));
+ok('配分保險：(N pts. each) × 題數', /pts\?\\\.\?\\s\*each/.test(data) || /each\\s\*\\\)/.test(data) || /pts\?\.\?/.test(data));
+ok('圈字的 checkArg 斜線／頓號／or 都當分隔', /\\\/\|\]\+\|\\bor\\b/.test(data));
 console.log(fail ? `\n❌ t-v558：${pass} 過 / ${fail} 失敗` : `\n✅ t-v558：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

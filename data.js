@@ -7849,6 +7849,7 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
 "parts" may ONLY use these kinds. Anything else goes in "skipped".
   "circle"  — "Read and Circle N <pattern> words" over a passage.
               "check" must be one of: vce | team | digraph | suffix | prefix
+              With several patterns, separate them with SPACES in "checkArg": "mis- en- em-".
                  "-VCe words"            -> "check":"vce"
                  "vowel team inside"     -> "check":"team"
                  "digraph"               -> "check":"digraph"
@@ -7905,11 +7906,19 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               "pts" is 0 — it is not scored.
   "short"   — any question the child writes a long answer to. Give "pts" and, if a marking
               rubric is printed, a one-line "rubric".
+              🔴 ALWAYS include "questions":[{"q":"<the printed task, exactly as printed>","pts":N}].
+              A "Summarize the text / write three important details" task is a "short" with
+              "rubricSet":"summary" (see below), even though it is a part of a bigger Part 2.
               🔴 If the printed rubric has the Kang Chiao writing criteria (Content, Details,
               Creativity, Text Structure, Length, Grammar, Vocabulary) add "rubricSet":"writing".
               If it has Explanation / Relevant / Effort, add "rubricSet":"basic".
               If it is a "Summary Writing Rubric" (details from the beginning / middle / end, chronological
               order, complete sentences, own words), add "rubricSet":"summary".
+
+A page that has ONLY a reading selection (a title, maybe a photo, numbered paragraphs) and says
+"Read the selection. Then complete Part 1 and Part 2" has no questions of its own. Do NOT put it in
+"skipped". Output it as a section with "parts":[] and a "passage" field holding the whole selection
+(include its title as the first line), keeping the Section heading exactly as printed.
 
 If a part is still something else, do NOT guess — put a short description in "skipped".
 
@@ -7944,13 +7953,21 @@ function _examReadOne(content) {
         || data?.content?.[0]?.text || '';
       const o = _gnSalvageJson(_aiStripFence(txt));
       if (!o || typeof o !== 'object') return null;
+      const dropped = [];
       const secs = (Array.isArray(o.sections) ? o.sections : []).map(sc => ({
         name: String((sc && sc.name) || '').trim(),
         pct: +((sc && sc.pct) || 0) || 0,
-        parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(_examCleanPart).filter(Boolean),
-      })).filter(sc => sc.parts.length);
+        /* v560：只有文章、沒有題目的那一頁（「Read the selection. Then complete Part 1 and 2」） */
+        passage: String((sc && sc.passage) || '').trim(),
+        parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
+          const c = _examCleanPart(pt);
+          /* ⚠ 讀進來卻被清洗丟掉的，一定要告訴老師——以前是整題消失、什麼都不說 */
+          if (!c && pt && (pt.title || pt.kind)) dropped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」讀到了但內容不完整，沒收進來`);
+          return c;
+        }).filter(Boolean),
+      })).filter(sc => sc.parts.length || sc.passage);
       return { title: String(o.title || '').trim(), sections: secs,
-               skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean) };
+               skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean).concat(dropped) };
     }, 90000);
 }
 
@@ -7976,6 +7993,17 @@ function _examCleanPart(p) {
   if (p.kind === 'circle' && !p.passage) {
     const alt = [p.text, p.story, p.paragraph].find(x => typeof x === 'string' && x.trim());
     if (alt) p = { ...p, passage: alt };
+  }
+  /* v560：摘要題實測——模型回的是「一個 short、沒有 questions 陣列」（只有 title／need／rubric），
+     而下面的 short 分支要 questions，結果整題無聲無息被丟掉（連「跳過」都沒列）。
+     撿回來：用印出來的題目當那一題，並認出「摘要」就掛上摘要評分表。 */
+  if (p.kind === 'short' && !(Array.isArray(p.questions) && p.questions.length)) {
+    const task = String(p.question || p.prompt || p.instruction || p.title || '').trim();
+    if (task) {
+      const sumLike = /summar/i.test(task + ' ' + (p.rubric || '') + ' ' + (p.rubricSet || ''));
+      p = { ...p, questions: [{ q: task, pts: +p.pts || 0, rubric: String(p.rubric || '') }],
+            ...(sumLike && !p.rubricSet ? { rubricSet: 'summary' } : {}) };
+    }
   }
   const base = { kind: p.kind, title: String(p.title || '').trim(),
                  instruction: String(p.instruction || '').trim(), pts: +p.pts || 0 };
@@ -8116,8 +8144,8 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     v.sections.forEach(sc => {
       const key = sc.name.toLowerCase().replace(/\s+/g, '');
       const hit = key && secs.find(x => x.key === key);
-      if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; return; }
-      secs.push({ key, name: sc.name, pct: sc.pct, parts: sc.parts.slice() });
+      if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; if (sc.passage && !hit.passage) hit.passage = sc.passage; return; }
+      secs.push({ key, name: sc.name, pct: sc.pct, passage: sc.passage || '', parts: sc.parts.slice() });
     });
   });
   /* 模型把一個 Part 拆成好幾個（一題一個）時，連續的同型大題併回去。
@@ -8137,10 +8165,32 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     });
     sc.parts = merged;
   });
+  /* v560 ① 「只有文章」的那一頁：文章接到後面第一個要先讀文章的大題上（選擇題／排順序／摘要／長文），
+         而且模型常把同一個 Section 拆成名字不一樣的幾段（"Section: Reading Skills"、"Part 2: …"），
+         沒有自己 Section 編號的、配分比例是 0 的，併回前面那個有編號的 Section。 */
+  const NEEDS_READ = { quiz: 1, order: 1, short: 1, essay: 1 };
+  for (let i = 0; i < secs.length; i++) {
+    const sc = secs[i];
+    if (!sc.passage) continue;
+    /* 後面連續幾段「沒有自己的 Section 編號、配分比例是 0」的，全部是同一個 Section 的內容 */
+    while (secs[i + 1] && !(+secs[i + 1].pct) && !/^section\s*\d/i.test(secs[i + 1].name)) {
+      sc.parts = sc.parts.concat(secs[i + 1].parts); secs.splice(i + 1, 1);
+    }
+    const tgt = sc.parts.find(pt => NEEDS_READ[pt.kind] && !pt.readText && !pt.passage);
+    if (tgt) tgt.readText = sc.passage;
+    else skipped.push('有一篇文章（' + sc.passage.slice(0, 30).replace(/\n/g, ' ') + '…）找不到要接在哪一題，請自己貼上');
+  }
+  /* v560 ② 配分保險：模型有時只回「(3 pts. each)」沒回總分 → 自己乘出來 */
+  secs.forEach(sc => sc.parts.forEach(pt => {
+    if (+pt.pts > 0 || (EXAM_KINDS[pt.kind] || {}).noScore) return;
+    const m = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*each\s*\)/i.exec((pt.title || '') + ' ' + (pt.instruction || ''));
+    const n = examPartN(pt);
+    if (m && n) pt.pts = Math.round(+m[1] * n * 10) / 10;
+  }));
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,
-    sections: secs.map(({ key, ...rest }) => rest),
+    sections: secs.map(({ key, passage, ...rest }) => rest),
   };
   /* ⭐ 不另外寫驗證——丟進 v515 老師手打考卷用的同一組檢查。 */
   return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item) };
@@ -8277,7 +8327,8 @@ const EXAM_CHECKIN = {
    ⚠ 它不是安靜壞掉（出卷頁會說「短文裡只有 0 個符合」），
      但老師看不出為什麼，所以這裡直接讓它支援。 */
 function examCircleCheck(part) {
-  const args = String((part && part.checkArg) || '').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean);
+  /* v560：模型有時寫 mis-/en-/em- 或 mis- or en-——斜線、頓號、or 都當分隔 */
+  const args = String((part && part.checkArg) || '').split(/[\s,，、\/|]+|\bor\b/i).map(x => x.trim()).filter(Boolean);
   return { kind: String((part && part.check) || '').toLowerCase(), args };
 }
 function examCircleHit(word, part) {
