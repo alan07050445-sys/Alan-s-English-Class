@@ -2991,6 +2991,9 @@ function QuizResultScreen({ finalScore, total, finalPct, title, wrongList, onRes
           : `再 ${Math.max(1, 80 - finalPct)} 分就達成任務 ⭐`}
       </div>
 
+      {window.hwDoubleOn && window.hwDoubleOn() && (
+        <div className="hw-x2-chip" role="note">🎃 萬聖節限時 · 這次的星星 <b>×2</b></div>
+      )}
       <div className="qm-result-msg">{msg}</div>
 
       <div className="qm-result-btns">

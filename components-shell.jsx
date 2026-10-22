@@ -1530,6 +1530,17 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
       {window.festOn && window.festOn() && (
         <div className="fest-day-wrap"><FestCountdown big/></div>
       )}
+      {/* v552（Alan：「首頁特別提到像遊戲一樣、漂亮特效」）：限時雙倍的遊戲式橫幅。
+          ⚠ 只在 10/20～10/31 才 render，跟星星加倍用同一個 hwDoubleOn。 */}
+      {window.hwDoubleOn && window.hwDoubleOn() && (
+        <div className="hw-x2-banner" aria-label="萬聖節限時星星雙倍">
+          <i className="hw-x2-sp s1">✦</i><i className="hw-x2-sp s2">🦇</i>
+          <i className="hw-x2-sp s3">✦</i><i className="hw-x2-sp s4">🎃</i>
+          <span className="hw-x2-tag">LIMITED EVENT · 限時活動</span>
+          <span className="hw-x2-main">🎃 萬聖節 <b>星星 ×2</b> 🎃</span>
+          <span className="hw-x2-sub">10/20 – 10/31 做練習，星星直接雙倍！像闖關遊戲一樣，一路衝滿星星 ⭐</span>
+        </div>
+      )}
       {/* v392: 扇形封面四張卡——只有第一張（單字）維持 loading="eager"，其餘三張改 lazy。
           原因：這四張在扇形排列裡本來就有大半被旁邊的卡片蓋住，而且實測時間軸顯示它們要到
           t=3113ms 才開始下載，等於一起搶頻寬卻沒有一起被看到。改 lazy 之後瀏覽器會把它們

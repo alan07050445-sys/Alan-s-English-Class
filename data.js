@@ -7027,11 +7027,13 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
       const k = findKey(wid, it.id);
       if (k) used.add(k);
       const prog = getProg(wid, it.id);
-      const n = autoStarsForItem(it, prog, cloudShape);
+      const base = autoStarsForItem(it, prog, cloudShape);
+      const dbl = base > 0 && hwDoubleAt(prog && (prog.ts || prog.done));
+      const n = dbl ? base * HW_DOUBLE.mult : base;
       if (n > 0) {
         total += n;
         entries.push({ id: `auto:${wid}_${it.id}`, auto: true, date: dateOf(prog),
-                       amount: n, note: `完成「${it.title || it.id}」` });
+                       amount: n, note: `完成「${it.title || it.id}」` + (dbl ? ' 🎃雙倍' : '') });
       }
     });
     /* ✨ v477（Alan：「一整組單字或是文法都完成並且通過門檻，有沒有額外加分？」）
@@ -7084,11 +7086,13 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
   Object.keys(its).forEach(k => {
     if (used.has(k)) return;
     const prog = its[k];
-    const n = autoStarsForItem(null, prog, cloudShape);
-    if (n <= 0) return;
+    const base = autoStarsForItem(null, prog, cloudShape);
+    if (base <= 0) return;
+    const dbl = hwDoubleAt(prog && (prog.ts || prog.done));
+    const n = dbl ? base * HW_DOUBLE.mult : base;
     total += n;
     entries.push({ id: `auto:${k}`, auto: true, past: true, date: dateOf(prog),
-                   amount: n, note: `完成「${(prog && prog.itemTitle) || '之前的練習'}」` });
+                   amount: n, note: `完成「${(prog && prog.itemTitle) || '之前的練習'}」` + (dbl ? ' 🎃雙倍' : '') });
   });
 
   return { total, entries };
@@ -9599,6 +9603,27 @@ function festNow(now) {
 function festOn(now)      { return !!festNow(now); }
 function festIs(id, now)  { const f = festNow(now); return !!f && f.id === id; }
 
+/* ══ v552 🎃 萬聖節限時星星雙倍（Alan：「halloween 限時分數雙倍」）══════════
+   在 10/20～10/31 之間「完成的」練習，自動集點的星星 ×2。
+   ⭐ 用**完成當下的時間戳**判斷，不是用「現在幾號」：
+     星星是由進度算出來的（v361），如果用現在的日期，11/1 一到所有人的星星
+     會一起縮水一半。用 prog.ts，雙倍期間賺到的就永遠是雙倍。
+   ⚠ 跟 festNow 的老師開關無關：老師預覽萬聖節外觀，不可以讓星星跟著變。
+   ⚠ 年份用「現在」的年份；沒有時間戳（舊的本機紀錄）就不加倍，寧可少給。 */
+const HW_DOUBLE = { from: '10-20', to: '10-31', mult: 2 };
+function hwDoubleAt(t) {
+  const n = Number(t || 0);
+  if (!(n > 1e11)) return false;
+  const d = new Date(n);
+  if (d.getFullYear() !== new Date().getFullYear()) return false;
+  const md = _festMD(d);
+  return md >= HW_DOUBLE.from && md <= HW_DOUBLE.to;
+}
+function hwDoubleOn(now) {
+  const md = _festMD(now || new Date());
+  return md >= HW_DOUBLE.from && md <= HW_DOUBLE.to;
+}
+
 /* 掛在 <html> 上，對應的 styles-holiday*.css 才會生效。
    ⚠ 掛在 <html> 不是 <body>：有些浮層（放大圖、裝扮室）是 createPortal 到 body 的，
      掛 body 也會吃到，但 <html> 連 body 自己的背景都蓋得到。
@@ -9670,7 +9695,7 @@ function festCountText(now) {
   return f.hi;                                  // 當天過了之後（例如 11/01 還開著）
 }
 
-Object.assign(window, { festOn, festIs, festNow, festApply, festSetOverride, festOverride,
+Object.assign(window, { hwDoubleOn, hwDoubleAt, HW_DOUBLE, festOn, festIs, festNow, festApply, festSetOverride, festOverride,
   festIsDay, festDaysTo, festCountText, festCountParts, FESTS, FEST_1010 });
 
 /* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。

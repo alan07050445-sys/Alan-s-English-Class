@@ -3544,7 +3544,10 @@ function QuizResultScreen({
     className: "qm-result-pct"
   }, "\u7B54\u5C0D\u7387 ", animPct, "%"), /*#__PURE__*/React.createElement("div", {
     className: `qm-result-goal${reached ? ' reached' : ''}`
-  }, reached ? '🎉 達成任務！這一項完成了' : `再 ${Math.max(1, 80 - finalPct)} 分就達成任務 ⭐`), /*#__PURE__*/React.createElement("div", {
+  }, reached ? '🎉 達成任務！這一項完成了' : `再 ${Math.max(1, 80 - finalPct)} 分就達成任務 ⭐`), window.hwDoubleOn && window.hwDoubleOn() && /*#__PURE__*/React.createElement("div", {
+    className: "hw-x2-chip",
+    role: "note"
+  }, "\uD83C\uDF83 \u842C\u8056\u7BC0\u9650\u6642 \xB7 \u9019\u6B21\u7684\u661F\u661F ", /*#__PURE__*/React.createElement("b", null, "\xD72")), /*#__PURE__*/React.createElement("div", {
     className: "qm-result-msg"
   }, msg), /*#__PURE__*/React.createElement("div", {
     className: "qm-result-btns"
