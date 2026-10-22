@@ -4176,3 +4176,29 @@ textarea.ex-essay {
 .qs-story-i { font-size: 12.5px; font-weight: 800; color: var(--accent); }
 /* v543 上課紀錄：把會填進去的內容整段顯示出來（他要確認的就是這一段） */
 .ask-plan-did { display: block; margin-top: 3px; white-space: pre-wrap; font-weight: 600; line-height: 1.7; }
+
+/* ══ v545 📂 同一種題型的（1/4）（2/4）收成一小組 ══════════════════
+   v542 之後一組可能有 4 份測驗、5 份字義選擇、4 篇短文——29 個單元攤開要捲很久。
+   ⚠ 顏色一律走變數（萬聖節那層會把它們整組翻成深色）。 */
+.qm-sub { margin: 2px 0; }
+.qm-sub-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 12px; border-radius: 11px; cursor: pointer;
+  border: 1px solid var(--border-soft, #E8E2D0); background: none;
+  font-family: var(--sans); text-align: left;
+}
+.qm-sub-head:hover { border-color: var(--border, #DDD6C4); background: rgba(0,0,0,.02); }
+.qm-sub.open .qm-sub-head { border-color: var(--border, #DDD6C4); }
+.qm-sub-chev { flex: none; font-size: 11px; color: var(--ink-3); width: 10px; }
+.qm-sub-name { font-size: 14.5px; font-weight: 800; color: var(--ink); }
+.qm-sub-n {
+  flex: none; padding: 1px 8px; border-radius: 999px;
+  background: var(--bg, #F4F0E7); border: 1px solid var(--border-soft, #E8E2D0);
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink-3);
+}
+.qm-sub-due { flex: none; font-size: 11.5px; font-weight: 800; color: var(--accent); }
+.qm-sub-done { margin-left: auto; font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--ink-3); }
+.qm-sub-done.all { color: var(--ok, #1F6B4B); }
+/* 展開的那幾份往右縮一點，看得出來是同一組底下的 */
+.qm-sub-rows { padding-left: 14px; margin-top: 2px;
+  border-left: 2px solid var(--border-soft, #E8E2D0); }

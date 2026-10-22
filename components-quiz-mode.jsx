@@ -404,6 +404,32 @@ function taMarkWrong(text, part) {
   return [t.slice(0, i), <mark key="m" className="ta-wrong-mark">{t.slice(i, i + p.length)}</mark>, t.slice(i + p.length)];
 }
 
+/* 作業到期還有幾天——小組標頭與單元列用**同一份**（兩邊各算一次會走鐘） */
+function qmDueText(dueDate) {
+  if (!dueDate) return null;
+  const d = new Date(dueDate + 'T00:00:00');
+  const diff = Math.ceil((d - new Date()) / 86400000);
+  return diff > 0 ? `${diff}天` : diff === 0 ? '今天到期' : diff >= -7 ? '已過期' : '已結束';
+}
+
+/* v545：把「測驗（1/4）測驗（2/4）…」收成一小組。
+   ⭐ 判斷用的是**畫面上真的顯示的那個標籤**（qmShortLabel），不是 item.title——
+     標籤才是學生看到的東西，而且同一個標題在不同組會顯示成不同的標籤。
+   ⚠ 只有「同一個題型名稱、而且真的有（n/m）」才收；
+     沒有編號的單元一律維持原樣，不要憑空多一層。 */
+function qmSubGroups(list, groupName) {
+  const out = [];
+  (list || []).forEach(it => {
+    const lab = qmShortLabel(it, groupName);
+    const m = String(lab).match(/^(.*?)\s*[（(]\s*\d+\s*\/\s*\d+\s*[)）]\s*$/);
+    const base = m ? m[1].trim() : '';
+    const last = out[out.length - 1];
+    if (base && last && last.base === base) { last.items.push(it); return; }
+    out.push({ base, items: [it] });
+  });
+  return out;
+}
+
 function qmShortLabel(item, groupName) {
   const title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
@@ -935,6 +961,10 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const isTeacherView = !!(window.isAdminUser && window.isAdminUser(window._currentUser));
   const libAdminView = isLibView && isTeacherView;
   const [openGroups, setOpenGroups] = useQM({});
+  /* v545（Alan：「如果有題目類型有分 1234 之類的就再分組，不然全部展開也太長」）
+     v542 之後一組可能有 4 份測驗、5 份字義選擇、4 篇短文……29 個單元攤開要捲很久。
+     → 同一種題型的「（1/4）（2/4）…」收成一個小組，點一下才展開。 */
+  const [openSubs, setOpenSubs] = useQM({});
   const [libMeta, setLibMeta] = useQM(null);
   const [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
   // v350: 直接在單元列指派學生（不必透過「暑假發派」頁，也不必設成作業）
@@ -1296,11 +1326,9 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
               homeworkMainIds.has(item.id) ||
               item.id === fallbackMainId
             );
-            const dueLabel = hw?.dueDate ? (() => {
-              const d = new Date(hw.dueDate + 'T00:00:00');
-              const diff = Math.ceil((d - new Date()) / 86400000);
-              return diff > 0 ? `📌 ${diff}天` : diff === 0 ? '📌 今天到期' : diff >= -7 ? '📌 已過期' : '已結束'; // v266
-            })() : null;
+            const dueLabel = hw?.dueDate
+              ? (qmDueText(hw.dueDate) === '已結束' ? '已結束' : `📌 ${qmDueText(hw.dueDate)}`)   // v266
+              : null;
 
             // v390: 學生端整列改成 <button>，鍵盤才進得去（老師端維持 div——裡面有巢狀按鈕）
             const RowTag = editMode ? 'div' : 'button';
@@ -1556,10 +1584,38 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                     <span className="qm-gres-go">→</span>
                   </button>
                 ) : null}
-                {openGroups[g.key]
-                  ? (editMode ? g.items : [...g.items].sort((a, b) => qmItemRank(a) - qmItemRank(b)))
-                      .map((it, ii, arr) => renderUnitRow(it, g.name, editMode ? { list: arr, idx: ii } : null))
-                  : null}
+                {openGroups[g.key] ? (() => {
+                  const rows = editMode ? g.items : [...g.items].sort((a, b) => qmItemRank(a) - qmItemRank(b));
+                  /* ⚠ 編輯模式維持**攤平**：老師要在這裡上下移、刪單一個單元，
+                     多一層收合只會擋路（而且他本來就是來處理個別單元的）。 */
+                  if (editMode) return rows.map((it, ii, arr) => renderUnitRow(it, g.name, { list: arr, idx: ii }));
+                  return qmSubGroups(rows, g.name).map((sub, si) => {
+                    if (!sub.base || sub.items.length < 2) return sub.items.map(it => renderUnitRow(it, g.name, null));
+                    const sk = `${g.key}::${sub.base}`;
+                    /* 正在做的那一份在裡面就自動打開——不要讓他點進去之後找不到自己在哪 */
+                    const hasSel = sub.items.some(it => selectedItem && selectedItem.id === it.id);
+                    const open = openSubs[sk] || hasSel;
+                    const done = sub.items.filter(it => (qmProg[`${weekId}_${it.id}`] || {}).done).length;
+                    /* 整組同一個截止日才顯示一次；不同就讓每一份自己顯示 */
+                    const dues = [...new Set(sub.items.map(it => ((homework || {})[it.id] || {}).dueDate).filter(Boolean))];
+                    return (
+                      <div className={'qm-sub' + (open ? ' open' : '')} key={'sub' + si}>
+                        <button className="qm-sub-head" onClick={() => setOpenSubs(x => ({ ...x, [sk]: !open }))}>
+                          <span className="qm-sub-chev">{open ? '▾' : '▸'}</span>
+                          <span className="qm-sub-name">{sub.base}</span>
+                          <span className="qm-sub-n">{sub.items.length} 份</span>
+                          {dues.length === 1 && <span className="qm-sub-due">📌 {qmDueText(dues[0])}</span>}
+                          <span className={'qm-sub-done' + (done === sub.items.length ? ' all' : '')}>
+                            {done === sub.items.length ? '✓ 做完了' : `${done}/${sub.items.length}`}
+                          </span>
+                        </button>
+                        {open && <div className="qm-sub-rows">
+                          {sub.items.map(it => renderUnitRow(it, g.name, null))}
+                        </div>}
+                      </div>
+                    );
+                  });
+                })() : null}
               </div>
             ) : renderUnitRow(g.single));
           })()}

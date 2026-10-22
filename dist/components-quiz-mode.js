@@ -554,6 +554,38 @@ function taMarkWrong(text, part) {
     className: "ta-wrong-mark"
   }, t.slice(i, i + p.length)), t.slice(i + p.length)];
 }
+
+/* 作業到期還有幾天——小組標頭與單元列用**同一份**（兩邊各算一次會走鐘） */
+function qmDueText(dueDate) {
+  if (!dueDate) return null;
+  var d = new Date(dueDate + 'T00:00:00');
+  var diff = Math.ceil((d - new Date()) / 86400000);
+  return diff > 0 ? `${diff}天` : diff === 0 ? '今天到期' : diff >= -7 ? '已過期' : '已結束';
+}
+
+/* v545：把「測驗（1/4）測驗（2/4）…」收成一小組。
+   ⭐ 判斷用的是**畫面上真的顯示的那個標籤**（qmShortLabel），不是 item.title——
+     標籤才是學生看到的東西，而且同一個標題在不同組會顯示成不同的標籤。
+   ⚠ 只有「同一個題型名稱、而且真的有（n/m）」才收；
+     沒有編號的單元一律維持原樣，不要憑空多一層。 */
+function qmSubGroups(list, groupName) {
+  var out = [];
+  (list || []).forEach(it => {
+    var lab = qmShortLabel(it, groupName);
+    var m = String(lab).match(/^(.*?)\s*[（(]\s*\d+\s*\/\s*\d+\s*[)）]\s*$/);
+    var base = m ? m[1].trim() : '';
+    var last = out[out.length - 1];
+    if (base && last && last.base === base) {
+      last.items.push(it);
+      return;
+    }
+    out.push({
+      base,
+      items: [it]
+    });
+  });
+  return out;
+}
 function qmShortLabel(item, groupName) {
   var title = item.title || '';
   if (groupName && title.toLowerCase().startsWith(String(groupName).toLowerCase())) {
@@ -1182,6 +1214,10 @@ function QuizModeCategoryView({
   var isTeacherView = !!(window.isAdminUser && window.isAdminUser(window._currentUser));
   var libAdminView = isLibView && isTeacherView;
   var [openGroups, setOpenGroups] = useQM({});
+  /* v545（Alan：「如果有題目類型有分 1234 之類的就再分組，不然全部展開也太長」）
+     v542 之後一組可能有 4 份測驗、5 份字義選擇、4 篇短文……29 個單元攤開要捲很久。
+     → 同一種題型的「（1/4）（2/4）…」收成一個小組，點一下才展開。 */
+  var [openSubs, setOpenSubs] = useQM({});
   var [libMeta, setLibMeta] = useQM(null);
   var [stuFilter, setStuFilter] = useQM('all'); // 'all' | 'none' | email
   // v350: 直接在單元列指派學生（不必透過「暑假發派」頁，也不必設成作業）
@@ -1570,11 +1606,8 @@ function QuizModeCategoryView({
       var hasQuiz = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isSentOrder || isExam || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || isFlashcard && (item.cards || []).length > 0;
       var hw = (homework || {})[item.id]; // { dueDate }
       var isMainMission = !editMode && (explicitMainIds.has(item.id) || homeworkMainIds.has(item.id) || item.id === fallbackMainId);
-      var dueLabel = hw?.dueDate ? (() => {
-        var d = new Date(hw.dueDate + 'T00:00:00');
-        var diff = Math.ceil((d - new Date()) / 86400000);
-        return diff > 0 ? `📌 ${diff}天` : diff === 0 ? '📌 今天到期' : diff >= -7 ? '📌 已過期' : '已結束'; // v266
-      })() : null;
+      var dueLabel = hw?.dueDate ? qmDueText(hw.dueDate) === '已結束' ? '已結束' : `📌 ${qmDueText(hw.dueDate)}` // v266
+      : null;
 
       // v390: 學生端整列改成 <button>，鍵盤才進得去（老師端維持 div——裡面有巢狀按鈕）
       var RowTag = editMode ? 'div' : 'button';
@@ -1856,10 +1889,47 @@ function QuizModeCategoryView({
       className: "qm-gres-tx"
     }, /*#__PURE__*/React.createElement("b", null, "\u53C3\u8003\u8CC7\u6599"), /*#__PURE__*/React.createElement("span", null, [groupRes[`${cat.id}::${g.name}`].yt ? '影片' : null, groupRes[`${cat.id}::${g.name}`].fileUrl ? '課文檔案' : null, groupRes[`${cat.id}::${g.name}`].note ? '老師的話' : null].filter(Boolean).join(' · ') || '點開來看')), /*#__PURE__*/React.createElement("span", {
       className: "qm-gres-go"
-    }, "\u2192")) : null, openGroups[g.key] ? (editMode ? g.items : [...g.items].sort((a, b) => qmItemRank(a) - qmItemRank(b))).map((it, ii, arr) => renderUnitRow(it, g.name, editMode ? {
-      list: arr,
-      idx: ii
-    } : null)) : null) : renderUnitRow(g.single));
+    }, "\u2192")) : null, openGroups[g.key] ? (() => {
+      var rows = editMode ? g.items : [...g.items].sort((a, b) => qmItemRank(a) - qmItemRank(b));
+      /* ⚠ 編輯模式維持**攤平**：老師要在這裡上下移、刪單一個單元，
+         多一層收合只會擋路（而且他本來就是來處理個別單元的）。 */
+      if (editMode) return rows.map((it, ii, arr) => renderUnitRow(it, g.name, {
+        list: arr,
+        idx: ii
+      }));
+      return qmSubGroups(rows, g.name).map((sub, si) => {
+        if (!sub.base || sub.items.length < 2) return sub.items.map(it => renderUnitRow(it, g.name, null));
+        var sk = `${g.key}::${sub.base}`;
+        /* 正在做的那一份在裡面就自動打開——不要讓他點進去之後找不到自己在哪 */
+        var hasSel = sub.items.some(it => selectedItem && selectedItem.id === it.id);
+        var open = openSubs[sk] || hasSel;
+        var done = sub.items.filter(it => (qmProg[`${weekId}_${it.id}`] || {}).done).length;
+        /* 整組同一個截止日才顯示一次；不同就讓每一份自己顯示 */
+        var dues = [...new Set(sub.items.map(it => ((homework || {})[it.id] || {}).dueDate).filter(Boolean))];
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'qm-sub' + (open ? ' open' : ''),
+          key: 'sub' + si
+        }, /*#__PURE__*/React.createElement("button", {
+          className: "qm-sub-head",
+          onClick: () => setOpenSubs(x => ({
+            ...x,
+            [sk]: !open
+          }))
+        }, /*#__PURE__*/React.createElement("span", {
+          className: "qm-sub-chev"
+        }, open ? '▾' : '▸'), /*#__PURE__*/React.createElement("span", {
+          className: "qm-sub-name"
+        }, sub.base), /*#__PURE__*/React.createElement("span", {
+          className: "qm-sub-n"
+        }, sub.items.length, " \u4EFD"), dues.length === 1 && /*#__PURE__*/React.createElement("span", {
+          className: "qm-sub-due"
+        }, "\uD83D\uDCCC ", qmDueText(dues[0])), /*#__PURE__*/React.createElement("span", {
+          className: 'qm-sub-done' + (done === sub.items.length ? ' all' : '')
+        }, done === sub.items.length ? '✓ 做完了' : `${done}/${sub.items.length}`)), open && /*#__PURE__*/React.createElement("div", {
+          className: "qm-sub-rows"
+        }, sub.items.map(it => renderUnitRow(it, g.name, null))));
+      });
+    })() : null) : renderUnitRow(g.single));
   })())), /*#__PURE__*/React.createElement("div", {
     className: "qm-quiz-area"
   }, selectedItem && !editMode && /*#__PURE__*/React.createElement(window.FocusBtn, null), selectedItem && !editMode && phase === 'intro' && QM_TYPE_ZH[selectedItem.type] && /*#__PURE__*/React.createElement("div", {

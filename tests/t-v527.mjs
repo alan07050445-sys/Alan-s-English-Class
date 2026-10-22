@@ -101,9 +101,12 @@ ok('⭐ 這些規則是**撈出來的**不是手列的（數量會在上百條�
 
 console.log('\n【7】老師後台刻意留在亮色');
 ok('⭐⭐ .dash-overlay／.modal-backdrop 把顏色變數原樣還原', (() => {
-   const i = css.indexOf('html.fest-hw .dash-overlay');
+   /* ⚠ v545：要先把註解拿掉再切——那一段的說明裡引用了 `{ color-scheme: dark }`，
+      裡面那個 } 會讓「切到下一個 }」提早收手（v473 記過的同一件事）。 */
+   const c2 = css.replace(/\/\*[\s\S]*?\*\//g, '');
+   const i = c2.indexOf('html.fest-hw .dash-overlay');
    if (i < 0) return false;
-   const blk = css.slice(i, css.indexOf('}', i));
+   const blk = c2.slice(i, c2.indexOf('}', i));
    return /--bg:\s*#F4F0E7/.test(blk) && /--ink:\s*#15130E/.test(blk)
        && /--ok-bg:\s*#EAF3EE/.test(blk); })());
 ok('   理由寫在旁邊（學生看不到＋欄位太多＋我沒辦法一頁一頁點完）',
