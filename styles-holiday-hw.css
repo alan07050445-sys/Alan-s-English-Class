@@ -922,7 +922,7 @@ html.fest-hw .tt-meta, html.fest-hw .tt-note { color: #AE9FCC; }
 html.fest-hw .tt-group-title { color: #F4EFFF; }
 html.fest-hw .tt-group-count { background: rgba(255,255,255,.08); color: #D9CEF2; }
 html.fest-hw .tt-group-rows { border-left-color: rgba(255,255,255,.14); }
-html.fest-hw .tt-row:hover, html.fest-hw .tt-group-head:hover { background: rgba(255,255,255,.06); }
+html.fest-hw .tt-row:hover, html.fest-hw .tt-group-head:hover, html.fest-hw .tt-group-name:hover { background: rgba(255,255,255,.06); }
 html.fest-hw .tt-empty, html.fest-hw .tt-alldone { color: #C5B8E3; }
 html.fest-hw .tt-ic { background: rgba(255,255,255,.1); }
 html.fest-hw .tt-group-ico { background: transparent; }
@@ -1603,3 +1603,8 @@ html.fest-hw .mx-handle {
 @keyframes hwx2Pop{50%{transform:scale(1.14)}}
 @keyframes hwx2Float{50%{transform:translateY(-6px) rotate(12deg);opacity:.4}}
 @media (prefers-reduced-motion:reduce){.hw-x2-banner,.hw-x2-banner::after,.hw-x2-main b,.hw-x2-sp,.hw-x2-chip{animation:none}}
+
+/* v556（Alan：「滑鼠滑到上面反白」）：今日任務的分組列是 .tt-group-name（按鈕），
+   平常的 hover 是米白底，字被萬聖節改成淺色 → 滑過去看不到字。上面那條寫成 .tt-group-head 打錯了。 */
+html.fest-hw .tt-group-name:hover,
+html.fest-hw .tt-group-name:focus-visible { background: rgba(255,255,255,.08); color: #F4EFFF; }

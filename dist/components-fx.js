@@ -2654,6 +2654,17 @@ function MascotLayer() {
   }, [hwOn]);
   var [petId, setPetId] = useFx(mxGetPet); // v401: 現在陪你的是哪一隻
   var [menu, setMenu] = useFx(false); // 長按叫出來的小選單
+  /* v556（Alan：「按旁邊就關掉，不然每次都要按取消」）：選單開著時，按到選單以外的地方就收起來。
+     ⚠ 用 pointerdown 不是 click：長按 500ms 叫出選單時，放開手指的那一下不會誤關。
+     ⚠ capture 階段：選單自己有 stopPropagation，冒泡階段會收不到。 */
+  useFxE(() => {
+    if (!menu) return;
+    var off = e => {
+      if (!(e.target && e.target.closest && e.target.closest('.mx-menu'))) setMenu(false);
+    };
+    document.addEventListener('pointerdown', off, true);
+    return () => document.removeEventListener('pointerdown', off, true);
+  }, [menu]);
   var [petPick, setPetPick] = useFx(false); // v401: 夥伴圖鑑（從小選單打開）
   /* v459：長按在某些平板上真的按不出來（瀏覽器搶走）。除了攔截右鍵選單之外，
      再留一條「看得到」的路：點一下牠，旁邊會冒出一顆小小的 ⋯，五秒後自己消失。
