@@ -1327,7 +1327,7 @@ function StarBurst({
   var cy = typeof window !== 'undefined' ? window.innerHeight * 0.38 : 150;
 
   // Generate star data once (random, no memo needed — rendered once then removed)
-  var EMOJIS = ['⭐', '✨', '🌟', '💫', '⭐', '🌟'];
+  var EMOJIS = window.festIs && window.festIs('hw') ? ['🎃', '🎃', '🦇', '👻', '🎃', '✨'] : ['⭐', '✨', '🌟', '💫', '⭐', '🌟'];
   var stars = React.useRef(Array.from({
     length: count
   }, (_, i) => {
@@ -2078,6 +2078,60 @@ function installFestCursor() {
 }
 try {
   installFestCursor();
+} catch (e) {}
+
+/* ══ v555 🎃 萬聖節：全站的「星星」都換成南瓜（Alan：「所有的星星也都改成這個特效，包括商店、完成獲得的特效星星」）
+   做法是在 DOM 層把文字裡的 ⭐ 🌟 換成 🎃——商店、星星餘額、結算、老師後台一次全包，
+   不用逐一去改 100 多個地方，而且之後新加的星星也自動變南瓜。
+   ⚠ 只在萬聖節外觀開著的時候做（festIs('hw')）；節慶一過就不裝，什麼都不會變。
+   ⚠ 只改「顯示」：input／textarea／可編輯區不碰，資料裡存的字一個都沒動。
+   ⚠ 只換 ⭐🌟 兩個 emoji。★☆（5 星評分的實心／空心）換了會對不上，不動。 */
+function installFestStars() {
+  if (typeof document === 'undefined' || window.__festStars) return;
+  if (!(window.festIs && window.festIs('hw'))) return;
+  window.__festStars = true;
+  var RE = /[\u2B50\u{1F31F}]\uFE0F?/gu;
+  var SKIP = 'script,style,textarea,input,select,[contenteditable="true"]';
+  var fix = n => {
+    if (n.nodeType === 3) {
+      var v = n.nodeValue;
+      if (v && RE.test(v)) {
+        RE.lastIndex = 0;
+        var p = n.parentElement;
+        if (p && p.closest(SKIP)) return;
+        n.nodeValue = v.replace(RE, '🎃');
+      }
+      RE.lastIndex = 0;
+    } else if (n.nodeType === 1 && !n.matches(SKIP)) {
+      var w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+      var t;
+      while (t = w.nextNode()) fix(t);
+    }
+  };
+  var busy = false;
+  var mo = new MutationObserver(muts => {
+    if (busy) return;
+    busy = true;
+    try {
+      muts.forEach(m => {
+        if (m.type === 'characterData') fix(m.target);else m.addedNodes.forEach(fix);
+      });
+    } finally {
+      busy = false;
+    }
+  });
+  var start = () => {
+    fix(document.body);
+    mo.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+  };
+  if (document.body) start();else document.addEventListener('DOMContentLoaded', start);
+}
+try {
+  installFestStars();
 } catch (e) {}
 function LoginScreen({
   onLogin,
