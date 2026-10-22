@@ -1538,7 +1538,6 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
           <i className="hw-x2-sp s3">✦</i><i className="hw-x2-sp s4">🎃</i>
           <span className="hw-x2-tag">LIMITED EVENT · 限時活動</span>
           <span className="hw-x2-main">🎃 萬聖節 <b>星星 ×2</b> 🎃</span>
-          <span className="hw-x2-sub">10/20 – 10/31 做練習，星星直接雙倍！像闖關遊戲一樣，一路衝滿星星 ⭐</span>
         </div>
       )}
       {/* v392: 扇形封面四張卡——只有第一張（單字）維持 loading="eager"，其餘三張改 lazy。

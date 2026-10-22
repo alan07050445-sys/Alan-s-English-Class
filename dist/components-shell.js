@@ -2137,9 +2137,7 @@ function LoginScreen({
     className: "hw-x2-tag"
   }, "LIMITED EVENT \xB7 \u9650\u6642\u6D3B\u52D5"), /*#__PURE__*/React.createElement("span", {
     className: "hw-x2-main"
-  }, "\uD83C\uDF83 \u842C\u8056\u7BC0 ", /*#__PURE__*/React.createElement("b", null, "\u661F\u661F \xD72"), " \uD83C\uDF83"), /*#__PURE__*/React.createElement("span", {
-    className: "hw-x2-sub"
-  }, "10/20 \u2013 10/31 \u505A\u7DF4\u7FD2\uFF0C\u661F\u661F\u76F4\u63A5\u96D9\u500D\uFF01\u50CF\u95D6\u95DC\u904A\u6232\u4E00\u6A23\uFF0C\u4E00\u8DEF\u885D\u6EFF\u661F\u661F \u2B50")), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83C\uDF83 \u842C\u8056\u7BC0 ", /*#__PURE__*/React.createElement("b", null, "\u661F\u661F \xD72"), " \uD83C\uDF83")), /*#__PURE__*/React.createElement("div", {
     className: "lc-fan",
     "aria-hidden": "true"
   }, /*#__PURE__*/React.createElement("div", {
