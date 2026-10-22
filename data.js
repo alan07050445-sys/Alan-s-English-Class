@@ -1718,6 +1718,10 @@ ${_AI_MINIFY}`;
 
 /* 規則檢查器。AI 回傳 check:{kind, arg}，程式自己判每個字符不符合。
    判不出來的（kind 不認得）就整份退回——寧可不出，也不要出錯的答案。 */
+const WS_FALSE_PREFIX = new Set(('enemy enemies energy energetic empty emptied engine engines english enough enter entered entering '
+  + 'entire entirely entrance entry entries envelope environment enormous ensure embassy ember emerald emergency emotion emotions '
+  + 'emperor empire empress emphasis miss missed misses missing mission missions missile mist misty mister mistress '
+  + 'mice mile miles milk mill million mind mine mint minute minus mirror').split(' '));
 const WS_CHECKS = {
   /* VCe：母音-子音-e 結尾，而且那個母音前面不能再有母音
      （pause 的 au 是母音組合，不是 VCe；tissue 的 ue 也不是）。
@@ -1733,6 +1737,9 @@ const WS_CHECKS = {
   prefix: (w, arg) => {
     const a = String(arg || '').replace(/-$/, '').toLowerCase();
     const x = String(w || '').trim().toLowerCase();
+    /* v559：只看開頭字母會把 enemy／energy／empty／mission 都當成有字首——
+       它們只是剛好開頭一樣，不是「字首＋字根」。常見的假朋友列在這裡。 */
+    if (WS_FALSE_PREFIX.has(x)) return false;
     return !!a && x.length > a.length && x.startsWith(a);
   },
   // 母音組合／雙字母：ai / ay / ea / ee / ei / ie / oa / ue / aw / oo…

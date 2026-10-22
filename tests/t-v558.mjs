@@ -44,5 +44,12 @@ const B = sb.of({});
 ok('舊的三項照舊是 4~0，滿分算法沒變', sb.bands(B, B.criteria[0]).map(b => b.n).join('') === '43210'
    && sb.pts({ explain: 4, relevant: 4, effort: 4 }, 20, 4, B.criteria) === 20);
 ok('提示詞教 AI 認得 summary', /"rubricSet":"summary"/.test(data));
+console.log('\n【字首檢查不被假朋友騙】');
+const sb2 = {}; vm.createContext(sb2);
+vm.runInContext(grab2('const WS_FALSE_PREFIX', '/* 🔴 v484') + '\nthis.chk=WS_CHECKS;', sb2);
+function grab2(a, b) { return data.slice(data.indexOf(a), data.indexOf(b, data.indexOf(a))); }
+const pf = (w) => sb2.chk.prefix(w, 'en-') || sb2.chk.prefix(w, 'em-') || sb2.chk.prefix(w, 'mis-');
+ok('真的有字首的字照樣過：enlarge embed misplace misunderstand', ['enlarge', 'embed', 'misplace', 'misunderstand', 'endanger', 'empower'].every(pf));
+ok('enemy／energy／empty／mission 不算', ['enemy', 'energy', 'empty', 'mission'].every(w => !pf(w)));
 console.log(fail ? `\n❌ t-v558：${pass} 過 / ${fail} 失敗` : `\n✅ t-v558：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);
