@@ -737,6 +737,8 @@ html.fest-hw .page-mission .qm-sidebar-cat::before {
   position: fixed; inset: 0; pointer-events: none; z-index: 4;
   overflow: hidden;
 }
+/* 封面專用：比 .lc-cover（fixed、z-index 300）高一點，其他頁的圖案仍留在 z-index 4（不蓋住閱讀與單字卡） */
+.hw-trail-layer.hw-trail-top { z-index: 301; }
 .hw-trail {
   position: fixed; width: 30px; height: 30px;
   margin: -15px 0 0 -15px;

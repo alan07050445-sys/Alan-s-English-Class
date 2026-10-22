@@ -1461,6 +1461,19 @@ function installFestCursor() {
     host.className = 'hw-trail-layer';
     host.setAttribute('aria-hidden', 'true');
     document.body.appendChild(host);
+    /* 🔴 v551（Alan：「第二頁、第三頁的鼠標都有萬聖節主題，但我的首頁怎麼沒有變」）
+       封面（.lc-cover）是 position:fixed、z-index:300 的整頁蓋板，
+       而上面那一層只有 z-index:4 → 圖案**有生出來，但整個被封面蓋在底下**。
+       第二、三頁是一般版面（沒有蓋板）所以看得到。
+       v528／v529 我是用「數 DOM 節點」驗證的（生出 8 個），所以當時回報「有在跑」，
+       其實肉眼看不見——⭐ 驗證特效要問「那個位置最上面的元素是誰」，不是「有沒有生出來」。
+       ⚠ 不能把整層一起抬高：閱讀與單字卡的全螢幕層同樣是 z-index:300，
+         抬高會讓蝙蝠飛到小朋友正在讀的內容上（v528 刻意不做）。
+         所以**只有封面**用一層比它高一點的（.hw-trail-top）。 */
+    const hostTop = document.createElement('div');
+    hostTop.className = 'hw-trail-layer hw-trail-top';
+    hostTop.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(hostTop);
 
     const KINDS = ['bat', 'ghost', 'star', 'bat', 'star'];
     let last = null, i = 0;
@@ -1477,14 +1490,14 @@ function installFestCursor() {
       sp.style.top = y + 'px';
       sp.style.setProperty('--dx', (Math.random() * 36 - 18).toFixed(1) + 'px');
       sp.style.setProperty('--rot', (Math.random() * 50 - 25).toFixed(1) + 'deg');
-      host.appendChild(sp);
+      (t.closest('.lc-cover') ? hostTop : host).appendChild(sp);
       const tm = setTimeout(() => { try { sp.remove(); } catch (er) {} timers.delete(tm); }, 1200);
       timers.add(tm);
     };
     document.addEventListener('pointermove', onMove, { passive: true });
     /* 換頁時把還在飄的清掉，免得它們留在 DOM 上 */
     window.addEventListener('pagehide', () => {
-      try { host.querySelectorAll('.hw-trail').forEach(n => n.remove()); } catch (er) {}
+      try { document.querySelectorAll('.hw-trail-layer .hw-trail').forEach(n => n.remove()); } catch (er) {}
       timers.forEach(clearTimeout);
     });
   }

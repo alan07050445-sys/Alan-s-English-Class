@@ -112,7 +112,9 @@ ok('   拖尾不可以擋到點擊（會按不到登入鈕）', /\.hw-trail \{[\
 ok('   換頁時要把還在飄的清乾淨', (() => {
    const i = shell.indexOf('function installFestCursor');
    const b = shell.slice(i, shell.indexOf('\nfunction ', i + 10));
-   return /pagehide/.test(b) && /querySelectorAll\('\.hw-trail'\)[\s\S]{0,80}remove\(\)/.test(b); })());
+   /* ⚠ v551：封面多了一層（.hw-trail-top），清除改成 `.hw-trail-layer .hw-trail`（兩層一起清）。
+      本來釘的是字面 querySelectorAll('.hw-trail')，釘寫法不是釘行為。 */
+   return /pagehide/.test(b) && /querySelectorAll\('[^']*\.hw-trail'\)[\s\S]{0,80}remove\(\)/.test(b); })());
 
 console.log('\n【4】圖案真的畫得出來（這次兩個坑都是「完全不報錯但畫不出來」）');
 const uris = [...css.matchAll(/url\("(data:image\/svg\+xml,[^"]*)"\)/g)].map(m => m[1]);
