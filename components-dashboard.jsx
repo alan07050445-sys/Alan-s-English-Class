@@ -3477,7 +3477,7 @@ function ExamMarking({ students }) {
                             <label className="mk-cr" key={cr.id}>
                               <span className="mk-cr-n">{cr.zh}<i>{cr.en}</i></span>
                               <span className="mk-cr-btns">
-                                {RB.bands.map(b => (
+                                {(window.examBandsOf ? window.examBandsOf(RB, cr) : RB.bands).map(b => (
                                   <button key={b.n} className={c[cr.id] === b.n ? 'on' : ''}
                                     title={b.zh ? `${b.zh}（${cr.tip}）` : cr.tip}
                                     onClick={() => setCell(pk, i, { [cr.id]: b.n, _ai: false })}>{b.n}</button>

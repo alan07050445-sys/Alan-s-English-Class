@@ -2103,7 +2103,7 @@ function installFestStars() {
       }
       RE.lastIndex = 0;
     } else if (n.nodeType === 1 && !n.matches(SKIP)) {
-      var w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+      var w = document.createTreeWalker(n, window.NodeFilter.SHOW_TEXT);
       var t;
       while (t = w.nextNode()) fix(t);
     }

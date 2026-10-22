@@ -48,6 +48,7 @@ const CASES = {
               passage:'Penguins have a thick layer of fat called blubber under their skin.' },
   essay:    { kind:'essay', pts:45, prompt:'Write a narrative about a time you were brave.',
               vocab:['curious','brave'], paras:5, sentsPerPara:4, rubricSet:'writing' },
+  order:    { kind:'order', pts:10, events:['A team earned a place.','They traveled abroad.','They won the final.'] },
   checkin:  { kind:'checkin', pts:0,
               goals:['Read every question carefully.','Stay calm and do my best.'] },
 };

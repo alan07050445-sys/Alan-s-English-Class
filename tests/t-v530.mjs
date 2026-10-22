@@ -57,8 +57,10 @@ ok('⭐ 分數不是允許的等第就整份作廢（不要只夾回來就用）
       所以檢查從「在 0~max 之間」改成「必須是允許的等第之一」——更嚴，不是更鬆。 */
    const i = data.indexOf('async function aiGradeRubric');
    const b = data.slice(i, data.indexOf('\n}', i));
+   /* v557：摘要評分表每一項滿分不同，那種沒有等第的套組改成「0~這一項的滿分」；
+      有等第的套組（寫作七項）照舊必須是允許的等第。 */
    return /const allowed = new Set\(R\.bands\.map/.test(data)
-     && /!allowed\.has\(n\)\) return null/.test(b); })());
+     && /allowed\.has\(n\)/.test(b) && /return null/.test(b); })());
 ok('⭐ 每一項都要有一句理由，沒有就作廢', (() => {
    const i = data.indexOf('async function aiGradeRubric');
    return /if \(!out\[c\.id\]\.why\) return null/.test(data.slice(i, data.indexOf('\n}', i))); })());

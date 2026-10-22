@@ -1527,7 +1527,7 @@ function installFestStars() {
       }
       RE.lastIndex = 0;
     } else if (n.nodeType === 1 && !n.matches(SKIP)) {
-      const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+      const w = document.createTreeWalker(n, window.NodeFilter.SHOW_TEXT);
       let t; while ((t = w.nextNode())) fix(t);
     }
   };

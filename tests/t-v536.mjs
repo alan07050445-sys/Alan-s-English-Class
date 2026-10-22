@@ -106,7 +106,7 @@ ok('⭐⭐ 還沒改仍然是 null 不是 0（跟 v530 同一條規矩）',
 ok('⭐⭐ AI 只能回允許的等第——回一個 6 的話整份作廢', (() => {
    /* 寫作卷只有 7/5/3/0，模型回 6 的話老師在畫面上根本點不到那一格。 */
    const i = data.indexOf('const allowed = new Set(R.bands.map');
-   return i > 0 && /if \(!isFinite\(n\) \|\| !allowed\.has\(n\)\) return null;/.test(data); })());
+   return i > 0 && /: allowed\.has\(n\);\s*\n\s*if \(!isFinite\(n\) \|\| !okN\) return null;/.test(data); })());
 ok('⭐ 提示詞是照準則**組出來**的，不是寫死三項',
    /\{BANDS\}/.test(data) && /\{CRITERIA\}/.test(data)
    && /R\.criteria\.map\(c => `- \$\{c\.id\} : \$\{c\.en\}/.test(data));
@@ -117,7 +117,7 @@ ok('⭐ 學生看到的評分也照那一大題的準則', /window\.examRubricOf
 ok('⭐⭐ 用哪一套 rubric 要跟著學生的答案一起存，老師端才看得到七項',
    /rubricSet: pp\.part\.rubricSet \|\| 'basic'/.test(qm));
 ok('⭐ 老師批改畫面照等第畫按鈕（不是 0~max 一整排）',
-   /RB\.bands\.map\(b => \(/.test(dash) && /className=\{c\[cr\.id\] === b\.n \? 'on' : ''\}/.test(dash));
+   /\(window\.examBandsOf \? window\.examBandsOf\(RB, cr\) : RB\.bands\)\.map\(b => \(/.test(dash) && /className=\{c\[cr\.id\] === b\.n \? 'on' : ''\}/.test(dash));
 ok('⭐ AI 批改知道這一題用哪一套', /part: w \}\)/.test(dash));
 ok('⭐ 出卷端選得到套組', /window\.EXAM_RUBRIC_SETS \|\| \{\}\)\.map/.test(ed) && /rubricSet: k/.test(ed));
 ok('   兩種新題型在出卷端有說明', /storymap: '貼文章/.test(ed) && /usewords: '一行就是詞庫/.test(ed));

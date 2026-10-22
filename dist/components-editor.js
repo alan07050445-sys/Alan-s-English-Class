@@ -560,6 +560,7 @@ function EditorModal({
         genq: '貼文章。學生要自己出「文章上沒有」的問題。上面的「個」＝要出幾個問題。',
         storymap: '貼文章。學生要填開頭／中間／結尾三格。上面的「個」＝每一格寫幾句。',
         usewords: '一行就是詞庫，空白或逗號分開：extreme protect shelter。上面的「個」＝要造幾個句子。',
+        order: '一行一個事件，**照正確的順序**寫（最早發生的在最上面）。學生看到的是打亂的，要自己標 1、2、3…。每個事件算一格。',
         /* ══ v538 ══ */
         fixbox: '第一行＝改好的那幾個字（逗號分開）：Taipei, I, Monday, English, May。' + '空一行，再貼那一段文章。格子數＝答案的個數，大小寫要寫對才算對。',
         evidence: '第一行＝要問的問題（Why can penguins live in the cold?）。' + '空一行，再貼那篇文章。上面的「個」＝要寫幾個細節，每一個都要引用文章裡的話。',
@@ -775,7 +776,55 @@ function EditorModal({
           ...x,
           parts: x.parts.filter((_, k) => k !== pi)
         }))
-      }, "\u2715")), /*#__PURE__*/React.createElement("textarea", {
+      }, "\u2715")), (pt.kind === 'quiz' || pt.kind === 'order' || pt.kind === 'short' || pt.kind === 'essay') && /*#__PURE__*/React.createElement("div", {
+        className: "exed-share"
+      }, /*#__PURE__*/React.createElement("textarea", {
+        rows: 3,
+        value: pt.readText || '',
+        placeholder: "\uFF08\u9078\u586B\uFF09\u9019\u4E00\u5927\u984C\u8981\u5148\u8B80\u7684\u6587\u7AE0\u2014\u2014\u8CBC\u5728\u9019\u88E1\uFF0C\u5B78\u751F\u5728\u984C\u76EE\u4E0A\u65B9\u5C31\u770B\u5F97\u5230",
+        onChange: e => patchPart(si, pi, {
+          readText: e.target.value
+        })
+      }), /*#__PURE__*/React.createElement("div", {
+        className: "exed-img"
+      }, pt.img && /*#__PURE__*/React.createElement("img", {
+        src: pt.img,
+        alt: ""
+      }), /*#__PURE__*/React.createElement("label", {
+        className: "btn ghost"
+      }, pt.img ? '換圖片' : '＋ 加圖片', /*#__PURE__*/React.createElement("input", {
+        type: "file",
+        accept: "image/*",
+        style: {
+          display: 'none'
+        },
+        onChange: async e => {
+          var f = e.target.files && e.target.files[0];
+          e.target.value = '';
+          if (!f || !window.uploadFlashcardImage) return;
+          try {
+            patchPart(si, pi, {
+              img: await window.uploadFlashcardImage(f)
+            });
+          } catch (err) {
+            alert('圖片上傳失敗，再試一次');
+          }
+        }
+      })), pt.img && /*#__PURE__*/React.createElement("input", {
+        className: "exed-cap",
+        value: pt.imgCap || '',
+        placeholder: "\u5716\u7247\u8AAA\u660E\uFF08\u9078\u586B\uFF09",
+        onChange: e => patchPart(si, pi, {
+          imgCap: e.target.value
+        })
+      }), pt.img && /*#__PURE__*/React.createElement("button", {
+        className: "exed-x",
+        title: "\u62FF\u6389\u5716\u7247",
+        onClick: () => patchPart(si, pi, {
+          img: '',
+          imgCap: ''
+        })
+      }, "\u2715"))), /*#__PURE__*/React.createElement("textarea", {
         rows: pt.kind === 'circle' ? 5 : 6,
         value: window.examPartText ? window.examPartText(pt) : '',
         onChange: e => patchPart(si, pi, window.examParsePart(pt.kind, e.target.value)),

@@ -7133,7 +7133,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               <span className="ex-marked-n">{i + 1}</span>
               <span className="ex-marked-cr">
                 {R.map(c => (
-                  <em key={c.id}>{c.zh} <b>{m[c.id] == null ? '—' : m[c.id]}</b>/{max}</em>
+                  <em key={c.id}>{c.zh} <b>{m[c.id] == null ? '—' : m[c.id]}</b>/{c.max || max}</em>
                 ))}
               </span>
               {m.note && <span className="ex-marked-note">{m.note}</span>}
@@ -7169,6 +7169,36 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           })()}
         </div>
         {pt.instruction && <p className="ex-inst">{pt.instruction}</p>}
+        {/* v557：這一大題的共用圖片與文章（選擇題、排順序、摘要都會用到，圈選等本來就有自己的 passage） */}
+        {pt.img && <figure className="ex-fig"><img src={pt.img} alt="" loading="lazy"/>{pt.imgCap && <figcaption>{pt.imgCap}</figcaption>}</figure>}
+        {pt.readText && <div className="ex-read">{pt.readText}</div>}
+
+        {/* ── v557 🔢 事件排順序：在每個句子前面填 1~N ── */}
+        {pt.kind === 'order' && (() => {
+          const evs = pt.events || [];
+          const nums = Array.isArray(v) ? v : [];
+          const shown = window.examOrderShuffle ? window.examOrderShuffle(evs) : evs.map((_, i) => i);
+          return (
+            <>
+              {!sent && <p className="ex-hint">依照<b>事情發生的順序</b>，在句子前面寫 1～{evs.length}（最早的寫 <b>1</b>）。</p>}
+              <ul className="ex-order">
+                {shown.map((oi) => {
+                  const d = sent ? ((pr && pr.detail[oi]) || {}) : null;
+                  return (
+                    <li key={oi} className={'ex-ord' + (sent ? (d.ok ? ' ok' : ' bad') : '')}>
+                      <input className="ex-ord-n" inputMode="numeric" maxLength={2} disabled={sent}
+                        value={nums[oi] == null ? '' : nums[oi]} placeholder="__"
+                        onChange={e => { const t = e.target.value.replace(/[^0-9]/g, '');
+                          put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[oi] = t; return g; }); }}/>
+                      <span className="ex-ord-t">{evs[oi]}</span>
+                      {sent && !d.ok && <u>{(d.why || [])[0]}</u>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          );
+        })()}
 
         {/* ── 圈出符合的字 ── */}
         {pt.kind === 'circle' && (() => {

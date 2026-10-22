@@ -7858,6 +7858,7 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               Each entry: {"q":"...","options":[...in printed order...],"answer":<0-based index>}
               "pts" is the TOTAL for the whole Part (e.g. "/18"), not per question.
               Do not number the questions; the website numbers them.
+              If the passage they refer to is printed on the paper, put it in "passage" (the whole text).
   "affix"   — "Make two words using two of the suffixes below, then write a sentence for each."
               "affixes" = every suffix/prefix in the box, written WITH its hyphen: ["-ity","-ty","-ic","-ment"]
               (a prefix is written the other way round: "un-", "mis-").
@@ -7887,6 +7888,11 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               "paras" / "sentsPerPara" = if the paper says "5 paragraphs" / "4 sentences each",
               put 5 and 4. "pts" = the printed total. Add "rubricSet":"writing" when the Kang Chiao
               writing criteria are printed. 🔴 Use "essay", not "short", when it is ONE long piece.
+  "order"   — "Number the events 1-5 in the order they happened". The sentences are printed in a
+              MIXED order with a blank in front of each. 🔴 "events" = the sentences in the CORRECT
+              chronological order (earliest first) — YOU work that out by reading the passage; do not
+              copy the order they are printed in. "passage" = the passage they come from if it is on
+              the page (else ""). "pts" = the printed total for this part.
   "checkin" — the warm-up at the top: "How are you feeling right now?" + "What is your goal
               for this test?". "goals" = the printed goal choices, exactly as printed.
               "pts" is 0 — it is not scored.
@@ -7895,6 +7901,8 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               🔴 If the printed rubric has the Kang Chiao writing criteria (Content, Details,
               Creativity, Text Structure, Length, Grammar, Vocabulary) add "rubricSet":"writing".
               If it has Explanation / Relevant / Effort, add "rubricSet":"basic".
+              If it is a "Summary Writing Rubric" (details from the beginning / middle / end, chronological
+              order, complete sentences, own words), add "rubricSet":"summary".
 
 If a part is still something else, do NOT guess — put a short description in "skipped".
 
@@ -7980,6 +7988,11 @@ function _examCleanPart(p) {
     if (!bank.length || !items.length) return null;
     return { ...base, bank, items };
   }
+  if (p.kind === 'order') {
+    const events = (Array.isArray(p.events) ? p.events : []).map(x => String(x).trim()).filter(Boolean);
+    if (events.length < 2) return null;                    // 一件事沒有「順序」可言
+    return { ...base, events: events.slice(0, 10), readText: String(p.passage || p.readText || '').trim() };
+  }
   if (p.kind === 'quiz') {
     const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => {
       const options = (Array.isArray(q && q.options) ? q.options : []).map(x => String(x).trim()).filter(Boolean);
@@ -7989,7 +8002,8 @@ function _examCleanPart(p) {
       return { q: String(q.q).trim(), options, answer: a };
     }).filter(Boolean);
     if (!questions.length) return null;
-    return { ...base, questions };
+    const rt = String(p.passage || p.readText || '').trim();
+    return { ...base, questions, ...(rt ? { readText: rt } : {}) };
   }
   /* ══ v537：v522／v536 新增的四種也要收得進來 ══════════════════════
      ⚠ 提示詞教會模型認這幾種之後，這裡一定要跟著收——不然它讀出來了，
@@ -8228,6 +8242,8 @@ const EXAM_KINDS = {
   evidence: { zh: '用文章裡的 N 個細節回答', auto: true },
   essay:    { zh: '長文寫作（老師改）', auto: false },
   checkin:  { zh: '開頭的心情與目標', auto: true, noScore: true },  // 不計分
+  /* v557：康橋 Grade 4 的 "Chronological Order"——把 5 個事件照發生的順序標 1~5 */
+  order:    { zh: '事件排順序（標 1~N）', auto: true },
   short:  { zh: '問答（老師改）', auto: false },// Part 5：申論，照 rubric 手改
 };
 
@@ -8284,6 +8300,7 @@ function examPartN(part) {
   if (part.kind === 'usewords') return +part.need || 2;
   if (part.kind === 'fixbox')   return (part.answers || []).length || +part.need || 5;
   if (part.kind === 'evidence') return +part.need || 2;
+  if (part.kind === 'order')    return (part.events || []).length;
   if (part.kind === 'essay')    return 1;
   if (part.kind === 'checkin')  return 0;          // 不是題目，不計入題數
   return 0;
@@ -8384,6 +8401,27 @@ const EXAM_RUBRIC_SETS = {
     ],
   },
 };
+/* v557 📝 摘要評分表（康橋 Grade 4：Summary Writing Rubric，共 10 分）
+   ⭐ 跟前兩套不同：**每一項的滿分不一樣**（2/2/2/2/1/1），所以準則自己帶 max。
+     沒帶 max 的準則照整套的 max（舊的兩套完全不受影響）。 */
+EXAM_RUBRIC_SETS.summary = {
+  zh: '摘要六項（康橋 Summary Rubric，10 分）', max: 2,
+  criteria: [
+    { id: 'begin',  zh: '開頭細節', en: 'Detail from the beginning', tip: '有沒有寫到文章開頭的重要細節', max: 2 },
+    { id: 'middle', zh: '中間細節', en: 'Detail from the middle',    tip: '有沒有寫到文章中間的重要細節', max: 2 },
+    { id: 'end',    zh: '結尾細節', en: 'Detail from the end',       tip: '有沒有寫到文章結尾的重要細節', max: 2 },
+    { id: 'order',  zh: '時間順序', en: 'Chronological order',       tip: '細節有沒有照事情發生的順序寫', max: 2 },
+    { id: 'sent',   zh: '完整句子', en: 'Complete sentences',        tip: '每一個細節是不是完整的句子',   max: 1 },
+    { id: 'own',    zh: '自己的話', en: "Student's own words",       tip: '有沒有用自己的話寫，不是照抄',   max: 1 },
+  ],
+};
+/* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
+function examBandsOf(R, c) {
+  if (c && c.max && !(R && R.hasBands)) {
+    return Array.from({ length: c.max + 1 }, (_, i) => ({ n: c.max - i, zh: '' }));
+  }
+  return (R && R.bands) || [];
+}
 /* 一大題要用哪一套 rubric。
    ⚠ 認不得就回 basic——不要回 undefined，下游會整個炸掉。 */
 function examRubricOf(part) {
@@ -8393,7 +8431,8 @@ function examRubricOf(part) {
   const bands = set.bands && set.bands.length
     ? set.bands
     : Array.from({ length: max + 1 }, (_, i) => ({ n: max - i, zh: '' }));
-  return { key: (part && part.rubricSet) || 'basic', zh: set.zh, max, bands, criteria: set.criteria };
+  return { key: (part && part.rubricSet) || 'basic', zh: set.zh, max, bands, criteria: set.criteria,
+           hasBands: !!(set.bands && set.bands.length) };
 }
 
 /* 一題的 rubric 分數 → 這一題拿幾分。
@@ -8405,8 +8444,11 @@ function examRubricPoints(mark, pts, max, criteria) {
   if (!mark) return null;
   const vals = cs.map(c => mark[c.id]);
   if (vals.every(v => v == null || v === '')) return null;
-  const sum = vals.reduce((a, v) => a + Math.max(0, Math.min(m, +v || 0)), 0);
-  return Math.round((+pts || 0) * sum / (cs.length * m) * 10) / 10;
+  /* v557：每一項可以有自己的滿分（摘要評分表 2/2/2/2/1/1）；沒寫 max 的照整套的 */
+  const capOf = (c) => +c.max || m;
+  const sum = cs.reduce((a, c, i) => a + Math.max(0, Math.min(capOf(c), +vals[i] || 0)), 0);
+  const full = cs.reduce((a, c) => a + capOf(c), 0);
+  return Math.round((+pts || 0) * sum / full * 10) / 10;
 }
 
 /* 整個 short 大題：每一小題的 rubric 加起來。回傳 { got, max, done, per[] } */
@@ -8455,8 +8497,10 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
     return zero;
   }
   const sys = AI_RUBRIC_SYS
-    .replace('{BANDS}', R.bands.map(b => b.n + (b.en ? ` (${b.en})` : '')).join(' / '))
-    .replace('{CRITERIA}', R.criteria.map(c => `- ${c.id} : ${c.en} — ${c.tip}`).join('\n'))
+    .replace('{BANDS}', R.criteria.some(c => c.max) && !R.hasBands
+      ? 'each criterion has its own range, given after it'
+      : R.bands.map(b => b.n + (b.en ? ` (${b.en})` : '')).join(' / '))
+    .replace('{CRITERIA}', R.criteria.map(c => `- ${c.id} : ${c.en} — ${c.tip}` + (c.max && !R.hasBands ? ` (allowed: 0 to ${c.max})` : '')).join('\n'))
     .replace(/\{MAX\}/g, String(R.max));
   const msg = `QUESTION: ${question || ''}\n` +
     (keyPoints ? `WHAT A GOOD ANSWER MENTIONS: ${keyPoints}\n` : '') +
@@ -8473,7 +8517,8 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
     const n = Math.round(+r.n);
     /* ⚠ 不只要在範圍內，還要是**允許的等第**——康橋寫作卷只有 7/5/3/0，
        模型回一個 6 的話老師在畫面上根本點不到那一格。 */
-    if (!isFinite(n) || !allowed.has(n)) return null;
+    const okN = (c.max && !R.hasBands) ? (n >= 0 && n <= c.max) : allowed.has(n);
+    if (!isFinite(n) || !okN) return null;
     out[c.id] = { n, why: String(r.why || '').trim().slice(0, 40) };
     if (!out[c.id].why) return null;
   }
@@ -8669,6 +8714,24 @@ function examTotals(item) {
   return { auto, manual, total: auto + manual, sections: secs.length, parts };
 }
 
+/* v557 事件排順序：給學生看的「打亂後的順序」。
+   ⭐ 用事件文字做種子的固定洗牌——同一題每次重畫都一樣（不然每打一個字題目就重新洗牌），
+     而且保證**不會剛好等於正確順序**（等於把答案直接送給他）。
+   回傳原始索引的陣列，例如 [2,0,3,1]＝畫面第一列放第 2 個事件。 */
+function examOrderShuffle(events) {
+  const n = (events || []).length;
+  const idx = Array.from({ length: n }, (_, i) => i);
+  let h = 2166136261;
+  String((events || []).join('|')).split('').forEach(c => { h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; });
+  const rnd = () => { h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0; return h / 4294967296; };
+  for (let k = 0; k < 8; k++) {
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+    if (n < 2 || idx.some((v, i) => v !== i)) break;
+  }
+  if (n >= 2 && idx.every((v, i) => v === i)) idx.push(idx.shift());   // 最後保底
+  return idx;
+}
+
 /* 一大題算幾分。回傳 { got, max, n, right, detail }
    detail 是每一小題對不對，結果頁要逐題標。 */
 function examScorePart(part, ans) {
@@ -8763,6 +8826,15 @@ function examScorePart(part, ans) {
     }
     out.got = Math.round(max * (out.right / n));
     return out;
+  } else if (part.kind === 'order') {
+    /* v557：ans[i] = 學生寫在「第 i 個事件（正確順序）」旁邊的數字；對＝剛好是 i+1。
+       ⚠ 空白、小數、超出範圍都算錯；不扣重複——重複的數字本來就不可能每個都對。 */
+    (part.events || []).forEach((ev, i) => {
+      const got = parseInt(String((ans || [])[i] == null ? '' : (ans || [])[i]).trim(), 10);
+      const good = got === i + 1;
+      if (good) out.right++;
+      out.detail.push({ ok: good, text: ev, got: isFinite(got) ? String(got) : '', why: good ? [] : ['應該是 ' + (i + 1)] });
+    });
   } else if (part.kind === 'fixbox') {
     out.detail = examFixBoxScore(part, ans);
     out.right = out.detail.filter(d => d.ok).length;
@@ -8851,6 +8923,7 @@ function examPartText(part) {
   if (p.kind === 'storymap') return String(p.passage || '');
   if (p.kind === 'usewords') return (p.bank || []).join(' ');
   if (p.kind === 'fixbox') return [(p.answers || []).join(', '), '', String(p.passage || '')].join('\n');
+  if (p.kind === 'order') return (p.events || []).join('\n');
   if (p.kind === 'evidence') return [String(p.question || ''), '', String(p.passage || '')].join('\n');
   if (p.kind === 'essay') return [String(p.prompt || ''), '', (p.vocab || []).join(', ')].join('\n');
   if (p.kind === 'checkin') return (p.goals || []).join('\n');
@@ -8890,6 +8963,10 @@ function examParsePart(kind, text) {
   }
   if (kind === 'genq' || kind === 'storymap') {
     return { passage: lines.join('\n').trim() };
+  }
+  if (kind === 'order') {
+    /* 一行一個事件，**照正確的順序**寫（最早的在最上面）。畫面上會自動打亂給學生。 */
+    return { events: nonEmpty.map(l => l.trim()).slice(0, 10) };
   }
   if (kind === 'fixbox') {
     /* 第一行＝改好的那幾個字（逗號分開），空一行之後是那一段文章 */
@@ -8953,6 +9030,11 @@ function examWarnings(item) {
       if (!String(pt.passage || '').trim()) w.push(`${where}沒有那一段文章。`);
       else if (miss.length) w.push(`${where}的答案「${miss.join('、')}」在文章裡找不到。`);
     }
+    if (pt.kind === 'order') {
+      const ev = (pt.events || []).filter(Boolean);
+      if (ev.length < 2) w.push(`${where}至少要兩個事件才排得出順序。`);
+      if (new Set(ev.map(x => x.toLowerCase())).size < ev.length) w.push(`${where}有兩個一樣的事件。`);
+    }
     if (pt.kind === 'evidence' && !String(pt.passage || '').trim()) {
       w.push(`${where}沒有文章——學生沒辦法「從文章裡找細節」。`);
     }
@@ -8998,12 +9080,12 @@ function examWarnings(item) {
   return w;
 }
 
-Object.assign(window, { EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
+Object.assign(window, { examOrderShuffle, EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
   examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,
   examCircleCheck, examCircleHit,
-  EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf,
+  EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf, examBandsOf,
   examRubricPoints, examRubricPart, aiGradeRubric });
 
 /* ══════════════════════════════════════════════════════════════════════════

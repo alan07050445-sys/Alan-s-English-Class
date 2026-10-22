@@ -8664,7 +8664,7 @@ function ExamPlayer({
         className: "ex-marked-cr"
       }, R.map(c => /*#__PURE__*/React.createElement("em", {
         key: c.id
-      }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", max))), m.note && /*#__PURE__*/React.createElement("span", {
+      }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", c.max || max))), m.note && /*#__PURE__*/React.createElement("span", {
         className: "ex-marked-note"
       }, m.note));
     }));
@@ -8692,7 +8692,47 @@ function ExamPlayer({
       }, sent && pr ? pr.auto ? `${pr.got} / ${pts}` : `__ / ${pts}` : `${pts} 分`, !sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : '');
     })()), pt.instruction && /*#__PURE__*/React.createElement("p", {
       className: "ex-inst"
-    }, pt.instruction), pt.kind === 'circle' && (() => {
+    }, pt.instruction), pt.img && /*#__PURE__*/React.createElement("figure", {
+      className: "ex-fig"
+    }, /*#__PURE__*/React.createElement("img", {
+      src: pt.img,
+      alt: "",
+      loading: "lazy"
+    }), pt.imgCap && /*#__PURE__*/React.createElement("figcaption", null, pt.imgCap)), pt.readText && /*#__PURE__*/React.createElement("div", {
+      className: "ex-read"
+    }, pt.readText), pt.kind === 'order' && (() => {
+      var evs = pt.events || [];
+      var nums = Array.isArray(v) ? v : [];
+      var shown = window.examOrderShuffle ? window.examOrderShuffle(evs) : evs.map((_, i) => i);
+      return /*#__PURE__*/React.createElement(React.Fragment, null, !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u4F9D\u7167", /*#__PURE__*/React.createElement("b", null, "\u4E8B\u60C5\u767C\u751F\u7684\u9806\u5E8F"), "\uFF0C\u5728\u53E5\u5B50\u524D\u9762\u5BEB 1\uFF5E", evs.length, "\uFF08\u6700\u65E9\u7684\u5BEB ", /*#__PURE__*/React.createElement("b", null, "1"), "\uFF09\u3002"), /*#__PURE__*/React.createElement("ul", {
+        className: "ex-order"
+      }, shown.map(oi => {
+        var d = sent ? pr && pr.detail[oi] || {} : null;
+        return /*#__PURE__*/React.createElement("li", {
+          key: oi,
+          className: 'ex-ord' + (sent ? d.ok ? ' ok' : ' bad' : '')
+        }, /*#__PURE__*/React.createElement("input", {
+          className: "ex-ord-n",
+          inputMode: "numeric",
+          maxLength: 2,
+          disabled: sent,
+          value: nums[oi] == null ? '' : nums[oi],
+          placeholder: "__",
+          onChange: e => {
+            var t = e.target.value.replace(/[^0-9]/g, '');
+            put(key, prev => {
+              var g = Array.isArray(prev) ? prev.slice() : [];
+              g[oi] = t;
+              return g;
+            });
+          }
+        }), /*#__PURE__*/React.createElement("span", {
+          className: "ex-ord-t"
+        }, evs[oi]), sent && !d.ok && /*#__PURE__*/React.createElement("u", null, (d.why || [])[0]));
+      })));
+    })(), pt.kind === 'circle' && (() => {
       var picked = Array.isArray(v) ? v : [];
       var toks = window.examTokens ? window.examTokens(pt.passage) : [];
       return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {

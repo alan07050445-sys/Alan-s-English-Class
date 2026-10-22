@@ -4312,7 +4312,7 @@ function ExamMarking({
         className: "mk-cr-n"
       }, cr.zh, /*#__PURE__*/React.createElement("i", null, cr.en)), /*#__PURE__*/React.createElement("span", {
         className: "mk-cr-btns"
-      }, RB.bands.map(b => /*#__PURE__*/React.createElement("button", {
+      }, (window.examBandsOf ? window.examBandsOf(RB, cr) : RB.bands).map(b => /*#__PURE__*/React.createElement("button", {
         key: b.n,
         className: c[cr.id] === b.n ? 'on' : '',
         title: b.zh ? `${b.zh}（${cr.tip}）` : cr.tip,
