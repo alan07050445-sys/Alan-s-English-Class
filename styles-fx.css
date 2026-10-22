@@ -33,8 +33,17 @@
 @media (min-width: 700px) and (max-width: 1366px) and (max-height: 900px) {
   .mx-layer { --mx-w: clamp(34px, 4.8vh, 42px); }
 }
-.mx-layer.dragging /* v459：長按的替代入口——點一下牠就出現五秒的小 ⋯（某些平板長按真的按不出來）。
-   ⚠ .mx-layer 是 pointer-events:none，浮在上面的東西都要自己把它打開。 */
+.mx-layer.dragging .mx-body { cursor: grabbing; }
+/* v459：長按的替代入口——點一下牠就出現五秒的小 ⋯（某些平板長按真的按不出來）。
+   ⚠ .mx-layer 是 pointer-events:none，浮在上面的東西都要自己把它打開。
+   🔴 v549（Alan：「每次切換成蝙蝠，左下角都會有點點，而且會變高」）
+     v459 把這段說明**插在上一條規則的中間**（選擇器寫到一半就接了一段說明文字）：
+       `.mx-layer.dragging` ＋說明＋ `.mx-handle { … }`
+     ＝上一條 `.mx-body { cursor: grabbing; }` 被吃掉，而這一條的選擇器變成
+     「拖曳中才有的 .mx-handle」→ 平常**完全沒有樣式**：按鈕掉進版面、
+     在牠下面多排一格（把整隻頂高 27px），而且是個沒有圓框的白點。
+     ⚠ 這種壞法**不報錯**，而且不是只有蝙蝠：每一隻、每次點牠都會。
+     ⭐ 註解不要插在選擇器與 { 之間。 */
 .mx-handle {
   position: absolute; left: 100%; bottom: 58%; margin-left: 2px;
   pointer-events: auto; cursor: pointer;
@@ -230,7 +239,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mx-svg, .mx-eye, .mx-leg { animation: none !important; }
+  .mx-svg, .mx-eye, .mx-leg, .mx-wing, .mx-cape { animation: none !important; }
   .mx-bubble { animation: none; }
   /* v395 稽核補漏 ①：.mx-menu（v384 才加的長按小選單，:210）跑的是同一支 mxPop，
      但當時漏了掛進這個區塊——「其他動畫都停了、只有選單還會彈」是最刺眼的那種漏。 */
@@ -1038,3 +1047,63 @@
   .pet-bun.act-walk .mx-svg, .pet-bun.act-walk .mx-leg,
   .pet-bun.act-walk .mx-ear, .pet-bun.act-hop .mx-leg, .pet-bun.act-walk .mx-tail, .pet-bun.act-hop .mx-tail { animation: none; }
 }
+
+/* ══ v549 🧛 吸血鬼走路＋🦇 蝙蝠飛行（Alan：「要變成比較真實的 Vampire 走路，蝙蝠也要會飛，翅膀真實一點」）══
+   只在萬聖節掛 .is-vamp／.is-bat 的時候才作用，平常的五隻完全不受影響。
+   ⚠ 掛在 <g>／<svg> 內部的 transform 一律要寫 transform-box: view-box（SVG 預設就是它，
+     v408 小芽長高踩過）——所以 transform-origin 的座標是「viewBox 左上角」算起：
+     viewBox 是 `0 -4 18 20`，所以圖面上的 y=4 對應這裡的 8px。 */
+.mx-wing, .mx-cape { transform-box: view-box; }
+.mx-wing-l { transform-origin: 5px 8px; }     /* 左肩 (5,4) */
+.mx-wing-r { transform-origin: 13px 8px; }    /* 右肩 (13,4) */
+.mx-cape   { transform-origin: 9px 17px; }
+
+/* ── 吸血鬼走路：慢、挺、微前傾、披風往後飄 ──
+   以前套的是五隻共用的「左右搖晃」（每 .34 秒傾 2°）——那是小動物的蹣跚，
+   不是吸血鬼。真的吸血鬼走路的特徵：步子大而慢、上身幾乎不晃、
+   整個人像滑過去、披風被帶著往後拖。
+   ⚠ 一個週期 = 兩步（.52s 一步）；身體只在「兩腳交會」那一刻微微抬高。 */
+.is-vamp.act-walk .mx-svg { animation: mxVampStride 1.05s ease-in-out infinite; }
+@keyframes mxVampStride {
+  0%, 50%, 100% { transform: translateY(0)    rotate(2deg); }
+  25%, 75%      { transform: translateY(-1px) rotate(2deg); }
+}
+/* 腳：向前跨出（抬起）→ 落地 → 在地上往後推。兩隻差半個週期 */
+.is-vamp.act-walk .mx-leg-a { animation: mxVampLeg 1.05s ease-in-out infinite; }
+.is-vamp.act-walk .mx-leg-c { animation: mxVampLeg 1.05s ease-in-out infinite -.525s; }
+@keyframes mxVampLeg {
+  0%   { transform: translate(-1px, 0); }
+  25%  { transform: translate(0, -1.5px); }
+  50%  { transform: translate(1px, 0); }
+  75%  { transform: translate(0, 0); }
+  100% { transform: translate(-1px, 0); }
+}
+/* 披風：往後（-x）拖，跟著腳步一鼓一收 */
+.is-vamp.act-walk .mx-cape { animation: mxVampCape 1.05s ease-in-out infinite; }
+@keyframes mxVampCape {
+  0%, 50%, 100% { transform: translateX(-.8px) skewX(-4deg); }
+  25%, 75%      { transform: translateX(-1.6px) skewX(-8deg); }
+}
+/* 站著的時候披風也有極輕的呼吸，才不像貼紙 */
+.is-vamp.act-idle .mx-cape { animation: mxVampCapeIdle 3.2s ease-in-out infinite; }
+@keyframes mxVampCapeIdle { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-.4px) skewX(-2deg); } }
+
+/* ── 蝙蝠：翅膀從肩膀拍動，走路＝飛 ──
+   左翅往上＝順時針（正角度）、右翅鏡射＝負角度。
+   停著的時候也慢慢拍（懸停），走的時候快拍＋身體一上一下（飛行）。 */
+.is-bat .mx-wing-l { animation: mxWingL 1.3s ease-in-out infinite; }
+.is-bat .mx-wing-r { animation: mxWingR 1.3s ease-in-out infinite; }
+@keyframes mxWingL { 0%, 100% { transform: rotate(16deg); } 50% { transform: rotate(-14deg); } }
+@keyframes mxWingR { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(14deg); } }
+.is-bat.act-walk .mx-wing-l, .is-bat.act-dash .mx-wing-l { animation: mxFlapL .32s ease-in-out infinite; }
+.is-bat.act-walk .mx-wing-r, .is-bat.act-dash .mx-wing-r { animation: mxFlapR .32s ease-in-out infinite; }
+/* 拍下去的時候翅膀稍微收窄（scaleX）＝用力划空氣；拍上去時整片攤開 */
+@keyframes mxFlapL { 0%, 100% { transform: rotate(38deg) scaleX(1); } 50% { transform: rotate(-30deg) scaleX(.82); } }
+@keyframes mxFlapR { 0%, 100% { transform: rotate(-38deg) scaleX(1); } 50% { transform: rotate(30deg) scaleX(.82); } }
+/* 身體：停著時輕輕浮動，飛的時候離地、隨拍翅一上一下（下拍時身體被托起） */
+.is-bat.act-idle .mx-svg { animation: mxBatHover 2.4s ease-in-out infinite; }
+@keyframes mxBatHover { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(-4px); } }
+.is-bat.act-walk .mx-svg { animation: mxBatFly .32s ease-in-out infinite; }
+@keyframes mxBatFly { 0%, 100% { transform: translateY(-6px); } 50% { transform: translateY(-9px); } }
+/* 蝙蝠不走路：腳縮起來（不然會看到兩隻小腳在空中踏步） */
+.is-bat .mx-leg { animation: none !important; }

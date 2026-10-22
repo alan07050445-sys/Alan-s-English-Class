@@ -997,7 +997,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     autoRef.current = setTimeout(() => {
       autoRef.current = null;
       goNextFill();
-    }, 1000);
+    }, window.autoNextMs ? window.autoNextMs(1000) : 1000);   // v549：快 20%
   };
 
   const goNextFill = () => {
@@ -1283,7 +1283,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       autoRef.current = setTimeout(() => {
         autoRef.current = null;
         goNextLearn(true);
-      }, 1000);
+      }, window.autoNextMs ? window.autoNextMs(1000) : 1000);   // v549：快 20%
     };
 
     return (

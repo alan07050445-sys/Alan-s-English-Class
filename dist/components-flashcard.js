@@ -1279,7 +1279,7 @@ function FlashcardPlayer({
     autoRef.current = setTimeout(() => {
       autoRef.current = null;
       goNextFill();
-    }, 1000);
+    }, window.autoNextMs ? window.autoNextMs(1000) : 1000); // v549：快 20%
   };
   var goNextFill = () => {
     clearAuto(); // v392: 學生自己按「下一題」時先收掉自動跳的 timer，避免連跳兩題
@@ -1638,7 +1638,7 @@ function FlashcardPlayer({
       autoRef.current = setTimeout(() => {
         autoRef.current = null;
         goNextLearn(true);
-      }, 1000);
+      }, window.autoNextMs ? window.autoNextMs(1000) : 1000); // v549：快 20%
     };
     return /*#__PURE__*/React.createElement("div", {
       className: "fc-wrap"

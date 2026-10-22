@@ -2387,6 +2387,15 @@ function _storyRescue(passage, missing, ex) {
      拆成三篇／三大題，AI 做不到——跟 v417／v488 同一類：
      程式自己會做的事叫模型做，它為了服從會亂回報。
      所以 AI 只負責「生足夠的題材」，切成幾份由程式決定。 */
+/* ══ v549 答對之後換下一題的速度 ═══════════════════════════════════
+   Alan：「學習模式答對換下一題速度快一點，如果現在是 10 分，幫我快一點變成 12 分；
+          測驗模式、字義也都是，加快」＝**快 20%**＝等待時間 ÷ 1.2。
+   ⭐ 倍率只放這一份：單字卡（學習／測驗）與所有測驗（含字義選擇）都走 autoNextMs，
+     以後再覺得快或慢，改這一個數字就全站一起動。
+   ⚠ 只縮「答對之後自動跳」的等待；答錯停在原地等學生自己按，那個不動。 */
+const AUTO_NEXT_SPEED = 1.2;
+function autoNextMs(ms) { return Math.max(200, Math.round(Number(ms) / AUTO_NEXT_SPEED)); }
+
 const QS_MAX_Q = 10;                 // 一般練習：一個單元最多 10 題
 const QS_SPLIT = {
   /* 有自己規矩的題型（Alan 指名的兩種） */
@@ -6761,7 +6770,7 @@ Object.assign(window, {
   dictHas, prefetchDict, readWorthyWords,
   playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, ttsPickVoice: _ttsPickVoice,
   aiMakeVocabExercises, aiMakeVocabStory, aiMakeVocabStories,
-  QS_MAX_Q, QS_SPLIT, qsChunkEven, qsPartTitle, qsStripPart, qsStoryBank,
+  AUTO_NEXT_SPEED, autoNextMs, QS_MAX_Q, QS_SPLIT, qsChunkEven, qsPartTitle, qsStripPart, qsStoryBank,
   storyBlanks, storyCheck, storyFix, storyHint: _storyHint, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson,
   // v386: 閱讀理解出題（選擇題＋簡答＋閱讀技巧）
   vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk,

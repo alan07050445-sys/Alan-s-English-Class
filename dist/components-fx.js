@@ -1067,10 +1067,58 @@ function BatForm({
 }) {
   /* ⚠ 不能太深：頁面底是 #1E1333，剪影要看得出來才像蝙蝠不是一團黑 */
   var WING = '#403A52',
+    BONE = '#2F2A3F',
     BODY = '#4E4664',
     EYE = '#FFFFFF',
     PUP = '#15131A',
     FANG = '#FFFFFF';
+  /* 🦇 v549（Alan：「蝙蝠也要會飛，翅膀真實一點」）
+     本來是兩塊不會動的方塊。真的蝙蝠翅膀有三個特徵，這裡都畫出來：
+       ① 前緣是一條斜線（手臂骨），翼尖在最高處
+       ② 翼膜往下垂，下緣是**三個尖角**（手指之間的膜被拉成扇形）
+       ③ 翅膀從肩膀拍動（CSS 以肩膀為軸轉動），所以左右要各自一個 <g>
+     畫左翅，右翅用鏡射（x → 17 - x）。每一列是 [起點x, 寬度]。 */
+  var ROWS = [[1, 0, 1], [2, 0, 2], [3, 0, 3], [4, 0, 5], [5, 0, 5], [6, 0, 5], [7, 0, 1], [7, 2, 1], [7, 4, 1], [8, 0, 1]];
+  var bones = [[0, 1], [1, 2], [2, 3], [3, 4]]; // 前緣：從翼尖斜向肩膀
+  var wing = mirror => /*#__PURE__*/React.createElement(React.Fragment, null, ROWS.map(([y, x, w], k) => /*#__PURE__*/React.createElement("rect", {
+    key: k,
+    x: mirror ? 17 - x - (w - 1) : x,
+    y: y,
+    width: w,
+    height: "1",
+    fill: WING
+  })), bones.map(([x, y], k) => /*#__PURE__*/React.createElement("rect", {
+    key: 'b' + k,
+    x: mirror ? 17 - x : x,
+    y: y,
+    width: "1",
+    height: "1",
+    fill: BONE
+  })), /*#__PURE__*/React.createElement("rect", {
+    x: mirror ? 14 : 3,
+    y: "5",
+    width: "1",
+    height: "1",
+    fill: BONE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: mirror ? 15 : 2,
+    y: "6",
+    width: "1",
+    height: "1",
+    fill: BONE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: mirror ? 17 : 0,
+    y: "7",
+    width: "1",
+    height: "1",
+    fill: BONE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: mirror ? 13 : 4,
+    y: "5",
+    width: "1",
+    height: "2",
+    fill: tone
+  }));
   return /*#__PURE__*/React.createElement("svg", {
     className: "mx-svg",
     width: size,
@@ -1080,67 +1128,11 @@ function BatForm({
     "aria-hidden": "true"
   }, /*#__PURE__*/React.createElement("g", {
     className: "mx-torso"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "3",
-    width: "5",
-    height: "4",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "13",
-    y: "3",
-    width: "5",
-    height: "4",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "0",
-    y: "7",
-    width: "1",
-    height: "1",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "7",
-    width: "1",
-    height: "1",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "4",
-    y: "7",
-    width: "1",
-    height: "1",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "13",
-    y: "7",
-    width: "1",
-    height: "1",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "15",
-    y: "7",
-    width: "1",
-    height: "1",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "17",
-    y: "7",
-    width: "1",
-    height: "1",
-    fill: WING
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "4",
-    y: "4",
-    width: "1",
-    height: "3",
-    fill: tone
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "13",
-    y: "4",
-    width: "1",
-    height: "3",
-    fill: tone
-  }), /*#__PURE__*/React.createElement("rect", {
+  }, /*#__PURE__*/React.createElement("g", {
+    className: "mx-wing mx-wing-l"
+  }, wing(false)), /*#__PURE__*/React.createElement("g", {
+    className: "mx-wing mx-wing-r"
+  }, wing(true)), /*#__PURE__*/React.createElement("rect", {
     x: "5",
     y: "1",
     width: "2",
@@ -1239,7 +1231,8 @@ function VampireMascot({
     SKIN = '#DCE9F4',
     BLUSH = '#F2A7B0',
     EYE = '#15131A',
-    FANG = '#FFFFFF';
+    FANG = '#FFFFFF',
+    BOOT = '#5A5470';
   var F = fit || MX_FIT_DEF;
   return /*#__PURE__*/React.createElement("svg", {
     className: "mx-svg",
@@ -1422,13 +1415,45 @@ function VampireMascot({
     height: "1",
     fill: SKIN
   })), /*#__PURE__*/React.createElement("g", {
+    className: "mx-cape"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "0",
+    y: "14",
+    width: "4",
+    height: "1",
+    fill: CAPE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "0",
+    y: "15",
+    width: "3",
+    height: "1",
+    fill: tone
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "14",
+    y: "14",
+    width: "4",
+    height: "1",
+    fill: CAPE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "15",
+    y: "15",
+    width: "3",
+    height: "1",
+    fill: tone
+  })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-a"
   }, /*#__PURE__*/React.createElement("rect", {
     x: "4",
     y: "14",
     width: "4",
-    height: "2",
+    height: "1",
     fill: CAPE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "15",
+    width: "4",
+    height: "1",
+    fill: BOOT
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-b"
   }), /*#__PURE__*/React.createElement("g", {
@@ -1437,8 +1462,14 @@ function VampireMascot({
     x: "10",
     y: "14",
     width: "4",
-    height: "2",
+    height: "1",
     fill: CAPE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "10",
+    y: "15",
+    width: "4",
+    height: "1",
+    fill: BOOT
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-prop mx-prop-type"
   }, /*#__PURE__*/React.createElement("rect", {
@@ -3534,7 +3565,7 @@ function MascotLayer() {
     className: 'mx-bubble' + (act === 'grow' ? ' mx-bubble-high' : '') + (act === 'hop' ? ' mx-bubble-hop' : '')
   }, bubble), /*#__PURE__*/React.createElement("div", {
     ref: bodyRef,
-    className: 'mx-body pet-' + petId + ' act-' + act,
+    className: 'mx-body pet-' + petId + ' act-' + act + (hwOn ? bat ? ' is-bat' : ' is-vamp' : ''),
     style: {
       '--mx-dir': dir
     },
@@ -3834,7 +3865,9 @@ Object.assign(window, {
      「五隻 × 每一件」，不然只能一個一個換來換去看。 */
   MxHat,
   MxAcc,
-  MX_FIT
+  MX_FIT,
+  VampireMascot,
+  BatForm
 });
 
 /* 自己掛載——不動 App 的樹，任何頁面都在 */

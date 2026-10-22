@@ -6297,32 +6297,8 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
         {!msgs.length && (
           <div className="ask-hello">
             <p>直接說你想做什麼，或把單字表／文章／作業照片丟進來。</p>
-            <div className="ask-eg">
-              {['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼',
-                '這週 Word Study 是 prefixes mis-, en-, & em-',
-                '幫我擬 Eric 今天的上課紀錄',
-                '這週誰還沒做完？',
-                'Nick 這週做得怎麼樣？',
-                'Nick 錯最多的是哪些？',
-                '針對 Nick 的弱點出練習',
-                'Nick 週三的課改成 17:30',
-                '提醒這週沒做完的人',
-                'Nick 加 10 顆星星，上課表現很好',
-                '把測驗（2/4）改名叫 期中複習 B',
-                /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
-                '這篇文章做成分段閱讀（貼上文章）',
-                '出一份外師的考前複習卷',
-                '把 Barbed Wire Baseball 排一份複習到第 9 週',
-                '把 Barbed Wire Baseball 那組沿用到第 10 週',
-                '我要改申論題',
-                '把第 7 週的內容複製到第 9 週',
-                '把 Unit 1 跟 Unit 2 的單字合併再出一份，只要 12 題',
-                'Barbed Wire Baseball 那組設成下週三到期',
-                '跟 G4 的家長說這週三停課一次',
-                '出一份外師的考卷，題目要包含現在完成式跟比較級'].map((x, i) => (
-                <button key={i} onClick={() => setText(x)}>{x}</button>
-              ))}
-            </div>
+            {/* v549（Alan：「小助手打開來不要再呈現這些建議，我自己會打，太亂了」）
+                範例句整塊拿掉——現在會做的事收在下面那個「我現在會做這 N 件事」裡（預設收起來）。 */}
             {/* v531：把「現在我做得到哪些事」直接列出來。
                 ⚠ 這是從 ASK_JOBS 撈的，不是另外手寫一份——手寫的那份一定會跟實際的走鐘。 */}
             <details className="ask-can">

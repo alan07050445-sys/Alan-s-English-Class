@@ -9685,13 +9685,7 @@ function AskPanel({
     className: "ask-body"
   }, !msgs.length && /*#__PURE__*/React.createElement("div", {
     className: "ask-hello"
-  }, /*#__PURE__*/React.createElement("p", null, "\u76F4\u63A5\u8AAA\u4F60\u60F3\u505A\u4EC0\u9EBC\uFF0C\u6216\u628A\u55AE\u5B57\u8868\uFF0F\u6587\u7AE0\uFF0F\u4F5C\u696D\u7167\u7247\u4E1F\u9032\u4F86\u3002"), /*#__PURE__*/React.createElement("div", {
-    className: "ask-eg"
-  }, ['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼', '這週 Word Study 是 prefixes mis-, en-, & em-', '幫我擬 Eric 今天的上課紀錄', '這週誰還沒做完？', 'Nick 這週做得怎麼樣？', 'Nick 錯最多的是哪些？', '針對 Nick 的弱點出練習', 'Nick 週三的課改成 17:30', '提醒這週沒做完的人', 'Nick 加 10 顆星星，上課表現很好', '把測驗（2/4）改名叫 期中複習 B', /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
-  '這篇文章做成分段閱讀（貼上文章）', '出一份外師的考前複習卷', '把 Barbed Wire Baseball 排一份複習到第 9 週', '把 Barbed Wire Baseball 那組沿用到第 10 週', '我要改申論題', '把第 7 週的內容複製到第 9 週', '把 Unit 1 跟 Unit 2 的單字合併再出一份，只要 12 題', 'Barbed Wire Baseball 那組設成下週三到期', '跟 G4 的家長說這週三停課一次', '出一份外師的考卷，題目要包含現在完成式跟比較級'].map((x, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    onClick: () => setText(x)
-  }, x))), /*#__PURE__*/React.createElement("details", {
+  }, /*#__PURE__*/React.createElement("p", null, "\u76F4\u63A5\u8AAA\u4F60\u60F3\u505A\u4EC0\u9EBC\uFF0C\u6216\u628A\u55AE\u5B57\u8868\uFF0F\u6587\u7AE0\uFF0F\u4F5C\u696D\u7167\u7247\u4E1F\u9032\u4F86\u3002"), /*#__PURE__*/React.createElement("details", {
     className: "ask-can"
   }, /*#__PURE__*/React.createElement("summary", null, "\u6211\u73FE\u5728\u6703\u505A\u9019 ", Object.keys(JOBS).length, " \u4EF6\u4E8B"), /*#__PURE__*/React.createElement("ul", null, Object.keys(JOBS).map(k => /*#__PURE__*/React.createElement("li", {
     key: k

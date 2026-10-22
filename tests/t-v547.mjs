@@ -168,7 +168,10 @@ ok('⭐⭐ 「只改這一次」要老實說做不到，不可以偷偷改成固
 ok('⭐ 提示詞教了兩個新工具與 qtype', /query     — he is ASKING/.test(data) && /timetable — change ONE student/.test(data));
 ok('⭐ 提示詞講明「你不回答、只選 qtype」', /You do NOT answer\. You only pick the qtype/.test(data));
 ok('⭐ weak 與 query 的分界寫清楚（出練習＝weak，問是什麼＝query）', /that is "weak", not "query"/.test(data));
-ok('⭐ 範例句也換了（「Nick 最近哪裡最弱」本來是 weak，現在會被當成查詢）', /'這週誰還沒做完？'/.test(ed) && /'針對 Nick 的弱點出練習'/.test(ed));
+/* ⚠ v549 Alan 要求小助手打開時不要再放範例句（「我自己會打，太亂了」）——
+   這一條本來釘「範例句裡有這幾句」，現在改成釘「路由提示詞已經把 weak／query 的分界教好了」，
+   沒有範例句不影響他講「Nick 最近哪裡最弱」會被當成查詢。 */
+ok('⭐ weak／query 的分界在提示詞裡（不靠範例句）', /Asking WHAT \/ WHO \/ HOW MANY ＝ query/.test(data));
 
 console.log(fail ? `\n❌ t-v547：${pass} 過 / ${fail} 失敗` : `\n✅ t-v547：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

@@ -10,10 +10,15 @@ let pass = 0, fail = 0;
 const ok = (m, c) => { if (c) { pass++; console.log('  ✅ ' + m); } else { fail++; console.log('  ❌ ' + m); } };
 
 console.log('\n【1】答對之後跳下一題快一點');
-const plain = +(/QM_AUTO_MS_PLAIN\s*=\s*(\d+)/.exec(qm) || [])[1];
-const expl  = +(/QM_AUTO_MS_EXPLAIN\s*=\s*(\d+)/.exec(qm) || [])[1];
-ok(`沒解說：1000 → ${plain}（約快三成）`, plain >= 700 && plain <= 820);
-ok(`有解說：4000 → ${expl}`, expl >= 2900 && expl <= 3300);
+/* ⚠ v549：這兩個常數現在寫成 `_qmFast(760)`（再快 20%，倍率在 data.js 只有一份），
+   不再是裸數字——本來的正則讀不到就變 NaN。要守的是「比 v461 的 1000／4000 快」，
+   所以這裡把 _qmFast 的倍率套回去算出實際毫秒數。 */
+const _spd = +(/const AUTO_NEXT_SPEED = ([\d.]+);/.exec(fs.readFileSync(new URL('../data.js', import.meta.url), 'utf8')) || [])[1] || 1;
+const _ms = (name) => { const m = new RegExp(name + '\\s*=\\s*(?:_qmFast\\()?(\\d+)\\)?').exec(qm); return m ? Math.round(+m[1] / (/_qmFast/.test(m[0]) ? _spd : 1)) : NaN; };
+const plain = _ms('QM_AUTO_MS_PLAIN');
+const expl  = _ms('QM_AUTO_MS_EXPLAIN');
+ok(`沒解說：1000 → ${plain}（比 v461 的 760 還要快）`, plain >= 500 && plain <= 760);
+ok(`有解說：4000 → ${expl}（比 v461 的 3050 還要快）`, expl >= 2200 && expl <= 3050);
 ok('全站所有題型都吃這兩個常數（改一次就全改）',
    (qm.match(/QM_AUTO_MS_(PLAIN|EXPLAIN)/g) || []).length >= 8);
 

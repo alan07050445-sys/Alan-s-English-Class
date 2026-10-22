@@ -372,24 +372,33 @@ function ClaudeMascot({ size = 46, hat = 'none', acc = '' }) {
    ⚠ 變身時帽子與配件先收起來：蝙蝠沒有頭頂也沒有脖子，硬戴上去會飄在空中。 */
 function BatForm({ size = 46, tone = '#C1785A' }) {
   /* ⚠ 不能太深：頁面底是 #1E1333，剪影要看得出來才像蝙蝠不是一團黑 */
-  const WING = '#403A52', BODY = '#4E4664', EYE = '#FFFFFF', PUP = '#15131A', FANG = '#FFFFFF';
+  const WING = '#403A52', BONE = '#2F2A3F', BODY = '#4E4664', EYE = '#FFFFFF', PUP = '#15131A', FANG = '#FFFFFF';
+  /* 🦇 v549（Alan：「蝙蝠也要會飛，翅膀真實一點」）
+     本來是兩塊不會動的方塊。真的蝙蝠翅膀有三個特徵，這裡都畫出來：
+       ① 前緣是一條斜線（手臂骨），翼尖在最高處
+       ② 翼膜往下垂，下緣是**三個尖角**（手指之間的膜被拉成扇形）
+       ③ 翅膀從肩膀拍動（CSS 以肩膀為軸轉動），所以左右要各自一個 <g>
+     畫左翅，右翅用鏡射（x → 17 - x）。每一列是 [起點x, 寬度]。 */
+  const ROWS = [[1, 0, 1], [2, 0, 2], [3, 0, 3], [4, 0, 5], [5, 0, 5], [6, 0, 5], [7, 0, 1], [7, 2, 1], [7, 4, 1], [8, 0, 1]];
+  const bones = [[0, 1], [1, 2], [2, 3], [3, 4]];        // 前緣：從翼尖斜向肩膀
+  const wing = (mirror) => (
+    <>
+      {ROWS.map(([y, x, w], k) => <rect key={k} x={mirror ? 17 - x - (w - 1) : x} y={y} width={w} height="1" fill={WING}/>)}
+      {bones.map(([x, y], k) => <rect key={'b' + k} x={mirror ? 17 - x : x} y={y} width="1" height="1" fill={BONE}/>)}
+      {/* 翼膜上的一條指骨，從肩膀拉到最長的那個尖角 */}
+      <rect x={mirror ? 14 : 3} y="5" width="1" height="1" fill={BONE}/>
+      <rect x={mirror ? 15 : 2} y="6" width="1" height="1" fill={BONE}/>
+      <rect x={mirror ? 17 : 0} y="7" width="1" height="1" fill={BONE}/>
+      {/* 翅膀內側留一條原本那一隻的顏色＝變身了還認得出是誰 */}
+      <rect x={mirror ? 13 : 4} y="5" width="1" height="2" fill={tone}/>
+    </>
+  );
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
       <g className="mx-torso">
-        {/* 翅膀：上緣平、下緣鋸齒（蝙蝠翅膀的識別就在那排尖角）。
-           ⚠ 要比身體寬、而且鋸齒要看得出來，不然會變成「有耳朵的黑球」。 */}
-        <rect x="0" y="3" width="5" height="4" fill={WING}/>
-        <rect x="13" y="3" width="5" height="4" fill={WING}/>
-        <rect x="0" y="7" width="1" height="1" fill={WING}/>
-        <rect x="2" y="7" width="1" height="1" fill={WING}/>
-        <rect x="4" y="7" width="1" height="1" fill={WING}/>
-        <rect x="13" y="7" width="1" height="1" fill={WING}/>
-        <rect x="15" y="7" width="1" height="1" fill={WING}/>
-        <rect x="17" y="7" width="1" height="1" fill={WING}/>
-        {/* 翅膀內側留一條原本那一隻的顏色＝變身了還認得出是誰 */}
-        <rect x="4" y="4" width="1" height="3" fill={tone}/>
-        <rect x="13" y="4" width="1" height="3" fill={tone}/>
+        <g className="mx-wing mx-wing-l">{wing(false)}</g>
+        <g className="mx-wing mx-wing-r">{wing(true)}</g>
         {/* 耳朵 */}
         <rect x="5" y="1" width="2" height="2" fill={BODY}/>
         <rect x="11" y="1" width="2" height="2" fill={BODY}/>
@@ -415,7 +424,7 @@ function BatForm({ size = 46, tone = '#C1785A' }) {
 function VampireMascot({ size = 46, hat = 'none', acc = '', tone = '#C1785A', fit, bat }) {
   if (bat) return <BatForm size={size} tone={tone}/>;
   const CAPE = '#1E1B24', HAIR = '#15131A', SKIN = '#DCE9F4',
-        BLUSH = '#F2A7B0', EYE = '#15131A', FANG = '#FFFFFF';
+        BLUSH = '#F2A7B0', EYE = '#15131A', FANG = '#FFFFFF', BOOT = '#5A5470';
   const F = fit || MX_FIT_DEF;
   return (
     <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
@@ -462,9 +471,20 @@ function VampireMascot({ size = 46, hat = 'none', acc = '', tone = '#C1785A', fi
         <rect x="11" y="11" width="3" height="1" fill={tone}/>
         <rect x="8" y="12" width="2" height="1" fill={SKIN}/>
       </g>
-      <g className="mx-leg mx-leg-a"><rect x="4" y="14" width="4" height="2" fill={CAPE}/></g>
+      {/* 🧛 v549 披風下擺：獨立一個 <g>，走路時整片往後飄（Alan：「要變成比較真實的 Vampire 走路」）。
+          畫在腳的兩側（x 0~3、15~17），不壓到腳；下緣參差＝披風布料的感覺。 */}
+      {/* ⚠ 披風與腳本來是近黑色，頁面底也是近黑（#1E1333）——走路姿勢再怎麼改都看不見。
+          → 下擺最下面一排用「這一隻的主色」當內裡（披風翻起來才會露出來），
+            鞋子最下面一排用淺一階的灰（BOOT）。 */}
+      <g className="mx-cape">
+        <rect x="0" y="14" width="4" height="1" fill={CAPE}/>
+        <rect x="0" y="15" width="3" height="1" fill={tone}/>
+        <rect x="14" y="14" width="4" height="1" fill={CAPE}/>
+        <rect x="15" y="15" width="3" height="1" fill={tone}/>
+      </g>
+      <g className="mx-leg mx-leg-a"><rect x="4" y="14" width="4" height="1" fill={CAPE}/><rect x="4" y="15" width="4" height="1" fill={BOOT}/></g>
       <g className="mx-leg mx-leg-b"/>
-      <g className="mx-leg mx-leg-c"><rect x="10" y="14" width="4" height="2" fill={CAPE}/></g>
+      <g className="mx-leg mx-leg-c"><rect x="10" y="14" width="4" height="1" fill={CAPE}/><rect x="10" y="15" width="4" height="1" fill={BOOT}/></g>
       {/* 招牌道具：兩個都畫（CSS 只會顯示當下那一個動作的） */}
       <g className="mx-prop mx-prop-type">
         <rect x="2" y="9" width="14" height="5" fill="#4A443A"/>
@@ -1603,7 +1623,7 @@ function MascotLayer() {
           <div className={'mx-bubble' + (act === 'grow' ? ' mx-bubble-high' : '') + (act === 'hop' ? ' mx-bubble-hop' : '')}>{bubble}</div>}
         {/* v407：多一個 pet-<id>——同一個動作要能「這一隻做得不一樣」
             （阿石滾得慢、走得重；小焰衝刺時身後有速度線）。 */}
-        <div ref={bodyRef} className={'mx-body pet-' + petId + ' act-' + act} style={{ '--mx-dir': dir }}
+        <div ref={bodyRef} className={'mx-body pet-' + petId + ' act-' + act + (hwOn ? (bat ? ' is-bat' : ' is-vamp') : '')} style={{ '--mx-dir': dir }}
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
           onPointerCancel={() => { clearTimeout(pressT.current); endDrag(); }}
           /* v459（Alan：「有學生的平板不是 iPad，長按會跳出網站的設定」）：
@@ -1854,7 +1874,7 @@ Object.assign(window, { ClaudeMascot, OwlMascot, FlameMascot, RockMascot, Sprout
   MX_PETS, mxGetPet, mxPetOf, MascotLayer, FxLayer, ConfettiBurst,
   /* v435：裝扮的繪圖元件也開放出來——校稿／對照表（scratchpad/site/_fit.html）要能一次畫出
      「五隻 × 每一件」，不然只能一個一個換來換去看。 */
-  MxHat, MxAcc, MX_FIT });
+  MxHat, MxAcc, MX_FIT, VampireMascot, BatForm });
 
 /* 自己掛載——不動 App 的樹，任何頁面都在 */
 (function mountFx() {

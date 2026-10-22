@@ -1573,3 +1573,9 @@ html.fest-hw .qm-sub-due { color: var(--hw-pump); }
 html.fest-hw .qm-sub-done { color: #AE9FCC; }
 html.fest-hw .qm-sub-done.all { color: #7FE3A0; }
 html.fest-hw .qm-sub-rows { border-left-color: rgba(255,255,255,.14); }
+
+/* v549 ⋯ 備用入口（點過牠之後五秒內出現）：夜色版——白底圓鈕在夜色裡太亮、太像一個破洞 */
+html.fest-hw .mx-handle {
+  background: rgba(61,42,99,.92); border-color: rgba(255,255,255,.22); color: #E9DFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}

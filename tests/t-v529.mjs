@@ -29,10 +29,13 @@ ok('⭐ 一樣是畫素（只有 <rect> ＋ crispEdges ＋ 同一個 viewBox）'
    /shapeRendering="crispEdges"/.test(BAT) && /viewBox="0 -4 18 20"/.test(BAT)
    && !/<(circle|ellipse|path|polygon)/.test(BAT));
 ok('⭐ 翅膀要比身體寬、而且有鋸齒（不然只是「有耳朵的黑球」）', (() => {
-   const wings = [...BAT.matchAll(/<rect x="(\d+)" y="3" width="(\d+)"/g)].map(m => [+m[1], +m[2]]);
-   const left = wings.find(w => w[0] === 0), right = wings.find(w => w[0] === 13);
-   const teeth = (BAT.match(/y="7" width="1" height="1"/g) || []).length;
-   return left && right && teeth >= 6; })());
+   /* ⚠ v549 把翅膀從「兩塊寫死的方塊」改成資料列 + 鏡射（才能各自拍動）。
+      本來數 `y="7" width="1"` 有幾個 → 現在翅膀由 ROWS 產生，要看資料列：
+      下緣（y=7）有三個尖角、最寬那幾列涵蓋 x 0~4（比身體 x 5~12 的左右各多出 5 格）。 */
+   const rows = [...BAT.matchAll(/\[(\d), (\d), (\d)\]/g)].map(m => ({ y: +m[1], x: +m[2], w: +m[3] }));
+   const teeth = rows.filter(r => r.y === 7).length;
+   const widest = Math.max(...rows.map(r => r.x + r.w));
+   return /mirror \? 17 - x/.test(BAT) && teeth >= 3 && widest >= 5; })());
 ok('⚠ 顏色不可以太深（頁面底是 #1E1333，太深就看不出剪影）', (() => {
    const m = /const WING = '#([0-9A-Fa-f]{6})'/.exec(BAT);
    if (!m) return false;
