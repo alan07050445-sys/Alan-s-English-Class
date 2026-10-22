@@ -3901,4 +3901,4 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
   );
 }
 
-Object.assign(window, { TeacherDashboard, ExamMarking, LessonLog });   // 後兩個匯出給對照頁單獨跑
+Object.assign(window, { TeacherDashboard, ExamMarking, LessonLog, dashCurrentWeekId });   // 後兩個匯出給對照頁單獨跑

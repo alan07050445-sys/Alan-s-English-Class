@@ -1517,6 +1517,44 @@ function App() {
         handleSetHomeworkMany(found.items.map(it => it.id), due ? { dueDate: due } : null);
       }
 
+    } else if (plan.intent === 'timetable') {
+      /* 🗓 v547 改固定課表（Alan：「改時間」）。
+         ⚠ 這會改到孩子的固定上課時段，所以**一定先問**——而且要把「一起上的還有誰」
+           「跟誰撞時間」在按確定之前就講出來。
+         ⚠ 只改每週固定的那一堂；「只改這一次」現在做不到，要老實說，不可以偷偷改成固定的。 */
+      if (plan.once) {
+        showToast('「只改這一次」我還不會——上課紀錄裡有「補課」可以記一次性的課。要改固定課表的話跟我說就好。');
+      } else {
+        (async () => {
+          const found = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
+          if (!found || !found.email) {
+            showToast(found && found.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);
+            return;
+          }
+          const tt = await new Promise(res => {
+            let un = null, done = false;
+            const fin = (v) => { if (done) return; done = true; try { un && un(); } catch (e) {} res(v); };
+            try { un = window.subscribeTimetable(fin); if (done) { try { un && un(); } catch (e) {} } } catch (e) { fin(null); }
+            setTimeout(() => fin(null), 6000);
+          });
+          if (!tt || !(tt.slots || []).length) { showToast('還沒有固定課表——先到「上課紀錄」貼上課表。'); return; }
+          const r = window.ttMoveSlot(tt, { email: found.email, name: found.name,
+            fromDay: plan.fromDay, toDay: plan.toDay, start: plan.start, end: plan.end });
+          if (r.error) { showToast(r.error); return; }
+          if (r.ask) { showToast(r.ask); return; }
+          const msg = [`把 ${found.name} 的固定課表：`, `  ${r.before}  →  ${r.after}`,
+            r.others.length ? `\n⚠ 這一堂還有 ${r.others.join('、')} 一起上，他們也會一起改。` : '',
+            r.clash.length ? `\n⚠ 跟這幾堂時間重疊：${r.clash.join('；')}` : '',
+            '\n確定要改嗎？'].filter(Boolean).join('\n');
+          if (!window.confirm(msg)) return;
+          try {
+            await window.saveTimetable(r.tt);
+            showToast(`改好了：${found.name} ${r.after}`);
+          } catch (e) { showToast('存檔失敗，課表沒有改。'); }
+        })();
+      }
+      setAskOpen(false);
+
     } else if (plan.intent === 'notify') {
       /* 📢 LINE 公告：把稿子先打好、對象先選好，**送出那一下還是他自己按**。
          ⚠ 這是會直接送到家長手機上的東西，不可以由聊天室替他送出去。 */

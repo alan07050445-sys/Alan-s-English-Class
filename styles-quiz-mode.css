@@ -4202,3 +4202,18 @@ textarea.ex-essay {
 /* 展開的那幾份往右縮一點，看得出來是同一組底下的 */
 .qm-sub-rows { padding-left: 14px; margin-top: 2px;
   border-left: 2px solid var(--border-soft, #E8E2D0); }
+
+/* ══ v547 🔎 聊天室的答案 ═════════════════════════════════════════════
+   顏色只表示狀態；走變數，萬聖節那層才翻得過來。 */
+.ask-ans { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ask-ans li {
+  display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 9px;
+  background: var(--bg-card, #fff); border: 1px solid var(--border-soft, #E8E2D0);
+  border-left: 4px solid var(--border, #DDD6C4); font-size: 13px; line-height: 1.55;
+}
+.ask-ans li b { flex: none; min-width: 64px; font-weight: 800; color: var(--ink); }
+.ask-ans li span { color: var(--ink-2); }
+.ask-ans li.tone-bad  { border-left-color: var(--no, #A8331F); }
+.ask-ans li.tone-warn { border-left-color: #D98A1F; }
+.ask-ans li.tone-ok   { border-left-color: var(--ok, #1F6B4B); }
+.ask-ans-foot { margin-top: 8px; font-size: 11.5px; line-height: 1.7; color: var(--ink-3); white-space: pre-wrap; }

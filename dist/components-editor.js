@@ -9626,6 +9626,44 @@ function AskPanel({
     /* ⚠ 照片要留給產生器用——文法與考卷是直接拿原圖再讀一次，
        不是靠路由器轉述（轉述會掉細節，而且題目要照原文）。 */
     plan.images = shots;
+    /* v547 🔎 查詢是「直接回答」，不是開畫面，也不用確認卡（它什麼都不會動）。
+       ⚠ 數字全由程式算（askQueryAnswer 用的是後台總覽同一支 buildWeeklyReport），
+         AI 只選 qtype。讀資料要一點時間，先放一則「查詢中」讓他知道有在動。 */
+    if (plan.intent === 'query' && window.askQueryAnswer) {
+      setMsgs(m => m.concat([{
+        me: false,
+        text: '好，我查一下…',
+        pending: true
+      }]));
+      var ans;
+      try {
+        var data = await window.askLoadQueryData();
+        ans = window.askQueryAnswer(plan, {
+          roster,
+          students: data.students,
+          gradeData: data.gradeData,
+          currentWeekId: window.dashCurrentWeekId
+        });
+      } catch (e) {
+        ans = {
+          head: '查詢失敗，等一下再問一次。',
+          rows: [],
+          foot: ''
+        };
+      }
+      /* ⚠ 他一句話裡常常「查＋做」一起講（「誰沒做完，順便提醒他們」）。
+         查的這一半我做得到，做的那一半（提醒）聊天室還不會——
+         如果什麼都不說，他會以為已經提醒了（安靜地少做一半是最難發現的）。 */
+      if (/提醒|催|通知|傳給|發給/.test(t)) {
+        ans.foot = (ans.foot ? ans.foot + '\n' : '') + '你也提到要提醒／通知——這一半我還不會幫你做。後台「作業提醒」可以手動發給沒做完的家長。';
+      }
+      setMsgs(m => m.filter(x => !x.pending).concat([{
+        me: false,
+        text: ans.head,
+        answer: ans
+      }]));
+      return;
+    }
     setMsgs(m => m.concat([{
       me: false,
       text: plan.intent === 'unknown' ? plan.ask || '我不太確定你要做哪一件事。' : plan.say || '',
@@ -9649,7 +9687,7 @@ function AskPanel({
     className: "ask-hello"
   }, /*#__PURE__*/React.createElement("p", null, "\u76F4\u63A5\u8AAA\u4F60\u60F3\u505A\u4EC0\u9EBC\uFF0C\u6216\u628A\u55AE\u5B57\u8868\uFF0F\u6587\u7AE0\uFF0F\u4F5C\u696D\u7167\u7247\u4E1F\u9032\u4F86\u3002"), /*#__PURE__*/React.createElement("div", {
     className: "ask-eg"
-  }, ['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼', '這週 Word Study 是 prefixes mis-, en-, & em-', '幫我擬 Eric 今天的上課紀錄', 'Nick 最近哪裡最弱？', /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
+  }, ['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼', '這週 Word Study 是 prefixes mis-, en-, & em-', '幫我擬 Eric 今天的上課紀錄', '這週誰還沒做完？', 'Nick 這週做得怎麼樣？', 'Nick 錯最多的是哪些？', '針對 Nick 的弱點出練習', 'Nick 週三的課改成 17:30', /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
   '這篇文章做成分段閱讀（貼上文章）', '出一份外師的考前複習卷', '把 Barbed Wire Baseball 排一份複習到第 9 週', '把 Barbed Wire Baseball 那組沿用到第 10 週', '我要改申論題', '把第 7 週的內容複製到第 9 週', '把 Unit 1 跟 Unit 2 的單字合併再出一份，只要 12 題', 'Barbed Wire Baseball 那組設成下週三到期', '跟 G4 的家長說這週三停課一次', '出一份外師的考卷，題目要包含現在完成式跟比較級'].map((x, i) => /*#__PURE__*/React.createElement("button", {
     key: i,
     onClick: () => setText(x)
@@ -9668,7 +9706,14 @@ function AskPanel({
     key: k,
     src: im.preview,
     alt: ""
-  }))), /*#__PURE__*/React.createElement("span", null, m.text), m.plan && m.plan.intent !== 'unknown' && (() => {
+  }))), /*#__PURE__*/React.createElement("span", null, m.text), m.answer && (m.answer.rows || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+    className: "ask-ans"
+  }, m.answer.rows.map((r, k) => /*#__PURE__*/React.createElement("li", {
+    key: k,
+    className: r.tone ? 'tone-' + r.tone : ''
+  }, /*#__PURE__*/React.createElement("b", null, r.name), /*#__PURE__*/React.createElement("span", null, r.text)))), m.answer && m.answer.foot && /*#__PURE__*/React.createElement("div", {
+    className: "ask-ans-foot"
+  }, m.answer.foot), m.plan && m.plan.intent !== 'unknown' && m.plan.intent !== 'query' && (() => {
     var J = JOBS[m.plan.intent] || {};
     return /*#__PURE__*/React.createElement("div", {
       className: "ask-plan"

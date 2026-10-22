@@ -4770,5 +4770,6 @@ function StudentDetail({
 Object.assign(window, {
   TeacherDashboard,
   ExamMarking,
-  LessonLog
+  LessonLog,
+  dashCurrentWeekId
 }); // 後兩個匯出給對照頁單獨跑

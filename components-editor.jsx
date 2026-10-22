@@ -6262,6 +6262,26 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
     /* ⚠ 照片要留給產生器用——文法與考卷是直接拿原圖再讀一次，
        不是靠路由器轉述（轉述會掉細節，而且題目要照原文）。 */
     plan.images = shots;
+    /* v547 🔎 查詢是「直接回答」，不是開畫面，也不用確認卡（它什麼都不會動）。
+       ⚠ 數字全由程式算（askQueryAnswer 用的是後台總覽同一支 buildWeeklyReport），
+         AI 只選 qtype。讀資料要一點時間，先放一則「查詢中」讓他知道有在動。 */
+    if (plan.intent === 'query' && window.askQueryAnswer) {
+      setMsgs(m => m.concat([{ me: false, text: '好，我查一下…', pending: true }]));
+      let ans;
+      try {
+        const data = await window.askLoadQueryData();
+        ans = window.askQueryAnswer(plan, { roster, students: data.students, gradeData: data.gradeData,
+                                            currentWeekId: window.dashCurrentWeekId });
+      } catch (e) { ans = { head: '查詢失敗，等一下再問一次。', rows: [], foot: '' }; }
+      /* ⚠ 他一句話裡常常「查＋做」一起講（「誰沒做完，順便提醒他們」）。
+         查的這一半我做得到，做的那一半（提醒）聊天室還不會——
+         如果什麼都不說，他會以為已經提醒了（安靜地少做一半是最難發現的）。 */
+      if (/提醒|催|通知|傳給|發給/.test(t)) {
+        ans.foot = (ans.foot ? ans.foot + '\n' : '') + '你也提到要提醒／通知——這一半我還不會幫你做。後台「作業提醒」可以手動發給沒做完的家長。';
+      }
+      setMsgs(m => m.filter(x => !x.pending).concat([{ me: false, text: ans.head, answer: ans }]));
+      return;
+    }
     setMsgs(m => m.concat([{ me: false, text: plan.intent === 'unknown' ? (plan.ask || '我不太確定你要做哪一件事。') : (plan.say || ''), plan }]));
   };
 
@@ -6281,7 +6301,11 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
               {['這課單字幫我出一份：pursued 追趕、barbed 有刺的、glanced 瞥了一眼',
                 '這週 Word Study 是 prefixes mis-, en-, & em-',
                 '幫我擬 Eric 今天的上課紀錄',
-                'Nick 最近哪裡最弱？',
+                '這週誰還沒做完？',
+                'Nick 這週做得怎麼樣？',
+                'Nick 錯最多的是哪些？',
+                '針對 Nick 的弱點出練習',
+                'Nick 週三的課改成 17:30',
                 /* v531：新接進來的 6 件事也給例句——不然他不會知道現在講得動了 */
                 '這篇文章做成分段閱讀（貼上文章）',
                 '出一份外師的考前複習卷',
@@ -6314,8 +6338,19 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                 <div className="ask-thumbs">{m.images.map((im, k) => <img key={k} src={im.preview} alt=""/>)}</div>
               )}
               <span>{m.text}</span>
+              {/* v547 🔎 答案：一列一個人／一項，顏色只表示狀態（紅＝完全沒做、橘＝做一半、綠＝OK） */}
+              {m.answer && (m.answer.rows || []).length > 0 && (
+                <ul className="ask-ans">
+                  {m.answer.rows.map((r, k) => (
+                    <li key={k} className={r.tone ? 'tone-' + r.tone : ''}>
+                      <b>{r.name}</b><span>{r.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {m.answer && m.answer.foot && <div className="ask-ans-foot">{m.answer.foot}</div>}
               {/* 確認卡：它要做什麼，一清二楚，按了才會動 */}
-              {m.plan && m.plan.intent !== 'unknown' && (() => {
+              {m.plan && m.plan.intent !== 'unknown' && m.plan.intent !== 'query' && (() => {
                 const J = JOBS[m.plan.intent] || {};
                 return (
                   <div className="ask-plan">

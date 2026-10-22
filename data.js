@@ -7410,6 +7410,11 @@ const ASK_JOBS = {
   /* ══ v534（Alan 又加的五件）══════════════════════════════════════ */
   assign:    { zh: '設定作業期限', ico: '📌', need: 'group', where: 'editor' },
   notify:    { zh: '發 LINE 公告', ico: '📢', need: 'text', where: 'dash' },
+  /* ══ v547（Alan：「聽你的」——查詢類最值得，其次是改固定課表）══════════
+     query    ＝直接**回答**問題（不是開畫面）。數字一律由程式算，AI 只負責聽懂在問什麼。
+     timetable＝改固定課表的某一堂（星期幾／幾點到幾點）。 */
+  query:     { zh: '直接回答問題', ico: '🔎', need: '', where: 'chat' },
+  timetable: { zh: '改固定課表', ico: '🗓', need: 'student', where: 'dash' },
 };
 
 /* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
@@ -7510,10 +7515,30 @@ The tools:
               ("Barbed Wire Baseball 那組設成下週三到期").
   notify    — send a LINE announcement to parents
               ("跟家長說這週三停課一次" / "跟 G4 的家長說…").
+  query     — he is ASKING a question and wants the ANSWER, not a screen.
+              "qtype" is exactly one of:
+                unfinished（這週誰還沒做完／誰沒交）
+                notstarted（誰這週完全沒開始）
+                student   （某一位學生這週做得怎麼樣——needs "student"）
+                mistakes  （某一位學生目前錯題最多的是哪些——needs "student"）
+              🔴 You do NOT answer. You only pick the qtype; the website computes the numbers.
+              If he wants you to MAKE practice from the mistakes ("針對 Nick 的弱點出練習"),
+              that is "weak", not "query". Asking WHAT / WHO / HOW MANY ＝ query.
+              A grade ("G4 誰沒做完") goes in "gradeId".
+  timetable — change ONE student's regular weekly lesson slot in the fixed timetable
+              ("Nick 週三改成 17:30" / "把 Eric 週二的課改到週四 18:00 到 19:30").
+              "student" = who; "fromDay" = the weekday he is moving FROM (0=日…6=六, -1 if he
+              did not say); "toDay" = the weekday it becomes (-1 if unchanged);
+              "start"/"end" = new times as "HH:MM" 24-hour ("" if he did not say).
+              If he only gave a start time, leave "end" empty — the website keeps the length.
+              🔴 This is the PERMANENT weekly slot. If he said it is only for ONE time
+              ("這週三改成週四" / "下週一那堂換時間"), set "once": true — the website will say it
+              cannot do a one-time change yet. If you cannot tell, use "unknown" and ask:
+              "是固定課表都改，還是只改這一次？".
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper tense review group marking copyweek merge assign notify unknown
+  guided exampaper tense review group marking copyweek merge assign notify query timetable unknown
 - "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
@@ -7629,6 +7654,14 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
       ? String(o.target).trim() : 'all',
     gradeId: /^g[1-6]$/.test(String(o.gradeId || '').trim().toLowerCase())
       ? String(o.gradeId).trim().toLowerCase() : '',
+    /* v547：全部夾回受控值——模型亂填一個 qtype 或 25:99，程式照做就會算錯、存錯。 */
+    qtype: ['unfinished', 'notstarted', 'student', 'mistakes'].indexOf(String(o.qtype || '').trim()) >= 0
+      ? String(o.qtype).trim() : '',
+    fromDay: (() => { const n = Math.round(+o.fromDay); return (n >= 0 && n <= 6) ? n : -1; })(),
+    toDay:   (() => { const n = Math.round(+o.toDay);   return (n >= 0 && n <= 6) ? n : -1; })(),
+    start: (() => { const t = String(o.start || '').trim(); return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
+    end:   (() => { const t = String(o.end || '').trim();   return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
+    once: o.once === true,
   };
   /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
   if (out.student) {
@@ -7648,6 +7681,20 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   if (out.intent === 'group' && !out.op) {
     out.intent = 'unknown';
     out.ask = `「${out.group || '那一組'}」要做什麼？沿用到別週／搬過去／再出一份／刪掉`;
+  }
+  /* v547：query 沒說問什麼、或該有學生卻沒有 → 問，不要亂猜。 */
+  if (out.intent === 'query') {
+    if (!out.qtype) {
+      out.intent = 'unknown';
+      out.ask = out.ask || '想查什麼？「這週誰還沒做完」、「Nick 這週做得怎麼樣」、「Nick 錯最多的是哪些」我都查得到。';
+    } else if ((out.qtype === 'student' || out.qtype === 'mistakes') && !out.student) {
+      out.intent = 'unknown';
+      out.ask = '要查哪一位學生？';
+    }
+  }
+  if (out.intent === 'timetable' && !out.once && out.toDay < 0 && !out.start && !out.end) {
+    out.intent = 'unknown';
+    out.ask = `${out.student || '他'}要改成星期幾、幾點？`;
   }
   const need = (ASK_JOBS[out.intent] || {}).need;
   if (need === 'words' && !out.words.length) { out.intent = 'unknown'; out.ask = out.ask || '要出哪幾個單字？直接貼給我就好。'; }
@@ -9435,7 +9482,7 @@ function computeCheckin(checkin) {
   };
 }
 Object.assign(window, {
-  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent, renameGroupItems,
+  checkInToday, computeCheckin, checkinToday, EXAM_CHECKIN, askFindStudent, renameGroupItems, askQueryAnswer, askLoadQueryData, ttMoveSlot,
   CHECKIN_DAILY, CHECKIN_CYCLE, CHECKIN_MILESTONES, CHECKIN_PERFECT,
 });
 
@@ -10159,6 +10206,168 @@ function timetableParse(text, roster) {
   const twins = _ttLookAlikes((roster || []).map(r => String(r.name || '').trim()).filter(Boolean),
                               out.flatMap(s => s.names));
   return { slots: out, unknown: [...new Set(unknown)], twins };
+}
+
+/* ══ v547 🔎 聊天室直接回答問題 ═══════════════════════════════════════
+   Alan：「這週誰還沒做完」「Nick 最近錯最多的是什麼」——以前聊天室只會把畫面打開，
+   他還要自己點進去找。現在直接回答。
+
+   ⭐⭐ **數字一律由程式算，AI 一個字都不寫**（AI 只選 qtype）。
+     算法用後台總覽**同一支** buildWeeklyReport，所以聊天室說的跟後台看到的一定對得上。
+   ⚠ 名單上有、但**從沒登入過**（沒有進度文件）的孩子不可以消失——
+     那正是最需要被找出來的人（v500：靜靜地少一個比直接失敗更難發現）。
+   ⚠ 每個孩子用**自己年級**的那一份作業（v434 的教訓，一份資料當成全部）。
+   ⚠ 只算學期課程，不含暑假發派——答案裡要講明。 */
+function askQueryAnswer(plan, ctx) {
+  const c = ctx || {};
+  const roster = (c.roster || []).filter(r => r && r.email && r.active !== false);
+  const byEmail = new Map((c.students || []).map(x => [String(x.email || '').toLowerCase(), x]));
+  const gradeOf = (r) => (r.grade || (window.gradeFromEmail ? window.gradeFromEmail(r.email) : '') || '').toString().toLowerCase();
+  const cur = c.currentWeekId || (() => null);
+  const gdOf = (g) => { const d = (c.gradeData || {})[g]; return (d && d.order && d.order.length) ? d : null; };
+  const stuOf = (r) => byEmail.get(String(r.email).toLowerCase())
+    || { email: r.email, name: r.name, items: {}, streak: { count: 0 }, _noDoc: true };
+  const weekOf = (g) => { const d = gdOf(g); return d ? { d, wid: cur(d.weeks, d.order) } : null; };
+  const catCount = (pending) => {
+    const m = {}; pending.forEach(x => { m[x.cat] = (m[x.cat] || 0) + 1; });
+    return Object.keys(m).map(k => `${k} ${m[k]} 項`).join('、');
+  };
+  const BASIS = '算法跟後台「總覽」同一套（這週所有練習；只算學期課程，不含暑假發派）。';
+
+  if (plan.qtype === 'unfinished' || plan.qtype === 'notstarted') {
+    const rows = [], noGrade = [], noTask = [];
+    let n = 0, weekLabels = new Set();
+    roster.forEach(r => {
+      const g = gradeOf(r);
+      if (plan.gradeId && g !== plan.gradeId) return;
+      n++;
+      const wk = weekOf(g);
+      if (!wk || !wk.wid) { noGrade.push(r.name || r.email); return; }
+      const rep = buildWeeklyReport(stuOf(r), wk.d.weeks, wk.d.order, { weekId: wk.wid });
+      weekLabels.add(`${g.toUpperCase()} ${rep.weekLabel}`);
+      if (!rep.totalItems) { noTask.push(r.name || r.email); return; }
+      const done = rep.completed.length;
+      const hit = plan.qtype === 'notstarted' ? done === 0 : done < rep.totalItems;
+      if (hit) rows.push({ name: r.name || r.email, grade: g, done, total: rep.totalItems, pct: rep.completionRate,
+        text: `${done}/${rep.totalItems}（${rep.completionRate}%）${done < rep.totalItems ? ' · 還差 ' + catCount(rep.pending) : ''}`,
+        noDoc: !!stuOf(r)._noDoc, tone: done === 0 ? 'bad' : 'warn' });
+    });
+    rows.sort((a, b) => a.pct - b.pct || String(a.name).localeCompare(String(b.name)));
+    rows.forEach(x => { if (x.noDoc) x.text += ' · 還沒登入過'; });
+    const scope = plan.gradeId ? `${plan.gradeId.toUpperCase()} ` : '';
+    const label = [...weekLabels].join('、') || '這週';
+    const head = rows.length
+      ? `${scope}${plan.qtype === 'notstarted' ? '這週完全沒開始' : '這週還沒做完'}的有 ${rows.length} 位（共 ${n - noGrade.length - noTask.length} 位有作業的，${label}）`
+      : `${scope}${plan.qtype === 'notstarted' ? '這週每位都開始做了' : '這週每位都做完了'}（${label}）🎉`;
+    const foot = [
+      noGrade.length ? `⚠ 找不到作業資料所以沒算到：${noGrade.join('、')}` : '',
+      noTask.length ? `這週沒有作業：${noTask.slice(0, 6).join('、')}${noTask.length > 6 ? '…' : ''}` : '',
+      BASIS].filter(Boolean).join('\n');
+    return { head, rows, foot };
+  }
+
+  /* 以下兩種都要先找到那位學生 */
+  const who = askFindStudent(plan.student, roster);
+  if (!who || !who.email) {
+    return { head: who && who.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。`
+                                    : `名單裡找不到「${plan.student}」。`, rows: [], foot: '' };
+  }
+  const r = roster.find(x => String(x.email).toLowerCase() === String(who.email).toLowerCase());
+  const g = gradeOf(r), wk = weekOf(g), stu = stuOf(r);
+  const twin = (who.twins || []).length ? `⚠ 名單裡有長得很像的名字（${who.twins.join('、')}），確認一下是不是 ${who.name}。\n` : '';
+
+  if (plan.qtype === 'student') {
+    if (!wk || !wk.wid) return { head: `找不到 ${who.name} 這個年級的作業資料。`, rows: [], foot: twin };
+    const rep = buildWeeklyReport(stu, wk.d.weeks, wk.d.order, { weekId: wk.wid });
+    if (!rep.totalItems) return { head: `${who.name} 這週（${rep.weekLabel}）沒有作業。`, rows: [], foot: twin + BASIS };
+    const rows = [{ name: '完成', text: `${rep.completed.length}/${rep.totalItems}（${rep.completionRate}%）`,
+                    tone: rep.completionRate >= 80 ? 'ok' : rep.completionRate > 0 ? 'warn' : 'bad' }];
+    if (rep.avgScore != null) rows.push({ name: '平均分數', text: `${rep.avgScore} 分` });
+    if (rep.lateCount) rows.push({ name: '補交', text: `${rep.lateCount} 項` });
+    if (rep.pending.length) rows.push({ name: '還差', text: catCount(rep.pending), tone: 'warn' });
+    if (stu._noDoc) rows.push({ name: '注意', text: '這位還沒登入過', tone: 'bad' });
+    return { head: `${who.name}（${g.toUpperCase()} ${rep.weekLabel}）`, rows, foot: twin + BASIS };
+  }
+
+  if (plan.qtype === 'mistakes') {
+    const d = wk && wk.d;
+    const list = (typeof collectWrongQuestions === 'function' && d)
+      ? collectWrongQuestions(stu.items, d.weeks, d.order, typeof CATEGORIES !== 'undefined' ? CATEGORIES : []) : [];
+    if (!list.length) return { head: `${who.name} 目前沒有還沒訂正的錯題 👍`, rows: [], foot: twin };
+    const m = new Map();
+    list.forEach(q => {
+      const k = `${q.weekLabel}｜${q.itemTitle}`;
+      if (!m.has(k)) m.set(k, { weekLabel: q.weekLabel, title: q.itemTitle, n: 0, sample: q.q });
+      m.get(k).n++;
+    });
+    const top = [...m.values()].sort((a, b) => b.n - a.n).slice(0, 5);
+    return { head: `${who.name} 目前還沒訂正的錯題共 ${list.length} 題，集中在：`,
+      rows: top.map(x => ({ name: `${x.n} 題`, text: `${x.weekLabel} · ${x.title}`, tone: x.n >= 4 ? 'bad' : 'warn' })),
+      foot: twin + '這是「還沒訂正」的累積，不是某段時間內的（題目答錯的時間沒有記錄）。\n想針對這些出練習，跟我說「針對 ' + who.name + ' 的弱點出練習」。' };
+  }
+  return { head: '我不知道怎麼查這個。', rows: [], foot: '' };
+}
+
+/* 一次性讀「全部學生進度＋六個年級的作業」（60 秒內重複問不重讀）。
+   ⚠ 用既有的訂閱函式讀第一次回來的那一筆就取消訂閱——不另外寫一套 Firestore 讀取。
+   ⚠ 8 秒讀不到就放棄那一份，回 null 讓答案老實說「沒算到」。 */
+let _askQueryCache = null;
+function askLoadQueryData() {
+  if (_askQueryCache && Date.now() - _askQueryCache.at < 60000) return Promise.resolve(_askQueryCache.v);
+  const once = (sub) => new Promise(res => {
+    let un = null, done = false;
+    const fin = (v) => { if (done) return; done = true; try { un && un(); } catch (e) {} res(v); };
+    try { un = sub(fin); if (done) { try { un && un(); } catch (e) {} } } catch (e) { fin(null); }
+    setTimeout(() => fin(null), 8000);
+  });
+  const G = { g1: 'subscribeToClassDataG1', g2: 'subscribeToClassDataG2', g3: 'subscribeToClassData',
+              g4: 'subscribeToClassDataG4', g5: 'subscribeToClassDataG5', g6: 'subscribeToClassDataG6' };
+  return Promise.all([
+    once(cb => subscribeAllStudents(cb)),
+    ...Object.keys(G).map(g => once(cb => (window[G[g]] ? window[G[g]]((w, o) => cb({ weeks: w || {}, order: (o || []).slice() }), () => cb(null)) : (cb(null), null)))),
+  ]).then(([students, ...grades]) => {
+    const gradeData = {};
+    Object.keys(G).forEach((g, i) => { if (grades[i]) gradeData[g] = grades[i]; });
+    const v = { students: students || [], gradeData };
+    _askQueryCache = { at: Date.now(), v };
+    return v;
+  });
+}
+
+/* ══ v547 🗓 聊天室改固定課表 ═══════════════════════════════════════
+   「Nick 週三改成 17:30」——改的是**每週固定**的那一堂（不是只改這一次）。
+   ⚠ 一個時段可能有好幾個孩子（Elvis & Elory 一起上）——改時段會一起動，
+     所以回傳 others 讓畫面在按下去之前就講清楚。
+   ⚠ 同一天、時間重疊的另一堂要回報（老師只有一個人），但不擋——他可能就是要這樣。
+   ⚠ 一週不只一堂又沒說是哪一天 → 問，不要猜（Nick 週三＋週日）。 */
+function ttMoveSlot(tt, op) {
+  const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+  const mins = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
+  const hhmm = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+  const show = (sl) => `週${DAYS[sl.day]} ${sl.start}–${sl.end}`;
+  const slots = timetableOfStudent(tt, op.email);
+  if (!slots.length) return { error: `課表裡沒有 ${op.name || '這位學生'}——要先把他排進固定課表。` };
+  let cand = slots;
+  if (op.fromDay >= 0) cand = slots.filter(x => Number(x.day) === op.fromDay);
+  if (!cand.length) return { error: `${op.name || '他'}週${DAYS[op.fromDay]}沒有課。他的課是：${slots.map(show).join('、')}` };
+  if (cand.length > 1) return { ask: `${op.name || '他'}一週有 ${cand.length} 堂（${cand.map(show).join('、')}），要改哪一堂？` };
+  const old = cand[0];
+  const len = Math.max(15, mins(old.end) - mins(old.start));
+  const day = op.toDay >= 0 ? op.toDay : Number(old.day);
+  const start = op.start || old.start;
+  const end = op.end || (op.start ? hhmm(Math.min(24 * 60 - 1, mins(op.start) + len)) : old.end);
+  if (mins(end) <= mins(start)) return { error: `結束時間（${end}）要比開始時間（${start}）晚。` };
+  if (day === Number(old.day) && start === old.start && end === old.end) return { error: '跟現在一樣，沒有要改的。' };
+  const next = { ...old, day, start, end };
+  const clash = ((tt && tt.slots) || []).filter(x => x.id !== old.id && Number(x.day) === day
+    && mins(x.start) < mins(end) && mins(start) < mins(x.end));
+  const names = (sl) => (sl.names && sl.names.length ? sl.names : sl.students || []);
+  return {
+    tt: { ...tt, slots: ((tt && tt.slots) || []).map(x => x.id === old.id ? next : x) },
+    before: show(old), after: show(next),
+    others: names(old).filter(n => String(n).toLowerCase() !== String(op.name || '').toLowerCase()),
+    clash: clash.map(x => `${names(x).join('、') || '（沒有名字）'}（${show(x)}）`),
+  };
 }
 
 /* ══ v544 ✏️ 整組改名字 ═══════════════════════════════════════════
