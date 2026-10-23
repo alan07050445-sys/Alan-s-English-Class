@@ -720,6 +720,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
           return (
             <BlockTag
               key={cat.id}
+              data-cat={cat.id}
               className={`qm-block${!clickable ? ' empty' : ''}`}
               onClick={() => { if (clickable) onEnterCat(cat); }}
               {...blockProps}

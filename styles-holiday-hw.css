@@ -1637,3 +1637,11 @@ html.fest-hw .modal:not(.edr-modal) select option { background: #2A1B45; color: 
 html.fest-hw .modal:not(.edr-modal) textarea:focus,
 html.fest-hw .modal:not(.edr-modal) select:focus,
 html.fest-hw .modal:not(.edr-modal) input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=button]):not([type=submit]):focus { border-color: #FFC95C; }
+
+/* v568：依類別決定顏色（調整卡片順序不會錯色） */
+html.fest-hw .qm-blocks .qm-block[data-cat="vocab"] { --cat-c: #A796FF; --cat-t: #B3A4FF; }
+html.fest-hw .qm-blocks .qm-block[data-cat="grammar"] { --cat-c: #FF86A8; --cat-t: #FF93B2; }
+html.fest-hw .qm-blocks .qm-block[data-cat="word"] { --cat-c: #6EC6FF; --cat-t: #7CCDFF; }
+html.fest-hw .qm-blocks .qm-block[data-cat="reading"] { --cat-c: #63D996; --cat-t: #6FE0A0; }
+html.fest-hw .qm-blocks .qm-block[data-cat="ltvocab"] { --cat-c: #FFB454; --cat-t: #FFC27A; }
+html.fest-hw .qm-blocks .qm-block[data-cat="mock"] { --cat-c: #4FD6CB; --cat-t: #7BE6DC; }

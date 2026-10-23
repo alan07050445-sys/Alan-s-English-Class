@@ -108,6 +108,13 @@
 /* v567：第 5、6 張＝中師單字（琥珀）、綜合考卷（青綠） */
 .qm-blocks .qm-block:nth-of-type(5) { --cat-c: var(--c-lt);   --cat-bg: var(--c-lt-bg); }
 .qm-blocks .qm-block:nth-of-type(6) { --cat-c: var(--c-mock); --cat-bg: var(--c-mock-bg); }
+/* v568：改成依「類別」決定顏色（原本照第幾張卡），這樣調整順序不會錯色 */
+.qm-blocks .qm-block[data-cat="vocab"] { --cat-c: var(--c-vocab); --cat-bg: var(--c-vocab-bg); }
+.qm-blocks .qm-block[data-cat="grammar"] { --cat-c: var(--c-grammar); --cat-bg: var(--c-grammar-bg); }
+.qm-blocks .qm-block[data-cat="word"] { --cat-c: var(--c-word); --cat-bg: var(--c-word-bg); }
+.qm-blocks .qm-block[data-cat="reading"] { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+.qm-blocks .qm-block[data-cat="ltvocab"] { --cat-c: var(--c-lt); --cat-bg: var(--c-lt-bg); }
+.qm-blocks .qm-block[data-cat="mock"] { --cat-c: var(--c-mock); --cat-bg: var(--c-mock-bg); }
 
 /* 頂部色條 — 每張卡有自己的身份 */
 .qm-block::before {

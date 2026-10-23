@@ -918,6 +918,7 @@ function QuizModeBlocks({
     };
     return /*#__PURE__*/React.createElement(BlockTag, _extends({
       key: cat.id,
+      "data-cat": cat.id,
       className: `qm-block${!clickable ? ' empty' : ''}`,
       onClick: () => {
         if (clickable) onEnterCat(cat);

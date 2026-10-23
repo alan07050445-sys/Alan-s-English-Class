@@ -45,8 +45,16 @@ const CATEGORIES = [
     descZh: "本週外師課堂單字練習，透過 Quizlet 與 Wordwall 反覆練習，建立紮實的字彙基礎。",
   },
   {
-    id: "grammar",
+    id: "ltvocab",
     num: "02",
+    title: "LT Vocabulary",
+    titleZh: "中師單字",
+    desc: "Chinese-teacher (LT) lesson vocabulary — flashcards, matching, spelling and quiz practice.",
+    descZh: "本週中師課堂單字，透過字卡、配對、聽寫與測驗反覆練習。",
+  },
+  {
+    id: "grammar",
+    num: "03",
     title: "Grammar",
     titleZh: "文法",
     desc: "Sentence patterns and grammar drills. Watch the explanation, then practice.",
@@ -54,7 +62,7 @@ const CATEGORIES = [
   },
   {
     id: "word",
-    num: "03",
+    num: "04",
     title: "Word Study",
     titleZh: "字根字首",
     desc: "Roots, prefixes, suffixes — learn how words are built so you can decode unfamiliar ones.",
@@ -62,19 +70,11 @@ const CATEGORIES = [
   },
   {
     id: "reading",
-    num: "04",
+    num: "05",
     title: "Reading Comprehension",
     titleZh: "閱讀理解",
     desc: "Short passages with comprehension questions. Read first, then answer.",
     descZh: "短文閱讀加上閱讀測驗題目，培養閱讀理解的速度與準確度。",
-  },
-  {
-    id: "ltvocab",
-    num: "05",
-    title: "LT Vocabulary",
-    titleZh: "中師單字",
-    desc: "Chinese-teacher (LT) lesson vocabulary — flashcards, matching, spelling and quiz practice.",
-    descZh: "本週中師課堂單字，透過字卡、配對、聽寫與測驗反覆練習。",
   },
   {
     id: "mock",

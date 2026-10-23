@@ -21,8 +21,16 @@ const CATEGORIES_G4 = [
     descZh: '本週外師課堂單字，透過字卡、填空與測驗全面練習字彙。',
   },
   {
-    id: 'grammar',
+    id: 'ltvocab',
     num: '02',
+    title: 'LT Vocabulary',
+    titleZh: '中師單字',
+    desc: 'Chinese-teacher (LT) lesson vocabulary — flashcards, matching, spelling and quiz practice.',
+    descZh: '本週中師課堂單字，透過字卡、配對、聽寫與測驗反覆練習。',
+  },
+  {
+    id: 'grammar',
+    num: '03',
     title: 'Grammar',
     titleZh: '文法',
     desc: 'Grammar focus for the week — multiple choice, type-answer, and writing practice.',
@@ -30,7 +38,7 @@ const CATEGORIES_G4 = [
   },
   {
     id: 'word',
-    num: '03',
+    num: '04',
     title: 'Word Study',
     titleZh: '字彙學習',
     desc: 'Syllable division, suffix/prefix study, and word classification activities.',
@@ -38,19 +46,11 @@ const CATEGORIES_G4 = [
   },
   {
     id: 'reading',
-    num: '04',
+    num: '05',
     title: 'Reading & Writing',
     titleZh: '閱讀寫作',
     desc: 'Reading passages with comprehension questions and writing practice.',
     descZh: '閱讀短文加上理解測驗與造句寫作，全面提升閱讀與寫作能力。',
-  },
-  {
-    id: 'ltvocab',
-    num: '05',
-    title: 'LT Vocabulary',
-    titleZh: '中師單字',
-    desc: 'Chinese-teacher (LT) lesson vocabulary — flashcards, matching, spelling and quiz practice.',
-    descZh: '本週中師課堂單字，透過字卡、配對、聽寫與測驗反覆練習。',
   },
   {
     id: 'mock',
