@@ -7568,7 +7568,11 @@ function moveGroupCatInWeek(wk, fromCat, itemIds, toCat, groupName, resKey) {
   const rk = resKey || ((c, n) => `${c}::${String(n || '').trim()}`);
   if (wk.groupRes && g) {
     const from = rk(fromCat, g), to = rk(toCat, g);
-    if (wk.groupRes[from]) { wk.groupRes[to] = { ...(wk.groupRes[to] || {}), ...wk.groupRes[from] }; delete wk.groupRes[from]; }
+    if (wk.groupRes[from]) {
+      wk.groupRes[to] = { ...(wk.groupRes[to] || {}), ...wk.groupRes[from] };
+      // v572：只搬單一單元時，原類別若還有同組的單元，參考資料要留一份在原處
+      if (!wk.items[fromCat].some(it => it && String(it.group || '').trim() === g)) delete wk.groupRes[from];
+    }
   }
   return moving.length;
 }

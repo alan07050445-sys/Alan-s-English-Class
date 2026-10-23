@@ -1756,7 +1756,30 @@ function QuizModeCategoryView({
       }, /*#__PURE__*/React.createElement(window.Icon, {
         name: "copy",
         size: 12
-      })), /*#__PURE__*/React.createElement("button", {
+      })), onMoveGroupCat && (allCategories || []).filter(c => c.id !== cat.id).length > 0 && /*#__PURE__*/React.createElement("button", {
+        className: "qm-unit-copy-btn",
+        onClick: e => {
+          e.stopPropagation();
+          setMoveCatFor(moveCatFor === 'item:' + item.id ? null : 'item:' + item.id);
+        },
+        title: "\u628A\u9019\u500B\u55AE\u5143\u642C\u5230\u5225\u7684\u985E\u5225"
+      }, "\uD83D\uDD00"), moveCatFor === 'item:' + item.id && /*#__PURE__*/React.createElement("div", {
+        className: "qm-due-popover",
+        onClick: e => e.stopPropagation()
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "qm-due-popover-label"
+      }, "\u642C\u5230\u54EA\u4E00\u985E\uFF1F"), (allCategories || []).filter(c => c.id !== cat.id).map(c => /*#__PURE__*/React.createElement("button", {
+        key: c.id,
+        className: "qm-grp-ghost",
+        onClick: () => {
+          if (!confirm(`把「${item.title}」從「${cat.titleZh || cat.title}」搬到「${c.titleZh || c.title}」？\n\n（內容、做過的紀錄、作業日期都不會變）`)) return;
+          setMoveCatFor(null);
+          onMoveGroupCat(cat.id, String(item.group || '').trim(), [item.id], c.id);
+        }
+      }, c.titleZh || c.title)), /*#__PURE__*/React.createElement("button", {
+        className: "qm-due-cancel",
+        onClick: () => setMoveCatFor(null)
+      }, "\u53D6\u6D88")), /*#__PURE__*/React.createElement("button", {
         className: "qm-unit-edit-btn",
         onClick: e => {
           e.stopPropagation();

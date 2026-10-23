@@ -1460,6 +1460,30 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                           title="沿用到其他週"
                         ><window.Icon name="copy" size={12}/></button>
                       )}
+                      {/* v572（Alan：「不是整組而是個別的也要可以換 item」）：單一單元換類別 */}
+                      {onMoveGroupCat && (allCategories || []).filter(c => c.id !== cat.id).length > 0 && (
+                        <button
+                          className="qm-unit-copy-btn"
+                          onClick={(e) => { e.stopPropagation(); setMoveCatFor(moveCatFor === 'item:' + item.id ? null : 'item:' + item.id); }}
+                          title="把這個單元搬到別的類別"
+                        >🔀</button>
+                      )}
+                      {moveCatFor === 'item:' + item.id && (
+                        <div className="qm-due-popover" onClick={(e) => e.stopPropagation()}>
+                          <div className="qm-due-popover-label">搬到哪一類？</div>
+                          {(allCategories || []).filter(c => c.id !== cat.id).map(c => (
+                            <button key={c.id} className="qm-grp-ghost"
+                              onClick={() => {
+                                if (!confirm(`把「${item.title}」從「${cat.titleZh || cat.title}」搬到「${c.titleZh || c.title}」？\n\n（內容、做過的紀錄、作業日期都不會變）`)) return;
+                                setMoveCatFor(null);
+                                onMoveGroupCat(cat.id, String(item.group || '').trim(), [item.id], c.id);
+                              }}>
+                              {c.titleZh || c.title}
+                            </button>
+                          ))}
+                          <button className="qm-due-cancel" onClick={() => setMoveCatFor(null)}>取消</button>
+                        </div>
+                      )}
                       <button
                         className="qm-unit-edit-btn"
                         onClick={(e) => { e.stopPropagation(); onEditItem(item); }}
