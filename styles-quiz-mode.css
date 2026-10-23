@@ -4281,3 +4281,4 @@ textarea.ex-essay {
 .edr-modal .modal-head h3, .edr-modal .exs-sum b, .edr-modal .exs-sec-h b, .edr-modal .exs-part-h b { color: #15130E; }
 .edr-modal .edr-part-btns button { color: #5c554a; }
 .edr-modal .edr-msg.ai { color: #15130E; }
+.ex-af-det { font-style: normal; font-size: 12.5px; font-weight: 800; color: var(--ok, #2E7D43); white-space: nowrap; }

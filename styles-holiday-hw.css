@@ -1610,3 +1610,7 @@ html.fest-hw .hw-x2-chip{display:inline-block;margin:8px 0 2px;padding:6px 14px;
    平常的 hover 是米白底，字被萬聖節改成淺色 → 滑過去看不到字。上面那條寫成 .tt-group-head 打錯了。 */
 html.fest-hw .tt-group-name:hover,
 html.fest-hw .tt-group-name:focus-visible { background: rgba(255,255,255,.08); color: #F4EFFF; }
+
+/* v563：萬聖節把 .ex-af-p 的底色蓋成半透明白，而且優先權比「選中」高——選了也看不出來 */
+html.fest-hw .ex-af-p.on { background: var(--hw-pump, #F57C1F); border-color: var(--hw-pump, #F57C1F); color: #fff; }
+html.fest-hw .ex-af-det { color: #8fe3a4; }

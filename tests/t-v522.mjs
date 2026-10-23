@@ -27,9 +27,14 @@ const GOOD2 = { affix: '-est', word: 'biggest', sentence: 'The blue whale is the
 
 console.log('\n【1】✏️ 造字＋造句（拿 Nick 考卷上真的寫的答案測）');
 ok('⭐ 兩格全對 = 滿分', sc([GOOD1, GOOD2]).got === 10);
-ok('⭐ 造的字沒有那個字尾 → 扣那半（句子照他寫的字算，所以句子那半還是有分）', (() => {
+ok('⭐ 造的字沒用到字尾表裡任何一個 → 扣那半（句子照他寫的字算，所以句子那半還是有分）', (() => {
+   /* v563：從字本身認字尾，不再逼他先點對按鈕——所以「點 -ing、造 played（-ed）」現在是對的；
+      要扣分的是「字根本沒用到清單上的任何字尾」。 */
+   const r = sc([{ affix: '-ing', word: 'table', sentence: 'I put my books on the table at home.' }, GOOD2]);
+   return r.got === 8 && /「table」沒有用到/.test(r.detail[0].why.join()); })());
+ok('⭐ v563 點的按鈕跟字不一樣，但字真的有清單上的字尾 → 算對', (() => {
    const r = sc([{ affix: '-ing', word: 'played', sentence: 'I played soccer with my friends yesterday.' }, GOOD2]);
-   return r.got === 8 && /「played」沒有 -ing/.test(r.detail[0].why.join()); })());
+   return r.got === 10; })());
 ok('⭐ 句子沒用到那個字 → 扣那半', (() => {
    const r = sc([{ ...GOOD1, sentence: 'I love soccer and basketball very much.' }, GOOD2]);
    return r.got === 8 && /沒有用到/.test(r.detail[0].why.join()); })());

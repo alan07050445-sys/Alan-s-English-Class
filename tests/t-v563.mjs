@@ -1,0 +1,33 @@
+// v563 造字＋造句判分：字首自動認、句子吃變化形（Alan 實測 empower／misunderstand 被誤判）
+import fs from 'fs'; import vm from 'vm';
+const data = fs.readFileSync(new URL('../data.js', import.meta.url), 'utf8');
+const qm = fs.readFileSync(new URL('../components-quiz-mode.jsx', import.meta.url), 'utf8');
+let pass = 0, fail = 0;
+const ok = (m, c) => { if (c) { pass++; console.log('  ✅', m); } else { fail++; console.log('  ❌', m); } };
+const g = (a, b) => data.slice(data.indexOf(a), data.indexOf(b, data.indexOf(a)));
+const sb = {}; vm.createContext(sb);
+vm.runInContext(g('const WS_FALSE_PREFIX', '/* 🔴 v484') + '\n' + g('function examAffixZh', '\nfunction examUseWordOne')
+  + '\nthis.one = examAffixOne; this.det = examAffixDetect; this.re = examWordFormRe; this.zh = examAffixZh;', sb);
+const P = { affixes: ['mis-', 'en-', 'em-'], minWords: 5 };
+const r = (slot) => sb.one(slot, P);
+console.log('\n【Alan 實測的兩題】');
+ok('empower（他點了 en-，字其實是 em-）＋句子寫 empowers → 對', r({ affix: 'en-', word: 'empower', sentence: 'The superpower empowers me to fly in the sky.' }).ok);
+ok('misunderstand（完全沒點按鈕）→ 對', r({ word: 'misunderstand', sentence: 'I misunderstand the instruction from my teachers.' }).ok);
+ok('用了哪個字首是從字認出來的，不是看按鈕', r({ affix: 'en-', word: 'empower', sentence: 'x y z w v' }).affix === 'em-');
+console.log('\n【該判錯的還是判錯】');
+ok('沒用到任何字首（happy）→ 錯，而且說的是「字首」不是「字尾」', (() => { const x = r({ word: 'happy', sentence: 'I am very happy to see you.' }); return !x.ok && /字首/.test(x.why[0]) && !/字尾/.test(x.why[0]); })());
+ok('假朋友（enemy／energy／empty／end）不算有字首', ['enemy', 'energy', 'empty', 'end'].every(w => !sb.det(w, P.affixes)));
+ok('句子太短 → 錯', !r({ word: 'embed', sentence: 'Embed the picture.' }).ok);
+ok('句子沒用到那個字 → 錯', !r({ word: 'enclose', sentence: 'We built a fence around the big field.' }).ok);
+ok('沒造字／沒造句各自有說明', r({ sentence: 'a b c d e f' }).why[0] === '沒有造字' && r({ word: 'misplace' }).why.includes('沒有造句'));
+console.log('\n【變化形】');
+ok('empowers／empowered／empowering', ['empowers', 'empowered', 'empowering'].every(w => sb.re('empower').test('x ' + w + ' y')));
+ok('misplace → misplaced／misplacing；stop → stopped；carry → carried', sb.re('misplace').test('she misplaced it') && sb.re('misplace').test('misplacing it') && sb.re('stop').test('he stopped') && sb.re('carry').test('she carried it'));
+ok('不會誤判：superpower ≠ power、trend ≠ end', !sb.re('power').test('superpower') && !sb.re('end').test('a trend'));
+ok('字首用字首、字尾用字尾的說法', sb.zh(['mis-', 'en-']) === '字首' && sb.zh(['-ing', '-ed']) === '字尾' && sb.zh(['un-', '-ful']) === '字首／字尾');
+console.log('\n【畫面】');
+ok('輸入字之後按鈕自動亮起，不用先點', /examAffixDetect\(sl\.word, pt\.affixes\)/.test(qm) && /det \? det === a : sl\.affix === a/.test(qm));
+ok('兩個字用同一個字首的判斷改用「認出來的」，不是按鈕', /out\.detail\.map\(d => d\.affix\)/.test(data));
+ok('萬聖節主題下「選中」的按鈕看得出來', /html\.fest-hw \.ex-af-p\.on/.test(fs.readFileSync(new URL('../styles-holiday-hw.css', import.meta.url), 'utf8')));
+console.log(fail ? `\n❌ t-v563：${pass} 過 / ${fail} 失敗` : `\n✅ t-v563：${pass} 過 / 0 失敗`);
+process.exit(fail ? 1 : 0);

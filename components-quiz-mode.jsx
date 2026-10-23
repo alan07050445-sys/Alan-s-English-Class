@@ -7316,18 +7316,21 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               {Array.from({ length: n }, (_, i) => {
                 const sl = slots[i] || {};
                 const d = sent ? (pr.detail[i] || {}) : null;
+                /* v563：用了哪個字首／字尾由「字本身」認出來，按鈕只是輔助——自動亮起來給他看 */
+                const det = window.examAffixDetect ? window.examAffixDetect(sl.word, pt.affixes) : '';
                 return (
                   <div className={'ex-af' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={i}>
                     <div className="ex-af-row">
                       <label>Word:</label>
                       <span className="ex-af-picks">
                         {(pt.affixes || []).map((a, k) => (
-                          <button key={k} className={'ex-af-p' + (sl.affix === a ? ' on' : '')} disabled={sent}
+                          <button key={k} className={'ex-af-p' + ((det ? det === a : sl.affix === a) ? ' on' : '')} disabled={sent}
                             onClick={() => setSlot(i, { affix: sl.affix === a ? '' : a })}>{a}</button>
                         ))}
                       </span>
-                      <input className="ex-af-w" disabled={sent} value={sl.word || ''} placeholder="你造的字"
+                      <input className="ex-af-w" disabled={sent} value={sl.word || ''} placeholder="你造的字（不用先點按鈕）"
                         onChange={e => setSlot(i, { word: e.target.value })}/>
+                      {!sent && det && <em className="ex-af-det">✓ 用了 {det}</em>}
                     </div>
                     <div className="ex-af-row">
                       <label>Sentence:</label>

@@ -1719,7 +1719,7 @@ ${_AI_MINIFY}`;
 /* 規則檢查器。AI 回傳 check:{kind, arg}，程式自己判每個字符不符合。
    判不出來的（kind 不認得）就整份退回——寧可不出，也不要出錯的答案。 */
 const WS_FALSE_PREFIX = new Set(('enemy enemies energy energetic empty emptied engine engines english enough enter entered entering '
-  + 'entire entirely entrance entry entries envelope environment enormous ensure embassy ember emerald emergency emotion emotions '
+  + 'entire entirely entrance entry entries envelope environment enormous ensure embassy ember emerald emergency emotion emotions end ends ended ending endless employ employee employer employed '
   + 'emperor empire empress emphasis miss missed misses missing mission missions missile mist misty mister mistress '
   + 'mice mile miles milk mill million mind mine mint minute minus mirror').split(' '));
 const WS_CHECKS = {
@@ -8535,32 +8535,74 @@ function examPartN(part) {
    回傳 { ok, why[] }。why 是「哪裡不符合考卷的規則」，結果頁要逐條寫給學生看。
    ⚠ 一格兩件事（字、句子）各算一半——只造出字沒寫句子不該是 0 分，
      那跟完全空白是不一樣的。 */
+/* ══ v563 造字＋造句判分的三個 bug（Alan 拿真的題目測：empower 被判錯、misunderstand 被判錯）══════
+   🔴 ① 本來要學生「先點一個字首按鈕」才算——沒點就是「沒有選字尾」（連這題考的是字首都寫成字尾），
+        點的跟字不一樣（點 en-、造 empower）就是「empower 沒有 en-」。
+        考卷上根本沒有「選按鈕」這一步，那是網站多加的。
+      → 現在**從字本身認出用了哪個字首／字尾**（examAffixDetect），按鈕只是輔助、不再當條件。
+   🔴 ② 句子裡寫 empowers／misunderstood… 被判「沒有用到 empower」——要吃變化形（examWordFormRe）。
+   🔴 ③ 訊息一律寫「字尾」——現在字首就寫字首。 */
+function examAffixZh(affixes) {
+  const a = (affixes || []).map(x => String(x || '').trim()).filter(Boolean);
+  const pre = a.filter(x => /-$/.test(x)).length, suf = a.filter(x => /^-/.test(x)).length;
+  return pre && !suf ? '字首' : suf && !pre ? '字尾' : '字首／字尾';
+}
+/* 這個字用了清單裡的哪一個字首／字尾？沒有就回 ''。取最長的那個（un- 與 under- 不要搞混）。 */
+function examAffixDetect(word, affixes) {
+  const w = String(word || '').trim().toLowerCase();
+  if (!/^[a-z'-]{3,}$/.test(w)) return '';
+  let best = '';
+  (affixes || []).map(x => String(x || '').trim()).filter(Boolean).forEach(a => {
+    const kind = /^-/.test(a) ? 'suffix' : /-$/.test(a) ? 'prefix' : '';
+    if (!kind || !WS_CHECKS[kind](w, a)) return;
+    if (a.replace(/-/g, '').length > best.replace(/-/g, '').length) best = a;
+  });
+  return best;
+}
+/* 「這個字在句子裡有沒有出現」——吃常見的變化形：
+   empower → empowers／empowered／empowering；misplace → misplaced／misplacing；carry → carries／carried */
+function examWordFormRe(word) {
+  const w = String(word || '').trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!w) return null;
+  const alts = [w, w + '(?:s|es|ed|d|ing|ly)?'];
+  if (/e$/.test(w)) alts.push(w.slice(0, -1) + '(?:ing|ed)');
+  if (/y$/.test(w)) alts.push(w.slice(0, -1) + '(?:ies|ied|ying)');
+  if (/([^aeiou])([aeiou])([^aeiouwxy])$/.test(w)) alts.push(w + w.slice(-1) + '(?:ed|ing)');   // stop → stopped／stopping
+  return new RegExp('\\b(?:' + alts.join('|') + ')\\b', 'i');
+}
 function examAffixOne(slot, part) {
   const minW = +part.minWords || 5;
-  const affix = String((slot && slot.affix) || '').trim();
+  const affixes = part.affixes || [];
+  const picked = String((slot && slot.affix) || '').trim();      // 學生點的按鈕（只當輔助）
   const word = String((slot && slot.word) || '').trim();
   const sent = String((slot && slot.sentence) || '').trim();
+  const zh = examAffixZh(affixes);
   const why = [];
-  let half1 = false, half2 = false;
+  let half1 = false, half2 = false, affix = '';
 
-  if (!affix) why.push('沒有選字尾');
-  else if (!word) why.push('沒有造字');
+  if (!word) why.push('沒有造字');
+  else if (!/^[A-Za-z'-]{3,}$/.test(word)) why.push(`「${word}」看起來不是一個英文字`);
   else {
-    const kind = /^-/.test(affix) ? 'suffix' : /-$/.test(affix) ? 'prefix' : 'suffix';
-    if (!/^[A-Za-z'-]{3,}$/.test(word)) why.push(`「${word}」看起來不是一個英文字`);
-    else if (!WS_CHECKS[kind](word, affix)) why.push(`「${word}」沒有 ${affix}`);
+    affix = examAffixDetect(word, affixes);
+    /* 清單裡認不出來、但他點的那個按鈕確實符合 → 也算（老師的清單可能沒列全） */
+    if (!affix && picked) {
+      const kind = /^-/.test(picked) ? 'suffix' : /-$/.test(picked) ? 'prefix' : '';
+      if (kind && WS_CHECKS[kind](word, picked)) affix = picked;
+    }
+    if (!affix) why.push(`「${word}」沒有用到 ${affixes.join('、')} 其中任何一個${zh.split('／')[0]}`);
     else half1 = true;
   }
 
   if (!sent) why.push('沒有造句');
   else {
     const n = sent.split(/\s+/).filter(Boolean).length;
-    const used = word && new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(sent);
+    const re = examWordFormRe(word);
+    const used = !!(re && re.test(sent));
     if (!used) why.push(`句子裡沒有用到「${word || '那個字'}」`);
     else if (n < minW) why.push(`句子只有 ${n} 個字，要 ${minW} 個字以上`);
     else half2 = true;
   }
-  return { ok: half1 && half2, half1, half2, why };
+  return { ok: half1 && half2, half1, half2, why, affix };
 }
 
 /* ── v522 ③ Generate Questions：程式驗得了的三件事 ──────────────────
@@ -9002,14 +9044,15 @@ function examScorePart(part, ans) {
     for (let i = 0; i < n; i++) {
       const r = examAffixOne((ans || [])[i], part);
       halves += (r.half1 ? 1 : 0) + (r.half2 ? 1 : 0);
-      out.detail.push({ ok: r.ok, why: r.why, got: (ans || [])[i] || null });
+      out.detail.push({ ok: r.ok, why: r.why, got: (ans || [])[i] || null, affix: r.affix || '' });
     }
     /* 考卷寫 "two of the suffixes" ——兩格選同一個字尾不算兩種。
        ⚠ 這是**整大題**的問題，不是某一格的問題，所以記在 note 上，
          不要把兩格都標成錯（學生會以為自己兩個字都造錯了）。 */
-    const picked = (ans || []).map(x => String((x && x.affix) || '').trim()).filter(Boolean);
+    /* v563：用「從字認出來的」，不是他點的按鈕——他可能根本沒點 */
+    const picked = out.detail.map(d => d.affix).filter(Boolean);
     const dup = picked.length > new Set(picked).size;
-    if (dup) out.note = '這一大題要用「兩個不一樣的字尾」，你兩格選了同一個。';
+    if (dup) out.note = `這一大題要用「兩個不一樣的${examAffixZh(part.affixes)}」，你兩個字用了同一個（${picked[0]}）。`;
     out.right = Math.round(halves / 2 * 10) / 10;
     out.got = Math.round(max * (halves / (n * 2)) * (dup ? 0.5 : 1));
     return out;
@@ -9305,7 +9348,7 @@ function examWarnings(item) {
   return w;
 }
 
-Object.assign(window, { examOrderShuffle, EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
+Object.assign(window, { examAffixDetect, examAffixZh, examWordFormRe, examOrderShuffle, EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
   examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,

@@ -8843,6 +8843,8 @@ function ExamPlayer({
       }, (_, i) => {
         var sl = slots[i] || {};
         var d = sent ? pr.detail[i] || {} : null;
+        /* v563：用了哪個字首／字尾由「字本身」認出來，按鈕只是輔助——自動亮起來給他看 */
+        var det = window.examAffixDetect ? window.examAffixDetect(sl.word, pt.affixes) : '';
         return /*#__PURE__*/React.createElement("div", {
           className: 'ex-af' + (sent ? d.ok ? ' ok' : ' bad' : ''),
           key: i
@@ -8852,7 +8854,7 @@ function ExamPlayer({
           className: "ex-af-picks"
         }, (pt.affixes || []).map((a, k) => /*#__PURE__*/React.createElement("button", {
           key: k,
-          className: 'ex-af-p' + (sl.affix === a ? ' on' : ''),
+          className: 'ex-af-p' + ((det ? det === a : sl.affix === a) ? ' on' : ''),
           disabled: sent,
           onClick: () => setSlot(i, {
             affix: sl.affix === a ? '' : a
@@ -8861,11 +8863,13 @@ function ExamPlayer({
           className: "ex-af-w",
           disabled: sent,
           value: sl.word || '',
-          placeholder: "\u4F60\u9020\u7684\u5B57",
+          placeholder: "\u4F60\u9020\u7684\u5B57\uFF08\u4E0D\u7528\u5148\u9EDE\u6309\u9215\uFF09",
           onChange: e => setSlot(i, {
             word: e.target.value
           })
-        })), /*#__PURE__*/React.createElement("div", {
+        }), !sent && det && /*#__PURE__*/React.createElement("em", {
+          className: "ex-af-det"
+        }, "\u2713 \u7528\u4E86 ", det)), /*#__PURE__*/React.createElement("div", {
           className: "ex-af-row"
         }, /*#__PURE__*/React.createElement("label", null, "Sentence:"), /*#__PURE__*/React.createElement("input", {
           className: "ex-af-s",
