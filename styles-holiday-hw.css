@@ -1615,3 +1615,17 @@ html.fest-hw .tt-group-name:focus-visible { background: rgba(255,255,255,.08); c
 html.fest-hw .ex-af-p.on { background: var(--hw-pump, #F57C1F); border-color: var(--hw-pump, #F57C1F); color: #fff; }
 html.fest-hw .ex-af-det { color: #8fe3a4; }
 html.fest-hw .ex-af-det.warn { color: #ffcf7a; }
+
+/* v566：萬聖節深色彈窗裡的輸入框／下拉選單，文字是近黑色（--ink）、底又是透明 → 黑字壓在深紫上看不到
+   （一鍵出單字的「單字清單」、「放在哪一類」下拉都中）。統一成淺字＋微亮的底。
+   ⚠ 只動文字輸入類（不動 checkbox／radio／檔案／顏色／滑桿）；考卷草稿視窗（.edr-modal）自己是淺色底，排除。 */
+html.fest-hw .modal:not(.edr-modal) :is(textarea, select,
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=button]):not([type=submit])) {
+  color: #F4EFFF;
+  caret-color: #FFC95C;
+  background-color: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.28);
+}
+html.fest-hw .modal:not(.edr-modal) :is(textarea, input)::placeholder { color: #A99BC8; opacity: 1; }
+html.fest-hw .modal:not(.edr-modal) select option { background: #2A1B45; color: #F4EFFF; }
+html.fest-hw .modal:not(.edr-modal) :is(textarea, select, input):focus { border-color: #FFC95C; }
