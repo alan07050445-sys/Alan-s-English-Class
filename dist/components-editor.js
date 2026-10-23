@@ -9539,6 +9539,106 @@ async function gnFileToImage(file) {
   };
 }
 
+/* ══ v562 📄 PDF 也能當考卷／講義來源（Alan：「有些檔案不是圖片檔，而是 PDF」）══════
+   做法：pdf.js（用到才從 CDN 載，跟分段閱讀匯入 PDF 同一個版本）把每一頁畫成 1600px 的 JPEG，
+   之後**跟照片完全同一條路**——不另外寫一套「讀 PDF」的辨識。
+   ⚠ 一次最多讀 room 頁（拍考卷是 8 張）；超過的不是默默丟掉，而是回報「只讀了前 N 頁」。
+   ⚠ 有密碼的、壞掉的 PDF 會丟錯，呼叫端要接得住並說人話。 */
+function gnIsPdf(f) {
+  return !!f && (/pdf$/i.test(f.type || '') || /\.pdf$/i.test(f.name || ''));
+}
+function _gnLoadPdfJs() {
+  return new Promise((resolve, reject) => {
+    if (window.pdfjsLib) return resolve(window.pdfjsLib);
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => {
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      } catch (e) {}
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => reject(new Error('PDF 元件載入失敗，請確認網路'));
+    document.head.appendChild(s);
+  });
+}
+async function gnPdfToImages(file, maxPages) {
+  var pdfjs = await _gnLoadPdfJs();
+  var pdf = await pdfjs.getDocument({
+    data: await file.arrayBuffer()
+  }).promise;
+  var N = pdf.numPages,
+    take = Math.min(N, Math.max(0, maxPages));
+  var out = [];
+  try {
+    for (var p = 1; p <= take; p++) {
+      var page = await pdf.getPage(p);
+      var vp1 = page.getViewport({
+        scale: 1
+      });
+      var vp = page.getViewport({
+        scale: Math.min(3, 1600 / vp1.width)
+      });
+      var cv = document.createElement('canvas');
+      cv.width = Math.round(vp.width);
+      cv.height = Math.round(vp.height);
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, cv.width, cv.height); // 透明底的 PDF 轉 JPEG 會變黑
+      await page.render({
+        canvasContext: ctx,
+        viewport: vp
+      }).promise;
+      var url = cv.toDataURL('image/jpeg', 0.82);
+      cv.width = cv.height = 0;
+      try {
+        page.cleanup();
+      } catch (e) {}
+      out.push({
+        media_type: 'image/jpeg',
+        data: url.split(',')[1],
+        preview: url,
+        name: `${file.name} 第 ${p} 頁`
+      });
+    }
+  } finally {
+    try {
+      pdf.destroy();
+    } catch (e) {}
+  }
+  return {
+    images: out,
+    pages: N
+  };
+}
+/* 照片與 PDF 一起收：回傳 { made:[…], note:'' }。room＝還能再放幾張。 */
+async function gnFilesToImages(files, room) {
+  var made = [];
+  var note = '';
+  for (var f of [...(files || [])]) {
+    var left = room - made.length;
+    if (left <= 0) {
+      note = note || `最多 ${room} 張，多的沒有放進來。`;
+      break;
+    }
+    if (gnIsPdf(f)) {
+      var r = await gnPdfToImages(f, left);
+      made.push(...r.images);
+      if (r.pages > r.images.length) note = `「${f.name}」共 ${r.pages} 頁，這次只讀了前 ${r.images.length} 頁（一次最多 ${room} 張）；其餘的可以分次再傳。`;
+    } else if (/^image\//.test(f.type || '')) {
+      made.push(Object.assign(await gnFileToImage(f), {
+        name: f.name
+      }));
+    } else {
+      note = note || `「${f.name}」不是照片或 PDF，已略過。`;
+    }
+  }
+  return {
+    made,
+    note
+  };
+}
+
 /* ══ 📸 v516 拍考卷照片 → 變成互動版 ═══════════════════════════════════════
    Alan 手上有一疊考過的 Formative。v515 做好了「考卷」這個容器，這裡把紙變成資料。
    讀照片的機制沿用 v428~v430（一張一個請求、同時送、壞一頁只少一頁）。
@@ -9639,12 +9739,25 @@ function AskPanel({
   }, [msgs, busy]);
   if (!open) return null;
   var addFiles = async files => {
-    var list = [...(files || [])].slice(0, 4 - imgs.length);
-    if (!list.length) return;
+    var room = 4 - imgs.length;
+    if (room <= 0 || !(files || []).length) return;
     try {
-      var made = await Promise.all(list.map(f => gnFileToImage(f)));
-      setImgs(v => v.concat(made));
-    } catch (e) {}
+      var {
+        made,
+        note
+      } = await gnFilesToImages(files, room); // v562：照片與 PDF 都收
+      setImgs(v => v.concat(made).slice(0, 4));
+      /* 超過的頁數不要默默丟掉——用一則系統訊息告訴他 */
+      if (note) setMsgs(m => m.concat([{
+        me: false,
+        text: '⚠ ' + note
+      }]));
+    } catch (e) {
+      setMsgs(m => m.concat([{
+        me: false,
+        text: '⚠ 這個檔案讀不進來——PDF 請確認沒有密碼、不是壞檔，或改傳照片。'
+      }]));
+    }
   };
   var send = async () => {
     var t = text.trim();
@@ -9900,13 +10013,13 @@ function AskPanel({
     className: "ask-input"
   }, /*#__PURE__*/React.createElement("button", {
     className: "ask-clip",
-    title: "\u52A0\u7167\u7247",
+    title: "\u52A0\u7167\u7247\u6216 PDF",
     disabled: imgs.length >= 4,
     onClick: () => fileRef.current && fileRef.current.click()
   }, "\uD83D\uDCCE"), /*#__PURE__*/React.createElement("input", {
     ref: fileRef,
     type: "file",
-    accept: "image/*",
+    accept: "image/*,application/pdf,.pdf",
     multiple: true,
     style: {
       display: 'none'
@@ -9959,18 +10072,26 @@ function ExamScanModal({
   }, [open]);
   if (!open) return null;
   var addFiles = async files => {
-    var list = [...(files || [])].slice(0, 8 - imgs.length);
-    if (!list.length) return;
-    setErr('');
-    try {
-      var made = await Promise.all(list.map(f => gnFileToImage(f).then(x => ({
-        ...x,
-        name: f.name
-      }))));
-      setImgs(v => v.concat(made));
-    } catch (e) {
-      setErr('這幾張照片讀不進來，換一張試試。');
+    var room = 8 - imgs.length;
+    if (!(files || []).length) return;
+    if (room <= 0) {
+      setErr('最多 8 張，先刪掉幾張再加。');
+      return;
     }
+    setErr('');
+    setBusy('pdf');
+    try {
+      var {
+        made,
+        note
+      } = await gnFilesToImages(files, room); // v562：照片與 PDF（每頁一張）都收
+      setImgs(v => v.concat(made));
+      if (note) setErr(note);else if (!made.length) setErr('沒有讀到可用的頁面，換一個檔案試試。');
+    } catch (e) {
+      var m = String(e && e.name + ' ' + e.message || '');
+      setErr(/password/i.test(m) ? '這個 PDF 有密碼保護，讀不了——請先拿掉密碼，或改傳照片。' : /元件載入失敗/.test(m) ? e.message : '這個檔案讀不進來——PDF 可能是壞檔或不是真的 PDF，換一個試試，或改傳照片。');
+    }
+    setBusy(false);
   };
   var read = async () => {
     if (!imgs.length) return;
@@ -10027,7 +10148,7 @@ function ExamScanModal({
     className: "field"
   }, /*#__PURE__*/React.createElement("label", {
     className: "field-label"
-  }, "\u8003\u5377\u7167\u7247\uFF08\u4E00\u9801\u4E00\u5F35\uFF0C\u6700\u591A 8 \u5F35\uFF09"), /*#__PURE__*/React.createElement("div", {
+  }, "\u8003\u5377\u7167\u7247\u6216 PDF\uFF08\u4E00\u9801\u4E00\u5F35\uFF0C\u6700\u591A 8 \u9801\uFF09"), /*#__PURE__*/React.createElement("div", {
     className: "exs-shots"
   }, imgs.map((im, i) => /*#__PURE__*/React.createElement("div", {
     className: "exs-shot",
@@ -10039,11 +10160,12 @@ function ExamScanModal({
     onClick: () => setImgs(v => v.filter((_, k) => k !== i))
   }, "\u2715"))), imgs.length < 8 && /*#__PURE__*/React.createElement("button", {
     className: "exs-add",
+    disabled: !!busy,
     onClick: () => fileRef.current && fileRef.current.click()
-  }, "\uFF0B", /*#__PURE__*/React.createElement("span", null, "\u52A0\u7167\u7247"))), /*#__PURE__*/React.createElement("input", {
+  }, "\uFF0B", /*#__PURE__*/React.createElement("span", null, busy === 'pdf' ? '轉換中…' : '加照片／PDF'))), /*#__PURE__*/React.createElement("input", {
     ref: fileRef,
     type: "file",
-    accept: "image/*",
+    accept: "image/*,application/pdf,.pdf",
     multiple: true,
     style: {
       display: 'none'
@@ -10054,7 +10176,7 @@ function ExamScanModal({
     }
   }), /*#__PURE__*/React.createElement("div", {
     className: "field-help"
-  }, "\u6574\u9801\u90FD\u8981\u5165\u93E1\u3001\u62CD\u6B63\u4E00\u9EDE\u3002", /*#__PURE__*/React.createElement("b", null, "\u5B78\u751F\u5BEB\u7684\u7B54\u6848\u8207\u8001\u5E2B\u7684\u7D05\u7B46\u4E0D\u6703\u88AB\u8B80\u9032\u53BB"), "\u2014\u2014 \u5B83\u8B80\u7684\u662F\u5370\u5237\u7684\u984C\u76EE\uFF0C\u59D3\u540D\u8207\u5206\u6578\u4E5F\u4E0D\u6703\u5B58\u3002")), err && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("b", null, "\u4E5F\u53EF\u4EE5\u76F4\u63A5\u9078 PDF"), "\uFF08\u6BCF\u4E00\u9801\u6703\u8B8A\u6210\u4E00\u5F35\uFF09\u3002\u7167\u7247\u8981\u6574\u9801\u5165\u93E1\u3001\u62CD\u6B63\u4E00\u9EDE\u3002", /*#__PURE__*/React.createElement("b", null, "\u5B78\u751F\u5BEB\u7684\u7B54\u6848\u8207\u8001\u5E2B\u7684\u7D05\u7B46\u4E0D\u6703\u88AB\u8B80\u9032\u53BB"), "\u2014\u2014 \u5B83\u8B80\u7684\u662F\u5370\u5237\u7684\u984C\u76EE\uFF0C\u59D3\u540D\u8207\u5206\u6578\u4E5F\u4E0D\u6703\u5B58\u3002")), err && /*#__PURE__*/React.createElement("div", {
     className: "exs-err"
   }, "\u26A0 ", err), !got && /*#__PURE__*/React.createElement("button", {
     className: "btn primary exs-go",
@@ -10481,19 +10603,21 @@ function GrammarNotesModal({
   if (!open) return null;
   var addFiles = async files => {
     setErr('');
-    var list = Array.from(files || []).filter(f => /^image\//.test(f.type)).slice(0, 6 - imgs.length);
-    if (!list.length) {
-      if ((files || []).length) setErr('只收照片（JPG／PNG）。PDF 請先截圖。');
+    var room = 6 - imgs.length;
+    if (!(files || []).length) return;
+    if (room <= 0) {
+      setErr('最多 6 張，先刪掉幾張再加。');
       return;
     }
     try {
-      var out = [];
-      for (var f of list) out.push(Object.assign(await gnFileToImage(f), {
-        name: f.name
-      }));
-      setImgs(v => v.concat(out).slice(0, 6));
+      var {
+        made,
+        note
+      } = await gnFilesToImages(files, room); // v562：PDF 也收（每頁一張）
+      setImgs(v => v.concat(made).slice(0, 6));
+      if (note) setErr(note);else if (!made.length) setErr('只收照片（JPG／PNG）或 PDF。');
     } catch (e) {
-      setErr('有照片讀不出來，請換一張試試。');
+      setErr('有檔案讀不出來，請換一個試試。');
     }
   };
   var ready = (imgs.length > 0 || text.trim().length >= 20) && nMcq + nFill + nTr + nRw + nCircle + nSort > 0;
@@ -10703,7 +10827,7 @@ function GrammarNotesModal({
     }, /*#__PURE__*/React.createElement("input", {
       ref: fileRef,
       type: "file",
-      accept: "image/*",
+      accept: "image/*,application/pdf,.pdf",
       multiple: true,
       hidden: true,
       onChange: e => {
