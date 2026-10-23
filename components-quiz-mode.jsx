@@ -608,10 +608,8 @@ const CAT_IMG   = {
   grammar: 'icon-grammar.webp',
   word:    'icon-word.webp',
   reading: 'icon-reading.webp',
-  /* v567：中師單字／綜合考卷。圖檔 icon-ltvocab.webp、icon-mock.webp 放進網站根目錄後，
-     把下面兩行的註解拿掉就會換成插畫；在那之前用 emoji＋漸層（CAT_ICONS／CAT_BG）。
-  ltvocab: 'icon-ltvocab.webp',
-  mock:    'icon-mock.webp', */
+  ltvocab: 'icon-ltvocab.webp',   // v567：中師單字
+  mock:    'icon-mock.webp',      // v567：綜合考卷
 };
 const CAT_BG    = {
   vocab:   'linear-gradient(135deg,#667eea,#764ba2)',
