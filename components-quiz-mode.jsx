@@ -841,9 +841,10 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
+  const [moveCatFor, setMoveCatFor] = useQM(null);   // v570：正在選「搬到哪一類」的那一組（g.key）
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
   const [playerKey,    setPlayerKey]    = useQM(0);
   const [progVersion,  setProgVersion]  = useQM(0);      // bumped after quiz completes → refreshes sidebar scores
@@ -1549,11 +1550,35 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                           ✏️ 改名字…
                         </button>
                       )}
+                      {/* v570（Alan：「把原本外師的單字轉移到中師的底下」）：整組換一個類別。
+                          單元的內容、進度、作業日期都不動，只是從這一類搬到另一類。 */}
+                      {onMoveGroupCat && (allCategories || []).filter(c => c.id !== cat.id).length > 0 && (
+                        <button className="qm-grp-ghost"
+                          onClick={() => setMoveCatFor(moveCatFor === g.key ? null : g.key)}
+                          title="把這一組整個搬到別的類別（例如外師單字 → 中師單字）；做過的紀錄、作業日期都會跟著">
+                          🔀 移到其他類別…
+                        </button>
+                      )}
                       {onCopyGroupToWeeks && (weekChoices || []).length > 0 && (
                         <button className="qm-grp-ghost"
                           onClick={() => { setCopyItem({ __group: true, name: g.name, items: g.items }); setCopySel([]); setGrpMenu(null); }}>
                           📄 整組沿用到其他週…
                         </button>
+                      )}
+                      {moveCatFor === g.key && (
+                        <div className="qm-grp-movecat">
+                          <span>搬到哪一類？</span>
+                          {(allCategories || []).filter(c => c.id !== cat.id).map(c => (
+                            <button key={c.id} className="qm-grp-ghost"
+                              onClick={() => {
+                                if (!confirm(`把「${g.name}」整組 ${g.items.length} 個單元，從「${cat.titleZh || cat.title}」搬到「${c.titleZh || c.title}」？\n\n（內容、做過的紀錄、作業日期都不會變）`)) return;
+                                setMoveCatFor(null); setGrpMenu(null);
+                                onMoveGroupCat(cat.id, g.name, g.items.map(it => it.id), c.id);
+                              }}>
+                              {c.titleZh || c.title}
+                            </button>
+                          ))}
+                        </div>
                       )}
                       {onRegenGroup && (
                         <button className="qm-grp-ghost"

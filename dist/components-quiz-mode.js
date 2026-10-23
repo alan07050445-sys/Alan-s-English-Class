@@ -1084,6 +1084,8 @@ function QuizModeCategoryView({
   onReviewGroup,
   onDeleteGroup,
   onRenameGroup,
+  onMoveGroupCat,
+  allCategories,
   weekQuizItems,
   initialItemId,
   cloudProg,
@@ -1092,6 +1094,7 @@ function QuizModeCategoryView({
 }) {
   var [selectedItem, setSelectedItem] = useQM(null);
   var [phase, setPhase] = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
+  var [moveCatFor, setMoveCatFor] = useQM(null); // v570：正在選「搬到哪一類」的那一組（g.key）
   var [flashItem, setFlashItem] = useQM(null); // flashcard item to review
   var [playerKey, setPlayerKey] = useQM(0);
   var [progVersion, setProgVersion] = useQM(0); // bumped after quiz completes → refreshes sidebar scores
@@ -1870,7 +1873,11 @@ function QuizModeCategoryView({
         onRenameGroup(g.name, String(b).trim());
       },
       title: "\u6539\u9019\u4E00\u7D44\u7684\u540D\u5B57\u2014\u2014\u5E95\u4E0B\u6BCF\u500B\u55AE\u5143\u7684\u6A19\u984C\u4E5F\u6703\u8DDF\u8457\u6539"
-    }, "\u270F\uFE0F \u6539\u540D\u5B57\u2026"), onCopyGroupToWeeks && (weekChoices || []).length > 0 && /*#__PURE__*/React.createElement("button", {
+    }, "\u270F\uFE0F \u6539\u540D\u5B57\u2026"), onMoveGroupCat && (allCategories || []).filter(c => c.id !== cat.id).length > 0 && /*#__PURE__*/React.createElement("button", {
+      className: "qm-grp-ghost",
+      onClick: () => setMoveCatFor(moveCatFor === g.key ? null : g.key),
+      title: "\u628A\u9019\u4E00\u7D44\u6574\u500B\u642C\u5230\u5225\u7684\u985E\u5225\uFF08\u4F8B\u5982\u5916\u5E2B\u55AE\u5B57 \u2192 \u4E2D\u5E2B\u55AE\u5B57\uFF09\uFF1B\u505A\u904E\u7684\u7D00\u9304\u3001\u4F5C\u696D\u65E5\u671F\u90FD\u6703\u8DDF\u8457"
+    }, "\uD83D\uDD00 \u79FB\u5230\u5176\u4ED6\u985E\u5225\u2026"), onCopyGroupToWeeks && (weekChoices || []).length > 0 && /*#__PURE__*/React.createElement("button", {
       className: "qm-grp-ghost",
       onClick: () => {
         setCopyItem({
@@ -1881,7 +1888,18 @@ function QuizModeCategoryView({
         setCopySel([]);
         setGrpMenu(null);
       }
-    }, "\uD83D\uDCC4 \u6574\u7D44\u6CBF\u7528\u5230\u5176\u4ED6\u9031\u2026"), onRegenGroup && /*#__PURE__*/React.createElement("button", {
+    }, "\uD83D\uDCC4 \u6574\u7D44\u6CBF\u7528\u5230\u5176\u4ED6\u9031\u2026"), moveCatFor === g.key && /*#__PURE__*/React.createElement("div", {
+      className: "qm-grp-movecat"
+    }, /*#__PURE__*/React.createElement("span", null, "\u642C\u5230\u54EA\u4E00\u985E\uFF1F"), (allCategories || []).filter(c => c.id !== cat.id).map(c => /*#__PURE__*/React.createElement("button", {
+      key: c.id,
+      className: "qm-grp-ghost",
+      onClick: () => {
+        if (!confirm(`把「${g.name}」整組 ${g.items.length} 個單元，從「${cat.titleZh || cat.title}」搬到「${c.titleZh || c.title}」？\n\n（內容、做過的紀錄、作業日期都不會變）`)) return;
+        setMoveCatFor(null);
+        setGrpMenu(null);
+        onMoveGroupCat(cat.id, g.name, g.items.map(it => it.id), c.id);
+      }
+    }, c.titleZh || c.title))), onRegenGroup && /*#__PURE__*/React.createElement("button", {
       className: "qm-grp-ghost",
       onClick: () => {
         setGrpMenu(null);

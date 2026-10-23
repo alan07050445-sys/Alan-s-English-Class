@@ -77,10 +77,10 @@ ok('⭐ 按取消（prompt 回 null）什麼都不做，不要當成「改成空
    /if \(b == null\) return;/.test(qmC));
 ok('   空白名字擋掉', /if \(!String\(b\)\.trim\(\)\) \{ alert\('名字不能是空的。'\); return; \}/.test(qmC));
 ok('⭐ app.jsx 有接上去', /onRenameGroup=\{\(gName, newName\) => handleRenameGroup\(catView\.id, gName, newName\)\}/.test(app));
-ok('   prop 有一路傳進元件', /onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, weekQuizItems,/.test(qm));
+ok('   prop 有一路傳進元件', /onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems,/.test(qm));
 
 console.log('\n【5】聊天室也要叫得動（畫面做得到的，用講的也要做得到）');
-ok('⭐ op 收得了 rename', /\['copy', 'move', 'again', 'rename', 'delete'\]/.test(data));
+ok('⭐ op 收得了 rename', /\['copy', 'move', 'again', 'rename', 'delete', 'recat'\]/.test(data));
 ok('⭐ 提示詞教過 rename，而且說新名字放在 title',
    /RENAME it, or delete it/.test(data) && /For "rename", put the NEW name in "title"/.test(data));
 ok('⭐ 提示詞講了這最常發生在合併之後（他就是這樣遇到的）',

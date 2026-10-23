@@ -47,7 +47,7 @@ ok('   toWeek 夾在 0~40（打錯成 900 不會跑去第 900 週）',
 console.log('\n【3】沒講清楚就要問，不可以自己猜');
 ok('⭐⭐ 整組操作沒說要做什麼 → 問他', (() => {
    const r = V({ intent: 'group', group: 'Barbed Wire' });
-   return r.intent === 'unknown' && /沿用到別週／搬過去／再出一份／刪掉/.test(r.ask); })());
+   return r.intent === 'unknown' && /沿用到別週／搬到別週／換類別／再出一份／刪掉/.test(r.ask); })());
 ok('⭐ 考卷沒說外師還中師 → 問他', (() => {
    const r = V({ intent: 'exampaper' });
    return r.intent === 'unknown' && /外師還是中師/.test(r.ask); })());
@@ -76,10 +76,15 @@ ok('⭐⭐ 找不到那一組 → 把這一週有哪些組列給他看', (() => 
      && /這一週還沒有任何分組/.test(RUN); })());
 ok('⭐ 沒說搬去第幾週 → 問，不要自己挑一週', /要沿用到第幾週/.test(RUN));
 ok('⭐ 組名比對要寬鬆（他不會一個字不差地打出來）', (() => {
-   /* ⚠ 切到 runAskPlan 為止，不要用固定長度（這個 repo 已經踩過五次） */
+   /* ⚠ 切到 runAskPlan 為止，不要用固定長度（這個 repo 已經踩過五次）
+      v570：比對本身搬進 data.js 的 askBestGroup（打分數：完全一樣 ＞ 開頭 ＞ 包含），
+      app.jsx 只留正規化（大小寫、破折號）。 */
    const i = app.indexOf('const askNorm =');
    const blk = app.slice(i, app.indexOf('const runAskPlan', i));
-   return /toLowerCase\(\)/.test(blk) && /\[—–-\]/.test(blk) && /indexOf\(q\) >= 0/.test(blk); })());
+   const j = data.indexOf('function askBestGroup');
+   const bg = data.slice(j, data.indexOf('Object.assign(window, { askBestGroup', j));
+   return /toLowerCase\(\)/.test(blk) && /\[—–-\]/.test(blk) && /window\.askBestGroup/.test(blk)
+     && /indexOf\(q\) >= 0/.test(bg) && /startsWith\(q\)/.test(bg) && /n === q/.test(bg); })());
 
 console.log('\n【6】🔴 唯一會把東西丟掉的那件事');
 ok('⭐⭐ 刪整組一定要他自己按下去確認', (() => {

@@ -1369,41 +1369,9 @@ function App() {
        但複製的**來源**可以是現在這一週，所以多一個開關。 */
     return hit && (allowCurrent || hit !== weekId) ? hit : '';
   };
-  const askFindGroup = (name) => {
-    const q = askNorm(name);
-    if (!q) return null;
-    const w = weeksRef.current[weekId] || {};
-    let best = null;
-    Object.keys(w.items || {}).forEach(cid => {
-      const groups = {};
-      (w.items[cid] || []).forEach(it => {
-        const g = (it.group || '').trim();
-        if (g) (groups[g] = groups[g] || []).push(it);
-      });
-      Object.keys(groups).forEach(g => {
-        const n = askNorm(g);
-        /* 完全一樣最好；其次是「包含」（他可能只講了前半段） */
-        if (!best && (n === q || n.indexOf(q) >= 0 || q.indexOf(n) >= 0)) {
-          best = { catId: cid, name: g, items: groups[g] };
-        }
-      });
-      /* v534：他常常講的是**單元名**不是組名（「Barbed Wire Baseball 的單字卡
-         再加幾種題目」）——用單元名也找得到，回傳它所屬的那一組。 */
-      if (!best) {
-        (w.items[cid] || []).forEach(it => {
-          if (best) return;
-          const t = askNorm(it.title || '');
-          if (t && (t === q || t.indexOf(q) >= 0 || q.indexOf(t) >= 0)) {
-            const g = (it.group || '').trim();
-            best = g && groups[g]
-              ? { catId: cid, name: g, items: groups[g] }
-              : { catId: cid, name: it.title || '', items: [it] };
-          }
-        });
-      }
-    });
-    return best;
-  };
+  /* v570：改用打分數的 askBestGroup（完全一樣 ＞ 開頭 ＞ 包含），不再「第一個符合就用」 */
+  const askFindGroup = (name) => window.askBestGroup
+    ? window.askBestGroup((weeksRef.current[weekId] || {}).items, name, askNorm) : null;
 
   const runAskPlan = (plan) => {
     if (!plan) return;
@@ -1725,6 +1693,13 @@ function App() {
         const b = String(plan.title || '').trim();
         if (!b) showToast(`「${found.name}」要改叫什麼？跟我說新名字就好。`);
         else handleRenameGroup(found.catId, found.name, b);
+      } else if (plan.op === 'recat') {
+        /* v570：整組換類別（「把 Barbed Wire Baseball 移到中師單字」）。
+           ⚠ 他沒講搬去哪一類就問，不要自己挑；目標類別必須是這個年級真的有的。 */
+        const to = activeCategories.find(c => c.id === plan.toCat);
+        if (!to) showToast('要搬到哪一類？外師單字、中師單字、文法、字彙學習、閱讀寫作、綜合考卷，跟我說一個就好。');
+        else if (to.id === found.catId) showToast(`「${found.name}」本來就在「${to.titleZh || to.title}」了。`);
+        else handleMoveGroupCat(found.catId, found.name, found.items.map(it => it.id), to.id);
       } else if (plan.op === 'delete') {
         /* 🔴 唯一一件會把東西丟掉的事——一定要他自己按下去確認。
            聊天室打錯一個字就刪掉一整組，那是救不回來的。 */
@@ -2013,6 +1988,28 @@ function App() {
      他合併了 6 組，組名變成六個名字串在一起，連單元標題都是那一長串。
      ⚠ 要一起搬的有三樣：單元的 group、單元的 title、以及**群組的參考資料**
        （groupRes 的 key 是 `分類::組名`——不搬的話 📎 參考資料會整個消失，而且不報錯）。 */
+  /* v570（Alan：「把原本外師的單字轉移到中師的底下」）：整組換類別。
+     ⚠ 只動「放在哪一類」：單元 id 不變 → 進度（weekId_itemId）、作業日期、requires／linked 全都跟著，
+       不用搬。📎 參考資料（groupRes）是用「類別::組名」當 key 的，要一起換 key。
+     ⚠ 目標類別已經有同名的一組 → 會併成一組（側欄靠 group 歸戶），先問一句。 */
+  const handleMoveGroupCat = (fromCat, groupName, itemIds, toCat) => {
+    const ids = new Set((itemIds || []).filter(Boolean));
+    if (!ids.size || !fromCat || !toCat || fromCat === toCat) return;
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    const wk = w[weekId];
+    if (!wk || !wk.items || !Array.isArray(wk.items[fromCat])) { showToast('找不到那一組'); return; }
+    const moving = wk.items[fromCat].filter(it => it && ids.has(it.id));
+    if (!moving.length) { showToast('找不到那一組'); return; }
+    const gname = String(groupName || '').trim();
+    const clash = gname && Array.isArray(wk.items[toCat]) && wk.items[toCat].some(it => it && String(it.group || '').trim() === gname);
+    if (clash && !confirm(`「${(activeCategories.find(c => c.id === toCat) || {}).titleZh || toCat}」裡已經有一組叫「${gname}」了。\n\n搬過去會跟它變成同一組，確定嗎？`)) return;
+    window.moveGroupCatInWeek(wk, fromCat, [...ids], toCat, gname, groupResKey);
+    setWeeks(w);
+    saveWeeksSafe(w);
+    const toZh = (activeCategories.find(c => c.id === toCat) || {}).titleZh || toCat;
+    setOpenCat(toCat);
+    showToast(`已把「${gname || moving[0].title}」${moving.length} 個單元搬到「${toZh}」`);
+  };
   const handleRenameGroup = (catId, oldName, newName) => {
     const a = String(oldName || '').trim(), b = String(newName || '').trim();
     if (!a || !b || a === b) return;
@@ -2710,6 +2707,8 @@ function App() {
                  ⚠ 真的認不出來才退回「要出哪一種」那個選單。 */
               onDeleteGroup={(gName, gItems) => handleDeleteItems((gItems || []).map(it => it.id))}
               onRenameGroup={(gName, newName) => handleRenameGroup(catView.id, gName, newName)}
+              onMoveGroupCat={handleMoveGroupCat}
+              allCategories={activeCategories}
               onRegenGroup={(catId, name, gItems) => {
                 const ws = (window.reviewWordsOf && window.reviewWordsOf(gItems)) || [];
                 if (ws.length >= 2) {

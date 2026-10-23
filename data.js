@@ -7471,6 +7471,81 @@ Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
      也不要亂猜一個最接近的去做——猜錯的成本是老師花十分鐘校稿完才發現方向就錯了。
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* ══ v570 聊天室「找那一組」要找對（Alan 合併 Barbed Wire Baseball 與 Barbed Wire Baseball — Part 2 沒成功）══
+   🔴 以前是「第一個符合就用」：名字只要**包含**他講的、或他講的包含它，就算中。
+      兩組名字一個是另一個的前半段時（A 與 A — Part 2），找「A — Part 2」會先撞到 A（A 被包含在裡面），
+      於是兩次都指到同一組——合併出來只有一組的字，看起來像「沒合併」。
+      （程式註解還寫「完全一樣最好」，但實際沒有優先選完全一樣的。）
+   → 改成**打分數**：完全一樣 ＞ 他講的是名字的開頭 ＞ 名字包含他講的 ＞ 他講的包含名字（而且名字愈長愈好），
+     整週所有類別一起比，取最高分。同分取字數最接近的。
+   ⚠ 純函式，items 傳 week.items，norm 傳比對用的正規化函式——方便單獨測。 */
+function askBestGroup(weekItems, name, norm) {
+  /* 標點全部當空白（「Part 2」「— Part 2」「- Part 2」是同一個意思；他打字不會記得放破折號） */
+  const N0 = norm || ((t) => String(t || '').toLowerCase());
+  const N = (t) => N0(t).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const q = N(name);
+  if (!q) return null;
+  const score = (n) => {
+    if (!n) return 0;
+    if (n === q) return 1000;
+    if (n.startsWith(q)) return 800 - (n.length - q.length);        // 他講了前半段：A → A — Part 2 也算，但字愈少愈接近
+    if (n.indexOf(q) >= 0) return 600 - (n.length - q.length);
+    if (q.indexOf(n) >= 0 && n.length >= 3) return 400 + n.length;  // 他講得比組名長：組名愈長愈像
+    return 0;
+  };
+  let best = null, bestScore = 0;
+  const items = weekItems || {};
+  Object.keys(items).forEach(cid => {
+    const groups = {};
+    (items[cid] || []).forEach(it => {
+      const g = (it.group || '').trim();
+      if (g) (groups[g] = groups[g] || []).push(it);
+    });
+    Object.keys(groups).forEach(g => {
+      const sc = score(N(g));
+      if (sc > bestScore) { bestScore = sc; best = { catId: cid, name: g, items: groups[g] }; }
+    });
+  });
+  if (best) return best;
+  /* 他常講的是**單元名**不是組名——用單元名找，回傳它所屬的那一組（同樣打分數） */
+  Object.keys(items).forEach(cid => {
+    const groups = {};
+    (items[cid] || []).forEach(it => {
+      const g = (it.group || '').trim();
+      if (g) (groups[g] = groups[g] || []).push(it);
+    });
+    (items[cid] || []).forEach(it => {
+      const sc = score(N(it.title || ''));
+      if (sc > bestScore) {
+        bestScore = sc;
+        const g = (it.group || '').trim();
+        best = g && groups[g] ? { catId: cid, name: g, items: groups[g] } : { catId: cid, name: it.title || '', items: [it] };
+      }
+    });
+  });
+  return best;
+}
+/* v570 整組換類別（純函式，直接改傳進來的 week 物件；呼叫端負責先 clone）。
+   ⚠ 只動「放在哪一類」：單元 id 不變 → 進度（weekId_itemId）、作業日期（homework[id]）、requires／linked 都不用搬。
+   📎 groupRes 的 key 是「類別::組名」，一起換。回傳搬了幾個單元。 */
+function moveGroupCatInWeek(wk, fromCat, itemIds, toCat, groupName, resKey) {
+  const ids = new Set((itemIds || []).filter(Boolean));
+  if (!wk || !wk.items || !Array.isArray(wk.items[fromCat]) || !ids.size || !toCat || fromCat === toCat) return 0;
+  const moving = wk.items[fromCat].filter(it => it && ids.has(it.id));
+  if (!moving.length) return 0;
+  wk.items[fromCat] = wk.items[fromCat].filter(it => !(it && ids.has(it.id)));
+  if (!Array.isArray(wk.items[toCat])) wk.items[toCat] = [];
+  wk.items[toCat] = wk.items[toCat].concat(moving);
+  const g = String(groupName || '').trim();
+  const rk = resKey || ((c, n) => `${c}::${String(n || '').trim()}`);
+  if (wk.groupRes && g) {
+    const from = rk(fromCat, g), to = rk(toCat, g);
+    if (wk.groupRes[from]) { wk.groupRes[to] = { ...(wk.groupRes[to] || {}), ...wk.groupRes[from] }; delete wk.groupRes[from]; }
+  }
+  return moving.length;
+}
+Object.assign(window, { askBestGroup, moveGroupCatInWeek });
+
 /* 它會做的事就這幾件。AI 只能從這裡面挑，挑別的一律當 unknown。 */
 const ASK_JOBS = {
   vocab:     { zh: '一鍵出單字', ico: '📚', need: 'words', where: 'editor' },
@@ -7661,7 +7736,11 @@ Rules:
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
 - "op": ONLY for intent "group". One of:
-    copy（沿用到別週）move（搬過去）again（再出一份）rename（改名字）delete（刪掉）
+    copy（沿用到別週）move（搬過去＝搬到別的一週）again（再出一份）rename（改名字）delete（刪掉）
+    recat（換類別＝同一週內，把整組搬到另一個類別，例如「把外師單字那組移到中師單字」）
+  For "recat", put the target category in "toCat": one of
+    vocab（外師單字）ltvocab（中師單字）grammar（文法）word（字彙學習／字根字首）reading（閱讀寫作）mock（綜合考卷）
+  If he did not say which category, use op "recat" and leave "toCat" empty — the website asks.
   For "rename", put the NEW name in "title", exactly as he said it. If he asked to rename
   but did not say the new name, use op "rename" and leave "title" empty — the website asks.
 - "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
@@ -7757,8 +7836,11 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
        模型亂填一個 side 或 op，程式照著做就會動到不該動的東西。 */
     side: (o.side === 'it' || o.side === 'lt') ? o.side : '',
     group: String(o.group || '').trim().slice(0, 120),
-    op: ['copy', 'move', 'again', 'rename', 'delete'].indexOf(String(o.op || '').trim()) >= 0
+    op: ['copy', 'move', 'again', 'rename', 'delete', 'recat'].indexOf(String(o.op || '').trim()) >= 0
       ? String(o.op).trim() : '',
+    /* v570：換類別的目標——只收網站真的有的類別 id（亂填就當沒講，網站會問） */
+    toCat: ['vocab', 'ltvocab', 'grammar', 'word', 'reading', 'mock'].indexOf(String(o.toCat || '').trim()) >= 0
+      ? String(o.toCat).trim() : '',
     toWeek: Math.max(0, Math.min(40, Math.round(+o.toWeek || 0))),
     fromWeek: Math.max(0, Math.min(40, Math.round(+o.fromWeek || 0))),
     /* ⚠ 一樣夾回受控值：組名最多 8 個、週次最多 12 週、題數最多 60。
@@ -7803,7 +7885,7 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   /* v531：整組操作沒說要做什麼就先問清楚——「把那組弄一下」不能自己猜。 */
   if (out.intent === 'group' && !out.op) {
     out.intent = 'unknown';
-    out.ask = `「${out.group || '那一組'}」要做什麼？沿用到別週／搬過去／再出一份／刪掉`;
+    out.ask = `「${out.group || '那一組'}」要做什麼？沿用到別週／搬到別週／換類別／再出一份／刪掉`;
   }
   /* v547：query 沒說問什麼、或該有學生卻沒有 → 問，不要亂猜。 */
   if (out.intent === 'query') {

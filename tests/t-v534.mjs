@@ -60,11 +60,13 @@ ok('⚠ 提示詞明講「不要加他沒說的話」', /no greetings he did not
 console.log('\n【4】他講的是「單元名」不是「組名」也要找得到');
 ok('⭐⭐ 比對組名找不到時，再用單元名找一次', (() => {
    /* 他會說「Barbed Wire Baseball 的單字卡再加幾種題目」——那是單元名。 */
-   const i = app.indexOf('const askFindGroup =');
-   const blk = app.slice(i, app.indexOf('\n  const runAskPlan', i));
-   return /askNorm\(it\.title \|\| ''\)/.test(blk) && /it\.group \|\| ''/.test(blk); })());
+   /* v570：比對搬進 data.js 的 askBestGroup（組名找不到才用單元名，而且同樣打分數） */
+   const d = fs.readFileSync(new URL('../data.js', import.meta.url), 'utf8');
+   const j = d.indexOf('function askBestGroup');
+   const blk = d.slice(j, d.indexOf('Object.assign(window, { askBestGroup', j));
+   return /N\(it\.title \|\| ''\)/.test(blk) && /it\.group \|\| ''/.test(blk) && /window\.askBestGroup/.test(app); })());
 ok('   找到單元就回傳它所屬的那一組（整組一起處理才合理）',
-   /best = g && groups\[g\]\s*\?\s*\{ catId: cid, name: g, items: groups\[g\] \}/.test(app));
+   /best = g && groups\[g\] \? \{ catId: cid, name: g, items: groups\[g\] \}/.test(fs.readFileSync(new URL('../data.js', import.meta.url), 'utf8')));
 
 console.log('\n【5】文法也能合併');
 const MG = br("plan.intent === 'merge'", "plan.intent === 'review'");

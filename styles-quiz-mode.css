@@ -4287,3 +4287,6 @@ textarea.ex-essay {
 .mk-err input { width: 52px; text-align: center; margin: 0 4px; padding: 2px 4px; border-radius: 6px; border: 1.5px solid var(--border, #DDD6C4); font: inherit; }
 .mk-err i { font-style: normal; opacity: .75; } .mk-err em { font-style: normal; flex: 1 1 100%; opacity: .85; }
 .mk-allai { margin-left: auto; margin-right: 10px; font-size: 12px; padding: 3px 10px; }
+
+.qm-grp-movecat { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; padding: 6px 2px; }
+.qm-grp-movecat > span { font-size: 12.5px; font-weight: 700; opacity: .8; }
