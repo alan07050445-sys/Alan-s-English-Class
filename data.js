@@ -68,6 +68,22 @@ const CATEGORIES = [
     desc: "Short passages with comprehension questions. Read first, then answer.",
     descZh: "短文閱讀加上閱讀測驗題目，培養閱讀理解的速度與準確度。",
   },
+  {
+    id: "ltvocab",
+    num: "05",
+    title: "LT Vocabulary",
+    titleZh: "中師單字",
+    desc: "Chinese-teacher (LT) lesson vocabulary — flashcards, matching, spelling and quiz practice.",
+    descZh: "本週中師課堂單字，透過字卡、配對、聽寫與測驗反覆練習。",
+  },
+  {
+    id: "mock",
+    num: "06",
+    title: "Comprehensive Exam",
+    titleZh: "綜合考卷",
+    desc: "Full practice exam papers — word study, vocabulary and reading in one scored paper.",
+    descZh: "整份有配分的綜合考卷：字詞、詞彙、閱讀一次考，交卷才公布分數。",
+  },
 ];
 
 // Week 14 — Mar 31 – Apr 6, 2025 (seed content)
@@ -7640,7 +7656,8 @@ The tools:
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
   guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars roster unit unknown
-- "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
+- "side": for exampaper, and for vocab / merge when he says whose vocabulary it is. "it" if he said 外師/IT,
+  "lt" if he said 中師/LT. If he did not say, "". (中師單字 is its own category on the website.)
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
 - "op": ONLY for intent "group". One of:

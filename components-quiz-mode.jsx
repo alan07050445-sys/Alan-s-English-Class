@@ -602,18 +602,24 @@ function markFlashcardModeLocal(progressKey, mode) {
 }
 
 /* ── Visual config ───────────────────────────────────── */
-const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖' };
+const CAT_ICONS = { vocab: '📚', grammar: '✏️', word: '🔤', reading: '📖', ltvocab: '📕', mock: '📝' };
 const CAT_IMG   = {
   vocab:   'icon-vocab.webp',
   grammar: 'icon-grammar.webp',
   word:    'icon-word.webp',
   reading: 'icon-reading.webp',
+  /* v567：中師單字／綜合考卷。圖檔 icon-ltvocab.webp、icon-mock.webp 放進網站根目錄後，
+     把下面兩行的註解拿掉就會換成插畫；在那之前用 emoji＋漸層（CAT_ICONS／CAT_BG）。
+  ltvocab: 'icon-ltvocab.webp',
+  mock:    'icon-mock.webp', */
 };
 const CAT_BG    = {
   vocab:   'linear-gradient(135deg,#667eea,#764ba2)',
   grammar: 'linear-gradient(135deg,#f093fb,#f5576c)',
   word:    'linear-gradient(135deg,#4facfe,#00f2fe)',
   reading: 'linear-gradient(135deg,#43e97b,#38f9d7)',
+  ltvocab: 'linear-gradient(135deg,#f6d365,#fda085)',
+  mock:    'linear-gradient(135deg,#36d1c4,#5b86e5)',
 };
 /* 分類圖示：優先使用 AI 插畫圖，找不到時回退 emoji + 漸層 */
 function CatIcon({ catId, className }) {

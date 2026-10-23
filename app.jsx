@@ -1412,7 +1412,9 @@ function App() {
       /* v533：「我只要 10 題」＝只用前 10 個字（單字題的題數是跟著字數走的）。
          ⚠ 只會**裁短**，絕對不會去湊——湊出來的字不是他要教的。 */
       const ws = (plan.nQ && plan.words.length > plan.nQ) ? plan.words.slice(0, plan.nQ) : plan.words;
-      setRegenFor({ name: plan.title || '', catId: cat0,
+      /* v567：他說「中師單字」→ 放進中師單字那一類（有這一類才放） */
+      const vcat = (plan.side === 'lt' && activeCategories.find(c => c.id === 'ltvocab')) ? 'ltvocab' : cat0;
+      setRegenFor({ name: plan.title || '', catId: vcat,
         text: ws.map(w => [w.term, w.zh].filter(Boolean).join(' - ')).join('\n') });
       setQuickSetOpen(true);
       if (ws.length < plan.words.length) showToast(`照你說的只用前 ${ws.length} 個字`);
@@ -2993,6 +2995,8 @@ function App() {
               onSave={(items, plan, dueDate) => {
                 const cat = openCat
                   || (plan.intent === 'reading' && activeCategories.find(c => c.id === 'reading') ? 'reading' : '')
+                  || (plan.intent === 'exam' && activeCategories.find(c => c.id === 'mock') ? 'mock' : '')
+                  || (plan.intent === 'vocab' && plan.side === 'lt' && activeCategories.find(c => c.id === 'ltvocab') ? 'ltvocab' : '')
                   || (activeCategories[0] && activeCategories[0].id) || 'vocab';
                 handleAddBuiltItems(items, cat, dueDate);
               }}
@@ -3004,7 +3008,7 @@ function App() {
             <window.ExamScanModal
               open={examScanOpen}
               categories={activeCategories}
-              defaultCat={openCat || 'reading'}
+              defaultCat={activeCategories.find(c => c.id === 'mock') ? 'mock' : (openCat || 'reading')}
               defaultGrade={grade}
               onClose={() => setExamScanOpen(false)}
               onCreate={({ _cat, ...item }) => {
@@ -3019,7 +3023,7 @@ function App() {
             <window.ExamDraftModal
               open={!!examDraft} brief={examDraft && examDraft.brief}
               categories={activeCategories}
-              defaultCat={openCat || 'reading'}
+              defaultCat={activeCategories.find(c => c.id === 'mock') ? 'mock' : (openCat || 'reading')}
               defaultGrade={grade}
               onClose={() => setExamDraft(null)}
               onCreate={({ _cat, ...item }) => {

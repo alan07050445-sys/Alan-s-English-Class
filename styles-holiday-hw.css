@@ -778,6 +778,8 @@ html.fest-hw .qm-blocks .qm-block:nth-of-type(1) { --cat-c: #A796FF; }   /* 單�
 html.fest-hw .qm-blocks .qm-block:nth-of-type(2) { --cat-c: #FF86A8; }   /* 文法 粉 */
 html.fest-hw .qm-blocks .qm-block:nth-of-type(3) { --cat-c: #6EC6FF; }   /* 字彙 藍 */
 html.fest-hw .qm-blocks .qm-block:nth-of-type(4) { --cat-c: #63D996; }   /* 閱讀 綠 */
+html.fest-hw .qm-blocks .qm-block:nth-of-type(5) { --cat-c: #FFB454; }   /* 中師單字 琥珀 */
+html.fest-hw .qm-blocks .qm-block:nth-of-type(6) { --cat-c: #4FD6CB; }   /* 綜合考卷 青綠 */
 html.fest-hw .qm-block-title { color: #fff; }
 html.fest-hw .qm-block-count { color: rgba(255,255,255,.76); }
 html.fest-hw .qm-block-meta  { color: rgba(255,255,255,.58); }
@@ -905,6 +907,8 @@ html.fest-hw .qm-blocks .qm-block:nth-of-type(1) { --cat-t: #B3A4FF; }
 html.fest-hw .qm-blocks .qm-block:nth-of-type(2) { --cat-t: #FF93B2; }
 html.fest-hw .qm-blocks .qm-block:nth-of-type(3) { --cat-t: #7CCDFF; }
 html.fest-hw .qm-blocks .qm-block:nth-of-type(4) { --cat-t: #6FE0A0; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(5) { --cat-t: #FFC27A; }
+html.fest-hw .qm-blocks .qm-block:nth-of-type(6) { --cat-t: #7BE6DC; }
 html.fest-hw .qm-blocks .qm-block:nth-of-type(3):last-child { --cat-t: #6FE0A0; }
 html.fest-hw .qm-blocks-title { color: #F4EFFF; }
 html.fest-hw .qm-blocks-head-view { border-bottom-color: rgba(255,255,255,.1); }

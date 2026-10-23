@@ -1434,7 +1434,7 @@ function MobileNav({
     disabled: true
   }, /*#__PURE__*/React.createElement("span", {
     className: "mobile-nav-icon"
-  }, catView?.id === 'vocab' ? '📚' : catView?.id === 'grammar' ? '✏️' : catView?.id === 'word' ? '🔤' : '📖'), /*#__PURE__*/React.createElement("span", {
+  }, catView?.id === 'vocab' ? '📚' : catView?.id === 'grammar' ? '✏️' : catView?.id === 'word' ? '🔤' : catView?.id === 'ltvocab' ? '📕' : catView?.id === 'mock' ? '📝' : '📖'), /*#__PURE__*/React.createElement("span", {
     style: {
       overflow: 'hidden',
       textOverflow: 'ellipsis',

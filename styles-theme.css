@@ -13,6 +13,10 @@
   --c-grammar-bg:#FDF0F4;
   --c-word:     #2E8FD0;
   --c-word-bg:  #EDF6FD;
+  --c-lt:       #D9892B;
+  --c-lt-bg:    #FDF3E4;
+  --c-mock:     #1E9C94;
+  --c-mock-bg:  #E8F7F5;
   --c-reading:  #2FA56B;
   --c-reading-bg:#EDFAF2;
 
@@ -100,6 +104,10 @@
 .qm-blocks .qm-block:nth-of-type(2) { --cat-c: var(--c-grammar); --cat-bg: var(--c-grammar-bg); }
 .qm-blocks .qm-block:nth-of-type(3) { --cat-c: var(--c-word);    --cat-bg: var(--c-word-bg); }
 .qm-blocks .qm-block:nth-of-type(4) { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+
+/* v567：第 5、6 張＝中師單字（琥珀）、綜合考卷（青綠） */
+.qm-blocks .qm-block:nth-of-type(5) { --cat-c: var(--c-lt);   --cat-bg: var(--c-lt-bg); }
+.qm-blocks .qm-block:nth-of-type(6) { --cat-c: var(--c-mock); --cat-bg: var(--c-mock-bg); }
 
 /* 頂部色條 — 每張卡有自己的身份 */
 .qm-block::before {

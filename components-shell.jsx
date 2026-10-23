@@ -1047,7 +1047,7 @@ function MobileNav({ week, weekIdx, weekOrder, onPrevWeek, onNextWeek, catView, 
           </button>
           <div className="mobile-nav-divider"/>
           <button className="mobile-nav-btn" style={{flex:2, fontSize:'10px', color:'var(--ink)', letterSpacing:'0.02em', textTransform:'none', fontFamily:'var(--sans)', fontWeight:700}} disabled>
-            <span className="mobile-nav-icon">{catView?.id === 'vocab' ? '📚' : catView?.id === 'grammar' ? '✏️' : catView?.id === 'word' ? '🔤' : '📖'}</span>
+            <span className="mobile-nav-icon">{catView?.id === 'vocab' ? '📚' : catView?.id === 'grammar' ? '✏️' : catView?.id === 'word' ? '🔤' : catView?.id === 'ltvocab' ? '📕' : catView?.id === 'mock' ? '📝' : '📖'}</span>
             <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>{catView?.titleZh || catView?.title || ''}</span>
           </button>
           <div style={{flex:1}}/>

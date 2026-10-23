@@ -44,6 +44,22 @@ const CATEGORIES_G4 = [
     desc: 'Reading passages with comprehension questions and writing practice.',
     descZh: '閱讀短文加上理解測驗與造句寫作，全面提升閱讀與寫作能力。',
   },
+  {
+    id: 'ltvocab',
+    num: '05',
+    title: 'LT Vocabulary',
+    titleZh: '中師單字',
+    desc: 'Chinese-teacher (LT) lesson vocabulary — flashcards, matching, spelling and quiz practice.',
+    descZh: '本週中師課堂單字，透過字卡、配對、聽寫與測驗反覆練習。',
+  },
+  {
+    id: 'mock',
+    num: '06',
+    title: 'Comprehensive Exam',
+    titleZh: '綜合考卷',
+    desc: 'Full practice exam papers — word study, vocabulary and reading in one scored paper.',
+    descZh: '整份有配分的綜合考卷：字詞、詞彙、閱讀一次考，交卷才公布分數。',
+  },
 ];
 
 /* ─── Default week order ────────────────────────────────────────────────── */

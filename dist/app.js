@@ -1955,9 +1955,11 @@ function App() {
       /* v533：「我只要 10 題」＝只用前 10 個字（單字題的題數是跟著字數走的）。
          ⚠ 只會**裁短**，絕對不會去湊——湊出來的字不是他要教的。 */
       var ws = plan.nQ && plan.words.length > plan.nQ ? plan.words.slice(0, plan.nQ) : plan.words;
+      /* v567：他說「中師單字」→ 放進中師單字那一類（有這一類才放） */
+      var vcat = plan.side === 'lt' && activeCategories.find(c => c.id === 'ltvocab') ? 'ltvocab' : cat0;
       setRegenFor({
         name: plan.title || '',
-        catId: cat0,
+        catId: vcat,
         text: ws.map(w => [w.term, w.zh].filter(Boolean).join(' - ')).join('\n')
       });
       setQuickSetOpen(true);
@@ -3943,13 +3945,13 @@ function App() {
     onRun: runAskPlan,
     onGenerate: askGenerate,
     onSave: (items, plan, dueDate) => {
-      var cat = openCat || (plan.intent === 'reading' && activeCategories.find(c => c.id === 'reading') ? 'reading' : '') || activeCategories[0] && activeCategories[0].id || 'vocab';
+      var cat = openCat || (plan.intent === 'reading' && activeCategories.find(c => c.id === 'reading') ? 'reading' : '') || (plan.intent === 'exam' && activeCategories.find(c => c.id === 'mock') ? 'mock' : '') || (plan.intent === 'vocab' && plan.side === 'lt' && activeCategories.find(c => c.id === 'ltvocab') ? 'ltvocab' : '') || activeCategories[0] && activeCategories[0].id || 'vocab';
       handleAddBuiltItems(items, cat, dueDate);
     }
   }), window.ExamScanModal && /*#__PURE__*/React.createElement(window.ExamScanModal, {
     open: examScanOpen,
     categories: activeCategories,
-    defaultCat: openCat || 'reading',
+    defaultCat: activeCategories.find(c => c.id === 'mock') ? 'mock' : openCat || 'reading',
     defaultGrade: grade,
     onClose: () => setExamScanOpen(false),
     onCreate: ({
@@ -3963,7 +3965,7 @@ function App() {
     open: !!examDraft,
     brief: examDraft && examDraft.brief,
     categories: activeCategories,
-    defaultCat: openCat || 'reading',
+    defaultCat: activeCategories.find(c => c.id === 'mock') ? 'mock' : openCat || 'reading',
     defaultGrade: grade,
     onClose: () => setExamDraft(null),
     onCreate: ({

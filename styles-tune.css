@@ -1584,6 +1584,8 @@ summary:focus-visible,
 .qm-blocks .qm-block:nth-of-type(2){ --cat-t:#C23C63; }   /* grammar */
 .qm-blocks .qm-block:nth-of-type(3){ --cat-t:#1E6FA8; }   /* word    */
 .qm-blocks .qm-block:nth-of-type(4){ --cat-t:#1F7D50; }   /* reading */
+.qm-blocks .qm-block:nth-of-type(5){ --cat-t:#A8641A; }   /* ltvocab（v567）*/
+.qm-blocks .qm-block:nth-of-type(6){ --cat-t:#12746D; }   /* mock（v567）*/
 /* v207：暑假班表只有 3 個分類，第 3 張其實是「閱讀理解」→ 沿用綠色，
    跟 styles-theme.css:518 同一個寫法。 */
 .qm-blocks .qm-block:nth-of-type(3):last-child{ --cat-t:#1F7D50; }
