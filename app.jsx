@@ -621,6 +621,7 @@ function App() {
   const [pacing, setPacing] = useAppState(null);
   const [examSide, setExamSide] = useAppState(null);   // v513：考前複習包（'it' / 'lt'）
   const [examScanOpen, setExamScanOpen] = useAppState(false);   // v516：拍考卷
+  const [examDraft, setExamDraft] = useAppState(null);            // v561：跟 AI 出大考考卷（{ brief } 或 null）
   const [askOpen, setAskOpen] = useAppState(false);             // v517：💬 用講的就好
   const [askRoster, setAskRoster] = useAppState([]);            // 認名字用（「幫 Eric 寫紀錄」）
   const [askTopic, setAskTopic] = useAppState('');              // 💬 帶進 Word Study 的主題
@@ -1423,6 +1424,9 @@ function App() {
       setAskText({ text: plan.text, title: plan.title, note: plan.note }); setRcGenOpen(true);
     } else if (plan.intent === 'exam') {
       setExamScanOpen(true);
+    } else if (plan.intent === 'examdraft') {
+      /* 🗣 v561：他說的內容原封不動帶進去當第一句話，AI 直接開始擬稿 */
+      setExamDraft({ brief: [plan.text, plan.note].filter(Boolean).join('\n') });
     } else if (plan.intent === 'lesson' || plan.intent === 'weak' || plan.intent === 'marking') {
       /* 這三件事住在後台（📒 上課紀錄 / 🎯 弱點分析 / 📋 申論批改）——開後台並指到那一頁。
          🔴 v543：這裡本來寫 `email: plan.email || ''`，但 **router 從來沒有產生過
@@ -2613,6 +2617,7 @@ function App() {
             onGrammarNotes={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setGnGenOpen(true)}
             /* 📸 v516：拍考卷 → 互動版 */
             onExamScan={window.ExamScanModal ? () => setExamScanOpen(true) : null}
+            onExamDraft={window.ExamDraftModal ? () => setExamDraft({ brief: '' }) : null}
             onWordStudy={(window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setWsGenOpen(true)}
             pace={paceWeek}
             nextF={paceNextF}
@@ -3004,6 +3009,21 @@ function App() {
               onClose={() => setExamScanOpen(false)}
               onCreate={({ _cat, ...item }) => {
                 setExamScanOpen(false);
+                handleAddBuiltItems([item], _cat || 'reading');
+              }}
+            />
+          )}
+
+          {/* 🗣 v561：跟 AI 一來一往出大考考卷 */}
+          {window.ExamDraftModal && (
+            <window.ExamDraftModal
+              open={!!examDraft} brief={examDraft && examDraft.brief}
+              categories={activeCategories}
+              defaultCat={openCat || 'reading'}
+              defaultGrade={grade}
+              onClose={() => setExamDraft(null)}
+              onCreate={({ _cat, ...item }) => {
+                setExamDraft(null);
                 handleAddBuiltItems([item], _cat || 'reading');
               }}
             />

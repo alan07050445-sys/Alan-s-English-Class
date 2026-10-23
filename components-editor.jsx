@@ -6622,6 +6622,229 @@ function ExamScanModal({ open, categories, defaultCat, defaultGrade, onClose, on
     </div>, document.body);
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v561 🗣 跟 AI 一來一往出大考考卷
+   左：對話（他說考什麼、題目該怎麼出，AI 擬草稿、照意見改）
+   右：目前的草稿——每一大題都看得到「這輪有沒有被動到」「哪裡一定要改／要你看」，
+       也可以直接點 ✏️ 自己改（跟編輯單元同一個格式），不一定要靠講的。
+   ⚠ 不會自己存。按「存成考卷」才進週次。 */
+function ExamDraftModal({ open, categories, defaultCat, defaultGrade, brief, onClose, onCreate }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const [msgs, setMsgs]   = useS([]);
+  const [draft, setDraft] = useS(null);
+  const [notes, setNotes] = useS([]);
+  const [words, setWords] = useS([]);
+  const [changed, setChanged] = useS({});        // 'si_pi' → 'new' | 'edit'（這一輪被動到的）
+  const [input, setInput] = useS('');
+  const [busy, setBusy]   = useS(false);
+  const [err, setErr]     = useS('');
+  const [openKey, setOpenKey] = useS('');        // 展開的那一大題
+  const [editKey, setEditKey] = useS('');        // 正在自己改的那一大題
+  const [cat, setCat]     = useS(defaultCat || 'reading');
+  const logRef = React.useRef(null);
+  const runRef = React.useRef(0);
+
+  const checks = React.useMemo(
+    () => (draft && window.examDraftChecks) ? window.examDraftChecks(draft, words, notes) : [],
+    [draft, words, notes]);
+
+  const send = async (text) => {
+    const msg = String(text == null ? input : text).trim();
+    if (!msg || busy) return;
+    setErr(''); setBusy(true); setInput('');
+    const hist = msgs.concat([{ role: 'user', text: msg }]);
+    setMsgs(hist);
+    const my = ++runRef.current;
+    try {
+      const r = await window.aiDraftExam({ message: msg, history: msgs, draft, mustWords: words, grade: defaultGrade });
+      if (my !== runRef.current) return;
+      const ch = {};
+      if (!r.same && r.item) {
+        const oldS = (draft && draft.sections) || [];
+        (r.item.sections || []).forEach((sc, si) => (sc.parts || []).forEach((pt, pi) => {
+          const before = oldS[si] && oldS[si].parts && oldS[si].parts[pi];
+          if (!before) ch[si + '_' + pi] = 'new';
+          else if (JSON.stringify(before) !== JSON.stringify(pt)) ch[si + '_' + pi] = 'edit';
+        }));
+      }
+      setMsgs(h => h.concat([{ role: 'ai', text: [r.reply, r.ask && ('❓ ' + r.ask)].filter(Boolean).join('\n') || '（好了）' }]));
+      if (!r.same) { setDraft(r.item); setNotes(r.notes || []); setChanged(ch); }
+      setWords(r.words || []);
+      if ((r.dropped || []).length) setErr('這幾大題 AI 給的內容不完整，沒收進草稿：' + r.dropped.join('、') + '。可以請它再出一次。');
+    } catch (e) {
+      if (my !== runRef.current) return;
+      setErr(e.message || 'AI 暫時連不上，再送一次試試。');
+      setMsgs(h => h.slice(0, -1)); setInput(msg);
+    }
+    setBusy(false);
+  };
+
+  useE(() => {
+    if (!open) return;
+    runRef.current++;
+    setMsgs([]); setDraft(null); setNotes([]); setWords([]); setChanged({}); setInput('');
+    setBusy(false); setErr(''); setOpenKey(''); setEditKey(''); setCat(defaultCat || 'reading');
+    if (brief && String(brief).trim()) setTimeout(() => send(String(brief).trim()), 0);
+  }, [open]);
+  useE(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [msgs, busy]);
+  if (!open) return null;
+
+  const T = draft && window.examTotals ? window.examTotals(draft) : null;
+  const bad = checks.filter(c => c.level === 'bad');
+  const chk = checks.filter(c => c.level === 'check');
+  const forPart = (si, pi, level) => checks.filter(c => c.si === si && c.pi === pi && c.level === level);
+
+  const patchPart = (si, pi, patch) => setDraft(d => ({
+    ...d, sections: d.sections.map((sc, i) => i !== si ? sc : { ...sc, parts: sc.parts.map((p, k) => k !== pi ? p : { ...p, ...patch }) }),
+  }));
+
+  const save = () => {
+    if (!draft || !T || !T.parts) return;
+    if (bad.length && !window.confirm(`還有 ${bad.length} 個「一定要改」的地方沒處理，確定先存起來嗎？\n（存起來之後可以在編輯單元裡繼續改）`)) return;
+    onCreate({ ...draft, id: 'ex' + Date.now().toString(36), _cat: cat });
+  };
+
+  const starters = [
+    '幫我出一份大考考卷：這次考的單字是 ',
+    '出一份完整的大考考卷（字詞 30%、詞彙 32%、閱讀 38%），我再告訴你內容',
+  ];
+
+  return ReactDOM.createPortal(
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) nudge(); }}>
+      <div className={'modal edr-modal ' + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>🗣 跟 AI 出大考考卷 <em>→ 有配分的考卷</em></h3>
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </div>
+        <div className="edr-body">
+
+          {/* ── 左：對話 ── */}
+          <div className="edr-chat">
+            <div className="edr-log" ref={logRef}>
+              {!msgs.length && (
+                <div className="edr-hint">
+                  <b>直接跟它說這次要考什麼</b>，例如：
+                  <ul>
+                    <li>這次考 frail, managed, descent, barracks… 這 8 個字，文法考過去式</li>
+                    <li>閱讀用下面這篇（貼文章）。選擇題 6 題、排事件順序 5 題</li>
+                    <li>題目難一點／句子短一點／選項不要太像</li>
+                  </ul>
+                  它會擬一份草稿，<b>你再說哪裡要改</b>（「第二大題改成 6 題」「把 managed 換成 coached」），
+                  也可以直接點右邊的 ✏️ 自己改。
+                </div>
+              )}
+              {msgs.map((m, i) => (
+                <div key={i} className={'edr-msg ' + m.role}>{m.text}</div>
+              ))}
+              {busy && <div className="edr-msg ai edr-typing">擬稿中…（約 20～60 秒）</div>}
+            </div>
+            {err && <div className="exs-err">⚠ {err}</div>}
+            {!msgs.length && (
+              <div className="edr-starters">
+                {starters.map((t, i) => <button key={i} className="btn ghost" onClick={() => setInput(t)}>{t.slice(0, 22)}…</button>)}
+              </div>
+            )}
+            <div className="edr-input">
+              <textarea rows={3} value={input} disabled={busy}
+                placeholder={draft ? '哪裡要改？例如：第 2 大題只要 6 題／選擇題難一點／摘要題改成 15 分' : '這次考什麼？單字、文法、文章都可以直接貼'}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}/>
+              <button className="btn primary" disabled={busy || !input.trim()} onClick={() => send()}>
+                {busy ? '…' : draft ? '改' : '出草稿'}
+              </button>
+            </div>
+          </div>
+
+          {/* ── 右：草稿 ── */}
+          <div className="edr-draft">
+            {!draft ? (
+              <div className="edr-empty">草稿會出現在這裡。<br/>每一大題都會標出<b>哪裡一定要改</b>、<b>哪裡要你看過</b>。</div>
+            ) : (
+              <>
+                <div className="exs-sum">
+                  <b>{draft.title}</b>
+                  <span className={T.total === 100 ? 'ok' : 'bad'}>
+                    {T.sections} 區 · {T.parts} 大題 · 合計 {T.total} 分（自動 {T.auto}／老師改 {T.manual}）
+                  </span>
+                </div>
+
+                {/* 🔴🟡 需要你看的地方——一眼看完 */}
+                <div className={'edr-todo' + (bad.length ? ' has-bad' : '')}>
+                  <div className="edr-todo-h">
+                    {bad.length ? <span className="b">🔴 一定要改 {bad.length}</span> : <span className="g">✅ 程式沒查到一定要改的錯</span>}
+                    <span className="y">🟡 請你看過 {chk.length}</span>
+                  </div>
+                  {bad.map((c, i) => <div key={'b' + i} className="edr-todo-i bad"><i>{c.at}</i>{c.why}</div>)}
+                  {chk.length > 0 && (
+                    <details className="edr-chk">
+                      <summary>🟡 哪些地方要你確認（{chk.length}）</summary>
+                      {chk.map((c, i) => <div key={'c' + i} className="edr-todo-i"><i>{c.at}</i>{c.why}</div>)}
+                    </details>
+                  )}
+                </div>
+
+                {(draft.sections || []).map((sc, si) => (
+                  <div className="exs-sec" key={si}>
+                    <div className="exs-sec-h"><b>{sc.name || `Section ${si + 1}`}</b>{sc.pct ? <span>({sc.pct}%)</span> : null}</div>
+                    {(sc.parts || []).map((pt, pi) => {
+                      const key = si + '_' + pi;
+                      const b = forPart(si, pi, 'bad'), y = forPart(si, pi, 'check');
+                      const isOpen = openKey === key;
+                      return (
+                        <div className={'exs-part edr-part' + (b.length ? ' has-bad' : '')} key={key}>
+                          <div className="exs-part-h">
+                            <i>{(window.EXAM_KINDS[pt.kind] || {}).zh}</i>
+                            <b>{pt.title || '（沒有標題）'}</b>
+                            <span>{pt.pts} 分 · {window.examPartN(pt)} 題</span>
+                            {changed[key] && <em className={'edr-tag ' + changed[key]}>{changed[key] === 'new' ? '新' : '這輪改過'}</em>}
+                            {b.length > 0 && <em className="edr-tag bad">🔴 {b.length}</em>}
+                            {y.length > 0 && <em className="edr-tag chk">🟡 {y.length}</em>}
+                          </div>
+                          <div className="edr-part-btns">
+                            <button onClick={() => setOpenKey(isOpen ? '' : key)}>{isOpen ? '收起' : '看題目'}</button>
+                            <button onClick={() => { setOpenKey(key); setEditKey(editKey === key ? '' : key); }}>✏️ 自己改</button>
+                            <button onClick={() => setInput(`第 ${si + 1} 區的「${(pt.title || '').slice(0, 30)}」：`)}>💬 請 AI 改這題</button>
+                          </div>
+                          {isOpen && (editKey === key ? (
+                            <textarea className="edr-edit" rows={10}
+                              defaultValue={window.examPartText(pt)}
+                              onBlur={e => patchPart(si, pi, window.examParsePart(pt.kind, e.target.value))}/>
+                          ) : (
+                            <>
+                              {pt.readText && <pre className="exs-pre edr-read">{pt.readText}</pre>}
+                              <pre className="exs-pre">{window.examPartText(pt)}</pre>
+                            </>
+                          ))}
+                          {isOpen && (b.length > 0 || y.length > 0) && (
+                            <div className="edr-part-why">
+                              {b.map((c, i) => <div key={'b' + i} className="bad">🔴 {c.why}</div>)}
+                              {y.map((c, i) => <div key={'y' + i}>🟡 {c.why}</div>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+
+                <div className="edr-foot">
+                  <label>放到哪一類
+                    <select value={cat} onChange={e => setCat(e.target.value)}>
+                      {(categories || []).map(c => <option key={c.id} value={c.id}>{c.titleZh || c.title}</option>)}
+                    </select>
+                  </label>
+                  <button className="btn primary" onClick={save}>存成考卷</button>
+                </div>
+                <div className="field-help">存起來之後在「編輯單元」還能繼續改；文章配圖也在那裡加。</div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 function GrammarNotesModal({ open, categories, defaultCat, defaultGrade, perStudent, roster, defaultTitle, defaultText, onClose, onCreate }) {
   const [nudgeCls, nudge] = useModalNudge();   // v461：點背景不關閉，只晃一下
   const [title, setTitle]   = useS('');
@@ -8282,5 +8505,5 @@ function ExamPrepModal({ open, side, pace, weeks, weekOrder, weekId, categories,
     </div>, document.body);
 }
 
-Object.assign(window, { AskPanel, ExamPrepModal, ExamScanModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+Object.assign(window, { AskPanel, ExamPrepModal, ExamScanModal, ExamDraftModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

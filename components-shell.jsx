@@ -159,7 +159,7 @@ function findUnitsIn(weekOrder, weeks, q) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAsk, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, onExamScan, pace, nextF, onPacing, onExamPrep,
+  canEdit, editMode, onToggleEdit, onAsk, onAddWeek, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, onExamScan, onExamDraft, pace, nextF, onPacing, onExamPrep,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -438,6 +438,13 @@ function Header({
                 <button className="edit-make-btn exs" onClick={onExamScan}>
                   <span className="emk-ico">📸</span>
                   <span className="emk-txt"><b>拍考卷</b><em>拍學校的 Formative → 一份有配分的互動考卷</em></span>
+                </button>
+              )}
+              {/* 🗣 v561：跟 AI 一來一往出一份大考考卷（他說考什麼、哪裡要改，AI 改草稿） */}
+              {onExamDraft && (
+                <button className="edit-make-btn exs" onClick={onExamDraft}>
+                  <span className="emk-ico">🗣</span>
+                  <span className="emk-txt"><b>跟 AI 出大考考卷</b><em>說這次考什麼 → AI 擬草稿 → 你說哪裡要改 → 有配分的考卷</em></span>
                 </button>
               )}
               {/* v482：📘 Word Study——康橋每一課都有，主題每次不同但題型固定那幾種 */}

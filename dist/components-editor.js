@@ -10109,6 +10109,272 @@ function ExamScanModal({
     onClick: save
   }, "\u5B58\u6210\u4E00\u4EFD\u8003\u5377")))))), document.body);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v561 🗣 跟 AI 一來一往出大考考卷
+   左：對話（他說考什麼、題目該怎麼出，AI 擬草稿、照意見改）
+   右：目前的草稿——每一大題都看得到「這輪有沒有被動到」「哪裡一定要改／要你看」，
+       也可以直接點 ✏️ 自己改（跟編輯單元同一個格式），不一定要靠講的。
+   ⚠ 不會自己存。按「存成考卷」才進週次。 */
+function ExamDraftModal({
+  open,
+  categories,
+  defaultCat,
+  defaultGrade,
+  brief,
+  onClose,
+  onCreate
+}) {
+  var [nudgeCls, nudge] = useModalNudge();
+  var [msgs, setMsgs] = useS([]);
+  var [draft, setDraft] = useS(null);
+  var [notes, setNotes] = useS([]);
+  var [words, setWords] = useS([]);
+  var [changed, setChanged] = useS({}); // 'si_pi' → 'new' | 'edit'（這一輪被動到的）
+  var [input, setInput] = useS('');
+  var [busy, setBusy] = useS(false);
+  var [err, setErr] = useS('');
+  var [openKey, setOpenKey] = useS(''); // 展開的那一大題
+  var [editKey, setEditKey] = useS(''); // 正在自己改的那一大題
+  var [cat, setCat] = useS(defaultCat || 'reading');
+  var logRef = React.useRef(null);
+  var runRef = React.useRef(0);
+  var checks = React.useMemo(() => draft && window.examDraftChecks ? window.examDraftChecks(draft, words, notes) : [], [draft, words, notes]);
+  var send = async text => {
+    var msg = String(text == null ? input : text).trim();
+    if (!msg || busy) return;
+    setErr('');
+    setBusy(true);
+    setInput('');
+    var hist = msgs.concat([{
+      role: 'user',
+      text: msg
+    }]);
+    setMsgs(hist);
+    var my = ++runRef.current;
+    try {
+      var r = await window.aiDraftExam({
+        message: msg,
+        history: msgs,
+        draft,
+        mustWords: words,
+        grade: defaultGrade
+      });
+      if (my !== runRef.current) return;
+      var ch = {};
+      if (!r.same && r.item) {
+        var oldS = draft && draft.sections || [];
+        (r.item.sections || []).forEach((sc, si) => (sc.parts || []).forEach((pt, pi) => {
+          var before = oldS[si] && oldS[si].parts && oldS[si].parts[pi];
+          if (!before) ch[si + '_' + pi] = 'new';else if (JSON.stringify(before) !== JSON.stringify(pt)) ch[si + '_' + pi] = 'edit';
+        }));
+      }
+      setMsgs(h => h.concat([{
+        role: 'ai',
+        text: [r.reply, r.ask && '❓ ' + r.ask].filter(Boolean).join('\n') || '（好了）'
+      }]));
+      if (!r.same) {
+        setDraft(r.item);
+        setNotes(r.notes || []);
+        setChanged(ch);
+      }
+      setWords(r.words || []);
+      if ((r.dropped || []).length) setErr('這幾大題 AI 給的內容不完整，沒收進草稿：' + r.dropped.join('、') + '。可以請它再出一次。');
+    } catch (e) {
+      if (my !== runRef.current) return;
+      setErr(e.message || 'AI 暫時連不上，再送一次試試。');
+      setMsgs(h => h.slice(0, -1));
+      setInput(msg);
+    }
+    setBusy(false);
+  };
+  useE(() => {
+    if (!open) return;
+    runRef.current++;
+    setMsgs([]);
+    setDraft(null);
+    setNotes([]);
+    setWords([]);
+    setChanged({});
+    setInput('');
+    setBusy(false);
+    setErr('');
+    setOpenKey('');
+    setEditKey('');
+    setCat(defaultCat || 'reading');
+    if (brief && String(brief).trim()) setTimeout(() => send(String(brief).trim()), 0);
+  }, [open]);
+  useE(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [msgs, busy]);
+  if (!open) return null;
+  var T = draft && window.examTotals ? window.examTotals(draft) : null;
+  var bad = checks.filter(c => c.level === 'bad');
+  var chk = checks.filter(c => c.level === 'check');
+  var forPart = (si, pi, level) => checks.filter(c => c.si === si && c.pi === pi && c.level === level);
+  var patchPart = (si, pi, patch) => setDraft(d => ({
+    ...d,
+    sections: d.sections.map((sc, i) => i !== si ? sc : {
+      ...sc,
+      parts: sc.parts.map((p, k) => k !== pi ? p : {
+        ...p,
+        ...patch
+      })
+    })
+  }));
+  var save = () => {
+    if (!draft || !T || !T.parts) return;
+    if (bad.length && !window.confirm(`還有 ${bad.length} 個「一定要改」的地方沒處理，確定先存起來嗎？\n（存起來之後可以在編輯單元裡繼續改）`)) return;
+    onCreate({
+      ...draft,
+      id: 'ex' + Date.now().toString(36),
+      _cat: cat
+    });
+  };
+  var starters = ['幫我出一份大考考卷：這次考的單字是 ', '出一份完整的大考考卷（字詞 30%、詞彙 32%、閱讀 38%），我再告訴你內容'];
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    onClick: e => {
+      if (e.target === e.currentTarget) nudge();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: 'modal edr-modal ' + nudgeCls,
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDDE3 \u8DDF AI \u51FA\u5927\u8003\u8003\u5377 ", /*#__PURE__*/React.createElement("em", null, "\u2192 \u6709\u914D\u5206\u7684\u8003\u5377")), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "close",
+    size: 14
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "edr-body"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "edr-chat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "edr-log",
+    ref: logRef
+  }, !msgs.length && /*#__PURE__*/React.createElement("div", {
+    className: "edr-hint"
+  }, /*#__PURE__*/React.createElement("b", null, "\u76F4\u63A5\u8DDF\u5B83\u8AAA\u9019\u6B21\u8981\u8003\u4EC0\u9EBC"), "\uFF0C\u4F8B\u5982\uFF1A", /*#__PURE__*/React.createElement("ul", null, /*#__PURE__*/React.createElement("li", null, "\u9019\u6B21\u8003 frail, managed, descent, barracks\u2026 \u9019 8 \u500B\u5B57\uFF0C\u6587\u6CD5\u8003\u904E\u53BB\u5F0F"), /*#__PURE__*/React.createElement("li", null, "\u95B1\u8B80\u7528\u4E0B\u9762\u9019\u7BC7\uFF08\u8CBC\u6587\u7AE0\uFF09\u3002\u9078\u64C7\u984C 6 \u984C\u3001\u6392\u4E8B\u4EF6\u9806\u5E8F 5 \u984C"), /*#__PURE__*/React.createElement("li", null, "\u984C\u76EE\u96E3\u4E00\u9EDE\uFF0F\u53E5\u5B50\u77ED\u4E00\u9EDE\uFF0F\u9078\u9805\u4E0D\u8981\u592A\u50CF")), "\u5B83\u6703\u64EC\u4E00\u4EFD\u8349\u7A3F\uFF0C", /*#__PURE__*/React.createElement("b", null, "\u4F60\u518D\u8AAA\u54EA\u88E1\u8981\u6539"), "\uFF08\u300C\u7B2C\u4E8C\u5927\u984C\u6539\u6210 6 \u984C\u300D\u300C\u628A managed \u63DB\u6210 coached\u300D\uFF09\uFF0C \u4E5F\u53EF\u4EE5\u76F4\u63A5\u9EDE\u53F3\u908A\u7684 \u270F\uFE0F \u81EA\u5DF1\u6539\u3002"), msgs.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: 'edr-msg ' + m.role
+  }, m.text)), busy && /*#__PURE__*/React.createElement("div", {
+    className: "edr-msg ai edr-typing"
+  }, "\u64EC\u7A3F\u4E2D\u2026\uFF08\u7D04 20\uFF5E60 \u79D2\uFF09")), err && /*#__PURE__*/React.createElement("div", {
+    className: "exs-err"
+  }, "\u26A0 ", err), !msgs.length && /*#__PURE__*/React.createElement("div", {
+    className: "edr-starters"
+  }, starters.map((t, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    className: "btn ghost",
+    onClick: () => setInput(t)
+  }, t.slice(0, 22), "\u2026"))), /*#__PURE__*/React.createElement("div", {
+    className: "edr-input"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    rows: 3,
+    value: input,
+    disabled: busy,
+    placeholder: draft ? '哪裡要改？例如：第 2 大題只要 6 題／選擇題難一點／摘要題改成 15 分' : '這次考什麼？單字、文法、文章都可以直接貼',
+    onChange: e => setInput(e.target.value),
+    onKeyDown: e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send();
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    disabled: busy || !input.trim(),
+    onClick: () => send()
+  }, busy ? '…' : draft ? '改' : '出草稿'))), /*#__PURE__*/React.createElement("div", {
+    className: "edr-draft"
+  }, !draft ? /*#__PURE__*/React.createElement("div", {
+    className: "edr-empty"
+  }, "\u8349\u7A3F\u6703\u51FA\u73FE\u5728\u9019\u88E1\u3002", /*#__PURE__*/React.createElement("br", null), "\u6BCF\u4E00\u5927\u984C\u90FD\u6703\u6A19\u51FA", /*#__PURE__*/React.createElement("b", null, "\u54EA\u88E1\u4E00\u5B9A\u8981\u6539"), "\u3001", /*#__PURE__*/React.createElement("b", null, "\u54EA\u88E1\u8981\u4F60\u770B\u904E"), "\u3002") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "exs-sum"
+  }, /*#__PURE__*/React.createElement("b", null, draft.title), /*#__PURE__*/React.createElement("span", {
+    className: T.total === 100 ? 'ok' : 'bad'
+  }, T.sections, " \u5340 \xB7 ", T.parts, " \u5927\u984C \xB7 \u5408\u8A08 ", T.total, " \u5206\uFF08\u81EA\u52D5 ", T.auto, "\uFF0F\u8001\u5E2B\u6539 ", T.manual, "\uFF09")), /*#__PURE__*/React.createElement("div", {
+    className: 'edr-todo' + (bad.length ? ' has-bad' : '')
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "edr-todo-h"
+  }, bad.length ? /*#__PURE__*/React.createElement("span", {
+    className: "b"
+  }, "\uD83D\uDD34 \u4E00\u5B9A\u8981\u6539 ", bad.length) : /*#__PURE__*/React.createElement("span", {
+    className: "g"
+  }, "\u2705 \u7A0B\u5F0F\u6C92\u67E5\u5230\u4E00\u5B9A\u8981\u6539\u7684\u932F"), /*#__PURE__*/React.createElement("span", {
+    className: "y"
+  }, "\uD83D\uDFE1 \u8ACB\u4F60\u770B\u904E ", chk.length)), bad.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: 'b' + i,
+    className: "edr-todo-i bad"
+  }, /*#__PURE__*/React.createElement("i", null, c.at), c.why)), chk.length > 0 && /*#__PURE__*/React.createElement("details", {
+    className: "edr-chk"
+  }, /*#__PURE__*/React.createElement("summary", null, "\uD83D\uDFE1 \u54EA\u4E9B\u5730\u65B9\u8981\u4F60\u78BA\u8A8D\uFF08", chk.length, "\uFF09"), chk.map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: 'c' + i,
+    className: "edr-todo-i"
+  }, /*#__PURE__*/React.createElement("i", null, c.at), c.why)))), (draft.sections || []).map((sc, si) => /*#__PURE__*/React.createElement("div", {
+    className: "exs-sec",
+    key: si
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "exs-sec-h"
+  }, /*#__PURE__*/React.createElement("b", null, sc.name || `Section ${si + 1}`), sc.pct ? /*#__PURE__*/React.createElement("span", null, "(", sc.pct, "%)") : null), (sc.parts || []).map((pt, pi) => {
+    var key = si + '_' + pi;
+    var b = forPart(si, pi, 'bad'),
+      y = forPart(si, pi, 'check');
+    var isOpen = openKey === key;
+    return /*#__PURE__*/React.createElement("div", {
+      className: 'exs-part edr-part' + (b.length ? ' has-bad' : ''),
+      key: key
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "exs-part-h"
+    }, /*#__PURE__*/React.createElement("i", null, (window.EXAM_KINDS[pt.kind] || {}).zh), /*#__PURE__*/React.createElement("b", null, pt.title || '（沒有標題）'), /*#__PURE__*/React.createElement("span", null, pt.pts, " \u5206 \xB7 ", window.examPartN(pt), " \u984C"), changed[key] && /*#__PURE__*/React.createElement("em", {
+      className: 'edr-tag ' + changed[key]
+    }, changed[key] === 'new' ? '新' : '這輪改過'), b.length > 0 && /*#__PURE__*/React.createElement("em", {
+      className: "edr-tag bad"
+    }, "\uD83D\uDD34 ", b.length), y.length > 0 && /*#__PURE__*/React.createElement("em", {
+      className: "edr-tag chk"
+    }, "\uD83D\uDFE1 ", y.length)), /*#__PURE__*/React.createElement("div", {
+      className: "edr-part-btns"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setOpenKey(isOpen ? '' : key)
+    }, isOpen ? '收起' : '看題目'), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setOpenKey(key);
+        setEditKey(editKey === key ? '' : key);
+      }
+    }, "\u270F\uFE0F \u81EA\u5DF1\u6539"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setInput(`第 ${si + 1} 區的「${(pt.title || '').slice(0, 30)}」：`)
+    }, "\uD83D\uDCAC \u8ACB AI \u6539\u9019\u984C")), isOpen && (editKey === key ? /*#__PURE__*/React.createElement("textarea", {
+      className: "edr-edit",
+      rows: 10,
+      defaultValue: window.examPartText(pt),
+      onBlur: e => patchPart(si, pi, window.examParsePart(pt.kind, e.target.value))
+    }) : /*#__PURE__*/React.createElement(React.Fragment, null, pt.readText && /*#__PURE__*/React.createElement("pre", {
+      className: "exs-pre edr-read"
+    }, pt.readText), /*#__PURE__*/React.createElement("pre", {
+      className: "exs-pre"
+    }, window.examPartText(pt)))), isOpen && (b.length > 0 || y.length > 0) && /*#__PURE__*/React.createElement("div", {
+      className: "edr-part-why"
+    }, b.map((c, i) => /*#__PURE__*/React.createElement("div", {
+      key: 'b' + i,
+      className: "bad"
+    }, "\uD83D\uDD34 ", c.why)), y.map((c, i) => /*#__PURE__*/React.createElement("div", {
+      key: 'y' + i
+    }, "\uD83D\uDFE1 ", c.why))));
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "edr-foot"
+  }, /*#__PURE__*/React.createElement("label", null, "\u653E\u5230\u54EA\u4E00\u985E", /*#__PURE__*/React.createElement("select", {
+    value: cat,
+    onChange: e => setCat(e.target.value)
+  }, (categories || []).map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.titleZh || c.title)))), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: save
+  }, "\u5B58\u6210\u8003\u5377")), /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u5B58\u8D77\u4F86\u4E4B\u5F8C\u5728\u300C\u7DE8\u8F2F\u55AE\u5143\u300D\u9084\u80FD\u7E7C\u7E8C\u6539\uFF1B\u6587\u7AE0\u914D\u5716\u4E5F\u5728\u90A3\u88E1\u52A0\u3002")))))), document.body);
+}
 function GrammarNotesModal({
   open,
   categories,
@@ -13083,6 +13349,7 @@ Object.assign(window, {
   AskPanel,
   ExamPrepModal,
   ExamScanModal,
+  ExamDraftModal,
   PacingImportModal,
   GrammarNotesModal,
   gnBuildItems,

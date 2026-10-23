@@ -4234,3 +4234,50 @@ textarea.ex-essay {
 .exed-img { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .exed-img img { height: 56px; border-radius: 6px; }
 .exed-cap { flex: 1 1 140px; }
+
+/* ══ v561 跟 AI 出大考考卷 ══ */
+.edr-modal { width: min(1180px, 96vw); max-width: none; }
+.edr-body { display: grid; grid-template-columns: minmax(300px, 4fr) minmax(0, 7fr); gap: 14px; padding: 0 16px 16px; height: min(78vh, 760px); }
+.edr-chat, .edr-draft { display: flex; flex-direction: column; min-height: 0; }
+.edr-draft { overflow-y: auto; padding-right: 4px; }
+.edr-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 8px; }
+.edr-hint { font-size: 13.5px; line-height: 1.7; color: var(--ink-2, #5c554a); background: var(--bg, #F4F0E7); border-radius: 10px; padding: 12px 14px; }
+.edr-hint ul { margin: 6px 0 8px 18px; padding: 0; }
+.edr-msg { max-width: 92%; padding: 9px 12px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+.edr-msg.user { align-self: flex-end; background: var(--accent, #D9610C); color: #fff; border-bottom-right-radius: 3px; }
+.edr-msg.ai { align-self: flex-start; background: var(--bg, #F4F0E7); color: var(--ink, #15130E); border-bottom-left-radius: 3px; }
+.edr-typing { opacity: .7; font-style: italic; }
+.edr-starters { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.edr-starters .btn { text-align: left; font-size: 12.5px; }
+.edr-input { display: flex; gap: 8px; align-items: flex-end; }
+.edr-input textarea { flex: 1; resize: none; padding: 9px 11px; border-radius: 10px; border: 1.5px solid var(--border, #DDD6C4); font: inherit; font-size: 14px; background: var(--bg-card, #fff); color: var(--ink, #15130E); }
+.edr-empty { margin: auto; text-align: center; color: var(--ink-3, #8a8270); line-height: 1.9; font-size: 14px; }
+.edr-todo { border: 1.5px solid var(--border, #DDD6C4); border-radius: 12px; padding: 10px 12px; margin: 8px 0 12px; font-size: 13.5px; }
+.edr-todo.has-bad { border-color: #C0392B; background: rgba(192, 57, 43, .08); }
+.edr-todo-h { display: flex; gap: 14px; font-weight: 800; flex-wrap: wrap; }
+.edr-todo-h .b { color: #C0392B; } .edr-todo-h .g { color: var(--ok, #2E7D43); } .edr-todo-h .y { color: #B7791F; }
+.edr-todo-i { padding: 5px 0 0; line-height: 1.55; }
+.edr-todo-i i { font-style: normal; font-size: 11.5px; font-weight: 800; background: rgba(0,0,0,.07); border-radius: 6px; padding: 1px 7px; margin-right: 7px; }
+.edr-todo-i.bad { color: #C0392B; }
+.edr-chk summary { cursor: pointer; margin-top: 8px; font-weight: 700; color: #B7791F; }
+.edr-part.has-bad { border-color: #C0392B; }
+.edr-part-btns { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+.edr-part-btns button { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border, #DDD6C4); background: transparent; color: var(--ink-2, #5c554a); cursor: pointer; }
+.edr-part-btns button:hover { border-color: var(--accent, #D9610C); color: var(--accent, #D9610C); }
+.edr-tag { font-style: normal; font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.edr-tag.new { background: #2E7D43; color: #fff; } .edr-tag.edit { background: #D9610C; color: #fff; }
+.edr-tag.bad { background: rgba(192,57,43,.15); color: #C0392B; } .edr-tag.chk { background: rgba(183,121,31,.18); color: #B7791F; }
+.edr-edit { width: 100%; font-family: var(--mono); font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--accent, #D9610C); background: var(--bg-card, #fff); color: var(--ink, #15130E); }
+.edr-read { max-height: 160px; overflow: auto; opacity: .85; }
+.edr-part-why { font-size: 12.5px; line-height: 1.6; margin-top: 6px; color: #B7791F; } .edr-part-why .bad { color: #C0392B; }
+.edr-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; position: sticky; bottom: 0; background: #fbf8f1; padding: 8px 0; }
+.exs-sum .bad { color: #C0392B; font-weight: 800; }
+@media (max-width: 820px) { .edr-body { grid-template-columns: 1fr; height: auto; } .edr-log { max-height: 40vh; } }
+/* 這個視窗固定淺色底：裡面用到的 exs-*／ex-* 都是為淺色設計的，萬聖節深色主題下會變深字配深底 */
+.edr-modal, html.fest-hw .modal.edr-modal, html .modal.edr-modal {
+  background: #fbf8f1; color: #15130E;
+  --ink: #15130E; --ink-2: #5c554a; --ink-3: #8a8270; --bg: #F4F0E7; --bg-card: #fff; --border: #DDD6C4;
+}
+.edr-modal .modal-head h3, .edr-modal .exs-sum b, .edr-modal .exs-sec-h b, .edr-modal .exs-part-h b { color: #15130E; }
+.edr-modal .edr-part-btns button { color: #5c554a; }
+.edr-modal .edr-msg.ai { color: #15130E; }

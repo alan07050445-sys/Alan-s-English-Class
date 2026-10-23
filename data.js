@@ -7427,6 +7427,8 @@ const ASK_JOBS = {
        所以不會出現「用講的生出來的東西跟用按的不一樣」（v520 就是這樣漏了一個單元）。 */
   guided:    { zh: '分段閱讀', ico: '📑', need: 'text', where: 'editor' },
   exampaper: { zh: '出一份新考卷', ico: '📝', need: 'side', where: 'editor' },
+  /* v561：跟 AI 一來一往出一份有配分的大考考卷（他說考哪些字／文法／文章，AI 擬草稿，他再提意見） */
+  examdraft: { zh: '跟 AI 出大考考卷', ico: '🗣', need: '', where: 'editor' },
   tense:     { zh: '五大時態題庫出題', ico: '🎞', need: '', where: 'editor' },
   review:    { zh: '排一份複習到別週', ico: '🔁', need: 'group', where: 'editor' },
   group:     { zh: '整組操作', ico: '📦', need: 'group', where: 'editor' },
@@ -7531,7 +7533,12 @@ The tools:
               never add a topic he did not teach.
   weak      — look at ONE named student's mistakes and make targeted practice.
   guided    — split a LONG passage into chunks, question after each chunk (分段閱讀).
+  examdraft — draft a SCORED exam paper (100 points, sections, hand-in-then-score) together with him,
+              from what HE says is on the test: words, grammar points, a passage ("這次大考考這幾個字…",
+              "幫我出一份大考考卷"). Put EVERYTHING he said about the content in "text", verbatim.
+              Use this — not "exampaper" — whenever he describes the content himself.
   exampaper — build a NEW practice exam from the words/topics of the last few weeks (考前複習包).
+              Only when he did NOT say what is on it and wants it taken from the school schedule.
               He says which teacher's side: "外師" = it, "中師" = lt.
   tense     — open the five-tenses question bank generator (only grades that have that track).
   review    — take an EXISTING group of exercises and make a DIFFERENT set from the same words,
@@ -7588,7 +7595,7 @@ The tools:
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper tense review group marking copyweek merge assign notify query timetable remind stars roster unit unknown
+  guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars roster unit unknown
 - "side": ONLY for exampaper. "it" if he said 外師/IT, "lt" if he said 中師/LT. If he did not say, "".
 - "group": the name of the existing group he is talking about, copied exactly
   (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
@@ -8252,7 +8259,167 @@ function examPaperFromText(text) {
            n: sections.reduce((x, sc) => x + sc.parts.length, 0) };
 }
 
-Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v561 🗣 跟 AI 一來一往出一份大考考卷（Alan：「我要可以跟 AI 溝通說題目應該怎麼出，
+        以及出了之後哪邊需要改」）
+   ──────────────────────────────────────────────────────────────────────────
+   ⭐ 分工（跟其他地方同一個原則）：AI 只負責「擬草稿、照老師的意見改草稿」，
+     對不對、夠不夠、有沒有照他說的做，一律**程式**檢查（examDraftChecks）：
+       · 🔴 程式查得出來的錯（答案不在詞庫裡、配分不是 100、他指定要考的字沒出現…）
+         → 一定要改，畫面上紅色
+       · 🟡 程式查不出來的（選擇題的答案是 AI 讀文章判斷的、句子通不通順）
+         → 請老師看過，畫面上黃色
+   ⚠ 草稿每一輪都是**整份重送**（目前草稿 ＋ 他的新意見 → 新草稿），
+     不是只傳差異——模型改一題時順手動到別題的風險，由「改前改後比對」顯示出來。
+   ⚠ 它不會自己存。老師按「存成考卷」才會進週次，之後在編輯單元裡還能手改。 */
+const EXAM_DRAFT_SYS = `You help a Taiwanese elementary English teacher (Tr. Alan, Kang Chiao school) DRAFT a
+scored exam paper for his students, in a back-and-forth conversation. You output the WHOLE current draft
+every time, as JSON. The teacher reads it, tells you what to change, and you output the whole draft again.
+
+THE TEACHER'S WORDS ARE THE SPEC
+- When he lists words, grammar points, or pastes a passage, use EXACTLY those. Never swap in other words,
+  never invent a passage when he gave one, never drop a word he asked for.
+- "words": copy back the list of vocabulary words he said MUST be tested (empty if he gave none).
+  The website checks that each one really appears in the draft.
+- If he did not say how many questions or how many points, pick a sensible default AND say so in "reply".
+- If something essential is missing (no passage for a reading section, no words for a vocabulary section),
+  do NOT make it up: leave that section out and ask ONE short question in "ask".
+- Total must be 100 points unless he says otherwise. Copy the style of Kang Chiao Formative papers:
+  Section 1 Word Study, Section 2 Vocabulary, Section 3 Reading, with a "pct" for each section.
+
+"parts" may ONLY use these kinds (write every English word exactly):
+  "circle"   passage + "check" (vce|team|digraph|suffix|prefix) + "checkArg" (patterns separated by SPACES) + "need" N.
+             The passage MUST really contain at least N matching words.
+  "cloze"    "bank":[...], "items":[{"text":"The workers drove a ___ to clear the dirt.","answer":"bulldozer"}].
+             🔴 Every answer MUST be in the bank; each bank word is used ONCE; as many items as bank words
+             unless he says otherwise; the sentence must have only ONE bank word that fits.
+  "quiz"     "questions":[{"q":"...","options":[4 options],"answer":<0-based index>}], optional "passage".
+             🔴 Every question must be answerable from the passage. Spread the correct answers over A/B/C/D.
+  "order"    "events":[sentences in the CORRECT chronological order], optional "passage".
+  "affix"    "affixes":["mis-","en-"], "need" N, "minWords" 5.
+  "usewords" "bank":[...], "need" N, "minWords" 6.
+  "fixbox"   "passage" with mistakes left in, "answers":[the corrected words with correct capitals].
+  "evidence" "question", "passage", "need" N, "minWords" 5.
+  "genq"     "passage", "need" N.
+  "storymap" "passage", "need" N.
+  "essay"    "prompt", "vocab":[...], "paras", "sentsPerPara", "rubricSet":"writing".
+  "short"    "questions":[{"q":"...","pts":N}], "rubricSet":"summary" for a summary task. Marked by the teacher.
+Every part: "title" (e.g. "Part 1: Fill in the blanks."), "pts" (the TOTAL for the part), and any
+"instruction". Anything the teacher wants that none of these can do: say so in "reply", do not fake it.
+
+NOTES FOR THE TEACHER — "notes":[{"at":"Section 2 · Part 1","why":"..."}]
+List what he should double-check yourself: answers you decided by reading, a sentence you are unsure
+reads naturally, a point total you chose, a guess about the level. One short Traditional Chinese sentence each.
+Do NOT list generic things. If you have nothing to flag, notes is [].
+
+REPLY — "reply": 1–3 short Traditional Chinese sentences to the teacher: what you did this round, what you
+assumed (default numbers!), and what changed compared to the previous draft. Never say you checked
+something the website checks (spelling of answers, 100 points) — the website does that.
+
+Output ONLY JSON:
+{"reply":"","ask":"","title":"","words":[],
+ "sections":[{"name":"Section 2: Vocabulary","pct":32,"parts":[ ... ]}],
+ "notes":[{"at":"","why":""}]}
+If you are only asking a question, return "sections": null and put the question in "ask".
+When you are given a CURRENT DRAFT and an instruction, change ONLY what the instruction asks.`;
+
+/* 草稿 → 一份 exam 單元（走跟拍考卷同一條清洗路線） */
+function _examDraftItem(o, prevTitle) {
+  const secs = (Array.isArray(o.sections) ? o.sections : []).map(sc => ({
+    name: String((sc && sc.name) || '').trim(),
+    pct: +((sc && sc.pct) || 0) || 0,
+    parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
+      const c = _examCleanPart(pt);
+      return c ? { ...c, ...(String(pt && pt.passage || '').trim() && (c.kind === 'quiz' || c.kind === 'order' || c.kind === 'short')
+                            ? { readText: String(pt.passage).trim() } : {}) } : null;
+    }).filter(Boolean),
+  })).filter(sc => sc.parts.length);
+  const dropped = [];
+  (Array.isArray(o.sections) ? o.sections : []).forEach(sc => (Array.isArray(sc && sc.parts) ? sc.parts : []).forEach(pt => {
+    if (pt && !_examCleanPart(pt)) dropped.push(String(pt.title || pt.kind || '一大題').slice(0, 40));
+  }));
+  return { item: { type: 'exam', title: String(o.title || prevTitle || '').trim() || '大考考卷', examMood: true, sections: secs }, dropped };
+}
+
+/* 程式把關：回傳 [{ level:'bad'|'check', at, why }]。
+   'bad' 是程式**確定**有問題；'check' 是程式查不出來、要老師看過的。 */
+function examDraftChecks(item, mustWords, aiNotes) {
+  const out = [];
+  const norm = (t) => String(t || '').trim().toLowerCase();
+  /* examWarnings 裡「第幾大題第幾句」那幾條，下面各大題的檢查會講得更清楚，這裡不重複 */
+  (examWarnings(item) || []).filter(w => !/大題第 \d+ 句/.test(w)).forEach(w => out.push({ level: 'bad', at: '整份', why: w }));
+  const allText = [];
+  (item.sections || []).forEach((sc, si) => (sc.parts || []).forEach((pt, pi) => {
+    const at = `${sc.name || 'Section ' + (si + 1)} · ${pt.title ? pt.title.split(/[:：.—-]/)[0].trim() : 'Part ' + (pi + 1)}`;
+    const push = (level, why) => out.push({ level, at, why, si, pi });
+    allText.push(JSON.stringify(pt).toLowerCase());
+    if (pt.kind === 'cloze') {
+      const bank = (pt.bank || []).map(norm);
+      const used = {};
+      (pt.items || []).forEach((it, i) => {
+        const a = norm(it.answer);
+        if (!a) push('bad', `第 ${i + 1} 句沒有答案。`);
+        else if (bank.indexOf(a) < 0) push('bad', `第 ${i + 1} 句的答案「${it.answer}」不在詞庫裡。`);
+        else if (used[a]) push('bad', `「${it.answer}」被用了兩次（詞庫每個字只能用一次）。`);
+        used[a] = 1;
+        if (!/_{2,}/.test(it.text || '')) push('bad', `第 ${i + 1} 句沒有空格（___）。`);
+      });
+      const unused = bank.filter(b => !used[b]);
+      if (unused.length && (pt.items || []).length >= bank.length) push('bad', `詞庫的「${unused.join('、')}」沒有任何一句用到。`);
+      push('check', '每一句是不是「只有一個字填得進去」，程式判不出來，請你快速看過。');
+    }
+    if (pt.kind === 'quiz') {
+      const qs = pt.questions || [];
+      const dist = {}; qs.forEach(q => { dist[q.answer] = (dist[q.answer] || 0) + 1; });
+      if (qs.length >= 4 && Object.keys(dist).length === 1) push('bad', '所有選擇題的正確答案都是同一個選項（' + 'ABCD'[qs[0].answer] + '），學生一猜就中。');
+      qs.forEach((q, i) => {
+        const o = (q.options || []).map(norm);
+        if (new Set(o).size < o.length) push('bad', `第 ${i + 1} 題有兩個一模一樣的選項。`);
+      });
+      if (!pt.readText) push('check', '這一大題沒有附文章——如果題目要「根據文章」回答，請在上方補上。');
+      push('check', '正確答案是 AI 讀文章判斷的，請你至少看過一遍（尤其是推論題）。');
+    }
+    if (pt.kind === 'order') push('check', '事件順序是 AI 讀文章排出來的，請確認哪個先、哪個後。');
+    if (pt.kind === 'circle') push('check', '短文裡符合的字數程式已經數過；通不通順請你看一下。');
+    if (pt.kind === 'short' || pt.kind === 'essay') push('check', '這一大題由你批改，不會自動給分。');
+  }));
+  /* 他指定要考的字，真的出現在草稿裡嗎？（比對字根，tests／tested 都算） */
+  const hay = allText.join(' ');
+  (mustWords || []).map(norm).filter(Boolean).forEach(w => {
+    const stem = w.length > 4 ? w.replace(/(ing|ed|es|s|e)$/, '') : w;
+    if (hay.indexOf(w) < 0 && hay.indexOf(stem) < 0) out.push({ level: 'bad', at: '你指定的字', why: `你說要考「${w}」，但草稿裡找不到它。` });
+  });
+  (aiNotes || []).forEach(n => { if (n && n.why) out.push({ level: 'check', at: String(n.at || 'AI 提醒'), why: String(n.why) }); });
+  return out;
+}
+
+/* 一輪對話：history＝[{role:'user'|'ai', text}]，draft＝目前的 exam 單元（或 null）。
+   回傳 { reply, ask, item, notes, words, checks, dropped }；AI 連不上就丟錯。 */
+async function aiDraftExam({ message, history, draft, mustWords, grade }) {
+  const hist = (history || []).slice(-8).map(h => `${h.role === 'user' ? 'TEACHER' : 'YOU'}: ${h.text}`).join('\n');
+  const cur = draft && (draft.sections || []).length
+    ? '\n\nCURRENT DRAFT (output the whole thing again, changing only what he asks):\n' + JSON.stringify({ title: draft.title, sections: draft.sections.map(sc => ({ name: sc.name, pct: sc.pct, parts: sc.parts.map(p => { const { readText, ...r } = p; return readText ? { ...r, passage: readText } : r; }) })) })
+    : '\n\n(There is no draft yet.)';
+  const user = `Grade: ${grade || 'unknown'}\n${hist ? 'CONVERSATION SO FAR:\n' + hist + '\n' : ''}\nTEACHER NOW SAYS:\n${message}${cur}`;
+  const o = await _aiAsk(
+    { model: GN_READ_MODEL, max_tokens: 9000, system: EXAM_DRAFT_SYS, messages: [{ role: 'user', content: user }] },
+    (data) => {
+      const txt = (data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.content?.[0]?.text || '';
+      const j = _gnSalvageJson(_aiStripFence(txt));
+      return (j && typeof j === 'object') ? j : null;
+    }, 150000);
+  if (!o) throw new Error('AI 沒有回應，請再送一次。');
+  const words = (Array.isArray(o.words) ? o.words : (mustWords || [])).map(x => String(x).trim()).filter(Boolean);
+  const hasDraft = Array.isArray(o.sections) && o.sections.length;
+  if (!hasDraft) return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item: draft || null, notes: [], words, checks: draft ? examDraftChecks(draft, words, []) : [], dropped: [], same: true };
+  const { item, dropped } = _examDraftItem(o, draft && draft.title);
+  const notes = (Array.isArray(o.notes) ? o.notes : []).filter(n => n && n.why).slice(0, 12);
+  return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item, notes, words,
+           checks: examDraftChecks(item, words, notes), dropped, same: false };
+}
+
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v515 📄 模擬考卷（Alan 給了兩張真的 G4 Formative，要做成互動版）
