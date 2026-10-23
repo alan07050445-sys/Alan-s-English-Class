@@ -4197,7 +4197,8 @@ function ExamMarking({
       var got = await window.aiGradeRubric(q.q, q.a, {
         max,
         keyPoints: q.keyPoints,
-        part: w
+        part: w,
+        passage: w.passage || ''
       });
       if (!got) {
         setMsg('這一題 AI 沒有給出可靠的建議（它引用不到孩子真的寫過的字）——請直接自己改。');
@@ -4212,6 +4213,9 @@ function ExamMarking({
         });
         patch._why = R2.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
         patch._quote = got.quote || '';
+        /* v565：小錯（拼字／文法）另外數——每 3 個扣 1 分，個數老師可以改 */
+        patch._errN = got._errN || 0;
+        patch._errList = got._errList || [];
         setCell(partKey, qi, patch);
       }
     } catch (e) {
@@ -4294,7 +4298,16 @@ function ExamMarking({
       key: pk
     }, /*#__PURE__*/React.createElement("div", {
       className: "mk-part-h"
-    }, /*#__PURE__*/React.createElement("b", null, w.title || '申論'), /*#__PURE__*/React.createElement("span", null, rp.got, " / ", w.pts, " \u5206")), (w.qs || []).map((q, i) => {
+    }, /*#__PURE__*/React.createElement("b", null, w.title || '申論'), /*#__PURE__*/React.createElement("button", {
+      className: "btn ghost mk-allai",
+      disabled: !!busy,
+      title: "\u9019\u4E00\u5927\u984C\u6BCF\u4E00\u5C0F\u984C\u90FD\u8ACB AI \u5148\u7D66\u5EFA\u8B70\uFF08\u4E0D\u6703\u5B58\u6A94\uFF0C\u4F60\u9084\u662F\u8981\u6309\u4E0B\u9762\u7684\u5B58\u6A94\uFF09",
+      onClick: async () => {
+        for (var k = 0; k < (w.qs || []).length; k++) {
+          await aiOne(pk, k, w.qs[k], max, w);
+        }
+      }
+    }, "\uD83E\uDD16 \u9019\u4E00\u5927\u984C\u5168\u90E8 AI \u5148\u6539"), /*#__PURE__*/React.createElement("span", null, rp.got, " / ", w.pts, " \u5206")), (w.qs || []).map((q, i) => {
       var c = cell(pk, i);
       return /*#__PURE__*/React.createElement("div", {
         className: "mk-q",
@@ -4323,6 +4336,22 @@ function ExamMarking({
       }, b.n)))))), c._why && /*#__PURE__*/React.createElement("p", {
         className: "mk-ai-why"
       }, "\uD83E\uDD16 ", c._why, c._quote ? `　引用：「${c._quote}」` : ''), /*#__PURE__*/React.createElement("div", {
+        className: "mk-err"
+      }, /*#__PURE__*/React.createElement("label", null, "\u5C0F\u932F", /*#__PURE__*/React.createElement("input", {
+        type: "number",
+        min: "0",
+        max: "30",
+        value: c._errN == null ? '' : c._errN,
+        placeholder: "0",
+        onChange: e => setCell(pk, i, {
+          _errN: Math.max(0, parseInt(e.target.value, 10) || 0),
+          _ai: false
+        })
+      }), "\u500B"), /*#__PURE__*/React.createElement("span", null, "\u2192 \u6263 ", /*#__PURE__*/React.createElement("b", null, window.examErrDeduct ? window.examErrDeduct(c._errN, w.rubricSet) : 0), " \u5206", /*#__PURE__*/React.createElement("i", null, "\uFF08\u6BCF ", (window.EXAM_ERR_RULE || {}).per || 3, " \u500B\u6263 1 \u5206\uFF0C\u6700\u591A\u6263 ", ((window.EXAM_ERR_RULE || {
+        cap: {}
+      }).cap[w.rubricSet] != null ? window.EXAM_ERR_RULE.cap[w.rubricSet] : (window.EXAM_ERR_RULE || {
+        cap: {}
+      }).cap.default) || 2, " \u5206\uFF09")), (c._errList || []).length > 0 && /*#__PURE__*/React.createElement("em", null, c._errList.map(x => `${x.w} → ${x.fix}`).join('　·　'))), /*#__PURE__*/React.createElement("div", {
         className: "mk-q-foot"
       }, /*#__PURE__*/React.createElement("input", {
         className: "mk-note",

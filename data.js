@@ -8751,11 +8751,11 @@ const EXAM_RUBRIC_SETS = {
 EXAM_RUBRIC_SETS.summary = {
   zh: '摘要六項（康橋 Summary Rubric，10 分）', max: 2,
   criteria: [
-    { id: 'begin',  zh: '開頭細節', en: 'Detail from the beginning', tip: '有沒有寫到文章開頭的重要細節', max: 2 },
-    { id: 'middle', zh: '中間細節', en: 'Detail from the middle',    tip: '有沒有寫到文章中間的重要細節', max: 2 },
-    { id: 'end',    zh: '結尾細節', en: 'Detail from the end',       tip: '有沒有寫到文章結尾的重要細節', max: 2 },
+    { id: 'begin',  zh: '開頭細節', en: 'Detail from the beginning', tip: '起因：有沒有寫到文章開頭的重要事情（寫到就給滿分，不用寫得很完整）', max: 2 },
+    { id: 'middle', zh: '中間細節', en: 'Detail from the middle',    tip: '經過：有沒有寫到中間發生的重要事情', max: 2 },
+    { id: 'end',    zh: '結尾細節', en: 'Detail from the end',       tip: '結果：有沒有寫到最後的結果', max: 2 },
     { id: 'order',  zh: '時間順序', en: 'Chronological order',       tip: '細節有沒有照事情發生的順序寫', max: 2 },
-    { id: 'sent',   zh: '完整句子', en: 'Complete sentences',        tip: '每一個細節是不是完整的句子',   max: 1 },
+    { id: 'sent',   zh: '完整句子', en: 'Complete sentences',        tip: '每個細節是不是一句話（不是只有幾個字）。文法拼字錯誤不在這裡扣', max: 1 },
     { id: 'own',    zh: '自己的話', en: "Student's own words",       tip: '有沒有用自己的話寫，不是照抄',   max: 1 },
   ],
 };
@@ -8779,10 +8779,20 @@ function examRubricOf(part) {
            hasBands: !!(set.bands && set.bands.length) };
 }
 
+/* ══ v565 文法／拼字的扣分（Alan：「不要設定太嚴格…文法錯誤、拼錯三個小錯才扣一分，不是一個錯扣一分」）══
+   ⭐ 內容（起因／經過／結果、有沒有答到）照準則給分，**拼字文法不進準則**；
+     小錯另外數，每 per 個扣 1 分，而且有上限（摘要題最多扣 1 分，其他寫作題最多 2 分）。
+   ⚠ 「分」是這一題實際的 1 分，不是準則的一級。
+   ⚠ 小錯的個數老師看得到、改得動（AI 數的只是建議）。 */
+const EXAM_ERR_RULE = { per: 3, cap: { summary: 1, default: 2 } };
+function examErrDeduct(n, rubricSet) {
+  const cap = EXAM_ERR_RULE.cap[rubricSet] != null ? EXAM_ERR_RULE.cap[rubricSet] : EXAM_ERR_RULE.cap.default;
+  return Math.min(cap, Math.floor(Math.max(0, +n || 0) / EXAM_ERR_RULE.per));
+}
 /* 一題的 rubric 分數 → 這一題拿幾分。
    ⚠ 三項都沒給分（老師還沒改）回 null，不要回 0——「還沒改」跟「改完 0 分」
      是兩件事，混在一起的話，沒改的孩子看起來就像被當掉了。 */
-function examRubricPoints(mark, pts, max, criteria) {
+function examRubricPoints(mark, pts, max, criteria, rubricSet) {
   const cs = (criteria && criteria.length) ? criteria : EXAM_RUBRIC;
   const m = max || EXAM_RUBRIC_MAX;
   if (!mark) return null;
@@ -8792,7 +8802,9 @@ function examRubricPoints(mark, pts, max, criteria) {
   const capOf = (c) => +c.max || m;
   const sum = cs.reduce((a, c, i) => a + Math.max(0, Math.min(capOf(c), +vals[i] || 0)), 0);
   const full = cs.reduce((a, c) => a + capOf(c), 0);
-  return Math.round((+pts || 0) * sum / full * 10) / 10;
+  const base = (+pts || 0) * sum / full;
+  const ded = examErrDeduct(mark._errN, rubricSet);          // v565：小錯每 3 個扣 1 分（有上限）
+  return Math.max(0, Math.round((base - ded) * 10) / 10);
 }
 
 /* 整個 short 大題：每一小題的 rubric 加起來。回傳 { got, max, done, per[] } */
@@ -8801,7 +8813,7 @@ function examRubricPart(part, marks) {
   const R = examRubricOf(part);
   const max = R.max;
   const each = qs.length ? (+part.pts || 0) / qs.length : 0;
-  const per = qs.map((q, i) => examRubricPoints((marks || {})[i], +q.pts || each, max, R.criteria));
+  const per = qs.map((q, i) => examRubricPoints((marks || {})[i], +q.pts || each, max, R.criteria, part.rubricSet));
   const done = per.filter(v => v != null).length;
   return {
     got: Math.round(per.reduce((a, v) => a + (v || 0), 0) * 10) / 10,
@@ -8815,21 +8827,48 @@ You give a SUGGESTION only; the teacher decides the final mark.
 Score each of these. Allowed scores: {BANDS}
 {CRITERIA}
 
-RULES
-- The writer is 8-12 years old and learning English. Judge the THINKING, not spelling or grammar.
-- A short but correct and on-topic answer still scores well on "relevant".
-- "why" for each: ONE short Traditional Chinese sentence (≤22 characters), said kindly, to the teacher.
-- "quote": copy 3 to 8 words EXACTLY as the child wrote them (same spelling, even if wrong).
+🔴 BE GENEROUS. The teacher's rule: "if the answer reaches the standard it should have, give a HIGH score."
+- For every criterion, give the TOP score whenever the child clearly does what the criterion asks. Go lower only
+  when the requirement is clearly MISSING or clearly wrong — not because it could be better, longer, or fancier.
+- Judge the CONTENT and the THINKING. The writer is 8–12 and learning English. A short, simple, correct answer
+  deserves full marks. Never lower a content score because of spelling, grammar, handwriting-style or word choice.
+- When two scores are both defensible, pick the higher one.
+- "Meets the standard" = the TOP score. If the bands have names like "Working At" or 達標 and the child meets
+  that standard, give the highest band — keep the lower bands for answers that clearly fall short of it.
+- A criterion about grammar / spelling / mistakes: do NOT lower it for a few small errors (those are listed
+  separately below and handled by the website). Lower it only when the errors make the writing hard to understand.
+- Generous is NOT the same as inventing. If a required element is simply NOT in the child's text (for example the
+  child never says how it ended or who won, or never mentions the beginning), that criterion is NOT met: score it
+  low, however nice the rest is. Check each required element against the actual words before you give it full marks.
+- A summary / story only needs its cause (起因), what happened (經過) and the result (結果) to be clearly stated,
+  in the child's own simple words, to earn full marks on those.
+
+SPELLING & GRAMMAR are NOT part of the scores above. Instead, list the small errors you see in "errors":
+- Only REAL small errors: a misspelled word, a wrong verb form, a missing "s", a missing capital at the start
+  of a sentence, a missing period. Not style, not "could be better", not different-but-correct phrasing.
+- Each: {"w":"<the wrong words EXACTLY as the child wrote them, 1-4 words>","fix":"<the correct form>"}.
+  "w" MUST be copied letter for letter from the child's text. At most 12. If there are none, [].
+- Do NOT count the same mistake twice. Do NOT list things that are correct.
+The website turns the number of errors into a small deduction (3 small errors = 1 point). You do not do that.
+
+"why" for each score: ONE short Traditional Chinese sentence (≤22 characters), said kindly, to the teacher.
+"quote": copy 3 to 8 words EXACTLY as the child wrote them (same spelling, even if wrong).
   Pick the words your scores are based on. If the answer is too short to quote, use "".
-- "next": ONE short Traditional Chinese sentence (≤24 characters) — what to tell the child to do better.
-Return ONLY JSON — one key per criterion id listed above, plus "quote" and "next":
-{"<id>":{"n":0,"why":""}, ..., "quote":"", "next":""}`;
+"next": ONE short Traditional Chinese sentence (≤24 characters) — one kind thing to tell the child.
+Return ONLY JSON — one key per criterion id listed above, plus "errors", "quote" and "next":
+{"<id>":{"n":0,"why":""}, ..., "errors":[{"w":"","fix":""}], "quote":"", "next":""}`;
 
 /* AI 先改一題。回 null ＝「這題 AI 不給建議」，老師自己改。
    ⚠⚠ 一定要驗 quote：把「引用孩子寫的字」當成**接地檢查**——
      引不出孩子真的寫過的連續字串，就代表它在憑空評論，整份建議作廢。
      （跟 v407 的分段閱讀出題用同一招。） */
-async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoints = '', part = null } = {}) {
+/* v565：等第名稱（Working Above／At／Below）會讓 AI 把「達標」放在中間，結果合格的孩子只拿到次高等第。
+   老師的規則是「達到應有的標準就給高分」——所以給 AI 看的等第說明改成：最高＝達到或超過標準。
+   ⚠ 只改給 AI 看的文字；老師畫面上的等第名稱與分數不變。 */
+const LENIENT_BAND_TEXT = {
+  4: ['TOP: meets OR beats the standard expected of a child this age', 'almost there — one clear gap', 'well below the standard', 'nothing written / off-topic'],
+};
+async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoints = '', part = null, passage = '' } = {}) {
   /* v536：準則不再寫死三項——那一大題用哪一套就照哪一套問。 */
   const R = examRubricOf(part || { rubricMax: max });
   const ans = String(answer == null ? '' : answer).trim();
@@ -8843,14 +8882,18 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
   const sys = AI_RUBRIC_SYS
     .replace('{BANDS}', R.criteria.some(c => c.max) && !R.hasBands
       ? 'each criterion has its own range, given after it'
-      : R.bands.map(b => b.n + (b.en ? ` (${b.en})` : '')).join(' / '))
+      : R.bands.map((b, bi) => b.n + (LENIENT_BAND_TEXT[R.bands.length] ? ` (${LENIENT_BAND_TEXT[R.bands.length][bi]})` : (b.en ? ` (${b.en})` : ''))).join(' / '))
     .replace('{CRITERIA}', R.criteria.map(c => `- ${c.id} : ${c.en} — ${c.tip}` + (c.max && !R.hasBands ? ` (allowed: 0 to ${c.max})` : '')).join('\n'))
     .replace(/\{MAX\}/g, String(R.max));
-  const msg = `QUESTION: ${question || ''}\n` +
+  /* v565：孩子讀的那一篇也給 AI——沒有它，AI 不知道這篇的「起因／經過／結果」是什麼，
+     孩子寫沒寫到它只能憑感覺放（實測：完全沒寫結果的摘要也拿到結果項滿分）。 */
+  const msg = (passage ? `THE PASSAGE THE CHILD READ (use it to check what the beginning, middle and end really are):\n${String(passage).slice(0, 4000)}\n\n` : '') +
+    `QUESTION: ${question || ''}\n` +
     (keyPoints ? `WHAT A GOOD ANSWER MENTIONS: ${keyPoints}\n` : '') +
     `\nTHE CHILD WROTE:\n${ans}`;
   let got = null;
-  try { got = await _gnCall(sys, msg, 500); } catch (e) { return null; }
+  /* v565：多了小錯清單（最多 12 條）＋每項的理由，500 會被截斷、整份 JSON 讀不出來 */
+  try { got = await _gnCall(sys, msg, 1400); } catch (e) { return null; }
   if (!got || typeof got !== 'object') return null;
 
   const out = { ai: true };
@@ -8872,6 +8915,25 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
   if (!q || q.split(' ').length < 3 || flat(ans).indexOf(q) < 0) return null;
   out.quote = String(got.quote).trim();
   out.next = String(got.next || '').trim().slice(0, 40);
+  /* v565：小錯清單也要「接地」——AI 說的錯，必須是孩子真的寫過的字（而且跟它給的改正不同），
+     不然憑空編出幾個錯就會害孩子被扣分。查不到的整條丟掉，數量以查得到的為準。 */
+  const seen = new Set();
+  out._errList = (Array.isArray(got.errors) ? got.errors : []).map(e => ({
+    w: String((e && e.w) || '').trim(), fix: String((e && e.fix) || '').trim(),
+  })).filter(e => {
+    const k = flat(e.w);
+    if (!k || k === flat(e.fix) || seen.has(k) || flat(ans).indexOf(k) < 0) return false;
+    seen.add(k); return true;
+  }).slice(0, 12);
+  out._errN = out._errList.length;
+  /* 寫作七項裡有一項「文法」：小錯已經另外算（3 個扣 1 分），這裡再扣一次就是扣兩次。
+     小錯 5 個以內 → 這一項給最高等第；錯到影響閱讀才讓 AI 自己的判斷留著。
+     ⚠ 這是程式決定的，不靠 AI 聽不聽話。 */
+  const gc = R.criteria.find(c => c.id === 'grammar');
+  if (gc && out.grammar && out._errN <= 5) {
+    const top = Math.max.apply(null, R.bands.map(b => +b.n));
+    if (out.grammar.n < top) out.grammar = { n: top, why: '拼字文法的小錯另外計算，這一項不重複扣' };
+  }
   return out;
 }
 
@@ -9430,7 +9492,7 @@ Object.assign(window, { examLoadDict, examNeedsDict, examAffixDetect, examAffixZ
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
   examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,
   examCircleCheck, examCircleHit,
-  EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf, examBandsOf,
+  EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf, examBandsOf, EXAM_ERR_RULE, examErrDeduct,
   examRubricPoints, examRubricPart, aiGradeRubric });
 
 /* ══════════════════════════════════════════════════════════════════════════

@@ -7082,6 +7082,15 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
          開新的 collection 就要 Alan 再去 Firebase 貼一次 rules。
        ⚠ 只存「老師要改的那幾大題」，自動計分的不用留（它們已經有分數了）。 */
     const written = {};
+    /* v565：批改要知道「孩子讀的是哪一篇」才判得出他有沒有寫到起因／經過／結果。
+       文章常掛在同一個 Section 前面的選擇題上，所以整個 Section 裡找得到的第一篇都帶上。 */
+    const passageOf = (pp) => {
+      const own = pp.part.readText || pp.part.passage;
+      if (own) return String(own).slice(0, 4000);
+      const sec = (item.sections || [])[pp.si] || {};
+      const hit = (sec.parts || []).find(x => x.readText || x.passage);
+      return hit ? String(hit.readText || hit.passage).slice(0, 4000) : '';
+    };
     r.parts.forEach(pp => {
       if (pp.auto) return;
       const v = ans[pp.key];
@@ -7091,6 +7100,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       if (pp.part.kind === 'essay') {
         const t = String(v || '').trim();
         if (t) written[pp.key] = {
+          passage: passageOf(pp),
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
@@ -7101,6 +7111,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       }
       if (Array.isArray(v) && v.some(x => String(x || '').trim())) {
         written[pp.key] = {
+          passage: passageOf(pp),
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
@@ -7133,7 +7144,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
     const max = RS.max;
     const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
     if (!marked) return <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>;
-    const rp = window.examRubricPart({ pts: pt.pts, questions: qs, rubricMax: max }, by);
+    const rp = window.examRubricPart({ pts: pt.pts, questions: qs, rubricMax: max, rubricSet: pt.rubricSet }, by);
     return (
       <div className="ex-marked">
         <div className="ex-marked-h">老師改好了 <b>{rp.got} / {pt.pts}</b></div>
@@ -7148,6 +7159,9 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                   <em key={c.id}>{c.zh} <b>{m[c.id] == null ? '—' : m[c.id]}</b>/{c.max || max}</em>
                 ))}
               </span>
+              {(+m._errN || 0) >= 3 && window.examErrDeduct && window.examErrDeduct(m._errN, pt.rubricSet) > 0 && (
+                <span className="ex-marked-note">拼字／文法有 {m._errN} 個小錯，扣 {window.examErrDeduct(m._errN, pt.rubricSet)} 分</span>
+              )}
               {m.note && <span className="ex-marked-note">{m.note}</span>}
             </div>
           );

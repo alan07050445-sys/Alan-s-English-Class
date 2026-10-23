@@ -3389,7 +3389,7 @@ function ExamMarking({ students }) {
   const aiOne = async (partKey, qi, q, max, w) => {
     setMsg(''); setBusy(partKey + qi);
     try {
-      const got = await window.aiGradeRubric(q.q, q.a, { max, keyPoints: q.keyPoints, part: w });
+      const got = await window.aiGradeRubric(q.q, q.a, { max, keyPoints: q.keyPoints, part: w, passage: w.passage || '' });
       if (!got) { setMsg('這一題 AI 沒有給出可靠的建議（它引用不到孩子真的寫過的字）——請直接自己改。'); }
       else {
         const R2 = rubOf(w).criteria;
@@ -3397,6 +3397,9 @@ function ExamMarking({ students }) {
         R2.forEach(c => { patch[c.id] = got[c.id] ? got[c.id].n : 0; });
         patch._why = R2.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
         patch._quote = got.quote || '';
+        /* v565：小錯（拼字／文法）另外數——每 3 個扣 1 分，個數老師可以改 */
+        patch._errN = got._errN || 0;
+        patch._errList = got._errList || [];
         setCell(partKey, qi, patch);
       }
     } catch (e) { setMsg('AI 現在叫不動，等一下再試，或直接自己改。'); }
@@ -3464,6 +3467,11 @@ function ExamMarking({ students }) {
                 <div className="mk-part" key={pk}>
                   <div className="mk-part-h">
                     <b>{w.title || '申論'}</b>
+                    <button className="btn ghost mk-allai" disabled={!!busy}
+                      title="這一大題每一小題都請 AI 先給建議（不會存檔，你還是要按下面的存檔）"
+                      onClick={async () => { for (let k = 0; k < (w.qs || []).length; k++) { await aiOne(pk, k, w.qs[k], max, w); } }}>
+                      🤖 這一大題全部 AI 先改
+                    </button>
                     <span>{rp.got} / {w.pts} 分</span>
                   </div>
                   {(w.qs || []).map((q, i) => {
@@ -3487,6 +3495,19 @@ function ExamMarking({ students }) {
                           ))}
                         </div>
                         {c._why && <p className="mk-ai-why">🤖 {c._why}{c._quote ? `　引用：「${c._quote}」` : ''}</p>}
+                        {/* v565：拼字文法的小錯——每 3 個才扣 1 分（有上限），個數可以自己改 */}
+                        <div className="mk-err">
+                          <label>小錯
+                            <input type="number" min="0" max="30" value={c._errN == null ? '' : c._errN} placeholder="0"
+                              onChange={e => setCell(pk, i, { _errN: Math.max(0, parseInt(e.target.value, 10) || 0), _ai: false })}/>
+                            個
+                          </label>
+                          <span>→ 扣 <b>{window.examErrDeduct ? window.examErrDeduct(c._errN, w.rubricSet) : 0}</b> 分
+                            <i>（每 {(window.EXAM_ERR_RULE || {}).per || 3} 個扣 1 分，最多扣 {((window.EXAM_ERR_RULE || { cap: {} }).cap[w.rubricSet] != null ? window.EXAM_ERR_RULE.cap[w.rubricSet] : (window.EXAM_ERR_RULE || { cap: {} }).cap.default) || 2} 分）</i></span>
+                          {(c._errList || []).length > 0 && (
+                            <em>{c._errList.map(x => `${x.w} → ${x.fix}`).join('　·　')}</em>
+                          )}
+                        </div>
                         <div className="mk-q-foot">
                           <input className="mk-note" placeholder="給他的一句話（學生看得到）"
                             value={c.note || ''} onChange={e => setCell(pk, i, { note: e.target.value })}/>

@@ -4283,3 +4283,7 @@ textarea.ex-essay {
 .edr-modal .edr-msg.ai { color: #15130E; }
 .ex-af-det { font-style: normal; font-size: 12.5px; font-weight: 800; color: var(--ok, #2E7D43); white-space: nowrap; }
 .ex-af-det.warn { color: #B7791F; font-weight: 700; white-space: normal; }
+.mk-err { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12.5px; margin: 6px 0 0; color: var(--ink-2, #5c554a); }
+.mk-err input { width: 52px; text-align: center; margin: 0 4px; padding: 2px 4px; border-radius: 6px; border: 1.5px solid var(--border, #DDD6C4); font: inherit; }
+.mk-err i { font-style: normal; opacity: .75; } .mk-err em { font-style: normal; flex: 1 1 100%; opacity: .85; }
+.mk-allai { margin-left: auto; margin-right: 10px; font-size: 12px; padding: 3px 10px; }

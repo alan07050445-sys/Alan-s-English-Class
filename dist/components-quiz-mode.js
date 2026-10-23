@@ -8587,6 +8587,15 @@ function ExamPlayer({
          開新的 collection 就要 Alan 再去 Firebase 貼一次 rules。
        ⚠ 只存「老師要改的那幾大題」，自動計分的不用留（它們已經有分數了）。 */
     var written = {};
+    /* v565：批改要知道「孩子讀的是哪一篇」才判得出他有沒有寫到起因／經過／結果。
+       文章常掛在同一個 Section 前面的選擇題上，所以整個 Section 裡找得到的第一篇都帶上。 */
+    var passageOf = pp => {
+      var own = pp.part.readText || pp.part.passage;
+      if (own) return String(own).slice(0, 4000);
+      var sec = (item.sections || [])[pp.si] || {};
+      var hit = (sec.parts || []).find(x => x.readText || x.passage);
+      return hit ? String(hit.readText || hit.passage).slice(0, 4000) : '';
+    };
     r.parts.forEach(pp => {
       if (pp.auto) return;
       var v = ans[pp.key];
@@ -8596,6 +8605,7 @@ function ExamPlayer({
       if (pp.part.kind === 'essay') {
         var t = String(v || '').trim();
         if (t) written[pp.key] = {
+          passage: passageOf(pp),
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
@@ -8610,6 +8620,7 @@ function ExamPlayer({
       }
       if (Array.isArray(v) && v.some(x => String(x || '').trim())) {
         written[pp.key] = {
+          passage: passageOf(pp),
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
@@ -8658,7 +8669,8 @@ function ExamPlayer({
     var rp = window.examRubricPart({
       pts: pt.pts,
       questions: qs,
-      rubricMax: max
+      rubricMax: max,
+      rubricSet: pt.rubricSet
     }, by);
     return /*#__PURE__*/React.createElement("div", {
       className: "ex-marked"
@@ -8676,7 +8688,9 @@ function ExamPlayer({
         className: "ex-marked-cr"
       }, R.map(c => /*#__PURE__*/React.createElement("em", {
         key: c.id
-      }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", c.max || max))), m.note && /*#__PURE__*/React.createElement("span", {
+      }, c.zh, " ", /*#__PURE__*/React.createElement("b", null, m[c.id] == null ? '—' : m[c.id]), "/", c.max || max))), (+m._errN || 0) >= 3 && window.examErrDeduct && window.examErrDeduct(m._errN, pt.rubricSet) > 0 && /*#__PURE__*/React.createElement("span", {
+        className: "ex-marked-note"
+      }, "\u62FC\u5B57\uFF0F\u6587\u6CD5\u6709 ", m._errN, " \u500B\u5C0F\u932F\uFF0C\u6263 ", window.examErrDeduct(m._errN, pt.rubricSet), " \u5206"), m.note && /*#__PURE__*/React.createElement("span", {
         className: "ex-marked-note"
       }, m.note));
     }));
