@@ -10,12 +10,13 @@ const g = (a, b) => data.slice(data.indexOf(a), data.indexOf(b, data.indexOf(a))
 const sb = {}; sb.window = sb; vm.createContext(sb);
 vm.runInContext(g('const WS_FALSE_PREFIX', '/* 🔴 v484') + '\nthis.dp = (w, a) => WS_CHECKS.diphthong(w, a);', sb);
 console.log('\n【雙母音 diphthong（圈出 /aʊ/ /oʊ/ /ɔɪ/）】');
-const yes = ['fountain', 'boy', 'sound', 'brown', 'proud', 'avoid', 'shower', 'shout', 'joy', 'enjoy', 'our', 'about', 'cloud', 'power', 'coin', 'annoy', 'thousand', 'down', 'snow', 'know', 'drought', 'oil', 'toy'];
-const no = ['could', 'would', 'should', 'you', 'young', 'country', 'touch', 'famous', 'dangerous', 'enough', 'thought', 'group', 'soup', 'four', 'tortoise', 'choir', 'cap', 'relay', 'sky', 'pool'];
+const yes = ['fountain', 'boy', 'sound', 'brown', 'proud', 'avoid', 'shower', 'shout', 'joy', 'enjoy', 'our', 'about', 'cloud', 'power', 'coin', 'annoy', 'thousand', 'down', 'flower', 'drought', 'oil', 'toy'];
+const no = ['could', 'would', 'should', 'you', 'young', 'country', 'touch', 'famous', 'dangerous', 'enough', 'thought', 'group', 'soup', 'four', 'tortoise', 'choir', 'snow', 'know', 'yellow', 'window', 'grow', 'cap', 'relay', 'sky', 'pool'];
 ok(`該算的都算（${yes.length} 個）`, yes.every(w => sb.dp(w, '')) || (console.log('   漏：', yes.filter(w => !sb.dp(w, ''))), false));
 ok(`ou 不是雙母音的字不算：could／young／famous／enough／group…（${no.length} 個）`, no.every(w => !sb.dp(w, '')) || (console.log('   誤：', no.filter(w => sb.dp(w, ''))), false));
+ok('看讀音：brown 與 shout 同一個音都算；snow／know 是 /oʊ/ 不算，指定 ow:long 才算', sb.dp('brown','') && sb.dp('shout','') && !sb.dp('snow','') && sb.dp('snow','ow:long') && !sb.dp('brown','ow:long'));
 ok('可以只指定一種拼法：oi／oy', sb.dp('coin', 'oi') && !sb.dp('boy', 'oi') && sb.dp('boy', 'oy'));
-ok('提示詞教 AI 用 diphthong、編輯器說明有寫', /diphthong sounds \/aʊ\/ \/oʊ\/ \/ɔɪ\/" \(circle the words\) -> "check":"diphthong"/.test(data) && /diphthong／suffix/.test(ed));
+ok('提示詞教 AI 用 diphthong、編輯器說明有寫', /diphthong sounds \/aʊ\/ \/ɔɪ\/" \(circle the words\) -> "check":"diphthong"/.test(data) && /diphthong／suffix/.test(ed));
 console.log('\n【插圖：AI 指位置、程式精修、上傳、掛在文章上】');
 ok('提示詞要 AI 回「圖在整頁的哪個位置」，不要描述圖', /"figure":\{"box":\[x0,y0,x1,y1\]/.test(data) && /Never describe the picture, only locate it/.test(data));
 ok('框夾回 0~1，太小或幾乎整頁都不收', /w \* h > 0\.85\) return null/.test(data) && /w < 0\.08 \|\| h < 0\.05/.test(data));

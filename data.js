@@ -1809,17 +1809,21 @@ const WS_CHECKS = {
   },
   // 子音連綴／雙字母子音：ch / sh / th / ph / ck…（位置不限）
   digraph: (w, arg) => WS_CHECKS.team(w, arg),
-  /* v571 雙母音 diphthong（康橋 G3：圈出 /aʊ/ /oʊ/ /ɔɪ/ 的字）——ou／ow／oi／oy。
-     ⚠ 不能只看拼法：could／would／should／you／young／country／touch 的 ou 不是雙母音，
-       -ous 結尾（famous、dangerous）與 -ough（enough、thought）也不是；
-       但 bough／plough／drought 是。ow 一律算（brown 是 /aʊ/、snow 是 /oʊ/，兩個都是雙母音）。
-     沒給 arg（或給空的）＝ ou ow oi oy 全部。 */
+  /* v571 雙母音 diphthong（康橋 G3：圈出 /aʊ/ 或 /ɔɪ/ 的字）——看**讀音**，不是只看拼法。
+     /aʊ/：ou（shout、sound）、ow（brown、down、flower）——兩種拼法同一個音。
+     ⚠ ou 不唸 /aʊ/：could／you／young／country／touch／-ous／-ough…；
+       ow 唸 /oʊ/（snow、know、grow、yellow、window…）也不是 /aʊ/，要另外用 arg「ow:long」才算。
+     /ɔɪ/：oi／oy。沒給 arg ＝ ou ow oi oy（/aʊ/ 與 /ɔɪ/）。 */
   diphthong: (w, arg) => {
     const x = String(w || '').trim().toLowerCase();
     if (!/^[a-z'-]{2,}$/.test(x)) return false;
-    const pats = arg ? [String(arg).toLowerCase()] : ['ou', 'ow', 'oi', 'oy'];
+    const a = String(arg || '').toLowerCase();
+    const long = /ow:long|oʊ/.test(a);
+    const pats = long ? ['ow:long'] : (a ? [a] : ['ou', 'ow', 'oi', 'oy']);
     return pats.some(p => {
+      if (p === 'ow:long') return /ow/.test(x) && WS_OW_LONG.test(x);
       if (x.indexOf(p) < 0) return false;
+      if (p === 'ow') return !WS_OW_LONG.test(x);
       if (p === 'ou') {
         if (WS_NOT_OU.test(x)) return false;
         if (/ous(ly|ness)?$/.test(x)) return false;
@@ -1831,6 +1835,8 @@ const WS_CHECKS = {
     });
   },
 };
+/* ow 唸 /oʊ/（長 o）的常見字——這些不算 /aʊ/。 */
+const WS_OW_LONG = /^(snow\w*|know\w*|known|grow\w*|grown|blow\w*|(?:flow|flows|flowed|flowing)|low|lower|lowest|slow\w*|(?:show|shows|showed|shown|showing)|throw\w*|thrown|own\w*|bowl\w*|yellow\w*|window\w*|pillow\w*|follow\w*|tomorrow|borrow\w*|narrow|shadow\w*|arrow\w*|elbow\w*|rainbow\w*|below|crow|crows|glow\w*|mow|mowed|sow|swallow\w*|sparrow\w*|willow\w*|marshmallow\w*|scarecrow\w*|row|rows|bow|bows|tow|towed|stow|stowed|mellow|fellow|hollow|widow|minnow|winnow|bungalow|gallows|rowboat|snowman|snowmen|owe|owed|owes|owing|owner\w*)$/;
 const WS_NOT_OU = /^(could|would|should|couldn't|wouldn't|shouldn't|you|your|yours|youth|young|younger|youngest|country|countries|couple|cousin|touch|touched|touches|double|trouble|troubled|soul|souls|shoulder|shoulders|four|pour|poured|court|courts|course|courses|source|route|routes|group|groups|soup|soups|through|coupon|wound|rough|tough|enough|famous)$/;
 /* 🔴 v484：一課可以有**好幾個** pattern——康橋的 Word Study 本來就是
    「Suffixes -ty, -ity, -ic, -ment」「Vowel Teams ai, ay, ea, ee, oa」這種。
@@ -8021,7 +8027,7 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
 "parts" may ONLY use these kinds. Anything else goes in "skipped".
   "circle"  — "Read and Circle N <pattern> words" over a passage.
               "check" must be one of: vce | team | digraph | suffix | prefix | diphthong
-                 "diphthong sounds /aʊ/ /oʊ/ /ɔɪ/" (circle the words) -> "check":"diphthong", "checkArg":"ou ow oi oy".
+                 "diphthong sounds /aʊ/ /ɔɪ/" (circle the words) -> "check":"diphthong", "checkArg":"ou ow oi oy". It judges by PRONUNCIATION: ou/ow as in shout, brown = /aʊ/ (same sound); snow, know (/oʊ/) are NOT counted unless checkArg is "ow:long".
               With several patterns, separate them with SPACES in "checkArg": "mis- en- em-".
                  "-VCe words"            -> "check":"vce"
                  "vowel team inside"     -> "check":"team"
