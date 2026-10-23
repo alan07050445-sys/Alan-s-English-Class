@@ -7018,6 +7018,13 @@ function ExamCheckin({ goals, value, onChange, disabled }) {
 }
 
 function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  /* v564：這份考卷有造字／圈字首字尾的題目 → 先把字表載好（打字時的「✓ 用了 em-」提示也要靠它） */
+  const [, setDictOn] = useQM(!!window.EN_DICT);
+  useQME(() => {
+    if (window.examNeedsDict && window.examNeedsDict(item) && window.examLoadDict) {
+      window.examLoadDict().then(() => setDictOn(true));
+    }
+  }, [item]);
   const [ans, setAns]       = useQM({});
   /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
      ⚠ 老師沒改之前這裡是 null，畫面上就維持「老師還沒改」——
@@ -7054,7 +7061,12 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       }).length
     : 0;
 
-  const submit = () => {
+  const submit = async () => {
+    /* v564：造字／圈字首字尾要靠字表判「剩下的是不是真的字」——交卷前確定字表載好了，
+       不然會用舊規則（開頭一樣就算）給出不同的分數。最多等 8 秒，載不到就用舊規則。 */
+    if (window.examNeedsDict && window.examNeedsDict(item) && window.examLoadDict && !window.EN_DICT) {
+      await Promise.race([window.examLoadDict(), new Promise(r => setTimeout(r, 8000))]);
+    }
     const r = window.examScore(item, ans);
     setRes(r); setSent(true);
     try { if (topRef.current) topRef.current.scrollIntoView({ block: 'start' }); } catch (e) {}
@@ -7331,6 +7343,9 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                       <input className="ex-af-w" disabled={sent} value={sl.word || ''} placeholder="你造的字（不用先點按鈕）"
                         onChange={e => setSlot(i, { word: e.target.value })}/>
                       {!sent && det && <em className="ex-af-det">✓ 用了 {det}</em>}
+                      {!sent && !det && String(sl.word || '').trim().length >= 4 && window.EN_DICT && (
+                        <em className="ex-af-det warn">還沒用到 {(pt.affixes || []).join('、')}（拿掉之後要剩下一個真的字）</em>
+                      )}
                     </div>
                     <div className="ex-af-row">
                       <label>Sentence:</label>

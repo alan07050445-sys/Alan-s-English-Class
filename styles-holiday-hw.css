@@ -1614,3 +1614,4 @@ html.fest-hw .tt-group-name:focus-visible { background: rgba(255,255,255,.08); c
 /* v563：萬聖節把 .ex-af-p 的底色蓋成半透明白，而且優先權比「選中」高——選了也看不出來 */
 html.fest-hw .ex-af-p.on { background: var(--hw-pump, #F57C1F); border-color: var(--hw-pump, #F57C1F); color: #fff; }
 html.fest-hw .ex-af-det { color: #8fe3a4; }
+html.fest-hw .ex-af-det.warn { color: #ffcf7a; }

@@ -1722,6 +1722,44 @@ const WS_FALSE_PREFIX = new Set(('enemy enemies energy energetic empty emptied e
   + 'entire entirely entrance entry entries envelope environment enormous ensure embassy ember emerald emergency emotion emotions end ends ended ending endless employ employee employer employed '
   + 'emperor empire empress emphasis miss missed misses missing mission missions missile mist misty mister mistress '
   + 'mice mile miles milk mill million mind mine mint minute minus mirror').split(' '));
+/* ══ v564 真正的字首／字尾：拿掉之後，剩下的要是一個真的英文字（Alan：「要是真正的 prefix」）══════
+   只看開頭字母一樣是不夠的：en+emy 不是 enemy 的拆法、en+ergy 也不是、em+pty 更不是。
+   v559 我用「例外字清單」擋，那是補丁——列不完（entire？employ？）。
+   → 現在用英文字表（data-words.js，約 3.8 萬個常用字）判斷：
+       字首：en- ＋ large ✓（enlarge）／en- ＋ emy ✗（enemy）／mis- ＋ place ✓（misplace）
+       字尾（只管「加在原來那個字後面」的變化：-s -es -ed -ing -er -est -ly）：
+            run ＋ ning 要認得 runn → run、hope ＋ d → hop+e、happy ＋ ness → happi → happy
+            ⚠ -ity／-ty／-ic／-ment 這種會改字形的衍生字尾（able → ability）**不**用字典擋，維持原本的規則——
+              擋的話真的對的字會被判錯，比放過一個假朋友傷害大。
+   ⚠ 字表還沒載入（網路慢）時退回舊規則（開頭一樣＋例外清單），所以交卷前會先等它載入（examLoadDict）。 */
+const _EN_INFLECT = ['s', 'es', 'ed', 'd', 'ing', 'er', 'est', 'ly'];
+/* 前面那塊至少要幾個字母——-d／-er／-est／-ly 的假朋友特別多（be+d、on+ly、for+est、und+er），要求 3 個字母以上 */
+/* 字典也擋不掉的「剛好前面是個字」的假朋友（paper＝pap+er、forest＝for+est、morning＝morn+ing…）。
+   這份列的是常見的；不在這裡的少數假朋友仍可能漏過——老師看得到結果，可以手改分數。 */
+const WS_FALSE_SUFFIX = new Set(('paper forest number dinner butter letter hammer finger corner winter summer sister monster poster '
+  + 'morning evening spring string during ceiling darling pudding wedding this his was has yes bus gas always across early '
+  + 'only family jelly belly hundred sacred naked wicked').split(' '));
+const _EN_MIN_BASE = { s: 2, es: 2, ed: 2, ing: 2, d: 3, er: 3, est: 3, ly: 3 };
+function _enReady() { return typeof window !== 'undefined' && !!window.EN_DICT; }
+function _enHas(w) { return _enReady() && window.EN_DICT.has(w); }
+/* 一個「加了字尾之前的樣子」是不是真的字：原樣、+e、i→y、重複字母還原 */
+function _enBaseOk(b, minLen) {
+  if (!b || b.length < (minLen || 2)) return false;
+  if (_enHas(b)) return true;
+  /* hop+ed→hope（丟掉 e）：前面要 ≥3 個字母，否則 th+e＝the（thing）、se+e＝see（seed）會被當成真的拆法；
+     唯一的短例外 us→use（using） */
+  if ((b.length >= 3 || b === 'us') && _enHas(b + 'e')) return true;
+  if (/i$/.test(b) && _enHas(b.slice(0, -1) + 'y')) return true;      // happi → happy
+  if (/ie$/.test(b) && b.length > 3 && _enHas(b.slice(0, -2) + 'y')) return true;   // citie（cities）→ city
+  if (/([a-z])\1$/.test(b) && _enHas(b.slice(0, -1))) return true;
+  return false;
+}
+/* 字首後面剩下的那一塊是不是真的字（本身，或它再加了常見變化：couraged → courage） */
+function _enRealRest(r) {
+  if (!r || r.length < 3) return false;
+  if (_enHas(r)) return true;
+  return _EN_INFLECT.some(sf => r.length > sf.length + 2 && r.endsWith(sf) && _enBaseOk(r.slice(0, -sf.length), _EN_MIN_BASE[sf]));
+}
 const WS_CHECKS = {
   /* VCe：母音-子音-e 結尾，而且那個母音前面不能再有母音
      （pause 的 au 是母音組合，不是 VCe；tissue 的 ue 也不是）。
@@ -1731,7 +1769,10 @@ const WS_CHECKS = {
   suffix: (w, arg) => {
     const a = String(arg || '').replace(/^-/, '').toLowerCase();
     const x = String(w || '').trim().toLowerCase();
-    return !!a && x.length > a.length && x.endsWith(a);
+    if (!(!!a && x.length > a.length && x.endsWith(a))) return false;
+    /* v564：只有「加在原來那個字後面」的變化字尾才要求前面是真的字（ring ≠ r+ing、king ≠ k+ing） */
+    if (_enReady() && _EN_INFLECT.indexOf(a) >= 0) return !WS_FALSE_SUFFIX.has(x) && _enBaseOk(x.slice(0, -a.length), _EN_MIN_BASE[a]);
+    return true;
   },
   // 字首：un- / re- / pre-…
   prefix: (w, arg) => {
@@ -1740,7 +1781,10 @@ const WS_CHECKS = {
     /* v559：只看開頭字母會把 enemy／energy／empty／mission 都當成有字首——
        它們只是剛好開頭一樣，不是「字首＋字根」。常見的假朋友列在這裡。 */
     if (WS_FALSE_PREFIX.has(x)) return false;
-    return !!a && x.length > a.length && x.startsWith(a);
+    if (!(!!a && x.length > a.length && x.startsWith(a))) return false;
+    /* v564：拿掉字首，剩下的要是真的字（en+large ✓、en+emy ✗）。字表還沒載入就維持上面的舊規則。 */
+    if (_enReady()) return _enRealRest(x.slice(a.length));
+    return true;
   },
   // 母音組合／雙字母：ai / ay / ea / ee / ei / ie / oa / ue / aw / oo…
   team: (w, arg) => {
@@ -8542,6 +8586,28 @@ function examPartN(part) {
       → 現在**從字本身認出用了哪個字首／字尾**（examAffixDetect），按鈕只是輔助、不再當條件。
    🔴 ② 句子裡寫 empowers／misunderstood… 被判「沒有用到 empower」——要吃變化形（examWordFormRe）。
    🔴 ③ 訊息一律寫「字尾」——現在字首就寫字首。 */
+function examLoadDict() {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  if (window.EN_DICT) return Promise.resolve(window.EN_DICT);
+  if (window.__enDictP) return window.__enDictP;
+  window.__enDictP = new Promise((resolve) => {
+    const build = () => { window.EN_DICT = new Set(String(window.EN_WORDS_STR || '').split(' ')); resolve(window.EN_DICT); };
+    if (window.EN_WORDS_STR) return build();
+    const src = ((document.querySelector('script[src*="data.js"]') || {}).src || '');
+    const v = (src.match(/\?v=\d+/) || [''])[0];                    // 跟網站同一個版本號，才不會吃到舊快取
+    const sc = document.createElement('script');
+    sc.src = 'data-words.js' + v;
+    sc.onload = build;
+    sc.onerror = () => { window.__enDictP = null; resolve(null); };  // 載不到就退回舊規則，下次再試
+    document.head.appendChild(sc);
+  });
+  return window.__enDictP;
+}
+/* 這份考卷要不要先把字表載好才能公平計分？ */
+function examNeedsDict(item) {
+  return ((item && item.sections) || []).some(sc => (sc.parts || []).some(pt =>
+    pt.kind === 'affix' || (pt.kind === 'circle' && /^(prefix|suffix)$/i.test(String(pt.check || '')))));
+}
 function examAffixZh(affixes) {
   const a = (affixes || []).map(x => String(x || '').trim()).filter(Boolean);
   const pre = a.filter(x => /-$/.test(x)).length, suf = a.filter(x => /^-/.test(x)).length;
@@ -8589,8 +8655,19 @@ function examAffixOne(slot, part) {
       const kind = /^-/.test(picked) ? 'suffix' : /-$/.test(picked) ? 'prefix' : '';
       if (kind && WS_CHECKS[kind](word, picked)) affix = picked;
     }
-    if (!affix) why.push(`「${word}」沒有用到 ${affixes.join('、')} 其中任何一個${zh.split('／')[0]}`);
-    else half1 = true;
+    if (!affix) {
+      /* 開頭／結尾字母一樣，但拿掉之後剩下的不是字 → 講清楚為什麼（enemy ≠ en + emy） */
+      const lw = word.toLowerCase();
+      const near = _enReady() && affixes.map(a => String(a).trim()).find(a =>
+        (/-$/.test(a) && lw.startsWith(a.replace(/-$/, '')) && lw.length > a.length - 1) ||
+        (/^-/.test(a) && lw.endsWith(a.replace(/^-/, '')) && lw.length > a.length - 1));
+      if (near) {
+        const rest = /-$/.test(near) ? lw.slice(near.replace(/-$/, '').length) : lw.slice(0, lw.length - near.replace(/^-/, '').length);
+        why.push(`「${word}」不算有 ${near}：拿掉 ${near} 之後剩下「${rest}」，不是一個英文字（${zh.split('／')[0]}要加在一個真的字上）`);
+      } else {
+        why.push(`「${word}」沒有用到 ${affixes.join('、')} 其中任何一個${zh.split('／')[0]}`);
+      }
+    } else half1 = true;
   }
 
   if (!sent) why.push('沒有造句');
@@ -9348,7 +9425,7 @@ function examWarnings(item) {
   return w;
 }
 
-Object.assign(window, { examAffixDetect, examAffixZh, examWordFormRe, examOrderShuffle, EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
+Object.assign(window, { examLoadDict, examNeedsDict, examAffixDetect, examAffixZh, examWordFormRe, examOrderShuffle, EXAM_KINDS, examPartN, examTotals, examScorePart, examScore, examTokens,
   examPartText, examParsePart, examWarnings, examAffixOne, examGenqOne,
   EXAM_STORY_SECTIONS, examStoryOne, examUseWordOne,
   examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,

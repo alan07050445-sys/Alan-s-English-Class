@@ -8507,6 +8507,13 @@ function ExamPlayer({
   onBackToTasks,
   onNextTask
 }) {
+  /* v564：這份考卷有造字／圈字首字尾的題目 → 先把字表載好（打字時的「✓ 用了 em-」提示也要靠它） */
+  var [, setDictOn] = useQM(!!window.EN_DICT);
+  useQME(() => {
+    if (window.examNeedsDict && window.examNeedsDict(item) && window.examLoadDict) {
+      window.examLoadDict().then(() => setDictOn(true));
+    }
+  }, [item]);
   var [ans, setAns] = useQM({});
   /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
      ⚠ 老師沒改之前這裡是 null，畫面上就維持「老師還沒改」——
@@ -8549,7 +8556,12 @@ function ExamPlayer({
     var v = ans[p.key];
     return Array.isArray(v) ? v.some(x => x !== undefined && x !== '') : v != null;
   }).length : 0;
-  var submit = () => {
+  var submit = async () => {
+    /* v564：造字／圈字首字尾要靠字表判「剩下的是不是真的字」——交卷前確定字表載好了，
+       不然會用舊規則（開頭一樣就算）給出不同的分數。最多等 8 秒，載不到就用舊規則。 */
+    if (window.examNeedsDict && window.examNeedsDict(item) && window.examLoadDict && !window.EN_DICT) {
+      await Promise.race([window.examLoadDict(), new Promise(r => setTimeout(r, 8000))]);
+    }
     var r = window.examScore(item, ans);
     setRes(r);
     setSent(true);
@@ -8869,7 +8881,9 @@ function ExamPlayer({
           })
         }), !sent && det && /*#__PURE__*/React.createElement("em", {
           className: "ex-af-det"
-        }, "\u2713 \u7528\u4E86 ", det)), /*#__PURE__*/React.createElement("div", {
+        }, "\u2713 \u7528\u4E86 ", det), !sent && !det && String(sl.word || '').trim().length >= 4 && window.EN_DICT && /*#__PURE__*/React.createElement("em", {
+          className: "ex-af-det warn"
+        }, "\u9084\u6C92\u7528\u5230 ", (pt.affixes || []).join('、'), "\uFF08\u62FF\u6389\u4E4B\u5F8C\u8981\u5269\u4E0B\u4E00\u500B\u771F\u7684\u5B57\uFF09")), /*#__PURE__*/React.createElement("div", {
           className: "ex-af-row"
         }, /*#__PURE__*/React.createElement("label", null, "Sentence:"), /*#__PURE__*/React.createElement("input", {
           className: "ex-af-s",
