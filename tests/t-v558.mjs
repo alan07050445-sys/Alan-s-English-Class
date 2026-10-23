@@ -55,7 +55,7 @@ console.log('\n【拍考卷辨識的容錯（真的 AI 跑出來的問題）】'
 ok('short 沒帶 questions 也撿得回來（摘要題以前整題消失）', /p\.kind === 'short' && !\(Array\.isArray\(p\.questions\) && p\.questions\.length\)/.test(data));
 ok('認得摘要題並掛上摘要評分表', /sumLike[\s\S]{0,160}rubricSet: 'summary'/.test(data));
 ok('被清洗丟掉的大題會列進「跳過」，不再無聲消失', /讀到了但內容不完整，沒收進來/.test(data));
-ok('只有文章的那一頁不再被丟掉（section 帶 passage）', /\.filter\(sc => sc\.parts\.length \|\| sc\.passage\)/.test(data));
+ok('只有文章的那一頁不再被丟掉（section 帶 passage）', /\.filter\(sc => sc\.parts\.length \|\| sc\.passage( \|\| sc\.figure)?\)/.test(data));
 ok('文章接到後面第一個要先讀的大題上', /NEEDS_READ[\s\S]{0,400}tgt\.readText = sc\.passage/.test(data));
 ok('被拆開的 Section 併回有編號的那個', /while \(secs\[i \+ 1\] && !\(\+secs\[i \+ 1\]\.pct\)/.test(data));
 ok('配分保險：(N pts. each) × 題數', /pts\?\\\.\?\\s\*each/.test(data) || /each\\s\*\\\)/.test(data) || /pts\?\.\?/.test(data));

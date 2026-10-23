@@ -49,6 +49,8 @@ const CASES = {
   essay:    { kind:'essay', pts:45, prompt:'Write a narrative about a time you were brave.',
               vocab:['curious','brave'], paras:5, sentsPerPara:4, rubricSet:'writing' },
   order:    { kind:'order', pts:10, events:['A team earned a place.','They traveled abroad.','They won the final.'] },
+  table:    { kind:'table', pts:9, rows:3, headers:['Descriptive Word or Phrase','What It Helps Me Imagine'] },
+  draw:     { kind:'draw', pts:3, prompt:'Draw the final scene. Include details from the sentences.' },
   checkin:  { kind:'checkin', pts:0,
               goals:['Read every question carefully.','Stay calm and do my best.'] },
 };

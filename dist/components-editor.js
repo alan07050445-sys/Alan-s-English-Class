@@ -552,7 +552,7 @@ function EditorModal({
       };
       var warns = window.examWarnings ? window.examWarnings(form) : [];
       var HINT = {
-        circle: '第一行＝要圈什麼（vce／team／digraph／suffix:-ing），第二行以後＝短文',
+        circle: '第一行＝要圈什麼（vce／team／digraph／diphthong／suffix:-ing），第二行以後＝短文',
         cloze: '第一行＝詞庫（逗號分隔）；之後每行＝ 句子（用 ___ 當空格） | 答案',
         quiz: '每行＝ 題目 | 選項1 | 選項2 | 選項3 | 正解編號（從 1 算）。⚠ 不用自己加題號，畫面會自己編。',
         short: '每行＝ 題目 | 配分 | 評分重點（可省略）。這一種不自動給分——' + '勾「三項評分」就照 Explanation／Relevant／Effort 在後台改，AI 會先給建議。',
@@ -560,6 +560,8 @@ function EditorModal({
         genq: '貼文章。學生要自己出「文章上沒有」的問題。上面的「個」＝要出幾個問題。',
         storymap: '貼文章。學生要填開頭／中間／結尾三格。上面的「個」＝每一格寫幾句。',
         usewords: '一行就是詞庫，空白或逗號分開：extreme protect shelter。上面的「個」＝要造幾個句子。',
+        table: '第一行＝欄名，用 | 分開（例：Descriptive Word or Phrase | What It Helps Me Imagine）；第二行＝要幾列（上面的「個」也是）。學生填表、老師改，每列的分數＝總分 ÷ 列數。',
+        draw: '寫「要畫什麼」就好（例：Draw the final scene. Include details from the sentences.）。學生用畫板畫，交卷後老師在批改畫面看圖給分。',
         order: '一行一個事件，**照正確的順序**寫（最早發生的在最上面）。學生看到的是打亂的，要自己標 1、2、3…。每個事件算一格。',
         /* ══ v538 ══ */
         fixbox: '第一行＝改好的那幾個字（逗號分開）：Taipei, I, Monday, English, May。' + '空一行，再貼那一段文章。格子數＝答案的個數，大小寫要寫對才算對。',
@@ -761,7 +763,7 @@ function EditorModal({
         onChange: e => patchPart(si, pi, {
           sentsPerPara: +e.target.value || 0
         })
-      }), /*#__PURE__*/React.createElement("span", null, "\u53E5")), (pt.kind === 'circle' || pt.kind === 'affix' || pt.kind === 'genq' || pt.kind === 'usewords' || pt.kind === 'storymap' || pt.kind === 'evidence') && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
+      }), /*#__PURE__*/React.createElement("span", null, "\u53E5")), (pt.kind === 'circle' || pt.kind === 'affix' || pt.kind === 'genq' || pt.kind === 'usewords' || pt.kind === 'storymap' || pt.kind === 'evidence' || pt.kind === 'table') && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
         className: "exed-pts",
         type: "number",
         value: pt.need || '',
@@ -776,7 +778,7 @@ function EditorModal({
           ...x,
           parts: x.parts.filter((_, k) => k !== pi)
         }))
-      }, "\u2715")), (pt.kind === 'quiz' || pt.kind === 'order' || pt.kind === 'short' || pt.kind === 'essay') && /*#__PURE__*/React.createElement("div", {
+      }, "\u2715")), (pt.kind === 'quiz' || pt.kind === 'order' || pt.kind === 'short' || pt.kind === 'essay' || pt.kind === 'table' || pt.kind === 'draw') && /*#__PURE__*/React.createElement("div", {
         className: "exed-share"
       }, /*#__PURE__*/React.createElement("textarea", {
         rows: 3,

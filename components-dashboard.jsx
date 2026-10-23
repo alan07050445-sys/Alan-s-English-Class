@@ -3480,6 +3480,7 @@ function ExamMarking({ students }) {
                       <div className="mk-q" key={i}>
                         <p className="mk-qt">{i + 1}. {q.q}</p>
                         <div className="mk-ans">{q.a || <i>（空白）</i>}</div>
+                        {q.img && <a href={q.img} target="_blank" rel="noopener" className="mk-img"><img src={q.img} alt="學生畫的圖"/></a>}
                         <div className="mk-rub">
                           {RB.criteria.map(cr => (
                             <label className="mk-cr" key={cr.id}>
@@ -3511,7 +3512,8 @@ function ExamMarking({ students }) {
                         <div className="mk-q-foot">
                           <input className="mk-note" placeholder="給他的一句話（學生看得到）"
                             value={c.note || ''} onChange={e => setCell(pk, i, { note: e.target.value })}/>
-                          <button className="btn ghost" disabled={!!busy}
+                          <button className="btn ghost" disabled={!!busy || !!q.img}
+                            title={q.img ? '畫圖由老師直接看圖給分' : undefined}
                             onClick={() => aiOne(pk, i, q, max, w)}>
                             {busy === pk + i ? '看一下…' : '🤖 AI 先改'}
                           </button>

@@ -4316,7 +4316,15 @@ function ExamMarking({
         className: "mk-qt"
       }, i + 1, ". ", q.q), /*#__PURE__*/React.createElement("div", {
         className: "mk-ans"
-      }, q.a || /*#__PURE__*/React.createElement("i", null, "\uFF08\u7A7A\u767D\uFF09")), /*#__PURE__*/React.createElement("div", {
+      }, q.a || /*#__PURE__*/React.createElement("i", null, "\uFF08\u7A7A\u767D\uFF09")), q.img && /*#__PURE__*/React.createElement("a", {
+        href: q.img,
+        target: "_blank",
+        rel: "noopener",
+        className: "mk-img"
+      }, /*#__PURE__*/React.createElement("img", {
+        src: q.img,
+        alt: "\u5B78\u751F\u756B\u7684\u5716"
+      })), /*#__PURE__*/React.createElement("div", {
         className: "mk-rub"
       }, RB.criteria.map(cr => /*#__PURE__*/React.createElement("label", {
         className: "mk-cr",
@@ -4362,7 +4370,8 @@ function ExamMarking({
         })
       }), /*#__PURE__*/React.createElement("button", {
         className: "btn ghost",
-        disabled: !!busy,
+        disabled: !!busy || !!q.img,
+        title: q.img ? '畫圖由老師直接看圖給分' : undefined,
         onClick: () => aiOne(pk, i, q, max, w)
       }, busy === pk + i ? '看一下…' : '🤖 AI 先改')));
     }));

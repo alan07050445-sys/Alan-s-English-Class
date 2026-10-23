@@ -51,7 +51,9 @@ ok('⭐⭐ 引用不到孩子真的寫過的字 → 整份建議作廢', (() => 
    /* 這是接地檢查：引不出連續 3 個字，就代表它在憑空評論。 */
    const i = data.indexOf('async function aiGradeRubric');
    const b = data.slice(i, data.indexOf('\n}', i));
-   return /q\.split\(' '\)\.length < 3 \|\| flat\(ans\)\.indexOf\(q\) < 0\) return null/.test(b); })());
+   /* v571：最少引幾個字改成看答案長度（短答案 1~2 個字、長答案才 3 個字）；「必須是孩子真的寫過的」不變 */
+   return /q\.split\(' '\)\.length < minQ \|\| flat\(ans\)\.indexOf\(q\) < 0\) return null/.test(b)
+     && /minQ = aw <= 10 \? 1 : \(aw <= 25 \? 2 : 3\)/.test(b); })());
 ok('⭐ 分數不是允許的等第就整份作廢（不要只夾回來就用）', (() => {
    /* v536 起等第可以是 7/5/3/0 這種不連續的（康橋寫作卷），
       所以檢查從「在 0~max 之間」改成「必須是允許的等第之一」——更嚴，不是更鬆。 */

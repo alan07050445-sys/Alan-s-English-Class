@@ -134,7 +134,7 @@ ok('⭐ 老師改好的分數與評語跟申論用**同一塊**（兩邊各寫�
    /* 守的是「只有一份」：examMarkBlock 定義一次，申論與長文各叫它一次。 */
    const def = (qm.match(/const examMarkBlock = \(pt, key, qs\) =>/g) || []).length;
    const use = (qm.match(/examMarkBlock\(pt, key,/g) || []).length;
-   return def === 1 && use === 2; })());
+   return def === 1 && use >= 2; })());   /* v571：表格與畫圖也用同一塊，只要「定義只有一份」就好 */
 ok('   Rubric 要開給它（康橋寫作卷就是那七項）',
    /pt\.kind === 'short' \|\| pt\.kind === 'essay'\) && \(/.test(ed)
    && W.EXAM_RUBRIC_SETS.writing.criteria.length === 7);

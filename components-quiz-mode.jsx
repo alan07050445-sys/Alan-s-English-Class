@@ -7047,6 +7047,106 @@ function ExamCheckin({ goals, value, onChange, disabled }) {
   );
 }
 
+
+/* ══ v571 ✏️ 畫板（康橋 G3 "Draw the final scene"）══════════════════════
+   學生用手指／觸控筆／滑鼠畫，交卷時存成圖，老師在批改畫面看。
+   ⚠ 用 pointer events＋touch-action:none，不然在 iPad 上畫圖會變成捲動頁面。
+   ⚠ 畫完（每一筆放開）才把圖存進 onChange，不要邊畫邊存——每一筆都轉一次 dataURL 會卡。
+   ⚠ 導出時鋪白底（畫板本身是透明的，存成 JPEG 會變黑）。 */
+function ExamDrawPad({ value, onChange, disabled }) {
+  const cvRef = React.useRef(null);
+  const drawing = React.useRef(false);
+  const last = React.useRef(null);
+  const undo = React.useRef([]);
+  const [color, setColor] = useQM('#2b2b2b');
+  const [size, setSize]   = useQM(5);
+  const [erase, setErase] = useQM(false);
+  const COLORS = ['#2b2b2b', '#d32f2f', '#f57c00', '#fbc02d', '#388e3c', '#1976d2', '#7b1fa2', '#6d4c41'];
+
+  const fillWhite = () => {
+    const cv = cvRef.current; if (!cv) return;
+    const cx = cv.getContext('2d');
+    cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, cv.width, cv.height);
+  };
+  useQME(() => {
+    const cv = cvRef.current; if (!cv) return;
+    fillWhite();
+    if (value) {                       // 重新畫面（例如切換頁面回來）時把原本的圖放回去
+      const im = new Image();
+      im.onload = () => { try { cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); } catch (e) {} };
+      im.src = value;
+    }
+  }, []);
+  const pos = (e) => {
+    const cv = cvRef.current, r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height };
+  };
+  const down = (e) => {
+    if (disabled) return;
+    e.preventDefault();
+    try { cvRef.current.setPointerCapture(e.pointerId); } catch (er) {}
+    const cv = cvRef.current;
+    undo.current.push(cv.getContext('2d').getImageData(0, 0, cv.width, cv.height));
+    if (undo.current.length > 12) undo.current.shift();
+    drawing.current = true; last.current = pos(e);
+    stroke(last.current, last.current);          // 點一下也要有一個點
+  };
+  const stroke = (a, b) => {
+    const cx = cvRef.current.getContext('2d');
+    cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.strokeStyle = erase ? '#ffffff' : color;
+    cx.lineWidth = erase ? size * 3 : size;
+    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x + 0.01, b.y + 0.01); cx.stroke();
+  };
+  const move = (e) => {
+    if (!drawing.current || disabled) return;
+    e.preventDefault();
+    const p = pos(e); stroke(last.current, p); last.current = p;
+  };
+  const up = () => {
+    if (!drawing.current) return;
+    drawing.current = false; last.current = null;
+    try { onChange(cvRef.current.toDataURL('image/jpeg', 0.85)); } catch (e) {}
+  };
+  const doUndo = () => {
+    const cv = cvRef.current, prev = undo.current.pop();
+    if (!prev) return;
+    cv.getContext('2d').putImageData(prev, 0, 0);
+    onChange(cv.toDataURL('image/jpeg', 0.85));
+  };
+  const clearAll = () => {
+    if (!confirm('把整張畫擦掉重畫？')) return;
+    const cv = cvRef.current;
+    undo.current.push(cv.getContext('2d').getImageData(0, 0, cv.width, cv.height));
+    fillWhite(); onChange('');
+  };
+  return (
+    <div className="ex-draw">
+      {!disabled && (
+        <div className="ex-draw-tools">
+          {COLORS.map(c => (
+            <button key={c} className={'ex-draw-c' + (!erase && color === c ? ' on' : '')} style={{ background: c }}
+              aria-label={'顏色 ' + c} onClick={() => { setColor(c); setErase(false); }}/>
+          ))}
+          <span className="ex-draw-sep"/>
+          {[3, 6, 11].map(z => (
+            <button key={z} className={'ex-draw-z' + (size === z ? ' on' : '')} onClick={() => setSize(z)} aria-label={'筆畫粗細 ' + z}>
+              <i style={{ width: z + 4, height: z + 4 }}/>
+            </button>
+          ))}
+          <span className="ex-draw-sep"/>
+          <button className={'ex-draw-b' + (erase ? ' on' : '')} onClick={() => setErase(e => !e)}>🧽 橡皮擦</button>
+          <button className="ex-draw-b" onClick={doUndo}>↩ 上一步</button>
+          <button className="ex-draw-b" onClick={clearAll}>🗑 全部重畫</button>
+        </div>
+      )}
+      <canvas ref={cvRef} className="ex-draw-cv" width={960} height={540}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}/>
+      {!disabled && !value && <div className="ex-draw-hint">用手指或滑鼠直接畫在這裡</div>}
+    </div>
+  );
+}
+
 function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   /* v564：這份考卷有造字／圈字首字尾的題目 → 先把字表載好（打字時的「✓ 用了 em-」提示也要靠它） */
   const [, setDictOn] = useQM(!!window.EN_DICT);
@@ -7071,6 +7171,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [focus, setFocus]   = useQM(null);   // cloze：現在在填哪一格（點詞庫要知道填去哪）
   const focusRef = React.useRef(null);       // 同上，但「永遠是最新的」——見下面 put 的說明
   const [sent, setSent]     = useQM(false);
+  const [drawErr, setDrawErr] = useQM('');     // v571：畫的圖沒傳成功時的說明
   const [res, setRes]       = useQM(null);
   const topRef = React.useRef(null);
 
@@ -7100,6 +7201,20 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
     const r = window.examScore(item, ans);
     setRes(r); setSent(true);
     try { if (topRef.current) topRef.current.scrollIntoView({ block: 'start' }); } catch (e) {}
+    /* v571 ✏️ 畫圖：先把每一張畫傳到學生自己的資料夾（submissions/{uid}/…），老師才看得到。
+       ⚠ 傳不上去不能讓交卷整個失敗——其他分數照樣存，並且明講「這張圖老師看不到」。 */
+    const drawUrls = {};
+    const failedDraw = [];
+    const u0 = window._currentUser;
+    for (const pp of r.parts) {
+      if (pp.part.kind !== 'draw' || !ans[pp.key]) continue;
+      try {
+        if (!u0 || !window.uploadSubmissionPhoto) throw new Error('not-signed-in');
+        const blob = await (await fetch(ans[pp.key])).blob();
+        drawUrls[pp.key] = await window.uploadSubmissionPhoto(u0.uid, progressKey, blob, 'draw_' + pp.key);
+      } catch (e) { failedDraw.push(pp.part.title || '畫圖'); }
+    }
+    if (failedDraw.length) setDrawErr(`「${failedDraw.join('、')}」畫的圖沒有傳成功（要登入、而且網路要通），老師現在看不到這張圖。請跟老師說一聲，或重新交卷。`);
     /* 寫進度：⚠ 用「自動計分的部分」當分數。把老師還沒改的 20 分算成 0
        會讓每個孩子的成績看起來都很慘，而且星星也會算錯。 */
     const wrongList = [];
@@ -7127,6 +7242,35 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       /* v538 ✍️ 長文寫作也是老師改的，但它的作答是**一段字串**不是陣列——
          ⚠ 少了這一段，孩子寫滿五段交出去，老師端的批改清單裡什麼都沒有
            （畫面上完全看不出來少了，因為那一大題本來就寫「老師會親自改」）。 */
+      /* v571 表格填寫：每一列變成一小題（左欄＋右欄串成一行給老師／AI 看） */
+      if (pp.part.kind === 'table') {
+        const rows = Array.isArray(v) ? v : [];
+        const H = pp.part.headers || [];
+        if (rows.some(r => [].concat(r || []).some(c => String(c || '').trim()))) {
+          written[pp.key] = {
+            passage: passageOf(pp),
+            title: pp.part.title || '',
+            pts: +pp.part.pts || 0,
+            rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+            rubricSet: 'table',
+            qs: Array.from({ length: window.examPartN(pp.part) }, (_, i) => ({
+              q: `${H.join(' ／ ')}（第 ${i + 1} 列）`, keyPoints: pp.part.instruction || '',
+              a: [].concat(rows[i] || []).map(c => String(c || '').trim()).filter(Boolean).join('  ➜  '),
+            })),
+          };
+        }
+        return;
+      }
+      /* v571 畫圖：圖已經在交卷前上傳好（drawUrls），這裡只放網址，老師看得到圖 */
+      if (pp.part.kind === 'draw') {
+        const url = (drawUrls || {})[pp.key];
+        if (url) written[pp.key] = {
+          passage: '', title: pp.part.title || '', pts: +pp.part.pts || 0,
+          rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4), rubricSet: 'draw',
+          qs: [{ q: pp.part.prompt || '', keyPoints: '', a: '（學生畫的圖，見下）', img: url }],
+        };
+        return;
+      }
       if (pp.part.kind === 'essay') {
         const t = String(v || '').trim();
         if (t) written[pp.key] = {
@@ -7636,6 +7780,53 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         )}
 
         {/* ── 申論（老師親自改）── */}
+        {/* ── v571 📋 表格填寫：每一列兩格（欄名照考卷），老師改 ── */}
+        {pt.kind === 'table' && (() => {
+          const H = pt.headers || [];
+          const rowsV = Array.isArray(v) ? v : [];
+          const setCell = (i, c, t) => put(key, prev => {
+            const g = Array.isArray(prev) ? prev.map(r => [].concat(r || [])) : [];
+            while (g.length <= i) g.push([]);
+            g[i][c] = t; return g;
+          });
+          return (
+            <>
+              <div className="ex-tbl-wrap">
+                <table className="ex-tbl">
+                  <thead><tr><th className="ex-tbl-n"></th>{H.map((h, c) => <th key={c}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {Array.from({ length: n }, (_, i) => (
+                      <tr key={i}>
+                        <td className="ex-tbl-n">{i + 1}.</td>
+                        {H.map((h, c) => (
+                          <td key={c}>
+                            <textarea rows={c === 0 ? 2 : 3} disabled={sent}
+                              value={(rowsV[i] && rowsV[i][c]) || ''}
+                              placeholder={sent ? '' : '寫在這裡…'}
+                              onChange={e => setCell(i, c, e.target.value)}/>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {examMarkBlock(pt, key, Array.from({ length: n }, (_, i) => ({ q: `第 ${i + 1} 列` })))}
+            </>
+          );
+        })()}
+
+        {/* ── v571 ✏️ 畫圖 ── */}
+        {pt.kind === 'draw' && (
+          <>
+            {pt.prompt && <p className="ex-qt">{pt.prompt}</p>}
+            <ExamDrawPad value={typeof v === 'string' ? v : ''} disabled={sent}
+              onChange={(dataUrl) => put(key, () => dataUrl)}/>
+            {sent && drawErr && <div className="ex-draw-err">⚠ {drawErr}</div>}
+            {examMarkBlock(pt, key, [{ q: pt.prompt || '' }])}
+          </>
+        )}
+
         {pt.kind === 'short' && (
           <>
             {pt.passage && <div className="ex-read">{pt.passage}</div>}

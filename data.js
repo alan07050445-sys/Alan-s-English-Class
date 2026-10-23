@@ -1809,7 +1809,29 @@ const WS_CHECKS = {
   },
   // 子音連綴／雙字母子音：ch / sh / th / ph / ck…（位置不限）
   digraph: (w, arg) => WS_CHECKS.team(w, arg),
+  /* v571 雙母音 diphthong（康橋 G3：圈出 /aʊ/ /oʊ/ /ɔɪ/ 的字）——ou／ow／oi／oy。
+     ⚠ 不能只看拼法：could／would／should／you／young／country／touch 的 ou 不是雙母音，
+       -ous 結尾（famous、dangerous）與 -ough（enough、thought）也不是；
+       但 bough／plough／drought 是。ow 一律算（brown 是 /aʊ/、snow 是 /oʊ/，兩個都是雙母音）。
+     沒給 arg（或給空的）＝ ou ow oi oy 全部。 */
+  diphthong: (w, arg) => {
+    const x = String(w || '').trim().toLowerCase();
+    if (!/^[a-z'-]{2,}$/.test(x)) return false;
+    const pats = arg ? [String(arg).toLowerCase()] : ['ou', 'ow', 'oi', 'oy'];
+    return pats.some(p => {
+      if (x.indexOf(p) < 0) return false;
+      if (p === 'ou') {
+        if (WS_NOT_OU.test(x)) return false;
+        if (/ous(ly|ness)?$/.test(x)) return false;
+        if (/ough/.test(x) && !/^(bough|boughs|plough|ploughs|drought|droughts)$/.test(x)) return false;
+        return true;
+      }
+      if (p === 'oi') return !/^(choir|choirs|tortoise|tortoises|porpoise|porpoises)$/.test(x);
+      return true;
+    });
+  },
 };
+const WS_NOT_OU = /^(could|would|should|couldn't|wouldn't|shouldn't|you|your|yours|youth|young|younger|youngest|country|countries|couple|cousin|touch|touched|touches|double|trouble|troubled|soul|souls|shoulder|shoulders|four|pour|poured|court|courts|course|courses|source|route|routes|group|groups|soup|soups|through|coupon|wound|rough|tough|enough|famous)$/;
 /* 🔴 v484：一課可以有**好幾個** pattern——康橋的 Word Study 本來就是
    「Suffixes -ty, -ity, -ic, -ment」「Vowel Teams ai, ay, ea, ee, oa」這種。
    v482 我逼 AI「只能挑一個」，結果：
@@ -7998,7 +8020,8 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
 
 "parts" may ONLY use these kinds. Anything else goes in "skipped".
   "circle"  — "Read and Circle N <pattern> words" over a passage.
-              "check" must be one of: vce | team | digraph | suffix | prefix
+              "check" must be one of: vce | team | digraph | suffix | prefix | diphthong
+                 "diphthong sounds /aʊ/ /oʊ/ /ɔɪ/" (circle the words) -> "check":"diphthong", "checkArg":"ou ow oi oy".
               With several patterns, separate them with SPACES in "checkArg": "mis- en- em-".
                  "-VCe words"            -> "check":"vce"
                  "vowel team inside"     -> "check":"team"
@@ -8051,6 +8074,13 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               chronological order (earliest first) — YOU work that out by reading the passage; do not
               copy the order they are printed in. "passage" = the passage they come from if it is on
               the page (else ""). "pts" = the printed total for this part.
+  "table"   — a written answer TABLE with column headings and a fixed number of empty rows, e.g. "Find three
+              descriptive words or phrases. Write each on the left. Explain what it helps you imagine on the
+              right (3 pts. each)". "headers" = the column headings exactly as printed (2 or 3 of them),
+              "rows" = how many rows, "passage" = the excerpt the child must look at if one is printed above it
+              (else ""). "pts" = rows × points each.
+  "draw"    — a blank box where the child must DRAW ("Draw the final scene", "Scene Picture"). "prompt" = the
+              printed drawing task exactly as printed, "pts" = its points. NEVER put a drawing box in "short".
   "checkin" — the warm-up at the top: "How are you feeling right now?" + "What is your goal
               for this test?". "goals" = the printed goal choices, exactly as printed.
               "pts" is 0 — it is not scored.
@@ -8069,6 +8099,14 @@ A page that has ONLY a reading selection (a title, maybe a photo, numbered parag
 "Read the selection. Then complete Part 1 and Part 2" has no questions of its own. Do NOT put it in
 "skipped". Output it as a section with "parts":[] and a "passage" field holding the whole selection
 (include its title as the first line), keeping the Section heading exactly as printed.
+
+PICTURES — "figure": if the page has an ILLUSTRATION, COMIC or PHOTO that belongs to the reading (a picture above or
+beside a passage or a question — NOT a logo, border, line or decoration), add it on that section (the one holding the
+passage) or on that part:
+  "figure":{"box":[x0,y0,x1,y1],"caption":"<the printed caption / photo credit line, or empty>"}
+  box = the picture's rectangle as FRACTIONS of the WHOLE image you are looking at: [0,0] is its top-left corner,
+  [1,1] its bottom-right. Draw it TIGHT around the picture only (not the caption, not the passage text).
+  If there is no such picture, leave "figure" out. Never describe the picture, only locate it.
 
 If a part is still something else, do NOT guess — put a short description in "skipped".
 
@@ -8095,6 +8133,16 @@ Output ONLY JSON. Note how ONE quiz part holds SIX questions:
  ],
  "skipped":[]}`;
 
+/* v571 插圖位置：AI 給的 box 是「整張圖的比例」[x0,y0,x1,y1]。夾回 0~1、太小或幾乎整頁都不收
+   （整頁＝它根本沒找到圖，裁下來只是把整張考卷當插圖）。 */
+function _examFigureOf(f) {
+  if (!f || !Array.isArray(f.box) || f.box.length !== 4) return null;
+  const b = f.box.map(x => Math.max(0, Math.min(1, +x)));
+  if (b.some(x => !isFinite(x))) return null;
+  const w = b[2] - b[0], h = b[3] - b[1];
+  if (w < 0.08 || h < 0.05 || w * h < 0.02 || w * h > 0.85) return null;
+  return { box: b, caption: String(f.caption || '').trim().slice(0, 160) };
+}
 function _examReadOne(content) {
   return _aiAsk(
     { model: GN_READ_MODEL, max_tokens: 4000, system: EXAM_READ_SYS, messages: [{ role: 'user', content }] },
@@ -8109,13 +8157,14 @@ function _examReadOne(content) {
         pct: +((sc && sc.pct) || 0) || 0,
         /* v560：只有文章、沒有題目的那一頁（「Read the selection. Then complete Part 1 and 2」） */
         passage: String((sc && sc.passage) || '').trim(),
+        figure: _examFigureOf(sc && sc.figure),
         parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
           const c = _examCleanPart(pt);
           /* ⚠ 讀進來卻被清洗丟掉的，一定要告訴老師——以前是整題消失、什麼都不說 */
           if (!c && pt && (pt.title || pt.kind)) dropped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」讀到了但內容不完整，沒收進來`);
           return c;
         }).filter(Boolean),
-      })).filter(sc => sc.parts.length || sc.passage);
+      })).filter(sc => sc.parts.length || sc.passage || sc.figure);
       return { title: String(o.title || '').trim(), sections: secs,
                skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean).concat(dropped) };
     }, 90000);
@@ -8156,7 +8205,8 @@ function _examCleanPart(p) {
     }
   }
   const base = { kind: p.kind, title: String(p.title || '').trim(),
-                 instruction: String(p.instruction || '').trim(), pts: +p.pts || 0 };
+                 instruction: String(p.instruction || '').trim(), pts: +p.pts || 0,
+                 ...(_examFigureOf(p.figure) ? { figure: _examFigureOf(p.figure) } : {}) };
   if (p.kind === 'circle') {
     const check = String(p.check || '').trim().toLowerCase();
     if (!WS_CHECKS[check]) return null;                    // 程式判不出來的規則不要收
@@ -8230,6 +8280,20 @@ function _examCleanPart(p) {
     return { ...base, passage, question: String(p.question || p.q || '').trim(),
              need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5 };
   }
+  if (p.kind === 'table') {
+    const headers = (Array.isArray(p.headers) ? p.headers : (Array.isArray(p.columns) ? p.columns : []))
+      .map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
+    if (headers.length < 2) return null;                   // 沒有欄名，學生不知道每一格要寫什麼
+    const rows = Math.max(1, Math.min(12, +p.rows || +p.need || (Array.isArray(p.items) ? p.items.length : 0) || 3));
+    const rt = String(p.passage || p.readText || '').trim();
+    return { ...base, headers, need: rows, rubricSet: 'table', rubricMax: EXAM_RUBRIC_SETS.table.max,
+             ...(rt ? { readText: rt } : {}) };
+  }
+  if (p.kind === 'draw') {
+    const prompt = String(p.prompt || p.question || p.instruction || p.title || '').trim();
+    if (!prompt) return null;
+    return { ...base, prompt, rubricSet: 'draw', rubricMax: EXAM_RUBRIC_SETS.draw.max };
+  }
   if (p.kind === 'essay') {
     const prompt = String(p.prompt || p.q || p.instruction || '').trim();
     if (!prompt) return null;                              // 沒有題目，孩子不知道要寫什麼
@@ -8258,6 +8322,79 @@ function _examCleanPart(p) {
 }
 
 /* 把幾張照片讀成一份考卷。回傳 { item, skipped, missed, warnings } */
+/* 從一張（base64）圖裁出一塊，回傳 JPEG blob。box＝[x0,y0,x1,y1]（整張圖的比例）。
+   ⭐ v571 實測：AI 畫的框只是「大概在哪」——上緣少一截、下面多帶標題與第一段文字。
+     所以拿它當搜尋範圍（往外多看 8%），再用像素找真正的圖片邊緣：
+     圖片（照片、漫畫）幾乎整片都有顏色，文字行大部分是白紙。找不到明顯的圖就老實用 AI 的框。 */
+function _examRefineBox(el, box) {
+  const W = el.naturalWidth, H = el.naturalHeight;
+  const ex = 0.08;
+  const x0 = Math.max(0, box[0] - ex), y0 = Math.max(0, box[1] - ex), x1 = Math.min(1, box[2] + ex), y1 = Math.min(1, box[3] + ex);
+  const sw = Math.max(8, (x1 - x0) * W), sh = Math.max(8, (y1 - y0) * H);
+  const k = Math.min(1, 420 / sw);
+  const cw = Math.max(4, Math.round(sw * k)), ch = Math.max(4, Math.round(sh * k));
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  /* ⚠ 一定要關掉平滑：縮小時預設會把整行文字「平均」成一片灰，文字行就被當成圖片的一部分（實測圖下面的說明文字被一起裁進來）。
+       不平滑＝直接取點，文字行只剩零星幾個黑點，密度很低。 */
+  cx.imageSmoothingEnabled = false;
+  cx.drawImage(el, x0 * W, y0 * H, sw, sh, 0, 0, cw, ch);
+  const px = cx.getImageData(0, 0, cw, ch).data;
+  const inkAt = (x, y) => { const i = (y * cw + x) * 4; return px[i] < 232 || px[i + 1] < 232 || px[i + 2] < 232; };
+  /* 橫的：每一列有多少比例不是白紙 */
+  const rowD = new Array(ch).fill(0);
+  for (let y = 0; y < ch; y++) { let n = 0; for (let x = 0; x < cw; x++) if (inkAt(x, y)) n++; rowD[y] = n / cw; }
+  const bands = []; let st = -1, gap = 0; const maxGap = Math.max(2, Math.round(ch * 0.03));
+  for (let y = 0; y < ch; y++) {
+    if (rowD[y] >= 0.5) { if (st < 0) st = y; gap = 0; }
+    else if (st >= 0) { gap++; if (gap > maxGap) { bands.push([st, y - gap]); st = -1; gap = 0; } }
+  }
+  if (st >= 0) bands.push([st, ch - 1 - gap]);
+  if (!bands.length) return box;
+  const band = bands.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  if ((band[1] - band[0] + 1) < ch * 0.12) return box;          // 太矮＝只是一條線
+  /* 圖片的邊緣列幾乎整列都有顏色；緊貼著圖的那行說明文字密度只有它的一半左右。
+     把帶子上下兩端「比這條帶子的中間值稀疏很多」的列修掉（說明文字不要被裁進圖裡，它另外存成文字）。 */
+  const sorted = rowD.slice(band[0], band[1] + 1).sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  /* 下緣（說明文字常在圖的下面）用 0.82；上緣只修「明顯是文字」的列（0.5）——圖頂常是淡淡的天空，不能誤切 */
+  while (band[1] > band[0] && rowD[band[1]] < med * 0.82) band[1]--;
+  while (band[0] < band[1] && rowD[band[0]] < med * 0.5) band[0]++;
+  /* 直的：在這個高度範圍裡，每一欄有多少比例不是白紙 */
+  const bh = band[1] - band[0] + 1;
+  const colOk = new Array(cw).fill(false);
+  for (let x = 0; x < cw; x++) { let n = 0; for (let y = band[0]; y <= band[1]; y++) if (inkAt(x, y)) n++; colOk[x] = n / bh >= 0.4; }
+  let cs = -1, ce = -1, best = 0, i = 0;
+  while (i < cw) {
+    if (!colOk[i]) { i++; continue; }
+    let j = i, g = 0, last = i;
+    while (j < cw && g <= 3) { if (colOk[j]) { last = j; g = 0; } else g++; j++; }
+    if (last - i + 1 > best) { best = last - i + 1; cs = i; ce = last; }
+    i = last + 1;
+  }
+  if (cs < 0 || best < cw * 0.2) return box;
+  const rb = [x0 + (cs / cw) * (x1 - x0), y0 + (band[0] / ch) * (y1 - y0), x0 + ((ce + 1) / cw) * (x1 - x0), y0 + ((band[1] + 1) / ch) * (y1 - y0)];
+  const area = (b) => (b[2] - b[0]) * (b[3] - b[1]);
+  return (area(rb) >= area(box) * 0.3 && area(rb) >= 0.02) ? rb : box;
+}
+async function _examCropFigure(img, box) {
+  const el = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im); im.onerror = () => rej(new Error('image'));
+    im.src = `data:${(img && img.media_type) || 'image/jpeg'};base64,${img && img.data}`;
+  });
+  const W = el.naturalWidth, H = el.naturalHeight, pad = 0.003;
+  let rb = box;
+  try { rb = _examRefineBox(el, box); } catch (e) { rb = box; }
+  const x0 = Math.max(0, rb[0] - pad) * W, y0 = Math.max(0, rb[1] - pad) * H;
+  const x1 = Math.min(1, rb[2] + pad) * W, y1 = Math.min(1, rb[3] + pad) * H;
+  const sw = Math.max(8, x1 - x0), sh = Math.max(8, y1 - y0);
+  const k = Math.min(1, 1200 / sw);
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
+  cv.getContext('2d').drawImage(el, x0, y0, sw, sh, 0, 0, cv.width, cv.height);
+  return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('toBlob')), 'image/jpeg', 0.88));
+}
 async function aiReadExamSheet({ images = [], onProgress } = {}) {
   const imgs = (images || []).slice(0, 8);
   if (!imgs.length) throw new Error('請先選幾張考卷照片。');
@@ -8278,6 +8415,14 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     .then(v => ({ v }), e => ({ e }))
     .finally(() => { done++; if (onProgress) onProgress(done, parts.length); })));
 
+  /* v571：每一段、每一大題記得「它在第幾張」——之後從那一張把插圖裁出來 */
+  got.forEach((g, i) => {
+    if (!g.v) return;
+    g.v.sections.forEach(sc => {
+      sc.pg = i; if (sc.figure) sc.figure.pg = i;
+      sc.parts.forEach(p => { p.pg = i; if (p.figure) p.figure.pg = i; });
+    });
+  });
   const ok = got.filter(g => g.v && g.v.sections.length);
   if (!ok.length) {
     const to = got.some(g => g.e && g.e.timeout);
@@ -8294,8 +8439,8 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     v.sections.forEach(sc => {
       const key = sc.name.toLowerCase().replace(/\s+/g, '');
       const hit = key && secs.find(x => x.key === key);
-      if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; if (sc.passage && !hit.passage) hit.passage = sc.passage; return; }
-      secs.push({ key, name: sc.name, pct: sc.pct, passage: sc.passage || '', parts: sc.parts.slice() });
+      if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; if (sc.passage && !hit.passage) hit.passage = sc.passage; if (sc.figure && !hit.figure) hit.figure = sc.figure; return; }
+      secs.push({ key, name: sc.name, pct: sc.pct, passage: sc.passage || '', figure: sc.figure || null, parts: sc.parts.slice() });
     });
   });
   /* 模型把一個 Part 拆成好幾個（一題一個）時，連續的同型大題併回去。
@@ -8327,7 +8472,7 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
       sc.parts = sc.parts.concat(secs[i + 1].parts); secs.splice(i + 1, 1);
     }
     const tgt = sc.parts.find(pt => NEEDS_READ[pt.kind] && !pt.readText && !pt.passage);
-    if (tgt) tgt.readText = sc.passage;
+    if (tgt) { tgt.readText = sc.passage; sc._figTarget = tgt; }
     else skipped.push('有一篇文章（' + sc.passage.slice(0, 30).replace(/\n/g, ' ') + '…）找不到要接在哪一題，請自己貼上');
   }
   /* v560 ② 配分保險：模型有時只回「(3 pts. each)」沒回總分 → 自己乘出來 */
@@ -8335,12 +8480,45 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     if (+pt.pts > 0 || (EXAM_KINDS[pt.kind] || {}).noScore) return;
     const m = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*each\s*\)/i.exec((pt.title || '') + ' ' + (pt.instruction || ''));
     const n = examPartN(pt);
-    if (m && n) pt.pts = Math.round(+m[1] * n * 10) / 10;
+    if (m && n) { pt.pts = Math.round(+m[1] * n * 10) / 10; return; }
+    /* 問答題的分數常寫在題目後面：「Why does the author…? (2 pts.)」 */
+    if (pt.kind === 'short') {
+      const tot = (pt.questions || []).reduce((a, q) => {
+        const mm = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*\)/i.exec(String((q && q.q) || ''));
+        return a + (mm ? +mm[1] : (+q.pts || 0));
+      }, 0);
+      if (tot > 0) pt.pts = tot;
+    }
   }));
+  /* v571 🖼 插圖：從那一張把 AI 指的那塊裁出來、上傳、掛在那篇文章（或那一大題）上。
+     ⚠ 上傳失敗不能讓整份考卷讀不出來——記一句，讓老師自己在編輯單元補圖。 */
+  secs.forEach(sc => {
+    if (sc.figure) {
+      const t = sc._figTarget || sc.parts.find(p => NEEDS_READ[p.kind]) || sc.parts[0];
+      if (t && !t._fig) t._fig = sc.figure;
+    }
+    sc.parts.forEach(p => { if (p.figure && !p._fig) p._fig = p.figure; });
+  });
+  for (const sc of secs) {
+    for (const p of sc.parts) {
+      if (!p._fig) continue;
+      try {
+        const src = imgs[p._fig.pg];
+        const blob = await _examCropFigure(src, p._fig.box);
+        const url = await uploadFlashcardImage(blob);
+        p.img = url;
+        if (p._fig.caption) p.imgCap = p._fig.caption;
+      } catch (e) {
+        skipped.push('讀到一張插圖' + (p._fig.caption ? '（' + p._fig.caption.slice(0, 40) + '）' : '') + '，但裁切或上傳失敗，請在編輯單元自己加圖');
+      }
+    }
+  }
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,
-    sections: secs.map(({ key, passage, ...rest }) => rest),
+    sections: secs.map(({ key, passage, figure, _figTarget, pg, ...rest }) => ({
+      ...rest, parts: rest.parts.map(({ figure: _f, _fig, pg: _pg, ...pt }) => pt),
+    })),
   };
   /* ⭐ 不另外寫驗證——丟進 v515 老師手打考卷用的同一組檢查。 */
   return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item) };
@@ -8432,7 +8610,7 @@ THE TEACHER'S WORDS ARE THE SPEC
   Section 1 Word Study, Section 2 Vocabulary, Section 3 Reading, with a "pct" for each section.
 
 "parts" may ONLY use these kinds (write every English word exactly):
-  "circle"   passage + "check" (vce|team|digraph|suffix|prefix) + "checkArg" (patterns separated by SPACES) + "need" N.
+  "circle"   passage + "check" (vce|team|digraph|suffix|prefix|diphthong) + "checkArg" (patterns separated by SPACES) + "need" N.
              The passage MUST really contain at least N matching words.
   "cloze"    "bank":[...], "items":[{"text":"The workers drove a ___ to clear the dirt.","answer":"bulldozer"}].
              🔴 Every answer MUST be in the bank; each bank word is used ONCE; as many items as bank words
@@ -8611,6 +8789,11 @@ const EXAM_KINDS = {
   checkin:  { zh: '開頭的心情與目標', auto: true, noScore: true },  // 不計分
   /* v557：康橋 Grade 4 的 "Chronological Order"——把 5 個事件照發生的順序標 1~5 */
   order:    { zh: '事件排順序（標 1~N）', auto: true },
+  /* v571（康橋 G3 IT Formative）：兩種老師改的題型
+     table：「左欄找描述字詞、右欄寫它讓你想像到什麼」這種填表（每列 N 分）
+     draw ：「Draw the final scene」——學生在畫板上畫，老師看圖給分 */
+  table:    { zh: '表格填寫（老師改）', auto: false },
+  draw:     { zh: '畫圖（老師改）', auto: false },
   short:  { zh: '問答（老師改）', auto: false },// Part 5：申論，照 rubric 手改
 };
 
@@ -8668,6 +8851,8 @@ function examPartN(part) {
   if (part.kind === 'usewords') return +part.need || 2;
   if (part.kind === 'fixbox')   return (part.answers || []).length || +part.need || 5;
   if (part.kind === 'evidence') return +part.need || 2;
+  if (part.kind === 'table')    return Math.max(1, Math.min(12, +part.need || +part.rows || 3));
+  if (part.kind === 'draw')     return 1;
   if (part.kind === 'order')    return (part.events || []).length;
   if (part.kind === 'essay')    return 1;
   if (part.kind === 'checkin')  return 0;          // 不是題目，不計入題數
@@ -8858,6 +9043,22 @@ EXAM_RUBRIC_SETS.summary = {
     { id: 'own',    zh: '自己的話', en: "Student's own words",       tip: '有沒有用自己的話寫，不是照抄',   max: 1 },
   ],
 };
+/* v571：表格填寫（每列 3 分＝找得對 1 ＋ 說得清楚 2）、畫圖（3 分＝細節 2 ＋ 場景 1）。
+   ⚠ 跟摘要一樣每項滿分不同，所以準則自己帶 max。 */
+EXAM_RUBRIC_SETS.table = {
+  zh: '表格填寫（找字詞＋說明，每列 3 分）', max: 2,
+  criteria: [
+    { id: 'find',    zh: '找得對',   en: 'Right word or phrase', tip: '左欄寫的是不是文章裡真的有的描述性字詞（形容詞、生動的動詞、比喻）', max: 1 },
+    { id: 'explain', zh: '說得清楚', en: 'Clear explanation',    tip: '右欄有沒有說出這個字詞讓人想像到什麼（看到、聽到、感覺到）', max: 2 },
+  ],
+};
+EXAM_RUBRIC_SETS.draw = {
+  zh: '畫圖（細節＋場景，3 分）', max: 2,
+  criteria: [
+    { id: 'details', zh: '細節', en: 'Details from the sentences', tip: '有沒有畫出句子裡提到的東西', max: 2 },
+    { id: 'scene',   zh: '場景', en: 'The final scene',            tip: '畫的是不是「最後那一句之後」的樣子', max: 1 },
+  ],
+};
 /* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
 function examBandsOf(R, c) {
   if (c && c.max && !(R && R.hasBands)) {
@@ -9011,7 +9212,11 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
   /* 接地：引用的字要真的出現在孩子寫的東西裡（忽略大小寫與標點） */
   const flat = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const q = flat(got.quote);
-  if (!q || q.split(' ').length < 3 || flat(ans).indexOf(q) < 0) return null;
+  /* v571：引用至少幾個字，看孩子寫了多少——表格每一格只有兩三個字（"blazing suns"），
+     硬要引 3 個字以上，AI 只好引到別格或編一段，整份建議就被丟掉（實測：好答案回「不可靠」）。
+     短答案引 1~2 個字就夠；長答案才要 3 個字以上。引的字仍然必須是孩子真的寫過的。 */
+  const aw = words.length, minQ = aw <= 10 ? 1 : (aw <= 25 ? 2 : 3);
+  if (!q || q.split(' ').length < minQ || flat(ans).indexOf(q) < 0) return null;
   out.quote = String(got.quote).trim();
   out.next = String(got.next || '').trim().slice(0, 40);
   /* v565：小錯清單也要「接地」——AI 說的錯，必須是孩子真的寫過的字（而且跟它給的改正不同），
@@ -9356,6 +9561,10 @@ function examScorePart(part, ans) {
     }
     out.got = Math.round(max * (out.right / n));
     return out;
+  } else if (part.kind === 'table' || part.kind === 'draw') {
+    /* v571：表格與畫圖都是老師改的——程式只把作答收起來，不給分 */
+    out.detail = [{ ok: null, got: part.kind === 'draw' ? (ans ? '（有畫）' : '') : (Array.isArray(ans) ? ans.map(r => [].concat(r || []).join(' ➜ ')).join(' ／ ') : '') }];
+    return out;
   } else if (part.kind === 'essay') {
     /* 長文：不自動給分，但把數得出來的（幾段、每段幾句、用了幾個單字）帶給老師 */
     out.detail = [{ ok: null, got: String(ans || ''), stats: examEssayStats(ans, part) }];
@@ -9432,6 +9641,8 @@ function examPartText(part) {
   if (p.kind === 'order') return (p.events || []).join('\n');
   if (p.kind === 'evidence') return [String(p.question || ''), '', String(p.passage || '')].join('\n');
   if (p.kind === 'essay') return [String(p.prompt || ''), '', (p.vocab || []).join(', ')].join('\n');
+  if (p.kind === 'table') return [(p.headers || []).join(' | '), String(examPartN(p))].join('\n');
+  if (p.kind === 'draw') return String(p.prompt || '');
   if (p.kind === 'checkin') return (p.goals || []).join('\n');
   return '';
 }
@@ -9487,6 +9698,13 @@ function examParsePart(kind, text) {
     return { question: (gap > 0 ? lines.slice(0, gap) : [lines[0] || '']).join(' ').trim(),
              passage: (gap > 0 ? lines.slice(gap + 1) : lines.slice(1)).join('\n').trim() };
   }
+  if (kind === 'table') {
+    /* 第一行＝欄名（用 | 分開，2~3 欄），第二行＝幾列 */
+    const headers = (nonEmpty[0] || '').split('|').map(x => x.trim()).filter(Boolean).slice(0, 3);
+    const rows = Math.max(1, Math.min(12, parseInt(nonEmpty[1], 10) || 3));
+    return { headers, need: rows };
+  }
+  if (kind === 'draw') return { prompt: lines.join('\n').trim() };
   if (kind === 'essay') {
     /* 第一行（到空行為止）＝題目，空行之後那一行＝這一課的單字（逗號分開） */
     const gap = lines.findIndex((l, i) => i > 0 && !l.trim());
@@ -9536,6 +9754,8 @@ function examWarnings(item) {
       if (!String(pt.passage || '').trim()) w.push(`${where}沒有那一段文章。`);
       else if (miss.length) w.push(`${where}的答案「${miss.join('、')}」在文章裡找不到。`);
     }
+    if (pt.kind === 'table' && (pt.headers || []).length < 2) w.push(`${where}要有至少兩個欄名（例如：左邊找字詞、右邊寫說明）。`);
+    if (pt.kind === 'draw' && !String(pt.prompt || '').trim()) w.push(`${where}沒有寫要畫什麼。`);
     if (pt.kind === 'order') {
       const ev = (pt.events || []).filter(Boolean);
       if (ev.length < 2) w.push(`${where}至少要兩個事件才排得出順序。`);
