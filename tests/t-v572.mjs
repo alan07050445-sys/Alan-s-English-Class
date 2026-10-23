@@ -13,5 +13,6 @@ ok('原類別還有同組 → 參考資料兩邊都有', !!w.groupRes['vocab::G'
 w = wk(); sb.mv(w, 'vocab', ['a', 'b'], 'ltvocab', 'G');
 ok('整組搬 → 參考資料換 key', !w.groupRes['vocab::G'] && !!w.groupRes['ltvocab::G']);
 ok('單元列有 🔀 按鈕與類別選單', /'item:' \+ item\.id/.test(qm) && /onMoveGroupCat\(cat\.id, String\(item\.group/.test(qm));
-ok('考卷內文字放大（passage ≥ 20px、題目 ≥ 18px）', /\.ex-passage \{[^}]*font-size: 2\d/.test(css) && /\.ex-part-h b \{[^}]*font-size: 19px/.test(css));
+const last = (sel) => { const m = [...css.matchAll(new RegExp('^' + sel.replace(/[.]/g, '\\.') + ' \\{[^}]*font-size:\\s*([\\d.]+)px', 'gm'))]; return m.length ? +m[m.length - 1][1] : 0; };
+ok('Section 標題 ＞ Part 標題 ＞ 題目字', last('.ex-sec-h b') > last('.ex-part-h b') && last('.ex-part-h b') > last('.ex-qt') && last('.ex-part-h b') > last('.ex-opt'));
 process.exit(fail ? 1 : 0);
