@@ -1805,10 +1805,14 @@ const WS_CHECKS = {
   // 母音組合／雙字母：ai / ay / ea / ee / ei / ie / oa / ue / aw / oo…
   team: (w, arg) => {
     const a = String(arg || '').toLowerCase();
-    return !!a && String(w || '').toLowerCase().indexOf(a) >= 0;
+    /* v582：考卷只寫「a vowel team inside」、沒列是哪幾種（康橋 G4 Formative 2）→ 用常見的母音組合。 */
+    if (!a) return /(ai|ay|ea|ee|ie|oa|oe|ue|ui|oo|ou|ow|oi|oy|au|aw|ew)/.test(String(w || '').toLowerCase());
+    return String(w || '').toLowerCase().indexOf(a) >= 0;
   },
-  // 子音連綴／雙字母子音：ch / sh / th / ph / ck…（位置不限）
-  digraph: (w, arg) => WS_CHECKS.team(w, arg),
+  // 子音連綴／雙字母子音：ch / sh / th / ph / ck…（位置不限）；沒列是哪幾種 → 常見的子音雙字母
+  digraph: (w, arg) => String(arg || '').trim()
+    ? WS_CHECKS.team(w, arg)
+    : /(ch|sh|th|ph|wh|ck|ng|kn|wr)/.test(String(w || '').toLowerCase()),
   /* v571 雙母音 diphthong（康橋 G3：圈出 /aʊ/ 或 /ɔɪ/ 的字）——看**讀音**，不是只看拼法。
      /aʊ/：ou（shout、sound）、ow（brown、down、flower）——兩種拼法同一個音。
      ⚠ ou 不唸 /aʊ/：could／you／young／country／touch／-ous／-ough…；
@@ -8169,7 +8173,17 @@ function _examReadOne(content) {
         passage: String((sc && sc.passage) || '').trim(),
         figure: _examFigureOf(sc && sc.figure),
         parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
-          const c = _examCleanPart(pt);
+          let c = _examCleanPart(pt);
+          /* v582：考卷跨頁時，續頁只有「後半段」——填空沒有詞庫（詞庫在上一頁）、自己出問題沒有文章（文章在前面那頁）。
+             每一頁是分開讀的，所以先收下來標成 _cont，等合併時再接回前面的大題。 */
+          if (!c && pt && pt.kind === 'cloze' && Array.isArray(pt.items || pt.sentences) && !(Array.isArray(pt.bank) && pt.bank.length)) {
+            c = _examCleanPart({ ...pt, bank: ['_'] });
+            if (c) c = { ...c, bank: [], _cont: 'bank' };
+          }
+          if (!c && pt && (pt.kind === 'genq' || pt.kind === 'storymap') && !String(pt.passage || '').trim()) {
+            c = _examCleanPart({ ...pt, passage: '_' });
+            if (c) c = { ...c, passage: '', _cont: 'passage' };
+          }
           /* ⚠ 讀進來卻被清洗丟掉的，一定要告訴老師——以前是整題消失、什麼都不說 */
           if (!c && pt && (pt.title || pt.kind)) dropped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」讀到了但內容不完整，沒收進來`);
           return c;
@@ -8448,7 +8462,8 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     skipped.push(...v.skipped);
     v.sections.forEach(sc => {
       const key = sc.name.toLowerCase().replace(/\s+/g, '');
-      const hit = key && secs.find(x => x.key === key);
+      /* v582：沒有名字的段落（續頁開頭沒有 Section 標題）＝接在前一個 Section 後面 */
+      const hit = key ? secs.find(x => x.key === key) : (secs.length ? secs[secs.length - 1] : null);
       if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; if (sc.passage && !hit.passage) hit.passage = sc.passage; if (sc.figure && !hit.figure) hit.figure = sc.figure; return; }
       secs.push({ key, name: sc.name, pct: sc.pct, passage: sc.passage || '', figure: sc.figure || null, parts: sc.parts.slice() });
     });
@@ -8459,6 +8474,21 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     const merged = [];
     sc.parts.forEach(pt => {
       const last = merged[merged.length - 1];
+      /* v582 填空續頁：沒有詞庫的那段，接到最近一個填空大題上（詞庫、題號、配分都用前面那個的） */
+      /* 模型看不到詞庫時偶爾會「自己編一個」——所以沒有標題、又接在填空後面的填空，一律當續頁，用前面那個的詞庫 */
+      const prevCloze = () => { let pv = null; for (const s2 of secs) for (const q of (s2 === sc ? merged : s2.parts)) if (q.kind === 'cloze' && !q._cont && q !== pt) pv = q; return pv; };
+      if (pt._cont === 'bank' || (pt.kind === 'cloze' && !pt.title && prevCloze())) {
+        const prev = prevCloze();
+        if (prev) {
+          prev._fixAns = true;                                        // 續頁的答案要照前面的詞庫重選
+          prev.items = (prev.items || []).concat(pt.items || []);
+          const each = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*each\s*\)/i.exec((prev.title || '') + ' ' + (prev.instruction || ''));
+          if (each) prev.pts = Math.round(+each[1] * prev.items.length * 10) / 10;
+          return;
+        }
+        skipped.push('有一段填空沒有詞庫（可能是上一頁沒讀到），請自己補上');
+        return;
+      }
       const same = last && last.kind === pt.kind && (pt.kind === 'quiz' || pt.kind === 'short');
       if (same && !pt.title) {
         last.questions = (last.questions || []).concat(pt.questions || []);
@@ -8485,6 +8515,37 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     if (tgt) { tgt.readText = sc.passage; sc._figTarget = tgt; }
     else skipped.push('有一篇文章（' + sc.passage.slice(0, 30).replace(/\n/g, ' ') + '…）找不到要接在哪一題，請自己貼上');
   }
+  /* v582：續頁的填空，答案是模型沒看到詞庫時猜的——照前面的詞庫請它重選一次（選不出在詞庫裡的就留給老師） */
+  for (const sc of secs) for (const pt of sc.parts) {
+    if (!pt._fixAns) continue;
+    delete pt._fixAns;
+    const inBank = (w) => (pt.bank || []).some(b => String(b).toLowerCase() === String(w || '').toLowerCase());
+    if (pt.items.every(q => inBank(q.answer))) continue;
+    try {
+      const got = await _gnCall('You are checking a fill-in-the-blank exercise for elementary students. For EACH sentence pick the ONE word from the word bank that best completes it (each bank word is used at most once). '
+        + 'Return ONLY JSON: {"answers":["word for sentence 1","word for sentence 2",...]} — exactly one entry per sentence, each copied exactly from the word bank.',
+        `WORD BANK: ${pt.bank.join(', ')}\n\nSENTENCES:\n` + pt.items.map((q, i) => `${i + 1}. ${q.text}`).join('\n'), 500);
+      const ans = got && Array.isArray(got.answers) ? got.answers : [];
+      pt.items.forEach((q, i) => { const w = (pt.bank || []).find(b => String(b).toLowerCase() === String(ans[i] || '').toLowerCase()); if (w) q.answer = w; });
+    } catch (e) {}
+    pt.items.forEach((q, i) => { if (!inBank(q.answer)) skipped.push(`填空第 ${i + 1} 句的答案不在詞庫裡，請自己確認`); });
+  }
+  /* v582：「自己出問題」續頁沒有文章——用同一個 Section 裡最近讀到的那一篇（選擇題上的 readText 或整段文章） */
+  secs.forEach((sc, si) => {
+    sc.parts = sc.parts.filter(pt => {
+      if (pt._cont !== 'passage') return true;
+      let src = '';
+      for (let k = si; k >= 0 && !src; k--) {
+        const list = k === si ? sc.parts : secs[k].parts;
+        for (const q of list) { if (q !== pt && (q.readText || q.passage)) src = String(q.readText || q.passage); }
+        if (!src && secs[k].passage) src = secs[k].passage;
+      }
+      if (!src) { skipped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」要用到一篇文章，但找不到，請自己貼上`); return false; }
+      pt.passage = src;
+      return true;
+    });
+    sc.parts.forEach(pt => { delete pt._cont; });
+  });
   /* v560 ② 配分保險：模型有時只回「(3 pts. each)」沒回總分 → 自己乘出來 */
   secs.forEach(sc => sc.parts.forEach(pt => {
     if (+pt.pts > 0 || (EXAM_KINDS[pt.kind] || {}).noScore) return;
