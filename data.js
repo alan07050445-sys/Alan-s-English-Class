@@ -921,6 +921,20 @@ async function saveProgressItem(uid, displayName, email, itemId, data) {
     if (email      && email.trim())       profileFields.email = email.trim();
     await ref.set(profileFields, { merge: true });
     // Step 2: update() correctly treats "items.itemId" as a nested field path
+    /* v589：保留「第一次完成」的時間（first）——節慶星星雙倍看它（見 earnedAtOf）。
+       這一筆是**整個被換掉**的，而 done 每次完成都會更新成最新那次；
+       不留 first 的話，11 月重做一個萬聖節完成的練習，雙倍就消失、星星變少。
+       ⚠ 舊資料沒有 first：用舊的 done 當第一次（最接近的已知值）。
+       ⚠ 多讀一次文件，但**只在「完成」時**才讀（不是每次作答）；讀失敗就不帶 first，不影響存檔。 */
+    if (data && data.done) {
+      try {
+        const snap = await ref.get();
+        const old = snap.exists ? ((snap.data() || {}).items || {})[itemId] : null;
+        const t = (v) => (Number(v) > 1e11 ? Number(v) : 0);
+        const first = t(old && old.first) || t(old && old.done) || t(data.done) || t(data.ts);
+        if (first) data = { ...data, first };
+      } catch (e) { /* 讀不到就照舊存，只是這一筆沒有 first */ }
+    }
     const fieldUpdate = {};
     fieldUpdate[`items.${itemId}`] = data === null
       ? firebase.firestore.FieldValue.delete()
@@ -7127,7 +7141,7 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
       if (k) used.add(k);
       const prog = getProg(wid, it.id);
       const base = autoStarsForItem(it, prog, cloudShape);
-      const dbl = base > 0 && hwDoubleAt(prog && (prog.ts || prog.done));
+      const dbl = base > 0 && hwDoubleAt(earnedAtOf(prog));
       const n = dbl ? base * HW_DOUBLE.mult : base;
       if (n > 0) {
         total += n;
@@ -7187,7 +7201,7 @@ function computeAutoStars(weeks, weekOrder, progItems, opts) {
     const prog = its[k];
     const base = autoStarsForItem(null, prog, cloudShape);
     if (base <= 0) return;
-    const dbl = hwDoubleAt(prog && (prog.ts || prog.done));
+    const dbl = hwDoubleAt(earnedAtOf(prog));
     const n = dbl ? base * HW_DOUBLE.mult : base;
     total += n;
     entries.push({ id: `auto:${k}`, auto: true, past: true, date: dateOf(prog),
@@ -10623,12 +10637,28 @@ function festIs(id, now)  { const f = festNow(now); return !!f && f.id === id; }
      會一起縮水一半。用 prog.ts，雙倍期間賺到的就永遠是雙倍。
    ⚠ 跟 festNow 的老師開關無關：老師預覽萬聖節外觀，不可以讓星星跟著變。
    ⚠ 年份用「現在」的年份；沒有時間戳（舊的本機紀錄）就不加倍，寧可少給。 */
-const HW_DOUBLE = { from: '10-20', to: '10-31', mult: 2 };
+/* 🔴 v589 修兩個會讓學生星星「變少」的洞（Alan 的「限時雙倍」功能本身的缺陷）：
+   ① 年份：本來用「現在的年份」比對——2027/01/01 一到，今年萬聖節賺到的雙倍**全部同時消失**
+      （實測 20 → 10）。雙倍是「2026 年這一次活動」，年份要釘在活動本身（year），不是跟著今天走。
+      ⚠ 明年的萬聖節要不要雙倍是新的決定（加一筆），不是自動延續。
+   ② 時間：本來看 prog.ts——那是**最後一次存檔**的時間。10/25 完成、11/05 重做一次，
+      ts 變成 11/05，雙倍就掉了（實測 20 → 10）；反過來 9/15 完成、10/25 重做會被算成雙倍。
+      → 看 earnedAtOf（第一次完成的時間，見下）。 */
+const HW_DOUBLE = { year: 2026, from: '10-20', to: '10-31', mult: 2 };
+/* 這一筆進度是「什麼時候第一次完成」的。
+   優先序：first（第一次完成，v589 起每次存檔都保留）＞ done（雲端存的完成時間）＞ ts。
+   ⚠ 本機那份的 done 是「做對幾題」的**數字**不是時間，所以每一個都要 > 1e11 才當時間用。
+   ⚠ 舊資料沒有 first：用 done（最接近的已知值）；之後第一次重做時 saveProgressItem 會把它記成 first。 */
+function earnedAtOf(prog) {
+  if (!prog) return 0;
+  for (const k of ['first', 'done', 'ts']) { const t = Number(prog[k]); if (t > 1e11) return t; }
+  return 0;
+}
 function hwDoubleAt(t) {
   const n = Number(t || 0);
   if (!(n > 1e11)) return false;
   const d = new Date(n);
-  if (d.getFullYear() !== new Date().getFullYear()) return false;
+  if (d.getFullYear() !== HW_DOUBLE.year) return false;
   const md = _festMD(d);
   return md >= HW_DOUBLE.from && md <= HW_DOUBLE.to;
 }
@@ -10708,7 +10738,7 @@ function festCountText(now) {
   return f.hi;                                  // 當天過了之後（例如 11/01 還開著）
 }
 
-Object.assign(window, { hwDoubleOn, hwDoubleAt, HW_DOUBLE, festOn, festIs, festNow, festApply, festSetOverride, festOverride,
+Object.assign(window, { hwDoubleOn, hwDoubleAt, earnedAtOf, HW_DOUBLE, festOn, festIs, festNow, festApply, festSetOverride, festOverride,
   festIsDay, festDaysTo, festCountText, festCountParts, FESTS, FEST_1010 });
 
 /* 一載入就套用——要在 React 掛載**之前**，不然學生會先看到原本的樣子再閃一下變色。

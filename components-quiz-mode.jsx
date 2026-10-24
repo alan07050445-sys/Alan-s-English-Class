@@ -559,9 +559,12 @@ function saveQuizModeCompletion(progressKey, item, { doneCount = 1, score = null
   // 未達 80 仍把分數/錯題記下來（best-of、「上次 X 分」、老師端看得到），只是 done 留空、不計入完成度/✓。
   const scorePct = localScore == null ? null : Math.round((localScore / localTotal) * 100);
   const qualifies = scorePct == null || scorePct >= 80;
+  /* v551：記住「第一次完成」的時間（節慶星星加倍看它）。重做、補分數都不可以把它往後推——
+     不然 11 月重做一個萬聖節完成的練習，那一筆的雙倍就消失、星星變少。 */
+  const firstAt = (old && old.first) || (qualifies ? ts : 0);
   prev[progressKey] = keepOld
-    ? { ...old, ts }
-    : { done: qualifies ? (doneCount || localTotal) : 0, score: localScore, total: localTotal, ts };
+    ? { ...old, ts, ...(firstAt ? { first: firstAt } : {}) }
+    : { done: qualifies ? (doneCount || localTotal) : 0, score: localScore, total: localTotal, ts, ...(firstAt ? { first: firstAt } : {}) };
   saveQMProg(prev);
   if (window._bumpQmProgress) window._bumpQmProgress(); // 大廳（今天的任務）即時刷新——所有題型都會走這裡
 

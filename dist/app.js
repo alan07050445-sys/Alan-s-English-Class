@@ -1026,7 +1026,8 @@ function App() {
         done: fp.done ? 1 : 0,
         score: fp.score != null ? fp.score : null,
         total: fp.score != null ? 100 : fp.total || 1,
-        ts: fp.done || 0
+        ts: fp.done || 0,
+        first: fp.first || 0
       };
       var cur = local[key];
       var modes = {
@@ -1049,6 +1050,10 @@ function App() {
       var meta = {};
       if (fp.itemType) meta.itemType = fp.itemType;
       if (fp.itemTitle) meta.itemTitle = fp.itemTitle;
+      /* v551：第一次完成的時間——三方（挑中的、本機的、雲端的）取**最早**的那個有值的，
+         合併絕不可以把它換成比較晚的（節慶星星加倍看它）。 */
+      var firstAts = [base.first, cur && cur.first, remote.first, fp.done].map(Number).filter(t => t > 1e11);
+      if (firstAts.length) meta.first = Math.min(...firstAts);
       local[key] = {
         ...base,
         done: doneVal,

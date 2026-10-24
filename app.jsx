@@ -751,7 +751,7 @@ function App() {
       // v361: 沒達 80 分（done 是空的）但有分數的也要併進來——短答 3 顆星就是這種，集點要用；
       //       單字卡的 modes（學習/填空跑完沒）也要跟著過來，換裝置才不會漏算。
       if (!fp.done && fp.score == null && !fp.modes) return;
-      const remote = { done: fp.done ? 1 : 0, score: fp.score != null ? fp.score : null, total: fp.score != null ? 100 : (fp.total || 1), ts: fp.done || 0 };
+      const remote = { done: fp.done ? 1 : 0, score: fp.score != null ? fp.score : null, total: fp.score != null ? 100 : (fp.total || 1), ts: fp.done || 0, first: fp.first || 0 };
       const cur = local[key];
       const modes = { ...((cur && cur.modes) || {}), ...(fp.modes || {}) };
       const base = (!cur || pctOf(remote) > pctOf(cur)) ? remote : cur;
@@ -770,6 +770,10 @@ function App() {
       const meta = {};
       if (fp.itemType)  meta.itemType  = fp.itemType;
       if (fp.itemTitle) meta.itemTitle = fp.itemTitle;
+      /* v551：第一次完成的時間——三方（挑中的、本機的、雲端的）取**最早**的那個有值的，
+         合併絕不可以把它換成比較晚的（節慶星星加倍看它）。 */
+      const firstAts = [base.first, cur && cur.first, remote.first, fp.done].map(Number).filter(t => t > 1e11);
+      if (firstAts.length) meta.first = Math.min(...firstAts);
       local[key] = { ...base, done: doneVal, ...(Object.keys(modes).length ? { modes } : {}), ...meta };
     });
     return local;
