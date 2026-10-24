@@ -8849,7 +8849,7 @@ const EXAM_KINDS = {
   /* v522：Part 2 Generate Questions——「用剛讀的故事，自己出兩個**文章上沒有**的問題」。
      程式驗得了最常見的三種失分（沒有問號、直接抄文章、太短），
      「這個問題跟故事有沒有關」才需要 AI——所以這一題半自動，給老師一個建議分。 */
-  genq:   { zh: '自己出問題', auto: true },
+  genq:   { zh: '自己出問題（AI／老師改）', auto: false },
   /* ══ v536：Alan 的康橋考卷上還有這兩種 ══════════════════════════ */
   storymap: { zh: '故事結構圖（開頭／中間／結尾）', auto: true },
   usewords: { zh: '用詞庫的字造句', auto: true },
@@ -9133,6 +9133,22 @@ EXAM_RUBRIC_SETS.draw = {
     { id: 'scene',   zh: '場景', en: 'The final scene',            tip: '畫的是不是「最後那一句之後」的樣子', max: 1 },
   ],
 };
+/* v583（康橋 G4 Formative 2：Generate Questions，每題 7 分；Teacher's Marking Guide 四級 6-7／4-5／2-3／1）
+   ⭐ 一題一個等第（7／5／3／1／0），跟寫作卷同一種「整套等第」。 */
+EXAM_RUBRIC_SETS.genq = {
+  zh: '自己出問題（根據文章，每題 7 分）', max: 7,
+  bands: [
+    { n: 7, zh: '清楚根據文章', en: 'Clearly about the story' },
+    { n: 5, zh: '有問題但跟文章關係不大', en: 'A question, not really connected' },
+    { n: 3, zh: '缺少重要資訊或抄別題', en: 'Missing vital info / copied' },
+    { n: 1, zh: '沒寫問題或跟文章無關', en: 'None / not about the story' },
+    { n: 0, zh: '沒作答', en: 'Blank' },
+  ],
+  criteria: [
+    { id: 'story', zh: '根據文章', en: 'Question about the story', tip: '是不是一個合理、根據這篇文章資訊的問題' },
+  ],
+  aiHint: 'The child was asked to write ONE question about the passage (a question that is not already printed on the page). Give 7 whenever it is a real, sensible question that is clearly about information in THIS passage — even a simple who / what / where / why / how question, and even with small spelling or grammar mistakes (those are listed separately). Do not ask for a clever or hard question. Give 5 only if it is a question but hardly connected to the passage. Give 3 if it is missing vital information so it cannot be understood, or it is a sentence copied from the passage. Give 1 if it is not a question about the passage.',
+};
 /* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
 function examBandsOf(R, c) {
   if (c && c.max && !(R && R.hasBands)) {
@@ -9240,6 +9256,7 @@ Return ONLY JSON — one key per criterion id listed above, plus "errors", "quot
    老師的規則是「達到應有的標準就給高分」——所以給 AI 看的等第說明改成：最高＝達到或超過標準。
    ⚠ 只改給 AI 看的文字；老師畫面上的等第名稱與分數不變。 */
 const LENIENT_BAND_TEXT = {
+  5: ['TOP: a reasonable question clearly about the passage', 'a question, but hardly connected', 'missing vital information or copied', 'not a question about the passage', 'nothing written'],
   4: ['TOP: meets OR beats the standard expected of a child this age', 'almost there — one clear gap', 'well below the standard', 'nothing written / off-topic'],
 };
 async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoints = '', part = null, passage = '' } = {}) {

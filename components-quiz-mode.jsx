@@ -7299,6 +7299,24 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         };
         return;
       }
+      /* v583 自己出問題：每一題一個等第，AI 先改（根據文章合理就給分） */
+      if (pp.part.kind === 'genq') {
+        const rows = Array.isArray(v) ? v : [];
+        const nq = window.examPartN(pp.part);
+        if (rows.some(x => String(x || '').trim())) {
+          written[pp.key] = {
+            passage: String(pp.part.passage || '').slice(0, 4000),
+            title: pp.part.title || '', pts: +pp.part.pts || 0,
+            rubricMax: 7, rubricSet: 'genq',
+            aiRule: String(pp.part.aiRule || '').slice(0, 600),
+            qs: Array.from({ length: nq }, (_, i) => ({
+              q: 'Using the story, the student had to write a question (not already on the page). This is the student\'s question #' + (i + 1) + '.',
+              keyPoints: '', a: String(rows[i] || '').trim(),
+            })),
+          };
+        }
+        return;
+      }
       if (pp.part.kind === 'essay') {
         const t = String(v || '').trim();
         if (t) written[pp.key] = {
@@ -7423,8 +7441,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               <span className="ex-pts">
                 {sent && pr ? (pr.auto ? `${pr.got} / ${pts}` : (() => {
                   const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || aiMarks[key];
-                  const nq = pt.kind === 'essay' || pt.kind === 'draw' ? 1 : (pt.kind === 'table' ? n : (pt.questions || []).length);
-                  const rp = by && nq && window.examRubricPart ? window.examRubricPart({ pts: pt.pts, questions: Array.from({ length: nq }, () => ({})), rubricMax: pt.rubricMax, rubricSet: pt.rubricSet }, by) : null;
+                  const nq = pt.kind === 'essay' || pt.kind === 'draw' ? 1 : (pt.kind === 'table' || pt.kind === 'genq' ? n : (pt.questions || []).length);
+                  const rp = by && nq && window.examRubricPart ? window.examRubricPart({ pts: pt.pts, questions: Array.from({ length: nq }, () => ({})), rubricMax: pt.kind === 'genq' ? 7 : pt.rubricMax, rubricSet: pt.kind === 'genq' ? 'genq' : pt.rubricSet }, by) : null;
                   return rp && rp.done ? `${rp.got} / ${pts}` : `__ / ${pts}`;
                 })()) : `${pts} 分`}
                 {!sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : ''}
@@ -7629,20 +7647,18 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               {pt.passage && <div className="ex-read">{pt.passage}</div>}
               <ol className="ex-genq">
                 {Array.from({ length: n }, (_, i) => {
-                  const d = sent ? (pr.detail[i] || {}) : null;
                   return (
-                    <li className={sent ? (d.ok ? 'ok' : 'bad') : ''} key={i}>
+                    <li key={i}>
                       <input disabled={sent} value={got[i] || ''}
                         placeholder="寫一個文章上沒有的問題…"
                         onChange={e => { const t = e.target.value;
                           put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[i] = t; return g; }); }}/>
-                      {sent && (d.why || []).length > 0 && (
-                        <ul className="ex-why">{d.why.map((w, k) => <li key={k}>{w}</li>)}</ul>
-                      )}
                     </li>
                   );
                 })}
               </ol>
+              {/* v583：自己出問題改由 AI 先改（寬鬆：合理、根據文章就給分），老師再看過 */}
+              {sent && examMarkBlock({ ...pt, rubricSet: 'genq', rubricMax: 7 }, key, Array.from({ length: n }, (_, i) => ({ q: `第 ${i + 1} 題` })))}
               {!sent && <p className="ex-hint">問題要跟這個故事有關，而且<b>答案不能直接寫在文章上</b>。</p>}
             </>
           );

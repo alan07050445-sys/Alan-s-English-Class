@@ -8866,6 +8866,29 @@ function ExamPlayer({
         };
         return;
       }
+      /* v583 自己出問題：每一題一個等第，AI 先改（根據文章合理就給分） */
+      if (pp.part.kind === 'genq') {
+        var _rows = Array.isArray(v) ? v : [];
+        var nq = window.examPartN(pp.part);
+        if (_rows.some(x => String(x || '').trim())) {
+          written[pp.key] = {
+            passage: String(pp.part.passage || '').slice(0, 4000),
+            title: pp.part.title || '',
+            pts: +pp.part.pts || 0,
+            rubricMax: 7,
+            rubricSet: 'genq',
+            aiRule: String(pp.part.aiRule || '').slice(0, 600),
+            qs: Array.from({
+              length: nq
+            }, (_, i) => ({
+              q: 'Using the story, the student had to write a question (not already on the page). This is the student\'s question #' + (i + 1) + '.',
+              keyPoints: '',
+              a: String(_rows[i] || '').trim()
+            }))
+          };
+        }
+        return;
+      }
       if (pp.part.kind === 'essay') {
         var t = String(v || '').trim();
         if (t) written[pp.key] = {
@@ -9020,14 +9043,14 @@ function ExamPlayer({
         className: "ex-pts"
       }, sent && pr ? pr.auto ? `${pr.got} / ${pts}` : (() => {
         var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || aiMarks[key];
-        var nq = pt.kind === 'essay' || pt.kind === 'draw' ? 1 : pt.kind === 'table' ? n : (pt.questions || []).length;
+        var nq = pt.kind === 'essay' || pt.kind === 'draw' ? 1 : pt.kind === 'table' || pt.kind === 'genq' ? n : (pt.questions || []).length;
         var rp = by && nq && window.examRubricPart ? window.examRubricPart({
           pts: pt.pts,
           questions: Array.from({
             length: nq
           }, () => ({})),
-          rubricMax: pt.rubricMax,
-          rubricSet: pt.rubricSet
+          rubricMax: pt.kind === 'genq' ? 7 : pt.rubricMax,
+          rubricSet: pt.kind === 'genq' ? 'genq' : pt.rubricSet
         }, by) : null;
         return rp && rp.done ? `${rp.got} / ${pts}` : `__ / ${pts}`;
       })() : `${pts} 分`, !sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : '');
@@ -9241,9 +9264,7 @@ function ExamPlayer({
       }, Array.from({
         length: n
       }, (_, i) => {
-        var d = sent ? pr.detail[i] || {} : null;
         return /*#__PURE__*/React.createElement("li", {
-          className: sent ? d.ok ? 'ok' : 'bad' : '',
           key: i
         }, /*#__PURE__*/React.createElement("input", {
           disabled: sent,
@@ -9257,12 +9278,16 @@ function ExamPlayer({
               return g;
             });
           }
-        }), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
-          className: "ex-why"
-        }, d.why.map((w, k) => /*#__PURE__*/React.createElement("li", {
-          key: k
-        }, w))));
-      })), !sent && /*#__PURE__*/React.createElement("p", {
+        }));
+      })), sent && examMarkBlock({
+        ...pt,
+        rubricSet: 'genq',
+        rubricMax: 7
+      }, key, Array.from({
+        length: n
+      }, (_, i) => ({
+        q: `第 ${i + 1} 題`
+      }))), !sent && /*#__PURE__*/React.createElement("p", {
         className: "ex-hint"
       }, "\u554F\u984C\u8981\u8DDF\u9019\u500B\u6545\u4E8B\u6709\u95DC\uFF0C\u800C\u4E14", /*#__PURE__*/React.createElement("b", null, "\u7B54\u6848\u4E0D\u80FD\u76F4\u63A5\u5BEB\u5728\u6587\u7AE0\u4E0A"), "\u3002"));
     })(), pt.kind === 'storymap' && (() => {

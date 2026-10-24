@@ -82,7 +82,7 @@ ok('⭐ 自己出問題沒有文章 → 提醒', warn([{ kind: 'genq', pts: 100,
 
 console.log('\n【4】編輯器與學生端都接上了');
 ok('⭐ 兩種都在 EXAM_KINDS 裡', !!W.EXAM_KINDS.affix && !!W.EXAM_KINDS.genq);
-ok('⭐ 都是自動計分', W.EXAM_KINDS.affix.auto === true && W.EXAM_KINDS.genq.auto === true);
+ok('⭐ 字首字尾造字是自動計分；v583 起自己出問題改由 AI／老師改（合理就給分，不是程式的死規則）', W.EXAM_KINDS.affix.auto === true && W.EXAM_KINDS.genq.auto === false);
 ok('⭐ 編輯器的文字格式（字尾表一行／貼文章）', (() => {
    const a = W.examParsePart('affix', '-ing -ed -s -est');
    const q = W.examParsePart('genq', 'Some passage here.');

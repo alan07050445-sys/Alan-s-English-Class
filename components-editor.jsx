@@ -660,7 +660,7 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                           )}
                           {/* v581（Alan：「幫我確認如何制定批改規則」）：這一大題自己的批改規則，直接寫給 AI 看。
                               AI 已經有一套預設（寬鬆、小錯 3 個扣 1 分）；這裡寫的是「這一題」的額外規則，會加在預設後面。 */}
-                          {(pt.kind === 'short' || pt.kind === 'essay' || pt.kind === 'table') && (
+                          {(pt.kind === 'short' || pt.kind === 'essay' || pt.kind === 'table' || pt.kind === 'genq') && (
                             <input className="exed-airule" value={pt.aiRule || ''}
                               placeholder="🤖 給 AI 的批改規則（選填）：例如「只要提到 hot 或 bright 就給滿分」「不用寫完整句子」"
                               onChange={e => patchPart(si, pi, { aiRule: e.target.value })}/>
