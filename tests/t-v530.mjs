@@ -97,8 +97,8 @@ ok('⭐⭐ 沒有「全部自動改完」這顆按鈕——AI 一次只建議一
    return /aiGradeRubric\(/.test(b) && !/全部自動|markAll|autoAll/.test(b); })());
 ok('⭐ AI 建議的旁邊要寫出它引用了哪一句（老師才判斷得了可不可信）',
    /mk-ai-why/.test(dash) && /_quote/.test(dash));
-ok('   畫面上要講清楚「存檔之前學生看不到」',
-   /AI 只給建議，按下存檔之前學生看不到任何分數/.test(dash));
+ok('   v578：畫面上講清楚 AI 已先改、學生先看到 AI 分數、老師存檔後換成老師的',
+   /學生交卷時 AI 已先改好，學生會先看到 AI 的分數/.test(dash));
 ok('   老師改過的分數再打開要帶回來（不然每次點進去都是空的）', /had && !mark\[sel\]/.test(dash));
 
 console.log('\n【5】學生端');
