@@ -1648,3 +1648,21 @@ html.fest-hw .qm-blocks .qm-block[data-cat="ltvocab"] { --cat-c: #FFB454; --cat-
 html.fest-hw .qm-blocks .qm-block[data-cat="mock"] { --cat-c: #4FD6CB; --cat-t: #7BE6DC; }
 /* v575：選中的選項要有顏色——舊版只寫了 .sel，但單字測驗按下去的 class 是 .selected */
 html.fest-hw .ws-word-chip.pool.selected { background: rgba(245,124,31,.2); border-color: rgba(247,154,62,.6); color: #FFD6A8; }
+
+/* ── v579：iPad 橫式（高度只有 ~770–900）時，萬聖節多出來的倒數鐘＋雙倍橫幅把封面撐太高
+   （Alan：首頁和第二頁的進入畫面被擋住）。
+   ⚠ 封面是 flex 直排、每個子元素預設會被壓扁——扇形牌組被壓成 110px，卡片就溢出去蓋住
+     「歡迎回來／進入課程」；所以先 flex-shrink:0，再把扇形、間距縮小讓整頁放得下。 */
+@media (min-width: 700px) and (max-height: 900px) {
+  html.fest-hw .lc-cover > * { flex-shrink: 0; }
+  html.fest-hw .lc-cover .fest-day-wrap { margin: 6px 0 0; }
+  html.fest-hw .lc-cover .hw-x2-banner { margin: 6px auto 2px; padding-top: 6px; padding-bottom: 7px; }
+  html.fest-hw .lc-cover .lc-fan { transform: scale(.72); transform-origin: 50% 0; height: 196px; margin-top: 16px; }
+  html.fest-hw .lc-cover .lc-cta-wrap { margin-top: 4px; }
+  html.fest-hw .lc-cover .lc-welcome { margin: 6px 0 8px; }
+  html.fest-hw .lc-cover .lc-cta { padding: 13px 34px; }
+  html.fest-hw .lc-cover .lc-logout { margin-top: 8px; }
+  html.fest-hw .grade-selector { padding-top: 14px; padding-bottom: 14px; }
+  html.fest-hw .grade-selector-inner .grade-sel-logo-img { width: 60px; height: 60px; margin-bottom: 10px; }
+  html.fest-hw .grade-selector-inner .fest-day-wrap { margin: 8px 0 14px; }
+}
