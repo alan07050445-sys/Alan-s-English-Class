@@ -4283,7 +4283,7 @@ function ExamMarking({
       key: k,
       className: 'mk-stu' + (sel === k ? ' on' : '') + (d.n >= d.t ? ' done' : ''),
       onClick: () => setSel(k)
-    }, /*#__PURE__*/React.createElement("b", null, p.name), /*#__PURE__*/React.createElement("span", null, p.title), /*#__PURE__*/React.createElement("em", null, d.n >= d.t ? '已改完' : `${d.n} / ${d.t}`));
+    }, /*#__PURE__*/React.createElement("b", null, p.name), /*#__PURE__*/React.createElement("span", null, p.title), /*#__PURE__*/React.createElement("em", null, d.n >= d.t ? '已改完' : d.n === 0 && Object.keys(p.written).some(k => p.written[k].aiMarks) ? '🤖 AI 已先改・待確認' : `${d.n} / ${d.t}`));
   })), /*#__PURE__*/React.createElement("div", {
     className: "mk-main"
   }, !cur ? /*#__PURE__*/React.createElement("p", {
@@ -4391,7 +4391,7 @@ function ExamMarking({
     className: "mk-foot"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mk-foot-hint"
-  }, "AI \u53EA\u7D66\u5EFA\u8B70\uFF0C\u6309\u4E0B\u5B58\u6A94\u4E4B\u524D\u5B78\u751F\u770B\u4E0D\u5230\u4EFB\u4F55\u5206\u6578\u3002"), /*#__PURE__*/React.createElement("button", {
+  }, "\u5B78\u751F\u4EA4\u5377\u6642 AI \u5DF2\u5148\u6539\u597D\uFF0C\u5B78\u751F\u6703\u5148\u770B\u5230 AI \u7684\u5206\u6578\uFF08\u6A19\u660E\u300C\u8001\u5E2B\u9084\u6703\u518D\u770B\u904E\u300D\uFF09\uFF1B\u4F60\u78BA\u8A8D\u6216\u8ABF\u6574\u5F8C\u6309\u5B58\u6A94\uFF0C\u5C31\u63DB\u6210\u8001\u5E2B\u7684\u5206\u6578\u3002"), /*#__PURE__*/React.createElement("button", {
     className: "btn primary",
     onClick: save,
     disabled: busy === 'save'

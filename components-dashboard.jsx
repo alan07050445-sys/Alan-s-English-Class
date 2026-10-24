@@ -3449,7 +3449,7 @@ function ExamMarking({ students }) {
               onClick={() => setSel(k)}>
               <b>{p.name}</b>
               <span>{p.title}</span>
-              <em>{d.n >= d.t ? '已改完' : `${d.n} / ${d.t}`}</em>
+              <em>{d.n >= d.t ? '已改完' : (d.n === 0 && Object.keys(p.written).some(k => p.written[k].aiMarks) ? '🤖 AI 已先改・待確認' : `${d.n} / ${d.t}`)}</em>
             </button>
           );
         })}
@@ -3532,7 +3532,7 @@ function ExamMarking({ students }) {
             })}
             {msg && <p className="mk-msg">{msg}</p>}
             <div className="mk-foot">
-              <span className="mk-foot-hint">AI 只給建議，按下存檔之前學生看不到任何分數。</span>
+              <span className="mk-foot-hint">學生交卷時 AI 已先改好，學生會先看到 AI 的分數（標明「老師還會再看過」）；你確認或調整後按存檔，就換成老師的分數。</span>
               <button className="btn primary" onClick={save} disabled={busy === 'save'}>
                 {busy === 'save' ? '存檔中…' : '存檔並讓學生看到'}
               </button>
