@@ -826,7 +826,14 @@ function EditorModal({
           img: '',
           imgCap: ''
         })
-      }, "\u2715"))), /*#__PURE__*/React.createElement("textarea", {
+      }, "\u2715"))), (pt.kind === 'short' || pt.kind === 'essay' || pt.kind === 'table') && /*#__PURE__*/React.createElement("input", {
+        className: "exed-airule",
+        value: pt.aiRule || '',
+        placeholder: "\uD83E\uDD16 \u7D66 AI \u7684\u6279\u6539\u898F\u5247\uFF08\u9078\u586B\uFF09\uFF1A\u4F8B\u5982\u300C\u53EA\u8981\u63D0\u5230 hot \u6216 bright \u5C31\u7D66\u6EFF\u5206\u300D\u300C\u4E0D\u7528\u5BEB\u5B8C\u6574\u53E5\u5B50\u300D",
+        onChange: e => patchPart(si, pi, {
+          aiRule: e.target.value
+        })
+      }), /*#__PURE__*/React.createElement("textarea", {
         rows: pt.kind === 'circle' ? 5 : 6,
         value: window.examPartText ? window.examPartText(pt) : '',
         onChange: e => patchPart(si, pi, window.examParsePart(pt.kind, e.target.value)),

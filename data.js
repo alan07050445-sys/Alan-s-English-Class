@@ -9198,7 +9198,8 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
       : R.bands.map((b, bi) => b.n + (LENIENT_BAND_TEXT[R.bands.length] ? ` (${LENIENT_BAND_TEXT[R.bands.length][bi]})` : (b.en ? ` (${b.en})` : ''))).join(' / '))
     .replace('{CRITERIA}', R.criteria.map(c => `- ${c.id} : ${c.en} — ${c.tip}` + (c.max && !R.hasBands ? ` (allowed: 0 to ${c.max})` : '')).join('\n'))
     .replace(/\{MAX\}/g, String(R.max))
-    + (R.aiHint ? `\n\nSPECIAL RULE FOR THIS KIND OF ANSWER (the teacher wants generous marking):\n${R.aiHint}` : '');
+    + (R.aiHint ? `\n\nSPECIAL RULE FOR THIS KIND OF ANSWER (the teacher wants generous marking):\n${R.aiHint}` : '')
+    + (part && part.aiRule ? `\n\nTHE TEACHER'S OWN RULE FOR THIS QUESTION (follow it; it overrides the generic rules above, but never invent things the child did not write):\n${String(part.aiRule).slice(0, 600)}` : '');
   /* v565：孩子讀的那一篇也給 AI——沒有它，AI 不知道這篇的「起因／經過／結果」是什麼，
      孩子寫沒寫到它只能憑感覺放（實測：完全沒寫結果的摘要也拿到結果項滿分）。 */
   const msg = (passage ? `THE PASSAGE THE CHILD READ (use it to check what the beginning, middle and end really are):\n${String(passage).slice(0, 4000)}\n\n` : '') +

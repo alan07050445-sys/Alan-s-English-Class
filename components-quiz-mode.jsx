@@ -7278,6 +7278,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
             title: pp.part.title || '',
             pts: +pp.part.pts || 0,
             rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          aiRule: String(pp.part.aiRule || '').slice(0, 600),
             rubricSet: 'table',
             qs: Array.from({ length: window.examPartN(pp.part) }, (_, i) => ({
               q: `${H.join(' ／ ')}（第 ${i + 1} 列）`, keyPoints: pp.part.instruction || '',
@@ -7292,7 +7293,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         const url = (drawUrls || {})[pp.key];
         if (url) written[pp.key] = {
           passage: '', title: pp.part.title || '', pts: +pp.part.pts || 0,
-          rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4), rubricSet: 'draw',
+          rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          aiRule: String(pp.part.aiRule || '').slice(0, 600), rubricSet: 'draw',
           qs: [{ q: pp.part.prompt || '', keyPoints: '', a: '（學生畫的圖，見下）', img: url }],
         };
         return;
@@ -7304,6 +7306,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          aiRule: String(pp.part.aiRule || '').slice(0, 600),
           rubricSet: pp.part.rubricSet || 'basic',
           qs: [{ q: pp.part.prompt || '', keyPoints: pp.part.rubric || '', a: t }],
         };
@@ -7315,6 +7318,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || (window.EXAM_RUBRIC_MAX || 4),
+          aiRule: String(pp.part.aiRule || '').slice(0, 600),
           /* v536：用哪一套 rubric 也要帶過去，不然老師端只看得到三項 */
           rubricSet: pp.part.rubricSet || 'basic',
           qs: (pp.part.questions || []).map((q, i) => ({
@@ -7366,7 +7370,13 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
     const R = RS.criteria;
     const max = RS.max;
     const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
-    if (!marked) return <div className="ex-manual">{aiBusy ? '🤖 AI 正在改這一題…（約十幾秒）' : '✍️ 這一題等老師改，還沒有分數。'}</div>;
+    if (!marked) {
+      /* v581：依狀態講清楚——還沒交卷（交了 AI 會先改）／AI 改的當下／AI 沒改成才等老師 */
+      if (pt.kind === 'draw') return <div className="ex-manual">✍️ 畫圖題由老師看圖給分。</div>;
+      if (!sent) return <div className="ex-manual">🤖 交卷後 AI 會先幫你改這一題（老師還會再看過）。</div>;
+      if (aiBusy) return <div className="ex-manual">🤖 AI 正在改這一題…（約十幾秒）</div>;
+      return <div className="ex-manual">✍️ 這一題 AI 這次沒改成，等老師改。</div>;
+    }
     const rp = window.examRubricPart({ pts: pt.pts, questions: qs, rubricMax: max, rubricSet: pt.rubricSet }, by);
     return (
       <div className="ex-marked">

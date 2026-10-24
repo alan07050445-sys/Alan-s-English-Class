@@ -8834,6 +8834,7 @@ function ExamPlayer({
             title: pp.part.title || '',
             pts: +pp.part.pts || 0,
             rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+            aiRule: String(pp.part.aiRule || '').slice(0, 600),
             rubricSet: 'table',
             qs: Array.from({
               length: window.examPartN(pp.part)
@@ -8854,6 +8855,7 @@ function ExamPlayer({
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+          aiRule: String(pp.part.aiRule || '').slice(0, 600),
           rubricSet: 'draw',
           qs: [{
             q: pp.part.prompt || '',
@@ -8871,6 +8873,7 @@ function ExamPlayer({
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+          aiRule: String(pp.part.aiRule || '').slice(0, 600),
           rubricSet: pp.part.rubricSet || 'basic',
           qs: [{
             q: pp.part.prompt || '',
@@ -8886,6 +8889,7 @@ function ExamPlayer({
           title: pp.part.title || '',
           pts: +pp.part.pts || 0,
           rubricMax: +pp.part.rubricMax || window.EXAM_RUBRIC_MAX || 4,
+          aiRule: String(pp.part.aiRule || '').slice(0, 600),
           /* v536：用哪一套 rubric 也要帶過去，不然老師端只看得到三項 */
           rubricSet: pp.part.rubricSet || 'basic',
           qs: (pp.part.questions || []).map((q, i) => ({
@@ -8950,9 +8954,21 @@ function ExamPlayer({
     var R = RS.criteria;
     var max = RS.max;
     var marked = by && by.some(m => m && R.some(c => m[c.id] != null));
-    if (!marked) return /*#__PURE__*/React.createElement("div", {
-      className: "ex-manual"
-    }, aiBusy ? '🤖 AI 正在改這一題…（約十幾秒）' : '✍️ 這一題等老師改，還沒有分數。');
+    if (!marked) {
+      /* v581：依狀態講清楚——還沒交卷（交了 AI 會先改）／AI 改的當下／AI 沒改成才等老師 */
+      if (pt.kind === 'draw') return /*#__PURE__*/React.createElement("div", {
+        className: "ex-manual"
+      }, "\u270D\uFE0F \u756B\u5716\u984C\u7531\u8001\u5E2B\u770B\u5716\u7D66\u5206\u3002");
+      if (!sent) return /*#__PURE__*/React.createElement("div", {
+        className: "ex-manual"
+      }, "\uD83E\uDD16 \u4EA4\u5377\u5F8C AI \u6703\u5148\u5E6B\u4F60\u6539\u9019\u4E00\u984C\uFF08\u8001\u5E2B\u9084\u6703\u518D\u770B\u904E\uFF09\u3002");
+      if (aiBusy) return /*#__PURE__*/React.createElement("div", {
+        className: "ex-manual"
+      }, "\uD83E\uDD16 AI \u6B63\u5728\u6539\u9019\u4E00\u984C\u2026\uFF08\u7D04\u5341\u5E7E\u79D2\uFF09");
+      return /*#__PURE__*/React.createElement("div", {
+        className: "ex-manual"
+      }, "\u270D\uFE0F \u9019\u4E00\u984C AI \u9019\u6B21\u6C92\u6539\u6210\uFF0C\u7B49\u8001\u5E2B\u6539\u3002");
+    }
     var rp = window.examRubricPart({
       pts: pt.pts,
       questions: qs,
