@@ -196,7 +196,9 @@ function App() {
   const [editorGroups, setEditorGroups] = useAppState(null);   // v374(#5): 新增時要提供哪些分組選項
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [qMoveFor, setQMoveFor] = useAppState(null);          // v591 搬單題：要搬的單元
-  const [composeOpen, setComposeOpen] = useAppState(false);    // v591 跨週挑單元
+  const [composeOpen, setComposeOpen] = useAppState(false);    // v591 跨週挑單元（也可能是物件＝聊天室帶著預選開的）
+  const [qMoveInit, setQMoveInit] = useAppState(null);        // v592 聊天室預選的題目／目的地
+  const [askPick, setAskPick] = useAppState(null);              // v592「你是說…？」{ title, options:[], onPick }
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
   /* v398：匯出備份。ExportModal 早就寫好了（components-editor.jsx），
      但從 UI 沒有任何入口進得去＝等於不存在。期末整理的第一步就是「先備份」，
@@ -1379,6 +1381,47 @@ function App() {
   const askFindGroup = (name) => window.askBestGroup
     ? window.askBestGroup((weeksRef.current[weekId] || {}).items, name, askNorm) : null;
 
+  /* v592（Alan：「打錯一個字 AI 助手就沒辦法了…至少問是不是哪一個」）
+     找不到名字時不要只丟一句「找不到」：列出長得像的，點一下就用那個重跑。
+     ⚠ 還是不替他選——Elroy/Elory 只差兩個字母對調，自動選最像的會記到別的孩子身上。 */
+  const askChoose = (title, options, onPick) => setAskPick({ title, options: (options || []).slice(0, 6), onPick });
+  const askUnitTitles = () => {
+    const w = weeksRef.current[weekId] || {};
+    const out = [];
+    Object.keys(w.items || {}).forEach(cid => (w.items[cid] || []).forEach(it => { if (it && it.title) out.push(it.title); }));
+    return out;
+  };
+  /* 學生：回 'chooser'＝跳出選項了（呼叫端別再往下做）；'toast'＝只講了一句 */
+  const askStudentMiss = (f, plan) => {
+    if (f && f.many) { showToast(`名單裡有兩個「${plan.student}」，說全名我才知道是誰。`); return 'toast'; }
+    const opts = window.askSuggest ? window.askSuggest(plan.student, (askRoster || []).map(r => r && r.name)) : [];
+    if (!opts.length) { showToast(`名單裡找不到「${plan.student}」`); return 'toast'; }
+    askChoose(`名單裡沒有「${plan.student}」——你是說哪一位？`, opts, (o) => runAskPlan({ ...plan, student: o }));
+    return 'chooser';
+  };
+
+  /* 單元：唯一符合就回它；多個→列出來點；一個都沒有→找長得像的（打錯字）。回 null＝已經問了／講了。 */
+  const askResolveUnit = (flat, name, plan, field, what) => {
+    const hits = window.askMatchUnits(flat, name);
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) {
+      const titles = Array.from(new Set(hits.map(h => h.item.title)));
+      if (titles.length === hits.length) askChoose(`符合「${name}」的${what}有 ${hits.length} 個，是哪一個？`, titles, (o) => runAskPlan({ ...plan, [field]: o }));
+      else showToast(`符合「${name}」的${what}有 ${hits.length} 個而且名字一樣——請到畫面上自己點。`);
+      return null;
+    }
+    const opts = window.askSuggest ? window.askSuggest(name, flat.map(x => x.item.title)) : [];
+    if (opts.length) askChoose(`找不到「${name}」——你是說哪一個${what}？`, opts, (o) => runAskPlan({ ...plan, [field]: o }));
+    else showToast(`這裡找不到「${name}」這個${what}。`);
+    return null;
+  };
+  const askFlatUnits = (wid) => {
+    const wk = weeksRef.current[wid] || {};
+    const flat = [];
+    Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(it => { if (it && it.id) flat.push({ catId: cid, item: it }); }));
+    return flat;
+  };
+
   const runAskPlan = (plan) => {
     if (!plan) return;
     const cat0 = openCat || (activeCategories[0] && activeCategories[0].id) || 'vocab';
@@ -1414,9 +1457,7 @@ function App() {
       if (plan.student && (!found || !found.email)) {
         /* ⚠ 對不到就老實說，不要猜最像的那一個——
            名單裡真的有 Elroy(G6) 跟 Elory(G4)，猜錯會把整堂課記到別的孩子身上。 */
-        showToast(found && found.many
-          ? `名單裡有兩個「${plan.student}」，請自己點一下是哪一位`
-          : `名單裡找不到「${plan.student}」`);
+        if (askStudentMiss(found, plan) === 'chooser') { setAskOpen(false); return; }
       } else if (found && (found.twins || []).length) {
         showToast(`⚠ 名單裡有「${found.twins.join('、')}」這種很像的名字，確認一下是不是 ${found.name}`);
       }
@@ -1474,6 +1515,17 @@ function App() {
     } else if (plan.intent === 'merge') {
       /* 🧩 合併單字再出題：把字接起來、去重、（有講的話）裁到他要的題數，
          然後開「一鍵出單字」並把單字表填好。 */
+      /* v592：有哪一組名字打錯（找不到）→ 先問「你是說…？」，不要默默少合併一組 */
+      const missG = (plan.groups || []).find(g => !askFindGroup(g));
+      if (missG) {
+        const opts = window.askSuggest ? window.askSuggest(missG, askGroupNames().concat(askUnitTitles())) : [];
+        if (opts.length) {
+          askChoose(`這一週沒有「${missG}」——你是說哪一組？`, opts,
+            (o) => runAskPlan({ ...plan, groups: plan.groups.map(g => g === missG ? o : g) }));
+          setAskOpen(false);
+          return;
+        }
+      }
       let ws = askMergeWords({ groups: plan.groups, weeks: plan.weeks });
       /* v534（Alan：「文法題目再加上 或是合併」）：那幾組如果不是單字組，
          就把它們的文法筆記接起來，開「一鍵出文法」。
@@ -1536,7 +1588,7 @@ function App() {
         let emails = [], names = [];
         if (plan.student) {
           const f = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
-          if (!f || !f.email) { showToast(f && f.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`); return; }
+          if (!f || !f.email) { askStudentMiss(f, plan); return; }
           emails = [f.email]; names = [f.name];
         } else {
           const data = await window.askLoadQueryData();
@@ -1556,7 +1608,7 @@ function App() {
       /* ⭐ v548：給／扣一位孩子的星星。⚠ 星星是他們在乎的東西，寫之前一定確認一次。 */
       const f = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
       if (!f || !f.email) {
-        showToast(f && f.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);
+        askStudentMiss(f, plan);
       } else {
         const msg = [`${f.name}：${plan.amount > 0 ? '加' : '扣'} ${Math.abs(plan.amount)} 顆星星`,
           plan.note ? `原因：${plan.note}` : '',
@@ -1586,7 +1638,7 @@ function App() {
         }
       } else {
         const f = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
-        if (!f || !f.email) showToast(f && f.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);
+        if (!f || !f.email) askStudentMiss(f, plan);
         else {
           const on = plan.rop === 'activate';
           if (window.confirm(`${on ? '恢復' : '停用'} ${f.name}？\n\n${on ? '他會重新出現在名單與統計裡。' : '停用不是刪除：進度與星星都留著，隨時可以恢復。\n他不會再出現在名單、課表統計與提醒裡。'}`)) {
@@ -1601,15 +1653,8 @@ function App() {
     } else if (plan.intent === 'unit') {
       /* ✏️ v548 改／刪**單一個**單元。⚠ 要**唯一**符合才動手——同一週常有「測驗（1/4）（2/4）…」，
          他只說「測驗」就刪的話，刪錯一個是救不回來的。 */
-      const wk = weeksRef.current[weekId] || {};
-      const flat = [];
-      Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(it => flat.push({ catId: cid, item: it })));
-      const hits = window.askMatchUnits(flat, plan.group);
-      if (!hits.length) showToast(`這一週找不到「${plan.group}」`);
-      else if (hits.length > 1) {
-        showToast(`符合的有 ${hits.length} 個：${hits.slice(0, 4).map(h => h.item.title).join('、')}${hits.length > 4 ? '…' : ''}——說清楚是哪一個`);
-      } else {
-        const h = hits[0];
+      const h = askResolveUnit(askFlatUnits(weekId), plan.group, plan, 'group', '單元');
+      if (h) {
         if (plan.op === 'delete') {
           if (window.confirm(`刪掉「${h.item.title}」這一個單元嗎？\n\n學生做過的紀錄會留著，但單元會從這一週消失，救不回來。`)) {
             handleDeleteItem(h.item.id);
@@ -1620,6 +1665,58 @@ function App() {
         }
       }
       setAskOpen(false);
+
+    } else if (plan.intent === 'compose') {
+      /* 📚 v592：把 v591 的「組合複習」叫出來——只負責**挑好、勾好、開視窗**，
+         複製本身走同一份 composeApply，而且最後那一下是他按。
+         ⚠ 週次只認這個年級真的有的；groups 有講才篩，沒講就是那幾週的全部。 */
+      const wNos = plan.weeks || [];
+      const srcIds = wNos.length ? wNos.map(n => askFindWeek(n, true)).filter(Boolean) : weekOrder;
+      const target = plan.toWeek ? askFindWeek(plan.toWeek, true) : '__new__';
+      if (wNos.length && !srcIds.length) showToast('找不到你說的那幾週。');
+      else if (plan.toWeek && !target) showToast(`找不到第 ${plan.toWeek} 週。`);
+      else {
+        const seen = new Set(), picks = [];
+        const add = (wid, it) => { const k = wid + '\u0001' + it.id; if (it && it.id && !seen.has(k) && wid !== target) { seen.add(k); picks.push({ weekId: wid, itemId: it.id }); } };
+        srcIds.forEach(wid => {
+          const wk = weeksRef.current[wid]; if (!wk) return;
+          if ((plan.groups || []).length) {
+            plan.groups.forEach(g => { const f = window.askBestGroup(wk.items, g, askNorm); if (f) f.items.forEach(it => add(wid, it)); });
+          } else Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(it => add(wid, it)));
+        });
+        if (!picks.length) showToast('那幾週裡找不到符合的單元。');
+        else {
+          setComposeOpen({ picks, target, newLabel: target === '__new__' ? (plan.title || '') : '',
+            group: target === '__new__' ? '' : (plan.title || ''), due: plan.due ? (window.askDueDate ? window.askDueDate(plan.due) : '') : '' });
+          showToast(`已幫你勾好 ${picks.length} 個單元——確認後按「帶過去」`);
+        }
+      }
+
+    } else if (plan.intent === 'qmove') {
+      /* ↔ v592：把 v591 的「搬題目」叫出來。找單元要唯一（多個／打錯字都用「你是說…？」問），
+         題號超出範圍就老實說，不要裁掉；開視窗時題目與目的地都先選好，搬還是他按。 */
+      const src = askResolveUnit(askFlatUnits(weekId), plan.group, plan, 'group', '單元');
+      if (src) {
+        const info = window.qmoveInfo(src.item);
+        if (!info) showToast(`「${src.item.title}」不是一題一題的題目，沒辦法搬題目。`);
+        else {
+          const dw = plan.toWeek ? askFindWeek(plan.toWeek, true) : weekId;
+          if (!dw) showToast(`找不到第 ${plan.toWeek} 週。`);
+          else {
+            const bad = plan.qall ? [] : (plan.qnums || []).filter(n => n > info.list.length);
+            if (bad.length) showToast(`「${src.item.title}」只有 ${info.list.length} 題，沒有第 ${bad.join('、')} 題。`);
+            else {
+              const cands = askFlatUnits(dw).filter(x => x.item.id !== src.item.id && window.qmoveCompatible(src.item, x.item));
+              const dst = askResolveUnit(cands, plan.toGroup, plan, 'toGroup', '單元');
+              if (dst) {
+                const sel = plan.qall ? info.list.map((_, i) => i) : Array.from(new Set((plan.qnums || []).map(n => n - 1)));
+                setQMoveInit({ sel, dw, dstId: dst.item.id, copy: !!plan.copy });
+                setQMoveFor(src.item);
+              }
+            }
+          }
+        }
+      }
 
     } else if (plan.intent === 'timetable') {
       /* 🗓 v547 改固定課表（Alan：「改時間」）。
@@ -1632,7 +1729,7 @@ function App() {
         (async () => {
           const found = window.askFindStudent && window.askFindStudent(plan.student, askRoster);
           if (!found || !found.email) {
-            showToast(found && found.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。` : `名單裡找不到「${plan.student}」`);
+            askStudentMiss(found, plan);
             return;
           }
           const tt = await new Promise(res => {
@@ -1675,7 +1772,9 @@ function App() {
       const found = askFindGroup(plan.group);
       if (!found) {
         const names = askGroupNames();
-        showToast(names.length
+        const opts = window.askSuggest ? window.askSuggest(plan.group, names.concat(askUnitTitles())) : [];
+        if (opts.length) askChoose(`這一週沒有「${plan.group}」——你是說哪一組？`, opts, (o) => runAskPlan({ ...plan, group: o }));
+        else showToast(names.length
           ? `這一週沒有「${plan.group}」這一組。有的是：${names.slice(0, 4).join('、')}`
           : '這一週還沒有任何分組。');
       } else if (plan.intent === 'review') {
@@ -2250,7 +2349,7 @@ function App() {
     setWeeks(res.weeks);
     saveWeeksSafe(res.weeks);
     showToast(`${args.copy ? '已複製' : '已搬'} ${res.moved} 題 ✓`);
-    setQMoveFor(null);
+    setQMoveFor(null); setQMoveInit(null);
     return res;
   };
   const handleCompose = ({ picks, target, newLabel, group, dueDate }) => {
@@ -2974,8 +3073,9 @@ function App() {
               weeks={weeks}
               weekOrder={weekOrder}
               catTitles={(() => { const o = {}; (activeCategories || []).forEach(c => { o[c.id] = c.titleZh || c.title || c.id; }); return o; })()}
-              onClose={() => setQMoveFor(null)}
+              onClose={() => { setQMoveFor(null); setQMoveInit(null); }}
               onApply={handleQuestionMove}
+              initial={qMoveInit}
             />
           )}
           {composeOpen && window.ComposeModal && (
@@ -2986,7 +3086,30 @@ function App() {
               catTitles={(() => { const o = {}; (activeCategories || []).forEach(c => { o[c.id] = c.titleZh || c.title || c.id; }); return o; })()}
               onClose={() => setComposeOpen(false)}
               onApply={handleCompose}
+              initial={composeOpen === true ? null : composeOpen}
             />
+          )}
+          {askPick && (
+            <div className="modal-backdrop" onClick={() => setAskPick(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-head">
+                  <h3>你是說哪一個？</h3>
+                  <button className="modal-close" aria-label="關閉" onClick={() => setAskPick(null)}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <div className="field-help" style={{ marginBottom: 12 }}>{askPick.title}</div>
+                  <div className="ask-dym">
+                    {askPick.options.map(o => (
+                      <button key={o} type="button" className="btn primary"
+                        onClick={() => { const f = askPick.onPick; setAskPick(null); f(o); }}>{o}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="modal-foot">
+                  <button className="btn" onClick={() => setAskPick(null)}>都不是</button>
+                </div>
+              </div>
+            </div>
           )}
           <window.GrammarGenModal
             open={grGenOpen}

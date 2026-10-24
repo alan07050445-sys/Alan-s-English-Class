@@ -7637,6 +7637,9 @@ const ASK_JOBS = {
   stars:     { zh: '給／扣星星', ico: '⭐', need: 'student', where: 'chat' },
   roster:    { zh: '學生名單', ico: '👥', need: '', where: 'chat' },
   unit:      { zh: '改／刪單一個單元', ico: '✏️', need: 'group', where: 'editor' },
+  /* ══ v592：v591 做的兩個工具也叫得動（一樣只開畫面、填好，按下去還是他按）══ */
+  compose:   { zh: '組合複習／模擬考', ico: '📚', need: '', where: 'editor' },
+  qmove:     { zh: '搬題目到別的單元', ico: '↔', need: 'group', where: 'editor' },
 };
 
 /* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
@@ -7777,10 +7780,25 @@ The tools:
               ("這週三改成週四" / "下週一那堂換時間"), set "once": true — the website will say it
               cannot do a one-time change yet. If you cannot tell, use "unknown" and ask:
               "是固定課表都改，還是只改這一次？".
+  compose   — build a new review / mock-exam set by picking existing exercises from DIFFERENT weeks
+              and copying them into one week ("把第 1 到 3 週的測驗組成期中複習" / "把 Unit 1 跟 Unit 3
+              那兩組放到新的一週"). "weeks" = week numbers he named; "groups" = group names if he
+              named specific ones (leave empty = everything in those weeks); "toWeek" = the target
+              week number if he said one, 0 = make a NEW week; "title" = the name for the new week
+              or the group name ("期中複習"); "due" as usual. You never copy anything — the website
+              opens the picker with his choices ticked and HE presses the button.
+  qmove     — move (or copy) some QUESTIONS from one exercise into another exercise of the same kind
+              ("Unit 1 測驗的第 2、3 題搬到 Unit 2 測驗"). "group" = the SOURCE exercise's title;
+              "toGroup" = the DESTINATION exercise's title; "qnums" = the question numbers as he said
+              them (1-based list); "qall": true if he said all of them; "toWeek" = the week number
+              of the destination if it is another week, else 0; "copy": true only if he said copy
+              ("複製"), false for move. If he did not say which questions, leave qnums empty and set
+              intent "unknown" asking which ones. This is about single questions, not whole exercises:
+              moving a whole exercise is "unit"/"group".
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars roster unit unknown
+  guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars roster unit compose qmove unknown
 - "side": for exampaper, and for vocab / merge when he says whose vocabulary it is. "it" if he said 外師/IT,
   "lt" if he said 中師/LT. If he did not say, "". (中師單字 is its own category on the website.)
 - "group": the name of the existing group he is talking about, copied exactly
@@ -7912,6 +7930,11 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     start: (() => { const t = String(o.start || '').trim(); return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
     end:   (() => { const t = String(o.end || '').trim();   return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
     once: o.once === true,
+    /* v592：搬題目／組合複習的參數——全部夾回受控值 */
+    toGroup: String(o.toGroup || '').trim().slice(0, 120),
+    qnums: (Array.isArray(o.qnums) ? o.qnums : []).map(n => Math.round(+n || 0)).filter(n => n >= 1 && n <= 200).slice(0, 40),
+    qall: o.qall === true,
+    copy: o.copy === true,
     /* v548：金額只收整數且上限 200——模型寫成 10000 或 NaN，程式照做就會把某個孩子的星星弄壞。 */
     amount: (() => { const n = Math.round(+o.amount); return (isFinite(n) && Math.abs(n) <= 200) ? n : 0; })(),
     rop: ['deactivate', 'activate', 'add'].indexOf(String(o.rop || '').trim()) >= 0 ? String(o.rop).trim() : '',
@@ -7926,8 +7949,17 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     });
     out.email = hit ? hit.email : '';
     if (!hit) {
+      /* v592（Alan：「打錯一個字就沒辦法了，真的 AI 應該可以理解，或是至少問是不是哪一個」）
+         以前這裡直接放棄。現在：找長得像的，列成按鈕問「你是說…？」。
+         ⚠ 還是不替他選——Elroy 跟 Elory 只差一個字母位置，猜錯會記到別的孩子身上；
+           列出來讓他點一下，才是又聰明又安全。
+         raw＝模型原本的回答，他點選之後用同一份重新驗一次（不另寫一套流程）。 */
+      const opts = askSuggest(out.student, (roster || []).map(r => r && r.name));
       out.intent = 'unknown';
-      out.ask = `名單裡找不到「${out.student}」——是哪一位？`;
+      if (opts.length) {
+        out.dym = { field: 'student', wrong: out.student, options: opts, raw: o };
+        out.ask = `名單裡沒有「${out.student}」——你是說${opts.length > 1 ? '哪一位？' : ` ${opts[0]} 嗎？`}`;
+      } else out.ask = `名單裡找不到「${out.student}」——是哪一位？`;
     }
   }
   /* 該有的東西沒有 → 不要硬做，改成問他。
@@ -7963,6 +7995,15 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   }
   if (out.intent === 'unit' && out.op === 'rename' && !out.title) {
     out.intent = 'unknown'; out.ask = `「${out.group}」要改叫什麼？`;
+  }
+  if (out.intent === 'compose' && !out.weeks.length && !out.groups.length) {
+    out.intent = 'unknown'; out.ask = out.ask || '要從哪幾週（或哪幾組）挑？例如「第 1 到 3 週」。';
+  }
+  if (out.intent === 'qmove') {
+    if (!out.toGroup) { out.intent = 'unknown'; out.ask = out.ask || `要搬到哪一個單元？`; }
+    else if (!out.qnums.length && !out.qall) {
+      out.intent = 'unknown'; out.ask = out.ask || `要搬「${out.group}」的第幾題？（例如「第 2、3 題」，或說全部）`;
+    }
   }
   if (out.intent === 'timetable' && !out.once && out.toDay < 0 && !out.start && !out.end) {
     out.intent = 'unknown';
@@ -8017,8 +8058,51 @@ async function aiRouteCommand({ text = '', images = [], categories = [], roster 
   return askVerify(got, { categories, roster, nImages: imgs.length });
 }
 
+/* ══ v592 打錯字也聽得懂：找「長得像的」名字 ═══════════════════════════
+   Alan：「打錯一個字 AI 助手就沒辦法了…真的 AI 應該可以理解，或是至少問是不是哪一個」。
+   ⚠ 這個函式**只列候選，不替他選**：名單裡真的有 Elroy 跟 Elory（只差兩個字母對調），
+     自動選最像的會把課記到別的孩子身上而且不報錯——所以呼叫端一律拿去問「你是說…？」。
+   比對：忽略大小寫與標點；跟「整個名字」「名字裡的每一個詞」「名字開頭同長度那一段」各算一次
+   編輯距離（換字、少打、多打、相鄰兩字對調都算 1），取最小；允許的距離隨長度放寬。
+   中文也適用（「期末複習」→「期中複習」差一個字）。 */
+function _askNormName(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
+function _askEditDist(a, b) {
+  const al = a.length, bl = b.length;
+  if (!al) return bl; if (!bl) return al;
+  const d = [];
+  for (let i = 0; i <= al; i++) { d[i] = [i]; }
+  for (let j = 0; j <= bl; j++) d[0][j] = j;
+  for (let i = 1; i <= al; i++) for (let j = 1; j <= bl; j++) {
+    const c = a[i - 1] === b[j - 1] ? 0 : 1;
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[al][bl];
+}
+function askSuggest(query, names, max) {
+  const q = _askNormName(query);
+  if (!q) return [];
+  const allow = q.length <= 2 ? 0 : q.length <= 5 ? 1 : q.length <= 9 ? 2 : 3;
+  const seen = new Set(), scored = [];
+  (names || []).forEach(raw => {
+    const orig = String(raw || '').trim();
+    const n = _askNormName(orig);
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    if (n === q) return;                                   // 完全一樣就不是「打錯」，不列
+    const parts = n.split(' ').filter(Boolean);
+    let best = _askEditDist(q, n);
+    parts.forEach(p => { best = Math.min(best, _askEditDist(q, p)); });
+    if (n.length > q.length) best = Math.min(best, _askEditDist(q, n.slice(0, q.length)) + 1);   // 打到一半
+    const contains = (q.length >= 3 || (q.length >= 2 && /[\u4e00-\u9fff]/.test(q))) && (n.indexOf(q) >= 0 || q.indexOf(n) >= 0);
+    if (best <= allow || contains) scored.push({ orig, score: contains && best > allow ? allow + 0.5 : best, len: Math.abs(n.length - q.length) });
+  });
+  scored.sort((a, b) => a.score - b.score || a.len - b.len || (a.orig < b.orig ? -1 : 1));
+  return scored.slice(0, max || 4).map(x => x.orig);
+}
+
 Object.assign(window, { ASK_JOBS, ASK_SYS, ASK_VOCAB_KINDS, ASK_DUE_WORDS,
-  askDueDate, askDueDefault, askVerify, aiRouteCommand });
+  askDueDate, askDueDefault, askVerify, aiRouteCommand, askSuggest });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v516 📸 拍考卷照片 → 變成互動版

@@ -4345,3 +4345,6 @@ textarea.ex-essay {
 .cmp-grp-h { display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: .85; cursor: pointer; padding: 3px 0; }
 .cmp-unit { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 22px; font-size: 14px; border-radius: 8px; cursor: pointer; }
 .cmp-unit.on { background: rgba(139, 49, 32, .08); }
+/* v592 你是說…？ */
+.ask-dym { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ask-dym .btn { text-transform: none; letter-spacing: 0; }

@@ -9794,9 +9794,15 @@ function AskPanel({
       }))
     });
     setBusy(false);
+    await respond(plan, t, shots);
+  };
+
+  /* v592：路由器回來之後怎麼回應——抽出來，因為「你是說…？」點選後要走同一條路。 */
+  var respond = async (plan, t, shots) => {
     /* ⚠ 照片要留給產生器用——文法與考卷是直接拿原圖再讀一次，
        不是靠路由器轉述（轉述會掉細節，而且題目要照原文）。 */
     plan.images = shots;
+    plan.userText = t; // 點選「你是說…」之後要用原本那句話（查詢那邊會看有沒有提到「提醒」）
     /* v547 🔎 查詢是「直接回答」，不是開畫面，也不用確認卡（它什麼都不會動）。
        ⚠ 數字全由程式算（askQueryAnswer 用的是後台總覽同一支 buildWeeklyReport），
          AI 只選 qtype。讀資料要一點時間，先放一則「查詢中」讓他知道有在動。 */
@@ -9871,7 +9877,32 @@ function AskPanel({
     key: k,
     src: im.preview,
     alt: ""
-  }))), /*#__PURE__*/React.createElement("span", null, m.text), m.answer && (m.answer.rows || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+  }))), /*#__PURE__*/React.createElement("span", null, m.text), m.plan && m.plan.dym && !m.dymDone && /*#__PURE__*/React.createElement("div", {
+    className: "ask-dym"
+  }, m.plan.dym.options.map(o => /*#__PURE__*/React.createElement("button", {
+    key: o,
+    type: "button",
+    className: "btn",
+    onClick: async () => {
+      setMsgs(x => x.map((y, k) => k === i ? {
+        ...y,
+        dymDone: true
+      } : y).concat([{
+        me: true,
+        text: o
+      }]));
+      var raw = {
+        ...m.plan.dym.raw,
+        [m.plan.dym.field]: o
+      };
+      var p2 = window.askVerify(raw, {
+        categories,
+        roster,
+        nImages: (m.plan.images || []).length
+      });
+      await respond(p2, m.plan.userText || '', m.plan.images || []);
+    }
+  }, o))), m.answer && (m.answer.rows || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
     className: "ask-ans"
   }, m.answer.rows.map((r, k) => /*#__PURE__*/React.createElement("li", {
     key: k,
@@ -13490,17 +13521,19 @@ function QuestionMoveModal({
   weekOrder,
   catTitles,
   onClose,
-  onApply
+  onApply,
+  initial
 }) {
   var [nudgeCls, nudge] = useModalNudge();
   var info = window.qmoveInfo(item) || {
     list: [],
     min: 1
   };
-  var [sel, setSel] = useS([]);
-  var [dw, setDw] = useS(weekId);
-  var [dstId, setDstId] = useS('');
-  var [copy, setCopy] = useS(false);
+  var ini = initial || {};
+  var [sel, setSel] = useS(ini.sel || []); // v592：聊天室可以先選好
+  var [dw, setDw] = useS(ini.dw || weekId);
+  var [dstId, setDstId] = useS(ini.dstId || '');
+  var [copy, setCopy] = useS(!!ini.copy);
   var [err, setErr] = useS('');
   var wk = weeks[dw] || {
     items: {}
@@ -13661,16 +13694,30 @@ function ComposeModal({
   curWeekId,
   catTitles,
   onClose,
-  onApply
+  onApply,
+  initial
 }) {
   var [nudgeCls, nudge] = useModalNudge();
-  var [target, setTarget] = useS('__new__');
-  var [newLabel, setNewLabel] = useS('');
-  var [group, setGroup] = useS('');
-  var [due, setDue] = useS('');
+  var ini = initial || {}; // v592：聊天室可以把週次、單元、名字先勾好填好
+  var [target, setTarget] = useS(ini.target || '__new__');
+  var [newLabel, setNewLabel] = useS(ini.newLabel || '');
+  var [group, setGroup] = useS(ini.group || '');
+  var [due, setDue] = useS(ini.due || '');
   var [q, setQ] = useS('');
-  var [open, setOpen] = useS({});
-  var [sel, setSel] = useS({}); // 'weekId\u0001itemId' → true
+  var [open, setOpen] = useS(() => {
+    var o = {};
+    (ini.picks || []).forEach(p => {
+      o[p.weekId] = true;
+    });
+    return o;
+  });
+  var [sel, setSel] = useS(() => {
+    var o = {};
+    (ini.picks || []).forEach(p => {
+      o[p.weekId + '\u0001' + p.itemId] = true;
+    });
+    return o;
+  }); // 'weekId\u0001itemId' → true
   var [err, setErr] = useS('');
   var K = (w, id) => w + '\u0001' + id;
   var needle = q.trim().toLowerCase();
@@ -13697,7 +13744,7 @@ function ComposeModal({
       weekId: w,
       itemId: id
     };
-  });
+  }).filter(p => p.weekId !== target); // 放進哪一週，那一週自己的單元就不是來源
   var closure = window.composeClosure(weeks, picks);
   var extra = closure.length - picks.length;
   var toggleMany = (keys, on) => setSel(s => {

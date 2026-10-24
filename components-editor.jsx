@@ -6359,9 +6359,15 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
       history: msgs.slice(-4).map(m => ({ me: m.me, text: m.text })),
     });
     setBusy(false);
+    await respond(plan, t, shots);
+  };
+
+  /* v592：路由器回來之後怎麼回應——抽出來，因為「你是說…？」點選後要走同一條路。 */
+  const respond = async (plan, t, shots) => {
     /* ⚠ 照片要留給產生器用——文法與考卷是直接拿原圖再讀一次，
        不是靠路由器轉述（轉述會掉細節，而且題目要照原文）。 */
     plan.images = shots;
+    plan.userText = t;   // 點選「你是說…」之後要用原本那句話（查詢那邊會看有沒有提到「提醒」）
     /* v547 🔎 查詢是「直接回答」，不是開畫面，也不用確認卡（它什麼都不會動）。
        ⚠ 數字全由程式算（askQueryAnswer 用的是後台總覽同一支 buildWeeklyReport），
          AI 只選 qtype。讀資料要一點時間，先放一則「查詢中」讓他知道有在動。 */
@@ -6417,6 +6423,20 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
                 <div className="ask-thumbs">{m.images.map((im, k) => <img key={k} src={im.preview} alt=""/>)}</div>
               )}
               <span>{m.text}</span>
+              {/* v592 打錯字：列出長得像的名字，點一下就用那個重新跑一次（不替他選） */}
+              {m.plan && m.plan.dym && !m.dymDone && (
+                <div className="ask-dym">
+                  {m.plan.dym.options.map(o => (
+                    <button key={o} type="button" className="btn" onClick={async () => {
+                      setMsgs(x => x.map((y, k) => k === i ? { ...y, dymDone: true } : y)
+                        .concat([{ me: true, text: o }]));
+                      const raw = { ...m.plan.dym.raw, [m.plan.dym.field]: o };
+                      const p2 = window.askVerify(raw, { categories, roster, nImages: (m.plan.images || []).length });
+                      await respond(p2, m.plan.userText || '', m.plan.images || []);
+                    }}>{o}</button>
+                  ))}
+                </div>
+              )}
               {/* v547 🔎 答案：一列一個人／一項，顏色只表示狀態（紅＝完全沒做、橘＝做一半、綠＝OK） */}
               {m.answer && (m.answer.rows || []).length > 0 && (
                 <ul className="ask-ans">
@@ -8595,13 +8615,14 @@ function ExamPrepModal({ open, side, pace, weeks, weekOrder, weekId, categories,
    v591（Alan：「2 跨週挑單元組成複習／模擬考」「6 單題搬到別的單元」）
    純資料都在 data.js（qmoveApply／composeApply，有 t-v591 測試）；這裡只有畫面。
    ⚠ 兩個視窗都不自己存檔——onApply 回傳結果，由 app.jsx 一次存完。 */
-function QuestionMoveModal({ item, weekId, weeks, weekOrder, catTitles, onClose, onApply }) {
+function QuestionMoveModal({ item, weekId, weeks, weekOrder, catTitles, onClose, onApply, initial }) {
   const [nudgeCls, nudge] = useModalNudge();
   const info = window.qmoveInfo(item) || { list: [], min: 1 };
-  const [sel, setSel]     = useS([]);
-  const [dw, setDw]       = useS(weekId);
-  const [dstId, setDstId] = useS('');
-  const [copy, setCopy]   = useS(false);
+  const ini = initial || {};
+  const [sel, setSel]     = useS(ini.sel || []);               // v592：聊天室可以先選好
+  const [dw, setDw]       = useS(ini.dw || weekId);
+  const [dstId, setDstId] = useS(ini.dstId || '');
+  const [copy, setCopy]   = useS(!!ini.copy);
   const [err, setErr]     = useS('');
   const wk = weeks[dw] || { items: {} };
   const cands = [];
@@ -8692,15 +8713,16 @@ function QuestionMoveModal({ item, weekId, weeks, weekOrder, catTitles, onClose,
   );
 }
 
-function ComposeModal({ weeks, weekOrder, curWeekId, catTitles, onClose, onApply }) {
+function ComposeModal({ weeks, weekOrder, curWeekId, catTitles, onClose, onApply, initial }) {
   const [nudgeCls, nudge] = useModalNudge();
-  const [target, setTarget] = useS('__new__');
-  const [newLabel, setNewLabel] = useS('');
-  const [group, setGroup] = useS('');
-  const [due, setDue]     = useS('');
+  const ini = initial || {};   // v592：聊天室可以把週次、單元、名字先勾好填好
+  const [target, setTarget] = useS(ini.target || '__new__');
+  const [newLabel, setNewLabel] = useS(ini.newLabel || '');
+  const [group, setGroup] = useS(ini.group || '');
+  const [due, setDue]     = useS(ini.due || '');
   const [q, setQ]         = useS('');
-  const [open, setOpen]   = useS({});
-  const [sel, setSel]     = useS({});     // 'weekId\u0001itemId' → true
+  const [open, setOpen]   = useS(() => { const o = {}; (ini.picks || []).forEach(p => { o[p.weekId] = true; }); return o; });
+  const [sel, setSel]     = useS(() => { const o = {}; (ini.picks || []).forEach(p => { o[p.weekId + '\u0001' + p.itemId] = true; }); return o; });     // 'weekId\u0001itemId' → true
   const [err, setErr]     = useS('');
   const K = (w, id) => w + '\u0001' + id;
   const needle = q.trim().toLowerCase();
@@ -8716,7 +8738,8 @@ function ComposeModal({ weeks, weekOrder, curWeekId, catTitles, onClose, onApply
     }));
     return out;
   };
-  const picks = Object.keys(sel).filter(k => sel[k]).map(k => { const [w, id] = k.split('\u0001'); return { weekId: w, itemId: id }; });
+  const picks = Object.keys(sel).filter(k => sel[k]).map(k => { const [w, id] = k.split('\u0001'); return { weekId: w, itemId: id }; })
+    .filter(p => p.weekId !== target);   // 放進哪一週，那一週自己的單元就不是來源
   const closure = window.composeClosure(weeks, picks);
   const extra = closure.length - picks.length;
   const toggleMany = (keys, on) => setSel(s => { const n = { ...s }; keys.forEach(k => { if (on) n[k] = true; else delete n[k]; }); return n; });

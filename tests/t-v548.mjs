@@ -81,7 +81,7 @@ ok('⭐ 星星對到名字很像的人要再提醒一次（Elroy/Elory）', /名
 ok('⭐⭐ 停用要講明「不是刪除」，進度與星星都留著', /停用不是刪除：進度與星星都留著/.test(app));
 ok('⭐ 新增學生已經在名單裡就說「已經在名單裡」，不重複建', /已經在名單裡了/.test(app));
 ok('⭐ 新增走既有的 addRosterStudent，teacher 欄位寫他自己', /window\.addRosterStudent\(plan\.newEmail, plan\.student, g, me\)/.test(appC));
-ok('⭐⭐ 刪單元：多個符合要列候選叫他說清楚，唯一符合才 confirm 然後刪', /符合的有 \$\{hits\.length\} 個/.test(app)
+ok('⭐⭐ 刪單元：多個符合要列候選叫他說清楚，唯一符合才 confirm 然後刪', /符合「\$\{name\}」的\$\{what\}有 \$\{hits\.length\} 個/.test(app)   // v592：改成列成按鈕讓他點（askChoose），不只講一句
    && /刪掉「\$\{h\.item\.title\}」這一個單元嗎/.test(app) && /handleDeleteItem\(h\.item\.id\)/.test(appC));
 ok('⭐⭐ 改單元名只動 title，不動 group（還留在原本那一組）', (() => {
    const i = appC.indexOf('const handleRenameUnit');
