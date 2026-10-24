@@ -9,4 +9,5 @@ ok('文章掛在「題目跟它共用實詞最多」的那一題，不是第一�
 ok('後面沒等到題目的標題＋文章 → 改當 Section 的文章', /pt\._cont !== 'questions'/.test(data) && /if \(rt && !sc\.passage\) sc\.passage = rt/.test(data));
 ok('short 的文章也存成 readText（學生端才看得到）', /\.\.\.\(rtShort \? \{ readText: rtShort \} : \{\}\)/.test(data));
 ok('題目在問 the text 卻整個 Section 都沒文章 → 提醒', /在問一篇文章（the text／the author）/.test(data) && /!\(sec\.parts \|\| \[\]\)\.some\(x => String\(x\.readText/.test(data));
+ok('v588：Part 5 這類手寫題（作者目的／舉一個細節並解釋）寬鬆規則：有基礎就給分、短答案不扣用心', /naming the purpose[\s\S]{0,200}full-mark answer/.test(data) && /A short answer to a short question is NOT low effort/.test(data) && /6: \['TOP: the basic requirement is met/.test(data));
 process.exit(fail ? 1 : 0);

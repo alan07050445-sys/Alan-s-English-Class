@@ -9148,7 +9148,14 @@ const EXAM_RUBRIC_MAX = 4;          // 每一項的滿分（老師可以在出�
 const EXAM_RUBRIC_SETS = {
   basic: {
     zh: '三項（說明／切題／用心）', max: 4, criteria: EXAM_RUBRIC,
-    aiHint: 'Give FULL marks when the answer sensibly answers the question and says WHY / WHAT the question asks, even if it is short and simple (for example: descriptive language helps the reader picture, imagine or feel the scene). Do not ask for more length or detail than the question needs.',
+    aiHint: 'Give FULL marks when the answer sensibly answers the question and says WHY / WHAT the question asks, even if it is short and simple (for example: descriptive language helps the reader picture, imagine or feel the scene). Do not ask for more length or detail than the question needs. '
+      + 'Typical cases: (1) "What is the author\'s purpose?" — naming the purpose (to inform / entertain / persuade, or the same idea in the child\'s own words) is already a full-mark answer; a reason is a bonus, not required. '
+      + '(2) "Write one detail from the story, then explain how it supports the purpose" — if the child gives ONE real detail from the passage (a quote or a paraphrase) and says, in any simple way, how it shows or supports the purpose, give top marks on all three criteria. '
+      + '"Explanation" is full when the child says what the detail shows; "Relevant" is full when the detail really is in the passage and fits the question; "Effort" is full for a complete, readable answer — it does not need to be long or perfect. '
+      + 'A short answer to a short question is NOT low effort: give "Effort" 5 whenever the child wrote a real, readable answer to what was asked, and never below 4 for that. '
+      + 'If the child names the purpose in loose words ("to tell about him", "to teach us") that counts as naming it — give full marks. '
+      + 'If the child gives a real detail AND says anything about what it shows, "Explanation" is 5 (do not hold back a point for style). '
+      + 'Only go low when the answer is blank, off topic, a detail that is NOT in the passage, or has no explanation at all.',
   },
   writing: {
     zh: '康橋寫作七項', max: 7,
@@ -9324,6 +9331,7 @@ Return ONLY JSON — one key per criterion id listed above, plus "errors", "quot
    老師的規則是「達到應有的標準就給高分」——所以給 AI 看的等第說明改成：最高＝達到或超過標準。
    ⚠ 只改給 AI 看的文字；老師畫面上的等第名稱與分數不變。 */
 const LENIENT_BAND_TEXT = {
+  6: ['TOP: the basic requirement is met (meets OR beats the standard for a child this age)', 'met, with one small gap', 'partly met', 'weak: simple and missing some details', 'mostly off topic or hard to read', 'nothing written'],
   5: ['TOP: a reasonable question clearly about the passage', 'a question, but hardly connected', 'missing vital information or copied', 'not a question about the passage', 'nothing written'],
   4: ['TOP: meets OR beats the standard expected of a child this age', 'almost there — one clear gap', 'well below the standard', 'nothing written / off-topic'],
 };
