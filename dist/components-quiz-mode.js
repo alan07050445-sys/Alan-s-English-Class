@@ -8733,6 +8733,8 @@ function ExamPlayer({
   var [focus, setFocus] = useQM(null); // cloze：現在在填哪一格（點詞庫要知道填去哪）
   var focusRef = React.useRef(null); // 同上，但「永遠是最新的」——見下面 put 的說明
   var [sent, setSent] = useQM(false);
+  var [aiMarks, setAiMarks] = useQM({}); // v575：交卷時 AI 先改好的手寫題（partKey → 每題的分數）
+  var [aiBusy, setAiBusy] = useQM(false);
   var [drawErr, setDrawErr] = useQM(''); // v571：畫的圖沒傳成功時的說明
   var [res, setRes] = useQM(null);
   var topRef = React.useRef(null);
@@ -8894,6 +8896,29 @@ function ExamPlayer({
         };
       }
     });
+    /* v575 🤖 手寫題交卷時就由 AI 先改（Alan：「記住要 AI 改」）。
+       ⚠ 規則在 data.js：EXAM_RUBRIC_SETS 各題型的 aiHint＋AI_RUBRIC_SYS（偏寬鬆、小錯 3 個扣 1 分）。
+       ⚠ 最多等 45 秒——AI 叫不動就照舊交卷，那幾題等老師改；畫圖不改。
+       ⚠ AI 的分數存在孩子自己的作答裡（aiMarks），老師端會帶進批改畫面、確認後才算數；
+         老師存過的分數永遠優先。 */
+    var wk = Object.keys(written).filter(k => written[k].rubricSet !== 'draw' && window.examAiMarkPart);
+    if (wk.length) {
+      setAiBusy(true);
+      try {
+        var got = await Promise.race([Promise.all(wk.map(k => window.examAiMarkPart(written[k]).catch(() => null))), new Promise(res => setTimeout(() => res(null), 45000))]);
+        if (got) {
+          var mine = {};
+          wk.forEach((k, i) => {
+            if (got[i]) {
+              written[k].aiMarks = got[i];
+              mine[k] = got[i];
+            }
+          });
+          setAiMarks(mine);
+        }
+      } catch (e) {}
+      setAiBusy(false);
+    }
     saveQuizModeCompletion(progressKey, item, {
       doneCount: r.parts.filter(p => examCountsAsTask(p.part)).length,
       score: r.auto,
@@ -8914,7 +8939,9 @@ function ExamPlayer({
      ⚠ 抽出來的原因不只是少打字：兩邊各寫一份，改了 rubric 的顯示方式
        只有一邊會動（v526 的倒數時鐘就吃過這個虧）。 */
   var examMarkBlock = (pt, key, qs) => {
-    var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || null;
+    var byTeacher = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || null;
+    var by = byTeacher || aiMarks[key] || null; // v575：老師沒改之前，先顯示 AI 改的
+    var isAi = !byTeacher && !!by;
     /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
     var RS = window.examRubricOf ? window.examRubricOf(pt) : {
       criteria: window.EXAM_RUBRIC || [],
@@ -8925,7 +8952,7 @@ function ExamPlayer({
     var marked = by && by.some(m => m && R.some(c => m[c.id] != null));
     if (!marked) return /*#__PURE__*/React.createElement("div", {
       className: "ex-manual"
-    }, "\u270D\uFE0F \u9019\u4E00\u984C\u8001\u5E2B\u6703\u89AA\u81EA\u6539\uFF0C\u4E0D\u6703\u81EA\u52D5\u7D66\u5206\u3002");
+    }, aiBusy ? '🤖 AI 正在改這一題…（約十幾秒）' : '✍️ 這一題等老師改，還沒有分數。');
     var rp = window.examRubricPart({
       pts: pt.pts,
       questions: qs,
@@ -8936,7 +8963,7 @@ function ExamPlayer({
       className: "ex-marked"
     }, /*#__PURE__*/React.createElement("div", {
       className: "ex-marked-h"
-    }, "\u8001\u5E2B\u6539\u597D\u4E86 ", /*#__PURE__*/React.createElement("b", null, rp.got, " / ", pt.pts)), qs.map((q, i) => {
+    }, isAi ? '🤖 AI 先幫你改了（老師還會再看過）' : '老師改好了', " ", /*#__PURE__*/React.createElement("b", null, rp.got, " / ", pt.pts)), qs.map((q, i) => {
       var m = by[i];
       if (!m) return null;
       return /*#__PURE__*/React.createElement("div", {
@@ -8975,7 +9002,19 @@ function ExamPlayer({
       }, "\u4E0D\u8A08\u5206");
       return /*#__PURE__*/React.createElement("span", {
         className: "ex-pts"
-      }, sent && pr ? pr.auto ? `${pr.got} / ${pts}` : `__ / ${pts}` : `${pts} 分`, !sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : '');
+      }, sent && pr ? pr.auto ? `${pr.got} / ${pts}` : (() => {
+        var by = teacherMark && teacherMark.byPart && teacherMark.byPart[key] || aiMarks[key];
+        var nq = pt.kind === 'essay' || pt.kind === 'draw' ? 1 : pt.kind === 'table' ? n : (pt.questions || []).length;
+        var rp = by && nq && window.examRubricPart ? window.examRubricPart({
+          pts: pt.pts,
+          questions: Array.from({
+            length: nq
+          }, () => ({})),
+          rubricMax: pt.rubricMax,
+          rubricSet: pt.rubricSet
+        }, by) : null;
+        return rp && rp.done ? `${rp.got} / ${pts}` : `__ / ${pts}`;
+      })() : `${pts} 分`, !sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : '');
     })()), pt.instruction && /*#__PURE__*/React.createElement("p", {
       className: "ex-inst"
     }, pt.instruction), pt.img && /*#__PURE__*/React.createElement("figure", {

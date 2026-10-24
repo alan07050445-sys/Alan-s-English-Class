@@ -52,7 +52,7 @@ ok('⭐⭐ 引用不到孩子真的寫過的字 → 整份建議作廢', (() => 
    const i = data.indexOf('async function aiGradeRubric');
    const b = data.slice(i, data.indexOf('\n}', i));
    /* v571：最少引幾個字改成看答案長度（短答案 1~2 個字、長答案才 3 個字）；「必須是孩子真的寫過的」不變 */
-   return /q\.split\(' '\)\.length < minQ \|\| flat\(ans\)\.indexOf\(q\) < 0\) return null/.test(b)
+   return /q\.split\(' '\)\.length < minQ \|\| !grounded\) return null/.test(b) && /const grounded = flat\(ans\)\.indexOf\(q\) >= 0/.test(b)
      && /minQ = aw <= 10 \? 1 : \(aw <= 25 \? 2 : 3\)/.test(b); })());
 ok('⭐ 分數不是允許的等第就整份作廢（不要只夾回來就用）', (() => {
    /* v536 起等第可以是 7/5/3/0 這種不連續的（康橋寫作卷），
@@ -103,10 +103,10 @@ ok('   老師改過的分數再打開要帶回來（不然每次點進去都是�
 
 console.log('\n【5】學生端');
 ok('⭐ 學生訂閱自己的 practice 看分數', /window\.subscribePractice\(em, \(doc\) => \{[\s\S]{0,140}examMarkOf/.test(qm));
-ok('⭐⭐ 老師沒改之前就顯示「老師會親自改」，不可以拿 AI 的建議先頂著', (() => {
-   const i = qm.indexOf('const marked = by && by.some');
-   const b = qm.slice(i, i + 400);
-   return i > 0 && /if \(!marked\)/.test(b) && /老師會親自改/.test(b); })());
+ok('⭐⭐ v575：老師存過的分數優先；沒有才顯示 AI 先改的，而且標明是 AI（不假裝是老師）', (() => {
+   const i = qm.indexOf('const byTeacher =');
+   const b = qm.slice(i, i + 500);
+   return i > 0 && /by = byTeacher \|\| aiMarks\[key\]/.test(b) && /isAi/.test(qm) && /AI 先幫你改了（老師還會再看過）/.test(qm) && /if \(!marked\)/.test(qm); })());
 ok('   改好之後三項分數與評語都看得到', /ex-marked-cr/.test(qm) && /ex-marked-note/.test(qm));
 
 console.log('\n【6】出卷端');

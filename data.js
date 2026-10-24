@@ -9019,6 +9019,7 @@ const EXAM_RUBRIC_MAX = 4;          // 每一項的滿分（老師可以在出�
 const EXAM_RUBRIC_SETS = {
   basic: {
     zh: '三項（說明／切題／用心）', max: 4, criteria: EXAM_RUBRIC,
+    aiHint: 'Give FULL marks when the answer sensibly answers the question and says WHY / WHAT the question asks, even if it is short and simple (for example: descriptive language helps the reader picture, imagine or feel the scene). Do not ask for more length or detail than the question needs.',
   },
   writing: {
     zh: '康橋寫作七項', max: 7,
@@ -9044,6 +9045,7 @@ const EXAM_RUBRIC_SETS = {
      沒帶 max 的準則照整套的 max（舊的兩套完全不受影響）。 */
 EXAM_RUBRIC_SETS.summary = {
   zh: '摘要六項（康橋 Summary Rubric，10 分）', max: 2,
+  aiHint: 'This is a SUMMARY of the passage. For beginning / middle / end: give FULL marks when the child clearly states that part (the cause, what happened, the result) in simple words — no extra detail is needed. "order" is full if the events go roughly in story order. "sent" is full if each detail is a sentence. "own" is full unless it is copied word for word. Go low ONLY when a part is truly missing, the text is copied, or it is absurd / unrelated to the passage.',
   criteria: [
     { id: 'begin',  zh: '開頭細節', en: 'Detail from the beginning', tip: '起因：有沒有寫到文章開頭的重要事情（寫到就給滿分，不用寫得很完整）', max: 2 },
     { id: 'middle', zh: '中間細節', en: 'Detail from the middle',    tip: '經過：有沒有寫到中間發生的重要事情', max: 2 },
@@ -9057,6 +9059,7 @@ EXAM_RUBRIC_SETS.summary = {
    ⚠ 跟摘要一樣每項滿分不同，所以準則自己帶 max。 */
 EXAM_RUBRIC_SETS.table = {
   zh: '表格填寫（找字詞＋說明，每列 3 分）', max: 2,
+  aiHint: 'Each answer is ONE row of a table: "descriptive word or phrase  ➜  what it helps me imagine". "find" is full if the left part is a reasonable descriptive wording that really appears in (or closely matches) the passage — an adjective, a vivid verb, a comparison. "explain" is full when the right part says, in any simple words, what it makes the reader see / hear / feel / imagine (for "blazing suns": "very hot and bright"). Do not demand a perfect sentence. Go low ONLY if the left part is not from the passage or not descriptive, or the right part is empty, unrelated, or just repeats the left.',
   criteria: [
     { id: 'find',    zh: '找得對',   en: 'Right word or phrase', tip: '左欄寫的是不是文章裡真的有的描述性字詞（形容詞、生動的動詞、比喻）', max: 1 },
     { id: 'explain', zh: '說得清楚', en: 'Clear explanation',    tip: '右欄有沒有說出這個字詞讓人想像到什麼（看到、聽到、感覺到）', max: 2 },
@@ -9085,7 +9088,7 @@ function examRubricOf(part) {
   const bands = set.bands && set.bands.length
     ? set.bands
     : Array.from({ length: max + 1 }, (_, i) => ({ n: max - i, zh: '' }));
-  return { key: (part && part.rubricSet) || 'basic', zh: set.zh, max, bands, criteria: set.criteria,
+  return { key: (part && part.rubricSet) || 'basic', zh: set.zh, max, bands, criteria: set.criteria, aiHint: set.aiHint || '',
            hasBands: !!(set.bands && set.bands.length) };
 }
 
@@ -9194,7 +9197,8 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
       ? 'each criterion has its own range, given after it'
       : R.bands.map((b, bi) => b.n + (LENIENT_BAND_TEXT[R.bands.length] ? ` (${LENIENT_BAND_TEXT[R.bands.length][bi]})` : (b.en ? ` (${b.en})` : ''))).join(' / '))
     .replace('{CRITERIA}', R.criteria.map(c => `- ${c.id} : ${c.en} — ${c.tip}` + (c.max && !R.hasBands ? ` (allowed: 0 to ${c.max})` : '')).join('\n'))
-    .replace(/\{MAX\}/g, String(R.max));
+    .replace(/\{MAX\}/g, String(R.max))
+    + (R.aiHint ? `\n\nSPECIAL RULE FOR THIS KIND OF ANSWER (the teacher wants generous marking):\n${R.aiHint}` : '');
   /* v565：孩子讀的那一篇也給 AI——沒有它，AI 不知道這篇的「起因／經過／結果」是什麼，
      孩子寫沒寫到它只能憑感覺放（實測：完全沒寫結果的摘要也拿到結果項滿分）。 */
   const msg = (passage ? `THE PASSAGE THE CHILD READ (use it to check what the beginning, middle and end really are):\n${String(passage).slice(0, 4000)}\n\n` : '') +
@@ -9226,7 +9230,11 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
      硬要引 3 個字以上，AI 只好引到別格或編一段，整份建議就被丟掉（實測：好答案回「不可靠」）。
      短答案引 1~2 個字就夠；長答案才要 3 個字以上。引的字仍然必須是孩子真的寫過的。 */
   const aw = words.length, minQ = aw <= 10 ? 1 : (aw <= 25 ? 2 : 3);
-  if (!q || q.split(' ').length < minQ || flat(ans).indexOf(q) < 0) return null;
+  /* v575：表格的答案是「左欄 ➜ 右欄」串起來的——AI 常把兩欄的字接成一句引用（跳過中間的箭頭）。
+     表格答案改成「引用的每個字都要按順序出現在孩子寫的字裡」，仍然不能編孩子沒寫過的字。 */
+  const inOrder = (qq, aa) => { let i = 0; const A = aa.split(' '); for (const w of qq.split(' ')) { const j = A.indexOf(w, i); if (j < 0) return false; i = j + 1; } return true; };
+  const grounded = flat(ans).indexOf(q) >= 0 || (/➜/.test(ans) && inOrder(q, flat(ans)));
+  if (!q || q.split(' ').length < minQ || !grounded) return null;
   out.quote = String(got.quote).trim();
   out.next = String(got.next || '').trim().slice(0, 40);
   /* v565：小錯清單也要「接地」——AI 說的錯，必須是孩子真的寫過的字（而且跟它給的改正不同），
@@ -9249,6 +9257,33 @@ async function aiGradeRubric(question, answer, { max = EXAM_RUBRIC_MAX, keyPoint
     if (out.grammar.n < top) out.grammar = { n: top, why: '拼字文法的小錯另外計算，這一項不重複扣' };
   }
   return out;
+}
+
+/* v575（Alan：「記住要 AI 改，給 AI 設定規則」）：交卷時就由 AI 把手寫題先改好。
+   w ＝ examWritten 的一大題（{ passage, rubricSet, rubricMax, qs:[{q,keyPoints,a}] }）。
+   回傳 byPart 陣列（跟老師批改存的格式一樣：每題 { 各準則分數, note, _ai, _errN, _errList… }），
+   某一題 AI 沒給出可靠的結果就是 null（那題照舊等老師改）。畫圖不改。 */
+async function examAiMarkPart(w) {
+  if (!w || w.rubricSet === 'draw') return null;
+  const R = examRubricOf(w);
+  const qs = w.qs || [];
+  const out = await Promise.all(qs.map(async (q) => {
+    if (q.img) return null;
+    try {
+      const ask = () => aiGradeRubric(q.q, q.a, { max: R.max, keyPoints: q.keyPoints, part: w, passage: w.passage || '' });
+      /* AI 偶爾引用不到孩子真的寫過的字（建議作廢）——再問一次，兩次都不行才留給老師 */
+      const got = (await ask()) || (await ask());
+      if (!got) return null;
+      const m = { note: got.next || '', _ai: true };
+      R.criteria.forEach(c => { m[c.id] = got[c.id] ? got[c.id].n : 0; });
+      m._why = R.criteria.map(c => `${c.zh}：${(got[c.id] || {}).why || ''}`).join('　');
+      m._quote = got.quote || '';
+      m._errN = got._errN || 0;
+      m._errList = got._errList || [];
+      return m;
+    } catch (e) { return null; }
+  }));
+  return out.some(Boolean) ? out : null;
 }
 
 /* ══ v536 📊 故事結構圖（Beginning / Middle / End）════════════════
@@ -9822,7 +9857,7 @@ Object.assign(window, { examLoadDict, examNeedsDict, examAffixDetect, examAffixZ
   examFixBoxScore, examEvidenceOne, examEssayStats, examPtsOf, _evSentences,
   examCircleCheck, examCircleHit,
   EXAM_RUBRIC, EXAM_RUBRIC_MAX, EXAM_RUBRIC_SETS, examRubricOf, examBandsOf, EXAM_ERR_RULE, examErrDeduct,
-  examRubricPoints, examRubricPart, aiGradeRubric });
+  examRubricPoints, examRubricPart, aiGradeRubric, examAiMarkPart });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v513（Alan 的 AI 清單第三順位）📝 考前複習包

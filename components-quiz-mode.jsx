@@ -7195,6 +7195,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [focus, setFocus]   = useQM(null);   // cloze：現在在填哪一格（點詞庫要知道填去哪）
   const focusRef = React.useRef(null);       // 同上，但「永遠是最新的」——見下面 put 的說明
   const [sent, setSent]     = useQM(false);
+  const [aiMarks, setAiMarks] = useQM({});     // v575：交卷時 AI 先改好的手寫題（partKey → 每題的分數）
+  const [aiBusy, setAiBusy] = useQM(false);
   const [drawErr, setDrawErr] = useQM('');     // v571：畫的圖沒傳成功時的說明
   const [res, setRes]       = useQM(null);
   const topRef = React.useRef(null);
@@ -7322,6 +7324,27 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         };
       }
     });
+    /* v575 🤖 手寫題交卷時就由 AI 先改（Alan：「記住要 AI 改」）。
+       ⚠ 規則在 data.js：EXAM_RUBRIC_SETS 各題型的 aiHint＋AI_RUBRIC_SYS（偏寬鬆、小錯 3 個扣 1 分）。
+       ⚠ 最多等 45 秒——AI 叫不動就照舊交卷，那幾題等老師改；畫圖不改。
+       ⚠ AI 的分數存在孩子自己的作答裡（aiMarks），老師端會帶進批改畫面、確認後才算數；
+         老師存過的分數永遠優先。 */
+    const wk = Object.keys(written).filter(k => written[k].rubricSet !== 'draw' && window.examAiMarkPart);
+    if (wk.length) {
+      setAiBusy(true);
+      try {
+        const got = await Promise.race([
+          Promise.all(wk.map(k => window.examAiMarkPart(written[k]).catch(() => null))),
+          new Promise(res => setTimeout(() => res(null), 45000)),
+        ]);
+        if (got) {
+          const mine = {};
+          wk.forEach((k, i) => { if (got[i]) { written[k].aiMarks = got[i]; mine[k] = got[i]; } });
+          setAiMarks(mine);
+        }
+      } catch (e) {}
+      setAiBusy(false);
+    }
     saveQuizModeCompletion(progressKey, item, {
       doneCount: r.parts.filter(p => examCountsAsTask(p.part)).length,
       score: r.auto, total: r.autoMax, wrongQuestions: wrongList,
@@ -7335,17 +7358,19 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
      ⚠ 抽出來的原因不只是少打字：兩邊各寫一份，改了 rubric 的顯示方式
        只有一邊會動（v526 的倒數時鐘就吃過這個虧）。 */
   const examMarkBlock = (pt, key, qs) => {
-    const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || null;
+    const byTeacher = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || null;
+    const by = byTeacher || aiMarks[key] || null;       // v575：老師沒改之前，先顯示 AI 改的
+    const isAi = !byTeacher && !!by;
     /* v536：準則與滿分照那一大題自己的設定（寫作卷是七項） */
     const RS = window.examRubricOf ? window.examRubricOf(pt) : { criteria: window.EXAM_RUBRIC || [], max: 4 };
     const R = RS.criteria;
     const max = RS.max;
     const marked = by && by.some(m => m && R.some(c => m[c.id] != null));
-    if (!marked) return <div className="ex-manual">✍️ 這一題老師會親自改，不會自動給分。</div>;
+    if (!marked) return <div className="ex-manual">{aiBusy ? '🤖 AI 正在改這一題…（約十幾秒）' : '✍️ 這一題等老師改，還沒有分數。'}</div>;
     const rp = window.examRubricPart({ pts: pt.pts, questions: qs, rubricMax: max, rubricSet: pt.rubricSet }, by);
     return (
       <div className="ex-marked">
-        <div className="ex-marked-h">老師改好了 <b>{rp.got} / {pt.pts}</b></div>
+        <div className="ex-marked-h">{isAi ? '🤖 AI 先幫你改了（老師還會再看過）' : '老師改好了'} <b>{rp.got} / {pt.pts}</b></div>
         {qs.map((q, i) => {
           const m = by[i];
           if (!m) return null;
@@ -7386,7 +7411,12 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
             if ((window.EXAM_KINDS[pt.kind] || {}).noScore) return <span className="ex-pts soft">不計分</span>;
             return (
               <span className="ex-pts">
-                {sent && pr ? (pr.auto ? `${pr.got} / ${pts}` : `__ / ${pts}`) : `${pts} 分`}
+                {sent && pr ? (pr.auto ? `${pr.got} / ${pts}` : (() => {
+                  const by = (teacherMark && teacherMark.byPart && teacherMark.byPart[key]) || aiMarks[key];
+                  const nq = pt.kind === 'essay' || pt.kind === 'draw' ? 1 : (pt.kind === 'table' ? n : (pt.questions || []).length);
+                  const rp = by && nq && window.examRubricPart ? window.examRubricPart({ pts: pt.pts, questions: Array.from({ length: nq }, () => ({})), rubricMax: pt.rubricMax, rubricSet: pt.rubricSet }, by) : null;
+                  return rp && rp.done ? `${rp.got} / ${pts}` : `__ / ${pts}`;
+                })()) : `${pts} 分`}
                 {!sent && n > 1 ? `（${Math.round(pts / n * 10) / 10} 分一題）` : ''}
               </span>
             );

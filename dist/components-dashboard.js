@@ -4189,6 +4189,16 @@ function ExamMarking({
       ...m,
       [sel]: had
     }));
+    /* v575：老師還沒存過 → 把學生交卷時 AI 先改好的帶進來（老師確認或改完按「存檔」才算數） */else if (!had && !mark[sel] && cur.written) {
+      var pre = {};
+      Object.keys(cur.written).forEach(k => {
+        if (cur.written[k].aiMarks) pre[k] = cur.written[k].aiMarks;
+      });
+      if (Object.keys(pre).length) setMark(m => ({
+        ...m,
+        [sel]: pre
+      }));
+    }
   }, [sel, saved]);
   var aiOne = async (partKey, qi, q, max, w) => {
     setMsg('');
