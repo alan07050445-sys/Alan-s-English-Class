@@ -2,6 +2,11 @@
 
 const { useState: useAppState, useEffect: useAppEffect, useMemo: useAppMemo, useRef: useAppRef } = React;
 
+/* ⚡ v594：老師專用的視窗（出題／編輯／後台）在另一包，**只有老師才載**（見 index.html 的 loadTeacherBundle）。
+   學生與訪客那一包沒載進來時 window.EditorModal 是 undefined——直接寫 window.EditorModal 當元件會
+   整個畫面白掉（Element type is invalid）。所以一律經過這個：元件還沒到就什麼都不畫。 */
+function Lazy({ n, ...p }) { const C = window[n]; return C ? React.createElement(C, p) : null; }
+
 // ── Capture G3 originals at module load (before any grade-switch overrides) ──
 const _CATS_G3           = window.CATEGORIES;
 const _saveWeeksG3       = window.saveWeeks;
@@ -353,6 +358,18 @@ function App() {
   }, [revealReady]);
 
   const isTeacher = window.isAdminUser(user);
+  /* ⚡ v594：確定是老師才去載老師那一包（editor＋後台）。載好之後 setTbReady 讓畫面重畫，
+     出題按鈕與視窗才會出現。失敗最多重試 3 次（網路不穩時不要讓老師永遠沒有按鈕）。 */
+  const [tbReady, setTbReady] = useAppState(() => !!window.EditorModal);
+  useAppEffect(() => {
+    if (!isTeacher || tbReady || !window.loadTeacherBundle) return;
+    let dead = false;
+    const go = (n) => window.loadTeacherBundle().then(
+      () => { if (!dead) setTbReady(true); },
+      () => { if (!dead && n < 3) setTimeout(() => go(n + 1), 1500 * (n + 1)); });
+    go(0);
+    return () => { dead = true; };
+  }, [isTeacher, tbReady]);
 
   /* ── v399（開學）：學生的年級改成「由學號綁定」，不能自己選 ──────────────
      康橋學號信箱 leNN…→ gradeFromEmail 直接算出年級（le15→G1 … le10→G6）。
@@ -3099,7 +3116,7 @@ function App() {
             />
           )}
 
-          <window.EditorModal
+          <Lazy n="EditorModal"
             open={editorOpen}
             draft={editorDraft}
             weekId={weekId}
@@ -3111,7 +3128,7 @@ function App() {
             onDelete={handleDeleteItem}
           />
 
-          <window.WeekModal
+          <Lazy n="WeekModal"
             open={weekModalOpen}
             existingIds={weekOrder}
             onClose={() => setWeekModalOpen(false)}
@@ -3170,7 +3187,7 @@ function App() {
               </div>
             </div>
           )}
-          <window.GrammarGenModal
+          <Lazy n="GrammarGenModal"
             open={grGenOpen}
             defaultTense={openCat && /^t[1-5]$/.test(openCat) ? openCat : 't1'}
             onClose={() => setGrGenOpen(false)}
@@ -3212,7 +3229,7 @@ function App() {
             onClose={() => { setGnGenOpen(false); setRegenFor(null); setAskText(null); }}
             onCreate={handleGrammarNotesCreate}
           />}
-          <window.ReadingGenModal
+          <Lazy n="ReadingGenModal"
             open={rcGenOpen}
             categories={activeCategories}
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
@@ -3292,7 +3309,7 @@ function App() {
               }}
             />
           )}
-          <window.QuickSetModal
+          <Lazy n="QuickSetModal"
             open={quickSetOpen}
             categories={activeCategories}
             perStudent={!!(window.isSummerTrack && window.isSummerTrack(grade))}
@@ -3306,7 +3323,7 @@ function App() {
             onClose={() => { setQuickSetOpen(false); setRegenFor(null); }}
             onCreate={handleQuickSet}
           />
-          <window.TermSetupModal
+          <Lazy n="TermSetupModal"
             open={termOpen}
             existingIds={weekOrder}
             gradeLabel={_gradeOf(grade, { g1: '一年級', g2: '二年級', g4: '四年級', g5: '五年級', g6: '六年級', g3: '三年級', summer: '暑假', grammar: '文法核心' })}
@@ -3315,14 +3332,14 @@ function App() {
             onClose={() => setTermOpen(false)}
             onCreate={handleCreateTerm}
           />
-          <window.ExportModal
+          <Lazy n="ExportModal"
             open={exportOpen}
             weeks={weeks}
             weekOrder={weekOrder}
             onClose={() => setExportOpen(false)}
             showToast={showToast}
           />
-          <window.WeekModal
+          <Lazy n="WeekModal"
             open={weekEditOpen}
             existingIds={weekOrder}
             onClose={() => setWeekEditOpen(false)}
@@ -3457,7 +3474,7 @@ function App() {
 
       {/* 老師後台 — top-level：門口頁的「老師後台」卡也能直接開 */}
       {dashOpen && isTeacher && (
-        <window.TeacherDashboard
+        <Lazy n="TeacherDashboard"
           onClose={() => runWave(() => setDashOpen(false))}
           weeks={weeks}
           weekOrder={weekOrder}

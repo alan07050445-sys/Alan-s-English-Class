@@ -7,6 +7,17 @@ var {
   useRef: useAppRef
 } = React;
 
+/* ⚡ v594：老師專用的視窗（出題／編輯／後台）在另一包，**只有老師才載**（見 index.html 的 loadTeacherBundle）。
+   學生與訪客那一包沒載進來時 window.EditorModal 是 undefined——直接寫 window.EditorModal 當元件會
+   整個畫面白掉（Element type is invalid）。所以一律經過這個：元件還沒到就什麼都不畫。 */
+function Lazy({
+  n,
+  ...p
+}) {
+  var C = window[n];
+  return C ? React.createElement(C, p) : null;
+}
+
 // ── Capture G3 originals at module load (before any grade-switch overrides) ──
 var _CATS_G3 = window.CATEGORIES;
 var _saveWeeksG3 = window.saveWeeks;
@@ -500,6 +511,22 @@ function App() {
     }
   }, [revealReady]);
   var isTeacher = window.isAdminUser(user);
+  /* ⚡ v594：確定是老師才去載老師那一包（editor＋後台）。載好之後 setTbReady 讓畫面重畫，
+     出題按鈕與視窗才會出現。失敗最多重試 3 次（網路不穩時不要讓老師永遠沒有按鈕）。 */
+  var [tbReady, setTbReady] = useAppState(() => !!window.EditorModal);
+  useAppEffect(() => {
+    if (!isTeacher || tbReady || !window.loadTeacherBundle) return;
+    var dead = false;
+    var go = n => window.loadTeacherBundle().then(() => {
+      if (!dead) setTbReady(true);
+    }, () => {
+      if (!dead && n < 3) setTimeout(() => go(n + 1), 1500 * (n + 1));
+    });
+    go(0);
+    return () => {
+      dead = true;
+    };
+  }, [isTeacher, tbReady]);
 
   /* ── v399（開學）：學生的年級改成「由學號綁定」，不能自己選 ──────────────
      康橋學號信箱 leNN…→ gradeFromEmail 直接算出年級（le15→G1 … le10→G6）。
@@ -4131,7 +4158,8 @@ function App() {
       scrollPageToTop();
     },
     user: user
-  }), /*#__PURE__*/React.createElement(window.EditorModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "EditorModal",
     open: editorOpen,
     draft: editorDraft,
     weekId: weekId,
@@ -4141,7 +4169,8 @@ function App() {
     onClose: () => setEditorOpen(false),
     onSave: handleSaveItem,
     onDelete: handleDeleteItem
-  }), /*#__PURE__*/React.createElement(window.WeekModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "WeekModal",
     open: weekModalOpen,
     existingIds: weekOrder,
     onClose: () => setWeekModalOpen(false),
@@ -4222,7 +4251,8 @@ function App() {
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn",
     onClick: () => setAskPick(null)
-  }, "\u90FD\u4E0D\u662F")))), /*#__PURE__*/React.createElement(window.GrammarGenModal, {
+  }, "\u90FD\u4E0D\u662F")))), /*#__PURE__*/React.createElement(Lazy, {
+    n: "GrammarGenModal",
     open: grGenOpen,
     defaultTense: openCat && /^t[1-5]$/.test(openCat) ? openCat : 't1',
     onClose: () => setGrGenOpen(false),
@@ -4270,7 +4300,8 @@ function App() {
       setAskText(null);
     },
     onCreate: handleGrammarNotesCreate
-  }), /*#__PURE__*/React.createElement(window.ReadingGenModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "ReadingGenModal",
     open: rcGenOpen,
     categories: activeCategories,
     perStudent: !!(window.isSummerTrack && window.isSummerTrack(grade)),
@@ -4347,7 +4378,8 @@ function App() {
       });
       setQuickSetOpen(true);
     }
-  }), /*#__PURE__*/React.createElement(window.QuickSetModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "QuickSetModal",
     open: quickSetOpen,
     categories: activeCategories,
     perStudent: !!(window.isSummerTrack && window.isSummerTrack(grade)),
@@ -4363,7 +4395,8 @@ function App() {
       setRegenFor(null);
     },
     onCreate: handleQuickSet
-  }), /*#__PURE__*/React.createElement(window.TermSetupModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "TermSetupModal",
     open: termOpen,
     existingIds: weekOrder,
     gradeLabel: _gradeOf(grade, {
@@ -4389,13 +4422,15 @@ function App() {
     categories: activeCategories,
     onClose: () => setTermOpen(false),
     onCreate: handleCreateTerm
-  }), /*#__PURE__*/React.createElement(window.ExportModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "ExportModal",
     open: exportOpen,
     weeks: weeks,
     weekOrder: weekOrder,
     onClose: () => setExportOpen(false),
     showToast: showToast
-  }), /*#__PURE__*/React.createElement(window.WeekModal, {
+  }), /*#__PURE__*/React.createElement(Lazy, {
+    n: "WeekModal",
     open: weekEditOpen,
     existingIds: weekOrder,
     onClose: () => setWeekEditOpen(false),
@@ -4553,7 +4588,8 @@ function App() {
     }
   })), welcomeOpen && /*#__PURE__*/React.createElement(window.WelcomeGuide, {
     onClose: dismissWelcome
-  }), dashOpen && isTeacher && /*#__PURE__*/React.createElement(window.TeacherDashboard, {
+  }), dashOpen && isTeacher && /*#__PURE__*/React.createElement(Lazy, {
+    n: "TeacherDashboard",
     onClose: () => runWave(() => setDashOpen(false)),
     weeks: weeks,
     weekOrder: weekOrder,

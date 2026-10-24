@@ -6,7 +6,7 @@
 <title>Alan's English Class — Weekly</title>
 
 <!-- PWA / Home Screen Icon -->
-<link rel="manifest" href="manifest.json?v=593"/>
+<link rel="manifest" href="manifest.json?v=594"/>
 <link rel="icon" type="image/svg+xml" href="icon.svg"/>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
@@ -27,18 +27,18 @@
      「iPad 橫式 1180×760 一個畫面裝得下」的保證。 -->
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet"/>
 
-<link rel="stylesheet" href="styles.css?v=593"/>
-<link rel="stylesheet" href="styles-part2.css?v=593"/>
-<link rel="stylesheet" href="styles-quiz.css?v=593"/>
-<link rel="stylesheet" href="styles-flashcard.css?v=593"/>
-<link rel="stylesheet" href="styles-auth.css?v=593"/>
-<link rel="stylesheet" href="styles-quiz-mode.css?v=593"/>
-<link rel="stylesheet" href="styles-mistakes.css?v=593"/>
-<link rel="stylesheet" href="styles-home.css?v=593"/>
-<link rel="stylesheet" href="styles-theme.css?v=593"/>
-<link rel="stylesheet" href="styles-fx.css?v=593"/>
+<link rel="stylesheet" href="styles.css?v=594"/>
+<link rel="stylesheet" href="styles-part2.css?v=594"/>
+<link rel="stylesheet" href="styles-quiz.css?v=594"/>
+<link rel="stylesheet" href="styles-flashcard.css?v=594"/>
+<link rel="stylesheet" href="styles-auth.css?v=594"/>
+<link rel="stylesheet" href="styles-quiz-mode.css?v=594"/>
+<link rel="stylesheet" href="styles-mistakes.css?v=594"/>
+<link rel="stylesheet" href="styles-home.css?v=594"/>
+<link rel="stylesheet" href="styles-theme.css?v=594"/>
+<link rel="stylesheet" href="styles-fx.css?v=594"/>
 <!-- styles-tune.css 一定要放最後：手機/平板瘦身＋桌機小字放大，靠載入順序覆蓋前面的規則 -->
-<link rel="stylesheet" href="styles-tune.css?v=593"/>
+<link rel="stylesheet" href="styles-tune.css?v=594"/>
 <!-- 🎊 節慶限定外觀：整份包在 html.fest-XXXX 底下，class 沒掛上去就完全不作用。
      一定要排在最後——它的工作就是覆寫前面所有樣式。
      v508 起改成「只有節慶那幾天才載」：整張 CSS 全部包在節慶 class 底下，
@@ -66,7 +66,7 @@
       } else if (ov === 'on' && !hit) hit = F[F.length - 1];
       if (hit) {
         var l = document.createElement('link');
-        l.rel = 'stylesheet'; l.href = hit.css + '?v=593';
+        l.rel = 'stylesheet'; l.href = hit.css + '?v=594';
         document.head.appendChild(l);
       }
     } catch (e) {}
@@ -99,25 +99,29 @@
 </template>
 <div id="root"><div id="__boot"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><g transform="translate(100 100)"><circle r="58" fill="none" stroke="#1a1a1a" stroke-width="2"/><text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="78" fill="#1a1a1a">A</text></g><text x="100" y="176" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="9" letter-spacing="2" fill="#8a8270">ALAN'S ENGLISH CLASS</text></svg></div></div>
 
-<!-- React / React-DOM 補上 SRI（本來只有 crossorigin，是漏掉不是刻意；babel 那行早就有了）。
-     雜湊用 sha384 對 unpkg 上 18.3.1 的 production build 實算出來的。 -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<!-- ⚡ v594：React 與 Firebase 改放自己的 /vendor/（以前是 unpkg 與 gstatic）。
+     為什麼：① 少兩個要另外連線的網站（每個要 DNS＋TLS，手機上各約 0.2~0.4 秒，而且 script 是
+     一個接一個執行，等它們就是白等）② unpkg 掛掉時全站就打不開 ③ 跟其他檔案一起走 service worker
+     的快取，離線與第二次開啟都是即時的。
+     ⚠ 版本寫在檔名裡（react-18.3.1…／firebase-…-9.23.0…），要升級就換檔名＝快取自然換新。
+     ⚠ React 兩個檔案的 sha384 跟原本 index.html 上的 SRI 逐字相同（下載後實算比對過），內容沒被動過。 -->
+<script src="vendor/react-18.3.1.production.min.js"></script>
+<script src="vendor/react-dom-18.3.1.production.min.js"></script>
 
 <!-- Firebase compat SDK (must load before data.js) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-app-compat-9.23.0.js"></script>
+<script src="vendor/firebase-firestore-compat-9.23.0.js"></script>
+<script src="vendor/firebase-storage-compat-9.23.0.js"></script>
+<script src="vendor/firebase-auth-compat-9.23.0.js"></script>
 
-<script src="data.js?v=593"></script>
-<script src="data-g1.js?v=593"></script>
-<script src="data-g2.js?v=593"></script>
-<script src="data-g4.js?v=593"></script>
-<script src="data-g5.js?v=593"></script>
-<script src="data-g6.js?v=593"></script>
-<script src="data-summer.js?v=593"></script>
-<script src="data-grammar.js?v=593"></script>
+<script src="data.js?v=594"></script>
+<script src="data-g1.js?v=594"></script>
+<script src="data-g2.js?v=594"></script>
+<script src="data-g4.js?v=594"></script>
+<script src="data-g5.js?v=594"></script>
+<script src="data-g6.js?v=594"></script>
+<script src="data-summer.js?v=594"></script>
+<script src="data-grammar.js?v=594"></script>
 <!-- ⚡ v508（Alan：「有小朋友反應登入頁面跟到第二頁以及第三頁…轉換畫面還是會卡卡的」）
      這裡本來是 9 個 <script type="text/babel">，由瀏覽器端的 @babel/standalone 即時轉譯。
      實測（線上站台、它自己那份 babel.min.js）：9 個檔 1,290KB，轉譯佔住主執行緒 10.9 秒（Mac）。
@@ -135,21 +139,44 @@
        會丟「Identifier 'useQM' has already been declared」，整個 app 掛掉。
      ⚠ 改完 .jsx 一定要重跑 node tools/build-jsx.js，不然線上跑的是舊程式**而且畫面完全正常**。
        tests/t-dist.mjs 會重算一次逐字比對，忘了重跑就是紅燈。 -->
-<script src="dist/components-shell.js?v=593"></script>
-<script src="dist/components-quiz.js?v=593"></script>
-<script src="dist/components-flashcard.js?v=593"></script>
-<script src="dist/components-editor.js?v=593"></script>
-<script src="dist/components-quiz-mode.js?v=593"></script>
-<script src="dist/components-dashboard.js?v=593"></script>
-<script src="dist/components-mistakes.js?v=593"></script>
-<script src="dist/app.js?v=593"></script>
-<script src="dist/components-fx.js?v=593"></script>
+<script src="dist/components-shell.js?v=594"></script>
+<script src="dist/components-quiz.js?v=594"></script>
+<script src="dist/components-flashcard.js?v=594"></script>
+<script src="dist/components-quiz-mode.js?v=594"></script>
+<script src="dist/components-mistakes.js?v=594"></script>
+<script src="dist/app.js?v=594"></script>
+<script src="dist/components-fx.js?v=594"></script>
+
+<!-- ⚡ v594：老師專用的兩包（出題／編輯視窗 components-editor ＝ 148KB、後台 components-dashboard ＝ 64KB，
+     壓縮後合計約 212KB，是學生要下載的程式的四分之一）**只有老師才載**。
+     app.jsx 確認登入的人是老師之後才呼叫 loadTeacherBundle()；學生與訪客永遠不會下載它。
+     ⚠ 載入順序跟以前一樣（editor → dashboard），而且一個載完才載下一個——它們以前就是這個順序。
+     ⚠ 這兩個檔案刻意不放進 service worker 的預先快取（那會讓每個學生都下載一次）；
+       老師第一次載入後由 service worker 的「用到才快取」接手，之後也是即時的。 -->
+<script>
+  window.loadTeacherBundle = function () {
+    if (window.__teacherBundle) return window.__teacherBundle;
+    var load = function (src) {
+      return new Promise(function (ok, bad) {
+        var s = document.createElement('script');
+        s.src = src; s.async = false;
+        s.onload = ok;
+        s.onerror = function () { bad(new Error('load ' + src)); };
+        document.head.appendChild(s);
+      });
+    };
+    window.__teacherBundle = load('dist/components-editor.js?v=594')
+      .then(function () { return load('dist/components-dashboard.js?v=594'); })
+      .catch(function (e) { window.__teacherBundle = null; throw e; });   // 失敗了下次可以再試
+    return window.__teacherBundle;
+  };
+</script>
 
 <script>
   // Register Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=593').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=594').catch(() => {});
     });
   }
 </script>

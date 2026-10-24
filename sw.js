@@ -6,26 +6,37 @@
 // 為什麼要分：Alan 一個月內從 v375 跳到 v391（16 次 deploy），舊版 activate 會刪掉所有
 // key !== CACHE 的快取，等於每次 deploy 都把每個學生的圖片也一起清空重新冷啟動。
 // 圖片其實一整年都沒變，沒有理由跟著版本號陪葬。
-const CACHE = 'alans-english-v593';
+const CACHE = 'alans-english-v594';
 const STATIC = 'alans-static-v1';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
 const asset = path => BASE + path;
 
-// 跟版本走的檔案：URL 上都帶 ?v=521，所以 cache-first 是安全的（改版就換 URL）。
+// 跟版本走的檔案：URL 上都帶 ?v=N，所以 cache-first 是安全的（改版就換 URL）。
+/* 🔴 v594：這份清單以前**寫死 ?v=521**，但頁面實際要的是 ?v=593（每次 deploy 只換 index.html 與 CACHE 名字，
+   這份清單沒人改）。結果：預先快取的全是**從來沒人用的 URL**（頁面要的 URL 對不上），
+   第一次來的學生等於額外再下載一整份（約 1.9MB）去存一堆用不到的東西，
+   而且跟頁面自己的請求搶頻寬——正好是最需要快的那幾秒。
+   → 版本號直接從 CACHE 的名字取（CACHE 與 index.html 的 ?v= 一定一起升，tests 會擋不一致）。
+   ⚠ 老師專用的 components-editor／components-dashboard **刻意不放進來**：放進來就是每個學生都下載一次。
+     老師第一次載入後，下面 fetch 的「用到才快取」會接手。 */
+const V = CACHE.replace(/^.*-v/, '');
+const q = '?v=' + V;
 const PRECACHE = [
-  asset('/'), asset('/index.html'), asset('/manifest.json?v=521'),
-  asset('/styles.css?v=521'), asset('/styles-part2.css?v=521'), asset('/styles-quiz.css?v=521'),
-  asset('/styles-flashcard.css?v=521'), asset('/styles-auth.css?v=521'), asset('/styles-quiz-mode.css?v=521'),
-  asset('/data.js?v=521'), asset('/data-g1.js?v=521'), asset('/data-g2.js?v=521'), asset('/data-g4.js?v=521'), asset('/data-g5.js?v=521'), asset('/data-g6.js?v=521'), asset('/data-summer.js?v=521'), asset('/data-grammar.js?v=521'),
-  asset('/dist/components-shell.js?v=521'), asset('/dist/components-quiz.js?v=521'),
-  asset('/dist/components-flashcard.js?v=521'), asset('/dist/components-editor.js?v=521'),
-  asset('/dist/components-quiz-mode.js?v=521'), asset('/dist/components-dashboard.js?v=521'),
-  asset('/dist/components-mistakes.js?v=521'), asset('/styles-mistakes.css?v=521'),
-  asset('/styles-theme.css?v=521'), asset('/styles-home.css?v=521'),
-  asset('/dist/app.js?v=521'), asset('/dist/components-fx.js?v=521'),
-  asset('/styles-fx.css?v=521'), asset('/styles-tune.css?v=521'),
-  asset('/summer-booking.html'), asset('/summer-booking.css?v=521'), asset('/summer-booking-admin.css?v=521'), asset('/summer-booking.js?v=521'),
+  asset('/'), asset('/index.html'), asset('/manifest.json' + q),
+  asset('/styles.css' + q), asset('/styles-part2.css' + q), asset('/styles-quiz.css' + q),
+  asset('/styles-flashcard.css' + q), asset('/styles-auth.css' + q), asset('/styles-quiz-mode.css' + q),
+  asset('/styles-mistakes.css' + q), asset('/styles-theme.css' + q), asset('/styles-home.css' + q),
+  asset('/styles-fx.css' + q), asset('/styles-tune.css' + q),
+  asset('/data.js' + q), asset('/data-g1.js' + q), asset('/data-g2.js' + q), asset('/data-g4.js' + q), asset('/data-g5.js' + q), asset('/data-g6.js' + q), asset('/data-summer.js' + q), asset('/data-grammar.js' + q),
+  asset('/dist/components-shell.js' + q), asset('/dist/components-quiz.js' + q),
+  asset('/dist/components-flashcard.js' + q), asset('/dist/components-quiz-mode.js' + q),
+  asset('/dist/components-mistakes.js' + q), asset('/dist/app.js' + q), asset('/dist/components-fx.js' + q),
+  // v594：React／Firebase 自己放（檔名帶版本，不用 ?v=）
+  asset('/vendor/react-18.3.1.production.min.js'), asset('/vendor/react-dom-18.3.1.production.min.js'),
+  asset('/vendor/firebase-app-compat-9.23.0.js'), asset('/vendor/firebase-firestore-compat-9.23.0.js'),
+  asset('/vendor/firebase-storage-compat-9.23.0.js'), asset('/vendor/firebase-auth-compat-9.23.0.js'),
+  // 暑假預約那頁有自己的版本號（?v=167…），而且不是每個學生都會進去，所以不在這裡預先快取（用到才快取）。
 ];
 
 // 跟版本無關的圖片／icon（合計約 417KB）。原本完全沒進快取，而 GitHub Pages 全站

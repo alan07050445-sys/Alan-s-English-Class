@@ -34,7 +34,8 @@ ok('⭐⭐ 13 個生成視窗本來就各自獨立 render（靠自己的 open �
    const need = ['<window.QuickSetModal', '<window.WordStudyModal', '<window.GrammarNotesModal',
                  '<window.ReadingGenModal', '<window.ExamScanModal', '<window.EditorModal'];
    return need.every(tag => {
-     const i = app.indexOf(tag);
+     /* v594：老師專用的視窗改經過 <Lazy n="…"/>（沒載進來就不畫），兩種寫法都算 */
+     const i = Math.max(app.indexOf(tag), app.indexOf('<Lazy n="' + tag.replace('<window.', '') + '"'));
      if (i < 0) return false;
      /* 往前找 200 字裡不可以有 editMode 的開關 */
      return !/editMode && \($/.test(app.slice(Math.max(0, i - 200), i).trim());

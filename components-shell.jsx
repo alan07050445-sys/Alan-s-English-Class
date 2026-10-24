@@ -1938,4 +1938,45 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
 }
 
 // v392: 舊版行銷長頁的元件已從這份匯出名單移除（函式本體同時刪除，見檔案上方 v392 註解）
-Object.assign(window, { Boom, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+/* v594：Footer 本來住在 components-editor.jsx，但它是**學生頁**也會畫的元件——
+   editor 改成只有老師才載之後，它必須搬到學生一定會載的這個檔案。 */
+/* Footer — v275: 跟行銷頁同一套 .ll-foot2 樣式（styles-auth.css 全站都有載） */
+function Footer({ onOpenGuide }) {
+  const gmailUrl = "https://mail.google.com/mail/?view=cm&fs=1&to=alan07050445%40gmail.com";
+  const lineUrl = "https://line.me/R/ti/p/~9161791608";
+
+  return (
+    <footer className="ll-foot2 app-foot2">
+      <div className="ll-foot2-top">
+        <div className="ll-foot2-brand">
+          <b>Alan’s English Class<i>.</i></b>
+          <p>對齊康橋國際學校每週進度的英文練習平台——在家練的就是學校在教的。</p>
+        </div>
+        <div className="ll-foot2-cols">
+          <div className="ll-foot2-col">
+            <b>學習項目</b>
+            <span>單字</span>
+            <span>文法</span>
+            <span>字根字首</span>
+            <span>閱讀寫作</span>
+          </div>
+          <div className="ll-foot2-col">
+            <b>使用說明</b>
+            {onOpenGuide && <button onClick={onOpenGuide}>新手教學</button>}
+          </div>
+        </div>
+        <div className="ll-foot2-contact">
+          <b>聯絡 Alan 老師</b>
+          <a className="ll-foot2-btn" href={gmailUrl} target="_blank" rel="noopener noreferrer" aria-label="使用 Gmail 聯絡 Alan 老師">✉️ Email 聯絡</a>
+          <a className="ll-foot2-btn ll-foot2-btn-line" href={lineUrl} target="_blank" rel="noopener noreferrer" aria-label="加 Alan 老師的 LINE 好友">💬 LINE 加好友</a>
+        </div>
+      </div>
+      <div className="ll-foot2-bar">
+        <span>© {new Date().getFullYear()} Alan’s English Class</span>
+        <span className="ll-foot2-mini">對齊康橋國際學校每週進度 · 用心製作</span>
+      </div>
+    </footer>
+  );
+}
+
+Object.assign(window, { Boom, Footer, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

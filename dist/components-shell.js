@@ -2745,8 +2745,51 @@ function StarsPanel({
 }
 
 // v392: 舊版行銷長頁的元件已從這份匯出名單移除（函式本體同時刪除，見檔案上方 v392 註解）
+/* v594：Footer 本來住在 components-editor.jsx，但它是**學生頁**也會畫的元件——
+   editor 改成只有老師才載之後，它必須搬到學生一定會載的這個檔案。 */
+/* Footer — v275: 跟行銷頁同一套 .ll-foot2 樣式（styles-auth.css 全站都有載） */
+function Footer({
+  onOpenGuide
+}) {
+  var gmailUrl = "https://mail.google.com/mail/?view=cm&fs=1&to=alan07050445%40gmail.com";
+  var lineUrl = "https://line.me/R/ti/p/~9161791608";
+  return /*#__PURE__*/React.createElement("footer", {
+    className: "ll-foot2 app-foot2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-top"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-brand"
+  }, /*#__PURE__*/React.createElement("b", null, "Alan\u2019s English Class", /*#__PURE__*/React.createElement("i", null, ".")), /*#__PURE__*/React.createElement("p", null, "\u5C0D\u9F4A\u5EB7\u6A4B\u570B\u969B\u5B78\u6821\u6BCF\u9031\u9032\u5EA6\u7684\u82F1\u6587\u7DF4\u7FD2\u5E73\u53F0\u2014\u2014\u5728\u5BB6\u7DF4\u7684\u5C31\u662F\u5B78\u6821\u5728\u6559\u7684\u3002")), /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-cols"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-col"
+  }, /*#__PURE__*/React.createElement("b", null, "\u5B78\u7FD2\u9805\u76EE"), /*#__PURE__*/React.createElement("span", null, "\u55AE\u5B57"), /*#__PURE__*/React.createElement("span", null, "\u6587\u6CD5"), /*#__PURE__*/React.createElement("span", null, "\u5B57\u6839\u5B57\u9996"), /*#__PURE__*/React.createElement("span", null, "\u95B1\u8B80\u5BEB\u4F5C")), /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-col"
+  }, /*#__PURE__*/React.createElement("b", null, "\u4F7F\u7528\u8AAA\u660E"), onOpenGuide && /*#__PURE__*/React.createElement("button", {
+    onClick: onOpenGuide
+  }, "\u65B0\u624B\u6559\u5B78"))), /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-contact"
+  }, /*#__PURE__*/React.createElement("b", null, "\u806F\u7D61 Alan \u8001\u5E2B"), /*#__PURE__*/React.createElement("a", {
+    className: "ll-foot2-btn",
+    href: gmailUrl,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    "aria-label": "\u4F7F\u7528 Gmail \u806F\u7D61 Alan \u8001\u5E2B"
+  }, "\u2709\uFE0F Email \u806F\u7D61"), /*#__PURE__*/React.createElement("a", {
+    className: "ll-foot2-btn ll-foot2-btn-line",
+    href: lineUrl,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    "aria-label": "\u52A0 Alan \u8001\u5E2B\u7684 LINE \u597D\u53CB"
+  }, "\uD83D\uDCAC LINE \u52A0\u597D\u53CB"))), /*#__PURE__*/React.createElement("div", {
+    className: "ll-foot2-bar"
+  }, /*#__PURE__*/React.createElement("span", null, "\xA9 ", new Date().getFullYear(), " Alan\u2019s English Class"), /*#__PURE__*/React.createElement("span", {
+    className: "ll-foot2-mini"
+  }, "\u5C0D\u9F4A\u5EB7\u6A4B\u570B\u969B\u5B78\u6821\u6BCF\u9031\u9032\u5EA6 \xB7 \u7528\u5FC3\u88FD\u4F5C")));
+}
 Object.assign(window, {
   Boom,
+  Footer,
   findUnitsIn,
   FullscreenBtn,
   FocusBtn,

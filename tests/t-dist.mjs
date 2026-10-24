@@ -35,11 +35,17 @@ const noC = html.replace(/<!--[\s\S]*?-->/g, '');
 ok('⭐ 網頁上不再載 @babel/standalone（約 2.8MB，而且會佔住主執行緒）',
    !/babel\.min\.js/.test(noC));
 ok('⭐ 沒有任何 <script type="text/babel"> 了', !/text\/babel/.test(noC));
-ok('⭐ 九個檔都從 dist 載（而且是普通 script，preload scanner 看得到）',
+/* v594：老師專用的兩包（editor／dashboard）改成確認是老師才載，所以不在 <script> 標籤裡，
+   而是在 loadTeacherBundle() 裡——順序仍是 editor → dashboard（跟以前一樣）。 */
+const TEACHER = ['components-editor.jsx', 'components-dashboard.jsx'];
+ok('⭐ 九個檔都從 dist 載（學生那七個是普通 script；老師那兩個由 loadTeacherBundle 載）',
    FILES.every(f => noC.includes('dist/' + f.replace(/\.jsx$/, '.js'))));
-ok('⭐⭐ 載入順序跟以前一模一樣（9 個檔共用同一個全域範圍，順序＝全域變數建立順序）', (() => {
-   const got = [...noC.matchAll(/src="dist\/([^"?]+)\.js/g)].map(m => m[1] + '.jsx');
-   return got.join() === FILES.join(); })());
+ok('⭐⭐ 學生那七個的載入順序跟以前一模一樣（共用同一個全域範圍，順序＝全域變數建立順序）', (() => {
+   const got = [...noC.matchAll(/<script src="dist\/([^"?]+)\.js/g)].map(m => m[1] + '.jsx');
+   return got.join() === FILES.filter(f => !TEACHER.includes(f)).join(); })());
+ok('⭐ 老師那兩包照原本的順序一個接一個載（editor → dashboard，async=false）', (() => {
+   const a = noC.indexOf("load('dist/components-editor.js"), b = noC.indexOf("load('dist/components-dashboard.js");
+   return a > 0 && b > a && /s\.async = false/.test(noC); })());
 
 console.log('\n【3】轉譯參數不可以走鐘');
 ok('⭐⭐ 還是有 transform-block-scoping——頂層維持 const 的話，useQM 會重複宣告整個 app 掛掉',
@@ -53,7 +59,7 @@ ok('⭐ 實際跑出來的 dist 真的沒有頂層 const／let（那是 block-sc
 
 console.log('\n【4】Service Worker 也要跟著改（不然它會去抓已經不存在的 .jsx）');
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-ok('⭐ 預先快取的是 dist/*.js', FILES.every(f => sw.includes('/dist/' + f.replace(/\.jsx$/, '.js'))));
+ok('⭐ 預先快取的是 dist/*.js（老師專用那兩包刻意不放——放了就是每個學生都下載一次）', FILES.filter(f => !TEACHER.includes(f)).every(f => sw.includes('/dist/' + f.replace(/\.jsx$/, '.js'))) && !/components-(editor|dashboard)/.test(sw.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '')));
 ok('   清單裡不再有 .jsx', !/\.jsx\?v=/.test(sw));
 
 console.log(fail ? `\n❌ ${fail} failed, ${pass} passed` : `\n🎉 全部通過：${pass} passed, 0 failed`);
