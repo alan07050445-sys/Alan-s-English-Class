@@ -9602,12 +9602,15 @@ function ExamPlayer({
   }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), item.examMood && !sent && /*#__PURE__*/React.createElement(ExamCheckin, {
     value: mood,
     onChange: setMood
-  }), secs.map((sec, si) => /*#__PURE__*/React.createElement("section", {
+  }), secs.map((sec, si) => !(sec.parts || []).length ? null :
+  /*#__PURE__*/
+  /* v583：沒有任何大題的 Section 不畫標題（以前讀進來的卷子可能留著空殼） */
+  React.createElement("section", {
     className: "ex-sec",
     key: si
   }, /*#__PURE__*/React.createElement("div", {
     className: "ex-sec-h"
-  }, /*#__PURE__*/React.createElement("b", null, sec.name || `Section ${si + 1}`), sec.pct ? /*#__PURE__*/React.createElement("span", null, "(", sec.pct, "%)") : null), (sec.parts || []).map((pt, pi) => {
+  }, /*#__PURE__*/React.createElement("b", null, (sec.name || `Section ${si + 1}`).replace(sec.pct ? /\s*\(\s*\d+\s*%\s*\)\s*$/ : /$^/, '')), sec.pct ? /*#__PURE__*/React.createElement("span", null, "(", sec.pct, "%)") : null), (sec.parts || []).map((pt, pi) => {
     var key = si + '_' + pi;
     var pr = sent && res ? res.parts.find(x => x.key === key) : null;
     return renderPart(pt, key, pr);

@@ -7966,10 +7966,11 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       {/* 開場：心情與目標（學校卷子上就有這兩題）*/}
       {item.examMood && !sent && <ExamCheckin value={mood} onChange={setMood}/>}
 
-      {secs.map((sec, si) => (
+      {secs.map((sec, si) => (!(sec.parts || []).length ? null : (   /* v583：沒有任何大題的 Section 不畫標題（以前讀進來的卷子可能留著空殼） */
         <section className="ex-sec" key={si}>
           <div className="ex-sec-h">
-            <b>{sec.name || `Section ${si + 1}`}</b>
+            {/* 名字裡已經寫了 (32%) 就不要再顯示一次 */}
+            <b>{(sec.name || `Section ${si + 1}`).replace(sec.pct ? /\s*\(\s*\d+\s*%\s*\)\s*$/ : /$^/, '')}</b>
             {sec.pct ? <span>({sec.pct}%)</span> : null}
           </div>
           {(sec.parts || []).map((pt, pi) => {
@@ -7978,7 +7979,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
             return renderPart(pt, key, pr);
           })}
         </section>
-      ))}
+      )))}
 
       <div className="ex-foot">
         {!sent ? (

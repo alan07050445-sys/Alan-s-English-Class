@@ -8461,7 +8461,10 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   ok.forEach(({ v }) => {
     skipped.push(...v.skipped);
     v.sections.forEach(sc => {
-      const key = sc.name.toLowerCase().replace(/\s+/g, '');
+      /* v583：同一個 Section 在不同頁常寫成不同樣子（"Section 2: Vocabulary (32%)" 與 "Section 2: Vocabulary"）——
+         有 Section 編號就用編號當身分；沒有就把括號裡的百分比拿掉再比。 */
+      const num = /^\s*section\s*(\d+)/i.exec(sc.name);
+      const key = num ? 'section' + num[1] : sc.name.toLowerCase().replace(/\([^)]*\)/g, '').replace(/\s+/g, '');
       /* v582：沒有名字的段落（續頁開頭沒有 Section 標題）＝接在前一個 Section 後面 */
       const hit = key ? secs.find(x => x.key === key) : (secs.length ? secs[secs.length - 1] : null);
       if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; if (sc.passage && !hit.passage) hit.passage = sc.passage; if (sc.figure && !hit.figure) hit.figure = sc.figure; return; }
@@ -8584,6 +8587,8 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
       }
     }
   }
+  /* v583：大題都被併到別處（續頁併回前面）的 Section 會變成空殼——沒有大題就不要留標題 */
+  for (let i = secs.length - 1; i >= 0; i--) if (!secs[i].parts.length) secs.splice(i, 1);
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,
