@@ -1133,6 +1133,7 @@ html.fest-hw .fc-test-choice:hover,
 html.fest-hw .gr-seg:hover,
 html.fest-hw .rs-step:hover { background: rgba(255,255,255,.13); }
 html.fest-hw .fc-test-choice.sel,
+html.fest-hw .fc-test-choice.selected,
 html.fest-hw .rs-chip.sel,
 html.fest-hw .rs-step.on {
   background: rgba(245,124,31,.2); border-color: rgba(247,154,62,.6); color: #FFD6A8;
@@ -1645,3 +1646,5 @@ html.fest-hw .qm-blocks .qm-block[data-cat="word"] { --cat-c: #6EC6FF; --cat-t: 
 html.fest-hw .qm-blocks .qm-block[data-cat="reading"] { --cat-c: #63D996; --cat-t: #6FE0A0; }
 html.fest-hw .qm-blocks .qm-block[data-cat="ltvocab"] { --cat-c: #FFB454; --cat-t: #FFC27A; }
 html.fest-hw .qm-blocks .qm-block[data-cat="mock"] { --cat-c: #4FD6CB; --cat-t: #7BE6DC; }
+/* v575：選中的選項要有顏色——舊版只寫了 .sel，但單字測驗按下去的 class 是 .selected */
+html.fest-hw .ws-word-chip.pool.selected { background: rgba(245,124,31,.2); border-color: rgba(247,154,62,.6); color: #FFD6A8; }
