@@ -844,7 +844,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onMoveQuestions, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [moveCatFor, setMoveCatFor] = useQM(null);   // v570：正在選「搬到哪一類」的那一組（g.key）
@@ -1455,6 +1455,14 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                         >👤{(assignedOf.get(item.id) || new Set()).size > 0 && (
                           <b>{(assignedOf.get(item.id) || new Set()).size}</b>
                         )}</button>
+                      )}
+                      {/* v591：把這個單元的幾題搬（或複製）到別的單元——同樣題型才給搬 */}
+                      {onMoveQuestions && window.qmoveInfo && window.qmoveInfo(item) && (
+                        <button
+                          className="qm-unit-copy-btn"
+                          onClick={(e) => { e.stopPropagation(); onMoveQuestions(item); }}
+                          title="把幾題搬到別的單元"
+                        >↔</button>
                       )}
                       {onCopyToWeeks && (weekChoices || []).length > 0 && (
                         <button

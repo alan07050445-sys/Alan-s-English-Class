@@ -317,6 +317,7 @@ function Header({
   onToggleEdit,
   onAsk,
   onAddWeek,
+  onCompose,
   onDeleteWeek,
   onArchiveWeek,
   weekArchived,
@@ -695,7 +696,10 @@ function Header({
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "plus",
     size: 12
-  }), " \u65B0\u589E\u4E00\u9031"), onExport && /*#__PURE__*/React.createElement("button", {
+  }), " \u65B0\u589E\u4E00\u9031"), onCompose && /*#__PURE__*/React.createElement("button", {
+    className: "banner-btn",
+    onClick: onCompose
+  }, "\uD83D\uDCDA \u7D44\u5408\u8907\u7FD2\uFF0F\u6A21\u64EC\u8003"), onExport && /*#__PURE__*/React.createElement("button", {
     className: "banner-btn",
     onClick: onExport
   }, "\uD83D\uDCBE \u532F\u51FA\u5099\u4EFD"), onArchiveWeek && /*#__PURE__*/React.createElement("button", {

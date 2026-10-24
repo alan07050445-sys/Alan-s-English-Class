@@ -1085,6 +1085,7 @@ function QuizModeCategoryView({
   onSaveGroupRes,
   weekChoices,
   onCopyToWeeks,
+  onMoveQuestions,
   onCopyGroupToWeeks,
   homework,
   onSetHomework,
@@ -1754,7 +1755,14 @@ function QuizModeCategoryView({
           setAssignItem(item);
         },
         title: "\u6307\u6D3E\u7D66\u54EA\u4E9B\u5B78\u751F"
-      }, "\uD83D\uDC64", (assignedOf.get(item.id) || new Set()).size > 0 && /*#__PURE__*/React.createElement("b", null, (assignedOf.get(item.id) || new Set()).size)), onCopyToWeeks && (weekChoices || []).length > 0 && /*#__PURE__*/React.createElement("button", {
+      }, "\uD83D\uDC64", (assignedOf.get(item.id) || new Set()).size > 0 && /*#__PURE__*/React.createElement("b", null, (assignedOf.get(item.id) || new Set()).size)), onMoveQuestions && window.qmoveInfo && window.qmoveInfo(item) && /*#__PURE__*/React.createElement("button", {
+        className: "qm-unit-copy-btn",
+        onClick: e => {
+          e.stopPropagation();
+          onMoveQuestions(item);
+        },
+        title: "\u628A\u5E7E\u984C\u642C\u5230\u5225\u7684\u55AE\u5143"
+      }, "\u2194"), onCopyToWeeks && (weekChoices || []).length > 0 && /*#__PURE__*/React.createElement("button", {
         className: "qm-unit-copy-btn",
         onClick: e => {
           e.stopPropagation();

@@ -13478,7 +13478,400 @@ function ExamPrepModal({
     className: "ep-note"
   }, "\u984C\u76EE\u4EA4\u7D66\u300C\u4E00\u9375\u51FA\u55AE\u5B57\u300D\u751F\u6210\u2014\u2014\u5B83\u6703\u907F\u958B\u90A3\u5E7E\u9031\u539F\u672C\u51FA\u904E\u7684\u53E5\u5B50\uFF0C\u6240\u4EE5\u662F**\u65B0\u984C\u76EE**\u4E0D\u662F\u91CD\u64AD\u3002"))))), document.body);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   v591（Alan：「2 跨週挑單元組成複習／模擬考」「6 單題搬到別的單元」）
+   純資料都在 data.js（qmoveApply／composeApply，有 t-v591 測試）；這裡只有畫面。
+   ⚠ 兩個視窗都不自己存檔——onApply 回傳結果，由 app.jsx 一次存完。 */
+function QuestionMoveModal({
+  item,
+  weekId,
+  weeks,
+  weekOrder,
+  catTitles,
+  onClose,
+  onApply
+}) {
+  var [nudgeCls, nudge] = useModalNudge();
+  var info = window.qmoveInfo(item) || {
+    list: [],
+    min: 1
+  };
+  var [sel, setSel] = useS([]);
+  var [dw, setDw] = useS(weekId);
+  var [dstId, setDstId] = useS('');
+  var [copy, setCopy] = useS(false);
+  var [err, setErr] = useS('');
+  var wk = weeks[dw] || {
+    items: {}
+  };
+  var cands = [];
+  Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(x => {
+    if (x && window.qmoveCompatible(item, x) && !(dw === weekId && x.id === item.id)) cands.push({
+      cid,
+      it: x
+    });
+  }));
+  var toggle = i => setSel(s => s.indexOf(i) >= 0 ? s.filter(x => x !== i) : s.concat(i));
+  var go = () => {
+    setErr('');
+    var args = {
+      src: {
+        weekId,
+        itemId: item.id
+      },
+      dst: {
+        weekId: dw,
+        itemId: dstId
+      },
+      idx: sel,
+      copy
+    };
+    var res = onApply(args);
+    if (res && res.error === 'unplayable') {
+      if (!confirm(`這樣「${item.title}」只會剩 ${res.left} 題，學生會玩不了（至少要 ${res.need} 題）。\n\n還是要搬嗎？`)) return;
+      res = onApply({
+        ...args,
+        force: true
+      });
+    }
+    if (!res || !res.ok) {
+      setErr({
+        type: '兩個單元的題型不一樣，搬不過去。',
+        same: '不能搬給自己。',
+        empty: '先勾要搬的題目。',
+        notfound: '找不到那個單元，請重新整理再試。'
+      }[res && res.error] || '搬不過去，請再試一次。');
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    onClick: nudge
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal wide" + nudgeCls,
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\u2194 \u642C\u984C\u76EE ", /*#__PURE__*/React.createElement("em", null, item.title)), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    "aria-label": "\u95DC\u9589",
+    onClick: onClose
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "modal-body"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "field-help",
+    style: {
+      marginBottom: 12
+    }
+  }, "\u52FE\u8981\u642C\u7684\u984C\u76EE\uFF0C\u518D\u9078\u642C\u53BB", /*#__PURE__*/React.createElement("b", null, "\u54EA\u4E00\u500B\u55AE\u5143"), "\u3002\u53EA\u80FD\u642C\u5230", /*#__PURE__*/React.createElement("b", null, "\u540C\u6A23\u984C\u578B"), "\u7684\u55AE\u5143\uFF08\u6E2C\u9A57\u642C\u6E2C\u9A57\u3001\u586B\u7A7A\u642C\u586B\u7A7A\uFF09\uFF1B \u53EF\u4EE5\u642C\u53BB\u5225\u9031\u3002\u9078\u300C\u8907\u88FD\u300D\u7684\u8A71\u9019\u88E1\u7684\u984C\u76EE\u6703\u7559\u8457\u3002"), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u9019\u500B\u55AE\u5143\u7684\u984C\u76EE\uFF08\u5DF2\u52FE ", sel.length, " / ", info.list.length, "\uFF09"), /*#__PURE__*/React.createElement("div", {
+    className: "qmv-list"
+  }, info.list.map((q, i) => /*#__PURE__*/React.createElement("label", {
+    key: i,
+    className: 'qmv-row' + (sel.indexOf(i) >= 0 ? ' on' : '')
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: sel.indexOf(i) >= 0,
+    onChange: () => toggle(i)
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "qmv-n"
+  }, i + 1), /*#__PURE__*/React.createElement("span", {
+    className: "qmv-t"
+  }, window.qmoveLabel(q))))), /*#__PURE__*/React.createElement("div", {
+    className: "qmv-quick"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "btn",
+    onClick: () => setSel(info.list.map((_, i) => i))
+  }, "\u5168\u9078"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "btn",
+    onClick: () => setSel([])
+  }, "\u6E05\u9664"))), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u642C\u53BB\u54EA\u4E00\u9031"), /*#__PURE__*/React.createElement("select", {
+    value: dw,
+    onChange: e => {
+      setDw(e.target.value);
+      setDstId('');
+    }
+  }, weekOrder.map(id => /*#__PURE__*/React.createElement("option", {
+    key: id,
+    value: id
+  }, weeks[id] && (weeks[id].label || id) || id, id === weekId ? '（這一週）' : '')))), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u642C\u9032\u54EA\u4E00\u500B\u55AE\u5143"), cands.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "gr-warn"
+  }, "\u90A3\u4E00\u9031\u6C92\u6709\u300C\u540C\u6A23\u984C\u578B\u300D\u7684\u55AE\u5143\u53EF\u4EE5\u642C\u9032\u53BB\u3002\u63DB\u4E00\u9031\uFF0C\u6216\u5148\u5230\u90A3\u4E00\u9031\u65B0\u589E\u4E00\u500B\u540C\u6A23\u984C\u578B\u7684\u55AE\u5143\u3002") : /*#__PURE__*/React.createElement("div", {
+    className: "qmv-list"
+  }, cands.map(({
+    cid,
+    it
+  }) => /*#__PURE__*/React.createElement("label", {
+    key: it.id,
+    className: 'qmv-row' + (dstId === it.id ? ' on' : '')
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "radio",
+    name: "qmv-dst",
+    checked: dstId === it.id,
+    onChange: () => setDstId(it.id)
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "qmv-t"
+  }, it.title, it.group ? /*#__PURE__*/React.createElement("em", null, " \xB7 ", it.group) : null), /*#__PURE__*/React.createElement("span", {
+    className: "qmv-n"
+  }, catTitles && catTitles[cid] || cid, " \xB7 ", (window.qmoveInfo(it) || {
+    list: []
+  }).list.length, " \u984C"))))), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u65B9\u5F0F"), /*#__PURE__*/React.createElement("div", {
+    className: "qmv-mode"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: 'btn' + (!copy ? ' primary' : ''),
+    onClick: () => setCopy(false)
+  }, "\u642C\u904E\u53BB\uFF08\u9019\u88E1\u4E0D\u7559\uFF09"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: 'btn' + (copy ? ' primary' : ''),
+    onClick: () => setCopy(true)
+  }, "\u8907\u88FD\u4E00\u4EFD\u904E\u53BB"))), err && /*#__PURE__*/React.createElement("div", {
+    className: "gr-warn"
+  }, err)), /*#__PURE__*/React.createElement("div", {
+    className: "modal-foot"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: onClose
+  }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    disabled: !sel.length || !dstId,
+    onClick: go
+  }, copy ? '複製' : '搬', " ", sel.length || '', " \u984C \u2192"))));
+}
+function ComposeModal({
+  weeks,
+  weekOrder,
+  curWeekId,
+  catTitles,
+  onClose,
+  onApply
+}) {
+  var [nudgeCls, nudge] = useModalNudge();
+  var [target, setTarget] = useS('__new__');
+  var [newLabel, setNewLabel] = useS('');
+  var [group, setGroup] = useS('');
+  var [due, setDue] = useS('');
+  var [q, setQ] = useS('');
+  var [open, setOpen] = useS({});
+  var [sel, setSel] = useS({}); // 'weekId\u0001itemId' → true
+  var [err, setErr] = useS('');
+  var K = (w, id) => w + '\u0001' + id;
+  var needle = q.trim().toLowerCase();
+  /* 一週裡的單元，照「分類 → 組」排好。搜尋只看標題／組名 */
+  var unitsOf = wid => {
+    var wk = weeks[wid] || {
+      items: {}
+    };
+    var out = [];
+    Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(it => {
+      if (!it || !it.id) return;
+      var hay = ((it.title || '') + ' ' + (it.group || '')).toLowerCase();
+      if (needle && hay.indexOf(needle) < 0) return;
+      out.push({
+        cid,
+        it
+      });
+    }));
+    return out;
+  };
+  var picks = Object.keys(sel).filter(k => sel[k]).map(k => {
+    var [w, id] = k.split('\u0001');
+    return {
+      weekId: w,
+      itemId: id
+    };
+  });
+  var closure = window.composeClosure(weeks, picks);
+  var extra = closure.length - picks.length;
+  var toggleMany = (keys, on) => setSel(s => {
+    var n = {
+      ...s
+    };
+    keys.forEach(k => {
+      if (on) n[k] = true;else delete n[k];
+    });
+    return n;
+  });
+  var go = () => {
+    setErr('');
+    if (!picks.length) {
+      setErr('先勾要帶過去的單元。');
+      return;
+    }
+    if (target === '__new__' && !newLabel.trim()) {
+      setErr('新的一週要取個名字（例：期中複習）。');
+      return;
+    }
+    var res = onApply({
+      picks,
+      target,
+      newLabel: newLabel.trim(),
+      group: group.trim(),
+      dueDate: due
+    });
+    if (!res || !res.ok) setErr('帶不過去，請再試一次。');
+  };
+  var srcWeeks = weekOrder.filter(id => id !== target);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    onClick: nudge
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal wide" + nudgeCls,
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDCDA \u7D44\u5408\u8907\u7FD2\uFF0F\u6A21\u64EC\u8003"), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    "aria-label": "\u95DC\u9589",
+    onClick: onClose
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "modal-body"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "field-help",
+    style: {
+      marginBottom: 12
+    }
+  }, "\u5F9E", /*#__PURE__*/React.createElement("b", null, "\u4E0D\u540C\u9031"), "\u6311\u55AE\u5143\uFF0C\u4E00\u6B21\u8907\u88FD\u5230\u540C\u4E00\u9031\uFF08\u53EF\u4EE5\u76F4\u63A5\u958B\u65B0\u7684\u4E00\u9031\uFF09\u3002 \u4F86\u6E90\u7684\u55AE\u5143", /*#__PURE__*/React.createElement("b", null, "\u5B8C\u5168\u4E0D\u52D5"), "\uFF0C\u8907\u88FD\u904E\u53BB\u662F\u7368\u7ACB\u7684\u4E00\u4EFD\uFF0C\u6210\u7E3E\u5206\u958B\u7B97\u3002"), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u653E\u5230\u54EA\u4E00\u9031"), /*#__PURE__*/React.createElement("select", {
+    value: target,
+    onChange: e => setTarget(e.target.value)
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "__new__"
+  }, "\uFF0B \u65B0\u589E\u4E00\u9031"), weekOrder.map(id => /*#__PURE__*/React.createElement("option", {
+    key: id,
+    value: id
+  }, weeks[id] && (weeks[id].label || id) || id, id === curWeekId ? '（這一週）' : ''))), target === '__new__' && /*#__PURE__*/React.createElement("input", {
+    className: "cmp-in",
+    value: newLabel,
+    onChange: e => setNewLabel(e.target.value),
+    placeholder: "\u65B0\u4E00\u9031\u7684\u540D\u5B57\uFF0C\u4F8B\uFF1A\u671F\u4E2D\u8907\u7FD2"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "cmp-two"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u653E\u9032\u54EA\u4E00\u7D44\uFF08\u9078\u586B\uFF09"), /*#__PURE__*/React.createElement("input", {
+    className: "cmp-in",
+    value: group,
+    onChange: e => setGroup(e.target.value),
+    placeholder: "\u4F8B\uFF1A\u671F\u4E2D\u8907\u7FD2\uFF08\u4E0D\u586B\u5C31\u4FDD\u7559\u539F\u672C\u7684\u7D44\uFF09"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u540C\u6642\u8A2D\u6210\u4F5C\u696D\uFF08\u9078\u586B\uFF09"), /*#__PURE__*/React.createElement("input", {
+    className: "cmp-in",
+    type: "date",
+    value: due,
+    onChange: e => setDue(e.target.value)
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label"
+  }, "\u6311\u55AE\u5143\uFF08\u5DF2\u52FE ", picks.length, " \u500B", extra > 0 ? `，另外自動帶 ${extra} 個相關的單字卡／教學卡` : '', "\uFF09"), /*#__PURE__*/React.createElement("input", {
+    className: "cmp-in",
+    value: q,
+    onChange: e => setQ(e.target.value),
+    placeholder: "\u641C\u5C0B\u55AE\u5143\u540D\u7A31\u6216\u7D44\u540D"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "cmp-weeks"
+  }, srcWeeks.map(wid => {
+    var us = unitsOf(wid);
+    if (!us.length) return null;
+    var keys = us.map(({
+      it
+    }) => K(wid, it.id));
+    var n = keys.filter(k => sel[k]).length;
+    var isOpen = !!open[wid] || !!needle;
+    var byGroup = {};
+    us.forEach(({
+      cid,
+      it
+    }) => {
+      var g = (catTitles && catTitles[cid] || cid) + ' · ' + (it.group || '（未分組）');
+      (byGroup[g] = byGroup[g] || []).push(it);
+    });
+    return /*#__PURE__*/React.createElement("div", {
+      key: wid,
+      className: "cmp-wk"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "cmp-wk-head"
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: n === keys.length,
+      ref: el => {
+        if (el) el.indeterminate = n > 0 && n < keys.length;
+      },
+      onChange: e => toggleMany(keys, e.target.checked),
+      "aria-label": "\u6574\u9031\u5168\u9078"
+    }), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "cmp-wk-t",
+      onClick: () => setOpen(o => ({
+        ...o,
+        [wid]: !o[wid]
+      }))
+    }, isOpen ? '▾' : '▸', " ", weeks[wid] && (weeks[wid].label || wid) || wid, /*#__PURE__*/React.createElement("em", null, n ? `已勾 ${n} / ` : '', keys.length, " \u500B\u55AE\u5143"))), isOpen && Object.keys(byGroup).map(g => {
+      var gk = byGroup[g].map(it => K(wid, it.id));
+      var gn = gk.filter(k => sel[k]).length;
+      return /*#__PURE__*/React.createElement("div", {
+        key: g,
+        className: "cmp-grp"
+      }, /*#__PURE__*/React.createElement("label", {
+        className: "cmp-grp-h"
+      }, /*#__PURE__*/React.createElement("input", {
+        type: "checkbox",
+        checked: gn === gk.length,
+        ref: el => {
+          if (el) el.indeterminate = gn > 0 && gn < gk.length;
+        },
+        onChange: e => toggleMany(gk, e.target.checked)
+      }), /*#__PURE__*/React.createElement("b", null, g)), byGroup[g].map(it => /*#__PURE__*/React.createElement("label", {
+        key: it.id,
+        className: 'cmp-unit' + (sel[K(wid, it.id)] ? ' on' : '')
+      }, /*#__PURE__*/React.createElement("input", {
+        type: "checkbox",
+        checked: !!sel[K(wid, it.id)],
+        onChange: e => toggleMany([K(wid, it.id)], e.target.checked)
+      }), /*#__PURE__*/React.createElement("span", null, it.title))));
+    }));
+  }))), err && /*#__PURE__*/React.createElement("div", {
+    className: "gr-warn"
+  }, err)), /*#__PURE__*/React.createElement("div", {
+    className: "modal-foot"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: onClose
+  }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    disabled: !picks.length,
+    onClick: go
+  }, "\u5E36\u904E\u53BB ", closure.length || '', " \u500B\u55AE\u5143 \u2192"))));
+}
 Object.assign(window, {
+  QuestionMoveModal,
+  ComposeModal,
   AskPanel,
   ExamPrepModal,
   ExamScanModal,

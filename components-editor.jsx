@@ -8590,5 +8590,232 @@ function ExamPrepModal({ open, side, pace, weeks, weekOrder, weekId, categories,
     </div>, document.body);
 }
 
-Object.assign(window, { AskPanel, ExamPrepModal, ExamScanModal, ExamDraftModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+
+/* ══════════════════════════════════════════════════════════════
+   v591（Alan：「2 跨週挑單元組成複習／模擬考」「6 單題搬到別的單元」）
+   純資料都在 data.js（qmoveApply／composeApply，有 t-v591 測試）；這裡只有畫面。
+   ⚠ 兩個視窗都不自己存檔——onApply 回傳結果，由 app.jsx 一次存完。 */
+function QuestionMoveModal({ item, weekId, weeks, weekOrder, catTitles, onClose, onApply }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const info = window.qmoveInfo(item) || { list: [], min: 1 };
+  const [sel, setSel]     = useS([]);
+  const [dw, setDw]       = useS(weekId);
+  const [dstId, setDstId] = useS('');
+  const [copy, setCopy]   = useS(false);
+  const [err, setErr]     = useS('');
+  const wk = weeks[dw] || { items: {} };
+  const cands = [];
+  Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(x => {
+    if (x && window.qmoveCompatible(item, x) && !(dw === weekId && x.id === item.id)) cands.push({ cid, it: x });
+  }));
+  const toggle = (i) => setSel(s => s.indexOf(i) >= 0 ? s.filter(x => x !== i) : s.concat(i));
+  const go = () => {
+    setErr('');
+    const args = { src: { weekId, itemId: item.id }, dst: { weekId: dw, itemId: dstId }, idx: sel, copy };
+    let res = onApply(args);
+    if (res && res.error === 'unplayable') {
+      if (!confirm(`這樣「${item.title}」只會剩 ${res.left} 題，學生會玩不了（至少要 ${res.need} 題）。\n\n還是要搬嗎？`)) return;
+      res = onApply({ ...args, force: true });
+    }
+    if (!res || !res.ok) {
+      setErr({ type: '兩個單元的題型不一樣，搬不過去。', same: '不能搬給自己。', empty: '先勾要搬的題目。',
+               notfound: '找不到那個單元，請重新整理再試。' }[res && res.error] || '搬不過去，請再試一次。');
+    }
+  };
+  return (
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>↔ 搬題目 <em>{item.title}</em></h3>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="field-help" style={{ marginBottom: 12 }}>
+            勾要搬的題目，再選搬去<b>哪一個單元</b>。只能搬到<b>同樣題型</b>的單元（測驗搬測驗、填空搬填空）；
+            可以搬去別週。選「複製」的話這裡的題目會留著。
+          </div>
+          <div className="field">
+            <label className="field-label">這個單元的題目（已勾 {sel.length} / {info.list.length}）</label>
+            <div className="qmv-list">
+              {info.list.map((q, i) => (
+                <label key={i} className={'qmv-row' + (sel.indexOf(i) >= 0 ? ' on' : '')}>
+                  <input type="checkbox" checked={sel.indexOf(i) >= 0} onChange={() => toggle(i)}/>
+                  <span className="qmv-n">{i + 1}</span>
+                  <span className="qmv-t">{window.qmoveLabel(q)}</span>
+                </label>
+              ))}
+            </div>
+            <div className="qmv-quick">
+              <button type="button" className="btn" onClick={() => setSel(info.list.map((_, i) => i))}>全選</button>
+              <button type="button" className="btn" onClick={() => setSel([])}>清除</button>
+            </div>
+          </div>
+          <div className="field">
+            <label className="field-label">搬去哪一週</label>
+            <select value={dw} onChange={e => { setDw(e.target.value); setDstId(''); }}>
+              {weekOrder.map(id => <option key={id} value={id}>{(weeks[id] && (weeks[id].label || id)) || id}{id === weekId ? '（這一週）' : ''}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label">搬進哪一個單元</label>
+            {cands.length === 0 ? (
+              <div className="gr-warn">那一週沒有「同樣題型」的單元可以搬進去。換一週，或先到那一週新增一個同樣題型的單元。</div>
+            ) : (
+              <div className="qmv-list">
+                {cands.map(({ cid, it }) => (
+                  <label key={it.id} className={'qmv-row' + (dstId === it.id ? ' on' : '')}>
+                    <input type="radio" name="qmv-dst" checked={dstId === it.id} onChange={() => setDstId(it.id)}/>
+                    <span className="qmv-t">{it.title}{it.group ? <em> · {it.group}</em> : null}</span>
+                    <span className="qmv-n">{(catTitles && catTitles[cid]) || cid} · {(window.qmoveInfo(it) || { list: [] }).list.length} 題</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="field">
+            <label className="field-label">方式</label>
+            <div className="qmv-mode">
+              <button type="button" className={'btn' + (!copy ? ' primary' : '')} onClick={() => setCopy(false)}>搬過去（這裡不留）</button>
+              <button type="button" className={'btn' + (copy ? ' primary' : '')} onClick={() => setCopy(true)}>複製一份過去</button>
+            </div>
+          </div>
+          {err && <div className="gr-warn">{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={!sel.length || !dstId} onClick={go}>
+            {copy ? '複製' : '搬'} {sel.length || ''} 題 →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComposeModal({ weeks, weekOrder, curWeekId, catTitles, onClose, onApply }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const [target, setTarget] = useS('__new__');
+  const [newLabel, setNewLabel] = useS('');
+  const [group, setGroup] = useS('');
+  const [due, setDue]     = useS('');
+  const [q, setQ]         = useS('');
+  const [open, setOpen]   = useS({});
+  const [sel, setSel]     = useS({});     // 'weekId\u0001itemId' → true
+  const [err, setErr]     = useS('');
+  const K = (w, id) => w + '\u0001' + id;
+  const needle = q.trim().toLowerCase();
+  /* 一週裡的單元，照「分類 → 組」排好。搜尋只看標題／組名 */
+  const unitsOf = (wid) => {
+    const wk = weeks[wid] || { items: {} };
+    const out = [];
+    Object.keys(wk.items || {}).forEach(cid => (wk.items[cid] || []).forEach(it => {
+      if (!it || !it.id) return;
+      const hay = ((it.title || '') + ' ' + (it.group || '')).toLowerCase();
+      if (needle && hay.indexOf(needle) < 0) return;
+      out.push({ cid, it });
+    }));
+    return out;
+  };
+  const picks = Object.keys(sel).filter(k => sel[k]).map(k => { const [w, id] = k.split('\u0001'); return { weekId: w, itemId: id }; });
+  const closure = window.composeClosure(weeks, picks);
+  const extra = closure.length - picks.length;
+  const toggleMany = (keys, on) => setSel(s => { const n = { ...s }; keys.forEach(k => { if (on) n[k] = true; else delete n[k]; }); return n; });
+  const go = () => {
+    setErr('');
+    if (!picks.length) { setErr('先勾要帶過去的單元。'); return; }
+    if (target === '__new__' && !newLabel.trim()) { setErr('新的一週要取個名字（例：期中複習）。'); return; }
+    const res = onApply({ picks, target, newLabel: newLabel.trim(), group: group.trim(), dueDate: due });
+    if (!res || !res.ok) setErr('帶不過去，請再試一次。');
+  };
+  const srcWeeks = weekOrder.filter(id => id !== target);
+  return (
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>📚 組合複習／模擬考</h3>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="field-help" style={{ marginBottom: 12 }}>
+            從<b>不同週</b>挑單元，一次複製到同一週（可以直接開新的一週）。
+            來源的單元<b>完全不動</b>，複製過去是獨立的一份，成績分開算。
+          </div>
+          <div className="field">
+            <label className="field-label">放到哪一週</label>
+            <select value={target} onChange={e => setTarget(e.target.value)}>
+              <option value="__new__">＋ 新增一週</option>
+              {weekOrder.map(id => <option key={id} value={id}>{(weeks[id] && (weeks[id].label || id)) || id}{id === curWeekId ? '（這一週）' : ''}</option>)}
+            </select>
+            {target === '__new__' && (
+              <input className="cmp-in" value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="新一週的名字，例：期中複習"/>
+            )}
+          </div>
+          <div className="cmp-two">
+            <div className="field">
+              <label className="field-label">放進哪一組（選填）</label>
+              <input className="cmp-in" value={group} onChange={e => setGroup(e.target.value)} placeholder="例：期中複習（不填就保留原本的組）"/>
+            </div>
+            <div className="field">
+              <label className="field-label">同時設成作業（選填）</label>
+              <input className="cmp-in" type="date" value={due} onChange={e => setDue(e.target.value)}/>
+            </div>
+          </div>
+          <div className="field">
+            <label className="field-label">挑單元（已勾 {picks.length} 個{extra > 0 ? `，另外自動帶 ${extra} 個相關的單字卡／教學卡` : ''}）</label>
+            <input className="cmp-in" value={q} onChange={e => setQ(e.target.value)} placeholder="搜尋單元名稱或組名"/>
+            <div className="cmp-weeks">
+              {srcWeeks.map(wid => {
+                const us = unitsOf(wid);
+                if (!us.length) return null;
+                const keys = us.map(({ it }) => K(wid, it.id));
+                const n = keys.filter(k => sel[k]).length;
+                const isOpen = !!open[wid] || !!needle;
+                const byGroup = {};
+                us.forEach(({ cid, it }) => { const g = (catTitles && catTitles[cid] || cid) + ' · ' + (it.group || '（未分組）'); (byGroup[g] = byGroup[g] || []).push(it); });
+                return (
+                  <div key={wid} className="cmp-wk">
+                    <div className="cmp-wk-head">
+                      <input type="checkbox" checked={n === keys.length} ref={el => { if (el) el.indeterminate = n > 0 && n < keys.length; }}
+                        onChange={e => toggleMany(keys, e.target.checked)} aria-label="整週全選"/>
+                      <button type="button" className="cmp-wk-t" onClick={() => setOpen(o => ({ ...o, [wid]: !o[wid] }))}>
+                        {isOpen ? '▾' : '▸'} {(weeks[wid] && (weeks[wid].label || wid)) || wid}
+                        <em>{n ? `已勾 ${n} / ` : ''}{keys.length} 個單元</em>
+                      </button>
+                    </div>
+                    {isOpen && Object.keys(byGroup).map(g => {
+                      const gk = byGroup[g].map(it => K(wid, it.id));
+                      const gn = gk.filter(k => sel[k]).length;
+                      return (
+                        <div key={g} className="cmp-grp">
+                          <label className="cmp-grp-h">
+                            <input type="checkbox" checked={gn === gk.length} ref={el => { if (el) el.indeterminate = gn > 0 && gn < gk.length; }}
+                              onChange={e => toggleMany(gk, e.target.checked)}/>
+                            <b>{g}</b>
+                          </label>
+                          {byGroup[g].map(it => (
+                            <label key={it.id} className={'cmp-unit' + (sel[K(wid, it.id)] ? ' on' : '')}>
+                              <input type="checkbox" checked={!!sel[K(wid, it.id)]} onChange={e => toggleMany([K(wid, it.id)], e.target.checked)}/>
+                              <span>{it.title}</span>
+                            </label>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {err && <div className="gr-warn">{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={!picks.length} onClick={go}>帶過去 {closure.length || ''} 個單元 →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { QuestionMoveModal, ComposeModal, AskPanel, ExamPrepModal, ExamScanModal, ExamDraftModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

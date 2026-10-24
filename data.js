@@ -11654,3 +11654,152 @@ function subscribeTimetable(cb) {
 Object.assign(window, { TT_DAYS, timetableParse, timetableOfDay, timetableOfStudent,
                         timetableNextDate, timetableHours, timetableBuddies, timetableSlotOn,
                         saveTimetable, subscribeTimetable });
+
+/* ══════════════════════════════════════════════════════════════════
+   v591（Alan：「跨週挑單元組成複習／模擬考」＋「單題搬到別的單元」）
+   純資料函式，不碰畫面也不存檔——呼叫端拿到新的 weeks 再自己存一次。
+   ⚠ 一律深拷貝：搬題目、複製單元都不可以讓兩個單元共用同一個物件，
+     不然改一邊另一邊跟著變。
+   ⚠ 單元之間互相指向的 id（requires 教學卡的鎖、linkedFlashcardId 單字卡）
+     複製後一定要換成新 id；指不到的就拿掉——指向不存在的單元會把學生鎖死。 */
+const QMOVE_LISTS = {
+  'quiz':           { field: 'questions',       min: 1 },
+  'fillblank':      { field: 'questions',       min: 2 },
+  'type-answer':    { field: 'pairs',           min: 1 },
+  'circle-answer':  { field: 'circleQuestions', min: 1 },
+  'sentence-order': { field: 'orderQuestions',  min: 1 },
+  'short-answer':   { field: 'saQuestions',     min: 1 },
+  'spelling':       { field: 'spellWords',      min: 1 },
+  'def-match':      { field: 'defPairs',        min: 2 },
+  'vocab-quiz':     { field: 'words',           min: 2 },
+  'syllable-div':   { field: 'sdWords',         min: 1 },
+};
+function qmoveInfo(item) {
+  const d = item && QMOVE_LISTS[item.type];
+  if (!d) return null;
+  return { field: d.field, min: d.min, list: Array.isArray(item[d.field]) ? item[d.field] : [] };
+}
+/* 給老師看的一行文字：每種題型欄位名不一樣，找得到的第一個就用 */
+function qmoveLabel(q) {
+  if (!q) return '';
+  const t = q.q || q.question || q.sentence || q.prompt || q.text || q.word || q.en
+    || (Array.isArray(q.words) ? q.words.join(' ') : '');
+  const extra = (q.def && q.word) ? ` = ${q.def}` : '';
+  return (String(t || '').replace(/\s+/g, ' ').trim() + extra) || '（空白）';
+}
+/* 只有「同樣題型、同樣 variant」才搬得過去：填空和改寫的資料長得一樣但教的東西不同 */
+function qmoveCompatible(a, b) {
+  return !!(a && b && qmoveInfo(a) && a.type === b.type && (a.variant || '') === (b.variant || ''));
+}
+function qmoveFind(weeks, weekId, itemId) {
+  const wk = weeks && weeks[weekId];
+  if (!wk || !wk.items) return null;
+  for (const catId of Object.keys(wk.items)) {
+    const it = (wk.items[catId] || []).find(x => x && x.id === itemId);
+    if (it) return { catId, item: it, week: wk };
+  }
+  return null;
+}
+/* idx＝要搬的題目在來源單元裡的位置。copy＝複製（來源不動）。
+   force＝來源會少到玩不了也照做。回傳 { ok, error, weeks, moved, left, need } */
+function qmoveApply(weeks, { src, dst, idx, copy, force } = {}) {
+  const w = JSON.parse(JSON.stringify(weeks || {}));
+  const s = src && qmoveFind(w, src.weekId, src.itemId);
+  const d = dst && qmoveFind(w, dst.weekId, dst.itemId);
+  if (!s || !d) return { ok: false, error: 'notfound' };
+  if (s.item === d.item || (src.weekId === dst.weekId && src.itemId === dst.itemId)) return { ok: false, error: 'same' };
+  if (!qmoveCompatible(s.item, d.item)) return { ok: false, error: 'type' };
+  const si = qmoveInfo(s.item), di = qmoveInfo(d.item);
+  const pick = Array.from(new Set((idx || []).map(Number))).filter(i => i >= 0 && i < si.list.length).sort((a, b) => a - b);
+  if (!pick.length) return { ok: false, error: 'empty' };
+  const left = copy ? si.list.length : si.list.length - pick.length;
+  if (!copy && left < si.min && !force) return { ok: false, error: 'unplayable', left, need: si.min };
+  if (!Array.isArray(d.item[di.field])) d.item[di.field] = [];
+  const dstList = d.item[di.field];
+  const taken = new Set(dstList.map(q => q && q.id).filter(Boolean));
+  pick.forEach(i => {
+    const q = JSON.parse(JSON.stringify(si.list[i]));
+    if (q && q.id) {
+      let id = q.id, n = 2;
+      while (taken.has(id)) { id = `${q.id}-${n}`; n++; }
+      taken.add(id); q.id = id;
+    }
+    dstList.push(q);
+  });
+  if (!copy) {
+    const gone = new Set(pick);
+    s.item[si.field] = si.list.filter((_, i) => !gone.has(i));
+  }
+  return { ok: true, weeks: w, moved: pick.length, left: copy ? si.list.length : s.item[si.field].length };
+}
+
+/* 挑單元組成新的一份：勾了「需要先學完」的教學卡或「對應單字卡」的練習，
+   那張卡也要一起帶，不然複製過去之後它指向一個不存在的單元 */
+function composeClosure(weeks, picks) {
+  const out = [], seen = new Set();
+  const key = p => p.weekId + '\u0001' + p.itemId;
+  const add = p => {
+    if (seen.has(key(p))) return;
+    const f = qmoveFind(weeks, p.weekId, p.itemId);
+    if (!f) return;
+    seen.add(key(p)); out.push({ weekId: p.weekId, itemId: p.itemId, auto: !!p.auto });
+    [f.item.requires, f.item.linkedFlashcardId].forEach(id => { if (id) add({ weekId: p.weekId, itemId: id, auto: true }); });
+  };
+  (picks || []).forEach(add);
+  return out;
+}
+/* picks＝[{ weekId, itemId }]（來源週＋單元）。target＝目標週 id（要已經存在）。
+   group 有填就把複製過去的單元都歸到這個組名；dueDate 有填就同時設成作業。 */
+function composeApply(weeks, { picks, target, group, dueDate } = {}) {
+  const w = JSON.parse(JSON.stringify(weeks || {}));
+  const dst = w[target];
+  if (!dst) return { ok: false, error: 'notarget' };
+  const list = composeClosure(w, picks);
+  if (!list.length) return { ok: false, error: 'empty' };
+  if (!dst.items) dst.items = {};
+  const taken = new Set(Object.values(dst.items).flat().map(it => it && it.id).filter(Boolean));
+  const map = {};              // 'weekId\u0001舊id' → 新 id
+  const made = [];
+  list.forEach(p => {
+    const f = qmoveFind(w, p.weekId, p.itemId);
+    if (!f) return;
+    const clone = JSON.parse(JSON.stringify(f.item));
+    let id = f.item.id, n = 2;
+    while (taken.has(id)) { id = `${f.item.id}-${n}`; n++; }
+    taken.add(id); clone.id = id;
+    map[p.weekId + '\u0001' + p.itemId] = id;
+    clone.__from = p.weekId;
+    if (group) clone.group = group;
+    if (!Array.isArray(dst.items[f.catId])) dst.items[f.catId] = [];
+    dst.items[f.catId].push(clone);
+    made.push(clone);
+  });
+  let dropped = 0;
+  made.forEach(c => {
+    ['requires', 'linkedFlashcardId'].forEach(k => {
+      if (!c[k]) return;
+      const nid = map[c.__from + '\u0001' + c[k]];
+      if (nid) c[k] = nid; else { delete c[k]; dropped++; }
+    });
+    delete c.__from;
+  });
+  if (dueDate) {
+    if (!dst.homework) dst.homework = {};
+    made.forEach(c => { dst.homework[c.id] = { dueDate }; });
+  }
+  return { ok: true, weeks: w, copied: made.length, auto: list.filter(p => p.auto).length, dropped };
+}
+/* 新增一週用的 id：最後一週的尾巴數字 +1（保留位數），撞到就一直加到不撞 */
+function composeNextWeekId(weekOrder) {
+  const ids = weekOrder || [];
+  const last = ids[ids.length - 1] || 'week-00';
+  const m = /^(.*?)(\d+)$/.exec(last);
+  if (!m) { let n = 2; while (ids.includes(`${last}-${n}`)) n++; return `${last}-${n}`; }
+  let num = parseInt(m[2], 10) + 1;
+  const pad = m[2].length;
+  let id = m[1] + String(num).padStart(pad, '0');
+  while (ids.includes(id)) { num++; id = m[1] + String(num).padStart(pad, '0'); }
+  return id;
+}
+Object.assign(window, { QMOVE_LISTS, qmoveInfo, qmoveLabel, qmoveCompatible, qmoveFind, qmoveApply,
+                        composeClosure, composeApply, composeNextWeekId });

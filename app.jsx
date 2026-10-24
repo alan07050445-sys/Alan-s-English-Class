@@ -195,6 +195,8 @@ function App() {
   const [assignAfterSave, setAssignAfterSave] = useAppState(null);
   const [editorGroups, setEditorGroups] = useAppState(null);   // v374(#5): 新增時要提供哪些分組選項
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
+  const [qMoveFor, setQMoveFor] = useAppState(null);          // v591 搬單題：要搬的單元
+  const [composeOpen, setComposeOpen] = useAppState(false);    // v591 跨週挑單元
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
   /* v398：匯出備份。ExportModal 早就寫好了（components-editor.jsx），
      但從 UI 沒有任何入口進得去＝等於不存在。期末整理的第一步就是「先備份」，
@@ -2239,6 +2241,38 @@ function App() {
       : `整組 ${list.length} 個單元已沿用到 ${weeksTouched} 週${dueDate ? '，並設成作業' : ''} ✓`);
   };
 
+  /* ══ v591：搬單題／跨週挑單元（邏輯在 data.js 的 qmoveApply／composeApply，有測試）══
+     ⚠ 都是「算出新的 weeks → 存一次」。新增一週時，週次本身與內容要一起存，
+       不要先 handleAddWeek 再複製——兩次存會互相蓋掉（v474 踩過）。 */
+  const handleQuestionMove = (args) => {
+    const res = window.qmoveApply(weeksRef.current, args);
+    if (!res.ok) return res;
+    setWeeks(res.weeks);
+    saveWeeksSafe(res.weeks);
+    showToast(`${args.copy ? '已複製' : '已搬'} ${res.moved} 題 ✓`);
+    setQMoveFor(null);
+    return res;
+  };
+  const handleCompose = ({ picks, target, newLabel, group, dueDate }) => {
+    const base = JSON.parse(JSON.stringify(weeksRef.current));
+    let tid = target, nextOrder = null;
+    if (target === '__new__') {
+      tid = window.composeNextWeekId(weekOrder);
+      base[tid] = { id: tid, label: newLabel || tid, dateRange: '—', theme: '', themeZh: '', subtitle: '', subtitleZh: '',
+                    items: { vocab: [], grammar: [], word: [], reading: [] } };
+      nextOrder = [...weekOrder, tid].sort();
+    }
+    const res = window.composeApply(base, { picks, target: tid, group, dueDate });
+    if (!res.ok) return res;
+    setWeeks(res.weeks);
+    saveWeeksSafe(res.weeks);
+    if (nextOrder) { setWeekOrder(nextOrder); window.saveWeekOrder(nextOrder); }
+    const lab = (res.weeks[tid] && (res.weeks[tid].label || tid)) || tid;
+    showToast(`已把 ${res.copied} 個單元帶到「${lab}」${res.auto ? `（含自動帶上的 ${res.auto} 個單字卡／教學卡）` : ''}${dueDate ? '，並設成作業' : ''} ✓`);
+    setComposeOpen(false);
+    return { ...res, weekId: tid };
+  };
+
   /* ══ 🗓 v533：整週內容複製到別週 ════════════════════════════════
      Alan：「我說把哪一週的內容複製到哪裡」——以前**整個網站都做不到**，
      只能一組一組沿用（v454）。
@@ -2612,6 +2646,7 @@ function App() {
             editMode={editMode}
             onToggleEdit={() => setEditMode(e => !e)}
             onAddWeek={() => setWeekModalOpen(true)}
+            onCompose={window.ComposeModal ? () => setComposeOpen(true) : null}   /* v591 */
             onTermSetup={(window.isSummerTrack && window.isSummerTrack(grade)) || (window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setTermOpen(true)}
             onQuickSet={() => setQuickSetOpen(true)}
             onAsk={window.AskPanel ? () => setAskOpen(true) : null}   /* 💬 v517 */
@@ -2703,6 +2738,7 @@ function App() {
                 label: (weeks[id] && (weeks[id].label || weeks[id].id)) || id,
                 sub: weeks[id] ? [weeks[id].dateRange, weeks[id].theme].filter(Boolean).join(' · ') : '',
               }))}
+              onMoveQuestions={(item) => setQMoveFor(item)}
               onCopyToWeeks={(item, targetIds) => handleCopyItemToWeeks(catView.id, item, targetIds)}
               onCopyGroupToWeeks={(items, targetIds, due, move) => handleCopyGroupToWeeks(catView.id, items, targetIds, due, move)}
               /* 🔴 v474（Alan：「這份很明顯就是單字，幹嘛還要選？」
@@ -2931,6 +2967,27 @@ function App() {
             onClose={() => setWeekModalOpen(false)}
             onSave={handleAddWeek}
           />
+          {qMoveFor && window.QuestionMoveModal && (
+            <window.QuestionMoveModal
+              item={qMoveFor}
+              weekId={weekId}
+              weeks={weeks}
+              weekOrder={weekOrder}
+              catTitles={(() => { const o = {}; (activeCategories || []).forEach(c => { o[c.id] = c.titleZh || c.title || c.id; }); return o; })()}
+              onClose={() => setQMoveFor(null)}
+              onApply={handleQuestionMove}
+            />
+          )}
+          {composeOpen && window.ComposeModal && (
+            <window.ComposeModal
+              weeks={weeks}
+              weekOrder={weekOrder}
+              curWeekId={weekId}
+              catTitles={(() => { const o = {}; (activeCategories || []).forEach(c => { o[c.id] = c.titleZh || c.title || c.id; }); return o; })()}
+              onClose={() => setComposeOpen(false)}
+              onApply={handleCompose}
+            />
+          )}
           <window.GrammarGenModal
             open={grGenOpen}
             defaultTense={openCat && /^t[1-5]$/.test(openCat) ? openCat : 't1'}

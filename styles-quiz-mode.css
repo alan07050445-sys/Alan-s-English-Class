@@ -4320,3 +4320,28 @@ textarea.ex-essay {
 .ex-part-h b { font-size: 21px; }
 .ex-pts { font-size: 16px; }
 .exed-airule { width: 100%; box-sizing: border-box; margin-bottom: 6px; font-size: 14px; }
+
+/* v591：搬單題（qmv-）／跨週挑單元（cmp-）——只用變數與半透明，夜色底也看得清楚 */
+.qmv-list, .cmp-weeks { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding: 2px; }
+.cmp-weeks { max-height: 340px; }
+.qmv-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer;
+  border: 1.5px solid var(--border, #ecdfc6); background: var(--card, transparent); color: var(--ink, inherit);
+}
+.qmv-row.on { border-color: var(--accent, #8B3120); background: rgba(139, 49, 32, .08); }
+.qmv-row .qmv-t { flex: 1; min-width: 0; font-size: 14px; line-height: 1.4; }
+.qmv-row .qmv-t em { font-style: normal; opacity: .6; font-size: 12px; }
+.qmv-row .qmv-n { flex: none; font-size: 12px; opacity: .6; }
+.qmv-quick { display: flex; gap: 8px; margin-top: 8px; }
+.qmv-mode { display: flex; gap: 8px; flex-wrap: wrap; }
+.cmp-in { width: 100%; box-sizing: border-box; margin-top: 6px; }
+.cmp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .cmp-two { grid-template-columns: 1fr; } }
+.cmp-wk { border: 1.5px solid var(--border, #ecdfc6); border-radius: 12px; padding: 6px 10px; color: var(--ink, inherit); }
+.cmp-wk-head { display: flex; align-items: center; gap: 10px; }
+.cmp-wk-t { flex: 1; text-align: left; background: none; border: none; cursor: pointer; font: inherit; font-weight: 700; color: inherit; padding: 6px 0; }
+.cmp-wk-t em { font-style: normal; font-weight: 500; opacity: .6; font-size: 12px; margin-left: 8px; }
+.cmp-grp { margin: 2px 0 8px 26px; }
+.cmp-grp-h { display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: .85; cursor: pointer; padding: 3px 0; }
+.cmp-unit { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 22px; font-size: 14px; border-radius: 8px; cursor: pointer; }
+.cmp-unit.on { background: rgba(139, 49, 32, .08); }
