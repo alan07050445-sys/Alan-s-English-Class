@@ -8105,9 +8105,24 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               "rubricSet":"summary" (see below), even though it is a part of a bigger Part 2.
               🔴 If the printed rubric has the Kang Chiao writing criteria (Content, Details,
               Creativity, Text Structure, Length, Grammar, Vocabulary) add "rubricSet":"writing".
-              If it has Explanation / Relevant / Effort, add "rubricSet":"basic".
+              If it has Explanation / Relevant / Effort, add "rubricSet":"basic" and "rubricMax":N, where N is the
+              biggest point value in that criteria table (columns "5 Points ... 0 Points" -> 5).
+              🔴 "Read the text below and answer the questions" followed by written answers (e.g. "What is the author's
+              purpose? (5pts.)" and "Write one detail from the story ... then explain how it supports ... (15pts.)")
+              is ONE "short" part: "passage" = the text, "pts" = the printed total (20), and EVERY written question in
+              "questions" with its own "pts". Do NOT use "evidence" for that — "evidence" is only for "use N details".
+              🔴 ALWAYS copy the whole reading text into "passage" of the part that says "Read the text below" — the
+              text is part of the exam; never leave it out, even when the questions are on the next page.
+              🔴 If the text is on THIS page but its questions are on the NEXT page, still output the part:
+              "kind":"short", its title, "pts", the "passage", and "questions":[] (empty). The next page then outputs the
+              questions as a "short" part with no title and the passage left out.
+              🔴 A reading text that comes AFTER a quiz belongs to the part printed right above it ("Read the text below"),
+              NOT to the multiple-choice quiz before it. Put the passage in THAT part.
               If it is a "Summary Writing Rubric" (details from the beginning / middle / end, chronological
               order, complete sentences, own words), add "rubricSet":"summary".
+
+If a page shows ONLY a marking-criteria table (rows like Explanation / Relevant / Effort, columns "5 Points ... 0 Points"),
+it has no sections: output "sections":[] and a top-level "rubricMax":N (the biggest point value, e.g. 5).
 
 A page that has ONLY a reading selection (a title, maybe a photo, numbered paragraphs) and says
 "Read the selection. Then complete Part 1 and Part 2" has no questions of its own. Do NOT put it in
@@ -8173,7 +8188,17 @@ function _examReadOne(content) {
         passage: String((sc && sc.passage) || '').trim(),
         figure: _examFigureOf(sc && sc.figure),
         parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
-          let c = _examCleanPart(pt);
+          /* v585：「Read the text below…」這一大題的題目在下一頁——只有標題與文章，沒有題目。
+             不能讓清洗把標題本身當成一題（那會多出一個假題目，而且分數會重複算）。 */
+          const noQs = !(Array.isArray(pt && pt.questions) && pt.questions.length);
+          const isHeadShort = !!pt && pt.kind === 'short' && noQs && !String(pt.question || pt.prompt || '').trim()
+            && (Array.isArray(pt.questions)
+                || (/\b(read|use what you read|answer the questions)\b/i.test(String(pt.title || pt.instruction || '')) && !/\?\s*$/.test(String(pt.title || '')) && !/summar|write|explain|describe/i.test(String(pt.title || '') + ' ' + String(pt.instruction || ''))));
+          let c;
+          if (isHeadShort) {
+            c = _examCleanPart({ ...pt, questions: [{ q: '_', pts: 0 }] });
+            if (c) c = { ...c, questions: [], _cont: 'questions' };
+          } else c = _examCleanPart(pt);
           /* v582：考卷跨頁時，續頁只有「後半段」——填空沒有詞庫（詞庫在上一頁）、自己出問題沒有文章（文章在前面那頁）。
              每一頁是分開讀的，所以先收下來標成 _cont，等合併時再接回前面的大題。 */
           if (!c && pt && pt.kind === 'cloze' && Array.isArray(pt.items || pt.sentences) && !(Array.isArray(pt.bank) && pt.bank.length)) {
@@ -8189,7 +8214,7 @@ function _examReadOne(content) {
           return c;
         }).filter(Boolean),
       })).filter(sc => sc.parts.length || sc.passage || sc.figure);
-      return { title: String(o.title || '').trim(), sections: secs,
+      return { title: String(o.title || '').trim(), sections: secs, rubricMax: Math.max(0, Math.min(10, Math.round(+o.rubricMax || 0))),
                skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean).concat(dropped) };
     }, 90000);
 }
@@ -8341,7 +8366,8 @@ function _examCleanPart(p) {
   /* 印在卷子上的 rubric 是哪一套（七項寫作／三項）——認不得就不設，用預設的三項 */
   const rs = String(p.rubricSet || '').trim();
   const rubricSet = EXAM_RUBRIC_SETS[rs] ? rs : '';
-  return { ...base, passage: String(p.passage || '').trim(), questions,
+  const rtShort = String(p.passage || p.readText || '').trim();
+  return { ...base, passage: rtShort, ...(rtShort ? { readText: rtShort } : {}), questions,
            ...(rubricSet ? { rubricSet, rubricMax: EXAM_RUBRIC_SETS[rubricSet].max } : {}) };
 }
 
@@ -8431,7 +8457,9 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
                  改成「這張照片上看得到的全部都要讀，左頁先、右頁後」。 */
               { type: 'text', text: `Read EVERYTHING visible in this photo${imgs.length > 1 ? ` (photo ${i + 1} of ${imgs.length} of one exam paper)` : ''}. `
                 + 'A photo often shows TWO facing pages of an open booklet — read the LEFT page first, then the RIGHT page, '
-                + 'and output every Section and Part you can see on either side.' }],
+                + 'and output every Section and Part you can see on either side. '
+                + 'Every reading text (story / article / paragraphs) printed on the page MUST be copied word for word into a "passage" field '
+                + '(on the part that says "Read the text below", or on the section) — never leave a printed reading text out.' }],
   }));
   let done = 0;
   if (onProgress) onProgress(0, parts.length);
@@ -8448,12 +8476,14 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     });
   });
   const ok = got.filter(g => g.v && g.v.sections.length);
+  /* v585：只有「評分標準表」的那一頁沒有大題，但它告訴我們 rubric 每項最高幾分（康橋 G4 Formative 1：5 分） */
+  const printedRubricMax = Math.max(0, ...got.map(g => (g.v && g.v.rubricMax) || 0));
   if (!ok.length) {
     const to = got.some(g => g.e && g.e.timeout);
     throw new Error(to ? '讀考卷太久沒有回應，請再試一次。'
                        : '讀不懂這幾張照片——請拍正一點、光線亮一點，整頁都要入鏡。');
   }
-  const missed = got.map((g, i) => (g.v && g.v.sections.length ? null : parts[i].label)).filter(Boolean);
+  const missed = got.map((g, i) => (g.v && (g.v.sections.length || g.v.rubricMax) ? null : parts[i].label)).filter(Boolean);
 
   /* 合併：同名的 Section 接起來（一個 Section 常常跨兩頁）。 */
   const secs = [];
@@ -8494,8 +8524,12 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
       }
       const same = last && last.kind === pt.kind && (pt.kind === 'quiz' || pt.kind === 'short');
       if (same && !pt.title) {
+        const headed = last._cont === 'questions';           // 前一頁只有文章與標題、題目在這一頁
         last.questions = (last.questions || []).concat(pt.questions || []);
-        last.pts = (+last.pts || 0) + (+pt.pts || 0);
+        last.pts = headed ? (+last.pts || +pt.pts || 0) : (+last.pts || 0) + (+pt.pts || 0);
+        const qp = (last.questions || []).map(q => +q.pts || 0);
+        if (last.questions.length && qp.every(v => v > 0)) last.pts = qp.reduce((a, b) => a + b, 0);   // 每題都有配分 → 總分照加
+        if (headed) delete last._cont;
         if (!last.passage && pt.passage) last.passage = pt.passage;
         return;
       }
@@ -8506,6 +8540,18 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   /* v560 ① 「只有文章」的那一頁：文章接到後面第一個要先讀文章的大題上（選擇題／排順序／摘要／長文），
          而且模型常把同一個 Section 拆成名字不一樣的幾段（"Section: Reading Skills"、"Part 2: …"），
          沒有自己 Section 編號的、配分比例是 0 的，併回前面那個有編號的 Section。 */
+  /* v586：只有標題與文章、後面沒有等到它的題目（例如文章後面接的是選擇題）→ 那篇文章改當 Section 的文章，
+     等一下依題目內容掛到真正在問它的那一大題 */
+  secs.forEach(sc => {
+    sc.parts = sc.parts.filter(pt => {
+      if (pt._cont !== 'questions') return true;
+      if ((pt.questions || []).length) { delete pt._cont; return true; }
+      const rt = String(pt.readText || pt.passage || '').trim();
+      if (rt && !sc.passage) sc.passage = rt;
+      if (pt.figure && !sc.figure) sc.figure = pt.figure;
+      return false;
+    });
+  });
   const NEEDS_READ = { quiz: 1, order: 1, short: 1, essay: 1 };
   for (let i = 0; i < secs.length; i++) {
     const sc = secs[i];
@@ -8514,7 +8560,18 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     while (secs[i + 1] && !(+secs[i + 1].pct) && !/^section\s*\d/i.test(secs[i + 1].name)) {
       sc.parts = sc.parts.concat(secs[i + 1].parts); secs.splice(i + 1, 1);
     }
-    const tgt = sc.parts.find(pt => NEEDS_READ[pt.kind] && !pt.readText && !pt.passage);
+    /* v585：文章要掛在「問的是這篇」的那一題上，不是第一個遇到的。
+       康橋 G4 Formative 1：Part 4 的選擇題問的是另一篇（Buzz），這一頁的文章（Kjell）是後面 Part 5 的——
+       所以比對題目與文章共用多少實詞；全部都是 0 才退而求其次，掛在最後一個候選。 */
+    const cands = sc.parts.filter(pt => NEEDS_READ[pt.kind] && !pt.readText && !pt.passage);
+    const srcW = new Set(_examContentWords(sc.passage));
+    const score = (pt) => {
+      const txt = (pt.questions || []).map(q => [q.q].concat(q.options || []).join(' ')).join(' ') + ' ' + (pt.events || []).join(' ');
+      return _examContentWords(txt).filter(w => srcW.has(w)).length;
+    };
+    let tgt = null, best = 0;
+    cands.forEach(pt => { const sc2 = score(pt); if (sc2 > best) { best = sc2; tgt = pt; } });
+    if (!tgt && cands.length) tgt = cands.length > 1 && cands.some(pt => !(pt.questions || []).length === false) ? cands[cands.length - 1] : cands[0];
     if (tgt) { tgt.readText = sc.passage; sc._figTarget = tgt; }
     else skipped.push('有一篇文章（' + sc.passage.slice(0, 30).replace(/\n/g, ' ') + '…）找不到要接在哪一題，請自己貼上');
   }
@@ -8564,6 +8621,12 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
       if (tot > 0) pt.pts = tot;
     }
   }));
+  /* v585 評分標準表（Explanation／Relevant／Effort，每項最高 5 分）：套到沒有指定評分表的手寫題上 */
+  if (printedRubricMax > 0) {
+    secs.forEach(sc => sc.parts.forEach(pt => {
+      if (pt.kind === 'short' && (!pt.rubricSet || pt.rubricSet === 'basic')) { pt.rubricSet = 'basic'; pt.rubricMax = printedRubricMax; }
+    }));
+  }
   /* v571 🖼 插圖：從那一張把 AI 指的那塊裁出來、上傳、掛在那篇文章（或那一大題）上。
      ⚠ 上傳失敗不能讓整份考卷讀不出來——記一句，讓老師自己在編輯單元補圖。 */
   secs.forEach(sc => {
@@ -9870,6 +9933,11 @@ function examWarnings(item) {
     if (pt.kind !== 'checkin') {
       if (!n) w.push(`${where}一題都沒有。`);
       if (!(examPtsOf(pt) > 0)) w.push(`${where}沒有配分。`);
+    }
+    /* v586：題目在問「the text／the passage／the author」，卻沒有附任何文章 → 學生沒東西可讀（卷子上那篇不在這份 PDF 裡時最常發生） */
+    if ((pt.kind === 'quiz' || pt.kind === 'short') && !(sec.parts || []).some(x => String(x.readText || x.passage || '').trim())
+        && (pt.questions || []).some(q => /\b(according to the (text|passage|story)|the (text|passage|story|selection)|the author|in the (text|passage|story))\b/i.test(String((q && q.q) || '')))) {
+      w.push(`${where}的題目在問一篇文章（the text／the author），但沒有附文章——請在編輯單元貼上那篇文章。`);
     }
     /* v536 的兩種新題型 */
     if (pt.kind === 'storymap' && !String(pt.passage || '').trim()) {
