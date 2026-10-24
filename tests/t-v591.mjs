@@ -102,7 +102,7 @@ ok('⭐ app 有把 onMoveQuestions 傳進去，而且打開的是 QuestionMoveMo
 ok('⭐ Header 有收 onCompose 並畫出按鈕；app 有傳、有渲染 ComposeModal', /onAddWeek, onCompose,/.test(shell) && /onClick=\{onCompose\}/.test(shell) && /onCompose=\{/.test(app) && /<window\.ComposeModal/.test(app) && /onApply=\{handleCompose\}/.test(app));
 ok('⭐ 兩個 handler 都走 data.js 那份邏輯（同一件判斷只有一份）', /window\.qmoveApply\(weeksRef\.current/.test(app) && /window\.composeApply\(base/.test(app));
 ok('⭐ 新增一週時，週次與內容一次存完（不是先 handleAddWeek 再複製）', (() => { const f = app.slice(app.indexOf('const handleCompose')); const body = f.slice(0, f.indexOf('\n  };')); return !/handleAddWeek\(/.test(body) && /saveWeekOrder\(nextOrder\)/.test(body) && (body.match(/saveWeeksSafe\(/g) || []).length === 1; })());
-ok('⭐ 兩個視窗有匯出到 window', /Object\.assign\(window, \{ QuestionMoveModal, ComposeModal,/.test(ed));
+ok('⭐ 兩個視窗有匯出到 window', /Object\.assign\(window, \{[^}]*\bQuestionMoveModal\b[^}]*\bComposeModal\b/.test(ed));
 ok('⭐ 把單題搬空前有 confirm（不是安靜搬空）', /error === 'unplayable'[\s\S]{0,300}confirm\(/.test(ed));
 console.log(fail ? `\n❌ t-v591：${pass} 過 / ${fail} 失敗` : `\n✅ t-v591：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

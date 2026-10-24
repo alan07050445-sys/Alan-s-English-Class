@@ -159,7 +159,7 @@ function findUnitsIn(weekOrder, weeks, q) {
 function Header({
   week, weekOrder, weekIdx, onPrevWeek, onNextWeek,
   onShowCheckin, checkinDone, checkinStreak,
-  canEdit, editMode, onToggleEdit, onAsk, onAddWeek, onCompose, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, onExamScan, onExamDraft, pace, nextF, onPacing, onExamPrep,
+  canEdit, editMode, onToggleEdit, onAsk, onAddWeek, onCompose, onTrash, onDeleteWeek, onArchiveWeek, weekArchived, onExport, onEditWeek, onTermSetup, onQuickSet, onGrammarGen, onReadingGen, onGrammarNotes, onWordStudy, onExamScan, onExamDraft, pace, nextF, onPacing, onExamPrep,
   progress,
   // Auth props
   user, onLogin, onLogout, onShowDashboard, onHome,
@@ -473,6 +473,9 @@ function Header({
                 <button className="banner-btn" onClick={onAddWeek}><Icon name="plus" size={12}/> 新增一週</button>
                 {onCompose && (
                   <button className="banner-btn" onClick={onCompose}>📚 組合複習／模擬考</button>
+                )}
+                {onTrash && (
+                  <button className="banner-btn" onClick={onTrash}>🗑 垃圾桶（救回刪掉的）</button>
                 )}
                 {onExport && (
                   <button className="banner-btn" onClick={onExport}>💾 匯出備份</button>

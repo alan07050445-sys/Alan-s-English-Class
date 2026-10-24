@@ -4348,3 +4348,23 @@ textarea.ex-essay {
 /* v592 你是說…？ */
 .ask-dym { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .ask-dym .btn { text-transform: none; letter-spacing: 0; }
+
+/* v593 🗑 垃圾桶 */
+.trash-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; }
+.trash-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--border, #ecdfc6); border-radius: 12px; color: var(--ink, inherit); }
+.trash-ico { flex: none; font-size: 18px; }
+.trash-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.trash-main b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-main em { font-style: normal; font-size: 12px; opacity: .65; }
+.toast.toast-undo { display: flex; align-items: center; gap: 14px; }
+.toast.toast-undo button { background: transparent; border: 1px solid currentColor; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 4px 12px; cursor: pointer; }
+
+/* v593 🗑 垃圾桶 */
+.trash-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; }
+.trash-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--border, #ecdfc6); border-radius: 12px; color: var(--ink, inherit); }
+.trash-ico { flex: none; font-size: 18px; }
+.trash-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.trash-main b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-main em { font-style: normal; font-size: 12px; opacity: .65; }
+.toast.toast-undo { display: flex; align-items: center; gap: 14px; }
+.toast.toast-undo button { background: transparent; border: 1px solid currentColor; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 4px 12px; cursor: pointer; }

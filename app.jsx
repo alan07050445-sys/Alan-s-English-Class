@@ -197,6 +197,8 @@ function App() {
   const [weekModalOpen, setWeekModalOpen] = useAppState(false);
   const [qMoveFor, setQMoveFor] = useAppState(null);          // v591 搬單題：要搬的單元
   const [composeOpen, setComposeOpen] = useAppState(false);    // v591 跨週挑單元（也可能是物件＝聊天室帶著預選開的）
+  const [trashOpen, setTrashOpen] = useAppState(false);        // v593 🗑 垃圾桶
+  const [trashList, setTrashList] = useAppState(null);          // null＝還沒讀；[]＝空的
   const [qMoveInit, setQMoveInit] = useAppState(null);        // v592 聊天室預選的題目／目的地
   const [askPick, setAskPick] = useAppState(null);              // v592「你是說…？」{ title, options:[], onPick }
   const [termOpen, setTermOpen] = useAppState(false);   // v377: 一鍵建立一整個學期
@@ -893,6 +895,14 @@ function App() {
     setToast(msg);
     setTimeout(() => setToast(null), 1800);
   };
+  /* v593：刪東西之後的「復原」提示——掛 10 秒（一般提示只有 1.8 秒，來不及按）。
+     ⚠ 用 ref 記計時器：不然前一個提示的 1.8 秒計時器會把這個提早收掉。 */
+  const undoTimerRef = useAppRef(0);
+  const showUndoToast = (msg, onUndo) => {
+    clearTimeout(undoTimerRef.current);
+    setToast({ msg, undo: onUndo });
+    undoTimerRef.current = setTimeout(() => setToast(null), 10000);
+  };
 
   const finishTutorial = () => {
     try { localStorage.setItem('alan-tutorial-done', '1'); } catch(e) {}
@@ -1124,6 +1134,7 @@ function App() {
 
   const handleDeleteWeek = () => {
     if (weekOrder.length <= 1) { showToast("Can't delete the last week"); return; }
+    const snap = window.trashSnapshotWeek(weeksRef.current, weekOrder, weekId);   // v593
     const nextWeeks = { ...weeksRef.current };
     delete nextWeeks[weekId];
     const nextOrder = weekOrder.filter(id => id !== weekId);
@@ -1133,7 +1144,7 @@ function App() {
     window.saveWeekOrder(nextOrder);
     setWeekIdx(i => Math.max(0, i - 1));
     setOpenCat(null);
-    showToast("Week deleted");
+    keepInTrash(snap, '整週刪掉了');
   };
 
   const toggleCheck = (itemId) => {
@@ -1657,8 +1668,7 @@ function App() {
       if (h) {
         if (plan.op === 'delete') {
           if (window.confirm(`刪掉「${h.item.title}」這一個單元嗎？\n\n學生做過的紀錄會留著，但單元會從這一週消失，救不回來。`)) {
-            handleDeleteItem(h.item.id);
-            showToast(`已刪掉「${h.item.title}」`);
+            handleDeleteItem(h.item.id);   // 它自己會跳出「復原」提示
           }
         } else if (handleRenameUnit(h.catId, h.item.id, plan.title)) {
           showToast(`改好了：${h.item.title} → ${plan.title}`);
@@ -2214,14 +2224,54 @@ function App() {
   const handleDeleteItems = (itemIds) => {
     const ids = new Set((itemIds || []).filter(Boolean));
     if (!ids.size) return;
+    const snap = window.trashSnapshotUnits(weeksRef.current, weekId, Array.from(ids));   // v593：先拍快照，再刪
     const w = JSON.parse(JSON.stringify(weeksRef.current));
     stripItemsFrom(w[weekId], ids);   // 單元＋孤兒作業＋別人指向它的鎖，一起清
     setWeeks(w);
     saveWeeksSafe(w);
     setEditorOpen(false);
-    showToast(ids.size > 1 ? `已刪掉 ${ids.size} 個單元` : 'Item deleted');
+    keepInTrash(snap, ids.size > 1 ? `已刪掉 ${ids.size} 個單元` : '已刪掉');
   };
   const handleDeleteItem = (itemId) => handleDeleteItems([itemId]);
+
+  /* ══ 🗑 v593 垃圾桶 ══════════════════════════════════════════════
+     刪除的兩個出口（handleDeleteItems／handleDeleteWeek）都先拍快照再刪，
+     所以單元的垃圾桶鈕、整組刪、聊天室刪、刪整週**全部**都救得回來。
+     ⚠ 復原的提示用記憶體裡那份快照（不必等雲端）；垃圾桶清單才讀雲端。
+     ⚠ 快照存不進雲端要講出來，不可以讓他以為救得回來。 */
+  const keepInTrash = (snap, msg) => {
+    if (!snap) { showToast(msg); return; }
+    showUndoToast(msg, () => restoreFromTrash(snap));
+    window.trashPush(grade, snap).then(() => setTrashList(null), () => {
+      showToast('⚠ 已刪掉，但垃圾桶沒存到——現在的「復原」按鈕還有效，重新整理就沒了。');
+    });
+  };
+  const restoreFromTrash = (entry) => {
+    if (!entry || !entry.data) return false;
+    if (entry.kind === 'week') {
+      const r = window.trashRestoreWeek(weeksRef.current, weekOrder, entry);
+      if (!r.ok) { showToast(r.error === 'exists' ? '那一週已經在了。' : '這筆資料壞掉了，救不回來。'); return false; }
+      setWeeks(r.weeks); setWeekOrder(r.order);
+      saveWeeksSafe(r.weeks); window.saveWeekOrder(r.order);
+      showToast(`「${entry.label}」整週救回來了 ✓`);
+    } else {
+      const r = window.trashRestoreUnits(weeksRef.current, entry);
+      if (!r.ok) {
+        showToast(r.error === 'noweek' ? `原本那一週（${entry.weekLabel}）已經不在了，先把那一週救回來。`
+          : r.error === 'already' ? '這些單元已經在原本那一週了。' : '救不回來。');
+        return false;
+      }
+      setWeeks(r.weeks); saveWeeksSafe(r.weeks);
+      showToast(`救回來了：${r.restored} 個單元${r.skipped ? `（${r.skipped} 個本來就在）` : ''} ✓`);
+    }
+    window.trashRemove(grade, entry.id).then(() => {}, () => {});
+    setTrashList(l => (l || []).filter(e => e.id !== entry.id));
+    return true;
+  };
+  const openTrash = () => {
+    setTrashOpen(true);
+    window.trashLoad(grade).then(setTrashList, () => setTrashList([]));
+  };
 
   // ── Homework handler ────────────────────────────────────
   const handleSetHomework = (itemId, hwData) => {
@@ -2746,6 +2796,7 @@ function App() {
             onToggleEdit={() => setEditMode(e => !e)}
             onAddWeek={() => setWeekModalOpen(true)}
             onCompose={window.ComposeModal ? () => setComposeOpen(true) : null}   /* v591 */
+            onTrash={window.TrashModal ? openTrash : null}   /* v593 */
             onTermSetup={(window.isSummerTrack && window.isSummerTrack(grade)) || (window.isGrammarTrack && window.isGrammarTrack(grade)) ? null : () => setTermOpen(true)}
             onQuickSet={() => setQuickSetOpen(true)}
             onAsk={window.AskPanel ? () => setAskOpen(true) : null}   /* 💬 v517 */
@@ -3089,6 +3140,14 @@ function App() {
               initial={composeOpen === true ? null : composeOpen}
             />
           )}
+          {trashOpen && window.TrashModal && (
+            <window.TrashModal
+              entries={trashList}
+              onRestore={restoreFromTrash}
+              onClear={() => { if (window.confirm('清空垃圾桶？這之後就真的救不回來了。')) { window.trashClear(grade).then(() => setTrashList([])); } }}
+              onClose={() => setTrashOpen(false)}
+            />
+          )}
           {askPick && (
             <div className="modal-backdrop" onClick={() => setAskPick(null)}>
               <div className="modal" onClick={e => e.stopPropagation()}>
@@ -3321,7 +3380,11 @@ function App() {
               </div>
             </div>
           )}
-          {toast && <div className="toast">{toast}</div>}
+          {toast && (typeof toast === 'string'
+            ? <div className="toast">{toast}</div>
+            : <div className="toast toast-undo">{toast.msg}
+                <button type="button" onClick={() => { const f = toast.undo; setToast(null); f && f(); }}>復原</button>
+              </div>)}
           {/* v447：存檔沒成功就一直掛著，不要讓老師以為存好了（他的分段閱讀就是這樣不見的） */}
           {/* v550：雲端資料 4 秒還沒回來——畫面上要講，不要讓人以為這就是最新的課程 */}
           {cloudSlow && !cloudSeen && (

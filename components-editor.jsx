@@ -8840,5 +8840,52 @@ function ComposeModal({ weeks, weekOrder, curWeekId, catTitles, onClose, onApply
   );
 }
 
-Object.assign(window, { QuestionMoveModal, ComposeModal, AskPanel, ExamPrepModal, ExamScanModal, ExamDraftModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
+/* v593 🗑 垃圾桶：刪掉的單元／整週保留 30 天，點一下救回來（資料與規則見 data.js trash*） */
+function TrashModal({ entries, onRestore, onClear, onClose }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const ago = (t) => {
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (m < 1) return '剛剛';
+    if (m < 60) return `${m} 分鐘前`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h} 小時前`;
+    return `${Math.round(h / 24)} 天前`;
+  };
+  return (
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>🗑 垃圾桶</h3>
+          <button className="modal-close" aria-label="關閉" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="field-help" style={{ marginBottom: 12 }}>
+            刪掉的單元、整組、整週會在這裡放 <b>30 天</b>。救回來會放回<b>原本那一週</b>，
+            而且學生做過的成績會跟著回來。
+          </div>
+          {entries === null && <div className="field-help">讀取中…</div>}
+          {entries && !entries.length && <div className="field-help">垃圾桶是空的。</div>}
+          <div className="trash-list">
+            {(entries || []).map(e => (
+              <div key={e.id} className="trash-row">
+                <span className="trash-ico">{e.kind === 'week' ? '🗓' : '📄'}</span>
+                <span className="trash-main">
+                  <b>{e.label}</b>
+                  <em>{e.kind === 'week' ? `整週（${e.n} 個單元）` : `${e.weekLabel} · ${e.n} 個單元`} · {ago(e.at)}刪的</em>
+                </span>
+                <button className="btn primary" onClick={() => onRestore(e)}>救回來</button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="modal-foot">
+          {entries && entries.length > 0 && <button className="btn" onClick={onClear}>清空</button>}
+          <button className="btn primary" onClick={onClose}>關閉</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { TrashModal, QuestionMoveModal, ComposeModal, AskPanel, ExamPrepModal, ExamScanModal, ExamDraftModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, Footer, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

@@ -318,6 +318,7 @@ function Header({
   onAsk,
   onAddWeek,
   onCompose,
+  onTrash,
   onDeleteWeek,
   onArchiveWeek,
   weekArchived,
@@ -699,7 +700,10 @@ function Header({
   }), " \u65B0\u589E\u4E00\u9031"), onCompose && /*#__PURE__*/React.createElement("button", {
     className: "banner-btn",
     onClick: onCompose
-  }, "\uD83D\uDCDA \u7D44\u5408\u8907\u7FD2\uFF0F\u6A21\u64EC\u8003"), onExport && /*#__PURE__*/React.createElement("button", {
+  }, "\uD83D\uDCDA \u7D44\u5408\u8907\u7FD2\uFF0F\u6A21\u64EC\u8003"), onTrash && /*#__PURE__*/React.createElement("button", {
+    className: "banner-btn",
+    onClick: onTrash
+  }, "\uD83D\uDDD1 \u5783\u573E\u6876\uFF08\u6551\u56DE\u522A\u6389\u7684\uFF09"), onExport && /*#__PURE__*/React.createElement("button", {
     className: "banner-btn",
     onClick: onExport
   }, "\uD83D\uDCBE \u532F\u51FA\u5099\u4EFD"), onArchiveWeek && /*#__PURE__*/React.createElement("button", {

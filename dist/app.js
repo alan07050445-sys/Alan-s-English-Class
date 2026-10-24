@@ -302,6 +302,8 @@ function App() {
   var [weekModalOpen, setWeekModalOpen] = useAppState(false);
   var [qMoveFor, setQMoveFor] = useAppState(null); // v591 搬單題：要搬的單元
   var [composeOpen, setComposeOpen] = useAppState(false); // v591 跨週挑單元（也可能是物件＝聊天室帶著預選開的）
+  var [trashOpen, setTrashOpen] = useAppState(false); // v593 🗑 垃圾桶
+  var [trashList, setTrashList] = useAppState(null); // null＝還沒讀；[]＝空的
   var [qMoveInit, setQMoveInit] = useAppState(null); // v592 聊天室預選的題目／目的地
   var [askPick, setAskPick] = useAppState(null); // v592「你是說…？」{ title, options:[], onPick }
   var [termOpen, setTermOpen] = useAppState(false); // v377: 一鍵建立一整個學期
@@ -1199,6 +1201,17 @@ function App() {
     setToast(msg);
     setTimeout(() => setToast(null), 1800);
   };
+  /* v593：刪東西之後的「復原」提示——掛 10 秒（一般提示只有 1.8 秒，來不及按）。
+     ⚠ 用 ref 記計時器：不然前一個提示的 1.8 秒計時器會把這個提早收掉。 */
+  var undoTimerRef = useAppRef(0);
+  var showUndoToast = (msg, onUndo) => {
+    clearTimeout(undoTimerRef.current);
+    setToast({
+      msg,
+      undo: onUndo
+    });
+    undoTimerRef.current = setTimeout(() => setToast(null), 10000);
+  };
   var finishTutorial = () => {
     try {
       localStorage.setItem('alan-tutorial-done', '1');
@@ -1536,6 +1549,7 @@ function App() {
       showToast("Can't delete the last week");
       return;
     }
+    var snap = window.trashSnapshotWeek(weeksRef.current, weekOrder, weekId); // v593
     var nextWeeks = {
       ...weeksRef.current
     };
@@ -1547,7 +1561,7 @@ function App() {
     window.saveWeekOrder(nextOrder);
     setWeekIdx(i => Math.max(0, i - 1));
     setOpenCat(null);
-    showToast("Week deleted");
+    keepInTrash(snap, '整週刪掉了');
   };
   var toggleCheck = itemId => {
     setProgress(prev => {
@@ -2271,8 +2285,7 @@ function App() {
       if (h) {
         if (plan.op === 'delete') {
           if (window.confirm(`刪掉「${h.item.title}」這一個單元嗎？\n\n學生做過的紀錄會留著，但單元會從這一週消失，救不回來。`)) {
-            handleDeleteItem(h.item.id);
-            showToast(`已刪掉「${h.item.title}」`);
+            handleDeleteItem(h.item.id); // 它自己會跳出「復原」提示
           }
         } else if (handleRenameUnit(h.catId, h.item.id, plan.title)) {
           showToast(`改好了：${h.item.title} → ${plan.title}`);
@@ -2984,14 +2997,62 @@ function App() {
   var handleDeleteItems = itemIds => {
     var ids = new Set((itemIds || []).filter(Boolean));
     if (!ids.size) return;
+    var snap = window.trashSnapshotUnits(weeksRef.current, weekId, Array.from(ids)); // v593：先拍快照，再刪
     var w = JSON.parse(JSON.stringify(weeksRef.current));
     stripItemsFrom(w[weekId], ids); // 單元＋孤兒作業＋別人指向它的鎖，一起清
     setWeeks(w);
     saveWeeksSafe(w);
     setEditorOpen(false);
-    showToast(ids.size > 1 ? `已刪掉 ${ids.size} 個單元` : 'Item deleted');
+    keepInTrash(snap, ids.size > 1 ? `已刪掉 ${ids.size} 個單元` : '已刪掉');
   };
   var handleDeleteItem = itemId => handleDeleteItems([itemId]);
+
+  /* ══ 🗑 v593 垃圾桶 ══════════════════════════════════════════════
+     刪除的兩個出口（handleDeleteItems／handleDeleteWeek）都先拍快照再刪，
+     所以單元的垃圾桶鈕、整組刪、聊天室刪、刪整週**全部**都救得回來。
+     ⚠ 復原的提示用記憶體裡那份快照（不必等雲端）；垃圾桶清單才讀雲端。
+     ⚠ 快照存不進雲端要講出來，不可以讓他以為救得回來。 */
+  var keepInTrash = (snap, msg) => {
+    if (!snap) {
+      showToast(msg);
+      return;
+    }
+    showUndoToast(msg, () => restoreFromTrash(snap));
+    window.trashPush(grade, snap).then(() => setTrashList(null), () => {
+      showToast('⚠ 已刪掉，但垃圾桶沒存到——現在的「復原」按鈕還有效，重新整理就沒了。');
+    });
+  };
+  var restoreFromTrash = entry => {
+    if (!entry || !entry.data) return false;
+    if (entry.kind === 'week') {
+      var r = window.trashRestoreWeek(weeksRef.current, weekOrder, entry);
+      if (!r.ok) {
+        showToast(r.error === 'exists' ? '那一週已經在了。' : '這筆資料壞掉了，救不回來。');
+        return false;
+      }
+      setWeeks(r.weeks);
+      setWeekOrder(r.order);
+      saveWeeksSafe(r.weeks);
+      window.saveWeekOrder(r.order);
+      showToast(`「${entry.label}」整週救回來了 ✓`);
+    } else {
+      var _r2 = window.trashRestoreUnits(weeksRef.current, entry);
+      if (!_r2.ok) {
+        showToast(_r2.error === 'noweek' ? `原本那一週（${entry.weekLabel}）已經不在了，先把那一週救回來。` : _r2.error === 'already' ? '這些單元已經在原本那一週了。' : '救不回來。');
+        return false;
+      }
+      setWeeks(_r2.weeks);
+      saveWeeksSafe(_r2.weeks);
+      showToast(`救回來了：${_r2.restored} 個單元${_r2.skipped ? `（${_r2.skipped} 個本來就在）` : ''} ✓`);
+    }
+    window.trashRemove(grade, entry.id).then(() => {}, () => {});
+    setTrashList(l => (l || []).filter(e => e.id !== entry.id));
+    return true;
+  };
+  var openTrash = () => {
+    setTrashOpen(true);
+    window.trashLoad(grade).then(setTrashList, () => setTrashList([]));
+  };
 
   // ── Homework handler ────────────────────────────────────
   var handleSetHomework = (itemId, hwData) => {
@@ -3724,6 +3785,7 @@ function App() {
     onToggleEdit: () => setEditMode(e => !e),
     onAddWeek: () => setWeekModalOpen(true),
     onCompose: window.ComposeModal ? () => setComposeOpen(true) : null /* v591 */,
+    onTrash: window.TrashModal ? openTrash : null /* v593 */,
     onTermSetup: window.isSummerTrack && window.isSummerTrack(grade) || window.isGrammarTrack && window.isGrammarTrack(grade) ? null : () => setTermOpen(true),
     onQuickSet: () => setQuickSetOpen(true),
     onAsk: window.AskPanel ? () => setAskOpen(true) : null /* 💬 v517 */,
@@ -4116,6 +4178,15 @@ function App() {
     onClose: () => setComposeOpen(false),
     onApply: handleCompose,
     initial: composeOpen === true ? null : composeOpen
+  }), trashOpen && window.TrashModal && /*#__PURE__*/React.createElement(window.TrashModal, {
+    entries: trashList,
+    onRestore: restoreFromTrash,
+    onClear: () => {
+      if (window.confirm('清空垃圾桶？這之後就真的救不回來了。')) {
+        window.trashClear(grade).then(() => setTrashList([]));
+      }
+    },
+    onClose: () => setTrashOpen(false)
   }), askPick && /*#__PURE__*/React.createElement("div", {
     className: "modal-backdrop",
     onClick: () => setAskPick(null)
@@ -4409,9 +4480,18 @@ function App() {
     className: "emk-ico"
   }, "\uD83D\uDCD6"), /*#__PURE__*/React.createElement("span", {
     className: "emk-txt"
-  }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u95B1\u8B80\u7406\u89E3"), /*#__PURE__*/React.createElement("em", null, "\u8CBC\u6587\u7AE0 \u2192 \u80CC\u666F\u77E5\u8B58\u30FB\u9078\u64C7\u30FB\u7C21\u7B54\u30FB\u95B1\u8B80\u6280\u5DE7"))))))), toast && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("b", null, "\u4E00\u9375\u51FA\u95B1\u8B80\u7406\u89E3"), /*#__PURE__*/React.createElement("em", null, "\u8CBC\u6587\u7AE0 \u2192 \u80CC\u666F\u77E5\u8B58\u30FB\u9078\u64C7\u30FB\u7C21\u7B54\u30FB\u95B1\u8B80\u6280\u5DE7"))))))), toast && (typeof toast === 'string' ? /*#__PURE__*/React.createElement("div", {
     className: "toast"
-  }, toast), cloudSlow && !cloudSeen && /*#__PURE__*/React.createElement("div", {
+  }, toast) : /*#__PURE__*/React.createElement("div", {
+    className: "toast toast-undo"
+  }, toast.msg, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      var f = toast.undo;
+      setToast(null);
+      f && f();
+    }
+  }, "\u5FA9\u539F"))), cloudSlow && !cloudSeen && /*#__PURE__*/React.createElement("div", {
     className: "save-fail-bar cloud-slow-bar"
   }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u26A0 \u9084\u6C92\u9023\u4E0A\u96F2\u7AEF"), "\uFF1A\u73FE\u5728\u770B\u5230\u7684\u53EF\u80FD\u4E0D\u662F\u6700\u65B0\u7684\u9031\u6B21\u8207\u4F5C\u696D\u3002"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {

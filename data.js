@@ -11887,3 +11887,120 @@ function composeNextWeekId(weekOrder) {
 }
 Object.assign(window, { QMOVE_LISTS, qmoveInfo, qmoveLabel, qmoveCompatible, qmoveFind, qmoveApply,
                         composeClosure, composeApply, composeNextWeekId });
+
+/* ══════════════════════════════════════════════════════════════════
+   v593 🗑 垃圾桶（Alan 清單第 1 項：「刪單元、刪整組、搬移之後可以復原」）
+   以前刪掉就真的沒了——而且網站上有好幾條路會刪（單元的垃圾桶鈕、整組刪、聊天室、
+   刪整週），全部都走 handleDeleteItems／handleDeleteWeek，所以只要在這兩個出口
+   先拍一張快照，就一個都不會漏。
+   ⭐ 存在 `class/trash_<年級>`——class 集合的規則本來就是「老師可寫」，
+     **不用再改 Firestore 規則**（開新集合要 Alan 重貼規則，卡過好幾個功能）。
+   ⚠ 每筆的內容序列化成一個字串存（Firestore 不收「陣列裡面直接放陣列」，
+     題目資料裡有這種形狀；字串最單純，也不會被 undefined 弄壞）。
+   ⚠ 學生做過的紀錄本來就留著（key＝週次_單元 id）→ 復原時**用原本的 id**，
+     成績就跟著回來。id 已經被占用就當作「已經在了」不重複放。
+   ⚠ 刪除時別的單元身上「需要先學完這一個」「對應這張單字卡」的指向會被解掉，
+     復原時要接回去——所以快照要把 links 一起記。 */
+const TRASH_MAX = 30, TRASH_TTL = 30 * 24 * 3600 * 1000, TRASH_MAX_BYTES = 600000;
+function _trashId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function trashSnapshotUnits(weeks, weekId, ids) {
+  const wk = weeks && weeks[weekId];
+  const set = new Set((ids || []).filter(Boolean));
+  if (!wk || !wk.items || !set.size) return null;
+  const items = [], links = [], homework = {};
+  Object.keys(wk.items).forEach(catId => (wk.items[catId] || []).forEach(it => {
+    if (!it) return;
+    if (set.has(it.id)) {
+      items.push({ catId, item: JSON.parse(JSON.stringify(it)) });
+      if (wk.homework && wk.homework[it.id]) homework[it.id] = JSON.parse(JSON.stringify(wk.homework[it.id]));
+    } else {
+      ['requires', 'linkedFlashcardId'].forEach(key => { if (it[key] && set.has(it[key])) links.push({ itemId: it.id, key, to: it[key] }); });
+    }
+  }));
+  if (!items.length) return null;
+  const titles = items.map(x => x.item.title || x.item.id);
+  const groups = Array.from(new Set(items.map(x => String(x.item.group || '').trim()).filter(Boolean)));
+  const label = items.length === 1 ? titles[0]
+    : (groups.length === 1 ? `${groups[0]}（${items.length} 個單元）` : `${titles[0]} 等 ${items.length} 個單元`);
+  return { id: _trashId(), at: Date.now(), kind: 'units', n: items.length, label,
+           weekLabel: wk.label || weekId, data: { weekId, items, links, homework } };
+}
+function trashRestoreUnits(weeks, entry) {
+  const d = entry && entry.data;
+  const w = JSON.parse(JSON.stringify(weeks || {}));
+  const wk = d && w[d.weekId];
+  if (!wk) return { ok: false, error: 'noweek' };
+  if (!wk.items) wk.items = {};
+  const have = new Set(Object.values(wk.items).flat().map(it => it && it.id).filter(Boolean));
+  const back = new Set();
+  let skipped = 0;
+  (d.items || []).forEach(({ catId, item }) => {
+    if (!item || !item.id) return;
+    if (have.has(item.id)) { skipped++; return; }
+    if (!Array.isArray(wk.items[catId])) wk.items[catId] = [];
+    wk.items[catId].push(JSON.parse(JSON.stringify(item)));
+    have.add(item.id); back.add(item.id);
+  });
+  if (!back.size && skipped) return { ok: false, error: 'already' };
+  if (!wk.homework) wk.homework = {};
+  Object.keys(d.homework || {}).forEach(id => { if (back.has(id) && !wk.homework[id]) wk.homework[id] = d.homework[id]; });
+  let relinked = 0;
+  (d.links || []).forEach(l => {
+    if (!back.has(l.to)) return;
+    const other = Object.values(wk.items).flat().find(it => it && it.id === l.itemId);
+    if (other && !other[l.key]) { other[l.key] = l.to; relinked++; }
+  });
+  return { ok: true, weeks: w, restored: back.size, skipped, relinked };
+}
+function trashSnapshotWeek(weeks, order, weekId) {
+  const wk = weeks && weeks[weekId];
+  if (!wk) return null;
+  const n = Object.values(wk.items || {}).reduce((s, a) => s + ((a || []).length), 0);
+  return { id: _trashId(), at: Date.now(), kind: 'week', n, label: wk.label || weekId, weekLabel: wk.label || weekId,
+           data: { weekId, week: JSON.parse(JSON.stringify(wk)), index: (order || []).indexOf(weekId) } };
+}
+function trashRestoreWeek(weeks, order, entry) {
+  const d = entry && entry.data;
+  if (!d || !d.week) return { ok: false, error: 'bad' };
+  if (weeks && weeks[d.weekId]) return { ok: false, error: 'exists' };
+  const w = { ...(weeks || {}), [d.weekId]: JSON.parse(JSON.stringify(d.week)) };
+  const o = (order || []).slice();
+  const at = d.index >= 0 ? Math.min(d.index, o.length) : o.length;
+  o.splice(at, 0, d.weekId);
+  return { ok: true, weeks: w, order: o };
+}
+/* 過期（30 天）、太多（30 筆）、太大（整份 600KB）都從最舊的丟——文件有 1MB 上限，寫不進去比丟舊的更糟 */
+function trashTrim(list, { now = Date.now(), max = TRASH_MAX, ttl = TRASH_TTL, maxBytes = TRASH_MAX_BYTES } = {}) {
+  let out = (list || []).filter(e => e && e.id && now - (e.at || 0) < ttl).sort((a, b) => b.at - a.at).slice(0, max);
+  const size = (xs) => JSON.stringify(xs).length;
+  while (out.length > 1 && size(out) > maxBytes) out.pop();
+  return out;
+}
+function trashPack(e) { const { data, ...meta } = e; return { ...meta, json: JSON.stringify(data) }; }
+function trashUnpack(r) { try { const { json, ...meta } = r; return { ...meta, data: JSON.parse(json) }; } catch (x) { return null; } }
+const _trashDoc = (grade) => _db.collection('class').doc('trash_' + String(grade || 'g3'));
+async function trashLoad(grade) {
+  const s = await _trashDoc(grade).get();
+  const rows = (s.exists && s.data().entries) || [];
+  return trashTrim(rows.map(trashUnpack).filter(Boolean));
+}
+/* 讀了再寫要用交易：另一個 session 同時也在刪東西的話，不能互相蓋掉對方剛放進去的那一筆 */
+async function trashPush(grade, entry) {
+  const ref = _trashDoc(grade);
+  await _db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const cur = ((s.exists && s.data().entries) || []).map(trashUnpack).filter(Boolean);
+    tx.set(ref, { entries: trashTrim([entry].concat(cur)).map(trashPack) });
+  });
+}
+async function trashRemove(grade, id) {
+  const ref = _trashDoc(grade);
+  await _db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const cur = ((s.exists && s.data().entries) || []).map(trashUnpack).filter(Boolean).filter(e => e.id !== id);
+    tx.set(ref, { entries: trashTrim(cur).map(trashPack) });
+  });
+}
+async function trashClear(grade) { await _trashDoc(grade).set({ entries: [] }); }
+Object.assign(window, { TRASH_MAX, trashSnapshotUnits, trashRestoreUnits, trashSnapshotWeek, trashRestoreWeek, trashTrim,
+                        trashPack, trashUnpack, trashLoad, trashPush, trashRemove, trashClear });

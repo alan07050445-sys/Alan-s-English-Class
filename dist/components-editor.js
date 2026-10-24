@@ -13916,7 +13916,70 @@ function ComposeModal({
     onClick: go
   }, "\u5E36\u904E\u53BB ", closure.length || '', " \u500B\u55AE\u5143 \u2192"))));
 }
+
+/* v593 🗑 垃圾桶：刪掉的單元／整週保留 30 天，點一下救回來（資料與規則見 data.js trash*） */
+function TrashModal({
+  entries,
+  onRestore,
+  onClear,
+  onClose
+}) {
+  var [nudgeCls, nudge] = useModalNudge();
+  var ago = t => {
+    var m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (m < 1) return '剛剛';
+    if (m < 60) return `${m} 分鐘前`;
+    var h = Math.round(m / 60);
+    if (h < 24) return `${h} 小時前`;
+    return `${Math.round(h / 24)} 天前`;
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    onClick: nudge
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal wide" + nudgeCls,
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDDD1 \u5783\u573E\u6876"), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    "aria-label": "\u95DC\u9589",
+    onClick: onClose
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "modal-body"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "field-help",
+    style: {
+      marginBottom: 12
+    }
+  }, "\u522A\u6389\u7684\u55AE\u5143\u3001\u6574\u7D44\u3001\u6574\u9031\u6703\u5728\u9019\u88E1\u653E ", /*#__PURE__*/React.createElement("b", null, "30 \u5929"), "\u3002\u6551\u56DE\u4F86\u6703\u653E\u56DE", /*#__PURE__*/React.createElement("b", null, "\u539F\u672C\u90A3\u4E00\u9031"), "\uFF0C \u800C\u4E14\u5B78\u751F\u505A\u904E\u7684\u6210\u7E3E\u6703\u8DDF\u8457\u56DE\u4F86\u3002"), entries === null && /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u8B80\u53D6\u4E2D\u2026"), entries && !entries.length && /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u5783\u573E\u6876\u662F\u7A7A\u7684\u3002"), /*#__PURE__*/React.createElement("div", {
+    className: "trash-list"
+  }, (entries || []).map(e => /*#__PURE__*/React.createElement("div", {
+    key: e.id,
+    className: "trash-row"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "trash-ico"
+  }, e.kind === 'week' ? '🗓' : '📄'), /*#__PURE__*/React.createElement("span", {
+    className: "trash-main"
+  }, /*#__PURE__*/React.createElement("b", null, e.label), /*#__PURE__*/React.createElement("em", null, e.kind === 'week' ? `整週（${e.n} 個單元）` : `${e.weekLabel} · ${e.n} 個單元`, " \xB7 ", ago(e.at), "\u522A\u7684")), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: () => onRestore(e)
+  }, "\u6551\u56DE\u4F86"))))), /*#__PURE__*/React.createElement("div", {
+    className: "modal-foot"
+  }, entries && entries.length > 0 && /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: onClear
+  }, "\u6E05\u7A7A"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: onClose
+  }, "\u95DC\u9589"))));
+}
 Object.assign(window, {
+  TrashModal,
   QuestionMoveModal,
   ComposeModal,
   AskPanel,
