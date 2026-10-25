@@ -1006,7 +1006,7 @@ html.fest-hw .header .grade-chip-fixed {
 
 /* ── 浮層／面板：全部跟著翻 ── */
 html.fest-hw .sp-panel, html.fest-hw .mk-panel, html.fest-hw .growth-sheet,
-html.fest-hw .ca-sheet, html.fest-hw .modal, html.fest-hw .modal-card {
+html.fest-hw .ca-sheet, html.fest-hw .modal-card {   /* v601：.modal（老師的彈窗）不在這裡——見檔案後段「老師彈窗不進夜色」 */
   background: linear-gradient(180deg, #33224F 0%, #281A42 100%);
   border-color: rgba(255,255,255,.16);
 }
@@ -1293,8 +1293,6 @@ html.fest-hw .mk-ans { background: rgba(255,255,255,.07); border-color: rgba(255
 html.fest-hw .mk-empty-check { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
 html.fest-hw .mk-fix-card { background: rgba(255,142,120,.16); border-color: rgba(255,142,120,.36); }
 html.fest-hw .mk-subj-chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: #FFD27A; }
-html.fest-hw .modal .edit-make-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
-html.fest-hw .modal .edit-make-btn:hover { background: rgba(255,201,92,.15); border-color: rgba(255,201,92,.34); }
 html.fest-hw .page-lobby .qm-block { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
 html.fest-hw .qm-due-popover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); }
 html.fest-hw .qm-feedback-banner.correct { background: rgba(95,217,143,.16); border-color: rgba(95,217,143,.34); color: #7FE3A0; }
@@ -1621,23 +1619,12 @@ html.fest-hw .ex-af-p.on { background: var(--hw-pump, #F57C1F); border-color: va
 html.fest-hw .ex-af-det { color: #8fe3a4; }
 html.fest-hw .ex-af-det.warn { color: #ffcf7a; }
 
-/* v566：萬聖節深色彈窗裡的輸入框／下拉選單，文字是近黑色（--ink）、底又是透明 → 黑字壓在深紫上看不到
-   （一鍵出單字的「單字清單」、「放在哪一類」下拉都中）。統一成淺字＋微亮的底。
-   ⚠ 只動文字輸入類（不動 checkbox／radio／檔案／顏色／滑桿）；考卷草稿視窗（.edr-modal）自己是淺色底，排除。 */
-html.fest-hw .modal:not(.edr-modal) textarea,
-html.fest-hw .modal:not(.edr-modal) select,
-html.fest-hw .modal:not(.edr-modal) input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=button]):not([type=submit]) {
-  color: #F4EFFF;
-  caret-color: #FFC95C;
-  background-color: rgba(255,255,255,.07);
-  border-color: rgba(255,255,255,.28);
-}
-html.fest-hw .modal:not(.edr-modal) textarea::placeholder,
-html.fest-hw .modal:not(.edr-modal) input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=button]):not([type=submit])::placeholder { color: #A99BC8; opacity: 1; }
-html.fest-hw .modal:not(.edr-modal) select option { background: #2A1B45; color: #F4EFFF; }
-html.fest-hw .modal:not(.edr-modal) textarea:focus,
-html.fest-hw .modal:not(.edr-modal) select:focus,
-html.fest-hw .modal:not(.edr-modal) input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=button]):not([type=submit]):focus { border-color: #FFC95C; }
+/* 🔴 v601（Alan 截圖：一鍵出單字的「校稿」整個看不到字）：老師的彈窗（.modal）**不進夜色**。
+   以前（v563／v566）把 .modal 的底翻成深紫、輸入框翻成淺字——但它外面的 .modal-backdrop 把顏色變數還原成「平常的亮色」，
+   於是同一個彈窗變成：標題列亮色、內文深紫、校稿的每一張卡片是亮色底、卡片裡的輸入框卻是淺字（#F4EFFF）→ 亮底淺字，完全看不到。
+   兩套主題疊在一起（跟 v527 一樣的坑）：不是「再多補幾條」能解，要選一邊。
+   老師的工作台本來就刻意不進夜色（見上面「老師後台與編輯器」那段），彈窗跟著回到平常的亮色，
+   輸入框、卡片、標籤全部自然是原本設計好的對比。學生那邊的面板（.sp-panel .mk-panel .growth-sheet .ca-sheet .modal-card）維持夜色。 */
 
 /* v568：依類別決定顏色（調整卡片順序不會錯色） */
 html.fest-hw .qm-blocks .qm-block[data-cat="vocab"] { --cat-c: #A796FF; --cat-t: #B3A4FF; }
