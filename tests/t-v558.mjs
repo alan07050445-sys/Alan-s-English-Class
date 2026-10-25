@@ -56,7 +56,7 @@ ok('short 沒帶 questions 也撿得回來（摘要題以前整題消失）', /p
 ok('認得摘要題並掛上摘要評分表', /sumLike[\s\S]{0,160}rubricSet: 'summary'/.test(data));
 ok('被清洗丟掉的大題會列進「跳過」，不再無聲消失', /讀到了但內容不完整，沒收進來/.test(data));
 ok('只有文章的那一頁不再被丟掉（section 帶 passage）', /\.filter\(sc => sc\.parts\.length \|\| sc\.passage( \|\| sc\.figure)?\)/.test(data));
-ok('文章接到要先讀的大題上（v586 起：挑題目與文章共用實詞最多的那一題，全部沒有才挑候選）', /NEEDS_READ[\s\S]{0,1800}tgt\.readText = sc\.passage/.test(data));
+ok('文章接到要先讀的大題上（v586 起：挑題目與文章共用實詞最多的那一題，全部沒有才挑候選）', /NEEDS_READ[\s\S]{0,2800}pt\.readText = sc\.passage/.test(data));
 ok('被拆開的 Section 併回有編號的那個', /while \(secs\[i \+ 1\] && !\(\+secs\[i \+ 1\]\.pct\)/.test(data));
 ok('配分保險：(N pts. each) × 題數', /pts\?\\\.\?\\s\*each/.test(data) || /each\\s\*\\\)/.test(data) || /pts\?\.\?/.test(data));
 ok('圈字的 checkArg 斜線／頓號／or 都當分隔', /\\\/\|\]\+\|\\bor\\b/.test(data));

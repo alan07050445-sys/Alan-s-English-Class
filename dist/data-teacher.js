@@ -5115,6 +5115,20 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
 If a page shows ONLY a marking-criteria table (rows like Explanation / Relevant / Effort, columns "5 Points ... 0 Points"),
 it has no sections: output "sections":[] and a top-level "rubricMax":N (the biggest point value, e.g. 5).
 
+🔴 ANSWER KEY PAGE — a page titled "Answer Key" / "Answers" (it lists the right answers; it is NOT an exam page).
+It has no sections: output "sections":[] and an "answerKey" object, copied exactly as printed — never work answers out yourself:
+  "answerKey":{"mc":[{"n":1,"letter":"D"},{"n":2,"letter":"B"}],
+               "written":[{"n":4,"sample":"<the Sample Answer text, exactly as printed>",
+                           "others":["<each 'Other acceptable…' line, exactly as printed>"]}],
+               "note":"<the Teacher Note text, exactly as printed, else empty>"}
+  "n" = the question number printed beside it. A line like "1. D — Keeping Their Eggs Safe" is {"n":1,"letter":"D"}.
+  A line like "4. Sample Answer" followed by a paragraph is a "written" entry. If several written questions each have
+  a sample answer, give one entry per question number.
+
+A written question that only says "Use evidence from the passage and describe two ... Explain ..." and has lines to
+write on is "evidence" (need = 2) — give "question" exactly as printed. Its reading text is usually on ANOTHER page:
+leave "passage" empty rather than guessing; the website attaches it.
+
 A page that has ONLY a reading selection (a title, maybe a photo, numbered paragraphs) and says
 "Read the selection. Then complete Part 1 and Part 2" has no questions of its own. Do NOT put it in
 "skipped". Output it as a section with "parts":[] and a "passage" field holding the whole selection
@@ -5163,6 +5177,65 @@ function _examFigureOf(f) {
   if (w < 0.08 || h < 0.05 || w * h < 0.02 || w * h > 0.85) return null;
   return { box: b, caption: String(f.caption || '').trim().slice(0, 160) };
 }
+/* 🔴 v605（Alan 給的 Unseen Reading 考卷：文章＋選擇題＋問答題＋最後一頁「Answer Key」）
+   解答頁：選擇題的字母、問答題的參考答案與「其他可接受的證據」。清洗成 { mc:[{n,idx}], written:[{n,sample,others[]}], note }。
+   ⚠ 只收長得對的：字母要在 A~H、題號要是正整數；整份什麼都沒有就回 null。 */
+function _examCleanKey(k) {
+  if (!k || typeof k !== 'object') return null;
+  const L = 'ABCDEFGH';
+  const mc = (Array.isArray(k.mc) ? k.mc : []).map(x => {
+    const n = Math.round(+(x && (x.n != null ? x.n : x.q)));
+    const idx = L.indexOf(String((x && (x.letter != null ? x.letter : x.answer)) || '').trim().charAt(0).toUpperCase());
+    return (n >= 1 && n <= 99 && idx >= 0) ? { n, idx } : null;
+  }).filter(Boolean);
+  const written = (Array.isArray(k.written) ? k.written : []).map(x => {
+    const n = Math.round(+(x && x.n));
+    const sample = String((x && (x.sample || x.answer)) || '').trim().slice(0, 2000);
+    const others = (Array.isArray(x && x.others) ? x.others : []).map(o => String(o || '').trim()).filter(Boolean).slice(0, 12);
+    return (n >= 1 && n <= 99 && (sample || others.length)) ? { n, sample, others } : null;
+  }).filter(Boolean);
+  const note = String(k.note || '').trim().slice(0, 600);
+  return (mc.length || written.length) ? { mc, written, note } : null;
+}
+/* 把解答套回考卷（純函式，直接改傳進來的 sections，回傳要告訴老師的事）。
+   題號＝考卷上印的那種：選擇題、問答題**依序連續編號**（康橋這份：A 部分 1~6，B 部分 7~8）。
+   ⚠ 選擇題答案以解答頁為準（老師的話，不是模型讀文章猜的）；對不上就不動，並回報。
+   ⚠ 問答題的參考答案放進 keyPoints——AI 批改建議（aiGradeRubric）本來就會吃這個欄位。 */
+function examApplyKey(sections, key) {
+  const notes = [];
+  if (!key) return notes;
+  const flat = [];          // 依序：{ kind:'mc', q, part } ｜ { kind:'w', q?, part }
+  (sections || []).forEach(sc => (sc.parts || []).forEach(pt => {
+    if (pt.kind === 'quiz') (pt.questions || []).forEach(q => flat.push({ kind: 'mc', q, part: pt }));
+    else if (pt.kind === 'short') (pt.questions || []).forEach(q => flat.push({ kind: 'w', q, part: pt }));
+    else if (pt.kind === 'evidence' || pt.kind === 'essay') flat.push({ kind: 'w', q: null, part: pt });
+  }));
+  let applied = 0;
+  (key.mc || []).forEach(m => {
+    const t = flat[m.n - 1];
+    if (!t || t.kind !== 'mc') { notes.push(`解答頁第 ${m.n} 題的選擇題答案對不到考卷上的題目，沒有套用`); return; }
+    const opts = (t.q.options || []).length;
+    if (m.idx >= opts) { notes.push(`解答頁第 ${m.n} 題的答案超出選項，沒有套用`); return; }
+    if (t.q.answer !== m.idx) {
+      notes.push(`第 ${m.n} 題：照解答頁把答案改成 ${'ABCDEFGH'[m.idx]}（模型讀文章時選的是 ${'ABCDEFGH'[t.q.answer] || '?'}）`);
+      t.q.answer = m.idx;
+    }
+    applied++;
+  });
+  (key.written || []).forEach(w => {
+    const t = flat[w.n - 1];
+    if (!t || t.kind !== 'w') { notes.push(`解答頁第 ${w.n} 題的參考答案對不到考卷上的問答題，沒有套用`); return; }
+    const text = [w.sample].concat((w.others || []).map(o => '• ' + o)).filter(Boolean).join('\n');
+    const tgt = t.q || t.part;
+    tgt.keyPoints = text;
+    tgt.sample = w.sample;
+    if (key.note) tgt.teacherNote = key.note;
+    applied++;
+  });
+  if (applied) notes.unshift(`解答頁已套用（${applied} 題）`);
+  return notes;
+}
+
 function _examReadOne(content) {
   return _aiAsk(
     { model: GN_READ_MODEL, max_tokens: 4000, system: EXAM_READ_SYS, messages: [{ role: 'user', content }] },
@@ -5196,6 +5269,12 @@ function _examReadOne(content) {
             c = _examCleanPart({ ...pt, bank: ['_'] });
             if (c) c = { ...c, bank: [], _cont: 'bank' };
           }
+          /* v605：「Use evidence from the passage and describe two…」題目在這一頁、文章在另一頁——
+             每一頁是分開讀的，沒有文章不是這題壞掉，是等合併時再接回前面那一頁的文章。 */
+          if (!c && pt && pt.kind === 'evidence' && !String(pt.passage || '').trim()) {
+            c = _examCleanPart({ ...pt, passage: '_' });
+            if (c) c = { ...c, passage: '', _cont: 'passage' };
+          }
           if (!c && pt && (pt.kind === 'genq' || pt.kind === 'storymap') && !String(pt.passage || '').trim()) {
             c = _examCleanPart({ ...pt, passage: '_' });
             if (c) c = { ...c, passage: '', _cont: 'passage' };
@@ -5206,6 +5285,7 @@ function _examReadOne(content) {
         }).filter(Boolean),
       })).filter(sc => sc.parts.length || sc.passage || sc.figure);
       return { title: String(o.title || '').trim(), sections: secs, rubricMax: Math.max(0, Math.min(10, Math.round(+o.rubricMax || 0))),
+               answerKey: _examCleanKey(o.answerKey),
                skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean).concat(dropped) };
     }, 90000);
 }
@@ -5458,6 +5538,14 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     .then(v => ({ v }), e => ({ e }))
     .finally(() => { done++; if (onProgress) onProgress(done, parts.length); })));
 
+  /* 🔴 v605：有一頁偶爾整頁讀成空的（實測同一份卷子重跑，第 3 頁的問答題有時有、有時沒有）。
+     空的那幾頁**再讀一次**（只重打那幾頁），還是空才報「讀不到」。 */
+  const empty = (g) => !g.v || !(g.v.sections.length || g.v.rubricMax || g.v.answerKey);
+  const again = got.map((g, i) => i).filter(i => empty(got[i]));
+  if (again.length) {
+    await Promise.all(again.map(i => _examReadOne(parts[i].content).then(v => { if (v && !empty({ v })) got[i] = { v }; }, () => {})));
+  }
+
   /* v571：每一段、每一大題記得「它在第幾張」——之後從那一張把插圖裁出來 */
   got.forEach((g, i) => {
     if (!g.v) return;
@@ -5474,7 +5562,9 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     throw new Error(to ? '讀考卷太久沒有回應，請再試一次。'
                        : '讀不懂這幾張照片——請拍正一點、光線亮一點，整頁都要入鏡。');
   }
-  const missed = got.map((g, i) => (g.v && (g.v.sections.length || g.v.rubricMax) ? null : parts[i].label)).filter(Boolean);
+  const missed = got.map((g, i) => (g.v && (g.v.sections.length || g.v.rubricMax || g.v.answerKey) ? null : parts[i].label)).filter(Boolean);
+  const answerKey = (() => { const ks = got.map(g => g.v && g.v.answerKey).filter(Boolean); if (!ks.length) return null;
+    return { mc: ks.flatMap(k => k.mc), written: ks.flatMap(k => k.written), note: ks.map(k => k.note).filter(Boolean).join(' ') }; })();
 
   /* 合併：同名的 Section 接起來（一個 Section 常常跨兩頁）。 */
   const secs = [];
@@ -5543,7 +5633,7 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
       return false;
     });
   });
-  const NEEDS_READ = { quiz: 1, order: 1, short: 1, essay: 1 };
+  const NEEDS_READ = { quiz: 1, order: 1, short: 1, essay: 1, evidence: 1 };   // v605：evidence（問答題要引用文章）也要接文章
   for (let i = 0; i < secs.length; i++) {
     const sc = secs[i];
     if (!sc.passage) continue;
@@ -5557,13 +5647,20 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     const cands = sc.parts.filter(pt => NEEDS_READ[pt.kind] && !pt.readText && !pt.passage);
     const srcW = new Set(_examContentWords(sc.passage));
     const score = (pt) => {
-      const txt = (pt.questions || []).map(q => [q.q].concat(q.options || []).join(' ')).join(' ') + ' ' + (pt.events || []).join(' ');
+      const txt = (pt.questions || []).map(q => [q.q].concat(q.options || []).join(' ')).join(' ') + ' ' + (pt.events || []).join(' ') + ' ' + (pt.question || '');
       return _examContentWords(txt).filter(w => srcW.has(w)).length;
     };
     let tgt = null, best = 0;
     cands.forEach(pt => { const sc2 = score(pt); if (sc2 > best) { best = sc2; tgt = pt; } });
     if (!tgt && cands.length) tgt = cands.length > 1 && cands.some(pt => !(pt.questions || []).length === false) ? cands[cands.length - 1] : cands[0];
-    if (tgt) { tgt.readText = sc.passage; sc._figTarget = tgt; }
+    /* 🔴 v605：同一篇文章常常有好幾大題都要讀它（Alan 的 Unseen Reading：選擇題＋問答題都問這篇）。
+       以前只接給「最像的那一題」，問答題就沒有文章。現在：跟文章共用的實詞數 ≥ 2、而且至少是最像那題的一半 → 都接。
+       ⚠ 門檻是為了 v585 那個情況——Part 4 問的是**另一篇**（Buzz），不能因為撞到一兩個常見字就拿到這篇（Kjell）。 */
+    const givePassage = (pt) => { if (pt.kind === 'evidence') pt.passage = sc.passage; else pt.readText = sc.passage; };
+    if (tgt) {
+      givePassage(tgt); sc._figTarget = tgt;
+      cands.forEach(pt => { if (pt !== tgt && best >= 2 && score(pt) >= Math.max(2, best / 2)) givePassage(pt); });
+    }
     else skipped.push('有一篇文章（' + sc.passage.slice(0, 30).replace(/\n/g, ' ') + '…）找不到要接在哪一題，請自己貼上');
   }
   /* v582：續頁的填空，答案是模型沒看到詞庫時猜的——照前面的詞庫請它重選一次（選不出在詞庫裡的就留給老師） */
@@ -5612,6 +5709,21 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
       if (tot > 0) pt.pts = tot;
     }
   }));
+  /* 🔴 v605：整份卷子**完全沒有印配分**（Alan 自己出的 Unseen Reading 練習卷：選擇題＋問答題，沒有分數）。
+     全部是 0 分的話，交卷會是「0/0」、完成判定與星星都沒有依據。
+     所以只在「整份一個分數都沒有」時才補預設：選擇題每題 1 分、問答題每題 4 分，並**明講是預設**，老師在校稿頁改。
+     ⚠ 只要卷子上有任何一個印出來的分數，就一律不補——不可以替老師編分數。 */
+  const scored = [];
+  secs.forEach(sc => sc.parts.forEach(pt => { if (!(EXAM_KINDS[pt.kind] || {}).noScore) scored.push(pt); }));
+  let defaultPts = false;
+  if (scored.length && scored.every(pt => !(+pt.pts > 0)) && !secs.some(sc => +sc.pct > 0)) {
+    scored.forEach(pt => {
+      if (pt.kind === 'quiz') pt.pts = (pt.questions || []).length;
+      else if (pt.kind === 'short') pt.pts = (pt.questions || []).length * 4;
+      else if (pt.kind === 'evidence' || pt.kind === 'essay') pt.pts = 4;
+    });
+    defaultPts = scored.some(pt => +pt.pts > 0);
+  }
   /* v585 評分標準表（Explanation／Relevant／Effort，每項最高 5 分）：套到沒有指定評分表的手寫題上 */
   if (printedRubricMax > 0) {
     secs.forEach(sc => sc.parts.forEach(pt => {
@@ -5643,6 +5755,8 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   }
   /* v583：大題都被併到別處（續頁併回前面）的 Section 會變成空殼——沒有大題就不要留標題 */
   for (let i = secs.length - 1; i >= 0; i--) if (!secs[i].parts.length) secs.splice(i, 1);
+  /* 🔴 v605 解答頁：選擇題答案以解答頁為準、問答題的參考答案放進 keyPoints（AI 批改建議會參考）。 */
+  const keyNotes = examApplyKey(secs, answerKey);
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,
@@ -5651,7 +5765,7 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     })),
   };
   /* ⭐ 不另外寫驗證——丟進 v515 老師手打考卷用的同一組檢查。 */
-  return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item) };
+  return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item).concat(keyNotes, defaultPts ? ['這份卷子沒有印配分，先用預設：選擇題每題 1 分、問答題每題 4 分——請在校稿頁改成你要的分數。'] : []) };
 }
 
 /* ══ v540 📋 貼上整份考卷 ═══════════════════════════════════════════
@@ -5869,7 +5983,7 @@ async function aiDraftExam({ message, history, draft, mustWords, grade }) {
   return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item, notes, words,
            checks: examDraftChecks(item, words, notes), dropped, same: false };
 }
-Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS });
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examCleanKey: _examCleanKey });
 
 /* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
 function examBandsOf(R, c) {

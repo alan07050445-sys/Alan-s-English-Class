@@ -64,7 +64,7 @@ ok('   連一張都讀不到時給得出下一步', /請拍正一點、光線亮
 
 console.log('\n【5】⭐ 校稿檢查不另外寫一份');
 ok('⭐⭐ 直接用 v515 老師手打考卷的那組 examWarnings',
-   /return \{ item, skipped: \[\.\.\.new Set\(skipped\)\], missed, warnings: examWarnings\(item\) \}/.test(data));
+   /return \{ item, skipped: \[\.\.\.new Set\(skipped\)\], missed, warnings: examWarnings\(item\)/.test(data));   // v605：後面多接了解答頁與預設配分的提示，核心還是同一組 examWarnings
 ok('   理由有寫下來（同一件判斷只留一份）', /同一件判斷只留一份/.test(data));
 ok('⭐ 程式判不出來的圈選規則不收（不要生出一個學生永遠做不對的題）',
    /if \(!WS_CHECKS\[check\]\) return null;/.test(data));
