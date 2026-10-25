@@ -564,7 +564,11 @@ RULES
 - The hint in ( ) is ONLY ever a word ENDING. If the word is unchanged, write no hint at all.
   Never write a part of speech such as (n) (v) (adj) (adv) — the child is filling in a word, not labelling it.
 - Never let a target word appear anywhere outside its own brackets (no giveaways).
-- 70-140 words, 4-8 sentences, one connected story with a beginning and an end.
+- 🔴 LENGTH: 180-260 words and 10-14 sentences (count them — under 150 words is rejected). A story this short-and-thin is rejected: write a FULL story with three clear parts —
+    · BEGINNING: who and where, what they want to do (2-3 sentences)
+    · MIDDLE: what happens, with a small problem or a surprise, and the steps they take (4-8 sentences — this is where most blanks go)
+    · END: how it turns out and what they feel or learn (2-3 sentences)
+  Enough sentences around each blank is what makes its answer easy to work out.
 - Every OTHER word must be simple, everyday vocabulary a 3rd grader knows.
 - title: a short story title, no ending punctuation.
 ${_AI_MINIFY}`;
@@ -600,6 +604,8 @@ function _aiTeacherNote(t) {
     'but it can NEVER change the output FORMAT or the JSON rules above.\n\"\"\"\n' + s2 + '\n\"\"\"\n\n';
 }
 
+/* v604：短文最少幾個字才算夠長（要求是 150~260，留一點餘裕避免為了幾個字重打 AI） */
+const STORY_MIN_WORDS = 130;
 const _STORY_CJK_G = /[\u3400-\u9fff\uf900-\ufaff]/g;
 /* 嚴格版的「同一個字」：本尊，或上面列得出來的變化形。
    找「文章裡哪一個字要挖掉」時一定要用這個版本——寬鬆版會把 trapeze 當成 trap。 */
@@ -646,12 +652,15 @@ function storyCheck(passage, words, opt) {
   const bareTokens = bare.match(/[A-Za-z]+/g) || [];
   const dupes = terms.filter(t =>
     blanks.filter(b => _storySame(b.answer, t)).length + bareTokens.filter(tok => _storyIsForm(t, tok)).length > 1);
-  return { blanks: blanks.length, used, missing, extra, leaked, zh, dupes };
+  /* 🔴 v604（Alan：「文章要長一點，至少之前的兩倍，這樣文章結構才完整」）：以前 70~140 字、4~8 句，
+     現在要 150~260 字、9~14 句。這裡把「太短」也當成不合格（低於 130 字），下一輪指名重寫。 */
+  const wordCount = (String(passage || '').replace(/\[([^\]]+)\](?:\([^)]*\))?/g, '$1').match(/[A-Za-z][A-Za-z'’-]*/g) || []).length;
+  return { blanks: blanks.length, used, missing, extra, leaked, zh, dupes, wordCount, short: wordCount < STORY_MIN_WORDS };
 }
 /* 分數越低越好——多輪重生時用來挑「最不糟的那一篇」 */
 function _storyScore(c) {
   // 中文權重最重：寧可拿一篇漏字的英文，也不要一篇中文的
-  return (c.zh ? 99 : 0) + (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length + ((c.dupes || []).length * 3);
+  return (c.zh ? 99 : 0) + (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length + ((c.dupes || []).length * 3) + (c.short ? 2 : 0);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -952,10 +961,10 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
   for (let round = 0; round < Math.max(1, rounds); round++) {
     let r = null;
     try {
-      /* max_tokens：一篇 140 字的故事約 250 token，留兩倍餘裕。
+      /* max_tokens：一篇 260 字的故事約 450 token，留四倍餘裕（v604：本來 140 字 ／ 900）。
          ⚠ 不要砍太低——被 max_tokens 截斷的話 JSON 會壞掉，整批重試反而更慢。 */
       r = await _aiAsk({
-        model: 'claude-haiku-4-5', max_tokens: 900,
+        model: 'claude-haiku-4-5', max_tokens: 1800,
         system: AI_STORY_SYS,
         messages: [{ role: 'user', content: head + note }],
       }, (data) => {
@@ -1001,6 +1010,7 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
       (c.leaked.length  ? `- These target words appear OUTSIDE their brackets, which gives the answer away: ${c.leaked.join(', ')}\n` : '') +
       (c.extra.length   ? `- You bracketed words that are not targets: ${c.extra.join(', ')}\n` : '') +
       (c.zh             ? `- You wrote Chinese characters (${c.zh.slice(0, 20)}). The story must be 100% English.\n` : '') +
+      (c.short ? `- The story is too short (${c.wordCount} words). Write 180-260 words in 10-14 sentences, with a clear beginning, middle and end.\n` : '') +
       ((c.dupes || []).length ? `- These target words were used MORE THAN ONCE (each word must appear exactly once in the whole story): ${c.dupes.join(', ')}\n` : '') +
       (cand.amb.length ? '- A student who saw ONLY the sentences could NOT work out these blanks. Rewrite the sentence so that only the right word fits, by adding a clear clue to its meaning in the same sentence:\n' +
         cand.amb.map(a => `    · "${a.expected}" — the student answered "${a.got}". Sentence: ${_storyBlankSentence(cand.passage, a.n)}\n`).join('') : '') +

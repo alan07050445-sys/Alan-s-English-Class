@@ -52,9 +52,10 @@ ok('⭐ 純函式 _storyJudge：答對的不算錯、答成別的字或「?」�
 ok('   空格數字對得上：答案陣列與驗算結果用同一個編號（1 起算）', W.storyJudge(['a', 'b'], { '1': 'b', '2': 'b' }, ['a', 'b']).map(x => x.n).join() === '1');
 ok('⭐ 驗算看到的是「(1)_____」的樣子，不是答案', W.storyBlankView('A [fluffy](y) cat. The [contour] is soft.') === 'A (1)_____(y) cat. The (2)_____ is soft.');
 
-const GOOD = 'Tom built a cloud for class. He gathered cotton and [fluffy] materials that felt soft like air. Next, he traced the [contour], the smooth outline of the cloud, with a pencil. He chose to [waterproof] the cotton, which means making it so water cannot get in. Then he used a [system] of three boxes, a plan that kept things in order. At the end he rested in the [shade] of a tree, away from the hot sun.';
+const GOOD = 'On Monday, Tom learned that his class had to build a model of a cloud for science. He felt a little worried because he had never made one before. After school he went to the craft store with his mother and bought a big bag of cotton. At home he gathered the cotton and spread it on the table, and it was so [fluffy] that his hand sank into it like a soft pillow. Next, he traced the [contour], the smooth outline of the cloud, with a pencil so he knew where to glue. Then his teacher reminded him to [waterproof] the cotton, which means making it so water cannot get in, because the model would be sprayed with a little rain. Tom also used a [system] of three boxes, a plan that kept the glue, the cotton and the brushes in order. When he got tired, he rested in the [shade] of a tree, away from the hot sun. By Friday the cloud was finished. His classmates clapped, and Tom smiled because the hard work had been worth it.';
 const DUPED = GOOD + ' His fluffy cloud looked real.';
 const VAGUE = GOOD.replace('[contour], the smooth outline of the cloud,', '[contour]');
+const SHORT = 'Tom made a cloud. It was [fluffy]. He drew the [contour]. He had to [waterproof] it. A [system] helped. He sat in the [shade].';
 const solver = (picks) => (s2) => !isStoryWriter(s2) ? picks : null;
 
 ok('⭐⭐ 寫的人重複用了字 → 程式先拿掉多出來的句子，不用多打一輪 AI；驗算過了就收工', await (async () => {
@@ -84,6 +85,21 @@ ok('⭐ 三輪都推不出來 → 交出「最不糟」的那一篇，而且跟�
   handler = (s2) => isStoryWriter(s2) ? { title: 'Cloud', passage: VAGUE } : { 1: 'fluffy', 2: 'shade', 3: 'waterproof', 4: 'system', 5: 'contour' };
   const st = await W.aiMakeVocabStory(words, { grade: 'g4', blanks: 5, rounds: 2 });
   return !!st.passage && (st.fixes || []).some(f => /驗算：有 \d 格可能前後文不夠明確/.test(f)); })());
+console.log('\n【5】文章要夠長（Alan：至少之前的兩倍，結構才完整）');
+ok('⭐⭐ prompt 要求 180~260 字、10~14 句（門檻 130 字，留餘裕避免為了幾個字重打 AI），而且要有開頭／經過／結尾三段', /180-260 words and 10-14 sentences/.test(sys) && /BEGINNING/.test(sys) && /MIDDLE/.test(sys) && /END:/.test(sys) && !/70-140 words/.test(sys));
+ok('⭐ 長度是舊的兩倍以上（舊：70~140 字；新最少 150 字）', 150 >= 70 * 2 && 260 >= 140 * 1.8);
+ok('⭐⭐ storyCheck 會量字數：太短的標 short，夠長的不標（括號與提示不算字）', W.storyCheck(SHORT, words).short === true && W.storyCheck(GOOD, words).short === false && W.storyCheck(GOOD, words).wordCount >= 150);
+ok('⭐ 太短 → 下一輪 prompt 指名「太短，要 150~260 字、9~14 句」，而且回來的是夠長的那一篇', await (async () => {
+  calls.length = 0; let round = 0;
+  handler = (s2) => isStoryWriter(s2) ? (++round, { title: 'Cloud', passage: round === 1 ? SHORT : GOOD }) : { 1: 'fluffy', 2: 'contour', 3: 'waterproof', 4: 'system', 5: 'shade' };
+  const st = await W.aiMakeVocabStory(words, { grade: 'g4', blanks: 5, rounds: 3 });
+  const note = calls.filter(c => isStoryWriter(String(c.system)))[1].messages[0].content;
+  return st.rounds === 2 && /The story is too short \(\d+ words\)/.test(note) && !st.check.short; })());
+ok('⭐ 三輪都太短 → 還是交出來（不擋），校稿頁會標「文章偏短」', await (async () => {
+  handler = (s2) => isStoryWriter(s2) ? { title: 'Cloud', passage: SHORT } : { 1: 'fluffy', 2: 'contour', 3: 'waterproof', 4: 'system', 5: 'shade' };
+  const st = await W.aiMakeVocabStory(words, { grade: 'g4', blanks: 5, rounds: 2 });
+  return !!st.passage && st.check.short === true && /文章偏短/.test(editor); })());
+ok('⭐ 輸出上限跟著放大（260 字約 450 token，本來 900 對 140 字；現在 1800），不然長文被截斷 JSON 會壞', /model: 'claude-haiku-4-5', max_tokens: 1800,\s*system: AI_STORY_SYS/.test(data));
 ok('⭐ 一次出好幾篇時，驗算的 Word Bank 含別篇的字（跟學生看到的一樣）', /bank: list,/.test(data));
 
 console.log('\n【4】老師看得到');
