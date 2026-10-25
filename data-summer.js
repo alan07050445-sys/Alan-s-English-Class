@@ -164,6 +164,9 @@ function _subscribeLib(callback, onError) {
       const o = Array.isArray(d.weekOrder) && d.weekOrder.length ? d.weekOrder : _libOrder();
       // v355: 記住雲端現在有幾題（存檔防呆要用），並把「有題目」的版本另存一份備份
       _lastLibCount = _countLibItems(w);
+      /* v597：記下「雲端現在有哪些 key」，存檔時才知道本機拿掉了哪些（見 data.js weeksWithDeletes）。
+         ⚠ 只在雲端真的有 weeks 時記——退回種子（9 個空週）那種不能當對照。 */
+      if (d.weeks && window.noteCloudWeeks) window.noteCloudWeeks('sl', d.weeks);
       if (_lastLibCount > 0) {
         try { localStorage.setItem(_LIB_BAK, JSON.stringify({ at: Date.now(), n: _lastLibCount, weeks: w })); } catch (e) {}
       }
@@ -260,13 +263,17 @@ function summerApi(t) {
       if (n === 0 && _lastLibCount > 0) {
         throw new Error(`擋下了一次危險的存檔：這次要寫入的題庫是 0 題，但雲端現在有 ${_lastLibCount} 題。請重新整理後再試。`);
       }
-      await _libDoc.set({ weeks, ..._stamp(n) }, { merge: true });
+      /* 🔴 v597：merge:true 不會刪 map 的 key——取消釘選作業、刪單元後清掉的作業，雲端永遠留著
+         （跟學期那邊同一個 bug，見 data.js weeksWithDeletes；題庫週次是固定 9 週，不自動刪整週）。 */
+      await _libDoc.set({ weeks: window.weeksWithDeletes ? window.weeksWithDeletes('sl', weeks) : weeks, ..._stamp(n) }, { merge: true });
       _libLog(n, 'save');
     },
     // 從備份還原整份題庫（restoreSummerLib 用）
     async forceSaveWeeks(weeks) {
       if (!isLib) return;
       const n = _countLibItems(weeks);
+      /* ⚠ 還原備份刻意維持「只加不刪」的 merge：它的目的是把弄丟的東西找回來，
+         不能因為備份比較舊，就把備份之後新增的作業刪掉。 */
       await _libDoc.set({ weeks, ..._stamp(n) }, { merge: true });
       _libLog(n, 'restore');
     },
