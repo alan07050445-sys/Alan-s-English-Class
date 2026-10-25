@@ -794,6 +794,7 @@ function App() {
   useAppEffect(() => {
     summerMetaRef.current = summerMeta;
   }, [summerMeta]);
+  var summerNeeded = !!user && (window.isAdminUser(user) || summerOnlyDoor); // v598：誰需要暑假清單（見下方 effect）
   useAppEffect(() => {
     /* v399：沒登入就不要去讀 class/summer_meta。
        這份文件（暑假派發清單）含 11 位學生的真名與學校信箱，安全規則發布後
@@ -805,12 +806,24 @@ function App() {
       setSummerMetaReady(true);
       return;
     }
+    /* ⚡ v598：**學期中的學生用不到暑假清單，就不要等它、也不要讀它。**
+       以前每個登入的學生，載入畫面都要等這份 62KB 的文件回來才放行
+       （有本機快取的學生，這是唯一還在等的雲端資料——也就是每天開網站都要多等的那一段）。
+       但暑假清單只在兩種情況有用：① 老師（要發派／看暑假題庫）② 開學前的暑假門口頁（summerOnlyDoor）。
+       開學日（TERM_START）之後，學生的暑假入口本來就收起來了（見下面 summer=null），
+       還停在暑假 track 的人也會被 boundGrade 那個 effect 拉回自己的年級。
+       ⚠ 日期一到自動生效：summerOnlyDoor 是 render 時算的（nowTick），明年暑假把 TERM_START 改了，
+         這裡會跟著恢復讀取——不用另外記得改。 */
+    if (!summerNeeded) {
+      setSummerMetaReady(true);
+      return;
+    }
     // v322: 資料回來（或出錯）都標記 ready，載入畫面才知道可以揭曉了
     return window.subscribeSummerMeta(m => {
       setSummerMeta(m);
       setSummerMetaReady(true);
     }, () => setSummerMetaReady(true));
-  }, [user?.uid]); // user 從 null→有值時會重跑，登入後才真的去訂閱
+  }, [user?.uid, summerNeeded]); // user 從 null→有值時會重跑，登入後才真的去訂閱
   // v322: 防呆——暑假清單 3 秒內沒回來也先揭曉（退回一般門口頁），永不卡在載入畫面
   useAppEffect(() => {
     if (summerMetaReady) return;
