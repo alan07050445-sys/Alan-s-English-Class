@@ -913,6 +913,15 @@ function playableItem(it) {
 function buildHomeworkList(cls) {
   const weeks = (cls && cls.weeks) || {};
   const out = [];
+  /* v596：每個單元 id 出現在幾個不同的週次（「沿用到別週」複製出來的 id 相同）——isDone 要靠它決定嚴不嚴格 */
+  const weeksOfId = {};
+  for (const wid of Object.keys(weeks)) {
+    for (const cat of Object.keys((weeks[wid] || {}).items || {})) {
+      for (const it of (weeks[wid].items[cat] || [])) {
+        if (it && it.id) { const a = weeksOfId[it.id] = weeksOfId[it.id] || new Set(); a.add(wid); }
+      }
+    }
+  }
   for (const wid of Object.keys(weeks)) {
     const wk = weeks[wid] || {};
     const hw = wk.homework || {};
@@ -942,6 +951,7 @@ function buildHomeworkList(cls) {
         title: String(m.title || '').trim() || itemId, type: m.type, cat: m.cat, dueDate: dd,
         wkLabel: wk.label || '', wkStart: wk.startISO || '', wkEnd: wk.endISO || '',
         archived: wk.archived === true,
+        dup: !!(weeksOfId[itemId] && weeksOfId[itemId].size > 1),
       });
     }
   }
@@ -1020,7 +1030,7 @@ function wkRange(hw) {
 function splitTodos(todos, doneItems, today, thisWeek, overdue, preview) {
   for (const hw of todos) {
     if (hw.archived) continue;                          // 封存的是上學期，不提醒
-    if (isDone(doneItems, hw.wid, hw.itemId)) continue;
+    if (isDone(doneItems, hw.wid, hw.itemId, hw.dup)) continue;
     if (hw.wkStart && hw.wkEnd) {
       // 有週次日期就照週次分（最準：dueDate 有時候是舊的沒改到）
       if (today < hw.wkStart) preview.push(hw);
@@ -1134,13 +1144,24 @@ function hwAlt(name, secs, opts) {
   return `${o.title || '📚 作業提醒'} — ${name || ''}｜` + (o.note ? o.note.slice(0, 40) + '｜' : '') + bits.join('、');
 }
 
-function isDone(items, wid, itemId) {
+/* 🔴 v596：同一個單元 id 出現在好幾週時，「做完了嗎」只認**這一週**那一筆。
+   以前最後一段是 `k.endsWith('_' + itemId)`——**任何一週**只要有同一個單元 id 做完了，這週就算做完。
+   但「沿用到別週」複製出來的單元 id 是一樣的（G4 線上有 44 個 id 同時出現在好幾週；進度本來就是
+   「週次_單元id」分開記的），結果：上週做完的單元，被複製到這週當複習，這週**不會提醒家長**——
+   而且不會報錯，只是安靜地少提醒。
+   ⚠ dup＝這個 id 在同一個年級的好幾週都有（buildHomeworkList 算的）。**只有 dup 才嚴格**；
+     id 全年級只有一個的話，寬鬆比對照舊保留——那是為了「週次 id 改過（g4-2026-W06 → g4-2026F-W06）
+     之後，舊的進度前綴對不上」的舊資料，網站的 getProgress 也是這個優先序。
+   ⚠ 暑假題庫的 todo 沒有 dup（一律寬鬆）：它的進度 key 用的週次不一定跟發派清單一致（v330 起就這樣）。
+   ⚠ 沒有週次前綴的舊格式（items[itemId]）也保留——那是以前核取方塊的紀錄，網站本身也是這樣讀。 */
+function isDone(items, wid, itemId, dup) {
   if (!items) return false;
   const pid = wid + '_' + itemId;
   if (items[pid] && items[pid].done) return true;
   if (items[itemId] && items[itemId].done) return true;
+  if (dup) return false;
   for (const k of Object.keys(items)) {
-    if ((k === itemId || k.endsWith('_' + itemId)) && items[k] && items[k].done) return true;
+    if (k.endsWith('_' + itemId) && items[k] && items[k].done) return true;
   }
   return false;
 }

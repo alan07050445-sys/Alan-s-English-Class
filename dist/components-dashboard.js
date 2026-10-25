@@ -3624,12 +3624,15 @@ function TeacherDashboard({
   };
   var allItemsFor = s => {
     var w = weeksForStudent(s);
+    var sharedIds = window.sharedItemIds ? window.sharedItemIds(w, orderForStudent(s)) : new Set(); // v596
     return orderForStudent(s).flatMap(wid => {
       var wk = w[wid];
       if (!wk) return [];
       return window.CATEGORIES.flatMap(c => (wk.items[c.id] || []).map(it => ({
         id: it.id,
         progressId: `${wid}_${it.id}`,
+        shared: sharedIds.has(it.id),
+        // v596：這個 id 出現在好幾週 → 進度只認自己這一週
         title: it.title || it.id,
         weekId: wid,
         // v307 (F8): 用來把「當前這週」置頂＋標示
@@ -3647,12 +3650,14 @@ function TeacherDashboard({
 
   // Flatten all items across every week (for "X / total" calculation)
   var allItems = useDashM(() => {
+    var sharedIds = window.sharedItemIds ? window.sharedItemIds(dWeeks, dOrder) : new Set(); // v596
     return dOrder.flatMap(wid => {
       var w = dWeeks[wid];
       if (!w) return [];
       return window.CATEGORIES.flatMap(c => (w.items[c.id] || []).map(it => ({
         id: it.id,
         progressId: `${wid}_${it.id}`,
+        shared: sharedIds.has(it.id),
         title: it.title || it.id,
         weekLabel: w.label,
         cat: c.title
@@ -3741,18 +3746,16 @@ function TeacherDashboard({
 
     // Match by progressId (weekId_itemId), bare itemId, OR any key ending in _itemId
     // — handles cases where weekId changed (week rebuilt / grade switched)
-    var isDone = it => {
-      if (its[it.progressId]?.done) return true;
-      if (its[it.id]?.done) return true;
-      // Fuzzy: find any stored key whose suffix matches the itemId
-      return Object.keys(its).some(k => (k === it.id || k.endsWith('_' + it.id)) && its[k]?.done);
-    };
+    var isDone = it => window.progKeysFor(its, it).some(k => its[k]?.done); // v596：重複 id 只認自己這一週
     var done = list.filter(isDone).length;
 
     // Score: only count items that also have 'done' (avoids ghost scores from deleted items)
     // and cap at 100 to prevent impossible percentages from data corruption
     // v239: 平均分只算目前範圍內（且派給他）的項目——學期舊成績不會混進暑假報告
-    var progFor = it => its[it.progressId] || its[it.id] || its[Object.keys(its).find(k => k.endsWith('_' + it.id)) || ''] || null;
+    var progFor = it => {
+      var k = window.progKeysFor(its, it)[0];
+      return k ? its[k] : null;
+    };
     var scores = list.map(progFor).filter(pr => pr && pr.done && pr.score != null).map(pr => Math.min(100, pr.score || 0));
     var avg = scores.length ? Math.round(scores.reduce((acc, v) => acc + v, 0) / scores.length) : null;
     var last = s.updatedAt ? new Date(s.updatedAt).toLocaleDateString('zh-TW', {
@@ -4572,7 +4575,7 @@ function StudentDetail({
 
   var its = student.items || {};
   var progFor = it => {
-    var pk = its[it.progressId] ? it.progressId : its[it.id] ? it.id : Object.keys(its).find(k => k.endsWith('_' + it.id));
+    var pk = window.progKeysFor(its, it)[0]; // v596
     return pk ? its[pk] : null;
   };
   var done = allItems.filter(it => progFor(it)?.done).length;
@@ -4706,7 +4709,8 @@ function StudentDetail({
     }, items.map(it => {
       // Fuzzy match: try progressId, bare id, or any key ending in _itemId
       // v257: 把「所有」對得上的 key 都找出來——刪除單筆成績時要整組刪乾淨
-      var progKeys = [...new Set([its[it.progressId] ? it.progressId : null, its[it.id] ? it.id : null, ...Object.keys(its).filter(k => k.endsWith('_' + it.id))].filter(Boolean))];
+      var progKeys = [...new Set([its[it.progressId] ? it.progressId : null, its[it.id] ? it.id : null, ...(it.shared ? [] : Object.keys(its).filter(k => k.endsWith('_' + it.id))) // v596：重複 id 不連別週一起刪
+      ].filter(Boolean))];
       var prog = progKeys.length ? its[progKeys[0]] : null;
       var isDone = !!prog?.done;
       var score = prog?.score != null ? Math.min(100, prog.score) : null;

@@ -6480,6 +6480,36 @@ async function removeWrongQuestion(uid, itemId, q, answer) {
 
 // ── Weekly Report Helpers ──────────────────────────────────────────────
 // Build a structured report object for one student + one week.
+/* 🔴 v596：同一個單元 id 出現在好幾週（「沿用到別週」複製出來的 id 相同）時，
+   進度只認「週次_單元id」那一筆——不能再用「任何一週的後綴相同」當作做完了。
+   （LINE 提醒少提醒就是這個；老師後台與聊天室「誰沒做完」用的是同一套判斷，所以數字一起錯。）
+   ⚠ 只有「有重複」的 id 才嚴格；全年級只有一個的 id 照舊寬鬆，那是為了週次 id 改過的舊進度。 */
+const _sharedCache = new WeakMap();
+function sharedItemIds(weeks, order) {
+  if (!weeks || typeof weeks !== 'object') return new Set();
+  const c = _sharedCache.get(weeks);
+  if (c && c.order === order) return c.set;
+  const cnt = {};
+  (order && order.length ? order : Object.keys(weeks)).forEach(wid => {
+    const seen = new Set();
+    Object.values((weeks[wid] || {}).items || {}).forEach(arr => (arr || []).forEach(it => {
+      if (it && it.id && !seen.has(it.id)) { seen.add(it.id); cnt[it.id] = (cnt[it.id] || 0) + 1; }
+    }));
+  });
+  const set = new Set(Object.keys(cnt).filter(k => cnt[k] > 1));
+  _sharedCache.set(weeks, { order, set });
+  return set;
+}
+/* 這個單元在學生進度裡對得上的 key（順序＝優先序：週次_id → 裸 id → 後綴）。it＝{ id, progressId, shared } */
+function progKeysFor(its, it) {
+  const keys = [];
+  if (!its || !it) return keys;
+  if (it.progressId && its[it.progressId]) keys.push(it.progressId);
+  if (its[it.id] && keys.indexOf(it.id) < 0) keys.push(it.id);
+  if (!it.shared) Object.keys(its).forEach(k => { if (k.endsWith('_' + it.id) && keys.indexOf(k) < 0) keys.push(k); });
+  return keys;
+}
+
 function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
   const targetWeekId = weekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null);
   const empty = { weekLabel: '—', dateRange: '', completed: [], pending: [], weekVocab: [], completionRate: 0, avgScore: null, totalItems: 0, lateCount: 0, streak: { count: 0 }, xp: 0, badges: {}, wrongQuestions: [], weekId: targetWeekId };
@@ -6511,8 +6541,9 @@ function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
 
   /* ⚠ 優先序必須維持 progressId > 裸 itemId > 後綴，順序寫錯會讓
      「週次改過 id」的舊資料成績消失。 */
+  const shared = sharedItemIds(weeks, weekOrder);   // v596：有重複的 id 不走後綴那一層
   const getProgress = (itemId) =>
-    its[`${targetWeekId}_${itemId}`] || its[itemId] || suffixIndex()[itemId] || null;
+    its[`${targetWeekId}_${itemId}`] || its[itemId] || (shared.has(itemId) ? null : suffixIndex()[itemId]) || null;
 
   const completed = [], pending = [];
   let allWrongQ = [];
@@ -6989,7 +7020,7 @@ function guardWeekSave(key, weeks) {
   }
   return n;
 }
-Object.assign(window, { noteCloudWeeks, guardWeekSave, weeksWithDeletes, countWeekItems: _countWeekItems });
+Object.assign(window, { sharedItemIds, progKeysFor, noteCloudWeeks, guardWeekSave, weeksWithDeletes, countWeekItems: _countWeekItems });
 
 /* ═══════════ v361: 完成練習自動集點 ═══════════════════════════
    Alan 訂的規則（老師／管理者不計）：
