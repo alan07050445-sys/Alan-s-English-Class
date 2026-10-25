@@ -98,7 +98,7 @@ function _mergeG1WithSeed(existing, seed) {
 }
 
 /* ─── Save / Load ────────────────────────────────────────────────────────── */
-async function saveWeeksG1(weeks)    { window.guardWeekSave && window.guardWeekSave('g1', weeks); await _classDocG1.set({ weeks },        { merge: true }); }
+async function saveWeeksG1(weeks)    { window.guardWeekSave && window.guardWeekSave('g1', weeks); await _classDocG1.set({ weeks: window.weeksWithDeletes ? window.weeksWithDeletes('g1', weeks) : weeks }, { merge: true }); }
 async function saveWeekOrderG1(o)    { await _classDocG1.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG1() {

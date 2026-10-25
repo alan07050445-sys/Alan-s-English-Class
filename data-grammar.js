@@ -109,7 +109,7 @@ function _mergeGRWithSeed(existing, seed) {
 /* ─── Save / Load ────────────────────────────────────────────────────────── */
 async function saveWeeksGR(weeks) {
   window.guardWeekSave && window.guardWeekSave('gr', weeks);   // v359: 防「寫成 0 題」
-  await _classDocGR.set({ weeks }, { merge: true });
+  await _classDocGR.set({ weeks: window.weeksWithDeletes ? window.weeksWithDeletes('gr', weeks) : weeks }, { merge: true });   // v595
 }
 async function saveWeekOrderGR(o) { await _classDocGR.set({ weekOrder: o }, { merge: true }); }
 

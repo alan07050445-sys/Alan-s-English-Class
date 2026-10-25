@@ -294,7 +294,7 @@ async function deleteRosterStudent(email) {
 
 async function saveWeeks(weeks) {
   guardWeekSave('g3', weeks);                      // v359: 不准把有題目的蓋成空的
-  await _classDoc.set({ weeks }, { merge: true });
+  await _classDoc.set({ weeks: weeksWithDeletes('g3', weeks) }, { merge: true });   // v595：少掉的 key 要真的刪
 }
 
 async function saveWeekOrder(order) {
@@ -6938,7 +6938,48 @@ function _countWeekItems(weeks) {
   return Object.values(weeks || {}).reduce((n, wk) =>
     n + Object.values((wk || {}).items || {}).reduce((m, arr) => m + ((arr && arr.length) || 0), 0), 0);
 }
-function noteCloudWeeks(key, weeks) { _cloudWeekCount[key] = _countWeekItems(weeks); }
+/* ══ 🔴 v595 「刪掉的東西永遠回來」——藏了很久的存檔 bug ═══════════════════════
+   所有年級存課程都是 `doc.set({ weeks }, { merge: true })`。⚠ Firestore 的 merge 會**逐層合併 map**：
+   本機把 weeks.w1.homework.b 拿掉再存，雲端那一筆**根本不會被刪**（陣列才是整個換掉）。
+   用真的 Firestore SDK 離線實測過（tests/t-v595 有同一份重現）：
+     items 陣列少了 b ✔　但 homework.b 還在 ✘
+   後果（都不會報錯，所以沒人發現）：
+     · 取消作業／刪單元後清掉的作業，雲端永遠留著 → 線上六個年級有 87 筆「幽靈作業」
+       （v486 的 pruneGhostHomework 每次存檔都在清，但清的只是本機那份，雲端從來沒少過）
+     · 取消封存（delete week.archived）存不進去 → 學生還是看不到那一週
+     · 刪整週只是從順序拿掉，週次本身留在雲端（六個年級共 26 個孤兒週）
+   修法：存之前拿「這台最後一次看到的雲端」當對照，**本機明確少掉的 key** 改寫成 FieldValue.delete()。
+   ⚠ 只刪「我看過、現在沒了」的——別台剛加的 key 我沒看過，不會被刪（merge 原本保護的就是這個）。
+   ⚠ 不自動刪整週（depth 0）：萬一本機只載到一部分週次，就會把雲端的週次刪光。
+   ⚠ 週次層的欄位（label、startISO…）也不自動刪，只有 archived 例外；有些地方會用「只有已知欄位」
+     重新組一個週次物件，那種情況刪欄位會把真資料弄丟。 */
+const _cloudSkel = {};
+function _skel(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return 1;
+  const o = {}; Object.keys(v).forEach(k => { o[k] = _skel(v[k]); }); return o;
+}
+function noteCloudWeeks(key, weeks) {
+  _cloudWeekCount[key] = _countWeekItems(weeks);
+  try { _cloudSkel[key] = _skel(weeks); } catch (e) { delete _cloudSkel[key]; }   // 只記「有哪些 key」，不留資料
+}
+function weeksWithDeletes(key, weeks, del) {
+  const old = _cloudSkel[key];
+  if (!old || !weeks || typeof weeks !== 'object') return weeks;
+  const DEL = del !== undefined ? del : firebase.firestore.FieldValue.delete();
+  const isMap = (x) => x && typeof x === 'object' && !Array.isArray(x);
+  const walk = (o, n, depth) => {
+    const out = {};
+    Object.keys(n).forEach(k => { out[k] = (isMap(n[k]) && isMap(o[k])) ? walk(o[k], n[k], depth + 1) : n[k]; });
+    Object.keys(o).forEach(k => {
+      if (k in n) return;
+      if (depth === 0) return;                        // 整週不自動刪
+      if (depth === 1 && k !== 'archived') return;    // 週次層的欄位只認 archived
+      out[k] = DEL;
+    });
+    return out;
+  };
+  return walk(old, weeks, 0);
+}
 function guardWeekSave(key, weeks) {
   const last = _cloudWeekCount[key];
   if (last === undefined) throw new Error('課程內容還沒從雲端載入完成，先等一下再存（避免把雲端的題目蓋掉）');
@@ -6948,7 +6989,7 @@ function guardWeekSave(key, weeks) {
   }
   return n;
 }
-Object.assign(window, { noteCloudWeeks, guardWeekSave, countWeekItems: _countWeekItems });
+Object.assign(window, { noteCloudWeeks, guardWeekSave, weeksWithDeletes, countWeekItems: _countWeekItems });
 
 /* ═══════════ v361: 完成練習自動集點 ═══════════════════════════
    Alan 訂的規則（老師／管理者不計）：

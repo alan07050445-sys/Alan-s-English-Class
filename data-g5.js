@@ -133,7 +133,7 @@ function _mergeG5WithSeed(existing, seed) {
 }
 
 /* ─── Save / Load ────────────────────────────────────────────────────────── */
-async function saveWeeksG5(weeks)    { window.guardWeekSave && window.guardWeekSave('g5', weeks); await _classDocG5.set({ weeks },        { merge: true }); }
+async function saveWeeksG5(weeks)    { window.guardWeekSave && window.guardWeekSave('g5', weeks); await _classDocG5.set({ weeks: window.weeksWithDeletes ? window.weeksWithDeletes('g5', weeks) : weeks }, { merge: true }); }
 async function saveWeekOrderG5(o)    { await _classDocG5.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG5() {

@@ -653,7 +653,7 @@ function subscribeToClassDataG2(callback, onError) {
   });
 }
 
-async function saveWeeksG2(weeks) { window.guardWeekSave && window.guardWeekSave('g2', weeks); await _classDocG2.set({ weeks },        { merge: true }); }
+async function saveWeeksG2(weeks) { window.guardWeekSave && window.guardWeekSave('g2', weeks); await _classDocG2.set({ weeks: window.weeksWithDeletes ? window.weeksWithDeletes('g2', weeks) : weeks }, { merge: true }); }
 async function saveWeekOrderG2(o) { await _classDocG2.set({ weekOrder: o }, { merge: true }); }
 
 function loadWeeksG2() {
