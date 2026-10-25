@@ -39,12 +39,12 @@ const vend = { 'vendor/react-18.3.1.production.min.js': 'sha384-DGyLxAyjq0f9SPpV
 Object.keys(vend).forEach(f => ok(`⭐⭐ ${f} 的雜湊跟原本 index.html 上的 SRI 逐字相同（內容沒被動過）`,
   'sha384-' + crypto.createHash('sha384').update(fs.readFileSync(path.join(ROOT, f))).digest('base64') === vend[f]));
 ok('⭐ 頁面不再從 unpkg／gstatic 載程式（只剩字型）', !/unpkg\.com|gstatic\.com\/firebasejs/.test(html));
-ok('⭐ 六個 vendor 檔都存在、都在預先快取裡，而且載入順序 React → ReactDOM → firebase app → firestore → storage → auth（data.js 之前）', (() => {
+ok('⭐ 六個 vendor 檔都存在、都在預先快取裡，而且載入順序 React → ReactDOM → firebase app → firestore → storage → auth（data-core 之前）', (() => {
   const order = [...html.matchAll(/<script src="(vendor\/[^"]+)"/g)].map(m => m[1].replace(/-\d[\d.]*(\.production\.min)?\.js$/, ''));
   const files = [...html.matchAll(/<script src="(vendor\/[^"]+)"/g)].map(m => m[1]);
   return files.length === 6 && files.every(f => fs.existsSync(path.join(ROOT, f)) && pre.PRECACHE.some(u => u.endsWith('/' + f)))
     && order.join() === 'vendor/react,vendor/react-dom,vendor/firebase-app-compat,vendor/firebase-firestore-compat,vendor/firebase-storage-compat,vendor/firebase-auth-compat'
-    && html.indexOf('vendor/firebase-auth') < html.indexOf('data.js'); })());
+    && html.indexOf('vendor/firebase-auth') < html.indexOf('dist/data-core.js'); })());
 
 console.log('\n【3】老師那兩包：只有老師才載，而且學生頁不依賴它們');
 ok('⭐ app.jsx 只在 isTeacher 才呼叫 loadTeacherBundle，載完 setTbReady 重畫，失敗最多重試 3 次', /if \(!isTeacher \|\| tbReady \|\| !window\.loadTeacherBundle\) return;/.test(noC(app)) && /setTbReady\(true\)/.test(app) && /n < 3/.test(app));

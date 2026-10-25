@@ -1,0 +1,7296 @@
+
+
+// v339: 多位老師各帶各的學生——記下這位學生是誰帶的（沒填就是目前登入的老師）。
+// 舊資料沒有 teacher 欄位 → 視為擁有者(Alan)的學生。
+async function addRosterStudent(email, name, grade, teacher) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !id.includes('@')) throw new Error('invalid-email');
+  const owner = String(teacher || (_auth.currentUser && _auth.currentUser.email) || '').toLowerCase();
+  await _db.collection('roster').doc(id).set({
+    name: (name || '').trim(),
+    grade: grade || '',
+    active: true,
+    teacher: owner,
+    addedAt: Date.now(),
+  }, { merge: true });   // merge：改年級/改名不會洗掉既有欄位
+}
+
+async function setRosterStudentActive(email, active) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('roster').doc(id).set({ active: !!active }, { merge: true });
+}
+
+async function deleteRosterStudent(email) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('roster').doc(id).delete();
+}
+
+// v277: 分段閱讀的文章照片——刻意放在 pdfs/reading/ 底下：
+// 已發布的 pdfs/** 規則＝所有人可讀、只有老師信箱可寫，直接沿用、不用再改 Storage 規則
+async function uploadReadingPhoto(itemId, blob) {
+  const safe = String(itemId || 'gr').replace(/[^A-Za-z0-9_-]/g, '_');
+  const ref = _storage.ref(`pdfs/reading/${safe}/${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`);
+  await ref.put(blob, { contentType: 'image/jpeg' });
+  return ref.getDownloadURL();
+}
+
+// v289: 課文音檔（老師上傳課本配音/自錄）——<audio> 播放跟 <img> 一樣不需要 CORS
+async function uploadReadingAudio(itemId, file) {
+  const safe = String(itemId || 'gr').replace(/[^A-Za-z0-9_-]/g, '_');
+  const ext = (String(file.name || '').match(/\.(mp3|m4a|aac|wav|ogg)$/i) || [, 'mp3'])[1].toLowerCase();
+  const ref = _storage.ref(`pdfs/reading/${safe}/${Date.now()}_audio.${ext}`);
+  await ref.put(file, { contentType: file.type || 'audio/mpeg' });
+  return ref.getDownloadURL();
+}
+
+async function saveReadingWords(obj) {
+  const id = 'grwords_' + Date.now() + Math.random().toString(36).slice(2, 6);
+  await _db.collection('class').doc(id).set(obj);
+  return id;
+}
+
+// ── Utilities ──────────────────────────────────────────
+
+function suggestNextWeekId(existingIds) {
+  const parsed = existingIds
+    .map(id => {
+      const m = String(id).match(/^(\d{4})-W(\d{1,2})$/i);
+      return m ? { year: +m[1], week: +m[2], id } : null;
+    })
+    .filter(Boolean);
+  if (parsed.length === 0) {
+    const d = new Date();
+    return `${d.getFullYear()}-W01`;
+  }
+  parsed.sort((a, b) => a.year - b.year || a.week - b.week);
+  const last = parsed[parsed.length - 1];
+  let nextYear = last.year, nextWeek = last.week + 1;
+  if (nextWeek > 53) { nextYear += 1; nextWeek = 1; }
+  return `${nextYear}-W${String(nextWeek).padStart(2, "0")}`;
+}
+
+// ── 管理者名單維護（只有擁有者能用；規則同樣會擋）──────────────────
+function subscribeAdmins(callback, onError) {
+  return _db.collection('admins').onSnapshot(snap => {
+    const list = [];
+    snap.forEach(d => list.push({ email: d.id, ...d.data() }));
+    list.sort((a, b) => String(a.email).localeCompare(String(b.email)));
+    callback(list);
+  }, onError || (() => {}));
+}
+async function addAdmin(email, name) {
+  const id = _lc(email);
+  if (!id || !id.includes('@')) throw new Error('invalid-email');
+  if (OWNER_EMAILS.includes(id)) throw new Error('owner-already');
+  await _db.collection('admins').doc(id).set({
+    email: id,
+    name: String(name || '').trim(),
+    addedBy: (_auth.currentUser && _auth.currentUser.email) || '',
+    addedAt: Date.now(),
+  });
+}
+async function removeAdmin(email) {
+  const id = _lc(email);
+  if (OWNER_EMAILS.includes(id)) throw new Error('cannot-remove-owner');
+  await _db.collection('admins').doc(id).delete();
+}
+
+// ── v379: AI 出題（配對連線的英文定義／填空的情境例句＋中文解說）────────────
+// Alan 本來的做法是把單字貼給 ChatGPT、拿回來再匯入。
+// alan-ai-proxy 這個 Worker 本來就是「通用的 Anthropic 代理」（收 system+messages 原樣轉送），
+// 所以不用重新部署，直接換一組 prompt 就能在網站裡出題。
+/* 所有 system prompt 共用的一行：叫模型不要輸出換行與縮排。
+   實測同一組 10 個單字，未加時 output_tokens 883/1196（含 83 個換行），
+   加了之後 866/882（0 個換行）——依 176 tok/s 換算約省 1.9 秒。
+   ⚠ _aiStripFence 仍然保留，因為模型偶爾還是會加 code fence。 */
+const _AI_MINIFY =
+  "Output the JSON MINIFIED on a single line: no newlines, no indentation, no spaces after ':' or ','. Do not wrap it in a code fence.";
+
+/* v442（Alan：「我也有 G1 G2 的學生，生成出來的題目要簡單一點，
+   所以我希望 AI 可以分級 G1G2 / G3G4 / G5G6，但一定都要給 context clue」）
+   ⚠ 只有「句子的難度」跟著年級走；**線索一定要有**——那是這個題型的重點，
+     低年級只是把線索講得更白話、句子更短。 */
+const VOCAB_BANDS = {
+  low:  { label: 'G1-G2', note: `Grades 1-2 (age 6-8, CEFR pre-A1).
+- sentence: 8-12 words, ONE simple clause, present tense, only very common words (like, eat, play, happy, school).
+- The clue must be a concrete, everyday picture a 7-year-old can see (food, animals, family, toys, weather).
+- def: 5-8 words, use the simplest words you know.
+- explain: Traditional Chinese, 15-30 characters, very plain wording.` },
+  mid:  { label: 'G3-G4', note: `Grades 3-4 (age 9-10, CEFR A1-A2).
+- sentence: 12-18 words, one or two clauses, simple past or present.
+- def: 5-12 words.
+- explain: Traditional Chinese, 20-40 characters.` },
+  high: { label: 'G5-G6', note: `Grades 5-6 (age 11-12, CEFR A2).
+- sentence: 14-22 words, may use because/when/so and richer vocabulary around the blank.
+- def: 6-14 words.
+- explain: Traditional Chinese, 25-45 characters.` },
+};
+const vocabBandOf = (g) => (g === 'g1' || g === 'g2' || g === 'low') ? 'low'
+  : (g === 'g5' || g === 'g6' || g === 'high') ? 'high' : 'mid';
+const AI_VOCAB_SYS =
+`You write English exercises for Taiwanese elementary-school students (grades 2-6, CEFR A1-A2).
+Output ONLY a JSON array. No prose, no markdown, no code fences.
+
+For each target word output:
+{"word":"<word> (<pos.>)","zh":"<Traditional Chinese meaning>","def":"<definition>","sentence":"<context sentence with ___>","answer":"<the word as it fills the blank>","explain":"<Traditional Chinese explanation>"}
+
+RULES
+- zh: the Traditional Chinese meaning of the word, 2-8 characters, no explanation (e.g. 遺產／移民／訪問).
+- def: a kid-friendly ENGLISH definition, 5-14 words, no ending punctuation, and it must NOT contain the target word or any form of it.
+- IF a target word comes with [TEACHER'S DEFINITION: "..."], copy that text into "def" EXACTLY, character for character.
+  Do not rewrite it, shorten it, fix its grammar, or add punctuation. That is the wording the teacher will test,
+  so every other field you write for that word (sentence, explain) must agree with it.
+- sentence: ONE natural sentence, 12-22 words, with exactly one ___ where the word goes. The rest of the sentence must give enough clues to work the answer out. Never let the target word appear anywhere else in the sentence.
+- answer: the exact surface form that fills the blank (may be inflected, e.g. plural or past tense).
+- explain: Traditional Chinese, 20-45 characters. Copy the clue phrase from YOUR OWN sentence (not from the definition), say in Chinese what that clue means, then give the answer. Never output the literal characters "…" or "..." — always write the real reasoning.
+  GOOD: 「old photos and stories from our grandparents」是家族一代一代留下來的東西，所以是 heritage（文化遺產）。
+  GOOD: 「asked her many questions」是訪問別人的動作，所以是 interview（訪問）。
+  BAD:  「something valuable passed down」表示…，所以是 heritage（文化遺產）。
+  BAD:  quoting the definition instead of a phrase from the sentence.
+- Keep every other word simple. Use the student's own world (school, family, food, animals, festivals).
+- Return the words in the same order they were given, one object per word.
+${_AI_MINIFY}`;
+
+const WS_SYS = `You design a Word Study worksheet for Taiwanese elementary students,
+in the style of a Kang Chiao (康橋) textbook Word Study page.
+Output ONLY JSON:
+{"topic":"","rule":"","ruleZh":"","check":{"kind":"vce|suffix|prefix|team|digraph","args":[""]},
+ "groups":[{"label":"","arg":"","means":"","zh":"","words":[""]}],
+ "yes":[""],"no":[""],
+ "mcq":[{"q":"","options":["","","",""],"answer":0}],
+ "build":[{"clue":"","base":"","answer":""}],
+ "bases":{"safety":"safe"},
+ "story":{"title":"","text":""}}
+RULES
+- check: how a computer can test the pattern. "vce" needs no args.
+  For "suffix"/"prefix", args are the affixes ("-ty", "-ity", "-ic", "-ment").
+  For "team"/"digraph", args are the letter groups ("ai", "ay", "ea", "ee", "oa").
+  ⚠ LIST EVERY affix or team the topic covers — a word counts as following the pattern when it
+  matches ANY of them. Missing one makes the whole worksheet wrong.
+- rule: ONE sentence of simple English a 9-year-old reads, explaining the pattern.
+- ruleZh: the same thing in spoken Traditional Chinese, ≤30 characters, keeping the English terms in English.
+- groups: 2-4 sub-groups, each with 3-5 real words that belong ONLY to that group.
+  (long a / long i / long o / long u … or -ty / -ity / -ic / -ment … or ai / ay / ea / ee …)
+  "arg" is which one of your "check" args that group is for ("-ity", "ea"); leave it "" for vce groups.
+  ⚠ "label" must be SHORT — just the affix or the letters ("-ity", "ea", "long a"), at most 10 characters.
+  Put the meaning in "means" instead (English, ≤4 words: "quality of", "the sound in rain").
+  "zh": how a teacher says that group out loud in Traditional Chinese, ≤20 characters, keeping the
+  English part in English (「-ity 是『品質、狀態』，把動詞或形容詞變成名詞」).
+  ⚠ EVERY group needs "means" and "zh" — the site reads them out in the lesson, so a missing one
+  means the children never get told what that group is.
+- mcq: when a question names ONE affix or team ("Which word has the ea vowel team?"), every option is
+  judged against THAT one only — so exactly one option must have it and the others must not.
+- yes: 8-12 words that DO follow the pattern. no: 8-12 that clearly do NOT.
+  Mix them from everyday school words a 9-year-old meets.
+- mcq: 4-6 questions. q is one short English question ("Which word has the VCe pattern?").
+  options: four real words where EXACTLY ONE follows the pattern. answer: 0-based index.
+- ⚠ For an AFFIX topic, every word inside "groups" must really be BASE + AFFIX
+  (safety = safe + -ty). Words that merely END in those letters are NOT allowed there:
+  "dirty", "empty", "plenty", "twenty", "music", "comic" have no base word, so they teach the
+  wrong idea in a lesson about building words. Put look-alikes in "no" if you want them.
+- ⚠ Each group's "means" must be different from the other groups'.
+  For a sound topic (vce / team / digraph), "means" must be "the sound in <word>" where <word>
+  is one of THAT group's own words — naming a word from another group teaches the wrong sound.
+- bases: ONLY when the pattern is an affix (suffix/prefix). For EVERY word you listed in "groups",
+  give the base word it was built from ("safety":"safe", "ability":"able", "basic":"base",
+  "historic":"history", "enjoyment":"enjoy"). The children are shown "safe + -ty", so they can
+  see where the word came from. Spell the base word as a real English word on its own.
+  If the pattern is not an affix (vce / team / digraph), return {}.
+- build: 4-6 items, only when the pattern is an affix. clue = the meaning in simple English
+  ("relating to history"), base = the base word ("history"), answer = base + affix ("historic").
+  If the pattern is not an affix, return an empty array.
+- story: ONE short passage (60-110 words) a 9-year-old enjoys, containing 6-10 words that follow
+  the pattern, spread across the whole passage. Give it a short title.
+  ⚠ Every word in the passage must be spelled correctly and the English must be natural.
+- Everything the student sees is ENGLISH. Only "ruleZh" is Chinese.
+${_AI_MINIFY}`;
+
+/* 程式把 AI 的產出整個驗一遍。AI 只負責「想題材」，對錯一律程式說了算。 */
+/* v486（Alan：「這種類型一定要都給 base word，這樣小朋友才知道原來是從這個字變過來的」）：
+   base word 不能純靠程式推——safety→safe 砍掉字尾就有，但 basic→base（要補 e）、
+   historic→history（要補 y）、ability→able（il→le 的母音變化）都推不出來。
+   所以照老規矩：**AI 給、程式驗**。驗不過的那一個字就不顯示 base，不要整份退回
+   （少一個拆解只是少一點提示，給錯的拆解才是教錯）。 */
+function _wsBaseOk(word, affix, base) {
+  const w = String(word || '').toLowerCase();
+  const b = String(base || '').toLowerCase();
+  const a = String(affix || '').replace(/-/g, '').toLowerCase();
+  if (!/^[a-z]{2,}$/.test(b) || !w || !a || b === w) return false;
+  // 字尾／字首剝掉之後剩下的「字幹」
+  const stem = w.endsWith(a) ? w.slice(0, -a.length) : (w.startsWith(a) ? w.slice(a.length) : '');
+  if (stem.length < 2) return false;
+  if (b === stem) return true;                                   // loyalty → loyal
+  if (b === stem + 'e') return true;                             // basic → base、creativity → creative
+  if (b === stem + 'y') return true;                             // historic → history
+  if (stem.endsWith('i') && b === stem.slice(0, -1) + 'y') return true;   // happiness → happy
+  if (stem.endsWith('il') && b === stem.slice(0, -2) + 'le') return true; // ability → able、possibility → possible
+  if (stem.endsWith('ic') && b === stem.slice(0, -2) + 'y') return true;  // -ity 接在 -ic 後
+  return false;
+}
+
+function wsValidPack(x) {
+  const str = (v) => String(v == null ? '' : v).trim();
+  const words = (a) => (Array.isArray(a) ? a : []).map(str).filter(w => /^[A-Za-z][A-Za-z'-]*$/.test(w));
+  const check = { kind: str(x && x.check && x.check.kind).toLowerCase(), args: _wsArgs(x && x.check) };
+  if (!WS_CHECKS[check.kind]) return null;                       // 程式不會判的規則，整份退回
+  if (check.kind !== 'vce' && !check.args.length) return null;    // 除了 vce，一定要講明是哪些詞綴／字母
+  const hit = (w, one) => wsCheck(w, check, one) === true;
+
+  const rule = str(x && x.rule), ruleZh = _zhTW(str(x && x.ruleZh));
+  if (!rule || _gnCJK.test(rule)) return null;
+
+  // ① 圈出來：符合的留下、不符合的留下，兩邊都要程式驗過
+  /* ⚠ 一定要寫成 `w => hit(w)`，不可以直接 `.filter(hit)`——
+     Array.filter 會把「索引」當第二個參數傳進去，而 hit 的第二個參數是
+     「只比哪一個 pattern」→ 第 2 個字以後都拿索引去比，全部判成不符合。 */
+  const yes = [...new Set(words(x && x.yes).filter(w => hit(w)))];
+  const no  = [...new Set(words(x && x.no).filter(w => !hit(w)))].filter(w => yes.indexOf(w) < 0);
+
+  // ② 分一分：每個字都要真的符合規則，而且每一籃至少 2 個
+  /* 每一籃可以指名自己的 pattern（「-ity」那一籃就只收 -ity 的字）。
+     沒指名就從籃子名稱猜，猜不到才退回「符合任何一個」。 */
+  const groups = (Array.isArray(x && x.groups) ? x.groups : []).map(g => {
+    const lab = str(g && g.label);
+    const one = str(g && g.arg)
+      || check.args.find(a2 => lab.toLowerCase().indexOf(String(a2).replace(/^-|-$/g, '').toLowerCase()) >= 0)
+      || '';
+    /* 🔴 v485：籃子名稱**只放詞綴／字母**，意思放 means。
+       v484 讓 AI 自己決定 label，它寫成「-ity (quality of)」→ 畫面上被切成「-ity (qu」。
+       ⚠ 光靠提示詞擋不住，程式自己拆：括號裡的東西搬去 means，名稱只留前面那一段。 */
+    const m = lab.match(/^([^(（]+)[(（]([^)）]*)[)）]?\s*$/);
+    const short = (m ? m[1] : lab).trim().slice(0, 12);
+    const means = str(g && g.means) || (m ? m[2].trim() : '');
+    return { label: short, arg: one,
+             means: means.slice(0, 40), zh: _zhTW(str(g && g.zh)).slice(0, 40),
+             words: [...new Set(words(g && g.words).filter(w => hit(w, one || undefined)))] };
+  }).filter(g => g.label && g.words.length >= 2);
+  // 同一個字不可以出現在兩籃（不然分到哪都對）
+  const seenG = new Set();
+  groups.forEach(g => { g.words = g.words.filter(w => { const k = w.toLowerCase(); if (seenG.has(k)) return false; seenG.add(k); return true; }); });
+  /* ⑥ v486 base word（Alan：「這種類型一定要都給 base word」）：
+     AI 給、程式驗，驗不過的不收——`safety←safari` 這種假拆解比沒有還糟。
+     ⚠ 順便擋掉「只是剛好那樣結尾」的字：dirty／empty／plenty 沒有 base word，
+       放進「加 -ty 造新字」的籃子裡會教成錯的觀念（真 AI 第一次就塞了 dirty、empty）。
+     不是詞綴的主題（VCe／母音組合）本來就沒有 base word，整段跳過。 */
+  const bases = {};
+  const affix = (check.kind === 'suffix' || check.kind === 'prefix');
+  if (affix) {
+    const src = (x && x.bases && typeof x.bases === 'object') ? x.bases : {};
+    (Array.isArray(x && x.build) ? x.build : []).forEach(b => {
+      const ans = str(b && b.answer); if (ans && !src[ans]) src[ans] = str(b && b.base);
+    });
+    /* ⚠ 只有「AI 真的有給 bases」時才拿它當門檻。整份都沒給就只是少了拆解提示，
+       不該因此把分籃清空、連分一分都生不出來（第一版寫太嚴，整組單元就不見了）。
+       沒給的情況交給下面的重試回饋去要。 */
+    const strict = Object.keys(src).length > 0;
+    groups.forEach(g => {
+      g.words = g.words.filter(w => {
+        if (!strict) return true;
+        const got = str(src[w] || src[w.toLowerCase()]);
+        const aff = g.arg || check.args.find(a => wsCheck(w, check, a) === true) || '';
+        if (!got || !_wsBaseOk(w, aff, got)) return false;
+        bases[w] = got.toLowerCase();
+        return true;
+      });
+    });
+  }
+
+  /* v486：聲音類的 means 要用**這一籃自己的字**（真 AI 給過
+     `long e → the sound in mile`——mile 是 long i，說明直接標錯）。
+     AI 講的字不在這一籃裡就不要它，改用這一籃的第一個字自己拼。 */
+  if (!affix) {
+    groups.forEach(g => {
+      const own = g.words.map(w => w.toLowerCase());
+      const named = (g.means.toLowerCase().match(/[a-z']+/g) || []).some(t => own.indexOf(t) >= 0);
+      if (!named && g.words.length) g.means = `the sound in ${g.words[0]}`;
+    });
+  }
+
+  const goodGroups = groups.filter(g => g.words.length >= 2).slice(0, 4);
+
+  // ③ 選擇題：四個選項裡**只能有一個**符合規則，而且正解要指對
+  const mcq = (Array.isArray(x && x.mcq) ? x.mcq : []).map(q => {
+    const opts = words(q && q.options);
+    if (opts.length !== 4) return null;
+    if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;
+    const qq = str(q && q.q);
+    if (!qq || _gnCJK.test(qq)) return null;
+    /* 🔴 v484：**題目問哪一個 pattern，就要照那一個算答案**。
+       v482 只用「符合任何一個」算，實測出現
+       「Which word has the ea vowel team? → straight」——straight 是 ai 不是 ea，正解是錯的。 */
+    const lowQ = ' ' + qq.toLowerCase() + ' ';
+    const named = check.args.filter(a2 => {
+      const bare = String(a2).replace(/^-|-$/g, '').toLowerCase();
+      return bare && (lowQ.indexOf('-' + bare) >= 0 || lowQ.indexOf(' ' + bare + ' ') >= 0 || lowQ.indexOf('"' + bare) >= 0);
+    });
+    if (named.length > 1) return null;                           // 一題問兩種，說不清楚要哪個
+    const ok = opts.map(o => hit(o, named[0]));
+    if (ok.filter(Boolean).length !== 1) return null;            // 只能有一個對
+    return { q: qq, options: opts, answer: ok.indexOf(true) };
+  }).filter(Boolean);
+
+  // ④ 加字首字尾：答案一定要真的等於「base ＋ 那個詞綴」才收
+  const build = (Array.isArray(x && x.build) ? x.build : []).map(b => {
+    const clue = str(b && b.clue), base = str(b && b.base), ans = str(b && b.answer);
+    if (!clue || !base || !ans || _gnCJK.test(clue + base + ans)) return null;
+    if (!hit(ans)) return null;
+    if (ans.toLowerCase() === base.toLowerCase()) return null;
+    return { clue, base, answer: ans };
+  }).filter(Boolean);
+
+  // ⑤ 短文找字：程式自己從短文裡找出符合的字＝答案不可能錯
+  const st = x && x.story;
+  const text = str(st && st.text);
+  let story = null;
+  if (text && !_gnCJK.test(text)) {
+    const toks = text.split(/\s+/).map(_GN_TOK).filter(Boolean);
+    const found = [...new Set(toks.filter(w => hit(w)).map(w => w.toLowerCase()))];   // ⚠ 同上，不可以直接 .filter(hit)
+    // 只留「整篇只出現一次」的（學生是一個字一個字點的，出現兩次就說不準點哪個）
+    const once = found.filter(w => toks.filter(t => t.toLowerCase() === w).length === 1);
+    const n = toks.length;
+    if (once.length >= 4 && n >= 40 && n <= 160) {
+      story = { title: str(st.title).slice(0, 40), text, answers: once.slice(0, 10) };
+    }
+  }
+
+  const enough = (yes.length >= 4 && no.length >= 4) || goodGroups.length >= 2 || mcq.length >= 2 || !!story;
+  if (!enough) return null;
+  return { topic: str(x && x.topic).slice(0, 60), rule, ruleZh, check, bases,
+           yes: yes.slice(0, 12), no: no.slice(0, 12), groups: goodGroups, mcq: mcq.slice(0, 8), build: build.slice(0, 8), story };
+}
+
+async function aiMakeWordStudy({ topic, words = '', grade = 'g4', teacherNote = '', onProgress } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const list = String(words || '').split(/[\n,、，]+/).map(w => w.trim()).filter(Boolean).slice(0, 40);
+  const base = `LEVEL: ${band.label}\n${band.note}\n\n` +
+    `WORD STUDY TOPIC: ${String(topic || '').trim()}\n` +
+    _aiTeacherNote(teacherNote) +
+    (list.length ? `The teacher's own spelling list for this lesson — use these words first, and add more of your own if you need:\n${list.join(', ')}\n` : '');
+  let last = null, feedback = '';
+  for (let round = 0; round < 3; round++) {
+    if (onProgress) onProgress(round + 1, 3);
+    let raw;
+    try { raw = await _gnCall(WS_SYS, base + feedback, 3000); } catch (e) { last = e; continue; }
+    const pack = wsValidPack(raw);
+    if (pack) return pack;
+    /* 跟 v480 同一個道理：擋掉就要講原因，不然重試只是再犯一次。 */
+    feedback = '\n\nYour previous answer was REJECTED by a checker. Common reasons:\n' +
+      '- "check" was missing or not one of vce / suffix / prefix / team / digraph\n' +
+      '- a word you put in "yes" or in a group does NOT actually follow the pattern\n' +
+      '- an MCQ had zero or more than one option following the pattern (exactly one must)\n' +
+      '- the story had fewer than 4 pattern words that appear exactly once\n' +
+      'Check every single word against the pattern yourself before answering.';
+  }
+  throw new Error('Word Study 題目產生失敗' + _aiUpstreamNote(last));
+}
+
+const AI_SENSE_SYS = `You write "which meaning is it here?" vocabulary questions for Taiwanese
+elementary students, exactly like a Kang Chiao formative assessment.
+Output ONLY a JSON array: [{"word":"","passage":"","title":"","q":"","options":["","","",""],"answer":0,"explain":""}]
+RULES
+- title: a SHORT headline, 2-5 words. Put it ONLY here.
+- passage: 2-4 short sentences (25-55 words) that a 9-year-old enjoys.
+  Do NOT repeat the title inside it and never start it with "Title:" — the site shows the title separately.
+  The target word must appear in it EXACTLY ONCE, used in ONE clear meaning, and the sentences
+  around it must make that meaning findable. Never define the word inside the passage.
+  ⚠ Use the word NATURALLY — change its form if the sentence needs it (trap -> trapped, soar -> soaring).
+  Every sentence must be perfect English. "it got trapping in the bushes" is wrong and unusable.
+- q: always exactly "Based on the passage above, what does <word> mean?"
+- options: FOUR definitions, 3-9 words each, no ending punctuation.
+  ⚠⚠ The three wrong ones must be OTHER REAL MEANINGS OF THE SAME WORD, or meanings that sound
+  close to it — never the definition of a different word, and never something silly.
+  Example for "shade": "a cool place out of the sun" (right) / "a colour that is a little dark" /
+  "a cover for a lamp" / "to hide something from someone".
+  If the word honestly has only one meaning, use near-misses a child would really pick
+  (too wide, too narrow, or the opposite).
+- All four options must be about the SAME part of speech and similar length, so the longest one
+  is not always the answer.
+- options[0] is ALWAYS the correct definition, and "answer" is ALWAYS 0.
+  Do NOT move it around — the website shuffles the positions itself afterwards.
+- explain: very simple ENGLISH, ≤16 words, quoting the clue words from YOUR passage.
+${_AI_MINIFY}`;
+
+/* 回傳 [{word, title, passage, q, options, answer, explain}]。
+   驗證的重點：目標字在短文裡只出現一次、四個選項不重複、答案位置要分散。
+
+   🔴 v488（Alan：「我單字卡有 8 個，字義選擇只有 4 題」）：
+   實測 8 個字只出 4~5 題，被擋掉的全是「出題者說 2、覆核說 0」。
+   一度以為是覆核在亂判，但把同一題的正解輪流放到四個位置去問，
+   覆核 12/12 全對——**沒有位置偏誤，是出題者自己標錯**。
+   根因在提示詞：`Put the correct one in a DIFFERENT position each time`
+   → 模型把正確定義寫在第 0 格，卻為了「換位置」宣稱答案是第 2 格。
+   而位置**程式本來就會攤平**（_qsSpreadAnswers，v468 做的）＝這行指令既多餘又有害。
+   改成「正解一律放第 0 格」，位置交給程式。
+   ⭐ 通用原則：**程式自己會做的隨機化，不要再叫模型做一次**——
+      模型為了服從而謊報，而那是程式看不出來的錯（跟 v417「選最長的就對」同一類）。 */
+async function aiMakeVocabSense(words, { grade = 'g4', hint = '', teacherNote = '', avoid = [], onProgress } = {}) {
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  if (!list.length) return [];
+  /* 第一輪出完 → 交叉檢查 → 沒過的那幾個字**再出一次**。
+     實測第一輪大約會被擋掉一半（都是真的標錯答案），直接丟掉的話老師貼 8 個字只拿到 4 題。 */
+  let got = await _senseRound(list, { grade, hint, teacherNote, avoid, onProgress });
+  const miss = list.filter(w => !got.some(g => g.word.toLowerCase() === w.term.toLowerCase()));
+  if (miss.length) {
+    const more = await _senseRound(miss, { grade, hint, teacherNote, avoid, onProgress: null });
+    got = got.concat(more);
+  }
+  // 照老師貼的順序排回去，再把正解位置攤平
+  const ix = (w) => list.findIndex(x => x.term.toLowerCase() === w.word.toLowerCase());
+  got.sort((a, b) => ix(a) - ix(b));
+  return _qsSpreadAnswers(got);
+}
+
+async function _senseRound(list, { grade = 'g4', hint = '', teacherNote = '', avoid = [], onProgress } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const parts = [];
+  for (let i = 0; i < list.length; i += 2) parts.push(list.slice(i, i + 2));
+  let done = 0;
+  const packs = await pMap(parts, async (part) => {
+    const msg = `LEVEL: ${band.label}\n${band.note}\n\n` +
+      (hint ? `Topic: ${hint}\n` : '') + _aiTeacherNote(teacherNote) + _aiAvoidNote(avoid) +
+      'Target words:\n' + part.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
+    try {
+      return await _aiAsk({ model: 'claude-haiku-4-5', max_tokens: Math.max(900, part.length * 450),
+        system: AI_SENSE_SYS, messages: [{ role: 'user', content: msg }] },
+        (d) => { const a = JSON.parse(_aiStripFence(d?.content?.[0]?.text || '')); return Array.isArray(a) ? a : null; });
+    } finally { done += part.length; if (onProgress) onProgress(Math.min(done, list.length), list.length); }
+  }, 10);
+  const cand0 = [];
+  (packs || []).forEach(arr => (arr || []).forEach(x => { const v = qsValidSense(x); if (v) cand0.push(v); }));
+  /* ⚠ v488：**先攤平位置、再送去覆核**。
+     提示詞現在要求正解一律放第 0 格（見 aiMakeVocabSense 上面的說明），
+     如果就這樣拿去問覆核，它每一題都只要回答「0」——萬一它偏好第一個選項，
+     整個交叉檢查就變成蓋橡皮章。攤平之後正解平均落在 ABCD，它才真的要讀短文。 */
+  const cand = _qsSpreadAnswers(cand0);
+  /* ⚠⚠ 2026-10-06 實測：模型會**把答案標錯**（trapping 的正解是「catching or holding」，
+     它標成「making a sound」）。這種錯程式看不出來——四個選項都像定義。
+     所以讓另一個 AI 自己讀短文作答，對不上就丟掉那一題。
+     跟 v431 選擇題、v444 找出來、v452 分一分、v467 整段改錯同一招：
+     **單一正解的題型，一律要有第二個 AI 的意見。** */
+  const checked = await pMap(cand, async (x) => {
+    try {
+      const pick = await _aiAsk({
+        model: 'claude-haiku-4-5', max_tokens: 120,
+        system: `You answer ONE multiple-choice vocabulary question. Output ONLY JSON: {"answer":0}
+Read the passage, decide what the word means THERE, and give the 0-based index of the best option.`,
+        messages: [{ role: 'user', content:
+          `PASSAGE:\n${x.passage}\n\nQUESTION: ${x.q}\nOPTIONS:\n` +
+          x.options.map((o, i) => `${i}. ${o}`).join('\n') }],
+      }, (d) => { const o = JSON.parse(_aiStripFence(d?.content?.[0]?.text || '')); return (o && Number.isInteger(o.answer)) ? o : null; }, 30000);
+      return pick.answer === x.answer ? x : null;     // 兩邊不同調＝這一題有問題，不要給學生
+    } catch (e) { return x; }                         // 檢查器掛掉不擋住老師
+  }, 6);
+  return checked.filter(Boolean);
+}
+
+function qsValidSense(x) {
+  const word = String((x && x.word) || '').trim();
+  /* 🔴 v476（Alan：「文章內部又寫了一次標題」）：提示詞本來寫
+     「passage … with a short "title"」，AI 就把標題寫進短文裡
+     → 畫面上方一個標題、短文開頭又一個「Title: The Kind Neighbors」。
+     提示詞已經改掉，這裡再清一次（AI 偶爾還是會寫，而且舊的也救得回來）。 */
+  let passage = String((x && x.passage) || '').trim()
+    .replace(/^\s*(title|標題)\s*[:：]\s*/i, '');
+  const t0 = String((x && x.title) || '').trim();
+  if (t0 && passage.toLowerCase().indexOf(t0.toLowerCase()) === 0) {
+    passage = passage.slice(t0.length).replace(/^[\s.:：,，、-]+/, '');
+  }
+  const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o || '').trim()).filter(Boolean);
+  const ai = Number(x && x.answer);
+  if (!word || !passage || opts.length !== 4) return null;
+  if (_gnCJK.test(passage + opts.join(''))) return null;
+  if (!(ai >= 0 && ai < 4)) return null;
+  if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;      // 選項不可以重複
+  // 目標字在短文裡只能出現一次，不然「哪一個用法」就不唯一了
+  const toks = passage.split(/\s+/).map(_GN_TOK).filter(Boolean).map(t => t.toLowerCase());
+  const base = word.toLowerCase();
+  const hits = toks.filter(t => t === base || t === base + 's' || t === base + 'es' || t === base + 'ed' || t === base + 'ing').length;
+  if (hits !== 1) return null;
+  const n = toks.length;
+  if (n < 20 || n > 70) return null;
+  // 正解不可以永遠是最長的那一個（v417 的教訓：學生會發現「選最長的就對」）
+  const lens = opts.map(o => o.split(/\s+/).length);
+  if (lens[ai] > Math.max(...lens.filter((_, i) => i !== ai)) + 3) return null;
+  return { word, title: String((x && x.title) || '').trim().slice(0, 40), passage,
+           q: `Based on the passage above, what does ${word} mean?`,
+           options: opts, answer: ai, explain: String((x && x.explain) || '').trim() };
+}
+
+/* 把正解位置攤平：模型很愛一直放同一格，學生兩題就看出來了。 */
+function _qsSpreadAnswers(list) {
+  return (list || []).map((x, i) => {
+    const want = i % 4;
+    if (x.answer === want) return x;
+    const opts = x.options.slice();
+    const right = opts[x.answer];
+    opts[x.answer] = opts[want]; opts[want] = right;
+    return { ...x, options: opts, answer: want };
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v406：一鍵出單字再多一種——「短文填空」（Alan 給的學校作業 Part B 就長這樣）
+   ──────────────────────────────────────────────────────────────────────────
+   一篇小故事，把這一課的每個單字各挖一個空格，學生讀上下文把字填回去。
+   輸出的 passage 直接就是 cloze 題型吃的格式：`[answer]` 是空格，
+   後面可以再接 `(提示)`——跟老師紙本上的 `______(ing)` 一模一樣
+   （components-quiz-mode.jsx 的 parseClozePassage / ClozePlayer 已經支援）。 */
+const AI_STORY_SYS =
+`You write ONE short cloze story for Taiwanese elementary-school students (grades 2-6, CEFR A1-A2).
+Output ONLY a JSON object. No prose, no markdown, no code fences.
+
+{"title":"<2-5 words>","passage":"<the story>"}
+
+RULES
+- ENGLISH ONLY. The passage and the title must contain no Chinese characters at all —
+  not for translation, not for hints, not in brackets. A single Chinese character makes the whole story invalid.
+- The story must use EVERY target word exactly once, and nothing else may be bracketed.
+- Wrap each target word in square brackets where it belongs: [word]
+- If the word needs a different form, put the exact form the student types inside the brackets
+  and the ending as a hint right after: [soaring](ing)  [attracts](s)  [trapped](ed)
+- The hint in ( ) is ONLY ever a word ENDING. If the word is unchanged, write no hint at all.
+  Never write a part of speech such as (n) (v) (adj) (adv) — the child is filling in a word, not labelling it.
+- Never let a target word appear anywhere outside its own brackets (no giveaways).
+- 70-140 words, 4-8 sentences, one connected story with a beginning and an end.
+- Every OTHER word must be simple, everyday vocabulary a 3rd grader knows.
+- Give enough context around each blank that a child can work the answer out.
+- title: a short story title, no ending punctuation.
+${_AI_MINIFY}`;
+
+/* 空格 → { answer, hint }。跟 parseClozePassage 同一條規則，這裡只是為了做檢查。 */
+function storyBlanks(passage) {
+  const out = [];
+  const re = /\[([^\]]+)\](?:\(([^)]*)\))?/g;
+  let m;
+  while ((m = re.exec(String(passage || '')))) out.push({ answer: m[1].trim(), hint: (m[2] || '').trim() });
+  return out;
+}
+
+/* ══ v445（Alan：「一鍵生成都可以自己跟 AI 協調，這次我可能要客製化某一些地方」）══
+   老師在每個一鍵生成的視窗裡都可以寫一段「特別要求」，原封不動送給 AI。
+   ⚠ 放在 user 訊息裡、而且明講「不可以破壞 JSON 格式」——格式一壞整份就沒了。 */
+/* v466：把「上次已經出過的句子」攤給模型看，並明講不可以再用。
+   只放前 24 句——再多會把 prompt 撐大又沒有額外效果（真的要避開的就是最近那一批）。 */
+function _aiAvoidNote(avoid) {
+  const list = (avoid || []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 24);
+  if (!list.length) return '';
+  return `\nALREADY USED — this is a REVIEW round, so the student has seen these before.
+Every sentence you write must be about a DIFFERENT situation from all of these.
+Do not reuse their people, places, objects or verbs, and do not just swap one word:
+${list.map(x => '  × ' + x).join('\n')}\n\n`;
+}
+
+function _aiTeacherNote(t) {
+  const s2 = String(t || '').trim().slice(0, 600);
+  if (!s2) return '';
+  return "TEACHER'S SPECIAL REQUEST — follow it exactly, it outranks your own preferences.\n" +
+    'It can change WHAT you write (the topic, the wording, which points to cover, how many),\n' +
+    'but it can NEVER change the output FORMAT or the JSON rules above.\n\"\"\"\n' + s2 + '\n\"\"\"\n\n';
+}
+
+const _STORY_CJK_G = /[\u3400-\u9fff\uf900-\ufaff]/g;
+/* 嚴格版的「同一個字」：本尊，或上面列得出來的變化形。
+   找「文章裡哪一個字要挖掉」時一定要用這個版本——寬鬆版會把 trapeze 當成 trap。 */
+function _storyIsForm(term, token) {
+  const t = _storyNorm(term), f = _storyNorm(token);
+  if (!t || !f) return false;
+  return f === t || _storyHint(term, token) !== '';
+}
+/* 寬鬆版：只用來「檢查有沒有用到」，允許沒列到的變化形（漏判比誤判傷害大）。 */
+function _storySame(a, b) {
+  const x = _storyNorm(a), y = _storyNorm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [lo, hi] = x.length <= y.length ? [x, y] : [y, x];
+  if (hi.startsWith(lo) && hi.length - lo.length <= 4) return true;
+  if (lo.endsWith('y') && hi.startsWith(lo.slice(0, -1) + 'i') && hi.length - lo.length <= 4) return true;
+  return false;
+}
+
+/* ⚠ AI 生出來的東西一律用程式驗一次（這個專案吃過虧）：
+   哪些字沒被用到、哪些空格根本不是這一課的字、有沒有在括號外面洩答案。 */
+function storyCheck(passage, words, opt) {
+  const partial = !!(opt && opt.partial);      // v445：只挖 5 格，其他目標字留在文章裡（Word Bank 的誘答）
+  const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
+  const blanks = storyBlanks(passage);
+  const used = [], missing = [];
+  // 括號外面直接出現目標字＝答案被洩漏
+  const bare = String(passage || '').replace(/\[[^\]]*\](?:\([^)]*\))?/g, ' ');
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const inBare = (t) => new RegExp('\\b' + esc(t) + '\\w*\\b', 'i').test(bare);
+  terms.forEach(t => {
+    const hasBlank = blanks.some(b => _storySame(b.answer, t));
+    ((hasBlank || (partial && inBare(t))) ? used : missing).push(t);   // partial：有出現在文章裡就算用到了
+  });
+  const extra = blanks.filter(b => !terms.some(t => _storySame(b.answer, t))).map(b => b.answer);
+  // partial：沒挖的字本來就會出現在文章裡，只有「挖了又出現」才是洩漏
+  const leaked = terms.filter(t => (!partial || blanks.some(b => _storySame(b.answer, t))) &&
+    new RegExp('\\b' + esc(t) + '\\b', 'i').test(bare));
+  // v443（Alan：「短文一定只能英文，我不要中文的」）——整篇出現中文就是不合格，不是小瑕疵
+  const zh = (String(passage || '').match(_STORY_CJK_G) || []).join('');
+  return { blanks: blanks.length, used, missing, extra, leaked, zh };
+}
+/* 分數越低越好——多輪重生時用來挑「最不糟的那一篇」 */
+function _storyScore(c) {
+  // 中文權重最重：寧可拿一篇漏字的英文，也不要一篇中文的
+  return (c.zh ? 99 : 0) + (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v407（Alan：「這個新增題型我要百分之百能夠成功」）
+   ──────────────────────────────────────────────────────────────────────────
+   v406 只驗不修：驗到問題就把琥珀色警告丟給老師，等於把 AI 的失誤變成老師的工。
+   這一版改成三層，只有全部落空才會讓老師看到問題：
+     ① 程式修（storyFix）——修得掉的一律當場修好，不重打 AI：
+        · 挖到不是這一課的字 → 把括號拆掉，文字本身不動
+        · 目標字寫在括號外面 → 直接挖成空格
+          （這一步同時解決「漏了這個字」與「答案被洩漏」——
+           AI 最常見的失誤就是「字有寫進去、只是忘了加括號」）
+     ② 重生（最多 3 輪）——把「這次哪裡不合格」原原本本寫進下一輪的 prompt
+     ③ 保底（rescue）——還漏的字，直接把「填空題」那一份現成的例句接到故事後面。
+        填空題本來就跟短文同一批平行生成，所以這一步不用多等 AI。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const _STORY_MAX_BLANK = 3;   // 同一個字最多挖幾格（避免整篇被同一個字洗版）
+
+/* 找出「不在任何括號裡」的第一個目標字（含變化形）。回傳 {i, form} 或 null。 */
+function _storyFindBare(passage, term, from) {
+  const p = String(passage || '');
+  // 先算出所有「受保護」的區間：[答案] 與緊接著的 (提示) 都不能動
+  const guard = [];
+  const gre = /\[[^\]]*\](?:\([^)]*\))?/g;
+  let g;
+  while ((g = gre.exec(p))) guard.push([g.index, g.index + g[0].length]);
+  const inGuard = (i) => guard.some(([a, b]) => i >= a && i < b);
+  const wre = /[A-Za-z]+/g;
+  let m;
+  wre.lastIndex = from || 0;
+  while ((m = wre.exec(p))) {
+    if (inGuard(m.index)) continue;
+    if (_storyIsForm(term, m[0])) return { i: m.index, form: m[0] };
+  }
+  return null;
+}
+
+/* 程式修補。回傳 { passage, check, notes }——notes 是給老師看的「我幫你改了什麼」。 */
+function storyFix(passage, words) {
+  const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
+  let p = String(passage || '').trim();
+  const notes = [];
+
+  // ① 不是這一課的字被挖走 → 拆掉括號與提示，句子本身完全不動
+  const dropped = [];
+  p = p.replace(/\[([^\]]+)\](?:\([^)]*\))?/g, (m, a) => {
+    if (terms.some(t => _storySame(a, t))) return m;
+    dropped.push(a.trim());
+    return a;
+  });
+  if (dropped.length) notes.push(`拆掉不該挖的空格：${dropped.join('、')}`);
+
+  // ② 目標字出現在括號外面 → 就地挖成空格（順便把字尾提示補上）
+  const wrapped = [];
+  terms.forEach(t => {
+    for (let n = 0; n < _STORY_MAX_BLANK; n++) {
+      if (storyBlanks(p).filter(b => _storySame(b.answer, t)).length >= _STORY_MAX_BLANK) break;
+      const hit = _storyFindBare(p, t);
+      if (!hit) break;
+      const h = _storyHint(t, hit.form);
+      p = p.slice(0, hit.i) + '[' + hit.form + ']' + (h ? '(' + h + ')' : '') + p.slice(hit.i + hit.form.length);
+      wrapped.push(hit.form);
+    }
+  });
+  if (wrapped.length) notes.push(`補挖成空格：${wrapped.join('、')}`);
+
+  /* ③ v443：字尾提示一律由程式重算。
+     實測 AI 會自己發明詞性標記——[storm](n)、[check](v)、[quiet](adj)——
+     小朋友看到的是作業紙上的 ______(ing) 那種「字尾」提示，標詞性只會讓他們更混亂。
+     沒有變化形的字就不該有提示（[storm](s) 也是錯的，storm 本來就沒有加 s）。 */
+  const badHints = [];
+  p = p.replace(/\[([^\]]+)\](\(([^)]*)\))?/g, (m, a, _h, hv) => {
+    const t = terms.find(x => _storySame(x, a) || _storyIsForm(x, a));
+    const want = t ? _storyHint(t, a) : '';
+    const now = String(hv == null ? '' : hv).trim();
+    if (now === want) return m;
+    if (now) badHints.push(now);
+    return '[' + a + ']' + (want ? '(' + want + ')' : '');
+  });
+  if (badHints.length) notes.push(`拿掉不對的字尾提示：${badHints.join('、')}`);
+
+  return { passage: p, check: storyCheck(p, terms), notes };
+}
+
+/* ③ 保底：把「填空題」現成的例句接到故事後面，一個漏掉的字一句。
+   ex 的形狀就是 aiMakeVocabExercises 的輸出（{ term, sentence:'… ___ …', answer }）。 */
+function _storyRescue(passage, missing, ex) {
+  if (!Array.isArray(ex) || !ex.length || !missing.length) return { passage, added: [] };
+  let out = String(passage || '').replace(/\s+$/, '');
+  const added = [];
+  missing.forEach(t => {
+    const e = ex.find(x => x && (_storySame(x.term, t) || _storySame(x.answer, t)));
+    const sent = e && String(e.sentence || '').trim();
+    if (!sent || !/_{2,}|___/.test(sent)) return;
+    const ans = String(e.answer || t).trim();
+    const h = _storyHint(t, ans);
+    const s = sent.replace(/_+/, '[' + ans + ']' + (h ? '(' + h + ')' : ''));
+    if (s.indexOf('[') < 0) return;
+    out += ' ' + s;
+    added.push(t);
+  });
+  return { passage: out, added };
+}
+
+const QS_MAX_Q = 10;                 // 一般練習：一個單元最多 10 題
+const QS_SPLIT = {
+  /* 有自己規矩的題型（Alan 指名的兩種） */
+  story: { per: 6, bank: 10 },       // 一篇挖 6 格；Word Bank 給 10 個字（多的當誘答）
+  sense: { per: 8 },                 // 字義選擇要讀短文，比較累，一次 8 題
+};
+/* 切成每份最多 per 個，而且**盡量平均**（Alan：「幫我平均分散」）。
+   ⚠ 24 個、上限 10 → 要 8/8/8，不是 10/10/4。
+     直接 slice 會留下一個很短的尾巴，看起來像出錯了。 */
+function qsChunkEven(list, per) {
+  const arr = Array.isArray(list) ? list.slice() : [];
+  const cap = Math.max(1, +per || QS_MAX_Q);
+  if (arr.length <= cap) return arr.length ? [arr] : [];
+  const n = Math.ceil(arr.length / cap);
+  const out = [];
+  let at = 0;
+  for (let i = 0; i < n; i++) {
+    /* 剩下的平均分給還沒切的份數——餘數會被前面幾份各多吃一個，
+       所以每一份最多只差 1 個。 */
+    const take = Math.ceil((arr.length - at) / (n - i));
+    out.push(arr.slice(at, at + take));
+    at += take;
+  }
+  return out;
+}
+/* 一份 N 份的標題：只有一份時**完全不要加字尾**（不要動到原本就好好的流程）。
+   ⚠⚠ 加字尾就要同時提供「把字尾拿掉」——站上有好幾個地方是**用標題比對**
+     來認題型的（qsKindsInGroup 的 `/字義選擇$/` 就是），
+     標題後面多了「（1/3）」它就認不出來了，而且**不會報錯**，
+     只會讓「只補漏掉的題型」重複生一份字義選擇。 */
+function qsPartTitle(title, i, total) {
+  return total > 1 ? `${title}（${i + 1}/${total}）` : title;
+}
+/* 短文填空的 Word Bank：答案全放，再從整池抽誘答補到 want 個，然後洗牌。
+   ⚠ 不洗牌的話答案會整排排在前面＝直接送分。 */
+function qsStoryBank(answers, allTerms, want) {
+  const norm = (x) => String(x || '').trim();
+  const ans = (answers || []).map(norm).filter(Boolean);
+  const low = ans.map(x => x.toLowerCase());
+  const rest = (allTerms || []).map(norm).filter(x => x && low.indexOf(x.toLowerCase()) < 0);
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
+  const bank = ans.concat(rest.slice(0, Math.max(0, (+want || QS_SPLIT.story.bank) - ans.length)));
+  for (let i = bank.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = bank[i]; bank[i] = bank[j]; bank[j] = t; }
+  return bank;
+}
+
+const _STORY_PICK = 5;
+function storyPick(passage, n) {
+  const p = String(passage || '');
+  const re = /\[([^\]]+)\](\([^)]*\))?/g;
+  const hits = [];
+  let m;
+  while ((m = re.exec(p))) hits.push({ i: m.index, len: m[0].length, word: m[1], key: _storyNorm(m[1]) });
+  if (hits.length <= n || n < 1) return p;
+  /* ⚠ 同一個字要嘛整組留、要嘛整組還原。
+     實測踩過：AI 寫了兩次 lights、兩格都挖，只留一格之後另一格變回原文
+     ＝答案就寫在文章裡（真 AI 第一次跑就中）。所以這裡以「字」為單位挑，不是以「格」。 */
+  const keys = [];
+  hits.forEach(h => { if (keys.indexOf(h.key) < 0) keys.push(h.key); });
+  const size = (k) => hits.filter(h => h.key === k).length;
+  const keep = new Set();
+  let total = 0;
+  const want = Math.min(keys.length, Math.max(1, n));
+  for (let k = 0; k < want && total < n; k++) {
+    const key = keys[want === 1 ? 0 : Math.round(k * (keys.length - 1) / (want - 1))];
+    if (keep.has(key)) continue;
+    keep.add(key); total += size(key);
+  }
+  let out = '', last = 0;
+  hits.forEach(h => {
+    if (keep.has(h.key)) return;
+    out += p.slice(last, h.i) + h.word;
+    last = h.i + h.len;
+  });
+  return out + p.slice(last);
+}
+
+async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3, blanks = _STORY_PICK, teacherNote = '', avoid = [] } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];   // v442：短文也跟著年級（低年級句子更短更白話）
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
+  /* v445：交出去之前只留幾格——挖太多格，前後文就不夠孩子推答案了 */
+  const finish = (b) => {
+    const nb = Math.max(2, +blanks || _STORY_PICK);
+    const before = storyBlanks(b.passage).length;
+    let picked = storyPick(b.passage, nb);
+    // 保險絲：挑完如果反而洩漏了答案（同一個字挖一格、另一格變回原文），就整篇照原樣全挖
+    if (storyCheck(picked, list, { partial: true }).leaked.length > storyCheck(b.passage, list).leaked.length) picked = b.passage;
+    const n = storyBlanks(picked).length;
+    return { ...b, passage: picked, full: b.passage, partial: true,
+             check: storyCheck(picked, list, { partial: true }),
+             fixes: (b.fixes || []).concat(n < before ? ['只留 ' + n + ' 個空格（Word Bank 還是全部 ' + list.length + ' 個字，其他當誘答）'] : []) };
+  };
+  const head =
+    `LEVEL: ${band.label}\n${band.note}\nEvery blank must still be findable from the words around it — that rule never changes.\n\n` +
+    (hint ? `Story topic / lesson title: ${hint}\n` : '') +
+    _aiTeacherNote(teacherNote) +
+    _aiAvoidNote(avoid) +          // v466：複習時不可以寫出跟上次一樣的短文
+    'Target words (use each exactly once):\n' +
+    list.map(w => `- ${w.term}${w.zh ? `  (${w.zh})` : ''}`).join('\n');
+
+  let best = null, lastErr = null, note = '';
+  for (let round = 0; round < Math.max(1, rounds); round++) {
+    let r = null;
+    try {
+      /* max_tokens：一篇 140 字的故事約 250 token，留兩倍餘裕。
+         ⚠ 不要砍太低——被 max_tokens 截斷的話 JSON 會壞掉，整批重試反而更慢。 */
+      r = await _aiAsk({
+        model: 'claude-haiku-4-5', max_tokens: 900,
+        system: AI_STORY_SYS,
+        messages: [{ role: 'user', content: head + note }],
+      }, (data) => {
+        const txt = data?.content?.[0]?.text || data?.text || '';
+        const o = JSON.parse(_aiStripFence(txt));
+        // v443：中文的短文直接不收（_aiAsk 會自己再問一次，比整輪重來快）
+        const bad = !o || typeof o.passage !== 'string' || o.passage.indexOf('[') < 0 || _STORY_CJK_G.test(o.passage);
+        _STORY_CJK_G.lastIndex = 0;
+        return bad ? null : o;
+      });
+    } catch (e) { lastErr = e; continue; }
+
+    const fixed = storyFix(r.passage, list);
+    const cand = {
+      title: String(r.title || '').trim(),
+      passage: fixed.passage, check: fixed.check, fixes: fixed.notes, rounds: round + 1,
+    };
+    if (!_storyScore(cand.check)) return finish(cand);               // 完全乾淨，收工（最後只留 5 格）
+    if (!best || _storyScore(cand.check) < _storyScore(best.check)) best = cand;
+
+    /* 下一輪把「這次哪裡不合格」原原本本告訴它。
+       泛泛地說「請再試一次」沒有用（v382 學到的），要指名道姓。 */
+    const c = cand.check;
+    note = '\n\nYour previous attempt was rejected. Fix exactly these problems:\n' +
+      (c.missing.length ? `- These target words were never used: ${c.missing.join(', ')}\n` : '') +
+      (c.leaked.length  ? `- These target words appear OUTSIDE their brackets, which gives the answer away: ${c.leaked.join(', ')}\n` : '') +
+      (c.extra.length   ? `- You bracketed words that are not targets: ${c.extra.join(', ')}\n` : '') +
+      (c.zh             ? `- You wrote Chinese characters (${c.zh.slice(0, 20)}). The story must be 100% English.\n` : '') +
+      'Write a NEW story that uses every target word exactly once, each one inside brackets.';
+  }
+
+  if (!best) throw lastErr || new Error('AI 這次沒有生出短文，請再試一次。');
+
+  // ③ 還漏字 → 用「填空題」那一份現成的例句補上（不用再等 AI）
+  if (best.check.missing.length && rescue) {
+    let ex = null;
+    try { ex = await Promise.resolve(typeof rescue === 'function' ? rescue() : rescue); } catch (e) { ex = null; }
+    const pat = _storyRescue(best.passage, best.check.missing, ex);
+    if (pat.added.length) {
+      const again = storyFix(pat.passage, list);
+      best = { ...best, passage: again.passage, check: again.check,
+               fixes: (best.fixes || []).concat(again.notes, [`用填空題的例句補上：${pat.added.join('、')}`]) };
+    }
+  }
+  return finish(best);
+}
+
+/* ══ v542 📄 短文填空出好幾篇 ═══════════════════════════════════════
+   Alan（合併 24 個單字）：「短文填空幫我出共三篇，都幫我挖空 6 格，
+   Word Bank 每一篇給隨機 10 個單字」。
+
+   ⭐⭐ **幾篇、哪幾個字、挖幾格，全部由程式決定**，AI 只負責把一篇寫好。
+     他已經試過在「特別要求」裡叫 AI 拆三篇——做不到。
+     （v417／v488 同一類：程式自己會做的事叫模型做，它為了服從會謊報。）
+   ⚠ 每一篇都要**不一樣**：前面寫過的整篇當 avoid 餵下去
+     （v466 學到的——只說「要不一樣」沒有用）。
+   ⚠ 一篇失敗不可以拖垮其他篇，但要回報出來（v473 的教訓：
+     .catch(()=>null) 會讓老師只看到「少一篇」卻不知道為什麼）。 */
+async function aiMakeVocabStories(words, opts = {}) {
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  const per = Math.max(2, +opts.per || QS_SPLIT.story.per);
+  /* 幾篇＝照「一篇挖幾格」去切。⚠ 一篇故事要寫得順，字太少寫不成，
+     所以每一批至少 3 個字（跟 canDo.story 的門檻一樣）。 */
+  const batches = qsChunkEven(list, Math.max(3, per));
+  const out = [];
+  const seen = (opts.avoid || []).slice();
+  for (let i = 0; i < batches.length; i++) {
+    try {
+      const st = await aiMakeVocabStory(batches[i], {
+        ...opts, avoid: seen,
+        /* 這一批有幾個字就挖幾格（最多 per 格）——
+           批次本來就是照 per 切的，所以通常剛好 */
+        blanks: Math.min(per, batches[i].length),
+      });
+      if (st && st.passage) {
+        out.push({ ...st, words: batches[i] });
+        seen.push(String(st.full || st.passage || '').replace(/[\[\]]/g, ''));
+      }
+    } catch (e) {
+      out.push({ error: (e && e.message) || '這一篇沒出來', words: batches[i] });
+    }
+  }
+  return out;
+}
+
+/* ── v392: AI 呼叫的三個共用小工具 ──────────────────────────────────────
+   為什麼要加：出一套時態題原本要 118 秒，老師在校稿頁前面乾等。
+   量出來的延遲公式是 latency ≈ 1.4s + output_tokens / 176 ——
+   幾乎全部是「吐字時間」，跟 prompt 長短、max_tokens 都無關。
+   所以只有兩條路能快：把請求拆小、以及把請求同時送出去。 */
+
+/* pMap：有上限的平行 map。單一請求失敗只讓那一格變 null，不會拖垮整批
+   （呼叫端本來就要驗證＋補不足，null 就當成「這一發沒中」）。
+   端點是 HTTP/2，實測 30 個請求同時打全部成功、沒有被限流；
+   瀏覽器對 HTTP/2 也沒有「每網域 6 條連線」的限制，所以平行在前端真的會生效。 */
+async function pMap(list, fn, limit = 8) {
+  const out = new Array(list.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < list.length) {
+      const k = i++;
+      try { out[k] = await fn(list[k], k); } catch (e) { out[k] = null; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+  return out;
+}
+
+/* words: [{ term, zh }]（zh 只是給 AI 當語意提示，可省略）
+   回傳 [{ word, def, sentence, answer, explain }]，順序與輸入相同。 */
+/* v392: 改成「先切成一堆小請求，再一次平行送出去」。
+   chunk 從 10 縮成 2：延遲幾乎全是吐字時間（≈ output_tokens / 176），
+   所以每個請求要吐的字變少＝每個請求本身就變快；再加上全部同時跑，
+   20 個單字實測從 20.8 秒降到 3 秒上下。
+   ⚠ 對回輸入順序的方式完全沒變（part.forEach((w,k) => parsed[k]），
+   校稿頁看到的欄位、順序、中文解說都跟以前一樣。 */
+/* v466（Alan：「我想製作一個複習的方式，但題目我又要重新生成，
+   如果不生成題目又一樣，小朋友會背答案」）：
+   avoid ＝ 上一次出過的句子。不傳進去的話，同一批單字再出一次，
+   模型很可能寫出幾乎一樣的句子（v461 的分一分就實測過這件事：
+   只說「要不一樣」沒有用，要把「不可以用的」直接攤在它面前）。 */
+async function aiMakeVocabExercises(words, { onProgress, chunk = 2, hint = '', grade = 'g4', teacherNote = '', avoid = [], _noRetry = false } = {}) {
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
+  if (!list.length) return [];
+  const size = Math.max(1, +chunk || 1);
+  const parts = [];
+  for (let i = 0; i < list.length; i += size) parts.push(list.slice(i, i + size));
+
+  let doneWords = 0;
+  let timedOut = false;
+  const packs = await pMap(parts, async (part) => {
+    const userMsg =
+      `LEVEL: ${band.label}\n${band.note}\nThe blank's sentence must ALWAYS contain a clue that makes the answer findable — that rule never changes.\n\n` +
+      (hint ? `Context / topic: ${hint}\n` : '') +
+      _aiTeacherNote(teacherNote) +
+      _aiAvoidNote(avoid) +
+      'Target words:\n' +
+      /* v461（Alan：「有時候老師會直接給相對應的 definition，就直接用就可以了，
+         不需要 AI 生成；但如果沒有就還是需要」）：老師貼了定義就原封不動送進 prompt，
+         要求 AI 原樣抄回來。這樣「配對、選擇題、解說」用到的定義全部是老師的那一句，
+         不會出現「配對是老師的講法、選擇題是 AI 另一套講法」。
+         ⚠ 不能因此就整個字不送給 AI——例句（填空／短文）還是要它出。 */
+      part.map(w => `- ${w.term}${w.zh ? `  (Chinese meaning: ${w.zh})` : ''}`
+        + (w.def ? `  [TEACHER'S DEFINITION: "${String(w.def).replace(/"/g, "'")}"]` : '')).join('\n');
+    try {
+      /* max_tokens 700：chunk=2 時實測用量遠低於此，留約 1.6 倍餘裕當保險絲。
+         ⚠ 不要再往下砍——一旦 stop_reason 變成 max_tokens，JSON 會被截斷、
+         解析直接失敗然後整批重試，反而更慢。chunk 被呼叫端調大時按比例放寬。 */
+      const arr = await _aiAsk({
+        model: 'claude-haiku-4-5', max_tokens: Math.max(700, part.length * 350),
+        system: AI_VOCAB_SYS,
+        messages: [{ role: 'user', content: userMsg }],
+      }, (data) => {
+        const txt = data?.content?.[0]?.text || data?.text || '';
+        const a = JSON.parse(_aiStripFence(txt));
+        return Array.isArray(a) ? a : null;
+      });
+      return arr;
+    } catch (e) {
+      if (e && e.timeout) timedOut = true;
+      throw e;
+    } finally {
+      // 進度語意不變：仍然是「已完成幾個字 / 總共幾個字」，只是 chunk 變小、回報變密
+      doneWords += part.length;
+      if (onProgress) onProgress(Math.min(doneWords, list.length), list.length);
+    }
+  }, 10);
+
+  if (packs.some(p => !p)) {
+    throw new Error(timedOut
+      ? 'AI 太久沒有回應，請再試一次。'
+      : 'AI 出題失敗（回傳格式看不懂），請再試一次。');
+  }
+
+  const out = [];
+  parts.forEach((part, pi) => {
+    const parsed = packs[pi] || [];
+    // 用輸入的順序對回去，AI 少給或多給都不會錯位
+    part.forEach((w, k) => {
+      const r = parsed[k] || {};
+      out.push({
+        term: w.term,
+        zh: w.zh || String(r.zh || '').trim(),   // 老師自己寫的中文優先，沒寫才用 AI 的
+        word: String(r.word || w.term).trim(),
+        def: String(r.def || '').trim(),
+        sentence: String(r.sentence || '').trim(),
+        answer: String(r.answer || w.term).trim(),
+        explain: String(r.explain || '').trim(),
+      });
+    });
+  });
+  /* 🔴 v476（Alan：「為什麼我的配對連線有一個是中文？」）：
+     AI 偶爾會漏掉某個字的 def（Alan 那次是 remains）。下游 qsBuildItems 的退路是
+     「沒有英文定義就用中文」→ 八個英文定義裡夾一個「n. 遺骸；殘留物」。
+     與其在下游補一個不一致的東西，不如**把漏掉的那幾個再問一次**（跟 v468 同一招）。 */
+  const missing = _noRetry ? [] : out.filter(r => !r.def);
+  if (missing.length && missing.length < out.length) {
+    try {
+      const again = await aiMakeVocabExercises(missing.map(r => ({ term: r.term, zh: r.zh })),
+        { chunk: Math.max(1, +chunk || 1), hint, grade, teacherNote, avoid, _noRetry: true });
+      again.forEach(r2 => {
+        if (!r2 || !r2.def) return;
+        const hit = out.find(r => r.term === r2.term && !r.def);
+        if (hit) { hit.def = r2.def; if (!hit.sentence) hit.sentence = r2.sentence; }
+      });
+    } catch (e) { /* 再問一次也失敗就算了——下游還有退路，不該整份出題跟著失敗 */ }
+  }
+  return out;
+}
+
+// ── v382: AI 出時態題目（五大時態核心題庫）────────────────────────────────
+// Type A 單句填空 → type-answer（打字作答，大小寫不計、拼字與形式要對）
+// Type B 短文填空 → cloze（passage 用 [答案](原形) 標記，括號會顯示成空格旁的提示）
+const GR_TENSES = {
+  t1: {
+    zh: '現在簡單式', en: 'Simple Present Tense',
+    must: `I/You/We/They + base form. He/She/It + -s or -es. consonant+y -> -ies. have -> has. do -> does. be: am/is/are.
+Negatives: do not / does not + base form. Questions: Do / Does + subject + base form.
+Meaning: habits, routines, schedules, facts and general truths.
+Frequency adverbs: always, usually, often, sometimes, never.
+Time clues: every day, on Mondays, once a week, after dinner.`,
+    avoid: `Do not use past or future time clues. Do not use continuous forms.`,
+  },
+  t2: {
+    zh: '過去簡單式', en: 'Simple Past Tense',
+    must: `Regular verbs + -ed. Verbs ending in e + -d. consonant+y -> -ied. short vowel + single consonant -> double the consonant + -ed.
+Common irregular verbs. be: was / were.
+Negatives: did not + base form. Questions: Did + subject + base form.
+Meaning: actions finished in the past.
+Time clues: yesterday, last night, last week, two days ago, in 2025.`,
+    avoid: `Do not use present perfect. Every item must have a clear finished-past time clue or context.`,
+  },
+  t3: {
+    zh: '未來簡單式', en: 'Simple Future Tense',
+    must: `will + base form. will be. Negatives: will not / won't + base form. Questions: Will + subject + base form.
+Meaning: predictions, promises, sudden decisions, future events.
+Time clues: tomorrow, next week, soon, later, in the future, one day.`,
+    avoid: `NEVER use "be going to" anywhere — the student would not know which form the site wants. Only "will".`,
+  },
+  t4: {
+    zh: '現在進行式', en: 'Present Progressive Tense',
+    must: `am / is / are + V-ing. Normal verbs + -ing. Verbs ending in e -> drop e + -ing. short vowel + single consonant -> double the consonant + -ing. -ie -> -ying.
+Negatives: am not / is not / are not + V-ing. Questions: Am / Is / Are + subject + V-ing.
+Meaning: happening right now.
+Time clues: now, right now, at the moment, Look!, Listen!`,
+    avoid: `NEVER use stative verbs that do not take the progressive: know, believe, understand, need, like, want, hate.`,
+  },
+  t5: {
+    zh: '現在完成式', en: 'Present Perfect Tense',
+    must: `have / has + past participle. Regular and common irregular past participles. He/She/It + has. I/You/We/They + have.
+Negatives: have not / has not + past participle. Questions: Have / Has + subject + past participle.
+Meaning: finished but connected to now, life experience, state continuing from past until now.
+Time clues: already, just, yet, ever, never, since, for.`,
+    avoid: `NEVER use a finished past time such as yesterday, last week, two days ago, this morning, just now, today.
+The answer must be the WHOLE verb phrase in one blank, e.g. "have finished" / "has left".
+Do not use "have gone to" (it means the person is still away) — use "have been to" for experience.
+NEVER use the present perfect CONTINUOUS (have/has been + V-ing) — that is a different tense and is not in this unit.
+Do not mix past-tense verbs into the same sentence or passage.`,
+  },
+};
+
+const _GR_SYS = (t, kind, n) => {
+  const T = GR_TENSES[t];
+  return `You write grammar drills for Taiwanese elementary students (Grade 4-6, CEFR A1-A2).
+Questions in English. Explanations in Traditional Chinese.
+Output ONLY valid JSON. No prose, no markdown fences.
+
+TARGET TENSE: ${T.en}（${T.zh}）
+The student must practise:
+${T.must}
+HARD AVOID:
+${T.avoid}
+
+UNIVERSAL RULES
+- Every blank has EXACTLY ONE correct answer. Never write a sentence where two forms both work.
+- Give enough time clues / context that the tense is unambiguous.
+- Sentences must be complete and grammatical apart from the blank — check prepositions, articles and objects (e.g. "go to the supermarket", not "go the supermarket").
+- Use Taiwanese elementary school life, family, food, animals, sports, science, travel.
+- Vary the subject, verb and situation every time. Do NOT just swap names.
+
+⚠⚠ THE SITE HAS ONE INPUT BOX PER BLANK. THIS IS THE MOST IMPORTANT RULE.
+- EXACTLY ONE blank per sentence. Never two blanks in the same sentence.
+- The answer may ONLY contain verb forms built from the base verb in the parentheses
+  (plus a required auxiliary such as have/has/will/am/is/are).
+- The answer must NEVER contain an adverb or a negative word.
+  already / just / never / ever / yet / always / usually / not — these stay as ordinary
+  words inside the sentence, OUTSIDE the blank. The student cannot guess them from "(finish)".
+- For NEGATIVE items: write the auxiliary and "not" in the sentence, blank only the main verb.
+    GOOD: \`Kevin does not ________ video games on school nights. (play)\`  → play
+    BAD:  \`Kevin ________ video games on school nights. (not play)\`
+- For QUESTION items: blank only the auxiliary at the start.
+    GOOD: \`________ your sister like animals? (do)\`  → Does
+    BAD:  \`________ you ________ a panda before? (see)\`
+- Correct placement of adverbs:
+    GOOD: \`I ________ my homework already. (finish)\`  → have finished
+    BAD:  \`I ________ my homework. (finish)\` with answer "have already finished"
+${kind === 'A' ? `
+OUTPUT (${n} items):
+{"items":[{"prompt":"<full sentence with ________ and the base verb in parentheses at the end>","answer":"<exact word(s) filling the blank>","explain":"<Traditional Chinese, 15-40 characters, say why>"}]}
+- prompt format exactly like: \`Eric ________ his teeth before breakfast every morning. (brush)\`
+  — 8 underscores, one space before the parentheses, base verb last.
+- answer is only what goes in the blank (may be more than one word, e.g. "will visit", "have finished").
+- Across the ${n} items, cover the full range listed above: different subjects, -s/-es/-ies, irregular forms, be-verbs, at least one negative and at least one question.`
+: `
+OUTPUT (${n} passage${n > 1 ? 's' : ''}):
+{"items":[{"title":"<short English title>","passage":"<the passage>"}]}
+- Each passage is ONE connected story of 80-130 words about a single situation. NOT unrelated sentences.
+- Mark a blank like this: \`Lydia usually [wakes](wake) up at 6:30.\`  → [answer](base form)
+- ⚠ EXACTLY 5 to 8 blanks per passage. COUNT THEM before you answer. Most verbs must stay as complete words so the story reads naturally.
+- Every blank must be in the target tense. The WHOLE passage stays in that tense — never mix in past-tense verbs.
+- ⚠ Inside [ ] put ONLY verb forms built from the base form in ( ). Adverbs stay outside the brackets:
+    GOOD: \`We have already [finished](finish) the project.\`
+    BAD:  \`We [have already finished](finish) the project.\`
+    BAD:  \`Tom [has never been](be) to the zoo.\`  → write \`Tom has never [been](be) to the zoo.\``}
+
+${_AI_MINIFY}`;
+};
+
+/* v392: 改走 _aiAsk（60 秒逾時＋429/500/529 才退避的三次重試）。
+   原本是 catch 後立刻重試、不看 status，兩次會在 100ms 內燒光＝形同沒有重試。 */
+async function _grCall(system, user, maxTokens) {
+  return _aiAsk(
+    { model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000, system, messages: [{ role: 'user', content: user }] },
+    (data) => {
+      const arr = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+      return (arr && Array.isArray(arr.items)) ? arr.items : null;
+    }
+  );
+}
+
+/* ⚠ 只靠 prompt 講不動——模型很愛出「____ never ____」這種兩個空格的題目
+   （那是課本的寫法，但這裡只有一個輸入框），也很愛把 never/just/already
+   包進答案裡（學生看到「(see)」根本猜不到要加 never）。
+   所以改成「程式驗，不合格就丟掉重生」，不靠模型自律。 */
+const _GR_ADV = /\b(already|just|never|ever|yet|not|always|usually|often|sometimes|n't)\b/i;
+/* 結構對了不代表內容對。這些是實測反覆出現、但不在 Alan 規格裡的東西。 */
+const _GR_BAN = {
+  t1: [/\bwill\b/i, /\b(am|is|are)\s+\w+ing\b/i, /\bhave\s+\w+ed\b/i],
+  t2: [/\bwill\b/i, /\b(have|has)\s+/i, /\b(am|is|are)\s+\w+ing\b/i],
+  t3: [/\bgoing\s+to\b/i, /\b(have|has)\s+/i],
+  t4: [/\bwill\b/i, /\b(have|has)\s+/i,
+       /\b(know|believe|understand|need|like|want|hate|belong|own)\b/i],
+  // 現在完成進行式 (have been + V-ing) 不在規格裡；have gone 語意是「人還沒回來」，
+  // 跟「經驗」的 have been 混在一起小朋友一定亂 → 一律不收
+  t5: [/\bbeen\s+\w+ing\b/i, /\b(gone)\b/i, /\bwill\b/i],
+};
+function _grTenseOk(tense, x) {
+  const hay = `${x.prompt || ''} ${x.answer || ''}`;
+  if ((_GR_BAN[tense] || []).some(re => re.test(x.answer || ''))) return false;
+  if (/\s(to|in|on|at|for|with|of)$/i.test(String(x.answer || '').trim())) return false;  // 答案不該以介系詞結尾
+  if (tense === 't5' && /\b(yesterday|last (night|week|month|year)|ago|this morning|just now)\b/i.test(hay)) return false;
+  if (tense === 't2' && /\b(tomorrow|next (week|month|year)|already|yet|since)\b/i.test(hay)) return false;
+  return true;
+}
+function _grValidA(x) {
+  if (!x || !x.prompt || !x.answer) return false;
+  const blanks = (x.prompt.match(/_{3,}/g) || []).length;
+  if (blanks !== 1) return false;                       // 一句只能一個空格
+  if (!/\([^)]+\)\s*$/.test(x.prompt)) return false;    // 句尾要有 (原形動詞)
+  if (_GR_ADV.test(x.answer)) return false;             // 答案不可以含副詞／否定
+  if (/[?？]/.test(x.answer)) return false;
+  const w = x.answer.trim().split(/\s+/).length;
+  return w >= 1 && w <= 3;
+}
+/* 模型很愛把 never/already/just 包進 [ ] 裡（例 `[has never camped](camp)`），
+   學生看到「(camp)」根本不知道要打 never。重生幾次也照樣犯，所以直接程式修：
+   把助動詞＋副詞挪到空格外面，空格裡只留動詞本身 → `has never [camped](camp)`。
+   這樣「空格＝剛好缺的那一塊」，學生看得到的就是他要補的。 */
+function _grFixPassage(passage) {
+  let out = String(passage || '').replace(/\[([^\]]+)\]\(([^)]*)\)/g, (whole, inner, base) => {
+    if (!_GR_ADV.test(inner)) return whole;
+    const parts = inner.trim().split(/\s+/);
+    if (parts.length < 2) return whole;
+    const verb = parts[parts.length - 1];
+    const prefix = parts.slice(0, -1).join(' ');
+    return prefix + ' [' + verb + '](' + base + ')';
+  });
+  /* 挖太多空（規格是 5–8）也很常見——與其重生，不如把多的那幾個還原成完整的字，
+     文章反而更自然（規格本來就要求「不是所有動詞都挖空」）。從後面開始還原。 */
+  const MAX = 8;
+  let n = (out.match(/\[[^\]]+\]\([^)]*\)/g) || []).length;
+  while (n > MAX) {
+    out = out.replace(/\[([^\]]+)\]\(([^)]*)\)(?![\s\S]*\[[^\]]+\]\([^)]*\))/, '$1');
+    const m = (out.match(/\[[^\]]+\]\([^)]*\)/g) || []).length;
+    if (m === n) break;                 // 保險：沒減少就停，不要無限迴圈
+    n = m;
+  }
+  return out;
+}
+
+function _grValidB(p) {
+  if (!p || !p.passage) return false;
+  const n = grCountBlanks(p.passage);
+  if (n < 5 || n > 8) return false;
+  const pairs = p.passage.match(/\[([^\]]+)\]\(([^)]*)\)/g) || [];
+  if (pairs.length !== n) return false;                 // 每個 [ ] 後面都要有 ( )
+  return pairs.every(m => {
+    const inner = m.slice(1, m.indexOf(']'));
+    if (_GR_ADV.test(inner) || /[?？]/.test(inner)) return false;
+    return inner.trim().split(/\s+/).length <= 3;
+  });
+}
+
+/* v392: 平行請求要用的「主題種子」。
+   原本是「把前面出過的答案塞進 prompt 叫它不要重複」的鏈式脈絡，
+   一旦改平行就沒有前一題可以參考了。補救方式（實測有效）：
+   給每個平行請求不同的主題，回來後在程式端 dedupe。
+   實測 9 個平行 A 請求拿到 47 題有效、unique 也是 47（0 重複）。 */
+const _GR_SEEDS = ['school life', 'family', 'food and cooking', 'animals', 'sports',
+  'the weekend', 'the classroom', 'pets', 'travel', 'festivals', 'the night market', 'hobbies'];
+
+/* 超額生成的倍率＝實測通過率的倒數（第一波就一次把量做足，不要一輪一輪補）。
+   實測：t1 四批都 12/12（幾乎全過）；t5 只有 8/12、3/12、4/12、6/12，
+   B 短文 t5 更只有 2/5。其餘三個時態沒實測，取中間值。 */
+const _GR_OVER = { t1: 1.2, t2: 1.6, t3: 1.6, t4: 1.6, t5: 2.5 };
+const _GR_MAX_WAVE = 12;   // 一波最多 12 個請求（A、B 各自算）
+
+/* 產生一個時態的整套題目。
+   typeA: 幾「組」×10 題；typeB: 幾篇短文。回傳 { A:[[10題],[10題],…], B:[篇,…] }
+
+   v392 改法：原本是「外層 group、內層重生 round」兩層循序 for，組與組之間也排隊，
+   t5 四組 A + 五篇 B 實測要 118.6 秒。現在改成
+   「超額生成 → 全部平行送 → 驗過的丟進同一個池子 → 依組切 10 題 → 不夠才發第二波」，
+   預期同一組設定約 15 秒。
+   ⚠ 驗證器（_grValidA / _grTenseOk / _grValidB / _grFixPassage）與判斷順序
+     完全沒有動，是 v382 用血換來的規則。 */
+async function aiMakeGrammarSet({ tense, aGroups = 3, bCount = 5, onProgress } = {}) {
+  if (!GR_TENSES[tense]) throw new Error('不認得這個時態');
+  const total = aGroups + bCount;
+  const over = _GR_OVER[tense] || 1.6;
+  const needA = aGroups * 10;
+  if (needA <= 0 && bCount <= 0) return { A: [], B: [] };   // 什麼都沒勾＝不用打任何請求
+
+  const poolA = [], seenA = new Set();      // 驗過的 A 題（池子）
+  const poolB = [], seenB = new Set();      // 驗過的 B 短文
+  const rejB = [];                          // 沒驗過的 B：最後不夠時先收下讓老師校稿（別丟掉）
+  let timedOut = false;
+
+  /* 進度：對外仍然是「已完成幾個單元 / 共幾個單元」，總次數也還是 aGroups+bCount，
+     components-editor.jsx 的進度條不用動。差別只是現在由池子的存量換算出來。 */
+  let units = 0;
+  const emit = (n, label) => { while (units < n) { units++; if (onProgress) onProgress(units, total, label); } };
+  const sync = () => {
+    const aU = Math.min(aGroups, Math.floor(poolA.length / 10));
+    const bU = Math.min(bCount, poolB.length);
+    emit(aU + bU, `單句填空 ${aU}/${aGroups}、短文填空 ${bU}/${bCount}`);
+  };
+
+  const takeA = (items) => {
+    (items || []).map(x => ({
+      prompt: String(x.prompt || '').trim(),
+      answer: String(x.answer || '').trim(),
+      explain: String(x.explain || '').trim(),
+    })).forEach(x => {
+      const key = x.prompt.toLowerCase().replace(/\s+/g, ' ');
+      if (!key || seenA.has(key)) return;                     // 平行來的重複題目在這裡擋掉
+      if (!_grValidA(x) || !_grTenseOk(tense, x)) return;      // ⚠ 驗證邏輯與 v382 完全相同
+      seenA.add(key); poolA.push(x);
+    });
+  };
+  const takeB = (items) => {
+    const p = (items || [])[0] || {};
+    const cand = { title: String(p.title || '').trim(), passage: _grFixPassage(String(p.passage || '').trim()) };
+    const key = (cand.title + '|' + cand.passage.slice(0, 60)).toLowerCase();
+    if (seenB.has(key)) return;
+    seenB.add(key);
+    const blanksOk = (cand.passage.match(/\[([^\]]+)\]/g) || [])
+      .every(m => _grTenseOk(tense, { prompt: cand.passage, answer: m.slice(1, -1) }));
+    if (_grValidB(cand) && blanksOk) poolB.push(cand);
+    else rejB.push(cand);                                     // 不合格的留著當備胎，不整批丟掉
+  };
+
+  // 一波：把 A 與 B 的請求算成一個陣列，一次全部平行送出去
+  let seed = 0;
+  const runWave = async (nA, nB) => {
+    const jobs = [];
+    for (let i = 0; i < nA; i++) jobs.push('A');
+    for (let i = 0; i < nB; i++) jobs.push('B');
+    if (!jobs.length) return;
+    await pMap(jobs, async (kind) => {
+      const topic = _GR_SEEDS[seed++ % _GR_SEEDS.length];
+      try {
+        if (kind === 'A') {
+          // max_tokens 2600：12 題（含中文解說）實測用不到這麼多，留餘裕避免 JSON 被截斷
+          takeA(await _grCall(_GR_SYS(tense, 'A', 12),
+            `Generate 12 items. Set them in this topic area: ${topic}. Vary the subject and verb in every item.`, 2600));
+        } else {
+          // max_tokens 900：一篇 80–130 字的短文加標題，900 已經很寬鬆
+          takeB(await _grCall(_GR_SYS(tense, 'B', 1),
+            `Generate 1 passage about: ${topic}.`, 900));
+        }
+      } catch (e) {
+        if (e && e.timeout) timedOut = true;
+        throw e;                       // pMap 會把這一格記成 null，其他請求照跑
+      } finally { sync(); }
+      return true;
+    }, Math.min(jobs.length, 24));
+  };
+
+  const waveSize = (miss, per) => (miss <= 0 ? 0
+    : Math.max(1, Math.min(_GR_MAX_WAVE, Math.ceil(Math.ceil(miss / per) * over))));
+
+  for (let wave = 0; wave < 3; wave++) {
+    const missA = needA - poolA.length;
+    const missB = bCount - poolB.length;
+    if (wave > 0 && missA <= 0 && missB <= 0) break;
+    const before = poolA.length + poolB.length;
+    await runWave(waveSize(missA, 12), waveSize(missB, 1));
+    // 一整波下來池子完全沒長（例如整段網路斷了）＝再打也是白打
+    if (wave > 0 && poolA.length + poolB.length === before) break;
+  }
+
+  if (!poolA.length && !poolB.length && !rejB.length) {
+    throw new Error(timedOut ? 'AI 太久沒有回應，請再試一次。' : 'AI 出題失敗（回傳格式看不懂），請再試一次。');
+  }
+
+  /* 池子依組切成每組 10 題。
+     ⚠ 池子不夠時要「輪流發牌」而不是前面切滿、後面留空組——
+     components-editor.jsx 是拿最後一組當「驗收」（r.A.pop()），
+     照順序切會讓驗收剛好變成那個空的。以前一組一組出的時候，
+     湊不滿是每組都少一點，這裡維持同樣的手感。 */
+  const A = Array.from({ length: aGroups }, () => []);
+  if (poolA.length >= needA) {
+    for (let g = 0; g < aGroups; g++) A[g] = poolA.slice(g * 10, g * 10 + 10);
+  } else {
+    poolA.forEach((x, i) => A[i % aGroups].push(x));
+  }
+  // 短文：先用驗過的，不夠再用備胎（＝原本「最後一輪還是不合格就先收下」的行為）
+  const B = [];
+  for (let i = 0; i < bCount; i++) B.push(poolB[i] || rejB[i - poolB.length] || { title: '', passage: '' });
+
+  emit(total, '完成');
+  return { A, B };
+}
+/* v383: 產生單元開頭的「教學卡」。
+   刻意做成通用的（topic 可以是任何主題，不只文法），之後單字單元也能用同一套。 */
+const _LS_SYS = `You write the teaching page that comes BEFORE the practice, for Taiwanese
+elementary students (Grade 4-6, CEFR A1-A2). Explanations in Traditional Chinese, examples in English.
+Output ONLY valid JSON. No prose, no markdown fences.
+
+{"lead":"","uses":[{"zh":"","en":"","enZh":""}],"forms":[{"subj":"","form":"","eg":""}],
+ "clues":[""],"mistakes":[{"bad":"","good":"","why":""}],
+ "examples":[{"q":"","a":"","why":""}],"check":[{"q":"","options":["",""],"answer":0,"why":""}],
+ "outro":""}
+
+RULES
+- lead: ONE sentence in Traditional Chinese, ≤40 characters, saying what this is for. No jargon.
+- uses: 3-4 items. zh = when you use it (Traditional Chinese, ≤20 chars). en = one short English example
+  sentence showing it. enZh = the Chinese meaning of that sentence.
+- forms: 2-4 rows of the pattern table. subj = the subject group (e.g. "He / She / It"),
+  form = what happens to the verb in Traditional Chinese (e.g. "動詞 + s / es"), eg = one English example.
+- clues: 4-6 English signal words/phrases that tell you it is this pattern.
+- mistakes: 2-3 of the mistakes Taiwanese kids actually make. bad = the wrong English sentence,
+  good = the corrected one, why = Traditional Chinese, ≤35 characters.
+- examples: 2-3 WORKED examples. q = a question in the same format as the drills
+  (a full sentence with ________ and the base verb in parentheses at the end).
+  a = the answer. why = Traditional Chinese reasoning, ≤40 characters.
+- check: 3 quick multiple-choice questions. q = a full sentence with ________ .
+  options = 2-3 short choices (just the verb forms). answer = the INDEX of the correct one (0-based).
+  why = Traditional Chinese, ≤40 characters, explaining the answer.
+- outro: ONE encouraging sentence in Traditional Chinese telling them what to practise next.
+- Everything must be simple enough for a 10-year-old. Use school, family, food, animals, sport.
+${_AI_MINIFY}`;
+
+async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
+  const T = tense && GR_TENSES[tense];
+  const user = T
+    ? `Topic: ${T.en}（${T.zh}）\nThe student must learn:\n${T.must}\nMust avoid:\n${T.avoid}`
+    : `Topic: ${topic}\n${notes ? `Teacher notes: ${notes}` : ''}`;
+  // v392: 改走 _aiAsk（60 秒逾時＋退避重試）。原本是裸 fetch、失敗立刻重試一次。
+  try {
+    return await _aiAsk(
+      { model: 'claude-haiku-4-5', max_tokens: 2600, system: _LS_SYS, messages: [{ role: 'user', content: user }] },
+      (data) => {
+        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+        if (!o || !(o.lead || o.uses)) return null;
+        // answer 有時會回文字而不是索引 → 修回索引；超出範圍就丟掉那一題
+        o.check = (o.check || []).map(c => {
+          if (!c || !Array.isArray(c.options)) return null;
+          let a = c.answer;
+          if (typeof a === 'string') a = c.options.findIndex(x => String(x).trim() === a.trim());
+          if (typeof a !== 'number' || a < 0 || a >= c.options.length) return null;
+          return { ...c, answer: a };
+        }).filter(Boolean);
+        return o;
+      }
+    );
+  } catch (e) {
+    throw new Error(e && e.timeout ? '教學卡太久沒有回應，請再試一次。' : '教學卡產生失敗，請再試一次。');
+  }
+}
+// 看照片用 Sonnet：v428 用同一張作業實測，兩個都讀到 10/10 題、都約 8 秒，
+// 但 Haiku 把「你的書包裡有任何書嗎」讀成「有什麼書」，還自己填上作業沒印的答案；Sonnet 逐字照抄。
+const GN_READ_MODEL = 'claude-sonnet-5';
+
+const GN_READ_SYS = `You read ONE part of a Taiwanese elementary-school English teacher's GRAMMAR homework
+(a photo of one page, or one section of pasted text). It usually has teaching NOTES, then QUESTIONS.
+Output ONLY JSON:
+{"unit":"","topic":"short English name of the grammar point in THIS part","topicZh":"繁體中文名稱","notes":"",
+ "questions":[{"kind":"mcq|fill|translate|rewrite|identify|other","q":"","options":[],"find":"","answer":""}],"caseMatters":false}
+RULES
+- unit: the name of the WHOLE unit if you can see it (e.g. "Nouns"), else "".
+- notes: every rule, pattern-table row and example sentence from the NOTES part, as plain text,
+  one idea per line (use \\n). Copy the teacher's own examples word for word. Never invent content.
+  Worked examples ("Example: … Answer: …") belong in notes, NOT in questions.
+- questions: every question you can read, in order.
+  * "Circle the correct answer: There (is / are) a book." → kind "mcq", q "There ________ a book.",
+    options ["is","are"].
+  * A group of words where the student writes or circles the one that is a ___ (e.g. "fans, audience, viewers")
+    → kind "mcq", q "Which one is a collective noun?", options = the words.
+  * "Underline / circle the ___ in each sentence" → kind "identify", q = ONLY the sentence,
+    find = what to look for (e.g. "noun", "non-count noun", "proper noun").
+  * A sentence with a blank line to fill → kind "fill", q with the blank written as ________ .
+    If the section title lists words to use (e.g. is / are / isn't), put them in options.
+    If the student writes a changed form of a word given in parentheses, put ________ where that word goes
+    and the word in parentheses at the end: "the (dog) barking ____" → "the ________ barking (dog)".
+  * A Chinese sentence to translate into English → kind "translate", q = the Chinese sentence.
+  * "Rewrite / correct each sentence" → kind "rewrite", q = ONLY the sentence to fix (leave out the directions).
+  * A multiple-choice question whose choices are whole sentences (e.g. "Circle the correct sentence" with A-D)
+    → kind "mcq", q "Choose the correct answer.", options = the sentences (without the A/B/C/D labels).
+  * Anything else → kind "other".
+  * answer: only if the answer is printed or already written in; otherwise "".
+- caseMatters: true ONLY if the grammar point of THIS part is CAPITAL LETTERS (capitalization rules), else false.
+- Keep notes short: rules and examples only, no directions. If a photo is unreadable, return empty fields.
+${_AI_MINIFY}`;
+
+// v430：AI 寫到 max_tokens 被切斷時，JSON 尾巴不完整——把已經寫完的題目救回來（notes 在前面，通常是完整的）
+function _gnSalvageJson(txt) {
+  const t = String(txt || '').trim();
+  try { return JSON.parse(t); } catch (e) { /* 往下救 */ }
+  const s = t.indexOf('{');
+  if (s < 0) return null;
+  let tries = 0;
+  for (let i = t.lastIndexOf('}'); i > s && tries < 60; i = t.lastIndexOf('}', i - 1), tries++) {
+    for (const tail of [']}', '}', ']', '']) {
+      try { const o = JSON.parse(t.slice(s, i + 1) + tail); if (o && typeof o === 'object' && !Array.isArray(o)) return o; } catch (e) { /* 再往前一個 } */ }
+    }
+  }
+  return null;
+}
+
+// 「題目裡混著 A. … B. … C. …」→ 拆成選項（老師作業常見；AI 偶爾整串抄進 q）
+function _gnInlineOpts(q) {
+  const m = String(q || '').match(/^(.*?)(?:^|\s)[(（]?A[)）.．]\s+(.+?)\s+[(（]?B[)）.．]\s+(.+?)(?:\s+[(（]?C[)）.．]\s+(.+?))?(?:\s+[(（]?D[)）.．]\s+(.+?))?\s*$/);
+  return m ? { stem: m[1].trim(), options: [m[2], m[3], m[4], m[5]].filter(Boolean).map(x => x.trim()) } : null;
+}
+
+/* v430：把貼上的長文字依大標題切段——Alan 的 Nouns 五大類（5800 字）一次讀，AI 寫到上限被切斷＝「讀不到」。
+   大標題＝「1. Collective Nouns」「Part B」「Lesson 2 …」這種短行：大寫開頭、不以句號結尾（題目會以 . ? 結尾）。 */
+function gnSplitText(text, max = 2400) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  const isHead = (l) => {
+    const t = l.trim();
+    return t.length >= 4 && t.length <= 80 && !/[.?!。？！_]\s*$/.test(t) &&
+      /^(?:\d{1,2}[.)．、]\s*[A-Z]|(?:part|unit|lesson|section|chapter)\s+[\w]+|[一二三四五六七八九十]+、)/i.test(t);
+  };
+  const secs = [];
+  lines.forEach(l => { if (isHead(l) || !secs.length) secs.push([l]); else secs[secs.length - 1].push(l); });
+  // 太短的（標題前的「老師把 Nouns 分成五大類」）併到下一段
+  for (let i = 0; i < secs.length - 1; i++) {
+    if (secs[i].join('\n').trim().length < 200) { secs[i + 1] = secs[i].concat(secs[i + 1]); secs.splice(i, 1); i--; }
+  }
+  // 太長的一段 → 在行之間切開，後面那塊帶上段落標題
+  const out = [];
+  secs.forEach(sec => {
+    const head = sec.find(l => l.trim()) || '';
+    let cur = [];
+    sec.forEach(l => {
+      if (cur.length && (cur.join('\n') + '\n' + l).length > max) { out.push(cur.join('\n')); cur = [`(continued) ${head.trim()}`]; }
+      cur.push(l);
+    });
+    if (cur.join('').trim()) out.push(cur.join('\n'));
+  });
+  // 段數太多就把相鄰的小段併起來（同時送出的請求不要超過 8 個）
+  while (out.length > 8) {
+    let k = 0, best = Infinity;
+    for (let i = 0; i < out.length - 1; i++) { const n = out[i].length + out[i + 1].length; if (n < best) { best = n; k = i; } }
+    out.splice(k, 2, out[k] + '\n' + out[k + 1]);
+  }
+  return out.map(s => s.trim()).filter(Boolean);
+}
+
+function _gnReadOne(content) {
+  return _aiAsk(
+    { model: GN_READ_MODEL, max_tokens: 4000, system: GN_READ_SYS, messages: [{ role: 'user', content }] },
+    (data) => {
+      const txt = (data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.content?.[0]?.text || '';
+      const o = _gnSalvageJson(_aiStripFence(txt));
+      if (!o || typeof o !== 'object') return null;
+      const qs = (Array.isArray(o.questions) ? o.questions : []).map(q => ({
+        kind: ['mcq', 'fill', 'translate', 'rewrite', 'identify'].indexOf(q && q.kind) >= 0 ? q.kind : 'other',
+        q: String((q && q.q) || '').trim(),
+        options: Array.isArray(q && q.options) ? q.options.map(x => String(x).trim().replace(_gnOptLabel, '').trim()).filter(Boolean) : [],
+        find: String((q && q.find) || '').trim(),
+        answer: String((q && q.answer) || '').trim(),
+      })).filter(q => q.q).map(q => {
+        // 「There (is / are) a book.」這種圈選題：括號變空格、括號裡的字變選項
+        const m = q.q.match(/[(（]([^()（）]*[\/／][^()（）]*)[)）]/);
+        if ((q.kind === 'mcq' || q.kind === 'other') && m) {
+          const opts = m[1].split(/[\/／]/).map(x => x.trim()).filter(Boolean);
+          if (opts.length >= 2) return { ...q, kind: 'mcq', q: q.q.replace(m[0], '________'), options: opts };
+        }
+        // 選項整串寫在題目裡（「Circle the correct one. A. … B. …」）→ 拆出來
+        if ((q.kind === 'mcq' || q.kind === 'other') && !q.options.length) {
+          const io = _gnInlineOpts(q.q);
+          if (io && io.options.length >= 2) return { ...q, kind: 'mcq', q: io.stem, options: io.options };
+        }
+        // 「Rewrite with the correct capital letters: my cousin junie…」→ 改寫題（只留要改的句子）
+        const rw = q.kind === 'other' && q.q.match(/^(?:rewrite|correct|fix)[^:：]*[:：]\s*(.+)$/i);
+        if (rw) return { ...q, kind: 'rewrite', q: rw[1].trim() };
+        return q;
+      }).map(q => (q.kind === 'mcq' ? { ...q, q: gnCleanStem(q.q, q.options) } : q));
+      const notes = String(o.notes || '').trim();
+      return { unit: String(o.unit || '').trim(), topic: String(o.topic || '').trim(), topicZh: String(o.topicZh || '').trim(),
+               notes, questions: qs, caseMatters: o.caseMatters === true || /capital letter|大寫/i.test(notes) };
+    }, 60000);
+}
+
+// images: [{ media_type:'image/jpeg', data:'<base64>' }]
+// v430：每張照片一個請求、文字依大標題切段，全部同時送出再合併——一份再長也不會被切斷；
+//       某一段讀不到只少那一段（missed 告訴老師是哪一張），不再整份「讀不懂」。
+async function aiReadGrammarSheet({ images = [], text = '', onProgress } = {}) {
+  const raw = String(text || '').trim().slice(0, 20000);
+  const imgs = (images || []).slice(0, 6);
+  const chunks = raw ? gnSplitText(raw) : [];
+  const head = raw ? raw.split('\n').find(l => l.trim()).trim().slice(0, 120) : '';
+  const parts = imgs.map((im, i) => ({
+    label: `第 ${i + 1} 張照片`,
+    content: [{ type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } },
+              { type: 'text', text: imgs.length > 1 ? `This is page ${i + 1} of ${imgs.length}. Read only this page.` : 'Read the worksheet.' }],
+  })).concat(chunks.map((c, i) => ({
+    label: chunks.length > 1 ? `文字第 ${i + 1} 段` : '貼上的文字',
+    content: [{ type: 'text', text: (chunks.length > 1
+      ? `The teacher pasted a long worksheet; this is section ${i + 1} of ${chunks.length}.${i > 0 && head ? ` (The worksheet begins with: "${head}")` : ''}\n`
+      : 'The teacher pasted this text:\n') + c }],
+  })));
+  if (!parts.length) parts.push({ label: '作業', content: [{ type: 'text', text: 'Read the worksheet.' }] });
+  let done = 0;
+  if (onProgress) onProgress(0, parts.length);
+  const got = await Promise.all(parts.map(p => _gnReadOne(p.content)
+    .then(v => ({ v }), e => ({ e }))
+    .finally(() => { done++; if (onProgress) onProgress(done, parts.length); })));
+  const ok = got.map((g, i) => ({ ...g, label: parts[i].label })).filter(g => g.v && (g.v.notes || g.v.questions.length));
+  if (!ok.length) {
+    const to = got.some(g => g.e && g.e.timeout);
+    throw new Error(to ? '讀作業太久沒有回應，請再試一次。' : '讀不懂這份作業，請換清楚一點的照片，或直接貼文字。');
+  }
+  const missed = got.map((g, i) => (g.v && (g.v.notes || g.v.questions.length) ? null : parts[i].label)).filter(Boolean);
+  if (ok.length === 1) return { ...ok[0].v, questions: ok[0].v.questions.map(q => ({ ...q, sec: 0 })), sections: [ok[0].v.topic], missed };
+  // 合併：同一個主題（跨兩頁的同一段）併在一起；notes 每段加上【主題】，出題和教學才知道要照顧到每一段
+  const secs = [];
+  ok.forEach(({ v }) => {
+    const last = secs[secs.length - 1];
+    const k = (v.topic || '').toLowerCase();
+    if (last && k && last.key === k) { last.notes.push(v.notes); last.qs.push(...v.questions); last.cm.push(v.caseMatters); return; }
+    secs.push({ key: k, topic: v.topic, topicZh: v.topicZh, notes: [v.notes], qs: v.questions.slice(), cm: [v.caseMatters] });
+  });
+  const mode = (arr) => { const c = {}; let best = ''; arr.filter(Boolean).forEach(x => { c[x] = (c[x] || 0) + 1; if (!best || c[x] > c[best]) best = x; }); return best; };
+  const unit = mode(ok.map(g => g.v.unit));
+  const topics = secs.map(s => s.topic).filter(Boolean);
+  const notes = secs.map(s => { const n = s.notes.filter(Boolean).join('\n').trim(); return n ? (s.topic ? `【${s.topic}】\n${n}` : n) : ''; })
+    .filter(Boolean).join('\n\n');
+  // 大小寫：只有「大部分段落」都在教大寫才算——Nouns 五段只有一段講大寫，不能讓整份都變成大寫單元
+  const cmSecs = secs.filter(s => s.cm.some(Boolean)).length;
+  return {
+    unit, topic: unit || (secs.length === 1 ? secs[0].topic : topics.slice(0, 3).join(' / ')),
+    topicZh: (secs.length === 1 ? secs[0].topicZh : '') || '',
+    notes, sections: topics, missed,
+    questions: secs.reduce((a, s, i) => a.concat(s.qs.map(q => ({ ...q, sec: i }))), []),
+    caseMatters: cmSecs * 2 > secs.length,
+  };
+}
+
+/* ── ② 出題 ─────────────────────────────────────────────── */
+const GN_GRADE = {
+  g1: 'Grade 1 (age 7). Tiny sentences of 3-5 words.', g2: 'Grade 2 (age 8). Very short sentences.',
+  g3: 'Grade 3 (age 9, CEFR A1).', g4: 'Grade 4 (age 10, CEFR A1-A2).',
+  g5: 'Grade 5 (age 11, CEFR A2).', g6: 'Grade 6 (age 12, CEFR A2).',
+};
+// v430：notes 由好幾段合併（【Collective Nouns】【Possessive Nouns】…）→ 回傳段數，否則 0
+const _gnMultiSec = (notes) => { const n = (String(notes || '').match(/^【[^】\n]+】/gm) || []).length; return n >= 2 ? n : 0; };
+const _GN_BASE = (grade, topic, notes, caseMatters, teacherNote) => `${_aiTeacherNote(teacherNote)}Students: Taiwanese elementary school, ${GN_GRADE[grade] || GN_GRADE.g4}
+Grammar point: ${topic}
+The teacher's notes (stay inside them — do not teach anything the notes do not cover):
+${String(notes || '').slice(0, 9000)}
+Use everyday topics a child knows: school, family, pets, food, sports, toys, parks.
+⚠ COMPARATIVES — get this right, a checker rejects the whole batch otherwise:
+  -er/-est ONLY for 1-syllable words (big, sweet, tall) and 2-syllable words ending in
+  -y / -er / -ow / -le (happy->happier, clever, narrow, simple).
+  more/most for EVERYTHING ELSE, including every 3-syllable word
+  (more delicious, more beautiful, more expensive, more careful, more famous).
+  "more delicious" and "the most beautiful" are CORRECT English — never present them as mistakes.
+  Irregular: good/better/best, bad/worse/worst, far/farther/farthest.${_gnMultiSec(notes) ? `
+The notes have ${_gnMultiSec(notes)} sections (each starts with 【…】). Cover EVERY section, spread evenly — do not stay on the first one.` : ''}${caseMatters ? `
+IMPORTANT: this lesson is about CAPITAL LETTERS. Every question and interaction must test capitalization,
+and every answer must be written with exactly the right capital letters.` : ''}`;
+
+const GN_LESSON_SYS = `You design a VERY SHORT, INTERACTIVE warm-up that comes before practice.
+It is NOT the whole worksheet — 3 rounds, the most important ideas only, then the child practises.
+Explanations in spoken Traditional Chinese that KEEPS THE ENGLISH WORDS IN ENGLISH, examples in English.
+Write the way a teacher talks to a 9-year-old: 「Noun 就是名字，分成四種：person、animal、place、thing」
+— never a wall of Chinese, never grammar jargon.
+Output ONLY JSON:
+{"lead":"","steps":[
+ {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
+ {"kind":"pick","q":"","options":["",""],"answer":0,"why":""},
+ {"kind":"tap","q":"","sentence":"","answers":[""],"why":""},
+ {"kind":"sort","q":"","groups":[{"label":"","items":[""]}],"why":""},
+ {"kind":"order","zh":"","words":[""]},
+ {"kind":"fix","sentence":"","wrong":"","right":"","why":""}
+],"outro":""}
+RULES
+- lead: ONE Traditional Chinese sentence, ≤25 characters, what this grammar is for.
+- steps: EXACTLY 3 rounds (4 only if the notes truly cover four different ideas — never more, even if the
+  notes have ten sections; pick the ideas the child needs before practising and drop the rest).
+  Each round = ONE "learn" step immediately followed by ONE interaction that practises exactly what that learn step just said.
+- CHOOSING THE INTERACTION — pick the one that really tests the idea, and use at least two different kinds:
+  · "tap"   → the idea is "find the X in a sentence" (find the nouns / the verb / the adjective / the capital letter).
+  · "sort"  → the idea has 2-3 groups (person/place/thing, common/proper, countable/uncountable, a/an, is/are).
+  · "pick"  → one blank or one short question with 2-4 choices. Always safe.
+  · "order" → ONLY when the notes teach WORD ORDER or sentence building. If the notes are about recognising
+            or classifying words, do NOT use "order" — rearranging a sentence teaches nothing about it.
+  · "fix"   → ONLY when a word can be WRONG because of THIS rule (taipei→Taipei, cat→cats, go→goes, a→an).
+            The wrong word must break the rule you just taught. NEVER swap a word just because another word
+            would sound nicer (cat→dog is NOT a mistake) — a checker rejects that and the whole lesson fails.
+- learn.say: ONE idea only, ≤30 characters, spoken Chinese with the English terms left in English
+  (「Noun 分成四種：person、animal、place、thing」／「專有名詞 proper noun 開頭要大寫」).
+  A child must understand it out loud. No grammar jargon, no full-Chinese translation of English terms.
+- ⚠ NEVER teach an instruction that only works on paper — colouring words, underlining, drawing lines,
+  "places are blue, things are yellow". On a screen that means nothing. Teach the language point itself.
+- learn.imgHint: 2-4 English words naming a PHOTO of WHAT THE FIRST EXAMPLE SENTENCE IS ABOUT.
+  If the example is "The park is big." the hint is "big city park"; if it is "I have a pencil." the hint is "pencil on desk".
+  The site fetches that photo automatically, so name a scene a stock photo would really show, and always reuse the
+  main word from your own example — a photo that does not match the sentence confuses the child.
+- learn.examples: 1-2 short English sentences (≤8 words). hl = the exact words in "en" to highlight
+  (the grammar part). zh = the Chinese meaning.
+- pick.q: EITHER one sentence with ________ for the missing part, OR a short question
+  (e.g. "Which one is a proper noun?"). options: 2-4 short choices. answer: 0-based index.
+  why: Traditional Chinese ≤30 characters.
+- tap.q: a Traditional Chinese instruction, ≤20 characters (e.g. 「點出句子裡的名詞」).
+  tap.sentence: ONE English sentence, 4-10 words. tap.answers: 1-3 words copied EXACTLY from that sentence
+  (each word may appear only once in the sentence). Every other word in the sentence must clearly NOT be an answer.
+  why: Traditional Chinese ≤30 characters.
+- sort.q: a Traditional Chinese instruction, ≤20 characters (e.g. 「這些字是人、地方還是東西？」).
+  sort.groups: 2 or 3 groups. label = Traditional Chinese, ≤6 characters. items = 2-3 SHORT English words each,
+  6 items in total at most. why: Traditional Chinese ≤30 characters.
+  ⚠⚠ Every item must fit ONE group only. Never use a word that belongs to two groups — the sense verbs
+  (smell, taste, feel, look, sound) are BOTH linking and action verbs, so they can never be sorted;
+  the same goes for any word your own lesson just called "both". A checker deletes such items.
+- order.zh: a Chinese sentence. order.words: the English translation split into 3-8 word tiles IN THE CORRECT ORDER
+  (keep the final punctuation on the last word).
+- fix.sentence: an English sentence with exactly ONE wrong word. wrong: that word exactly as written. right: the correct word.
+  A capital-letter mistake counts (wrong "taipei", right "Taipei"). why: Traditional Chinese ≤30 characters.
+- Practise ONLY what the notes teach. If the notes are about capital letters, EVERY interaction must be about capital letters
+  (never switch to a different grammar point such as articles or plurals).
+- outro: ONE encouraging Traditional Chinese sentence, ≤25 characters, telling them the practice comes next.
+- Every English sentence must be 100% grammatically correct. Use only simple COUNTABLE nouns (book, cat, apple, toy, pencil…);
+  avoid uncountable nouns (water, milk, equipment, furniture, homework…) unless the notes are about them.
+${_AI_MINIFY}`;
+
+/* v444（Alan：「這邊沒有找出來和分一分的題目，也幫我加上去」）
+   互動教學裡的 tap／sort 現在也能各自出成一個練習單元：
+   · 找出來 → 沿用現成的「圈選題」(circle-answer)：一句話圈一個字，已經有計分、星星、只重做錯的
+   · 分一分 → 沿用現成的「單字分類」(word-sort)：把字拖進 2-4 個籃子
+   ⚠ 不新增題型，因為 v414 的教訓：新題型要補 AUTO_STAR_KIND、QM_TYPE_WORDS… 漏一個就整個單元沒星星。 */
+
+/* 🔴 v461（Alan：「一鍵生成文法出來的題目都要是英文版本，只有先學學看維持原本的中英混合」）：
+   練習題（選擇／填空／改寫／找出來／分一分）學生看得到的字一律英文——題幹、選項、
+   指示語、分類籃子的標籤、答錯後的解說，全部。
+   ⚠ 兩個例外，而且是題型本質，不能動：
+     ① 🔤 中翻英：題目本來就是中文句子，要他翻成英文。
+     ② 📘 先學一下（lesson）：Alan 要的就是「中英夾雜的口語講解」，維持原樣。 */
+const GN_EN_ONLY = `LANGUAGE: every word the student sees must be ENGLISH — the question, the options,
+the instruction, the basket labels and the explanation. No Chinese characters anywhere in your output.
+Write the explanation in very simple English an 8-year-old reads (≤14 words).`;
+
+const GN_SORT_SYS = `You design ONE sorting exercise for Taiwanese elementary-school students.
+The child drags English words into 2-4 labelled baskets.
+Output ONLY JSON: {"instruction":"","categories":["",""],"words":[{"word":"","category":""}]}
+RULES
+- categories: 2-4 baskets, ENGLISH labels, ≤3 words each, taken straight from the notes
+  (e.g. Person / Place / Thing, Common Noun / Proper Noun, Countable / Uncountable, Singular / Plural).
+- words: short English words (1-2 words each). "category" must be EXACTLY one of the labels you listed.
+- ⚠⚠ EVERY word must belong to exactly ONE basket, with NO exceptions a teacher could argue about.
+  English is full of words that sit in two baskets at once — the sense verbs (smell, taste, feel, look, sound)
+  are BOTH linking verbs AND action verbs; "orange" is a colour AND a fruit; "play" is a verb AND a noun.
+  Those words are unusable here, no matter how well they fit the lesson. Pick a word that can only go in one basket.
+  A second checker re-reads every word and throws away the whole question if even one word fits two baskets.
+- At least 2 words per basket, spread evenly, and never repeat a word.
+- instruction: ONE short ENGLISH sentence, ≤12 words, telling the child what to do
+  (e.g. "Put each word in the right basket.").
+${GN_EN_ONLY}
+${_AI_MINIFY}`;
+
+const GN_Q_SYS = {
+  mcq: `You write multiple-choice grammar questions.
+Output ONLY a JSON array: [{"q":"","options":["","",""],"answer":0,"explain":""}]
+RULES
+- q: one English sentence with ________ for the missing part, OR a short question such as
+  Which word is a noun? "Luna is a smart cat."  (options = 3 words from that sentence, exactly ONE is correct).
+  If the options are whole sentences, q is just "Choose the correct answer."
+- options: 3 short choices (sometimes 2 if the notes only have two forms, e.g. is/are). EXACTLY ONE may be correct:
+  check every other option yourself and make sure a teacher would mark it wrong. If a sentence contains two words
+  that both fit (e.g. "Rex, lie down and relax." has TWO intransitive verbs), pick a different sentence or different
+  options — never let two options be acceptable.
+- answer: 0-based index of the correct option. Put the correct option in a DIFFERENT position each time.
+- explain: very simple ENGLISH, ≤14 words, why that answer.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+  fill: `You write fill-in-the-blank grammar questions (the student TYPES the answer).
+Output ONLY a JSON array: [{"prompt":"","answer":"","accept":[],"explain":""}]
+RULES
+- prompt: one English sentence with exactly one ________ . If the student needs a hint (e.g. the base verb), put it
+  in parentheses at the end: "She ________ to school every day. (walk)".
+- answer: 1-3 words that go in the blank. accept: other forms that are ALSO correct (e.g. "is not" for "isn't"), or [].
+- If one of the teacher's questions has TWO blanks, split it into two questions: each keeps one blank and has the other one filled in.
+- If CAPITAL LETTERS are the grammar point: give the word(s) in lowercase in parentheses at the end, and the answer is the same
+  word(s) with the correct capital letters. e.g. prompt "We live in ________. (taipei)", answer "Taipei". Only ONE correct answer.
+- explain: very simple ENGLISH, ≤14 words.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+  circle: `You write "find the words" questions: the student reads a sentence and taps EVERY word of one kind,
+exactly like the worksheet task "Read each sentence. Then underline the nouns."
+Output ONLY a JSON array: [{"sentence":"","answers":[""],"find":"","findZh":"","explain":""}]
+RULES
+- EVERY question in your answer must ask for the SAME kind of word (all nouns, or all verbs, or all proper nouns…),
+  because the children see one instruction above the whole exercise.
+- find: that kind of word in English, 1-3 words ("noun", "proper noun", "action verb").
+  findZh: v461 — this used to be Chinese; now write the SAME English words as "find".
+  The children see it in the instruction above the exercise, and that instruction is English now.
+- sentence: ONE English sentence, 4-12 words, everyday life, 100% correct English.
+- answers: EVERY word in that sentence that qualifies — 1 to 4 of them, copied EXACTLY as written
+  (same spelling, same capital letters), in the order they appear. A checker re-reads your sentence and
+  throws the question away if you missed one, so count carefully: in "My sister goes to school every morning."
+  the nouns are sister, school AND morning.
+- Each answer word must be ONE word that appears only once in the sentence. If a target is two words
+  (New York), choose a different sentence.
+- explain: very simple ENGLISH, ≤14 words, why those words.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+  rewrite: `You write "correct the sentence" questions: the student rewrites a sentence that has mistakes.
+Output ONLY a JSON array: [{"wrong":"","answer":"","explain":""}]
+RULES
+- wrong: one short English sentence (≤12 words) with 1-3 mistakes of EXACTLY the kind the notes teach
+  (e.g. missing capital letters). Nothing else in the sentence may be wrong.
+- answer: the same sentence, fully corrected. Change ONLY the mistakes.
+⚠⚠ THE MISTAKE MUST BE FIXABLE FROM THE SENTENCE ITSELF. A checker rejects anything else.
+  The corrected sentence must keep EXACTLY the same content words in the SAME order — only the
+  grammar machinery may change (word endings, than/the/is, more/most, capital letters).
+  You may NOT make the child invent information, and you may NOT ask about facts of the world.
+  BAD: "My fish is more beautiful." -> "My fish is more beautiful than yours."
+       (nothing in the sentence says what it is compared to — the child cannot know)
+  BAD: "The cake is sweeter than the candy." -> "The candy is sweeter than the cake."
+       (that is an opinion about food, not a grammar mistake)
+  GOOD: "My dog is more big than your dog." -> "My dog is bigger than your dog."
+  GOOD: "She is the happier student in class." -> "She is the happiest student in class."
+  GOOD: "My bag is bigger yours." -> "My bag is bigger than yours."   (only "than" is added)
+- explain: very simple ENGLISH, ≤14 words, what was fixed.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+  /* v462 ③（Alan 挑的第一個）：造句。
+     前面六種題型都在問「選哪個／填哪個／改哪裡」——會選不等於會用。
+     這一種給情境，要學生自己寫一句話，而且那句話一定要用到這個文法點，由 AI 批改。
+     沿用現成的 writing-practice 單元（AI 造句批改、五星評分、星星規則都現成）。 */
+  write: `You write "make a sentence" tasks that force the student to USE one grammar point.
+Output ONLY a JSON array: [{"prompt":"","must":"","hint":"","explain":""}]
+RULES
+- prompt: ONE short English instruction telling the child what to write about, ≤16 words, from a child's
+  own world (family, school, food, pets, weekend, festivals). It must be impossible to answer well
+  WITHOUT using the grammar point. Each prompt must be about a DIFFERENT situation.
+  GOOD (proper nouns): "Write one sentence about where you went last weekend. Name the real place."
+  GOOD (simple past): "Write one sentence about something you ate yesterday."
+  BAD: "Write a sentence using a proper noun." (that is the rule, not a situation — boring and vague)
+- must: the grammar feature the sentence MUST contain, in English, ≤6 words ("a proper noun with a capital letter").
+- hint: ONE short English pattern or example opening, ≤10 words ("Last Sunday I went to ___.").
+- explain: very simple ENGLISH, ≤14 words, what a good answer shows.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* v462 ②（Alan 挑的第二個）：句型轉換。
+     「改寫句子」只能把錯的改對；轉換是「這句對，但換一個說法」——
+     主動↔被動、直述↔疑問／否定、單數↔複數、兩句用 and/but/because 合成一句。
+     康橋考卷最常出這一種，而且一個文法點可以出一整頁。
+     沿用 type-answer（打字作答）＝寬鬆比對＋AI 判斷＋星星全部現成。 */
+  transform: `You write "change the sentence" questions: the student rewrites a CORRECT sentence a different way.
+Output ONLY a JSON array: [{"prompt":"","task":"","answer":"","accept":[],"explain":""}]
+RULES
+- prompt: ONE correct, natural English sentence, 4-12 words, everyday life. It must already be 100% correct
+  — this is NOT a find-the-mistake question.
+- task: what to change it into, in English, ≤8 words. Use ONLY changes the notes actually teach, e.g.
+  "Make it a question." / "Make it negative." / "Make it plural." / "Join them with because."
+- answer: the ONE sentence that results. It must be the only natural answer a teacher would accept.
+  If two different sentences would both be right, pick a different prompt.
+- accept: usually []. Only add a variant with EXACTLY the same meaning (e.g. the contraction "isn't" for "is not").
+- The change must be the grammar point itself — do not just swap a word for a synonym.
+- explain: very simple ENGLISH, ≤14 words, what changed and why.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* ══ v467：康橋的三種招牌題型（2026-10-06 Alan 給了 G3/G4 真實考卷）══
+     拆解見 memory/kangchiao-exam-format.md。這三種是他的考卷一直在考、而網站以前做不出來的。
+
+     ① editpara ＝「整段改錯，而且明講錯幾個」
+        兩份考卷出現三次：最高級 blog post、Run-on 段落（There are five mistakes）、
+        大小寫段落（Find the 5 capitalization errors）。
+        ⚠ 跟現有的「改寫句子」不一樣——那是單句，這是**一整段**，而且學生事先知道有幾個錯。 */
+  editpara: `You write ONE "edit the paragraph" exercise, exactly like a Kang Chiao formative assessment:
+the child reads a short paragraph that contains a stated number of mistakes, finds them, and writes the corrections.
+Output ONLY JSON: {"title":"","paragraph":"","errors":[{"wrong":"","right":"","why":""}]}
+RULES
+- paragraph: 4-7 short sentences, ONE connected story a 9-year-old would enjoy
+  (a school trip, a pet, a weekend, a festival). 45-90 words. Give it a short "title".
+- EVERY mistake must be the grammar point being taught — nothing else in the paragraph may be wrong.
+  Spelling, punctuation and other grammar must be perfect, or the child cannot tell which N are the mistakes.
+- errors: list EVERY mistake you planted, in paragraph order. Aim for about the number asked for —
+  getting the exact count is less important than every listed item being a REAL mistake.
+- Each "wrong" is 1 to 3 words, copied EXACTLY as it appears in the paragraph
+  (a superlative mistake is often two words: "most tallest", "most good").
+- ⚠⚠ That exact wording must appear in the paragraph EXACTLY ONCE, and each of its words must appear
+  only once in ITS OWN sentence — the child crosses the words out, so a repeat makes the question unanswerable.
+  If something would repeat, rewrite that sentence with different words.
+- "right" is the corrected wording. It must be DIFFERENT from "wrong".
+- Every error must be a REAL mistake. Never list something that is already correct.
+- why: very simple ENGLISH, ≤12 words, explaining the fix. Never write notes to yourself in this field.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* ② diagnose ＝「先判斷錯在哪一類，再改正」（康橋 G3 的 Subjects and Predicates 那一題）
+        圈 (Missing Subject / Missing Predicate) → 再把句子改完整。兩段式。 */
+  diagnose: `You write "what is wrong with this sentence?" questions, exactly like a Kang Chiao
+formative assessment: the child first picks WHAT KIND of mistake it is, then rewrites the sentence correctly.
+Output ONLY JSON: [{"broken":"","kinds":["",""],"answer":0,"fixed":"","why":""}]
+RULES
+- broken: ONE sentence that is wrong in exactly ONE way, 4-12 words, everyday child topics.
+- kinds: 2 or 3 short ENGLISH labels for the possible problems, ≤3 words each
+  (e.g. "Missing Subject" / "Missing Predicate", or "Run-on" / "Fragment").
+  Use the labels the notes actually teach. Exactly ONE is right; the others must be real,
+  plausible labels for this lesson — never a silly option.
+- answer: 0-based index of the correct label. Vary which position is correct.
+- fixed: the corrected sentence. It must still be about the same thing, and must fix ONLY that problem.
+- why: very simple ENGLISH, ≤12 words.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  /* v462 ①（Alan 挑的第四個）：排順序。
+     語序類文法（疑問句、形容詞順序、there is/are、副詞位置）用選擇題練不到。
+     ⚠ 出題時最怪的失敗是「打散之後其實有兩種排法都對」
+       （"I often play basketball." vs "Often I play basketball."）——明講不可以。 */
+  order: `You write "put the words in order" questions: the child sees the words of ONE sentence
+shuffled as tiles and taps them into the right order.
+Output ONLY a JSON array: [{"words":[""],"hint":"","explain":""}]
+RULES
+- words: the sentence split into tiles, IN THE CORRECT ORDER, 4-10 tiles.
+  Each tile is one word, except that punctuation stays attached to its word ("basketball." , "you?").
+  Keep the capital letter on the first word only — that is one of the clues the child uses.
+- ⚠⚠ There must be EXACTLY ONE order that a teacher would accept. English often allows two
+  ("I often play basketball." and "Often I play basketball." are both fine) — those sentences are
+  unusable here. Avoid movable adverbs (often, usually, sometimes, yesterday, today) unless the
+  notes are specifically about where they go, and avoid sentences where a phrase could move.
+- Use the grammar point in every sentence, and everyday child topics.
+- hint: ONE short ENGLISH clue, ≤8 words, about the pattern ("Questions start with Do or Does."). May be "".
+- explain: very simple ENGLISH, ≤14 words, why that order.
+${GN_EN_ONLY}
+${_AI_MINIFY}`,
+
+  translate: `You write Chinese-to-English translation questions that practise the grammar point.
+Output ONLY a JSON array: [{"zh":"","answer":"","accept":[],"hint":"","explain":""}]
+RULES
+- zh: a natural Traditional Chinese sentence a child would say.
+- answer: the best English translation, 4-10 words, ending with . or ? . It MUST use the grammar point.
+- accept: usually []. Only add a variant if it has EXACTLY the same meaning AND still uses the grammar point
+  (e.g. the contraction "There's" for "There is"). Never add a sentence that avoids the grammar point
+  ("I have a dog" does NOT practise "There is"). The system already has an AI checker for other wordings.
+- Every English sentence must be 100% grammatically correct; avoid uncountable nouns unless the notes are about them.
+- hint: the grammar pattern to use, e.g. "There are + 複數名詞". Short.
+- explain: Traditional Chinese, ≤30 characters.
+${_AI_MINIFY}`,
+};
+function gnValidLesson(o) {
+  const steps = (o && Array.isArray(o.steps) ? o.steps : []).map(gnValidStep).filter(Boolean);
+  const learn = steps.filter(s => s.kind === 'learn').length;
+  const act = steps.length - learn;
+  if (learn < 2 || act < 2) return null;
+  return { lead: _zhTW((o && o.lead) || '').trim(), steps, outro: _zhTW((o && o.outro) || '').trim() };
+}
+// 「A. My family visited…」「(B) …」→ 拿掉標號（老師作業的選項常常帶著）
+const _gnOptLabel = /^\s*(?:[(（]?[A-Da-d][)）.．、:]|[○◯●]\s*[A-Da-d][.．)）]?)\s+/;
+function gnValidMcq(x) {
+  const opts = (Array.isArray(x && x.options) ? x.options : []).map(o => String(o).trim().replace(_gnOptLabel, '').trim()).filter(Boolean);
+  let a = x && x.answer;
+  if (typeof a === 'string') {
+    const t = a.trim().replace(_gnOptLabel, '').trim();
+    a = opts.indexOf(t);                                                  // 先比完全一樣（大小寫單元靠這個）
+    if (a < 0 && /^[A-Da-d]$/.test(t)) a = 'abcd'.indexOf(t.toLowerCase()); // 答案寫成「B」
+    if (a < 0) a = opts.findIndex(o => o.toLowerCase() === t.toLowerCase());
+  }
+  const q = gnCleanStem(_gnBlank(x && x.q), opts);
+  // v429：「taipei zoo」和「Taipei Zoo」是兩個不同的選項——大寫單元的選擇題就是在考這個。
+  //       以前比對時轉小寫，Alan 作業 Part B 的選項全被當成重複，整題丟掉。
+  const uniq = new Set(opts).size === opts.length;
+  // v430：「Which word is a noun? "Luna is a smart cat."」→ 選項一定要是引號裡那句話的字（實測出現過句子裡沒有的 woman、
+  //       還有「park(common), Elm Street(proper)」這種組合選項）
+  const qt = q.match(/^Which\s+(?:word|one|words)\b[^"“]*["“]([^"”]+)["”]/i);
+  const fromSent = !qt || opts.every(o => o.split(/\s+/).length <= 3 && !/[()（）,]/.test(o) &&
+    new RegExp('(^|[^A-Za-z])' + o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z]|$)', 'i').test(qt[1]));
+  return q && opts.length >= 2 && opts.length <= 4 && uniq && fromSent && Number.isInteger(a) && a >= 0 && a < opts.length
+    ? { q, options: opts, answer: a, explain: String((x && x.explain) || '').trim() } : null;
+}
+/* v444 找出來：句子＋一個要圈的字。答案一定要在句子裡只出現一次（不然圈哪個都算） */
+function gnValidCircle(x) {
+  const sentence = String((x && x.sentence) || '').trim();
+  const raw = (Array.isArray(x && x.answers) ? x.answers : [x && x.answer]).map(a => _GN_TOK(String(a || ''))).filter(Boolean);
+  const find = String((x && x.find) || '').trim().slice(0, 30);
+  const findZh = _zhTW((x && x.findZh) || '').trim().slice(0, 8);
+  const toks = sentence.split(/\s+/).map(_GN_TOK).filter(Boolean);
+  const lower = raw.map(a => a.toLowerCase());
+  const uniq = new Set(lower).size === lower.length;
+  // 每個答案都要是句子裡「只出現一次」的完整單字，不然點哪一個都對／都不對
+  const once = raw.length >= 1 && raw.length <= 4 && uniq &&
+    raw.every(a => toks.filter(t => t.toLowerCase() === a.toLowerCase()).length === 1);
+  // 照句子的順序排（學生端會照順序亮起來，看起來才不會亂）
+  const answers = raw.slice().sort((a, b) => toks.findIndex(t => t.toLowerCase() === a.toLowerCase()) - toks.findIndex(t => t.toLowerCase() === b.toLowerCase()));
+  return sentence && find && findZh && once && toks.length >= 3 && toks.length <= 16
+    ? { sentence, answers, answer: answers[0], find, findZh, explain: _zhTW((x && x.explain) || '').trim() } : null;
+}
+/* v444 分一分：2-4 個籃子，每個字只能屬於一個籃子、每籃至少兩個字 */
+function gnValidSortSet(o, n) {
+  const cats = (Array.isArray(o && o.categories) ? o.categories : [])
+    .map(c => _zhTW(c).trim().slice(0, 8)).filter(Boolean);
+  const uniqCats = [...new Set(cats)];
+  if (uniqCats.length !== cats.length || cats.length < 2 || cats.length > 4) return null;
+  const seen = new Set(), words = [];
+  (Array.isArray(o && o.words) ? o.words : []).forEach(w => {
+    const word = String((w && w.word) || '').trim().slice(0, 24);
+    const cat = _zhTW((w && w.category) || '').trim().slice(0, 8);
+    const k = word.toLowerCase();
+    if (!word || cats.indexOf(cat) < 0 || seen.has(k)) return;
+    seen.add(k); words.push({ word, category: cat });
+  });
+  /* v452：要砍到 n 個字的時候「每一籃輪流拿」，不要直接切前面幾個——
+     直接 slice 會把最後一籃整個切光，整組就因為「有一籃不到兩個字」被判不合格。 */
+  const cap = Math.max(4, n || 8);
+  const byCat = {};
+  words.forEach(w => { (byCat[w.category] = byCat[w.category] || []).push(w); });
+  const kept = [];
+  for (let r = 0; kept.length < cap; r++) {
+    let added = false;
+    for (const c of cats) {
+      const arr = byCat[c] || [];
+      if (arr[r] && kept.length < cap) { kept.push(arr[r]); added = true; }
+    }
+    if (!added) break;
+  }
+  // 每一籃至少兩個字，而且每一籃都要有人（不然畫面上會出現空欄）
+  const per = cats.map(c => kept.filter(w => w.category === c).length);
+  if (kept.length < 4 || per.some(k => k < 2)) return null;
+  return { instruction: _zhTW((o && o.instruction) || '').trim().slice(0, 30) || '把這些字分到正確的籃子裡', categories: cats, words: kept };
+}
+function gnValidFill(x) {
+  const answer = String((x && x.answer) || '').trim();
+  // 括號提示如果就是答案本身（「Is there ____ cat? (a)」答案 a）→ 等於送分，拿掉提示
+  let prompt = _gnBlank(x && (x.prompt || x.q));
+  const hint = prompt.match(/\s*[(（]([^()（）]+)[)）]\s*$/);
+  // （只拿掉「完全一樣」的；大寫單元的「(taipei) → Taipei」提示是小寫、答案是大寫，那是題目本身，要留著）
+  if (hint && answer && hint[1].trim() === answer) prompt = prompt.slice(0, hint.index).trim();
+  const blanks = (prompt.match(/________/g) || []).length;
+  return blanks === 1 && answer && answer.split(/\s+/).length <= 4
+    ? { prompt, answer, accept: (Array.isArray(x.accept) ? x.accept : []).map(a => String(a).trim()).filter(Boolean).slice(0, 4),
+        explain: String(x.explain || '').trim() } : null;
+}
+function gnValidRewrite(x) {
+  const wrong = String((x && (x.wrong || x.q || x.prompt)) || '').trim();
+  const answer = String((x && x.answer) || '').trim();
+  const nw = wrong.split(/\s+/).length, na = answer.split(/\s+/).length;
+  if (!(wrong && answer && wrong !== answer && !_gnCJK.test(wrong + answer) && nw <= 18 && Math.abs(nw - na) <= 2)) return null;
+  /* 🔴 v480（Alan 截到兩題都無解）：錯的地方一定要**從句子本身就改得回來**。
+     「My fish is more beautiful.」→「…than yours.」：句子裡沒說跟誰比，學生不可能知道。
+     「The cake is sweeter than the candy.」→「The candy is sweeter than the cake.」：
+       那是在比哪個比較甜，是常識題不是文法題。 */
+  if (!_gnFixableFromSentence(wrong, answer)) return null;
+  if (!_gnCmpClaimOk(wrong, answer)) return null;          // v479：比較級的方向也要對
+  return { wrong, answer, explain: String(x.explain || '').trim() };
+}
+/* v462 ③：造句。沒有標準答案（AI 批改），所以能驗的就是「題目本身像不像一題」：
+   要有情境、要講清楚必須用到什麼、而且不可以出現中文（v461 的規則）。 */
+function gnValidWrite(x) {
+  const prompt = String((x && (x.prompt || x.q)) || '').trim();
+  const must = String((x && x.must) || '').trim();
+  const n = prompt.split(/\s+/).length;
+  if (!prompt || _gnCJK.test(prompt + must)) return null;
+  if (n < 4 || n > 22) return null;                       // 太短＝沒有情境；太長＝小朋友讀不完
+  if (!must) return null;                                 // 沒寫「一定要用到什麼」就沒辦法批改
+  return { prompt, must, hint: String((x && x.hint) || '').trim().slice(0, 60),
+           explain: String((x && x.explain) || '').trim() };
+}
+
+/* v462 ②：句型轉換。原句一定要跟答案不一樣，而且長度不能差太多
+   （差太多通常是模型自己寫了一句不相干的）。 */
+/* v467 ①：整段改錯。這一種最容易出的兩個問題，都要程式擋：
+     ① 錯字在段落裡出現不只一次 → 學生點了也不知道算不算到
+     ② 錯的數量跟題目說的不一樣 → 題目寫「有 5 個錯」卻只有 4 個，學生會一直找
+   ⚠ 回傳的是「一整包」不是一題一題，所以不走 _gnMakeKind。 */
+/* ══ 🔴 v479：比較級／最高級的「真的錯了嗎」把關 ═══════════════════════════
+   Alan 2026-10-07 截到一題：句子是 "That pizza is more delicious than this pizza."
+   ——這句**完全正確**，AI 卻說它錯，理由還寫「Delicious is short, so add -er, not more.」
+   delicious 是三音節，本來就該用 more。這種錯不能允許：它教的是錯的文法。
+
+   模型對「短形容詞加 -er、長形容詞用 more」這條規則不可靠，所以程式自己判一次。
+   規則（小學課本的版本）：
+     · 一音節 → -er（big, sweet, tall）
+     · 兩音節且字尾 y / er / ow / le → -er（happy, clever, narrow, simple）
+     · 其他兩音節、三音節以上 → more（careful, delicious, beautiful）
+     · 不規則另記（good/better、bad/worse…）
+   ⚠ 音節用母音群粗估就夠（silent e 要扣掉）。判不出來就回 null＝不擋，
+     寧可放過也不要把正確的題目誤殺。 */
+const _GN_IRREG_CMP = { good: 'better', bad: 'worse', far: 'farther', little: 'less', many: 'more', much: 'more' };
+const _GN_CMP_MORE = new Set(('careful famous modern helpful useful honest boring tired afraid common active '
+  + 'polite nervous eager cruel certain public private fluent patient').split(' '));
+function _gnSyl(w) {
+  let t = String(w || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!t) return 0;
+  t = t.replace(/e$/, '');                               // silent e
+  const m = t.match(/[aeiouy]+/g);
+  return m ? m.length : 1;
+}
+/* 'er' / 'more' / null（判不出來）。 */
+function _gnDegreeKind(adj) {
+  const w = String(adj || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!w) return null;
+  if (_GN_IRREG_CMP[w]) return 'irregular';
+  if (_GN_CMP_MORE.has(w)) return 'more';
+  const n = _gnSyl(w);
+  if (n <= 1) return 'er';
+  if (n === 2) return /(y|er|ow|le)$/.test(w) ? 'er' : 'more';
+  return 'more';
+}
+/* 一句話裡「比較級的寫法」有沒有被改錯方向。
+   回傳 false＝這一題在教錯的東西，整題丟掉。判不出來一律回 true（不擋）。 */
+function _gnCmpClaimOk(broken, fixed) {
+  const B = String(broken || '').toLowerCase().match(/[a-z]+/g) || [];
+  const F = String(fixed || '').toLowerCase().match(/[a-z]+/g) || [];
+  if (!B.length || !F.length) return true;
+  const has = (arr, w) => arr.indexOf(w) >= 0;
+  // ① 原句是「more X」，改完卻變成 -er 形（或 more 被整個拿掉）＝主張「X 該用 -er」
+  for (let i = 0; i < B.length - 1; i++) {
+    if (B[i] !== 'more' && B[i] !== 'most') continue;
+    const adj = B[i + 1];
+    /* ⚠ 「more crunchier」「the most yummiest」＝雙重比較級，那是**真的錯**，
+       而且後面那個字已經是 -er／-est 形，不是基本形容詞——這條規則不適用，跳過。
+       （沒跳過的話，整段改錯最常出的這一類會被我自己誤殺光。） */
+    if (/(er|est)$/.test(adj)) continue;
+    if (_gnDegreeKind(adj) !== 'more') continue;     // 本來就該用 -er，那 AI 說得對
+    /* ⚠ 加 -er 的拼字會變：happy→happier、expensive→expensiver（字尾 e 要去掉）。
+       少算一種，那一種的錯題就擋不住。 */
+    const y = adj.replace(/y$/, 'i'), e = adj.replace(/e$/, '');
+    if ([adj, y, e].reduce((a2, x) => a2.concat([x + 'er', x + 'est']), []).some(f => has(F, f))) return false;
+    /* ⚠ 「more → most」只是從比較級換成最高級，不是在主張用法錯，不要誤殺。
+       只有 more／most 兩個都不見、形容詞還光禿禿地留著，才是「叫他拿掉 more」。 */
+    if (!has(F, 'more') && !has(F, 'most') && has(F, adj)) return false;
+  }
+  // ② 原句是「Xer / Xest」，改成「more X / most X」＝主張「X 該用 more」
+  for (let i = 0; i < B.length; i++) {
+    const m = B[i].match(/^(.+?)(er|est)$/);
+    if (!m) continue;
+    if (!has(F, 'more') && !has(F, 'most')) continue;
+    /* ⚠ happier 還原是 happi，不是 happy——不還原回去就認不出它是 -er 派的字。 */
+    const cands = [m[1], m[1] + 'e', m[1].replace(/i$/, 'y')];
+    const base = cands.find(x => has(F, x));
+    if (!base) continue;
+    if (_gnDegreeKind(base) === 'er') return false;  // 本來就該用 -er，卻被改成 more
+  }
+  return true;
+}
+
+/* ══ 🔴 v480：改寫題「從句子本身就要改得回來」══════════════════════════════
+   Alan 2026-10-07 截到兩題，兩題都無解：
+     ① "My fish is more beautiful." → 正解 "My fish is more beautiful than yours."
+        句子裡**沒有任何線索**說是跟誰比，學生不可能知道要補 "than yours"。
+     ② "The cake is sweeter than the candy." → 正解 "The candy is sweeter than the cake."
+        理由還寫「Candy is actually sweeter than cake」——那是**常識題，不是文法題**。
+
+   Alan 的原則（而且他說要套用到所有文法點）：
+   改寫題只能改「句子裡本來就看得出來的文法錯」——比較級的形式、than、the、more/most…
+   → 程式判得出來的版本：
+     · 加進去的字只能是**功能詞**（than／the／is…），不可以憑空多一個實詞（yours）
+     · 實詞的**順序不可以換**（cake↔candy 對調＝在改內容，不是在改文法）
+     · 實詞只能變形（sweet→sweeter、good→better），不可以換成別的字
+   判不出來就放行——寧可放過，也不要把正常的題目誤殺。 */
+const _GN_FN_WORDS = new Set(('a an the this that these those my your his her its our their '
+  + 'is am are was were be been being do does did have has had will would can could shall should may might must '
+  + 'than then as of to in on at by for from with and or but so not no yes very too also just only '
+  + 'more most less least much many few little there here it he she they we you i me him them us'
+).split(' '));
+function _gnStem(w) {
+  let t = String(w || '').toLowerCase().replace(/[^a-z']/g, '');
+  if (_GN_IRREG_CMP[t]) return t;
+  for (const [a, b] of [[/iest$/, 'y'], [/ier$/, 'y'], [/est$/, ''], [/er$/, ''], [/ies$/, 'y'],
+                        [/es$/, ''], [/s$/, ''], [/ed$/, ''], [/ing$/, '']]) {
+    if (a.test(t) && t.replace(a, b).length >= 3) { t = t.replace(a, b); break; }
+  }
+  /* ⚠ big→bigger、hot→hotter、sad→sadder：加 -er 時最後一個子音會重複，
+     剝掉 -er 之後剩 "bigg"，跟 "big" 對不起來。收掉重複的那一個。 */
+  t = t.replace(/([bdfglmnprt])\1$/, '$1');
+  return t.replace(/e$/, '');
+}
+function _gnSameWord(a, b) {
+  const x = String(a || '').toLowerCase().replace(/[^a-z']/g, '');
+  const y = String(b || '').toLowerCase().replace(/[^a-z']/g, '');
+  if (!x || !y) return false;
+  if (x === y) return true;
+  // good/better/best、far/farther 這種比較級家族，算同一個字的不同形式
+  const fam = [['good', 'better', 'best'], ['bad', 'worse', 'worst'], ['far', 'farther', 'farthest', 'further', 'furthest'],
+               ['many', 'more', 'most'], ['much', 'more', 'most'], ['little', 'less', 'least']];
+  if (fam.some(f => f.indexOf(x) >= 0 && f.indexOf(y) >= 0)) return true;
+  const sx = _gnStem(x), sy = _gnStem(y);
+  if (sx === sy) return true;
+  /* 不規則動詞／名詞（buy/bought、child/children…）直接用現成那一份對照表，
+     不要在這裡再寫第二份——兩份遲早會走鐘。 */
+  /* ⚠ 學生寫錯的形式五花八門（goed / buyed / childs），詞幹規則不一定剝得回去
+     （goed 去掉 -ed 只剩兩個字母，會被長度保護擋下）。查表時多試幾種還原形。 */
+  const bases = (w) => [w, _gnStem(w), w.replace(/(ed|s|es)$/, ''), w.replace(/ed$/, 'e')].filter(Boolean);
+  const bx = bases(x), by = bases(y);
+  return _GN_FIX_IRREG.some(([p1, p2]) => {
+    const c1 = bases(p1), c2 = bases(p2);
+    const hit = (u, v) => u.some(t => v.indexOf(t) >= 0);
+    return (hit(bx, c1) && hit(by, c2)) || (hit(bx, c2) && hit(by, c1));
+  });
+}
+/* 🔴 v481：診斷題（「這句哪裡錯？」）的那一關要比改寫題鬆一點，但不能鬆到沒有。
+   康橋真的有「Missing Subject」：ran across the line. → My dad ran across the line.
+   ——那是**補**一個實詞，句子本來就缺，合法。
+   但「My sister's shoes are the most expensive toy. → …expensive shoes.」
+   （理由寫「shoes are not toys」）是**換掉**一個實詞——那是在改意思，不是改文法。
+   → 判準：原句的實詞必須原封不動、照原順序出現在改好的句子裡（只准插入，不准換、不准對調）。 */
+function _gnOnlyAdds(wrong, answer) {
+  const tok = (t) => String(t || '').toLowerCase().match(/[a-z']+/g) || [];
+  const A = tok(wrong).filter(w => !_GN_FN_WORDS.has(w));
+  const B = tok(answer).filter(w => !_GN_FN_WORDS.has(w));
+  if (!A.length) return true;
+  let j = 0;
+  for (let i = 0; i < A.length; i++) {
+    while (j < B.length && !_gnSameWord(A[i], B[j])) j++;
+    if (j >= B.length) return false;      // 這個實詞不見了＝被換掉或被調走
+    j++;
+  }
+  return true;
+}
+
+function _gnFixableFromSentence(wrong, answer) {
+  const tok = (t) => String(t || '').toLowerCase().match(/[a-z']+/g) || [];
+  const content = (arr) => arr.filter(w => !_GN_FN_WORDS.has(w));
+  let A = content(tok(wrong));
+  const B = content(tok(answer));
+  if (!A.length || !B.length) return true;                 // 判不出來就放行
+  /* ⚠ 「This toy is the best toy I have.」→「This is the best toy I have.」
+     ——刪掉重複的 toy 是合法的，而且從句子本身就看得出來。
+     所以允許「少一個**重複**的實詞」，但**不允許憑空多一個新的**（🔴 than yours）。 */
+  if (A.length === B.length + 1) {
+    const dup = A.findIndex((w, i) => A.some((v, j) => j !== i && _gnSameWord(w, v)));
+    if (dup < 0) return false;
+    A = A.slice(0, dup).concat(A.slice(dup + 1));
+  }
+  if (A.length !== B.length) return false;                 // 憑空多／少一個實詞
+  for (let i = 0; i < A.length; i++) if (!_gnSameWord(A[i], B[i])) return false;  // 換字或換順序（🔴 cake↔candy）
+  return true;
+}
+
+/* 🔴 v479（Alan：「第一題應該是圈 more 就好，crunchier 沒錯啊；
+   第二題只要把 good 圈起來就好，than 沒錯啊」）：
+   以前把整個詞組的每一個字都當成「錯的字」→ 正確的字也被要求圈起來。
+   真正錯的是「wrong 改成 right 時，**真的變動到的那幾個字**」，
+   所以直接比對前後，把兩頭沒變的字剝掉。
+     more crunchier → crunchier   ：剝掉共同結尾 → 只有 more 要圈
+     good than      → better than ：剝掉共同結尾 → 只有 good 要圈
+     more sweet     → sweeter     ：兩頭都不一樣 → more 跟 sweet 都要圈（本來就兩個字都得改）
+   ⚠ 圈選用 mark，寫答案還是用整個詞組（康橋的答案欄寫的是改好的整個詞組）。 */
+function _gnChangedWords(wrong, right) {
+  const A = String(wrong || '').split(/\s+/).filter(Boolean);
+  const B = String(right || '').split(/\s+/).filter(Boolean);
+  const same = (x, y) => String(x).toLowerCase().replace(/[^a-z0-9']/g, '')
+                      === String(y).toLowerCase().replace(/[^a-z0-9']/g, '');
+  let i = 0, j = 0;
+  while (i < A.length && i < B.length && same(A[i], B[i])) i++;                       // 共同開頭
+  while (j < A.length - i && j < B.length - i && same(A[A.length - 1 - j], B[B.length - 1 - j])) j++;  // 共同結尾
+  const mid = A.slice(i, A.length - j);
+  return mid.length ? mid : A;        // 整個都一樣（理論上不會）就退回原本的
+}
+
+function gnValidEditPara(x, want) {
+  const paragraph = String((x && x.paragraph) || '').trim();
+  const title = String((x && x.title) || '').trim().slice(0, 40);
+  const seenW = new Set();
+  const errs = (Array.isArray(x && x.errors) ? x.errors : [])
+    .map(e => ({ wrong: String((e && e.wrong) || '').trim(),
+                 right: String((e && e.right) || '').trim(),
+                 why:   String((e && e.why) || '').trim() }))
+    .filter(e => e.wrong && e.right && e.wrong !== e.right)
+    /* right 要像「改好的字」，不是一句解釋——實測模型會把 why 寫進 right
+       （"good is irregular; use best, not most good."）。 */
+    .filter(e => e.right.split(/\s+/).length <= 4 && !/[.;:!?]$/.test(e.right))
+    /* ⚠ 實測：模型常常把冠詞一起框進來（"the most good" → "the best"）。
+       康橋的答案欄寫的是「most high」不是「the most high」，而且 the 在一句裡通常不只一個，
+       會害下面「句內唯一」那一關誤殺。兩邊一起把開頭的冠詞拿掉。 */
+    .map(e => {
+      const strip = (t) => t.replace(/^(the|a|an)\s+/i, '').trim();
+      const w = strip(e.wrong), r = strip(e.right);
+      return (w && r && w !== r) ? { ...e, wrong: w, right: r } : e;
+    })
+    .filter(e => e.wrong !== e.right)
+    .filter(e => { const k = e.wrong.toLowerCase(); if (seenW.has(k)) return false; seenW.add(k); return true; });
+  if (!paragraph || _gnCJK.test(paragraph)) return null;
+  if (errs.some(e => _gnCJK.test(e.wrong + e.right))) return null;
+  /* ⚠ 2026-10-06 實測的教訓：一開始我寫死「一個錯＝一個字」，結果最高級整個出不來——
+     「most tallest → tallest」本來就是兩個字，康橋考卷上也是（most high → highest）。
+     規則不能跟考點打架。改成詞組（1~3 個字）。 */
+  if (errs.some(e => e.wrong.split(/\s+/).length > 3)) return null;
+  const words = paragraph.split(/\s+/).map(_GN_TOK).filter(Boolean);
+  if (words.length < 35 || words.length > 120) return null;
+  const low = ' ' + words.map(w => w.toLowerCase()).join(' ') + ' ';
+  const phr = (e) => e.wrong.split(/\s+/).map(_GN_TOK).filter(Boolean).map(w => w.toLowerCase()).join(' ');
+  // 這個詞組在整段裡只能出現一次（不然學生劃掉哪一處都說不準）
+  const countIn = (hay, needle) => hay.split(' ' + needle + ' ').length - 1;
+  if (!errs.every(e => phr(e) && countIn(low, phr(e)) === 1)) return null;
+  // 而且它的每一個字在「自己那一句」裡也只能出現一次（學生端是一個字一個字點的）
+  const sents = paragraph.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const sentOf = (e) => sents.find(x => (' ' + x.split(/\s+/).map(_GN_TOK).join(' ').toLowerCase() + ' ').indexOf(' ' + phr(e) + ' ') >= 0) || '';
+  const okInSent = errs.every(e => {
+    const st = sentOf(e); if (!st) return false;
+    const tk = st.split(/\s+/).map(_GN_TOK).filter(Boolean).map(w => w.toLowerCase());
+    return e.wrong.split(/\s+/).map(_GN_TOK).filter(Boolean)
+      .every(w => tk.filter(t => t === w.toLowerCase()).length === 1);
+  });
+  if (!okInSent) return null;
+  if (new Set(errs.map(e => e.wrong.toLowerCase())).size !== errs.length) return null;
+  const n = Math.max(2, Math.min(8, +want || errs.length));
+  if (want && errs.length !== n) return null;                            // want=0 ＝ 數量交給呼叫端決定
+  // 照在段落裡出現的順序排（學生端是照順序亮起來的）
+  errs.sort((p, q) => low.indexOf(' ' + phr(p) + ' ') - low.indexOf(' ' + phr(q) + ' '));
+  errs.forEach(e => { e.sentence = sentOf(e); });                        // 學生端一句一題
+  /* 🔴 v479：圈選只圈「真的改到的那幾個字」（crunchier、than 本來就沒錯）。 */
+  errs.forEach(e => { e.mark = _gnChangedWords(e.wrong, e.right); });
+  /* 🔴 v479：比較級的主張要先對過——「more delicious → deliciouser」整題丟掉。
+     ⚠ 用整句比（e.sentence vs 改好的那一句），不是只比詞組：
+       「more sweet → sweeter」單看詞組是對的，要放在句子裡才看得出沒問題。 */
+  const bad = errs.filter(e => !_gnCmpClaimOk(e.sentence || e.wrong,
+                                              (e.sentence || e.wrong).replace(e.wrong, e.right)));
+  if (bad.length) return null;
+  return { title, paragraph, errors: errs };
+}
+
+/* v467 ②：先判斷錯誤類型再改正。 */
+function gnValidDiagnose(x) {
+  const broken = String((x && x.broken) || '').trim();
+  const fixed = String((x && x.fixed) || '').trim();
+  const kinds = (Array.isArray(x && x.kinds) ? x.kinds : []).map(k => String(k || '').trim()).filter(Boolean);
+  const ai = Number(x && x.answer);
+  if (!broken || !fixed || gnNorm(broken) === gnNorm(fixed)) return null;   // 沒改就不是題目
+  if (_gnCJK.test(broken + fixed + kinds.join(''))) return null;
+  if (kinds.length < 2 || kinds.length > 3) return null;
+  if (new Set(kinds.map(k => k.toLowerCase())).size !== kinds.length) return null;
+  if (!(ai >= 0 && ai < kinds.length)) return null;
+  const nb = broken.split(/\s+/).length, nf = fixed.split(/\s+/).length;
+  if (nb > 16 || nf > 20) return null;
+  /* 🔴 v479：「more delicious」被說成錯的——整題丟掉。教錯的文法比少一題嚴重得多。 */
+  if (!_gnCmpClaimOk(broken, fixed)) return null;
+  /* 🔴 v480：這一題「改成正確的句子」那一步出不出得來。
+     ⚠ 不可以直接整題丟掉——康橋真的有「Missing Subject」這種題
+       （"ran across the line." → "My dad ran across the line."），
+       主詞本來就要學生自己想，**那是合法的「看出錯在哪」題**。
+       但它不能用「標準答案比對」來改（學生寫 "The boy ran…" 也對）。
+     → 所以：判斷題照出，改寫那一步只收「從句子本身就改得回來」的。 */
+  /* 🔴 v481：實詞被**換掉**（shoes are not toys）＝在考常識不是考文法，整題丟掉。
+     只是**補**一個實詞（Missing Subject）則照收——它是合法的「看出錯在哪」題。 */
+  if (!_gnOnlyAdds(broken, fixed)) return null;
+  const canRewrite = _gnFixableFromSentence(broken, fixed);
+  return { broken, kinds, answer: ai, fixed, canRewrite, why: String((x && x.why) || '').trim() };
+}
+
+/* v462 ①：排順序。能程式驗的：字塊數量、沒有中文、沒有重複的字塊
+   （重複的字塊會讓「哪一塊排哪裡」變成有兩種答案都對）。 */
+function gnValidOrder(x) {
+  const words = (Array.isArray(x && x.words) ? x.words : []).map(w => String(w || '').trim()).filter(Boolean);
+  if (words.length < 4 || words.length > 10) return null;
+  const joined = words.join(' ');
+  if (_gnCJK.test(joined)) return null;
+  if (words.some(w => w.split(/\s+/).length > 1)) return null;          // 一塊只能一個字
+  const low = words.map(w => w.toLowerCase().replace(/[.,!?]/g, ''));
+  if (new Set(low).size !== low.length) return null;                    // 有重複的字塊＝答案不唯一
+  return { words, hint: String((x && x.hint) || '').trim().slice(0, 60),
+           explain: String((x && x.explain) || '').trim() };
+}
+
+function gnValidTransform(x) {
+  const prompt = String((x && (x.prompt || x.q || x.from)) || '').trim();
+  const task = String((x && (x.task || x.instruction)) || '').trim();
+  const answer = String((x && x.answer) || '').trim();
+  if (!prompt || !answer || !task) return null;
+  if (_gnCJK.test(prompt + answer + task)) return null;
+  if (gnNorm(prompt) === gnNorm(answer)) return null;     // 沒變就不是轉換題
+  const np = prompt.split(/\s+/).length, na = answer.split(/\s+/).length;
+  if (np > 18 || na > 20 || Math.abs(np - na) > 6) return null;
+  return { prompt, task, answer,
+           accept: (Array.isArray(x.accept) ? x.accept : []).map(a2 => String(a2).trim()).filter(a2 => a2 && !_gnCJK.test(a2)).slice(0, 4),
+           explain: String((x && x.explain) || '').trim() };
+}
+
+function gnValidTranslate(x) {
+  const zh = String((x && (x.zh || x.q)) || '').trim();
+  const answer = String((x && x.answer) || '').trim();
+  const n = answer.split(/\s+/).length;
+  return zh && _gnCJK.test(zh) && answer && !_gnCJK.test(answer) && n >= 2 && n <= 16
+    ? { zh, answer, accept: (Array.isArray(x.accept) ? x.accept : []).map(a => String(a).trim()).filter(a => a && !_gnCJK.test(a)).slice(0, 4),
+        hint: String(x.hint || '').trim().slice(0, 40), explain: String(x.explain || '').trim() } : null;
+}
+
+/* 出一種題型到 n 題：老師原本的題目先收（請 AI 補答案、照原文），不夠再請 AI 另外出；
+   驗不過的丟掉、不夠就再出一輪（最多兩輪）。 */
+/* v430：選擇題交叉檢查——實測 AI 把「Luna is a smart cat.」的名詞標成 is。
+   v431（Alan 圖1「relax 跟 lie 都是答案」）：只比對答案還不夠——要問「有幾個選項是對的」。
+   請另一次 AI 不看答案、自己把每一題**所有**說得通的選項列出來：
+     · 列出來只有一個、而且就是出題的答案 → 收
+     · 列出兩個以上（兩個答案都對）或跟出題的答案不一樣 → 丟掉，下一輪補
+   檢查本身失敗（網路）→ 不擋，全部照收。回傳要丟掉的題目索引。 */
+async function _gnCheckMcq(items, base) {
+  if (!items.length) return new Set();
+  const sys = `You are checking a quiz for a Taiwanese elementary English class.
+For EVERY question, list the 0-based index of EVERY option a teacher would have to accept as correct.
+A question must have exactly ONE correct option. If two options are both acceptable, list them both —
+e.g. in 'Which word is an intransitive verb? "Rex, lie down and relax."' both "lie" and "relax" are
+intransitive verbs, so you list both. Judge each option on its own; do not assume only one is right.
+Output ONLY a JSON array of arrays, one per question, in order. e.g. [[2],[0,3],[1]]`;
+  const list = items.map((x, i) => `${i + 1}. ${x.q}\n${x.options.map((o, k) => `   ${k}) ${o}`).join('\n')}`).join('\n');
+  try {
+    const got = await _gnCall(sys, `${base}\n\nQUESTIONS\n${list}`, 600);
+    if (!Array.isArray(got) || got.length !== items.length) return new Set();
+    return new Set(items.map((x, i) => {
+      const a = Array.isArray(got[i]) ? got[i].map(Number).filter(n => Number.isInteger(n)) : [Number(got[i])];
+      return (a.length === 1 && a[0] === x.answer) ? -1 : i;     // 只有一個對、而且就是答案才收
+    }).filter(i => i >= 0));
+  } catch (e) { return new Set(); }
+}
+/* v444：找出來也要防「兩個答案都對」——問另一個 AI「這句話裡符合的字有哪些」，多於一個就丟掉。
+   跟 v431 的選擇題交叉檢查同一招（那次也是「lie 和 relax 都對」）。 */
+async function _gnCheckCircle(items, base) {
+  if (!items.length) return new Set();
+  const sys = `You are checking a "find the words" exercise for a Taiwanese elementary English class.
+For EVERY item you get a sentence and what the child must find.
+List EVERY word in that sentence a teacher would have to accept — if three words qualify, list all three.
+Judge each word on its own; do not stop at the first one.
+Output ONLY a JSON array of arrays of words, one per item, in order. e.g. [["cat"],["Tom","park"],["is"]]`;
+  const list = items.map((x, i) => `${i + 1}. find: ${x.find}\n   sentence: ${x.sentence}`).join('\n');
+  try {
+    const got = await _gnCall(sys, `${base}\n\nITEMS\n${list}`, 900);
+    if (!Array.isArray(got) || got.length !== items.length) return new Set();
+    const norm = (t) => String(t || '').trim().toLowerCase().replace(/[^a-z0-9']/g, '');
+    return new Set(items.map((x, i) => {
+      const a = [...new Set((Array.isArray(got[i]) ? got[i] : [got[i]]).map(norm).filter(Boolean))].sort();
+      const want = [...new Set((x.answers || [x.answer]).map(norm))].sort();
+      // 兩邊的字要完全一樣——少寫一個（漏掉的名詞）或多寫一個（不是名詞）都丟掉
+      return (a.length === want.length && a.every((t, k) => t === want[k])) ? -1 : i;
+    }).filter(i => i >= 0));
+  } catch (e) { return new Set(); }
+}
+/* ══ v452（Alan：「先學一下才剛講到某些字既可以是 linking 也可以是 action，
+   像是感官動詞就有兩種，那出這種題目也是應該有兩種選項」）═══════════════════
+   「分一分」只有一個正確籃子，所以**凡是能放進兩個籃子的字都不能用**
+   （smells 既是連綴動詞也是動作動詞——它被丟進「連綴動詞」，孩子放「動作動詞」就被判錯，
+     而那正是前一頁剛教過的事）。跟選擇題（v431）、找出來（v444）同一招：
+   再問一個 AI「這個字可以放進哪幾個籃子」，答案不只一個就整個字丟掉。 */
+async function _gnCheckSort(categories, words, base) {
+  if (!words.length) return new Set();
+  const sys = `You are checking a sorting exercise for a Taiwanese elementary English class.
+The child must drag each word into exactly ONE basket, so a word that honestly belongs in two baskets is unusable.
+For EVERY word, list EVERY basket label a teacher would have to accept.
+Be strict: English sense verbs (smell, taste, feel, look, sound) are BOTH linking verbs AND action verbs, so list both.
+Output ONLY a JSON array of arrays of basket labels, one per word, in order. e.g. [["人"],["地方","東西"],["人"]]`;
+  const list = words.map((w, i) => `${i + 1}. ${w.word}`).join('\n');
+  try {
+    const got = await _gnCall(sys, `${base}\n\nBASKETS: ${categories.join(' / ')}\n\nWORDS\n${list}`, 700);
+    if (!Array.isArray(got) || got.length !== words.length) return new Set();
+    const norm = (t) => _zhTW(String(t || '')).trim();
+    return new Set(words.map((w, i) => {
+      const a = [...new Set((Array.isArray(got[i]) ? got[i] : [got[i]]).map(norm).filter(Boolean))];
+      return (a.length === 1 && a[0] === norm(w.category)) ? -1 : i;   // 只能放一個籃子、而且就是我們給的那個
+    }).filter(i => i >= 0));
+  } catch (e) { return new Set(); }
+}
+function _gnSpread(list, n) {
+  const by = new Map();
+  list.forEach(q => { const k = q.sec || 0; if (!by.has(k)) by.set(k, []); by.get(k).push(q); });
+  const groups = [...by.values()], out = [];
+  for (let i = 0; out.length < n && groups.some(g => i < g.length); i++) groups.forEach(g => { if (i < g.length && out.length < n) out.push(g[i]); });
+  return out;
+}
+async function _gnMakeKind(kind, { n, base, teacherQs, caseMatters }) {
+  if (!n || n <= 0) return [];
+  const v0 = { mcq: gnValidMcq, fill: gnValidFill, translate: gnValidTranslate, rewrite: gnValidRewrite,
+               circle: gnValidCircle, write: gnValidWrite, transform: gnValidTransform,
+               order: gnValidOrder, diagnose: gnValidDiagnose }[kind];   // v462 / v467
+  // 大寫單元的填空：答案一定要有大寫字母（實測 AI 會出「My friend ____ lives in Taipei. → teacher」這種跟大寫無關、答案又不唯一的題）
+  const valid = (kind === 'fill' && caseMatters) ? (x) => { const v = v0(x); return v && /[A-Z]/.test(v.answer) ? v : null; } : v0;
+  // v430：老師題目各段輪流挑（不然 8 題全出自第一段）；「底線畫出名詞」這種 identify 題改成選擇題
+  const tq = _gnSpread((teacherQs || []).filter(q => q.kind === kind || (kind === 'mcq' && q.kind === 'identify')), n);
+  const hasId = tq.some(q => q.kind === 'identify');
+  const out = [], seen = new Set();
+  // 選擇題的題幹常常一模一樣（「Circle the sentence with the correct capital letters.」）→ 連選項一起比
+  /* ⚠ v467 實測踩到：新題型如果沒有被這一行認出來，所有題目的 key 都會變成空字串、
+     然後被「去重」砍到只剩一題（diagnose 要 3 題只出 1 題就是這樣）。
+     加新題型時，它的題幹欄位一定要列進來；最後再加一道保險，認不出來就用整個物件當 key。 */
+  const key = (x) => {
+    const stem = String(x.q || x.prompt || x.zh || x.wrong || x.sentence || x.broken
+      || (x.words || []).join(' ') || '');
+    const rest = (x.options || x.kinds || []).join('|') + '|' + (x.task || '') + '|' + (x.fixed || '');
+    const k = (stem + '|' + rest).replace(/\s+/g, ' ').trim();
+    return k === '|' ? JSON.stringify(x) : k;
+  };
+  /* 🔴 v480：被擋掉的要**告訴 AI 為什麼**。
+     本來重試第二輪送的是一模一樣的提示詞 → 它當然再犯一次同樣的錯，
+     然後整個題型就「產生失敗」。Alan 說得對：給它合理的提示就好。 */
+  const dropped = [];
+  const whyBad = (x) => {
+    const a1 = String((x && (x.wrong || x.broken)) || '').trim();
+    const b1 = String((x && (x.answer || x.fixed)) || '').trim();
+    if (a1 && b1) {
+      if (!_gnFixableFromSentence(a1, b1))
+        return 'the child cannot fix it from the sentence alone — your correction adds, removes or swaps a content word';
+      if (!_gnCmpClaimOk(a1, b1))
+        return 'the comparative rule is backwards (remember: -er only for short adjectives; more/most for long ones)';
+    }
+    return 'it breaks the RULES';
+  };
+  const take = (arr, from) => (Array.isArray(arr) ? arr : []).forEach(x => {
+    const v = valid(x);
+    if (!v) { if (dropped.length < 4) dropped.push(`- ${JSON.stringify(x).slice(0, 170)}\n  WHY: ${whyBad(x)}`); return; }
+    const k = key(v); if (!k || seen.has(k)) return;
+    seen.add(k); out.push(Object.assign(v, { from }));
+  });
+  for (let round = 0; round < 2 && out.length < n; round++) {
+    const need = n - out.length;
+    const teacherPart = (round === 0 && tq.length)
+      ? `FIRST include these ${tq.length} questions from the teacher's worksheet, keeping their wording (fill in the correct answer yourself):\n` +
+        tq.map((q, i) => `${i + 1}. ${q.kind === 'identify' ? `[identify: find the ${q.find || 'target word'}] ` : ''}${q.q}${q.options.length ? '  [' + q.options.join(' / ') + ']' : ''}${q.answer ? '  (answer: ' + q.answer + ')' : ''}`).join('\n') +
+        (hasId ? `\nItems marked [identify] come from "underline the …" exercises. Turn each into: q = Which word is a <X>? "<the sentence>" ,` +
+          ' options = 3 words taken from that sentence, where exactly ONE is a <X> and the other two clearly are not.' +
+          ' If an item asks for two kinds (e.g. common and proper nouns), ask about only ONE kind — alternate between them.' : '') +
+        `\nTHEN write ${Math.max(0, need - tq.length)} NEW questions of the same kind.`
+      : `Write ${need + 2} questions.`;
+    // v480：第二輪把「上一輪被擋掉的那幾題＋原因」一起送回去
+    const fb = (round > 0 && dropped.length)
+      ? `\n\nYour previous answer was REJECTED by a checker. These were thrown away:\n${dropped.join('\n')}\nDo not make those mistakes again.`
+      : '';
+    try {
+      const arr = await _gnCall(GN_Q_SYS[kind], `${base}\n\n${teacherPart}${fb}`, 2600);
+      const before = out.length;
+      take(arr, round === 0 && tq.length ? 'mixed' : 'ai');
+      if (kind === 'mcq' && out.length > before) {
+        const bad = await _gnCheckMcq(out.slice(before), base);
+        for (let i = out.length - 1; i >= before; i--) if (bad.has(i - before)) out.splice(i, 1);
+      }
+      if (kind === 'circle' && out.length > before) {
+        const bad = await _gnCheckCircle(out.slice(before), base);
+        for (let i = out.length - 1; i >= before; i--) if (bad.has(i - before)) out.splice(i, 1);
+      }
+    } catch (e) { if (round === 1) throw e; }
+  }
+  if (kind === 'circle' && out.length > 1) {
+    // 學生端整份只有一句指示語（「把名詞圈出來」）→ 只留最多數的那一種，問別種的丟掉
+    const tally = {};
+    out.forEach(x => { tally[x.findZh] = (tally[x.findZh] || 0) + 1; });
+    const main = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+    return out.filter(x => x.findZh === main).slice(0, n);
+  }
+  return out.slice(0, n);
+}
+
+/* v467：整段改錯也是「一整包」（一段文章＋N 個錯），跟分一分同理，自己一支。
+   出不來就帶著回饋重試——這一種對模型比較難（要剛好 N 個錯、每個錯字只能出現一次）。 */
+/* ⚠⚠ 2026-10-06 實測，這一種有三個真實的失敗模式，三個都要程式處理：
+     ① 叫它「剛好 5 個」它給 4 個——模型數不準。
+        → 不要逼它數。改成「大概幾個」，**真正的題數由驗證過的結果決定**。
+     ② 同一個錯列兩次（一次的 right 還寫成一句解釋）。→ 程式去重＋丟掉不像答案的。
+     ③ 把沒錯的當成錯（「the prettiest girl」→「the prettiest girl in her class」）。
+        → 這個程式看不出來，要**第二個 AI 重讀一次段落、自己列出所有錯**再比對
+        （跟 v444 找出來、v452 分一分同一招：單一正解的題型都要有「還有沒有別的答案」的檢查）。 */
+const GN_EDIT_CHECK_SYS = `You proofread ONE short paragraph for a single kind of grammar mistake.
+Output ONLY JSON: {"mistakes":[""]}
+- List the exact wording of EVERY place in the paragraph that is wrong for THAT grammar point, in order.
+- Copy the wording exactly as it appears. 1-3 words each.
+- Do not list anything that is already correct, and do not list other kinds of mistakes.
+- If the paragraph has none, output {"mistakes":[]}.
+${_AI_MINIFY}`;
+
+async function aiMakeGrammarEditPara({ base, n = 5, rounds = 3, topic = '' } = {}) {
+  let feedback = '', lastErr = null;
+  for (let i = 0; i < Math.max(1, rounds); i++) {
+    let raw;
+    try {
+      raw = await _gnCall(GN_Q_SYS.editpara,
+        /* ⚠ 多種幾個：實測模型種 5 個、能用的常常只剩 2~3 個
+           （有的是別種文法的錯、有的 right 寫成一句解釋）。多種一點，過濾完才夠數。 */
+        `${base}${feedback}\n\nPlant about ${n + 2} mistakes in the paragraph.`, 1600);
+    } catch (e) { lastErr = e; continue; }
+    const v = gnValidEditPara(raw, 0);          // 0 ＝ 不檢查數量，先看格式
+    if (v) {
+      /* 交叉檢查：另一個 AI 重讀段落、自己把錯找出來。
+         它找到的必須跟我們的答案「完全一樣」——它少找到表示我們列了沒錯的，
+         它多找到表示段落裡還有沒列進答案的錯（學生會找到卻被判錯）。 */
+      let seen = null;
+      try {
+        const chk = await _gnCall(GN_EDIT_CHECK_SYS,
+          `GRAMMAR POINT: ${topic || 'the lesson above'}\n\nPARAGRAPH:\n${v.paragraph}`, 700);
+        seen = (chk && Array.isArray(chk.mistakes)) ? chk.mistakes.map(m => _gnNormPhrase(m)).filter(Boolean) : null;
+      } catch (e) { seen = null; }               // 檢查器掛掉不要擋住老師，就當作沒意見
+      if (seen) {
+        const mine = v.errors.map(e => _gnNormPhrase(e.wrong));
+        const same = seen.length === mine.length && mine.every(m => seen.indexOf(m) >= 0);
+        if (!same) {
+          feedback = `\n\nYour last paragraph was rejected: a second proofreader found these mistakes in it — ` +
+            `${seen.map(x => '"' + x + '"').join(', ') || '(none)'} — but your answer key listed ` +
+            `${mine.map(x => '"' + x + '"').join(', ')}. Every mistake in the paragraph must be in the key, ` +
+            `and nothing in the key may already be correct. Write a NEW paragraph and be exact.`;
+          continue;
+        }
+      }
+      if (v.errors.length >= 3 && v.errors.length <= 8) return v;   // 題數＝驗證過的真實數量
+      feedback = `\n\nYour last attempt had ${v.errors.length} usable mistakes. Write a new paragraph with about ${n}.`;
+      continue;
+    }
+    feedback = `\n\nYour last attempt was rejected: a listed mistake did not appear in the paragraph exactly once, ` +
+      `or a "right" value was an explanation instead of the corrected wording, ` +
+      `or something other than the grammar point was wrong. Rewrite the whole paragraph.`;
+  }
+  throw lastErr || new Error('整段改錯出不來，請再試一次。');
+}
+/* 比對兩邊的用詞時，冠詞要一起拿掉——不然檢查器說「the goodest」、我們說「goodest」
+   會被當成不一樣，明明是同一個錯。 */
+const _gnNormPhrase = (t) => String(t || '').split(/\s+/).map(_GN_TOK).filter(Boolean).join(' ')
+  .toLowerCase().replace(/^(the|a|an)\s+/, '').trim();
+
+/* v444：分一分是「一整組」而不是一題一題，所以不走 _gnMakeKind，自己一個小迴圈。 */
+async function aiMakeGrammarSortSet({ base, n = 8, rounds = 3 } = {}) {
+  let feedback = '', lastErr = null;
+  for (let i = 0; i < Math.max(1, rounds); i++) {
+    let raw;
+    try { raw = await _gnCall(GN_SORT_SYS, `${base}${feedback}\n\nMake ${n + 2} words in total.`, 1400); } catch (e) { lastErr = e; continue; }
+    let v = gnValidSortSet(raw, n + 2);
+    if (v) {
+      /* v452：再問一個 AI「這個字可以放幾個籃子」，能放兩個的（smells…）整個丟掉。
+         故意多要 2 個字，丟掉之後通常還夠用，不必整組重出。 */
+      const bad = await _gnCheckSort(v.categories, v.words, base);
+      if (bad.size) {
+        const dropped = v.words.filter((w, k) => bad.has(k)).map(w => w.word);
+        v = gnValidSortSet({ ...v, words: v.words.filter((w, k) => !bad.has(k)) }, n);
+        feedback = '\n\nYour previous answer was REJECTED: these words fit TWO baskets at once, ' +
+          `so a child who sorted them correctly would still be marked wrong: ${dropped.join(', ')}.\n` +
+          'Replace them with words that can only ever go in ONE basket.';
+      } else {
+        v = gnValidSortSet({ ...v, words: v.words.slice(0, n) }, n);
+      }
+      if (v) return v;
+      continue;                                    // 丟完剩太少 → 換一輪重出（回饋已經寫好）
+    }
+    feedback = '\n\nYour previous answer was REJECTED: ' +
+      'you need 2-4 Chinese basket labels, at least 2 words in EVERY basket, no repeated word, ' +
+      'and every word\'s "category" must be exactly one of the labels you listed.';
+  }
+  throw new Error((lastErr && lastErr.timeout ? '分一分太久沒有回應' : '分一分這次沒有產生成功') + _aiUpstreamNote(lastErr));
+}
+
+/* ══ v443：這一課該用哪幾種互動？（Alan：「圖4 為什麼要組合句子」）══
+   「什麼是名詞」這種「認出來／分類」的單元，排句子跟找錯字都答非所問。
+   用主題字判斷，禁掉不合適的題型，並在 prompt 裡直接講清楚要用哪幾種。 */
+const _GN_IDENTIFY_RE = /(noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|part[s]?\s*of\s*speech|名詞|動詞|形容詞|副詞|代名詞|介系詞|冠詞|詞性)/i;
+const _GN_ORDER_RE = /(word\s*order|sentence\s*(order|structure|building|pattern)|question\s*form|語序|句型|句子結構|造句|重組|疑問句)/i;
+const _GN_RULEY_RE = /(tense|past|present|future|plural|singular|capital|letter|agreement|comparative|superlative|spelling|時態|過去|現在|未來|複數|單數|大寫|比較級|最高級)/i;
+/* v471：三種會動的講解長什麼樣子。只有用得到的那一課會把對應那一段放進提示詞
+   （不適用就連提都不提——AI 不會想用，也省 token）。 */
+const _GN_ANIM_SHAPE = {
+  timeline:
+    '  · "timeline" {"kind":"timeline","q":"","points":[{"when":"past|now|future","en":"","hl":[""],"zh":""}],"why":""}\n' +
+    '    2-3 points showing THE SAME action at different times. when: exactly "past", "now" or "future", each used once.\n' +
+    '    The English sentences must really differ (that difference IS the lesson) and each should carry its own time clue\n' +
+    '    ("I walked to school yesterday." / "I walk to school every day." / "I will walk to school tomorrow.").\n' +
+    '    hl = the words that changed, copied exactly from that sentence. q: Traditional Chinese ≤20 characters.',
+  forms:
+    '  · "forms" {"kind":"forms","q":"","forms":[{"type":"affirmative|negative|question","en":"","hl":[""],"zh":""}],"why":""}\n' +
+    '    2-3 versions of THE SAME sentence. type: exactly "affirmative", "negative" or "question", each used once.\n' +
+    '    Keep the subject and the main idea identical and change only what the grammar makes you change\n' +
+    '    ("She likes cats." / "She does not like cats." / "Does she like cats?").\n' +
+    '    A "question" MUST end with a question mark. hl = the words that changed. q: Traditional Chinese ≤20 characters.',
+  degree:
+    '  · "degree" {"kind":"degree","q":"","levels":[{"form":"","en":"","zh":""}],"why":""}\n' +
+    '    EXACTLY 3 levels of ONE adjective, in this order: plain, comparative, superlative (tall / taller / tallest,\n' +
+    '    good / better / best, beautiful / more beautiful / the most beautiful).\n' +
+    '    Every "en" must actually CONTAIN its own "form" word, the comparative sentence needs "than" (or an -er/more form)\n' +
+    '    and the superlative sentence needs "the" (or an -est/most form) — otherwise the example does not show the point.\n' +
+    '    q: Traditional Chinese ≤20 characters.',
+};
+
+/* v471：三種「會動的講解」各自綁死在它真正適用的文法點上。
+   v443 的教訓：不綁的話，教「什麼是名詞」也會跑出一條時態時間軸。
+   ⚠ 做法是「不適用就連提都不提」——提示詞裡不出現，AI 就不會想用，
+     比起先讓它生出來再擋掉，省 token 也少一輪重試。 */
+const _GN_TENSE_RE  = /(tense|past|present|future|simple\s*(past|present|future)|continuous|progressive|perfect|時態|過去式|現在式|未來式|進行式|完成式)/i;
+const _GN_DEGREE_RE = /(comparative|superlative|比較級|最高級|\ber\s*\/\s*est\b|more\s*\/\s*most)/i;
+const _GN_FORMS_RE  = /(negative|question|affirmative|yes\s*\/\s*no|do(es)?\s*not|don'?t|doesn'?t|auxiliar|helping\s*verb|否定|疑問|問句|肯定句|助動詞|be\s*動詞)/i;
+
+function _gnLessonPlan(topic, notes) {
+  const t = String(topic || '').trim() || String(notes || '').slice(0, 200);
+  const all = t + ' ' + String(notes || '').slice(0, 600);
+  // 「什麼是名詞」＝認出來／分類；「名詞的複數」「過去式」＝有規則可以違反，找錯字與排句子都合理
+  const identify = _GN_IDENTIFY_RE.test(t) && !_GN_RULEY_RE.test(t + ' ' + String(notes || '').slice(0, 200));
+  const ordery = _GN_ORDER_RE.test(t);
+
+  /* v471：這一課可以用哪幾種會動的講解？時態才有時間軸、比較級才有長條圖、
+     有講到否定／疑問才有三種句型。都看「主題＋筆記」，不是只看標題。 */
+  const showTimeline = _GN_TENSE_RE.test(all);
+  const showDegree   = _GN_DEGREE_RE.test(all);
+  const showForms    = _GN_FORMS_RE.test(all) || _GN_TENSE_RE.test(all);   // 時態一定會教到否定與疑問
+  const SHOW = { timeline: showTimeline, forms: showForms, degree: showDegree };
+  const anim = Object.keys(SHOW).filter(k => SHOW[k]);
+  const ban = Object.keys(SHOW).filter(k => !SHOW[k]);                     // 不適用的直接當不合格
+
+  const animText = anim.length ? ('\n\nANIMATED EXPLANATIONS available for THIS grammar point: ' +
+    anim.map(k => '"' + k + '"').join(', ') + '.\n' +
+    'They are a richer kind of "learn" step — the site animates them, so the child SEES the change happen.\n' +
+    'Use one in place of a plain "learn" step for the round where SEEING the change matters most. ' +
+    'A second one is fine only if it teaches a genuinely different idea ' +
+    '(e.g. "degree" once for short adjectives and once for long more/most adjectives) — never the same idea twice.\n' +
+    'They have no right answer, so they still need an interaction step after them, exactly like "learn".\n' +
+    anim.map(k => _GN_ANIM_SHAPE[k]).join('\n')) : '';
+
+  if (identify && !ordery) ban.push('order');
+  const text = (identify && !ordery
+    ? '\n\nLESSON PLAN: this grammar point is about RECOGNISING and CLASSIFYING words.\n' +
+      'Use "tap" (find the target words inside a sentence) and "sort" (put words into 2-3 groups) for most rounds; "pick" is also fine.\n' +
+      'Do NOT use "order" at all — rearranging a sentence does not show whether a child can recognise these words.\n' +
+      'Use "fix" only if a word can really be WRONG because of this rule (e.g. a capital letter, a missing -s).'
+    : '\n\nLESSON PLAN: choose for every round the interaction that really tests what that round just taught.\n' +
+      'Use at least two different interaction kinds, and prefer "tap" or "sort" whenever the idea is "find it" or "which group".')
+    + animText;
+  return { ban, text, anim };
+}
+/* imgHint 要講的是「例句在說什麼」，不是抽象的文法概念——
+   v442 的自動配圖抓的就是 imgHint，AI 給了「classroom」而例句在講公園，圖片就完全不相干。 */
+const _GN_STOP = new Set(('a an the is are am was were be been being do does did have has had can will would should could ' +
+  'i you he she it we they me him her us them my your his its our their this that these those there here to of in on at ' +
+  'and or but not with for from by as so very too what which who how why when where one two some any no yes ' +
+  // 常見動詞：拿來當圖片關鍵字沒有用（stock photo 搜「loves」搜不到東西），留名詞才找得到圖
+  'like likes love loves play plays go goes went run runs eat eats see sees get gets make makes take takes ' +
+  'read reads want wants need needs say says put give gives come comes look looks find finds live lives ' +
+  'work works walk walks sit sits drink drinks help helps know knows think thinks feel feels').split(' '));
+function _gnHintWords(en) {
+  return String(en || '').toLowerCase().replace(/[^a-z\s'-]/g, ' ').split(/\s+/)
+    .filter(w => w && w.length > 1 && !_GN_STOP.has(w));
+}
+function _gnFixImgHint(st) {
+  if (!st || st.kind !== 'learn') return st;
+  const words = (st.examples || []).reduce((a, e) => a.concat(_gnHintWords(e.en)), []);
+  if (!words.length) return st;
+  const hint = String(st.imgHint || '').toLowerCase();
+  const related = hint && _gnHintWords(hint).some(h => words.some(w => w === h || w.indexOf(h) === 0 || h.indexOf(w) === 0));
+  if (related) return st;
+  // 用第一句例句自己的實詞當關鍵字（「The park is big.」→「park big」），圖片至少跟句子有關
+  const first = _gnHintWords((st.examples[0] || {}).en).slice(0, 3).join(' ');
+  return first ? Object.assign({}, st, { imgHint: first }) : st;
+}
+
+// v429：互動教學獨立出來（校稿頁也能單獨按「重新產生」）
+async function aiMakeGrammarLesson({ topic, topicZh = '', notes, grade = 'g4', caseMatters = false, teacherNote = '' } = {}) {
+  const plan = _gnLessonPlan(topic + ' ' + topicZh, notes);                      // v443
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote) + plan.text;
+  // 這一課用不到的題型（例：「什麼是名詞」不該出「排句子」）直接當成不合格，讓 AI 換一種
+  const keep = (st) => { const v = gnValidStep(st); return v && plan.ban.indexOf(v.kind) < 0 ? v : null; };
+  let feedback = '', best = null, lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    let raw;
+    try { raw = await _gnCall(GN_LESSON_SYS, base + feedback, _gnMultiSec(notes) ? 3800 : 2400); } catch (e) { lastErr = e; continue; }
+    const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
+    let valid = steps.map(keep).filter(Boolean).map(_gnFixImgHint);
+    /* v452（Alan：「才剛講到感官動詞兩種都可以，那出這種題目也應該有兩種選項」）：
+       教學裡的「分一分」也要過同一關——能放進兩個籃子的字（smells…）先丟掉，
+       丟到某一籃不夠兩個字就整步不要（寧可少一步，也不要考一題一定會被誤判的題目）。 */
+    let sortBad = [];
+    for (let k = 0; k < valid.length; k++) {
+      const st = valid[k];
+      if (!st || st.kind !== 'sort') continue;
+      const flat = [].concat.apply([], st.groups.map(g => g.items.map(x => ({ word: x, category: g.label }))));
+      const bad = await _gnCheckSort(st.groups.map(g => g.label), flat, base);
+      if (!bad.size) continue;
+      sortBad = sortBad.concat(flat.filter((w, i) => bad.has(i)).map(w => w.word));
+      const drop = {};
+      flat.forEach((w, i) => { if (bad.has(i)) drop[w.word] = 1; });
+      const groups = st.groups.map(g => ({ ...g, items: g.items.filter(x => !drop[x]) }));
+      const left = groups.reduce((n2, g) => n2 + g.items.length, 0);
+      valid[k] = (groups.every(g => g.items.length >= 2) && left >= 4) ? { ...st, groups } : null;
+    }
+    valid = valid.filter(Boolean);
+    // 最後一步是「學」＝學完沒得練就結束了，砍掉（互動教學的重點就是動手）
+    let trimmed = false;
+    while (valid.length && gnIsTeachStep(valid[valid.length - 1])) { valid.pop(); trimmed = true; }
+    /* v445（Alan：「不需要這麼多頁講解，講解不是越多越好」）——最多 4 輪（8 步）。
+       多出來的整輪砍掉，寧可少講兩頁也不要小朋友翻十頁。 */
+    if (valid.length > 8) valid.length = 8;
+    while (valid.length && gnIsTeachStep(valid[valid.length - 1])) valid.pop();
+    const l = valid.filter(gnIsTeachStep).length >= 2 && valid.filter(s2 => !gnIsTeachStep(s2)).length >= 2
+      ? { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() } : null;
+    if (l) return l;
+    if (!best || valid.length > best.steps.length) best = { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() };
+    const why = (st) => {
+      if (gnValidStep(st)) return `kind "${st.kind}" does not suit this grammar point — use tap / sort / pick instead`;
+      if (st && st.kind === 'fix') return 'the "wrong" word is not a grammar mistake (or does not appear exactly once)';
+      if (st && st.kind === 'tap') return 'the answers must be words that appear exactly once in the sentence';
+      if (st && st.kind === 'sort') return 'need 2-3 groups, 3-9 items in total, every item in exactly one group';
+      return 'it breaks the RULES';
+    };
+    const bad = steps.map((st, k) => (keep(st) ? null : `- step ${k + 1} (${why(st)}): ${JSON.stringify(st).slice(0, 160)}`)).filter(Boolean);
+    if (trimmed) bad.push('- the lesson ended with a teaching step: every "learn" (and every animated explanation) must be followed by an interaction');
+    if (sortBad.length) bad.push('- a "sort" step used words that belong to TWO groups at once (a child who sorts them ' +
+      `correctly would still be marked wrong): ${sortBad.join(', ')}. Sense verbs (smell/taste/feel/look/sound) are ` +
+      'both linking and action verbs — never put them in a sorting question.');
+    feedback = `\n\nYour previous answer was REJECTED by the checker. Problem steps:\n${bad.join('\n') || '- not enough valid steps'}\n` +
+      'Fix them. You need at least 2 "learn" steps and 2 interaction steps, and every step must follow the RULES exactly.';
+  }
+  // 三次都不完美 → 只要有「學」也有「動手」，就先用驗過的那幾步（總比整個失敗好）
+  if (best && best.steps.some(gnIsTeachStep) && best.steps.some(s => !gnIsTeachStep(s))) return best;
+  throw new Error((lastErr && lastErr.timeout ? '互動教學太久沒有回應' : '互動教學產生失敗') + _aiUpstreamNote(lastErr));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v462 ⑦（Alan 挑的第三個）：依文法主題自動挑題型
+   ──────────────────────────────────────────────────────────────────────────
+   現在不管教什麼，八種題型都是同一組預設值。但它們根本不等價：
+     · 教「名詞分類」→ 找出來、分一分最有用，改寫句子出不出得來都沒意義
+     · 教「時態」    → 填空、句型轉換最有用，分一分沒東西可分
+     · 教「語序」    → 要排順序才練得到，選擇題練不到
+   所以先讓 AI 判斷「這是哪一類文法點」，再給一份建議的題型與題數，老師再微調。
+   ⚠ AI 只負責「判斷類型」這件它擅長的事；真正的題數是程式照對照表給的，
+     不讓模型自己編數字（它會給出 0 或 50 這種沒道理的值）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const GN_PLAN_SYS = `You classify ONE English grammar point so a teacher knows which exercises fit it.
+Output ONLY JSON: {"type":"","why":"","findWhat":"","sortBy":""}
+RULES
+- type: EXACTLY one of
+  "identify"  = the student must recognise or label words (noun / verb / proper noun / adjective…)
+  "form"      = the student must change a word's form (verb tense, plurals, comparatives, a/an…)
+  "order"     = the student must get the word order right (questions, adjective order, there is/are, adverb position)
+  "usage"     = the student must choose the right word for the meaning (prepositions, conjunctions, pronouns…)
+  "sentence"  = the point only shows up across a whole sentence (punctuation, capital letters, joining two sentences)
+- why: ONE Traditional Chinese sentence, ≤30 characters, telling the TEACHER why you picked that type.
+- findWhat: if the lesson can ask "find every X in this sentence", what is X, in English, ≤3 words. Else "".
+- sortBy: if the lesson can ask "put these words into baskets", what are the baskets, in English,
+  "A / B" or "A / B / C". Else "".
+${_AI_MINIFY}`;
+
+/* 每一類適合哪些題型、各出幾題。數字是「一節課寫得完」的量，老師可以自己改。
+   0 ＝ 這一類不要出這一種（例如教名詞分類不要出句型轉換）。 */
+const GN_PLAN_PRESET = {
+  identify: { nOrd: 0, nMcq: 6, nFill: 4, nTr: 0, nRw: 0, nWrite: 3, nTf: 0, nCircle: 6, nSort: 8, nCircleSets: 2, nSortSets: 1 },
+  form:     { nOrd: 4, nMcq: 6, nFill: 8, nTr: 4, nRw: 5, nWrite: 3, nTf: 6, nCircle: 0, nSort: 6, nCircleSets: 1, nSortSets: 1 },
+  order:    { nOrd: 8, nMcq: 4, nFill: 4, nTr: 5, nRw: 4, nWrite: 3, nTf: 6, nCircle: 0, nSort: 0, nCircleSets: 1, nSortSets: 1 },
+  usage:    { nOrd: 4, nMcq: 8, nFill: 8, nTr: 4, nRw: 0, nWrite: 3, nTf: 4, nCircle: 4, nSort: 6, nCircleSets: 1, nSortSets: 1 },
+  sentence: { nOrd: 5, nMcq: 6, nFill: 4, nTr: 3, nRw: 8, nWrite: 4, nTf: 5, nCircle: 4, nSort: 0, nCircleSets: 1, nSortSets: 1 },
+};
+const GN_PLAN_ZH = { identify: '認出來型', form: '變化形式型', order: '語序型', usage: '用對字型', sentence: '整句型' };
+
+async function aiPlanGrammarKinds({ topic, topicZh = '', notes, grade = 'g4' } = {}) {
+  const body = `GRAMMAR POINT: ${topic}${topicZh ? `（${topicZh}）` : ''}\nTEACHER'S NOTES:\n${String(notes || '').slice(0, 2500)}`;
+  let plan = null;
+  try {
+    plan = await _gnCall(GN_PLAN_SYS, body, 400);
+  } catch (e) { /* 判斷失敗不該擋住老師——退回通用的預設值 */ }
+  const type = (plan && GN_PLAN_PRESET[plan.type]) ? plan.type : 'usage';
+  const findWhat = String((plan && plan.findWhat) || '').trim();
+  const sortBy   = String((plan && plan.sortBy) || '').trim();
+  const preset = { ...GN_PLAN_PRESET[type] };
+  /* AI 已經回報「這一課能不能問『找出所有的 X』」「能不能分籃子」——那是它看完
+     教學重點之後的判斷，比我們的對照表知道得多。它說不行就關掉，不要硬出。
+     （實測：教 Do/Does 問句時 findWhat 是空的——句子裡沒有「一種可以全部找出來的字」。） */
+  if (!findWhat) preset.nCircle = 0;
+  if (!sortBy)   preset.nSort = 0;
+  return {
+    type, zh: GN_PLAN_ZH[type],
+    why: String((plan && plan.why) || '').trim() || '看不出特別偏向哪一種，先給通用的一組。',
+    findWhat, sortBy,
+    guessed: !plan,                       // true ＝ AI 沒判斷成功，這是退回的預設值
+    ...preset,
+  };
+}
+
+/* v461（Alan：「一鍵生成文法只能出一組找出來、分一分，但有時候我想出兩組三組」）：
+   要出好幾組的時候，每一組都要真的不一樣——同一個 prompt 送三次，模型很可能給你
+   三份幾乎一樣的句子。這裡明講「這是第幾組、跟別組不可以重複」。 */
+/* ⚠ 2026-09-30 實測：只說「要跟別組不一樣」不夠——分一分兩組 6 個字裡重複了 4 個
+   （teacher / bicycle / Friday / pizza 這種最順手的字，模型每次都先想到它們）。
+   平行送出去的請求彼此看不到對方，所以要給每一組**各自不同的題材範圍**，
+   靠題材把字分開才可靠。 */
+const _GN_SET_THEMES = [
+  'school and family life (classroom, homework, brother, grandmother, teacher, pencil)',
+  'food, animals and the night market (noodles, mango, rabbit, parrot, dumpling, market)',
+  'travel, weather and sport (mountain, typhoon, swimming, bicycle race, airport, umbrella)',
+];
+function _gnSetHint(k, total) {
+  if (!total || total <= 1) return '';
+  const theme = _GN_SET_THEMES[k % _GN_SET_THEMES.length];
+  return `\n\nThis is SET ${k + 1} of ${total} for the same lesson, and the sets are written at the same time
+by different writers who cannot see each other. To keep them from overlapping, THIS set must draw every
+sentence and every word from ONE subject area only: ${theme}.
+Do not use words or names from outside that area, and do not use the textbook's own examples.`;
+}
+
+async function aiMakeGrammarPack({ topic, topicZh = '', notes, teacherQs = [], grade = 'g4', nMcq = 8, nFill = 8, nTr = 5, nRw = 0,
+                                   nCircle = 0, nSort = 0, nCircleSets = 1, nSortSets = 1,
+                                   nWrite = 0, nTf = 0, nOrd = 0,             // v462 ③造句 ②句型轉換 ①排順序
+                                   nEdit = 0, nDiag = 0,                     // v467 康橋：整段改錯（幾個錯）／先判斷再改正（幾題）
+                                   caseMatters = false, teacherNote = '', avoid = [], onProgress } = {}) {
+  if (!String(notes || '').trim() && !String(topic || '').trim()) throw new Error('沒有教學內容，請先上傳照片或貼上文字。');
+  /* v469：複習時把「上次出過的句子」送進去說不可以再用（跟 v466 單字那邊同一套）。 */
+  const base = _GN_BASE(grade, topic + (topicZh ? `（${topicZh}）` : ''), notes, caseMatters, teacherNote)
+    + _aiAvoidNote(avoid);
+  const cSets = nCircle > 0 ? Math.max(1, Math.min(3, +nCircleSets || 1)) : 0;
+  const sSets = nSort   > 0 ? Math.max(1, Math.min(3, +nSortSets   || 1)) : 0;
+  let done = 0;
+  const total = 1 + [nMcq, nFill, nTr, nRw, nWrite, nTf, nOrd, nEdit, nDiag].filter(Boolean).length + cSets + sSets;
+  const tick = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+  // v429：每一份各自成敗——以前互動教學一失敗，Promise.all 整個丟掉，連已經出好的題目都沒了
+  const settle = (p, label, n) => p.then(v => ({ v }), e => ({ e })).finally(() => { if (n === undefined || n > 0) tick(label); });
+  const nm = (zh, k, tot) => tot > 1 ? `${zh} ${k + 1}` : zh;
+  const circleJobs = Array.from({ length: cSets }, (_, k) =>
+    settle(_gnMakeKind('circle', { n: nCircle, base: base + _gnSetHint(k, cSets), teacherQs, caseMatters }), nm('找出來', k, cSets), nCircle));
+  const sortJobs = Array.from({ length: sSets }, (_, k) =>
+    settle(aiMakeGrammarSortSet({ base: base + _gnSetHint(k, sSets), n: nSort }), nm('分一分', k, sSets), nSort));
+  const [L, M, F, T, R, W, X, O, E, D, Cs, Ss] = await Promise.all([
+    settle(aiMakeGrammarLesson({ topic, topicZh, notes, grade, caseMatters, teacherNote }), '互動教學'),
+    settle(_gnMakeKind('mcq', { n: nMcq, base, teacherQs, caseMatters }), '選擇題', nMcq),
+    settle(_gnMakeKind('fill', { n: nFill, base, teacherQs, caseMatters }), '填空題', nFill),
+    settle(_gnMakeKind('translate', { n: nTr, base, teacherQs, caseMatters }), '中翻英', nTr),
+    settle(_gnMakeKind('rewrite', { n: nRw, base, teacherQs, caseMatters }), '改寫句子', nRw),
+    settle(_gnMakeKind('write', { n: nWrite, base, teacherQs, caseMatters }), '造句', nWrite),
+    settle(_gnMakeKind('transform', { n: nTf, base, teacherQs, caseMatters }), '句型轉換', nTf),
+    settle(_gnMakeKind('order', { n: nOrd, base, teacherQs, caseMatters }), '排順序', nOrd),
+    settle(nEdit > 0 ? aiMakeGrammarEditPara({ base, n: nEdit, topic: topic + (topicZh ? `（${topicZh}）` : '') }) : Promise.resolve(null), '整段改錯', nEdit),
+    settle(_gnMakeKind('diagnose', { n: nDiag, base, teacherQs, caseMatters }), '先判斷再改正', nDiag),
+    Promise.all(circleJobs),
+    Promise.all(sortJobs),
+  ]);
+  const errors = [];
+  if (L.e) errors.push('互動教學');
+  [[M, '選擇題', nMcq], [F, '填空題', nFill], [T, '中翻英', nTr], [R, '改寫句子', nRw],
+   [W, '造句', nWrite], [X, '句型轉換', nTf], [O, '排順序', nOrd],
+   [E, '整段改錯', nEdit], [D, '先判斷再改正', nDiag]]
+    .forEach(([x, name, n]) => { if (n && x.e) errors.push(name); });
+  Cs.forEach((x, k) => { if (x.e) errors.push(nm('找出來', k, cSets)); });
+  Ss.forEach((x, k) => { if (x.e) errors.push(nm('分一分', k, sSets)); });
+  // 每一組各自一個單元；circle／sort 仍然是「第一組」，舊的呼叫端與校稿畫面完全不用改
+  const circleSets = Cs.map(x => x.v || []).filter(a => a.length);
+  const sortSets   = Ss.map(x => x.v || null).filter(Boolean);
+  const out = { lesson: L.v || null, mcq: M.v || [], fill: F.v || [], tr: T.v || [], rw: R.v || [],
+                write: W.v || [], tf: X.v || [], ord: O.v || [],   // v462
+                edit: E.v || null, diag: D.v || [],                // v467 康橋
+                circle: circleSets[0] || [], sort: sortSets[0] || null,
+                circleSets, sortSets, caseMatters, errors };
+  if (!out.lesson && !out.mcq.length && !out.fill.length && !out.tr.length && !out.rw.length
+      && !out.write.length && !out.tf.length && !out.ord.length && !out.edit && !out.diag.length
+      && !circleSets.length && !sortSets.length) {
+    throw new Error('全部都沒有產生成功，請再試一次。');
+  }
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v436：📖 閱讀理解的「先備知識」互動教學（Alan：「還缺少了一開始的 background
+   給學生的背景知識…我希望可以跟 grammar 一樣有互動式學習，讓小朋友可以提前知道
+   一些重要知識，這樣對網站來說更有意義」）
+   ──────────────────────────────────────────────────────────────────────────
+   刻意沿用 ✏️ 出文法那一套 lesson.steps（learn／pick）＝ 學生端 StepLesson 不用改，
+   星星、進度、鎖（requires）也全部沿用。差別只在內容：教的是「讀這篇之前要先知道的事」。
+   ⚠ 不能爆雷：背景知識不可以直接回答文章的理解題（prompt 有寫）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const RC_BG_SYS = `You write a SHORT interactive briefing a Taiwanese elementary student reads
+BEFORE the article, so they know what this text is about and what to look for.
+Output ONLY JSON:
+{"lead":"","steps":[
+ {"kind":"learn","say":"","imgHint":"","examples":[{"en":"","hl":[""],"zh":""}]},
+ {"kind":"pick","q":"","options":["",""],"answer":0,"why":""}
+],"outro":""}
+RULES
+- lead: ONE Traditional Chinese sentence, ≤30 characters, saying what the whole article is about —
+  like a one-line summary: 「這篇在講化石獵人 Mary Anning 的一生」.
+- steps: 3 or 4 rounds. Each round = ONE "learn" immediately followed by ONE "pick" that checks it.
+- ROUND 1 MUST BE THE OVERVIEW: learn.say = the main point of the article in ONE Traditional Chinese
+  sentence (≤30 characters): who/what it is about and why that person or thing matters.
+  e.g. 「Mary Anning 是兩百年前英國的化石獵人」.
+- ROUNDS 2-4: the other things the child should know before reading — who the key people are,
+  where the place is, what the key idea means, or what big thing happened.
+  Adding true, relevant background beyond the article is fine when it helps (年代、地點、為什麼重要).
+- learn.say: ONE idea, Traditional Chinese, ≤30 characters, no jargon.
+- learn.examples: 1-2 short English sentences (≤10 words) from the article or built from its words.
+  hl = the exact words in "en" to highlight. zh = the Chinese meaning.
+- learn.imgHint: 2-4 English words naming a photo that would help (the teacher adds the photo).
+- pick.q: a short question in Traditional Chinese, OR one English sentence with ________ .
+  options: 2-4 short choices. answer: 0-based index. why: Traditional Chinese ≤30 characters.
+- Give the big picture, NOT every detail: leave the story's details, dates and numbers for the child
+  to find while reading. Never write 課文提到／文章說 — they have not read it yet.
+- Everything must be true. Do not invent facts about the people or places.
+- outro: ONE encouraging Traditional Chinese sentence, ≤25 characters, telling them to start reading.
+${_AI_MINIFY}`;
+
+/* 有沒有「爆雷／講得像已經讀過」——實測 AI 會寫「課文提到他們留下美國國旗」 */
+const _rcBgSpoiler = (l) => JSON.stringify(l || {}).match(/課文(提到|說|裡|中)|文章(說|提到)/g) || [];
+
+async function aiMakeReadingBackground({ passage, title = '', grade = 'g4', teacherNote = '', onProgress } = {}) {
+  const _rcUser = (pg, ti, ex) => _rcUserBase(pg, ti, [_aiTeacherNote(teacherNote).trim(), ex].filter(Boolean).join('\n\n'));
+  const text = String(passage || '').trim();
+  if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字）。');
+  const base = `Students: Taiwanese elementary school, ${RC_GRADES[grade] || RC_GRADES.g4}
+Article title: ${title || '(untitled)'}
+The article:
+${text.slice(0, 6000)}`;
+  let feedback = '', best = null, lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    if (onProgress) onProgress(i + 1, 3, '背景知識');
+    let raw;
+    try { raw = await _gnCall(RC_BG_SYS, base + feedback, 2600); } catch (e) { lastErr = e; continue; }
+    const l = gnValidLesson(raw);
+    const spoil = l ? _rcBgSpoiler(l) : [];
+    if (l && !spoil.length) return l;
+    const steps = raw && Array.isArray(raw.steps) ? raw.steps : [];
+    const valid = steps.map(gnValidStep).filter(Boolean);
+    if (!best || valid.length > best.steps.length) {
+      best = { lead: _zhTW((raw && raw.lead) || '').trim(), steps: valid, outro: _zhTW((raw && raw.outro) || '').trim() };
+    }
+    if (l && spoil.length) {           // 步驟都合格，只是講得像已經讀過 → 換個講法重出
+      feedback = '\n\nYour previous answer was REJECTED: it mentioned 課文/文章 (' + spoil.join('、') +
+        '). The child has NOT read the article yet — teach the background as general knowledge instead.';
+      continue;
+    }
+    const bad = steps.map((st, k) => (gnValidStep(st) ? null : `- step ${k + 1}: ${JSON.stringify(st).slice(0, 180)}`)).filter(Boolean);
+    feedback = `\n\nYour previous answer was REJECTED by the checker. Problem steps:\n${bad.join('\n') || '- not enough valid steps'}\n` +
+      'Fix them. You need at least 2 "learn" steps and 2 "pick" steps, and every step must follow the RULES exactly.';
+  }
+  if (best && best.steps.some(s => s.kind === 'learn') && best.steps.some(s => s.kind !== 'learn')) return best;
+  throw new Error((lastErr && lastErr.timeout ? '背景知識太久沒有回應' : '背景知識產生失敗') + _aiUpstreamNote(lastErr));
+}
+
+function grCountBlanks(passage) {
+  return (String(passage || '').match(/\[[^\]]+\]/g) || []).length;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v386: AI 出閱讀理解題（貼文字稿 → 選擇題 + 閱讀簡答 + 閱讀技巧）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 的用法：學校老師除了考文意理解的選擇題與 short answer，還會考
+   reading skill（Cause & Effect／Problem & Solution／Sequencing／
+   Compare & Contrast）。這裡一次把三種都生出來，題數與要哪幾個技巧都由老師勾。
+
+   ⚠ 沿用 v382 學到的：AI 出題「光靠 prompt 講不動，要程式驗＋能修就修」。
+   每一種都有 _rcValid* 驗、修得掉的就修（例：answer 回文字而不是索引、
+   選項有重複、排序題事件數量超過），修不掉才重生；最後一輪還是不合格就先收下，
+   讓老師在校稿頁改（絕不整批丟掉、讓老師白等）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const RC_SKILLS = {
+  'problem-solution': { zh: '問題與解決', ico: '🧩', en: 'Problem & Solution' },
+  'cause-effect':     { zh: '因果關係',   ico: '⚡', en: 'Cause & Effect' },
+  'sequence':         { zh: '事件排序',   ico: '🔢', en: 'Sequencing' },
+  'compare-contrast': { zh: '比較對照',   ico: '⚖️', en: 'Compare & Contrast' },
+};
+
+const RC_GRADES = {
+  g1: 'Grade 1 (age 7, CEFR pre-A1). Three-to-five word sentences, only the most basic sight words.',
+  g2: 'Grade 2 (age 8, CEFR pre-A1). Very short sentences, only the most common words.',
+  g3: 'Grade 3 (age 9, CEFR A1). Short sentences, everyday words.',
+  g4: 'Grade 4 (age 10, CEFR A1-A2).',
+  g5: 'Grade 5 (age 11, CEFR A2).',
+  g6: 'Grade 6 (age 12, CEFR A2). May include one inference question that needs two facts joined together.',
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v415：閱讀技巧「題目」（Alan：「我可以自己勾選我這次要什麼 reading skill 的題目」）
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠ 跟上面的 RC_SKILLS 不是同一件事，兩個都要留著：
+     · RC_SKILLS  ＝ 拖卡片的「活動」（問題/解決兩個框、因果配對、排序、文氏圖）
+     · RC_QSKILLS ＝ 一般的選擇題／簡答題，只是「問的角度」指定成某一種閱讀技巧
+   Alan 的課本頁邊就是印這些：Use Text Evidence／Make Inferences／
+   Explain Author's Purpose／Vocabulary in Context…，所以是題目不是活動。
+   ══════════════════════════════════════════════════════════════════════════ */
+const RC_QSKILLS = {
+  'main-idea':        { zh: '主旨大意',     en: 'Main Idea',             ico: '🌟' },
+  'text-evidence':    { zh: '找出文本證據', en: 'Use Text Evidence',     ico: '🔎' },
+  'inference':        { zh: '推論',         en: 'Make Inferences',       ico: '💡' },
+  'cause-effect':     { zh: '因果關係',     en: 'Cause & Effect',        ico: '⚡' },
+  'problem-solution': { zh: '問題與解決',   en: 'Problem & Solution',    ico: '🧩' },
+  'character':        { zh: '描述角色',     en: 'Describe a Character',  ico: '🧍' },
+  'compare-contrast': { zh: '比較對照',     en: 'Compare & Contrast',    ico: '⚖️' },
+  'author-purpose':   { zh: '作者目的',     en: "Explain Author's Purpose", ico: '🎯' },
+  'vocabulary':       { zh: '上下文猜字',   en: 'Vocabulary in Context', ico: '🔤' },
+};
+/* 每一種到底該問什麼——寫給 AI 看的。寫得越具體，出來的題目越像那一種技巧。 */
+const RC_QSKILL_RULE = {
+  'main-idea':        'Ask what the passage is MOSTLY about. The three wrong options should be details that are true but too small to be the main idea.',
+  'text-evidence':    'Ask which detail from the passage BEST shows or proves a given statement. Every option must be a short quote or a close paraphrase of a real sentence in the passage, and all four must be about the same length - trim the correct one if you have to.',
+  'inference':        'Ask something the passage strongly implies but never says outright; the student must put two facts together. Never require outside knowledge.',
+  'cause-effect':     'Name one event from the passage and ask WHY it happened, or ask what that event caused. Both sides must be in the passage.',
+  'problem-solution': 'Ask what problem someone faced, or how a problem was fixed. Both the problem and the solution must be stated in the passage.',
+  'character':        'Ask what a person in the passage is like - a trait, a feeling, or why they did something - and make the answer provable from what they DO or SAY in the passage.',
+  'compare-contrast': 'Ask how two things, people, places or times in the passage are alike or different. Both must appear in the passage.',
+  'author-purpose':   'Ask WHY the author wrote this, or why the author included one particular detail or paragraph (to inform / to entertain / to persuade / to show something).',
+  'vocabulary':       'Pick a word that really appears in the passage and ask what it means AS USED there. The student must work it out from the sentence around it.',
+};
+/* 把「這次要考哪幾種」變成一段 prompt。round-robin 分配，題數不夠時只出前幾種。 */
+function _rcFocusBlock(qskills, n) {
+  const ks = (qskills || []).filter(k => RC_QSKILLS[k]);
+  if (!ks.length || !n) return '';
+  const plan = Array.from({ length: n }, (_, i) => ks[i % ks.length]);
+  return '\n\nTHIS SET MUST PRACTISE THESE READING SKILLS.\n' +
+    ks.map(k => `- ${RC_QSKILLS[k].en}: ${RC_QSKILL_RULE[k]}`).join('\n') +
+    '\nWrite the items in exactly this order:\n' +
+    plan.map((k, i) => `  ${i + 1}. ${RC_QSKILLS[k].en}`).join('\n') +
+    '\nPut the matching key in the "skill" field: ' + ks.join(', ') + '.';
+}
+/* 有兩種技巧「說得出來就驗得到」，程式再確認一次（其餘靠 grounding 那一關）：
+   · 找證據：正解必須真的是文章裡的句子（不是改寫得面目全非的東西）
+   · 上下文猜字：題目裡問的那個字，必須真的出現在文章裡 */
+function rcQSkillOk(passage, q, skill) {
+  if (skill === 'text-evidence') {
+    const ans = (q.options || [])[q.answer];
+    return _rcInPassage(passage, ans);
+  }
+  if (skill === 'vocabulary') {
+    const quoted = String(q.q || '').match(/["'“‘]([A-Za-z][A-Za-z'-]{2,})["'”’]/);
+    const w = quoted ? quoted[1] : '';
+    if (!w) return true;                       // 沒用引號標出來就不強求
+    return new RegExp('\\b' + w + '\\b', 'i').test(String(passage || ''));
+  }
+  return true;
+}
+
+function _rcId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function _rcTxt(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+
+/* AI 常常把 answer 回成選項文字而不是索引（aiMakeLesson 也踩過）→ 修回索引 */
+function _rcFixAnswerIdx(q) {
+  if (!q || !Array.isArray(q.options)) return null;
+  let a = q.answer;
+  if (typeof a === 'string') {
+    const t = _rcTxt(a);
+    let i = q.options.findIndex(x => _rcTxt(x).toLowerCase() === t.toLowerCase());
+    if (i < 0 && /^[0-3]$/.test(t)) i = +t;                                   // 回 "2" 這種數字字串
+    // 也可能回 "A" / "B" / "(C)" 這種
+    if (i < 0 && /^[（(]?[A-Da-d][）)．.]?$/.test(t)) i = t.toUpperCase().charCodeAt(t.search(/[A-Da-d]/i)) - 65;
+    a = i;
+  }
+  if (typeof a !== 'number' || !(a >= 0) || a >= q.options.length) return null;
+  return { ...q, answer: a };
+}
+
+/* ══ v417（Alan：「選擇題的答案選項都是最長的為答案，小朋友用猜的也猜得到」）══
+   量過他截圖裡的 4 題：4 題的正解都是最長的 → 只要「選最長的」正確率 100%（隨便猜 25%），
+   而且正解比第二長的多 15／17／42／48 個字元——那是一眼就看得出來的差距。
+
+   實測三種寫法之後才定案（都是打 Worker、同一篇課文各出 6 題）：
+     · 只寫「similar length」（原本就有這句）→ 正解最長 6/6，差 15~48 字元
+     · 改成用「字元數」下指令              → 正解最長 6/6，差 1~13 字元（模型數不準字元）
+     · 改成用「詞數」下相對指令            → 一般題最大只差 3 個字元、找證據最大 13
+   ⚠ 結論：**要模型數「詞」不要數「字元」**，而且要相對（四個選項詞數一樣），
+     不要給絕對值——短答案（例：On an island）被逼到 8 個字會很不自然。
+
+   程式這一關只擋「看得出來」的：差 12 個字元以上、或整整多 2 個詞。
+   差 1~6 個字元的不擋——那在畫面上根本分不出長短，擋了只是白花錢重生。 */
+const _RC_LEN_REMIND = '\n\nSome of your last items were thrown away because the correct answer was ' +
+  'clearly the LONGEST option - a child could pick it without reading. Count the WORDS in each option: ' +
+  'all four must have the same number of words, give or take one, and the correct answer must not be the longest.';
+function rcOptionLenOk(q) {
+  const opts = ((q && q.options) || []).map(o => String(o || '').trim());
+  if (opts.length !== 4 || opts.some(o => !o)) return false;
+  const C = opts.map(o => o.length);
+  const W = opts.map(o => o.split(/\s+/).length);
+  const i = q.answer;
+  if (!(C[i] > 0)) return false;
+  const oc = C.filter((_, k) => k !== i), ow = W.filter((_, k) => k !== i);
+  const hiC = Math.max.apply(null, oc), loC = Math.min.apply(null, oc);
+  const hiW = Math.max.apply(null, ow), loW = Math.min.apply(null, ow);
+  const visible = (dc, dw) => dc >= 12 || dw >= 2;      // 「看得出來」的門檻
+  if (C[i] > hiC && visible(C[i] - hiC, W[i] - hiW)) return false;   // 明顯最長＝選最長就對
+  if (C[i] < loC && visible(loC - C[i], loW - W[i])) return false;   // 明顯最短＝反向的破綻
+  return true;
+}
+
+function _rcValidMcq(q) {
+  if (!q || !_rcTxt(q.q)) return false;
+  const opts = (q.options || []).map(_rcTxt);
+  if (opts.length !== 4 || opts.some(o => !o)) return false;
+  // 選項重複＝送分題；大小寫不同也算重複
+  const seen = new Set(opts.map(o => o.toLowerCase()));
+  if (seen.size !== 4) return false;
+  if (opts.some(o => /^(all|none) of the above/i.test(o))) return false;
+  if (typeof q.answer !== 'number' || q.answer < 0 || q.answer > 3) return false;
+  if (!_rcTxt(q.explain)) return false;
+  if (/…|\.\.\./.test(q.explain)) return false;   // v379 踩過：模型把範本的「…」抄進輸出
+  if (!rcOptionLenOk(q)) return false;             // v417: 正解不可以是「明顯最長的那一個」
+  return true;
+}
+
+function _rcValidSa(q) {
+  if (!q || !_rcTxt(q.question) || !_rcTxt(q.keyPoints)) return false;
+  if (/^(is|are|was|were|do|does|did|can|will|has|have)\b/i.test(_rcTxt(q.question))) return false; // yes/no 題不適合簡答
+  return true;
+}
+
+const _RC_SYS_BASE =
+`You write English reading exercises for Taiwanese elementary-school students, based on a passage the teacher gives you.
+Output ONLY valid JSON. No prose, no markdown, no code fences.
+Everything you write must be answerable from the passage ALONE. Never use outside knowledge.
+Never write the literal characters "..." or the Chinese ellipsis - always write the real wording.
+${_AI_MINIFY}`;
+
+function _RC_SYS_MCQ(gradeNote, n, focus) {
+  return _RC_SYS_BASE + '\n\n' +
+`Student level: ${gradeNote}
+
+Return: {"items":[{"q":"","options":["","","",""],"answer":0,"explain":"","skill":"detail"}]}
+Generate ${n} items.
+
+RULES
+- q: ONE English question about the passage, 6-18 words. Answerable from the passage alone.
+- options: EXACTLY 4 short English choices, all plausible. Exactly ONE is correct.
+  The three wrong ones must be wrong because of the passage, not because they are silly.
+  Never use "All of the above" or "None of the above".
+- SAME-LENGTH RULE (a program checks this and throws the item away if it fails):
+  Count the WORDS in each of the four options. All four must have the same number of words,
+  give or take one word. Write the three wrong options FIRST and give them just as much detail
+  as the right one; then make the correct answer the same length.
+  The correct answer must NOT be the longest option.
+  A child who cannot read the passage must not be able to spot the answer just by its length.
+- answer: the 0-BASED INDEX (0,1,2,3) of the correct option. A number, never the text.
+- explain: Traditional Chinese, 20-45 characters. Quote the English clue phrase from the passage
+  inside the Chinese quotation marks, then say what it means, then give the answer.
+  GOOD: 「the deer ate too much grass and leaves」說鹿把草和樹葉都吃光了，所以島上的食物變少。
+  GOOD: 「the wolves left the healthy deer alone」說狼只吃虛弱的鹿，所以鹿群反而變健康。
+  BAD:  文章有提到相關內容，所以選 B。
+  BAD:  quoting nothing from the passage.
+- Keep every word simple enough for the student level above.` +
+    /* ⚠ v415：老師指定了要考哪些技巧時，這兩條一定要拿掉——
+       底稿要求「混合 main-idea / vocabulary / inference」，跟指定的技巧會互相打架，
+       出來的題目就會一半聽老師的、一半聽底稿的。 */
+    (focus ? focus : `
+- skill: one of "main-idea", "detail", "vocabulary", "inference", "sequence", "cause-effect".
+- Mix the skills: at least one "main-idea", at least one "vocabulary" (a word used in the passage,
+  asked in context), at least one "inference". The rest can be "detail".`);
+}
+
+function _RC_SYS_SA(gradeNote, n, focus) {
+  return _RC_SYS_BASE + '\n\n' +
+`Student level: ${gradeNote}
+
+Return: {"items":[{"question":"","keyPoints":""}]}
+Generate ${n} items.
+
+RULES
+- question: ONE open English question about the passage, 6-16 words, needing a 1-3 sentence answer.
+  It must NOT be answerable with yes or no, so never start with Is/Are/Was/Were/Do/Does/Did/Can/Will/Has/Have.
+  Start with What / Why / How / Who / Where / Describe / Explain.
+- keyPoints: what a full-credit answer must contain, in ENGLISH, 2-4 points separated by " / ".
+  These are marking points for the teacher's AI grader, not a model answer paragraph.
+  Example: "wolves left the island / no one hunted the deer / too many deer ate the plants"
+- Ask about different parts of the passage - do not ask two questions about the same sentence.` + (focus || '');
+}
+
+function _RC_SYS_SKILL(kind, gradeNote) {
+  const head = _RC_SYS_BASE + '\n\nStudent level: ' + gradeNote + '\n\n';
+  if (kind === 'problem-solution') {
+    return head +
+`Task: Problem & Solution. The student will drop each card into either the Problem box or the Solution box.
+
+Return: {"items":[{"text":"","zone":"problem","why":""}]}
+
+RULES
+- Write 4 or 6 cards in total, HALF "problem" and HALF "solution".
+- text: ONE short English sentence from the story, 5-14 words, in the student's own reading level.
+  A "problem" card states something that went wrong in the passage.
+  A "solution" card states what fixed it or made it better.
+- Every card must clearly belong to one box only. If a card could go in either, rewrite it.
+- Do NOT start a card with "The problem is" or "The solution is" - that gives the answer away.
+- why: Traditional Chinese, 15-35 characters, saying how you can tell which box it goes in.`;
+  }
+  if (kind === 'cause-effect') {
+    return head +
+`Task: Cause & Effect. The student sees the causes and drops the matching effect next to each one.
+
+Return: {"items":[{"cause":"","effect":"","why":""}]}
+
+RULES
+- Write exactly 4 pairs, taken from different parts of the passage.
+- cause: ONE short English sentence, 4-12 words, describing something that happened.
+- effect: ONE short English sentence, 4-12 words, describing what it made happen.
+- The 4 effects must be clearly different from each other. A student must not be able to
+  match an effect to the wrong cause and still be right.
+- Never put the words "because", "so", "cause" or "effect" inside cause or effect.
+- why: Traditional Chinese, 15-35 characters, explaining the link.`;
+  }
+  if (kind === 'sequence') {
+    return head +
+`Task: Sequencing. The student puts the events back into the order they happened in the passage.
+
+Return: {"items":[{"text":""}]}
+
+RULES
+- Write 6 or 7 events, IN THE CORRECT ORDER (first event first).
+- text: ONE short English sentence, 5-14 words, describing one clear event from the passage.
+- The events must spread across the WHOLE passage - beginning, middle and end.
+- Each event must be findable in the passage. Do not invent events.
+- Do NOT number the events and do NOT use ordering words (first, then, next, finally, after that)
+  inside the text - that would give the order away.`;
+  }
+  return head +
+`Task: Compare & Contrast (a Venn diagram). The student drops each card into "only A", "both", or "only B".
+
+Return: {"leftLabel":"","rightLabel":"","items":[{"text":"","zone":"left","why":""}]}
+
+RULES
+- leftLabel / rightLabel: the two things being compared, as short English labels, 2-6 words each,
+  taken from the passage (for example two time periods, two characters, or two places).
+- Write 6 to 8 cards in total: at least 2 with zone "left", at least 2 with zone "right",
+  and at least 2 with zone "both".
+- zone: exactly one of "left", "right", "both".
+- text: ONE short English phrase or sentence, 3-12 words, that is true of that side.
+- A "both" card must be true of BOTH sides. A "left" card must be true of the left side and
+  FALSE of the right side (and the same for right) - never ambiguous.
+- Do not repeat the label wording inside the card text.
+- why: Traditional Chinese, 15-35 characters.`;
+}
+
+/* 一次呼叫（沿用 _grCall 的重試 + 剝 code fence），但這裡有些回傳不是 {items:[]}
+   而是帶額外欄位的物件（比較對照要 leftLabel/rightLabel），所以回整個物件。
+   v392: 同樣改走 _aiAsk（60 秒逾時＋只對 429/500/529 退避的三次重試）。 */
+async function _rcCall(system, user, maxTokens) {
+  return _aiAsk(
+    { model: 'claude-haiku-4-5', max_tokens: maxTokens || 3000, system, messages: [{ role: 'user', content: user }] },
+    (data) => {
+      const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || ''));
+      return (o && typeof o === 'object') ? o : null;
+    }
+  );
+}
+
+function _rcUserBase(passage, title, extra) {
+  return (title ? 'Title: ' + title + '\n\n' : '') +
+    'Passage:\n"""\n' + String(passage || '').trim() + '\n"""' +
+    (extra ? '\n\n' + extra : '');
+}
+const _rcUser = _rcUserBase;      // 沒有特別要求時就是原本的（各函式內部會自己蓋掉）
+
+/* ── 把 AI 回來的東西整理成「卡片 → 區塊」的統一結構 ──────────────────────
+   四種技巧在畫面上長得不一樣，但底下都是同一件事：把卡片放到正確的格子裡。
+   統一成 { kind, zones:[{id,label,ico}], chips:[{id,text,zone,why}] } 之後，
+   播放器只要寫一套、四種都能用（＝ bug 面積只有四分之一）。 */
+function _rcBlockFrom(kind, o) {
+  const id = _rcId('rb');
+  const items = Array.isArray(o && o.items) ? o.items : [];
+  if (kind === 'problem-solution') {
+    const chips = items.map(x => ({
+      id: _rcId('rc'), text: _rcTxt(x && x.text),
+      zone: (x && x.zone) === 'solution' ? 'solution' : 'problem', why: _rcTxt(x && x.why),
+    })).filter(c => c.text);
+    return { id, kind, zones: [
+      { id: 'problem',  label: 'Problem 問題',      ico: '⚠️' },
+      { id: 'solution', label: 'Solution 解決方法', ico: '💡' },
+    ], chips };
+  }
+  if (kind === 'cause-effect') {
+    const pairs = items.map(x => ({ cause: _rcTxt(x && x.cause), effect: _rcTxt(x && x.effect), why: _rcTxt(x && x.why) }))
+      .filter(p => p.cause && p.effect);
+    return {
+      id, kind,
+      zones: pairs.map((p, i) => ({ id: 'c' + i, label: p.cause, ico: '⚡' })),
+      chips: pairs.map((p, i) => ({ id: _rcId('rc'), text: p.effect, zone: 'c' + i, why: p.why })),
+    };
+  }
+  if (kind === 'sequence') {
+    const evs = items.map(x => _rcTxt(x && (x.text || x))).filter(Boolean);
+    return rcResequence({ id, kind, zones: [], chips: evs.map(t => ({ id: _rcId('rc'), text: t, zone: '', why: '' })) });
+  }
+  const chips = items.map(x => {
+    const z = String((x && x.zone) || '').toLowerCase();
+    return {
+      id: _rcId('rc'), text: _rcTxt(x && x.text),
+      zone: z === 'both' ? 'both' : z === 'right' ? 'right' : 'left', why: _rcTxt(x && x.why),
+    };
+  }).filter(c => c.text);
+  const L = _rcTxt(o && o.leftLabel) || 'A';
+  const R = _rcTxt(o && o.rightLabel) || 'B';
+  return { id, kind, leftLabel: L, rightLabel: R, zones: [
+    { id: 'left',  label: L,        ico: '🔵' },
+    { id: 'both',  label: '兩邊都有 Both', ico: '🟣' },
+    { id: 'right', label: R,        ico: '🟠' },
+  ], chips };
+}
+
+/* 排序題：chips 的順序＝正確答案，zone 只是 s0,s1,… 的位子。
+   老師在校稿頁按 ▲▼ 換順序之後，重新蓋一次 zone 與格子標籤。 */
+function rcResequence(block) {
+  const chips = (block.chips || []).map((c, i) => ({ ...c, zone: 's' + i }));
+  return { ...block, chips, zones: chips.map((c, i) => ({ id: 's' + i, label: String(i + 1), ico: '' })) };
+}
+
+/* 因果題：老師改了某一格的 cause 文字之後不用重算，zone id 不動。
+   但如果他刪了一組，zones 與 chips 會對不起來 → 這裡重建一次。 */
+function rcRepairBlock(block) {
+  if (!block) return block;
+  if (block.kind === 'sequence') return rcResequence(block);
+  if (block.kind === 'cause-effect') {
+    const chips = (block.chips || []).map((c, i) => ({ ...c, zone: 'c' + i }));
+    const zones = chips.map((c, i) => {
+      const old = (block.zones || [])[i];
+      return { id: 'c' + i, label: (old && old.label) || '', ico: '⚡' };
+    });
+    return { ...block, chips, zones };
+  }
+  const ids = new Set((block.zones || []).map(z => z.id));
+  const fb = (block.zones || [])[0];
+  return { ...block, chips: (block.chips || []).map(c => ids.has(c.zone) ? c : { ...c, zone: fb ? fb.id : '' }) };
+}
+
+/* ⚠⚠ 因果題的 zones 與 chips 是「同一列的兩半」，位置對位置。
+   只濾掉 chips（例如空白的、重複的）而不濾 zones，rcRepairBlock 會照位置重配 →
+   CAUSE-B 會被配到 EFFECT-C，答案錯掉而且畫面上看不出來。
+   凡是要丟掉卡片，一律走這個函式，不要自己 filter。 */
+function rcFilterChips(block, keep) {
+  if (!block) return block;
+  const chips = block.chips || [];
+  const idx = chips.map((c, i) => (keep(c, i) ? i : -1)).filter(i => i >= 0);
+  const next = { ...block, chips: idx.map(i => chips[i]) };
+  if (block.kind === 'cause-effect') next.zones = idx.map(i => (block.zones || [])[i]).filter(Boolean);
+  return rcRepairBlock(next);
+}
+
+function rcValidBlock(block) {
+  if (!block || !Array.isArray(block.chips)) return false;
+  const chips = block.chips.filter(c => c && _rcTxt(c.text));
+  if (chips.length !== (block.chips || []).length) return false;
+  const lower = chips.map(c => c.text.toLowerCase());
+  if (new Set(lower).size !== lower.length) return false;        // 卡片重複＝一定有一格放不進去
+  const count = (z) => chips.filter(c => c.zone === z).length;
+  if (block.kind === 'problem-solution') {
+    return chips.length >= 4 && chips.length <= 8 && count('problem') >= 2 && count('solution') >= 2;
+  }
+  if (block.kind === 'cause-effect') {
+    if (chips.length < 3 || chips.length > 5) return false;
+    const zs = block.zones || [];
+    if (zs.length !== chips.length) return false;
+    if (zs.some(z => !_rcTxt(z.label))) return false;
+    if (new Set(zs.map(z => _rcTxt(z.label).toLowerCase())).size !== zs.length) return false;
+    return new Set(chips.map(c => c.zone)).size === chips.length;  // 一格一張，不能兩張同格
+  }
+  if (block.kind === 'sequence') return chips.length >= 5 && chips.length <= 8;
+  return chips.length >= 6 && chips.length <= 9
+    && count('left') >= 2 && count('right') >= 2 && count('both') >= 1
+    && !!_rcTxt(block.leftLabel) && !!_rcTxt(block.rightLabel);   // !! ＝ 一定回 boolean，不要回字串
+}
+
+/* 修得掉的就修，不要為了小事重生一整輪（v382 學到的） */
+function rcFixBlock(block) {
+  if (!block) return block;
+  let b = rcRepairBlock(block);
+  // 卡片文字空白或重複 → 只留第一張（連同 zones 一起丟，見 rcFilterChips 的警告）
+  const seen = new Set();
+  b = rcFilterChips(b, (c) => {
+    const k = _rcTxt(c && c.text).toLowerCase();
+    if (!k || seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  if (b.kind === 'sequence') b = rcFilterChips(b, (_c, i) => i < 8);   // 挖太多從後面砍（前面才是主線）
+  if (b.kind === 'cause-effect' && b.chips.length > 5) b = rcFilterChips(b, (_c, i) => i < 5);
+  if (b.kind === 'problem-solution' && b.chips.length > 8) b = rcFilterChips(b, (_c, i) => i < 8);
+  if (b.kind === 'compare-contrast' && b.chips.length > 9) b = rcFilterChips(b, (_c, i) => i < 9);
+  return b;
+}
+
+/* ── 主要入口 ────────────────────────────────────────────────────────────
+   opts: { passage, title, grade:'g2'..'g6', mcq:0|5|10|15|20, sa:0|3|5|8|10,
+           skills:['problem-solution',…], onProgress(done,total,label) }
+   回傳 { mcq:[…], sa:[…], blocks:[…] }（blocks 已是最終結構，可直接存） */
+async function aiMakeReadingSet({ passage, title = '', grade = 'g4', mcq = 10, sa = 5,
+  skills = [], qSkills = [], qSkillN = 2, teacherNote = '', onProgress } = {}) {
+  // v445：老師的「特別要求」跟著每一個請求走（題目、簡答、閱讀技巧都算）
+  const _rcUser = (pg, ti, ex) => _rcUserBase(pg, ti, [_aiTeacherNote(teacherNote).trim(), ex].filter(Boolean).join('\n\n'));
+  const text = String(passage || '').trim();
+  if (text.split(/\s+/).length < 40) throw new Error('文章太短了（至少要 40 個英文字），請貼完整的文字稿。');
+  const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
+  const nMcq = Math.max(0, +mcq || 0);
+  const nSa = Math.max(0, +sa || 0);
+  const kinds = (skills || []).filter(k => RC_SKILLS[k]);
+  // v415: 閱讀技巧「題目」（跟上面拖卡片的活動是兩回事）
+  const qsk = (qSkills || []).filter(k => RC_QSKILLS[k]);
+  const nQS = Math.max(0, +qSkillN || 0);
+
+  if (!nMcq && !nSa && !kinds.length && !(qsk.length && nQS)) {
+    throw new Error('至少要勾一種：選擇題、閱讀簡答、閱讀技巧活動，或閱讀技巧題。');
+  }
+
+  const CHUNK = 5;
+  const mcqRounds = Math.ceil(nMcq / CHUNK);
+  const total = mcqRounds + (nSa ? 1 : 0) + kinds.length + (nQS ? qsk.length : 0);
+  let done = 0;
+  const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+
+  /* ── 選擇題：每 5 題一批，多要 2 題當備料，驗不過的丟掉 ──
+     v392: 原本是「一輪等一輪」的兩層 for。改成一次把該打的輪次全部平行送出，
+     回來後用完全相同的驗證／去重邏輯收題；不夠再發第二、三波
+     （第二波之後會把已出過的題目塞進 prompt，因為同一篇文章平行問很容易撞題）。 */
+  const mcqOut = [];
+  const absorbMcq = (o) => {
+    ((o && o.items) || []).forEach(raw => {
+      if (mcqOut.length >= nMcq) return;
+      const q = _rcFixAnswerIdx({
+        q: _rcTxt(raw && raw.q),
+        options: (raw && raw.options || []).map(_rcTxt).slice(0, 4),
+        answer: raw && raw.answer,
+        explain: _rcTxt(raw && raw.explain),
+        skill: _rcTxt(raw && raw.skill) || 'detail',
+      });
+      if (q && _rcValidMcq(q) && !mcqOut.some(e => e.q.toLowerCase() === q.q.toLowerCase())) {
+        mcqOut.push({ id: _rcId('rq'), ...q });
+      }
+    });
+  };
+  // 進度仍然是「每一輪回報一次」，總次數不變（mcqRounds 次），只是改由已收題數換算
+  let mcqDone = 0;
+  const mcqTick = () => {
+    const r = Math.min(mcqRounds, Math.ceil(mcqOut.length / CHUNK));
+    while (mcqDone < r) { mcqDone++; bump('選擇題 ' + Math.min(mcqOut.length, nMcq) + '/' + nMcq); }
+  };
+  for (let wave = 0; wave < 3 && mcqOut.length < nMcq; wave++) {
+    const need = nMcq - mcqOut.length;
+    const reqs = Math.min(mcqRounds, Math.ceil(need / CHUNK));
+    const want = Math.min(CHUNK, need);
+    const asked = mcqOut.map(q => q.q).join(' | ');      // 這一波共用同一份「已出過的題目」
+    const before = mcqOut.length;
+    await pMap(new Array(reqs).fill(0), async () => {
+      /* ⚠ 這裡一定要各自 try：本來一次連線失敗就會把前面已經生好、驗過的題目
+         全部丟掉，老師等了半天回到設定頁。改成這一發算了、其他照跑。 */
+      let o = null;
+      try {
+        o = await _rcCall(_RC_SYS_MCQ(gradeNote, want + 2),
+          _rcUser(text, title, (asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : '')
+            + (wave ? _RC_LEN_REMIND : '')), 3200);
+      } catch (e) { return null; }
+      absorbMcq(o); mcqTick();
+      return true;
+    }, Math.min(reqs, 12));
+    if (mcqOut.length === before) break;                 // 一整波都沒收到新題＝再打也是白打
+  }
+  while (mcqDone < mcqRounds) { mcqDone++; bump('選擇題 ' + Math.min(mcqOut.length, nMcq) + '/' + nMcq); }
+
+  // ── 閱讀簡答 ──
+  const saOut = [];
+  if (nSa) {
+    for (let round = 0; round < 3 && saOut.length < nSa; round++) {
+      const asked = saOut.map(q => q.question).join(' | ');
+      let o = null;
+      try {
+        o = await _rcCall(_RC_SYS_SA(gradeNote, nSa - saOut.length + 1),
+          _rcUser(text, title, asked ? 'Do NOT repeat these questions:\n' + asked : ''), 2200);
+      } catch (e) { continue; }
+      (o.items || []).forEach(raw => {
+        if (saOut.length >= nSa) return;
+        const q = { question: _rcTxt(raw && raw.question), keyPoints: _rcTxt(raw && raw.keyPoints) };
+        if (_rcValidSa(q) && !saOut.some(e => e.question.toLowerCase() === q.question.toLowerCase())) {
+          saOut.push({ id: _rcId('sa'), ...q });
+        }
+      });
+    }
+    bump('閱讀簡答 ' + saOut.length + '/' + nSa);
+  }
+
+  // ── 閱讀技巧 ──
+  /* v392: 四種技巧彼此完全獨立，改成平行跑（每一種內部的三輪重試邏輯原封不動）。
+     ⚠ pMap 回傳的陣列是照索引對位的，所以 blocks 的順序仍然＝老師勾選的順序。 */
+  const blocks = (await pMap(kinds, async (kind) => {
+    let best = null;
+    for (let round = 0; round < 3 && !best; round++) {
+      let cand = null;
+      try {
+        const o = await _rcCall(_RC_SYS_SKILL(kind, gradeNote), _rcUser(text, title,
+          round ? 'Your last try did not follow the card-count rules. Follow them exactly this time.' : ''), 2200);
+        cand = rcFixBlock(_rcBlockFrom(kind, o));
+      } catch (e) { cand = null; }
+      if (cand && rcValidBlock(cand)) best = cand;
+      else if (round === 2 && cand) best = cand;   // 三次都不合格就先收下，讓老師在校稿頁改
+    }
+    bump(RC_SKILLS[kind].zh);
+    return best;
+  }, 4)).filter(Boolean);
+
+  /* ── v415：閱讀技巧題（Alan：「這個也幫我多加額外的 reading skill 題目」）──
+     一種技巧一個請求：這樣「這一題是哪一種」是由請求本身決定的，
+     不用去猜 AI 自己標的 skill 對不對，也不會幾種混在一起互相排擠。
+     驗證跟一般選擇題完全一樣（格式 → 有沒有根據 → 找證據/猜字再多驗一關）。 */
+  const skillQs = nQS && qsk.length ? [].concat(...(await pMap(qsk, async (kind) => {
+    const got = [];
+    for (let round = 0; round < 2 && got.length < nQS; round++) {
+      const need = nQS - got.length;
+      const asked = got.map(q => q.q).join(' | ');
+      let o = null;
+      try {
+        o = await _rcCall(
+          _RC_SYS_MCQ(gradeNote, need + 1, _rcFocusBlock([kind], need + 1)),
+          _rcUser(text, title, (asked ? 'Do NOT repeat or rephrase these questions:\n' + asked : '')
+            + (round ? _RC_LEN_REMIND : '')), 3000);
+      } catch (e) { continue; }
+      ((o && o.items) || []).forEach(raw => {
+        if (got.length >= nQS) return;
+        const q = _rcFixAnswerIdx({
+          q: _rcTxt(raw && raw.q),
+          options: ((raw && raw.options) || []).map(_rcTxt).slice(0, 4),
+          answer: raw && raw.answer,
+          explain: _rcTxt(raw && raw.explain),
+          skill: kind,
+        });
+        if (!q || !_rcValidMcq(q)) return;
+        if (!rcGroundedMcq(text, q, kind)) return;           // 不能亂出
+        if (!rcQSkillOk(text, q, kind)) return;              // 找證據／猜字再多驗一關
+        if (got.some(e => e.q.toLowerCase() === q.q.toLowerCase())) return;
+        got.push({ id: _rcId('rq'), ...q });
+      });
+    }
+    bump(RC_QSKILLS[kind].zh);
+    return got;
+  }, 4))) : [];
+
+  if (!mcqOut.length && !saOut.length && !blocks.length && !skillQs.length) throw new Error('AI 這次什麼都沒生出來，請再試一次。');
+  return { mcq: mcqOut, sa: saOut, blocks, skillQs };
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v407：分段閱讀「每一段自動出題」
+   （Alan：「分段閱讀我希望我匯入圖片或是文字或是檔案，能夠根據每一段自動生成題目
+     …先從 reading comprehension 出題就好…最後統整可以配合 reading skill 也很好，
+     但不能亂出，要真的符合文章」）
+   ──────────────────────────────────────────────────────────────────────────
+   跟 v386 的「📖 出閱讀理解」差在哪：那個是一整篇一次出；這個是「一段一題組」，
+   而且題目只能問這一段裡寫的事——學生讀完一小段馬上答，問到後面的內容就是壞題。
+
+   ⚠「不能亂出，要真的符合文章」不是靠 prompt 拜託，是靠程式驗（rcGroundedMcq /
+   rcGroundedSa / rcGroundedBlock）。做法是利用 v386 就定下的規矩：
+   選擇題的 explain 一定要「把文章裡的英文線索抄在「」裡面」。
+   有那條規矩，就可以反過來檢查那句線索到底在不在這一段文章裡——
+   在＝這題真的是從文章來的；不在＝AI 自己編的，丟掉重出。
+   照片辨識出來的文字本來就會有幾個字母是錯的，所以比對是「實詞重疊率」而不是全等。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const _rcFlat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/* explain 裡「」（或引號）括起來的那句英文線索 */
+function _rcClue(explain) {
+  const m = String(explain || '').match(/[「『"“]([^」』"”]{4,200})[」』"”]/);
+  return m ? m[1] : '';
+}
+/* 這句話在不在文章裡。先試整串（去掉標點大小寫之後），不中再看
+   「實詞（3 個字母以上）的重疊率」——AI 抄線索時常常會漏一兩個虛詞或換個時態。
+   （照片段落的 OCR 錯字不用擔心：文章本身就是那些錯字，AI 是從那份文字抄的，
+     所以錯字會一模一樣地對上。） */
+function _rcInPassage(passage, phrase) {
+  const t = _rcFlat(passage), p = _rcFlat(phrase);
+  if (!p || !t) return false;
+  if (t.indexOf(p) >= 0) return true;
+  const ws = p.split(' ').filter(w => w.length > 2);
+  if (ws.length < 2) return false;
+  return ws.filter(w => t.indexOf(w) >= 0).length / ws.length >= 0.8;
+}
+/* 選擇題：線索句一定要在文章裡（這是主要的關卡），正解則只擋「整個不沾邊」的捏造。
+   為什麼正解要放寬：正解本來就常常是改寫過的短句——文章寫
+   「stay in the air for hours」，正解寫「It can fly for a long time」，
+   一個字都對不上但完全正確。抓太緊會把好題目一起丟掉。
+   ⚠ 正解這一關用「整字」比對，不是子字串：不然 with 會被 without 收下、
+   gold 會被 golden 收下，等於沒擋。 */
+/* v415：有幾種技巧的「正解」天生就是抽象敘述，不會重用文章的字——
+   例：作者目的的答案是「To show how his early experiences led to his interest in flight」，
+   跟文章只有 3/11 個實詞重疊，會被下面那一關誤擋（實測就擋掉了一題好題目）。
+   這幾種只驗線索句那一關（那本來就是主要的關卡，而且是真的比對文章）。 */
+const _RC_ABSTRACT_ANSWER = { 'author-purpose': 1, 'main-idea': 1, 'inference': 1, 'character': 1 };
+function rcGroundedMcq(passage, q, skill) {
+  const clue = _rcClue(q && q.explain);
+  if (!clue) return false;                       // 沒引用文章＝沒辦法證明它有根據
+  if (!_rcInPassage(passage, clue)) return false;
+  if (_RC_ABSTRACT_ANSWER[skill || (q && q.skill)]) return true;
+  const words = new Set(_rcFlat(passage).split(' '));
+  const ws = _rcFlat((q.options || [])[q.answer]).split(' ').filter(w => w.length > 2);
+  if (!ws.length) return true;
+  return ws.filter(w => words.has(w)).length / ws.length >= 0.4;
+}
+/* 簡答題：答案要點是改寫過的評分點，所以只要求「一半以上」找得到出處 */
+function rcGroundedSa(passage, q) {
+  const pts = String((q && q.keyPoints) || '').split('/').map(x => x.trim()).filter(Boolean);
+  if (!pts.length) return false;
+  return pts.filter(x => _rcInPassage(passage, x)).length >= Math.ceil(pts.length / 2);
+}
+/* 閱讀技巧：每一張卡片都要在文章裡找得到，找不到的整張丟掉
+   （⚠ 一定要走 rcFilterChips——因果題的 zones 要跟卡片一起丟，不然答案會錯位） */
+function rcGroundedBlock(passage, block) {
+  if (!block) return block;
+  return rcFilterChips(block, (c) => _rcInPassage(passage, c && c.text));
+}
+
+/* 選擇題轉成分段閱讀吃的格式。分段閱讀作答時不洗牌，所以在這裡就先打散
+   （跟 grParseImport 的規矩一致）。 */
+function _grQFromMcq(q) {
+  const opts = (q.options || []).slice(0, 4);
+  const correct = opts[q.answer];
+  for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+  while (opts.length < 4) opts.push('');
+  return { id: _rcId('gq'), kind: 'mc', q: q.q, options: opts, answer: opts.indexOf(correct),
+           explain: q.explain || '', skill: q.skill || '' };
+}
+const _grQFromSa = (q) => ({ id: _rcId('gq'), kind: 'short', q: q.question, keyPoints: q.keyPoints || '' });
+
+/* 一段（或整篇）出一組題。mcq / sa 兩種同時送出，驗不過的重來一輪。 */
+async function _rcOneChunk(text, { title, gradeNote, mcq, sa, where, qskills }) {
+  const out = { mcq: [], sa: [], dropped: 0 };
+  for (let round = 0; round < 2; round++) {
+    const needM = mcq - out.mcq.length, needS = sa - out.sa.length;
+    if (needM <= 0 && needS <= 0) break;
+    const jobs = [];
+    // v415: 老師勾了閱讀技巧 → 把「每一題要問哪一種」寫進 prompt（round-robin 分配）
+    if (needM > 0) jobs.push(['mcq', _RC_SYS_MCQ(gradeNote, needM + 1, _rcFocusBlock(qskills, needM + 1)), 3000]);
+    if (needS > 0) jobs.push(['sa',  _RC_SYS_SA(gradeNote,  needS + 1, _rcFocusBlock(qskills, needS + 1)), 2000]);
+    const asked = out.mcq.map(q => q.q).concat(out.sa.map(q => q.question)).join(' | ');
+    const extra = where +
+      (asked ? '\n\nDo NOT repeat or rephrase these questions:\n' + asked : '') +
+      /* v417：重生的回饋要指名道姓（v382 的老教訓）。上一輪最常被丟掉的兩個原因都寫出來：
+         說了文章裡沒有的事、以及「正解是最長的那一個」。 */
+      (round ? '\n\nYour last try was rejected. Two things to fix:\n' +
+               '1. Everything - the question, the correct option, and the clue you quote in "explain" - ' +
+               'must appear in the passage above.\n' +
+               '2. Count the WORDS in the four options - they must all have the same number of words, ' +
+               'give or take one. Last time the correct answer was clearly the longest, so a child could ' +
+               'pick it without reading. Make the three wrong options just as detailed as the right one.' : '');
+    /* ⚠ 各自 try：一發連線失敗不該把同一段已經收到的題目一起丟掉 */
+    const got = await pMap(jobs, async ([k, sys, mx]) => {
+      try { return [k, await _rcCall(sys, _rcUser(text, title, extra), mx)]; } catch (e) { return [k, null]; }
+    }, 2);
+    got.forEach(([k, o]) => {
+      if (!o) return;
+      ((o.items) || []).forEach(raw => {
+        if (k === 'mcq') {
+          if (out.mcq.length >= mcq) return;
+          const q = _rcFixAnswerIdx({
+            q: _rcTxt(raw && raw.q),
+            options: ((raw && raw.options) || []).map(_rcTxt).slice(0, 4),
+            answer: raw && raw.answer,
+            explain: _rcTxt(raw && raw.explain),
+            skill: _rcTxt(raw && raw.skill) || 'detail',
+          });
+          if (!q || !_rcValidMcq(q)) { out.dropped++; return; }
+          if (!rcGroundedMcq(text, q, q.skill)) { out.dropped++; return; }   // ← 不能亂出
+          /* v415：技巧標籤是 AI 自己講的，光看標籤不算驗證；
+             但「找證據」與「上下文猜字」這兩種說得出來就驗得到，程式再確認一次。 */
+          if (!rcQSkillOk(text, q, q.skill)) { out.dropped++; return; }
+          if (out.mcq.some(e => e.q.toLowerCase() === q.q.toLowerCase())) return;
+          out.mcq.push(q);
+        } else {
+          if (out.sa.length >= sa) return;
+          const q = { question: _rcTxt(raw && raw.question), keyPoints: _rcTxt(raw && raw.keyPoints) };
+          if (!_rcValidSa(q)) { out.dropped++; return; }
+          if (!rcGroundedSa(text, q)) { out.dropped++; return; }         // ← 不能亂出
+          if (out.sa.some(e => e.question.toLowerCase() === q.question.toLowerCase())) return;
+          out.sa.push(q);
+        }
+      });
+    });
+  }
+  return out;
+}
+
+/* ── 主要入口 ────────────────────────────────────────────────────────────
+   segments: [{ i, text }]（i ＝ 第幾段，用來對回編輯器的段落）
+   回傳 { bySeg:{ [i]: [題目…] }, final:[題目…], blocks:[…], skipped:[i…], dropped, made } */
+/* v415：每段要出幾題——'auto' 就照這一段的長度給（Alan 本來就是這樣人工判斷的：
+   「視每段的長度以及有沒有重點」2~5 題）。短段只出 1 題，長段最多 4 題。 */
+function _rcAutoN(text, cap) {
+  const w = String(text || '').split(/\s+/).filter(Boolean).length;
+  const n = w < 45 ? 1 : w < 100 ? 2 : w < 180 ? 3 : 4;
+  return Math.min(n, cap == null ? 4 : cap);
+}
+async function aiMakeGuidedQuestions({ segments, title = '', grade = 'g4',
+  perMcq = 2, perSa = 1, finalMcq = 3, finalSa = 1, skills = [], qSkills = [], onProgress, teacherNote = '' } = {}) {
+  const _rcUser = (pg, ti, ex) => _rcUserBase(pg, ti, [_aiTeacherNote(teacherNote).trim(), ex].filter(Boolean).join('\n\n'));
+  const all = (segments || []).map((s, k) => ({
+    i: (s && s.i != null) ? s.i : k,
+    text: String((s && s.text) || '').replace(/\s+/g, ' ').trim(),
+  }));
+  /* 12 個英文字以下出不了一題像樣的題目（標題頁、圖說、只有一句的段落都在這裡被擋掉）。
+     擋掉的段號會回報給老師，不是默默跳過。 */
+  const segs = all.filter(s => s.text.split(' ').filter(Boolean).length >= 12);
+  const skipped = all.filter(s => segs.indexOf(s) < 0).map(s => s.i);
+  if (!segs.length) throw new Error('沒有一段有足夠的文字可以出題——照片段落要先按「🔍 辨識單字」，或直接把文字貼進段落裡。');
+
+  const gradeNote = RC_GRADES[grade] || RC_GRADES.g4;
+  const autoMcq = perMcq === 'auto';                       // v415: 每段題數照長度給
+  const nMcq = autoMcq ? 4 : Math.max(0, +perMcq || 0);
+  const nSa = Math.max(0, +perSa || 0);
+  const qsk = (qSkills || []).filter(k => RC_QSKILLS[k]);
+  const fMcq = Math.max(0, +finalMcq || 0), fSa = Math.max(0, +finalSa || 0);
+  const kinds = (skills || []).filter(k => RC_SKILLS[k]);
+  if (!nMcq && !nSa && !fMcq && !fSa && !kinds.length) throw new Error('至少要選一種題目。');
+
+  const wantFinal = !!(fMcq || fSa);
+  const total = (nMcq || nSa ? segs.length : 0) + (wantFinal ? 1 : 0) + kinds.length;
+  let done = 0;
+  const bump = (label) => { done++; if (onProgress) onProgress(done, total, label); };
+
+  const full = segs.map(s => s.text).join('\n\n');
+  let dropped = 0;
+
+  // ── 每一段（平行跑，一次最多 6 段；再多就開始排隊等 Worker） ──
+  const bySeg = {};
+  if (nMcq || nSa) {
+    await pMap(segs, async (seg) => {
+      const where = `The passage above is paragraph ${seg.i + 1} of ${all.length} of a longer article. ` +
+        'Ask ONLY about what is written in THIS paragraph. The student has not read the later paragraphs yet.';
+      const want = autoMcq ? _rcAutoN(seg.text) : nMcq;
+      const r = await _rcOneChunk(seg.text, { title, gradeNote, mcq: want, sa: nSa, where, qskills: qsk });
+      dropped += r.dropped;
+      const qs = r.mcq.map(_grQFromMcq).concat(r.sa.map(_grQFromSa));
+      if (qs.length) bySeg[seg.i] = qs;
+      bump(`第 ${seg.i + 1} 段（${qs.length} 題）`);
+    }, 8);   // v453：一次 6 段 → 8 段（Worker 扛得住，11 段的文章少等一輪）
+  }
+
+  // ── 整篇綜合 ──
+  let final = [];
+  if (wantFinal) {
+    const r = await _rcOneChunk(full, { title, gradeNote, mcq: fMcq, sa: fSa, qskills: qsk,
+      where: 'The passage above is the WHOLE article. Ask about the article as a whole - ' +
+             'the main idea, how the parts connect, and what it all adds up to. ' +
+             'Do not ask about one small detail that sits in a single paragraph.' });
+    dropped += r.dropped;
+    final = r.mcq.map(_grQFromMcq).concat(r.sa.map(_grQFromSa));
+    bump(`整篇綜合（${final.length} 題）`);
+  }
+
+  /* ── 閱讀技巧（選填）──
+     卡片直接沿用 v386 那一套（_RC_SYS_SKILL ＋ rcFixBlock ＋ rcValidBlock），
+     只是多加一層「每張卡片都要在文章裡找得到」。
+     ⚠ 這一層可能把卡片數量刷到不合格（例：比較對照剩 4 張）——
+     那就重生，寧可少一種技巧，也不要出一份跟文章對不上的。 */
+  const blocks = kinds.length ? (await pMap(kinds, async (kind) => {
+    let best = null;
+    for (let round = 0; round < 3 && !best; round++) {
+      try {
+        const o = await _rcCall(_RC_SYS_SKILL(kind, gradeNote), _rcUser(full, title,
+          round ? 'Your last try used sentences that are not in the passage. Every card must come from the passage above.' : ''), 2200);
+        const cand = rcGroundedBlock(full, rcFixBlock(_rcBlockFrom(kind, o)));
+        if (cand && rcValidBlock(cand)) best = cand;
+      } catch (e) { /* 這一輪算了，還有兩輪 */ }
+    }
+    bump(RC_SKILLS[kind].zh);
+    return best;                       // 三輪都對不上文章＝這一種不要，不硬湊
+  }, 4)).filter(Boolean) : [];
+
+  const made = Object.keys(bySeg).reduce((n, k) => n + bySeg[k].length, 0) + final.length;
+  // v449：一題都沒出來時，先講「是不是 AI 服務不通」——不然老師會以為是自己的文章有問題
+  if (!made && !blocks.length) throw new Error('AI 這次沒有出到符合文章的題目，請再試一次。' + _aiUpstreamNote(null));
+  return { bySeg, final, blocks, passage: full, skipped, dropped, made, segCount: segs.length };
+}
+
+/* 上一次出過哪些句子——這一組所有單元裡「學生看得到的英文句子」都算。
+   漏掉任何一種，那一種就有機會原封不動再出一次。 */
+function reviewSeenSentences(items) {
+  const out = [];
+  const push = (t) => { const v = String(t || '').trim(); if (v && /[A-Za-z]/.test(v)) out.push(v); };
+  (items || []).forEach(it => {
+    if (!it) return;
+    (it.cards || []).forEach(c => push(c.example));                       // 單字卡例句
+    (it.questions || []).forEach(q => push(q.q || q.sentence));           // 選擇題／填空
+    (it.pairs || []).forEach(q => push(q.prompt));                        // 打字題（填空／改寫／中翻英的英文答案不算題目）
+    (it.circleQuestions || []).forEach(q => push(q.sentence));            // 找出來
+    (it.spellWords || []).forEach(w => push(w.sentence));                 // 聽寫的例句
+    if (it.passage) push(String(it.passage).replace(/\[[^\]]*\]/g, '___'));   // 短文填空（把答案拿掉再比對）
+    (it.orderQuestions || []).forEach(q => push((q.words || []).join(' ')));    // 排順序
+  });
+  return [...new Set(out)];
+}
+
+// ── Weekly Report Helpers ──────────────────────────────────────────────
+// Build a structured report object for one student + one week.
+/* 🔴 v596：同一個單元 id 出現在好幾週（「沿用到別週」複製出來的 id 相同）時，
+   進度只認「週次_單元id」那一筆——不能再用「任何一週的後綴相同」當作做完了。
+   （LINE 提醒少提醒就是這個；老師後台與聊天室「誰沒做完」用的是同一套判斷，所以數字一起錯。）
+   ⚠ 只有「有重複」的 id 才嚴格；全年級只有一個的 id 照舊寬鬆，那是為了週次 id 改過的舊進度。 */
+const _sharedCache = new WeakMap();
+function sharedItemIds(weeks, order) {
+  if (!weeks || typeof weeks !== 'object') return new Set();
+  const c = _sharedCache.get(weeks);
+  if (c && c.order === order) return c.set;
+  const cnt = {};
+  (order && order.length ? order : Object.keys(weeks)).forEach(wid => {
+    const seen = new Set();
+    Object.values((weeks[wid] || {}).items || {}).forEach(arr => (arr || []).forEach(it => {
+      if (it && it.id && !seen.has(it.id)) { seen.add(it.id); cnt[it.id] = (cnt[it.id] || 0) + 1; }
+    }));
+  });
+  const set = new Set(Object.keys(cnt).filter(k => cnt[k] > 1));
+  _sharedCache.set(weeks, { order, set });
+  return set;
+}
+/* 這個單元在學生進度裡對得上的 key（順序＝優先序：週次_id → 裸 id → 後綴）。it＝{ id, progressId, shared } */
+function progKeysFor(its, it) {
+  const keys = [];
+  if (!its || !it) return keys;
+  if (it.progressId && its[it.progressId]) keys.push(it.progressId);
+  if (its[it.id] && keys.indexOf(it.id) < 0) keys.push(it.id);
+  if (!it.shared) Object.keys(its).forEach(k => { if (k.endsWith('_' + it.id) && keys.indexOf(k) < 0) keys.push(k); });
+  return keys;
+}
+
+function buildWeeklyReport(student, weeks, weekOrder, { weekId } = {}) {
+  const targetWeekId = weekId || (weekOrder && weekOrder.length > 0 ? weekOrder[weekOrder.length - 1] : null);
+  const empty = { weekLabel: '—', dateRange: '', completed: [], pending: [], weekVocab: [], completionRate: 0, avgScore: null, totalItems: 0, lateCount: 0, streak: { count: 0 }, xp: 0, badges: {}, wrongQuestions: [], weekId: targetWeekId };
+  if (!targetWeekId || !weeks || !weeks[targetWeekId]) return empty;
+
+  const week = weeks[targetWeekId];
+  const its = student.items || {};
+
+  /* v392: 「後綴 → 紀錄」的索引，讓最後那層 fallback 從 O(n) 變 O(1)。
+     原本每一個沒對上的項目都要 Object.keys(its).find(k => k.endsWith('_'+itemId)) 掃一次，
+     學生的 items 累積四十週之後就是上千個 key，而老師後台每一次重繪都會重跑一遍。
+     ⚠ 一定要「用到才建」：前兩層命中時原本根本不會去掃，
+       無條件先建索引反而會讓正常資料變慢（實測慢 20 倍以上）。 */
+  let bySuffix = null;
+  const suffixIndex = () => {
+    if (bySuffix) return bySuffix;
+    bySuffix = {};
+    Object.keys(its).forEach(k => {
+      /* 每一個「底線之後的尾巴」都建索引，等價於原本的 k.endsWith('_' + itemId)
+         （週次 id 或項目 id 自己含底線時也不會漏掉）。
+         同一個尾巴只留第一個 key，跟原本 Object.keys(...).find 取第一個的行為相同。 */
+      for (let p = k.indexOf('_'); p >= 0; p = k.indexOf('_', p + 1)) {
+        const b = k.slice(p + 1);
+        if (!(b in bySuffix)) bySuffix[b] = its[k];
+      }
+    });
+    return bySuffix;
+  };
+
+  /* ⚠ 優先序必須維持 progressId > 裸 itemId > 後綴，順序寫錯會讓
+     「週次改過 id」的舊資料成績消失。 */
+  const shared = sharedItemIds(weeks, weekOrder);   // v596：有重複的 id 不走後綴那一層
+  const getProgress = (itemId) =>
+    its[`${targetWeekId}_${itemId}`] || its[itemId] || (shared.has(itemId) ? null : suffixIndex()[itemId]) || null;
+
+  const completed = [], pending = [];
+  let allWrongQ = [];
+  const weekVocab = [];
+
+  // v257: 遲交判定——有截止日的項目，在截止日當天 23:59 之後才完成的算「補交」
+  const hw = week.homework || {};
+  const dueEndOf = (itemId) => {
+    const d = hw[itemId] && hw[itemId].dueDate;
+    if (!d) return null;
+    const t = new Date(d + 'T23:59:59').getTime();
+    return Number.isNaN(t) ? null : t;
+  };
+
+  CATEGORIES.forEach(cat => {
+    const items = (week.items && week.items[cat.id]) || [];
+    items.forEach(item => {
+      const prog = getProgress(item.id);
+      const isDone = !!(prog && prog.done);
+      const title = item.title || item.zh || item.id;
+      if (cat.id === 'vocab') weekVocab.push(title);
+      if (isDone) {
+        const score = prog.score != null ? Math.min(100, Math.round(prog.score)) : null;
+        const due = dueEndOf(item.id);
+        const late = !!(due && typeof prog.done === 'number' && prog.done > due);
+        completed.push({ cat: cat.titleZh, title, score, late, doneAt: typeof prog.done === 'number' ? prog.done : null });
+        (prog.wrongQuestions || []).forEach(wq => allWrongQ.push(wq));
+      } else {
+        pending.push({ cat: cat.titleZh, title });
+      }
+    });
+  });
+
+  allWrongQ = allWrongQ.slice(0, 5);
+  const totalItems = completed.length + pending.length;
+  const completionRate = totalItems > 0 ? Math.round(completed.length / totalItems * 100) : 0;
+  const scored = completed.filter(c => c.score != null);
+  const avgScore = scored.length > 0 ? Math.round(scored.reduce((s, c) => s + c.score, 0) / scored.length) : null;
+  const lateCount = completed.filter(c => c.late).length;
+
+  return {
+    weekId: targetWeekId,
+    weekLabel: week.label || targetWeekId,
+    dateRange: week.dateRange || '',
+    completed, pending, weekVocab,
+    completionRate, avgScore, totalItems, lateCount,
+    streak: student.streak || { count: 0 },
+    xp: student.xp || 0,
+    badges: student.badges || {},
+    wrongQuestions: allWrongQ,
+  };
+}
+
+// Format a report object into plain text suitable for LINE.
+function formatReportAsText(report, studentName) {
+  const name = studentName || '學生';
+  if (!report || report.totalItems === 0) {
+    const weekPart = report ? `${report.weekLabel}${report.dateRange ? `（${report.dateRange}）` : ''}` : '本週';
+    return `📚 Alan's English Class 學習週報\n👤 ${name} ｜ ${weekPart}\n\n本週尚未開始學習。\n\n— Alan 老師`;
+  }
+  const lines = [];
+  lines.push(`📚 Alan's English Class 學習週報`);
+  const datePart = report.dateRange ? `（${report.dateRange}）` : '';
+  lines.push(`👤 ${name} ｜ ${report.weekLabel}${datePart}`);
+  lines.push('');
+  lines.push(`✅ 本週完成 ${report.completed.length}/${report.totalItems} 項（${report.completionRate}%）`);
+  if (report.avgScore != null) lines.push(`⭐ 測驗平均：${report.avgScore} 分`);
+  if (report.streak && report.streak.count > 1) lines.push(`🔥 連續學習：${report.streak.count} 天`);
+
+  const bycat = {};
+  report.completed.forEach(c => { (bycat[c.cat] = bycat[c.cat] || []).push(c.title); });
+  if (Object.keys(bycat).length > 0) {
+    lines.push(''); lines.push('本週學習內容：');
+    Object.entries(bycat).forEach(([cat, titles]) => lines.push(`• ${cat}：${titles.join('、')}`));
+  }
+  if (report.pending.length > 0) {
+    lines.push(''); lines.push(`📝 尚未完成（${report.pending.length} 項）：`);
+    report.pending.forEach(p => lines.push(`• ${p.cat}：${p.title}`));
+  }
+  if (report.wrongQuestions && report.wrongQuestions.length > 0) {
+    lines.push(''); lines.push('💪 建議加強（答錯的題目）：');
+    report.wrongQuestions.forEach(wq => lines.push(`• ${wq.q} → ${wq.answer}`));
+  }
+  lines.push(''); lines.push('— Alan 老師');
+  return lines.join('\n');
+}
+
+// Render a report object into a polished, mobile-first HTML page (for parents, share via LINE).
+function buildReportHTML(report, studentName, teacherNote) {
+  // ⚠ 單引號也要跳脫：這段 HTML 是用 window.open('') + document.write 渲染的
+  //   （繼承 opener 來源），插進 attr='…' 裡的字串若沒跳脫就能跳出屬性。
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const name = esc(studentName || '學生');
+  const weekLine = esc(`${report.weekLabel || ''}${report.dateRange ? ' · ' + report.dateRange : ''}`);
+  const avg = report.avgScore;
+  const hasScore = avg != null;
+  const circ = 402;
+  const off = hasScore ? Math.round(circ * (1 - Math.max(0, Math.min(100, avg)) / 100)) : circ;
+  const compN = report.completed.length, totN = report.totalItems;
+  const rate = report.completionRate;
+  /* ⚠ streak 來自學生自己可寫的 progress/{uid}，count 若被塞成字串，
+     「|| 0」是攔不住的（字串 truthy），而下面直接把它插進 HTML＝老師開週報時
+     會在自己的 session 下執行。一律先 Number() 轉數字。 */
+  const streakN = Number(report.streak && report.streak.count) || 0;
+
+  const cm = {};
+  report.completed.forEach(c => { if (c.score == null) return; (cm[c.cat] = cm[c.cat] || { s: 0, n: 0 }); cm[c.cat].s += c.score; cm[c.cat].n++; });
+  const cats = Object.keys(cm).map(k => ({ cat: k, score: Math.round(cm[k].s / cm[k].n) })).sort((a, b) => b.score - a.score);
+  const catRows = cats.map(c => {
+    const warn = c.score < 80;
+    return `<div class="skill ${warn ? 'warn' : 'good'}"><div class="skill-top"><span class="skill-name">${esc(c.cat)}</span><span class="skill-score">${c.score} 分${warn ? ' · 需加強' : ''}</span></div><div class="skill-bar"><div class="skill-fill" style="width:${c.score}%"></div></div></div>`;
+  }).join('') || '<p style="font-size:13px;color:#8A8270;font-weight:600;">本週尚無已完成的測驗分數。</p>';
+
+  const doneRows = report.completed.map(c => `<div class="hw hw-done"><div class="hw-ic">✓</div><div class="hw-name">${esc(c.title)}</div><div class="hw-tag">${c.score != null ? c.score + ' 分' : '已完成'}</div></div>`).join('');
+  const pendRows = report.pending.map(p => `<div class="hw hw-wait"><div class="hw-ic">!</div><div class="hw-name">${esc(p.title)}</div><div class="hw-tag">尚未完成</div></div>`).join('');
+  const hwRows = (doneRows + pendRows) || '<p style="font-size:13px;color:#8A8270;font-weight:600;">本週尚無練習項目。</p>';
+
+  const wrongRows = (report.wrongQuestions || []).map(wq => `<div class="wrong-item"><span class="q">${esc(wq.q)}</span><br/>正解 <span class="a">${esc(wq.answer)}</span></div>`).join('');
+  const wrongBox = wrongRows ? `<div class="wrong-box"><div class="wrong-head">📕 本週需複習的錯題</div>${wrongRows}</div>` : '';
+
+  const note = teacherNote && teacherNote.trim() ? esc(teacherNote).replace(/\n/g, '<br/>') : '這週辛苦了！繼續保持，有任何問題都歡迎隨時問老師。';
+  const scoreInner = hasScore
+    ? `<b>${avg}</b><small>平均分數</small>`
+    : `<b style="font-size:24px;">—</b><small>本週尚未測驗</small>`;
+
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>學習週報 · ${name}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=Nunito:wght@400;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+:root{--paper:#F6F1E6;--card:#FBF8F1;--ink:#1F1B14;--ink-soft:#4A4439;--ink-muted:#8A8270;--accent:#8B3120;--terra:#B85A45;--moss:#5E8A57;--border:#E6DDC9;--border-soft:#EFE8D8;--serif:'Lora',Georgia,serif;--sans:'Nunito','Noto Sans TC',sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#ECE4D2;font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;padding:18px 0 40px;}
+.sheet{max-width:430px;margin:0 auto;padding:0 16px;}
+.pr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 4px;}
+.pr-brand{font-family:var(--serif);font-weight:600;font-size:15px;}.pr-brand .dot{color:var(--terra);}
+.pr-sync{font-size:11px;font-weight:700;color:var(--accent);background:#F3E6E1;border:1px solid #E8D2CB;padding:3px 9px;border-radius:999px;}
+.pr-hero-head{border-radius:20px;padding:20px 22px 18px;margin-bottom:14px;color:#fff;background:linear-gradient(135deg,#9A3A26 0%,#B85A45 100%);box-shadow:0 14px 30px -12px rgba(139,49,32,.5);}
+.pr-eyebrow{font-size:12px;font-weight:700;letter-spacing:.04em;opacity:.85;margin-bottom:6px;}
+.pr-title{font-family:var(--serif);font-size:23px;font-weight:600;line-height:1.2;}
+.pr-stu{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;}
+.pr-stu span{background:rgba(255,255,255,.16);padding:4px 12px;border-radius:999px;font-weight:600;}
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 6px 18px -12px rgba(31,27,20,.2);}
+.card-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:var(--ink-muted);margin-bottom:14px;}
+.score-card{text-align:center;background:radial-gradient(120% 120% at 50% 0%,rgba(201,168,76,.16),transparent 62%),var(--card);}
+.score-ring{position:relative;width:148px;height:148px;margin:2px auto 4px;}
+.score-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.score-num b{font-family:var(--serif);font-size:46px;font-weight:600;color:var(--accent);line-height:1;}
+.score-num small{font-size:12px;color:var(--ink-muted);font-weight:700;margin-top:2px;}
+.score-sub{font-size:12.5px;color:var(--ink-muted);margin-top:8px;font-weight:600;}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;}
+.stat{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:14px 6px;text-align:center;box-shadow:0 6px 18px -12px rgba(31,27,20,.2);}
+.stat b{display:block;font-family:var(--serif);font-size:22px;font-weight:600;line-height:1;}.stat b small{font-size:13px;color:var(--ink-muted);}
+.stat span{display:block;font-size:11.5px;color:var(--ink-muted);font-weight:700;margin-top:6px;}
+.hw{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--border-soft);}.hw:last-child{border-bottom:none;}
+.hw-ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;font-weight:800;}
+.hw-done .hw-ic{background:#EAF1E8;color:var(--moss);}.hw-wait .hw-ic{background:#FBF0DA;color:#B98A1E;}
+.hw-name{flex:1;font-size:14.5px;font-weight:700;color:var(--ink-soft);}
+.hw-tag{font-size:11.5px;font-weight:800;}.hw-done .hw-tag{color:var(--moss);}.hw-wait .hw-tag{color:#B98A1E;}
+.skill{margin-bottom:13px;}.skill:last-child{margin-bottom:0;}
+.skill-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.skill-name{font-size:14px;font-weight:800;color:var(--ink-soft);}
+.skill-score{font-family:var(--serif);font-size:15px;font-weight:600;}
+.skill-bar{height:9px;border-radius:999px;background:var(--border-soft);overflow:hidden;}.skill-fill{height:100%;border-radius:999px;}
+.good .skill-score{color:var(--moss);}.good .skill-fill{background:linear-gradient(90deg,#7AA873,#5E8A57);}
+.warn .skill-score{color:#C08A2A;}.warn .skill-fill{background:linear-gradient(90deg,#E0B24C,#C9982E);}
+.wrong-box{margin-top:16px;background:#FBF4F2;border:1px solid #EEDAD4;border-radius:14px;padding:13px 14px;}
+.wrong-head{font-size:12.5px;font-weight:800;color:var(--accent);margin-bottom:9px;}
+.wrong-item{font-size:13px;color:var(--ink-soft);line-height:1.6;padding:6px 0;border-bottom:1px dashed #EAD9D3;}.wrong-item:last-child{border-bottom:none;}
+.wrong-item .q{font-weight:700;}.wrong-item .a{color:var(--moss);font-weight:800;}
+.note-card{background:linear-gradient(135deg,#FBF8F1,#F6EFE0);}
+.note-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
+.note-avatar{width:46px;height:46px;border-radius:50%;background:#F3E6E1;border:1.5px solid #E8D2CB;object-fit:contain;flex-shrink:0;}
+.note-by b{display:block;font-family:var(--serif);font-size:16px;font-weight:600;}.note-by span{font-size:11.5px;color:var(--ink-muted);font-weight:700;}
+.note-body{font-size:14px;line-height:1.85;color:var(--ink-soft);font-weight:500;}
+.pr-foot{text-align:center;margin-top:6px;padding:14px;}
+.pr-foot-line{font-family:var(--serif);font-size:14px;font-weight:600;}
+.pr-foot-sub{font-size:11.5px;color:var(--ink-muted);margin-top:4px;font-weight:600;}
+</style></head><body><div class="sheet">
+<div class="pr-top"><div class="pr-brand">Alan<span class="dot">.</span> English Class</div><div class="pr-sync">康橋進度同步</div></div>
+<div class="pr-hero-head"><div class="pr-eyebrow">本週學習週報 · WEEKLY REPORT</div><div class="pr-title">${name} 這週的英文學習</div>
+<div class="pr-stu"><span>👤 ${name}</span><span>${weekLine}</span></div></div>
+<div class="card score-card"><div class="card-label" style="justify-content:center;"><span>📊</span>本週成績</div>
+<div class="score-ring"><svg width="148" height="148" viewBox="0 0 148 148"><circle cx="74" cy="74" r="64" fill="none" stroke="#EFE8D8" stroke-width="12"/><circle cx="74" cy="74" r="64" fill="none" stroke="#B85A45" stroke-width="12" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}" transform="rotate(-90 74 74)"/></svg>
+<div class="score-num">${scoreInner}</div></div>
+<div class="score-sub">本週完成 ${compN}/${totN} 項練習</div></div>
+<div class="card-label" style="padding:0 6px;margin-bottom:10px;"><span>🏃</span>本週練習量</div>
+<div class="stat-row"><div class="stat"><b>${compN}<small>/${totN}</small></b><span>完成練習</span></div><div class="stat"><b>${rate}<small>%</small></b><span>完成率</span></div><div class="stat"><b>${streakN}<small> 天</small></b><span>連續學習 🔥</span></div></div>
+<div class="card"><div class="card-label"><span>📋</span>練習完成狀況</div>${hwRows}</div>
+<div class="card"><div class="card-label"><span>🎯</span>學習狀況分析</div>${catRows}${wrongBox}</div>
+<div class="card note-card"><div class="note-head"><img src="owl-proud.png" alt="" class="note-avatar"/><div class="note-by"><b>老師的話</b><span>Alan 老師 · 康橋英文</span></div></div><div class="note-body">${note}</div></div>
+<div class="pr-foot"><div class="pr-foot-line">Alan's English Class</div><div class="pr-foot-sub">康橋進度同步學習系統 · 每週更新</div></div>
+</div></body></html>`;
+}
+
+// 老師端：訂閱全部學生的星星
+function subscribeAllStars(callback, onError) {
+  return _db.collection('stars').onSnapshot(snap => {
+    const out = {};
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      out[doc.id] = { email: doc.id, name: d.name || '', balance: _sumEntries(d.entries), entries: d.entries || [] };
+    });
+    callback(out);
+  }, onError || (() => {}));
+}
+
+// 新增一筆（老師）。amount 可負；date 預設今天
+async function addStarEntry(email, { amount, note, date, name }) {
+  const id = _lc(email);
+  if (!id || !id.includes('@')) throw new Error('invalid-email');
+  const n = Number(amount);
+  if (!n || !isFinite(n)) throw new Error('invalid-amount');
+  const ref = _starsDoc(id);
+  const snap = await ref.get();
+  const cur = snap.exists ? (snap.data() || {}) : {};
+  const entries = (cur.entries || []).concat([{
+    id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6),
+    date: date || new Date().toISOString().slice(0, 10),
+    amount: Math.round(n),
+    note: String(note || '').trim(),
+    by: (_auth.currentUser && _auth.currentUser.email) || '',
+    at: Date.now(),
+  }]);
+  await ref.set({
+    name: name || cur.name || '',
+    entries,
+    balance: _sumEntries(entries),
+    updatedAt: Date.now(),
+  }, { merge: true });
+}
+
+// 刪除一筆（打錯了要修正）
+async function deleteStarEntry(email, entryId) {
+  const ref = _starsDoc(email);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const entries = ((snap.data() || {}).entries || []).filter(e => e.id !== entryId);
+  await ref.set({ entries, balance: _sumEntries(entries), updatedAt: Date.now() }, { merge: true });
+}
+async function saveShopItems(items) {
+  await _shopDoc.set({ items: items || [], updatedAt: Date.now() }, { merge: true });
+}
+
+// ── LINE 通知（老師發公告）─────────────────────────────
+// 走「獨立」的 LINE Worker（跟 AI Worker 分開）。管理密碼由老師在後台輸入、
+// 只存在該裝置 localStorage，不寫進這份公開程式碼。
+// ⚠️ 部署 Worker 後，若你取的名字不是 alan-line，把下面網址改成你的。
+const LINE_ENDPOINT = 'https://alan-line.alan07050445.workers.dev';
+async function lineBroadcast(text, pass) {
+  const res = await fetch(LINE_ENDPOINT + '/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-pass': pass || '' },
+    body: JSON.stringify({ text: String(text || '') }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok || !data || !data.ok) {
+    const err = new Error((data && data.error) || ('http_' + res.status));
+    err.detail = data && data.detail;
+    throw err;
+  }
+  return data;
+}
+
+// 共用的 LINE Worker 呼叫（帶管理密碼）
+async function _lineCall(path, method, pass, body) {
+  const opts = { method, headers: { 'x-admin-pass': pass || '' } };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(LINE_ENDPOINT + path, opts);
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok || !data || !data.ok) {
+    const err = new Error((data && data.error) || ('http_' + res.status));
+    err.detail = data && data.detail;
+    throw err;
+  }
+  return data;
+}
+// 發送給指定對象（target = {type:'all'|'grade'|'students', grade?, emails?}）
+function linePush(target, text, pass) { return _lineCall('/push', 'POST', pass, { target, text: String(text || '') }); }
+// 同步學生名單到 Worker（webhook 比對姓名用）
+function lineSyncRoster(roster, pass) { return _lineCall('/sync-roster', 'POST', pass, { roster: roster || [] }); }
+// 讀家長綁定狀態
+function lineGetLinks(pass) { return _lineCall('/links', 'GET', pass); }
+// 解除某筆綁定（email 省略＝整個 LINE 帳號解綁）
+function lineUnlink(lineUserId, email, pass) { return _lineCall('/unlink', 'POST', pass, { lineUserId, email }); }
+// 功能B：手動試跑作業提醒（dry=true 只預覽不發送）
+// 自動提醒（每天 18:00 照規則發）——老師端只用來預覽「今晚會發什麼」
+function lineRunReminders(dry, pass) { return _lineCall('/run-reminders' + (dry ? '?dry=1' : ''), 'POST', pass); }
+// v426：老師主動提醒（跟自動提醒完全分開）target = {type:'all'|'grade'|'students', grade?, emails?}
+function lineManual(target, note, dry, pass) {
+  return _lineCall('/manual' + (dry ? '?dry=1' : ''), 'POST', pass, { target, note: String(note || '') });
+}
+// v460：最近 10 次自動提醒「實際發了什麼」
+// （用 Messaging API 推出去的訊息不會進 LINE 官方帳號後台的聊天室——那裡只留
+//   「從聊天室手動打的」與「家長傳進來的」，所以老師本來完全沒有紀錄可看。）
+function lineRunLog(pass) { return _lineCall('/run-log', 'GET', pass); }
+// v425：最近 30 則 LINE 訊息「怎麼處理、有沒有回成功」
+function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
+Object.assign(window, { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, gnValidLesson, gnValidRewrite, gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint, gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet, gnValidWrite, gnValidTransform, gnValidOrder, gnValidEditPara, gnValidDiagnose, aiPlanGrammarKinds, GN_PLAN_PRESET, GN_PLAN_ZH, subscribeAllStars, addStarEntry, deleteStarEntry, saveShopItems, LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders, lineManual, lineDiag, lineRunLog, suggestNextWeekId, uploadReadingPhoto, addRosterStudent, setRosterStudentActive, deleteRosterStudent, subscribeAdmins, addAdmin, removeAdmin, buildReportHTML, ttsPickVoice: _ttsPickVoice, aiMakeVocabExercises, aiMakeVocabStory, aiMakeVocabStories, QS_MAX_Q, QS_SPLIT, qsChunkEven, qsPartTitle, qsStoryBank, storyBlanks, storyCheck, storyFix, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson, vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk, RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'), saveReadingWords, uploadReadingAudio, reviewSeenSentences, aiMakeVocabSense, qsValidSense, aiMakeWordStudy, wsValidPack, buildWeeklyReport, formatReportAsText });
+
+Object.assign(window, { sharedItemIds, progKeysFor });
+
+/* 老師端：把買過的東西整理成一列一列（有紀錄的用紀錄的時間，舊資料沒時間就留空） */
+function mxPurchases(mx) {
+  const log = (mx && Array.isArray(mx.log)) ? mx.log : [];
+  const byId = {};
+  log.forEach(e => { if (e && e.id && !byId[e.id]) byId[e.id] = e; });
+  const out = mxOwnedList(mx).map(id => {
+    const it = MX_BY_ID[id], e = byId[id] || {};
+    return { id, zh: (it && it.zh) || id, kind: (it && it.kind) || '', cost: (it && it.cost) || 0, at: e.at || 0 };
+  });
+  const paid = mxRenamesPaid(mx);
+  for (let i = 0; i < paid; i++) {
+    const e = (log.filter(x => x && x.id === '__rename')[i]) || {};
+    out.push({ id: '__rename', zh: '改名卡', kind: 'rename', cost: MX_RENAME_COST, at: e.at || 0 });
+  }
+  return out.sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+/* 退費：拿掉一件（改名卡就把次數減一）。回傳新的 mx，畫面可以馬上更新。 */
+async function mxRefund(uid, id, mx) {
+  if (!uid) return { ok: false, reason: 'no-user' };
+  const cur = mx || {};
+  let owned = mxOwnedList(cur), renames = (+cur.renames || 0);
+  let cost = 0;
+  if (id === '__rename') {
+    if (mxRenamesPaid(cur) <= 0) return { ok: false, reason: 'not-owned' };
+    renames = Math.max(0, renames - 1);
+    cost = MX_RENAME_COST;
+  } else {
+    if (owned.indexOf(id) < 0) return { ok: false, reason: 'not-owned' };
+    cost = (MX_BY_ID[id] && MX_BY_ID[id].cost) || 0;
+    owned = owned.filter(x => x !== id);
+  }
+  // 身上正穿著的就順手脫掉（不然畫面會戴著一個已經不屬於他的東西）
+  const wear = Object.assign({}, cur.wear || {});
+  Object.keys(wear).forEach(k => { if (wear[k] === id) wear[k] = ''; });
+  const log = mxLogAdd(cur, { id, cost: -cost, refund: true });
+  try {
+    await _db.collection('progress').doc(uid).set({ mx: { owned, wear, renames, log } }, { merge: true });
+    return { ok: true, cost, mx: Object.assign({}, cur, { owned, wear, renames, log }) };
+  } catch (e) { return { ok: false, reason: 'save', err: e }; }
+}
+Object.assign(window, { mxPurchases, mxRefund });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v517 💬 用講的就好 —— 聽得懂老師在說什麼，去按對的那顆按鈕
+   ──────────────────────────────────────────────────────────────────────────
+   Alan：「我可以給他文字 或是截圖 不需要有任何匯入方式 我用對話的他就可以幫我生成
+          單字 文法 word study reading comprehension 之類的…我都有所有模板了對吧？」
+
+   ⭐ 他說得對：13 個產生器（＝「手」）早就做好了，而且都吃預填參數。
+     缺的只是一個**路由器**。所以這一版刻意**不新寫任何出題邏輯**：
+       AI 只決定「要做哪一件事、參數是什麼」
+       → 程式打開**現成的那個視窗**並且填好
+       → 出題、校稿、存檔走的全是已經驗過上百次的舊路。
+
+   🔴 它不會自己存。中間一定有一張確認卡。
+     週次的內容是整個年級共用一份文件，聽錯一句話就寫進去可能蓋掉別的東西
+     （v447「我做的單元不見了」）。多按一下，換「它絕對不會自己亂動課程」。
+
+   🔴 聽不懂就說聽不懂。寧可回一句「你是要出單字還是 Word Study？」
+     也不要亂猜一個最接近的去做——猜錯的成本是老師花十分鐘校稿完才發現方向就錯了。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══ v570 聊天室「找那一組」要找對（Alan 合併 Barbed Wire Baseball 與 Barbed Wire Baseball — Part 2 沒成功）══
+   🔴 以前是「第一個符合就用」：名字只要**包含**他講的、或他講的包含它，就算中。
+      兩組名字一個是另一個的前半段時（A 與 A — Part 2），找「A — Part 2」會先撞到 A（A 被包含在裡面），
+      於是兩次都指到同一組——合併出來只有一組的字，看起來像「沒合併」。
+      （程式註解還寫「完全一樣最好」，但實際沒有優先選完全一樣的。）
+   → 改成**打分數**：完全一樣 ＞ 他講的是名字的開頭 ＞ 名字包含他講的 ＞ 他講的包含名字（而且名字愈長愈好），
+     整週所有類別一起比，取最高分。同分取字數最接近的。
+   ⚠ 純函式，items 傳 week.items，norm 傳比對用的正規化函式——方便單獨測。 */
+function askBestGroup(weekItems, name, norm) {
+  /* 標點全部當空白（「Part 2」「— Part 2」「- Part 2」是同一個意思；他打字不會記得放破折號） */
+  const N0 = norm || ((t) => String(t || '').toLowerCase());
+  const N = (t) => N0(t).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const q = N(name);
+  if (!q) return null;
+  const score = (n) => {
+    if (!n) return 0;
+    if (n === q) return 1000;
+    if (n.startsWith(q)) return 800 - (n.length - q.length);        // 他講了前半段：A → A — Part 2 也算，但字愈少愈接近
+    if (n.indexOf(q) >= 0) return 600 - (n.length - q.length);
+    if (q.indexOf(n) >= 0 && n.length >= 3) return 400 + n.length;  // 他講得比組名長：組名愈長愈像
+    return 0;
+  };
+  let best = null, bestScore = 0;
+  const items = weekItems || {};
+  Object.keys(items).forEach(cid => {
+    const groups = {};
+    (items[cid] || []).forEach(it => {
+      const g = (it.group || '').trim();
+      if (g) (groups[g] = groups[g] || []).push(it);
+    });
+    Object.keys(groups).forEach(g => {
+      const sc = score(N(g));
+      if (sc > bestScore) { bestScore = sc; best = { catId: cid, name: g, items: groups[g] }; }
+    });
+  });
+  if (best) return best;
+  /* 他常講的是**單元名**不是組名——用單元名找，回傳它所屬的那一組（同樣打分數） */
+  Object.keys(items).forEach(cid => {
+    const groups = {};
+    (items[cid] || []).forEach(it => {
+      const g = (it.group || '').trim();
+      if (g) (groups[g] = groups[g] || []).push(it);
+    });
+    (items[cid] || []).forEach(it => {
+      const sc = score(N(it.title || ''));
+      if (sc > bestScore) {
+        bestScore = sc;
+        const g = (it.group || '').trim();
+        best = g && groups[g] ? { catId: cid, name: g, items: groups[g] } : { catId: cid, name: it.title || '', items: [it] };
+      }
+    });
+  });
+  return best;
+}
+/* v570 整組換類別（純函式，直接改傳進來的 week 物件；呼叫端負責先 clone）。
+   ⚠ 只動「放在哪一類」：單元 id 不變 → 進度（weekId_itemId）、作業日期（homework[id]）、requires／linked 都不用搬。
+   📎 groupRes 的 key 是「類別::組名」，一起換。回傳搬了幾個單元。 */
+function moveGroupCatInWeek(wk, fromCat, itemIds, toCat, groupName, resKey) {
+  const ids = new Set((itemIds || []).filter(Boolean));
+  if (!wk || !wk.items || !Array.isArray(wk.items[fromCat]) || !ids.size || !toCat || fromCat === toCat) return 0;
+  const moving = wk.items[fromCat].filter(it => it && ids.has(it.id));
+  if (!moving.length) return 0;
+  wk.items[fromCat] = wk.items[fromCat].filter(it => !(it && ids.has(it.id)));
+  if (!Array.isArray(wk.items[toCat])) wk.items[toCat] = [];
+  wk.items[toCat] = wk.items[toCat].concat(moving);
+  const g = String(groupName || '').trim();
+  const rk = resKey || ((c, n) => `${c}::${String(n || '').trim()}`);
+  if (wk.groupRes && g) {
+    const from = rk(fromCat, g), to = rk(toCat, g);
+    if (wk.groupRes[from]) {
+      wk.groupRes[to] = { ...(wk.groupRes[to] || {}), ...wk.groupRes[from] };
+      // v572：只搬單一單元時，原類別若還有同組的單元，參考資料要留一份在原處
+      if (!wk.items[fromCat].some(it => it && String(it.group || '').trim() === g)) delete wk.groupRes[from];
+    }
+  }
+  return moving.length;
+}
+Object.assign(window, { askBestGroup, moveGroupCatInWeek });
+
+
+/* 它會做的事就這幾件。AI 只能從這裡面挑，挑別的一律當 unknown。 */
+const ASK_JOBS = {
+  vocab:     { zh: '一鍵出單字', ico: '📚', need: 'words', where: 'editor' },
+  wordstudy: { zh: '一鍵出 Word Study', ico: '📘', need: 'topic', where: 'editor' },
+  grammar:   { zh: '一鍵出文法', ico: '✏️', need: 'text', where: 'editor' },
+  reading:   { zh: '出閱讀理解', ico: '📖', need: 'text', where: 'editor' },
+  exam:      { zh: '拍考卷 → 互動版', ico: '📸', need: 'images', where: 'editor' },
+  lesson:    { zh: '擬上課紀錄草稿', ico: '🪄', need: 'student', where: 'dash' },
+  weak:      { zh: '弱點分析 → 針對性練習', ico: '🎯', need: 'student', where: 'dash' },
+  /* ══ v531（Alan：「我要他做到任何事情，就要可以做到」）══════════════
+     把剩下的 6 個也接進來。做法跟前面 7 個一樣：**聊天室不自己生內容**，
+     它只負責聽懂要做哪一件事、把參數掏出來，然後把對應的畫面開起來、欄位填好。
+     ⚠ 這一點是刻意的——生成的程式只有一份，聊天室走的跟按按鈕走的是同一條路，
+       所以不會出現「用講的生出來的東西跟用按的不一樣」（v520 就是這樣漏了一個單元）。 */
+  guided:    { zh: '分段閱讀', ico: '📑', need: 'text', where: 'editor' },
+  exampaper: { zh: '出一份新考卷', ico: '📝', need: 'side', where: 'editor' },
+  /* v561：跟 AI 一來一往出一份有配分的大考考卷（他說考哪些字／文法／文章，AI 擬草稿，他再提意見） */
+  examdraft: { zh: '跟 AI 出大考考卷', ico: '🗣', need: '', where: 'editor' },
+  tense:     { zh: '五大時態題庫出題', ico: '🎞', need: '', where: 'editor' },
+  review:    { zh: '排一份複習到別週', ico: '🔁', need: 'group', where: 'editor' },
+  group:     { zh: '整組操作', ico: '📦', need: 'group', where: 'editor' },
+  marking:   { zh: '申論批改', ico: '📋', need: '', where: 'dash' },
+  /* ══ v533（Alan：「把哪一週的內容複製到哪裡、合併哪些單字卡、合併之後再出題、
+     我需要多少題目」）══ 前面兩個以前**整個網站都做不到**，不只是聊天室叫不動。 */
+  copyweek:  { zh: '整週內容複製到別週', ico: '🗓', need: 'toWeek', where: 'editor' },
+  merge:     { zh: '合併單字再出題', ico: '🧩', need: 'groups', where: 'editor' },
+  /* ══ v534（Alan 又加的五件）══════════════════════════════════════ */
+  assign:    { zh: '設定作業期限', ico: '📌', need: 'group', where: 'editor' },
+  notify:    { zh: '發 LINE 公告', ico: '📢', need: 'text', where: 'dash' },
+  /* ══ v547（Alan：「聽你的」——查詢類最值得，其次是改固定課表）══════════
+     query    ＝直接**回答**問題（不是開畫面）。數字一律由程式算，AI 只負責聽懂在問什麼。
+     timetable＝改固定課表的某一堂（星期幾／幾點到幾點）。 */
+  query:     { zh: '直接回答問題', ico: '🔎', need: '', where: 'chat' },
+  timetable: { zh: '改固定課表', ico: '🗓', need: 'student', where: 'dash' },
+  /* ══ v548（Alan：「接續做」——v547 沒做完的那幾項）══════════════════
+     remind＝把「這週沒做完」的孩子**選好**在 LINE 提醒那一頁（送出由他按，這是會響家長手機的東西）
+     stars ＝給／扣一位孩子的星星　roster＝停用／恢復／新增學生　unit＝改／刪**單一個**單元 */
+  remind:    { zh: '提醒沒做完的家長', ico: '🔔', need: '', where: 'dash' },
+  stars:     { zh: '給／扣星星', ico: '⭐', need: 'student', where: 'chat' },
+  roster:    { zh: '學生名單', ico: '👥', need: '', where: 'chat' },
+  unit:      { zh: '改／刪單一個單元', ico: '✏️', need: 'group', where: 'editor' },
+  /* ══ v592：v591 做的兩個工具也叫得動（一樣只開畫面、填好，按下去還是他按）══ */
+  compose:   { zh: '組合複習／模擬考', ico: '📚', need: '', where: 'editor' },
+  qmove:     { zh: '搬題目到別的單元', ico: '↔', need: 'group', where: 'editor' },
+};
+
+/* ══ 📌 v521：出完順手指派 ══════════════════════════════════════════════
+   Alan：「出完順手指派」——那是他每天都在做、最機械的一步。
+   ⚠ **日期一律由程式算**，AI 只負責回一個受控的詞。
+     模型算日期常常差一天（時區、週幾的定義），而「到期日差一天」
+     家長跟小孩都會被影響。這裡跟 lessonISO 一樣用本地時間，絕不用 toISOString。 */
+const ASK_DUE_WORDS = ['none', 'today', 'tomorrow',
+  'this-mon', 'this-tue', 'this-wed', 'this-thu', 'this-fri', 'this-sat', 'this-sun',
+  'next-mon', 'next-tue', 'next-wed', 'next-thu', 'next-fri', 'next-sat', 'next-sun'];
+const _ASK_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function askDueDate(hint, now) {
+  const h = String(hint || '').trim().toLowerCase();
+  const base = now instanceof Date ? new Date(now) : new Date();
+  base.setHours(0, 0, 0, 0);
+  if (!h || h === 'none') return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(h)) return h;              // 他直接講了日期
+  if (h === 'today') return lessonISO(base);
+  if (h === 'tomorrow') { base.setDate(base.getDate() + 1); return lessonISO(base); }
+  const plus = /^\+(\d{1,2})d$/.exec(h);
+  if (plus) { base.setDate(base.getDate() + Math.min(60, +plus[1])); return lessonISO(base); }
+  const wk = /^(this|next)-(sun|mon|tue|wed|thu|fri|sat)$/.exec(h);
+  if (wk) {
+    const want = _ASK_DOW[wk[2]];
+    if (wk[1] === 'this') {
+      /* 「這週三」如果今天已經是週三或更後面，指的是**下一個**週三——
+         不是今天，也不是上週。差一天就是作業到期日錯一天。 */
+      let add = (want - base.getDay() + 7) % 7;
+      if (add === 0) add = 7;
+      base.setDate(base.getDate() + add);
+      return lessonISO(base);
+    }
+    /* 🔴 v535（實測抓到）：「下週一」本來是算成「接下來那個週一再加七天」——
+       今天是週三時會變成 11/02，但他說的是 **10/26**，整整差一週。
+       作業到期日晚一週，小孩就是晚一週才寫。
+       → 「下週X」＝**下一個日曆週（週一起算）的那一天**，這樣：
+         今天週三 → 下週一 = 10/26、下週五 = 10/30、下週三 = 10/28
+       ⚠ 那個星期幾如果這週已經過了，「這週X」與「下週X」會指到同一天
+         （今天週三說「這週一」跟「下週一」都是 10/26）——那是對的，
+         中文本來就這樣講。 */
+    const mondayDelta = (8 - base.getDay()) % 7 || 7;   // 到「下一個週一」要幾天
+    const nextMon = new Date(base);
+    nextMon.setDate(nextMon.getDate() + mondayDelta);
+    nextMon.setDate(nextMon.getDate() + ((want + 6) % 7));   // 週一=0、週二=1…週日=6
+    return lessonISO(nextMon);
+  }
+  return '';
+}
+/* 沒特別講時的預設：**這個週日**（大部分作業都是一週）。
+   🔴 v535（實測抓到）：本來寫成 askDueDate('next-sun') ＝下下個週日，
+     但按鈕那條路（QuickSetModal）用的是「這個週日」——
+     **用講的跟用按的差了一整週**。兩條路一定要給同一個答案。 */
+function askDueDefault(now) {
+  const d = now instanceof Date ? new Date(now) : new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+  return lessonISO(d);
+}
+
+/* 一鍵出單字真的做得出來的題型（跟 components-editor.jsx 的 QS_KINDS 同一份 id）。
+   ⚠ 這裡寫死是為了程式驗得到——AI 自己發明的 id 丟進 qsBuildItems 會安靜地少一個單元。 */
+const ASK_VOCAB_KINDS = ['flashcard', 'def-match', 'spelling', 'quiz', 'fillblank', 'story', 'sense'];
+
+const ASK_SYS = `You are the assistant inside a Taiwanese one-on-one English tutor's own teaching website.
+He talks to you in Traditional Chinese. Your ONLY job is to work out WHICH of his existing tools he wants
+and pull the parameters out of what he typed or pasted. You never write the exercises yourself.
+
+The tools:
+  vocab     — make a full vocabulary set (flashcards, quiz, matching, cloze, dictation…) from a WORD LIST.
+  wordstudy — make a Word Study worksheet from a TOPIC like "prefixes mis-, en-, & em-" or "-VCe words".
+  grammar   — make an interactive grammar lesson + practice from a worksheet's TEXT or PHOTO.
+  reading   — make reading-comprehension questions from a PASSAGE.
+  exam      — turn PHOTOS of a printed exam paper into an interactive exam.
+  lesson    — write today's lesson record for ONE named student.
+              🔴 If he told you WHAT he taught, put it in "text" — that is the whole point of
+              the request. Keep his own wording and his own structure (中師 / 外師 on
+              separate lines, the numbered reading skills as he numbered them). Drop only the
+              chatty opening ("今天Nick我的上課內容是:"). Never summarise, never translate,
+              never add a topic he did not teach.
+  weak      — look at ONE named student's mistakes and make targeted practice.
+  guided    — split a LONG passage into chunks, question after each chunk (分段閱讀).
+  examdraft — draft a SCORED exam paper (100 points, sections, hand-in-then-score) together with him,
+              from what HE says is on the test: words, grammar points, a passage ("這次大考考這幾個字…",
+              "幫我出一份大考考卷"). Put EVERYTHING he said about the content in "text", verbatim.
+              Use this — not "exampaper" — whenever he describes the content himself.
+  exampaper — build a NEW practice exam from the words/topics of the last few weeks (考前複習包).
+              Only when he did NOT say what is on it and wants it taken from the school schedule.
+              He says which teacher's side: "外師" = it, "中師" = lt.
+  tense     — open the five-tenses question bank generator (only grades that have that track).
+  review    — take an EXISTING group of exercises and make a DIFFERENT set from the same words,
+              for another week ("把 Barbed Wire Baseball 排一份複習到第 9 週").
+  group     — do something to a whole EXISTING group: copy / move it to another week,
+              add one more exercise to it, RENAME it, or delete it.
+              Renaming is common right after merging several units — the merged name is the old
+              names joined together and he wants something short
+              ("把那組改名叫 Unit 1–3 期中複習").
+  marking   — open the marking screen for the written (申論) answers.
+  copyweek  — copy EVERYTHING in one week to another week ("把第 7 週的內容複製到第 9 週").
+  merge     — collect the words from SEVERAL existing groups (or several weeks), merge them into
+              one list (duplicates removed) and make a new set from it
+              ("把 Unit 1 跟 Unit 2 的單字卡合併起來再出一份").
+  assign    — set (or clear) the homework deadline on an EXISTING group
+              ("Barbed Wire Baseball 那組設成下週三到期").
+  notify    — send a LINE announcement to parents
+              ("跟家長說這週三停課一次" / "跟 G4 的家長說…").
+  query     — he is ASKING a question and wants the ANSWER, not a screen.
+              "qtype" is exactly one of:
+                unfinished（這週誰還沒做完／誰沒交）
+                notstarted（誰這週完全沒開始）
+                student   （某一位學生這週做得怎麼樣——needs "student"）
+                mistakes  （某一位學生目前錯題最多的是哪些——needs "student"）
+              🔴 You do NOT answer. You only pick the qtype; the website computes the numbers.
+              If he wants you to MAKE practice from the mistakes ("針對 Nick 的弱點出練習"),
+              that is "weak", not "query". Asking WHAT / WHO / HOW MANY ＝ query.
+              A grade ("G4 誰沒做完") goes in "gradeId".
+  remind    — get the parents of students who have NOT finished this week's work ready to be
+              reminded on LINE ("提醒這週沒做完的人" / "提醒 G4 沒做完的家長" / "提醒 Nick 的家長").
+              🔴 You never send anything. The website only selects the right children on the
+              reminder screen and HE presses send. "gradeId" limits to one grade; "student" to one
+              child (leave both empty for everyone who is unfinished). Put any extra line he wants
+              in the message in "note", in his own words.
+  stars     — give or take away stars for ONE student ("Nick 加 10 顆星星" / "扣 Eric 5 顆").
+              "student" = who; "amount" = a signed whole number (+10, -5); "note" = the reason
+              he gave ("上課表現好"), else "". Never invent an amount he did not say.
+  roster    — change the student list. "rop" is exactly one of: deactivate（停用）activate（恢復）
+              add（新增）. For add, "student" = the child's name, "newEmail" = the Google account
+              he gave, "gradeId" = the grade if he said. Never invent an email.
+  unit      — rename or delete ONE single exercise (not a whole set). "group" = the exercise's
+              title as he said it; "op" = rename（改名）or delete（刪掉）; for rename put the NEW
+              title in "title". If he is talking about the whole set of exercises, use "group".
+  timetable — change ONE student's regular weekly lesson slot in the fixed timetable
+              ("Nick 週三改成 17:30" / "把 Eric 週二的課改到週四 18:00 到 19:30").
+              "student" = who; "fromDay" = the weekday he is moving FROM (0=日…6=六, -1 if he
+              did not say); "toDay" = the weekday it becomes (-1 if unchanged);
+              "start"/"end" = new times as "HH:MM" 24-hour ("" if he did not say).
+              If he only gave a start time, leave "end" empty — the website keeps the length.
+              🔴 This is the PERMANENT weekly slot. If he said it is only for ONE time
+              ("這週三改成週四" / "下週一那堂換時間"), set "once": true — the website will say it
+              cannot do a one-time change yet. If you cannot tell, use "unknown" and ask:
+              "是固定課表都改，還是只改這一次？".
+  compose   — build a new review / mock-exam set by picking existing exercises from DIFFERENT weeks
+              and copying them into one week ("把第 1 到 3 週的測驗組成期中複習" / "把 Unit 1 跟 Unit 3
+              那兩組放到新的一週"). "weeks" = week numbers he named; "groups" = group names if he
+              named specific ones (leave empty = everything in those weeks); "toWeek" = the target
+              week number if he said one, 0 = make a NEW week; "title" = the name for the new week
+              or the group name ("期中複習"); "due" as usual. You never copy anything — the website
+              opens the picker with his choices ticked and HE presses the button.
+  qmove     — move (or copy) some QUESTIONS from one exercise into another exercise of the same kind
+              ("Unit 1 測驗的第 2、3 題搬到 Unit 2 測驗"). "group" = the SOURCE exercise's title;
+              "toGroup" = the DESTINATION exercise's title; "qnums" = the question numbers as he said
+              them (1-based list); "qall": true if he said all of them; "toWeek" = the week number
+              of the destination if it is another week, else 0; "copy": true only if he said copy
+              ("複製"), false for move. If he did not say which questions, leave qnums empty and set
+              intent "unknown" asking which ones. This is about single questions, not whole exercises:
+              moving a whole exercise is "unit"/"group".
+
+Rules:
+- "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
+  guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars roster unit compose qmove unknown
+- "side": for exampaper, and for vocab / merge when he says whose vocabulary it is. "it" if he said 外師/IT,
+  "lt" if he said 中師/LT. If he did not say, "". (中師單字 is its own category on the website.)
+- "group": the name of the existing group he is talking about, copied exactly
+  (usually a unit title like "Barbed Wire Baseball — Part 2"). Only for review / group.
+- "op": ONLY for intent "group". One of:
+    copy（沿用到別週）move（搬過去＝搬到別的一週）again（再出一份）rename（改名字）delete（刪掉）
+    recat（換類別＝同一週內，把整組搬到另一個類別，例如「把外師單字那組移到中師單字」）
+  For "recat", put the target category in "toCat": one of
+    vocab（外師單字）ltvocab（中師單字）grammar（文法）word（字彙學習／字根字首）reading（閱讀寫作）mock（綜合考卷）
+  If he did not say which category, use op "recat" and leave "toCat" empty — the website asks.
+  For "rename", put the NEW name in "title", exactly as he said it. If he asked to rename
+  but did not say the new name, use op "rename" and leave "title" empty — the website asks.
+- "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
+- "fromWeek": ONLY for copyweek, the SOURCE week number. If he did not say one, 0
+  (the website then uses the week he is looking at).
+- "groups": ONLY for merge. The names of the groups he wants merged, copied exactly, as a list.
+  If he said whole weeks instead ("第 5 到第 7 週的單字"), leave groups empty and put the
+  week numbers in "weeks" instead.
+- "weeks": ONLY for merge, a list of week NUMBERS when he named weeks rather than groups.
+- "nQ": how many questions / words he asked for ("出 10 題就好", "只要 12 個字").
+  0 when he did not say. This trims the list; it never invents extra words.
+- "target": ONLY for notify. "all"（全班）/ "grade"（某個年級）/ "students"（指定的孩子）.
+  Default "all" when he did not say.
+- "gradeId": ONLY for notify with target "grade" — g1…g6, copied from what he said.
+- 🔴 For "notify", put the ANNOUNCEMENT HE WANTS SENT in "text", written the way a parent
+  should read it. Do NOT add anything he did not say — no greetings he did not write,
+  no times he did not give. He will see it and press send himself.
+- "group" also works when he names ONE unit instead of a whole group
+  ("Barbed Wire Baseball 的單字卡再加幾種題目") — just copy the name he said.
+- For "exampaper", anything he said the paper must contain goes in "note", in his own words
+  ("要包含現在完成式跟比較級，閱讀那一段用動物的主題").
+- If you are not sure, use "unknown" and put ONE short Traditional-Chinese question in "ask".
+  Guessing wrong costs him ten minutes of proofreading before he notices, so ASK.
+- "words": only when he gave an actual word list. Each: {"term":"...","zh":"...(if he gave it)"}
+  Never invent words he did not give. If he only named a unit ("Barbed Wire Baseball"), leave words empty
+  and set intent "unknown" with ask "要出哪幾個單字？貼給我就好".
+- "topic": the Word Study focus, copied in English exactly as he wrote it.
+- "text": the passage / worksheet text he pasted, copied verbatim. Never summarise or rewrite it.
+  For intent "lesson" this is WHAT HE TAUGHT TODAY, in his own words — see the tool note above.
+- "title": a short unit name, in the language he used. If he did not say one, leave it "".
+- "student": the child's name exactly as he typed it (usually an English first name).
+- "kinds": ONLY for vocab. Which exercise types he asked for, from exactly these ids:
+     flashcard（單字卡） def-match（配對連線） spelling（聽寫） quiz（選擇題）
+     fillblank（填空） story（短文填空） sense（字義選擇）
+  If he named specific ones ("我只要選擇題和填空") list just those.
+  If he did not say, leave it [] — the website will use its own default set.
+- "note": any extra instruction he gave about HOW the questions should be ("難一點",
+  "多出一些推論題", "例句要跟棒球有關"). Copy his own words. This goes straight to the
+  question-writing AI. If he did not ask for anything special, leave it "".
+- "nMcq" / "nSa": ONLY for reading, when he said how many ("出 8 題選擇、3 題問答").
+  Otherwise 0 and the website uses its defaults.
+- "due": when he said the homework is due. ONE of:
+    none | today | tomorrow | +3d (any number of days)
+    this-mon…this-sun | next-mon…next-sun | or an exact 2026-10-26
+  🔴 Do NOT work out the actual date yourself — the website does that. Just pass the word.
+  If he did not mention a deadline at all, use "" and the website uses its own default.
+  If he said he does NOT want it set as homework ("先不要指派"), use "none".
+- "say": one short friendly Traditional-Chinese sentence telling him what you are about to do.
+- 🔴 "delete" is the only thing here that throws work away. If he was not clearly asking to delete
+  ("把那組刪掉"), do NOT use op "delete" — ask instead.
+
+Output ONLY JSON:
+{"intent":"vocab","title":"Barbed Wire Baseball","words":[{"term":"pursued","zh":"追趕"}],
+ "topic":"","text":"","student":"","kinds":["quiz","fillblank"],"note":"例句要跟棒球有關",
+ "nMcq":0,"nSa":0,"ask":"","say":"好，我用這 8 個字出選擇題和填空。"}`;
+
+/* 程式驗：AI 說的每一件事都要對得上真實的東西，對不上就降級成「我不確定」。 */
+function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
+  const o = got || {};
+  const intent = ASK_JOBS[o.intent] ? o.intent : 'unknown';
+  const words = (Array.isArray(o.words) ? o.words : [])
+    .map(w => ({ term: String((w && w.term) || '').trim(), zh: String((w && w.zh) || '').trim() }))
+    /* ⚠ 只收看起來真的是英文單字的——模型偶爾會把句子或中文塞進來，
+       那種丟進 qsBuildItems 會生出一堆壞題目（單字卡正面出現一整句話）。
+       ⚠ 允許空白是為了 "ice cream" 這種，但**最多兩個字**——
+         第一版寫成 [A-Za-z '-]{0,38} 就把 "I ran fast today" 整句收進去了。 */
+    .filter(w => /^[A-Za-z][A-Za-z'-]{0,19}( [A-Za-z][A-Za-z'-]{0,19})?$/.test(w.term));
+  const out = {
+    intent, words,
+    title: String(o.title || '').trim().slice(0, 80),
+    topic: String(o.topic || '').trim().slice(0, 120),
+    text: String(o.text || '').trim().slice(0, 12000),
+    student: String(o.student || '').trim().slice(0, 40),
+    say: String(o.say || '').trim().slice(0, 120),
+    ask: String(o.ask || '').trim().slice(0, 120),
+    /* v518：題型只能是真的存在的那幾種——模型自己發明一個 'matching2' 之類的，
+       丟進 qsBuildItems 只會安靜地少一個單元（v473 的教訓）。 */
+    kinds: (Array.isArray(o.kinds) ? o.kinds : [])
+      .map(k => String(k || '').trim())
+      .filter(k => ASK_VOCAB_KINDS.indexOf(k) >= 0),
+    note: String(o.note || '').trim().slice(0, 600),
+    nMcq: Math.max(0, Math.min(20, +o.nMcq || 0)),
+    nSa: Math.max(0, Math.min(10, +o.nSa || 0)),
+    /* v521：只收受控的詞或 +Nd 或明確日期；其他一律當「沒講」，由畫面用預設。 */
+    due: (() => {
+      const d = String(o.due || '').trim().toLowerCase();
+      if (ASK_DUE_WORDS.indexOf(d) >= 0) return d;
+      if (/^\+\d{1,2}d$/.test(d)) return d;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      return '';
+    })(),
+    /* v531 新增的三個參數，一樣全部夾回受控的值——
+       模型亂填一個 side 或 op，程式照著做就會動到不該動的東西。 */
+    side: (o.side === 'it' || o.side === 'lt') ? o.side : '',
+    group: String(o.group || '').trim().slice(0, 120),
+    op: ['copy', 'move', 'again', 'rename', 'delete', 'recat'].indexOf(String(o.op || '').trim()) >= 0
+      ? String(o.op).trim() : '',
+    /* v570：換類別的目標——只收網站真的有的類別 id（亂填就當沒講，網站會問） */
+    toCat: ['vocab', 'ltvocab', 'grammar', 'word', 'reading', 'mock'].indexOf(String(o.toCat || '').trim()) >= 0
+      ? String(o.toCat).trim() : '',
+    toWeek: Math.max(0, Math.min(40, Math.round(+o.toWeek || 0))),
+    fromWeek: Math.max(0, Math.min(40, Math.round(+o.fromWeek || 0))),
+    /* ⚠ 一樣夾回受控值：組名最多 8 個、週次最多 12 週、題數最多 60。
+       模型回一個 500 題，程式照做就會把瀏覽器卡死。 */
+    groups: (Array.isArray(o.groups) ? o.groups : [])
+      .map(g => String(g || '').trim()).filter(Boolean).slice(0, 8),
+    weeks: (Array.isArray(o.weeks) ? o.weeks : [])
+      .map(n => Math.round(+n || 0)).filter(n => n > 0 && n <= 40).slice(0, 12),
+    nQ: Math.max(0, Math.min(60, Math.round(+o.nQ || 0))),
+    target: ['all', 'grade', 'students'].indexOf(String(o.target || '').trim()) >= 0
+      ? String(o.target).trim() : 'all',
+    gradeId: /^g[1-6]$/.test(String(o.gradeId || '').trim().toLowerCase())
+      ? String(o.gradeId).trim().toLowerCase() : '',
+    /* v547：全部夾回受控值——模型亂填一個 qtype 或 25:99，程式照做就會算錯、存錯。 */
+    qtype: ['unfinished', 'notstarted', 'student', 'mistakes'].indexOf(String(o.qtype || '').trim()) >= 0
+      ? String(o.qtype).trim() : '',
+    fromDay: (() => { const n = Math.round(+o.fromDay); return (n >= 0 && n <= 6) ? n : -1; })(),
+    toDay:   (() => { const n = Math.round(+o.toDay);   return (n >= 0 && n <= 6) ? n : -1; })(),
+    start: (() => { const t = String(o.start || '').trim(); return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
+    end:   (() => { const t = String(o.end || '').trim();   return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
+    once: o.once === true,
+    /* v592：搬題目／組合複習的參數——全部夾回受控值 */
+    toGroup: String(o.toGroup || '').trim().slice(0, 120),
+    qnums: (Array.isArray(o.qnums) ? o.qnums : []).map(n => Math.round(+n || 0)).filter(n => n >= 1 && n <= 200).slice(0, 40),
+    qall: o.qall === true,
+    copy: o.copy === true,
+    /* v548：金額只收整數且上限 200——模型寫成 10000 或 NaN，程式照做就會把某個孩子的星星弄壞。 */
+    amount: (() => { const n = Math.round(+o.amount); return (isFinite(n) && Math.abs(n) <= 200) ? n : 0; })(),
+    rop: ['deactivate', 'activate', 'add'].indexOf(String(o.rop || '').trim()) >= 0 ? String(o.rop).trim() : '',
+    newEmail: (() => { const e = String(o.newEmail || '').trim().toLowerCase();
+                       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : ''; })(),
+  };
+  /* 認學生：名字要真的在名單裡，不然「幫 Jack 寫紀錄」會安靜地對到空氣。 */
+  if (out.student && !(out.intent === 'roster' && out.rop === 'add')) {
+    const hit = (roster || []).find(r => {
+      const n = String((r && r.name) || '').toLowerCase();
+      return n && (n === out.student.toLowerCase() || n.split(/\s+/)[0] === out.student.toLowerCase());
+    });
+    out.email = hit ? hit.email : '';
+    if (!hit) {
+      /* v592（Alan：「打錯一個字就沒辦法了，真的 AI 應該可以理解，或是至少問是不是哪一個」）
+         以前這裡直接放棄。現在：找長得像的，列成按鈕問「你是說…？」。
+         ⚠ 還是不替他選——Elroy 跟 Elory 只差一個字母位置，猜錯會記到別的孩子身上；
+           列出來讓他點一下，才是又聰明又安全。
+         raw＝模型原本的回答，他點選之後用同一份重新驗一次（不另寫一套流程）。 */
+      const opts = askSuggest(out.student, (roster || []).map(r => r && r.name));
+      out.intent = 'unknown';
+      if (opts.length) {
+        out.dym = { field: 'student', wrong: out.student, options: opts, raw: o };
+        out.ask = `名單裡沒有「${out.student}」——你是說${opts.length > 1 ? '哪一位？' : ` ${opts[0]} 嗎？`}`;
+      } else out.ask = `名單裡找不到「${out.student}」——是哪一位？`;
+    }
+  }
+  /* 該有的東西沒有 → 不要硬做，改成問他。
+     ⚠ 文法與考卷可以只給照片不給文字——照片本身就是內容（v428 讀作業、v516 讀考卷）。 */
+  /* v531：整組操作沒說要做什麼就先問清楚——「把那組弄一下」不能自己猜。 */
+  if (out.intent === 'group' && !out.op) {
+    out.intent = 'unknown';
+    out.ask = `「${out.group || '那一組'}」要做什麼？沿用到別週／搬到別週／換類別／再出一份／刪掉`;
+  }
+  /* v547：query 沒說問什麼、或該有學生卻沒有 → 問，不要亂猜。 */
+  if (out.intent === 'query') {
+    if (!out.qtype) {
+      out.intent = 'unknown';
+      out.ask = out.ask || '想查什麼？「這週誰還沒做完」、「Nick 這週做得怎麼樣」、「Nick 錯最多的是哪些」我都查得到。';
+    } else if ((out.qtype === 'student' || out.qtype === 'mistakes') && !out.student) {
+      out.intent = 'unknown';
+      out.ask = '要查哪一位學生？';
+    }
+  }
+  if (out.intent === 'stars') {
+    if (!out.amount) { out.intent = 'unknown'; out.ask = `要給 ${out.student || '他'} 幾顆？（加或扣都可以，一次最多 200）`; }
+  }
+  if (out.intent === 'roster') {
+    if (!out.rop) { out.intent = 'unknown'; out.ask = '要做什麼？停用／恢復／新增學生'; }
+    else if (out.rop === 'add' && (!out.student || !out.newEmail)) {
+      out.intent = 'unknown'; out.ask = '新增學生要有名字跟他的 Google 帳號（email），兩個都給我。';
+    } else if (out.rop !== 'add' && !out.email) {
+      out.intent = 'unknown'; out.ask = out.ask || '要停用／恢復哪一位？';
+    }
+  }
+  if (out.intent === 'unit' && ['rename', 'delete'].indexOf(out.op) < 0) {
+    out.intent = 'unknown'; out.ask = `「${out.group || '那個單元'}」要改名還是刪掉？`;
+  }
+  if (out.intent === 'unit' && out.op === 'rename' && !out.title) {
+    out.intent = 'unknown'; out.ask = `「${out.group}」要改叫什麼？`;
+  }
+  if (out.intent === 'compose' && !out.weeks.length && !out.groups.length) {
+    out.intent = 'unknown'; out.ask = out.ask || '要從哪幾週（或哪幾組）挑？例如「第 1 到 3 週」。';
+  }
+  if (out.intent === 'qmove') {
+    if (!out.toGroup) { out.intent = 'unknown'; out.ask = out.ask || `要搬到哪一個單元？`; }
+    else if (!out.qnums.length && !out.qall) {
+      out.intent = 'unknown'; out.ask = out.ask || `要搬「${out.group}」的第幾題？（例如「第 2、3 題」，或說全部）`;
+    }
+  }
+  if (out.intent === 'timetable' && !out.once && out.toDay < 0 && !out.start && !out.end) {
+    out.intent = 'unknown';
+    out.ask = `${out.student || '他'}要改成星期幾、幾點？`;
+  }
+  const need = (ASK_JOBS[out.intent] || {}).need;
+  if (need === 'words' && !out.words.length) { out.intent = 'unknown'; out.ask = out.ask || '要出哪幾個單字？直接貼給我就好。'; }
+  if (need === 'topic' && !out.topic)        { out.intent = 'unknown'; out.ask = out.ask || '這次的 Word Study 主題是什麼？'; }
+  if (need === 'text' && !out.text && !nImages) { out.intent = 'unknown'; out.ask = out.ask || '把文章或作業的內容貼給我，或拍一張照片。'; }
+  if (need === 'images' && !nImages)         { out.intent = 'unknown'; out.ask = out.ask || '把考卷拍給我——一頁一張，整頁入鏡。'; }
+  if (need === 'student' && !out.email)      { out.intent = 'unknown'; out.ask = out.ask || '要幫哪一位學生？'; }
+  if (need === 'side' && !out.side)          { out.intent = 'unknown'; out.ask = out.ask || '要出外師還是中師那一份？'; }
+  if (need === 'group' && !out.group)        { out.intent = 'unknown'; out.ask = out.ask || '是哪一組？把那一組的名字講給我就好。'; }
+  if (need === 'toWeek' && !out.toWeek)      { out.intent = 'unknown'; out.ask = out.ask || '要複製到第幾週？'; }
+  /* 📢 公告：他要發的字就是要送到家長手機上的東西——空的不可以放行。 */
+  if (out.intent === 'notify' && out.target === 'grade' && !out.gradeId) {
+    out.intent = 'unknown'; out.ask = '要發給哪一個年級？';
+  }
+  if (need === 'groups' && !out.groups.length && !out.weeks.length) {
+    out.intent = 'unknown';
+    out.ask = out.ask || '要合併哪幾組的單字？講組名或週次都可以。';
+  }
+  return out;
+}
+
+/* 聽一句話（可以帶截圖）。回傳驗過的結果。 */
+async function aiRouteCommand({ text = '', images = [], categories = [], roster = [], history = [] } = {}) {
+  const imgs = (images || []).slice(0, 4);
+  const content = imgs.map(im => ({ type: 'image',
+    source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } }));
+  const names = (roster || []).map(r => r && r.name).filter(Boolean).slice(0, 40).join('、');
+  const hist = (history || []).slice(-4).map(h => `${h.me ? '老師' : '你'}：${h.text}`).join('\n');
+  content.push({ type: 'text', text:
+    (names ? `（他的學生名單：${names}）\n` : '')
+    + (hist ? `（前幾句）\n${hist}\n\n` : '')
+    + (imgs.length ? `（他附了 ${imgs.length} 張圖，先看圖再讀下面這句話）\n` : '')
+    + '老師說：\n' + String(text || '').trim() });
+
+  let got = null;
+  try {
+    got = await _aiAsk({ model: GN_READ_MODEL, max_tokens: 3000, system: ASK_SYS,
+      messages: [{ role: 'user', content }] },
+      (d) => {
+        const t = (d?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('')
+          || d?.content?.[0]?.text || '';
+        const o = _gnSalvageJson(_aiStripFence(t));
+        return (o && typeof o === 'object') ? o : null;
+      }, 60000);
+  } catch (e) {
+    return { intent: 'unknown', ask: '我這邊連不上，等一下再說一次。', words: [], title: '', topic: '', text: '', student: '', say: '' };
+  }
+  return askVerify(got, { categories, roster, nImages: imgs.length });
+}
+
+/* ══ v592 打錯字也聽得懂：找「長得像的」名字 ═══════════════════════════
+   Alan：「打錯一個字 AI 助手就沒辦法了…真的 AI 應該可以理解，或是至少問是不是哪一個」。
+   ⚠ 這個函式**只列候選，不替他選**：名單裡真的有 Elroy 跟 Elory（只差兩個字母對調），
+     自動選最像的會把課記到別的孩子身上而且不報錯——所以呼叫端一律拿去問「你是說…？」。
+   比對：忽略大小寫與標點；跟「整個名字」「名字裡的每一個詞」「名字開頭同長度那一段」各算一次
+   編輯距離（換字、少打、多打、相鄰兩字對調都算 1），取最小；允許的距離隨長度放寬。
+   中文也適用（「期末複習」→「期中複習」差一個字）。 */
+function _askNormName(t) { return String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
+function _askEditDist(a, b) {
+  const al = a.length, bl = b.length;
+  if (!al) return bl; if (!bl) return al;
+  const d = [];
+  for (let i = 0; i <= al; i++) { d[i] = [i]; }
+  for (let j = 0; j <= bl; j++) d[0][j] = j;
+  for (let i = 1; i <= al; i++) for (let j = 1; j <= bl; j++) {
+    const c = a[i - 1] === b[j - 1] ? 0 : 1;
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[al][bl];
+}
+function askSuggest(query, names, max) {
+  const q = _askNormName(query);
+  if (!q) return [];
+  const allow = q.length <= 2 ? 0 : q.length <= 5 ? 1 : q.length <= 9 ? 2 : 3;
+  const seen = new Set(), scored = [];
+  (names || []).forEach(raw => {
+    const orig = String(raw || '').trim();
+    const n = _askNormName(orig);
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    if (n === q) return;                                   // 完全一樣就不是「打錯」，不列
+    const parts = n.split(' ').filter(Boolean);
+    let best = _askEditDist(q, n);
+    parts.forEach(p => { best = Math.min(best, _askEditDist(q, p)); });
+    if (n.length > q.length) best = Math.min(best, _askEditDist(q, n.slice(0, q.length)) + 1);   // 打到一半
+    const contains = (q.length >= 3 || (q.length >= 2 && /[\u4e00-\u9fff]/.test(q))) && (n.indexOf(q) >= 0 || q.indexOf(n) >= 0);
+    if (best <= allow || contains) scored.push({ orig, score: contains && best > allow ? allow + 0.5 : best, len: Math.abs(n.length - q.length) });
+  });
+  scored.sort((a, b) => a.score - b.score || a.len - b.len || (a.orig < b.orig ? -1 : 1));
+  return scored.slice(0, max || 4).map(x => x.orig);
+}
+Object.assign(window, { ASK_JOBS, ASK_SYS, ASK_VOCAB_KINDS, ASK_DUE_WORDS, askDueDate, askDueDefault, askVerify, aiRouteCommand, askSuggest });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v516 📸 拍考卷照片 → 變成互動版
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 手上有一疊考過的 Formative。v515 做好了「考卷」這個容器，
+   這一版負責把紙變成資料。整套讀照片的機制沿用 v428~v430 的 aiReadGrammarSheet：
+     · 一張照片一個請求、全部同時送 → 再長也不會被 max_tokens 切斷（v430 的教訓）
+     · 某一頁讀不到只少那一頁，會告訴老師是哪一張，不是整份「讀不懂」
+
+   🔴 這份照片跟作業照片最大的不同：**上面滿滿都是學生的手寫答案與老師的紅筆**。
+      所以提示詞要很明確：讀印刷的題目，不要讀手寫的；
+      而且**不要抓學生姓名與分數**——那是別人家小孩的成績，沒有理由進我們的資料庫。
+
+   ⭐ 讀完不另外寫驗證：直接丟進 v515 的 examWarnings()。
+      同一件判斷只留一份——老師手打的卷子跟 AI 讀的卷子吃同一組檢查。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const EXAM_READ_SYS = `You convert a photo of a printed English exam paper (Kang Chiao / 康橋 elementary
+"Formative") into JSON so it can be re-taken on a website.
+
+🔴 READ THE PRINTED QUESTIONS ONLY.
+   These papers have a student's handwritten answers and a teacher's red marks all over them.
+   Ignore ALL handwriting and red pen. You are reconstructing the BLANK paper.
+🔴 NEVER output the student's name, class or score. Leave them out entirely.
+
+Output ONE page's worth. Keep every English word exactly as printed — never translate, never rewrite.
+
+"parts" may ONLY use these kinds. Anything else goes in "skipped".
+  "circle"  — "Read and Circle N <pattern> words" over a passage.
+              "check" must be one of: vce | team | digraph | suffix | prefix | diphthong
+                 "diphthong sounds /aʊ/ /ɔɪ/" (circle the words) -> "check":"diphthong", "checkArg":"ou ow oi oy". It judges by PRONUNCIATION: ou/ow as in shout, brown = /aʊ/ (same sound); snow, know (/oʊ/) are NOT counted unless checkArg is "ow:long".
+              With several patterns, separate them with SPACES in "checkArg": "mis- en- em-".
+                 "-VCe words"            -> "check":"vce"
+                 "vowel team inside"     -> "check":"team"
+                 "digraph"               -> "check":"digraph"
+                 "words ending in -ing"  -> "check":"suffix", "checkArg":"-ing"
+              "need" = how many they must circle. "passage" = the whole passage, exactly as printed.
+  "cloze"   — a word bank + sentences with a blank.
+              "bank" = every word in the box.
+              🔴 The sentences go in a field called "items" (NOT "sentences", NOT "questions").
+              Each item: {"text":"Mark ___ on the test.","answer":"struggled"} — write the blank as ___
+              and "answer" = the word from the bank that fits. YOU choose the answer from the bank
+              by reading the sentence — do not copy the student's handwriting.
+  "quiz"    — multiple choice. 🔴 ONE part holds ALL the questions of that Part, in a
+              "questions" ARRAY. Do NOT emit one part per question.
+              Each entry: {"q":"...","options":[...in printed order...],"answer":<0-based index>}
+              "pts" is the TOTAL for the whole Part (e.g. "/18"), not per question.
+              Do not number the questions; the website numbers them.
+              If the passage they refer to is printed on the paper, put it in "passage" (the whole text).
+  "affix"   — "Make two words using two of the suffixes below, then write a sentence for each."
+              "affixes" = every suffix/prefix in the box, written WITH its hyphen: ["-ity","-ty","-ic","-ment"]
+              (a prefix is written the other way round: "un-", "mis-").
+              "need" = how many words they must make. "minWords" = the minimum sentence length
+              if one is printed ("5 or more words" -> 5).
+  "usewords"— "Write N sentences using words from the box" where they just USE the word
+              (they do NOT build a new word from a suffix — that is "affix").
+              "bank" = every word in the box. "need" = how many sentences.
+              "minWords" = the printed minimum ("at least six words long" -> 6).
+  "genq"    — "Using the story you just read, make two questions (not on the page)".
+              "passage" = the story they read. "need" = how many questions.
+  "storymap"— a Beginning / Middle / End chart (sometimes drawn as three boxes with arrows).
+              "passage" = the text the chart is about.
+              "need" = how many sentences per box ("Write 2 sentences per section" -> 2).
+  "fixbox"  — "Find the N mistakes and write the corrected words in the boxes" (usually
+              capitalization or punctuation). The answer sheet is a ROW OF BOXES, not a rewrite.
+              "answers" = the corrected words in the order they appear in the text,
+              WITH the correct capital letters: ["Taipei","I","Monday"].
+              "passage" = the paragraph exactly as printed (mistakes left in).
+  "evidence"— "Use N specific details from the text to explain/support ...".
+              "question" = the question they must answer, exactly as printed.
+              "passage" = the text the details must come from.
+              "need" = how many details. "minWords" = printed minimum sentence length, else 5.
+  "essay"   — one long piece of writing (a story, a letter, an opinion paragraph) with ONE prompt.
+              "prompt" = the printed writing task, exactly as printed.
+              "vocab" = any list of words they are told to use (else []).
+              "paras" / "sentsPerPara" = if the paper says "5 paragraphs" / "4 sentences each",
+              put 5 and 4. "pts" = the printed total. Add "rubricSet":"writing" when the Kang Chiao
+              writing criteria are printed. 🔴 Use "essay", not "short", when it is ONE long piece.
+  "order"   — "Number the events 1-5 in the order they happened". The sentences are printed in a
+              MIXED order with a blank in front of each. 🔴 "events" = the sentences in the CORRECT
+              chronological order (earliest first) — YOU work that out by reading the passage; do not
+              copy the order they are printed in. "passage" = the passage they come from if it is on
+              the page (else ""). "pts" = the printed total for this part.
+  "table"   — a written answer TABLE with column headings and a fixed number of empty rows, e.g. "Find three
+              descriptive words or phrases. Write each on the left. Explain what it helps you imagine on the
+              right (3 pts. each)". "headers" = the column headings exactly as printed (2 or 3 of them),
+              "rows" = how many rows, "passage" = the excerpt the child must look at if one is printed above it
+              (else ""). "pts" = rows × points each.
+  "draw"    — a blank box where the child must DRAW ("Draw the final scene", "Scene Picture"). "prompt" = the
+              printed drawing task exactly as printed, "pts" = its points. NEVER put a drawing box in "short".
+  "checkin" — the warm-up at the top: "How are you feeling right now?" + "What is your goal
+              for this test?". "goals" = the printed goal choices, exactly as printed.
+              "pts" is 0 — it is not scored.
+  "short"   — any question the child writes a long answer to. Give "pts" and, if a marking
+              rubric is printed, a one-line "rubric".
+              🔴 ALWAYS include "questions":[{"q":"<the printed task, exactly as printed>","pts":N}].
+              A "Summarize the text / write three important details" task is a "short" with
+              "rubricSet":"summary" (see below), even though it is a part of a bigger Part 2.
+              🔴 If the printed rubric has the Kang Chiao writing criteria (Content, Details,
+              Creativity, Text Structure, Length, Grammar, Vocabulary) add "rubricSet":"writing".
+              If it has Explanation / Relevant / Effort, add "rubricSet":"basic" and "rubricMax":N, where N is the
+              biggest point value in that criteria table (columns "5 Points ... 0 Points" -> 5).
+              🔴 "Read the text below and answer the questions" followed by written answers (e.g. "What is the author's
+              purpose? (5pts.)" and "Write one detail from the story ... then explain how it supports ... (15pts.)")
+              is ONE "short" part: "passage" = the text, "pts" = the printed total (20), and EVERY written question in
+              "questions" with its own "pts". Do NOT use "evidence" for that — "evidence" is only for "use N details".
+              🔴 ALWAYS copy the whole reading text into "passage" of the part that says "Read the text below" — the
+              text is part of the exam; never leave it out, even when the questions are on the next page.
+              🔴 If the text is on THIS page but its questions are on the NEXT page, still output the part:
+              "kind":"short", its title, "pts", the "passage", and "questions":[] (empty). The next page then outputs the
+              questions as a "short" part with no title and the passage left out.
+              🔴 A reading text that comes AFTER a quiz belongs to the part printed right above it ("Read the text below"),
+              NOT to the multiple-choice quiz before it. Put the passage in THAT part.
+              If it is a "Summary Writing Rubric" (details from the beginning / middle / end, chronological
+              order, complete sentences, own words), add "rubricSet":"summary".
+
+If a page shows ONLY a marking-criteria table (rows like Explanation / Relevant / Effort, columns "5 Points ... 0 Points"),
+it has no sections: output "sections":[] and a top-level "rubricMax":N (the biggest point value, e.g. 5).
+
+A page that has ONLY a reading selection (a title, maybe a photo, numbered paragraphs) and says
+"Read the selection. Then complete Part 1 and Part 2" has no questions of its own. Do NOT put it in
+"skipped". Output it as a section with "parts":[] and a "passage" field holding the whole selection
+(include its title as the first line), keeping the Section heading exactly as printed.
+
+PICTURES — "figure": if the page has an ILLUSTRATION, COMIC or PHOTO that belongs to the reading (a picture above or
+beside a passage or a question — NOT a logo, border, line or decoration), add it on that section (the one holding the
+passage) or on that part:
+  "figure":{"box":[x0,y0,x1,y1],"caption":"<the printed caption / photo credit line, or empty>"}
+  box = the picture's rectangle as FRACTIONS of the WHOLE image you are looking at: [0,0] is its top-left corner,
+  [1,1] its bottom-right. Draw it TIGHT around the picture only (not the caption, not the passage text).
+  If there is no such picture, leave "figure" out. Never describe the picture, only locate it.
+
+If a part is still something else, do NOT guess — put a short description in "skipped".
+
+Points: copy the printed numbers ("(4 pts. each)", "/32", "(30%)"). Never invent them.
+If a number is not printed, use 0 and let the teacher fill it in.
+
+Output ONLY JSON. Note how ONE quiz part holds SIX questions:
+{"title":"Grade 4 Formative 1",
+ "sections":[
+   {"name":"Section 1: Word Study","pct":30,
+    "parts":[{"kind":"circle","title":"Part 2: Read and Circle 10 -VCe words","pts":20,"need":10,
+              "check":"vce","checkArg":"","instruction":"","passage":"Captain Jeff was ready ..."}]},
+   {"name":"Section 2: Vocabulary","pct":32,
+    "parts":[{"kind":"cloze","title":"Part 3: Fill in the blanks","pts":32,
+              "bank":["struggled","challenge"],
+              "items":[{"text":"Mark ___ on the test.","answer":"struggled"},
+                       {"text":"The hill was a hard ___.","answer":"challenge"}]}]},
+   {"name":"Section 3: Reading Skill and Comprehension","pct":38,
+    "parts":[{"kind":"quiz","title":"Part 4: Color the circle next to the most correct answer.","pts":18,
+              "questions":[
+                {"q":"What nickname did his sister give him?","options":["Ace","Buzz","Doc"],"answer":1},
+                {"q":"Which quality did Buzz worship?","options":["Determination","Sadness","Business"],"answer":0}
+              ]}]}
+ ],
+ "skipped":[]}`;
+
+/* v571 插圖位置：AI 給的 box 是「整張圖的比例」[x0,y0,x1,y1]。夾回 0~1、太小或幾乎整頁都不收
+   （整頁＝它根本沒找到圖，裁下來只是把整張考卷當插圖）。 */
+function _examFigureOf(f) {
+  if (!f || !Array.isArray(f.box) || f.box.length !== 4) return null;
+  const b = f.box.map(x => Math.max(0, Math.min(1, +x)));
+  if (b.some(x => !isFinite(x))) return null;
+  const w = b[2] - b[0], h = b[3] - b[1];
+  if (w < 0.08 || h < 0.05 || w * h < 0.02 || w * h > 0.85) return null;
+  return { box: b, caption: String(f.caption || '').trim().slice(0, 160) };
+}
+function _examReadOne(content) {
+  return _aiAsk(
+    { model: GN_READ_MODEL, max_tokens: 4000, system: EXAM_READ_SYS, messages: [{ role: 'user', content }] },
+    (data) => {
+      const txt = (data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('')
+        || data?.content?.[0]?.text || '';
+      const o = _gnSalvageJson(_aiStripFence(txt));
+      if (!o || typeof o !== 'object') return null;
+      const dropped = [];
+      const secs = (Array.isArray(o.sections) ? o.sections : []).map(sc => ({
+        name: String((sc && sc.name) || '').trim(),
+        pct: +((sc && sc.pct) || 0) || 0,
+        /* v560：只有文章、沒有題目的那一頁（「Read the selection. Then complete Part 1 and 2」） */
+        passage: String((sc && sc.passage) || '').trim(),
+        figure: _examFigureOf(sc && sc.figure),
+        parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
+          /* v585：「Read the text below…」這一大題的題目在下一頁——只有標題與文章，沒有題目。
+             不能讓清洗把標題本身當成一題（那會多出一個假題目，而且分數會重複算）。 */
+          const noQs = !(Array.isArray(pt && pt.questions) && pt.questions.length);
+          const isHeadShort = !!pt && pt.kind === 'short' && noQs && !String(pt.question || pt.prompt || '').trim()
+            && (Array.isArray(pt.questions)
+                || (/\b(read|use what you read|answer the questions)\b/i.test(String(pt.title || pt.instruction || '')) && !/\?\s*$/.test(String(pt.title || '')) && !/summar|write|explain|describe/i.test(String(pt.title || '') + ' ' + String(pt.instruction || ''))));
+          let c;
+          if (isHeadShort) {
+            c = _examCleanPart({ ...pt, questions: [{ q: '_', pts: 0 }] });
+            if (c) c = { ...c, questions: [], _cont: 'questions' };
+          } else c = _examCleanPart(pt);
+          /* v582：考卷跨頁時，續頁只有「後半段」——填空沒有詞庫（詞庫在上一頁）、自己出問題沒有文章（文章在前面那頁）。
+             每一頁是分開讀的，所以先收下來標成 _cont，等合併時再接回前面的大題。 */
+          if (!c && pt && pt.kind === 'cloze' && Array.isArray(pt.items || pt.sentences) && !(Array.isArray(pt.bank) && pt.bank.length)) {
+            c = _examCleanPart({ ...pt, bank: ['_'] });
+            if (c) c = { ...c, bank: [], _cont: 'bank' };
+          }
+          if (!c && pt && (pt.kind === 'genq' || pt.kind === 'storymap') && !String(pt.passage || '').trim()) {
+            c = _examCleanPart({ ...pt, passage: '_' });
+            if (c) c = { ...c, passage: '', _cont: 'passage' };
+          }
+          /* ⚠ 讀進來卻被清洗丟掉的，一定要告訴老師——以前是整題消失、什麼都不說 */
+          if (!c && pt && (pt.title || pt.kind)) dropped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」讀到了但內容不完整，沒收進來`);
+          return c;
+        }).filter(Boolean),
+      })).filter(sc => sc.parts.length || sc.passage || sc.figure);
+      return { title: String(o.title || '').trim(), sections: secs, rubricMax: Math.max(0, Math.min(10, Math.round(+o.rubricMax || 0))),
+               skipped: (Array.isArray(o.skipped) ? o.skipped : []).map(x => String(x).trim()).filter(Boolean).concat(dropped) };
+    }, 90000);
+}
+
+/* 一大題的清洗：型別不認得、或內容根本湊不成一題的，直接不要。
+   🔴 v516 實測：模型很愛把選擇題**一題拆成一個 part**，options／answer 直接放在 part 上
+     （沒有 questions 陣列）。照原本的寫法整頁會被清成 0 大題，然後回報「這一張讀不出東西」
+     ——一半的考卷就這樣消失，而且畫面上只說「讀不懂」。
+   → 提示詞已經把形狀講死；這裡再撿一次：形狀不對但東西都在的，包回陣列。 */
+function _examCleanPart(p) {
+  if (!p || !EXAM_KINDS[p.kind]) return null;
+  /* 🔴 實測兩種「型別對、形狀不對」的回法，都要撿回來而不是整段丟掉：
+       ① 選擇題一題一個 part，options／answer 直接掛在 part 上（沒有 questions 陣列）
+       ② 填空的句子放在 "sentences" 而不是 "items"
+     兩種都會讓整個 Section 被清成空的，然後回報「這一張讀不出東西」——
+     照片明明讀對了，東西卻在我自己的清洗裡消失。 */
+  if (p.kind === 'quiz' && !Array.isArray(p.questions) && Array.isArray(p.options)) {
+    p = { ...p, questions: [{ q: String(p.q || p.instruction || '').trim(), options: p.options, answer: p.answer }] };
+  }
+  if (p.kind === 'cloze' && !Array.isArray(p.items)) {
+    const alt = [p.sentences, p.questions, p.blanks].find(Array.isArray);
+    if (alt) p = { ...p, items: alt };
+  }
+  if (p.kind === 'circle' && !p.passage) {
+    const alt = [p.text, p.story, p.paragraph].find(x => typeof x === 'string' && x.trim());
+    if (alt) p = { ...p, passage: alt };
+  }
+  /* v560：摘要題實測——模型回的是「一個 short、沒有 questions 陣列」（只有 title／need／rubric），
+     而下面的 short 分支要 questions，結果整題無聲無息被丟掉（連「跳過」都沒列）。
+     撿回來：用印出來的題目當那一題，並認出「摘要」就掛上摘要評分表。 */
+  if (p.kind === 'short' && !(Array.isArray(p.questions) && p.questions.length)) {
+    const task = String(p.question || p.prompt || p.instruction || p.title || '').trim();
+    if (task) {
+      const sumLike = /summar/i.test(task + ' ' + (p.rubric || '') + ' ' + (p.rubricSet || ''));
+      p = { ...p, questions: [{ q: task, pts: +p.pts || 0, rubric: String(p.rubric || '') }],
+            ...(sumLike && !p.rubricSet ? { rubricSet: 'summary' } : {}) };
+    }
+  }
+  const base = { kind: p.kind, title: String(p.title || '').trim(),
+                 instruction: String(p.instruction || '').trim(), pts: +p.pts || 0,
+                 ...(_examFigureOf(p.figure) ? { figure: _examFigureOf(p.figure) } : {}) };
+  if (p.kind === 'circle') {
+    const check = String(p.check || '').trim().toLowerCase();
+    if (!WS_CHECKS[check]) return null;                    // 程式判不出來的規則不要收
+    const passage = String(p.passage || '').trim();
+    if (!passage) return null;
+    return { ...base, check, checkArg: String(p.checkArg || '').trim(), need: +p.need || 0, passage };
+  }
+  if (p.kind === 'cloze') {
+    const bank = (Array.isArray(p.bank) ? p.bank : []).map(x => String(x).trim()).filter(Boolean);
+    const items = (Array.isArray(p.items) ? p.items : []).map(q => ({
+      text: String((q && (q.text || q.sentence || q.q)) || '').trim(),
+      answer: String((q && (q.answer || q.word)) || '').trim(),
+    })).filter(q => q.text);
+    if (!bank.length || !items.length) return null;
+    return { ...base, bank, items };
+  }
+  if (p.kind === 'order') {
+    const events = (Array.isArray(p.events) ? p.events : []).map(x => String(x).trim()).filter(Boolean);
+    if (events.length < 2) return null;                    // 一件事沒有「順序」可言
+    return { ...base, events: events.slice(0, 10), readText: String(p.passage || p.readText || '').trim() };
+  }
+  if (p.kind === 'quiz') {
+    const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => {
+      const options = (Array.isArray(q && q.options) ? q.options : []).map(x => String(x).trim()).filter(Boolean);
+      const a = +((q && q.answer) || 0);
+      if (!q || !String(q.q || '').trim() || options.length < 2) return null;
+      if (!(a >= 0 && a < options.length)) return null;     // 正解超出範圍＝這題不要
+      return { q: String(q.q).trim(), options, answer: a };
+    }).filter(Boolean);
+    if (!questions.length) return null;
+    const rt = String(p.passage || p.readText || '').trim();
+    return { ...base, questions, ...(rt ? { readText: rt } : {}) };
+  }
+  /* ══ v537：v522／v536 新增的四種也要收得進來 ══════════════════════
+     ⚠ 提示詞教會模型認這幾種之後，這裡一定要跟著收——不然它讀出來了，
+       在這一關被 return null 丟掉，畫面上還是少一大題（而且完全不報錯）。 */
+  if (p.kind === 'affix') {
+    const affixes = (Array.isArray(p.affixes) ? p.affixes : []).map(x => String(x).trim()).filter(Boolean);
+    /* 字尾要看得出是字首還是字尾（-ing／un-），寫成光禿禿的 ing 程式判不出來 */
+    if (affixes.length < 2 || !affixes.every(a => /^-|-$/.test(a))) return null;
+    return { ...base, affixes, need: Math.max(2, +p.need || 2), minWords: +p.minWords || 5 };
+  }
+  if (p.kind === 'usewords') {
+    const bank = (Array.isArray(p.bank) ? p.bank : []).map(x => String(x).trim()).filter(Boolean);
+    const need = Math.max(1, +p.need || 2);
+    if (bank.length < need) return null;                   // 詞庫比要造的句子少＝這題出不出來
+    return { ...base, bank, need, minWords: +p.minWords || 6 };
+  }
+  if (p.kind === 'genq' || p.kind === 'storymap') {
+    const passage = String(p.passage || '').trim();
+    if (!passage) return null;                             // 沒有文章，學生沒東西可以依據
+    return { ...base, passage, need: Math.max(1, +p.need || 2),
+             ...(p.kind === 'storymap' ? { minWords: +p.minWords || 4 } : {}) };
+  }
+  /* ══ v538：剩下的四種 ══════════════════════════════════════════ */
+  if (p.kind === 'fixbox') {
+    const answers = (Array.isArray(p.answers) ? p.answers : []).map(x => String(x).trim()).filter(Boolean);
+    const passage = String(p.passage || '').trim();
+    if (!answers.length || !passage) return null;
+    /* ⚠ 答案一定要真的出現在那段文章裡（大小寫不算）——
+         模型會「順手把句子改對」然後給一個文章裡沒有的字，
+         那樣孩子照文章找永遠找不到，而且老師看答案也看不出哪裡怪。 */
+    const low = passage.toLowerCase();
+    const ok = answers.filter(a => low.indexOf(a.toLowerCase()) >= 0);
+    if (ok.length < 2) return null;
+    return { ...base, answers: ok, passage, need: ok.length };
+  }
+  if (p.kind === 'evidence') {
+    const passage = String(p.passage || '').trim();
+    if (!passage) return null;                             // 沒有文章就沒有「證據」可以引用
+    return { ...base, passage, question: String(p.question || p.q || '').trim(),
+             need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5 };
+  }
+  if (p.kind === 'table') {
+    const headers = (Array.isArray(p.headers) ? p.headers : (Array.isArray(p.columns) ? p.columns : []))
+      .map(x => String(x || '').trim()).filter(Boolean).slice(0, 3);
+    if (headers.length < 2) return null;                   // 沒有欄名，學生不知道每一格要寫什麼
+    const rows = Math.max(1, Math.min(12, +p.rows || +p.need || (Array.isArray(p.items) ? p.items.length : 0) || 3));
+    const rt = String(p.passage || p.readText || '').trim();
+    return { ...base, headers, need: rows, rubricSet: 'table', rubricMax: EXAM_RUBRIC_SETS.table.max,
+             ...(rt ? { readText: rt } : {}) };
+  }
+  if (p.kind === 'draw') {
+    const prompt = String(p.prompt || p.question || p.instruction || p.title || '').trim();
+    if (!prompt) return null;
+    return { ...base, prompt, rubricSet: 'draw', rubricMax: EXAM_RUBRIC_SETS.draw.max };
+  }
+  if (p.kind === 'essay') {
+    const prompt = String(p.prompt || p.q || p.instruction || '').trim();
+    if (!prompt) return null;                              // 沒有題目，孩子不知道要寫什麼
+    const rsE = String(p.rubricSet || '').trim();
+    return { ...base, prompt,
+             vocab: (Array.isArray(p.vocab) ? p.vocab : []).map(x => String(x).trim()).filter(Boolean),
+             paras: +p.paras || 5, sentsPerPara: +p.sentsPerPara || 4,
+             rubric: String(p.rubric || '').trim(),
+             ...(EXAM_RUBRIC_SETS[rsE] ? { rubricSet: rsE, rubricMax: EXAM_RUBRIC_SETS[rsE].max } : {}) };
+  }
+  if (p.kind === 'checkin') {
+    const goals = (Array.isArray(p.goals) ? p.goals : []).map(x => String(x).trim()).filter(Boolean);
+    return { ...base, pts: 0, goals };                     // 不計分，配分一律歸零
+  }
+
+  const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => ({
+    q: String((q && q.q) || '').trim(), pts: +((q && q.pts) || 0) || 0,
+    rubric: String((q && q.rubric) || '').trim(), rows: 4,
+  })).filter(q => q.q);
+  if (!questions.length) return null;
+  /* 印在卷子上的 rubric 是哪一套（七項寫作／三項）——認不得就不設，用預設的三項 */
+  const rs = String(p.rubricSet || '').trim();
+  const rubricSet = EXAM_RUBRIC_SETS[rs] ? rs : '';
+  const rtShort = String(p.passage || p.readText || '').trim();
+  return { ...base, passage: rtShort, ...(rtShort ? { readText: rtShort } : {}), questions,
+           ...(rubricSet ? { rubricSet, rubricMax: EXAM_RUBRIC_SETS[rubricSet].max } : {}) };
+}
+
+/* 把幾張照片讀成一份考卷。回傳 { item, skipped, missed, warnings } */
+/* 從一張（base64）圖裁出一塊，回傳 JPEG blob。box＝[x0,y0,x1,y1]（整張圖的比例）。
+   ⭐ v571 實測：AI 畫的框只是「大概在哪」——上緣少一截、下面多帶標題與第一段文字。
+     所以拿它當搜尋範圍（往外多看 8%），再用像素找真正的圖片邊緣：
+     圖片（照片、漫畫）幾乎整片都有顏色，文字行大部分是白紙。找不到明顯的圖就老實用 AI 的框。 */
+function _examRefineBox(el, box) {
+  const W = el.naturalWidth, H = el.naturalHeight;
+  const ex = 0.08;
+  const x0 = Math.max(0, box[0] - ex), y0 = Math.max(0, box[1] - ex), x1 = Math.min(1, box[2] + ex), y1 = Math.min(1, box[3] + ex);
+  const sw = Math.max(8, (x1 - x0) * W), sh = Math.max(8, (y1 - y0) * H);
+  const k = Math.min(1, 420 / sw);
+  const cw = Math.max(4, Math.round(sw * k)), ch = Math.max(4, Math.round(sh * k));
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  /* ⚠ 一定要關掉平滑：縮小時預設會把整行文字「平均」成一片灰，文字行就被當成圖片的一部分（實測圖下面的說明文字被一起裁進來）。
+       不平滑＝直接取點，文字行只剩零星幾個黑點，密度很低。 */
+  cx.imageSmoothingEnabled = false;
+  cx.drawImage(el, x0 * W, y0 * H, sw, sh, 0, 0, cw, ch);
+  const px = cx.getImageData(0, 0, cw, ch).data;
+  const inkAt = (x, y) => { const i = (y * cw + x) * 4; return px[i] < 232 || px[i + 1] < 232 || px[i + 2] < 232; };
+  /* 橫的：每一列有多少比例不是白紙 */
+  const rowD = new Array(ch).fill(0);
+  for (let y = 0; y < ch; y++) { let n = 0; for (let x = 0; x < cw; x++) if (inkAt(x, y)) n++; rowD[y] = n / cw; }
+  const bands = []; let st = -1, gap = 0; const maxGap = Math.max(2, Math.round(ch * 0.03));
+  for (let y = 0; y < ch; y++) {
+    if (rowD[y] >= 0.5) { if (st < 0) st = y; gap = 0; }
+    else if (st >= 0) { gap++; if (gap > maxGap) { bands.push([st, y - gap]); st = -1; gap = 0; } }
+  }
+  if (st >= 0) bands.push([st, ch - 1 - gap]);
+  if (!bands.length) return box;
+  const band = bands.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  if ((band[1] - band[0] + 1) < ch * 0.12) return box;          // 太矮＝只是一條線
+  /* 圖片的邊緣列幾乎整列都有顏色；緊貼著圖的那行說明文字密度只有它的一半左右。
+     把帶子上下兩端「比這條帶子的中間值稀疏很多」的列修掉（說明文字不要被裁進圖裡，它另外存成文字）。 */
+  const sorted = rowD.slice(band[0], band[1] + 1).sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  /* 下緣（說明文字常在圖的下面）用 0.82；上緣只修「明顯是文字」的列（0.5）——圖頂常是淡淡的天空，不能誤切 */
+  while (band[1] > band[0] && rowD[band[1]] < med * 0.82) band[1]--;
+  while (band[0] < band[1] && rowD[band[0]] < med * 0.5) band[0]++;
+  /* 直的：在這個高度範圍裡，每一欄有多少比例不是白紙 */
+  const bh = band[1] - band[0] + 1;
+  const colOk = new Array(cw).fill(false);
+  for (let x = 0; x < cw; x++) { let n = 0; for (let y = band[0]; y <= band[1]; y++) if (inkAt(x, y)) n++; colOk[x] = n / bh >= 0.4; }
+  let cs = -1, ce = -1, best = 0, i = 0;
+  while (i < cw) {
+    if (!colOk[i]) { i++; continue; }
+    let j = i, g = 0, last = i;
+    while (j < cw && g <= 3) { if (colOk[j]) { last = j; g = 0; } else g++; j++; }
+    if (last - i + 1 > best) { best = last - i + 1; cs = i; ce = last; }
+    i = last + 1;
+  }
+  if (cs < 0 || best < cw * 0.2) return box;
+  const rb = [x0 + (cs / cw) * (x1 - x0), y0 + (band[0] / ch) * (y1 - y0), x0 + ((ce + 1) / cw) * (x1 - x0), y0 + ((band[1] + 1) / ch) * (y1 - y0)];
+  const area = (b) => (b[2] - b[0]) * (b[3] - b[1]);
+  return (area(rb) >= area(box) * 0.3 && area(rb) >= 0.02) ? rb : box;
+}
+async function _examCropFigure(img, box) {
+  const el = await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im); im.onerror = () => rej(new Error('image'));
+    im.src = `data:${(img && img.media_type) || 'image/jpeg'};base64,${img && img.data}`;
+  });
+  const W = el.naturalWidth, H = el.naturalHeight, pad = 0.003;
+  let rb = box;
+  try { rb = _examRefineBox(el, box); } catch (e) { rb = box; }
+  const x0 = Math.max(0, rb[0] - pad) * W, y0 = Math.max(0, rb[1] - pad) * H;
+  const x1 = Math.min(1, rb[2] + pad) * W, y1 = Math.min(1, rb[3] + pad) * H;
+  const sw = Math.max(8, x1 - x0), sh = Math.max(8, y1 - y0);
+  const k = Math.min(1, 1200 / sw);
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
+  cv.getContext('2d').drawImage(el, x0, y0, sw, sh, 0, 0, cv.width, cv.height);
+  return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('toBlob')), 'image/jpeg', 0.88));
+}
+async function aiReadExamSheet({ images = [], onProgress } = {}) {
+  const imgs = (images || []).slice(0, 8);
+  if (!imgs.length) throw new Error('請先選幾張考卷照片。');
+  const parts = imgs.map((im, i) => ({
+    label: `第 ${i + 1} 張`,
+    content: [{ type: 'image', source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } },
+              /* 🔴 v516 實測：Alan 是把攤開的卷子一次拍一張——**一張照片上有左右兩頁**。
+                 原本寫「this is page N, read only this page」，模型就真的只讀其中一邊，
+                 Section 2 的 Word Bank 填空（32 分）時有時無。
+                 改成「這張照片上看得到的全部都要讀，左頁先、右頁後」。 */
+              { type: 'text', text: `Read EVERYTHING visible in this photo${imgs.length > 1 ? ` (photo ${i + 1} of ${imgs.length} of one exam paper)` : ''}. `
+                + 'A photo often shows TWO facing pages of an open booklet — read the LEFT page first, then the RIGHT page, '
+                + 'and output every Section and Part you can see on either side. '
+                + 'Every reading text (story / article / paragraphs) printed on the page MUST be copied word for word into a "passage" field '
+                + '(on the part that says "Read the text below", or on the section) — never leave a printed reading text out.' }],
+  }));
+  let done = 0;
+  if (onProgress) onProgress(0, parts.length);
+  const got = await Promise.all(parts.map(p => _examReadOne(p.content)
+    .then(v => ({ v }), e => ({ e }))
+    .finally(() => { done++; if (onProgress) onProgress(done, parts.length); })));
+
+  /* v571：每一段、每一大題記得「它在第幾張」——之後從那一張把插圖裁出來 */
+  got.forEach((g, i) => {
+    if (!g.v) return;
+    g.v.sections.forEach(sc => {
+      sc.pg = i; if (sc.figure) sc.figure.pg = i;
+      sc.parts.forEach(p => { p.pg = i; if (p.figure) p.figure.pg = i; });
+    });
+  });
+  const ok = got.filter(g => g.v && g.v.sections.length);
+  /* v585：只有「評分標準表」的那一頁沒有大題，但它告訴我們 rubric 每項最高幾分（康橋 G4 Formative 1：5 分） */
+  const printedRubricMax = Math.max(0, ...got.map(g => (g.v && g.v.rubricMax) || 0));
+  if (!ok.length) {
+    const to = got.some(g => g.e && g.e.timeout);
+    throw new Error(to ? '讀考卷太久沒有回應，請再試一次。'
+                       : '讀不懂這幾張照片——請拍正一點、光線亮一點，整頁都要入鏡。');
+  }
+  const missed = got.map((g, i) => (g.v && (g.v.sections.length || g.v.rubricMax) ? null : parts[i].label)).filter(Boolean);
+
+  /* 合併：同名的 Section 接起來（一個 Section 常常跨兩頁）。 */
+  const secs = [];
+  const skipped = [];
+  ok.forEach(({ v }) => {
+    skipped.push(...v.skipped);
+    v.sections.forEach(sc => {
+      /* v583：同一個 Section 在不同頁常寫成不同樣子（"Section 2: Vocabulary (32%)" 與 "Section 2: Vocabulary"）——
+         有 Section 編號就用編號當身分；沒有就把括號裡的百分比拿掉再比。 */
+      const num = /^\s*section\s*(\d+)/i.exec(sc.name);
+      const key = num ? 'section' + num[1] : sc.name.toLowerCase().replace(/\([^)]*\)/g, '').replace(/\s+/g, '');
+      /* v582：沒有名字的段落（續頁開頭沒有 Section 標題）＝接在前一個 Section 後面 */
+      const hit = key ? secs.find(x => x.key === key) : (secs.length ? secs[secs.length - 1] : null);
+      if (hit) { hit.parts.push(...sc.parts); if (!hit.pct) hit.pct = sc.pct; if (sc.passage && !hit.passage) hit.passage = sc.passage; if (sc.figure && !hit.figure) hit.figure = sc.figure; return; }
+      secs.push({ key, name: sc.name, pct: sc.pct, passage: sc.passage || '', figure: sc.figure || null, parts: sc.parts.slice() });
+    });
+  });
+  /* 模型把一個 Part 拆成好幾個（一題一個）時，連續的同型大題併回去。
+     ⚠ 只併「後面那個沒有自己的標題」的——真的有兩個 Part 4 / Part 5 的卷子不可以被併掉。 */
+  secs.forEach(sc => {
+    const merged = [];
+    sc.parts.forEach(pt => {
+      const last = merged[merged.length - 1];
+      /* v582 填空續頁：沒有詞庫的那段，接到最近一個填空大題上（詞庫、題號、配分都用前面那個的） */
+      /* 模型看不到詞庫時偶爾會「自己編一個」——所以沒有標題、又接在填空後面的填空，一律當續頁，用前面那個的詞庫 */
+      const prevCloze = () => { let pv = null; for (const s2 of secs) for (const q of (s2 === sc ? merged : s2.parts)) if (q.kind === 'cloze' && !q._cont && q !== pt) pv = q; return pv; };
+      if (pt._cont === 'bank' || (pt.kind === 'cloze' && !pt.title && prevCloze())) {
+        const prev = prevCloze();
+        if (prev) {
+          prev._fixAns = true;                                        // 續頁的答案要照前面的詞庫重選
+          prev.items = (prev.items || []).concat(pt.items || []);
+          const each = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*each\s*\)/i.exec((prev.title || '') + ' ' + (prev.instruction || ''));
+          if (each) prev.pts = Math.round(+each[1] * prev.items.length * 10) / 10;
+          return;
+        }
+        skipped.push('有一段填空沒有詞庫（可能是上一頁沒讀到），請自己補上');
+        return;
+      }
+      const same = last && last.kind === pt.kind && (pt.kind === 'quiz' || pt.kind === 'short');
+      if (same && !pt.title) {
+        const headed = last._cont === 'questions';           // 前一頁只有文章與標題、題目在這一頁
+        last.questions = (last.questions || []).concat(pt.questions || []);
+        last.pts = headed ? (+last.pts || +pt.pts || 0) : (+last.pts || 0) + (+pt.pts || 0);
+        const qp = (last.questions || []).map(q => +q.pts || 0);
+        if (last.questions.length && qp.every(v => v > 0)) last.pts = qp.reduce((a, b) => a + b, 0);   // 每題都有配分 → 總分照加
+        if (headed) delete last._cont;
+        if (!last.passage && pt.passage) last.passage = pt.passage;
+        return;
+      }
+      merged.push({ ...pt });
+    });
+    sc.parts = merged;
+  });
+  /* v560 ① 「只有文章」的那一頁：文章接到後面第一個要先讀文章的大題上（選擇題／排順序／摘要／長文），
+         而且模型常把同一個 Section 拆成名字不一樣的幾段（"Section: Reading Skills"、"Part 2: …"），
+         沒有自己 Section 編號的、配分比例是 0 的，併回前面那個有編號的 Section。 */
+  /* v586：只有標題與文章、後面沒有等到它的題目（例如文章後面接的是選擇題）→ 那篇文章改當 Section 的文章，
+     等一下依題目內容掛到真正在問它的那一大題 */
+  secs.forEach(sc => {
+    sc.parts = sc.parts.filter(pt => {
+      if (pt._cont !== 'questions') return true;
+      if ((pt.questions || []).length) { delete pt._cont; return true; }
+      const rt = String(pt.readText || pt.passage || '').trim();
+      if (rt && !sc.passage) sc.passage = rt;
+      if (pt.figure && !sc.figure) sc.figure = pt.figure;
+      return false;
+    });
+  });
+  const NEEDS_READ = { quiz: 1, order: 1, short: 1, essay: 1 };
+  for (let i = 0; i < secs.length; i++) {
+    const sc = secs[i];
+    if (!sc.passage) continue;
+    /* 後面連續幾段「沒有自己的 Section 編號、配分比例是 0」的，全部是同一個 Section 的內容 */
+    while (secs[i + 1] && !(+secs[i + 1].pct) && !/^section\s*\d/i.test(secs[i + 1].name)) {
+      sc.parts = sc.parts.concat(secs[i + 1].parts); secs.splice(i + 1, 1);
+    }
+    /* v585：文章要掛在「問的是這篇」的那一題上，不是第一個遇到的。
+       康橋 G4 Formative 1：Part 4 的選擇題問的是另一篇（Buzz），這一頁的文章（Kjell）是後面 Part 5 的——
+       所以比對題目與文章共用多少實詞；全部都是 0 才退而求其次，掛在最後一個候選。 */
+    const cands = sc.parts.filter(pt => NEEDS_READ[pt.kind] && !pt.readText && !pt.passage);
+    const srcW = new Set(_examContentWords(sc.passage));
+    const score = (pt) => {
+      const txt = (pt.questions || []).map(q => [q.q].concat(q.options || []).join(' ')).join(' ') + ' ' + (pt.events || []).join(' ');
+      return _examContentWords(txt).filter(w => srcW.has(w)).length;
+    };
+    let tgt = null, best = 0;
+    cands.forEach(pt => { const sc2 = score(pt); if (sc2 > best) { best = sc2; tgt = pt; } });
+    if (!tgt && cands.length) tgt = cands.length > 1 && cands.some(pt => !(pt.questions || []).length === false) ? cands[cands.length - 1] : cands[0];
+    if (tgt) { tgt.readText = sc.passage; sc._figTarget = tgt; }
+    else skipped.push('有一篇文章（' + sc.passage.slice(0, 30).replace(/\n/g, ' ') + '…）找不到要接在哪一題，請自己貼上');
+  }
+  /* v582：續頁的填空，答案是模型沒看到詞庫時猜的——照前面的詞庫請它重選一次（選不出在詞庫裡的就留給老師） */
+  for (const sc of secs) for (const pt of sc.parts) {
+    if (!pt._fixAns) continue;
+    delete pt._fixAns;
+    const inBank = (w) => (pt.bank || []).some(b => String(b).toLowerCase() === String(w || '').toLowerCase());
+    if (pt.items.every(q => inBank(q.answer))) continue;
+    try {
+      const got = await _gnCall('You are checking a fill-in-the-blank exercise for elementary students. For EACH sentence pick the ONE word from the word bank that best completes it (each bank word is used at most once). '
+        + 'Return ONLY JSON: {"answers":["word for sentence 1","word for sentence 2",...]} — exactly one entry per sentence, each copied exactly from the word bank.',
+        `WORD BANK: ${pt.bank.join(', ')}\n\nSENTENCES:\n` + pt.items.map((q, i) => `${i + 1}. ${q.text}`).join('\n'), 500);
+      const ans = got && Array.isArray(got.answers) ? got.answers : [];
+      pt.items.forEach((q, i) => { const w = (pt.bank || []).find(b => String(b).toLowerCase() === String(ans[i] || '').toLowerCase()); if (w) q.answer = w; });
+    } catch (e) {}
+    pt.items.forEach((q, i) => { if (!inBank(q.answer)) skipped.push(`填空第 ${i + 1} 句的答案不在詞庫裡，請自己確認`); });
+  }
+  /* v582：「自己出問題」續頁沒有文章——用同一個 Section 裡最近讀到的那一篇（選擇題上的 readText 或整段文章） */
+  secs.forEach((sc, si) => {
+    sc.parts = sc.parts.filter(pt => {
+      if (pt._cont !== 'passage') return true;
+      let src = '';
+      for (let k = si; k >= 0 && !src; k--) {
+        const list = k === si ? sc.parts : secs[k].parts;
+        for (const q of list) { if (q !== pt && (q.readText || q.passage)) src = String(q.readText || q.passage); }
+        if (!src && secs[k].passage) src = secs[k].passage;
+      }
+      if (!src) { skipped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」要用到一篇文章，但找不到，請自己貼上`); return false; }
+      pt.passage = src;
+      return true;
+    });
+    sc.parts.forEach(pt => { delete pt._cont; });
+  });
+  /* v560 ② 配分保險：模型有時只回「(3 pts. each)」沒回總分 → 自己乘出來 */
+  secs.forEach(sc => sc.parts.forEach(pt => {
+    if (+pt.pts > 0 || (EXAM_KINDS[pt.kind] || {}).noScore) return;
+    const m = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*each\s*\)/i.exec((pt.title || '') + ' ' + (pt.instruction || ''));
+    const n = examPartN(pt);
+    if (m && n) { pt.pts = Math.round(+m[1] * n * 10) / 10; return; }
+    /* 問答題的分數常寫在題目後面：「Why does the author…? (2 pts.)」 */
+    if (pt.kind === 'short') {
+      const tot = (pt.questions || []).reduce((a, q) => {
+        const mm = /\(\s*(\d+(?:\.\d+)?)\s*pts?\.?\s*\)/i.exec(String((q && q.q) || ''));
+        return a + (mm ? +mm[1] : (+q.pts || 0));
+      }, 0);
+      if (tot > 0) pt.pts = tot;
+    }
+  }));
+  /* v585 評分標準表（Explanation／Relevant／Effort，每項最高 5 分）：套到沒有指定評分表的手寫題上 */
+  if (printedRubricMax > 0) {
+    secs.forEach(sc => sc.parts.forEach(pt => {
+      if (pt.kind === 'short' && (!pt.rubricSet || pt.rubricSet === 'basic')) { pt.rubricSet = 'basic'; pt.rubricMax = printedRubricMax; }
+    }));
+  }
+  /* v571 🖼 插圖：從那一張把 AI 指的那塊裁出來、上傳、掛在那篇文章（或那一大題）上。
+     ⚠ 上傳失敗不能讓整份考卷讀不出來——記一句，讓老師自己在編輯單元補圖。 */
+  secs.forEach(sc => {
+    if (sc.figure) {
+      const t = sc._figTarget || sc.parts.find(p => NEEDS_READ[p.kind]) || sc.parts[0];
+      if (t && !t._fig) t._fig = sc.figure;
+    }
+    sc.parts.forEach(p => { if (p.figure && !p._fig) p._fig = p.figure; });
+  });
+  for (const sc of secs) {
+    for (const p of sc.parts) {
+      if (!p._fig) continue;
+      try {
+        const src = imgs[p._fig.pg];
+        const blob = await _examCropFigure(src, p._fig.box);
+        const url = await uploadFlashcardImage(blob);
+        p.img = url;
+        if (p._fig.caption) p.imgCap = p._fig.caption;
+      } catch (e) {
+        skipped.push('讀到一張插圖' + (p._fig.caption ? '（' + p._fig.caption.slice(0, 40) + '）' : '') + '，但裁切或上傳失敗，請在編輯單元自己加圖');
+      }
+    }
+  }
+  /* v583：大題都被併到別處（續頁併回前面）的 Section 會變成空殼——沒有大題就不要留標題 */
+  for (let i = secs.length - 1; i >= 0; i--) if (!secs[i].parts.length) secs.splice(i, 1);
+  const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
+  const item = {
+    type: 'exam', title, examMood: true,
+    sections: secs.map(({ key, passage, figure, _figTarget, pg, ...rest }) => ({
+      ...rest, parts: rest.parts.map(({ figure: _f, _fig, pg: _pg, ...pt }) => pt),
+    })),
+  };
+  /* ⭐ 不另外寫驗證——丟進 v515 老師手打考卷用的同一組檢查。 */
+  return { item, skipped: [...new Set(skipped)], missed, warnings: examWarnings(item) };
+}
+
+/* ══ v540 📋 貼上整份考卷 ═══════════════════════════════════════════
+   出一份卷子有六大題，一題一題貼要設六次「題型／標題／配分」。
+   ⭐ 走的是**跟拍照讀考卷完全同一條清洗路線**（_examCleanPart）——
+     不另寫一份驗證，不然哪天改了其中一邊，另一邊會安靜地放行壞資料。
+   ⚠ 貼進來的東西要當成「可能是任何東西」：不是 JSON、是一個陣列、
+     parts 包在別的地方、題型根本不存在——每一種都要講得出原因，
+     不可以只回「讀不到」（老師會不知道要改哪裡）。 */
+function examPaperFromText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return { error: '沒有貼上任何東西。' };
+  /* 連 ```json 圍欄一起貼進來是最常見的（從對話框複製就會帶著） */
+  const body = raw.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  /* ⚠ **先照原樣試一次**，失敗才去掐頭去尾。
+     第一版直接「抓第一個 { 到最後一個 }」，結果整份貼一個 **陣列**
+     （[{…},{…}]）會被切成 `{…},{…}` ＝本來讀得進來的東西反而壞掉。 */
+  const tries = [body];
+  const a = body.indexOf('{'), b = body.lastIndexOf('}');
+  if (a > 0 || (b >= 0 && b < body.length - 1)) tries.push(body.slice(a, b + 1));
+  const a2 = body.indexOf('['), b2 = body.lastIndexOf(']');
+  if (a2 >= 0 && b2 > a2) tries.push(body.slice(a2, b2 + 1));
+  let data = null, err = '';
+  for (const t of tries) {
+    if (!t || !t.trim()) continue;
+    try { data = JSON.parse(t); break; } catch (e) { err = err || (e.message || ''); }
+  }
+  if (data == null) return { error: '這不是一份完整的考卷資料（JSON 解析失敗）：' + err };
+  if (Array.isArray(data)) data = { sections: data };
+  if (!data || typeof data !== 'object') return { error: '讀到的東西不是一份考卷。' };
+  let secsIn = data.sections || data.Sections || data.item && data.item.sections;
+  if (!Array.isArray(secsIn)) return { error: '裡面沒有 sections（一份考卷至少要有一個 Section）。' };
+
+  const skipped = [];
+  const sections = secsIn.map((sc, si) => {
+    const partsIn = Array.isArray(sc && sc.parts) ? sc.parts : [];
+    const parts = partsIn.map(p => {
+      const got = _examCleanPart(p);
+      if (!got) {
+        const k = (p && p.kind) || '(沒寫題型)';
+        skipped.push(`第 ${si + 1} 區的「${(p && p.title) || k}」：`
+          + (EXAM_KINDS[k] ? '內容不完整，收不進來' : `沒有「${k}」這種題型`));
+      }
+      return got;
+    }).filter(Boolean);
+    return { name: String((sc && sc.name) || '').trim() || `Section ${si + 1}`,
+             pct: +(sc && sc.pct) || 0, parts };
+  }).filter(sc => sc.parts.length);
+
+  if (!sections.length) return { error: '一大題都沒收到。' + (skipped[0] ? '（' + skipped[0] + '）' : '') };
+  const item = { type: 'exam', title: String(data.title || '').trim(),
+                 examKicker: String(data.examKicker || '').trim(), sections };
+  /* ⭐ 一樣丟進老師手打考卷用的那組檢查，配分對不對馬上看得到 */
+  return { item, sections, title: item.title, examKicker: item.examKicker,
+           skipped, warnings: examWarnings(item),
+           n: sections.reduce((x, sc) => x + sc.parts.length, 0) };
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v561 🗣 跟 AI 一來一往出一份大考考卷（Alan：「我要可以跟 AI 溝通說題目應該怎麼出，
+        以及出了之後哪邊需要改」）
+   ──────────────────────────────────────────────────────────────────────────
+   ⭐ 分工（跟其他地方同一個原則）：AI 只負責「擬草稿、照老師的意見改草稿」，
+     對不對、夠不夠、有沒有照他說的做，一律**程式**檢查（examDraftChecks）：
+       · 🔴 程式查得出來的錯（答案不在詞庫裡、配分不是 100、他指定要考的字沒出現…）
+         → 一定要改，畫面上紅色
+       · 🟡 程式查不出來的（選擇題的答案是 AI 讀文章判斷的、句子通不通順）
+         → 請老師看過，畫面上黃色
+   ⚠ 草稿每一輪都是**整份重送**（目前草稿 ＋ 他的新意見 → 新草稿），
+     不是只傳差異——模型改一題時順手動到別題的風險，由「改前改後比對」顯示出來。
+   ⚠ 它不會自己存。老師按「存成考卷」才會進週次，之後在編輯單元裡還能手改。 */
+const EXAM_DRAFT_SYS = `You help a Taiwanese elementary English teacher (Tr. Alan, Kang Chiao school) DRAFT a
+scored exam paper for his students, in a back-and-forth conversation. You output the WHOLE current draft
+every time, as JSON. The teacher reads it, tells you what to change, and you output the whole draft again.
+
+THE TEACHER'S WORDS ARE THE SPEC
+- When he lists words, grammar points, or pastes a passage, use EXACTLY those. Never swap in other words,
+  never invent a passage when he gave one, never drop a word he asked for.
+- "words": copy back the list of vocabulary words he said MUST be tested (empty if he gave none).
+  The website checks that each one really appears in the draft.
+- If he did not say how many questions or how many points, pick a sensible default AND say so in "reply".
+- If something essential is missing (no passage for a reading section, no words for a vocabulary section),
+  do NOT make it up: leave that section out and ask ONE short question in "ask".
+- Total must be 100 points unless he says otherwise. Copy the style of Kang Chiao Formative papers:
+  Section 1 Word Study, Section 2 Vocabulary, Section 3 Reading, with a "pct" for each section.
+
+"parts" may ONLY use these kinds (write every English word exactly):
+  "circle"   passage + "check" (vce|team|digraph|suffix|prefix|diphthong) + "checkArg" (patterns separated by SPACES) + "need" N.
+             The passage MUST really contain at least N matching words.
+  "cloze"    "bank":[...], "items":[{"text":"The workers drove a ___ to clear the dirt.","answer":"bulldozer"}].
+             🔴 Every answer MUST be in the bank; each bank word is used ONCE; as many items as bank words
+             unless he says otherwise; the sentence must have only ONE bank word that fits.
+  "quiz"     "questions":[{"q":"...","options":[4 options],"answer":<0-based index>}], optional "passage".
+             🔴 Every question must be answerable from the passage. Spread the correct answers over A/B/C/D.
+  "order"    "events":[sentences in the CORRECT chronological order], optional "passage".
+  "affix"    "affixes":["mis-","en-"], "need" N, "minWords" 5.
+  "usewords" "bank":[...], "need" N, "minWords" 6.
+  "fixbox"   "passage" with mistakes left in, "answers":[the corrected words with correct capitals].
+  "evidence" "question", "passage", "need" N, "minWords" 5.
+  "genq"     "passage", "need" N.
+  "storymap" "passage", "need" N.
+  "essay"    "prompt", "vocab":[...], "paras", "sentsPerPara", "rubricSet":"writing".
+  "short"    "questions":[{"q":"...","pts":N}], "rubricSet":"summary" for a summary task. Marked by the teacher.
+Every part: "title" (e.g. "Part 1: Fill in the blanks."), "pts" (the TOTAL for the part), and any
+"instruction". Anything the teacher wants that none of these can do: say so in "reply", do not fake it.
+
+NOTES FOR THE TEACHER — "notes":[{"at":"Section 2 · Part 1","why":"..."}]
+List what he should double-check yourself: answers you decided by reading, a sentence you are unsure
+reads naturally, a point total you chose, a guess about the level. One short Traditional Chinese sentence each.
+Do NOT list generic things. If you have nothing to flag, notes is [].
+
+REPLY — "reply": 1–3 short Traditional Chinese sentences to the teacher: what you did this round, what you
+assumed (default numbers!), and what changed compared to the previous draft. Never say you checked
+something the website checks (spelling of answers, 100 points) — the website does that.
+
+Output ONLY JSON:
+{"reply":"","ask":"","title":"","words":[],
+ "sections":[{"name":"Section 2: Vocabulary","pct":32,"parts":[ ... ]}],
+ "notes":[{"at":"","why":""}]}
+If you are only asking a question, return "sections": null and put the question in "ask".
+When you are given a CURRENT DRAFT and an instruction, change ONLY what the instruction asks.`;
+
+/* 草稿 → 一份 exam 單元（走跟拍考卷同一條清洗路線） */
+function _examDraftItem(o, prevTitle) {
+  const secs = (Array.isArray(o.sections) ? o.sections : []).map(sc => ({
+    name: String((sc && sc.name) || '').trim(),
+    pct: +((sc && sc.pct) || 0) || 0,
+    parts: (Array.isArray(sc && sc.parts) ? sc.parts : []).map(pt => {
+      const c = _examCleanPart(pt);
+      return c ? { ...c, ...(String(pt && pt.passage || '').trim() && (c.kind === 'quiz' || c.kind === 'order' || c.kind === 'short')
+                            ? { readText: String(pt.passage).trim() } : {}) } : null;
+    }).filter(Boolean),
+  })).filter(sc => sc.parts.length);
+  const dropped = [];
+  (Array.isArray(o.sections) ? o.sections : []).forEach(sc => (Array.isArray(sc && sc.parts) ? sc.parts : []).forEach(pt => {
+    if (pt && !_examCleanPart(pt)) dropped.push(String(pt.title || pt.kind || '一大題').slice(0, 40));
+  }));
+  return { item: { type: 'exam', title: String(o.title || prevTitle || '').trim() || '大考考卷', examMood: true, sections: secs }, dropped };
+}
+
+/* 程式把關：回傳 [{ level:'bad'|'check', at, why }]。
+   'bad' 是程式**確定**有問題；'check' 是程式查不出來、要老師看過的。 */
+function examDraftChecks(item, mustWords, aiNotes) {
+  const out = [];
+  const norm = (t) => String(t || '').trim().toLowerCase();
+  /* examWarnings 裡「第幾大題第幾句」那幾條，下面各大題的檢查會講得更清楚，這裡不重複 */
+  (examWarnings(item) || []).filter(w => !/大題第 \d+ 句/.test(w)).forEach(w => out.push({ level: 'bad', at: '整份', why: w }));
+  const allText = [];
+  (item.sections || []).forEach((sc, si) => (sc.parts || []).forEach((pt, pi) => {
+    const at = `${sc.name || 'Section ' + (si + 1)} · ${pt.title ? pt.title.split(/[:：.—-]/)[0].trim() : 'Part ' + (pi + 1)}`;
+    const push = (level, why) => out.push({ level, at, why, si, pi });
+    allText.push(JSON.stringify(pt).toLowerCase());
+    if (pt.kind === 'cloze') {
+      const bank = (pt.bank || []).map(norm);
+      const used = {};
+      (pt.items || []).forEach((it, i) => {
+        const a = norm(it.answer);
+        if (!a) push('bad', `第 ${i + 1} 句沒有答案。`);
+        else if (bank.indexOf(a) < 0) push('bad', `第 ${i + 1} 句的答案「${it.answer}」不在詞庫裡。`);
+        else if (used[a]) push('bad', `「${it.answer}」被用了兩次（詞庫每個字只能用一次）。`);
+        used[a] = 1;
+        if (!/_{2,}/.test(it.text || '')) push('bad', `第 ${i + 1} 句沒有空格（___）。`);
+      });
+      const unused = bank.filter(b => !used[b]);
+      if (unused.length && (pt.items || []).length >= bank.length) push('bad', `詞庫的「${unused.join('、')}」沒有任何一句用到。`);
+      push('check', '每一句是不是「只有一個字填得進去」，程式判不出來，請你快速看過。');
+    }
+    if (pt.kind === 'quiz') {
+      const qs = pt.questions || [];
+      const dist = {}; qs.forEach(q => { dist[q.answer] = (dist[q.answer] || 0) + 1; });
+      if (qs.length >= 4 && Object.keys(dist).length === 1) push('bad', '所有選擇題的正確答案都是同一個選項（' + 'ABCD'[qs[0].answer] + '），學生一猜就中。');
+      qs.forEach((q, i) => {
+        const o = (q.options || []).map(norm);
+        if (new Set(o).size < o.length) push('bad', `第 ${i + 1} 題有兩個一模一樣的選項。`);
+      });
+      if (!pt.readText) push('check', '這一大題沒有附文章——如果題目要「根據文章」回答，請在上方補上。');
+      push('check', '正確答案是 AI 讀文章判斷的，請你至少看過一遍（尤其是推論題）。');
+    }
+    if (pt.kind === 'order') push('check', '事件順序是 AI 讀文章排出來的，請確認哪個先、哪個後。');
+    if (pt.kind === 'circle') push('check', '短文裡符合的字數程式已經數過；通不通順請你看一下。');
+    if (pt.kind === 'short' || pt.kind === 'essay') push('check', '這一大題由你批改，不會自動給分。');
+  }));
+  /* 他指定要考的字，真的出現在草稿裡嗎？（比對字根，tests／tested 都算） */
+  const hay = allText.join(' ');
+  (mustWords || []).map(norm).filter(Boolean).forEach(w => {
+    const stem = w.length > 4 ? w.replace(/(ing|ed|es|s|e)$/, '') : w;
+    if (hay.indexOf(w) < 0 && hay.indexOf(stem) < 0) out.push({ level: 'bad', at: '你指定的字', why: `你說要考「${w}」，但草稿裡找不到它。` });
+  });
+  (aiNotes || []).forEach(n => { if (n && n.why) out.push({ level: 'check', at: String(n.at || 'AI 提醒'), why: String(n.why) }); });
+  return out;
+}
+
+/* 一輪對話：history＝[{role:'user'|'ai', text}]，draft＝目前的 exam 單元（或 null）。
+   回傳 { reply, ask, item, notes, words, checks, dropped }；AI 連不上就丟錯。 */
+async function aiDraftExam({ message, history, draft, mustWords, grade }) {
+  const hist = (history || []).slice(-8).map(h => `${h.role === 'user' ? 'TEACHER' : 'YOU'}: ${h.text}`).join('\n');
+  const cur = draft && (draft.sections || []).length
+    ? '\n\nCURRENT DRAFT (output the whole thing again, changing only what he asks):\n' + JSON.stringify({ title: draft.title, sections: draft.sections.map(sc => ({ name: sc.name, pct: sc.pct, parts: sc.parts.map(p => { const { readText, ...r } = p; return readText ? { ...r, passage: readText } : r; }) })) })
+    : '\n\n(There is no draft yet.)';
+  const user = `Grade: ${grade || 'unknown'}\n${hist ? 'CONVERSATION SO FAR:\n' + hist + '\n' : ''}\nTEACHER NOW SAYS:\n${message}${cur}`;
+  const o = await _aiAsk(
+    { model: GN_READ_MODEL, max_tokens: 9000, system: EXAM_DRAFT_SYS, messages: [{ role: 'user', content: user }] },
+    (data) => {
+      const txt = (data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.content?.[0]?.text || '';
+      const j = _gnSalvageJson(_aiStripFence(txt));
+      return (j && typeof j === 'object') ? j : null;
+    }, 150000);
+  if (!o) throw new Error('AI 沒有回應，請再送一次。');
+  const words = (Array.isArray(o.words) ? o.words : (mustWords || [])).map(x => String(x).trim()).filter(Boolean);
+  const hasDraft = Array.isArray(o.sections) && o.sections.length;
+  if (!hasDraft) return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item: draft || null, notes: [], words, checks: draft ? examDraftChecks(draft, words, []) : [], dropped: [], same: true };
+  const { item, dropped } = _examDraftItem(o, draft && draft.title);
+  const notes = (Array.isArray(o.notes) ? o.notes : []).filter(n => n && n.why).slice(0, 12);
+  return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item, notes, words,
+           checks: examDraftChecks(item, words, notes), dropped, same: false };
+}
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS });
+
+/* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
+function examBandsOf(R, c) {
+  if (c && c.max && !(R && R.hasBands)) {
+    return Array.from({ length: c.max + 1 }, (_, i) => ({ n: c.max - i, zh: '' }));
+  }
+  return (R && R.bands) || [];
+}
+
+/* ── 大題內容的文字格式（編輯器用）────────────────────────────────────
+   站上其他編輯器都是「一行一筆」的純文字，考卷沿用同一套習慣，
+   老師可以直接貼、直接改，不用面對一堆巢狀表單。
+
+     circle   第一行＝要圈什麼（vce / team / digraph / suffix:-ing）
+              第二行以後＝短文
+     cloze    第一行＝詞庫（逗號分隔）
+              之後每行＝ 句子（用 ___ 當空格） | 答案
+     quiz     每行＝ 題目 | 選項1 | 選項2 | 選項3 | 正解編號(從1算)
+     short    每行＝ 題目 | 配分 | 評分重點(可省略)
+   ⚠ 一律用「|」分欄：康橋的題目裡逗號很多，用逗號分欄一定出事。 */
+function examPartText(part) {
+  const p = part || {};
+  if (p.kind === 'circle') return [p.check + (p.checkArg ? ':' + p.checkArg : ''), p.passage || ''].join('\n');
+  if (p.kind === 'cloze') return [(p.bank || []).join(', ')]
+    .concat((p.items || []).map(q => `${q.text || ''} | ${q.answer || ''}`)).join('\n');
+  if (p.kind === 'quiz') return (p.questions || [])
+    .map(q => [q.q].concat(q.options || []).concat([(+q.answer || 0) + 1]).join(' | ')).join('\n');
+  if (p.kind === 'short') return (p.questions || [])
+    .map(q => [q.q, q.pts || '', q.rubric || ''].join(' | ').replace(/\s*\|\s*$/, '')).join('\n');
+  if (p.kind === 'affix') return (p.affixes || []).join(' ');
+  if (p.kind === 'genq') return String(p.passage || '');
+  if (p.kind === 'storymap') return String(p.passage || '');
+  if (p.kind === 'usewords') return (p.bank || []).join(' ');
+  if (p.kind === 'fixbox') return [(p.answers || []).join(', '), '', String(p.passage || '')].join('\n');
+  if (p.kind === 'order') return (p.events || []).join('\n');
+  if (p.kind === 'evidence') return [String(p.question || ''), '', String(p.passage || '')].join('\n');
+  if (p.kind === 'essay') return [String(p.prompt || ''), '', (p.vocab || []).join(', ')].join('\n');
+  if (p.kind === 'table') return [(p.headers || []).join(' | '), String(examPartN(p))].join('\n');
+  if (p.kind === 'draw') return String(p.prompt || '');
+  if (p.kind === 'checkin') return (p.goals || []).join('\n');
+  return '';
+}
+function examParsePart(kind, text) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/\s+$/, ''));
+  const nonEmpty = lines.filter(l => l.trim());
+  if (kind === 'circle') {
+    const head = (nonEmpty[0] || '').trim();
+    const i = head.indexOf(':');
+    return { check: (i >= 0 ? head.slice(0, i) : head).trim().toLowerCase(),
+             checkArg: i >= 0 ? head.slice(i + 1).trim() : '',
+             passage: lines.slice(lines.indexOf(nonEmpty[0]) + 1).join('\n').trim() };
+  }
+  if (kind === 'cloze') {
+    const bank = (nonEmpty[0] || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
+    const items = nonEmpty.slice(1).map(l => {
+      const c = l.split('|');
+      return { text: (c[0] || '').trim(), answer: (c[1] || '').trim() };
+    }).filter(q => q.text && q.answer);
+    return { bank, items };
+  }
+  if (kind === 'quiz') {
+    const questions = nonEmpty.map(l => {
+      const c = l.split('|').map(x => x.trim());
+      const ansNo = parseInt(c[c.length - 1], 10);
+      const opts = c.slice(1, -1).filter(Boolean);
+      if (!c[0] || opts.length < 2 || !(ansNo >= 1 && ansNo <= opts.length)) return null;
+      return { q: c[0], options: opts, answer: ansNo - 1 };
+    }).filter(Boolean);
+    return { questions };
+  }
+  if (kind === 'affix') {
+    /* 一行就是字尾表：-ing -ed -s -est（空白或逗號分開） */
+    return { affixes: (nonEmpty.join(' ').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean)).slice(0, 8) };
+  }
+  if (kind === 'genq' || kind === 'storymap') {
+    return { passage: lines.join('\n').trim() };
+  }
+  if (kind === 'order') {
+    /* 一行一個事件，**照正確的順序**寫（最早的在最上面）。畫面上會自動打亂給學生。 */
+    return { events: nonEmpty.map(l => l.trim()).slice(0, 10) };
+  }
+  if (kind === 'fixbox') {
+    /* 第一行＝改好的那幾個字（逗號分開），空一行之後是那一段文章 */
+    const answers = (nonEmpty[0] || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
+    const i = lines.indexOf(nonEmpty[0]);
+    return { answers, passage: lines.slice(i + 1).join('\n').trim(), need: answers.length };
+  }
+  if (kind === 'evidence') {
+    /* 第一行＝要問的問題，空一行之後＝那篇文章。
+       ⚠ 只存 passage 的話，學生畫面上會變成「兩個空格、沒有題目」。 */
+    const gap = lines.findIndex((l, i) => i > 0 && !l.trim());
+    return { question: (gap > 0 ? lines.slice(0, gap) : [lines[0] || '']).join(' ').trim(),
+             passage: (gap > 0 ? lines.slice(gap + 1) : lines.slice(1)).join('\n').trim() };
+  }
+  if (kind === 'table') {
+    /* 第一行＝欄名（用 | 分開，2~3 欄），第二行＝幾列 */
+    const headers = (nonEmpty[0] || '').split('|').map(x => x.trim()).filter(Boolean).slice(0, 3);
+    const rows = Math.max(1, Math.min(12, parseInt(nonEmpty[1], 10) || 3));
+    return { headers, need: rows };
+  }
+  if (kind === 'draw') return { prompt: lines.join('\n').trim() };
+  if (kind === 'essay') {
+    /* 第一行（到空行為止）＝題目，空行之後那一行＝這一課的單字（逗號分開） */
+    const gap = lines.findIndex((l, i) => i > 0 && !l.trim());
+    const prompt = (gap > 0 ? lines.slice(0, gap) : lines).join('\n').trim();
+    const vocabLine = gap > 0 ? (lines.slice(gap + 1).find(l => l.trim()) || '') : '';
+    return { prompt, vocab: vocabLine.split(/[,，]/).map(x => x.trim()).filter(Boolean) };
+  }
+  if (kind === 'checkin') {
+    return { goals: nonEmpty.map(l => l.trim()) };
+  }
+  if (kind === 'usewords') {
+    /* 一行就是詞庫，空白或逗號分開 */
+    return { bank: (nonEmpty[0] || '').split(/[\s,，]+/).map(x => x.trim()).filter(Boolean) };
+  }
+  if (kind === 'short') {
+    const questions = nonEmpty.map(l => {
+      const c = l.split('|').map(x => x.trim());
+      if (!c[0]) return null;
+      return { q: c[0], pts: +c[1] || 0, rubric: c[2] || '' };
+    }).filter(Boolean);
+    return { questions };
+  }
+  return {};
+}
+/* 出卷時的自我檢查——老師最常犯的三件事，直接寫在畫面上 */
+function examWarnings(item) {
+  const w = [];
+  const T = examTotals(item);
+  if (!T.parts) { w.push('這份卷子還沒有任何大題。'); return w; }
+  if (T.total !== 100) w.push(`配分加起來是 ${T.total} 分，不是 100 分。`);
+  (item.sections || []).forEach((sec, si) => (sec.parts || []).forEach((pt, pi) => {
+    const where = `${sec.name || '第 ' + (si + 1) + ' 區'} 的第 ${pi + 1} 大題`;
+    const n = examPartN(pt);
+    if (pt.kind !== 'checkin') {
+      if (!n) w.push(`${where}一題都沒有。`);
+      if (!(examPtsOf(pt) > 0)) w.push(`${where}沒有配分。`);
+    }
+    /* v586：題目在問「the text／the passage／the author」，卻沒有附任何文章 → 學生沒東西可讀（卷子上那篇不在這份 PDF 裡時最常發生） */
+    if ((pt.kind === 'quiz' || pt.kind === 'short') && !(sec.parts || []).some(x => String(x.readText || x.passage || '').trim())
+        && (pt.questions || []).some(q => /\b(according to the (text|passage|story)|the (text|passage|story|selection)|the author|in the (text|passage|story))\b/i.test(String((q && q.q) || '')))) {
+      w.push(`${where}的題目在問一篇文章（the text／the author），但沒有附文章——請在編輯單元貼上那篇文章。`);
+    }
+    /* v536 的兩種新題型 */
+    if (pt.kind === 'storymap' && !String(pt.passage || '').trim()) {
+      w.push(`${where}沒有文章——學生看不到故事，就沒辦法填開頭／中間／結尾。`);
+    }
+    if (pt.kind === 'fixbox') {
+      /* ⭐ 真的去文章裡找——老師說「改好是 Monday」，文章裡卻沒有 monday，
+         那學生永遠找不到（跟圈選那一題同一種檢查）。 */
+      const low = String(pt.passage || '').toLowerCase();
+      const miss = (pt.answers || []).filter(a => low.indexOf(String(a).toLowerCase()) < 0);
+      if (!String(pt.passage || '').trim()) w.push(`${where}沒有那一段文章。`);
+      else if (miss.length) w.push(`${where}的答案「${miss.join('、')}」在文章裡找不到。`);
+    }
+    if (pt.kind === 'table' && (pt.headers || []).length < 2) w.push(`${where}要有至少兩個欄名（例如：左邊找字詞、右邊寫說明）。`);
+    if (pt.kind === 'draw' && !String(pt.prompt || '').trim()) w.push(`${where}沒有寫要畫什麼。`);
+    if (pt.kind === 'order') {
+      const ev = (pt.events || []).filter(Boolean);
+      if (ev.length < 2) w.push(`${where}至少要兩個事件才排得出順序。`);
+      if (new Set(ev.map(x => x.toLowerCase())).size < ev.length) w.push(`${where}有兩個一樣的事件。`);
+    }
+    if (pt.kind === 'evidence' && !String(pt.passage || '').trim()) {
+      w.push(`${where}沒有文章——學生沒辦法「從文章裡找細節」。`);
+    }
+    if (pt.kind === 'essay' && !String(pt.prompt || '').trim()) {
+      w.push(`${where}沒有寫作題目。`);
+    }
+    if (pt.kind === 'usewords') {
+      const bank = (pt.bank || []).filter(Boolean);
+      const need = +pt.need || 2;
+      if (bank.length < need) w.push(`${where}要造 ${need} 個句子，但詞庫只有 ${bank.length} 個字。`);
+    }
+    if (pt.kind === 'short' && pt.rubricSet === 'writing' && (pt.questions || []).length > 1) {
+      w.push(`${where}用的是「寫作七項」rubric，通常只會有一題（整篇作文）。`);
+    }
+    if (pt.kind === 'circle') {
+      if (!WS_CHECKS[String(pt.check || '').toLowerCase()]) w.push(`${where}的「要圈什麼」程式看不懂：${pt.check || '(空的)'}`);
+      else {
+        /* ⭐ 真的拿檢查器去數短文裡有幾個符合——老師說要圈 10 個，
+           文章裡只有 7 個的話，學生永遠圈不滿。 */
+        const words = examTokens(pt.passage).filter(t => t.w).map(t => t.t);
+        const hit = words.filter(x => examCircleHit(x, pt) === true);
+        const need = +pt.need || n;
+        if (hit.length < need) w.push(`${where}要圈 ${need} 個，但短文裡只有 ${hit.length} 個符合。`);
+      }
+    }
+    if (pt.kind === 'affix') {
+      const aff = pt.affixes || [];
+      if (aff.length < 2) w.push(`${where}的字尾表至少要兩個（考卷寫「two of the suffixes」）。`);
+      aff.forEach(a => { if (!/^-|-$/.test(String(a))) w.push(`${where}的「${a}」沒有寫成 -ing 或 un- 這種形式，程式判不出來是字首還是字尾。`); });
+      if ((+pt.need || 2) > aff.length) w.push(`${where}要造 ${+pt.need || 2} 個字，但字尾表只有 ${aff.length} 個。`);
+    }
+    if (pt.kind === 'genq' && !String(pt.passage || '').trim()) {
+      w.push(`${where}沒有文章——「自己出問題」要有東西可以讀。`);
+    }
+    if (pt.kind === 'cloze') {
+      (pt.items || []).forEach((q, i) => {
+        if (String(q.text || '').indexOf('___') < 0) w.push(`${where}第 ${i + 1} 句沒有 ___ 空格。`);
+        if ((pt.bank || []).every(b => String(b).toLowerCase() !== String(q.answer).toLowerCase()))
+          w.push(`${where}第 ${i + 1} 句的答案「${q.answer}」不在詞庫裡。`);
+      });
+    }
+  }));
+  return w;
+}
+Object.assign(window, { examPartText, examParsePart, examWarnings, examBandsOf });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v513（Alan 的 AI 清單第三順位）📝 考前複習包
+   ──────────────────────────────────────────────────────────────────────────
+   外師每 3 週、中師每 4 週一次 formative（Alan 親口講的），
+   而 pacingNextFormative 早就知道下一次在第幾週。缺的只是
+   「那一次考試涵蓋哪幾週、那幾週教過哪些字」——把它接起來，考前複習就幾乎免費。
+
+   ⭐ 這一版刻意**不新寫一套出題 AI**：
+     題目交給已經驗過很多次的 QuickSetModal（一鍵出單字 7 種題型，
+     而且 v466 的 avoid 機制會讓題目跟原本那幾週不一樣）。
+     這裡只負責 AI 做不好、程式做得準的那一段：**算範圍、把字撈齊**。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 下一次 formative 涵蓋哪幾週。
+   涵蓋範圍＝「上一次 formative 之後」到「這一次」為止；
+   前面沒有考過就從第 1 週算起。 */
+function examRange(pace, weekId, side) {
+  const n = pacingWeekNo(weekId);
+  if (!n || !Array.isArray(pace)) return null;
+  const rows = pace.filter(w => w[side] && w[side].assess).sort((a, b) => a.n - b.n);
+  const next = rows.find(w => w.n >= n);
+  if (!next) return null;
+  const prev = rows.filter(w => w.n < next.n).pop();
+  return {
+    side, wk: next.n, name: next[side].assess,
+    from: prev ? prev.n + 1 : 1, to: next.n,
+    in: next.n - n,
+  };
+}
+
+/* 那幾週教過的字與主題——純程式，不花錢也不會編。
+   單字從每一週每一類的單元反推（reviewWordsOf 本來就會：
+   沒有單字卡時從配對／聽寫／短文填空挖出來）。 */
+function examSource(weeks, weekOrder, range, categories) {
+  const out = { words: [], topics: [], weeks: [], dup: 0 };
+  if (!range || !weeks || !weekOrder) return out;
+  const cats = (categories && categories.length) ? categories : (CATEGORIES || []);
+  const seen = new Map();
+  weekOrder.forEach(wid => {
+    const n = pacingWeekNo(wid);
+    if (!n || n < range.from || n > range.to) return;
+    const w = weeks[wid];
+    if (!w || w.archived) return;
+    let got = 0;
+    cats.forEach(c => {
+      const items = (w.items || {})[c.id] || [];
+      if (!items.length) return;
+      /* 一週一類裡可能有好幾組（一課一組），照組收才不會只拿到第一組 */
+      const groups = (window.qmGroupByArticle ? window.qmGroupByArticle(items) : [{ items }]);
+      groups.forEach(g => {
+        const list = g.items || (g.single ? [g.single] : []);
+        if (!list.length) return;
+        if (g.name && out.topics.indexOf(g.name) < 0) out.topics.push(g.name);
+        (reviewWordsOf(list) || []).forEach(x => {
+          const k = String(x.term || '').toLowerCase().trim();
+          if (!k) return;
+          if (seen.has(k)) { out.dup++; return; }        // 同一個字跨週重複出現只收一次
+          seen.set(k, x); out.words.push(x); got++;
+        });
+      });
+    });
+    out.weeks.push({ wid, n, label: w.label || wid, n_words: got });
+  });
+  return out;
+}
+Object.assign(window, { examRange, examSource });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v512（Alan 的 AI 清單第二順位）🪄 上課紀錄自動擬草稿
+   ──────────────────────────────────────────────────────────────────────────
+   他一週要填 20 筆（10 個孩子 × 2 堂），全部手打。材料其實全都已經在系統裡：
+     · 上一堂寫的「下次進度」          （v496 已經自動帶進「這次上了什麼」）
+     · 學校那一週的進度表              （v493~v503，含書名與頁碼、粗體只教那幾頁）
+     · 下一週的學校進度                （拿來寫「下次進度」）
+     · 上一堂交代的功課 ＋ 這次複習做了沒
+   以前是把這些用「、」串起來貼進去；現在讓 AI 寫成老師會寫的句子，
+   而且**連回家功課與下次進度一起擬**——那兩欄本來每次都要重打。
+
+   🔴 這個功能最危險的地方不是寫得好不好，是**頁碼編出來**。
+      「LAW p20-23」寫成「LAW p99-105」，家長照著做、小孩寫錯整份，
+      而且畫面上看起來完全正常。
+   → lessonDraftBadPages()：把草稿裡提到的頁碼跟學校進度表比對，
+     對不上的直接標紅給 Alan 看。不自動刪（刪了會把句子弄壞），但絕不放它安靜過去。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 一段頁碼字串（"20-23"、"p.8, 10"）裡所有「被涵蓋到」的頁數 */
+function _paceNums(s) {
+  const out = new Set();
+  String(s || '').replace(/(\d+)\s*[-–—~]\s*(\d+)|(\d+)/g, (m, a, b, c) => {
+    if (a && b) {
+      const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
+      if (hi - lo <= 80) for (let i = lo; i <= hi; i++) out.add(i);
+    } else if (c) out.add(+c);
+    return m;
+  });
+  return out;
+}
+/* 學校進度表「允許出現」的頁碼。可以給一週，也可以給好幾週
+   （「下次進度」本來就會寫到下一週的頁數——只比對這一週會誤報）。 */
+function pacingPageSet(wk) {
+  const set = new Set();
+  const weeks = Array.isArray(wk) ? wk : [wk];
+  weeks.forEach(w => [w && w.it, w && w.lt].forEach(side => {
+    if (!side) return;
+    pacingBooks(side).forEach(b => _paceNums(b.pages).forEach(n => set.add(n)));
+    (side.grammarBold || []).forEach(n => set.add(+n));
+  }));
+  return set;
+}
+/* 草稿裡提到、但學校進度表上沒有的頁碼 */
+function lessonDraftBadPages(text, wk) {
+  const allow = pacingPageSet(wk);
+  if (!allow.size) return [];                       // 沒進度表可比對就不要亂標紅
+  const bad = [];
+  String(text || '').replace(/(?:pp?\.?\s*|頁\s*)(\d+)(?:\s*[-–—~]\s*(\d+))?/gi, (m, a, b) => {
+    [a, b].filter(Boolean).map(Number).forEach(n => {
+      if (!allow.has(n) && bad.indexOf(n) < 0) bad.push(n);
+    });
+    return m;
+  });
+  return bad;
+}
+
+const AI_LESSON_SYS = `You are helping a Taiwanese one-on-one English tutor write his own lesson record,
+in Traditional Chinese, in his own terse style. You are writing a DRAFT he will edit — not a report.
+
+His style (copy it):
+  這次上了什麼: "Prefixes mis-, en-, & em-\\nComplex Sentences & Subordinating Conjunctions"
+  回家功課:     "Prefixes mis-, en-, & em- 學習單\\nLAW p20-23"
+  下次進度:     "複習Feathers Not Just For Flying 單字\\n文法\\nUnseen Reading about informational text"
+
+Rules:
+- Keep English book titles, unit names and grammar terms in ENGLISH exactly as given.
+  Only the connecting words are Chinese. Never translate a unit name.
+- One item per line. No bullets, no numbering, no full sentences, no praise, no filler.
+- 回家功課 must be things a child can actually go home and do: a worksheet, a workbook page range,
+  vocabulary to memorise. Use the book names and page numbers you were given.
+- 🔴 NEVER invent a page number. Only use page numbers that appear in SCHOOL PROGRESS below.
+  If you are not given a page number for something, just name the book or the worksheet without pages.
+- 下次進度 should continue from this lesson and look at NEXT WEEK's school progress.
+- If the child did not finish last time's homework, carry it into 下次進度.
+
+Output ONLY JSON: {"did":"…","hw":"…","next":"…"}`;
+
+/* ctx = { name, grade, dateISO, weekNo, cur, nextWk, prev, review } */
+async function aiDraftLesson(ctx) {
+  const c = ctx || {};
+  const side = (lab, sd) => {
+    if (!sd) return '';
+    const bk = pacingBooks(sd).map(b => `${b.book} ${b.pages}`).join('、');
+    const bits = [
+      sd.reading && `課文 ${pacingClean(sd.reading)}`,
+      sd.vocab && `單字 ${pacingClean(sd.vocab)}`,
+      sd.wordStudy && `Word Study ${pacingClean(sd.wordStudy)}`,
+      sd.skill && `技巧 ${pacingClean(sd.skill)}`,
+      sd.grammar && `文法 ${pacingClean(sd.grammar)}`,
+      sd.grammarHw && sd._carry && `（文法作業沿用 ${pacingClean(sd.grammarHw)}）`,
+      (sd.grammarBold || []).length && `只教 pp. ${sd.grammarBold.join(', ')}`,
+      bk && `書本頁數：${bk}`,
+    ].filter(Boolean);
+    return bits.length ? `${lab}\n  ` + bits.join('\n  ') : '';
+  };
+  const msg = [
+    `STUDENT: ${c.name || ''}  (${c.grade || ''})`,
+    `THIS LESSON: ${c.dateISO || ''}${c.weekNo ? `  = school week ${c.weekNo}` : ''}`,
+    '',
+    'SCHOOL PROGRESS — THIS WEEK',
+    side('外師 (foreign teacher)', c.cur && c.cur.it),
+    side('中師 (local teacher)', c.cur && c.cur.lt),
+    '',
+    'SCHOOL PROGRESS — NEXT WEEK',
+    side('外師 (foreign teacher)', c.nextWk && c.nextWk.it),
+    side('中師 (local teacher)', c.nextWk && c.nextWk.lt),
+    '',
+    'LAST LESSON',
+    c.prev ? `  上了: ${c.prev.did || '—'}\n  功課: ${c.prev.hw || '—'}\n  當時寫的下次進度: ${c.prev.next || '—'}` : '  （沒有上一堂）',
+    c.review ? `  這次來，上次的複習／功課: ${c.review}` : '',
+  ].filter(x => x !== '').join('\n');
+
+  let got = null;
+  try { got = await _gnCall(AI_LESSON_SYS, msg, 900); } catch (e) { return null; }
+  if (!got || typeof got !== 'object') return null;
+  const clean = (t) => String(t == null ? '' : t).replace(/\r/g, '').split('\n')
+    .map(l => l.replace(/^\s*[-•*\d.、]+\s*/, '').trim()).filter(Boolean).slice(0, 6).join('\n').slice(0, 400);
+  const out = { did: clean(got.did), hw: clean(got.hw), next: clean(got.next) };
+  if (!out.did && !out.hw && !out.next) return null;
+  /* 🔴 頁碼對不上學校進度表就標出來。
+     ⚠ 分開比：「這次上了什麼／回家功課」只能用**這一週**的頁數，
+       「下次進度」本來就會提到下一週的頁數——混在一起比會把對的也標成錯的
+       （實測第一版就是這樣誤報下一週的 Grammar WB p13-16）。 */
+  const bad = lessonDraftBadPages([out.did, out.hw].join('\n'), c.cur)
+    .concat(lessonDraftBadPages(out.next, [c.cur, c.nextWk]));
+  out.badPages = [...new Set(bad)];
+  return out;
+}
+Object.assign(window, { aiDraftLesson, lessonDraftBadPages, pacingPageSet });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v511（Alan：「有哪些也可以使用到 AI 的地方 可以幫助學習」→ 第一順位）
+   🎯 錯題 → 針對性練習
+   ──────────────────────────────────────────────────────────────────────────
+   做這個之前，網站上 13 個 AI 功能**全部都在「出題」這一端**
+   （aiMakeVocabExercises / aiMakeGrammarPack / aiMakeWordStudy …），
+   沒有任何一個 AI 在看「這個小孩實際做得怎麼樣」。這一組是第一個。
+
+   三層，由便宜到貴：
+     ① mkStats()           程式分群：哪一科、同一個答案錯幾次、哪一種題型。免費、即時。
+     ② aiDiagnoseMistakes() AI 看**真實的錯答**說出「他為什麼錯」。
+     ③ aiMakeFixSet()      針對那個毛病出 5 題新的。
+
+   ⭐ 跟全站同一條規矩：**AI 產出一律程式驗**。
+      ② 的把關：AI 舉的例子必須真的出現在他的錯題裡（比對 answer），
+        至少兩筆才算數——不然它會「說得頭頭是道但其實是編的」。
+      ③ 的把關：選項數／不重複／答案在範圍／rcOptionLenOk（正解不能最長），
+        再加 _gnCheckMcq 第二個 AI 交叉檢查（單一正解的題型一律要有，v431/v444/v452）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ① 程式先分群——不花錢、不會錯，而且本身就看得出東西 */
+function mkStats(rows) {
+  const list = (rows || []).filter(r => r && r.answer);
+  const byCat = {}, byAnswer = {}, byType = {};
+  list.forEach(r => {
+    const c = r.catId || '_other';
+    byCat[c] = (byCat[c] || 0) + 1;
+    byType[r.type || '_'] = (byType[r.type || '_'] || 0) + 1;
+    const k = String(r.answer).toLowerCase().trim();
+    (byAnswer[k] = byAnswer[k] || { answer: r.answer, n: 0, picked: [] }).n++;
+    if (r.picked && byAnswer[k].picked.indexOf(r.picked) < 0) byAnswer[k].picked.push(r.picked);
+  });
+  const repeats = Object.values(byAnswer).filter(x => x.n >= 2).sort((a, b) => b.n - a.n);
+  return { n: list.length, byCat, byType, repeats };
+}
+
+const AI_DIAG_SYS = `You are an experienced elementary-school English teacher in Taiwan looking at ONE child's
+actual wrong answers, to work out WHAT KIND of mistake they keep making.
+
+You get rows of: the question, the correct answer, and (when available) what the child actually chose.
+What the child chose is the most important signal — it tells you the DIRECTION of the error.
+
+Find at most 3 patterns. A pattern is a teachable weakness, not a list of words.
+  GOOD: "過去式動詞一律加 -ed，不規則動詞沒有背起來"（he picked eated / runned / goed）
+  GOOD: "母音組合 ea 與 ee 分不出來"
+  BAD : "單字不熟"（too vague to practise）
+  BAD : "他錯了 5 題"（that is a count, not a pattern）
+
+Rules:
+- "examples" MUST be copied EXACTLY from the "correct answer" column of the rows you were given.
+  Never invent a word that is not in the rows. If you cannot find at least 2 real rows for a
+  pattern, do not report that pattern at all.
+- "zh" is what the teacher reads: one short Traditional-Chinese phrase (<= 18 characters).
+- "why" is one Traditional-Chinese sentence explaining the misunderstanding behind it.
+- "drill" is a short English instruction describing exactly what kind of practice would fix it.
+
+Output ONLY JSON:
+[{"zh":"…","why":"…","examples":["ate","ran"],"drill":"Irregular past-tense verbs: give the base form, ask for the past form."}]`;
+
+/* ② 診斷。回傳 [{ zh, why, examples, drill, rows }]；驗不過的直接不回。 */
+async function aiDiagnoseMistakes(rows, { grade = 'g4', max = 3 } = {}) {
+  const list = (rows || []).filter(r => r && r.q && r.answer).slice(0, 60);
+  if (list.length < 3) return [];                 // 太少看不出模式，不要硬掰
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const body = list.map((r, i) =>
+    `${i + 1}. Q: ${r.q}\n   correct: ${r.answer}${r.picked ? `\n   child chose: ${r.picked}` : ''}${r.cat ? `\n   subject: ${r.cat}` : ''}`
+  ).join('\n');
+  let got = null;
+  try {
+    got = await _gnCall(AI_DIAG_SYS, `LEVEL: ${band.label}\n${band.note}\n\nTHIS CHILD'S WRONG ANSWERS\n${body}`, 1200);
+  } catch (e) { return []; }
+  if (!Array.isArray(got)) return [];
+
+  /* ⭐ 把關：AI 舉的例子必須真的在他的錯題裡。
+     不驗的話它會講出一套很有道理、但例子是編的診斷——老師照著出題就全錯方向。 */
+  const have = new Map();
+  list.forEach(r => have.set(String(r.answer).toLowerCase().trim(), r));
+  const out = [];
+  got.forEach(p => {
+    if (!p || !p.zh || !Array.isArray(p.examples)) return;
+    const real = [], hitRows = [];
+    p.examples.forEach(e => {
+      const r = have.get(String(e || '').toLowerCase().trim());
+      if (r && real.indexOf(r.answer) < 0) { real.push(r.answer); hitRows.push(r); }
+    });
+    if (real.length < 2) return;                  // 舉不出兩個真的例子 → 這個診斷不算數
+    out.push({
+      zh: String(p.zh).slice(0, 40),
+      why: String(p.why || '').slice(0, 120),
+      drill: String(p.drill || '').slice(0, 300),
+      examples: real.slice(0, 6),
+      rows: hitRows,
+      catId: hitRows[0].catId || '',
+      cat: hitRows[0].cat || '',
+    });
+  });
+  return out.slice(0, max);
+}
+
+const AI_FIXSET_SYS = `You write short multiple-choice practice for ONE Taiwanese elementary student who keeps
+making a specific mistake. You are told exactly what the mistake is.
+
+Every question must practise THAT mistake. Do not drift to general vocabulary.
+Use the child's own trouble words where it helps, but also include NEW words of the same kind,
+so they learn the rule rather than memorising those words.
+
+Hard rules (the website checks these and throws away anything that breaks them):
+- Exactly 4 options. Exactly ONE is acceptable. The other three must be clearly wrong to a teacher.
+- options[0] is ALWAYS the correct one and "answer" is ALWAYS 0.
+  Do NOT move it around — the website shuffles the positions itself afterwards.
+- Do not make the correct option the longest one; keep all four a similar length.
+- The wrong options should be the mistake the child actually makes (e.g. "eated" for "ate"),
+  not random unrelated words.
+- "explain" is ONE short Traditional-Chinese sentence saying why, written to the child.
+
+Output ONLY JSON:
+[{"q":"…","options":["correct","wrong","wrong","wrong"],"answer":0,"explain":"…"}]`;
+
+/* ③ 針對一個診斷出 n 題。程式驗 → 第二個 AI 交叉檢查 → 攤平正解位置。 */
+async function aiMakeFixSet(pattern, { grade = 'g4', n = 5 } = {}) {
+  if (!pattern || !pattern.drill) return [];
+  const band = VOCAB_BANDS[vocabBandOf(grade)];
+  const ex = (pattern.rows || []).slice(0, 8).map(r =>
+    `- correct: ${r.answer}${r.picked ? `  (the child wrote: ${r.picked})` : ''}`).join('\n');
+  const msg = `LEVEL: ${band.label}\n${band.note}\n\n` +
+    `THE MISTAKE: ${pattern.zh}\n${pattern.why ? pattern.why + '\n' : ''}` +
+    `WHAT TO PRACTISE: ${pattern.drill}\n\n` +
+    `THE CHILD'S OWN WRONG ANSWERS ON THIS:\n${ex}\n\n` +
+    `Write ${n} questions.`;
+  let got = null;
+  try { got = await _gnCall(AI_FIXSET_SYS, msg, Math.max(900, n * 260)); } catch (e) { return []; }
+  if (!Array.isArray(got)) return [];
+
+  // 程式驗
+  const seen = new Set();
+  let ok = got.map(x => {
+    if (!x || !x.q || !Array.isArray(x.options)) return null;
+    const opts = x.options.map(o => String(o == null ? '' : o).trim());
+    if (opts.length !== 4 || opts.some(o => !o)) return null;
+    if (new Set(opts.map(o => o.toLowerCase())).size !== 4) return null;   // 選項不可重複
+    const q = String(x.q).trim();
+    const key = q.toLowerCase();
+    if (seen.has(key)) return null; seen.add(key);                          // 題目不可重複
+    const item = { q, options: opts, answer: 0, explain: String(x.explain || '').slice(0, 120) };
+    if (!rcOptionLenOk(item)) return null;                                  // 正解不可以是最長的那個
+    return item;
+  }).filter(Boolean);
+  if (!ok.length) return [];
+
+  // 第二個 AI：單一正解的題型一律要有（v431/v444/v452 都是這樣抓到「兩個都對」的）
+  const bad = await _gnCheckMcq(ok, `The student is practising: ${pattern.zh}`);
+  ok = ok.filter((_, i) => !bad.has(i));
+  return _mkSpread(ok);
+}
+
+/* 正解一律在第 0 格出題、位置由程式攤平（跟 v488 字義選擇同一招：
+   叫模型自己隨機化，它會為了服從而謊報位置）。 */
+function _mkSpread(items) {
+  return items.map((it, i) => {
+    const to = i % 4;
+    if (to === 0) return it;
+    const opts = it.options.slice();
+    const t = opts[0]; opts[0] = opts[to]; opts[to] = t;
+    return { ...it, options: opts, answer: to };
+  });
+}
+
+/* ══ 存／讀：針對性練習的「個人收件匣」 ═══════════════════════════════════
+   ⚠ 為什麼不直接寫進那一週的單元？
+     一般週次的內容是整個年級共用一份文件（class/data…），寫進去的話
+     同年級的其他孩子也會看到「Eric 的加強練習」——而這個功能的賣點
+     正是「專門為你出的」。而且從後台寫那份文件，一手滑就會蓋掉整週的課程
+     （data.js 有 guardWeekSave 擋空白覆蓋就是因為出過事）。
+   → 另開 practice/{email}：老師寫、學生只讀自己那一份。跟 lessonsPublic 同一個模式。
+   ⚠ 要先貼新版 firestore.rules，不然老師存不進去、學生也讀不到。 */
+async function savePracticeSet(email, set) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !set || !(set.questions || []).length) return false;
+  const key = 'p' + Date.now().toString(36);
+  await _db.collection('practice').doc(id).set({
+    sets: { [key]: { ...set, id: key, at: Date.now() } },
+  }, { merge: true });
+  return key;
+}
+/* ── v530 📋 申論題的批改結果 ───────────────────────────────
+   也放 practice/{email}：老師寫、學生只讀自己那一份——跟加強練習同一條路，
+   **不用再加 Firestore 規則**（這條最重要，不然 Alan 又要去 Console 貼一次）。
+   ⚠ 學生寫的答案在 progress（他自己寫的），老師的分數在 practice（老師寫的）。
+     兩邊分開是故意的：規則上學生不能改自己的分數，老師也不能改學生的作答。 */
+async function saveExamMarks(email, progressKey, mark) {
+  const id = String(email || '').trim().toLowerCase();
+  if (!id || !progressKey) return false;
+  await _db.collection('practice').doc(id).set({
+    marks: { [progressKey]: { ...mark, at: Date.now() } },
+  }, { merge: true });
+  return true;
+}
+Object.assign(window, { mkStats, aiDiagnoseMistakes, aiMakeFixSet, savePracticeSet, saveExamMarks });
+
+Object.assign(window, { askFindStudent, renameGroupItems, askQueryAnswer, askLoadQueryData, ttMoveSlot, askMatchUnits });
+          // 存在 class/{pacing_g4} 之類的文件
+
+/* 🔴 v494（Alan 給了 G3 與 G6 的表）：**三個年級的欄位都不一樣**，
+   v493 照 G4 的欄位位置寫死，拿去讀 G3／G6 會整排錯位。
+     · G3 多一欄 High Frequency Words（Alan：不用管），中師作業欄叫 Homework
+     · G6 外師是 Writing（沒有 LAW／Word Study WB），中師叫 Grammar Skills
+   → 改成**照欄位名稱對**。下面是「我們要的東西」→「學校可能怎麼寫」的對照表。
+   ⚠ 比對時一律去掉空白與括號內容（`LAW (E1&E2)` → `law`），
+     學校改括號裡的字不會害我們讀不到。 */
+const _PACE_COLS = {
+  it: {
+    unit:      ['unit'],
+    reading:   ['reading'],
+    wordStudy: ['wordstudy'],
+    vocab:     ['vocabulary'],
+    skill:     ['readingskills', 'readingskill'],
+    law:       ['law', 'writing'],              // G6 這一欄叫 Writing
+    wsWb:      ['wordstudywb'],
+    assess:    ['assessments', 'assessment'],
+  },
+  lt: {
+    unit:    ['unit'],
+    reading: ['reading'],
+    vocab:   ['vocabulary'],
+    grammar: ['languageandconventions', 'grammarskills'],   // G6 叫 Grammar Skills
+    skill:   ['readingskills', 'readingskill'],
+    law:     ['law', 'homework'],                            // G3 這一欄叫 Homework
+    gramWb:  ['grammarwb'],
+    assess:  ['assessments', 'assessment'],
+  },
+};
+/* Alan：「G3 不用管 high frequency word 那一欄」 */
+const _PACE_SKIP = ['highfrequencywords', 'highfrequencyword'];
+const _paceNorm = (s) => String(s || '').replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+/* 欄位標題 → 拿來當書名顯示：`LAW (E1&E2)` → `LAW`、`Word Study WB (E1,E2+E3)` → `Word Study WB` */
+const _paceLabel = (s) => String(s || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+
+/* 只留 Formative（Alan：Summative 不用看）。
+   「Formative 1」「Grammar (Summative 1)」「-」都可能出現，認不出來就當沒有。 */
+function _paceFormative(s) {
+  const t = String(s || '').trim();
+  if (!t || t === '-') return '';
+  return /formative/i.test(t) ? t : '';
+}
+
+/* ══ 讀 .xlsx ══════════════════════════════════════════════════════════
+   🔴 v494：**一定要讀檔，不能貼上。**
+   Alan：「G6 的 Grammar 那邊顯示很多頁數，但老師實際上只會教粗體的頁數」
+   → 粗體是**一格裡面部分文字**才粗（G6 有 19 格是這樣），
+     從 Excel 複製出來的 TSV 會把粗體整個丟掉＝那份資訊救不回來。
+   xlsx 本身就是一個 zip，瀏覽器內建 DecompressionStream 解得開，
+   所以**不用載 SheetJS（400KB）**，只要抓兩個檔案出來。 */
+async function _paceUnzip(buf, want) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eo = -1;
+  for (let i = u8.length - 22; i >= 0 && i > u8.length - 66000; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eo = i; break; }
+  }
+  if (eo < 0) throw new Error('這不像是 Excel 檔（.xlsx）');
+  const n = dv.getUint16(eo + 10, true);
+  let p = dv.getUint32(eo + 16, true);
+  const out = {};
+  for (let k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    const lho = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+    p += 46 + nl + el + cl;
+    if (want.indexOf(name) < 0) continue;
+    /* ⚠ 本地檔頭的「名稱長度／extra 長度」可能跟中央目錄不同，一定要重讀，
+       不然起點會算錯幾個 byte，解壓就整個爛掉。 */
+    const lnl = dv.getUint16(lho + 26, true), lel = dv.getUint16(lho + 28, true);
+    const raw = u8.subarray(lho + 30 + lnl + lel, lho + 30 + lnl + lel + csize);
+    if (method === 0) { out[name] = new TextDecoder().decode(raw); continue; }
+    const ab = await new Response(new Blob([raw]).stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+    out[name] = new TextDecoder().decode(ab);
+  }
+  return out;
+}
+
+const _paceXML = (t) => new DOMParser().parseFromString(t, 'application/xml');
+
+/* 把 .xlsx 讀成「每一列 → {欄位字母: {t, bold}}」。
+   bold ＝ 這一格裡面「有被加粗的那幾段文字」（G6 的重點）。 */
+async function pacingReadXlsx(arrayBuffer) {
+  const f = await _paceUnzip(arrayBuffer, ['xl/sharedStrings.xml', 'xl/worksheets/sheet1.xml']);
+  if (!f['xl/worksheets/sheet1.xml']) throw new Error('Excel 裡找不到工作表');
+  const sst = [];
+  if (f['xl/sharedStrings.xml']) {
+    const d = _paceXML(f['xl/sharedStrings.xml']);
+    Array.from(d.getElementsByTagName('si')).forEach(si => {
+      const runs = Array.from(si.getElementsByTagName('r'));
+      if (runs.length) {
+        const parts = runs.map(r => {
+          const tt = r.getElementsByTagName('t')[0];
+          const pr = r.getElementsByTagName('rPr')[0];
+          return { t: (tt && tt.textContent) || '', b: !!(pr && pr.getElementsByTagName('b').length) };
+        });
+        sst.push({ t: parts.map(x => x.t).join(''), bold: parts.filter(x => x.b).map(x => x.t) });
+      } else {
+        sst.push({ t: Array.from(si.getElementsByTagName('t')).map(x => x.textContent).join(''), bold: [] });
+      }
+    });
+  }
+  const sd = _paceXML(f['xl/worksheets/sheet1.xml']);
+  const rows = {};
+  Array.from(sd.getElementsByTagName('c')).forEach(c => {
+    const ref = c.getAttribute('r') || '';
+    const m = /^([A-Z]+)(\d+)$/.exec(ref);
+    const v = c.getElementsByTagName('v')[0];
+    if (!m || !v) return;
+    const cell = c.getAttribute('t') === 's'
+      ? (sst[Number(v.textContent)] || { t: '', bold: [] })
+      : { t: v.textContent, bold: [] };
+    (rows[Number(m[2])] = rows[Number(m[2])] || {})[m[1]] = cell;
+  });
+  return rows;
+}
+
+/* 從一格裡抓出「被加粗的頁碼」。
+   G6 例：`**NOUNS**- … (GPW pp. **1**, 3, 4, **6**, **139**)` → ['1','6','139']
+   ⚠ 類別名稱（NOUNS／VERBS…）也是粗體，但那只是標題樣式不是頁碼 → 只收純數字那幾段。
+
+   ⭐ Alan 2026-10-12 確認的規則：
+     · 有粗體 → **只教粗體那幾頁**
+     · 整格都沒粗體 → **列出來的全部都教**
+   所以沒粗體時**刻意回空陣列**，讓上層不要顯示「只教 pp. X」——
+   整格文字本來就都看得到，不另外宣稱才是對的。
+   ⚠ 也刻意**不沿用**上一週的粗體頁數（grammarHw 會沿用、bold 不會）：
+     沿用會在「這週其實是 Writing Activity」的格子上宣稱要教某幾頁，那是沒根據的。 */
+function pacingBoldPages(bold) {
+  const out = [];
+  (bold || []).forEach(seg => {
+    (String(seg).match(/\d+(?:\s*-\s*\d+)?/g) || []).forEach(x => {
+      const v = x.replace(/\s+/g, '');
+      if (out.indexOf(v) < 0) out.push(v);
+    });
+  });
+  return out;
+}
+
+/* 共用的「一列一列讀出來」——吃的是 {列: {欄: {t,bold}}}。
+   ⭐ v494 改成**照欄位名稱對**（_PACE_COLS），不再照位置，
+     因為 G3／G4／G6 的欄位根本不一樣。
+   分左右兩半：兩個 WK 之間是外師，第二個 WK 之後是中師。 */
+function pacingFromRows(rows) {
+  const at = (r, c) => (rows[r] && rows[r][c]) || null;
+  const txt = (r, c) => { const x = at(r, c); return x ? String(x.t || '').trim() : ''; };
+  const colsOf = (r) => Object.keys(rows[r] || {});
+  const cnum = (c) => c.split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+  const byNum = (a, b) => cnum(a) - cnum(b);
+
+  let hRow = -1, wkCols = [];
+  for (const r of Object.keys(rows).map(Number).sort((a, b) => a - b)) {
+    const w = colsOf(r).filter(c => _paceNorm(txt(r, c)) === 'wk').sort(byNum);
+    if (w.length >= 2) { hRow = r; wkCols = w; break; }
+  }
+  if (hRow < 0) return null;
+
+  const allCols = colsOf(hRow).sort(byNum);
+  const noteCol = allCols.find(c => /^notes?$/.test(_paceNorm(txt(hRow, c))));
+  const itStart = cnum(wkCols[0]), ltStart = cnum(wkCols[1]);
+  /* 欄位名稱 → 我們的欄位 key。同一個名稱在左右兩半各出現一次（Unit、Reading…），
+     所以要先決定這一欄屬於哪一半，再去那一半的對照表找。 */
+  const map = { it: {}, lt: {} };
+  allCols.forEach(c => {
+    const n = _paceNorm(txt(hRow, c));
+    if (!n || n === 'wk' || _PACE_SKIP.indexOf(n) >= 0) return;
+    const side = cnum(c) > ltStart ? 'lt' : (cnum(c) > itStart ? 'it' : null);
+    if (!side) return;
+    for (const key of Object.keys(_PACE_COLS[side])) {
+      if (_PACE_COLS[side][key].indexOf(n) >= 0 && !map[side][key]) { map[side][key] = c; return; }
+    }
+  });
+
+  const out = [];
+  Object.keys(rows).map(Number).sort((a, b) => a - b).forEach(r => {
+    if (r <= hRow) return;
+    const wk = txt(r, wkCols[0]) || txt(r, wkCols[1]);
+    const m = /^W\s*(\d{1,2})$/i.exec(wk);
+    if (!m) return;
+    const grab = (side) => {
+      const o = {};
+      Object.keys(_PACE_COLS[side]).forEach(k => { o[k] = map[side][k] ? txt(r, map[side][k]) : ''; });
+      /* 🔴 v503（Alan：「請把什麼 book 寫清楚，像是 LAW、Word Study WB、Grammar WB」）：
+         光寫 `p20-23 · p14-16` 根本看不出是哪一本。書名**從 Excel 的欄位標題帶**，
+         不要寫死——G6 外師那欄叫 Writing、G3 中師那欄叫 Homework。 */
+      ['law', 'wsWb', 'gramWb'].forEach(k => {
+        if (map[side][k]) o[k + 'Label'] = _paceLabel(txt(hRow, map[side][k]));
+      });
+      /* G6 的重點：中師文法那一格裡，老師實際上只教**粗體**的頁數 */
+      const gc = map[side].grammar && at(r, map[side].grammar);
+      if (gc) { const b = pacingBoldPages(gc.bold); if (b.length) o.grammarBold = b; }
+      o.assess = _paceFormative(o.assess);
+      return o;
+    };
+    out.push({ n: Number(m[1]), note: noteCol ? txt(r, noteCol).replace(/\n+/g, ' ／ ') : '',
+               it: grab('it'), lt: grab('lt') });
+  });
+  return out.length ? pacingFill(out) : null;
+}
+
+/* 保留「貼上 TSV」當後備（讀檔失敗、或老師手上只有複製來的內容）。
+   ⚠ 貼上**一定沒有粗體**，所以 G6 的「只教粗體頁數」用貼的會拿不到——
+     介面上要講清楚，不要讓老師以為兩條路一樣。 */
+function pacingParse(tsv) {
+  const lines = String(tsv || '').replace(/\r\n?/g, '\n').split('\n');
+  const rows = {};
+  lines.forEach((l, i) => {
+    const cells = l.split('\t');
+    const o = {};
+    cells.forEach((v, k) => {
+      let c = '', n = k + 1;
+      while (n > 0) { c = String.fromCharCode(65 + (n - 1) % 26) + c; n = Math.floor((n - 1) / 26); }
+      o[c] = { t: v, bold: [] };
+    });
+    rows[i + 1] = o;
+  });
+  return pacingFromRows(rows);
+}
+
+/* 把兩條「沿用」規則套上去（見檔頭說明）。
+   ⚠ 一定要在存檔前做完，不要留到顯示時才算——
+     「同一件判斷只能有一份邏輯」（v460 的教訓）。 */
+function pacingFill(weeks) {
+  const carry = (side, keys) => {
+    const last = {};
+    weeks.forEach(w => {
+      const o = w[side];
+      keys.forEach(k => {
+        const v = String(o[k] || '').trim();
+        if (v && v !== '-') { last[k] = v; o['_own_' + k] = true; }
+        else if (last[k]) { o[k] = last[k]; o['_own_' + k] = false; }
+      });
+    });
+  };
+  // 規則 1：Unit／Reading 只寫在循環第一週
+  carry('it', ['unit', 'reading']);
+  carry('lt', ['unit', 'reading', 'vocab']);
+  // 規則 2：中師的文法主題——課堂在上 Writing Activity 時，作業還是沿用上一個文法主題
+  const isTopic = (s) => {
+    const t = String(s || '').trim();
+    return !!t && t !== '-' && !/writing activity/i.test(t);
+  };
+  let lastG = '';
+  weeks.forEach(w => {
+    const now = w.lt.grammar;
+    if (isTopic(now)) { lastG = now; w.lt.grammarHw = now; w.lt._carry = false; }
+    else { w.lt.grammarHw = lastG; w.lt._carry = !!lastG && !!w.lt.gramWb; }
+  });
+  return weeks;
+}
+Object.assign(window, { pacingParse, pacingFill, pacingReadXlsx, pacingFromRows, pacingBoldPages });
+
+
+const _LS_TERM_START = new Date(2026, 7, 31);   // 2026-08-31 開學（跟 app.jsx 的 TERM_START 同一天）
+const _lsDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+/* 'YYYY-MM-DD'。⚠ 不要用 toISOString()——那是 UTC，台灣早上會算成前一天。 */
+function lessonISO(d) {
+  const x = d instanceof Date ? d : new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+/* 日期 → 學校第幾週（W1 = 開學那一週）。開學前回 0。 */
+function lessonWeekOf(dateISO) {
+  const d = _lsDay(new Date(dateISO + 'T00:00:00'));
+  const diff = Math.floor((d - _lsDay(_LS_TERM_START)) / 86400000);
+  return diff < 0 ? 0 : Math.floor(diff / 7) + 1;
+}
+/* 下一個固定時段的日期（含今天）。沒設時段就回今天。 */
+function lessonNextDate(slot, from) {
+  const base = _lsDay(from ? new Date(from) : new Date());
+  if (!slot || slot.day == null) return lessonISO(base);
+  const want = Number(slot.day);
+  const d = new Date(base);
+  d.setDate(d.getDate() + ((want - d.getDay() + 7) % 7));
+  return lessonISO(d);
+}
+/* 上一堂（比 dateISO 早的最近一堂，且不是請假）——用來接「下次進度」。 */
+function lessonPrev(doc, dateISO) {
+  return lessonRows(doc).find(r => r.date < dateISO && r.kind !== 'off') || null;
+}
+
+/* 存一堂課。
+   ⭐ v499：**同時寫一份給家長看的**（lessonsPublic/{email}）。
+     Firestore 的規則沒辦法只擋某幾個欄位，所以「不給家長看 note」只能靠
+     **另存一份不含 note 的**——這是 v496 就寫在 firestore.rules 裡的結論。
+   ⚠ 兩份都要寫成功才算數：家長那份失敗的話要講出來，
+     不然老師以為家長看得到、家長其實看到舊的。 */
+async function saveLesson(email, dateISO, rec) {
+  const id = String(email || '').trim().toLowerCase();
+  const full = { ...rec, at: Date.now() };
+  await _db.collection('lessons').doc(id).set({ log: { [dateISO]: full } }, { merge: true });
+  const { note, ...pub } = full;          // 家長那份：把老師私人備註拿掉
+  await _db.collection('lessonsPublic').doc(id).set({ log: { [dateISO]: pub } }, { merge: true });
+}
+async function deleteLesson(email, dateISO) {
+  const id = String(email || '').trim().toLowerCase();
+  const gone = firebase.firestore.FieldValue.delete();
+  await _db.collection('lessons').doc(id).set({ log: { [dateISO]: gone } }, { merge: true });
+  // ⚠ 家長那份也要一起刪——不然老師刪掉了，家長還看得到
+  await _db.collection('lessonsPublic').doc(id).set({ log: { [dateISO]: gone } }, { merge: true });
+}
+async function saveLessonSlot(email, slot) {
+  const id = String(email || '').trim().toLowerCase();
+  await _db.collection('lessons').doc(id).set({ slot: slot || null }, { merge: true });
+}
+
+function subscribeLessons(email, cb) {
+  const id = String(email || '').trim().toLowerCase();
+  try {
+    return _db.collection('lessons').doc(id)
+      .onSnapshot(s => cb(s.exists ? s.data() : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+
+/* 給家長看的摘要（Alan：「之後也要出家長可以看的」）。
+   ⚠ **刻意不含 note**——那是老師自己的備註。
+   先做成「一鍵複製的文字」，他貼到 LINE 就好；之後要做家長頁面再用同一份資料。 */
+function lessonParentText(rec, who, pace) {
+  if (!rec) return '';
+  const L = [];
+  const k = LESSON_KINDS.find(x => x.id === rec.kind);
+  L.push(`${who ? who + ' · ' : ''}${rec.date}${k && k.id !== 'normal' ? `（${k.zh}）` : ''}`);
+  if (pace && pace.it && pace.it.reading) L.push(`🏫 學校進度：${pace.it.reading}${pace.it.vocab ? ' · ' + pace.it.vocab : ''}`);
+  if (rec.did)  L.push(`\n📘 今天上了\n${rec.did}`);
+  if (typeof rec.pct === 'number') L.push(`\n📊 熟悉程度：${rec.pct}%`);
+  if (rec.review) {
+    const r = REVIEW_STATES.find(x => x.id === rec.review);
+    if (r) L.push(`\n🔁 上次的複習：${r.ico} ${r.zh}`);
+  }
+  if (rec.prev) L.push(`\n🔭 先預習了\n${rec.prev}`);
+  if (rec.hw)   L.push(`\n📕 回家功課\n${rec.hw}`);
+  if (rec.next) L.push(`\n➡️ 下次進度\n${rec.next}`);
+  return L.join('\n');
+}
+Object.assign(window, { lessonISO, lessonWeekOf, lessonNextDate, lessonPrev, saveLesson, deleteLesson, saveLessonSlot, subscribeLessons, lessonParentText });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   📅 v497 固定課表（Timetable）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 2026-10-13 給了整份固定課表，裡面有兩件事打掉 v496 的假設：
+     ① 他說「我是一對一」，但實際上**有三組是兩個人一起**
+        （Elvis & Elory／Eric & Tayler／Joyce & Lydia）
+     ② v496 假設每人每週一堂，實際上**多數人每週兩堂**
+        （Eric & Tayler 二＋四、Nick 三＋日、Elroy 一＋日、Elvis & Elory 一＋六）
+
+   → 課表另外存一份 class/timetable（整週一份，不是每人一份）：
+     一次讀完就能畫出整週、也能算「今天有哪幾堂」。
+     { slots: [{ id, day, start, end, students: ['a@x','b@x'] }] }
+   上課紀錄仍然是 lessons/{email} 一人一份——
+   **同一個時段的兩個人，共用的內容一樣，但掌握度與備註各自記**。
+═══════════════════════════════════════════════════════════════════════════ */
+
+const TT_DOC = 'timetable';
+const TT_DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+/* 貼上課表就建好（Alan 自己就是用這個格式寫給我的）：
+     星期一
+     Elroy：18:00–20:00
+     Elvis & Elory：20:00–22:00
+   ⚠ 時間的分隔符號可能是 – — ~ - 任何一種；冒號可能是全形。
+   ⚠ 名字用 & 或 、或 + 分隔；比對名單時**不分大小寫、去掉空白**。 */
+function timetableParse(text, roster) {
+  const byName = {};
+  (roster || []).forEach(s => {
+    const k = String(s.name || '').trim().toLowerCase();
+    if (k) byName[k] = s.email;
+    // 「王小明Elroy Wang」這種中英混寫：也用第一個英文字當 key
+    const en = String(s.name || '').match(/[A-Za-z][A-Za-z'-]*/);
+    if (en) { const k2 = en[0].toLowerCase(); if (!byName[k2]) byName[k2] = s.email; }
+  });
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = []; let day = null; const unknown = [];
+  lines.forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    const dm = /^(?:星期|週|禮拜)\s*([日一二三四五六天])/.exec(line);
+    if (dm) { const c = dm[1] === '天' ? '日' : dm[1]; day = TT_DAYS.indexOf(c); return; }
+    if (day == null || day < 0) return;
+    /* 名字：起–迄 */
+    const m = /^(.+?)\s*[:：]\s*(\d{1,2})\s*[:：]\s*(\d{2})\s*[–—~\-到至]+\s*(\d{1,2})\s*[:：]\s*(\d{2})/.exec(line);
+    if (!m) return;
+    const names = m[1].split(/\s*[&、＋+和]\s*/).map(x => x.trim()).filter(Boolean);
+    const hhmm = (h, mi) => String(Number(h)).padStart(2, '0') + ':' + mi;
+    const emails = [];
+    names.forEach(n => {
+      const hit = byName[n.toLowerCase()];
+      if (hit) emails.push(hit); else unknown.push(n);
+    });
+    /* ⚠ Alan 2026-10-13 更正：「這邊只有 Elvis & Elory、Joyce & Lydia 一起上課」
+       ——同一個時段寫兩個名字**不一定是一起上**（Eric & Tayler 排在同一個
+       3 小時的區塊裡，但是分開上的）。
+       所以 together 只是**預設值**，每個時段都能在畫面上切換；
+       一起上＝記一次、共用內容複製給兩人（掌握度與備註仍各自填）。 */
+    out.push({ id: 's' + day + m[2] + m[3] + Math.random().toString(36).slice(2, 5),
+               day, start: hhmm(m[2], m[3]), end: hhmm(m[4], m[5]),
+               names, students: emails, together: emails.length > 1 });
+  });
+  if (!out.length) return null;
+  out.sort((a, b) => a.day - b.day || (a.start < b.start ? -1 : 1));
+  /* ⚠⚠ Alan 的名單裡真的有 **Elroy（G6，自己上）** 和 **Elory（G4，跟 Elvis 一起）**——
+     只差一個字母的位置。這種名字打錯不會報錯，只會**把課記到別的孩子身上**，
+     而且要等家長問起來才會發現。
+     → 課表裡只要出現「名單中有長得很像的名字」，就把那組挑出來請老師確認。 */
+  const twins = _ttLookAlikes((roster || []).map(r => String(r.name || '').trim()).filter(Boolean),
+                              out.flatMap(s => s.names));
+  return { slots: out, unknown: [...new Set(unknown)], twins };
+}
+
+/* ══ v547 🔎 聊天室直接回答問題 ═══════════════════════════════════════
+   Alan：「這週誰還沒做完」「Nick 最近錯最多的是什麼」——以前聊天室只會把畫面打開，
+   他還要自己點進去找。現在直接回答。
+
+   ⭐⭐ **數字一律由程式算，AI 一個字都不寫**（AI 只選 qtype）。
+     算法用後台總覽**同一支** buildWeeklyReport，所以聊天室說的跟後台看到的一定對得上。
+   ⚠ 名單上有、但**從沒登入過**（沒有進度文件）的孩子不可以消失——
+     那正是最需要被找出來的人（v500：靜靜地少一個比直接失敗更難發現）。
+   ⚠ 每個孩子用**自己年級**的那一份作業（v434 的教訓，一份資料當成全部）。
+   ⚠ 只算學期課程，不含暑假發派——答案裡要講明。 */
+function askQueryAnswer(plan, ctx) {
+  const c = ctx || {};
+  const roster = (c.roster || []).filter(r => r && r.email && r.active !== false);
+  const byEmail = new Map((c.students || []).map(x => [String(x.email || '').toLowerCase(), x]));
+  const gradeOf = (r) => (r.grade || (window.gradeFromEmail ? window.gradeFromEmail(r.email) : '') || '').toString().toLowerCase();
+  const cur = c.currentWeekId || (() => null);
+  const gdOf = (g) => { const d = (c.gradeData || {})[g]; return (d && d.order && d.order.length) ? d : null; };
+  const stuOf = (r) => byEmail.get(String(r.email).toLowerCase())
+    || { email: r.email, name: r.name, items: {}, streak: { count: 0 }, _noDoc: true };
+  const weekOf = (g) => { const d = gdOf(g); return d ? { d, wid: cur(d.weeks, d.order) } : null; };
+  const catCount = (pending) => {
+    const m = {}; pending.forEach(x => { m[x.cat] = (m[x.cat] || 0) + 1; });
+    return Object.keys(m).map(k => `${k} ${m[k]} 項`).join('、');
+  };
+  const BASIS = '算法跟後台「總覽」同一套（這週所有練習；只算學期課程，不含暑假發派）。';
+
+  if (plan.qtype === 'unfinished' || plan.qtype === 'notstarted') {
+    const rows = [], noGrade = [], noTask = [];
+    let n = 0, weekLabels = new Set();
+    roster.forEach(r => {
+      const g = gradeOf(r);
+      if (plan.gradeId && g !== plan.gradeId) return;
+      n++;
+      const wk = weekOf(g);
+      if (!wk || !wk.wid) { noGrade.push(r.name || r.email); return; }
+      const rep = buildWeeklyReport(stuOf(r), wk.d.weeks, wk.d.order, { weekId: wk.wid });
+      weekLabels.add(`${g.toUpperCase()} ${rep.weekLabel}`);
+      if (!rep.totalItems) { noTask.push(r.name || r.email); return; }
+      const done = rep.completed.length;
+      const hit = plan.qtype === 'notstarted' ? done === 0 : done < rep.totalItems;
+      if (hit) rows.push({ name: r.name || r.email, email: r.email, grade: g, done, total: rep.totalItems, pct: rep.completionRate,
+        text: `${done}/${rep.totalItems}（${rep.completionRate}%）${done < rep.totalItems ? ' · 還差 ' + catCount(rep.pending) : ''}`,
+        noDoc: !!stuOf(r)._noDoc, tone: done === 0 ? 'bad' : 'warn' });
+    });
+    rows.sort((a, b) => a.pct - b.pct || String(a.name).localeCompare(String(b.name)));
+    rows.forEach(x => { if (x.noDoc) x.text += ' · 還沒登入過'; });
+    const scope = plan.gradeId ? `${plan.gradeId.toUpperCase()} ` : '';
+    const label = [...weekLabels].join('、') || '這週';
+    const head = rows.length
+      ? `${scope}${plan.qtype === 'notstarted' ? '這週完全沒開始' : '這週還沒做完'}的有 ${rows.length} 位（共 ${n - noGrade.length - noTask.length} 位有作業的，${label}）`
+      : `${scope}${plan.qtype === 'notstarted' ? '這週每位都開始做了' : '這週每位都做完了'}（${label}）🎉`;
+    const foot = [
+      noGrade.length ? `⚠ 找不到作業資料所以沒算到：${noGrade.join('、')}` : '',
+      noTask.length ? `這週沒有作業：${noTask.slice(0, 6).join('、')}${noTask.length > 6 ? '…' : ''}` : '',
+      BASIS].filter(Boolean).join('\n');
+    return { head, rows, foot };
+  }
+
+  /* 以下兩種都要先找到那位學生 */
+  const who = askFindStudent(plan.student, roster);
+  if (!who || !who.email) {
+    return { head: who && who.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。`
+                                    : `名單裡找不到「${plan.student}」。`, rows: [], foot: '' };
+  }
+  const r = roster.find(x => String(x.email).toLowerCase() === String(who.email).toLowerCase());
+  const g = gradeOf(r), wk = weekOf(g), stu = stuOf(r);
+  const twin = (who.twins || []).length ? `⚠ 名單裡有長得很像的名字（${who.twins.join('、')}），確認一下是不是 ${who.name}。\n` : '';
+
+  if (plan.qtype === 'student') {
+    if (!wk || !wk.wid) return { head: `找不到 ${who.name} 這個年級的作業資料。`, rows: [], foot: twin };
+    const rep = buildWeeklyReport(stu, wk.d.weeks, wk.d.order, { weekId: wk.wid });
+    if (!rep.totalItems) return { head: `${who.name} 這週（${rep.weekLabel}）沒有作業。`, rows: [], foot: twin + BASIS };
+    const rows = [{ name: '完成', text: `${rep.completed.length}/${rep.totalItems}（${rep.completionRate}%）`,
+                    tone: rep.completionRate >= 80 ? 'ok' : rep.completionRate > 0 ? 'warn' : 'bad' }];
+    if (rep.avgScore != null) rows.push({ name: '平均分數', text: `${rep.avgScore} 分` });
+    if (rep.lateCount) rows.push({ name: '補交', text: `${rep.lateCount} 項` });
+    if (rep.pending.length) rows.push({ name: '還差', text: catCount(rep.pending), tone: 'warn' });
+    if (stu._noDoc) rows.push({ name: '注意', text: '這位還沒登入過', tone: 'bad' });
+    return { head: `${who.name}（${g.toUpperCase()} ${rep.weekLabel}）`, rows, foot: twin + BASIS };
+  }
+
+  if (plan.qtype === 'mistakes') {
+    const d = wk && wk.d;
+    const list = (typeof collectWrongQuestions === 'function' && d)
+      ? collectWrongQuestions(stu.items, d.weeks, d.order, typeof CATEGORIES !== 'undefined' ? CATEGORIES : []) : [];
+    if (!list.length) return { head: `${who.name} 目前沒有還沒訂正的錯題 👍`, rows: [], foot: twin };
+    const m = new Map();
+    list.forEach(q => {
+      const k = `${q.weekLabel}｜${q.itemTitle}`;
+      if (!m.has(k)) m.set(k, { weekLabel: q.weekLabel, title: q.itemTitle, n: 0, sample: q.q });
+      m.get(k).n++;
+    });
+    const top = [...m.values()].sort((a, b) => b.n - a.n).slice(0, 5);
+    return { head: `${who.name} 目前還沒訂正的錯題共 ${list.length} 題，集中在：`,
+      rows: top.map(x => ({ name: `${x.n} 題`, text: `${x.weekLabel} · ${x.title}`, tone: x.n >= 4 ? 'bad' : 'warn' })),
+      foot: twin + '這是「還沒訂正」的累積，不是某段時間內的（題目答錯的時間沒有記錄）。\n想針對這些出練習，跟我說「針對 ' + who.name + ' 的弱點出練習」。' };
+  }
+  return { head: '我不知道怎麼查這個。', rows: [], foot: '' };
+}
+
+/* 一次性讀「全部學生進度＋六個年級的作業」（60 秒內重複問不重讀）。
+   ⚠ 用既有的訂閱函式讀第一次回來的那一筆就取消訂閱——不另外寫一套 Firestore 讀取。
+   ⚠ 8 秒讀不到就放棄那一份，回 null 讓答案老實說「沒算到」。 */
+let _askQueryCache = null;
+function askLoadQueryData() {
+  if (_askQueryCache && Date.now() - _askQueryCache.at < 60000) return Promise.resolve(_askQueryCache.v);
+  const once = (sub) => new Promise(res => {
+    let un = null, done = false;
+    const fin = (v) => { if (done) return; done = true; try { un && un(); } catch (e) {} res(v); };
+    try { un = sub(fin); if (done) { try { un && un(); } catch (e) {} } } catch (e) { fin(null); }
+    setTimeout(() => fin(null), 8000);
+  });
+  const G = { g1: 'subscribeToClassDataG1', g2: 'subscribeToClassDataG2', g3: 'subscribeToClassData',
+              g4: 'subscribeToClassDataG4', g5: 'subscribeToClassDataG5', g6: 'subscribeToClassDataG6' };
+  return Promise.all([
+    once(cb => subscribeAllStudents(cb)),
+    ...Object.keys(G).map(g => once(cb => (window[G[g]] ? window[G[g]]((w, o) => cb({ weeks: w || {}, order: (o || []).slice() }), () => cb(null)) : (cb(null), null)))),
+  ]).then(([students, ...grades]) => {
+    const gradeData = {};
+    Object.keys(G).forEach((g, i) => { if (grades[i]) gradeData[g] = grades[i]; });
+    const v = { students: students || [], gradeData };
+    _askQueryCache = { at: Date.now(), v };
+    return v;
+  });
+}
+
+/* ══ v548 在這一週裡找「單一個單元」（「測驗（2/4）」「Unit 1 字義選擇」）══════════
+   ⚠ 比對一律要**唯一**才動手：同一週常常有「測驗（1/4）」「測驗（2/4）」…，
+     他只說「測驗」的話，刪錯一個是救不回來的。→ 多個符合就回候選清單叫他說清楚。
+   ⚠ 完全相同的優先（標題一樣就不是「包含」），不然「Unit 1」會同時命中「Unit 10」。 */
+function askMatchUnits(flat, name) {
+  const norm = (t) => String(t || '').toLowerCase().replace(/[—–-]/g, '-').replace(/[（）()]/g, m => m === '（' || m === '(' ? '(' : ')').replace(/\s+/g, ' ').trim();
+  const q = norm(name);
+  if (!q) return [];
+  const all = (flat || []).filter(x => x && x.item);
+  const exact = all.filter(x => norm(x.item.title) === q);
+  if (exact.length) return exact;
+  return all.filter(x => { const t = norm(x.item.title); return t && (t.indexOf(q) >= 0 || q.indexOf(t) >= 0); });
+}
+
+/* ══ v547 🗓 聊天室改固定課表 ═══════════════════════════════════════
+   「Nick 週三改成 17:30」——改的是**每週固定**的那一堂（不是只改這一次）。
+   ⚠ 一個時段可能有好幾個孩子（Elvis & Elory 一起上）——改時段會一起動，
+     所以回傳 others 讓畫面在按下去之前就講清楚。
+   ⚠ 同一天、時間重疊的另一堂要回報（老師只有一個人），但不擋——他可能就是要這樣。
+   ⚠ 一週不只一堂又沒說是哪一天 → 問，不要猜（Nick 週三＋週日）。 */
+function ttMoveSlot(tt, op) {
+  const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
+  const mins = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
+  const hhmm = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+  const show = (sl) => `週${DAYS[sl.day]} ${sl.start}–${sl.end}`;
+  const slots = timetableOfStudent(tt, op.email);
+  if (!slots.length) return { error: `課表裡沒有 ${op.name || '這位學生'}——要先把他排進固定課表。` };
+  let cand = slots;
+  if (op.fromDay >= 0) cand = slots.filter(x => Number(x.day) === op.fromDay);
+  if (!cand.length) return { error: `${op.name || '他'}週${DAYS[op.fromDay]}沒有課。他的課是：${slots.map(show).join('、')}` };
+  if (cand.length > 1) return { ask: `${op.name || '他'}一週有 ${cand.length} 堂（${cand.map(show).join('、')}），要改哪一堂？` };
+  const old = cand[0];
+  const len = Math.max(15, mins(old.end) - mins(old.start));
+  const day = op.toDay >= 0 ? op.toDay : Number(old.day);
+  const start = op.start || old.start;
+  const end = op.end || (op.start ? hhmm(Math.min(24 * 60 - 1, mins(op.start) + len)) : old.end);
+  if (mins(end) <= mins(start)) return { error: `結束時間（${end}）要比開始時間（${start}）晚。` };
+  if (day === Number(old.day) && start === old.start && end === old.end) return { error: '跟現在一樣，沒有要改的。' };
+  const next = { ...old, day, start, end };
+  const clash = ((tt && tt.slots) || []).filter(x => x.id !== old.id && Number(x.day) === day
+    && mins(x.start) < mins(end) && mins(start) < mins(x.end));
+  const names = (sl) => (sl.names && sl.names.length ? sl.names : sl.students || []);
+  return {
+    tt: { ...tt, slots: ((tt && tt.slots) || []).map(x => x.id === old.id ? next : x) },
+    before: show(old), after: show(next),
+    others: names(old).filter(n => String(n).toLowerCase() !== String(op.name || '').toLowerCase()),
+    clash: clash.map(x => `${names(x).join('、') || '（沒有名字）'}（${show(x)}）`),
+  };
+}
+
+/* ══ v544 ✏️ 整組改名字 ═══════════════════════════════════════════
+   Alan 合併了 6 組單字，組名變成六個名字串在一起
+   （「Reaching for the moon - week1 + Reaching for the moon - week2 + …」），
+   連單元標題都是那一長串——學生點進去滿螢幕都是標題。
+
+   ⭐ 改名要改**三個地方**，少一個就會出現「看起來正常但其實壞掉」：
+     ① 每個單元的 group（側欄靠它歸戶）
+     ② 每個單元的 title（標題本來就是用組名拼出來的：
+        「組名」「組名 · 字義選擇（1/3）」「組名 · 選擇題」）
+     ③ 群組的參考資料 groupRes，它的 key 是 `分類::組名`
+        —— ⚠ 不搬的話 📎 參考資料會**整個消失**，而且不會報錯。
+   ⚠ 老師自己改過標題的單元（標題裡沒有舊組名）一律不動——那是他故意取的名字。 */
+function renameGroupItems(items, oldName, newName) {
+  const a = String(oldName || '').trim();
+  const b = String(newName || '').trim();
+  if (!a || !b || a === b) return { items: items || [], n: 0, kept: 0 };
+  let n = 0, kept = 0;
+  const out = (items || []).map(it => {
+    if (!it) return it;
+    const t = String(it.title || '');
+    let title = t;
+    if (t === a) { title = b; n++; }
+    else if (t.indexOf(a) === 0) { title = b + t.slice(a.length); n++; }   // 保留「 · 字義選擇（1/3）」這種字尾
+    else kept++;                                                           // 老師自己取的名字，不動
+    return { ...it, group: b, title };
+  });
+  return { items: out, n, kept };
+}
+
+/* ══ v543 聊天室說的名字 → 名單裡的那個孩子 ════════════════════════
+   🔴 `plan.email` 從 v517 做好到現在**從來沒有被設定過**——router 只給 `plan.student`
+     （名字），app.jsx 卻寫 `email: plan.email || ''`，所以永遠是空的。
+     Alan 說「今天 Nick 的上課內容是…」，後台開起來但**連 Nick 都沒選到**。
+   ⚠⚠ 絕對不可以「猜最像的那一個」：名單裡真的有 Elroy(G6) 和 Elory(G4)，
+     只差一個字母的位置——猜錯會把整堂課記到別的孩子身上，而且不報錯。
+     → 對不到就回 null（讓畫面老實說找不到）；對到了但有長得像的，一起回報。 */
+function askFindStudent(name, roster) {
+  const norm = (x) => String(x || '').trim().toLowerCase();
+  const n = norm(name);
+  if (!n) return null;
+  const all = (roster || []).filter(r => r && r.email);
+  let hits = all.filter(r => norm(r.name) === n);
+  if (!hits.length) hits = all.filter(r => norm(r.email).split('@')[0] === n);
+  if (hits.length !== 1) {
+    /* 兩個人同名，或一個都沒有——都不要猜 */
+    return { email: '', name: String(name || ''), many: hits.length > 1,
+             twins: _ttLookAlikes(all.map(r => String(r.name || '')), [name]) };
+  }
+  return { email: hits[0].email, name: hits[0].name || hits[0].email,
+           many: false, twins: _ttLookAlikes(all.map(r => String(r.name || '')), [name]) };
+}
+
+/* 找出「用到的名字」裡，有沒有跟名單中另一個名字長得很像的（距離 1 以內）。
+   ⚠ 只比對**真的被用到**的名字，不然整份名單兩兩比會吵死人。 */
+function _ttLookAlikes(all, used) {
+  const norm = (x) => String(x || '').trim().toLowerCase();
+  const near = (a, b) => {
+    if (a === b) return false;
+    if (Math.abs(a.length - b.length) > 1) return false;
+    if (a.length === b.length) {
+      // 換一個字母（Elroy/Elrey）或相鄰兩個字母對調（Elroy/Elory）
+      const d = [];
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d.push(i);
+      if (d.length === 1) return true;
+      return d.length === 2 && d[1] === d[0] + 1 && a[d[0]] === b[d[1]] && a[d[1]] === b[d[0]];
+    }
+    const [lo, hi] = a.length < b.length ? [a, b] : [b, a];   // 差一個字母
+    for (let i = 0; i <= lo.length; i++) {
+      if (lo.slice(0, i) + hi[i] + lo.slice(i) === hi) return true;
+    }
+    return false;
+  };
+  const out = [];
+  [...new Set(used.map(norm))].forEach(u => {
+    all.forEach(n => { if (near(u, norm(n))) {
+      const pair = [u, norm(n)].sort().join(' / ');
+      if (out.indexOf(pair) < 0) out.push(pair);
+    } });
+  });
+  return out;
+}
+
+/* 某一天有哪幾堂（0=日 … 6=六）。 */
+function timetableOfDay(tt, day) {
+  return ((tt && tt.slots) || []).filter(s => Number(s.day) === Number(day))
+    .sort((a, b) => (a.start < b.start ? -1 : 1));
+}
+/* 這位學生每週有哪幾堂（v496 的單一 slot 換成這個）。 */
+function timetableOfStudent(tt, email) {
+  const id = String(email || '').toLowerCase();
+  return ((tt && tt.slots) || []).filter(s => (s.students || []).indexOf(id) >= 0)
+    .sort((a, b) => a.day - b.day || (a.start < b.start ? -1 : 1));
+}
+/* 這位學生「下一次上課」是哪一天（含今天）。
+   ⚠ v496 只看一個固定時段，但他多數學生一週兩堂 → 要在所有時段裡挑最近的那一個。 */
+function timetableNextDate(tt, email, from) {
+  const slots = timetableOfStudent(tt, email);
+  if (!slots.length) return window.lessonISO(from ? new Date(from) : new Date());
+  const base = from ? new Date(from + 'T00:00:00') : new Date();
+  const b = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  let best = null;
+  slots.forEach(s => {
+    const d = new Date(b);
+    d.setDate(d.getDate() + ((Number(s.day) - d.getDay() + 7) % 7));
+    if (!best || d < best) best = d;
+  });
+  return window.lessonISO(best);
+}
+/* 這位學生在某一天的那一堂（用來知道「今天這堂跟誰一起」）。 */
+function timetableSlotOn(tt, email, dateISO) {
+  const d = new Date(dateISO + 'T00:00:00').getDay();
+  const id = String(email || '').toLowerCase();
+  return timetableOfDay(tt, d).find(s => (s.students || []).indexOf(id) >= 0) || null;
+}
+
+/* 一週總時數——Alan 可以一眼看出這學期排了多少課。 */
+function timetableHours(tt) {
+  const mins = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
+  return (((tt && tt.slots) || []).reduce((a, s) => a + Math.max(0, mins(s.end) - mins(s.start)), 0) / 60);
+}
+
+async function saveTimetable(tt) {
+  await _db.collection('class').doc(TT_DOC).set({ slots: (tt && tt.slots) || [], at: Date.now() });
+}
+function subscribeTimetable(cb) {
+  try {
+    return _db.collection('class').doc(TT_DOC)
+      .onSnapshot(s => cb(s.exists ? s.data() : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+Object.assign(window, { TT_DAYS, timetableParse, timetableOfDay, timetableOfStudent, timetableNextDate, timetableHours, timetableSlotOn, saveTimetable, subscribeTimetable });
+
+/* 給老師看的一行文字：每種題型欄位名不一樣，找得到的第一個就用 */
+function qmoveLabel(q) {
+  if (!q) return '';
+  const t = q.q || q.question || q.sentence || q.prompt || q.text || q.word || q.en
+    || (Array.isArray(q.words) ? q.words.join(' ') : '');
+  const extra = (q.def && q.word) ? ` = ${q.def}` : '';
+  return (String(t || '').replace(/\s+/g, ' ').trim() + extra) || '（空白）';
+}
+/* 只有「同樣題型、同樣 variant」才搬得過去：填空和改寫的資料長得一樣但教的東西不同 */
+function qmoveCompatible(a, b) {
+  return !!(a && b && qmoveInfo(a) && a.type === b.type && (a.variant || '') === (b.variant || ''));
+}
+function qmoveFind(weeks, weekId, itemId) {
+  const wk = weeks && weeks[weekId];
+  if (!wk || !wk.items) return null;
+  for (const catId of Object.keys(wk.items)) {
+    const it = (wk.items[catId] || []).find(x => x && x.id === itemId);
+    if (it) return { catId, item: it, week: wk };
+  }
+  return null;
+}
+/* idx＝要搬的題目在來源單元裡的位置。copy＝複製（來源不動）。
+   force＝來源會少到玩不了也照做。回傳 { ok, error, weeks, moved, left, need } */
+function qmoveApply(weeks, { src, dst, idx, copy, force } = {}) {
+  const w = JSON.parse(JSON.stringify(weeks || {}));
+  const s = src && qmoveFind(w, src.weekId, src.itemId);
+  const d = dst && qmoveFind(w, dst.weekId, dst.itemId);
+  if (!s || !d) return { ok: false, error: 'notfound' };
+  if (s.item === d.item || (src.weekId === dst.weekId && src.itemId === dst.itemId)) return { ok: false, error: 'same' };
+  if (!qmoveCompatible(s.item, d.item)) return { ok: false, error: 'type' };
+  const si = qmoveInfo(s.item), di = qmoveInfo(d.item);
+  const pick = Array.from(new Set((idx || []).map(Number))).filter(i => i >= 0 && i < si.list.length).sort((a, b) => a - b);
+  if (!pick.length) return { ok: false, error: 'empty' };
+  const left = copy ? si.list.length : si.list.length - pick.length;
+  if (!copy && left < si.min && !force) return { ok: false, error: 'unplayable', left, need: si.min };
+  if (!Array.isArray(d.item[di.field])) d.item[di.field] = [];
+  const dstList = d.item[di.field];
+  const taken = new Set(dstList.map(q => q && q.id).filter(Boolean));
+  pick.forEach(i => {
+    const q = JSON.parse(JSON.stringify(si.list[i]));
+    if (q && q.id) {
+      let id = q.id, n = 2;
+      while (taken.has(id)) { id = `${q.id}-${n}`; n++; }
+      taken.add(id); q.id = id;
+    }
+    dstList.push(q);
+  });
+  if (!copy) {
+    const gone = new Set(pick);
+    s.item[si.field] = si.list.filter((_, i) => !gone.has(i));
+  }
+  return { ok: true, weeks: w, moved: pick.length, left: copy ? si.list.length : s.item[si.field].length };
+}
+
+/* 挑單元組成新的一份：勾了「需要先學完」的教學卡或「對應單字卡」的練習，
+   那張卡也要一起帶，不然複製過去之後它指向一個不存在的單元 */
+function composeClosure(weeks, picks) {
+  const out = [], seen = new Set();
+  const key = p => p.weekId + '\u0001' + p.itemId;
+  const add = p => {
+    if (seen.has(key(p))) return;
+    const f = qmoveFind(weeks, p.weekId, p.itemId);
+    if (!f) return;
+    seen.add(key(p)); out.push({ weekId: p.weekId, itemId: p.itemId, auto: !!p.auto });
+    [f.item.requires, f.item.linkedFlashcardId].forEach(id => { if (id) add({ weekId: p.weekId, itemId: id, auto: true }); });
+  };
+  (picks || []).forEach(add);
+  return out;
+}
+/* picks＝[{ weekId, itemId }]（來源週＋單元）。target＝目標週 id（要已經存在）。
+   group 有填就把複製過去的單元都歸到這個組名；dueDate 有填就同時設成作業。 */
+function composeApply(weeks, { picks, target, group, dueDate } = {}) {
+  const w = JSON.parse(JSON.stringify(weeks || {}));
+  const dst = w[target];
+  if (!dst) return { ok: false, error: 'notarget' };
+  const list = composeClosure(w, picks);
+  if (!list.length) return { ok: false, error: 'empty' };
+  if (!dst.items) dst.items = {};
+  const taken = new Set(Object.values(dst.items).flat().map(it => it && it.id).filter(Boolean));
+  const map = {};              // 'weekId\u0001舊id' → 新 id
+  const made = [];
+  list.forEach(p => {
+    const f = qmoveFind(w, p.weekId, p.itemId);
+    if (!f) return;
+    const clone = JSON.parse(JSON.stringify(f.item));
+    let id = f.item.id, n = 2;
+    while (taken.has(id)) { id = `${f.item.id}-${n}`; n++; }
+    taken.add(id); clone.id = id;
+    map[p.weekId + '\u0001' + p.itemId] = id;
+    clone.__from = p.weekId;
+    if (group) clone.group = group;
+    if (!Array.isArray(dst.items[f.catId])) dst.items[f.catId] = [];
+    dst.items[f.catId].push(clone);
+    made.push(clone);
+  });
+  let dropped = 0;
+  made.forEach(c => {
+    ['requires', 'linkedFlashcardId'].forEach(k => {
+      if (!c[k]) return;
+      const nid = map[c.__from + '\u0001' + c[k]];
+      if (nid) c[k] = nid; else { delete c[k]; dropped++; }
+    });
+    delete c.__from;
+  });
+  if (dueDate) {
+    if (!dst.homework) dst.homework = {};
+    made.forEach(c => { dst.homework[c.id] = { dueDate }; });
+  }
+  return { ok: true, weeks: w, copied: made.length, auto: list.filter(p => p.auto).length, dropped };
+}
+/* 新增一週用的 id：最後一週的尾巴數字 +1（保留位數），撞到就一直加到不撞 */
+function composeNextWeekId(weekOrder) {
+  const ids = weekOrder || [];
+  const last = ids[ids.length - 1] || 'week-00';
+  const m = /^(.*?)(\d+)$/.exec(last);
+  if (!m) { let n = 2; while (ids.includes(`${last}-${n}`)) n++; return `${last}-${n}`; }
+  let num = parseInt(m[2], 10) + 1;
+  const pad = m[2].length;
+  let id = m[1] + String(num).padStart(pad, '0');
+  while (ids.includes(id)) { num++; id = m[1] + String(num).padStart(pad, '0'); }
+  return id;
+}
+Object.assign(window, { qmoveLabel, qmoveCompatible, qmoveFind, qmoveApply, composeClosure, composeApply, composeNextWeekId });
+
+
+/* ══════════════════════════════════════════════════════════════════
+   v593 🗑 垃圾桶（Alan 清單第 1 項：「刪單元、刪整組、搬移之後可以復原」）
+   以前刪掉就真的沒了——而且網站上有好幾條路會刪（單元的垃圾桶鈕、整組刪、聊天室、
+   刪整週），全部都走 handleDeleteItems／handleDeleteWeek，所以只要在這兩個出口
+   先拍一張快照，就一個都不會漏。
+   ⭐ 存在 `class/trash_<年級>`——class 集合的規則本來就是「老師可寫」，
+     **不用再改 Firestore 規則**（開新集合要 Alan 重貼規則，卡過好幾個功能）。
+   ⚠ 每筆的內容序列化成一個字串存（Firestore 不收「陣列裡面直接放陣列」，
+     題目資料裡有這種形狀；字串最單純，也不會被 undefined 弄壞）。
+   ⚠ 學生做過的紀錄本來就留著（key＝週次_單元 id）→ 復原時**用原本的 id**，
+     成績就跟著回來。id 已經被占用就當作「已經在了」不重複放。
+   ⚠ 刪除時別的單元身上「需要先學完這一個」「對應這張單字卡」的指向會被解掉，
+     復原時要接回去——所以快照要把 links 一起記。 */
+const TRASH_MAX = 30, TRASH_TTL = 30 * 24 * 3600 * 1000, TRASH_MAX_BYTES = 600000;
+function _trashId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function trashSnapshotUnits(weeks, weekId, ids) {
+  const wk = weeks && weeks[weekId];
+  const set = new Set((ids || []).filter(Boolean));
+  if (!wk || !wk.items || !set.size) return null;
+  const items = [], links = [], homework = {};
+  Object.keys(wk.items).forEach(catId => (wk.items[catId] || []).forEach(it => {
+    if (!it) return;
+    if (set.has(it.id)) {
+      items.push({ catId, item: JSON.parse(JSON.stringify(it)) });
+      if (wk.homework && wk.homework[it.id]) homework[it.id] = JSON.parse(JSON.stringify(wk.homework[it.id]));
+    } else {
+      ['requires', 'linkedFlashcardId'].forEach(key => { if (it[key] && set.has(it[key])) links.push({ itemId: it.id, key, to: it[key] }); });
+    }
+  }));
+  if (!items.length) return null;
+  const titles = items.map(x => x.item.title || x.item.id);
+  const groups = Array.from(new Set(items.map(x => String(x.item.group || '').trim()).filter(Boolean)));
+  const label = items.length === 1 ? titles[0]
+    : (groups.length === 1 ? `${groups[0]}（${items.length} 個單元）` : `${titles[0]} 等 ${items.length} 個單元`);
+  return { id: _trashId(), at: Date.now(), kind: 'units', n: items.length, label,
+           weekLabel: wk.label || weekId, data: { weekId, items, links, homework } };
+}
+function trashRestoreUnits(weeks, entry) {
+  const d = entry && entry.data;
+  const w = JSON.parse(JSON.stringify(weeks || {}));
+  const wk = d && w[d.weekId];
+  if (!wk) return { ok: false, error: 'noweek' };
+  if (!wk.items) wk.items = {};
+  const have = new Set(Object.values(wk.items).flat().map(it => it && it.id).filter(Boolean));
+  const back = new Set();
+  let skipped = 0;
+  (d.items || []).forEach(({ catId, item }) => {
+    if (!item || !item.id) return;
+    if (have.has(item.id)) { skipped++; return; }
+    if (!Array.isArray(wk.items[catId])) wk.items[catId] = [];
+    wk.items[catId].push(JSON.parse(JSON.stringify(item)));
+    have.add(item.id); back.add(item.id);
+  });
+  if (!back.size && skipped) return { ok: false, error: 'already' };
+  if (!wk.homework) wk.homework = {};
+  Object.keys(d.homework || {}).forEach(id => { if (back.has(id) && !wk.homework[id]) wk.homework[id] = d.homework[id]; });
+  let relinked = 0;
+  (d.links || []).forEach(l => {
+    if (!back.has(l.to)) return;
+    const other = Object.values(wk.items).flat().find(it => it && it.id === l.itemId);
+    if (other && !other[l.key]) { other[l.key] = l.to; relinked++; }
+  });
+  return { ok: true, weeks: w, restored: back.size, skipped, relinked };
+}
+function trashSnapshotWeek(weeks, order, weekId) {
+  const wk = weeks && weeks[weekId];
+  if (!wk) return null;
+  const n = Object.values(wk.items || {}).reduce((s, a) => s + ((a || []).length), 0);
+  return { id: _trashId(), at: Date.now(), kind: 'week', n, label: wk.label || weekId, weekLabel: wk.label || weekId,
+           data: { weekId, week: JSON.parse(JSON.stringify(wk)), index: (order || []).indexOf(weekId) } };
+}
+function trashRestoreWeek(weeks, order, entry) {
+  const d = entry && entry.data;
+  if (!d || !d.week) return { ok: false, error: 'bad' };
+  if (weeks && weeks[d.weekId]) return { ok: false, error: 'exists' };
+  const w = { ...(weeks || {}), [d.weekId]: JSON.parse(JSON.stringify(d.week)) };
+  const o = (order || []).slice();
+  const at = d.index >= 0 ? Math.min(d.index, o.length) : o.length;
+  o.splice(at, 0, d.weekId);
+  return { ok: true, weeks: w, order: o };
+}
+/* 過期（30 天）、太多（30 筆）、太大（整份 600KB）都從最舊的丟——文件有 1MB 上限，寫不進去比丟舊的更糟 */
+function trashTrim(list, { now = Date.now(), max = TRASH_MAX, ttl = TRASH_TTL, maxBytes = TRASH_MAX_BYTES } = {}) {
+  let out = (list || []).filter(e => e && e.id && now - (e.at || 0) < ttl).sort((a, b) => b.at - a.at).slice(0, max);
+  const size = (xs) => JSON.stringify(xs).length;
+  while (out.length > 1 && size(out) > maxBytes) out.pop();
+  return out;
+}
+function trashPack(e) { const { data, ...meta } = e; return { ...meta, json: JSON.stringify(data) }; }
+function trashUnpack(r) { try { const { json, ...meta } = r; return { ...meta, data: JSON.parse(json) }; } catch (x) { return null; } }
+async function trashLoad(grade) {
+  const s = await _trashDoc(grade).get();
+  const rows = (s.exists && s.data().entries) || [];
+  return trashTrim(rows.map(trashUnpack).filter(Boolean));
+}
+/* 讀了再寫要用交易：另一個 session 同時也在刪東西的話，不能互相蓋掉對方剛放進去的那一筆 */
+async function trashPush(grade, entry) {
+  const ref = _trashDoc(grade);
+  await _db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const cur = ((s.exists && s.data().entries) || []).map(trashUnpack).filter(Boolean);
+    tx.set(ref, { entries: trashTrim([entry].concat(cur)).map(trashPack) });
+  });
+}
+async function trashRemove(grade, id) {
+  const ref = _trashDoc(grade);
+  await _db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const cur = ((s.exists && s.data().entries) || []).map(trashUnpack).filter(Boolean).filter(e => e.id !== id);
+    tx.set(ref, { entries: trashTrim(cur).map(trashPack) });
+  });
+}
+Object.assign(window, { TRASH_MAX, trashSnapshotUnits, trashRestoreUnits, trashSnapshotWeek, trashRestoreWeek, trashTrim, trashPack, trashUnpack, trashLoad, trashPush, trashRemove });

@@ -62,4 +62,7 @@ if (require.main === module) {
   let ms = 0, kb = 0;
   made.forEach(m => { ms += m.ms; kb += m.kb; console.log(`  ✅ ${m.f.padEnd(26)} ${String(m.ms).padStart(5)}ms  ${m.kb}KB`); });
   console.log(`\n  dist/ 共 ${made.length} 檔、${kb}KB、轉譯 ${ms}ms —— 這 ${ms}ms 以前是每個學生每次載入都要付的。`);
+  /* v599：data.js 也順便切成學生那包與老師那包（原始碼不動，見 tools/split-data.js） */
+  const sd = require('./split-data').writeDist();
+  console.log(`  ✅ data.js ${(sd.srcLen / 1024) | 0}KB → dist/data-core.js ${(sd.core.length / 1024) | 0}KB ＋ dist/data-teacher.js ${(sd.teacher.length / 1024) | 0}KB`);
 }
