@@ -65,4 +65,8 @@ if (require.main === module) {
   /* v599：data.js 也順便切成學生那包與老師那包（原始碼不動，見 tools/split-data.js） */
   const sd = require('./split-data').writeDist();
   console.log(`  ✅ data.js ${(sd.srcLen / 1024) | 0}KB → dist/data-core.js ${(sd.core.length / 1024) | 0}KB ＋ dist/data-teacher.js ${(sd.teacher.length / 1024) | 0}KB`);
+  /* v600：樣式表也切（要在 data 切分之後——「學生有沒有用到這個 class」要看切好的 data-core） */
+  const sc = require('./split-css').writeDist();
+  let a = 0, c = 0, t = 0; Object.keys(sc).forEach(f => { a += sc[f].srcLen; c += sc[f].core.length; t += sc[f].teacher.length; });
+  console.log(`  ✅ 樣式表 ${(a / 1024) | 0}KB → dist/css/ 學生 ${(c / 1024) | 0}KB ＋ 老師 ${(t / 1024) | 0}KB`);
 }

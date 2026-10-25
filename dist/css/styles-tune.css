@@ -1,0 +1,3953 @@
+/* styles-tune.css — v375（#5 手機／平板瘦身、#6 桌機小字放大）
+   ⚠ 這個檔一定要在 index.html 的最後載入：裡面的選擇器跟原本的規則同權重，
+     靠「後蓋前」生效，所以幾乎不需要 !important。
+   分成三段：
+     A. 桌機（≥1025px）：Alan 說「很多小字太小，要大蠻多的」→ 10~13.5px 的字統一往上抬。
+     B. 平板／手機（≤1024px、≤768px）：按鈕與標題太肥、間距太大 → 一直往下滑。這裡瘦身。
+     C. 做題目的畫面（player）在小螢幕的專用瘦身——最常被抱怨的地方。 */
+
+/* ══════════════════════════════════════════════════════════
+   A. 桌機：小字放大
+   ══════════════════════════════════════════════════════════ */
+@media (min-width: 1025px) {
+
+  /* ── 首頁／週次／單元列表 ── */
+  .qm-week-eyebrow      { font-size: 16px; }
+  .qm-block-title-zh    { font-size: 15.5px; }
+  .qm-block-count       { font-size: 15px; }
+  .qm-block-meta        { font-size: 15px; }
+  .qm-unit-score-badge  { font-size: 15px; }
+  .qm-hw-badge          { font-size: 15px; }
+  .qm-type-badge        { font-size: 14px; }
+  .qm-sidebar-prog-lbl  { font-size: 14.5px; }
+  .qm-placeholder-sub   { font-size: 16px; }
+  .qm-due-popover-label { font-size: 15px; }
+  .qm-due-actions button{ font-size: 15px; }
+
+  /* ── 做題目 ── */
+  .qm-player-counter    { font-size: 16px; }
+  .qm-question-hint     { font-size: 16px; }
+  .qm-opt-letter        { font-size: 16px; }
+  .qm-fc-start-btn span { font-size: 15px; }
+  .qm-fc-tap            { font-size: 16px; }
+  .sd-legend            { font-size: 16px; }
+  .sd-answer-label      { font-size: 16px; }
+  .ws-pool-label        { font-size: 15.5px; }
+  .ws-drop-hint         { font-size: 15px; }
+  .circle-classify-label{ font-size: 15.5px; }
+  .dm-hint              { font-size: 16.5px; }
+
+  /* ── 分段閱讀 ── */
+  .gr-seg-label     { font-size: 14.5px; }
+  .gr-past-chip     { font-size: 15px; }
+  .gr-q-count       { font-size: 15px; }
+  .gr-done-note     { font-size: 16px; }
+  .gr-peek-btn      { font-size: 15px; }
+  .gr-tap-hint      { font-size: 15px; }
+  .gr-rate-cap      { font-size: 15px; }
+  .gr-rate-btn      { font-size: 15px; }
+
+  /* ── 上傳作業 ── */
+  .uh-hint      { font-size: 15.5px; }
+  .uh-thumb-del { font-size: 14px; }
+
+  /* ── 群組參考資料 ── */
+  .gres-kicker         { font-size: 13px; }
+  .gres-edit .gres-lab { font-size: 15px; }
+  .gres-filerow        { font-size: 16px; }
+  .gres-help           { font-size: 14.5px; }
+  .qm-gres-tx span     { font-size: 14.5px; }
+
+  /* ── 單字卡 ── */
+  .fc-tab              { font-size: 15px; }
+  .fc-flip-hint        { font-size: 14.5px; }
+  .fc-nav-btn          { font-size: 15.5px; }
+  .fc-dual-circle      { font-size: 15.5px; }
+  .fc-complete-actions .btn,
+  .fc-complete-actions .btn.primary { font-size: 15.5px; }
+  .fc-review-icon      { font-size: 16px; }
+  .fc-review-wrong     { font-size: 15.5px; }
+  .fc-setup-desc       { font-size: 15.5px; }
+  .fc-test-qlabel      { font-size: 15px; }
+  .fc-test-qnum        { font-size: 15px; }
+  .fc-test-label       { font-size: 15.5px; }
+  .fc-fill-label       { font-size: 15.5px; }
+  .fc-scope-sub        { font-size: 14.5px; }
+  .fc-scope-btn span   { font-size: 15px; }
+  .fc-match-best-badge { font-size: 15.5px; }
+  .fc-card-empty       { font-size: 15.5px; }
+
+  /* ── 舊版測驗／週次卡 ── */
+  .quiz-q-num       { font-size: 15.5px; }
+  .quiz-q-mark      { font-size: 15.5px; }
+  .quiz-option-letter { font-size: 15.5px; }
+  .quiz-result-label  { font-size: 15.5px; }
+  .quiz-explain-label { font-size: 15.5px; }
+  .week-nav .label  { font-size: 14.5px; }
+  .hero-eyebrow     { font-size: 14px; }
+  .field-label      { font-size: 14px; }
+  .field-help       { font-size: 15px; }
+  .btn              { font-size: 14.5px; }
+  .toast            { font-size: 15px; }
+
+  /* ── 第二段：14~17px 這一層也往上抬一級。
+        Alan 說「要大蠻多的」，只把 10~13px 拉到 15px 還是偏小，
+        所以學生會看的那些欄位再加一級（老師後台不動，那裡欄位多、放大會擠）。 ── */
+  .qm-unit-row-title   { font-size: 18.5px; }
+  .qm-unit-row-meta    { font-size: 16px; }
+  .qm-unit-row-status  { font-size: 18px; }
+  .qm-sidebar-cat-name { font-size: 18.5px; }
+  .qm-sidebar-back     { font-size: 16.5px; }
+  .qm-sidebar-prog-lbl { font-size: 15px; }
+  .qm-block-title      { font-size: 25px; }
+  .qm-intro-meta       { font-size: 18px; }
+  .qm-intro-rule-row   { font-size: 18.5px; }
+  .qm-opt-text         { font-size: 20.5px; }
+  .qm-feedback-banner  { font-size: 19px; }
+  .qm-explain          { font-size: 18px; }
+  .qm-auto-next        { font-size: 16px; }
+  .qm-result-msg       { font-size: 19px; }
+  .qm-result-goal      { font-size: 18px; }
+  .qm-wrong-title      { font-size: 16px; }
+  .qm-wrong-q, .qm-wrong-a { font-size: 17px; }
+
+  .fc-tab              { font-size: 17px; }
+  .fc-topbar .mono     { font-size: 16.5px; }
+  .fc-choice           { font-size: 21px; }
+  .fc-test-choice      { font-size: 20px; }
+  .fc-review-term, .fc-review-ans { font-size: 17px; }
+  .fc-setup-label      { font-size: 18px; }
+  .fc-scope-btn b      { font-size: 19px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   B. 平板／手機：整體瘦身（少滑一點）
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  /* 進場說明頁：上下 64px 的留白＋60px 的 emoji，在 iPad 直式一定要往下滑才看得到按鈕 */
+  .qm-intro          { margin: 22px auto; padding: 0 14px; }
+  .qm-intro-icon     { font-size: 40px; margin-bottom: 10px; }
+  .qm-intro-title    { font-size: 27px; margin-bottom: 6px; }
+  .qm-intro-rules    { gap: 7px; padding: 13px 15px; margin-bottom: 18px; }
+  .qm-intro-btns     { margin-top: 4px; }
+
+  /* 做題目 */
+  .qm-player-head    { margin-bottom: 18px; gap: 10px; }
+  .qm-question-area  { margin-bottom: 18px; }
+  .qm-feedback       { margin-top: 14px; gap: 9px; }
+  .qm-options        { gap: 9px; }
+  .qm-option         { padding: 14px 15px; gap: 12px; }
+  .qm-btn            { padding: 13px 22px; font-size: 16.5px; }
+
+  /* 結果頁 */
+  .qm-result         { margin: 18px auto; padding-bottom: 34px; }
+}
+
+@media (max-width: 768px) {
+  .qm-intro          { margin: 14px auto; }
+  .qm-intro-icon     { font-size: 34px; margin-bottom: 8px; }
+  .qm-intro-title    { font-size: 23px; }
+  .qm-intro-meta     { margin-bottom: 12px; }
+  .qm-intro-rules    { gap: 6px; padding: 11px 13px; margin-bottom: 14px; }
+
+  .qm-player-head    { margin-bottom: 14px; }
+  .qm-question-area  { margin-bottom: 14px; }
+  .qm-option         { padding: 12px 13px; }
+  .qm-btn            { padding: 12px 18px; font-size: 16px; }
+  .qm-result         { margin: 12px auto; padding-bottom: 28px; }
+}
+
+/* ── 單元列表（左邊那一欄）：手機上光是標題列就吃掉 178px，
+      可視區只剩不到 3 列 → 一直滑。這裡把外框瘦身、列高壓低、可視高度拉高。 ── */
+@media (max-width: 768px) {
+  .qm-sidebar        { max-height: 62vh; }
+  .qm-sidebar-cat    { padding: 10px 16px; gap: 10px; }
+  .qm-sidebar-prog   { padding: 8px 14px 9px; }
+  .qm-unit-list      { padding: 4px 8px; }
+  .qm-unit-row       { padding: 10px 14px; margin-bottom: 2px; }
+  .qm-unit-row-title { margin-bottom: 1px; }
+
+  /* 分類大卡 */
+  .qm-block          { padding: 14px 16px; }
+}
+
+/* ── 單字卡：測驗是「一頁列出全部題目」，選項在手機變成一欄＝一題就 380px，
+      10 個字要滑快 4000px。改回 2×2（英文單字很短，放得下）並壓縮卡片留白。 ── */
+@media (max-width: 560px) {
+  .fc-test-choices { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fc-test-choice  { padding: 13px 10px; font-size: 15.5px; text-align: center; }
+  .fc-test-q       { padding: 13px 12px 15px; }
+  .fc-test-list    { gap: 14px; }
+  .fc-test-prompt  { min-height: 0; margin-bottom: 11px; }
+  .fc-test-zh      { font-size: 23px; }
+  .fc-test-qhead   { margin-bottom: 9px; }
+  .fc-test-label   { margin-bottom: 7px; }
+
+  /* 學習模式：一題一頁，選項壓低一點才不用滑 */
+  .fc-learn-q { padding: 10px 0 14px; }
+  .fc-learn-zh { font-size: 30px; }
+  .fc-choice  { padding: 15px 12px; font-size: 17px; border-radius: 11px; }
+  .fc-choices { gap: 8px; }
+  .fc-player  { padding: 12px; }
+  .fc-tab     { padding: 11px 8px; font-size: 12.5px; }
+}
+
+/* ── 按鈕在手機／平板不用那麼肥（Alan：「按鈕文字都太大了」）
+      仍然保留 44px 以上的觸控高度，只是不再一顆佔掉半個螢幕。 ── */
+@media (max-width: 768px) {
+  .qm-intro-btns .qm-btn.primary { padding: 15px 32px; font-size: 17px; min-width: 210px; }
+  .qm-result-btns .qm-btn        { padding: 12px 16px; font-size: 15.5px; }
+  .qm-result-btns                { gap: 9px; margin-bottom: 18px; }
+  .qm-fc-player-bar              { gap: 9px; padding-bottom: 12px; margin-bottom: 12px; }
+  .qm-fc-start-btn               { padding: 13px 16px; }
+  .fc-complete                   { min-height: 0; padding: 26px 12px; }
+  .fc-complete-actions .btn      { padding: 12px 16px; }
+  .fc-test-foot                  { padding-top: 12px; }
+  .fc-topbar                     { margin-bottom: 12px; }
+  .qm-wrong-list                 { margin-top: 14px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   C. v376 —「一次看一張」的練習畫面剛好塞滿一螢幕
+   Alan 回報：iPad 做「學習」時圖片把四個選項擠到畫面外，每一題都要往下滑。
+   高度由 JS 量好寫成 .fc-player 的 inline height（components-flashcard.jsx 的
+   useFitHeight，沿用 v345 配對格子那一套），這裡只負責把剩下的空間分給圖片。
+   ══════════════════════════════════════════════════════════ */
+.fc-p-card, .fc-p-learn {
+  display: flex; flex-direction: column;
+  /* ⚠ 不能用 overflow:hidden——手機橫式高度真的不夠時會把「下一張／選項」直接切掉、
+     而且按不到。改成需要時自己捲，塞得下就完全不會出現捲軸。 */
+  overflow-x: hidden; overflow-y: auto;
+}
+
+/* ── 單字卡（翻卡）── */
+.fc-p-card > .fc-topbar { flex: none; }
+.fc-p-card > .fc-nav    { flex: none; }
+.fc-p-card > .fc-flip-card {
+  flex: 1 1 auto; min-height: 230px; height: auto; margin-bottom: 14px;
+}
+.fc-p-card .fc-face          { overflow: hidden; }
+/* ⚠ v389：這裡本來是 flex:1 1 auto + max-height:none（＝圖片會伸縮去填滿版面）。
+   Alan 明確要「圖片固定住，不要再跟著伸縮」→ 真正生效的規則在本檔最後面的
+   v388/v389 區塊（flex:0 0 auto + 固定 max-height，靠後蓋前）。
+   這裡只留下 margin，不要再寫 flex/max-height，免得兩邊打架。 */
+.fc-p-card .fc-back-img-wrap { margin-bottom: 12px; }
+
+/* ── 學習 ── */
+.fc-p-learn > .fc-dual-bar { flex: none; margin-bottom: 12px; }
+/* 四個選項一律 2×2（原本手機是一欄，光選項就吃掉 300px，圖片只剩一點點） */
+.fc-p-learn > .fc-choices  { flex: none; grid-template-columns: 1fr 1fr; }
+.fc-choice, .fc-test-choice { overflow-wrap: anywhere; hyphens: auto; }
+.fc-p-learn > .fc-learn-q  { flex: 1 1 auto; min-height: 0; justify-content: center; padding: 4px 0 12px; }
+.fc-p-learn .fc-learn-img  { flex: 1 1 auto; min-height: 130px; max-height: none; margin-bottom: 12px; }
+
+/* 手機直式：先把選項與中文壓小，把高度讓給圖片 */
+@media (max-width: 560px) {
+  .fc-p-learn > .fc-dual-bar { margin-bottom: 8px; }
+  .fc-p-learn > .fc-learn-q  { padding: 2px 0 8px; }
+  .fc-p-learn .fc-learn-img  { margin-bottom: 8px; }
+  .fc-p-learn .fc-learn-zh   { font-size: 27px; line-height: 1.15; margin-bottom: 2px; }
+  .fc-p-learn .fc-learn-q > .mono { display: none; }   /* 選項就在下面，不用再提示一次 */
+  .fc-p-learn > .fc-choices  { gap: 7px; }
+  .fc-p-learn .fc-choice     { padding: 12px 8px; font-size: 16px; border-radius: 11px; }
+}
+.fc-p-learn .fc-learn-zh,
+.fc-p-learn .fc-retry-badge,
+.fc-p-learn .fc-learn-q > .mono { flex: none; }
+
+/* 寬又矮（iPad 橫式、筆電）：圖片放左邊、題目＋選項放右邊
+   → 不用縮圖也塞得下，圖片反而比原本更大 */
+@media (min-width: 820px) and (max-height: 950px) {
+  .fc-p-learn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 38px;
+    align-items: stretch;   /* ⚠ 不能用 center：那樣格子高度會變成「由內容決定」，
+                               圖片就不會縮，會壓到上下的東西 */
+  }
+  /* 進度條收到右欄上面 → 左欄（圖片）可以用滿整個高度，圖片比原本 400px 還大 */
+  .fc-p-learn > .fc-dual-bar { grid-column: 2; grid-row: 1; margin-bottom: 14px; }
+  /* ★ 星號原本釘在 .fc-learn-q 右上角；分成左右欄之後那裡變成畫面正中間（壓在圖片上）
+     → 改成釘在整個 player 的右上角 */
+  .fc-p-learn                { position: relative; }
+  .fc-p-learn > .fc-learn-q  { grid-column: 1; grid-row: 1 / -1; padding: 0; min-height: 0; position: static; }
+  .fc-p-learn .fc-star-btn-corner { top: 2px; right: 2px; }
+  .fc-p-learn > .fc-choices  { grid-column: 2; grid-row: 2; align-content: center; min-height: 0; }
+  .fc-p-learn .fc-learn-img  { max-width: 100%; margin-bottom: 10px; }
+  .fc-p-learn .fc-learn-zh   { font-size: 44px; margin-bottom: 2px; }
+}
+
+/* iPad 直式（561–900）：原本四個選項被壓成一欄＝多吃 150px，改回 2×2；
+   中文題目 52px 在這個寬度也沒被縮過。 */
+@media (min-width: 561px) and (max-width: 900px) {
+  .fc-choices      { grid-template-columns: 1fr 1fr; }
+  .fc-test-choices { grid-template-columns: 1fr 1fr; }
+  .fc-learn-zh     { font-size: 40px; }
+  .fc-choice       { padding: 16px 12px; font-size: 18px; }
+  .fc-test-choice  { padding: 15px 12px; font-size: 17px; }
+  /* 測驗是「一頁列出全部題目」的考卷——沒辦法不捲，但一題可以少吃 80px */
+  .fc-test-q       { padding: 15px 16px 17px; }
+  .fc-test-prompt  { min-height: 0; margin-bottom: 12px; }
+  .fc-test-zh      { font-size: 28px; }
+  .fc-test-list    { gap: 16px; }
+  .fc-test-qhead   { margin-bottom: 10px; }
+  .fc-test-label   { margin-bottom: 8px; }
+}
+
+/* ── 其他「被固定高度撐出捲軸」的地方 ── */
+/* 說明頁的 520px 地板：螢幕不夠高時拿掉（styles-theme.css 的 .page-mission .qm-intro） */
+@media (max-height: 920px) {
+  .page-mission .qm-intro { min-height: 0; }      /* 520px 的地板會把說明頁撐出捲軸 */
+}
+/* 內容區底部留白：手機的底部導覽列只有 60px，卻留了 84–96px；平板根本沒有導覽列 */
+@media (max-width: 768px) { .qm-quiz-area { padding-bottom: 72px; } }
+@media (min-width: 769px) and (max-width: 900px) { .qm-quiz-area { padding-bottom: 56px; } }
+
+/* 769–1024（iPad）：題目大字沒被縮過，一題就吃掉大半個畫面 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .qm-question-text { font-size: 42px; }
+  .ta-prompt        { font-size: 44px; }
+  .wp-word          { font-size: 38px; }
+}
+
+
+
+
+/* ── ⚠ 關鍵：iPad 橫式是「寬 1180 但只有 760 高」——照寬度做的瘦身完全沒作用。
+      所以同一套瘦身也要用「螢幕高度」再下一次。 ── */
+/* (a) 間距瘦身：矮螢幕一律套用（不動字級，桌機的大字保留） */
+@media (max-height: 920px) {
+  .qm-player-head    { margin-bottom: 12px; gap: 10px; }
+  .qm-question-area  { margin-bottom: 14px; }
+  .qm-question-hint  { margin-bottom: 8px; }
+  .qm-options        { gap: 9px; }
+  .qm-option         { padding: 13px 18px; gap: 12px; }
+  .qm-result         { margin: 16px auto; padding-bottom: 28px; }
+  .ta-prompt         { margin: 4px 0 20px; }
+}
+/* (a2) 說明頁在矮螢幕也要瘦身——但只在平板以上。
+       手機（≤768）已經有自己更緊的一套（見上面 B 段），不要被這裡蓋回去。 */
+@media (max-height: 920px) and (min-width: 769px) {
+  .qm-intro       { margin: 18px auto; }
+  .qm-intro-icon  { font-size: 38px; margin-bottom: 10px; }
+  .qm-intro-rules { gap: 7px; padding: 12px 15px; margin-bottom: 16px; }
+  .qm-intro-meta  { margin-bottom: 14px; }
+}
+/* (b) 字級也縮小：只在「矮而且不夠寬」時（iPad 橫式 1180×760、小筆電）——
+      桌機 1440×860 這種寬螢幕放得下，就別把 v375 剛放大的字又縮回去。 */
+@media (max-height: 920px) and (max-width: 1300px) {
+  .qm-question-hint  { font-size: 14px; }
+  .qm-question-text  { font-size: 36px; line-height: 1.2; }
+  .qm-opt-letter     { width: 32px; height: 32px; font-size: 15px; }
+  .qm-opt-text       { font-size: 19px; }
+  .ta-prompt         { font-size: 40px; }
+  .ta-input          { padding: 14px 20px; font-size: 23px; }
+  .qm-result-num     { font-size: 60px; }
+  .qm-result-msg     { font-size: 19px; margin-bottom: 18px; }
+  .qm-intro-title    { font-size: 27px; }
+  .sp-speak          { padding: 11px 22px; margin: 6px auto 4px; }
+  .sp-speak-ic       { font-size: 24px; }
+}
+
+/* 手機：題目字 36px 會斷成 4 行（130px）——答完之後多出的回饋區就一定超出畫面 */
+@media (max-width: 560px) {
+  .qm-question-text { font-size: 28px; }
+  .qm-option        { padding: 11px 12px; }
+  .qm-opt-text      { font-size: 17px; }
+  .qm-opt-letter    { width: 30px; height: 30px; font-size: 13px; }
+}
+
+/* ── 答完之後才出現的回饋區（✓正解／解說／下一題）會再多推 175px，
+      矮螢幕上小朋友每答一題都要往下捲才找得到「下一題」→ 一起瘦身。 ── */
+@media (max-height: 920px) {
+  .qm-feedback        { margin-top: 10px; gap: 8px; }
+  /* ⚠ 不要給 .qm-explain 加 max-height＋內捲軸：那是老師寫的解說，藏起來小朋友不會去找 */
+  .qm-feedback-banner { padding: 11px 16px; font-size: 18px; }
+  .qm-feedback .qm-btn.primary { padding: 12px 22px; }
+  .qm-auto-next       { font-size: 15px; }
+  .dm-wrap            { padding-bottom: 14px; }
+}
+
+/* ══ 最矮的畫面放最後：max-height 560/480 是 920 的子集，
+      要排在 920 那一段後面才不會被蓋掉。 ══ */
+/* 手機橫式／很矮的視窗：連外框（分頁列、完成練習列、內距）都要壓，
+   不然光是這些就吃掉 245px，390px 高的畫面根本不夠放題目 */
+@media (max-height: 560px) {
+  .fc-tab              { padding: 8px 6px; font-size: 12px; }
+  .fc-player           { padding: 8px 12px; }
+  .qm-fc-player-bar    { padding-bottom: 8px; margin-bottom: 8px; }
+  .qm-fc-need          { font-size: 13px; padding: 5px 10px; }
+  .qm-fc-start-btn     { padding: 9px 14px; }
+  .qm-quiz-area        { padding-top: 12px; padding-bottom: 16px; }
+  .fc-topbar           { margin-bottom: 8px; }
+  .fc-p-learn > .fc-dual-bar { margin-bottom: 6px; }
+  .qm-question-text { font-size: 30px; }
+  .ta-prompt        { font-size: 32px; }
+  .qm-intro-icon    { font-size: 28px; margin-bottom: 6px; }
+  .qm-intro-title   { font-size: 21px; }
+  .qm-intro-rules   { padding: 9px 12px; margin-bottom: 10px; }
+  .qm-player-head   { margin-bottom: 10px; }
+  .qm-question-area { margin-bottom: 10px; }
+  /* ⚠ 要用同樣的 .fc-p-learn 前綴，不然會被上面兩欄版面的 (0,2,0) 蓋掉
+     （iPhone Pro Max 橫式 932×430 兩個條件都成立） */
+  .fc-p-learn .fc-learn-zh { font-size: 26px; margin-bottom: 0; }
+  .fc-learn-zh      { font-size: 26px; }
+  .fc-choice        { padding: 11px 10px; font-size: 16px; }
+  .fc-choices       { grid-template-columns: 1fr 1fr; }
+  .fc-match-grid    { min-height: 0; }   /* 200px 的地板在 390px 高的畫面會把格子擠出去 */
+}
+/* 手機橫著拿只有 390px 高——選項改成 2×2、提示行拿掉，才塞得下一整題 */
+@media (max-height: 480px) {
+  .qm-options       { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .qm-option        { padding: 9px 12px; }
+  .qm-opt-text      { font-size: 16px; }
+  .qm-opt-letter    { width: 26px; height: 26px; font-size: 12px; }
+  .qm-question-text { font-size: 24px; }
+  .qm-question-hint { display: none; }
+  .qm-player-head   { margin-bottom: 8px; }
+  .qm-question-area { margin-bottom: 8px; }
+  .qm-feedback      { margin-top: 8px; gap: 6px; }
+  .qm-feedback-banner { padding: 8px 14px; font-size: 15.5px; }
+  .qm-explain       { font-size: 15px; }
+  .qm-feedback .qm-btn.primary { padding: 9px 18px; font-size: 15.5px; }
+  /* 手機橫式只有 ~215px 可用：卡片／圖片的最小高度要再讓一步，
+     不然「上一張／下一張」「四個選項」會被擠出可視範圍 */
+  .fc-p-card > .fc-flip-card { min-height: 120px; margin-bottom: 8px; }
+  .fc-p-card > .fc-topbar    { margin-bottom: 6px; }
+  .fc-p-learn .fc-learn-img  { min-height: 60px; margin-bottom: 6px; }
+  .fc-p-learn > .fc-dual-bar { margin-bottom: 6px; }
+  .fc-term                   { font-size: 30px; }
+  .fc-zh                     { font-size: 24px; margin-bottom: 6px; }
+  .fc-example                { font-size: 14px; }
+}
+
+/* ══ v377：一鍵建立一整個學期 ══ */
+.banner-btn.term { background: #2E4F7E; border-color: #2E4F7E; color: #fff; font-weight: 700; }
+.banner-btn.term:hover { background: #24406a; }
+
+/* ══ v377：整個年級還沒有內容時的空狀態（學生端） ══ */
+.week-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; padding: 56px 20px; min-height: 320px;
+}
+.week-empty-ico   { font-size: 52px; }
+.week-empty-title { font-family: var(--serif); font-size: 28px; font-weight: 600; color: var(--ink, #15130e); }
+.week-empty-sub   { font-family: var(--sans); font-size: 17px; color: var(--ink-3, #8a8270); margin-bottom: 8px; }
+@media (max-width: 768px) {
+  .week-empty { padding: 34px 16px; min-height: 0; }
+  .week-empty-ico { font-size: 40px; }
+  .week-empty-title { font-size: 22px; }
+  .week-empty-sub { font-size: 15.5px; }
+}
+
+/* ══ v377③：貼單字 → 一次建立整套 ══ */
+.banner-btn.quick { background: #8B3120; border-color: #8B3120; color: #fff; font-weight: 700; }
+.banner-btn.quick:hover { background: #732818; }
+.qs-proof-2 { display: grid; grid-template-columns: 190px 1fr; gap: 12px; }
+@media (max-width: 820px) {
+  .qs-proof-row, .qs-proof-2 { grid-template-columns: 1fr; gap: 8px; }
+}
+
+/* ══ v381：五大時態核心題庫的門口卡 ══ */
+.gs-card-gr { border-color: #cfd8e6; }
+.gs-card-gr:hover { border-color: #2E4F7E; }
+.gs-card-ico-gr { background: #eef2f8; color: #2E4F7E; }
+
+/* ══ v382：五大時態出題工具 ══ */
+.banner-btn.gr { background: #2E7D5B; border-color: #2E7D5B; color: #fff; font-weight: 700; }
+.banner-btn.gr:hover { background: #24634736; background: #246347; }
+.gr-tense-pick { display: flex; flex-wrap: wrap; gap: 7px; }
+.gr-tense-pick button {
+  padding: 11px 16px; border: 2px solid var(--border, #e5dfc8); border-radius: 11px;
+  background: #fff; font-family: var(--sans); font-size: 15.5px; font-weight: 700;
+  color: var(--ink, #15130e); cursor: pointer;
+}
+.gr-tense-pick button.active { background: var(--ink, #15130e); color: var(--bg-paper, #fbf8f1); border-color: var(--ink, #15130e); }
+.gr-num-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.gr-num-row select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border, #e5dfc8);
+  border-radius: 8px; font-family: inherit; font-size: 15.5px; background: #fff;
+}
+.gr-busy { margin-top: 14px; font-family: var(--sans); font-size: 14px; color: var(--ink-3, #8a8270); }
+.gr-busy-bar { height: 8px; border-radius: 99px; background: var(--border-soft, #eee7d4); overflow: hidden; margin-bottom: 6px; }
+.gr-busy-bar i { display: block; height: 100%; background: #2E7D5B; transition: width .3s; }
+
+.gr-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.gr-tabs button {
+  padding: 7px 13px; border: 1px solid var(--border, #e5dfc8); border-radius: 999px;
+  background: #fff; font-family: var(--sans); font-size: 13.5px; font-weight: 700;
+  color: var(--ink-2, #5c554a); cursor: pointer;
+}
+.gr-tabs button.active { background: #2E7D5B; border-color: #2E7D5B; color: #fff; }
+.gr-tabs button em { font-style: normal; margin-left: 6px; opacity: .7; font-size: 12px; }
+.gr-proof { max-height: 54vh; overflow-y: auto; padding-right: 4px; }
+.gq-row-f textarea, .gq-row-f input, .gr-passage {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 8px;
+  font-family: inherit; font-size: 15px; line-height: 1.6; background: #fff; resize: vertical;
+}
+.gr-passage { font-family: var(--mono, monospace); font-size: 14px; line-height: 1.85; }
+.gq-row-2 { display: grid; grid-template-columns: 200px 1fr; gap: 10px; margin-top: 6px; }
+.gq-row-2 label { display: block; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--ink-3, #8a8270); margin-bottom: 3px; }
+.gr-warn { margin-top: 6px; font-size: 13px; color: #A8331F; line-height: 1.5; }
+@media (max-width: 820px) { .gr-num-row, .gq-row-2 { grid-template-columns: 1fr; } }
+
+/* ══════════════════════════════════════════════════════════
+   v383：教學卡（lesson）——先教再練
+   ══════════════════════════════════════════════════════════ */
+.ls-wrap { max-width: 780px; width: 100%; margin: 0 auto; }
+.ls-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.ls-steps { flex: 1; display: flex; gap: 6px; align-items: center; }
+.ls-dot { flex: 1; height: 5px; border-radius: 99px; background: var(--border-soft, #eee7d4); transition: background .25s; }
+.ls-dot.done { background: #2E7D5B; }
+.ls-dot.on   { background: var(--ink, #15130e); }
+.ls-step-n { font-family: var(--mono); font-size: 14px; color: var(--ink-3, #8a8270); white-space: nowrap; }
+
+.ls-card {
+  background: var(--bg-card, #fff); border: 1px solid var(--border, #e5dfc8);
+  border-radius: 18px; padding: 28px 30px 30px;
+  box-shadow: 0 1px 0 rgba(21,19,14,.04), 0 14px 34px -22px rgba(21,19,14,.22);
+}
+@keyframes lsEnter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ls-enter { animation: lsEnter .3s cubic-bezier(.22,1,.36,1) both; }
+@media (prefers-reduced-motion: reduce) { .ls-enter { animation: none; } }
+
+.ls-kicker {
+  font-family: var(--mono); font-size: 12.5px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: #2E7D5B; margin-bottom: 10px;
+}
+.ls-title { font-family: var(--serif); font-size: 32px; font-weight: 600; line-height: 1.25; color: var(--ink, #15130e); margin-bottom: 10px; }
+.ls-lead  { font-family: var(--sans); font-size: 18px; line-height: 1.75; color: var(--ink-2, #5c554a); }
+.ls-sub   { font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink-3, #8a8270); margin: 24px 0 10px; }
+
+.ls-uses { display: flex; flex-direction: column; gap: 10px; }
+.ls-use  { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
+.ls-use-n {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: #eaf3ee; color: #1f6b4b; font-family: var(--mono); font-size: 14px; font-weight: 700;
+}
+.ls-use b { font-family: var(--sans); font-size: 17px; color: var(--ink, #15130e); }
+.ls-use-eg { font-family: 'Lora', Georgia, serif; font-size: 16.5px; color: var(--ink-2, #5c554a); margin-top: 3px; line-height: 1.6; }
+.ls-use-eg em { font-style: normal; color: var(--ink-3, #8a8270); }
+
+.ls-forms { display: flex; flex-direction: column; gap: 9px; }
+.ls-form {
+  display: grid; grid-template-columns: minmax(0,1fr) 22px minmax(0,1.4fr); gap: 10px; align-items: center;
+  padding: 13px 15px; border: 1px solid var(--border-soft, #eee7d4); border-radius: 12px; background: var(--bg-paper, #fbf8f1);
+}
+.ls-form-subj { font-family: 'Lora', Georgia, serif; font-size: 17px; font-weight: 700; color: var(--ink, #15130e); }
+.ls-form-arrow { color: var(--ink-faint, #b8b1a0); text-align: center; }
+.ls-form-body b { font-family: var(--sans); font-size: 16.5px; color: #2E7D5B; }
+.ls-form-eg { font-family: 'Lora', Georgia, serif; font-size: 16px; color: var(--ink-2, #5c554a); margin-top: 2px; }
+
+.ls-clues { display: flex; flex-wrap: wrap; gap: 7px; }
+.ls-clues span {
+  padding: 6px 13px; border-radius: 999px; background: #fdf3d8; border: 1px solid rgba(201,168,76,.5);
+  font-family: 'Lora', Georgia, serif; font-size: 15.5px; color: #7a5c0f;
+}
+
+.ls-mis { padding: 12px 15px; border-radius: 12px; background: #fdf6f4; border: 1px solid #f0d9d2; margin-bottom: 9px; }
+.ls-mis-bad  { font-family: 'Lora', Georgia, serif; font-size: 16.5px; color: #A8331F; text-decoration: line-through; text-decoration-color: rgba(168,51,31,.45); }
+.ls-mis-good { font-family: 'Lora', Georgia, serif; font-size: 16.5px; color: #1f6b4b; margin-top: 3px; }
+.ls-mis-why  { font-family: var(--sans); font-size: 14.5px; color: var(--ink-3, #8a8270); margin-top: 5px; line-height: 1.6; }
+
+.ls-demo { padding: 15px 0; border-top: 1px solid var(--border-soft, #eee7d4); }
+.ls-demo:first-of-type { border-top: none; }
+.ls-demo-q { font-family: 'Lora', Georgia, serif; font-size: 18px; line-height: 1.7; color: var(--ink, #15130e); }
+.ls-reveal {
+  margin-top: 9px; padding: 8px 18px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--border, #e5dfc8); background: #fff;
+  font-family: var(--sans); font-size: 14.5px; font-weight: 700; color: var(--ink-2, #5c554a);
+}
+.ls-reveal:hover { border-color: #2E7D5B; color: #2E7D5B; }
+.ls-demo-a { margin-top: 9px; padding: 11px 15px; border-radius: 11px; background: #eaf3ee; }
+.ls-demo-a b { font-family: 'Lora', Georgia, serif; font-size: 19px; color: #1f6b4b; }
+.ls-demo-a span { display: block; margin-top: 4px; font-family: var(--sans); font-size: 14.5px; color: var(--ink-2, #5c554a); line-height: 1.65; }
+
+.ls-check { padding: 16px 0; border-top: 1px solid var(--border-soft, #eee7d4); }
+.ls-check:first-of-type { border-top: none; }
+.ls-check-q { font-family: 'Lora', Georgia, serif; font-size: 18px; line-height: 1.7; color: var(--ink, #15130e); margin-bottom: 10px; }
+.ls-check-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ls-opt {
+  padding: 13px 14px; border: 2px solid var(--border, #e5dfc8); border-radius: 12px; background: #fff;
+  font-family: var(--sans); font-size: 17px; font-weight: 700; color: var(--ink, #15130e); cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.ls-opt:hover:not(:disabled) { border-color: var(--ink, #15130e); }
+.ls-opt.ok  { border-color: #2E7D5B; background: #eaf3ee; color: #1f6b4b; }
+.ls-opt.no  { border-color: #D6533C; background: #fdece8; color: #A8331F; }
+.ls-opt.dim { opacity: .4; }
+.ls-check-why { margin-top: 9px; padding: 10px 14px; border-radius: 10px; background: #fdf6f4; font-family: var(--sans); font-size: 14.5px; line-height: 1.65; color: var(--ink-2, #5c554a); }
+.ls-check-why.ok { background: #eaf3ee; }
+
+.ls-done { text-align: center; }
+.ls-done-ico { font-size: 52px; margin-bottom: 6px; }
+.ls-done-score { font-family: var(--mono); font-size: 17px; color: var(--ink-3, #8a8270); margin-bottom: 10px; }
+.ls-done .qm-result-btns { margin-top: 22px; justify-content: center; }
+
+.ls-foot { display: flex; gap: 10px; justify-content: space-between; margin-top: 18px; }
+.ls-foot .qm-btn { flex: 1; max-width: 260px; }
+
+@media (max-width: 768px) {
+  .ls-card { padding: 20px 18px 22px; border-radius: 14px; }
+  .ls-title { font-size: 25px; }
+  .ls-lead { font-size: 16.5px; }
+  .ls-form { grid-template-columns: 1fr; gap: 4px; }
+  .ls-form-arrow { display: none; }
+  .ls-check-opts { grid-template-columns: 1fr; }
+  .ls-foot .qm-btn { max-width: none; }
+}
+.gr-extra { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.gr-extra label {
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; cursor: pointer;
+  padding: 11px 13px; border: 1.5px solid var(--border, #e5dfc8); border-radius: 11px; background: #fff;
+}
+.gr-extra label.on { border-color: #2E7D5B; background: #f2f8f5; }
+.gr-extra input { width: 18px; height: 18px; accent-color: #2E7D5B; margin-top: 2px; }
+.gr-extra b { display: block; font-family: var(--sans); font-size: 15.5px; color: var(--ink, #15130e); margin-bottom: 2px; }
+.gr-extra span { font-family: var(--sans); font-size: 13.5px; color: var(--ink-3, #8a8270); line-height: 1.5; }
+
+/* ══ v386：📖 出閱讀理解（.rc-*）——出題視窗＋閱讀技巧編輯器共用 ══
+   ⚠ 播放器那邊用 .rs-*（在 styles-quiz-mode.css），這裡的 .rc-* 只給老師端。 */
+.banner-btn.rc { background: #2E4F7E; border-color: #2E4F7E; }
+.banner-btn.rc:hover { background: #24406A; border-color: #24406A; }
+.rc-row-2 { display: grid; grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.3fr); gap: 6px; margin-top: 6px; }
+
+@media (max-width: 820px) {
+  .rc-row-2 { grid-template-columns: 1fr; }
+}
+
+/* ══ v388：平板版面（Alan：側邊欄太大、圖片會為了平衡版面伸縮、還要往下滑）══ */
+
+/* ① 全螢幕鈕 */
+.fs-btn {
+  width: 34px; height: 34px; flex: none; border-radius: 10px; font-size: 15px; line-height: 1;
+  color: var(--ink-2, #5c554a); background: rgba(21,19,14,.05);
+  border: 1px solid transparent; transition: all .15s ease;
+}
+.fs-btn:hover { background: rgba(21,19,14,.1); color: var(--ink); }
+.fs-btn.on { background: rgba(139,49,32,.12); color: var(--accent, #8B3120); border-color: rgba(139,49,32,.3); }
+.fs-tip {
+  position: fixed; left: 50%; transform: translateX(-50%); top: 74px; z-index: 200;
+  max-width: min(420px, 92vw); padding: 10px 16px; border-radius: 12px;
+  background: #15130e; color: #fbf8f1; font-size: 13.5px; line-height: 1.6;
+  box-shadow: 0 14px 34px -12px rgba(21,19,14,.5);
+}
+
+/* ② 圖片改成「固定大小」——不再 flex:1 為了填滿版面伸縮（Alan 指定）。
+   本來是 flex:1 1 auto + max-height:100%，容器高度一變、圖片就跟著縮放，
+   翻卡（背面才有圖）也會把版面撐長。固定住之後，翻卡前後的高度一樣。 */
+.fc-p-card .fc-back-img-wrap {
+  flex: 0 0 auto; max-height: 330px;
+}
+.fc-p-card .fc-back-img-wrap img { max-height: 330px; }
+.fc-p-learn .fc-learn-img { flex: 0 0 auto; max-height: 340px; }
+
+/* ③ 平板：側欄寬度維持原本的 360px（v388 一度縮成 250px，Alan 說改回來）。
+   擁擠的問題改用「練習時收起上方列」解決（.focus-btn），不動側欄。 */
+@media (min-width: 901px) and (max-width: 1366px) {
+  .fc-p-card .fc-back-img-wrap, .fc-p-card .fc-back-img-wrap img { max-height: 300px; }
+  .fc-p-learn .fc-learn-img { max-height: 310px; }
+}
+
+/* ④ 留白瘦身：只要「不是很高的螢幕」都套（平板橫式 760–834、13" 筆電 900）。
+   圖片改固定大小之後就不會再幫忙吸收多餘高度了，所以這裡要把空間讓出來，
+   目標一樣是「一個畫面裝得下」。
+   ⚠ v376 的教訓：max-height 會打到所有筆電——所以這一段**只改留白、不動字級**，
+      字級的瘦身仍然要另外配 max-width（不要在這裡加字級規則）。 */
+@media (min-width: 901px) and (max-height: 950px) {
+  .page-mission .qm-cat-view  { padding: 10px 12px 14px; }
+  .page-mission .qm-quiz-area { padding: 18px 18px 8px; }
+  .qm-fc-player-bar { padding-bottom: 10px; }
+  .fc-player { padding: 16px 18px; }
+  .fc-topbar { margin-bottom: 12px; }
+  .fc-p-card > .fc-flip-card { margin-bottom: 10px; min-height: 190px; }
+}
+
+/* ④ 矮螢幕（iPad 橫式只有 760–834 高）再收一次。
+   ⚠ v376 的教訓：只寫 max-height 會打到所有筆電 → 一定要配 max-width 限制在平板範圍。 */
+@media (max-height: 860px) and (min-width: 901px) {
+  .page-mission .qm-cat-view  { padding: 8px 12px 10px; }
+  .page-mission .qm-quiz-area { padding: 14px 16px 10px; }
+  .fc-player { padding: 12px 16px; }
+  .fc-topbar { margin-bottom: 9px; }
+  .fc-p-card > .fc-flip-card { margin-bottom: 8px; min-height: 170px; }
+  .fc-p-card .fc-back-img-wrap, .fc-p-card .fc-back-img-wrap img { max-height: 260px; }
+  .fc-p-learn .fc-learn-img { max-height: 270px; }
+}
+
+
+/* ══ v389：練習時收起上方列（Alan：「Alan English Class 暑假那一列也要可以縮起來，
+   只有在做練習的時候」）。圖片改回大張之後高度更吃緊，這 72px 就是讓出來的空間。 ══ */
+.focus-btn {
+  position: fixed; top: 12px; right: 14px; z-index: 60;
+  width: 38px; height: 38px; border-radius: 12px; font-size: 16px; line-height: 1;
+  color: var(--ink-2, #5c554a); background: rgba(255,255,255,.92);
+  border: 1px solid var(--border, #DDD6C4);
+  box-shadow: 0 6px 18px -8px rgba(21,19,14,.35);
+  transition: all .15s ease;
+}
+.focus-btn:hover { color: var(--ink); border-color: #C9A84C; transform: translateY(-1px); }
+.focus-btn.on {
+  background: var(--accent, #8B3120); color: #fbf8f1; border-color: var(--accent, #8B3120);
+}
+/* 收起上方列——header 是 sticky，直接不顯示就好 */
+html.focus-on .header { display: none; }
+/* header 原本佔 72px，收起後把那塊高度還給內容 */
+/* ══ 🔴 v461（Alan：「測驗模式在 iPad 橫式或直式都滑不到最底下，沒辦法 submit」）══
+   兩個原因疊在一起，兩個都要修：
+
+   ① iPad Safari 的 100vh ＝「工具列收起來時」的高度，比實際看得到的還大。
+      作答區用 100vh 算高度 → 底部那一截永遠被藏在工具列底下，怎麼滑都滑不到。
+      → 改用 100dvh（動態視窗高度，會跟著工具列伸縮）。
+        舊瀏覽器讀不懂 dvh 就會忽略這一行，留著上面的 vh 當後備，不會壞掉。
+
+   ② .qm-quiz-area 自己是捲動區（overflow-y:auto），但它只有 min-height 沒有上限，
+      內容一多就長得比畫面還高 → 整頁**也**要捲。兩層捲動疊在一起，
+      在 iPad 上手指停在內層時，內層捲到底並不會自動接力去捲外層（iOS 不保證接力）
+      → 使用者卡在「內層到底了，但底部還在畫面外」。
+      → 給同樣數值的 max-height，讓作答區剛好等於可用高度＝只剩一層捲動。
+        內容再長也不會被切掉（它本來就會自己捲）。
+
+   ⚠ 這裡的每一條都要跟上面既有的 min-height 成對出現，數字要一樣，
+     不然會變成「上限比下限小」＝作答區被壓扁。 */
+@supports (height: 100dvh) {
+  .page-mission .qm-cat-view            { min-height: calc(100dvh - 72px); }
+  .page-mission .qm-quiz-area           { min-height: calc(100dvh - 140px); max-height: calc(100dvh - 140px); }
+  html.focus-on .page-mission .qm-cat-view  { min-height: 100dvh; }
+  html.focus-on .page-mission .qm-quiz-area { min-height: calc(100dvh - 54px); max-height: calc(100dvh - 54px); }
+  @media (max-width: 900px) {
+    .page-mission .qm-quiz-area           { min-height: calc(100dvh - 161px); max-height: calc(100dvh - 161px); }
+    html.focus-on .page-mission .qm-quiz-area { min-height: calc(100dvh - 88px); max-height: calc(100dvh - 88px); }
+  }
+}
+/* 左邊的單元清單也一樣：它比畫面高的時候，整頁就得捲（實測 iPad 橫式多出 135px）。
+   收進它自己的捲動區＝整頁完全不用捲，一個畫面只有一層捲動，iPad 上不會再卡住。
+   ⚠ 只在「左右雙欄」的寬度做（≥901px）。≤900px 是「一次一畫面」的手機式流程，
+     側欄那時是滿版的單元清單，鎖高度會把它壓扁。 */
+@media (min-width: 901px) {
+  .page-mission .qm-sidebar { max-height: calc(100vh - 140px); overflow-y: auto; }
+}
+@supports (height: 100dvh) {
+  @media (min-width: 901px) {
+    .page-mission .qm-sidebar { max-height: calc(100dvh - 140px); }
+    html.focus-on .page-mission .qm-sidebar { max-height: calc(100dvh - 54px); }
+  }
+}
+
+/* 不支援 dvh 的瀏覽器至少也拿掉「兩層捲動」那一半 */
+@supports not (height: 100dvh) {
+  .page-mission .qm-quiz-area { max-height: calc(100vh - 140px); }
+  @media (max-width: 900px) { .page-mission .qm-quiz-area { max-height: calc(100vh - 161px); } }
+}
+
+/* 交卷鈕黏在作答區底部——不管捲到哪裡都按得到（這是 Alan 真正在意的事） */
+.fc-test-foot {
+  position: sticky; bottom: 0; z-index: 4;
+  margin-top: 18px; padding: 12px 0 4px;
+  background: linear-gradient(to top, var(--bg, #F7F3EA) 62%, rgba(247, 243, 234, 0));
+}
+
+html.focus-on .page-mission .qm-cat-view  { min-height: 100vh; }
+html.focus-on .page-mission .qm-quiz-area { min-height: calc(100vh - 54px); }
+/* 收起上方列多出來的 72px 就拿來把圖片放大——按鈕是使用者自己按的，
+   跟「捲動時自己伸縮」是兩回事（那個才是 Alan 不要的）。 */
+html.focus-on .fc-p-card .fc-back-img-wrap,
+html.focus-on .fc-p-card .fc-back-img-wrap img { max-height: 330px; }
+html.focus-on .fc-p-learn .fc-learn-img { max-height: 340px; }
+@media (max-width: 900px) {
+  .focus-btn { top: 8px; right: 10px; width: 34px; height: 34px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v390：全站介面專業化（8 面向稽核 → 5 段實作）
+   稽核面向：字體階層／間距版面／色彩對比／鍵盤無障礙／觸控人體工學／
+             狀態與文案／題型一致性／產品標竿
+   ⚠ 五條禁區（useFitHeight 文件座標、單字卡圖片固定大小、專心模式、
+      v375 桌機字級、iPad 橫式 1180x760 零溢出）已在稽核與實作階段全程避開，
+      並在套用後於 5 個尺寸實測驗證。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ───── v390 區塊 1 / 5 ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   css-1 ── 設計 token 與排版階層（type scale / 字體堆疊 / 行高字距）
+   append 到 styles-tune.css 檔尾。styles-tune.css 是 index.html 最後一個載入的
+   CSS（index.html:33），所以下面全部靠「後蓋前」生效，沒有用到任何 !important。
+
+   ⚠ 本段刻意不碰：.fc-*（useFitHeight 文件座標量測）、單字卡圖片固定大小、
+     html.focus-on 專心模式、v375 桌機放大層、v376 平板瘦身層。
+     所有會改變高度的規則方向都是「變矮」，不會影響 iPad 橫式 1180×760 的溢出 0。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────
+   (A) 設計 token —— 只定義，不套用
+   目前全站量到 54 種 font-size、25 種 border-radius，有 token 但沒在用。
+   這裡先把「唯一一組」建立起來，後面 css-2~css-5 與未來新功能才有東西可用。
+   ⚠ --radius-* / --sp-* / --shadow-* 本段一律不套用（歸 css-5）。
+   ─────────────────────────────────────────────────────────────── */
+:root{
+  /* 字級階梯（10 級） */
+  --fs-micro:   11px;
+  --fs-label:   12.5px;
+  --fs-meta:    14px;
+  --fs-body-sm: 15.5px;
+  --fs-body:    17px;                    /* ＝ styles.css 的 body font-size，階梯的錨點 */
+  --fs-lead:    19px;
+  --fs-h3:      22px;
+  --fs-h2:      27px;
+  --fs-h1:      clamp(28px, 4vw, 40px);
+  --fs-display: clamp(30px, 6.5vw, 52px);
+
+  /* 行高：display 給超大字，title 給 22–32px 的標題（中文用 1.1 會黏在一起，
+     所以標題級一律用 1.25，不要拿 --lh-display 去套標題） */
+  --lh-display: 1.1;
+  --lh-title:   1.25;
+  --lh-lead:    1.45;
+  --lh-body:    1.75;
+  --lh-meta:    1.5;
+  --lh-flat:    1;
+
+  /* 字距：負值只能給「確定是拉丁字母」的元素，漢字用負字距會黏住 */
+  --ls-display: -0.02em;
+  --ls-title:   -0.01em;
+  --ls-body:    0;
+  --ls-label:   0.08em;
+  --ls-label-l: 0.14em;
+
+  /* 字重語意 —— Nunito 只載入 400;500;600;700;800（index.html:20），
+     所以沒有 900。全站寫 900 的地方本來就被瀏覽器降成 800 了。 */
+  --fw-body: 400;
+  --fw-med:  600;
+  --fw-bold: 700;
+  --fw-max:  800;
+
+  /* 間距：4px 級距 ＋ 六個確實在用的半階 */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-8: 32px; --sp-10: 40px; --sp-12: 48px; --sp-16: 64px;
+  --sp-h3: 6px; --sp-h5: 10px; --sp-h7: 14px; --sp-h9: 18px; --sp-h11: 22px;
+
+  /* 圓角 */
+  --radius-xs: 6px; --radius-sm: 10px; --radius-md: 14px;
+  --radius-lg: 20px; --radius-pill: 999px;
+
+  /* ⚠ --shadow-lg 沒有補在這裡。原始指示說「styles-theme.css:20-21 只有 sm/md，
+     要補一階 lg」——實際去看 styles-theme.css:22 已經有 --shadow-lg，而且
+     styles-home.css:813、styles-auth.css:1042/1361/1496/2957 共 5 處正在用它。
+     在這裡重新定義（數值還不一樣：.05/.18 vs 現行 .06/.22）會靜靜地把上線中的
+     5 個陰影變淡。要調整請直接改 styles-theme.css，不要在覆寫層偷換。 */
+
+  /* 內容量測寬度 */
+  --measure-narrow: 520px;
+  --measure:        860px;
+  --measure-wide:   1080px;
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (B) 字體堆疊補上中文後援 —— 本段影響最大、風險最低的一項
+   styles.css:71-73 三個 token 完全沒有 CJK 字體，Windows / Android 上
+   漢字會掉到系統預設（常常是難看的細明體）。
+   順序很重要：拉丁字母仍然先被 Lora / Nunito / JetBrains Mono 吃掉，
+   只有這三套沒有的漢字才會落到後面的 CJK 字體。
+   Noto Serif TC 已經在 index.html:20 載入（600;700;900），先前完全沒被用到。
+   ⚠ Noto Serif TC 沒有 400 字重，serif 400 的漢字會被瀏覽器選成 600（略粗），
+     這仍然比掉到系統預設好很多。CJK 是全形等寬，換字體不會改變斷行位置，
+     所以 .qm-question-text 在 iPad 橫式的排版不會變（禁區 #5 安全）。
+   ─────────────────────────────────────────────────────────────── */
+:root{
+  --serif: "Lora", "Noto Serif TC", Georgia, serif;
+  --sans:  "Nunito", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC",
+           "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+  --mono:  "JetBrains Mono", "SF Mono", Menlo,
+           "PingFang TC", "Microsoft JhengHei", monospace;
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (C) 禁止瀏覽器「合成斜體」
+   全站有 27 處 font-style:italic。用 Lora 的那些是真斜體（index.html:20 有載入
+   ital,wght@1,400;1,500），沒問題；但用 Nunito / JetBrains Mono 的那幾處
+   （.qm-explain、.wf-val.meaning、.editable-input::placeholder、
+   styles-quiz-mode.css:233）沒有 ital 軸，瀏覽器是把字「機器切歪」，
+   中文被斜切之後特別難看也難讀。
+   ⚠ 只關 style，不要加 font-synthesis-weight —— JetBrains Mono 只載入 400;500，
+     關掉 weight 合成會讓全站寫 700 的等寬字突然變細（另案評估）。
+   font-synthesis-style 是繼承屬性，寫在 html 就整站生效；舊瀏覽器忽略它，無害。
+   ─────────────────────────────────────────────────────────────── */
+html, body { font-synthesis-style: none; }
+
+
+/* ───────────────────────────────────────────────────────────────
+   (D) .qm-explain —— 答錯後的解說，是學生最該讀的一段字
+   現況：styles-quiz-mode.css:551 是 italic（Nunito 假斜體，中文被切歪），
+   而 styles-theme.css:1010（@media max-width:480）縮到 14.5px ——
+   小朋友最需要讀的字反而是整個畫面最小的。
+   ⚠ 不可以加 max-height ＋ 內捲軸：styles-tune.css:394 已經寫明原因
+     （老師寫的解說藏起來小朋友不會去找）。顏色不歸本段管（css-2）。
+   ─────────────────────────────────────────────────────────────── */
+.qm-explain{
+  font-style: normal;
+  font-size: var(--fs-body);
+  line-height: 1.8;
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+}
+/* 手機：14.5px → 16px。左側線改 10px 內縮，少吃 2px 寬度、降低多斷一行的機會。
+   （對應的高度補償寫在下面 (H) 的手機統一層裡，一起處理。） */
+@media (max-width: 480px){
+  .qm-explain{ font-size: 16px; line-height: 1.75; padding-left: 10px; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (E) 中文被塞進等寬字 ＋ 全大寫 ＋ 0.08em 字距的幾個元素
+   JetBrains Mono 沒有漢字 → 一句話中途換字體、基線會跳。
+   text-transform:uppercase 對漢字是無效操作，只會把混在裡面的英文變全大寫。
+   ⚠ .qm-sidebar-cat-zh 在 styles-theme.css:525 有 font-size:11px !important，
+     這裡只改 font-family / letter-spacing / text-transform，不碰它的 font-size。
+   ⚠ .qm-block-title-zh 在 styles-theme.css:124 已經是 var(--sans)，
+     所以只要拿掉字距與全大寫就好。
+   ─────────────────────────────────────────────────────────────── */
+.qm-block-count{
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;   /* 「12 / 20 題」的數字不要跳動 */
+}
+.qm-wrong-title{
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: var(--fw-bold);
+}
+.qm-sidebar-cat-zh{
+  font-family: var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.qm-block-title-zh{
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* 題型提示是中英混排（例：Choose the English word · 選出正確英文單字），
+   維持全大寫的標籤感，但字體換成 sans，漢字才不會掉出等寬字。 */
+.qm-question-hint{
+  font-family: var(--sans);
+  letter-spacing: 0.04em;
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (F) 顯示級字的行高與字距
+   全站 125 條 ≥24px 的規則在繼承 body 的 1.58 —— 大字用內文行高會太鬆。
+   ⚠ 原始指示列的清單裡，有一半是「已經設好了、再套會變糟」的，逐一查過後排除：
+       .hero-title        styles.css:197  已是 line-height .95 / ls -.02em
+       .quiz-result-score styles-quiz.css:132 已是 line-height 1 / ls -.02em
+       .stat-value        styles.css:229  已是 line-height 1
+       → 這三個套 --lh-display(1.1) 會讓它們「變高」，方向錯了，全部排除。
+       .footer-mark / .sm-score-num → grep 過所有 .jsx，只存在於 CSS，是死 class，排除。
+       .fc-gc-heading     在 .fc-fill-player 裡（components-flashcard.jsx:1610-1613），
+                          屬於 .fc-* 禁區 #1，排除。
+   剩下這兩個是真的還在繼承 1.58 的標題。用 --lh-title(1.25) 而不是
+   --lh-display(1.1)：它們的內容常常是中文，1.1 會讓漢字上下黏在一起。 */
+.quiz-result-message,
+.modal-head h3 { line-height: var(--lh-title); }
+
+/* 字距同理，只留「確定是拉丁字母／數字」的兩個。
+   ⚠ .qm-question-text 排除：components-quiz-mode.jsx:68 的題型
+     `q: word.zh`（選出英文單字）題幹整句都是中文，負字距會把漢字擠在一起。
+   ⚠ .ta-prompt 排除：styles-quiz-mode.css:1334 刻意設了正字距 +0.01em
+     （拼字題要一個字母一個字母看），不應該反向覆寫。 */
+.wp-word,
+.qm-result-num { letter-spacing: var(--ls-display); }
+
+/* 純英文的小標籤（內容是 "Classify:"），加字距才有標籤感 */
+.circle-classify-label { letter-spacing: var(--ls-label); }
+
+
+/* ───────────────────────────────────────────────────────────────
+   (G) v383 教學卡（.ls-*）沒有被納入 v375 的桌機放大層
+   說明文字在 27 吋螢幕上還停在 14.5px。
+   已確認 .ls-wrap（components-quiz-mode.jsx:6207）是獨立的教學卡畫面，
+   不在 useFitHeight 的量測範圍、也不是「一個畫面要裝得下」的練習播放器，
+   本來就會捲，所以字級長高幾 px 沒有版面風險。
+   ─────────────────────────────────────────────────────────────── */
+@media (min-width: 1025px){
+  .ls-lead        { font-size: var(--fs-lead); }      /* 18   → 19   */
+  .ls-use-eg      { font-size: var(--fs-body); }      /* 16.5 → 17   */
+  .ls-form-eg     { font-size: var(--fs-body); }      /* 16   → 17   */
+  .ls-mis-why     { font-size: var(--fs-body-sm); }   /* 14.5 → 15.5 */
+  .ls-demo-a span { font-size: var(--fs-body-sm); }   /* 14.5 → 15.5 */
+  .ls-check-why   { font-size: var(--fs-body-sm); }   /* 14.5 → 15.5 */
+  .ls-mis-good,
+  .ls-mis-bad     { font-size: var(--fs-body); }      /* 16.5 → 17   */
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (H) 修「以視窗高度瘦身的那一層漏到手機」
+   styles-tune.css:368 / 392 的 max-height:920 是 v376 為 iPad 橫式（1180×760）寫的，
+   但手機直式的高度也一起命中了 —— 結果同一代兩支手機字級不一樣，
+   而且**螢幕大的那支字反而小**（因為它高度 >920 反而躲掉了瘦身層）。
+   實際量到的差異（都在 ≤480 寬的情況下）：
+       選擇器              iPhone 14 Pro 393×844   iPhone 15 Plus 430×932
+       .ta-prompt              40px                    32px
+       .ta-input               14px 20px / 20px        18px 16px / 20px
+       .qm-intro-title         27px                    23px
+       .qm-result-msg          19px                    22px
+       .qm-feedback-banner     18px, pad 11/16         15px, pad 15/20
+       .qm-auto-next           15px                    14px
+       .sp-speak-ic            24px                    30px
+       .qm-feedback            mt10 / gap8             mt20 / gap12
+
+   ⚠ 原始指示給的媒體查詢是 `max-width:768 + min-height:561 + max-height:920`，
+     但那個上界 920 正好把「出問題的那一半手機」(932 / 956) 排除在外，
+     兩支手機還是不一致 —— 修不到問題。改成用**寬度**框住手機直式：
+       max-width:560  → 專案既有的手機斷點，同時把 iPad mini 直式 744×1133 擋在外面
+                        （驗收清單裡的 744×1133 不會被縮成手機字級）
+       min-height:561 → 避開已經寫好的 max-height:560 / 480 兩層（手機橫式）
+     手機橫式寬度都 >560，不會誤中。
+
+   取值原則：一律取兩支手機中**較小**的那個，方向只會讓元素變矮，
+   所以 390×844「答錯後下一題要在一個畫面內」不可能因此變糟。
+   ⚠ 不寫 .qm-question-text / .qm-opt-text / .qm-opt-letter ——
+     styles-tune.css:383 的 @media (max-width:560px) 已經處理，重寫會蓋掉它。
+   ⚠ .qm-result-num 沒列進來：查過兩支手機都是 60px，本來就一致，不需要動。
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 560px) and (min-height: 561px){
+  .ta-prompt          { font-size: 32px; }
+  .ta-input           { padding: 14px 16px; font-size: 20px; }
+  .qm-intro-title     { font-size: 23px; }
+  .qm-result-msg      { font-size: var(--fs-lead); }          /* 19px */
+  .qm-feedback-banner { font-size: var(--fs-body-sm); padding: 11px 16px; }
+  .qm-auto-next       { font-size: var(--fs-meta); }          /* 14px */
+  .sp-speak-ic        { font-size: 24px; }
+  /* 上面 (D) 把解說字從 14.5 放大到 16px、行高 1.65→1.75，
+     一段兩行大約多 8px；這裡把回饋區的外距與間隙收緊補回來
+     （margin 20→8 省 12px、三個子元素 gap 12→6 省 12px），淨值仍是變矮。 */
+  .qm-feedback        { margin-top: 8px; gap: 6px; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────
+   (I) 兩個「誠實化」的小修
+   ─────────────────────────────────────────────────────────────── */
+/* 原本寫 font-weight:900，但 Nunito 只載入到 800（index.html:20），
+   瀏覽器本來就是渲染成 800。改成 800 只是讓 code 不再說謊，畫面不變。 */
+.stars-bal-num, .sp-bal-num { font-weight: var(--fw-max); }
+
+/* ───── v390 區塊 2 / 5 ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   [css-2] 焦點樣式、對比度與色盲輔助
+   ---------------------------------------------------------------------------
+   為什麼要有這一段：
+   ① 全站只有 6 條 :focus-visible，而且還被 7 條 `.xxx:focus{outline:none}` 打死
+      → 只用鍵盤的人（含有些用觸控筆／輔具的孩子）完全看不到「我現在在哪裡」。
+   ② --ink-muted / --ink-faint 兩個核心 token 低於 WCAG AA，一次影響 150 條規則。
+   ③ 答對／答錯目前只靠紅綠色相區分，紅綠色盲模擬後兩者互相對比只有 1.16:1
+      ——等於「完全分不出來」。單字卡（.fc-choice-badge）早就有 ✓/✗ 了，
+      這裡只是把測驗模式補上同一套做法。
+   本段只寫「顏色」與「焦點」，不寫尺寸、不寫 :hover、不寫 :active。
+   ⚠ 全段沒有任何 100vh/dvh、沒有 ResizeObserver 相關、沒有動到單字卡圖片的
+     flex／max-height、沒有動到 html.focus-on、沒有動到字級 → 五條禁區都沒碰。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (A) 顏色 token
+   前兩個是「重新定義 styles.css:59-60 既有的 token」，所以不用改任何一條
+   使用它們的規則，150 條一次修好。
+   後面幾個是新增的，css-4 會直接消費 --ok / --no 這一組。
+   數值都實際算過（相對亮度公式，四捨五入到小數第二位）。
+   ─────────────────────────────────────────────────────────────────────────── */
+:root{
+  /* 原 #807A6B：白底 4.27 / 紙底 4.03 / 米底 3.76 —— 三個底色都不到 4.5。
+     壓到 #6F6959 之後：白 5.47 / 紙 5.15 / 米 4.81，三個都過 AA。 */
+  --ink-muted: #6F6959;
+
+  /* 原 #B8B1A0：白底只有 2.14，拿來當文字幾乎是「看得到但讀不到」。
+     壓到 #8F8878 之後白底 3.52 —— 過「非文字 UI 元件」的 3:1，
+     但仍然不夠當正文，所以真正是文字的地方見 (B) 改指 --ink-3。 */
+  --ink-faint: #8F8878;
+
+  /* 新增：需要「看得見的邊界」時用這個（白底 3.52、米底 3.10，都過 3:1）。
+     原本的 --border #DDD6C4 對白底只有 1.27，等於沒有邊界。 */
+  --border-em: #8F8878;   /* v390 修正：本來叫 --border-strong，但那個名字
+                              styles-quiz-mode.css:2312/2352 已經在用、而且全站從來沒定義過
+                              ——等於那兩處的 border shorthand 一直是無效的（根本沒畫框）。
+                              一旦定義就會憑空多出邊框、把 circle-answer 的按鈕撐大。
+                              所以改用新名字，不要動到既有的 --border-strong。 */
+
+  /* 焦點環就用品牌磚紅，不另外發明顏色：
+     對 --bg-paper #FBF8F1 是 7.74、對 --bg #F4F0E7 是 7.22、對白是 8.21。 */
+  --focus-ring: #8B3120;
+  --focus-halo: #FBF8F1;
+
+  /* 答對／答錯的唯一真相（css-4 也吃這一組，名稱與值請勿更動）。
+     刻意選「暖色紙感家族的深色版」，不是冷色系 Tailwind 綠紅：
+     白字對 --ok 6.44、白字對 --no 6.65；深字對各自的淺底 5.69 / 5.81。 */
+  --ok:#1F6B4B; --ok-bg:#EAF3EE; --ok-ink:#1F6B4B;
+  --no:#A8331F; --no-bg:#FDECE8; --no-ink:#A8331F;
+
+  /* 警告／金色的文字版（原本的 #e65100、#f57f17、#a07800 都不到 4.5） */
+  --warn-ink:#8A4B00; --warn-bg:#FFF3E0;   /* 8A4B00 on FFF3E0 = 6.20 */
+  --gold-text:#8A6D1C;                     /* on #fff8e1 = 4.61、on #fff = 4.90 */
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (B) --ink-faint 壓深後仍不足以當「正文」，把真的是文字的地方改指 --ink-3
+   （#6b6455，白底 5.87 / 紙底 5.53 / 米底 5.16）。
+   placeholder 尤其重要：那是輸入框唯一的說明文字。
+   ⚠ 原稿列了 .wj-node-theme，但 grep 過所有 .jsx 之後它只存在於
+     styles-home.css:680，畫面上不會出現（死規則），所以這裡不列它。
+   ─────────────────────────────────────────────────────────────────────────── */
+.editable-input::placeholder,
+.fc-written-input::placeholder,
+.fc-name-input::placeholder,
+.fc-name-count,
+.fc-lb-empty,
+.img-source-sub{ color: var(--ink-3); }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (C) 統一焦點環
+   原本的 6 條完全漏掉 textarea（全站 51 個）、summary、contenteditable，
+   而且 styles.css:288 那條只有 2px + --accent-soft（比較淡）。
+   這裡一次補齊。[tabindex] / [role=...] 是屬性選擇器不是自創 class，
+   目前 .jsx 只用到 role="tab"，其餘幾個是給未來的自訂控制項留的保險，
+   沒有元素命中就完全沒有成本。
+   ⚠ 這裡**故意不寫 border-radius**：outline 會自動貼合元素自己的圓角。
+     （被 styles.css:288 壓扁的問題在 (E) 處理。）
+   ─────────────────────────────────────────────────────────────────────────── */
+a[href]:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[contenteditable="true"]:focus-visible{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* 深底按鈕（背景是 --ink #15130E 或 LINE 綠）上面，磚紅環只有 2.26:1 → 看不見。
+   補一圈內側紙色細環（#FBF8F1 對 --ink 是 17.5:1）。
+   ⚠ box-shadow 是整條覆蓋的，所以本來有投影的元素要把原本的投影一起寫回來，
+     不然按鈕會在 Tab 到的瞬間「浮起來的感覺」不見。 */
+.btn.primary:focus-visible,
+.icon-btn.active:focus-visible,
+.sp-item-btn:focus-visible,
+.notify-send:focus-visible,
+.cwo-notify:focus-visible,
+.nt-line:focus-visible,
+.notify-chip.on:focus-visible{
+  box-shadow: inset 0 0 0 2px var(--focus-halo);
+}
+/* .qm-btn.primary 原本有 0 3px 10px 的投影 → 保留 */
+.qm-btn.primary:focus-visible{
+  box-shadow: inset 0 0 0 2px var(--focus-halo), 0 3px 10px rgba(21,19,14,.22);
+}
+/* .focus-btn.on（專心模式開啟時）背景是 --accent，跟環同色 → 也要補內環，
+   並保留 v389 原本的 0 6px 18px -8px 投影。 */
+.focus-btn.on:focus-visible{
+  box-shadow: inset 0 0 0 2px var(--focus-halo), 0 6px 18px -8px rgba(21,19,14,.35);
+}
+
+/* 系統開了「更高對比」就把環換成純黑（對任何底色都是最強的） */
+@media (prefers-contrast: more){
+  :root{ --focus-ring: #15130E; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (D) 壓過 7 條會殺死焦點環的 `.xxx:focus{outline:none}`
+   它們的權重是 (0,2,0)，比元素層級的 `input:focus-visible` (0,1,1) 高，
+   所以 (C) 贏不了它們 → 必須用同樣是 (0,2,0) 的 class 選擇器，
+   再靠「styles-tune.css 最後載入」後蓋前。
+   對應原檔：
+     styles-quiz-mode.css:1898 .essay-input       ← 意見寫作，孩子每週都會用
+     styles-quiz-mode.css:2113 .sm-textarea
+     styles-auth.css:2294 .report-note-input
+     styles-auth.css:2466 .notify-textarea（與 .notify-pass 同一條）
+     styles-auth.css:2467 .notify-pass
+     styles-auth.css:4354 .cwo-search             ← 老師端搜尋框
+     styles-auth.css:4402 .nt-text
+   ⚠ 原稿還列了 .sa-track-name（styles-auth.css:3477），但 grep 過所有 .jsx
+     之後那個 class 從來沒有被 render 出來（死規則），所以不列。
+   ─────────────────────────────────────────────────────────────────────────── */
+.essay-input:focus-visible,
+.sm-textarea:focus-visible,
+.report-note-input:focus-visible,
+.notify-textarea:focus-visible,
+.notify-pass:focus-visible,
+.cwo-search:focus-visible,
+.nt-text:focus-visible{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+
+/* v390 修正：這裡本來列了 15 條 :focus-visible 的圓角還原，
+   是為了抵銷 styles.css:288 的 `border-radius: 6px`。
+   那一行已經在這一版直接移除（outline 本來就會跟著元素自己的圓角走），
+   所以這些還原規則不但多餘，反而會製造新的不一致
+   （例如 .qm-block 本體是 20px，還原規則寫 18px → 一 Tab 就跳形狀）。整段拿掉。 */
+.qm-block:focus-visible{ border-radius: 18px; }
+.qm-option:focus-visible,
+.fc-choice:focus-visible{ border-radius: 14px; }
+.fc-test-choice:focus-visible,
+.focus-btn:focus-visible{ border-radius: 12px; }
+.qm-btn:focus-visible,
+.fs-btn:focus-visible,
+.notify-send:focus-visible,
+.cwo-notify:focus-visible{ border-radius: 10px; }
+
+/* 小螢幕上這幾個 class 的圓角本來就比較小（既有的瘦身規則），
+   上面 (0,2,0) 的還原值會贏過媒體查詢裡 (0,1,0) 的值 → 要跟著補回去，
+   不然反而變成「小螢幕 Tab 到會變更圓」。斷點沿用檔案裡既有的 768 / 560。 */
+@media (max-width: 768px){
+  .fc-test-choice:focus-visible{ border-radius: 10px; }   /* styles-flashcard.css:1174 */
+}
+@media (max-width: 560px){
+  .fc-choice:focus-visible{ border-radius: 11px; }        /* styles-tune.css（v375/v376） */
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (F) 大廳四大分類卡：鍵盤操作的第一站
+   既有的焦點環是 rgba(139,49,32,.28)（styles-quiz-mode.css:86），
+   混色後對比只有 1.61:1 —— 幾乎等於沒有。換成不透明的 --focus-ring。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-block:focus-visible{
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-color: var(--ink);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (G) 色盲輔助：測驗選項加上「形狀」標記
+   目前答對／答錯只有色相差異（#16a34a vs #dc2626），
+   紅綠色盲模擬後兩者互相對比只有 1.16:1 → 對紅綠色盲的孩子是「完全一樣」。
+   單字卡的學習模式早就用 .fc-choice-badge 放了 ✓/✗，這裡等於把
+   「已經做對的事」補回測驗模式，兩邊的語彙也統一了。
+   ⚠ 只加「寬度」（padding-right）不加高度，所以 iPad 橫式 1180x760
+     「一個畫面裝得下」的驗收（禁區 #5）完全不受影響。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-option{ position: relative; }
+.qm-option.correct,
+.qm-option.wrong{ padding-right: 48px; }
+.qm-option.correct::after,
+.qm-option.wrong::after{
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  font-size: 20px; font-weight: var(--fw-max, 800); line-height: 1;
+  pointer-events: none;
+}
+.qm-option.correct::after{ content: '✓'; color: var(--ok); }
+.qm-option.wrong::after  { content: '✗'; color: var(--no); }
+/* 第三個線索：錯的那一個左邊那條 5px 粗邊改成虛線（形狀 ≠ 顏色） */
+.qm-option.wrong{ border-left-style: dashed; }
+
+/* 手機橫著拿的時候選項是 2×2 的格子（styles-tune.css 的 max-height:480 那一層），
+   48px 的右留白在半寬的格子裡會逼文字折行 → 折行就會長高，那才會踩到禁區 #5。
+   所以這一層把符號縮小、右留白收窄。斷點沿用既有的 max-height:480。 */
+@media (max-height: 480px){
+  .qm-option.correct,
+  .qm-option.wrong{ padding-right: 32px; }
+  .qm-option.correct::after,
+  .qm-option.wrong::after{ right: 10px; font-size: 16px; }
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (H) 選項與回饋橫幅的狀態色
+   （只有 .qm-option 與 .qm-feedback-banner 歸這一段；其他題型的
+     correct/wrong 歸 css-4，它會消費上面 (A) 定義的 --ok / --no。）
+   ⚠⚠ .qm-option.correct 原本帶 `animation: opt-bounce`、
+       .qm-option.wrong 原本帶 `animation: opt-shake`
+       → 這裡**只寫顏色屬性，一個 animation 都不寫**，
+         不然彈跳／搖晃的回饋動畫會被整條清掉（孩子最有感的地方）。
+   ⚠ styles-theme.css:219/222 的 .qm-option.correct .qm-opt-letter 有寫 border-color，
+     所以這裡也要一起改，不然圓徽會留一圈舊的螢光綠／正紅邊。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-option.correct{ border-color: var(--ok); background: var(--ok-bg); }
+.qm-option.wrong  { border-color: var(--no); background: var(--no-bg); }
+.qm-option.correct .qm-opt-letter{ background: var(--ok); border-color: var(--ok); color: #fff; }
+.qm-option.wrong   .qm-opt-letter{ background: var(--no); border-color: var(--no); color: #fff; }
+
+/* 回饋橫幅原本是 border: 1px solid #bbf7d0 的簡寫 → 這裡只換 border-color，
+   1px solid 保留，盒子尺寸完全不變。 */
+.qm-feedback-banner.correct{ background: var(--ok-bg); color: var(--ok-ink); border-color: var(--ok); }
+.qm-feedback-banner.wrong  { background: var(--no-bg); color: var(--no-ink); border-color: var(--no); }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (I) 答完題之後「沒被選到」的選項
+   目前 opacity:0.35 → 文字掉到 2.27:1，可是那些干擾選項也是複習內容
+   （「為什麼 B 不對」本來就是要看的）。放寬到 .62 → 5.17:1。
+   有了 (G) 的 ✓/✗ 之後，視覺焦點靠「符號」而不是靠「把別人變糊」，兩者互補。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-option.dim{ opacity: .62; }
+.fc-choice.dimmed{ opacity: .62; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (J) 分類色當「文字色」用的時候全部不到 4.5:1
+   （--c-grammar #E0507A 3.75、--c-word #2E8FD0 3.53、--c-reading #2FA56B 3.13）
+   但 --c-* 還要當卡片頂條與 icon 的底色／陰影，壓深會讓整體變濁 →
+   不動 --c-*，另開一組「只給文字用」的 --cat-t。
+   theme 是用 nth-of-type 指派的（styles-theme.css:98-101、518），
+   照抄同樣的選擇器就會贏（同權重 + tune 最後載入）。
+   新色都對白卡底過 AA：紫 6.65 / 桃紅 5.10 / 藍 5.39 / 綠 5.11。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-blocks .qm-block{ --cat-t: var(--ink); }
+.qm-blocks .qm-block:nth-of-type(1){ --cat-t:#5B49C0; }   /* vocab   */
+.qm-blocks .qm-block:nth-of-type(2){ --cat-t:#C23C63; }   /* grammar */
+.qm-blocks .qm-block:nth-of-type(3){ --cat-t:#1E6FA8; }   /* word    */
+.qm-blocks .qm-block:nth-of-type(4){ --cat-t:#1F7D50; }   /* reading */
+.qm-blocks .qm-block:nth-of-type(5){ --cat-t:#A8641A; }   /* ltvocab（v567）*/
+.qm-blocks .qm-block:nth-of-type(6){ --cat-t:#12746D; }   /* mock（v567）*/
+/* v568：改成依類別決定（調整卡片順序不會錯色） */
+.qm-blocks .qm-block[data-cat="vocab"]{ --cat-t:#5B49C0; }
+.qm-blocks .qm-block[data-cat="grammar"]{ --cat-t:#C23C63; }
+.qm-blocks .qm-block[data-cat="word"]{ --cat-t:#1E6FA8; }
+.qm-blocks .qm-block[data-cat="reading"]{ --cat-t:#1F7D50; }
+.qm-blocks .qm-block[data-cat="ltvocab"]{ --cat-t:#A8641A; }
+.qm-blocks .qm-block[data-cat="mock"]{ --cat-t:#12746D; }
+
+/* v207：暑假班表只有 3 個分類，第 3 張其實是「閱讀理解」→ 沿用綠色，
+   跟 styles-theme.css:518 同一個寫法。 */
+.qm-blocks .qm-block:nth-of-type(3):last-child{ --cat-t:#1F7D50; }
+
+.qm-block-title-zh,
+.qm-pct{ color: var(--cat-t, var(--ink)); }
+/* 順便讓進度條對軌道（--border-soft #E8E2D0）過 3:1：
+   原本用 --cat-c 最低只有 2.4，換 --cat-t 之後最低 3.94。 */
+.qm-progress-fill{ background: var(--cat-t, var(--cat-c)); }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (K) 其餘單點對比修正 —— 全部只改顏色，border-width 一律不動，盒子尺寸不變
+   ⚠ 原稿列的 .xp-pill 只存在於 styles-auth.css:353，grep 過所有 .jsx
+     都沒有 render（死規則），所以不列。
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* 原 #e65100 on #fff3e0 = 3.46 → --warn-ink 6.20 */
+.fc-retry-badge{ color: var(--warn-ink); }
+
+/* 商店買不起的品項：原本 --border on --ink-muted 只有 2.95，
+   而且它**不是真的 disabled**（按下去會跳「星星不夠」的提示），
+   所以不能用「淡到看不見」來表達，要用「明顯是次要按鈕」來表達。
+   選擇器跟 styles-auth.css:6122 完全一樣（0,3,0），靠後載入贏。 */
+.sp-item.locked .sp-item-btn{
+  background: var(--border-soft);
+  color: var(--ink-2);
+  border: 1.5px solid var(--border-em);
+}
+
+/* 金色系文字：原 #f57f17 / #e65100 都不到 4.5 → --gold-text（on #fff8e1 = 4.61） */
+.fc-match-best-badge,
+.cloze-score-badge.ok{ color: var(--gold-text); }
+
+/* 配對題的小圓點：原 #cfc6ae 對底色只有 1.70，
+   而它是「這裡可以點」的唯一指示 → 換成過 3:1 的 --border-strong。
+   .dm-chip.sel / .linked / .wrong / .ok 底下的 .dm-dot 權重比較高，狀態色不受影響。 */
+.dm-dot{ border-color: var(--border-em); }
+
+/* 選項與輸入框的邊界：原本的 --border #DDD6C4 對白底只有 1.27，
+   等於「看起來沒有框」。換成 --border-strong（3.52）。
+   權重刻意保持最低（0,1,0 / 0,0,1），任何 class 層級的狀態色都贏得過它，
+   所以 .qm-option.correct / .fc-choice.wrong / :hover 的邊框顏色都不受影響。 */
+.qm-option,
+.fc-choice{ border-color: var(--border-em); }
+input, textarea, select{ border-color: var(--border-em); }
+
+/* ───── v390 區塊 3 / 5 ───── */
+/* ══════════════════════════════════════════════════════════════════════════
+   v390 · 觸控目標與行動／平板人體工學（css-3）
+   ─────────────────────────────────────────────────────────────────────────
+   這一段只處理「手指」的事：觸控裝置的 hover 還原、命中區補到 44px、
+   按下去的即時回饋、底部導覽列的 safe-area。
+   不寫顏色、不寫字級、不寫 :focus（那三件事分別是 css-2 / css-1 / css-2 的）。
+
+   ⚠ 五條禁區都確認過沒有碰到：
+     #1 useFitHeight：沒有動 .fc-dot 的「垂直」padding、沒有動 .fc-tab 在
+        max-height:560 以外的尺寸、沒有用 100vh/dvh、沒有加 ResizeObserver。
+     #2 單字卡圖片固定大小：完全沒碰 .fc-back-img-wrap / .fc-learn-img。
+     #3 專心模式：沒碰 html.focus-on。
+     #4 桌機字級／平板瘦身：沒有任何 font-size。
+     #5 iPad 橫式 1180×760 溢出 0：新增的高度只發生在
+        max-height:560（手機橫式，760 打不到）與 max-width:768（1180 打不到）。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 觸控最小命中尺寸。定成變數是為了以後要調（例如低年級班要 48）只改一個地方 */
+  --tap: 44px;
+}
+
+/* ══ (A)【最高優先】觸控裝置的 sticky hover 還原 ═══════════════════════════
+   iOS/iPadOS 沒有滑鼠，:hover 會「停在最後點到的元素」直到點別處。
+   全站 290 條 :hover 只有 6 條擋在 @media (hover:hover) 裡。
+
+   最嚴重的是 styles-quiz-mode.css:2360 把
+     .circle-label-option:hover:not(:disabled)  和  .circle-label-option.selected
+   寫成同一條（都是黑底白字）→ 學生在 iPad 點了 A 再改點 B，A 看起來還是「已選取」，
+   同時兩個都黑底 = 作答回饋錯誤，不是美觀問題。
+
+   @media (hover: none) 只命中「沒有滑鼠的裝置」，桌機完全不受影響。
+
+   ⚠ 權重（這一段最容易寫錯的地方，我把原始碼一條一條對過）：
+     還原規則的權重必須 ≥ 原規則，光靠 tune 最後載入是不夠的。
+     原規則權重：
+       .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed)          = (0,5,0)
+       .fc-match-tile:hover:not(.matched):not(.selected):not(.wrong)    = (0,5,0)
+       .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) = (0,6,0)
+       .page-mission .qm-unit-row:hover                                  = (0,3,0)
+     所以下面每一條都補到「跟原規則一模一樣長」或更長。
+   ⚠ 還原的值都是我去讀「基底規則」抄回來的，不是猜的，也不是 inherit
+     （用 background: inherit 會抓到父層的底色，是錯的）。 */
+@media (hover: none) {
+
+  /* 圈選題：還原成 styles-quiz-mode.css:2350 的基底。
+     .selected/.correct/.wrong/.answer 四個狀態都排除，狀態樣式一律保留。
+     註：--border-strong 目前全站沒有定義（只有兩處在用），這裡照抄基底以求一致；
+        要不要補上這個變數是 css-2 的事，我不在這裡偷改顏色。 */
+  .circle-label-option:hover:not(.selected):not(.correct):not(.wrong):not(.answer) {
+    border-color: var(--border-em);
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  /* 上一張／下一張：hover 是「墨色實心」，停住的話看起來像被按住 */
+  .fc-nav-btn:hover:not(:disabled) { background: transparent; color: inherit; }
+
+  /* 「開始練習」鈕：基底是白底墨字（styles-quiz-mode.css:903），
+     hover 會翻成墨底紙字 —— 原稿寫 background: transparent 是錯的，會變透明。 */
+  .qm-fc-start-btn:hover {
+    transform: none;
+    background: var(--bg-card);
+    color: var(--ink);
+  }
+
+  /* 大廳的四張科目卡。
+     :not(:active) 是刻意留的 —— styles-quiz-mode.css:88 已經有
+     .qm-block:active:not(.empty) 的按壓回饋(0,3,0)，我這條若不排除 :active
+     權重(0,3,0)又比較後面，會把那個既有回饋蓋掉。
+     還原值：border-color 來自 quiz-mode:72、box-shadow 來自 theme:96（都是 token）。 */
+  .qm-block:hover:not(.empty):not(:active) {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--border);
+  }
+
+  /* 選擇題選項：權重要補到 (0,6,0) 才贏得過 quiz-mode:480 */
+  .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) {
+    transform: none;
+    background: var(--bg-card);
+    border-color: var(--border);
+  }
+
+  /* 單字卡三種選項格子。原稿的 .fc-choice:hover 只有 (0,2,0)，
+     打不過 styles-flashcard.css:211 的 (0,5,0) —— 這裡補齊。 */
+  .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) {
+    border-color: var(--border);
+    background: var(--bg-card);
+  }
+  /* .selected 一定要排除，否則 hover 停住時會把「已選取的黑底」還原掉（反效果） */
+  .fc-test-choice:hover:not(.selected) {
+    transform: none;
+    border-color: var(--border, #e5dfc8);
+  }
+  .fc-match-tile:hover:not(.matched):not(.selected):not(.wrong) {
+    transform: none;
+    border-color: var(--border);
+    /* = styles-flashcard.css:575 的基底陰影；css-5 若調整基底陰影，這裡要同步 */
+    box-shadow: 0 2px 8px rgba(21,19,14,0.07);
+  }
+
+  /* 單元列表：styles-theme.css:429 有 .page-mission .qm-unit-row:hover (0,3,0)，
+     只寫 .qm-unit-row:hover (0,2,0) 會輸，所以兩條一起列。
+     只還原 transform，不動底色 —— 底色是 css-2 的地盤，而且 .active 有自己
+     很強的樣式（墨色翻轉／橘框），殘留的淺灰底不會被誤認成「已選取」。 */
+  .qm-unit-row:hover,
+  .page-mission .qm-unit-row:hover { transform: none; }
+
+  /* ── 補充：同一個 bug 類型、同樣在我負責的選擇器清單裡的幾個。
+        這裡刻意「只還原 transform／透明底」，不碰任何顏色，
+        才不會跟 css-2 的配色決定打架。 ── */
+  .rs-chip:hover:not(:disabled):not(.sel)  { transform: none; }  /* 停住的浮起 = 看起來像已選 */
+  .rs-mini:hover:not(.on)                  { transform: none; }
+  .qm-read-btn:hover                       { transform: none; }
+  .fc-star-btn:hover                       { transform: none; }  /* 停在 scale(1.15) 很明顯 */
+  /* 文章可點單字：點完查完字，那個字會一直亮著茶色底（基底本來沒有底色）。
+     :not(:active) 保留 styles-quiz-mode.css:3028 既有的按壓閃一下。 */
+  .grd-tword:hover:not(:active)            { background: transparent; }
+}
+
+
+/* ══ (B) 停用雙擊縮放 ══════════════════════════════════════════════════════
+   學生連點兩題（答完馬上按下一題）會觸發 iOS 雙擊放大，之後要自己捏回來。
+   ⚠ 用白名單，不能寫 button{touch-action:manipulation} 之類的全域選擇器：
+     會誤傷 .ca-handle（圖片標註拖曳，styles-quiz-mode.css:2766，已設 touch-action:none）
+     與 .mx-body（吉祥物拖曳，v385 才剛修好「滑鼠只是移過去就被拖走」）。 */
+.fc-choice, .fc-test-choice, .fc-match-tile, .fc-tab, .fc-dot, .fc-nav-btn,
+.qm-option, .qm-block, .qm-btn, .qm-unit-row, .mk-drill-option,
+.circle-label-option, .rs-chip, .rs-mini, .grd-tword, .grd-word,
+.qm-back-btn, .modal-close { touch-action: manipulation; }
+
+
+/* ══ (C) 文章可點單字（閱讀理解的核心互動）═════════════════════════════════
+   .grd-tword 是 <span>，長按會被 iOS 的文字選取＋放大鏡搶走；
+   低年級學生按壓時間長，真機上高頻失敗。
+   inline 元素的「垂直」padding 會接收點擊但不會撐開行框 → 版面完全不變，
+   命中高度從 ~31.5px 變成 ~45px。
+   background-clip: content-box 讓 hover/active 的底色仍然只畫在文字上，
+   不會因為 padding 變成一大塊。 */
+.grd-tword {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  padding: 7px 1px;
+  margin: 0 -1px;          /* 把水平 padding 抵銷掉，字距不變 */
+  background-clip: content-box;
+}
+
+
+/* ══ (D) 照片段落的可點單字框 ══════════════════════════════════════════════
+   .grd-word 的尺寸完全由 OCR 字框的百分比決定（padding:0），實際只有 15~20px 高。
+   用 ::after 只往「垂直」方向擴張，不偷鄰字的水平空間。
+   ⚠ 基底已經是 position: absolute（styles-quiz-mode.css:3041）——
+     原稿寫的 .grd-word{position:relative} 會直接把 OCR 定位整個弄壞，這裡不能加。
+     absolute 元素本來就是自己 ::after 的包含塊，不需要再宣告 position。
+   （.grd-hlbox 已設 pointer-events:none，不會互搶。） */
+.grd-word::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: -9px; bottom: -9px;
+}
+
+
+/* ══ (E) 命中區補到 44px ═══════════════════════════════════════════════════
+   原則沿用本專案既有慣例：「圖示大小不變，只把命中框補滿」
+   （見 styles-quiz-mode.css:405 的 .qm-back-btn 註解、styles-flashcard.css:62
+     的 .fc-speaker-btn — 兩個都是 width:34 + min-width:44 的寫法）。 */
+
+/* 星號鈕：JSX 裡只有一個用法，而且是 .fc-star-btn-corner（絕對定位在卡片角落），
+   所以放大到 44 對版面零影響，也不在 useFitHeight 的量測鏈上。 */
+.fc-star-btn { padding: 0; width: var(--tap); height: var(--tap); display: grid; place-items: center; }
+.fc-star-btn-corner { top: 4px; right: 4px; }   /* 跟著按鈕變大往下移，原 38px 會跟鈕重疊 */
+
+/* 關閉鈕：保持 32px 圓形外觀，用 ::after 把命中撐到 44。
+   .modal 是 overflow-y:auto，但 .modal-head 有 28/32px 內距，-6px 不會被裁掉。 */
+.modal-close { position: relative; }
+.modal-close::after { content: ''; position: absolute; inset: -6px; }
+
+/* 上傳縮圖的刪除鈕：22px 太小，放到 32px（.uh-thumb 是 96px + overflow:hidden，塞得下）。
+   ⚠ 放大會提高「想看大圖卻誤刪」的機率 → 建議搭配刪除前二次確認（JSX，另案）。
+   gap 從 10 → 16，是為了不讓相鄰縮圖的刪除鈕落在同一個指腹範圍內。 */
+.uh-thumb-del { width: 32px; height: 32px; font-size: 14px; border: 2px solid #fff; }
+.uh-grid { gap: 16px; }
+
+/* 錯題本「下一題」：原本 8px 上下內距只有 ~41px */
+.mk-next-btn {
+  min-height: var(--tap); box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* 「看原文」小鈕：閱讀模式那一列很擠，用 ::after 補命中＝零版面成本 */
+.gr-peek-btn { position: relative; }
+.gr-peek-btn::after { content: ''; position: absolute; inset: -6px; }
+
+.rs-mini { width: var(--tap); height: var(--tap); }   /* 40 → 44 */
+.qm-read-btn { padding: 10px 18px; }                  /* 8px 上下 → 10px */
+
+/* 圈選題選項：7px → 9px 上下內距（15.5px 字約 41–44px 高），
+   gap 8 → 10 讓相鄰選項不會同時進到指腹範圍。 */
+.circle-label-option { padding: 9px 16px; }
+.circle-label-options { gap: 10px; }
+
+/* 老師端的每列小工具鈕：28 → 36。
+   36 是不「額外」撐開 .fc-card-row-head 的上限 —— 該列已經有 36px 的 .fc-row-thumb，
+   所以有縮圖的列本來就是 60px；改完之後所有列一致變成 60px（沒縮圖的從 52 長到 60）。
+   這是老師端的編輯清單，不在學生的練習畫面裡。 */
+.fc-row-tools { gap: 6px; }
+.fc-row-tools button { width: 36px; height: 36px; }
+
+/* 卡片頁碼小圓點：只加「水平」內距 —— 垂直 padding 是 useFitHeight 量測鏈的一部分（禁區 #1），
+   一格也不能動。中心距 26px → 32px，高度完全不變。
+   註：整條點列會比現在寬一點點（每顆 +6px），.fc-dots 本來就 flex-wrap，
+       只有在單元字數很多（>30 張）時才可能多折一行。 */
+.fc-dot { padding-left: 10px; padding-right: 10px; }
+.fc-dots { gap: 4px; }
+
+
+/* ══ (F) 手機橫式的主分頁列 ════════════════════════════════════════════════
+   styles-tune.css:406 的 max-height:560 那層把 .fc-tab 壓到 8px 內距＝只有 35px 高。
+   max-height:560 不會命中 iPad 橫式的 760 → 不觸碰禁區 #5。
+   只加到 10px（12px 字 ×1.58 + 20 = 39px，只多吃 4px）：那一層的註解自己寫了
+   「光是這些外框就吃掉 245px」，推到 44 會讓 390px 高的畫面又要捲。 */
+@media (max-height: 560px) {
+  .fc-tab { padding: 10px 6px; }
+}
+
+
+/* ══ (G) 底部導覽列的 safe-area 地雷 ＋ 641–768px 內容被蓋住 ════════════════
+   兩個既有問題：
+   ① .mobile-nav 在 ≤768 才顯示，但幫它讓位的 .page{padding-bottom:68px}
+      （styles-part2.css:751）只寫在 ≤640 → 641–768px（小平板／手機橫式視窗）
+      內容會被導覽列蓋住。
+   ② .mobile-nav 是 height:60px + padding-bottom:env(safe-area-inset-bottom)，
+      在 border-box 下 padding 是「往內吃」，有 home indicator 的機型會把圖示往上擠。
+   讓位統一交給 .page 負責，.qm-quiz-area 那份就拿掉（不然 ≤640 會多出 68px 空白）。
+   .qm-cat-view 在 ≤768 是 flex-direction:column、高度自然撐開，
+   .qm-quiz-area 不是獨立捲動容器，所以 .page 的 padding 真的救得到底部內容。
+
+   目前 index.html 沒有 viewport-fit=cover，env() 一律回傳 0px，
+   所以 ≤640 完全零視覺變化（68px = 68px），這是預防性修正。
+   ⚠ 不要順手加 viewport-fit=cover。 */
+@media (max-width: 768px) {
+  .mobile-nav { height: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .page       { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 8px); }
+  .qm-quiz-area { padding-bottom: 0; }
+}
+
+
+/* ══ (H) 按下去的即時回饋 ══════════════════════════════════════════════════
+   全站 290 條 :hover 只對 27 條 :active。觸控沒有 hover，按下那一瞬間畫面
+   毫無變化 → 兒童的第一反應是「沒按到」而重複點擊（重複作答、重複計分）。
+
+   ⚠ 權重：這一段必須排在 (A) 後面，而且每一條都要 ≥ (A) 裡對應的還原規則，
+     否則按下去會被 transform:none 蓋掉。逐條對過：
+       .fc-choice     active(0,5,0) = hover 還原(0,5,0)，在後面 → 贏
+       .fc-match-tile active(0,5,0) = 還原(0,5,0) → 贏
+       .qm-option     active(0,6,0) = 還原(0,6,0) → 贏（所以多帶了 :not(:disabled)）
+       .rs-chip       active(0,4,0) = 還原(0,4,0) → 贏
+       .rs-mini       active(0,3,0) = 還原(0,3,0) → 贏（所以多帶了 :not(:disabled)） */
+.fc-tab:active,
+.fc-choice:active:not(.correct):not(.wrong):not(.dimmed),
+.fc-test-choice:active:not(.selected),
+.fc-match-tile:active:not(.matched):not(.selected):not(.wrong),
+.fc-nav-btn:active:not(:disabled),
+.fc-star-btn:active,
+.gr-peek-btn:active,
+.qm-read-btn:active,
+.rs-chip:active:not(:disabled):not(.locked),
+.rs-mini:active:not(:disabled),
+.qm-option:active:not(:disabled):not(.correct):not(.wrong):not(.dim) { transform: scale(.96); }
+
+/* 會暈的人：改成變淡，不要縮放。
+   ⚠ 選擇器必須跟上面一字不差（權重相同才蓋得掉），不能只寫 .qm-option:active。 */
+@media (prefers-reduced-motion: reduce) {
+  .fc-tab:active,
+  .fc-choice:active:not(.correct):not(.wrong):not(.dimmed),
+  .fc-test-choice:active:not(.selected),
+  .fc-match-tile:active:not(.matched):not(.selected):not(.wrong),
+  .fc-nav-btn:active:not(:disabled),
+  .fc-star-btn:active,
+  .gr-peek-btn:active,
+  .qm-read-btn:active,
+  .rs-chip:active:not(:disabled):not(.locked),
+  .rs-mini:active:not(:disabled),
+  .qm-option:active:not(:disabled):not(.correct):not(.wrong):not(.dim) { transform: none; opacity: .7; }
+}
+
+/* ───── v390 區塊 4 / 5 ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   css-4：題型播放器與練習頁的視覺一致性
+   目標：16 個題型連續作答時，骨架不要每換一題就換一次。
+   ⚠ 本段假設 css-1 已定義 --measure / --measure-wide / --measure-narrow /
+     --radius-pill / --fs-meta / --fw-bold，css-2 已定義 --ok / --ok-bg / --ok-ink /
+     --no / --no-bg / --no-ink。這裡「只消費、不定義」，但每個 var() 都寫了 fallback，
+     萬一 css-1/css-2 沒進版，畫面也不會壞（fallback 用的就是專案現有的值）。
+   ⚠ 本段不寫任何 :hover / :active（那是 css-3 的範圍），
+     也不碰 .qm-option / .qm-feedback-banner（css-2 的範圍）。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (A) 練習頁跟 header 對齊
+   header 住在 .shell（max-width:1280px; margin:0 auto; padding:0 40px），
+   但 .page-mission .qm-cat-view 沒有 max-width → 1920px 螢幕上品牌在 x=360、
+   側欄卻在 x=24，差 336px。這裡把練習頁放進同一個量尺。
+
+   ⚠⚠ 只能用 padding-inline，不可以寫 padding 簡寫。
+      styles-tune.css 前面有兩層 @media (min-width:901px) and (max-height:950px)
+      與 @media (max-height:860px) and (min-width:901px) 在調
+      .page-mission .qm-cat-view 的「垂直」內距，那是 iPad 橫式一畫面裝得下的關鍵。
+      我的規則排在後面、權重相同，寫簡寫就會把垂直值一起蓋掉 → 直接破壞禁區 #5。
+   ─────────────────────────────────────────────────────────────────────────── */
+.page-mission .qm-cat-view {
+  max-width: 1280px;          /* 跟 .shell 同一個量尺 */
+  margin-inline: auto;
+}
+
+/* 桌機的 40px 水平內距（＝.shell 的 padding）。
+   ⚠ 這裡故意「不是」原案的 @media (min-width:1025px)。原因是禁區 #5：
+     iPad 橫式 1180×760 目前的水平內距只有 12px（來自上面那兩層矮螢幕規則），
+     改成 40px 會讓作答欄從 776px 縮到 720px，題目大字很可能多斷一行 → 又要捲。
+     用「min-width:1367px，或 1025px 以上且螢幕夠高」當條件之後：
+       • 1920×1080 桌機 → 套用（這就是回報的那台）
+       • 1440×900 筆電 → 套用；作答欄 1440-80-360-20=980 > .qm-player-shell 的 860 上限
+         ＝內容一點都沒變窄，不可能多出捲動
+       • 1367px 以上任何寬度都符合上面那條算式，所以「加了內距不會讓內容變窄」
+       • 1180×760（iPad 橫式）與 1366×768（小筆電）→ 不套用，維持現狀 0 溢出
+     1366 是專案既有斷點（見 styles-tune.css 的 min-width:901 and max-width:1366）。 */
+@media (min-width: 1367px),
+       (min-width: 1025px) and (min-height: 951px) {
+  .page-mission .qm-cat-view { padding-inline: 40px; }
+}
+/* ≤900 / ≤640 直接對齊 .shell 在 styles-part2.css 的 20px / 14px */
+@media (max-width: 900px) { .page-mission .qm-cat-view { padding-inline: 20px; } }
+@media (max-width: 640px) { .page-mission .qm-cat-view { padding-inline: 14px; } }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (B) ≤900px 練習頁必定多出約 35px 捲動
+   算式（全站 box-sizing: border-box）：
+     .page-mission .qm-cat-view  min-height: calc(100vh - 72px)   ← header
+     ≤900 時它的內距是 12px 12px 76px ＝ 上下共 88px（styles-theme.css:487）
+     → 內容區真正可用高度 = 100vh - 72 - 88 = 100vh - 160
+     但 .page-mission .qm-quiz-area 的 min-height 還停在 calc(100vh - 126px)
+     → 硬撐出 34~35px 的捲動。
+   這一條只動 ≤900 分支，完全不碰桌機／iPad 橫式路徑（禁區 #5 不受影響）。
+   取 161（比 160 再少 1px）留一格安全邊，避免 header 底線 1px 造成 off-by-one。
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .page-mission .qm-quiz-area { min-height: calc(100vh - 161px); }
+  /* 專心模式（v389）header 收起來，只剩 cat-view 自己的 88px 內距 */
+  html.focus-on .page-mission .qm-quiz-area { min-height: calc(100vh - 88px); }
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (C) 統一「單欄作答內容」的欄寬
+   同一個角色現在有 7 種 max-width（440/520/640/680/720/780/860），
+   而 .wp-player / .ws-player / .circle-player / .cloze-player 根本沒有 max-width，
+   在 1440px 視窗會撐到約 1376px → 每換一題整個骨架就跳一次寬度。
+   ⚠ 不碰：.qm-player-shell（860，已經對）、.qm-fc-wrap（單字卡容器，寬度一變就會
+     觸發 useFitHeight 重算 → 禁區 #1）、.dm-shell（1180，配對連線需要橫向空間）。
+   ─────────────────────────────────────────────────────────────────────────── */
+/* 一般單欄：造句／重組／作文／短文摘要／教學卡 */
+.wp-player,
+.ws-player,
+.essay-player,
+.sm-player,
+.ls-wrap {
+  max-width: var(--measure, 720px);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* 需要長行的：圈選／克漏字／文法／閱讀技巧 */
+.circle-player,
+.cloze-player,
+.gr-player,
+.rs-shell {
+  max-width: var(--measure-wide, 1080px);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* ══ v412（Alan：「大小大概就是這樣…但可以再大一點點 滿版一點」）══════════
+   分段閱讀的「文章頁」要能滿版：課本掃描是跨頁的，卡在 860（.qm-player-shell）
+   或 1080（上面那條）都太窄，字會小到看不清楚。
+   ⚠ 只放寬文章頁——答題頁維持原本寬度（選項一行太寬反而難點、也難讀）。
+   ⚠ 高度那一半在 styles-quiz-mode.css 的 .gr-page-read .grd-fit（由畫面高度反推最大寬度）。
+   用 :has()；舊瀏覽器不支援就維持原本寬度，只是圖小一點，不會壞掉。 */
+.qm-player-shell:has(.gr-page-read),
+.gr-player:has(.gr-page-read) {
+  max-width: min(1500px, calc(100vw - 24px));
+}
+
+/* 說明頁／結果頁／上傳作業：短欄，讀起來才不會一行太長 */
+.qm-intro  { max-width: var(--measure-narrow, 640px); }
+.qm-result { max-width: var(--measure-narrow, 640px); }
+.uh        { max-width: var(--measure-narrow, 640px); }
+.sm-review,
+.sm-result { max-width: var(--measure, 720px); }
+/* 註：.qm-intro.sa-intro-wide（760，有 YouTube）與 .gr-page-intro .qm-intro（640）
+   權重比上面高，會保留原值——那是刻意的，不要為了「統一」去 !important 掉。 */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (D) 進度條規格
+   現在有 4 種（8px / 3px / 2px / 5px、三種轉場時間）。
+   以 .qm-player-bar（8px、radius 4px、0.3s；也是最新題型採用的那一種）為唯一實作。
+   ⚠⚠ .fc-progress-bar / .fc-progress-fill（flashcard 那一套）**刻意不動**，
+      原因：它在 useFitHeight 的量測範圍內，高度一變就會讓單字卡／學習／配對格子
+      重新算高 → 禁區 #1。視覺上不一致是已知的、可接受的代價。
+   ─────────────────────────────────────────────────────────────────────────── */
+.wp-progress-bar  { height: 8px; border-radius: 4px; background: var(--border); }
+.wp-progress-fill { border-radius: 4px; transition: width .3s ease; }
+/* 教學卡的步驟點是 flex:1 的長條，一樣吃這個規格 */
+.ls-dot { height: 8px; border-radius: 4px; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (E) 答對／答錯的顏色：8 種綠、6 種紅收斂成一組語意色
+   收掉的綠：#16a34a #22c55e #15803d #2e7d32 #2E7D5B #9bcba5 #166534
+   收掉的紅：#dc2626 #ef4444 #f44336 #D6533C #991b1b
+   ⚠ 只寫顏色屬性，不重寫任何 animation / text-decoration / opacity
+     （sd-pulse、dmShake、line-through、.wrong-cut 的 .55 透明度都原樣保留）。
+   ⚠ .qm-option 與 .qm-feedback-banner 不在這裡（css-2 的範圍）。
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* 拼寫輸入（原本 #22c55e/#f0fdf4/#166534、#ef4444/#fef2f2/#991b1b）
+   背景一起換，不然邊框是新綠、底色還是舊綠 */
+.ta-input.correct { border-color: var(--ok, #2E7D5B); color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); }
+.ta-input.wrong   { border-color: var(--no, #D6533C); color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); }
+
+/* 克漏字：填空結果（原本沒有 border，所以這裡改成寫 background，border-color 留著
+   是為了萬一之後加了框也對得起來） */
+.cloze-blank-result.correct { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); border-color: var(--ok, #2E7D5B); }
+.cloze-blank-result.wrong   { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+
+/* 克漏字：分數藥丸（.ok 是黃色「還可以」，不屬於對／錯語意，維持原樣） */
+.cloze-score-badge.great { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); border-color: var(--ok, #2E7D5B); }
+.cloze-score-badge.low   { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+
+/* 句子重組：結果 chip。.missing 跟 .wrong 本來就是同一組紅（#991b1b/#fef2f2/#fca5a5），
+   一起收，不然「漏掉的」跟「放錯的」會變兩種紅 */
+.ws-word-chip.result.correct { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); border-color: var(--ok, #2E7D5B); }
+.ws-word-chip.result.wrong,
+.ws-word-chip.result.missing { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+
+/* 斷句：斜線符號。
+   ⚠ 原案寫 background，但 .sd-gap-slash 是一個「／」文字字元（position:relative、
+     font-size 1.6~1.8rem），給它 background 會變成一塊色塊 → 這裡用 color。
+     font-size / animation / text-decoration 都不重寫。 */
+.sd-gap.done.correct   .sd-gap-slash { color: var(--ok, #2E7D5B); }
+.sd-gap.done.missed    .sd-gap-slash { color: var(--no, #D6533C); }
+.sd-gap.done.wrong-cut .sd-gap-slash { color: var(--no, #D6533C); }
+/* 斷句圖例（.missed 也一起收，不然圖例會出現兩種紅） */
+.sd-leg.correct   { color: var(--ok-ink, #1f6b4b); }
+.sd-leg.missed    { color: var(--no-ink, #A8331F); }
+.sd-leg.wrong-cut { color: var(--no-ink, #A8331F); }
+
+/* 圈選：整題的外框 */
+.circle-question.correct { border-color: var(--ok, #2E7D5B); }
+.circle-question.wrong   { border-color: var(--no, #D6533C); }
+
+/* 配對連線：
+   ⚠ 原案寫 .dm-chip{background/border-color}，但 v371 是 Alan 指定的「模仿學習單」，
+     .dm-chip 本來就是 background:none; border:none（不要卡片框）。
+     幫它加底色＝把那個刻意的決定改掉，所以這裡改成上真正在著色的那兩個子元素：
+     圓點（.dm-dot）與文字（.dm-txt）。border-color 對 .dm-chip 也是無效的（border:none）。
+   ⚠ .dm-chip.linked .dm-dot 用的是 var(--dm-c)（JSX 依連線顏色注入），交卷前不判對錯，
+     不能收成 --ok，維持原樣。 */
+.dm-chip.ok    .dm-dot { background: var(--ok, #2E7D5B);    border-color: var(--ok, #2E7D5B); }
+.dm-chip.bad   .dm-dot { background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+.dm-chip.wrong .dm-dot { background: var(--no-bg, #fdece8); border-color: var(--no, #D6533C); }
+.dm-chip.bad   .dm-txt { color: var(--no-ink, #A8331F); }
+/* 交卷後的 ✓ / ✗ 小方塊（同一個元件的對錯標記，一起收才不會出現第三種綠） */
+.dm-mark.ok  { color: var(--ok-ink, #1f6b4b); background: var(--ok-bg, #eaf3ee); }
+.dm-mark.bad { color: var(--no-ink, #A8331F); background: var(--no-bg, #fdece8); }
+
+/* 教學卡的隨堂小測（原本就住在 styles-tune.css，這裡靠後蓋前收成 token） */
+.ls-opt.ok { background: var(--ok-bg, #eaf3ee); color: var(--ok-ink, #1f6b4b); border-color: var(--ok, #2E7D5B); }
+.ls-opt.no { background: var(--no-bg, #fdece8); color: var(--no-ink, #A8331F); border-color: var(--no, #D6533C); }
+
+/* 註：.wf-verdict.correct/.incorrect 雖然還在 styles-quiz-mode.css:820-822，
+   但 grep 過所有 .jsx 都找不到任何 wf- 的 className ＝ 已經是死碼，
+   而且原案寫的 .wf-verdict.wrong 這個 class 根本不存在（只有 .incorrect）。
+   → 刻意不寫，避免對死掉的選擇器製造「已經統一了」的錯覺。 */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (F) .qm-intro-done：全站唯一沒有 CSS 的 intro 徽章
+   JSX 用了兩次（配對連線 components-quiz-mode.jsx:6377、閱讀技巧 6886 的
+   「✓ 上次 N 分」），但三個 CSS 檔都沒有規則 → 線上是一行沒有底色、沒有內距的裸文字，
+   跟其他 11 個 intro 的綠色藥丸完全不一樣。
+   照 .qm-intro-done-hint（styles-quiz-mode.css:2612）的外觀補，
+   順手把 -hint / -fcdone 一起收成 token，三個才會真的長一樣。
+   （.qm-intro 是 flex column，margin-inline:auto 會讓它縮成內容寬度並置中） */
+.qm-intro-done {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: var(--radius-pill, 999px);
+  background: var(--ok-bg, #eaf3ee); color: var(--ok-ink, #1f6b4b);
+  font-size: var(--fs-meta, 13.5px); font-weight: var(--fw-bold, 700);
+  margin: 0 auto 14px;
+}
+.qm-intro-done-hint,
+.qm-intro-fcdone {
+  background: var(--ok-bg, #eaf3ee); color: var(--ok-ink, #1f6b4b);
+  border-radius: var(--radius-pill, 999px);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (G) 沒有頭部的播放器，至少讓內距與重心一致
+   （加返回鍵要改 JSX，不在這一段的範圍）
+   ─────────────────────────────────────────────────────────────────────────── */
+.wp-header,
+.circle-topbar,
+.cloze-topbar { margin-bottom: 16px; }
+
+.ws-player,
+.essay-player,
+.sm-player { padding-top: 8px; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (H) 題目區與選項區差 4px 沒對齊
+   .qm-question-area 有 padding: 0 4px，.qm-options 沒有 → 題目文字比選項卡片內縮 4px。
+   ⚠ 只寫 padding-inline，因為 styles-tune.css 有五處在調 .qm-question-area 的
+     margin-bottom（矮螢幕瘦身），垂直方向一律不碰。
+   ─────────────────────────────────────────────────────────────────────────── */
+.qm-question-area { padding-inline: 0; }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (I) 側欄單元列文字左右不對稱 3.5px
+   .page-mission .qm-unit-row 四邊內距都是 14px，但左邊有 5px 的分類強調色條、
+   右邊只有 1.5px 的框 → 文字左緣 19px、右緣 15.5px。
+   把左內距改成 10.5px：5 + 10.5 = 15.5 = 1.5 + 14。只動水平，不動列高。
+   ─────────────────────────────────────────────────────────────────────────── */
+.page-mission .qm-unit-row { padding-left: 10.5px; }
+
+/* ───── v390 區塊 5 / 5 ───── */
+/* ══════════════════════════════════════════════════════════════════════
+   css-5：狀態（空／載入／錯誤）與質感打磨
+   ──────────────────────────────────────────────────────────────────────
+   這一段負責三件事：
+   (1) 把大廳六張卡的「內文左軸」拉成同一條垂直線（原本 82→58→58→62→64→62 鋸齒）
+   (2) 把區塊之間的垂直節奏從 14/18/22/28/66 五種收成兩級
+   (3) 陰影分三階、空狀態有形狀、過場只有兩種速度
+
+   ⚠ 所有 token 都寫成 var(--x, 後備值) 的形式。
+      理由：--sp-* / --radius-* 由 css-1 定義在 :root。萬一 css-1 那段還沒併進來
+      （或順序被調動），後備值讓這一段自己也能正確運作，而且一旦 css-1 存在，
+      它的值一定贏（後備值只在變數未定義時才生效）——不會反過來蓋掉 css-1。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 本段新增的 token（間距節奏與過場速度） ───────────────────────── */
+:root{
+  /* 區塊之間只有兩個間距：一般 24px、大段落 40px */
+  --section-gap:    24px;
+  --section-gap-lg: 40px;
+  /* 過場只有兩檔：hover/顏色類用 fast，陰影/形狀類用 base */
+  --t-fast: .15s;
+  --t-base: .25s;
+  --ease:   cubic-bezier(.4, 0, .2, 1);
+}
+
+
+/* ══ (A) 大廳卡片：內距與圓角收斂成兩級 ═══════════════════════════════
+   原本六張卡的水平內距是 42/18/18/22/24/22 六種、圓角 26/14/18/20/20 五種，
+   內文距視窗左緣在 58~82px 之間跳動（落差 24px）——這是「不專業」最直接的來源。
+   統一之後：.shell gutter 40px + 卡片內距 24px = 內文左軸一律落在 64px。   */
+
+/* 大卡（本週總覽／學習成長／本週摘要）：四邊 24px、大圓角
+   ⚠ .wh 刻意保留較高的垂直內距（32px）：它是大廳的主角卡，裡面有 110px 的
+     進度環，壓到 24px 會擠。驗收條件是「左緣對齊」，水平仍是 24px → 軸線一樣是 64。 */
+.wh{
+  padding: var(--sp-8, 32px) var(--sp-6, 24px);
+  border-radius: var(--radius-lg, 20px);
+}
+.growth-inline,
+.wk-summary{
+  padding: var(--sp-6, 24px);
+  border-radius: var(--radius-lg, 20px);
+}
+
+/* 分類卡：跟大卡同一級（原本 24px 22px / 圓角 18px） */
+.qm-block{
+  padding: var(--sp-6, 24px);
+  border-radius: var(--radius-lg, 20px);
+}
+
+/* 橫條型（本週聯絡簿的開合列、今天的任務）：矮一階的內距 + 中圓角
+   水平仍是 24px，左軸才會跟卡片對齊。 */
+.cb-bar,
+.tt{
+  padding: var(--sp-4, 16px) var(--sp-6, 24px);
+  border-radius: var(--radius-md, 14px);
+}
+/* 聯絡簿展開時上下兩塊要接成一體——圓角必須跟著 --radius-md 走，
+   否則 .cb-bar 變圓、下面的 .cb-body 還是寫死 14px，接縫會歪。 */
+.cb.open .cb-bar{ border-radius: var(--radius-md, 14px) var(--radius-md, 14px) 0 0; }
+.cb-body        { border-radius: 0 0 var(--radius-md, 14px) var(--radius-md, 14px); }
+
+/* ⚠⚠ 手機值一定要補回來。
+   .qm-block 的內距原本被四個檔案分四層斷點覆寫
+   （styles-theme.css:312 ≤760、styles-quiz-mode.css:1158 / styles-theme.css:328 ≤560、
+     styles-theme.css:977 ≤480、styles-tune.css:199 ≤768）。
+   上面那條沒有媒體查詢又排在最後，會把它們**全部**蓋掉 → 375px 上分類卡會突然變胖。
+   斷點用 768（不是規格書寫的 760）：styles-tune.css:199 既有的就是 768，
+   用 768 才不會在 761–768 這段留下一條 24px 的縫。 */
+@media (max-width: 768px){
+  .qm-block{ padding: var(--sp-4, 16px); }
+}
+@media (max-width: 480px){
+  .qm-block{ padding: var(--sp-4, 16px) var(--sp-3, 12px); }
+}
+
+/* 同理，.wh（styles-home.css:992 ≤640）、.growth-inline / .wk-summary
+   （styles-home.css:762/794 ≤560）、.tt（styles-home.css:1240 ≤640）
+   的手機瘦身也會被上面蓋掉，一起補回來。
+   三者統一用 640 這個斷點（跟 .shell 的手機 gutter 同一條線），
+   節奏才會一致：gutter 16 + 內距 16 = 手機上的內文左軸 32px。 */
+@media (max-width: 640px){
+  .wh,
+  .growth-inline,
+  .wk-summary{
+    padding: var(--sp-4, 16px);
+    border-radius: var(--radius-md, 14px);
+  }
+  .tt,
+  .cb-bar{ padding: var(--sp-3, 12px) var(--sp-4, 16px); }
+}
+
+
+/* ══ (B) 大廳區塊的垂直節奏 ══════════════════════════════════════════
+   原本是 14/18/22/28/66 五種，最大落差 4.7 倍。其中 66px 是
+   .qm-blocks 的 padding-bottom:48px 假裝成容器內距造成的。
+   一律改用 margin-bottom（不混 margin-top），避免 margin 疊加算不清。   */
+.cb  { margin: 0 0 var(--section-gap); }   /* 本週聯絡簿（老師編輯模式） */
+.wh  { margin: 0 0 var(--section-gap); }   /* 本週總覽 */
+.tt  { margin: 0 0 var(--section-gap); }   /* 今天的任務 */
+
+/* 分類卡區塊的下緣：唯一保留的「大段落」間距，用來跟成長區分段 */
+.qm-blocks{ padding-bottom: var(--section-gap-lg); }
+
+/* 成長區原本是 margin-top:18px；上面已經由 .qm-blocks 的 40px 負責距離，
+   這裡歸零、改用 margin-bottom 收尾（下面接 footer）。 */
+.growth-summary-row{ margin: 0 0 var(--section-gap); }
+/* .growth-inline 在 .growth-summary-row 裡本來就是 margin:0（styles-home.css:772），
+   但它單獨出現（非兩欄版）時原本帶 margin-top:18px → 一起歸零。 */
+.growth-inline{ margin: 0 0 var(--section-gap); }
+.growth-summary-row .growth-inline{ margin: 0; }
+
+/* 註：規格書列的 .wj-wrap 與 .home-more-head 在 .jsx 裡完全沒有被使用
+   （只剩 styles-home.css 的殘留規則），依「不存在就略過」原則不寫。 */
+
+
+/* ══ (C) .shell 的 gutter 級距 ═══════════════════════════════════════
+   原本 40/20/14。≤640 時 gutter 只有 14px，卻比卡片內距 16px 還小 →
+   內容看起來貼著螢幕邊（內距倒掛）。改成 40/24/16，永遠 gutter ≥ 卡片內距。
+   用 padding-inline 而不是 padding：styles.css:100 的 `padding: 0 40px` 已經把
+   上下設成 0，只覆寫左右才不會動到 .page-lobby .shell.main-enter 的 padding-top:44px。
+   斷點沿用 styles-part2.css 既有的 900 / 640。                          */
+@media (max-width: 900px){ .shell{ padding-inline: var(--sp-6, 24px); } }
+@media (max-width: 640px){ .shell{ padding-inline: var(--sp-4, 16px); } }
+
+
+/* ══ (D) Footer 上方留白 ═════════════════════════════════════════════
+   ⚠ 規格書寫的 `.footer` 是**死 CSS**：styles-part2.css:409 還留著，但全站
+     .jsx 沒有任何地方用它。真正的 app 版 footer 是 <footer className="ll-foot2 app-foot2">
+     （components-editor.jsx:599），所以只改 .app-foot2。
+   ⚠ 不動 .ll-foot2 本身：那是行銷首頁的 footer（scroll-snap 終點），版面刻意寬鬆。
+   原本 margin-top:84px（styles-auth.css:5951）+ padding-top:54px = 138px，
+   是全站最大區塊間距的 3 倍多；改成 48+32 = 80px。
+   ⚠ 只覆寫 margin-top / padding-top，**不能**用 padding 簡寫——
+     .ll-foot2 的 `padding: 54px 6vw 0` 那個 6vw 左右內距是版面骨架，寫簡寫會把它清掉。 */
+.app-foot2{
+  margin-top:  var(--sp-12, 48px);
+  padding-top: var(--sp-8, 32px);
+}
+@media (max-width: 640px){
+  .app-foot2{
+    margin-top:  var(--sp-8, 32px);
+    padding-top: var(--sp-6, 24px);
+  }
+}
+
+
+/* ══ (E) 陰影三階 ═══════════════════════════════════════════════════
+   規則：sm = 平放在紙上的內容卡；md = 需要一點層級的主角卡；lg = 浮在遮罩上的彈窗。
+   --shadow-sm / --shadow-md / --shadow-lg 已定義在 styles-theme.css:20-22。
+   原本這些卡各自手寫了 5 種不同的 box-shadow（0 2px 0 / 0 6px 18px -12px /
+   0 8px 22px / 0 10px 30px -18px / 0 18px 44px -18px），色溫和擴散都不一致。   */
+.qm-block,
+.cb-bar,
+.tt,
+.wk-summary,
+.growth-inline{ box-shadow: var(--shadow-sm); }
+
+.wh{ box-shadow: var(--shadow-md); }
+
+/* .modal 是老師端所有彈窗的殼；.gres-modal 是文法測驗結果彈窗。
+   規格書列的 .modal-panel / .modal-card / .growth-overlay-panel / .mk-drill
+   在 .jsx 與 .css 裡都不存在 → 依規則略過，不猜名字。 */
+.modal,
+.gres-modal{ box-shadow: var(--shadow-lg); }
+
+/* .cb.open .cb-bar{box-shadow:none}（styles-home.css:13）與
+   .growth-inline:hover 的加重陰影，特異度都比上面高，會照常生效——刻意不動。 */
+
+
+/* ══ (F) 空狀態 ═════════════════════════════════════════════════════
+   目標是「沒有東西的時候也要看起來是有設計的」，但只套在**真的是裸文字、
+   而且是獨立區塊**的空狀態上。逐一檢查後只有 .cb-empty 符合：
+
+   · .fc-lb-empty  → 是排行榜格子裡的 inline <span>「—」（components-flashcard.jsx:1702），
+                     不是空狀態容器；而且 .fc-* 屬於禁區 #1/#2，不寫 padding/margin/radius。→ 略過
+   · .mk-empty     → styles-mistakes.css:179 已經有完整設計（浮動插圖＋大標＋副標，
+                     還是 flex:1 撐滿），套虛線框會打壞它。→ 略過
+   · .qm-block.empty → 那是一張完整的分類卡（icon + 文字 + 箭頭的 flex 列），
+                     不是空盒子；改成 display:grid + 虛線框會把卡片版面拆掉。
+                     → 只拿掉陰影（停用的卡不該浮起來），其餘不動。
+   · .rv-empty / .uh-empty → 全專案不存在。→ 略過                        */
+.cb-empty{
+  display: grid; place-items: center; gap: var(--sp-2, 8px);
+  min-height: 96px;
+  margin: 6px;                                  /* 對齊 .cb-body 的 6px 內距 */
+  padding: var(--sp-6, 24px);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md, 14px);
+  background: var(--bg-paper);
+  color: var(--ink-3);
+  font-size: var(--fs-body-sm, 14.5px);
+  text-align: center;
+}
+/* 停用（本週沒安排）的分類卡：維持 opacity 0.62 的既有處理，但不要有陰影，
+   才不會看起來像可以按。 */
+.qm-block.empty{ box-shadow: none; }
+
+
+/* ══ (G) 過場節奏 ═══════════════════════════════════════════════════
+   全站轉場散在 .12s ~ .4s。統一成 fast / base 兩檔。
+
+   ⚠ .qm-block（styles-quiz-mode.css:76）與 .growth-inline（styles-home.css:734）
+     的 transition 裡**含 transform**，而且它們有 hover 位移。
+     用 transition 簡寫會把 transform 那段洗掉 → hover 變成瞬間跳動（明顯的退步），
+     而且也違反「不要在這裡寫 transform 的 transition」（會跟 css-3 打架）。
+     解法：這兩個只改「速度與曲線」，完全不碰 transition-property 清單。 */
+.qm-block,
+.growth-inline{
+  transition-duration: var(--t-fast);
+  transition-timing-function: var(--ease);
+}
+
+/* 其餘沒有 transform hover 的，可以安全地寫完整清單 */
+.cb-bar,
+.tt,
+.wk-summary,
+.modal,
+.toast{
+  transition: box-shadow var(--t-base) var(--ease),
+              border-color var(--t-fast) var(--ease);
+}
+
+/* reduced-motion 的退路。
+   styles.css:44 與 styles-theme.css:363 已經處理掉 .qm-block / .qm-option，
+   這裡把本段新加的其餘元素補齊。 */
+@media (prefers-reduced-motion: reduce){
+  .qm-block,
+  .cb-bar,
+  .tt,
+  .wk-summary,
+  .growth-inline,
+  .modal,
+  .toast{ transition: none; }
+}
+
+
+/* ══ (H) 圓角的最後收斂（純視覺，不改盒子尺寸） ═══════════════════════
+   ⚠ 不對 .fc-* 的任何元素寫 border-radius / padding / margin（禁區 #1、#2）。  */
+
+/* 練習按鈕：原本 10px → 走 --radius-sm（同一個值，改成 token 讓之後只要調一處） */
+.qm-btn{ border-radius: var(--radius-sm, 10px); }
+
+/* 圓形圖示鈕：原本寫 border-radius:50%，換成 pill token。
+   在 32×32 / 36×36 的正方形上兩者視覺完全一樣，純粹是把硬編碼換成 token。 */
+.modal-close,
+.icon-btn{ border-radius: var(--radius-pill, 999px); }
+
+/* 選項卡：quiz-mode 12px、theme 14px 兩種 → 統一走 --radius-md */
+.qm-option{ border-radius: var(--radius-md, 14px); }
+
+/* ⚠ 刻意**不**改 .btn。
+   規格書要求 .btn 走 --radius-sm，但 .btn 目前是 border-radius:999px 的膠囊
+   （styles-part2.css:589，配 mono 字體 + 全大寫 + 0.18em 字距），
+   是刻意的排版語言、全站 120 處在用。改成 10px 直角等於換掉一種按鈕型別，
+   超出「質感打磨」的範圍，而且會跟旁邊的 .modal-close 圓鈕失衡。→ 維持原狀。 */
+
+/* ══ v390 修正：實測 40 張單字卡時發現的兩個破版 ══
+   稽核建議「所有可點目標放大到 44px」，方向對，但套到 .fc-dot 上是錯的：
+   圓點是「第幾張」的指示器，數量等於卡片數。一張一張加寬之後，
+   40 張的圓點列從 2 排變 3 排、把例句擠出卡片外，
+   而且 .fc-nav 是 space-between，中間變寬就把兩顆「上一張／下一張」壓成直排文字。
+   → 圓點的水平內距改回原本的 6px（本來就有 padding:12px 6px＝20x32px，觸控已經夠用），
+     另外把導航鍵鎖住不准被壓縮（這是本來就有的隱患，只是被放大的圓點照出來）。 */
+.fc-dot { padding-left: 6px; padding-right: 6px; }
+.fc-nav-btn { flex: 0 0 auto; white-space: nowrap; }
+.fc-dots { flex: 1 1 auto; min-width: 0; }
+
+/* ══ v390 補：頁首控制項的觸控目標 ══
+   稽核的觸控面向漏了 header——實測手機上這一排全部不到 40px：
+   集點 31、簽到 34、頭像 32、全螢幕 34、年級章 25、站名 16。
+   這排每一頁都在，小朋友手指粗，誤觸成本高。
+   ⚠ header-inner 在手機只有 56px 高，所以取 40px（不是 44）——
+     44 會把這排塞得沒有呼吸空間，40 已經足夠好按又不撐破版面。
+   站名是文字連結，只加垂直內距擴大可點範圍，視覺高度不變。 */
+.stars-btn, .checkin-btn, .user-chip, .fs-btn, .grade-chip,
+.icon-btn, .dashboard-btn, .signin-btn {
+  min-height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+}
+.brand-home { padding-top: 8px; padding-bottom: 8px; }
+
+/* ══ v390 補：單元列改成 <button> 之後要把瀏覽器預設的置中拿掉 ══
+   v390 把學生端的 .qm-unit-row 從 <div> 換成 <button>（為了鍵盤可以走到），
+   但 <button> 的 text-align 預設是 center，會繼承到標題與副標 →
+   標題短的那幾列（例如「Unit 1 填空 / 4 題」）會變成置中，跟清單的左對齊軸線打架。
+   實測 computed textAlign 確實是 center，所以這一條是必要的。 */
+.qm-unit-row { text-align: left; width: 100%; }
+/* ⚠ width:100% 跟 text-align 一樣重要：<button> 在 display:block 的容器裡是
+   「縮到剛好包住內容」，不像 <div> 會自動撐滿 →
+   實測 358px 的側邊欄裡，四張卡變成 192/186/176/167 四種寬度（Alan 說「太醜」）。 */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v390 修正批：對抗式覆核抓到的回歸
+   （agent 產出的東西不能照單全收——這一批全部是覆核指出、我再驗證後修掉的）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ① .qm-explain 被寫成「無媒體查詢」→ 同時蓋掉 v375 桌機的 18px
+   與 v376 手機橫式的 15px。手機橫式最嚴重：行高 1.65→1.8、又多了 15px 左內縮，
+   三行的解說會變四行（約 +48px），而那正是 390px 高、已經要塞 2x2 選項的畫面。 */
+@media (min-width: 1025px) { .qm-explain { font-size: 18px; } }
+@media (max-height: 480px) {
+  .qm-explain { font-size: 15px; line-height: 1.6; border-left: none; padding-left: 2px; }
+}
+
+/* ② 答對／答錯的選項右邊留 48px 給勾叉，註解宣稱「只加寬度不加高度」——不對。
+   把文字框變窄正是變高的方式：1180x760 上 .qm-option 右內距 18→48，
+   文字少 30px，長句選項（v381~v383 的時態題庫就是整句）會多折一行。 */
+@media (max-height: 920px) {
+  .qm-option.correct, .qm-option.wrong { padding-right: 34px; }
+}
+
+/* ③ ≤768 把 .qm-quiz-area 的底部留白歸零、改由 .page 補 68px，
+   但算式漏算了自己新加的那 68px → 641–768px（iPad mini 直式 744、iPad 768）
+   反而多出 33px 的捲動。既有的 72px 本來就涵蓋這一段，還原它。 */
+@media (max-width: 768px) {
+  .qm-quiz-area { padding-bottom: 72px; }
+  .page { padding-bottom: 0; }
+}
+
+/* ④ .fc-nav-btn 釘成 flex:0 0 auto 之後（我為了修「被壓成直排」加的），
+   兩顆鈕在窄螢幕會各佔滿 93px，留給圓點的寬度從約 226px 掉到約 132px
+   → 20 張卡的圓點列從 3 排變 4 排、40 張從 5 排變 8 排，
+   而 .fc-p-card 是 JS 固定高度且 .fc-face 是 overflow:hidden ＝ 例句會被切掉。
+   → 窄螢幕改用較小的內距把寬度還給圓點列，同時保留不折行、不被壓扁。 */
+@media (max-width: 560px) {
+  .fc-nav-btn { padding-left: 10px; padding-right: 10px; }
+  /* 光縮內距還不夠：實測 390px、20 張卡時圓點欄只剩 86px 寬 → 疊成 244px 高、
+     卡片內部開始捲動。改成讓圓點自己獨佔一整列（寬度從 86 變約 326），
+     並且最多兩排就好——上面的「1 / 20」本來就已經在報位置了。 */
+  .fc-nav  { flex-wrap: wrap; row-gap: 8px; }
+  .fc-dots { order: 3; flex: 1 0 100%; max-height: 68px; overflow: hidden; }
+}
+
+/* ⑤ 頁首觸控目標那條把 .icon-btn 一起套了 min-height:40，
+   但它本體是 36x36 的正圓（styles.css:174）→ 變成 36x40 的橢圓，
+   而且桌機也中。改成 40x40，圓形維持。 */
+.icon-btn { width: 40px; height: 40px; }
+
+/* ⑥ 觸控裝置的 hover 還原用的是 var(--border)，但同一批把靜止態
+   改成了較深的 --border-em → 學生最後點過的那一顆反而框最淡，
+   而且會一直維持到點別的地方。還原色要跟靜止態一致。 */
+@media (hover: none) {
+  .qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim),
+  .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) { border-color: var(--border-em); }
+}
+
+/* ══ (v392) 全站順暢：modal 出口永遠在、overlay 不要拖著底下那頁一起捲 ═════════ */
+
+/* (D) Modal 的標題列與按鈕列改成 sticky。
+   styles-part2.css:497 的 .modal 本身就是捲動容器（max-height:90vh + overflow-y:auto），
+   而 .modal-head(:508) 與 .modal-foot(:584) 都沒有釘住。出一份 20 題的 quiz 時
+   表單遠超過 90vh：要按儲存得一路捲到最底、要按 ✕ 得一路捲回最頂，
+   而編輯器又刻意沒有「點背景關閉」（components-editor.jsx:75 說明：避免出到一半的題目消失）
+   ＝ 一個出口都不剩。釘住之後兩個出口隨時都在。 */
+.modal { position: relative; }
+.modal-head {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg-paper);   /* 必須不透明，否則會透出下方捲動中的內容 */
+}
+.modal-foot {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--bg-paper);
+}
+/* z-index 只需要 2：查過 .modal.wide 與 modal 內各題型的內嵌工具列，
+   styles-part2.css 裡 .modal-body 底下沒有任何自己的 z-index（該檔僅有的三個
+   z-index 是 .modal-backdrop 100、.toast 200、.mobile-nav 90，都在 modal 外面）。 */
+
+/* (E) 所有 overlay／面板加 overscroll-behavior: contain。
+   全站 overlay 都是 position:fixed 蓋在可捲動的頁面上，而全 repo 找不到任何
+   body 捲動鎖定 → 在 iPad/iPhone 上手指滑到底還繼續滑，捲動會外溢到底下那一頁，
+   關掉 modal 之後畫面已經跑到別的地方（錯題本與老師後台最明顯）。
+   ⚠ 刻意用純 CSS，不用 position:fixed 鎖 body——那會跟 html.focus-on 專心模式打架。 */
+.modal, .modal-backdrop,
+.mk-overlay, .mk-panel,
+.dash-overlay, .sp-overlay, .growth-overlay {
+  overscroll-behavior: contain;
+}
+/* 上面那組多半只是「不捲動的殼」，真正在捲的是殼裡面那一層；
+   捲動外溢是從最內層的捲動容器往外傳的，所以要釘在真的有 overflow-y:auto 的元素上。 */
+.mk-list, .mk-drill-options,          /* styles-mistakes.css:95 / :254 —— 錯題本 */
+.dash-body, .tdash-content,           /* styles-auth.css:1638 / :4273 —— 老師後台 */
+.sp-body, .stars-list,                /* styles-auth.css:6093 / :6038 —— 星星／商店 */
+.growth-body,                         /* styles-home.css:832 —— 成長報告 */
+.review-modal-body {                  /* styles-quiz-mode.css:642 —— 檢討視窗 */
+  overscroll-behavior: contain;
+}
+
+/* (F) 數字跳動動畫的 reduced-motion 退路：
+   查過這個檔只有一個自訂 @keyframes（:669 lsEnter），而它在 :671 已經被
+   @media (prefers-reduced-motion: reduce) 關掉了；.growth-summary-row(:2228) 這邊
+   沒有任何自訂動畫，:2348 的區塊也已經把 .growth-inline 的 transition 收掉。
+   → 這一項不需要新增規則。（useCountUp 的 JS 部分在 components-quiz-mode.jsx，不歸這裡。） */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v392：Alan 看了 v391 之後的四點回饋
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ② 大螢幕右半邊太空（Alan 圖2）
+   實測 1920x1080：.shell 被 max-width:1280px 夾住 → 左右各空 320px（整整 33% 的螢幕沒用到），
+   而練習卡片只有 611px 寬。練習頁不像文章需要限制行寬——它就是要把卡片與圖片放大。
+   ⚠ 只放寬「練習頁」；大廳與其他頁維持 1280（那些是資訊密度高的頁，太寬反而難讀）。 */
+@media (min-width: 1500px) {
+  .page-mission .shell { max-width: 1600px; }
+}
+@media (min-width: 1800px) {
+  .page-mission .shell { max-width: 1760px; }
+}
+
+/* ④ 圖片再大一點、留白再少一點（Alan 圖3 是他要的比例）
+   v389 定的 330px 是在「還沒放寬 shell」的前提下訂的；卡片變寬之後，
+   同樣的圖看起來就偏小、上下留白偏多。桌機拉到 420，平板 360。
+   ⚠ 仍然是固定值（flex:0 0 auto），不會跟著捲動伸縮——那是 Alan 明確要求的。 */
+@media (min-width: 1025px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 420px; }
+  .fc-p-learn .fc-learn-img { max-height: 430px; }
+}
+/* 1080 高的桌機放到 420 會多出約 39px → 這一段把圖片與卡片內距各收一點，
+   讓「圖片盡量大」與「一個畫面裝得下」同時成立。 */
+@media (min-width: 1025px) and (max-height: 1100px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 390px; }
+  .fc-p-learn .fc-learn-img { max-height: 400px; }
+  .fc-player { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (min-width: 901px) and (max-width: 1024px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 360px; }
+  .fc-p-learn .fc-learn-img { max-height: 370px; }
+}
+/* 專心模式再多給一些（上方列收起來就是為了換這個空間） */
+html.focus-on .fc-p-card .fc-back-img-wrap,
+html.focus-on .fc-p-card .fc-back-img-wrap img { max-height: 460px; }
+html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
+
+/* 卡片內的上下留白收緊——Alan：「不要留白太多」 */
+.fc-p-card .fc-face { justify-content: center; }
+/* v395：這行 v393 加的 min-height:0 是崩壞的第二個原因——
+   .fc-flip-card 裡面兩張 face 都是絕對定位，本身沒有內容高度，
+   把地板拿掉之後只要 flex 分不到空間就會塌成一條。地板要留著。 */
+.fc-p-card > .fc-flip-card { min-height: 220px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v393 ①：白色框框在捲的真正原因與修法（Alan：「不是圖片在卷 是白色框框在卷」）
+   ──────────────────────────────────────────────────────────────────────────
+   .fc-p-card 有 overflow-y:auto（v376 刻意的——高度真的不夠時寧可捲，
+   也不要用 overflow:hidden 把「下一張」按鈕切掉、變成按不到）。
+   但 v388/v389 為了修「圖片跟著捲動忽大忽小」把圖片改成完全固定
+   （flex:0 0 auto + 固定 max-height）之後，圖片與文字就再也不會讓步 →
+   空間不夠時內容一定溢出 → 白色框框自己捲起來，而且捲完字和圖還是一樣大。
+
+   🔑 關鍵：當初會「忽大忽小」，是因為**容器高度**在捲動時一直被重算
+   （useFitHeight 用相對視窗的座標）。那個根因已經在 v389 修掉了——
+   容器現在是穩定的。容器穩定之後，讓圖片「可以縮」就不會再有伸縮抖動，
+   因為它縮放的依據（容器高度）不再變動。
+
+   所以這裡把圖片改回「可以縮，但有上限」：
+     · max-height = 上限（有空間時就用到這麼大，維持 Alan 要的大圖）
+     · flex: 1 1 auto + min-height: 0 = 空間不夠時自己讓步，讓內容塞得下
+   結果：不再有捲軸，圖片也不會在捲動時變化。 */
+.fc-p-card .fc-back-img-wrap { flex: 1 1 auto; min-height: 0; }
+.fc-p-card .fc-back-img-wrap img { height: 100%; object-fit: contain; }
+.fc-p-learn .fc-learn-img { flex: 1 1 auto; min-height: 0; object-fit: contain; }
+
+/* ⚠⚠ v416（Alan：「圖片比較大的時候下面的例句會沒位置…iPad 更有這個問題，例句會消失」）
+   本來這一條是 `flex: 0 1 auto; min-height: 0; overflow: hidden`——
+   min-height:0 等於允許 flexbox 把例句壓成 **0 高度**，而圖片是 flex-grow:1 會先把空間吃光，
+   所以圖片一大，例句就整個不見（實測 1440×820：例句高度 0）。
+   改成「例句先佔位、圖片再拿剩下的」：例句 flex:0 0 auto 不讓步，
+   圖片本來就有 flex:1 1 auto + min-height:0 + object-fit:contain，會自己縮小讓位。
+   真的太長時用 line-clamp 收在「整行」的地方，不會像以前那樣切半行。 */
+.fc-p-card .fc-example {
+  flex: 0 0 auto; min-height: auto;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+@media (max-height: 820px) { .fc-p-card .fc-example { -webkit-line-clamp: 2; } }
+@media (max-height: 680px) { .fc-p-card .fc-example { -webkit-line-clamp: 1; } }
+
+/* ② 作答畫面填滿右半邊（Alan：「右邊留白還是太多」）
+   .fc-player 沒有 max-width，但 .fc-flip-card 之類的內層有；
+   在放寬 shell 之後右側就空了一塊。讓卡片吃滿可用寬度（仍留一點呼吸）。 */
+@media (min-width: 1500px) {
+  .fc-player, .fc-p-card, .fc-p-learn { max-width: none; }
+  .fc-p-card > .fc-flip-card, .fc-p-card .fc-face { max-width: none; }
+  .qm-player-shell { max-width: 1180px; }
+}
+
+/* v393 ②：矮螢幕上把空間讓給圖片（Alan：圖片要大、又不要捲）
+   實測 iPad 橫式 1180x760：卡片只有 517px 高，翻面那一格 384px，
+   其中 64px 是 .fc-face 的內距、62px 中文、17px 例句 → 圖片只剩 215px。
+   兩個願望在這個高度會互相牴觸，所以把「比較不重要的」讓出來給圖片：
+     · 內距 32→14（省 36px）
+     · 例句在矮螢幕收起來（單字卡背面的重點是圖 + 中文；例句在「學習」模式看得到）
+   桌機／高螢幕完全不受影響。 */
+@media (max-height: 900px) {
+  .fc-p-card .fc-face { padding: 14px 18px; }
+  /* ⚠ v416：這裡本來是 `.fc-p-card .fc-example { display: none; }`——
+     v393 為了「圖片要大又不要捲」把例句整個藏起來，代價是 900px 以下的螢幕
+     （iPad 橫式 1180×760、很多筆電）通通看不到例句。Alan 回報的就是這件事。
+     現在改成讓圖片縮小讓位（上面那一段），例句一律留著。 */
+  .fc-p-card .fc-zh { margin-top: 4px; }
+}
+/* 更矮的（手機橫式）連中文都要收一點行高，但不隱藏——那是題目本身 */
+@media (max-height: 560px) {
+  .fc-p-card .fc-face { padding: 10px 14px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v394：測驗模式「點小圖看大圖」燈箱
+   （對應 components-flashcard.jsx 的 FcImageZoom 與 .fc-img-zoomable）
+   ──────────────────────────────────────────────────────────────────────────
+   結構照 styles-quiz-mode.css 的 .rs-pass-back / .rs-pass：
+   暗底 position:fixed 蓋滿 + 置中的紙色面板 + 圓角 + 柔和陰影。
+   ⚠ 這一段只新增 class，完全不覆寫 .fc-test-img 既有的尺寸
+     （styles-flashcard.css 的 104px / 手機 72px），
+     也不改任何會影響 useFitHeight 量到的高度的東西。 */
+
+/* 可以點的小圖：只加游標與鍵盤焦點框，尺寸一律不碰 */
+.fc-img-zoomable {
+  cursor: zoom-in;
+  touch-action: manipulation;              /* iPad：點一下就開，不要等雙擊縮放 */
+  -webkit-tap-highlight-color: transparent;
+}
+.fc-img-zoomable:focus-visible { outline: 3px solid #8B3120; outline-offset: 3px; }
+
+.fc-zoom-back {
+  position: fixed; inset: 0; z-index: 320;  /* 圖庫搜尋的 overlay 是 300，要蓋在它之上 */
+  background: rgba(21, 19, 14, .62);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  display: grid; place-items: center; padding: 22px;
+  overscroll-behavior: contain;
+  animation: fcZoomFade .14s ease-out;
+}
+@keyframes fcZoomFade { from { opacity: 0; } to { opacity: 1; } }
+
+.fc-zoom-panel {
+  position: relative;
+  display: flex; flex-direction: column; gap: 10px;
+  max-width: min(880px, 100%); max-height: 88vh;
+  padding: 14px;
+  background: var(--bg-paper, #FBF8F1);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -20px rgba(21, 19, 14, .55);
+}
+.fc-zoom-img {
+  display: block; width: auto; height: auto;
+  max-width: 100%; max-height: calc(88vh - 100px);
+  object-fit: contain;                      /* 小圖是 cover 裁切過的，放大要看完整張 */
+  border-radius: 12px;
+}
+.fc-zoom-cap {
+  text-align: center;
+  font-family: var(--sans, system-ui, sans-serif); font-weight: 800; font-size: 17px;
+  color: var(--ink, #15130E);
+}
+.fc-zoom-x {
+  position: absolute; top: -13px; right: -13px;
+  width: 40px; height: 40px; border-radius: 999px;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--border, #E5DFC8);
+  background: var(--bg-paper, #FBF8F1);
+  color: #8B3120; font-size: 17px; font-weight: 800; line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -6px rgba(21, 19, 14, .45);
+}
+.fc-zoom-x:hover { background: #8B3120; color: #FBF8F1; border-color: #8B3120; }
+.fc-zoom-x:focus-visible { outline: 3px solid #8B3120; outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .fc-zoom-back  { padding: 16px; }
+  .fc-zoom-panel { padding: 10px; border-radius: 16px; gap: 8px; }
+  .fc-zoom-img   { max-height: calc(88vh - 86px); }
+  .fc-zoom-cap   { font-size: 15px; }
+  .fc-zoom-x     { top: -11px; right: -11px; width: 36px; height: 36px; font-size: 16px; }
+}
+
+/* v393 ③：右邊留白的真正元凶是 .qm-cat-view 自己的 max-width:1280
+   （上一版只放寬了 .shell，但內層還被 1280 夾住 → 1920 上作答區右邊仍空 280px）。
+   兩層一起放寬才有效。 */
+@media (min-width: 1500px) {
+  .page-mission .qm-cat-view { max-width: 1600px; }
+}
+@media (min-width: 1800px) {
+  .page-mission .qm-cat-view { max-width: 1760px; }
+}
+
+/* ══ v394：白色框框永遠不自己捲 ══
+   配合 useFitHeight 從 height 改成 min-height：框框現在會跟著內容長，
+   所以不再需要（也不可以）讓它自己捲——內容變長就讓整頁捲，
+   跟「測驗」模式一樣（Alan 說只有測驗沒問題，就是因為測驗沒有固定高度）。
+   ⚠ 這條同時解掉 v376 註解裡擔心的事：框框會長不會裁，
+     「下一張／選項」永遠不會被切掉，也永遠按得到。 */
+/* v395：v394 為了「框框不要捲」把 overflow 改成 visible，
+   但容器是固定高度，內容一多就會直接溢出到卡片外面（看起來像壞掉）。
+   改回 auto 當安全網——真正的解法是讓內容縮得下（圖片已經是 flex 可縮）。 */
+.fc-p-card, .fc-p-learn { overflow-x: hidden; overflow-y: auto; }
+
+/* ══ v394：手機與平板直式的圖片上限（之前漏掉的一整塊）══
+   v393 的矮螢幕圖片上限都寫成 `min-width: 901px` 才生效 →
+   手機（375~430）與 iPad 直式（744~820）通通落在條件外，還在用 330px 的基底值。
+   裝置矩陣實測：iPhone 13 單字卡整頁要捲 128px、iPad 直式 111px，就是這樣來的。
+   ⚠ 用 px 不用 vh：手機瀏覽器的網址列會伸縮，vh 會跟著跳（v376 踩過）。 */
+@media (max-width: 900px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 240px; }
+  .fc-p-learn .fc-learn-img { max-height: 250px; }
+}
+@media (max-width: 560px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 200px; }
+  .fc-p-learn .fc-learn-img { max-height: 210px; }
+}
+/* 手機橫式（高度只有 390~430）圖片再收一次，不然一張圖就吃掉整個畫面 */
+@media (max-height: 480px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 150px; }
+  .fc-p-learn .fc-learn-img { max-height: 160px; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v395：動畫流暢度稽核（只改動畫，完全不動版面尺寸／資料／計分）
+   ───────────────────────────────────────────────────────────────────────────
+   量到的事實（工具：把全站 11 個樣式檔的 @keyframes 逐一解析出「動了哪些屬性」，
+   再對回用到它的選擇器）：
+     · 209 條 animation 宣告、17 個無限迴圈動畫。
+     · 其中只有 3 個無限動畫在動「會觸發 layout」的屬性，而且都在同一個地方：
+       essay-progress（動 width）＝ AI 批改等待條。
+     · 沒有任何一個 scroll 監聽器（全站 0 個），所以捲動本身不是問題來源。
+     · 88/209 條在 reduced-motion 區塊內，48 條完全沒被任何 reduced-motion 蓋到。
+
+   ⚠ 禁區全部沒碰：useFitHeight／.fc-p-card／.fc-p-learn 的高度、
+     ResizeObserver、html.focus-on、任何 props/資料形狀。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ── ① AI 批改等待條：animation 動 width → 改成 transform ────────────────
+   styles-quiz-mode.css:1917 的 @keyframes essay-progress 是 `from{width:5%}
+   to{width:90%}`，掛在 .essay-checking-fill（:1915）與 .sm-checking-fill（:2124），
+   而且是 `2.5s infinite alternate`。
+
+   為什麼這是全站最該修的一條：
+     · width 不是合成屬性 → 每一幀都要重新 layout + paint。
+     · 它出現的時機正好是「AI 正在批改」——那段時間主執行緒本來就在等
+       fetch 回來、回來之後要一次算完批改結果並重繪整個回饋區。
+       等待幾秒＝幾百幀的無謂 layout，剛好卡在最需要順的時候。
+     · 它是無限迴圈，不會自己停。
+
+   改法：寬度固定 100%，改用 transform: scaleX() 縮放。scaleX 只走合成層，
+   0 次 layout、0 次 paint。
+   為什麼安全：
+     · .essay-checking-bar（:1908）與 .sm-checking-bar（:2126）都是
+       overflow:hidden + 固定高度的軌道，fill 是裡面唯一的子元素，
+       沒有任何東西的位置依賴它的寬度。
+     · JSX 是 <div className="essay-checking-fill"/>，沒有 inline style，
+       所以純 CSS 就能完整接管（全站的「真.進度條」是 style={{width:pct+'%'}}
+       由 JS 寫進去的，那些不能這樣改，見報告）。
+     · transform-origin 設 left，起點與原本的 width 一樣是從左邊長出來。
+     · 唯一的視覺差：border-radius:2px 的左右圓角會被水平壓扁。
+       這是一條高 3~4px 的實心色條，而且外框自己就是 radius:2px + overflow:hidden，
+       肉眼看不出來。 */
+.essay-checking-fill,
+.sm-checking-fill {
+  width: 100%;
+  transform-origin: left center;
+  animation: qmCheckGlide 2.5s ease-in-out infinite alternate;
+}
+@keyframes qmCheckGlide {
+  from { transform: scaleX(.05); }
+  to   { transform: scaleX(.90); }
+}
+
+
+/* ── ② .qm-btn：非 primary 沒有過場、而且全部按下去都沒有回饋 ────────
+   ⚠ 先寫下一個「用 grep 會查錯、要去瀏覽器查 CSSOM 才會發現」的事實：
+     .qm-btn 的 transition 一共有三條規則，分散在三個檔案，
+     grep 只搜 `^.qm-btn` 會漏掉後兩條（它們掛在 .qm-btn.primary 上）：
+       styles-quiz-mode.css:553  .qm-btn         { transition: opacity .15s }
+       styles-quiz-mode.css:558  .qm-btn.primary { transition: opacity .15s, transform .1s, box-shadow .15s }
+       styles-theme.css:923      .qm-btn.primary { transition: background .15s, transform .12s <彈性曲線>, box-shadow .15s }
+     所以 primary 的過場其實一直是完整的，最後由 styles-theme.css 那條勝出。
+
+   真正的兩個缺口是：
+     ① 非 primary（.secondary 等）只有 `opacity .15s`，
+        但 styles-quiz-mode.css:576 的 .qm-btn.secondary:hover 改的是
+        border-color + color → 這兩個是硬跳的。
+     ② 按下去（:active）全部都沒有回饋。primary 雖然有
+        `.qm-btn.primary:active { transform: translateY(0) }`（:564），
+        但那只是「把 hover 浮起來的 1px 收回去」；iPad 沒有 hover，
+        所以在平板上按 primary 的位移是 0 → 完全沒有「我按到了」的訊號。
+        .qm-btn 是全站按最多次的控制項（開始練習／下一題／完成／再試一次），
+        小朋友沒看到反應就會重複點。
+        本檔案 (H) 段（:1839）已經幫 11 種元素補過 :active scale(.96)，
+        當時漏掉 .qm-btn——這裡照同一套語彙補上。
+
+   權重逐條對過，並且已在瀏覽器實測 computed style 確認：
+     .qm-btn（我這條，0,1,0）→ 只贏過 quiz-mode 的 .qm-btn，
+       非 primary 實測得到 opacity/transform/box-shadow/border-color/color ✓
+       primary 實測仍是 styles-theme 的那條（0,2,0 贏我）——那條本來就比較好，
+       刻意讓它繼續贏，不去搶。
+     .qm-btn.primary:active           (0,3,0)
+     .qm-btn.primary:active:not(:disabled) (0,4,0) → 贏 ✓（實測確認）
+     .qm-btn:active:not(:disabled)    (0,2,0)，非 primary 沒有對手 ✓
+   transform 只在 :active 那一瞬間存在，而且 .qm-btn.primary:hover 本來就有
+   transform，所以「按鈕變成 fixed 子孫的包含塊」這個風險本來就已存在且無害
+   （.qm-btn 裡面只有文字）。 */
+.qm-btn {
+  transition: opacity   var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              transform  .13s                var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              box-shadow var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              border-color var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              color      var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1));
+}
+.qm-btn:active:not(:disabled),
+.qm-btn.primary:active:not(:disabled) { transform: scale(.97); }
+
+
+/* ── ③ 圈選題選項：完全沒有 transition ──────────────────────────────
+   styles-quiz-mode.css:2350 的 .circle-label-option 沒有任何 transition，
+   但 :2359 / :2365 / :2371 會改 border-color、background、color
+   （hover／選取／對／錯四種狀態）——選下去是硬跳的，沒有「被選到」的過程感。
+   這三個都是 paint-only 屬性，加 transition 不會造成 layout。
+   :active 的縮放沿用 (H) 段的 scale(.96)。 */
+.circle-label-option {
+  transition: background   var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              border-color var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              color        var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              transform    .12s                var(--ease, cubic-bezier(.4, 0, .2, 1));
+}
+.circle-label-option:active:not(:disabled) { transform: scale(.96); }
+
+
+/* ── ④ 斷句題的分隔線：hover 動 width / top / bottom → 改成 scale ────
+   styles-quiz-mode.css:1491：
+     transition: background .12s, width .12s, top .12s, bottom .12s;
+   hover 時 width 1.5px→2.5px、top/bottom 22%→14%（:1496）。
+   四個屬性全都要 layout，而斷句題一句話裡有十幾個 gap，滑鼠掃過去就是連續 relayout。
+
+   數學上完全等價的 transform：
+     寬 1.5 → 2.5     = scaleX(1.6667)
+     高 56% → 72%     = scaleY(1.2857)   （22/22 與 14/14 都對稱於中心）
+   基底本來就有 translateX(-50%)，把 scale 接在後面即可；
+   transform 由右往左套用＝先 scale（以自身中心為原點）再位移，
+   而 translateX 的百分比是以「未變形的 border-box 寬度 1.5px」計算，
+   所以中心點分毫不動，位置與原本一模一樣。
+   權重 (0,3,0) 與原規則相同，本檔在後面 → 贏。 */
+.sd-gap-line {
+  transition: background var(--t-fast, .12s) var(--ease, cubic-bezier(.4, 0, .2, 1)),
+              transform  .12s                var(--ease, cubic-bezier(.4, 0, .2, 1));
+}
+.sd-gap:hover:not(:disabled) .sd-gap-line {
+  width: 1.5px; top: 22%; bottom: 22%;          /* 還原成基底值，改由 transform 表現 */
+  transform: translateX(-50%) scale(1.6667, 1.2857);
+}
+
+
+/* ── ⑤ 兩個小地方的回饋補齊 ─────────────────────────────────────────
+   · .modal-close（styles-part2.css:519）：:hover 改 background，沒有 transition。
+   · .grd-word（styles-quiz-mode.css:3040）：照片上的隱形字框，
+     :active 會亮金色但沒有 transition。這裡刻意用「按下瞬間硬跳、放開才淡出」
+     的寫法——按下的回饋必須是 0ms（加了 transition 反而變遲鈍），
+     淡出才需要時間。:active 自己蓋掉 transition 就做得到。 */
+.modal-close { transition: background var(--t-fast, .15s) var(--ease, cubic-bezier(.4, 0, .2, 1)); }
+.grd-word    { transition: background .22s var(--ease, cubic-bezier(.4, 0, .2, 1)); }
+.grd-word:active { transition: none; }
+
+
+/* ── ⑥ 換頁動畫 0.55s → 0.34s ──────────────────────────────────────
+   .page 在 app.jsx:1461 是 key={pageKey} → 每一次換頁都重掛、重播，
+   是全站重複次數最高的動畫。
+
+   ⚠ 這裡有一個「看程式碼會看錯」的陷阱，是實際在瀏覽器裡查 CSSOM 才確定的：
+     .page 有兩條 animation 規則，
+       styles.css:39      .page { animation: pageEnter 0.5s ... both; }   ← 沒有生效
+       styles-auth.css:488 .page { animation: page-enter 0.55s ease forwards; } ← 真正生效
+     styles-auth.css 排在 styles.css 後面（index.html:29 vs :33），權重相同 → 後者贏。
+     所以線上真正跑的是 styles-auth.css:484 的 @keyframes page-enter，
+     內容是 `from{opacity:0} to{opacity:1}`——純淡入、0.55 秒。
+
+   這代表兩件事：
+     ① 每次換頁要等 0.55 秒內容才完全看得清楚，對小朋友就是「按了沒反應」。
+        0.34s 一樣有淡入的柔和感，但不再拖。
+     ② 真正生效的那條「完全沒有 transform」，只有 opacity ——
+        所以這個改動對版面是 0 影響，跟 useFitHeight 用
+        getBoundingClientRect().top 量高度那件事完全無關
+        （會污染量測的 translateY 來自 pageEnter，而 pageEnter 根本沒生效）。
+        沒有動到 useFitHeight 一個字，也沒有改變任何元素的算繪高度。
+
+   只改 animation-duration（不寫 shorthand）＝ 不管將來哪一條規則勝出，
+   都只調速度、不會意外把別人的 keyframes 或 fill-mode 換掉。 */
+.page { animation-duration: .34s; }
+
+
+/* ── ⑦ reduced-motion 補漏 ────────────────────────────────────────
+   稽核結果：209 條 animation 有 48 條完全沒被任何 reduced-motion 區塊蓋到。
+   扣掉登入頁行銷動畫（.ll-* / .lldm-* / .ls-*，那些多數自己包在
+   prefers-reduced-motion: no-preference 裡）之後，學生真的會遇到的有這幾條。
+
+   ⚠ 有 fill-mode 的動畫不能無腦寫 animation:none——那會把「動畫跑完的樣子」
+     一起拿掉。逐條處理：
+       .qm-result-star  基底是 opacity:0 + `both` → 直接 none 會變成星星消失，
+                        所以要補 opacity:1。
+       .qm-plus-one     基底是 forwards、結尾 opacity:0 → 直接 none 會讓「+1」
+                        永遠留在畫面上，所以換成一條只有 opacity 的動畫。
+       其餘三條沒有 fill-mode，安全。
+   ⚠ 刻意不碰 .fc-match-tile.matched（styles-flashcard.css:621）：
+     它是 forwards 且結尾 opacity:0，配對成功的方塊靠它消失。
+     它動的是 transform + opacity（合成屬性，本來就不卡），
+     為了 reduced-motion 去改它反而可能弄壞配對遊戲，不值得。 */
+@media (prefers-reduced-motion: reduce) {
+  /* 等待條：不再跑動，改成靜止的半滿（旁邊有「AI 正在批改…」的文字說明狀態） */
+  .essay-checking-fill,
+  .sm-checking-fill { animation: none; transform: scaleX(.4); }
+  .sm-checking-icon { animation: none; }                       /* styles-quiz-mode.css:2120 */
+  .qm-result-star   { animation: none; opacity: 1; }           /* styles-quiz-mode.css:656  */
+  .sd-gap.done.missed .sd-gap-slash { animation: none; }       /* styles-quiz-mode.css:1521 */
+  .rs-board.k0, .rs-board.k1        { animation: none; }       /* styles-quiz-mode.css:3681 */
+  .qm-plus-one { animation: qmPlusOneFadeRM .75s linear forwards; }
+  /* 本段新加的回饋也一起收斂（跟 (H) 段同一套：不縮放，改變淡） */
+  .qm-btn, .circle-label-option, .sd-gap-line, .grd-word, .modal-close { transition: none; }
+  .qm-btn:active:not(:disabled),
+  .qm-btn.primary:active:not(:disabled),
+  .circle-label-option:active:not(:disabled) { transform: none; opacity: .7; }
+  .sd-gap:hover:not(:disabled) .sd-gap-line { transform: translateX(-50%); }
+}
+@keyframes qmPlusOneFadeRM {
+  0%, 60% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v395：全站廣度稽核（每一頁，不是只有練習頁）
+   ──────────────────────────────────────────────────────────────────────────
+   Alan 的抱怨是「不要只有第三頁，是每一頁都要完全使用」。這一段把登入頁、門口頁、
+   大廳、練習頁、暑假頁、老師後台、編輯器、錯題本走過一輪之後，只挑出
+   「被蓋住／被裁切／小到按不到」這三類「確定是壞的、而且純 CSS 就能修」的問題。
+   需要動 JSX 的（死路、標籤不一致、重複的數字、看不到的入口）一律寫在報告裡，不在這裡改。
+   ⚠ 這一段刻意完全不碰 .fc-p-card / .fc-p-learn 的高度、不碰 html.focus-on、
+     不碰 1180×760 iPad 橫式練習畫面的任何規則。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── (1)【最嚴重】手機上「單元列表」鈕整顆被底部導覽列蓋住 ──────────────
+   .qm-sidebar-reopen 在 ≤640 是 fixed、bottom:20px、z-index:60
+   （styles-quiz-mode.css:189 與 :201）；
+   .mobile-nav 是 fixed、bottom:0、height:60px、z-index:90（styles-part2.css:760）。
+   兩者一定同時出現——MobileNav 在 catView 時渲染（app.jsx:1707），
+   展開鈕也只在 .qm-cat-view 裡（components-quiz-mode.jsx:981）——
+   所以這顆鈕整個落在導覽列那 60px 帶狀區內，又排在它下面 ＝ 看不到也按不到。
+   而手機直向一旦選了單元，側欄被 .qm-cat-view.has-selection .qm-sidebar{display:none}
+   收掉（styles-quiz-mode.css:1107），這顆鈕就是「回到單元列表」的唯一出口
+   ＝ 小朋友點進一個單元之後卡在裡面出不去。
+   ⚠ 只改 ≤640：641–768 這顆是 top:74px，本來就沒被蓋到。 */
+@media (max-width: 640px) {
+  .qm-sidebar-reopen {
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 14px);
+    z-index: 95;   /* 只要高過 .mobile-nav 的 90；仍遠低於 .modal-backdrop 的 100 */
+  }
+}
+
+/* ── (2) 老師端「每一個」彈窗在手機上左右各被裁掉 32px ─────────────────
+   .modal-backdrop 是 display:grid + place-items:center + padding:40px，
+   而且這條沒有任何斷點（styles-part2.css:488）→ 可用寬度＝100vw−80px；
+   .modal 在 ≤640 卻要 width:calc(100vw−16px)（styles-part2.css:727）。
+   grid item 比 track 寬 64px，置中之後左右各溢出 32px：出題、建立整個學期、
+   建立週次、匯出…老師端每一個彈窗的內容都被切掉兩邊。
+   背景內距縮到 8px 之後 100vw−16px 剛好等於 track，兩邊正好對上。 */
+@media (max-width: 640px) {
+  .modal-backdrop { padding: 8px; }
+}
+
+/* ── (3) 彈窗的按鈕列不會換行 ─────────────────────────────────────────
+   .modal-foot 是 flex + justify-content:space-between、沒有 flex-wrap
+   （styles-part2.css:584；上面 v392 那段只補了 sticky，沒補換行）。
+   「← 回上一步／↻ 重新出一次／建立 N 個練習並指派 →」這種三顆鈕的頁腳
+   在 375px 一定排不下。塞得下時這條完全不生效，塞不下才換行。 */
+.modal-foot { flex-wrap: wrap; row-gap: 10px; }
+
+/* ── (4) 彈窗主要按鈕 37px → 44px ─────────────────────────────────────
+   .btn 是 font-size:11px + padding:12px 22px ≈ 37px 高（styles-part2.css:589），
+   而它是老師端所有「儲存／取消／建立」的按鈕。
+   ⚠ 一定要限定在 .modal-foot 底下：.btn 也用在 components-flashcard.jsx 的
+     學生練習畫面（「下一題 →」「再多練一點 →」…），那些在 .fc-p-card /
+     .fc-p-learn 裡面，高度是 v394 明訂不能動的。
+     .modal-foot 全 repo 只出現在 components-editor.jsx（老師端彈窗頁腳），
+     改它百分之百碰不到練習畫面。 */
+.modal-foot .btn { min-height: 44px; }
+
+/* ── (5) 手機上唯一的換週鈕只有 32px ──────────────────────────────────
+   ≤640 時 header 的 .week-nav 被整個隱藏（styles-theme.css:548），
+   換週只剩大廳 hero 裡的 .wh-weeknav，而它是 32×32（styles-theme.css:556）。
+   這是手機上唯一的換週入口，補到 40px——跟 v390 幫 header 那排訂的標準一致
+   （那邊選 40 不選 44 的理由同樣適用：這排在一個矮的列裡）。 */
+@media (max-width: 640px) {
+  .wh-weeknav button { width: 40px; height: 40px; font-size: 20px; }
+}
+
+/* ── (6) 成長報告的三個數字磚在手機被擠成三欄 ─────────────────────────
+   styles-home.css:888 在 ≤560 想把 .growth-stats 改成兩欄，但
+   .growth-stats-3 帶著 !important（styles-theme.css:793）→ 兩欄那條永遠輸。
+   375px 上每一欄只剩約 100px，而第一個磚裡的「▲ 較上週 +6 分」有 9 個字，
+   一定爆出去。三個磚排兩欄會落單一個，所以維持三欄，
+   改成把內距與字級收一階，讓三欄真的排得下。 */
+@media (max-width: 560px) {
+  .growth-stats-3 { gap: 7px; }
+  .growth-stats-3 .growth-stat { padding: 13px 5px; }
+  .growth-stats-3 .growth-stat-num { font-size: 23px; }
+  .growth-stats-3 .growth-stat-num em { font-size: 11px; }
+  .growth-stats-3 .growth-stat-label { font-size: 11.5px; }
+  .growth-stats-3 .growth-stat-delta { font-size: 10.5px; line-height: 1.35; }
+}               /* 原 ≈32px，而且是在 168px 高的小捲動框裡選人 */
+
+/* ── (9) 錯題本：兩個主要按鈕都不到 44px ─────────────────────────────
+   .mk-item-answer（點一下才顯示答案，錯題本的主要互動）約 30px、
+   .mk-next-btn（下一題）約 38px（styles-mistakes.css:141 / :333）。
+   ⚠ 順帶記錄：錯題本目前在正式站上「沒有任何入口」——v319 拿掉 header 的 📕
+     之後，app.jsx:1495 仍把 onShowMistakes 傳給 Header，但 Header 裡沒有任何
+     按鈕用它（components-shell.jsx:191 的註解就是講這件事）。
+     這兩條是為了「之後把入口加回來時就已經是對的」。 */
+.mk-item-answer { min-height: 44px; }
+.mk-next-btn { min-height: 44px; }
+
+/* ── (10) 大廳「之前還有 N 項作業沒完成」那幾列約 40px ────────────────
+   .tt-past-row 是 padding:9px 12px（styles-home.css:1166），
+   而它是把落後的作業撿回來補做的唯一入口。 */
+.tt-past-row { min-height: 44px; }
+
+/* ── (11) 門口頁的說明句在手機只有 12px ──────────────────────────────
+   .gs-card-text > span 在 ≤560 被縮到 12px（styles-auth.css:5831）。
+   那一句正是「老師專用 · 出題後到後台發派給學生」「每週跟著學校進度練」
+   這種決定「我該點哪一張卡」的關鍵句，二到六年級讀 12px 中文太吃力。
+   那個 span 在 .gs-card-text{flex:1;min-width:0} 裡，放大只會換行，不會把卡片擠壞。 */
+@media (max-width: 560px) {
+  .gs-card-text > span { font-size: 13.5px; }
+}
+
+/* ══ v394：手機底部留白被算了兩次 ══
+   styles-theme.css:487 給 .page-mission .qm-cat-view 的內距是 12px 12px 76px
+   （76px 是替底部導覽列讓位），而 v392 又給 .qm-quiz-area 加了 padding-bottom:72px。
+   兩個加起來 148px，但底部導覽列只有 60px → 多出來的就是實測到的那 128px 溢出
+   （iPhone 13／15 Pro Max／iPad mini 直式全部剛好都是 128，因為它是固定值而不是比例）。
+   → 讓位只留一份：quiz-area 保留 72px，cat-view 的底部收掉。 */
+@media (max-width: 900px) {
+  .page-mission .qm-cat-view { padding-bottom: 8px; }
+}
+
+/* v394：錯題本入口（v319 拿掉之後就再也打不開了）——沿用簽到鈕的形狀 */
+.mistakes-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 40px; padding: 5px 11px; border-radius: 999px;
+  background: rgba(139,49,32,.08); border: 1px solid rgba(139,49,32,.2);
+  color: var(--accent, #8B3120); font-size: 15px; line-height: 1;
+  box-sizing: border-box; transition: all .15s ease;
+}
+.mistakes-btn:hover { background: rgba(139,49,32,.15); }
+.mistakes-btn-num { font-family: var(--sans); font-size: 12.5px; font-weight: 800; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v395 ④：轉場的小卡頓（Alan：「都會小卡頓，要順暢、有質感、又快一點」）
+   ──────────────────────────────────────────────────────────────────────────
+   查到一件意外的事：.qm-quiz-swap 與 .qm-question-swap 引用的
+   `questionSwap`、`optionRise` 這兩組 keyframes **整個專案都沒有定義**
+   （grep 全部 11 個 css 檔都找不到）。引用不存在的 keyframes ＝ 動畫不會跑，
+   所以換題其實是「直接跳掉」——沒有過場，配上 React 重繪的一瞬空檔，
+   看起來就是「卡一下」。
+
+   這裡把它們補上，而且只用 transform / opacity（GPU 合成，不觸發 layout／paint），
+   時間壓短（0.20~0.22s）＝ 有過場但不拖，符合「有效率又不失質感」。 */
+@keyframes questionSwap {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes optionRise {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.qm-quiz-swap     { animation-duration: .22s; }
+.qm-question-swap { animation-duration: .20s; }
+
+/* 選項逐一浮上來——間隔很小（30ms），是「有層次」而不是「等它跑完」 */
+.qm-options-swap .qm-option { animation-duration: .22s; }
+.qm-options-swap .qm-option:nth-child(2) { animation-delay: .03s; }
+.qm-options-swap .qm-option:nth-child(3) { animation-delay: .06s; }
+.qm-options-swap .qm-option:nth-child(4) { animation-delay: .09s; }
+
+/* 翻卡再快一點（0.18 → 0.15），並提示瀏覽器先把圖層準備好，
+   避免第一幀才開始合成造成的那一下頓。 */
+.fc-p-card .fc-face { transition-duration: .15s; }
+.fc-flip-card { will-change: auto; }
+.fc-flip-card:hover, .fc-flip-card:active { will-change: transform; }
+
+/* 換頁淡入：0.55s 對小朋友來說太久，而且它純 opacity、縮短沒有任何風險 */
+.page { animation-duration: .28s; }
+
+/* ⚠ will-change 不能一直掛著（會一直佔著合成層、反而更耗）——
+   只在真的要動的那一刻給。這裡用 :has 判斷「正在換題」的容器。 */
+.qm-quiz-area:has(.qm-quiz-swap) { will-change: contents; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qm-quiz-swap, .qm-question-swap, .qm-options-swap .qm-option, .page {
+    animation: none !important;
+  }
+  .fc-p-card .fc-face { transition-duration: .01s; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v397 ①：字母泡泡轉場——順暢＋加速（Alan：會卡頓）
+   ──────────────────────────────────────────────────────────────────────────
+   泡泡本身動的是 transform/opacity（沒問題），卡頓來自「每一顆的長相太貴」：
+   36 顆同時在動，每顆都有 radial-gradient 背景 + inset 與外陰影兩層 box-shadow，
+   而且 ::after 的反光還掛了 filter: blur(1px)——blur 是每幀重繪、36 顆一起就掉幀。
+   修法：
+     · 拿掉 blur，改用「本來就柔邊」的 radial-gradient 反光（看起來一樣，成本 0）
+     · 每顆提升成自己的合成層（translateZ + will-change），動的時候不再重繪
+     · 陰影簡化成一層
+     · 整體時間縮短：veil 1.75s → 1.05s、泡泡上升也同步變快 */
+.pwb {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  box-shadow: 0 6px 16px rgba(60, 45, 30, .12);   /* 原本 inset + 外陰影兩層 */
+}
+.pwb::after {
+  filter: none;                                    /* ⚠ 這是卡頓的主因 */
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.55) 55%, rgba(255,255,255,0) 100%);
+}
+.pw-veil { animation-duration: 1.05s !important; } /* 原 1.75s */
+.pwb { animation-duration: .78s !important; }      /* 原 0.9~1.35s，統一收短 */
+
+/* ② 換頁淡入與翻卡——Alan 指定的數值（我上一版收得太緊） */
+.page { animation-duration: .45s; }                /* v396 是 .28s */
+.fc-p-card .fc-face { transition-duration: .18s; } /* v396 是 .15s */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v398 ①②：Alan 實際看過 v397 之後的微調——「有點太快，稍微放慢」
+   ──────────────────────────────────────────────────────────────────────────
+   v397 為了解卡頓一次縮太多。卡頓的真正原因是 blur/陰影（已在上面修掉，保留），
+   時間本身可以放回來一些：
+     · 泡泡紗幕 1.05s → 1.3s（原始 1.75s 的 74%）
+     · 泡泡上升 .78s → .95s（跟著紗幕等比例放慢，維持「泡泡先到、紗幕再收」的節奏）
+     · 換頁淡入 .45s → .55s（Alan 指定） */
+.pw-veil { animation-duration: 1.3s !important; }
+.pwb     { animation-duration: .95s !important; }
+.page    { animation-duration: .55s; }
+
+/* ══ v398 ⑦(b)：「← 上一頁」跟卡片之間的上下留白改成對稱（Alan 二選一選 b）══
+   實測 1440x900（未捲動）：頁首底線 y=65、按鈕 65→104、下面那張週卡 y=108。
+   ＝ 按鈕上面 0px、下面只有 4px，整顆黏在分隔線上，所以看起來「偏上」。
+   改成上下各 10px：按鈕本身不變，但視覺上就落在頁首底線與卡片的正中間。 */
+.lobby-back { margin-top: 10px; margin-bottom: 10px; }
+
+/* ══ v397 ③：翻到圖片面按「下一張」會先閃出下一張的圖片面 ══
+   原因：.fc-face 兩面都掛 `transition: opacity .18s`。按下一張時
+   cardIdx 與 flipped 同時更新——正在淡出的那一面在這 180ms 內
+   顯示的已經是**新卡片**的內容，所以看起來就是「先閃一下下一張的背面」。
+   修法：要收起來的那一面「立刻消失」，只有要出現的那一面才淡入。
+   翻卡看起來也更俐落（不會兩面疊在一起半透明）。 */
+.fc-flip-card:not(.flipped) .fc-back { transition-duration: 0s; }
+.fc-flip-card.flipped .fc-front     { transition-duration: 0s; }
+
+/* ══ v397 ④：單字卡留白太多、圖片要更大（Alan 圖2）══
+   實測 1920x1080：翻卡面 679px 高，圖片被 max-height:390 夾住，
+   結果圖片上方空 85px、中文下方空 129px ＝ 214px 完全沒用到。
+   圖片本來就是 flex:1 1 auto（會自己長大到可用空間），
+   真正卡住它的是那個上限值——放寬即可，容器高度仍由 useFitHeight 控制，不會溢出。 */
+@media (min-width: 1025px) and (max-height: 1100px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 560px; }
+  .fc-p-learn .fc-learn-img { max-height: 480px; }
+  .fc-p-card .fc-face { padding: 18px 24px; }   /* 32px 內距在大螢幕上太鬆 */
+}
+@media (min-width: 1025px) and (min-height: 1101px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 640px; }
+  .fc-p-learn .fc-learn-img { max-height: 560px; }
+}
+
+/* ══ v397 ⑤：學習模式的四個選項往上移（Alan 圖4）══
+   圖片與選項之間的留白偏大，把題目區整體往上收，選項就跟著上來。 */
+@media (min-width: 1025px) {
+  .fc-p-learn .fc-learn-q     { margin-bottom: 10px; }
+  .fc-p-learn .fc-learn-img   { margin-bottom: 10px; }
+  .fc-p-learn .fc-choices     { margin-top: 4px; row-gap: 10px; }
+}
+
+
+/* ══ v398：期末整理用的「封存」按鈕與狀態標 ══
+   顏色刻意選琥珀色：跟 .danger（紅／刪除）明顯不同，因為封存是可逆的、刪除不是。 */
+.banner-btn.arch {
+  background: #8a6d1f; border-color: #8a6d1f; color: #fff; font-weight: 700;
+}
+.banner-btn.arch:hover { background: #705818; border-color: #705818; }
+.edit-banner-archived {
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: rgba(255, 214, 120, .18);
+  border: 1px solid rgba(255, 214, 120, .55);
+  color: #ffd678;
+  font-size: 12px; font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ══ v399：年級章「綁定版」——它現在是一個標籤，不是按鈕 ══
+   學生的年級由學號綁定之後就不能自己換班，所以那顆章不再是 <button>。
+   游標與 hover 一起拿掉，不然看起來還是可以點（點了卻沒事＝更糟的體驗）。 */
+.grade-chip-fixed { cursor: default; }
+.grade-chip-fixed:hover { opacity: 1; }
+
+/* ══ v399：年級卡從 5 張變 6 張（新增 G1）══
+   格線本來是 repeat(auto-fit, minmax(140px, 1fr))：容器 860 − 左右內距 40 − 5 道 14px 間隙
+   ＝ 每張只剩 125px < 140，auto-fit 於是只排得下 5 欄 → 第 6 張 G6 自己孤零零一列。
+   桌機直接指定 6 欄（125px 放得下大字號的年級章，實測過），
+   ≤760px 本來就是 3 欄＝剛好兩列，都不會有落單的那一張。 */
+@media (min-width: 761px) {
+  .grade-sel-cards { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* ══ v402 ①：門口頁「其他題庫」抽屜（Alan：開學了，暫時用不到，收起來）══
+   暑假題庫與五大時態本來是兩張跟教室卡一樣大的卡，卡在教室卡上面——
+   等於每天都要先跳過兩張大卡才看到今天要進的教室。
+   收成一條 40px 的細抽屜、預設關著，卡片本身完全沒改（點開就是原本那兩張）。
+   只有老師拿得到這兩張，所以學生端根本不會出現這一條。 */
+.gs-stash {
+  width: 100%; max-width: 560px; margin: 10px auto 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.gs-stash-bar {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 9px 14px;
+  border: 1.5px dashed var(--border, #ddd3b8);
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, background .15s;
+}
+.gs-stash-bar:hover { border-color: #C1785A; background: rgba(193, 120, 90, .05); }
+.gs-stash.open .gs-stash-bar { border-style: solid; background: rgba(193, 120, 90, .05); }
+.gs-stash-ico { font-size: 15px; line-height: 1; flex: none; opacity: .8; }
+.gs-stash-lbl {
+  flex: 1; min-width: 0; text-align: left;
+  font-size: 13.5px; font-weight: 800; color: var(--ink-2, #6b6355);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gs-stash-lbl em {
+  font-style: normal; font-weight: 600; font-size: 12px;
+  color: var(--ink-3, #8a8270); margin-left: 8px;
+}
+.gs-stash-caret {
+  flex: none; font-size: 11.5px; font-weight: 700;
+  color: var(--ink-3, #8a8270); letter-spacing: .04em;
+}
+.gs-stash-body { display: flex; flex-direction: column; gap: 8px; }
+/* 抽屜裡的卡片小一號——它們是「偶爾才用」的東西，不該跟今天的教室卡搶份量 */
+.gs-stash-body .gs-card { padding: 12px 14px; }
+@media (prefers-reduced-motion: no-preference) {
+  .gs-stash-body { animation: gs-stash-in .22s cubic-bezier(.22, 1, .36, 1) both; }
+  @keyframes gs-stash-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+}
+@media (max-width: 560px) { .gs-stash-lbl em { display: none; } }
+
+/* ══ v402 ③：登出過場改成「你的夥伴」跟你說再見（原本是 👋 emoji）══
+   牠是小朋友自己挑的夥伴，由牠來道別比一隻通用的手掌親切得多。 */
+.app-farewell-wave .mx-svg {
+  width: 88px; height: calc(88px * 10 / 9);   /* 原本那顆 👋 是 52px 的字，太小的話畫面會空 */
+  display: block; margin: 0 auto;
+  filter: drop-shadow(0 4px 6px rgba(21, 19, 14, .22));
+}
+
+
+/* ══ v407：分段閱讀的「🤖 AI 自動出題」面板 ══════════════════════════════
+   刻意跟旁邊的「📋 一次匯入所有題目」長得一樣——它們做的是同一件事，
+   只是一個用貼的、一個用生的，長得不一樣反而要重新學一次。 */
+.gr-ai-btn { border-color: rgba(90, 120, 170, .45); color: #3f5680; }
+.gr-ai-panel {
+  border: 1px solid var(--border, #e5dfc8); border-radius: 10px;
+  padding: 10px 12px; margin: 0 0 10px; background: var(--bg-paper, #FBF8F1);
+}
+.gr-ai-note { font-size: 11.5px; line-height: 1.75; color: var(--ink-2, #5c554a); margin-bottom: 9px; }
+.gr-ai-grid {
+  display: grid; gap: 8px 10px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+.gr-ai-grid label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11.5px; font-weight: 700; color: var(--ink-3, #6b6455);
+}
+.gr-ai-grid select {
+  font-family: inherit; font-size: 13px; padding: 6px 8px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 6px;
+  background: #fff; color: var(--ink, #15130e);
+}
+.gr-ai-skills { margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--border, #e5dfc8); }
+.gr-ai-skills-head { font-size: 11.5px; font-weight: 700; color: var(--ink-3, #6b6455); margin-bottom: 7px; }
+.gr-ai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-ai-chip {
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1.5px solid var(--border, #e5dfc8); background: #fff; color: var(--ink-2, #5c554a);
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.gr-ai-chip:hover { background: #f4efe1; }
+.gr-ai-chip.on { background: #2E7D5B; border-color: #2E7D5B; color: #fff; }
+.gr-ai-hint { font-size: 11px; line-height: 1.7; color: var(--ink-3, #8a8270); margin-top: 6px; }
+.gr-ai-rep {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  font-size: 11.5px; color: var(--ink-2, #5c554a); cursor: pointer;
+}
+.gr-ai-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.gr-ai-sum { font-size: 11.5px; color: var(--ink-3, #6b6455); font-weight: 700; }
+.gr-ai-err {
+  margin-top: 8px; padding: 7px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; line-height: 1.55;
+  background: rgba(220, 38, 38, .08); border: 1px solid rgba(220, 38, 38, .3); color: #a4271f;
+}
+/* 跑完的回報：出了幾題、跳過哪幾段、擋掉幾題——刻意不用綠色的「全部成功」語氣，
+   因為它常常會夾帶「有幾題被擋掉」，那不是失敗，但也不是「剛好出滿」。 */
+.gr-ai-done {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0 0 10px; padding: 8px 11px; border-radius: 9px;
+  font-size: 12px; font-weight: 600; line-height: 1.65;
+  background: rgba(46, 125, 91, .10); border: 1px solid rgba(46, 125, 91, .30); color: #2E7D5B;
+}
+.gr-ai-done button {
+  border: none; background: none; cursor: pointer; color: inherit;
+  font-size: 13px; line-height: 1; padding: 2px 4px; opacity: .65;
+}
+.gr-ai-done button:hover { opacity: 1; }
+
+/* ══ v416：翻頁鈕底下那截空白還給卡片 ═══════════════════════════════════
+   Alan：「你看底下的上一張 下一張其實還有點位置 所以其實可以往下拉一點」。
+   實測 1440×820：翻頁鈕下緣到視窗底還有 44px ＝ .fc-player 的 12px
+   ＋ .qm-quiz-area 的 32px。單字卡這一頁把它收窄，多出來的高度
+   useFitHeight 會自動算給卡片（它是扣完頁面溢出才定案的）。
+   ⚠ 只在「單字卡播放中」收窄，其他題型的呼吸空間不動。 */
+.fc-player.fc-p-card { padding-bottom: 6px; }
+.qm-quiz-area:has(.fc-p-card) { padding-bottom: 10px; }
+
+/* ═════════════════════════════════════════════════════════════
+   v428：✏️ 出文法（老師端）＋互動教學／中翻英／練習鎖（學生端）
+   ⚠ 前綴刻意用 gn-（老師端）、gnl-（學生端），跟既有的 gr-／gq-／ls- 分開（v413 撞名的教訓）
+   ═════════════════════════════════════════════════════════════ */
+.banner-btn.gn { background: #7A4E1E; border-color: #7A4E1E; }
+.banner-btn.gn:hover { background: #653F16; border-color: #653F16; }
+
+/* 學生端：互動教學 */
+.gnl-card { text-align: left; }
+.gnl-lead { font-family: var(--sans); font-size: 14px; color: var(--ink-muted); margin-bottom: 10px; }
+.gnl-say { font-family: var(--sans); font-size: clamp(20px, 3.4vw, 26px); font-weight: 800; line-height: 1.45; color: var(--ink); margin: 4px 0 16px; }
+.gnl-exs { display: flex; flex-direction: column; gap: 10px; }
+.gnl-ex { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; border: 1px solid var(--border); border-radius: 14px; padding: 12px 44px 12px 14px; background: var(--surface-2, #FAF7F0); cursor: pointer; }
+.gnl-ex-en { font-family: var(--serif, Georgia, serif); font-size: clamp(18px, 3vw, 22px); color: var(--ink); }
+.gnl-ex-zh { font-family: var(--sans); font-size: 13px; color: var(--ink-muted); }
+.gnl-ex-say { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 18px; }
+.gnl-hl { background: #FFE58F; color: inherit; border-radius: 4px; padding: 0 3px; font-weight: 700; }
+.gnl-q, .gnl-zh { font-family: var(--serif, Georgia, serif); font-size: clamp(19px, 3.2vw, 24px); line-height: 1.6; color: var(--ink); margin: 6px 0 16px; }
+.gnl-zh { font-family: var(--sans); font-weight: 700; }
+.gnl-sub { font-family: var(--sans); font-size: 14px; color: var(--ink-muted); margin-bottom: 10px; }
+.gnl-blank { display: inline-block; min-width: 64px; text-align: center; border-bottom: 3px solid #E0A100; padding: 0 6px; margin: 0 4px; color: var(--ink-muted); }
+.gnl-blank.ok { border-color: #1B7A3E; color: #1B7A3E; font-weight: 800; }
+.gnl-opts { display: flex; flex-wrap: wrap; gap: 10px; }
+.gnl-opt { min-width: 110px; min-height: 52px; padding: 10px 18px; border-radius: 14px; border: 2px solid var(--border); background: var(--surface, #fff); font-size: 19px; font-weight: 700; cursor: pointer; }
+.gnl-opt.ok { border-color: #1B7A3E; background: #E7F4EA; color: #1B7A3E; }
+.gnl-opt.no { border-color: #C62828; background: #FBEAEA; color: #C62828; opacity: .7; animation: gnlShake .35s; }
+.gnl-why { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: #FFF6E0; font-family: var(--sans); font-size: 14.5px; line-height: 1.6; }
+.gnl-why.ok { background: #E7F4EA; color: #1B5E2E; }
+.gnl-ans { margin-top: 6px; }
+.gnl-line { min-height: 60px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border-radius: 14px; border: 2px dashed var(--border); margin-bottom: 12px; }
+.gnl-line.ok { border-style: solid; border-color: #1B7A3E; background: #E7F4EA; }
+.gnl-line.no { border-color: #C62828; animation: gnlShake .35s; }
+.gnl-line-ph { font-family: var(--sans); font-size: 13.5px; color: var(--ink-muted); }
+.gnl-pool { display: flex; flex-wrap: wrap; gap: 8px; }
+.gnl-tile { min-height: 46px; padding: 8px 14px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface, #fff); font-size: 18px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 var(--border); }
+.gnl-tile.in { border-color: #2E6FB7; background: #EAF2FB; }
+.gnl-tile.ghost { opacity: .25; box-shadow: none; cursor: default; }
+.gnl-check, .gnl-retry { margin-top: 12px; }
+.gnl-fix { display: flex; flex-wrap: wrap; gap: 8px; font-size: 20px; }
+.gnl-word { padding: 8px 12px; border-radius: 10px; border: 2px solid var(--border); background: var(--surface, #fff); font-size: 20px; cursor: pointer; }
+.gnl-word.no { border-color: #C62828; color: #C62828; opacity: .6; animation: gnlShake .35s; }
+.gnl-word.fixed { border-color: #1B7A3E; background: #E7F4EA; color: #1B5E2E; }
+.gnl-word.fixed s { color: #C62828; opacity: .7; }
+.gnl-say-btn { border: 0; background: transparent; font-size: 16px; cursor: pointer; margin-left: 6px; }
+.gnl-unlocked { font-family: var(--sans); font-size: 14px; font-weight: 700; color: #1B7A3E; margin: 6px 0 14px; }
+/* v443：互動教學新題型——👉 找出來（tap）與 🗂 分一分（sort） */
+.gnl-tap { line-height: 2.1; }
+.gnl-word.got { border-color: #1B7A3E; background: #E7F4EA; color: #1B5E2E; font-weight: 700; }
+.gnl-chip-now { display: inline-block; margin: 4px 0 14px; padding: 12px 26px; border-radius: 16px;
+  border: 2px solid var(--border); background: var(--surface, #fff); font-size: clamp(24px, 4.4vw, 34px); font-weight: 700;
+  box-shadow: 0 3px 0 var(--border); }
+.gnl-chip-now.no { border-color: #C62828; color: #C62828; animation: gnlShake .35s; }
+.gnl-chip-now.ok { border-color: #1B7A3E; background: #E7F4EA; color: #1B5E2E; }
+.gnl-bins { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.gnl-bin { display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: center;
+  min-height: 92px; padding: 12px 10px; border-radius: 14px; border: 2px dashed var(--border);
+  background: var(--surface, #fff); cursor: pointer; }
+.gnl-bin:disabled { cursor: default; opacity: .8; }
+.gnl-bin-lab { font-family: var(--sans); font-size: 17px; font-weight: 800; color: var(--ink); }
+.gnl-bin-items { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.gnl-bin-items em { font-style: normal; font-size: 15px; font-weight: 700; color: #1B5E2E;
+  background: #E7F4EA; border-radius: 999px; padding: 3px 10px; }
+
+@keyframes gnlShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+/* 學生端：練習鎖 */
+.gnl-lock-badge { display: inline-block; margin-left: 8px; font-size: 11.5px; font-weight: 700; color: #8A6D1E; background: #FFF3CF; border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
+.qm-unit-row.gnl-locked { opacity: .72; }
+.gnl-gate-msg { font-family: var(--sans); font-size: 15px; line-height: 1.7; color: var(--ink); margin: 8px 0 16px; }
+
+/* 學生端：中翻英 */
+.ta-prompt.tr { font-family: var(--sans); font-size: clamp(20px, 3.4vw, 26px); font-weight: 700; }
+.ta-input.tr { font-size: 18px; }
+.ta-hint-btn { margin-top: 10px; border: 1px dashed var(--border); background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; color: var(--ink-muted); }
+.ta-hint { margin-top: 10px; font-family: var(--sans); font-size: 14px; color: #8A6D1E; background: #FFF6E0; border-radius: 10px; padding: 6px 12px; display: inline-block; }
+.ta-ai-tip { margin-top: 8px; font-family: var(--sans); font-size: 14px; line-height: 1.6; background: #FBEAEA; color: #8E1F1F; border-radius: 10px; padding: 8px 12px; }
+.ta-ai-tip.ok { background: #E7F4EA; color: #1B5E2E; }
+/* v428：中翻英打的是整句——等寬字體（單字練習用的）讀起來很吃力，改一般字體 */
+.ta-input.tr { font-family: var(--sans, system-ui, sans-serif); letter-spacing: 0; }
+.ta-input.tr + .ta-correct-ans, .ta-input.tr ~ .ta-correct-ans { font-family: var(--sans, system-ui, sans-serif); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v431 ③：平板直式的圖片上限（Alan：「iPad 直式 我覺得格子和圖片也可以再大一點」）
+   ──────────────────────────────────────────────────────────────────────────
+   卡片高度由 useFitHeight 量出來（v431 修好倒扣之後，iPad 直式 834×1194 是 945px），
+   但圖片仍被 @media (max-width:900px) 的 240px 上限夾住 → 背面 806px 高的區域裡
+   圖片只有 240px，下面空一大塊。這裡只放寬「又寬又高」的平板直式（≥601 且高 ≥900），
+   手機（≤560→200）、橫躺的手機（max-height:480→150）都不受影響。
+   圖片本來就是 flex:1 1 auto + object-fit:contain ＝ 空間不夠時自己讓位，放寬上限不會擠掉例句。 */
+@media (min-width: 601px) and (max-width: 1024px) and (min-height: 900px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 460px; }
+  .fc-p-learn .fc-learn-img { max-height: 470px; }
+}
+
+/* ══ v459（Alan：「平板橫式底下還有空位，讓圖片大一點比較好」）══════════════
+   實測 1024×768 全螢幕：翻卡面 508px，圖片 325、中文 63、例句 61，
+   內距與間距吃掉 59px ＝ 圖片只佔 64%。圖片本來就是 flex:1 1 auto（自己會長大），
+   上限（360/560px）在這個尺寸根本沒碰到——真正擋住它的是那些留白。
+   把平板橫式的內距與間距收緊，空出來的高度會全部進到圖片。
+   ⚠ 中文與例句一個字都不縮（那是要看的內容），只動留白。 */
+@media (min-width: 901px) and (max-width: 1366px) and (max-height: 900px) {
+  .fc-p-card .fc-face          { padding: 14px 24px; }
+  .fc-p-card .fc-back-img-wrap { margin-bottom: 6px; }
+  .fc-p-card .fc-zh            { margin-bottom: 4px; }
+}
+
+/* v436：互動教學的圖片（📖 閱讀的先備知識——老師自己放的圖） */
+.gnl-img {
+  display: block; margin: 10px auto 12px; max-width: min(520px, 100%);
+  max-height: 260px; object-fit: contain; border-radius: 10px;
+  border: 1px solid var(--border, #DDD6C4); background: #fff;
+}
+@media (max-width: 900px) { .gnl-img { max-height: 200px; } }
+@media (max-height: 820px) { .gnl-img { max-height: 180px; } }
+
+/* v437：分段閱讀的「🧠 讀之前先知道」區塊 */
+.gr-bk {
+  border: 1px solid var(--border, #DDD6C4); border-radius: 12px;
+  padding: 10px 12px; margin: 0 0 10px; background: #FBF8F0;
+}
+.gr-bk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gr-bk-head b { font-size: 13px; color: var(--ink, #15130e); }
+.gr-bk-sub { font-size: 11.5px; color: var(--ink-3, #8a8270); }
+.gr-bk-note { font-size: 11.5px; color: var(--ink-2, #5c554a); margin: 8px 0 4px; }
+
+/* ══ v440：簡報式的「讀之前先知道」（重點一次看完，不用翻頁）══ */
+.gnb-card { max-width: 760px; margin: 0 auto; text-align: left; }
+.gnb-lead {
+  font-size: 20px; font-weight: 700; line-height: 1.5; color: var(--ink, #15130e);
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--border, #DDD6C4);
+}
+.gnb-points { display: flex; flex-direction: column; gap: 14px; }
+.gnb-point { display: flex; gap: 14px; align-items: flex-start; }
+.gnb-img {
+  flex: none; width: 148px; height: 108px; object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--border, #DDD6C4); background: #fff;
+}
+.gnb-body { flex: 1 1 auto; min-width: 0; }
+.gnb-say { font-size: 16.5px; font-weight: 600; line-height: 1.65; color: var(--ink, #15130e); margin-bottom: 6px; }
+.gnb-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-right: 8px; border-radius: 50%;
+  background: var(--accent, #8B3120); color: #fbf8f1; font-size: 12.5px; font-weight: 700;
+}
+.gnb-ex {
+  display: block; width: 100%; text-align: left; cursor: pointer; position: relative;
+  background: #FBF8F0; border: 1px solid #EDE5D2; border-radius: 10px;
+  padding: 8px 34px 8px 12px; margin-top: 5px;
+}
+.gnb-ex:hover { border-color: #C9A84C; }
+.gnb-ex-en { display: block; font-size: 15px; line-height: 1.55; color: var(--ink, #15130e); }
+.gnb-ex-zh { display: block; font-size: 12.5px; color: var(--ink-3, #8a8270); margin-top: 2px; }
+.gnb-ex-say { position: absolute; right: 10px; top: 9px; font-size: 13px; opacity: .6; }
+.gnb-check { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border, #DDD6C4); }
+.gnb-check-head { font-size: 13.5px; font-weight: 700; color: var(--ink-2, #5c554a); margin-bottom: 10px; }
+.gnb-check-head em { font-style: normal; color: var(--ink-3, #8a8270); }
+.gnb-q { margin-bottom: 12px; }
+.gnb-q-t { font-size: 15px; line-height: 1.6; color: var(--ink, #15130e); margin-bottom: 6px; }
+.gnb-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.gnb-opt {
+  cursor: pointer; font-size: 14.5px; padding: 8px 14px; border-radius: 999px;
+  background: #fff; border: 1px solid var(--border, #DDD6C4); color: var(--ink, #15130e);
+}
+.gnb-opt:hover:not(:disabled) { border-color: #C9A84C; }
+.gnb-opt.ok { background: #E8F3EC; border-color: #2E7D5B; color: #1B7A3E; font-weight: 700; }
+.gnb-opt.no { background: #FBECEA; border-color: #C1454A; color: #B23A28; opacity: .75; }
+.gnb-opt:disabled { cursor: default; }
+.gnb-why { font-size: 12.5px; color: var(--ink-3, #8a8270); margin-top: 6px; }
+.gnb-go {
+  display: block; width: 100%; margin-top: 18px; cursor: pointer;
+  font-size: 15.5px; font-weight: 700; padding: 13px 18px; border-radius: 14px; border: 0;
+  background: var(--accent, #8B3120); color: #fbf8f1;
+}
+.gnb-go:disabled { background: #E6DFCE; color: #8a8270; cursor: default; }
+@media (max-width: 700px) {
+  .gnb-point { flex-direction: column; gap: 8px; }
+  .gnb-img { width: 100%; height: 170px; }
+  .gnb-lead { font-size: 18px; }
+}
+
+/* ══ v442：老師編輯列（Alan：「要給其他老師用了，做清楚一點——主要就是三個一鍵生成」）══ */
+.edit-banner-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.edit-banner-gap { flex: 1 1 auto; }
+.edit-banner-tag { font-size: 12px; letter-spacing: .12em; color: #C9A84C; font-weight: 700; }
+.edit-banner .banner-btn.done { background: rgba(255,255,255,.14); color: #fbf8f1; }
+.edit-make { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.edit-make-btn {
+  display: flex; align-items: center; gap: 11px; text-align: left; cursor: pointer;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.07); color: #fbf8f1; transition: all .15s ease;
+}
+.edit-make-btn:hover { background: rgba(255,255,255,.13); border-color: rgba(255,255,255,.3); transform: translateY(-1px); }
+.edit-make-btn .emk-ico { font-size: 22px; line-height: 1; flex: none; }
+.edit-make-btn .emk-txt { display: block; min-width: 0; }
+.edit-make-btn b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+.edit-make-btn em { display: block; font-style: normal; font-size: 11.5px; line-height: 1.5; color: rgba(251,248,241,.62); }
+.edit-make-btn.quick { border-color: rgba(201,168,76,.5); }
+.edit-make-btn.gn    { border-color: rgba(214,131,60,.5); }
+.edit-make-btn.rc    { border-color: rgba(110,160,200,.5); }
+.edit-banner-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.12); }
+
+/* 🔴 v474：上面那一組顏色是給**深色的老師編輯列**用的（白字配深底）。
+   v454 的「在這一組再出一份題目」把同一組 class 搬進**白底的彈窗**裡
+   → 白字配白底，整個看不見（Alan：「怎麼是白色字體，完全看不到」）。
+   ⚠ 同一組 class 用在兩種底色上，就一定要分開寫，不能只靠透明度。 */
+.modal .edit-make-btn {
+  border-color: var(--border); background: var(--surface-2, #FAF7F0); color: var(--ink);
+}
+.modal .edit-make-btn:hover { background: #F2EADA; border-color: #C9A84C; }
+.modal .edit-make-btn em { color: var(--ink-muted); }
+.modal .edit-make-btn.quick { border-color: rgba(201,168,76,.75); }
+.modal .edit-make-btn.gn    { border-color: rgba(214,131,60,.75); }
+.modal .edit-make-btn.rc    { border-color: rgba(110,160,200,.75); }
+/* 彈窗比編輯列窄，三欄會擠成一團 */
+@media (max-width: 760px) { .modal .edit-make { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .edit-make { grid-template-columns: 1fr; } }
+
+/* v444：找出來答錯時，除了正確答案也把解說寫出來 */
+.circle-explain { color: var(--ink-muted); font-weight: 600; }
+
+/* v446：老師端「找單元」與「這一週是空的」指路條 */
+.find-unit { position: relative; margin-top: 10px; }
+.find-unit-in { width: 100%; max-width: 420px; box-sizing: border-box; font-family: var(--sans); font-size: 14px;
+  padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.28);
+  background: rgba(255,255,255,.10); color: #fff; }
+.find-unit-in::placeholder { color: rgba(255,255,255,.62); }
+.find-unit-res { position: absolute; z-index: 40; margin-top: 6px; width: min(520px, 100%);
+  background: var(--surface, #fff); color: var(--ink); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.18); overflow: hidden; }
+.find-unit-row { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
+  padding: 10px 14px; border: 0; border-bottom: 1px solid var(--border); background: transparent; cursor: pointer; }
+.find-unit-row:last-child { border-bottom: 0; }
+.find-unit-row:hover { background: var(--surface-2, #F3EFE6); }
+.find-unit-row b { font-family: var(--sans); font-size: 14px; font-weight: 700; }
+.find-unit-row span { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); }
+.find-unit-none { padding: 12px 14px; font-family: var(--sans); font-size: 13.5px; color: var(--ink-muted); }
+.week-empty-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+  padding: 8px 16px; background: #FFF3CF; color: #6B551A; font-family: var(--sans); font-size: 14px; }
+.week-empty-bar button { border: 1px solid #C8AE62; background: #fff; color: #6B551A; border-radius: 999px;
+  padding: 5px 14px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.week-empty-bar button:hover { background: #FFF9E8; }
+.save-fail-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 4000;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: min(92vw, 720px);
+  padding: 10px 16px; border-radius: 14px; background: #7A1F1F; color: #fff;
+  font-family: var(--sans); font-size: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+.save-fail-bar b { font-weight: 800; }
+.save-fail-bar button { border: 0; border-radius: 999px; padding: 6px 14px; font-size: 13.5px; font-weight: 700;
+  background: #fff; color: #7A1F1F; cursor: pointer; }
+.save-fail-bar button.ghost { background: transparent; color: #FFD9D9; border: 1px solid rgba(255,255,255,.4); }
+
+/* v449：AI 失敗訊息現在會多帶一段「上游回了什麼」——換行要留著才看得懂 */
+.notify-msg.err, .gr-ai-err, .gn-ls-miss span, .qs-story-warn { white-space: pre-line; }
+
+/* v451：集點紀錄也列出「買了什麼／被退掉」 */
+.sp-sum { font-family: var(--sans); font-size: 13.5px; color: var(--ink-muted); padding: 2px 2px 10px; }
+.sp-sum b { color: var(--ink); font-size: 15px; }
+.sp-row.mx .sp-row-note { color: #8A6D1E; }
+
+/* v454：整組一起改（截止日／沿用到其他週／再出一份題目） */
+.qm-ugroup-more { border: 1px solid var(--border); background: var(--surface, #fff); color: var(--ink-muted);
+  border-radius: 999px; padding: 3px 10px; font-family: var(--sans); font-size: 12px; cursor: pointer; white-space: nowrap; }
+.qm-ugroup-more:hover, .qm-ugroup-more.on { border-color: #8A6D1E; color: #6B551A; background: #FFF9E8; }
+.qm-grp-menu { margin: 6px 0 10px; padding: 10px 12px; border: 1px solid #E3CE8C; border-radius: 12px; background: #FFFBEF; }
+.qm-grp-menu-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qm-grp-menu-row + .qm-grp-menu-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(138,109,30,.25); }
+.qm-grp-menu-lab { font-family: var(--sans); font-size: 13px; color: #6B551A; font-weight: 700; }
+.qm-grp-date { font-family: var(--sans); font-size: 13px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.qm-grp-go { border: 0; background: #6B551A; color: #fff; border-radius: 999px; padding: 6px 14px;
+  font-family: var(--sans); font-size: 13px; font-weight: 700; cursor: pointer; }
+.qm-grp-go:disabled { opacity: .45; cursor: default; }
+.qm-grp-ghost { border: 1px solid #D8C58A; background: #fff; color: #6B551A; border-radius: 999px; padding: 6px 12px;
+  font-family: var(--sans); font-size: 13px; cursor: pointer; }
+.qm-grp-ghost:hover { background: #FFF3CF; }
+.qm-copy-due { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 10px;
+  font-family: var(--sans); font-size: 13px; color: var(--ink-muted); }
+.qm-copy-due input { font-family: var(--sans); font-size: 13px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; }
+
+/* ══ v454（Alan：「所有的一鍵生成的最後確認介面再優化一點，不然很難看，都擠在一起」）══
+   校稿頁：每一題改成一張卡片、欄位不再擠成一排、分頁列釘在最上面。 */
+.gr-proof { max-height: 62vh; padding-right: 6px; }
+.gr-tabs { position: sticky; top: 0; z-index: 5; background: var(--bg-paper, #FBF8F0); padding-bottom: 6px; }
+.gq-row-2 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 12px; margin-top: 0; }
+.gq-row-2 > div { min-width: 0; }
+.gq-row-2 label { margin-bottom: 4px; letter-spacing: .02em; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v470：互動教學的動畫層（Alan 要「更智慧化的解說」）
+   ──────────────────────────────────────────────────────────────────────────
+   刻意只用 CSS、只掛在「已經存在的狀態類別」上（.gnl-tile.in、.gnl-word.fixed、
+   .gnl-blank.ok…），一行判斷邏輯都不動——所以**已經出好的文法單元全部直接變
+   成動畫版**，老師不用重新生成，也不會引進新的出錯風險。
+
+   守四條規則：
+   ① 每一段 150~300ms（小朋友的注意力，久了就變成在等動畫）
+   ② 動畫**不可以蓋住字**——只動元素自己的 transform / opacity / 背景，
+      不做任何浮層，也沒有任何一段結束在「看不見」的狀態
+   ③ 動完之後講解要留在畫面上（小朋友看完還要能回頭讀）
+   ④ prefers-reduced-motion 一律關掉（檔案最後面那一段）
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 🧩 積木落位：點一個字，它掉進句子裡
+   ⚠ 搭配 JSX 把 key 換成 picked[i]（固定的池子編號）。本來 key 是陣列位置，
+     拿掉中間一個字會讓後面的字全部重新掛載＝整排動畫莫名其妙重播一次。 */
+.gnl-tile.in { animation: gnlTileIn .22s cubic-bezier(.34, 1.4, .64, 1); }
+@keyframes gnlTileIn {
+  from { transform: translateY(-9px) scale(.9); opacity: .35; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* 🧩 排對了：整句從左到右一個一個定下來（＝「句子成形」）
+   排句子最多 9 個字（gnValidStep 擋著），所以列到 9 就夠。 */
+.gnl-line.ok .gnl-tile.in { animation: gnlSettle .24s ease-out both; }
+.gnl-line.ok .gnl-tile.in:nth-child(1) { animation-delay: 0s; }
+.gnl-line.ok .gnl-tile.in:nth-child(2) { animation-delay: .045s; }
+.gnl-line.ok .gnl-tile.in:nth-child(3) { animation-delay: .09s; }
+.gnl-line.ok .gnl-tile.in:nth-child(4) { animation-delay: .135s; }
+.gnl-line.ok .gnl-tile.in:nth-child(5) { animation-delay: .18s; }
+.gnl-line.ok .gnl-tile.in:nth-child(6) { animation-delay: .225s; }
+.gnl-line.ok .gnl-tile.in:nth-child(7) { animation-delay: .27s; }
+.gnl-line.ok .gnl-tile.in:nth-child(8) { animation-delay: .315s; }
+.gnl-line.ok .gnl-tile.in:nth-child(9) { animation-delay: .36s; }
+@keyframes gnlSettle {
+  0%   { transform: translateY(0); }
+  45%  { transform: translateY(-7px); }
+  100% { transform: translateY(0); }
+}
+
+/* 👆 答案落進空格裡 */
+.gnl-blank.ok { animation: gnlDrop .24s cubic-bezier(.34, 1.4, .64, 1); }
+@keyframes gnlDrop {
+  from { transform: translateY(-11px) scale(.82); opacity: 0; }
+  60%  { opacity: 1; }
+  to   { transform: none; opacity: 1; }
+}
+/* 選對的那一顆微微彈一下（不是整頁亂跳） */
+.gnl-opt.ok { animation: gnlPop .2s ease-out; }
+@keyframes gnlPop { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+
+/* 🔍 句子變形：錯的字收掉、對的字長出來
+   這是規格裡的「sentence morphing」——現成的 fix 步驟本來就是
+   <s>錯的</s> <b>對的</b>，只是以前一瞬間就換完，小朋友看不到「變」。 */
+.gnl-word.fixed   { animation: gnlFixFlash .26s ease-out; }
+.gnl-word.fixed s { display: inline-block; animation: gnlStrike .26s ease-out both; }
+.gnl-word.fixed b { display: inline-block; animation: gnlMorphIn .26s cubic-bezier(.34, 1.4, .64, 1) .12s both; }
+@keyframes gnlStrike {
+  from { transform: scale(1);   opacity: 1; }
+  to   { transform: scale(.88); opacity: .55; }
+}
+@keyframes gnlMorphIn {
+  from { transform: translateY(7px) scale(.75); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes gnlFixFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(27, 122, 62, .45); }
+  100% { box-shadow: 0 0 0 7px rgba(27, 122, 62, 0); }
+}
+
+/* 👉 找出來：螢光筆從左掃到右（掃的是背景，字一直看得見） */
+.gnl-word.got {
+  background-image: linear-gradient(#CDEBD6, #CDEBD6);
+  background-repeat: no-repeat; background-size: 100% 100%;
+  animation: gnlSweep .26s ease-out;
+}
+@keyframes gnlSweep { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+
+/* 🗂 分一分：下一個字滑進來、分對的字掉進籃子裡 */
+.gnl-chip-now { animation: gnlChipIn .2s ease-out; }
+@keyframes gnlChipIn {
+  from { transform: translateY(-8px) scale(.9); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.gnl-bin-items em { animation: gnlLand .24s cubic-bezier(.34, 1.4, .64, 1); }
+@keyframes gnlLand {
+  from { transform: translateY(-12px) scale(.55); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ✓ 講解浮出來（但只淡入位移，動完完整留在畫面上——規格第 ③ 條） */
+.gnl-why.ok { animation: gnlWhyIn .22s ease-out; }
+@keyframes gnlWhyIn {
+  from { transform: translateY(5px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ══ v471：三種會動的講解 ══════════════════════════════════════════════════
+   照 v470 同四條規則：每段 150~300ms、不蓋住字、不結束在看不見的狀態、
+   reduced-motion 一律關掉。
+   平板只用「點」——沒有任何拖曳互動（規格要求）。 */
+
+/* ⏳ 時態時間軸 */
+.gnl-tl { position: relative; display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 8px; margin: 18px 0 16px; padding: 0 4px; }
+.gnl-tl-rail { position: absolute; left: 6%; right: 6%; bottom: 34px; height: 4px; border-radius: 2px;
+  background: linear-gradient(90deg, #D8CFBE, #E0A100); }
+.gnl-tl-dot { position: relative; z-index: 1; flex: 1 1 0; min-height: 64px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; padding: 6px 2px; border: 0; background: transparent; cursor: pointer; }
+.gnl-tl-ico { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--surface, #fff); font-size: 19px;
+  transition: transform .2s ease-out, border-color .2s ease-out, background .2s ease-out; }
+.gnl-tl-lab { font-family: var(--sans); font-size: 13.5px; font-weight: 700; color: var(--ink-muted); }
+.gnl-tl-dot.seen .gnl-tl-ico { border-color: #1B7A3E; background: #E7F4EA; }
+.gnl-tl-dot.on .gnl-tl-ico { transform: scale(1.14); border-color: #E0A100; background: #FFF6E0; }
+.gnl-tl-dot.on .gnl-tl-lab { color: var(--ink); }
+
+/* 時間軸／三種句型／比較級共用的「現在這一句」 */
+.gnl-tl-say { padding: 14px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface-2, #FAF7F0); animation: gnlSayIn .24s cubic-bezier(.34, 1.4, .64, 1); }
+.gnl-tl-en { position: relative; display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  padding: 0 32px 0 0; cursor: pointer; font-family: var(--serif, Georgia, serif);
+  font-size: clamp(19px, 3.2vw, 24px); line-height: 1.55; color: var(--ink); }
+.gnl-tl-en .gnl-ex-say { right: 0; }
+@keyframes gnlSayIn {
+  from { transform: translateY(8px) scale(.97); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* 🔀 肯定／否定／疑問 */
+.gnl-ftabs { display: flex; gap: 8px; margin: 14px 0 14px; }
+.gnl-ftab { flex: 1 1 0; min-height: 48px; padding: 10px 8px; border-radius: 12px;
+  border: 2px solid var(--border); background: var(--surface, #fff);
+  font-family: var(--sans); font-size: 16px; font-weight: 800; color: var(--ink-muted); cursor: pointer;
+  transition: transform .2s ease-out, border-color .2s ease-out, background .2s ease-out, color .2s ease-out; }
+.gnl-ftab.on { border-color: #E0A100; background: #FFF6E0; color: var(--ink); transform: translateY(-2px); }
+
+/* 📊 比較級長條圖 */
+.gnl-bars { display: flex; align-items: flex-end; gap: 10px; height: 168px; margin: 16px 0 14px; }
+.gnl-bar-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  gap: 6px; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.gnl-bar-slot { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.gnl-bar { width: 100%; max-width: 78px; border-radius: 10px 10px 0 0;
+  background: linear-gradient(180deg, #F0C04A, #E0A100);
+  transform-origin: bottom center; animation: gnlGrow .26s cubic-bezier(.34, 1.3, .64, 1) both;
+  transition: filter .2s ease-out; }
+.gnl-bar-col.on .gnl-bar { filter: brightness(1.08) saturate(1.2); box-shadow: 0 0 0 3px rgba(224, 161, 0, .25); }
+.gnl-bar-lab { font-family: var(--sans); font-size: 15.5px; font-weight: 800; color: var(--ink); }
+.gnl-bar-col.on .gnl-bar-lab { color: #8A6D1E; }
+.gnl-bar-zh { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); }
+@keyframes gnlGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* 窄螢幕：時間軸的字不要擠成兩行 */
+@media (max-width: 420px) {
+  .gnl-tl-ico { width: 36px; height: 36px; font-size: 16px; }
+  .gnl-tl-rail { bottom: 30px; }
+  .gnl-tl-lab, .gnl-bar-zh { font-size: 12px; }
+  .gnl-bars { height: 140px; }
+}
+
+/* ④ 會動暈的小朋友（或系統設了減少動態）一律不要動。
+   ⚠ 答錯的晃動 gnlShake 也一起關掉——它本來就沒有被關過。 */
+@media (prefers-reduced-motion: reduce) {
+  .gnl-tile.in, .gnl-line.ok .gnl-tile.in, .gnl-blank.ok, .gnl-opt.ok,
+  .gnl-word.fixed, .gnl-word.fixed s, .gnl-word.fixed b, .gnl-word.got,
+  .gnl-chip-now, .gnl-bin-items em, .gnl-why.ok,
+  .gnl-opt.no, .gnl-line.no, .gnl-word.no, .gnl-chip-now.no,
+  .gnl-tl-say, .gnl-bar {                                  /* v471 的三種會動的講解 */
+    animation: none !important;
+  }
+  /* 關掉動畫時長條要維持該有的高度（scaleY 不跑＝也不會被縮成 0） */
+  .gnl-tl-ico, .gnl-ftab, .gnl-bar { transition: none !important; }
+  .gnl-word.got { background-size: 100% 100%; }
+}
+
+/* v474：整組刪掉——收不回來的動作要長得不一樣，不會跟旁邊的手滑按錯 */
+.qm-grp-ghost.danger { color: #C62828; border-color: rgba(198,40,40,.4); }
+.qm-grp-ghost.danger:hover { background: #FBEAEA; border-color: #C62828; }
+
+/* ══ v475：字義選擇的題目（Alan：「字體小一點、排版好一點，該單字要特別標起來」）══
+   短文是「讀的」不是「題目」——用內文字級、靠左、行距放寬；
+   真正的問題才用大一點的字，而且跟短文分開，一眼看得出要回答什麼。
+   ⚠ 不要用 .qm-question-text 的 52px：那是給「追求」這種兩個字的題目用的。 */
+.qm-sense { display: flex; flex-direction: column; gap: 14px; text-align: left; width: 100%; }
+/* v476（Alan：「title 大一點才清楚」）：13px 的小標太像裝飾，看不出是文章標題 */
+.qm-sense-title { font-family: var(--sans); font-size: clamp(17px, 2.1vw, 21px); font-weight: 800;
+  letter-spacing: .01em; color: var(--ink); }
+.qm-sense-passage { font-family: var(--serif, Georgia, serif);
+  font-size: clamp(17px, 2.1vw, 21px); line-height: 1.75; color: var(--ink);
+  padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface-2, #FAF7F0); }
+.qm-sense-ask { font-family: var(--sans); font-size: clamp(19px, 2.6vw, 25px); font-weight: 800;
+  line-height: 1.45; color: var(--ink); }
+/* 目標字：螢光筆（底色＋粗體，不是換顏色——色盲也看得見） */
+.qm-sense-mark { background: #FFE58F; color: inherit; font-weight: 700; border-radius: 4px; padding: 0 3px; }
+
+@media (max-width: 560px) {
+  .qm-sense { gap: 11px; }
+  .qm-sense-passage { padding: 11px 12px; line-height: 1.7; }
+}
+@media (prefers-reduced-motion: reduce) { .qm-sense { animation: none !important; } }
+
+/* v476（Alan：「配對的右邊英文 definition 靠右邊一點，讓線的距離拉開一點」）：
+   線愈長愈好連、也愈看得出是哪一條。做法是把欄距拉開、左欄再收窄一點
+   （左邊只放單字，本來就用不到那麼寬）。
+   ⚠ 只動 ≥761px 的桌機／平板；手機那一段（≤760px）原本就擠，不要碰。 */
+@media (min-width: 761px) {
+  .qm-player-shell .dm-wrap, .dm-wrap {
+    /* ⚠ 左欄要留一個最小寬度：只寫 0.5fr 的話，螢幕一窄
+       「miraculous (adj.)」就被擠成兩行——那比線短還難看。
+       v477（Alan：「間隔再開一點，整體再置中一點」）：
+       右欄本來吃掉 1.45fr，但定義是靠左排的、長度不一 →
+       右邊永遠空一大塊，整體看起來偏左。改成右欄**照內容收**，
+       再用 justify-content 把兩欄一起置中，右邊的空白就不見了。 */
+    /* v478（Alan：「再置中一點點、再開一點點就好」）：
+       🔴 偏左的真正原因是**左欄那個 262px 最小寬度**——單字只需要約 205px，
+       而文字是靠右排的，多出來的 57px 就變成左邊憑空多一塊空白。
+       改成兩欄都照內容收（max-content 本來就不會換行，所以也不需要最小寬度）。
+       右欄留 minmax(0, …)，螢幕太窄時讓它自己折行，不會把版面撐爆。 */
+    grid-template-columns: max-content minmax(0, max-content);
+    justify-content: center;
+    column-gap: clamp(120px, 22vw, 380px);
+  }
+}
+
+/* v477：「沿用一份過去」／「搬過去」二選一 */
+.qm-copy-mode { display: flex; gap: 8px; margin: 2px 0 12px; }
+.qm-copy-mode-b { flex: 1 1 0; min-height: 44px; padding: 9px 10px; border-radius: 12px;
+  border: 2px solid var(--border); background: var(--surface, #fff);
+  font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink-muted); cursor: pointer;
+  transition: border-color .2s ease-out, background .2s ease-out, color .2s ease-out; }
+.qm-copy-mode-b.on { border-color: #E0A100; background: #FFF6E0; color: var(--ink); }
+
+/* ══ v479：打字作答的輸入框（Alan：「填空的地方放大多多多一點，這麼小誰看得到」）══
+   本來不管題型都是 max-width:460px——要打一整句的（改寫／中翻英／句型轉換）
+   根本塞不下，字一多就看不到自己打了什麼。
+   ⚠ 分成兩種：整句型放到很大並允許換行；只寫幾個字的維持小框（那才是康橋的樣子）。 */
+.ta-input.long {
+  max-width: min(980px, 92vw); padding: 20px 22px;
+  font-size: clamp(20px, 2.4vw, 27px); line-height: 1.45;
+  text-align: left; font-family: var(--sans);
+}
+.ta-input.wd {
+  max-width: 420px; text-align: center;
+  font-size: clamp(22px, 2.6vw, 30px); font-weight: 700; letter-spacing: .01em;
+}
+/* 題幹裡「要改的那一段」標起來——學生才知道要寫哪裡 */
+.ta-prompt.wd { font-size: clamp(19px, 2.4vw, 26px); line-height: 1.6; }
+.ta-wrong-mark { background: #FBE3DE; color: #A8331F; font-weight: 800;
+  border-radius: 5px; padding: 0 5px; text-decoration: line-through; }
+@media (max-width: 560px) {
+  .ta-input.long { padding: 15px 14px; font-size: 18px; }
+  .ta-input.wd   { font-size: 21px; }
+}
+
+/* v482：📘 一鍵出 Word Study（第四顆按鈕；編輯列從三欄變四欄） */
+.edit-make-btn.ws { border-color: rgba(120,160,120,.5); }
+.modal .edit-make-btn.ws { border-color: rgba(120,160,120,.75); }
+@media (min-width: 901px) { .edit-make { grid-template-columns: repeat(4, 1fr); } }
+
+/* ══ v485：短文找字排成「一篇文章」（Alan：「不要很突兀的每個字分那麼開」）══
+   一句一個框、每個字撐開，那是「一句一題」的樣子；
+   這一種要讓小朋友**讀文章**，所以排成正常的段落，字只是剛好可以點。 */
+.circle-prose-wrap { max-width: 860px; margin: 0 auto; padding: 4px 18px 10px; }
+.circle-prose-title { font-family: var(--sans); font-size: clamp(17px, 2.2vw, 22px); font-weight: 800;
+  color: var(--ink); margin: 6px 0 14px; }
+.circle-prose {
+  font-family: var(--serif, Georgia, serif);
+  font-size: clamp(18px, 2.2vw, 23px); line-height: 2.05; color: var(--ink); text-align: left;
+}
+/* 字塊回到「文章裡的一個字」：沒有框、沒有多餘間距，點下去才有底色 */
+.circle-prose .circle-word {
+  /* ⚠ 左右內距會在標點前面留一道縫（things .）——用負邊距把它補回去，
+     既保留好點的範圍，看起來又跟一般文章一樣。 */
+  display: inline; padding: 2px 3px; margin: 0 -3px; border: 0; background: none;
+  font: inherit; color: inherit; border-radius: 5px; cursor: pointer;
+  box-shadow: inset 0 -2px 0 rgba(224,161,0,.22);     /* 很淡的底線，暗示「可以點」 */
+  transition: background .15s ease-out;
+}
+.circle-prose .circle-word:hover { background: #FFF3CF; }
+.circle-prose .circle-word.selected { background: #FFE58F; font-weight: 700; box-shadow: none; }
+.circle-prose .circle-word.correct  { background: #CDEBD6; color: #1B5E2E; font-weight: 700; box-shadow: none; }
+.circle-prose .circle-word.wrong    { background: #FBE3DE; color: #A8331F; text-decoration: line-through; box-shadow: none; }
+.circle-prose .circle-word.answer   { box-shadow: inset 0 -3px 0 #1B7A3E; }
+@media (max-width: 560px) {
+  .circle-prose-wrap { padding: 4px 12px 8px; }
+  .circle-prose { font-size: 17px; line-height: 1.95; }
+}
+
+/* v485：分籃的名稱不可以被切掉（Alan 截到「-ity (qu」）。
+   名稱只放詞綴（-ity），意思（quality of…）換行放小字——
+   以前整句塞在名稱裡，窄欄位就從中間切斷，兩邊都看不懂。 */
+.ws-col-head { overflow-wrap: anywhere; white-space: normal; line-height: 1.3; }
+.ws-col-hint {
+  display: block; margin-top: 3px;
+  font-size: .72em; font-weight: 600; opacity: .72; letter-spacing: 0;
+  text-transform: none; overflow-wrap: anywhere; white-space: normal;
+}
+
+/* v486：幽靈作業提示（只有老師看得到） */
+.cb-ghost {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 2px 0 12px; padding: 9px 13px; border-radius: 10px;
+  background: #FDF3E2; border: 1px solid rgba(190,130,40,.3);
+  font-family: var(--sans); font-size: 13.5px; color: #7A5312;
+}
+.cb-ghost b { font-size: 15px; }
+.cb-ghost-btn {
+  margin-left: auto; padding: 5px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(190,130,40,.5); background: #fff; color: #7A5312;
+  font-family: var(--sans); font-size: 13px; font-weight: 700;
+}
+.cb-ghost-btn:hover { background: #F6E6C8; }
+
+/* v489：國慶外觀開關（老師編輯列）——用國旗色讓它一眼認得出來 */
+.banner-btn.fest {
+  border-color: rgba(11,49,143,.55);
+  background: linear-gradient(100deg, rgba(214,0,28,.14), rgba(11,49,143,.14));
+}
+.banner-btn.fest:hover { border-color: rgba(11,49,143,.85); }
+
+/* ══ 🏫 v493 學校進度表 ═══════════════════════════════════════════ */
+/* 「學校這週在教什麼」——長在老師編輯列，點進一週就看得到，不用再開 Excel */
+.sw-bar {
+  margin: 10px 0 12px; padding: 10px 14px; border-radius: 12px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
+  font-family: var(--sans); font-size: 13.5px; line-height: 1.5;
+}
+.sw-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 3px 0; }
+.sw-tag {
+  flex: none; font-size: 11.5px; font-weight: 800; padding: 1px 8px; border-radius: 999px;
+  letter-spacing: .04em;
+}
+.sw-tag.it { background: rgba(110,170,255,.22); color: #BFD9FF; }
+.sw-tag.lt { background: rgba(255,170,110,.22); color: #FFD9BF; }
+.sw-main { color: #fff; font-weight: 800; }
+.sw-part { font-size: 12px; font-weight: 800; color: #0E1116; background: #E8C86A; padding: 0 7px; border-radius: 999px; }
+.sw-chip { font-size: 12.5px; color: #E8EDF6; background: rgba(255,255,255,.1); padding: 1px 9px; border-radius: 7px; }
+.sw-chip.carry { background: rgba(232,200,106,.16); color: #F0DCA0; }
+.sw-dim { font-size: 12.5px; color: rgba(255,255,255,.6); }
+.sw-hw { font-size: 12.5px; color: #CFE6D6; margin-left: auto; white-space: nowrap; }
+.sw-foot { gap: 14px; margin-top: 4px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,.14); }
+.sw-f { font-size: 12.5px; color: rgba(255,255,255,.72); }
+.sw-f.near { color: #FFD4A8; font-weight: 800; }   /* 這週或下週就要考＝該衝複習了 */
+.sw-note { font-size: 12.5px; color: rgba(255,255,255,.55); }
+@media (max-width: 700px) { .sw-hw { margin-left: 0; white-space: normal; } }
+
+.banner-btn.pace { border-color: rgba(150,190,255,.45); }
+.link-btn { font-family: var(--sans); font-size: 13px; color: var(--ink-3); text-decoration: underline; text-underline-offset: 3px; }
+.link-btn:hover { color: var(--accent); }
+.sw-bold {
+  font-size: 12.5px; font-weight: 800; color: #0E1116;
+  background: #E8C86A; padding: 1px 9px; border-radius: 7px;
+}
+
+/* ══ 📅 v497 固定課表 ═══════════════════════════════════════════ */
+.tt { margin-bottom: 14px; }
+.tt-body { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 12px 12px; padding: 14px; background: var(--bg-paper); }
+
+/* ══ 📒 v499 老師的上課紀錄（學生／家長端）═══════════════════════
+   v504（Alan：「不夠有質感」）：家長打開看到的第一份「成果」，照雜誌內頁排——
+   標題／統計分左右（卡片很寬，統計靠右才不會整片空在右邊）、日期排成真的像日期、
+   四個欄位用兩欄網格＋標題在上（第二行才對得齊，原本換行會掉回最左邊）、
+   左側一條時間軸把好幾堂課串起來。
+   ⚠ 小字顏色都挑過對比（#2FA56B 這種亮綠在 10.5px 讀不動 → 用深一階的）。
+   ══════════════════════════════════════════════════════════════ */
+.tlog {
+  grid-column: 1 / -1;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FDFCF8 100%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 22px 26px 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(21,19,14,.05), 0 2px 8px -2px rgba(21,19,14,.06));
+}
+
+/* ── 抬頭：左標題、右統計 ── */
+.tlog-h {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding-bottom: 13px; margin-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+.tlog-ttl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tlog-kicker {
+  font-family: var(--sans); font-size: 11px; font-weight: 800;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); opacity: .75;
+}
+.tlog-ttl b {
+  font-family: var(--serif); font-size: 23px; font-weight: 600;
+  letter-spacing: -.01em; color: var(--ink); line-height: 1.2;
+}
+.tlog-avg { text-align: right; flex: none; }
+.tlog-avg > span {
+  display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em;
+  color: var(--ink-3); margin-bottom: 2px;
+}
+.tlog-avg > b {
+  display: block; font-family: var(--serif); font-size: 32px; font-weight: 700;
+  line-height: 1; letter-spacing: -.02em;
+}
+.tlog-avg > b i { font-style: normal; font-size: 16px; margin-left: 1px; opacity: .72; }
+.tlog-bar {                            /* 細長的量尺，讓那個數字有個依據 */
+  width: 96px; height: 3px; margin: 8px 0 0 auto;
+  border-radius: 999px; background: var(--border); overflow: hidden;
+}
+.tlog-bar > div { height: 100%; border-radius: 999px; }
+.tlog-avg.hi > b  { color: #1B5E2E; }  .tlog-avg.hi .tlog-bar > div  { background: #2E7D43; }
+.tlog-avg.mid > b { color: #8A5A00; }  .tlog-avg.mid .tlog-bar > div { background: #B8821F; }
+.tlog-avg.lo > b  { color: #A8331F; }  .tlog-avg.lo .tlog-bar > div  { background: #C2543D; }
+
+/* ── 一堂一堂串成時間軸 ── */
+.tlog-row { position: relative; padding: 0 0 20px 24px; }
+.tlog-row:last-child { padding-bottom: 6px; }
+.tlog-row::before {                     /* 節點 */
+  content: ''; position: absolute; left: 0; top: 6px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--bg-card); border: 2px solid var(--border); box-sizing: border-box;
+}
+.tlog-row.now::before {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(139,49,32,.13);
+}
+.tlog-row::after {                      /* 串起來的那條線 */
+  content: ''; position: absolute; left: 4px; top: 19px; bottom: 0; width: 1px;
+  background: linear-gradient(180deg, var(--border), rgba(221,214,196,.2));
+}
+.tlog-row:last-child::after { display: none; }
+.tlog-row.off { opacity: .6; }
+
+.tlog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tlog-date { display: flex; align-items: baseline; gap: 8px; }
+.tlog-date b {
+  font-family: var(--serif); font-size: 22px; font-weight: 600;
+  letter-spacing: -.01em; color: var(--ink);
+}
+.tlog-date span { font-size: 13px; font-weight: 700; letter-spacing: .06em; color: var(--ink-3); }
+.tlog-tags { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.tlog-k { font-size: 12.5px; font-weight: 700; color: var(--ink-3); }
+.tlog-p, .tlog-rv {
+  font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
+  padding: 4px 12px; border-radius: 999px; white-space: nowrap;
+}
+.tlog-p.hi { background: #E3F3E8; color: #1B5E2E; }
+.tlog-p.mid { background: #FDF3E2; color: #8A5A00; }
+.tlog-p.lo { background: #FBE6E2; color: #A8331F; }
+.tlog-rv { font-weight: 700; }
+.tlog-rv.done { background: #F1F7F2; color: #1B5E2E; }
+.tlog-rv.part { background: #FBF6EB; color: #8A5A00; }
+.tlog-rv.none { background: #FBF1EE; color: #A8331F; }
+
+/* ── 四個欄位：標題在上、內容在下，寬一點就排成兩欄 ── */
+.tlog-fs { display: grid; grid-template-columns: 1fr; gap: 16px 30px; margin-top: 14px; }
+@media (min-width: 900px) { .tlog-fs { grid-template-columns: 1fr 1fr; } }
+.tlog-f { padding-left: 12px; border-left: 2px solid var(--border); min-width: 0; }
+.tlog-f em {
+  display: block; font-style: normal; font-size: 13px; font-weight: 800;
+  letter-spacing: .1em; color: var(--ink-3); margin-bottom: 6px;
+}
+.tlog-f em i { font-style: normal; font-size: 14px; letter-spacing: 0; margin-right: 6px; }
+.tlog-f p {
+  margin: 0; font-size: 16.5px; line-height: 1.7; color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.tlog-f.did  { border-left-color: #6FA8D0; } .tlog-f.did em  { color: #1E6FA8; }
+.tlog-f.prev { border-left-color: #9A8FDC; } .tlog-f.prev em { color: #5544B5; }
+.tlog-f.hw   { border-left-color: #7CC79D; } .tlog-f.hw em   { color: #1B7047; }
+.tlog-f.next { border-left-color: #C98A78; } .tlog-f.next em { color: var(--accent); }
+
+.tlog-more {
+  display: block; width: 100%; margin-top: 2px; padding: 11px 0 3px;
+  border: 0; border-top: 1px solid var(--border); background: none;
+  font-family: var(--sans); font-size: 14px; font-weight: 800; letter-spacing: .06em;
+  color: var(--ink-3); cursor: pointer; transition: color .15s;
+}
+.tlog-more:hover { color: var(--ink); }
+.tlog-more i { font-style: normal; margin-left: 6px; }
+
+@media (max-width: 560px) {
+  .tlog { padding: 16px 16px 12px; border-radius: 16px; }
+  .tlog-ttl b { font-size: 20px; }
+  .tlog-avg > b { font-size: 27px; }
+  .tlog-f p { font-size: 15.5px; }
+}
+
+/* v502：壞掉的那一塊（取代整頁白掉） */
+.boom {
+  margin: 16px 0; padding: 16px 20px; border-radius: 14px;
+  background: #FDEEEF; border: 1px solid rgba(168,0,26,.3); color: #8A1020;
+  font-family: var(--sans); font-size: 14px; line-height: 1.7;
+}
+.boom > b { display: block; font-size: 15.5px; font-weight: 800; margin-bottom: 6px; }
+.boom code {
+  display: block; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap;
+  background: #fff; border: 1px solid rgba(168,0,26,.2); border-radius: 8px;
+  padding: 8px 11px; margin: 6px 0; color: #6A0A18;
+}
+.boom span { display: block; font-size: 13px; color: #9A3040; }
+.boom button {
+  margin-top: 8px; font-family: var(--sans); font-size: 13px; font-weight: 700;
+  border: 1px solid rgba(168,0,26,.4); border-radius: 8px; padding: 4px 14px; background: #fff; color: #8A1020;
+}
+.sw-bk { white-space: nowrap; margin-right: 10px; }
+.sw-bk em {
+  font-style: normal; font-weight: 800; font-size: 10.5px; letter-spacing: .02em;
+  background: rgba(255,255,255,.16); padding: 1px 6px; border-radius: 5px; margin-right: 4px;
+}

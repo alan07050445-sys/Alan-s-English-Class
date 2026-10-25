@@ -1,0 +1,45 @@
+
+.grade-sel-card-desc {
+  font-family: var(--sans) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0 !important;
+  color: var(--ink-3);
+}
+
+/* ═══ 7. 總複習入口 — 獎盃金 ═════════════════════════════ */
+.rv-launcher-btn {
+  background: linear-gradient(120deg, #FFF8E8 0%, var(--bg-card) 55%);
+  border-color: #E8D9B0;
+}
+.rv-launcher-btn:hover { border-color: #C9A84C; }
+.rv-launcher-btn:hover .rv-launcher-arrow { color: #C9A84C; }
+.rv-launcher-emoji { filter: drop-shadow(0 3px 6px rgba(201,168,76,.4)); }
+
+@media (max-width: 560px) {
+  .qm-block-stars {
+    margin-top: 6px;
+  }}
+.qm-block-stars {
+  display: flex; align-items: center; gap: 3px;
+  margin-top: 7px;
+  font-family: var(--sans); font-size: 13px; font-weight: 800; color: #B8932F;
+}
+.qm-block-stars .qm-star { font-size: 15.5px; }
+.qm-block-stars-max { color: var(--ink-faint); font-weight: 600; }
+.tt-ended { color: var(--ink-3, #8a8270); }
+
+/* ═══ v268: 零決策入口＋家長成績入口＋完成慶祝＋門口待批改 ═══ */
+.wh-growth-link {
+  background: none; border: 0; padding: 0;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--ink-3, #8a8270);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #d7cdb2;
+  transition: color .15s;
+}
+.wh-growth-link:hover { color: var(--g-c, #8B3120); }
+.google-btn.ll-start-btn { font-size: 20px; padding: 17px 46px; }
+@media (max-width: 640px) {
+  .google-btn.ll-start-btn { font-size: 18.5px; padding: 16px 38px; }}

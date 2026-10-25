@@ -6,7 +6,7 @@
 // 為什麼要分：Alan 一個月內從 v375 跳到 v391（16 次 deploy），舊版 activate 會刪掉所有
 // key !== CACHE 的快取，等於每次 deploy 都把每個學生的圖片也一起清空重新冷啟動。
 // 圖片其實一整年都沒變，沒有理由跟著版本號陪葬。
-const CACHE = 'alans-english-v599';
+const CACHE = 'alans-english-v600';
 const STATIC = 'alans-static-v1';
 const SW_PATH = new URL(self.location.href).pathname;
 const BASE = SW_PATH.includes('/Alan-s-English-Class/') ? '/Alan-s-English-Class' : '';
@@ -24,10 +24,10 @@ const V = CACHE.replace(/^.*-v/, '');
 const q = '?v=' + V;
 const PRECACHE = [
   asset('/'), asset('/index.html'), asset('/manifest.json' + q),
-  asset('/styles.css' + q), asset('/styles-part2.css' + q), asset('/styles-quiz.css' + q),
-  asset('/styles-flashcard.css' + q), asset('/styles-auth.css' + q), asset('/styles-quiz-mode.css' + q),
-  asset('/styles-mistakes.css' + q), asset('/styles-theme.css' + q), asset('/styles-home.css' + q),
-  asset('/styles-fx.css' + q), asset('/styles-tune.css' + q),
+  asset('/dist/css/styles.css' + q), asset('/dist/css/styles-part2.css' + q), asset('/dist/css/styles-quiz.css' + q),
+  asset('/dist/css/styles-flashcard.css' + q), asset('/dist/css/styles-auth.css' + q), asset('/dist/css/styles-quiz-mode.css' + q),
+  asset('/dist/css/styles-mistakes.css' + q), asset('/dist/css/styles-theme.css' + q), asset('/dist/css/styles-home.css' + q),
+  asset('/dist/css/styles-fx.css' + q), asset('/dist/css/styles-tune.css' + q),
   asset('/dist/data-core.js' + q), asset('/data-g1.js' + q), asset('/data-g2.js' + q), asset('/data-g4.js' + q), asset('/data-g5.js' + q), asset('/data-g6.js' + q), asset('/data-summer.js' + q), asset('/data-grammar.js' + q),
   asset('/dist/components-shell.js' + q), asset('/dist/components-quiz.js' + q),
   asset('/dist/components-flashcard.js' + q), asset('/dist/components-quiz-mode.js' + q),

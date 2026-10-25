@@ -1,0 +1,784 @@
+/* styles-flashcard.css — Flashcard Player, Editor & Image Search */
+
+/* ── Mode Tabs ── */
+/* v315 (#1): Alan 要「原本的一整個版面」——v310 把卡片加了 margin:auto＋max-width 640，
+   讓它從「撐滿版面」變成「縮到內容寬(~554)置中」＝縮成這樣；又把高度改成 clamp(300,42vh,440)，
+   平板橫式 42vh 只有 ~344px 比圖片(420)還矮＝圖被裁＋大留白＝圖文不平衡。
+   關鍵修法：加回 width:100% 讓它撐滿父層（qm-fc-player-wrap 是 flex，光靠 max-width 撐不開），margin:auto 只在超過上限時置中。
+   v316: Alan 說桌機版還是太小、要「幾乎滿版」——max-width 760→1400（平板題目區 ~750 仍在上限內＝不受影響，
+   桌機寬螢幕才會撐大到接近滿版）。 */
+.fc-wrap { display: flex; flex-direction: column; background: var(--bg); width: 100%; max-width: 1400px; margin-left: auto; margin-right: auto; }
+.fc-mode-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-paper); }
+.fc-tab {
+  flex: 1;
+  padding: 18px 10px;
+  font-family: var(--mono);
+  font-size: 15.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+.fc-tab:hover { color: var(--ink); }
+.fc-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+/* v318 (#1): 星號單字分頁——用金色點綴，跟一般分頁區隔。 */
+.fc-star-filter.active { color: #B8860B; border-bottom-color: #E8B84B; }
+
+/* ── Player ── */
+.fc-player { padding: 28px; }
+.fc-empty { padding: 48px; text-align: center; color: var(--ink-muted); font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
+.fc-topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.fc-topbar .mono { white-space: nowrap; font-size: 15.5px; color: var(--ink-muted); }
+.fc-progress-bar { flex: 1; height: 2px; background: var(--border); border-radius: 1px; position: relative; }
+.fc-progress-fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--ink); border-radius: 1px; transition: width 0.4s; }
+
+/* ── Dual progress bar (Quizlet-style) ── */
+.fc-dual-bar {
+  display: flex !important; flex-direction: row !important;
+  align-items: center; gap: 10px;
+  margin-bottom: 20px; width: 100%;
+}
+.fc-dual-circle {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  border: 2px solid #ccc; color: #888;
+  flex-shrink: 0; background: transparent;
+}
+.fc-dual-circle.green { border-color: #2FA56B; color: #1f7d4f; background: color-mix(in srgb, #2FA56B 10%, transparent); }
+.fc-dual-track {
+  flex: 1; height: 8px; border-radius: 999px;
+  overflow: hidden; display: flex; background: var(--border, #e5dfc8);
+  min-width: 0;
+}
+.fc-dual-seg-green { background: #2FA56B; transition: flex 0.4s; min-width: 0; }
+.fc-dual-seg-gray  { background: color-mix(in srgb, var(--ink-3, #8a8270) 30%, transparent); transition: flex 0.4s; min-width: 0; }
+
+/* ── Speaker button ── */
+.fc-speaker-btn {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; min-width: 44px; min-height: 44px; border-radius: 50%;
+  color: var(--ink-muted); border: 1px solid var(--border);
+  background: var(--bg-paper); transition: all 0.15s;
+  flex-shrink: 0;
+}
+.fc-speaker-btn:hover { color: var(--ink); border-color: var(--ink); background: var(--bg-card); }
+/* v326: 產生 OpenAI 真人語音時的載入狀態（脈動一下，表示正在準備聲音） */
+.fc-speaker-btn.loading { cursor: wait; animation: fcSpeakPulse .9s ease-in-out infinite; }
+@keyframes fcSpeakPulse { 0%,100% { opacity: .45; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) { .fc-speaker-btn.loading { animation: none; opacity: .6; } }
+
+/* Speaker on card faces */
+.fc-face-speaker {
+  position: absolute; top: 12px; right: 12px;
+}
+.fc-face-speaker-dark {
+  color: var(--ink-muted); border-color: var(--border); background: transparent;
+}
+.fc-face-speaker-dark:hover { color: var(--ink); border-color: var(--ink); background: var(--bg); }
+
+/* ── Reveal card ── */
+/* v315 (#1): 卡片加高回接近原本 480，平板橫式(42vh 太矮)不再把背面圖片＋中文裁掉。 */
+.fc-flip-card { position: relative; width: 100%; min-height: clamp(360px, 58vh, 500px); height: auto; margin-bottom: 28px; cursor: pointer; }
+/* v317 (#3): 卡片角落的星號（Quizlet 式，好找）——空心☆＝未標、實心★＝已標。 */
+.fc-card-star {
+  position: absolute; top: 14px; left: 14px; z-index: 6;
+  width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0;
+  font-size: 24px; line-height: 1;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--ink-3); cursor: pointer;
+  transition: transform .14s, color .14s, border-color .14s, background .14s;
+  box-shadow: 0 2px 6px rgba(21,19,14,.08);
+}
+.fc-card-star:hover { border-color: #E8B84B; color: #E8A81E; transform: scale(1.07); }
+.fc-card-star.on { background: #FFF6E0; border-color: #E8B84B; color: #E8A81E; }
+.fc-flip-inner { width: 100%; height: 100%; min-height: inherit; position: relative; }
+.fc-face {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 14px;
+  padding: 32px;
+  text-align: center;
+  gap: 0;
+  overflow: hidden;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+}
+.fc-front { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.fc-back {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(6px);
+  background: var(--bg-card); color: var(--ink);
+}
+.fc-flip-card.flipped .fc-front {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(-4px);
+}
+.fc-flip-card.flipped .fc-back {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transform: translateY(0);
+}
+.fc-front.is-hidden {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(-4px);
+}
+.fc-back.is-visible {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-face { transition: none; }
+}
+
+/* Image on the BACK of card */
+/* v315 (#1): 圖片高度收到 340，讓「圖片＋中文＋例句」在加高後的卡片裡都看得到、不再一頭重＝圖文平衡。 */
+.fc-back-img-wrap {
+  width: 100%; max-height: 340px;
+  display: flex; justify-content: center;
+  margin-bottom: 18px; flex-shrink: 1; min-height: 0; overflow: hidden;
+}
+.fc-back-img-wrap img {
+  max-height: 340px; max-width: 96%;
+  object-fit: contain; border-radius: 6px; opacity: 0.95;
+}
+
+/* v316: Alan 覺得英文單字字體太大——上限 84→70、成長速度 8vw→7vw（桌機/平板都小一號、仍清楚大氣）。 */
+.fc-term { font-size: clamp(52px, 7vw, 70px); line-height: 1.1; letter-spacing: -0.015em; margin-bottom: 10px; }
+.fc-flip-hint { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #8a8270; }
+.fc-zh { font-size: 36px; font-weight: 700; margin-bottom: 12px; line-height: 1.25; }
+.fc-example { font-size: 17px; color: var(--ink-muted); max-width: 520px; line-height: 1.6; }
+
+/* ── Card nav ── */
+.fc-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.fc-nav-btn {
+  font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 12px 22px; border: 1px solid var(--ink); border-radius: 999px; transition: all 0.15s;
+}
+.fc-nav-btn:hover:not(:disabled) { background: var(--ink); color: var(--bg-paper); }
+.fc-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; border-color: var(--border); }
+.fc-dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.fc-dot { width: 8px; height: 8px; box-sizing: content-box; padding: 12px 6px; border-radius: 50%; background-color: var(--border); background-clip: content-box; cursor: pointer; transition: background 0.2s; }
+.fc-dot.active { background-color: var(--ink); }
+
+/* ── Learn mode ── */
+.fc-learn-q {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 16px 0 24px;
+}
+.fc-learn-img { max-height: 400px; max-width: min(680px, 96%); object-fit: contain; margin-bottom: 22px; border-radius: 6px; }
+
+/* Chinese shown as the question in learn mode */
+.fc-learn-zh {
+  font-size: 52px; font-weight: 700; line-height: 1.2;
+  letter-spacing: 0.02em; margin-bottom: 6px;
+}
+
+/* "再試一次吧" retry badge */
+/* v374：Alan 回報「再試一次」太小看不清楚 */
+.fc-retry-badge {
+  display: inline-block;
+  font-size: 16px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  background: #fff3e0; color: #e65100;
+  border: 2px solid #ffb74d; border-radius: 999px;
+  padding: 9px 24px; margin-bottom: 18px;
+}
+@media (max-width: 768px) { .fc-retry-badge { font-size: 14px; padding: 7px 18px; } }
+
+.fc-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fc-choice {
+  padding: 22px 16px; border: 1.5px solid var(--border);
+  font-size: 20px; font-family: var(--sans); font-weight: 700;
+  border-radius: 14px; text-align: center; transition: all 0.15s;
+  position: relative; background: var(--bg-card); cursor: pointer;
+}
+.fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) { border-color: var(--ink); background: var(--bg-paper); }
+.fc-choice.correct { background: color-mix(in srgb, #2FA56B 12%, transparent); border-color: #2FA56B; color: #1f7d4f; }
+.fc-choice.wrong   { background: #ffebee; border-color: #f44336; color: #c62828; }
+.fc-choice.dimmed  { opacity: 0.38; }
+.fc-choice-badge { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 16.5px; }
+
+/* ── Complete screen ── */
+.fc-complete {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 48px 16px; min-height: 410px;
+}
+.fc-complete-icon { font-size: 54px; margin-bottom: 18px; line-height: 1; }
+.fc-complete-title {
+  font-size: clamp(44px, 5vw, 58px);
+  line-height: 1.08;
+  margin-bottom: 10px;
+}
+.fc-complete-meta {
+  color: var(--ink-muted);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.fc-complete-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 16px;
+  margin-bottom: 26px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--ink-soft);
+  font-size: 16.5px;
+  font-weight: 700;
+  box-shadow: 0 2px 0 rgba(21,19,14,0.04);
+}
+.fc-complete-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fc-complete-actions .btn {
+  min-width: 190px;
+  padding: 14px 22px;
+  font-size: 13px;
+  letter-spacing: 0.10em;
+}
+.fc-complete-actions .btn.primary {
+  min-width: 230px;
+  box-shadow: 0 10px 24px rgba(21,19,14,0.16);
+}
+
+/* ── Review list ── */
+.fc-review-list { width: 100%; max-width: 480px; text-align: left; display: flex; flex-direction: column; gap: 5px; }
+.fc-review-row {
+  display: grid; grid-template-columns: 20px 1fr 1fr;
+  gap: 8px; align-items: center;
+  padding: 7px 10px; border-radius: 3px; font-size: 15.5px;
+}
+.fc-review-row.ok { background: color-mix(in srgb, #2FA56B 10%, transparent); }
+.fc-review-row.err { background: #fff5f5; }
+.fc-review-icon { font-size: 13px; }
+.fc-review-term { font-family: var(--serif); }
+.fc-review-ans { display: flex; flex-direction: column; gap: 1px; }
+.fc-review-wrong { color: #c62828; text-decoration: line-through; font-size: 13px; }
+.fc-review-correct { color: #1f7d4f; font-size: 14.5px; font-weight: 700; }
+
+/* ── Test setup screen ── */
+.fc-test-setup {
+  display: flex; flex-direction: column;
+  max-width: 480px; margin: 0 auto; width: 100%;
+  padding: 12px 0 8px;
+}
+.fc-setup-options {
+  display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--border); border-radius: 4px;
+  overflow: hidden; margin-bottom: 24px;
+}
+.fc-setup-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 16px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-paper); cursor: default;
+}
+.fc-setup-row:last-child { border-bottom: none; }
+.fc-setup-label {
+  font-size: 15.5px; font-weight: 600; color: var(--ink);
+  margin-bottom: 3px;
+}
+.fc-setup-desc {
+  font-size: 13px; color: var(--ink-muted); line-height: 1.4;
+}
+
+/* iOS-style toggle */
+.fc-toggle {
+  width: 48px; height: 28px; border-radius: 999px;
+  background: #ccc; position: relative; flex-shrink: 0;
+  transition: background 0.2s; cursor: pointer;
+}
+.fc-toggle::after {
+  content: ""; position: absolute;
+  top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 0.2s;
+}
+.fc-toggle.on { background: #2FA56B; }
+.fc-toggle.on::after { transform: translateX(20px); }
+
+/* ── Test mode ──
+   v373：改成「一題一張大卡片」（Alan 指定照參考圖的大小），原本一整頁小列表太難作答 */
+.fc-test-list { display: flex; flex-direction: column; gap: 22px; margin-bottom: 20px; }
+.fc-test-q {
+  background: var(--bg-card, #faf7f0);
+  border: 1.5px solid var(--border, #e5dfc8);
+  border-radius: 16px; padding: 22px 26px 26px;
+  box-shadow: 0 1px 2px rgba(21,19,14,.04), 0 10px 26px -18px rgba(21,19,14,.28);
+}
+.fc-test-qhead { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.fc-test-qlabel { font-family: var(--sans); font-size: 12.5px; font-weight: 800;
+  letter-spacing: .08em; color: var(--ink-muted, #8a8270); }
+.fc-test-qnum { margin-left: auto; font-size: 12px; color: var(--ink-muted, #8a8270); }
+.fc-test-prompt { display: flex; align-items: flex-start; gap: 18px; min-height: 92px; margin-bottom: 20px; }
+.fc-test-zh {
+  flex: 1; min-width: 0;
+  font-family: var(--sans); font-size: 38px; font-weight: 800; line-height: 1.25;
+  color: var(--ink, #15130e); letter-spacing: .01em;
+}
+.fc-test-img { flex: none; width: 104px; height: 104px; object-fit: cover; border-radius: 10px; }
+.fc-test-label { font-family: var(--sans); font-size: 12.5px; font-weight: 800;
+  letter-spacing: .06em; color: var(--ink-muted, #8a8270); margin-bottom: 10px; }
+.fc-test-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fc-test-choice {
+  padding: 20px 18px; border: 1.5px solid var(--border, #e5dfc8);
+  font-size: 19px; font-family: var(--sans); font-weight: 600; border-radius: 12px;
+  text-align: left; transition: all 0.15s; background: #fff; cursor: pointer;
+}
+.fc-test-choice:hover { border-color: #C9A84C; transform: translateY(-1px); }
+.fc-test-choice.selected { background: var(--ink); color: var(--bg-paper); border-color: var(--ink); }
+
+/* Written answer input */
+.fc-test-written { margin-top: 2px; }
+.fc-written-input {
+  width: 100%; box-sizing: border-box; border: 1.5px solid var(--border);
+  background: #fff; color: var(--ink);
+  padding: 16px 18px; font-size: 19px; font-family: var(--sans);
+  border-radius: 12px; outline: none; transition: border-color 0.15s;
+}
+.fc-written-input:focus { border-color: var(--ink); }
+.fc-written-input::placeholder { color: var(--ink-faint); }
+
+.fc-test-foot { display: flex; justify-content: center; padding-top: 16px; border-top: 1px solid var(--border); }
+
+/* ══════════════════════════════════════════════════════
+   FLASHCARD EDITOR
+══════════════════════════════════════════════════════ */
+.fc-editor { display: flex; flex-direction: column; gap: 12px; }
+.fc-editor-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+.fc-import-box {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 16px;
+}
+.fc-import-ta {
+  width: 100%; font-family: var(--mono); font-size: 13px; line-height: 1.65;
+  border: 1px solid var(--border); background: var(--bg-paper);
+  padding: 10px; resize: vertical; border-radius: 2px; color: var(--ink); outline: none;
+}
+.fc-import-ta:focus { border-color: var(--ink); }
+
+.fc-card-list { display: flex; flex-direction: column; gap: 1px; background: var(--border-soft); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+.fc-card-empty { text-align: center; padding: 32px; color: var(--ink-muted); font-size: 12px; font-family: var(--mono); letter-spacing: 0.14em; text-transform: uppercase; background: var(--bg-paper); }
+.fc-card-row { background: var(--bg-paper); }
+.fc-card-row.open { background: var(--bg-card); }
+.fc-card-row-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; cursor: pointer; min-height: 52px;
+  transition: background 0.12s;
+}
+.fc-card-row-head:hover { background: rgba(0,0,0,0.02); }
+.fc-row-term { font-family: var(--serif); font-size: 17px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-row-zh { font-size: 14.5px; color: var(--ink-muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-row-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+.fc-row-tools { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+.fc-row-tools button { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 3px; font-size: 14.5px; color: var(--ink-muted); transition: all 0.12s; background: none; border: none; cursor: pointer; }
+.fc-row-tools button:hover:not(:disabled) { background: var(--border-soft); color: var(--ink); }
+.fc-row-chevron { font-size: 8px; color: var(--ink-faint); flex-shrink: 0; font-family: var(--mono); }
+
+.fc-card-row-body {
+  padding: 16px; border-top: 1px solid var(--border-soft);
+  display: grid; grid-template-columns: 1fr 160px; gap: 20px;
+}
+.fc-card-fields { display: flex; flex-direction: column; gap: 14px; }
+.fc-card-img-col { display: flex; flex-direction: column; }
+.fc-img-preview img { width: 100%; height: 120px; object-fit: cover; border-radius: 3px; border: 1px solid var(--border); }
+.fc-img-add {
+  width: 100%; height: 120px;
+  border: 2px dashed var(--border); border-radius: 3px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: var(--ink-muted); transition: all 0.15s; background: var(--bg); cursor: pointer;
+}
+.fc-img-add:hover { border-color: var(--ink); color: var(--ink); background: var(--bg-paper); }
+
+/* ══════════════════════════════════════════════════════
+   IMAGE SEARCH  (Pixabay overlay)
+══════════════════════════════════════════════════════ */
+.img-search-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(21,19,14,0.55); backdrop-filter: blur(6px);
+  display: grid; place-items: center; padding: 32px;
+  animation: fadeIn 0.2s ease;
+}
+.img-search-panel {
+  background: var(--bg-paper); width: 100%; max-width: 680px;
+  max-height: 88vh; overflow-y: auto;
+  border: 1px solid var(--rule);
+  box-shadow: 0 32px 80px -16px rgba(0,0,0,0.35);
+  display: flex; flex-direction: column;
+  animation: modalUp 0.25s ease;
+}
+.img-search-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 22px 28px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+/* Source toggle tabs */
+/* ── v336: 圖庫搜尋 ↔ 自己上傳／貼上 ───────────────────── */
+.img-mode-tabs {
+  display: flex; gap: 6px; padding: 12px 28px 0; flex-shrink: 0;
+}
+.img-mode-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  font-family: var(--sans); font-size: 13.5px; font-weight: 700;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.img-mode-tab:hover { border-color: var(--ink); color: var(--ink); }
+.img-mode-tab.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+
+.img-up-wrap { padding: 16px 28px 22px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.img-up-drop {
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  padding: 34px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  text-align: center; cursor: pointer;
+  transition: all .15s;
+}
+.img-up-drop:hover, .img-up-drop.over { border-color: var(--ink); background: var(--bg-card, #fff); }
+.img-up-drop.busy { opacity: .65; cursor: default; }
+.img-up-ico { font-size: 34px; line-height: 1; }
+.img-up-drop b { font-family: var(--sans); font-size: 15px; color: var(--ink); }
+.img-up-drop span { font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; }
+.img-up-drop kbd {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--border-soft); border-radius: 4px; padding: 1px 5px;
+}
+.img-up-or {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--sans); font-size: 12px; color: var(--ink-faint);
+}
+.img-up-or::before, .img-up-or::after {
+  content: ''; flex: 1; height: 1px; background: var(--border-soft);
+}
+.img-up-wrap .img-search-bar { padding: 0; border-bottom: none; }
+.img-up-hint {
+  font-family: var(--sans); font-size: 12px; line-height: 1.6;
+  color: var(--ink-muted);
+  background: var(--bg); border: 1px dashed var(--border);
+  border-radius: 8px; padding: 9px 12px;
+}
+
+.img-source-tabs {
+  display: flex; gap: 0; padding: 10px 28px 0;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.img-source-tab {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 20px 10px; gap: 2px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-muted); transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none;
+}
+.img-source-tab:hover { color: var(--ink); }
+.img-source-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+.img-source-sub { font-size: 10px; color: var(--ink-faint); letter-spacing: 0.08em; }
+.img-source-tab.active .img-source-sub { color: var(--ink-muted); }
+
+.img-search-bar {
+  display: flex; gap: 10px; padding: 14px 28px;
+  border-bottom: 1px solid var(--border-soft); flex-shrink: 0;
+}
+.img-search-input {
+  flex: 1; border: 1px solid var(--border); background: var(--bg);
+  padding: 10px 14px; font-size: 16.5px; font-family: var(--sans); color: var(--ink);
+  border-radius: 2px; outline: none;
+}
+.img-search-input:focus { border-color: var(--ink); }
+.img-search-status { padding: 24px; text-align: center; color: var(--ink-muted); font-size: 12px; font-family: var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.img-search-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 12px; flex: 1;
+}
+.img-search-item {
+  aspect-ratio: 1; overflow: hidden; border-radius: 2px; cursor: pointer;
+  background: var(--bg); border: 2px solid transparent; transition: all 0.15s; padding: 0;
+}
+.img-search-item:hover { border-color: var(--ink); transform: scale(1.03); }
+.img-search-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.img-search-pages {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 28px; border-top: 1px solid var(--border-soft); flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════
+   MATCH MODE
+══════════════════════════════════════════════════════ */
+.fc-match-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; gap: 12px;
+}
+.fc-match-timer {
+  font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em;
+}
+/* Match ready screen */
+.fc-match-ready {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 40px 0;
+}
+
+.fc-match-best-badge {
+  display: inline-block; font-size: 13px; letter-spacing: 0.1em;
+  background: #fff8e1; color: #f57f17; border: 1px solid #ffe082;
+  border-radius: 999px; padding: 4px 16px; margin-bottom: 8px;
+}
+.fc-match-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 1fr;   /* rows share height equally */
+  gap: 10px;
+  /* v345: 高度改由 MatchFitGrid 實際量測後設定（inline style），這裡只留初次繪製的保底值。
+     舊版寫死 calc(100vh - 280px) + min-height:300px，猜不準就切掉最後一列、
+     iPad 的 Safari 工具列伸縮更會失準。min-height 拿掉，避免反而撐出捲軸。 */
+  height: calc(100dvh - 280px);
+  min-height: 200px;
+}
+.fc-match-tile {
+  /* No aspect-ratio — height comes from the grid */
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-card);
+  font-size: 16.5px; font-weight: 600; font-family: var(--sans);
+  text-align: center; line-height: 1.4; cursor: pointer;
+  transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s, opacity 0.18s;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  box-shadow: 0 2px 8px rgba(21,19,14,0.07);
+  padding: 0; min-height: 0;
+}
+/* Color-state overlay (sits above image, below text) */
+.fc-match-tile::after {
+  content: ''; position: absolute; inset: 0;
+  border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity 0.15s; z-index: 1;
+}
+
+/* Full-cover background image */
+.fc-match-tile-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; pointer-events: none;
+  border-radius: inherit; z-index: 0;
+}
+/* Text layer — always on top */
+.fc-match-tile-text {
+  position: relative; z-index: 2;
+  padding: 12px 14px;
+  word-break: break-word;
+}
+/* White frosted backdrop when sitting on top of an image */
+.fc-match-tile-text.has-img {
+  background: rgba(255,255,255,0.86);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 10px 14px;
+}
+
+/* Hover */
+.fc-match-tile:hover:not(.matched):not(.selected):not(.wrong) {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(21,19,14,0.13);
+  border-color: var(--ink-soft, #888);
+}
+/* Selected */
+.fc-match-tile.selected {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.28), 0 6px 16px rgba(21,19,14,0.1);
+  transform: translateY(-3px);
+}
+.fc-match-tile.selected::after { background: rgba(59,130,246,0.18); opacity: 1; }
+.fc-match-tile.selected .fc-match-tile-text { color: #1d4ed8; }
+/* Matched — flash green then vanish */
+.fc-match-tile.matched {
+  animation: fc-match-vanish 0.55s cubic-bezier(0.4,0,0.2,1) forwards;
+  pointer-events: none;
+}
+.fc-match-tile.matched::after { background: rgba(74,222,128,0.35); opacity: 1; }
+@keyframes fc-match-vanish {
+  0%   { opacity: 1;   transform: scale(1);    border-color: #4ade80; background: #dcfce7; }
+  30%  { opacity: 1;   transform: scale(1.06); border-color: #4ade80; background: #dcfce7; }
+  100% { opacity: 0;   transform: scale(0.88); border-color: #4ade80; }
+}
+/* Wrong */
+.fc-match-tile.wrong {
+  border-color: #ef4444;
+  animation: fc-shake 0.4s ease;
+}
+.fc-match-tile.wrong::after { background: rgba(239,68,68,0.18); opacity: 1; }
+
+@keyframes fc-shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  60%      { transform: translateX(6px); }
+}
+
+/* ══════════════════════════════════════════════════════
+   FILL-IN-BLANK MODE (Wordwall-style)
+══════════════════════════════════════════════════════ */
+/* v372(#2)：測驗模式整體放大（Alan：原本太小） */
+.fc-fill-player {
+  display: flex; flex-direction: column;
+  min-height: 560px; padding: 26px 34px 34px;
+}
+.fc-fill-topbar {
+  display: flex; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.fc-fill-sentence {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 16px 0 28px;
+}
+.fc-fill-text {
+  font-size: 44px; font-weight: 700; line-height: 1.35;
+  color: var(--ink); font-family: var(--sans);
+  max-width: 880px;
+}
+.fc-fill-zh {
+  font-size: 60px; letter-spacing: 0.02em;
+}
+.fc-fill-blank {
+  display: inline-block;
+  border-bottom: 3px solid var(--ink);
+  min-width: 80px; margin: 0 6px;
+  color: transparent; vertical-align: bottom;
+  letter-spacing: 3px;
+}
+.fc-fill-choices {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 16px; margin-top: 8px;
+}
+.fc-fill-btn {
+  padding: 30px 22px; border-radius: 10px; border: none;
+  font-size: 28px; font-weight: 700; font-family: var(--sans);
+  color: #fff; text-align: center; cursor: pointer;
+  transition: all 0.15s; box-shadow: 0 4px 0 rgba(0,0,0,0.18);
+}
+.fc-fill-btn:hover:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0,0,0,0.18);
+}
+.fc-fill-btn:active:not(.correct):not(.wrong):not(.dimmed) {
+  transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+.fc-fill-btn.correct { background: #22c55e !important; box-shadow: 0 4px 0 #16a34a; }
+.fc-fill-btn.wrong   { background: #ef4444 !important; box-shadow: 0 4px 0 #dc2626; }
+.fc-fill-btn.dimmed  { opacity: 0.38; cursor: default; }
+.fc-fill-next-row { display: flex; justify-content: center; margin-top: 20px; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .fc-choices { grid-template-columns: 1fr; }
+  .fc-test-choices { grid-template-columns: 1fr; margin-left: 0; }
+  .fc-test-written { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  .fc-card-row-body { grid-template-columns: 1fr; }
+  .fc-img-add, .fc-img-preview img { height: 80px; }
+  .img-search-grid { grid-template-columns: repeat(3, 1fr); }
+  .img-search-overlay { padding: 10px; }
+  .fc-player { padding: 16px; }
+  .fc-flip-card { min-height: 300px; height: auto; margin-bottom: 22px; }
+  .fc-face { padding: 22px 16px; }
+  .fc-back-img-wrap { max-height: 220px; margin-bottom: 14px; }
+  .fc-back-img-wrap img { max-height: 220px; max-width: 94%; }
+  .fc-term { font-size: 36px; }
+  .fc-zh { font-size: 30px; }
+  .fc-example { font-size: 17px; max-width: 100%; }
+  .fc-flip-hint { font-size: 11px; letter-spacing: 0.06em; }
+  .fc-learn-img { max-height: 230px; max-width: 96%; }
+  .fc-learn-zh { font-size: 36px; }
+  .fc-mode-tabs { overflow-x: auto; }
+  .fc-tab { font-size: 12px; padding: 14px 8px; white-space: nowrap; }
+  /* v345: 手機改 3 欄——2 欄時 12 張牌要 6 列、每格太扁；高度一樣由 JS 量測 */
+  .fc-match-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; height: calc(100dvh - 220px); }
+  .fc-match-tile { font-size: 17px; }
+  .fc-fill-player { padding: 14px 14px 20px; }
+  .fc-fill-text { font-size: 26px; }
+  .fc-fill-zh { font-size: 38px; }
+  .fc-fill-btn { font-size: 19px; padding: 18px 12px; }
+  .fc-nav-btn { font-size: 12px; padding: 11px 16px; }
+  .fc-complete { min-height: 360px; padding: 40px 12px; }
+  .fc-complete-icon { font-size: 46px; margin-bottom: 14px; }
+  .fc-complete-title { font-size: 40px; }
+  .fc-complete-meta { font-size: 15.5px; letter-spacing: 0.06em; }
+  .fc-complete-note { font-size: 15.5px; margin-bottom: 20px; }
+  .fc-complete-actions { width: 100%; gap: 12px; }
+  .fc-complete-actions .btn,
+  .fc-complete-actions .btn.primary { width: 100%; min-width: 0; font-size: 13px; padding: 15px 18px; }
+}
+
+/* v317 桌機版加強（≥901px，不動 Alan 覺得OK的平板/手機）：
+   #1 背面圖片＋中文放大到跟「學習」模式一樣大（卡片下方本來就有多餘空間、也比較清楚）；
+   #2 填空/選擇的彩色選項間距拉開、與題目距離加大（位置很多、不用擠）。 */
+@media (min-width: 901px) {
+  /* v318 (#2): Alan 要背面圖再更大——寬 5→7(×1.4)、高多一分(×1.2)；卡片再加高容納。 */
+  .fc-flip-card { min-height: clamp(460px, 66vh, 660px); }
+  .fc-back-img-wrap { max-height: 500px; }
+  .fc-back-img-wrap img { max-height: 500px; max-width: min(950px, 96%); }
+  .fc-zh { font-size: 50px; margin-bottom: 14px; }
+  .fc-example { font-size: 19px; max-width: 620px; }
+  /* #2 彩色選項不擠 */
+  .fc-fill-choices { gap: 22px; margin-top: 28px; max-width: 940px; margin-left: auto; margin-right: auto; width: 100%; }
+  .fc-fill-btn { padding: 28px 20px; }
+  .fc-fill-sentence { padding: 24px 0 40px; }
+}
+
+/* v372(#2)：測驗模式的小標（仿學習單／Quizlet 的「選擇答案」） */
+.fc-fill-label {
+  font-family: var(--sans); font-size: 13px; font-weight: 800; letter-spacing: .06em;
+  color: var(--ink-muted, #8a8270); margin: 4px 0 10px;
+}
+@media (max-width: 768px) {
+  .fc-fill-player { min-height: 440px; padding: 18px 16px 22px; }
+  .fc-fill-choices { gap: 10px; }
+  .fc-fill-btn { padding: 18px 12px; }
+  .fc-fill-label { font-size: 11.5px; }
+}
+
+/* v373：測驗大卡片的手機尺寸 */
+@media (max-width: 768px) {
+  .fc-test-q { padding: 16px 15px 18px; border-radius: 13px; }
+  .fc-test-prompt { min-height: 64px; gap: 12px; margin-bottom: 14px; }
+  .fc-test-zh { font-size: 26px; }
+  .fc-test-img { width: 72px; height: 72px; }
+  .fc-test-choices { gap: 9px; }
+  .fc-test-choice { padding: 15px 13px; font-size: 16px; border-radius: 10px; }
+  .fc-written-input { padding: 13px 14px; font-size: 16px; }
+}
+
+/* v374(#3)：學習／測驗前的範圍選擇 */
+.fc-scope { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 24px 46px; }
+.fc-scope-title { font-size: 30px; color: var(--ink); }
+.fc-scope-sub { font-size: 11px; color: var(--ink-muted); margin-bottom: 14px; letter-spacing: .08em; }
+.fc-scope-btn {
+  width: min(460px, 100%); display: flex; flex-direction: column; gap: 3px;
+  padding: 18px 22px; border-radius: 14px; cursor: pointer; text-align: left;
+  border: 1.5px solid var(--ink); background: var(--ink); color: var(--bg-paper);
+  font-family: inherit; transition: transform .14s, box-shadow .14s;
+}
+.fc-scope-btn b { font-size: 19px; font-weight: 800; }
+.fc-scope-btn span { font-size: 12.5px; opacity: .78; }
+.fc-scope-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px rgba(21,19,14,.6); }
+.fc-scope-btn.ghost { background: #fff; color: var(--ink); border-color: var(--border); }
+.fc-scope-btn.ghost:hover { border-color: #C9A84C; }
+@media (max-width: 768px) {
+  .fc-scope { padding: 26px 12px 32px; }
+  .fc-scope-title { font-size: 23px; }
+  .fc-scope-btn { padding: 15px 17px; } .fc-scope-btn b { font-size: 17px; }
+}

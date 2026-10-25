@@ -1,0 +1,1028 @@
+/* ═══════════════════════════════════════════════════════════════
+   styles-theme.css — 視覺改造層（最後載入，覆寫前面所有樣式）
+   設計方向：溫暖雜誌風 × 兒童活力
+   - 保留奶油紙張 + 襯線字的高級感（家長視角的質感）
+   - 注入分類色彩系統 + 觸感元件（學生視角的活力）
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 分類色 — 對齊既有 icon 漸層（vocab紫 grammar粉 word藍 reading綠） */
+  --c-vocab:    #6D5BD0;
+  --c-vocab-bg: #F3F0FC;
+  --c-grammar:  #E0507A;
+  --c-grammar-bg:#FDF0F4;
+  --c-word:     #2E8FD0;
+  --c-word-bg:  #EDF6FD;
+  --c-lt:       #D9892B;
+  --c-lt-bg:    #FDF3E4;
+  --c-mock:     #1E9C94;
+  --c-mock-bg:  #E8F7F5;
+  --c-reading:  #2FA56B;
+  --c-reading-bg:#EDFAF2;
+
+  /* 層次更分明的陰影 */
+  --shadow-sm: 0 1px 2px rgba(21,19,14,.05), 0 2px 8px -2px rgba(21,19,14,.06);
+  --shadow-md: 0 2px 4px rgba(21,19,14,.05), 0 12px 28px -10px rgba(21,19,14,.14);
+  --shadow-lg: 0 4px 8px rgba(21,19,14,.06), 0 24px 56px -16px rgba(21,19,14,.22);
+}
+
+/* ═══ 1. HEADER — 更輕、更精緻 ═══════════════════════════ */
+.header {
+  background: rgba(244,240,231,.86);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner { height: 64px; }
+.brand-mono {
+  border: none;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 10px; /* 裝飾性品牌章，維持小巧不隨全站字級放大 */
+  white-space: nowrap;
+}
+.grade-chip {
+  background: var(--accent) !important;
+  border-radius: 7px !important;
+  padding: 3px 9px !important;
+  font-size: 12px !important;
+}
+.week-nav button {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-card);
+  transition: all .15s;
+}
+.week-nav button:not(:disabled):hover {
+  border-color: var(--ink);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.week-nav button:disabled { opacity: .3; }
+.progress-pill {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  box-shadow: var(--shadow-sm);
+}
+.progress-fill { background: linear-gradient(90deg, var(--moss), #5FA851); }
+
+/* ═══ 2. 週次橫幅 — 標題更有存在感 ═══════════════════════ */
+.qm-week-banner { position: relative; padding-bottom: 18px; }
+.qm-week-title {
+  font-size: clamp(30px, 4.2vw, 44px);
+  letter-spacing: -0.02em;
+}
+.qm-week-banner::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: 6px;
+  width: 64px; height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-soft));
+}
+
+/* ═══ 3. 分類卡片 — 色彩系統注入 ═════════════════════════ */
+.qm-blocks { gap: 18px; }
+.qm-block {
+  --cat-c: var(--ink);
+  --cat-bg: var(--bg-paper);
+  border-radius: 18px;
+  border-width: 1.5px;
+  padding: 24px 22px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+/* 順序固定：vocab → grammar → word → reading（G2 少數分類也安全：只是少用幾個顏色） */
+.qm-blocks .qm-block:nth-of-type(1) { --cat-c: var(--c-vocab);   --cat-bg: var(--c-vocab-bg); }
+.qm-blocks .qm-block:nth-of-type(2) { --cat-c: var(--c-grammar); --cat-bg: var(--c-grammar-bg); }
+.qm-blocks .qm-block:nth-of-type(3) { --cat-c: var(--c-word);    --cat-bg: var(--c-word-bg); }
+.qm-blocks .qm-block:nth-of-type(4) { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+
+/* v567：第 5、6 張＝中師單字（琥珀）、綜合考卷（青綠） */
+.qm-blocks .qm-block:nth-of-type(5) { --cat-c: var(--c-lt);   --cat-bg: var(--c-lt-bg); }
+.qm-blocks .qm-block:nth-of-type(6) { --cat-c: var(--c-mock); --cat-bg: var(--c-mock-bg); }
+/* v568：改成依「類別」決定顏色（原本照第幾張卡），這樣調整順序不會錯色 */
+.qm-blocks .qm-block[data-cat="vocab"] { --cat-c: var(--c-vocab); --cat-bg: var(--c-vocab-bg); }
+.qm-blocks .qm-block[data-cat="grammar"] { --cat-c: var(--c-grammar); --cat-bg: var(--c-grammar-bg); }
+.qm-blocks .qm-block[data-cat="word"] { --cat-c: var(--c-word); --cat-bg: var(--c-word-bg); }
+.qm-blocks .qm-block[data-cat="reading"] { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+.qm-blocks .qm-block[data-cat="ltvocab"] { --cat-c: var(--c-lt); --cat-bg: var(--c-lt-bg); }
+.qm-blocks .qm-block[data-cat="mock"] { --cat-c: var(--c-mock); --cat-bg: var(--c-mock-bg); }
+
+/* 頂部色條 — 每張卡有自己的身份 */
+.qm-block::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--cat-c);
+  opacity: .9;
+}
+.qm-block:hover:not(.empty) {
+  border-color: var(--cat-c);
+  box-shadow: var(--shadow-md);
+}
+.qm-block-icon {
+  width: 60px; height: 60px;
+  border-radius: 16px;
+  font-size: 28px;
+  box-shadow: 0 6px 16px -6px var(--cat-c);
+}
+.qm-block-title { font-size: 18px; }
+.qm-block-title-zh {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--cat-c);
+  margin-bottom: 12px;
+}
+.qm-block-count {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.qm-progress-bar {
+  height: 8px;
+  border-radius: 5px;
+  background: var(--border-soft);
+}
+.qm-progress-fill {
+  border-radius: 5px;
+  background: var(--cat-c);
+}
+.qm-pct {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 14.5px;
+  color: var(--cat-c);
+}
+.qm-block-arrow {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1.5px solid var(--border-soft);
+  font-size: 18px;
+  transition: all .18s;
+}
+.qm-block:hover:not(.empty) .qm-block-arrow {
+  background: var(--cat-c);
+  border-color: var(--cat-c);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+/* ═══ 4. 側欄 — 從文件大綱變成單元卡片 ═══════════════════ */
+.qm-sidebar-cat-icon { border-radius: 14px !important; box-shadow: var(--shadow-sm); }
+.qm-unit-list { padding: 6px 10px; }
+.qm-unit-row {
+  border-radius: 12px;
+  margin-bottom: 4px;
+  border: 1.5px solid transparent;
+  transition: all .15s;
+}
+.qm-unit-row:hover {
+  background: var(--bg);
+  border-color: var(--border-soft);
+  transform: none;
+}
+/* 選中：墨色翻轉 — 一眼看出現在在哪 */
+.qm-unit-row.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+.qm-unit-row.active .qm-unit-row-title { color: var(--bg-paper); }
+.qm-unit-row.active .qm-unit-row-meta,
+.qm-unit-row.active .qm-type-badge { color: var(--ink-faint); }
+.qm-unit-row.active .qm-type-badge { background: rgba(255,255,255,.12); border-color: transparent; }
+.qm-unit-row.active .qm-unit-score-badge { background: rgba(255,255,255,.16); color: #fff; border-color: transparent; }
+.qm-unit-row.active .qm-unit-row-status { color: var(--bg-paper); }
+.qm-unit-row.active .qm-unit-row-status.done { color: #6EE7A0; }
+.qm-sidebar-back {
+  border-radius: 10px;
+  transition: all .15s;
+}
+.qm-sidebar-back:hover { background: var(--bg); }
+
+/* ═══ 5. 測驗選項 — 字母圓徽更大更可愛 ═══════════════════ */
+.qm-option { border-radius: 14px; }
+.qm-opt-letter {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 15.5px;
+  color: var(--ink-muted);
+  flex-shrink: 0;
+  transition: all .12s;
+}
+.qm-option:hover:not(:disabled):not(.correct):not(.wrong):not(.dim) .qm-opt-letter {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.qm-option.correct .qm-opt-letter {
+  background: #16a34a; border-color: #16a34a; color: #fff;
+}
+.qm-option.wrong .qm-opt-letter {
+  background: #dc2626; border-color: #dc2626; color: #fff;
+}
+
+/* 測驗進度條 — 加粗 + 漸層 */
+.qm-player-bar { height: 10px !important; border-radius: 6px !important; }
+.qm-player-fill {
+  border-radius: 6px !important;
+  background: linear-gradient(90deg, var(--moss), #5FA851) !important;
+}
+
+/* ═══ 6. 年級選擇 — 正確的網格 + 每年級一個顏色 ═══════════ */
+.grade-sel-cards {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.grade-sel-card {
+  --g-c: #8B3120;
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 26px 14px 22px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  transition: all .18s cubic-bezier(.22,1,.36,1);
+  position: relative;
+  overflow: hidden;
+}
+.grade-sel-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #8B3120, #B85A45);
+  opacity: .85;
+  transition: opacity .18s;
+}
+.grade-sel-card:hover {
+  border-color: var(--g-c);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+.grade-sel-card:hover::before { opacity: 1; }
+.grade-sel-badge {
+  color: var(--g-c) !important;
+  font-size: 40px !important;
+}
+
+/* ═══ 8. 全站統一細節 ════════════════════════════════════ */
+/* 卡片圓角統一 18px 系列 */
+.dash-panel, .mk-panel, .rv-panel, .report-modal { border-radius: 18px; }
+
+/* 主要 CTA 按鈕一致的彈性手感 */
+.qm-btn.primary, .rv-start-btn, .mk-drill-btn, .report-copy-btn, .roster-add-btn {
+  transition: background .15s, transform .12s cubic-bezier(.34,1.56,.64,1), box-shadow .15s;
+}
+.qm-btn.primary:hover, .rv-start-btn:hover, .mk-drill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -6px rgba(21,19,14,.4);
+}
+
+/* 選取文字的顏色也跟主題走 */
+::selection { background: rgba(139,49,32,.18); }
+
+/* ═══ 9. 行動裝置 ════════════════════════════════════════ */
+@media (max-width: 760px) {
+  .header-inner { height: 56px; }
+  .qm-week-title { font-size: 28px; }
+  .grade-sel-cards { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .grade-sel-card { padding: 20px 10px 16px; }
+  .grade-sel-badge { font-size: 32px !important; }
+  .qm-block { padding: 18px 16px; }
+  .qm-block-icon { width: 50px; height: 50px; font-size: 24px; border-radius: 13px; }
+}
+
+@media (max-width: 560px) {
+  .qm-blocks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    /* v203: 懸浮 week-nav 的讓位改由 .page-lobby .shell 統一處理（styles-home.css） */
+    padding-top: 12px;
+  }
+  .qm-block {
+    min-height: 190px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 18px 14px;
+  }
+  .qm-block-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+  }
+  .qm-block-title {
+    font-size: 17px;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+  }
+  .qm-block-title-zh {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .qm-block-count {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .qm-block-progress {
+    width: 100%;
+  }
+  .qm-block-arrow {
+    position: absolute;
+    top: 18px;
+    right: 14px;
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qm-block, .grade-sel-card, .week-nav button, .qm-option { transition: none !important; }
+}
+
+/* 品牌名不折行（中等寬度時縮小取代換行） */
+.brand-name { white-space: nowrap; }
+@media (max-width: 1020px) {
+  .brand-name { font-size: 18px; }
+  .header-inner { gap: 16px; }
+}
+/* v315 (#3): iPad 直式(≤900)頭部太擠、頂到邊——收掉裝飾性「EST · 2026」章、再縮間距，
+   讓「品牌｜週次｜書本＋帳號」三欄有呼吸空間（Alan 圈起來的地方）。 */
+@media (max-width: 900px) {
+  .brand-mono { display: none; }
+  .header-inner { gap: 12px; }
+  .brand { gap: 8px; }
+  .brand-name { font-size: 17px; }
+  .header-right { gap: 12px; }
+  .user-name { max-width: 72px; }
+}
+
+/* 年級選擇容器放寬，讓五張卡有呼吸空間 */
+.grade-selector-inner { max-width: 880px !important; width: 100%; }
+.grade-sel-cards { margin-top: 8px; }
+
+/* v153：分類內頁改成任務板，而不是後台列表 */
+.page-mission .header {
+  background: rgba(251,248,241,.88);
+  border-bottom-color: rgba(139,49,32,.18);
+}
+.page-mission .qm-cat-view {
+  gap: 20px;
+  padding: 18px 24px 32px;
+  min-height: calc(100vh - 72px);
+}
+.page-mission .qm-sidebar {
+  width: 360px;
+  border: 1px solid rgba(221,214,196,.9);
+  border-radius: 20px;
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 18px 42px -30px rgba(21,19,14,.34);
+  overflow: hidden;
+}
+.page-mission .qm-sidebar-back {
+  background: rgba(246,241,230,.76);
+  border-bottom-color: rgba(221,214,196,.82);
+  color: var(--accent);
+}
+.page-mission .qm-sidebar-cat {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.92), rgba(246,241,230,.72));
+  border-bottom-color: rgba(221,214,196,.82);
+}
+.page-mission .qm-sidebar-cat::after { content: none; }
+.page-mission .qm-unit-list {
+  padding: 12px;
+}
+.page-mission .qm-unit-row {
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1.5px solid rgba(221,214,196,.86);
+  border-left: 5px solid var(--cat-c, var(--accent));
+  border-radius: 14px;
+  background: rgba(255,255,255,.86);
+  box-shadow: 0 8px 18px -16px rgba(21,19,14,.28);
+}
+.page-mission .qm-unit-row:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+.page-mission .qm-unit-row.active {
+  background: #fffaf0;
+  border-color: rgba(255,183,67,.82);
+  border-left-color: #f59e0b;
+  box-shadow: 0 14px 26px -18px rgba(156,95,18,.35);
+}
+.page-mission .qm-unit-row.active .qm-unit-row-title,
+.page-mission .qm-unit-row.active .qm-unit-row-meta {
+  color: var(--ink) !important;
+}
+.page-mission .qm-unit-row-status {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+}
+.page-mission .qm-unit-row.active .qm-unit-row-status {
+  background: #fff2bd;
+  color: #9a5a0a;
+  border-color: #facc15;
+}
+.page-mission .qm-quiz-area {
+  flex: 1;
+  min-height: calc(100vh - 140px);
+  border: none;
+  border-radius: 22px;
+  background: transparent;
+  box-shadow: none;
+}
+.page-mission .qm-placeholder {
+  min-height: 520px;
+}
+.page-mission .qm-intro {
+  min-height: 520px;
+  border: none;
+  background: transparent;
+  border-radius: 18px;
+  box-shadow: none;
+}
+.page-mission .qm-intro-icon {
+  filter: drop-shadow(0 10px 16px rgba(21,19,14,.16));
+}
+.page-mission .qm-intro-title {
+  font-family: var(--serif);
+}
+.page-mission .qm-btn.primary {
+  box-shadow: 0 12px 24px -14px rgba(21,19,14,.46);
+}
+/* v315 (#12): 放寬到 900——涵蓋 iPad 直式(810–834)，讓側欄真的變滿寬（覆蓋 .page-mission .qm-sidebar{width:360px}），
+   配合 styles-quiz-mode.css 的「一次一畫面」直向流程。 */
+@media (max-width: 900px) {
+  .page-mission .qm-cat-view {
+    margin: 0;
+    padding: 12px 12px 76px;
+  }
+  .page-mission .qm-sidebar {
+    width: 100%;
+    max-height: none;
+    border-radius: 18px;
+  }
+  .page-mission .qm-quiz-area {
+    min-height: calc(100vh - 126px);
+    border-radius: 18px;
+  }
+}
+.grade-sel-card-label { font-weight: 700 !important; }
+
+/* ═══ 星級精熟 ⭐ ═══ */
+.qm-stars { display: inline-flex; gap: 1px; margin-left: 6px; vertical-align: middle; }
+.qm-star { color: var(--border); line-height: 1; }
+.qm-star.on { color: #F0C04A; }
+.qm-unit-row.active .qm-star { color: rgba(255,255,255,.25); }
+.qm-unit-row.active .qm-star.on { color: #F4D06A; }
+
+/* v207: 暑假班表只有 3 個分類——第 3 張（閱讀理解）沿用綠色而非位置色 */
+.qm-blocks .qm-block:nth-of-type(3):last-child { --cat-c: var(--c-reading); --cat-bg: var(--c-reading-bg); }
+
+/* v208: 學習頁質感輪（最後載入的覆寫層） */
+/* 側欄分類：中文為主，英文變小標籤 */
+.qm-sidebar-cat-name { font-size: 17px; }
+.qm-sidebar-cat-zh {
+  font-family: var(--mono);
+  font-size: 11px !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* 開始測驗 CTA 用品牌暖紅（原本是墨黑） */
+.page-mission .qm-intro .qm-intro-start {
+  background: var(--g-c, #8B3120);
+  color: #fff;
+}
+.page-mission .qm-intro .qm-intro-start:hover { filter: brightness(1.08); }
+/* 結果分數與 intro 標題：中文字也走襯線 */
+.page-mission .qm-intro-title,
+.qm-result-num {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+}
+.qm-result-num { font-weight: 700; color: var(--g-c, #8B3120); }
+
+/* ═══ v257: 手機/平板減壅擠 ═══════════════════════════════ */
+/* 手機版 header 只留一列（品牌＋帳號）：週切換移進 WeekHero 卡片，
+   不再折行懸浮在內容上；老師編輯模式維持原本的完整 header。 */
+.wh-weeknav { display: none; }
+@media (max-width: 640px) {
+  .header:not(.edit-mode) .week-nav { display: none; }
+  .header.edit-mode .header-inner { height: auto; }
+  /* 右側進度膠囊在手機上會把「登入」擠出畫面——大廳/任務頁都有自己的進度顯示 */
+  .progress-pill { display: none; }
+  /* week-nav 不再懸浮 → 大廳內容不用再讓位（原本 padding-top: 44px） */
+  .page-lobby .shell.main-enter { padding-top: 10px; }
+
+  .wh-weeknav { display: inline-flex; gap: 7px; margin-left: auto; }
+  .wh-weeknav button {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--border, #e5dfc8);
+    background: #fff;
+    color: var(--ink-2, #5c554a);
+    font-size: 18px; line-height: 1;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+  .wh-weeknav button:disabled { opacity: .3; }
+}
+
+/* ═══ v262: 版面三修——暑假 3 欄、門口頁連結加大、出題鈕顯眼 ═══ */
+/* 暑假只有 3 個分類：桌機改 3 欄滿排，不再 2+1 缺一角 */
+@media (min-width: 980px) {
+  .page-summer .qm-blocks { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 門口頁底部連結：底線小字 → 幽靈膠囊，加大字級與點擊範圍 */
+.grade-selector .gs-switch {
+  font-size: 13.5px;
+  text-decoration: none;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 100px;
+  color: var(--ink-2, #5c554a);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.grade-selector .gs-switch:hover {
+  color: var(--g-c, #8B3120);
+  border-color: var(--border, #e5dfc8);
+  background: #fff;
+}
+.grade-selector .gs-links { gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.grade-selector .gs-links > .gs-switch { margin: 0; }
+.grade-selector .gs-links > .gs-switch:not(:first-child)::before { content: none; margin: 0; }
+
+/* 編輯模式「出新題目」：小字隱藏在夾縫 → 虛線大按鈕 */
+.qm-unit-add-btn {
+  justify-content: center;
+  margin: 4px 0 10px;
+  padding: 13px 16px;
+  border: 1.5px dashed rgba(139, 49, 32, .45);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--g-c, #8B3120);
+  font-size: 13.5px;
+}
+.qm-unit-add-btn:hover {
+  background: #f6ece7;
+  border-color: var(--g-c, #8B3120);
+  color: var(--g-c, #8B3120);
+}
+/* v351: 篩選在某位學生底下 → 出的題目會直接指派給他，按鈕改實心提醒 */
+.qm-unit-add-btn.for-student {
+  border-style: solid;
+  border-color: var(--g-c, #8B3120);
+  background: var(--g-c, #8B3120);
+  color: #fff;
+}
+.qm-unit-add-btn.for-student:hover {
+  background: #6f2718;
+  border-color: #6f2718;
+  color: #fff;
+}
+
+/* ═══ v264: 今天的任務——群組階層明確化 ═══════════════════ */
+/* 之前：文章標題(14px)比子項目(15.5px)還小、全部平鋪 → 眼花撩亂。
+   現在：標題加大、數量變徽章；子項目縮排＋左側直線，一眼看出誰屬於誰。 */
+.tt-group { margin-top: 16px; }
+.tt-group-name {
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--ink, #15130e);
+  padding: 8px 8px 7px 4px;
+  gap: 8px;
+}
+.tt-group-ico { font-size: 15px; }
+.tt-group-count {
+  font-size: 11.5px;
+  color: var(--ink-2, #5c554a);
+  background: var(--bg, #f6f1e6);
+  border: 1px solid var(--border-soft, #efe9d8);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+.tt-group-rows {
+  margin: 0 0 4px 13px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border, #e5dfc8);
+}
+.tt-group .tt-row { padding-left: 10px; }
+.tt-group .tt-row .tt-ic { width: 30px; height: 30px; border-radius: 8px; }
+.tt-group .tt-row .tt-name { font-size: 14.5px; }
+/* 群組之間的分隔線上移到群組頭，行與群組間距鬆一點 */
+.tt-group + .tt-group, .tt-row + .tt-group, .tt-group + .tt-row { border-top: 1px solid var(--border-soft, #efe9d8); }
+@media (max-width: 640px) {
+  .tt-group-name { font-size: 15.5px; }
+  .tt-group-rows { margin-left: 8px; padding-left: 9px; }
+}
+
+/* ═══ v265: intro 的「重新開始」按鈕 ═══ */
+.qm-intro-restart { margin-top: 2px; }
+
+/* ═══ v266: UX 八項改善 ═══════════════════════════════════ */
+/* 過期 7 天以上＝已結束（灰色，紅色只留給近期） */
+.qm-hw-badge.ended { background: var(--bg, #f6f1e6); color: var(--ink-3, #8a8270); border-color: var(--border-soft, #efe9d8); }
+/* 任務列的上傳作業 📎 圖示 */
+.tt-ic-upload {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #fdf6e3, #f9e9c8);
+  border: 1px solid rgba(201, 168, 76, .5);
+  font-size: 15px;
+}
+.tt-group .tt-row .tt-ic-upload { font-size: 13px; }
+
+/* ═══ v267: 今天的任務——分組收合＋字體質感 ═══════════════ */
+/* 面板標題與群組標題改襯線（與 WeekHero/品牌一致），列密度收緊 */
+.tt-title {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 23px; font-weight: 700;
+  letter-spacing: .01em;
+}
+.tt-group-name {
+  width: 100%;
+  background: none; border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 10px;
+  transition: background .12s;
+}
+.tt-group-name:hover { background: #faf7ef; }
+.tt-group-title {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-weight: 700;
+  font-size: 16.5px;
+  color: var(--ink, #15130e);
+  flex: 1; min-width: 0;
+  line-height: 1.35;
+}
+.tt-group-chev {
+  flex: none;
+  font-size: 11px; line-height: 1;
+  color: #b3a98f;
+  transition: transform .18s ease;
+}
+.tt-group-chev.open { transform: rotate(90deg); }
+.tt-group-count.all-done {
+  color: #1f7d4f;
+  background: #eaf5ec;
+  border-color: #cfe6d5;
+  font-weight: 800;
+}
+/* 收合的組只剩一行——上下留一點空隙就好 */
+.tt-group:not(.open) { padding-bottom: 4px; }
+/* 列密度與文字層次 */
+.tt-group .tt-row { padding: 9px 8px 9px 10px; }
+.tt-name { font-weight: 700; letter-spacing: .01em; }
+.tt-meta { font-size: 12px; color: #a39a84; }
+@media (max-width: 640px) {
+  .tt-title { font-size: 17px; }
+  .tt-group-title { font-size: 15.5px; }
+}
+.gs-admin-pending { font-style: normal; color: #e8cf8e; font-weight: 800; }
+
+.tt-cele-overlay {
+  position: fixed; inset: 0;
+  z-index: 1200;
+  background: rgba(30, 25, 16, .45);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.tt-cele {
+  background: #fffdf6;
+  border: 1.5px solid rgba(201, 168, 76, .55);
+  border-radius: 22px;
+  padding: 34px 40px 30px;
+  max-width: 420px; width: 100%;
+  text-align: center;
+  box-shadow: 0 30px 80px -20px rgba(21, 19, 14, .45);
+}
+.tt-cele-emoji { font-size: 52px; line-height: 1; margin-bottom: 12px; }
+.tt-cele-title {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 24px; font-weight: 700;
+  color: var(--ink, #15130e);
+  margin-bottom: 8px;
+}
+.tt-cele-sub { font-size: 15px; color: var(--ink-2, #5c554a); margin-bottom: 20px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tt-cele { animation: tt-cele-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+}
+@keyframes tt-cele-pop {
+  from { transform: scale(.8); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* ═══ v269: 任務指引箭頭——呼吸的金色 chevron（取代「今天先做這個」按鈕） ═══ */
+.wh-task-cue {
+  display: flex; justify-content: center;
+  color: #b9964a;
+  height: 30px;
+  margin: 0 0 -8px;
+  pointer-events: none;
+}
+.wh-task-cue svg { display: block; filter: drop-shadow(0 1px 2px rgba(139, 49, 32, .12)); }
+@media (prefers-reduced-motion: no-preference) {
+  .wh-task-cue svg { animation: wh-cue-breathe 2s ease-in-out infinite; }
+}
+@keyframes wh-cue-breathe {
+  0%, 100% { transform: translateY(0); opacity: .45; }
+  50%      { transform: translateY(6px); opacity: .95; }
+}
+
+/* ═══ v271: 成長報告——分數曲線為主軸 ═══════════════════ */
+.growth-stats-3 { grid-template-columns: repeat(3, 1fr) !important; }
+.growth-stat-num em {
+  font-style: normal;
+  font-size: 13px; font-weight: 700;
+  color: var(--ink-3, #8a8270);
+  margin-left: 3px;
+}
+.growth-stat-delta {
+  margin-top: 4px;
+  font-size: 11.5px; font-weight: 800;
+  color: var(--ink-3, #8a8270);
+}
+.growth-stat-delta.up { color: #1f7d4f; }
+.growth-stat-delta.down { color: #a3372a; }
+.growth-dot-num {
+  font-family: var(--mono, monospace);
+  font-size: 11px; font-weight: 700;
+  fill: #7a3020;
+  text-anchor: middle;
+}
+.growth-dot.live { fill: #fff; stroke: #8B3120; stroke-width: 2; }
+.growth-line-dash { stroke-dasharray: 5 5; opacity: .65; }
+.growth-wrow-live {
+  flex: none;
+  font-size: 10.5px; font-weight: 800;
+  color: #8a6d1c;
+  background: #fdf6e3;
+  border: 1px solid #e8d9ac;
+  border-radius: 100px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.growth-wrow-score {
+  margin-left: auto;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--ink-2, #5c554a);
+  white-space: nowrap;
+}
+.growth-wrow-score b {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 19px; font-weight: 700;
+  color: var(--g-c, #8B3120);
+  margin: 0 2px;
+}
+
+/* ═══ v272: 作答頁題型章＋側欄短名 ═══════════════════════ */
+.qm-type-chip {
+  align-self: center;
+  margin: 4px auto -6px;
+  width: fit-content;
+  font-size: 13px; font-weight: 800;
+  color: #8a6d1c;
+  background: #fdf6e3;
+  border: 1px solid rgba(201, 168, 76, .55);
+  border-radius: 100px;
+  padding: 5px 14px;
+  letter-spacing: .02em;
+}
+
+/* ═══ v274: 單字卡套件升級 ═══════════════════════════════ */
+/* 星號鈕（卡片模式頂列＋學習模式題目角落） */
+.fc-star-btn {
+  background: none; border: none; padding: 4px 8px;
+  font-size: 22px; line-height: 1;
+  color: #d8cfb6;
+  cursor: pointer;
+  transition: color .15s, transform .12s;
+}
+.fc-star-btn:hover { transform: scale(1.15); }
+.fc-star-btn.on { color: #E0A63C; text-shadow: 0 1px 4px rgba(224, 166, 60, .4); }
+.fc-star-btn-corner { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.fc-learn-q { position: relative; }
+/* 只練星號濾鏡 chip */
+.fc-tab.fc-star-filter { color: #8a6d1c; }
+.fc-tab.fc-star-filter.active { background: #fdf6e3; border-color: #E0A63C; color: #8a6d1c; }
+/* 配對方塊字加大 */
+.fc-match-tile-text { font-size: 19px !important; font-weight: 700 !important; line-height: 1.3; }
+@media (max-width: 640px) { .fc-match-tile-text { font-size: 16.5px !important; } }
+
+/* 聽寫答錯 → 音節拆解＋照拼訂正 */
+.sp-redo { text-align: center; margin-top: 4px; }
+.sp-redo-title { font-size: 13.5px; font-weight: 800; color: #a3372a; margin-bottom: 10px; }
+.sp-syllables {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.sp-syl {
+  font-family: 'Lora', 'Noto Serif TC', Georgia, serif;
+  font-size: 30px; font-weight: 700; letter-spacing: .04em;
+  color: var(--g-c, #8B3120);
+  background: #fdf6e3;
+  border: 1.5px solid rgba(201, 168, 76, .6);
+  border-radius: 12px;
+  padding: 6px 14px;
+}
+.sp-syl-dot { font-size: 24px; font-weight: 800; color: #C9A84C; }
+@media (prefers-reduced-motion: no-preference) {
+  .sp-syl, .sp-syl-dot { opacity: 0; animation: sp-syl-pop .4s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+}
+@keyframes sp-syl-pop {
+  from { opacity: 0; transform: translateY(8px) scale(.85); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sp-redo-hint { font-size: 13px; color: var(--ink-2, #5c554a); margin-bottom: 6px; }
+.sp-skip { margin-top: 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .sp-shake-wrap { display: block; animation: sp-shake .4s ease; }
+}
+@keyframes sp-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-7px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-4px); }
+}
+
+/* 測驗前「先複習單字卡」醒目入口卡 */
+.qm-fcb {
+  display: flex; align-items: center; gap: 13px;
+  width: 100%; max-width: 380px;
+  margin: 0 auto 6px;
+  text-align: left;
+  font-family: inherit;
+  background: linear-gradient(115deg, #fdf6e3 0%, #f9e9c8 100%);
+  border: 1.5px solid rgba(201, 168, 76, .65);
+  border-radius: 16px;
+  padding: 13px 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px -8px rgba(139, 49, 32, .18);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s;
+}
+.qm-fcb:hover { transform: translateY(-2px); border-color: #C9A84C; box-shadow: 0 12px 26px -10px rgba(139, 49, 32, .28); }
+.qm-fcb-ico {
+  flex: none;
+  width: 42px; height: 42px; border-radius: 12px;
+  background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 0 0 3px rgba(255, 205, 90, .25);
+}
+.qm-fcb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qm-fcb-text b { font-family: 'Lora', 'Noto Serif TC', Georgia, serif; font-size: 16px; color: var(--ink, #15130e); }
+.qm-fcb-text > span { font-size: 12px; color: #8a6d1c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qm-fcb-arrow { flex: none; font-size: 18px; font-weight: 700; color: var(--g-c, #8B3120); }
+
+/* ── v327: 手機版 header 修正（Alan 回報：暑假模式下頂列太擠、溢出畫面）──
+   問題：老師登入後（品牌名＋暑假徽章＋編輯＋Report＋頭像）在窄螢幕塞不下——
+   「暑假」被壓成直排紅塊、Report 與頭像被推出畫面右緣。
+   修正：品牌欄可壓縮、徽章永不折行、Report 於窄螢幕只留圖示、頭像不再帶名字。 */
+.grade-chip { white-space: nowrap; }
+@media (max-width: 560px) {
+  .header-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    height: 56px;
+    padding: 0;
+  }
+  .brand { min-width: 0; gap: 8px; }
+  .brand-name {
+    font-size: 16px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .grade-chip { flex: 0 0 auto; }
+  .header-right { gap: 8px; }
+  .header-auth { gap: 8px; }
+  .dashboard-btn { padding: 7px; gap: 0; }
+  .dashboard-btn .db-label { display: none; }   /* 窄螢幕只留 icon */
+  .user-name { display: none; }                  /* 頭像已足夠、省空間 */
+}
+
+/* ── v327: footer 兩欄在手機上改「上下堆疊」，消掉「使用說明」右側孤立留白（Alan 選 B）── */
+@media (max-width: 560px) {
+  .ll-foot2 { padding-top: 40px; }
+  .ll-foot2-cols { flex-direction: column; gap: 22px; }
+}
+
+/* ── v332: 手機直式修正（Alan 回報）──────────────────────
+   ① 暑假練習卡片：窄螢幕從 2 欄改「單欄＋橫向」，字不再擠成一團
+   ② footer：聯絡 Alan 老師移到右邊，填滿右側留白 */
+@media (max-width: 480px) {
+  .qm-blocks { grid-template-columns: 1fr; gap: 12px; }
+  .qm-block { flex-direction: row; align-items: flex-start; min-height: 0; gap: 13px; padding: 15px; }
+  .qm-block-icon { width: 46px; height: 46px; border-radius: 13px; margin-top: 1px; }
+  .qm-block-title { font-size: 15.5px; margin-bottom: 3px; }
+  .qm-block-title-zh { font-size: 10.5px; white-space: nowrap; margin-bottom: 7px; }
+  .qm-block-count { font-size: 13.5px; }
+  .qm-pct { font-size: 14px; }
+  .qm-block-meta { font-size: 11.5px; }
+  .qm-block-empty { font-size: 12.5px; white-space: nowrap; }
+  .qm-block-arrow { top: 50%; transform: translateY(-50%); width: 30px; height: 30px; font-size: 16px; }
+  /* 「我的暑假練習」標題：柔和一點（降字重＋縮小）＋往下、跟「今天的任務」拉開距離 */
+  .qm-blocks-head-view { margin-top: 26px; }
+  .qm-blocks-title { font-size: 21px; font-weight: 600; letter-spacing: .01em; }
+}
+@media (max-width: 560px) {
+  .ll-foot2-top {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'brand brand' 'nav contact';
+    gap: 26px 16px;
+    align-items: start;
+  }
+  .ll-foot2-brand   { grid-area: brand; }
+  .ll-foot2-cols    { grid-area: nav; }
+  .ll-foot2-contact { grid-area: contact; }
+  .ll-foot2-btn { width: 100%; justify-content: center; padding: 11px 12px; box-sizing: border-box; font-size: 14.5px; }
+}
+
+/* ── v333: 手機直式題目字級全面縮小（Alan 回報「字太大、換行太多」）──
+   只在 ≤480px 手機生效——題目/選項/短文/單字卡更透氣、少換行。桌機、平板完全不變。 */
+@media (max-width: 480px) {
+  /* 核心選擇題（單字/文法/克漏/聽力共用的播放器）——最主要的兇手 */
+  .qm-question-text { font-size: 24px; line-height: 1.3; }
+  .qm-opt-text { font-size: 15.5px; }
+  .qm-feedback-banner { font-size: 15px; }
+  .qm-explain { font-size: 14.5px; }
+  .qm-intro-rule-row { font-size: 15px; }
+
+  /* 聽寫 / 寫字 / 拼字（大字單字題）*/
+  .ta-prompt { font-size: 32px; }
+  .ta-input { font-size: 20px; }
+  .wp-word { font-size: 32px; }
+  .sp-zh { font-size: 16px; }
+
+  /* 短答 / 作文 輸入框與題目 */
+  .qm-writing-input { font-size: 16px; }
+  .essay-prompt-text { font-size: 16px; }
+
+  /* 圈選正確字 / 克漏字（含短文，行高也收一點）*/
+  .circle-sentence { font-size: 16px; line-height: 1.9; }
+  .cloze-passage { font-size: 15.5px; line-height: 2.1; }
+
+  /* 閱讀理解（短文＋題目＋選項）*/
+  .gr-page-read .gr-seg-text { font-size: 15.5px; }
+  .gr-q-text { font-size: 16px; }
+  .gr-q .qm-opt-text { font-size: 15px; }
+
+  /* 單字卡（例句、選項；主字保持大不動）*/
+  .fc-example, .fc-learn-example { font-size: 15px; }
+  .fc-choice { font-size: 16.5px; }
+  .fc-fill-text { font-size: 20px; }
+  .fc-fill-btn { font-size: 16.5px !important; }
+
+  /* 舊版簡易測驗（原本手機沒縮，維持桌機大小）*/
+  .quiz-q-text { font-size: 19px; line-height: 1.35; }
+  .quiz-option, .quiz-option-text { font-size: 16px; }
+}
+
+/* ── v338: 門口頁字級放大（Alan 回報整體看起來太小）────────────────
+   副標「康橋每週進度」、「歡迎回來，○○」與「進入課程 →」按鈕都往上一級。 */
+.lc-subtitle { font-size: 18px !important; letter-spacing: .18em; }
+.lc-welcome  { font-size: 20px; font-weight: 600; }
+.lc-cta      { font-size: 20px; padding: 18px 42px; }
+@media (max-width: 640px) {
+  .lc-subtitle { font-size: 16px !important; letter-spacing: .14em; }
+  .lc-welcome  { font-size: 18px; margin: 22px 0 12px; }
+  .lc-cta      { font-size: 18.5px; padding: 16px 36px; }
+}

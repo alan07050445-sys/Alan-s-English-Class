@@ -1,0 +1,50 @@
+/* styles-mistakes.css — 錯題本 + 重練模式 */
+
+/* ── Header button ─────────────────────────────────── */
+.mk-header-btn {
+  position: relative;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 17px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.mk-header-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+.mk-header-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+.mk-empty-icon { font-size: 52px; }
+.mk-empty-art {
+  width: 150px; height: 150px; object-fit: contain;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 10px 20px rgba(21,19,14,.12));
+  animation: mkEmptyFloat 3.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .mk-empty-art { animation: none; }}
+.mk-complete-xp { color: var(--moss); font-weight: 700; }
+.mk-complete-badge {
+  font-family: var(--sans);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--accent-soft);
+}

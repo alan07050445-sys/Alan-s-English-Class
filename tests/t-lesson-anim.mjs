@@ -85,7 +85,7 @@ ok('步驟型態還是那六種，沒有新增也沒有拿掉',
 /* ⚠ 只比 <link> 的位置。index.html 第 25 行的註解也提到 styles-tune.css，
    直接 indexOf 會抓到註解，量到的順序是假的。 */
 const idx = fs.readFileSync(new URL('index.html', ROOT), 'utf8');
-const linkAt = (f) => idx.indexOf('<link rel="stylesheet" href="' + f);
+const linkAt = (f) => idx.indexOf('<link rel="stylesheet" href="dist/css/' + f);   // v600：樣式表改載 dist/css/ 的學生版（順序不變）
 ok('styles-tune.css 最後載入，所以蓋得過 styles-quiz-mode.css',
    linkAt('styles-tune.css') > linkAt('styles-quiz-mode.css') && linkAt('styles-quiz-mode.css') > 0);
 

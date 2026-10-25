@@ -1,0 +1,831 @@
+/* styles-tune.css — v375（#5 手機／平板瘦身、#6 桌機小字放大）
+   ⚠ 這個檔一定要在 index.html 的最後載入：裡面的選擇器跟原本的規則同權重，
+     靠「後蓋前」生效，所以幾乎不需要 !important。
+   分成三段：
+     A. 桌機（≥1025px）：Alan 說「很多小字太小，要大蠻多的」→ 10~13.5px 的字統一往上抬。
+     B. 平板／手機（≤1024px、≤768px）：按鈕與標題太肥、間距太大 → 一直往下滑。這裡瘦身。
+     C. 做題目的畫面（player）在小螢幕的專用瘦身——最常被抱怨的地方。 */
+
+/* ══════════════════════════════════════════════════════════
+   A. 桌機：小字放大
+   ══════════════════════════════════════════════════════════ */
+@media (min-width: 1025px) {
+  .qm-mission-badge     { font-size: 14.5px; }
+  .qm-word-chips button { font-size: 16px; }
+  .qm-writing-head small{ font-size: 15px; }
+  .wf-verdict-val       { font-size: 16px; }
+  .wf-examples-title    { font-size: 15.5px; }
+  .ca-hint              { font-size: 15.5px; }
+  .essay-detail-tab     { font-size: 15px; }
+  .sm-tab               { font-size: 15px; }
+  .uh-note      { font-size: 16px; }
+  .uh-fix-hint  { font-size: 15px; }
+  .uh-fix-btn   { font-size: 14.5px; }
+  .fc-gc-label         { font-size: 14px; }
+  .fc-gc-btn           { font-size: 14.5px; }
+  .fc-gc-btn.ghost     { font-size: 13.5px; }
+  .fc-answer-icon      { font-size: 13.5px; }
+  .fc-answer-yours     { font-size: 13.5px; }
+  .fc-lb-rank          { font-size: 14px; }
+  .fc-lb-num           { font-size: 15.5px; }
+  .section-head .meta { font-size: 15px; }
+  .cat-num          { font-size: 14.5px; }
+  .cat-count        { font-size: 14px; }
+  .cat-chip         { font-size: 13.5px; }
+  .item-type        { font-size: 14.5px; }
+  .item-meta        { font-size: 15.5px; }
+  .item-action      { font-size: 15.5px; }
+  .qm-task-title       { font-size: 18.5px; }
+  .qm-task-sub         { font-size: 16px; }}
+
+/* ── 單元列表（左邊那一欄）：手機上光是標題列就吃掉 178px，
+      可視區只剩不到 3 列 → 一直滑。這裡把外框瘦身、列高壓低、可視高度拉高。 ── */
+@media (max-width: 768px) {
+  .qm-block-head     { gap: 12px; }}
+.term-row { display: grid; grid-template-columns: 1.2fr .7fr .9fr; gap: 12px; margin-bottom: 6px; }
+.term-row input, .term-row select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border, #e5dfc8);
+  border-radius: 8px; font-family: inherit; font-size: 16px; background: #fff;
+}
+.term-preview {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 7px; max-height: 260px; overflow-y: auto;
+  padding: 12px; border: 1px solid var(--border, #e5dfc8); border-radius: 12px;
+  background: var(--bg-paper, #fbf8f1);
+}
+.term-chip {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 8px 10px; border-radius: 9px; background: #fff;
+  border: 1px solid var(--border-soft, #e8e2d0); font-size: 13px;
+}
+.term-chip b { font-size: 14.5px; color: var(--ink, #15130e); }
+.term-chip span { color: var(--ink-3, #8a8270); font-family: var(--mono); font-size: 12.5px; }
+.term-chip.dup { background: #f4f1e8; opacity: .62; }
+.term-chip em { font-style: normal; font-size: 11.5px; color: #a8823a; }
+@media (max-width: 640px) {
+  .term-row { grid-template-columns: 1fr; }
+  .term-preview { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); max-height: 200px; }}
+
+/* ══ v377：題型選單分層（常用 4 種放大、其餘收進「更多」） ══ */
+.type-picker .tp-big {
+  font-size: 16px; font-weight: 800; padding: 14px 20px; border-radius: 12px;
+  border-width: 2px; letter-spacing: .01em;
+}
+.tp-more-toggle {
+  margin-top: 10px; background: none; border: none; cursor: pointer;
+  font-family: var(--sans); font-size: 14px; font-weight: 700;
+  color: var(--ink-3, #8a8270); padding: 4px 0;
+}
+.tp-more-toggle:hover { color: var(--ink, #15130e); }
+.type-picker.tp-more { margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--border, #e5dfc8); }
+.type-picker.tp-more button { font-size: 13.5px; padding: 8px 13px; opacity: .92; }
+.qs-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 22px; }
+.qs-ta {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border, #e5dfc8); border-radius: 10px;
+  font-family: var(--mono, monospace); font-size: 14px; line-height: 1.7; background: #fff; resize: vertical;
+}
+.qs-sel {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border, #e5dfc8);
+  border-radius: 8px; font-family: inherit; font-size: 16px; background: #fff;
+}
+.qs-kinds { display: flex; flex-direction: column; gap: 7px; }
+.qs-kind {
+  display: grid; grid-template-columns: 20px auto; grid-template-rows: auto auto;
+  column-gap: 10px; align-items: center; cursor: pointer;
+  padding: 9px 12px; border: 1.5px solid var(--border, #e5dfc8); border-radius: 10px; background: #fff;
+}
+.qs-kind input { grid-row: 1 / 3; width: 18px; height: 18px; accent-color: #8B3120; }
+.qs-kind-zh   { font-family: var(--sans); font-size: 16px; font-weight: 800; color: var(--ink, #15130e); }
+.qs-kind-note { font-family: var(--sans); font-size: 13px; color: var(--ink-3, #8a8270); line-height: 1.4; }
+.qs-kind.on   { border-color: #8B3120; background: #fdf6f3; }
+.qs-kind.off  { opacity: .5; cursor: not-allowed; }
+@media (max-width: 820px) { .qs-grid { grid-template-columns: 1fr; gap: 14px; }}
+
+/* ══ v377：老師後台分頁分成「每天用 / 設定一次」兩區 ══ */
+.tdash-nav-sec {
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint, #b8b1a0);
+  padding: 14px 14px 6px;
+}
+.tdash-nav-sec:first-child { padding-top: 4px; }
+@media (max-width: 900px) {
+  /* 手機的分頁列是橫向捲動的膠囊列——標題改成細細的分隔字 */
+  .tdash-nav-sec { padding: 0 8px; align-self: center; font-size: 10px; white-space: nowrap; }}
+
+/* ══ v379：AI 出題開關與校稿畫面 ══ */
+.qs-ai {
+  display: grid; grid-template-columns: 22px 1fr; column-gap: 10px; align-items: center;
+  margin-top: 14px; padding: 12px 14px; cursor: pointer;
+  border: 1.5px solid var(--border, #e5dfc8); border-radius: 12px; background: #fff;
+}
+.qs-ai input { grid-row: 1 / 3; width: 18px; height: 18px; accent-color: #8B3120; }
+.qs-ai-t { font-family: var(--sans); font-size: 15.5px; font-weight: 700; color: var(--ink, #15130e); }
+.qs-ai-n { font-family: var(--sans); font-size: 13px; color: var(--ink-3, #8a8270); line-height: 1.5; }
+.qs-ai.on { border-color: #8B3120; background: #fdf6f3; }
+
+.qs-proof { display: flex; flex-direction: column; gap: 12px; max-height: 54vh; overflow-y: auto; padding-right: 4px; }
+.qs-proof-row {
+  display: grid; grid-template-columns: 190px 1fr; gap: 16px;
+  padding: 12px 14px; border: 1px solid var(--border, #e5dfc8); border-radius: 12px; background: var(--bg-paper, #fbf8f1);
+}
+.qs-proof-w input {
+  width: 100%; font-family: 'Lora', Georgia, serif; font-size: 19px; font-weight: 700;
+  padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 8px; background: #fff;
+}
+.qs-proof-zh { display: block; margin-top: 6px; font-size: 14px; color: var(--ink-3, #8a8270); }
+.qs-proof-f label {
+  display: block; font-family: var(--sans); font-size: 12.5px; font-weight: 700;
+  color: var(--ink-3, #8a8270); margin: 6px 0 3px;
+}
+.qs-proof-f label:first-child { margin-top: 0; }
+.qs-proof-f textarea, .qs-proof-f input {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 8px;
+  font-family: inherit; font-size: 15px; line-height: 1.55; background: #fff; resize: vertical;
+}
+@media (max-width: 820px) {
+  .qs-proof { max-height: 48vh; }}
+.qs-proof-zhin {
+  width: 100%; margin-top: 6px; padding: 6px 9px; font-size: 14px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 7px; background: #fff; font-family: inherit;
+}
+
+/* ══ v380：建立時整組一次指派 ══ */
+.qs-assign { margin-top: 14px; padding: 12px 14px; border: 1.5px solid var(--border, #e5dfc8); border-radius: 12px; background: #fff; }
+.qs-assign.on { border-color: #2E4F7E; background: #f4f7fb; }
+.qs-assign-head { display: flex; align-items: center; gap: 10px; cursor: pointer; font-family: var(--sans); font-size: 15px; color: var(--ink, #15130e); }
+.qs-assign-head input { width: 18px; height: 18px; accent-color: #2E4F7E; flex: none; }
+.qs-due { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.qs-due label { font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink-3, #8a8270); }
+.qs-due input { padding: 8px 10px; border: 1px solid var(--border, #e5dfc8); border-radius: 8px; font-family: inherit; font-size: 15px; }
+.qs-due-n { font-size: 13px; color: var(--ink-3, #8a8270); }
+.qs-who { margin-top: 10px; }
+.qs-who-bar { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-3, #8a8270); margin-bottom: 7px; }
+.qs-who-bar button { background: none; border: none; cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 700; color: #2E4F7E; padding: 0; }
+.qs-who-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow-y: auto; }
+.qs-who-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--border, #e5dfc8); border-radius: 999px; background: #fff; font-size: 14px; cursor: pointer; }
+.qs-who-item input { width: 15px; height: 15px; accent-color: #2E4F7E; }
+.qs-who-item.on { border-color: #2E4F7E; background: #eaf1f9; font-weight: 700; }
+.qs-who-empty { font-size: 13px; color: var(--ink-3, #8a8270); }
+/* ⚠⚠ v413：這幾條本來叫 .gr-q / .gr-q-n / .gr-q-f / .gr-q-2（v382 五大時態出題工具），
+   跟「分段閱讀」的題目區塊 .gr-q 撞名——而這支 CSS 比 styles-quiz-mode.css 後載入，
+   所以學生端分段閱讀的答題頁一直被這裡的 `display:grid; 28px 1fr` 蓋掉：
+   選項全部被塞進 28px 的那一欄，一個字一行，「問題 1 / 2」也變成直的。
+   （從 v382 就壞了，只是 v407 才開始自動幫每一段出題、v411 才讓翻頁一路走到答題頁，
+     所以到現在才被看到。）
+   老師端的東西一律改用 gq- 開頭，跟學生端的 gr- 分乾淨。 */
+.gq-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border-soft, #eee7d4); }
+.gq-row:first-child { border-top: none; }
+.gq-row.bad { background: #fdf3f1; border-radius: 10px; padding: 10px 8px; }
+.gq-row-n { font-family: var(--mono); font-size: 13px; color: var(--ink-3, #8a8270); padding-top: 10px; }
+
+/* ══ v385：老師後台的「兌換吉祥物帽子」快速鍵 ══ */
+.stars-quick-hat { margin-top: 6px; flex-wrap: wrap; }
+.stars-quick-hat button { border-color: #C9A84C !important; color: #7a5c0f !important; }
+.stars-quick-hat span { font-size: 12.5px; color: var(--ink-3, #8a8270); }
+
+.rc-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.rc-lab { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink-2, #5c554a); }
+.rc-lab input, .rc-lab select {
+  padding: 9px 11px; border: 1.5px solid var(--border, #DDD6C4); border-radius: 10px;
+  background: #fff; font: inherit; font-weight: 400; font-size: 14.5px;
+}
+.rc-ta { font-family: var(--mono, monospace); font-size: 13px; line-height: 1.6; }
+
+.rc-skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; }
+.rc-skill {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer;
+  border: 1.5px solid var(--border, #DDD6C4); border-radius: 12px; background: #fff;
+  transition: all .15s ease;
+}
+.rc-skill.on { border-color: #2E4F7E; background: rgba(46,79,126,.07); }
+.rc-skill input { accent-color: #2E4F7E; }
+.rc-skill-ico { font-size: 18px; }
+.rc-skill-tx { display: flex; flex-direction: column; line-height: 1.3; }
+.rc-skill-tx b { font-size: 13.5px; }
+.rc-skill-tx em { font-style: normal; font-size: 11.5px; color: var(--ink-3, #6b6455); }
+.rc-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin: 12px 0; cursor: pointer; }
+
+/* ── 校稿：選擇題 ── */
+.rc-q {
+  border: 1.5px solid var(--border-soft, #E8E2D0); border-radius: 12px;
+  padding: 11px 12px; margin-bottom: 10px; background: #fff;
+}
+.rc-q.bad, .rc-block.bad { border-color: #C86A55; background: rgba(200,106,85,.05); }
+.rc-q-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.rc-n {
+  width: 22px; height: 22px; flex: none; border-radius: 7px; display: grid; place-items: center;
+  background: rgba(46,79,126,.11); color: #2E4F7E; font-size: 12px; font-weight: 800;
+}
+.rc-skilltag {
+  font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-3, #6b6455); background: rgba(21,19,14,.05);
+  padding: 2px 7px; border-radius: 6px;
+}
+.rc-q-head .rc-x { margin-left: auto; }
+.rc-in {
+  width: 100%; padding: 7px 10px; border: 1.5px solid var(--border, #DDD6C4);
+  border-radius: 9px; font: inherit; font-size: 14px; background: #fff;
+}
+.rc-in + .rc-in, .rc-row-f .rc-in + .rc-in { margin-top: 6px; }
+.rc-why { font-size: 13px; }
+.rc-opt { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.rc-opt input[type=radio] { accent-color: #2E7D5B; flex: none; }
+.rc-opt-l {
+  width: 22px; height: 22px; flex: none; border-radius: 7px; display: grid; place-items: center;
+  background: rgba(21,19,14,.05); font-size: 12px; font-weight: 800; color: var(--ink-3, #6b6455);
+}
+.rc-opt.on .rc-opt-l { background: rgba(46,125,91,.15); color: #2E7D5B; }
+.rc-opt.on .rc-in { border-color: rgba(46,125,91,.5); }
+.rc-opt .rc-in { margin-top: 0; }
+
+/* ── 校稿／編輯：閱讀技巧的一塊 ── */
+.rc-block {
+  border: 1.5px solid var(--border-soft, #E8E2D0); border-radius: 14px;
+  padding: 12px 13px 14px; margin-bottom: 14px; background: #fff;
+}
+.rc-block-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; font-size: 14.5px; }
+.rc-block-n { font-size: 12px; color: var(--ink-3, #6b6455); background: rgba(21,19,14,.05); padding: 2px 8px; border-radius: 6px; }
+.rc-block-head .rc-x { margin-left: auto; }
+.rc-x {
+  width: 26px; height: 26px; flex: none; border-radius: 8px; font-size: 13px;
+  color: #A0442F; background: rgba(160,68,47,.08); transition: background .14s;
+}
+.rc-x:hover { background: rgba(160,68,47,.18); }
+.rc-warn { font-size: 12.5px; color: #8B3120; background: rgba(139,49,32,.07); padding: 7px 10px; border-radius: 8px; margin-bottom: 10px; }
+.rc-row { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 9px; align-items: start; margin-bottom: 9px; }
+.rc-row .rc-n { margin-top: 7px; }
+.rc-row-f { min-width: 0; }
+.rc-row-2 .rc-in { margin-top: 0; }
+.rc-z { padding: 7px 8px; border: 1.5px solid var(--border, #DDD6C4); border-radius: 9px; font: inherit; font-size: 13px; background: #fff; min-width: 0; }
+.rc-ud { display: flex; flex-direction: column; gap: 3px; }
+.rc-ud button {
+  width: 26px; height: 22px; border-radius: 6px; font-size: 10px; line-height: 1;
+  background: rgba(21,19,14,.05); color: var(--ink-2, #5c554a);
+}
+.rc-ud button:disabled { opacity: .3; cursor: default; }
+.rc-ud .rc-x { height: 22px; }
+.rc-add {
+  font-size: 13px; font-weight: 700; color: #2E4F7E;
+  background: rgba(46,79,126,.08); padding: 7px 13px; border-radius: 9px;
+}
+.rc-add:hover { background: rgba(46,79,126,.16); }
+.rc-note { font-size: 12.5px; color: var(--ink-3, #6b6455); margin-top: 8px; }
+.rc-addblock { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.rc-addblock select { padding: 8px 10px; border: 1.5px solid var(--border, #DDD6C4); border-radius: 10px; font: inherit; font-size: 13.5px; background: #fff; }
+
+@media (max-width: 820px) {
+  .rc-row { grid-template-columns: 22px minmax(0,1fr) auto; }}
+
+/* 家長綁定代碼：是要被人眼「逐字念出來」的字串，原本卻是 10.5px。
+   而且 JetBrains Mono 只載入 400;500，原本的 700 是瀏覽器合成的假粗體
+   （筆畫糊在一起，更難念）→ 改成真的有載入的 500。
+   字體維持 var(--mono)（代碼就該用等寬），現在 --mono 也有 CJK 後援了。
+   位置在家長端的綁定卡片，跟練習畫面無關，長高幾 px 沒有風險。 */
+.linkbind-kid em{
+  font-weight: 500;
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* LINE 綠 #06C755 配白字只有 2.26 → 壓深成 #067D3A（白字 5.25）。
+   仍然是「一眼認得出來的 LINE 綠」，只是深一階。 */
+.notify-chip.on,
+.notify-send,
+.cwo-notify,
+.nt-line{ background:#067D3A; border-color:#067D3A; }   /* 原 8px；鈕變大要往角落收，字才不會被壓到 */
+/* 註：styles-tune.css:304 的 .fc-p-learn .fc-star-btn-corner{top:2px;right:2px} 權重較高，
+   學習模式維持原本更貼角的位置，這是刻意的、不要動。 */
+
+/* 主題鈕在 .fc-fill-topbar（填空測驗的頂列）裡，不是 useFitHeight 管的
+   .fc-p-card / .fc-p-learn，放大 12px 只會讓那一列變高，不影響禁區 #1。 */
+.fc-theme-btn { min-width: var(--tap); min-height: var(--tap); box-sizing: border-box; }
+.fc-theme-picker { top: 50px; }
+
+/* ── (7) 老師後台：學生詳情的「返回」是一條沒有內距的 13px 文字 ─────────
+   .dash-back 是 padding:0 + font-size:13px（styles-auth.css:1917）≈ 18px 高，
+   而它是「學生詳情 → 班級總覽」的唯一出口。改成跟大廳 .lobby-back 同一款膠囊：
+   一眼看得出是按鈕，手指也點得到。 */
+.dash-back {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--border, #e5dfc8);
+  border-radius: 100px;
+  background: var(--bg-card, #fff);
+  font-size: 14px;
+}
+.dash-back:hover { border-color: #8B3120; }
+
+/* ── (8) 老師後台：一整排 18–28px 的控制項 ───────────────────────────
+   iPad 上老師是用手指點的。以下每一顆都查過原始尺寸，而且都在「會換行的 flex 列」
+   或表格格子裡——加高只會讓那一列變高，不會把版面擠壞。
+   發派矩陣的勾選格是全站老師最常按的一顆，單獨拉到 34×34
+   （.sa-mx-cell 有 58px 寬、≤760 也還有 50px，34 放得下；
+     .sa-mx-chk 靠 .sa-mx-cell 的 text-align:center 置中，改寬高不影響置中）。 */
+.sa-mx-chk { width: 34px; height: 34px; }        /* 原 26×26 */
+.sa-mx-add { width: 30px; height: 30px; }        /* 原 22×22 */
+.sa-mx-all,
+.sa-mx-agroup-all { min-height: 32px; }          /* 原 ≈24px（11px 字 + 2~3px 內距） */
+.linkbind-x { width: 28px; height: 28px; }       /* 原 18×18，而且是「解除家長綁定」這種不可逆動作 */
+.roster-del-btn { width: 34px; height: 34px; }   /* 原 28×28，名單與集點紀錄共用 */
+.stars-quick button,
+.roster-toggle-btn,
+.cwo-fchip,
+.cwo-export,
+.cwo-notify,
+.report-gen-btn { min-height: 36px; }            /* 原 ≈25–30px */
+.notify-chip { min-height: 40px; }
+
+/* ══ v406：一鍵出單字的「短文填空」校稿區 ══
+   沿用 .qs-proof 那一套紙感卡片；驗證結果用綠／琥珀兩種語氣，
+   老師掃一眼就知道這篇能不能直接用。 */
+.qs-story {
+  margin-top: 12px; padding: 12px 14px;
+  border: 1.5px solid var(--border, #e5dfc8); border-radius: 12px;
+  background: var(--bg-card, #fffdf6);
+}
+.qs-story-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.qs-story-head b { font-size: 14px; }
+.qs-story-n { font-size: 12px; color: var(--ink-3, #8a8270); font-weight: 700; }
+.qs-story-n.warn { color: #8a6d1f; }
+.qs-story-lab {
+  display: block; margin: 8px 0 4px;
+  font-size: 12px; font-weight: 700; color: var(--ink-3, #8a8270);
+}
+.qs-story-lab code {
+  font-family: var(--mono, monospace); font-size: 11.5px;
+  background: #f4efe1; padding: 1px 5px; border-radius: 4px;
+}
+.qs-story input, .qs-story textarea {
+  width: 100%; font-family: inherit; font-size: 13.5px; line-height: 1.6;
+  padding: 8px 10px; border: 1.5px solid var(--border, #e5dfc8); border-radius: 8px;
+  background: #fff; color: var(--ink, #15130e);
+}
+.qs-story textarea { resize: vertical; }
+.qs-story-warn, .qs-story-ok {
+  margin-top: 8px; padding: 7px 10px; border-radius: 8px;
+  font-size: 12.5px; font-weight: 700; line-height: 1.5;
+}
+.qs-story-warn { background: rgba(232, 200, 106, .18); border: 1px solid rgba(180, 140, 30, .4); color: #6b5310; }
+.qs-story-ok   { background: rgba(46, 125, 91, .10);  border: 1px solid rgba(46, 125, 91, .30);  color: #2E7D5B; }
+
+/* ══ v407：短文填空要「百分之百成功」多出來的兩塊 ══ */
+/* 程式自動修好的地方——語氣要比警告輕，它報的是好消息（已經處理完了） */
+.qs-story-fix {
+  margin-top: 6px; padding: 6px 10px; border-radius: 8px;
+  font-size: 12px; line-height: 1.5; font-weight: 600;
+  background: rgba(90, 120, 170, .10); border: 1px solid rgba(90, 120, 170, .28); color: #3f5680;
+}
+/* 最後的人工開關：只換這一篇短文，不用整組重出 */
+.qs-story-re {
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 4px 11px; border-radius: 999px;
+  border: 1.5px solid var(--border, #e5dfc8); background: #fff; color: var(--ink-2, #5c554a);
+  transition: background .15s ease, border-color .15s ease;
+}
+.qs-story-re:hover:not(:disabled) { background: #f4efe1; border-color: var(--ink-3, #8a8270); }
+.qs-story-re:disabled { opacity: .55; cursor: default; }
+
+/* ══ v415：閱讀技巧「題目」的設定區（📖 出閱讀理解）══════════════════════
+   跟下面那一區（拖卡片的活動）長得像，但刻意用不同的勾選色，
+   老師才不會把「技巧題」跟「技巧活動」搞混。 */
+.rc-qs-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.rc-qs-n {
+  font-family: inherit; font-size: 13px; padding: 5px 9px;
+  border: 1px solid var(--border, #e5dfc8); border-radius: 8px; background: #fff; color: var(--ink, #15130e);
+}
+.rc-skill-q.on { border-color: #3f5680; background: rgba(90, 120, 170, .10); }
+.rc-skill-q.on .rc-skill-tx b { color: #3f5680; }
+
+/* 老師端：上傳區 */
+.gn-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 18px; text-align: center; cursor: pointer; background: var(--surface-2, rgba(0,0,0,.02)); }
+.gn-drop:hover { border-color: #7A4E1E; }
+.gn-drop.has { text-align: left; cursor: default; padding: 10px; }
+.gn-drop-empty { font-family: var(--sans); font-size: 14px; color: var(--ink-muted); line-height: 1.8; }
+.gn-drop-empty b { color: var(--ink); }
+.gn-thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+.gn-thumb { position: relative; width: 96px; height: 120px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
+.gn-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.gn-thumb button { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; line-height: 22px; cursor: pointer; }
+.gn-thumb-add { width: 96px; height: 120px; border-radius: 8px; border: 2px dashed var(--border); background: transparent; font-size: 28px; color: var(--ink-muted); cursor: pointer; }
+
+/* 老師端：校稿 */
+.gn-step { border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; background: var(--surface, #fff); }
+.gn-step.k-learn { border-left-color: #2E6FB7; }
+.gn-step.k-pick  { border-left-color: #1B7A3E; }
+.gn-step.k-order { border-left-color: #E0A100; }
+.gn-step.k-fix   { border-left-color: #C62828; }
+.gn-step-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--sans); font-size: 13px; }
+.gn-step-head button, .gn-del { border: 1px solid var(--border); background: transparent; border-radius: 6px; font-size: 12px; padding: 2px 8px; cursor: pointer; color: var(--ink-muted); }
+.gn-step input, .gn-step select { width: 100%; }
+.gn-row3 { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 6px; }
+@media (max-width: 640px) { .gn-row3 { grid-template-columns: 1fr; }}
+.gn-notes { margin-top: 12px; }
+.gn-notes summary { cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700; }
+.gn-notes pre { white-space: pre-wrap; font-family: var(--sans); font-size: 12.5px; line-height: 1.7; background: var(--surface-2, rgba(0,0,0,.04)); border-radius: 8px; padding: 10px 12px; }
+/* v429：互動教學沒產生成功時的提示＋重出按鈕 */
+.gn-ls-miss { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: #FFF6E0; border: 1px solid #F0D9A0; font-family: var(--sans); font-size: 14px; line-height: 1.6; }
+.gn-ls-miss b { font-size: 15px; }
+
+/* ══ v436：📖 出閱讀理解——「先教背景知識」的老師端 UI ══ */
+.rc-bgbox {
+  display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+  padding: 11px 13px; border-radius: 12px; margin-bottom: 12px;
+  border: 1px solid var(--border, #DDD6C4); background: #FBF8F0;
+}
+.rc-bgbox.on { border-color: #C9A84C; background: #FBF6E8; }
+.rc-bgbox input { margin-top: 3px; }
+.rc-bgbox b { font-size: 14px; color: var(--ink, #15130e); }
+.rc-bgbox em { display: block; font-style: normal; font-size: 12.5px; color: var(--ink-3, #8a8270); margin-top: 3px; }
+.rc-bg-top { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.rc-bg-top .rc-in { flex: 1 1 auto; }
+.rc-bg-redo {
+  flex: none; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  color: var(--ink-2, #5c554a); background: #fff; border: 1px solid var(--border, #DDD6C4);
+  border-radius: 999px; padding: 7px 14px;
+}
+.rc-bg-redo:disabled { opacity: .6; cursor: default; }
+.rc-bg-img { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.rc-bg-img .rc-in { flex: 1 1 220px; }
+.rc-bg-thumb { width: 84px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border, #DDD6C4); }
+.rc-bg-hint { font-size: 12.5px; color: var(--ink-3, #8a8270); }
+.rc-bg-hint b { color: var(--ink-2, #5c554a); }
+.rc-bg-up {
+  flex: none; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: #fbf8f1; background: var(--accent, #8B3120); border-radius: 999px; padding: 6px 12px;
+}
+.gr-bk .rc-bg { margin-top: 6px; }
+
+/* v442：一鍵出單字的難度分級（G1–G2／G3–G4／G5–G6） */
+.qs-band { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.qs-band-l { font-size: 12.5px; font-weight: 700; color: var(--ink-2, #5c554a); }
+.qs-band-b {
+  cursor: pointer; padding: 6px 12px; border-radius: 999px; text-align: left;
+  border: 1px solid var(--border, #DDD6C4); background: #fff; color: var(--ink, #15130e);
+}
+.qs-band-b b { display: block; font-size: 13px; }
+.qs-band-b em { display: block; font-style: normal; font-size: 11px; color: var(--ink-3, #8a8270); }
+.qs-band-b.on { border-color: var(--accent, #8B3120); background: #FBF1EE; }
+.qs-band-b.on b { color: var(--accent, #8B3120); }
+.qs-band-note { flex: 1 1 100%; font-size: 11.5px; color: var(--ink-3, #8a8270); }
+
+/* v445：一鍵生成的「💬 這次的特別要求」 */
+.ai-note { margin-top: 12px; }
+.ai-note-open { border: 1px dashed var(--border); background: transparent; border-radius: 999px;
+  padding: 7px 16px; font-family: var(--sans); font-size: 14px; color: var(--ink-muted); cursor: pointer; }
+.ai-note-open:hover { border-color: var(--accent, #8A6D1E); color: var(--ink); }
+.ai-note-in { width: 100%; box-sizing: border-box; font-family: var(--sans); font-size: 14px; line-height: 1.6;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, #fff); resize: vertical; }
+.ai-note-tip { margin-top: 6px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-muted); line-height: 1.9; }
+.ai-note-tip b { display: inline-block; font-weight: 600; background: var(--surface-2, #F3EFE6);
+  border-radius: 999px; padding: 2px 10px; margin-right: 6px; }
+.qs-story-sub { font-weight: 400; color: var(--ink-muted); font-size: 12.5px; }
+
+/* v447：沒存到的編輯（草稿接回來）與「存檔沒成功」的常駐提示 */
+.ed-recover { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px;
+  padding: 10px 14px; border-radius: 12px; background: #FFF3CF; border: 1px solid #E3CE8C; }
+.ed-recover-tx { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; }
+.ed-recover-tx b { font-family: var(--sans); font-size: 14px; color: #6B551A; }
+.ed-recover-tx span { font-family: var(--sans); font-size: 12.5px; color: #8A7434; }
+
+/* v448：後台「買過的裝扮」與退費 */
+.stars-buys { margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff); }
+.stars-buys > summary { cursor: pointer; padding: 10px 14px; font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--ink); }
+.stars-buys .stars-list { padding: 0 8px 8px; }
+.stars-row-amt.minus { color: #A33; }
+.stars-refund-btn { border: 1px solid #C88; background: #fff; color: #A33; border-radius: 999px;
+  padding: 4px 12px; font-family: var(--sans); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.stars-refund-btn:hover { background: #FBEAEA; }
+.stars-refund-btn:disabled { opacity: .5; cursor: default; }
+.stars-row-tag { font-family: var(--sans); font-size: 11.5px; color: var(--ink-muted); background: var(--surface-2, #F3EFE6);
+  border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.stars-row.mx .stars-row-note { color: #8A6D1E; }
+.gq-row {
+  grid-template-columns: 34px 1fr; gap: 12px; padding: 14px; margin-bottom: 12px;
+  border: 1px solid var(--border); border-top: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.gq-row:first-child { border-top: 1px solid var(--border); }
+.gq-row-n {
+  display: flex; align-items: center; justify-content: center; align-self: start;
+  width: 26px; height: 26px; padding: 0; border-radius: 999px;
+  background: var(--surface-2, #F3EFE6); color: var(--ink-muted); font-size: 12.5px; font-weight: 700;
+}
+.gq-row-f { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gq-row-f textarea, .gq-row-f input { padding: 9px 11px; }
+.gn-del { align-self: start; margin-top: 2px; }
+/* 教學卡那一頁的每一步也拉開一點 */
+.gn-step { padding: 14px 16px; gap: 8px; margin: 12px 0; }
+.gn-step-head { margin-bottom: 2px; }
+.gn-row3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+@media (max-width: 820px) { .gq-row { padding: 12px 10px; }}
+
+/* v475：「在這一組再出一份」時，標出哪些題型已經有了 */
+.qs-have { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: #FFF6E0; line-height: 1.7; }
+.qs-kind-has { display: inline-block; margin-left: 6px; font-style: normal; font-size: 11px; font-weight: 700;
+  color: #8A6D1E; background: #FFF3CF; border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
+
+/* 匯入視窗 */
+.pace-modal { max-width: min(1180px, 95vw); }
+.pace-in { width: 100%; min-height: 190px; font-family: var(--mono); font-size: 12px; white-space: pre; }
+.pace-warn {
+  margin-top: 10px; padding: 8px 12px; border-radius: 9px; font-size: 13px;
+  background: #FDF3E2; border: 1px solid rgba(190,130,40,.3); color: #7A5312;
+}
+.pace-ok { font-size: 14px; margin-bottom: 10px; color: var(--ink); }
+.pace-tbl-wrap { max-height: 54vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.pace-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; font-family: var(--sans); }
+.pace-tbl th {
+  position: sticky; top: 0; z-index: 1; background: #F2F4F9; text-align: left;
+  padding: 7px 9px; font-weight: 800; font-size: 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.pace-tbl td { padding: 6px 9px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+.pace-tbl tr.has-f td { background: #FFF8E8; }
+.pace-tbl .pw { font-weight: 800; white-space: nowrap; }
+.pace-tbl .pp { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+.pace-tbl .pf { font-weight: 800; color: #A8001A; white-space: nowrap; }
+.pace-tbl .carry { color: var(--ink-3); font-style: italic; }   /* 表上是空的、照規則沿用 */
+
+/* v494：進度表改成上傳檔案（貼上拿不到粗體） */
+.pace-drop {
+  display: flex; align-items: center; gap: 16px; padding: 20px 22px;
+  border: 2px dashed var(--border); border-radius: 14px; background: var(--bg-paper);
+}
+.pace-drop-ico { font-size: 34px; line-height: 1; }
+.pace-drop-txt { flex: 1; min-width: 0; }
+.pace-drop-txt b { display: block; font-size: 15.5px; font-weight: 800; color: var(--ink); }
+.pace-drop-txt em { display: block; font-style: normal; font-size: 13px; color: var(--ink-3); margin-top: 3px; }
+.pace-alt { margin: 10px 0 0; text-align: center; }
+.pace-tbl .pb { display: block; margin-top: 2px; font-size: 11.5px; color: #A8001A; font-weight: 800; }
+
+/* ══ 📒 v496 上課紀錄 ═══════════════════════════════════════════ */
+.ll2 { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 860px) { .ll2 { grid-template-columns: 1fr; }}
+
+.ll2-side { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 8px; }
+.ll2-side-h { font-size: 12px; font-weight: 800; color: var(--ink-3); padding: 6px 10px 8px; letter-spacing: .04em; }
+.ll2-stu {
+  width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 9px 11px;
+  border-radius: 10px; text-align: left; font-family: var(--sans);
+}
+.ll2-stu b { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+.ll2-stu em { font-style: normal; font-size: 11.5px; color: var(--ink-3); margin-left: auto; }
+.ll2-stu:hover { background: var(--bg); }
+.ll2-stu.on { background: var(--ink); }
+.ll2-stu.on b, .ll2-stu.on em { color: var(--bg-paper); }
+.ll2-empty, .ll2-empty2, .ll2-pick { font-size: 13.5px; color: var(--ink-3); padding: 18px 12px; }
+.ll2-pick { text-align: center; padding: 60px 20px; }
+
+.ll2-main { min-width: 0; }
+.ll2-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ll2-head-l { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ll2-head-l h3 { font-family: var(--serif); font-size: 21px; font-weight: 600; }
+.ll2-grade { font-size: 12px; font-weight: 800; background: var(--bg); padding: 2px 9px; border-radius: 999px; color: var(--ink-2); }
+.ll2-avg { font-size: 12.5px; font-weight: 800; padding: 2px 10px; border-radius: 999px; }
+.ll2-avg.hi, .ll2-p.hi, .ll2-pct b.hi { background: #E3F3E8; color: #1B5E2E; }
+.ll2-avg.mid, .ll2-p.mid, .ll2-pct b.mid { background: #FDF3E2; color: #8A5A00; }
+.ll2-avg.lo, .ll2-p.lo, .ll2-pct b.lo { background: #FBE6E2; color: #A8331F; }
+.ll2-nopace { font-size: 12px; color: var(--ink-3); }
+.ll2-head-r { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ll2-slot { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-3); }
+.ll2-slot select, .ll2-slot input {
+  font-family: var(--sans); font-size: 13px; padding: 5px 8px;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--ink);
+}
+.ll2-msg { font-size: 13px; color: #1B5E2E; background: #E3F3E8; padding: 7px 12px; border-radius: 9px; margin-bottom: 10px; }
+
+.ll2-form { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--bg-paper); margin-bottom: 16px; }
+.ll2-form-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.ll2-form-h input[type=date] {
+  font-family: var(--sans); font-size: 14px; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 9px; background: #fff;
+}
+.ll2-wk { font-size: 12.5px; font-weight: 800; color: var(--ink-3); }
+.ll2-gap { flex: 1; }
+.ll2-kind {
+  font-family: var(--sans); font-size: 12.5px; padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-2);
+}
+.ll2-kind.on { background: var(--ink); color: var(--bg-paper); border-color: var(--ink); font-weight: 800; }
+
+.ll2-pace {
+  background: #fff; border: 1px solid var(--border-soft); border-radius: 11px;
+  padding: 10px 13px; margin-bottom: 12px; font-size: 13px; line-height: 1.75; position: relative;
+}
+.ll2-pace b { font-size: 11.5px; font-weight: 800; background: var(--bg); padding: 1px 7px; border-radius: 999px; margin-right: 6px; }
+.ll2-hw { margin-left: 8px; color: #1B5E2E; font-size: 12.5px; }
+.ll2-bold { margin-left: 8px; font-size: 12px; font-weight: 800; background: #FDF3E2; color: #8A5A00; padding: 1px 8px; border-radius: 6px; }
+.ll2-note { font-size: 12.5px; color: var(--ink-3); }
+.ll2-use {
+  position: absolute; right: 10px; bottom: 9px; font-family: var(--sans); font-size: 12px;
+  font-weight: 700; color: var(--accent); border: 1px solid var(--border); border-radius: 8px;
+  padding: 3px 10px; background: #fff;
+}
+.ll2-use:hover { border-color: var(--accent); }
+
+.ll2-pct { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.ll2-pct label { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.ll2-pct input[type=range] { flex: 1; min-width: 160px; max-width: 420px; }
+.ll2-pct b { font-size: 17px; font-weight: 800; padding: 2px 12px; border-radius: 999px; min-width: 70px; text-align: center; }
+.ll2-quick { display: flex; gap: 5px; }
+.ll2-quick button {
+  font-family: var(--sans); font-size: 12px; padding: 3px 9px; border-radius: 7px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-2);
+}
+.ll2-f { display: block; margin-bottom: 10px; }
+.ll2-f > span { display: block; font-size: 13px; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; }
+.ll2-f textarea {
+  width: 100%; min-height: 54px; font-family: var(--sans); font-size: 14px; line-height: 1.6;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff;
+  color: var(--ink); resize: vertical;
+}
+.ll2-form-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+
+.ll2-rows { display: flex; flex-direction: column; gap: 10px; }
+.ll2-row { border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 12px; padding: 11px 14px; background: var(--bg-card); }
+.ll2-row.off { border-left-color: var(--ink-faint); opacity: .72; }
+.ll2-row-h { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.ll2-row-h b { font-family: var(--mono); font-size: 14px; }
+.ll2-wk2, .ll2-kind2 { font-size: 12px; color: var(--ink-3); }
+.ll2-p { font-size: 12.5px; font-weight: 800; padding: 1px 9px; border-radius: 999px; }
+.ll2-mini {
+  font-family: var(--sans); font-size: 12px; color: var(--ink-3);
+  border: 1px solid var(--border); border-radius: 7px; padding: 2px 9px; background: #fff;
+}
+.ll2-mini:hover { color: var(--accent); border-color: var(--accent); }
+.ll2-row-f { font-size: 13.5px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; padding: 2px 0; }
+.ll2-row-f em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--ink-3); margin-right: 8px; }
+.ll2-row-f.priv { color: var(--ink-2); background: var(--bg); border-radius: 7px; padding: 5px 9px; margin-top: 4px; }
+.tt-bar {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 15px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+  font-family: var(--sans); text-align: left;
+}
+.tt-bar b { font-size: 15px; font-weight: 800; color: var(--ink); }
+.tt-sum { font-size: 13px; color: var(--ink-3); }
+.tt-chev { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+.tt-msg { font-size: 13px; background: #E3F3E8; color: #1B5E2E; padding: 7px 12px; border-radius: 9px; margin-bottom: 10px; }
+.tt-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 1100px) { .tt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+@media (max-width: 560px)  { .tt-grid { grid-template-columns: 1fr; }}
+.tt-day-h { font-size: 12.5px; font-weight: 800; color: var(--ink-2); padding: 2px 2px 6px; }
+.tt-day-h em { font-style: normal; font-weight: 400; color: var(--ink-faint); margin-left: 6px; font-size: 11.5px; }
+.tt-slot { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin-bottom: 7px; }
+.tt-slot-t { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tt-slot-t input, .tt-slot-t select, .tt-slot-s select {
+  font-family: var(--sans); font-size: 12px; padding: 3px 5px;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--ink);
+}
+.tt-slot-s { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.tt-chip {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700;
+  background: var(--bg); border-radius: 999px; padding: 2px 4px 2px 9px; color: var(--ink-2);
+}
+.tt-chip button { font-size: 10px; color: var(--ink-faint); padding: 0 3px; }
+.tt-chip button:hover { color: #A8331F; }
+.tt-slot-f { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.tt-tog { font-size: 11.5px; color: var(--ink-3); display: flex; align-items: center; gap: 4px; }
+.tt-mini { font-size: 11.5px; color: var(--ink-3); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; background: #fff; }
+.tt-mini.del:hover { color: #A8331F; border-color: #A8331F; }
+.tt-gap { flex: 1; }
+.tt-foot { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.tt-paste summary { font-size: 13px; color: var(--ink-3); cursor: pointer; }
+.tt-paste textarea {
+  width: 100%; min-height: 150px; margin-top: 8px; font-family: var(--mono); font-size: 12.5px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--ink);
+}
+.tt-paste-f { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.tt-paste-f span { flex: 1; font-size: 12px; color: var(--ink-3); }
+
+.ll2-today {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+  padding: 10px 15px; border-radius: 12px; background: #FFF7E6; border: 1px solid rgba(190,150,40,.3);
+  font-family: var(--sans); font-size: 13.5px;
+}
+.ll2-today > b { color: #7A5312; }
+.ll2-today-s { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-3); }
+.ll2-today-b {
+  font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink);
+  background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px;
+}
+.ll2-today-b.on, .ll2-today-b:hover { background: var(--ink); color: var(--bg-paper); border-color: var(--ink); }
+.ll2-today-s em { font-style: normal; font-size: 11px; background: #E8C86A; color: #0E1116; padding: 1px 7px; border-radius: 999px; font-weight: 800; }
+.ll2-mate {
+  font-size: 12.5px; line-height: 1.7; color: #7A5312; background: #FFF7E6;
+  border: 1px solid rgba(190,150,40,.3); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px;
+}
+.tt-chip i { font-style: normal; font-size: 10px; font-weight: 800; color: var(--ink-faint); margin-left: 2px; }
+.tt-twin {
+  font-size: 13px; line-height: 1.7; background: #FDEEEF; color: #8A1020;
+  border: 1px solid rgba(168,0,26,.25); border-radius: 10px; padding: 9px 13px; margin-bottom: 10px;
+}
+.tt-twin b { font-weight: 800; }
+.tt-twin button {
+  margin-left: 8px; font-family: var(--sans); font-size: 12px; font-weight: 700;
+  border: 1px solid rgba(168,0,26,.4); border-radius: 7px; padding: 2px 10px; background: #fff; color: #8A1020;
+}
+
+/* v499：複習狀況 */
+.ll2-rev { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.ll2-rev label { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.ll2-rv {
+  font-family: var(--sans); font-size: 12.5px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-2);
+}
+.ll2-rv.on.done { background: #E3F3E8; border-color: #1B5E2E; color: #1B5E2E; font-weight: 800; }
+.ll2-rv.on.part { background: #FDF3E2; border-color: #8A5A00; color: #8A5A00; font-weight: 800; }
+.ll2-rv.on.none { background: #FBE6E2; border-color: #A8331F; color: #A8331F; font-weight: 800; }
+.ll2-rev-hw { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: 4px; }
+.ll2-row-f.rv.done em, .ll2-row-f.rv.done { color: #1B5E2E; }
+.ll2-row-f.rv.part em, .ll2-row-f.rv.part { color: #8A5A00; }
+.ll2-row-f.rv.none em, .ll2-row-f.rv.none { color: #A8331F; }
+
+/* v500：沒對到人的名字／沒有學生的時段，一定要看得出來 */
+.tt-lost {
+  background: #FDEEEF; border: 1px solid rgba(168,0,26,.25); border-radius: 10px;
+  padding: 9px 13px; margin-bottom: 10px; font-size: 13px; line-height: 1.7; color: #8A1020;
+}
+.tt-lost b { display: block; font-weight: 800; }
+.tt-lost span { display: block; color: #9A3040; font-size: 12.5px; }
+.tt-lost button {
+  margin-top: 6px; font-family: var(--sans); font-size: 12px; font-weight: 700;
+  border: 1px solid rgba(168,0,26,.4); border-radius: 7px; padding: 2px 10px; background: #fff; color: #8A1020;
+}
+.tt-lost.soft { background: #FDF3E2; border-color: rgba(190,130,40,.3); color: #7A5312; }
+.tt-lost.soft b { display: inline; }
+.tt-slot.empty { border-color: rgba(168,0,26,.4); background: #FFF8F8; }
+.ll2-all {
+  margin-left: 8px; font-family: var(--sans); font-size: 11.5px; font-weight: 700;
+  color: var(--ink-3); border: 1px solid var(--border); border-radius: 7px; padding: 1px 8px; background: #fff;
+}
+.ll2-all:hover { color: var(--accent); border-color: var(--accent); }
+
+/* v501：在上課紀錄裡就能匯入學校進度表 */
+.ll2-nopace, .ll2-pace-ok {
+  font-family: var(--sans); font-size: 12.5px; font-weight: 700;
+  border-radius: 8px; padding: 3px 11px; border: 1px solid var(--border); background: #fff;
+}
+.ll2-nopace { color: #A8331F; border-color: rgba(168,51,31,.4); }
+.ll2-nopace:hover { background: #FDEEEF; }
+.ll2-pace-ok { color: var(--ink-3); }
+.ll2-pace-ok:hover { color: var(--accent); border-color: var(--accent); }
+
+/* v501：三個年級的進度表狀態列 */
+.pstrip {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
+  padding: 9px 15px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border);
+  font-family: var(--sans);
+}
+.pstrip > b { font-size: 13.5px; font-weight: 800; color: var(--ink); }
+.pstrip-g {
+  display: inline-flex; align-items: baseline; gap: 6px; font-family: var(--sans);
+  font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 9px; border: 1px solid var(--border); background: #fff;
+}
+.pstrip-g em { font-style: normal; font-size: 11.5px; font-weight: 600; }
+.pstrip-g.ok { color: #1B5E2E; border-color: rgba(27,94,46,.3); }
+.pstrip-g.no { color: #A8331F; border-color: rgba(168,51,31,.4); background: #FDF7F6; }
+.pstrip-g:hover { border-color: var(--accent); }
+.pstrip-tip { font-size: 12px; color: var(--ink-3); margin-left: auto; }
+@media (max-width: 700px) { .pstrip-tip { margin-left: 0; }}
+
+/* v502：進度表匯入視窗要蓋在老師後台（z-index:900）上面 */
+.modal-backdrop.pace-top { z-index: 1200; }
+
+/* v503：學校進度那一塊重排——拿掉編號、書名寫清楚 */
+.ll2-pl { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 2px 0; }
+.ll2-pl > b {
+  flex: none; font-size: 11.5px; font-weight: 800; background: var(--bg);
+  padding: 1px 8px; border-radius: 999px; color: var(--ink-2);
+}
+.ll2-main2 { font-weight: 800; color: var(--ink); font-size: 14.5px; }
+.ll2-part { font-size: 11.5px; font-weight: 800; background: #E8C86A; color: #0E1116; padding: 1px 8px; border-radius: 999px; }
+.ll2-tp { font-size: 13px; color: var(--ink-2); background: var(--bg); padding: 1px 9px; border-radius: 7px; }
+.ll2-tp.carry { background: #FDF3E2; color: #7A5312; }
+.ll2-pl.bk { padding-left: 2px; gap: 6px; }
+.ll2-bk { font-size: 12.5px; color: #1B5E2E; white-space: nowrap; }
+.ll2-bk em {
+  font-style: normal; font-weight: 800; font-size: 11px; letter-spacing: .02em;
+  background: #E3F3E8; padding: 1px 7px; border-radius: 6px; margin-right: 5px;
+}
+
+/* ══ 🪄 v512：上課紀錄自動擬草稿 ══════════════════════════════════════════ */
+.ll2-ai { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin: 4px 0 10px; }
+.ll2-ai-go {
+  border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer;
+  background: linear-gradient(135deg, #6D5BD0, #8A5FA8); color: #fff;
+  font-family: var(--sans); font-size: 13.5px; font-weight: 800;
+  box-shadow: 0 4px 12px -5px rgba(109,91,208,.7);
+}
+.ll2-ai-go:disabled { background: var(--border); color: var(--ink-3); box-shadow: none; cursor: default; }
+.ll2-ai-undo {
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 13px; cursor: pointer;
+  background: var(--bg-card); font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+}
+.ll2-ai-undo:hover { border-color: var(--ink-3); }
+.ll2-ai em { font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.ll2-ai-warn {
+  padding: 10px 13px; margin-bottom: 11px; border-radius: 10px;
+  background: #FDF3E2; border: 1px solid #B8821F; color: #7A5200;
+  font-size: 13px; font-weight: 700; line-height: 1.6;
+}
+.ll2-ai-warn b { font-family: var(--mono); color: #A8331F; }
