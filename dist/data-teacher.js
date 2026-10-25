@@ -5197,6 +5197,53 @@ function _examCleanKey(k) {
   const note = String(k.note || '').trim().slice(0, 600);
   return (mc.length || written.length) ? { mc, written, note } : null;
 }
+/* 🔴 v606 沒有解答頁時，選擇題的答案是「讀考卷的那個模型」邊讀邊猜的——而且會猜錯。
+   實測 Alan 的 Taiwan Biographies（學生版，沒附解答）：Yang 那篇第 2 題「Which statement correctly compares Yang and Johnson?」
+   文章明明寫 Yang 跑跳強、Johnson 投擲強，它卻選了「Yang 投擲強」。答案錯的考卷最糟：學生答對還被扣分。
+   → 有文章的選擇題（沒有解答頁的），**另外獨立解兩次**（選項順序正著給一次、反著給一次，排除「偏愛某個位置」）。
+     兩次都選同一個、而且跟讀卷時選的不一樣 → 改成那個，並明講請老師確認；只有一次不一樣或兩次不一致 → 不動，但提醒。
+   ⚠ 解題用的是**只看文章與題目**的獨立呼叫，不是把上一個答案餵給它（不然只是蓋橡皮章）。
+   ⚠ 驗算本身壞掉（沒回、格式不對）不擋——跳過那一題。 */
+async function _examSolveMC(passage, q, rev) {
+  const idx = (q.options || []).map((_, i) => i); if (rev) idx.reverse();
+  const L = 'ABCDEF';
+  const got = await _aiAsk({
+    model: GN_READ_MODEL, max_tokens: 200,
+    system: 'You are a careful teacher answering a multiple-choice reading question. Use ONLY the passage. Reply ONLY JSON {"answer":"A"} — one letter.',
+    messages: [{ role: 'user', content: `PASSAGE:\n${passage}\n\nQUESTION: ${q.q}\n` + idx.map((oi, k) => `${L[k]}. ${q.options[oi]}`).join('\n') }],
+  }, (data) => {
+    const txt = data?.content?.[0]?.text || data?.text || '';
+    const o = JSON.parse(_aiStripFence(txt));
+    const k = L.indexOf(String((o && o.answer) || '').trim().toUpperCase().charAt(0));
+    return (k >= 0 && k < idx.length) ? { oi: idx[k] } : null;
+  }, 45000);
+  return got ? got.oi : -1;
+}
+async function examVerifyQuiz(secs) {
+  const notes = [], jobs = [];
+  let n = 0;
+  (secs || []).forEach(sc => (sc.parts || []).forEach(pt => {
+    if (pt.kind === 'quiz') (pt.questions || []).forEach(q => { n++; if (!q._keyed && pt.readText && (q.options || []).length >= 2) jobs.push({ pt, q, n }); });
+    else if (pt.kind === 'short') n += (pt.questions || []).length;
+    else if (pt.kind === 'evidence' || pt.kind === 'essay') n++;
+  }));
+  await pMap(jobs, async (j) => {
+    try {
+      const [a, b] = await Promise.all([_examSolveMC(j.pt.readText, j.q, false), _examSolveMC(j.pt.readText, j.q, true)]);
+      if (a < 0 || b < 0) return;
+      const L = 'ABCDEF', now = j.q.answer;
+      if (a === now && b === now) return;
+      if (a === b) {
+        j.q.answer = a;
+        notes.push(`第 ${j.n} 題：讀考卷時選的是 ${L[now] || '?'}，但另外獨立解題兩次（選項順序正著、反著）都選 ${L[a]}——已改成 ${L[a]}，沒有解答頁可以對，請你確認。`);
+      } else notes.push(`第 ${j.n} 題的答案不太確定（讀考卷時選 ${L[now] || '?'}，獨立解題兩次分別選 ${L[a]}、${L[b]}），沒有解答頁可以對，請你確認。`);
+    } catch (e) { /* 驗算壞掉就跳過這一題 */ }
+  }, 6);
+  (secs || []).forEach(sc => (sc.parts || []).forEach(pt => (pt.questions || []).forEach(q => { delete q._keyed; })));
+  if (jobs.length && !notes.length) notes.push(`沒有解答頁，選擇題答案另外獨立驗算過（${jobs.length} 題），跟讀卷時一致。`);
+  return notes;
+}
+
 /* 把解答套回考卷（純函式，直接改傳進來的 sections，回傳要告訴老師的事）。
    題號＝考卷上印的那種：選擇題、問答題**依序連續編號**（康橋這份：A 部分 1~6，B 部分 7~8）。
    ⚠ 選擇題答案以解答頁為準（老師的話，不是模型讀文章猜的）；對不上就不動，並回報。
@@ -5216,6 +5263,7 @@ function examApplyKey(sections, key) {
     if (!t || t.kind !== 'mc') { notes.push(`解答頁第 ${m.n} 題的選擇題答案對不到考卷上的題目，沒有套用`); return; }
     const opts = (t.q.options || []).length;
     if (m.idx >= opts) { notes.push(`解答頁第 ${m.n} 題的答案超出選項，沒有套用`); return; }
+    t.q._keyed = true;                  // 這一題的答案來自解答頁，不必再驗算（examVerifyQuiz 看這個旗標）
     if (t.q.answer !== m.idx) {
       notes.push(`第 ${m.n} 題：照解答頁把答案改成 ${'ABCDEFGH'[m.idx]}（模型讀文章時選的是 ${'ABCDEFGH'[t.q.answer] || '?'}）`);
       t.q.answer = m.idx;
@@ -5431,7 +5479,12 @@ function _examCleanPart(p) {
 
   const questions = (Array.isArray(p.questions) ? p.questions : []).map(q => ({
     q: String((q && q.q) || '').trim(), pts: +((q && q.pts) || 0) || 0,
-    rubric: String((q && q.rubric) || '').trim(), rows: 4,
+    rubric: String((q && q.rubric) || '').trim(),
+    rows: Math.max(2, Math.min(12, Math.round(+(q && q.rows) || 4))),
+    /* v606：老師給的參考答案（keyPoints）要留著——AI 批改建議會參考它（aiGradeRubric 的 keyPoints）。
+       以前貼上整份考卷這條路會把它洗掉，只剩題目。 */
+    ...(q && String(q.keyPoints || '').trim() ? { keyPoints: String(q.keyPoints).trim().slice(0, 2000) } : {}),
+    ...(q && String(q.sample || '').trim() ? { sample: String(q.sample).trim().slice(0, 2000) } : {}),
   })).filter(q => q.q);
   if (!questions.length) return null;
   /* 印在卷子上的 rubric 是哪一套（七項寫作／三項）——認不得就不設，用預設的三項 */
@@ -5756,7 +5809,7 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   /* v583：大題都被併到別處（續頁併回前面）的 Section 會變成空殼——沒有大題就不要留標題 */
   for (let i = secs.length - 1; i >= 0; i--) if (!secs[i].parts.length) secs.splice(i, 1);
   /* 🔴 v605 解答頁：選擇題答案以解答頁為準、問答題的參考答案放進 keyPoints（AI 批改建議會參考）。 */
-  const keyNotes = examApplyKey(secs, answerKey);
+  const keyNotes = examApplyKey(secs, answerKey).concat(await examVerifyQuiz(secs));
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,
@@ -5983,7 +6036,7 @@ async function aiDraftExam({ message, history, draft, mustWords, grade }) {
   return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item, notes, words,
            checks: examDraftChecks(item, words, notes), dropped, same: false };
 }
-Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examCleanKey: _examCleanKey });
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examVerifyQuiz, examCleanKey: _examCleanKey });
 
 /* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
 function examBandsOf(R, c) {

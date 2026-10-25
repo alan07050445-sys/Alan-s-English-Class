@@ -1,0 +1,173 @@
+{
+ "type": "exam",
+ "title": "G4 CET Unseen Reading — Reading 2: Yang Chuan-kwang: Ten Events, One Goal",
+ "examKicker": "Tr. Alan / G4 CET Unseen Reading Practice",
+ "sections": [
+  {
+   "name": "Reading 2 | Biography",
+   "pct": 100,
+   "parts": [
+    {
+     "kind": "quiz",
+     "title": "Part A | Reading Comprehension",
+     "instruction": "Directions: Choose the best answer based on the selection. Fill in one circle for each question.",
+     "pts": 30,
+     "questions": [
+      {
+       "q": "According to paragraph 1, how is the winner of a decathlon decided?",
+       "options": [
+        "By the height of the athlete's best jump.",
+        "By the result of the final running race.",
+        "By the total points from all ten events.",
+        "By the number of races the athlete enters."
+       ],
+       "answer": 2
+      },
+      {
+       "q": "Which statement correctly compares Yang and Johnson?",
+       "options": [
+        "Yang was stronger in running; Johnson was stronger in throwing.",
+        "Yang was stronger in throwing; Johnson was stronger in running.",
+        "Both were strongest in throwing and weakest in jumping.",
+        "Both were strongest in jumping and weakest in running."
+       ],
+       "answer": 0
+      },
+      {
+       "q": "Why was the final race especially important to Johnson?",
+       "options": [
+        "He needed to finish it to enter the Olympics.",
+        "He wanted to change it into a jumping event.",
+        "He had already lost his points from throwing.",
+        "He needed to stay close to the stronger runner."
+       ],
+       "answer": 3
+      },
+      {
+       "q": "Why did Yang win silver even though he finished the final race ahead of Johnson?",
+       "options": [
+        "Yang had entered fewer events than Johnson.",
+        "Johnson still had more points across all events.",
+        "Johnson received extra points for their friendship.",
+        "Yang's final race did not count toward his score."
+       ],
+       "answer": 1
+      },
+      {
+       "q": "What does the detail about the athletes leaning on each other best suggest?",
+       "options": [
+        "They planned to stop competing after that race.",
+        "They needed another race to decide the winner.",
+        "Their competition did not remove their friendship.",
+        "Their coach asked them to share the gold medal."
+       ],
+       "answer": 2
+      },
+      {
+       "q": "Why does the author explain the decathlon before describing the 1960 competition?",
+       "options": [
+        "To help readers understand how the results were decided.",
+        "To show readers why running was the only important skill.",
+        "To explain why Yang chose to stop entering other events.",
+        "To tell readers which Olympic sport they should practise. 07"
+       ],
+       "answer": 0
+      }
+     ],
+     "readText": "Yang Chuan-kwang: Ten Events, One Goal\n\nWORDS TO KNOW\ndecathlon - a sport with ten events\ncompetitor - a person trying to win\noverall - counting all parts\nworld record - the best result in the world\n\n[1] Running fast is difficult. So are jumping high and throwing far. Yang Chuan-kwang, an athlete from Taitung, Taiwan, competed in a sport that required all these skills. It was called the decathlon. Athletes completed ten events over two days and earned points in each event. Their total points decided the winner.\n\n[2] In 1954, Yang won the decathlon at the Asian Games. Two years later, he competed in his first Olympic Games and finished eighth in the decathlon. His Olympic journey did not end there. In 1958, he won the Asian Games decathlon again. He also trained at the University of California, Los Angeles, known as UCLA.\n\n[3] At UCLA, Yang trained with American athlete Rafer Johnson. The two became good friends, but they were also strong competitors. Yang was especially good at running and jumping. Johnson was stronger in the throwing events. To succeed in the decathlon, neither athlete could depend on just one skill.\n\n[4] At the 1960 Olympic Games in Rome, their competition was close. After nine events, Johnson had a small lead in total points. The final event was a 1,500-meter race. Yang was the stronger runner, so Johnson needed to stay close to him. Yang finished the race ahead of Johnson, but Johnson finished close enough to keep his lead in total points.\n\n[5] Johnson won the gold medal, and Yang won silver. Yang's faster finish in the last race did not make him the overall winner because all ten events counted. After the race, the two tired athletes leaned on each other. Their friendship remained part of the story, even as they competed for the same prize.\n\n[6] Yang continued competing after Rome. In 1963, he broke the decathlon world record. The athlete who had once placed eighth at the Olympics had continued building his skills."
+    },
+    {
+     "kind": "short",
+     "title": "Part B | Short Answer",
+     "instruction": "Directions: Answer in complete sentences. Support your answers with details from the selection.",
+     "pts": 20,
+     "questions": [
+      {
+       "q": "Explain why being a fast runner was not enough to guarantee a gold medal in the decathlon. Use the result of the 1960 competition in your answer.",
+       "rows": 4,
+       "keyPoints": "The decathlon has ten events and the winner is decided by total points. In Rome in 1960 Yang was the stronger runner and finished the final 1,500-meter race ahead of Johnson, but Johnson had a lead in total points and stayed close enough to keep it, so Johnson won gold and Yang won silver."
+      },
+      {
+       "q": "How was Yang's relationship with Johnson different from a relationship between competitors who were strangers? Include two details from the selection.",
+       "rows": 4,
+       "keyPoints": "They trained together at UCLA and became good friends even though they were strong competitors; after the final race the two tired athletes leaned on each other, and their friendship remained part of the story as they competed for the same prize."
+      }
+     ]
+    },
+    {
+     "kind": "short",
+     "title": "Part C | Use Text Evidence",
+     "instruction": "Directions: Find one detail that supports each statement. You may copy a short sentence or write the evidence in your own words. Then answer Question 4.",
+     "pts": 24,
+     "questions": [
+      {
+       "q": "Statement: Yang achieved success in competitions before the 1960 Olympic Games.\nText Evidence:",
+       "rows": 3,
+       "keyPoints": "In 1954 Yang won the decathlon at the Asian Games, and in 1958 he won it again (also: he finished eighth at his first Olympics in 1956)."
+      },
+      {
+       "q": "Statement: Johnson's lead was not safe before the final event.\nText Evidence:",
+       "rows": 3,
+       "keyPoints": "After nine events Johnson had only a small lead in total points, and the final 1,500-meter race was one where Yang was the stronger runner."
+      },
+      {
+       "q": "Statement: Yang continued improving after winning his Olympic silver medal.\nText Evidence:",
+       "rows": 3,
+       "keyPoints": "In 1963 Yang broke the decathlon world record."
+      },
+      {
+       "q": "Choose the evidence you used for Question 3. Explain how it supports the statement. Do more than repeat the evidence.",
+       "rows": 4,
+       "keyPoints": "Says WHY it supports it: breaking the world record in 1963 shows he was better than every decathlete in the world, three years after finishing second in Rome, so he kept building his skills."
+      }
+     ]
+    },
+    {
+     "kind": "short",
+     "title": "Part D | Summarize a Text — Important Details",
+     "instruction": "Directions: Write three important details for a summary of Yang's athletic journey. Include events from different parts of the selection.",
+     "pts": 14,
+     "questions": [
+      {
+       "q": "Write three important details for a summary of Yang's athletic journey. Include events from different parts of the selection.\n1.\n2.\n3.",
+       "rows": 7,
+       "keyPoints": "One from the beginning, one from the middle, one from the end, in order, e.g. Yang won the decathlon at the Asian Games in 1954 → he trained with Rafer Johnson at UCLA and won silver in Rome in 1960 → in 1963 he broke the decathlon world record."
+      }
+     ],
+     "rubricSet": "summary"
+    },
+    {
+     "kind": "quiz",
+     "title": "Part D | Question 4",
+     "instruction": "",
+     "pts": 6,
+     "questions": [
+      {
+       "q": "Which is the best summary of the selection?",
+       "options": [
+        "Yang and Johnson trained at UCLA, where they developed different strengths in running, jumping, and throwing.",
+        "Yang developed his skills, won an Olympic silver medal while competing against a friend, and later broke a world record.",
+        "Yang finished ahead of Johnson in the final race in Rome, but Johnson's total score was high enough to win gold.",
+        "Yang won the Asian Games decathlon in 1954 and returned two years later to finish eighth at his first Olympic Games."
+       ],
+       "answer": 1
+      }
+     ]
+    },
+    {
+     "kind": "short",
+     "title": "Part D | Question 5",
+     "instruction": "",
+     "pts": 6,
+     "questions": [
+      {
+       "q": "Why is the best summary more complete than the other choices?",
+       "rows": 4,
+       "keyPoints": "It includes events from the whole selection — developing his skills, the Olympic silver medal against his friend, and the later world record — while each other choice covers only one part or one event."
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

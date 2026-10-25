@@ -4368,3 +4368,8 @@ textarea.ex-essay {
 .trash-main em { font-style: normal; font-size: 12px; opacity: .65; }
 .toast.toast-undo { display: flex; align-items: center; gap: 14px; }
 .toast.toast-undo button { background: transparent; border: 1px solid currentColor; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; padding: 4px 12px; cursor: pointer; }
+
+/* v606 同一篇文章只完整顯示一次；之後收起來 */
+.ex-read-dup { margin: 0 0 12px; }
+.ex-read-dup > summary { cursor: pointer; font-size: 14px; color: var(--ink-3, #6b6455); padding: 6px 2px; }
+.ex-read-dup[open] > summary { margin-bottom: 6px; }

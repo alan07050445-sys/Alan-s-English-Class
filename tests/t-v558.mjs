@@ -27,7 +27,7 @@ ok('拍照讀進來的 order 少於兩個事件就丟掉', /events\.length < 2\)
 ok('出卷端有 order 的說明', /order: '一行一個事件/.test(fs.readFileSync(new URL('../components-editor.jsx', import.meta.url), 'utf8')));
 ok('學生端畫得出來', /pt\.kind === 'order'/.test(qm) && /ex-ord-n/.test(qm));
 console.log('\n【共用圖片與文章】');
-ok('圖片與文章顯示在題目上方', /pt\.img &&[\s\S]{0,60}ex-fig/.test(qm) && /pt\.readText &&/.test(qm));
+ok('圖片與文章顯示在題目上方', /pt\.img &&[\s\S]{0,60}ex-fig/.test(qm) && /readBlock\(pt\.readText/.test(qm));   // v606：同一篇文章只完整顯示一次，改走 readBlock
 ok('選擇題收得進共用文章', /\.\.\.\(rt \? \{ readText: rt \} : \{\}\)/.test(data));
 console.log('\n【摘要評分表】');
 const R = sb.of({ rubricSet: 'summary' });

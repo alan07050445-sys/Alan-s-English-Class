@@ -7433,6 +7433,26 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   };
 
   /* ── 一大題 ── */
+  /* 🔴 v606：同一篇文章在這份卷子裡只完整顯示一次。
+     Alan 的 Unseen Reading 卷：選擇題、問答題、證據題**都要讀同一篇**，每一大題都貼一次整篇 → 學生要捲過三、四遍一樣的文章。
+     第一次出現照常顯示；之後遇到「同一篇」改成收起來的「📖 再看一次文章」。
+     ⚠ 這個 Set 每次 render 重建、而且是照出現順序判斷——只動畫面，資料（每一題各自帶的文章，AI 批改要用）完全不動。 */
+  const seenReads = new Set();
+  const readBlock = (text, cls) => {
+    const t = String(text || '').trim();
+    if (!t) return null;
+    const k = t.length + ':' + t.slice(0, 120);
+    if (seenReads.has(k)) {
+      return (
+        <details className="ex-read-dup">
+          <summary>📖 這一題要讀的文章（上面已經有了，點開再看一次）</summary>
+          <div className={cls || 'ex-read'}>{t}</div>
+        </details>
+      );
+    }
+    seenReads.add(k);
+    return <div className={cls || 'ex-read'}>{text}</div>;
+  };
   const renderPart = (pt, key, pr) => {
     const n = window.examPartN ? window.examPartN(pt) : 0;
     const v = ans[key];
@@ -7464,7 +7484,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
         {pt.instruction && <p className="ex-inst">{pt.instruction}</p>}
         {/* v557：這一大題的共用圖片與文章（選擇題、排順序、摘要都會用到，圈選等本來就有自己的 passage） */}
         {pt.img && <figure className="ex-fig"><img src={pt.img} alt="" loading="lazy"/>{pt.imgCap && <figcaption>{pt.imgCap}</figcaption>}</figure>}
-        {pt.readText && <div className="ex-read">{pt.readText}</div>}
+        {readBlock(pt.readText, 'ex-read')}
 
         {/* ── v557 🔢 事件排順序：在每個句子前面填 1~N ── */}
         {pt.kind === 'order' && (() => {
@@ -7655,7 +7675,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           const got = Array.isArray(v) ? v : [];
           return (
             <>
-              {pt.passage && <div className="ex-read">{pt.passage}</div>}
+              {readBlock(pt.passage, 'ex-read')}
               <ol className="ex-genq">
                 {Array.from({ length: n }, (_, i) => {
                   return (
@@ -7683,7 +7703,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           let di = 0;                       // detail 是攤平的，要照同樣順序對回去
           return (
             <>
-              {pt.passage && <div className="ex-read">{pt.passage}</div>}
+              {readBlock(pt.passage, 'ex-read')}
               <div className="ex-story">
                 {secs.map((sec) => (
                   <div className="ex-story-box" key={sec.id}>
@@ -7769,7 +7789,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           const boxes = Array.isArray(v) ? v : [];
           return (
             <>
-              {pt.passage && <div className="ex-read ex-read-fix">{pt.passage}</div>}
+              {readBlock(pt.passage, 'ex-read ex-read-fix')}
               <div className="ex-fixgrid">
                 {Array.from({ length: n }, (_, i) => {
                   const d = sent ? ((pr && pr.detail[i]) || {}) : null;
@@ -7797,7 +7817,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           const rows = Array.isArray(v) ? v : [];
           return (
             <>
-              {pt.passage && <div className="ex-read">{pt.passage}</div>}
+              {readBlock(pt.passage, 'ex-read')}
               {pt.question && <p className="ex-qt">{pt.question}</p>}
               {Array.from({ length: n }, (_, i) => {
                 const d = sent ? ((pr && pr.detail[i]) || {}) : null;
@@ -7920,7 +7940,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
 
         {pt.kind === 'short' && (
           <>
-            {pt.passage && <div className="ex-read">{pt.passage}</div>}
+            {readBlock(pt.passage, 'ex-read')}
             {(pt.questions || []).map((q, i) => (
               <div className="ex-sa" key={i}>
                 <p className="ex-qt">{q.q}{q.pts ? <span className="ex-sapts">（{q.pts} 分）</span> : null}</p>

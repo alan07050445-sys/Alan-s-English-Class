@@ -9040,6 +9040,27 @@ function ExamPlayer({
   };
 
   /* ── 一大題 ── */
+  /* 🔴 v606：同一篇文章在這份卷子裡只完整顯示一次。
+     Alan 的 Unseen Reading 卷：選擇題、問答題、證據題**都要讀同一篇**，每一大題都貼一次整篇 → 學生要捲過三、四遍一樣的文章。
+     第一次出現照常顯示；之後遇到「同一篇」改成收起來的「📖 再看一次文章」。
+     ⚠ 這個 Set 每次 render 重建、而且是照出現順序判斷——只動畫面，資料（每一題各自帶的文章，AI 批改要用）完全不動。 */
+  var seenReads = new Set();
+  var readBlock = (text, cls) => {
+    var t = String(text || '').trim();
+    if (!t) return null;
+    var k = t.length + ':' + t.slice(0, 120);
+    if (seenReads.has(k)) {
+      return /*#__PURE__*/React.createElement("details", {
+        className: "ex-read-dup"
+      }, /*#__PURE__*/React.createElement("summary", null, "\uD83D\uDCD6 \u9019\u4E00\u984C\u8981\u8B80\u7684\u6587\u7AE0\uFF08\u4E0A\u9762\u5DF2\u7D93\u6709\u4E86\uFF0C\u9EDE\u958B\u518D\u770B\u4E00\u6B21\uFF09"), /*#__PURE__*/React.createElement("div", {
+        className: cls || 'ex-read'
+      }, t));
+    }
+    seenReads.add(k);
+    return /*#__PURE__*/React.createElement("div", {
+      className: cls || 'ex-read'
+    }, text);
+  };
   var renderPart = (pt, key, pr) => {
     var n = window.examPartN ? window.examPartN(pt) : 0;
     var v = ans[key];
@@ -9079,9 +9100,7 @@ function ExamPlayer({
       src: pt.img,
       alt: "",
       loading: "lazy"
-    }), pt.imgCap && /*#__PURE__*/React.createElement("figcaption", null, pt.imgCap)), pt.readText && /*#__PURE__*/React.createElement("div", {
-      className: "ex-read"
-    }, pt.readText), pt.kind === 'order' && (() => {
+    }), pt.imgCap && /*#__PURE__*/React.createElement("figcaption", null, pt.imgCap)), readBlock(pt.readText, 'ex-read'), pt.kind === 'order' && (() => {
       var evs = pt.events || [];
       var nums = Array.isArray(v) ? v : [];
       var shown = window.examOrderShuffle ? window.examOrderShuffle(evs) : evs.map((_, i) => i);
@@ -9274,9 +9293,7 @@ function ExamPlayer({
       }, "\u26A0 ", pr.note));
     })(), pt.kind === 'genq' && (() => {
       var got = Array.isArray(v) ? v : [];
-      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
-        className: "ex-read"
-      }, pt.passage), /*#__PURE__*/React.createElement("ol", {
+      return /*#__PURE__*/React.createElement(React.Fragment, null, readBlock(pt.passage, 'ex-read'), /*#__PURE__*/React.createElement("ol", {
         className: "ex-genq"
       }, Array.from({
         length: n
@@ -9312,9 +9329,7 @@ function ExamPlayer({
       var per = +pt.need || 2;
       var got = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
       var di = 0; // detail 是攤平的，要照同樣順序對回去
-      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
-        className: "ex-read"
-      }, pt.passage), /*#__PURE__*/React.createElement("div", {
+      return /*#__PURE__*/React.createElement(React.Fragment, null, readBlock(pt.passage, 'ex-read'), /*#__PURE__*/React.createElement("div", {
         className: "ex-story"
       }, secs.map(sec => /*#__PURE__*/React.createElement("div", {
         className: "ex-story-box",
@@ -9416,9 +9431,7 @@ function ExamPlayer({
       }, "\u6BCF\u500B\u5B57\u53EA\u80FD\u7528", /*#__PURE__*/React.createElement("b", null, "\u4E00\u6B21"), "\uFF1B\u53EF\u4EE5\u52A0 when / because / and / but / so \u8B93\u53E5\u5B50\u9577\u4E00\u9EDE\u3002"));
     })(), pt.kind === 'fixbox' && (() => {
       var boxes = Array.isArray(v) ? v : [];
-      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
-        className: "ex-read ex-read-fix"
-      }, pt.passage), /*#__PURE__*/React.createElement("div", {
+      return /*#__PURE__*/React.createElement(React.Fragment, null, readBlock(pt.passage, 'ex-read ex-read-fix'), /*#__PURE__*/React.createElement("div", {
         className: "ex-fixgrid"
       }, Array.from({
         length: n
@@ -9449,9 +9462,7 @@ function ExamPlayer({
       }, "\u6B63\u78BA\u7B54\u6848\uFF1A", /*#__PURE__*/React.createElement("b", null, (pt.answers || []).join('　'))));
     })(), pt.kind === 'evidence' && (() => {
       var rows = Array.isArray(v) ? v : [];
-      return /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
-        className: "ex-read"
-      }, pt.passage), pt.question && /*#__PURE__*/React.createElement("p", {
+      return /*#__PURE__*/React.createElement(React.Fragment, null, readBlock(pt.passage, 'ex-read'), pt.question && /*#__PURE__*/React.createElement("p", {
         className: "ex-qt"
       }, pt.question), Array.from({
         length: n
@@ -9570,9 +9581,7 @@ function ExamPlayer({
       className: "ex-draw-err"
     }, "\u26A0 ", drawErr), examMarkBlock(pt, key, [{
       q: pt.prompt || ''
-    }])), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, pt.passage && /*#__PURE__*/React.createElement("div", {
-      className: "ex-read"
-    }, pt.passage), (pt.questions || []).map((q, i) => /*#__PURE__*/React.createElement("div", {
+    }])), pt.kind === 'short' && /*#__PURE__*/React.createElement(React.Fragment, null, readBlock(pt.passage, 'ex-read'), (pt.questions || []).map((q, i) => /*#__PURE__*/React.createElement("div", {
       className: "ex-sa",
       key: i
     }, /*#__PURE__*/React.createElement("p", {
