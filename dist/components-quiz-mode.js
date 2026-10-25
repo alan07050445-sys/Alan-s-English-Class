@@ -33,10 +33,10 @@ var {
    有解說的那一種本來就可以「點畫面直接跳過」，所以縮短不會來不及看。
    ⚠ 全站所有題型的自動前進都吃這兩個常數（選擇／填空／中翻英／圈選／分類…），
      改這裡就是全部一起改。 */
-/* v549：再快 20%（Alan：「10 分變 12 分」）——倍率在 data.js 的 AUTO_NEXT_SPEED，全站只有一份。 */
+/* v549：再快 20%（Alan：「10 分變 12 分」）；v602：再快 30%（「10 分變 13 分」）——倍率在 data.js 的 AUTO_NEXT_SPEED，全站只有一份。 */
 var _qmFast = ms => window.autoNextMs ? window.autoNextMs(ms) : ms;
-var QM_AUTO_MS_PLAIN = _qmFast(760); // 答對、沒有解說（原 760 → 633）
-var QM_AUTO_MS_EXPLAIN = _qmFast(3050); // 答對、有解說（原 3050 → 2542，可被點畫面取消）
+var QM_AUTO_MS_PLAIN = _qmFast(760); // 答對、沒有解說（原 760 → 487）
+var QM_AUTO_MS_EXPLAIN = _qmFast(3050); // 答對、有解說（原 3050 → 1955，可被點畫面取消）
 // 答錯的題目往後第幾題再考一次（對齊 components-flashcard.jsx 的 RETRY_GAP）
 var QM_RETRY_GAP = 4;
 

@@ -1775,7 +1775,9 @@ function _storyHint(term, form) {
    ⭐ 倍率只放這一份：單字卡（學習／測驗）與所有測驗（含字義選擇）都走 autoNextMs，
      以後再覺得快或慢，改這一個數字就全站一起動。
    ⚠ 只縮「答對之後自動跳」的等待；答錯停在原地等學生自己按，那個不動。 */
-const AUTO_NEXT_SPEED = 1.2;
+/* v602：Alan 又說「現在如果是 10 分，幫我增加到 13 分」＝以**現在這個速度**為 10，再快 30%＝等待時間再 ÷ 1.3。
+   累計：v549 的 1.2 × 1.3 ＝ 1.56（相對 v549 以前的速度）。同樣只改這一個數字。 */
+const AUTO_NEXT_SPEED = 1.56;
 function autoNextMs(ms) { return Math.max(200, Math.round(Number(ms) / AUTO_NEXT_SPEED)); }
 function qsStripPart(title) {
   return String(title || '').replace(/\s*[（(]\s*\d+\s*\/\s*\d+\s*[)）]\s*$/, '').trim();

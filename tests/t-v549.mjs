@@ -27,8 +27,8 @@ ok('⭐ 範例按鈕整塊拿掉（⚠ 輸入框的 placeholder 與查詢答案�
 ok('   招呼語與「我現在會做這 N 件事」（預設收起）還在', /直接說你想做什麼/.test(edC) && /<details className="ask-can">/.test(edC));
 
 console.log('\n【2】答對跳題快 20%（10 分 → 12 分）');
-ok('⭐ 倍率只有一份：AUTO_NEXT_SPEED = 1.2，autoNextMs 除以它', /const AUTO_NEXT_SPEED = 1\.2;/.test(data) && W.autoNextMs(1000) === 833);
-ok('⭐ 所有測驗（含字義選擇）：760 → 633、3050 → 2542', W.autoNextMs(760) === 633 && W.autoNextMs(3050) === 2542
+ok('⭐ 倍率只有一份：AUTO_NEXT_SPEED（v602 起＝1.2×1.3＝1.56），autoNextMs 除以它', /const AUTO_NEXT_SPEED = 1\.56;/.test(data) && W.autoNextMs(1000) === 641);
+ok('⭐ 所有測驗（含字義選擇）：760 → 487、3050 → 1955（v602 再快 30% 之後）', W.autoNextMs(760) === 487 && W.autoNextMs(3050) === 1955
    && /_qmFast\(760\)/.test(qm) && /_qmFast\(3050\)/.test(qm));
 ok('⭐ 單字卡「學習模式」與「測驗模式」兩處都走它', (fc.match(/window\.autoNextMs \? window\.autoNextMs\(1000\) : 1000/g) || []).length === 2);
 ok('⚠ 不會快到 0（再快的倍率也有下限，不會連答對的回饋都看不到）', W.autoNextMs(100) >= 200);

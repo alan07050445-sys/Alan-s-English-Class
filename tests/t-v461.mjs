@@ -17,8 +17,8 @@ const _spd = +(/const AUTO_NEXT_SPEED = ([\d.]+);/.exec(fs.readFileSync(new URL(
 const _ms = (name) => { const m = new RegExp(name + '\\s*=\\s*(?:_qmFast\\()?(\\d+)\\)?').exec(qm); return m ? Math.round(+m[1] / (/_qmFast/.test(m[0]) ? _spd : 1)) : NaN; };
 const plain = _ms('QM_AUTO_MS_PLAIN');
 const expl  = _ms('QM_AUTO_MS_EXPLAIN');
-ok(`沒解說：1000 → ${plain}（比 v461 的 760 還要快）`, plain >= 500 && plain <= 760);
-ok(`有解說：4000 → ${expl}（比 v461 的 3050 還要快）`, expl >= 2200 && expl <= 3050);
+ok(`沒解說：1000 → ${plain}（比 v461 的 760 還要快）`, plain >= 300 && plain <= 760);
+ok(`有解說：4000 → ${expl}（比 v461 的 3050 還要快）`, expl >= 1500 && expl <= 3050);
 ok('全站所有題型都吃這兩個常數（改一次就全改）',
    (qm.match(/QM_AUTO_MS_(PLAIN|EXPLAIN)/g) || []).length >= 8);
 
