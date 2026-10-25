@@ -1548,6 +1548,7 @@ function QuickSetModal({ open, categories, defaultCat, existingGroups, roster, p
                     if ((c.missing || []).length) bad.push(`短文裡沒有出現：${c.missing.join('、')}`);
                     if ((c.extra || []).length)   bad.push(`挖到不是這一課的字：${c.extra.join('、')}`);
                     if ((c.leaked || []).length)  bad.push(`答案出現在括號外面：${c.leaked.join('、')}`);
+                    if ((c.dupes || []).length)   bad.push(`同一個字用了兩次以上（一個字只能用一次）：${c.dupes.join('、')}`);   // v603
                     return (
                       <div className="qs-story-one" key={si}>
                         <div className="qs-story-head">

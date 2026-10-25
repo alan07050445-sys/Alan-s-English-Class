@@ -545,6 +545,19 @@ RULES
 - ENGLISH ONLY. The passage and the title must contain no Chinese characters at all —
   not for translation, not for hints, not in brackets. A single Chinese character makes the whole story invalid.
 - The story must use EVERY target word exactly once, and nothing else may be bracketed.
+- 🔴 ONE WORD, ONE USE. Each target word appears EXACTLY ONCE in the whole story — one blank, no more.
+  Never use the same word again anywhere else (not as a second blank, not as plain text, not in another form
+  such as fluffy → fluffier). If you want to say it again, use a different word.
+- 🔴 EVERY BLANK MUST BE WORK-OUT-ABLE. A child must be able to tell WHICH word goes there from the words around it,
+  without being told. In the SAME sentence (or the one right next to it) give at least one real CLUE to the word's MEANING:
+    · a definition or explanation:    "She used a [thermos] to keep her soup hot for hours."
+    · a contrast or opposite:         "The path was [narrow], not wide, so only one person could pass."
+    · an example or a result:         "He had to [waterproof] the bag, so no rain could get in."
+    · what the thing does or looks like: "The [contour] of the hill — its smooth curved outline — ..."
+  The clue must point to THIS word, not just to the right part of speech.
+  BAD (many words fit — never write these):  "It was a very [fluffy] day."   "She felt [smoothly]."   "He liked the [system]."
+  GOOD (only one word fits):                  "The cat's fur was so [fluffy] that her hand sank into it like a soft cloud."
+- Do not choose a blank where another target word from the list could fit equally well.
 - Wrap each target word in square brackets where it belongs: [word]
 - If the word needs a different form, put the exact form the student types inside the brackets
   and the ending as a hint right after: [soaring](ing)  [attracts](s)  [trapped](ed)
@@ -553,7 +566,6 @@ RULES
 - Never let a target word appear anywhere outside its own brackets (no giveaways).
 - 70-140 words, 4-8 sentences, one connected story with a beginning and an end.
 - Every OTHER word must be simple, everyday vocabulary a 3rd grader knows.
-- Give enough context around each blank that a child can work the answer out.
 - title: a short story title, no ending punctuation.
 ${_AI_MINIFY}`;
 
@@ -628,12 +640,18 @@ function storyCheck(passage, words, opt) {
     new RegExp('\\b' + esc(t) + '\\b', 'i').test(bare));
   // v443（Alan：「短文一定只能英文，我不要中文的」）——整篇出現中文就是不合格，不是小瑕疵
   const zh = (String(passage || '').match(_STORY_CJK_G) || []).join('');
-  return { blanks: blanks.length, used, missing, extra, leaked, zh };
+  /* 🔴 v603（Alan：「單字重複出現，一個 word 只會用一次」）：同一個字在整篇出現超過一次
+     （挖了兩格、或挖一格＋括號外還有一次）。Word Bank 裡那個字只有一個，兩格都要它就一定有一格填不了。
+     ⚠ 用嚴格版（本尊或認得出來的變化形）數括號外的字，不然 trapeze 會被當成 trap。 */
+  const bareTokens = bare.match(/[A-Za-z]+/g) || [];
+  const dupes = terms.filter(t =>
+    blanks.filter(b => _storySame(b.answer, t)).length + bareTokens.filter(tok => _storyIsForm(t, tok)).length > 1);
+  return { blanks: blanks.length, used, missing, extra, leaked, zh, dupes };
 }
 /* 分數越低越好——多輪重生時用來挑「最不糟的那一篇」 */
 function _storyScore(c) {
   // 中文權重最重：寧可拿一篇漏字的英文，也不要一篇中文的
-  return (c.zh ? 99 : 0) + (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length;
+  return (c.zh ? 99 : 0) + (c.missing.length * 3) + (c.leaked.length * 2) + c.extra.length + ((c.dupes || []).length * 3);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -651,7 +669,6 @@ function _storyScore(c) {
         填空題本來就跟短文同一批平行生成，所以這一步不用多等 AI。
    ══════════════════════════════════════════════════════════════════════════ */
 
-const _STORY_MAX_BLANK = 3;   // 同一個字最多挖幾格（避免整篇被同一個字洗版）
 
 /* 找出「不在任何括號裡」的第一個目標字（含變化形）。回傳 {i, form} 或 null。 */
 function _storyFindBare(passage, term, from) {
@@ -687,17 +704,20 @@ function storyFix(passage, words) {
   });
   if (dropped.length) notes.push(`拆掉不該挖的空格：${dropped.join('、')}`);
 
-  // ② 目標字出現在括號外面 → 就地挖成空格（順便把字尾提示補上）
+  /* ② 目標字出現在括號外面 → 就地挖成空格（順便把字尾提示補上）
+     🔴 v603：**只在這個字還沒有任何一格時才挖，而且只挖一格**。
+     以前最多挖三格（_STORY_MAX_BLANK）——AI 把 fluffy 寫了兩次，這裡就把第二次也挖成空格，
+     Word Bank 裡 fluffy 只有一個 → 兩格要同一個字、一定有一格填不了（Alan 截圖）。
+     已經有一格的字，括號外多出來的那幾次不再補挖——留給 storyCheck 標成「重複用到」，
+     讓下一輪重寫，或由 storyDropDupes 把那個句子拿掉。 */
   const wrapped = [];
   terms.forEach(t => {
-    for (let n = 0; n < _STORY_MAX_BLANK; n++) {
-      if (storyBlanks(p).filter(b => _storySame(b.answer, t)).length >= _STORY_MAX_BLANK) break;
-      const hit = _storyFindBare(p, t);
-      if (!hit) break;
-      const h = _storyHint(t, hit.form);
-      p = p.slice(0, hit.i) + '[' + hit.form + ']' + (h ? '(' + h + ')' : '') + p.slice(hit.i + hit.form.length);
-      wrapped.push(hit.form);
-    }
+    if (storyBlanks(p).some(b => _storySame(b.answer, t))) return;
+    const hit = _storyFindBare(p, t);
+    if (!hit) return;
+    const h = _storyHint(t, hit.form);
+    p = p.slice(0, hit.i) + '[' + hit.form + ']' + (h ? '(' + h + ')' : '') + p.slice(hit.i + hit.form.length);
+    wrapped.push(hit.form);
   });
   if (wrapped.length) notes.push(`補挖成空格：${wrapped.join('、')}`);
 
@@ -717,6 +737,94 @@ function storyFix(passage, words) {
   if (badHints.length) notes.push(`拿掉不對的字尾提示：${badHints.join('、')}`);
 
   return { passage: p, check: storyCheck(p, terms), notes };
+}
+
+/* 🔴 v603 把「重複用到同一個字」的句子拿掉（程式修，不用再等 AI）。
+   規則：每個字留**第一次**出現的那個句子；之後又出現的句子，如果拿掉它不會讓任何字「唯一的一次」消失，就拿掉。
+   ⚠ 句子裡同時有別的字的唯一出現處 → 不能拿（拿了會少一個字），留給重生去解。
+   ⚠ 拿完至少要剩 3 句（故事要有頭有尾）；而且拿完用 storyCheck 驗一次，沒有變好就原樣還給。 */
+function storyDropDupes(passage, words) {
+  const terms = (words || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
+  const before = storyCheck(passage, terms);
+  if (!(before.dupes || []).length) return { passage, removed: [] };
+  const split = (t) => String(t || '').trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+  let sents = split(passage);
+  const removed = [];
+  const countIn = (sent, t) => {
+    const blanks = storyBlanks(sent).filter(b => _storySame(b.answer, t)).length;
+    const bare = (String(sent).replace(/\[[^\]]*\](?:\([^)]*\))?/g, ' ').match(/[A-Za-z]+/g) || []).filter(tok => _storyIsForm(t, tok)).length;
+    return blanks + bare;
+  };
+  for (let guard = 0; guard < 6; guard++) {
+    const first = {};
+    terms.forEach(t => { first[t] = sents.findIndex(x => countIn(x, t) > 0); });
+    let dropAt = -1;
+    for (let i = 0; i < sents.length && dropAt < 0; i++) {
+      const hasLater = terms.some(t => countIn(sents[i], t) > 0 && first[t] < i);
+      if (!hasLater) continue;
+      const soleHere = terms.some(t => countIn(sents[i], t) > 0 && first[t] === i);
+      if (!soleHere) dropAt = i;
+    }
+    if (dropAt < 0 || sents.length <= 3) break;
+    removed.push(sents[dropAt]);
+    sents = sents.filter((_, i) => i !== dropAt);
+  }
+  if (!removed.length) return { passage, removed: [] };
+  const out = sents.join(' ');
+  const after = storyCheck(out, terms);
+  if (after.missing.length > before.missing.length || (after.dupes || []).length >= (before.dupes || []).length) return { passage, removed: [] };
+  return { passage: out, removed };
+}
+
+/* 🔴 v603（Alan：「很多單字的填空不合理，要能夠根據前後文推斷出單字意思」）
+   「驗算」：另一個模型（不是寫故事的那個）**只看填空的樣子**——每格變成 (1)_____、給 Word Bank——
+   把每一格填回去。填得出原本的答案＝前後文夠清楚；填成別的字＝這一格有好幾個字都說得通（或根本推不出來）。
+   ⚠ 程式只負責比對，哪一格不夠清楚、怎麼改，是下一輪的 prompt 指名道姓告訴寫的人。
+   ⚠ 驗算本身壞掉（沒回、格式不對）時**不擋**——寧可放行，也不要因為驗算失敗讓整篇出不來。 */
+function _storyBlankView(passage) {
+  let n = 0;
+  return String(passage || '').replace(/\[([^\]]+)\](?:\(([^)]*)\))?/g, (m, a, h) => { n++; return `(${n})_____` + (h ? `(${h})` : ''); });
+}
+/* 純函式：expected＝[答案…]（依空格順序）、picks＝模型回的 {"1":"word",…}。回傳答錯的那幾格。 */
+function _storyJudge(expected, picks, terms) {
+  const wrong = [];
+  (expected || []).forEach((ans, i) => {
+    const got = String((picks && (picks[String(i + 1)] != null ? picks[String(i + 1)] : picks[i + 1])) || '').trim();
+    const t = (terms || []).find(x => _storySame(x, ans)) || ans;
+    if (!got || got === '?' || !(_storySame(got, t) || _storySame(got, ans))) wrong.push({ n: i + 1, expected: t, got: got || '?' });
+  });
+  return wrong;
+}
+async function _storySolve(passage, list, bank) {
+  try {
+    const terms = (list || []).map(w => String((w && w.term) || w || '').trim()).filter(Boolean);
+    const blanks = storyBlanks(passage);
+    if (!blanks.length) return { checked: false, wrong: [] };
+    const pool = Array.from(new Set(terms.concat((bank || []).map(x => String((x && x.term) || x || '').trim()).filter(Boolean)))).slice(0, 16);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+    const picks = await _aiAsk({
+      model: GN_READ_MODEL, max_tokens: 400,
+      system: 'You are a careful 3rd-grade English student doing a fill-in-the-blank test. You see a story with numbered blanks and a Word Bank. ' +
+        'For each blank choose the ONE word from the Word Bank that fits, using ONLY the words around the blank. Each Word Bank word can be used at most once. ' +
+        'If a blank ending like (ing) or (ed) is shown, the word is changed that way — still answer with the Word Bank word. ' +
+        'If you cannot tell which word fits, or two words fit equally well, answer "?" for that blank. ' +
+        'Reply ONLY a JSON object like {"1":"word","2":"?"} — no other text.',
+      messages: [{ role: 'user', content: 'Word Bank: ' + pool.join(', ') + '\n\nStory:\n' + _storyBlankView(passage) }],
+    }, (data) => {
+      const txt = data?.content?.[0]?.text || data?.text || '';
+      const o = JSON.parse(_aiStripFence(txt));
+      return (o && typeof o === 'object') ? o : null;
+    }, 45000);
+    return { checked: true, wrong: _storyJudge(blanks.map(b => b.answer), picks, terms) };
+  } catch (e) { return { checked: false, wrong: [] }; }
+}
+/* 給下一輪 prompt 看的：那一格長什麼樣（把別的空格縮成 ___，這一格標成 <<blank>>） */
+function _storyBlankSentence(passage, n) {
+  let k = 0;
+  const marked = String(passage || '').replace(/\[([^\]]+)\](?:\([^)]*\))?/g, (m) => { k++; return k === n ? '<<BLANK>>' : '___'; });
+  const sents = marked.split(/(?<=[.!?])\s+/);
+  const i = sents.findIndex(x => x.indexOf('<<BLANK>>') >= 0);
+  return i < 0 ? '' : sents.slice(Math.max(0, i - 1), i + 2).join(' ').replace('<<BLANK>>', '_____');
 }
 
 /* ③ 保底：把「填空題」現成的例句接到故事後面，一個漏掉的字一句。
@@ -816,7 +924,7 @@ function storyPick(passage, n) {
   return out + p.slice(last);
 }
 
-async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3, blanks = _STORY_PICK, teacherNote = '', avoid = [] } = {}) {
+async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null, rounds = 3, blanks = _STORY_PICK, teacherNote = '', avoid = [], bank = [] } = {}) {
   const band = VOCAB_BANDS[vocabBandOf(grade)];   // v442：短文也跟著年級（低年級句子更短更白話）
   const list = (words || []).map(w => (typeof w === 'string' ? { term: w } : w)).filter(w => w && w.term);
   if (list.length < 2) throw new Error('至少要 2 個單字才生得出短文。');
@@ -865,8 +973,25 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
       title: String(r.title || '').trim(),
       passage: fixed.passage, check: fixed.check, fixes: fixed.notes, rounds: round + 1,
     };
-    if (!_storyScore(cand.check)) return finish(cand);               // 完全乾淨，收工（最後只留 5 格）
-    if (!best || _storyScore(cand.check) < _storyScore(best.check)) best = cand;
+    /* v603：同一個字用了兩次 → 先試著把「多出來的那一句」拿掉（程式修，不用重打 AI） */
+    if ((cand.check.dupes || []).length) {
+      const dd = storyDropDupes(cand.passage, list);
+      if (dd.removed.length) {
+        const re = storyFix(dd.passage, list);
+        cand.passage = re.passage; cand.check = re.check;
+        cand.fixes = (cand.fixes || []).concat(re.notes, ['有字用了兩次，拿掉了重複的句子：' + dd.removed.map(x => x.slice(0, 40) + '…').join('；')]);
+      }
+    }
+    /* 🔴 v603 驗算：程式檢查都過了，再讓另一個模型「只看填空」把每一格填回去。
+       填不回原本的字＝前後文推不出來（或好幾個字都說得通）→ 下一輪指名道姓重寫那幾格。 */
+    cand.amb = [];
+    if (!_storyScore(cand.check)) {
+      const sv = await _storySolve(cand.passage, list, bank);
+      cand.amb = sv.wrong || [];
+      if (!cand.amb.length) return finish(cand);                      // 完全乾淨且推得出來，收工（最後只留 5 格）
+    }
+    const candScore = _storyScore(cand.check) + cand.amb.length * 2;
+    if (!best || candScore < _storyScore(best.check) + (best.amb || []).length * 2) best = cand;
 
     /* 下一輪把「這次哪裡不合格」原原本本告訴它。
        泛泛地說「請再試一次」沒有用（v382 學到的），要指名道姓。 */
@@ -876,10 +1001,16 @@ async function aiMakeVocabStory(words, { hint = '', grade = 'g4', rescue = null,
       (c.leaked.length  ? `- These target words appear OUTSIDE their brackets, which gives the answer away: ${c.leaked.join(', ')}\n` : '') +
       (c.extra.length   ? `- You bracketed words that are not targets: ${c.extra.join(', ')}\n` : '') +
       (c.zh             ? `- You wrote Chinese characters (${c.zh.slice(0, 20)}). The story must be 100% English.\n` : '') +
-      'Write a NEW story that uses every target word exactly once, each one inside brackets.';
+      ((c.dupes || []).length ? `- These target words were used MORE THAN ONCE (each word must appear exactly once in the whole story): ${c.dupes.join(', ')}\n` : '') +
+      (cand.amb.length ? '- A student who saw ONLY the sentences could NOT work out these blanks. Rewrite the sentence so that only the right word fits, by adding a clear clue to its meaning in the same sentence:\n' +
+        cand.amb.map(a => `    · "${a.expected}" — the student answered "${a.got}". Sentence: ${_storyBlankSentence(cand.passage, a.n)}\n`).join('') : '') +
+      'Write a NEW story that uses every target word exactly once (one blank per word), each one inside brackets, every blank with a clear clue.';
   }
 
   if (!best) throw lastErr || new Error('AI 這次沒有生出短文，請再試一次。');
+  if (best.amb && best.amb.length) {
+    best = { ...best, fixes: (best.fixes || []).concat([`⚠ 驗算：有 ${best.amb.length} 格可能前後文不夠明確（${best.amb.map(a => a.expected + '→被填成 ' + a.got).join('；')}），請看一下這幾格，不滿意可以按「換一篇」`]) };
+  }
 
   // ③ 還漏字 → 用「填空題」那一份現成的例句補上（不用再等 AI）
   if (best.check.missing.length && rescue) {
@@ -918,6 +1049,7 @@ async function aiMakeVocabStories(words, opts = {}) {
     try {
       const st = await aiMakeVocabStory(batches[i], {
         ...opts, avoid: seen,
+        bank: list,                    // v603：驗算時 Word Bank 要跟學生看到的一樣（含別篇的字當誘答）
         /* 這一批有幾個字就挖幾格（最多 per 格）——
            批次本來就是照 per 切的，所以通常剛好 */
         blanks: Math.min(per, batches[i].length),
@@ -4201,7 +4333,7 @@ function lineManual(target, note, dry, pass) {
 function lineRunLog(pass) { return _lineCall('/run-log', 'GET', pass); }
 // v425：最近 30 則 LINE 訊息「怎麼處理、有沒有回成功」
 function lineDiag(pass) { return _lineCall('/diag', 'GET', pass); }
-Object.assign(window, { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, gnValidLesson, gnValidRewrite, gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint, gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet, gnValidWrite, gnValidTransform, gnValidOrder, gnValidEditPara, gnValidDiagnose, aiPlanGrammarKinds, GN_PLAN_PRESET, GN_PLAN_ZH, subscribeAllStars, addStarEntry, deleteStarEntry, saveShopItems, LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders, lineManual, lineDiag, lineRunLog, suggestNextWeekId, uploadReadingPhoto, addRosterStudent, setRosterStudentActive, deleteRosterStudent, subscribeAdmins, addAdmin, removeAdmin, buildReportHTML, ttsPickVoice: _ttsPickVoice, aiMakeVocabExercises, aiMakeVocabStory, aiMakeVocabStories, QS_MAX_Q, QS_SPLIT, qsChunkEven, qsPartTitle, qsStoryBank, storyBlanks, storyCheck, storyFix, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson, vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk, RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'), saveReadingWords, uploadReadingAudio, reviewSeenSentences, aiMakeVocabSense, qsValidSense, aiMakeWordStudy, wsValidPack, buildWeeklyReport, formatReportAsText });
+Object.assign(window, { aiReadGrammarSheet, aiMakeGrammarPack, aiMakeGrammarLesson, gnValidLesson, gnValidRewrite, gnFixPairOk: _gnFixPairOk, gnLessonPlan: _gnLessonPlan, gnFixImgHint: _gnFixImgHint, gnValidCircle, gnValidSortSet, aiMakeGrammarSortSet, gnValidWrite, gnValidTransform, gnValidOrder, gnValidEditPara, gnValidDiagnose, aiPlanGrammarKinds, GN_PLAN_PRESET, GN_PLAN_ZH, subscribeAllStars, addStarEntry, deleteStarEntry, saveShopItems, LINE_ENDPOINT, lineBroadcast, linePush, lineSyncRoster, lineGetLinks, lineUnlink, lineRunReminders, lineManual, lineDiag, lineRunLog, suggestNextWeekId, uploadReadingPhoto, addRosterStudent, setRosterStudentActive, deleteRosterStudent, subscribeAdmins, addAdmin, removeAdmin, buildReportHTML, ttsPickVoice: _ttsPickVoice, aiMakeVocabExercises, aiMakeVocabStory, aiMakeVocabStories, QS_MAX_Q, QS_SPLIT, qsChunkEven, qsPartTitle, qsStoryBank, storyBlanks, storyCheck, storyFix, storyDropDupes, storyJudge: _storyJudge, storyBlankView: _storyBlankView, aiMakeGrammarSet, GR_TENSES, grCountBlanks, grValidA: _grValidA, grValidB: _grValidB, grFixPassage: _grFixPassage, aiMakeLesson, vocabBandOf, VOCAB_BANDS, aiMakeReadingSet, aiMakeReadingBackground, aiMakeGuidedQuestions, rcGroundedMcq, rcGroundedSa, rcQSkillOk, rcOptionLenOk, RC_SKILLS, RC_QSKILLS, RC_GRADES, rcValidBlock, rcFixBlock, rcRepairBlock, rcResequence, rcFilterChips, rcNewChip: () => ({ id: _rcId('rc'), text: '', zone: '', why: '' }), rcNewBlockId: () => _rcId('rb'), saveReadingWords, uploadReadingAudio, reviewSeenSentences, aiMakeVocabSense, qsValidSense, aiMakeWordStudy, wsValidPack, buildWeeklyReport, formatReportAsText });
 
 Object.assign(window, { sharedItemIds, progKeysFor });
 
