@@ -7214,6 +7214,9 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [aiBusy, setAiBusy] = useQM(false);
   const [drawErr, setDrawErr] = useQM('');     // v571：畫的圖沒傳成功時的說明
   const [res, setRes]       = useQM(null);
+  /* v610 🔁 只重做答錯的選擇題：不重新交卷、不動成績，選了就立刻看對錯與解析 */
+  const [redo, setRedo]     = useQM(false);
+  const [redoAns, setRedoAns] = useQM({});
   const topRef = React.useRef(null);
 
   /* 存草稿：停手 0.8 秒存一次；離開頁面（切 App／關分頁）當下立刻補存。交卷後不再存。 */
@@ -7612,6 +7615,27 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           <ol className="ex-q">
             {(pt.questions || []).map((q, i) => {
               const d = sent ? (pr.detail[i] || {}) : null;
+              if (redo && sent && d.ok) return null;   // v610：重做時只留答錯的
+              const rk = key + '_' + i, rPick = redo && sent ? redoAns[rk] : undefined;
+              if (redo && sent) return (
+                <li key={i} value={i + 1} className={rPick == null ? '' : (rPick === q.answer ? 'ok' : 'bad')}>
+                  <p className="ex-qt">{q.q}</p>
+                  {(q.options || []).map((o, oi) => (
+                    <button key={oi} className={'ex-opt' + (rPick === oi ? ' on' : '') + (rPick != null && oi === q.answer ? ' ans' : '')}
+                      disabled={rPick != null && rPick === q.answer}
+                      onClick={() => setRedoAns(a => ({ ...a, [rk]: oi }))}>
+                      <i>{rPick === oi ? '●' : '○'}</i>{o}
+                    </button>
+                  ))}
+                  {rPick != null && (
+                    <div className={'ex-why' + (rPick === q.answer ? ' ok' : '')}>
+                      <p className="ex-why-a">{rPick === q.answer ? '✅ 答對了！' : '再想想看，換一個選項試試'}</p>
+                      {rPick === q.answer && q.explain && <p className="ex-why-t">💡 {q.explain}</p>}
+                      {rPick === q.answer && q.explain && q.quote && <p className="ex-why-q">📖 文章裡：“{q.quote}”</p>}
+                    </div>
+                  )}
+                </li>
+              );
               return (
                 <li key={i} className={sent ? (d.ok ? 'ok' : 'bad') : ''}>
                   <p className="ex-qt">{q.q}</p>
@@ -8019,6 +8043,17 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               </div>
             ))}
           </div>
+          {(() => {
+            const nWrong = res.parts.reduce((a, p) => a + (p.part.kind === 'quiz' ? (p.detail || []).filter(d => d && !d.ok).length : 0), 0);
+            if (!nWrong) return null;
+            return (
+              <div className="ex-redo">
+                <button type="button" onClick={() => { setRedo(r => !r); setRedoAns({}); }}>
+                  {redo ? '↩ 回到完整的答案' : `🔁 只重做答錯的 ${nWrong} 題（不影響成績）`}
+                </button>
+              </div>
+            );
+          })()}
           {res.manualMax > 0 && (
             <p className="ex-res-note">
               這份卷子有 <b>{res.manualMax} 分</b>是問答題，老師會照 rubric 親自改——

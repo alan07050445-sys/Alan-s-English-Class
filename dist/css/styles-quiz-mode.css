@@ -3645,3 +3645,7 @@ textarea.ex-essay {
 body:has(.fc-wrap) .ask-fab,
 body:has(.fc-wrap) .ask-fab.with-nav { top: 56%; bottom: auto; right: 8px; padding: 11px; opacity: .85; }
 body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
+
+/* v610 只重做答錯的題目 */
+.ex-redo { margin: 12px 0 0; }
+.ex-redo button { border: 1.5px solid var(--ink, #15130E); background: transparent; color: var(--ink, #15130E); border-radius: 999px; padding: 9px 16px; font-weight: 800; font-size: 15px; cursor: pointer; }

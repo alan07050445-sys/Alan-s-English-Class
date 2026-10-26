@@ -8758,6 +8758,9 @@ function ExamPlayer({
   var [aiBusy, setAiBusy] = useQM(false);
   var [drawErr, setDrawErr] = useQM(''); // v571：畫的圖沒傳成功時的說明
   var [res, setRes] = useQM(null);
+  /* v610 🔁 只重做答錯的選擇題：不重新交卷、不動成績，選了就立刻看對錯與解析 */
+  var [redo, setRedo] = useQM(false);
+  var [redoAns, setRedoAns] = useQM({});
   var topRef = React.useRef(null);
 
   /* 存草稿：停手 0.8 秒存一次；離開頁面（切 App／關分頁）當下立刻補存。交卷後不再存。 */
@@ -9249,6 +9252,32 @@ function ExamPlayer({
       className: "ex-q"
     }, (pt.questions || []).map((q, i) => {
       var d = sent ? pr.detail[i] || {} : null;
+      if (redo && sent && d.ok) return null; // v610：重做時只留答錯的
+      var rk = key + '_' + i,
+        rPick = redo && sent ? redoAns[rk] : undefined;
+      if (redo && sent) return /*#__PURE__*/React.createElement("li", {
+        key: i,
+        value: i + 1,
+        className: rPick == null ? '' : rPick === q.answer ? 'ok' : 'bad'
+      }, /*#__PURE__*/React.createElement("p", {
+        className: "ex-qt"
+      }, q.q), (q.options || []).map((o, oi) => /*#__PURE__*/React.createElement("button", {
+        key: oi,
+        className: 'ex-opt' + (rPick === oi ? ' on' : '') + (rPick != null && oi === q.answer ? ' ans' : ''),
+        disabled: rPick != null && rPick === q.answer,
+        onClick: () => setRedoAns(a => ({
+          ...a,
+          [rk]: oi
+        }))
+      }, /*#__PURE__*/React.createElement("i", null, rPick === oi ? '●' : '○'), o)), rPick != null && /*#__PURE__*/React.createElement("div", {
+        className: 'ex-why' + (rPick === q.answer ? ' ok' : '')
+      }, /*#__PURE__*/React.createElement("p", {
+        className: "ex-why-a"
+      }, rPick === q.answer ? '✅ 答對了！' : '再想想看，換一個選項試試'), rPick === q.answer && q.explain && /*#__PURE__*/React.createElement("p", {
+        className: "ex-why-t"
+      }, "\uD83D\uDCA1 ", q.explain), rPick === q.answer && q.explain && q.quote && /*#__PURE__*/React.createElement("p", {
+        className: "ex-why-q"
+      }, "\uD83D\uDCD6 \u6587\u7AE0\u88E1\uFF1A\u201C", q.quote, "\u201D")));
       return /*#__PURE__*/React.createElement("li", {
         key: i,
         className: sent ? d.ok ? 'ok' : 'bad' : ''
@@ -9679,7 +9708,19 @@ function ExamPlayer({
   }, res.bySection.map((sc, i) => /*#__PURE__*/React.createElement("div", {
     className: "ex-res-row",
     key: i
-  }, /*#__PURE__*/React.createElement("b", null, sc.name), /*#__PURE__*/React.createElement("span", null, sc.max ? `${sc.got} / ${sc.max}` : '—'), sc.manual > 0 && /*#__PURE__*/React.createElement("i", null, "\uFF0B", sc.manual, " \u5206\u8001\u5E2B\u6539")))), res.manualMax > 0 && /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("b", null, sc.name), /*#__PURE__*/React.createElement("span", null, sc.max ? `${sc.got} / ${sc.max}` : '—'), sc.manual > 0 && /*#__PURE__*/React.createElement("i", null, "\uFF0B", sc.manual, " \u5206\u8001\u5E2B\u6539")))), (() => {
+    var nWrong = res.parts.reduce((a, p) => a + (p.part.kind === 'quiz' ? (p.detail || []).filter(d => d && !d.ok).length : 0), 0);
+    if (!nWrong) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "ex-redo"
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => {
+        setRedo(r => !r);
+        setRedoAns({});
+      }
+    }, redo ? '↩ 回到完整的答案' : `🔁 只重做答錯的 ${nWrong} 題（不影響成績）`));
+  })(), res.manualMax > 0 && /*#__PURE__*/React.createElement("p", {
     className: "ex-res-note"
   }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), resumed && !sent && /*#__PURE__*/React.createElement("div", {
     className: "ex-resume"
