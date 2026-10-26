@@ -1,152 +1,164 @@
 {
- "type": "exam",
- "title": "G4 CET Unseen Reading — Reading 1: Chen Shu-chu: A Vegetable Seller Who Gave",
- "examKicker": "Tr. Alan / G4 CET Unseen Reading Practice",
- "sections": [
-  {
-   "name": "Reading 1 | Biography",
-   "pct": 100,
-   "parts": [
+  "type": "exam",
+  "title": "G4 CET Unseen Reading — Reading 1: Chen Shu-chu: A Vegetable Seller Who Gave",
+  "examKicker": "Tr. Alan / G4 CET Unseen Reading Practice",
+  "sections": [
     {
-     "kind": "quiz",
-     "title": "Part A | Reading Comprehension",
-     "instruction": "Directions: Choose the best answer based on the selection. Fill in one circle for each question.",
-     "pts": 36,
-     "questions": [
-      {
-       "q": "According to paragraph 2, why did Chen help her father sell vegetables?",
-       "options": [
-        "To prepare for a school project.",
-        "To help support her family.",
-        "To become known around Taiwan.",
-        "To collect money for an award."
-       ],
-       "answer": 1
-      },
-      {
-       "q": "Which experience helped Chen understand that people could support others during difficult times?",
-       "options": [
-        "Her vegetables became popular with shoppers.",
-        "A magazine included her on a list.",
-        "Her hospital received a new building.",
-        "Her former school raised money for her family."
-       ],
-       "answer": 3
-      },
-      {
-       "q": "Which detail best shows that Chen valued children's education?",
-       "options": [
-        "She helped pay for a school library.",
-        "She worked at a market in Taitung.",
-        "She appeared on an international list.",
-        "She gave her prize to a hospital."
-       ],
-       "answer": 0
-      },
-      {
-       "q": "Based on paragraph 4, what did Chen do after receiving an award in 2012?",
-       "options": [
-        "She used the prize to expand her stand.",
-        "She saved the prize for a trip abroad.",
-        "She gave the prize money to a hospital.",
-        "She divided the prize among her customers."
-       ],
-       "answer": 2
-      },
-      {
-       "q": "What does \"Even an award became another opportunity to give\" mean?",
-       "options": [
-        "Chen needed an award before she could help.",
-        "Chen used her success to continue helping.",
-        "Chen gave away the award instead of money.",
-        "Chen wanted other people to win her prize."
-       ],
-       "answer": 1
-      },
-      {
-       "q": "Which statement would Chen most likely agree with, based on paragraph 5?",
-       "options": [
-        "People should become famous before giving.",
-        "Giving matters only when the gift is large.",
-        "Winning prizes is the best way to help.",
-        "People can help even when they give little. 02"
-       ],
-       "answer": 3
-      }
-     ],
-     "readText": "Chen Shu-chu: A Vegetable Seller Who Gave\n\nWORDS TO KNOW\ndonation - money given to help\ninfluential - able to affect others\ngenerous - willing to give\nextraordinary - very unusual or special\n\n[1] Helping others does not always begin with a large amount of money. Sometimes, it begins with an ordinary person who decides to share. Chen Shu-chu, a vegetable seller in Taitung, Taiwan, became known for doing just that.\n\n[2] Chen's family did not have much money. When she was thirteen, her mother became seriously ill. Her father tried to borrow money for hospital treatment, but her mother died. After elementary school, Chen helped her father sell vegetables to support the family. Later, when one of her brothers became ill, her former school raised money to help. Her brother did not survive, but Chen remembered the kindness people had shown her family.\n\n[3] For many years, Chen worked long hours at her vegetable stand. She lived simply and saved money from her work. She used her savings to help children and schools. One of her donations helped build a library at her former elementary school. Other donations supported children who needed food, a safe place to live, or help staying in school.\n\n[4] In 2010, TIME magazine included Chen on its list of the world's 100 most influential people. Two years later, she received the Ramon Magsaysay Award for helping others. She donated the entire cash prize to a hospital in Taitung. Even an award became another opportunity to give.\n\n[5] Chen did not see herself as an extraordinary person. She believed that being willing to help mattered, even when someone could give only a little. Her life shows how years of ordinary work and generous choices can make a difference."
-    },
-    {
-     "kind": "short",
-     "title": "Part B | Short Answer",
-     "instruction": "Directions: Answer in complete sentences. Support your answers with details from the selection.",
-     "pts": 24,
-     "questions": [
-      {
-       "q": "How did Chen's choices about work and daily living allow her to help others? Include two details.",
-       "rows": 4,
-       "keyPoints": "She worked long hours at her vegetable stand, lived simply and saved money, and used those savings to help children and schools (for example, helping build a library at her former elementary school, or supporting children who needed food, a safe place to live, or help staying in school)."
-      },
-      {
-       "q": "Someone says, \"Chen helped people only because she wanted an award.\" Explain why the selection does not support this idea. Use text evidence.",
-       "rows": 4,
-       "keyPoints": "She helped for years before any award. After winning the Ramon Magsaysay Award she donated the entire cash prize to a hospital in Taitung, and she did not see herself as extraordinary — she believed being willing to help mattered even when someone could give only a little."
-      }
-     ]
-    },
-    {
-     "kind": "short",
-     "title": "Part C | Analyze Main Idea and Details",
-     "instruction": "Directions: Write the main idea of the whole selection. Then add three different key details that support it.",
-     "pts": 20,
-     "questions": [
-      {
-       "q": "Main Idea: Write the main idea of the whole selection.",
-       "rows": 3,
-       "keyPoints": "Ordinary people like Chen can make a difference by choosing to share and help others, even when they can give only a little."
-      },
-      {
-       "q": "Key Detail 1",
-       "rows": 2,
-       "keyPoints": "Any detail that supports the main idea, e.g. Chen worked long hours, lived simply and saved money from her work to help others."
-      },
-      {
-       "q": "Key Detail 2",
-       "rows": 2,
-       "keyPoints": "e.g. One of her donations helped build a library at her former elementary school; other donations supported children who needed food, a safe place to live, or help staying in school."
-      },
-      {
-       "q": "Key Detail 3",
-       "rows": 2,
-       "keyPoints": "e.g. She donated the entire cash prize of the Ramon Magsaysay Award to a hospital in Taitung; TIME named her one of the 100 most influential people in 2010."
-      }
-     ]
-    },
-    {
-     "kind": "short",
-     "title": "Part D | Generate Questions",
-     "instruction": "Directions: Read each detail. Write a question that the detail answers. Then write one interview question.",
-     "pts": 20,
-     "questions": [
-      {
-       "q": "Detail: Chen helped her father sell vegetables to support her family.\nQuestion:",
-       "rows": 3,
-       "keyPoints": "e.g. Why did Chen help her father sell vegetables? / How did Chen help her family after elementary school?"
-      },
-      {
-       "q": "Detail: One of Chen's donations helped build a library at her former elementary school.\nQuestion:",
-       "rows": 3,
-       "keyPoints": "e.g. What did one of Chen's donations help build? / How did Chen help her former school?"
-      },
-      {
-       "q": "Imagine you could interview Chen. Write one question about her decision to help others. Do not ask a question already answered directly in the selection.\nInterview Question:",
-       "rows": 3,
-       "keyPoints": "A question about WHY or HOW she decided to help that is NOT answered directly in the text, e.g. \"What made you decide to keep giving even when you had little money yourself?\""
-      }
-     ],
-     "rubricSet": "genq"
+      "name": "Reading 1 | Biography",
+      "pct": 100,
+      "parts": [
+        {
+          "kind": "quiz",
+          "title": "Part A | Reading Comprehension",
+          "instruction": "Directions: Choose the best answer based on the selection. Fill in one circle for each question.",
+          "pts": 36,
+          "questions": [
+            {
+              "q": "According to paragraph 2, why did Chen help her father sell vegetables?",
+              "options": [
+                "To prepare for a school project.",
+                "To help support her family.",
+                "To become known around Taiwan.",
+                "To collect money for an award."
+              ],
+              "answer": 1,
+              "explain": "課文提到陳樹菊家中沒有錢，所以她幫忙賣菜來支持家庭。",
+              "quote": "Chen helped her father sell vegetables to support the family"
+            },
+            {
+              "q": "Which experience helped Chen understand that people could support others during difficult times?",
+              "options": [
+                "Her vegetables became popular with shoppers.",
+                "A magazine included her on a list.",
+                "Her hospital received a new building.",
+                "Her former school raised money for her family."
+              ],
+              "answer": 3,
+              "explain": "學校募款幫助她的家人，讓她了解人們可以在困難時互相幫助。",
+              "quote": "her former school raised money to help"
+            },
+            {
+              "q": "Which detail best shows that Chen valued children's education?",
+              "options": [
+                "She helped pay for a school library.",
+                "She worked at a market in Taitung.",
+                "She appeared on an international list.",
+                "She gave her prize to a hospital."
+              ],
+              "answer": 0,
+              "explain": "她的捐款幫助母校建圖書館，顯示她重視孩童教育。",
+              "quote": "One of her donations helped build a library at her former elementary school"
+            },
+            {
+              "q": "Based on paragraph 4, what did Chen do after receiving an award in 2012?",
+              "options": [
+                "She used the prize to expand her stand.",
+                "She saved the prize for a trip abroad.",
+                "She gave the prize money to a hospital.",
+                "She divided the prize among her customers."
+              ],
+              "answer": 2,
+              "explain": "她把整筆獎金捐給台東的一家醫院。",
+              "quote": "She donated the entire cash prize to a hospital in Taitung"
+            },
+            {
+              "q": "What does \"Even an award became another opportunity to give\" mean?",
+              "options": [
+                "Chen needed an award before she could help.",
+                "Chen used her success to continue helping.",
+                "Chen gave away the award instead of money.",
+                "Chen wanted other people to win her prize."
+              ],
+              "answer": 1,
+              "explain": "這句話表示她把得獎當作繼續幫助他人的機會。",
+              "quote": "Even an award became another opportunity to give"
+            },
+            {
+              "q": "Which statement would Chen most likely agree with, based on paragraph 5?",
+              "options": [
+                "People should become famous before giving.",
+                "Giving matters only when the gift is large.",
+                "Winning prizes is the best way to help.",
+                "People can help even when they give little. 02"
+              ],
+              "answer": 3,
+              "explain": "她認為即使只能給一點點，幫助他人也很重要。",
+              "quote": "being willing to help mattered, even when someone could give only a little"
+            }
+          ],
+          "readText": "Chen Shu-chu: A Vegetable Seller Who Gave\n\nWORDS TO KNOW\ndonation - money given to help\ninfluential - able to affect others\ngenerous - willing to give\nextraordinary - very unusual or special\n\n[1] Helping others does not always begin with a large amount of money. Sometimes, it begins with an ordinary person who decides to share. Chen Shu-chu, a vegetable seller in Taitung, Taiwan, became known for doing just that.\n\n[2] Chen's family did not have much money. When she was thirteen, her mother became seriously ill. Her father tried to borrow money for hospital treatment, but her mother died. After elementary school, Chen helped her father sell vegetables to support the family. Later, when one of her brothers became ill, her former school raised money to help. Her brother did not survive, but Chen remembered the kindness people had shown her family.\n\n[3] For many years, Chen worked long hours at her vegetable stand. She lived simply and saved money from her work. She used her savings to help children and schools. One of her donations helped build a library at her former elementary school. Other donations supported children who needed food, a safe place to live, or help staying in school.\n\n[4] In 2010, TIME magazine included Chen on its list of the world's 100 most influential people. Two years later, she received the Ramon Magsaysay Award for helping others. She donated the entire cash prize to a hospital in Taitung. Even an award became another opportunity to give.\n\n[5] Chen did not see herself as an extraordinary person. She believed that being willing to help mattered, even when someone could give only a little. Her life shows how years of ordinary work and generous choices can make a difference."
+        },
+        {
+          "kind": "short",
+          "title": "Part B | Short Answer",
+          "instruction": "Directions: Answer in complete sentences. Support your answers with details from the selection.",
+          "pts": 24,
+          "questions": [
+            {
+              "q": "How did Chen's choices about work and daily living allow her to help others? Include two details.",
+              "rows": 4,
+              "keyPoints": "She worked long hours at her vegetable stand, lived simply and saved money, and used those savings to help children and schools (for example, helping build a library at her former elementary school, or supporting children who needed food, a safe place to live, or help staying in school)."
+            },
+            {
+              "q": "Someone says, \"Chen helped people only because she wanted an award.\" Explain why the selection does not support this idea. Use text evidence.",
+              "rows": 4,
+              "keyPoints": "She helped for years before any award. After winning the Ramon Magsaysay Award she donated the entire cash prize to a hospital in Taitung, and she did not see herself as extraordinary — she believed being willing to help mattered even when someone could give only a little."
+            }
+          ]
+        },
+        {
+          "kind": "short",
+          "title": "Part C | Analyze Main Idea and Details",
+          "instruction": "Directions: Write the main idea of the whole selection. Then add three different key details that support it.",
+          "pts": 20,
+          "questions": [
+            {
+              "q": "Main Idea: Write the main idea of the whole selection.",
+              "rows": 3,
+              "keyPoints": "Ordinary people like Chen can make a difference by choosing to share and help others, even when they can give only a little."
+            },
+            {
+              "q": "Key Detail 1",
+              "rows": 2,
+              "keyPoints": "Any detail that supports the main idea, e.g. Chen worked long hours, lived simply and saved money from her work to help others."
+            },
+            {
+              "q": "Key Detail 2",
+              "rows": 2,
+              "keyPoints": "e.g. One of her donations helped build a library at her former elementary school; other donations supported children who needed food, a safe place to live, or help staying in school."
+            },
+            {
+              "q": "Key Detail 3",
+              "rows": 2,
+              "keyPoints": "e.g. She donated the entire cash prize of the Ramon Magsaysay Award to a hospital in Taitung; TIME named her one of the 100 most influential people in 2010."
+            }
+          ]
+        },
+        {
+          "kind": "short",
+          "title": "Part D | Generate Questions",
+          "instruction": "Directions: Read each detail. Write a question that the detail answers. Then write one interview question.",
+          "pts": 20,
+          "questions": [
+            {
+              "q": "Detail: Chen helped her father sell vegetables to support her family.\nQuestion:",
+              "rows": 3,
+              "keyPoints": "e.g. Why did Chen help her father sell vegetables? / How did Chen help her family after elementary school?"
+            },
+            {
+              "q": "Detail: One of Chen's donations helped build a library at her former elementary school.\nQuestion:",
+              "rows": 3,
+              "keyPoints": "e.g. What did one of Chen's donations help build? / How did Chen help her former school?"
+            },
+            {
+              "q": "Imagine you could interview Chen. Write one question about her decision to help others. Do not ask a question already answered directly in the selection.\nInterview Question:",
+              "rows": 3,
+              "keyPoints": "A question about WHY or HOW she decided to help that is NOT answered directly in the text, e.g. \"What made you decide to keep giving even when you had little money yourself?\""
+            }
+          ],
+          "rubricSet": "genq"
+        }
+      ]
     }
-   ]
-  }
- ]
+  ]
 }

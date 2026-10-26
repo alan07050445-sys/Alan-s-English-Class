@@ -33,6 +33,7 @@ ok('AI 不同意答案時只回報、不寫解析', /it\.disagree\) \{ disputed\
 ok('讀考卷時順便補解析，且壞掉不擋', /examExplain\(secs\)/.test(data));
 ok('交卷後顯示正確答案／解析／依據／範例', /ex-why-a/.test(qm) && /ex-why-q/.test(qm) && /ex-sample/.test(qm));
 ok('只有交卷後才顯示（sent）', /\{sent && \(\s*\n\s*<div className=\{'ex-why'/.test(qm));
+ok('解析讀回覆時要找 text 區塊（模型第一塊是 thinking）', /examExplain[\s\S]{0,2600}filter\(b => b && b\.type === 'text'\)/.test(data));
 ok('編輯器有「AI 補上解析」按鈕', /aiExplainExam/.test(ed) && /AI 補上解析/.test(ed));
 console.log(fail ? `\n❌ t-v607：${pass} 過 / ${fail} 失敗` : `\n✅ t-v607：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

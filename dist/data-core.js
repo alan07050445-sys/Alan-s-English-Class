@@ -3376,7 +3376,7 @@ async function examExplain(secs, { onProgress } = {}) {
           'Reply ONLY JSON: {"items":[{"n":1,"explain":"…","quote":"…"},{"n":2,"disagree":true,"think":"B"}]} — "n" is the question number given.',
         messages: [{ role: 'user', content: body }],
       }, (data) => {
-        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || data?.text || ''));
+        const o = JSON.parse(_aiStripFence((data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.text || ''));   // 這個模型第一個區塊是 thinking，文字在後面
         return o && Array.isArray(o.items) ? o : null;
       }, 60000);
       const hay = _exNorm(j.passage);
