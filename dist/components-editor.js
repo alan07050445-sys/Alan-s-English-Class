@@ -9723,6 +9723,16 @@ function AskPanel({
   var [text, setText] = useS('');
   var [imgs, setImgs] = useS([]);
   var [busy, setBusy] = useS(false);
+  /* v611 等超過 12 秒就說明原因（代理被導到連不出去的機房時會重試好幾十秒，以前只看到「在想…」一直轉） */
+  var [slow, setSlow] = useS(false);
+  useE(() => {
+    if (!busy) {
+      setSlow(false);
+      return;
+    }
+    var t = setTimeout(() => setSlow(true), 12000);
+    return () => clearTimeout(t);
+  }, [busy]);
   var [gen, setGen] = useS({}); // i → { busy, label, items, err }
   var fileRef = React.useRef(null);
   var endRef = React.useRef(null);
@@ -10023,7 +10033,7 @@ function AskPanel({
     className: "ask-bub"
   }, /*#__PURE__*/React.createElement("span", {
     className: "ask-dots"
-  }, "\u5728\u60F3\u2026"))), /*#__PURE__*/React.createElement("div", {
+  }, slow ? '連線被擋了，還在重試…（AI 代理偶爾會被導到連不出去的機房，不是你的指令有問題；等一下或再送一次）' : '在想…'))), /*#__PURE__*/React.createElement("div", {
     ref: endRef
   })), /*#__PURE__*/React.createElement("div", {
     className: "ask-foot"

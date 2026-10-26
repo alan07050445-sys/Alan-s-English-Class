@@ -6306,6 +6306,9 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
   const [text, setText] = useS('');
   const [imgs, setImgs] = useS([]);
   const [busy, setBusy] = useS(false);
+  /* v611 等超過 12 秒就說明原因（代理被導到連不出去的機房時會重試好幾十秒，以前只看到「在想…」一直轉） */
+  const [slow, setSlow] = useS(false);
+  useE(() => { if (!busy) { setSlow(false); return; } const t = setTimeout(() => setSlow(true), 12000); return () => clearTimeout(t); }, [busy]);
   const [gen, setGen] = useS({});        // i → { busy, label, items, err }
   const fileRef = React.useRef(null);
   const endRef = React.useRef(null);
@@ -6520,7 +6523,7 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
             </div>
           </div>
         ))}
-        {busy && <div className="ask-row"><div className="ask-bub"><span className="ask-dots">在想…</span></div></div>}
+        {busy && <div className="ask-row"><div className="ask-bub"><span className="ask-dots">{slow ? '連線被擋了，還在重試…（AI 代理偶爾會被導到連不出去的機房，不是你的指令有問題；等一下或再送一次）' : '在想…'}</span></div></div>}
         <div ref={endRef}/>
       </div>
 
