@@ -4380,3 +4380,9 @@ textarea.ex-essay {
 .ex-why, .ex-sample { margin: 8px 0 2px; padding: 9px 12px; border-radius: 10px; background: var(--bg, #F4F0E7); border: 1px solid var(--border, #DDD6C4); color: var(--ink, #15130E); font-size: 15px; line-height: 1.6; }
 .ex-why p, .ex-sample p { margin: 2px 0; }
 .ex-why-q { color: var(--ink-3, #6b6455); font-style: italic; }
+
+/* v608 單字卡／學習模式裡，小助手不要蓋住底下的「上一個／下一個」：
+   只留圖示、移到右邊中間偏下（卡片兩側沒有按鈕）。 */
+body:has(.fc-wrap) .ask-fab,
+body:has(.fc-wrap) .ask-fab.with-nav { top: 56%; bottom: auto; right: 8px; padding: 11px; opacity: .85; }
+body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
