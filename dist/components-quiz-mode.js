@@ -8734,7 +8734,11 @@ function ExamPlayer({
       window.examLoadDict().then(() => setDictOn(true));
     }
   }, [item]);
-  var [ans, setAns] = useQM({});
+  /* v607 作答自動保存：切到別的 App／重新整理回來，寫到一半的答案還在（存這台裝置，交卷後清掉） */
+  var draft0 = React.useRef(undefined);
+  if (draft0.current === undefined) draft0.current = window.examDraftLoad && window.examDraftLoad(progressKey, item) || null;
+  var [resumed, setResumed] = useQM(!!draft0.current);
+  var [ans, setAns] = useQM(() => draft0.current && draft0.current.ans || {});
   /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
      ⚠ 老師沒改之前這裡是 null，畫面上就維持「老師還沒改」——
        不可以拿 AI 的建議先頂著，那還沒有人看過。 */
@@ -8746,7 +8750,7 @@ function ExamPlayer({
       setTeacherMark(window.examMarkOf ? window.examMarkOf(doc, progressKey) : null);
     });
   }, [progressKey]);
-  var [mood, setMood] = useQM(null); // 開場區的心情與目標（{ mood, goals }）
+  var [mood, setMood] = useQM(() => draft0.current && draft0.current.mood || null); // 開場區的心情與目標（{ mood, goals }）
   var [focus, setFocus] = useQM(null); // cloze：現在在填哪一格（點詞庫要知道填去哪）
   var focusRef = React.useRef(null); // 同上，但「永遠是最新的」——見下面 put 的說明
   var [sent, setSent] = useQM(false);
@@ -8755,6 +8759,47 @@ function ExamPlayer({
   var [drawErr, setDrawErr] = useQM(''); // v571：畫的圖沒傳成功時的說明
   var [res, setRes] = useQM(null);
   var topRef = React.useRef(null);
+
+  /* 存草稿：停手 0.8 秒存一次；離開頁面（切 App／關分頁）當下立刻補存。交卷後不再存。 */
+  var draftLive = React.useRef({
+    ans,
+    mood,
+    sent
+  });
+  draftLive.current = {
+    ans,
+    mood,
+    sent
+  };
+  useQME(() => {
+    if (sent || !window.examDraftSave) return;
+    var t = setTimeout(() => window.examDraftSave(progressKey, item, {
+      ans,
+      mood
+    }), 800);
+    return () => clearTimeout(t);
+  }, [ans, mood, sent]);
+  useQME(() => {
+    var flush = () => {
+      var d = draftLive.current;
+      if (!d.sent && window.examDraftSave) window.examDraftSave(progressKey, item, d);
+    };
+    var vis = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', vis);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', vis);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [progressKey]);
+  var restartFresh = () => {
+    if (window.examDraftClear) window.examDraftClear(progressKey);
+    setAns({});
+    setMood(null);
+    setResumed(false);
+  };
   var secs = item.sections || [];
   var T = window.examTotals ? window.examTotals(item) : {
     auto: 0,
@@ -8973,6 +9018,7 @@ function ExamPlayer({
         examTitle: item.title || ''
       } : null
     });
+    if (window.examDraftClear) window.examDraftClear(progressKey); // v607：交卷完成才清草稿
     if (window._onQuizComplete) window._onQuizComplete(r.auto, r.autoMax, wrongList, {
       itemId: progressKey
     });
@@ -9221,7 +9267,15 @@ function ExamPlayer({
             return g;
           })
         }, /*#__PURE__*/React.createElement("i", null, on ? '●' : '○'), o);
-      }));
+      }), sent && /*#__PURE__*/React.createElement("div", {
+        className: 'ex-why' + (d.ok ? ' ok' : '')
+      }, !d.ok && q.options && q.answer != null && /*#__PURE__*/React.createElement("p", {
+        className: "ex-why-a"
+      }, "\u6B63\u78BA\u7B54\u6848\uFF1A", /*#__PURE__*/React.createElement("b", null, 'ABCDEF'.charAt(q.answer), ". ", q.options[q.answer])), q.explain && /*#__PURE__*/React.createElement("p", {
+        className: "ex-why-t"
+      }, "\uD83D\uDCA1 ", q.explain), q.explain && q.quote && /*#__PURE__*/React.createElement("p", {
+        className: "ex-why-q"
+      }, "\uD83D\uDCD6 \u6587\u7AE0\u88E1\uFF1A\u201C", q.quote, "\u201D")));
     })), pt.kind === 'affix' && (() => {
       var slots = Array.isArray(v) ? v : [];
       var setSlot = (i, patch) => put(key, prev => {
@@ -9603,7 +9657,9 @@ function ExamPlayer({
       }
     }), q.rubric && /*#__PURE__*/React.createElement("div", {
       className: "ex-rub"
-    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric))), examMarkBlock(pt, key, pt.questions || [])));
+    }, "\u8A55\u5206\u91CD\u9EDE\uFF1A", q.rubric), sent && (q.keyPoints || q.sample) && /*#__PURE__*/React.createElement("div", {
+      className: "ex-sample"
+    }, q.keyPoints && /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "\u53C3\u8003\u7B54\u6848\u91CD\u9EDE\uFF1A"), q.keyPoints), q.sample && /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "\u7BC4\u4F8B\uFF1A"), q.sample)))), examMarkBlock(pt, key, pt.questions || [])));
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "ex-paper",
@@ -9625,7 +9681,12 @@ function ExamPlayer({
     key: i
   }, /*#__PURE__*/React.createElement("b", null, sc.name), /*#__PURE__*/React.createElement("span", null, sc.max ? `${sc.got} / ${sc.max}` : '—'), sc.manual > 0 && /*#__PURE__*/React.createElement("i", null, "\uFF0B", sc.manual, " \u5206\u8001\u5E2B\u6539")))), res.manualMax > 0 && /*#__PURE__*/React.createElement("p", {
     className: "ex-res-note"
-  }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), item.examMood && !sent && /*#__PURE__*/React.createElement(ExamCheckin, {
+  }, "\u9019\u4EFD\u5377\u5B50\u6709 ", /*#__PURE__*/React.createElement("b", null, res.manualMax, " \u5206"), "\u662F\u554F\u7B54\u984C\uFF0C\u8001\u5E2B\u6703\u7167 rubric \u89AA\u81EA\u6539\u2014\u2014 \u4E0A\u9762\u7684 ", res.auto, "/", res.autoMax, " \u53EA\u662F\u81EA\u52D5\u8A08\u5206\u7684\u90E8\u5206\u3002")), resumed && !sent && /*#__PURE__*/React.createElement("div", {
+    className: "ex-resume"
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCDD \u63A5\u8457\u4E0A\u6B21\u5BEB\u5230\u7684\u5730\u65B9\u7E7C\u7E8C\uFF08\u7B54\u6848\u5DF2\u7D93\u5E6B\u4F60\u5B58\u597D\u4E86\uFF09"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: restartFresh
+  }, "\u5F9E\u982D\u958B\u59CB")), item.examMood && !sent && /*#__PURE__*/React.createElement(ExamCheckin, {
     value: mood,
     onChange: setMood
   }), secs.map((sec, si) => !(sec.parts || []).length ? null :

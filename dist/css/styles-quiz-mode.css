@@ -3632,3 +3632,10 @@ textarea.ex-essay {
 .ex-read-dup { margin: 0 0 12px; }
 .ex-read-dup > summary { cursor: pointer; font-size: 14px; color: var(--ink-3, #6b6455); padding: 6px 2px; }
 .ex-read-dup[open] > summary { margin-bottom: 6px; }
+
+/* v607 作答保存提示、交卷後解析（顏色一律走變數，萬聖節層才翻得過去） */
+.ex-resume { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: var(--bg, #F4F0E7); border: 1px dashed var(--border, #DDD6C4); color: var(--ink, #15130E); font-size: 15px; font-weight: 700; }
+.ex-resume button { flex: none; border: 1px solid var(--border, #DDD6C4); background: transparent; color: var(--ink, #15130E); border-radius: 999px; padding: 6px 12px; font-weight: 800; cursor: pointer; }
+.ex-why, .ex-sample { margin: 8px 0 2px; padding: 9px 12px; border-radius: 10px; background: var(--bg, #F4F0E7); border: 1px solid var(--border, #DDD6C4); color: var(--ink, #15130E); font-size: 15px; line-height: 1.6; }
+.ex-why p, .ex-sample p { margin: 2px 0; }
+.ex-why-q { color: var(--ink-3, #6b6455); font-style: italic; }

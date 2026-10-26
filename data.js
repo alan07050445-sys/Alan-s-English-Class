@@ -8520,6 +8520,114 @@ function _examCleanKey(k) {
   const note = String(k.note || '').trim().slice(0, 600);
   return (mc.length || written.length) ? { mc, written, note } : null;
 }
+/* ══ v607 ① 作答自動保存（Alan：「作答中途不小心離開，整份要重寫」）══════════════════════════════
+   ExamPlayer 的答案本來只放在畫面記憶體——iPad 切到別的 App 被系統收掉分頁、不小心重新整理、
+   Safari 自己重載，長文與問答寫到一半就**整份消失**（程式裡沒有任何存檔）。
+   ⭐ 存在這台裝置的 localStorage，key 帶帳號與單元（共用電腦換人不會看到別人的）。
+   ⚠ 卷子內容的「簽章」（每大題的型別／標題／題數）對不上就不套用：老師中途改了卷子，舊草稿的格子就會錯位。
+   ⚠ 放 14 天就丟；交卷完成就清掉；畫圖的 dataURL 太大不存（不然會把 5MB 額度吃光，連文字也存不進去）。
+   ⚠ 只存這一台——刻意不同步到雲端：progress 文件整筆覆寫會洗掉成績（saveProgressItem 的 items.<id> 是整個換掉）。 */
+const EXAM_DRAFT_TTL = 14 * 24 * 3600 * 1000;
+function examDraftSig(item) {
+  const bits = [];
+  ((item && item.sections) || []).forEach(sc => (sc.parts || []).forEach(p => bits.push([p.kind, p.title || '', examPartN(p)].join('~'))));
+  const str = bits.join('|');
+  let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + ':' + bits.length;
+}
+function examDraftHas(v) {
+  if (v == null) return false;
+  if (typeof v === 'string') return v.trim().length > 0;
+  if (typeof v === 'number') return true;
+  if (Array.isArray(v)) return v.some(examDraftHas);
+  if (typeof v === 'object') return Object.keys(v).some(k => examDraftHas(v[k]));
+  return false;
+}
+function _examDraftKey(progressKey) {
+  const u = (typeof window !== 'undefined' && window._currentUser && window._currentUser.uid) || 'anon';
+  return 'alans-exam-draft:' + u + ':' + progressKey;
+}
+function examDraftLoad(progressKey, item) {
+  try {
+    const raw = localStorage.getItem(_examDraftKey(progressKey));
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || d.sig !== examDraftSig(item)) return null;
+    if (Date.now() - (d.at || 0) > EXAM_DRAFT_TTL) { localStorage.removeItem(_examDraftKey(progressKey)); return null; }
+    return examDraftHas(d.ans) || examDraftHas(d.mood) ? d : null;
+  } catch (e) { return null; }
+}
+function examDraftSave(progressKey, item, { ans, mood } = {}) {
+  try {
+    const slim = {};
+    Object.keys(ans || {}).forEach(k => { const v = ans[k]; if (!(typeof v === 'string' && v.length > 150000)) slim[k] = v; });   // 畫圖的圖不存
+    if (!examDraftHas(slim) && !examDraftHas(mood)) { localStorage.removeItem(_examDraftKey(progressKey)); return false; }
+    localStorage.setItem(_examDraftKey(progressKey), JSON.stringify({ v: 1, sig: examDraftSig(item), at: Date.now(), ans: slim, mood: mood == null ? null : mood }));
+    return true;
+  } catch (e) { return false; }
+}
+function examDraftClear(progressKey) { try { localStorage.removeItem(_examDraftKey(progressKey)); } catch (e) {} }
+Object.assign(window, { examDraftSig, examDraftHas, examDraftLoad, examDraftSave, examDraftClear, EXAM_DRAFT_TTL });
+
+/* ══ v607 ② 交卷後的解析（AI 幫選擇題寫「為什麼是這個答案」）══════════════════════════════════
+   學生考完只知道對錯，不知道**為什麼**——沒有學到東西。
+   ⭐ 每一題要「指得出文章裡的依據」：模型要回 quote（逐字抄文章裡的 3~12 個字），程式驗 quote 真的在文章裡才收；
+     抄不到＝它在憑空解釋，這一題不收（寧可沒有解析，也不要一段看似合理的錯誤說明）。
+   ⭐ 順便當第二道把關：模型如果認為「老師給的答案」不對，會回 disagree——不寫解析，回報給老師看。
+   ⚠ 只做有文章的選擇題（沒有文章就沒有「依據」可以引）。壞掉的呼叫跳過那一題，不擋整份。 */
+const _exNorm = (t) => String(t || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+async function examExplain(secs, { onProgress } = {}) {
+  const jobs = [];
+  (secs || []).forEach((sc, si) => {
+    const fallback = ((sc.parts || []).find(x => x.readText || x.passage) || {});
+    (sc.parts || []).forEach((pt, pi) => {
+      if (pt.kind !== 'quiz') return;
+      const passage = String(pt.readText || pt.passage || fallback.readText || fallback.passage || '').trim();
+      const qs = (pt.questions || []).map((q, i) => ({ q, i })).filter(({ q }) => !q.explain && (q.options || []).length >= 2);
+      if (passage && qs.length) jobs.push({ pt, passage, qs, si, pi });
+    });
+  });
+  const L = 'ABCDEF';
+  const added = [], disputed = [];
+  let done = 0;
+  await pMap(jobs, async (j) => {
+    try {
+      const body = `PASSAGE:\n${j.passage}\n\nQUESTIONS (with the teacher's correct answer):\n` + j.qs.map(({ q, i }) =>
+        `${i + 1}. ${q.q}\n` + q.options.map((o, k) => `   ${L[k]}. ${o}`).join('\n') + `\n   CORRECT: ${L[q.answer]}`).join('\n\n');
+      const got = await _aiAsk({
+        model: GN_READ_MODEL, max_tokens: 1800,
+        system: 'You write answer explanations for Taiwanese 4th-grade English learners after a reading test. For EACH question write ONE or TWO short sentences in Traditional Chinese (at most 70 characters) saying WHY the correct answer is right, pointing at the clue in the passage. ' +
+          'Also give "quote": 3 to 12 words copied EXACTLY (same spelling) from the passage — the words that contain the clue. ' +
+          'If you are sure the teacher\'s CORRECT answer is wrong, set "disagree":true and say which letter you think is right in "think", and write no explanation. ' +
+          'Reply ONLY JSON: {"items":[{"n":1,"explain":"…","quote":"…"},{"n":2,"disagree":true,"think":"B"}]} — "n" is the question number given.',
+        messages: [{ role: 'user', content: body }],
+      }, (data) => {
+        const o = JSON.parse(_aiStripFence(data?.content?.[0]?.text || data?.text || ''));
+        return o && Array.isArray(o.items) ? o : null;
+      }, 60000);
+      const hay = _exNorm(j.passage);
+      (got.items || []).forEach(it => {
+        const hit = j.qs.find(({ i }) => i + 1 === Math.round(+it.n));
+        if (!hit) return;
+        if (it.disagree) { disputed.push({ si: j.si, pi: j.pi, i: hit.i, q: hit.q.q, key: L[hit.q.answer], think: String(it.think || '?').toUpperCase().charAt(0) }); return; }
+        const explain = String(it.explain || '').trim(), quote = String(it.quote || '').trim();
+        const grounded = quote && _exNorm(quote).length >= 8 && hay.indexOf(_exNorm(quote)) >= 0;
+        if (!explain || explain.length > 160 || !/[一-鿿]/.test(explain) || !grounded) return;
+        hit.q.explain = explain; hit.q.quote = quote;
+        added.push(hit.q.q);
+      });
+    } catch (e) { /* 這一批壞了就跳過，不擋整份 */ }
+    done++; if (onProgress) onProgress(done, jobs.length);
+  }, 3);
+  return { added: added.length, disputed, parts: jobs.length };
+}
+/* 老師端按鈕用：回傳補好解析的新 sections（不動傳進來的） */
+async function aiExplainExam(item, opts) {
+  const sections = JSON.parse(JSON.stringify((item && item.sections) || []));
+  const r = await examExplain(sections, opts);
+  return { sections, ...r };
+}
+
 /* 🔴 v606 沒有解答頁時，選擇題的答案是「讀考卷的那個模型」邊讀邊猜的——而且會猜錯。
    實測 Alan 的 Taiwan Biographies（學生版，沒附解答）：Yang 那篇第 2 題「Which statement correctly compares Yang and Johnson?」
    文章明明寫 Yang 跑跳強、Johnson 投擲強，它卻選了「Yang 投擲強」。答案錯的考卷最糟：學生答對還被扣分。
@@ -8725,7 +8833,10 @@ function _examCleanPart(p) {
       const a = +((q && q.answer) || 0);
       if (!q || !String(q.q || '').trim() || options.length < 2) return null;
       if (!(a >= 0 && a < options.length)) return null;     // 正解超出範圍＝這題不要
-      return { q: String(q.q).trim(), options, answer: a };
+      /* v607：交卷後要顯示的「為什麼是這個答案」（explain）與文章裡的依據（quote）要留著——
+         以前這裡只收 q／options／answer，貼上整份考卷與讀考卷都會把解析洗掉。 */
+      const explain = String((q && q.explain) || '').trim().slice(0, 300), quote = String((q && q.quote) || '').trim().slice(0, 200);
+      return { q: String(q.q).trim(), options, answer: a, ...(explain ? { explain } : {}), ...(quote ? { quote } : {}) };
     }).filter(Boolean);
     if (!questions.length) return null;
     const rt = String(p.passage || p.readText || '').trim();
@@ -8769,7 +8880,9 @@ function _examCleanPart(p) {
     const passage = String(p.passage || '').trim();
     if (!passage) return null;                             // 沒有文章就沒有「證據」可以引用
     return { ...base, passage, question: String(p.question || p.q || '').trim(),
-             need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5 };
+             need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5,
+             ...(String(p.keyPoints || '').trim() ? { keyPoints: String(p.keyPoints).trim().slice(0, 2000) } : {}),
+             ...(String(p.sample || '').trim() ? { sample: String(p.sample).trim().slice(0, 2000) } : {}) };
   }
   if (p.kind === 'table') {
     const headers = (Array.isArray(p.headers) ? p.headers : (Array.isArray(p.columns) ? p.columns : []))
@@ -9133,6 +9246,12 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   for (let i = secs.length - 1; i >= 0; i--) if (!secs[i].parts.length) secs.splice(i, 1);
   /* 🔴 v605 解答頁：選擇題答案以解答頁為準、問答題的參考答案放進 keyPoints（AI 批改建議會參考）。 */
   const keyNotes = examApplyKey(secs, answerKey).concat(await examVerifyQuiz(secs));
+  /* v607 解析：有文章的選擇題交卷後要能看到「為什麼」。壞掉不擋讀卷。 */
+  try {
+    const ex = await examExplain(secs);
+    if (ex.added) keyNotes.push(`AI 幫 ${ex.added} 題選擇題寫了解析（每一則都附文章裡的依據，已逐字核對過）。`);
+    ex.disputed.forEach(d => keyNotes.push(`⚠ 第 ${d.i + 1} 題（${d.q.slice(0, 40)}…）：AI 覺得答案應該是 ${d.think}，不是現在的 ${d.key}——請你看一下。`));
+  } catch (e) {}
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,
@@ -9360,7 +9479,7 @@ async function aiDraftExam({ message, history, draft, mustWords, grade }) {
            checks: examDraftChecks(item, words, notes), dropped, same: false };
 }
 
-Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examVerifyQuiz, examCleanKey: _examCleanKey });
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examVerifyQuiz, examExplain, aiExplainExam, examCleanKey: _examCleanKey });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v515 📄 模擬考卷（Alan 給了兩張真的 G4 Formative，要做成互動版）

@@ -7190,7 +7190,11 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       window.examLoadDict().then(() => setDictOn(true));
     }
   }, [item]);
-  const [ans, setAns]       = useQM({});
+  /* v607 作答自動保存：切到別的 App／重新整理回來，寫到一半的答案還在（存這台裝置，交卷後清掉） */
+  const draft0 = React.useRef(undefined);
+  if (draft0.current === undefined) draft0.current = (window.examDraftLoad && window.examDraftLoad(progressKey, item)) || null;
+  const [resumed, setResumed] = useQM(!!draft0.current);
+  const [ans, setAns]       = useQM(() => (draft0.current && draft0.current.ans) || {});
   /* v530 📋 老師改好的申論分數（practice/{email}，老師寫、學生只讀自己的）。
      ⚠ 老師沒改之前這裡是 null，畫面上就維持「老師還沒改」——
        不可以拿 AI 的建議先頂著，那還沒有人看過。 */
@@ -7202,7 +7206,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       setTeacherMark(window.examMarkOf ? window.examMarkOf(doc, progressKey) : null);
     });
   }, [progressKey]);
-  const [mood, setMood]     = useQM(null);   // 開場區的心情與目標（{ mood, goals }）
+  const [mood, setMood]     = useQM(() => (draft0.current && draft0.current.mood) || null);   // 開場區的心情與目標（{ mood, goals }）
   const [focus, setFocus]   = useQM(null);   // cloze：現在在填哪一格（點詞庫要知道填去哪）
   const focusRef = React.useRef(null);       // 同上，但「永遠是最新的」——見下面 put 的說明
   const [sent, setSent]     = useQM(false);
@@ -7211,6 +7215,22 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
   const [drawErr, setDrawErr] = useQM('');     // v571：畫的圖沒傳成功時的說明
   const [res, setRes]       = useQM(null);
   const topRef = React.useRef(null);
+
+  /* 存草稿：停手 0.8 秒存一次；離開頁面（切 App／關分頁）當下立刻補存。交卷後不再存。 */
+  const draftLive = React.useRef({ ans, mood, sent });
+  draftLive.current = { ans, mood, sent };
+  useQME(() => {
+    if (sent || !window.examDraftSave) return;
+    const t = setTimeout(() => window.examDraftSave(progressKey, item, { ans, mood }), 800);
+    return () => clearTimeout(t);
+  }, [ans, mood, sent]);
+  useQME(() => {
+    const flush = () => { const d = draftLive.current; if (!d.sent && window.examDraftSave) window.examDraftSave(progressKey, item, d); };
+    const vis = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', vis); window.addEventListener('pagehide', flush);
+    return () => { document.removeEventListener('visibilitychange', vis); window.removeEventListener('pagehide', flush); };
+  }, [progressKey]);
+  const restartFresh = () => { if (window.examDraftClear) window.examDraftClear(progressKey); setAns({}); setMood(null); setResumed(false); };
 
   const secs = item.sections || [];
   const T = window.examTotals ? window.examTotals(item) : { auto: 0, manual: 0, total: 0 };
@@ -7383,6 +7403,7 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
       score: r.auto, total: r.autoMax, wrongQuestions: wrongList,
       extra: Object.keys(written).length ? { examWritten: written, examTitle: item.title || '' } : null,
     });
+    if (window.examDraftClear) window.examDraftClear(progressKey);   // v607：交卷完成才清草稿
     if (window._onQuizComplete) window._onQuizComplete(r.auto, r.autoMax, wrongList, { itemId: progressKey });
   };
 
@@ -7607,6 +7628,13 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                       </button>
                     );
                   })}
+                  {sent && (
+                    <div className={'ex-why' + (d.ok ? ' ok' : '')}>
+                      {!d.ok && q.options && q.answer != null && <p className="ex-why-a">正確答案：<b>{'ABCDEF'.charAt(q.answer)}. {q.options[q.answer]}</b></p>}
+                      {q.explain && <p className="ex-why-t">💡 {q.explain}</p>}
+                      {q.explain && q.quote && <p className="ex-why-q">📖 文章裡：“{q.quote}”</p>}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -7950,6 +7978,12 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
                   onChange={e => { const t = e.target.value;
                     put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[i] = t; return g; }); }}/>
                 {q.rubric && <div className="ex-rub">評分重點：{q.rubric}</div>}
+                {sent && (q.keyPoints || q.sample) && (
+                  <div className="ex-sample">
+                    {q.keyPoints && <p><b>參考答案重點：</b>{q.keyPoints}</p>}
+                    {q.sample && <p><b>範例：</b>{q.sample}</p>}
+                  </div>
+                )}
               </div>
             ))}
             {examMarkBlock(pt, key, pt.questions || [])}
@@ -7991,6 +8025,13 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               上面的 {res.auto}/{res.autoMax} 只是自動計分的部分。
             </p>
           )}
+        </div>
+      )}
+
+      {resumed && !sent && (
+        <div className="ex-resume">
+          <span>📝 接著上次寫到的地方繼續（答案已經幫你存好了）</span>
+          <button type="button" onClick={restartFresh}>從頭開始</button>
         </div>
       )}
 

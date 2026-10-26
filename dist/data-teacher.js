@@ -1075,29 +1075,6 @@ async function aiMakeVocabStories(words, opts = {}) {
   return out;
 }
 
-/* ── v392: AI 呼叫的三個共用小工具 ──────────────────────────────────────
-   為什麼要加：出一套時態題原本要 118 秒，老師在校稿頁前面乾等。
-   量出來的延遲公式是 latency ≈ 1.4s + output_tokens / 176 ——
-   幾乎全部是「吐字時間」，跟 prompt 長短、max_tokens 都無關。
-   所以只有兩條路能快：把請求拆小、以及把請求同時送出去。 */
-
-/* pMap：有上限的平行 map。單一請求失敗只讓那一格變 null，不會拖垮整批
-   （呼叫端本來就要驗證＋補不足，null 就當成「這一發沒中」）。
-   端點是 HTTP/2，實測 30 個請求同時打全部成功、沒有被限流；
-   瀏覽器對 HTTP/2 也沒有「每網域 6 條連線」的限制，所以平行在前端真的會生效。 */
-async function pMap(list, fn, limit = 8) {
-  const out = new Array(list.length);
-  let i = 0;
-  const worker = async () => {
-    while (i < list.length) {
-      const k = i++;
-      try { out[k] = await fn(list[k], k); } catch (e) { out[k] = null; }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
-  return out;
-}
-
 /* words: [{ term, zh }]（zh 只是給 AI 當語意提示，可省略）
    回傳 [{ word, def, sentence, answer, explain }]，順序與輸入相同。 */
 /* v392: 改成「先切成一堆小請求，再一次平行送出去」。
@@ -1582,9 +1559,6 @@ async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
     throw new Error(e && e.timeout ? '教學卡太久沒有回應，請再試一次。' : '教學卡產生失敗，請再試一次。');
   }
 }
-// 看照片用 Sonnet：v428 用同一張作業實測，兩個都讀到 10/10 題、都約 8 秒，
-// 但 Haiku 把「你的書包裡有任何書嗎」讀成「有什麼書」，還自己填上作業沒印的答案；Sonnet 逐字照抄。
-const GN_READ_MODEL = 'claude-sonnet-5';
 
 const GN_READ_SYS = `You read ONE part of a Taiwanese elementary-school English teacher's GRAMMAR homework
 (a photo of one page, or one section of pasted text). It usually has teaching NOTES, then QUESTIONS.
@@ -5197,6 +5171,7 @@ function _examCleanKey(k) {
   const note = String(k.note || '').trim().slice(0, 600);
   return (mc.length || written.length) ? { mc, written, note } : null;
 }
+
 /* 🔴 v606 沒有解答頁時，選擇題的答案是「讀考卷的那個模型」邊讀邊猜的——而且會猜錯。
    實測 Alan 的 Taiwan Biographies（學生版，沒附解答）：Yang 那篇第 2 題「Which statement correctly compares Yang and Johnson?」
    文章明明寫 Yang 跑跳強、Johnson 投擲強，它卻選了「Yang 投擲強」。答案錯的考卷最糟：學生答對還被扣分。
@@ -5402,7 +5377,10 @@ function _examCleanPart(p) {
       const a = +((q && q.answer) || 0);
       if (!q || !String(q.q || '').trim() || options.length < 2) return null;
       if (!(a >= 0 && a < options.length)) return null;     // 正解超出範圍＝這題不要
-      return { q: String(q.q).trim(), options, answer: a };
+      /* v607：交卷後要顯示的「為什麼是這個答案」（explain）與文章裡的依據（quote）要留著——
+         以前這裡只收 q／options／answer，貼上整份考卷與讀考卷都會把解析洗掉。 */
+      const explain = String((q && q.explain) || '').trim().slice(0, 300), quote = String((q && q.quote) || '').trim().slice(0, 200);
+      return { q: String(q.q).trim(), options, answer: a, ...(explain ? { explain } : {}), ...(quote ? { quote } : {}) };
     }).filter(Boolean);
     if (!questions.length) return null;
     const rt = String(p.passage || p.readText || '').trim();
@@ -5446,7 +5424,9 @@ function _examCleanPart(p) {
     const passage = String(p.passage || '').trim();
     if (!passage) return null;                             // 沒有文章就沒有「證據」可以引用
     return { ...base, passage, question: String(p.question || p.q || '').trim(),
-             need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5 };
+             need: Math.max(1, +p.need || 2), minWords: +p.minWords || 5,
+             ...(String(p.keyPoints || '').trim() ? { keyPoints: String(p.keyPoints).trim().slice(0, 2000) } : {}),
+             ...(String(p.sample || '').trim() ? { sample: String(p.sample).trim().slice(0, 2000) } : {}) };
   }
   if (p.kind === 'table') {
     const headers = (Array.isArray(p.headers) ? p.headers : (Array.isArray(p.columns) ? p.columns : []))
@@ -5810,6 +5790,12 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   for (let i = secs.length - 1; i >= 0; i--) if (!secs[i].parts.length) secs.splice(i, 1);
   /* 🔴 v605 解答頁：選擇題答案以解答頁為準、問答題的參考答案放進 keyPoints（AI 批改建議會參考）。 */
   const keyNotes = examApplyKey(secs, answerKey).concat(await examVerifyQuiz(secs));
+  /* v607 解析：有文章的選擇題交卷後要能看到「為什麼」。壞掉不擋讀卷。 */
+  try {
+    const ex = await examExplain(secs);
+    if (ex.added) keyNotes.push(`AI 幫 ${ex.added} 題選擇題寫了解析（每一則都附文章裡的依據，已逐字核對過）。`);
+    ex.disputed.forEach(d => keyNotes.push(`⚠ 第 ${d.i + 1} 題（${d.q.slice(0, 40)}…）：AI 覺得答案應該是 ${d.think}，不是現在的 ${d.key}——請你看一下。`));
+  } catch (e) {}
   const title = (ok.map(g => g.v.title).find(Boolean) || '模擬考卷').trim();
   const item = {
     type: 'exam', title, examMood: true,

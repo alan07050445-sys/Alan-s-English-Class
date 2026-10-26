@@ -232,6 +232,8 @@ function EditorModal({
   var [moreTypes, setMoreTypes] = useS(false);
   /* v540 📋 貼上整份考卷：null＝沒打開，否則 { text, res } */
   var [pastePaper, setPastePaper] = useS(null);
+  /* v607 📚 AI 補上解析：null＝沒在跑，否則 { msg } */
+  var [explainBusy, setExplainBusy] = useS(null);
   /* v447：沒存到的編輯，下次打開時接回來 */
   var [recover, setRecover] = useS(null);
   useE(() => {
@@ -587,7 +589,31 @@ function EditorModal({
           text: '',
           res: null
         })
-      }, "\uD83D\uDCCB \u8CBC\u4E0A\u6574\u4EFD\u8003\u5377"), /*#__PURE__*/React.createElement("span", {
+      }, "\uD83D\uDCCB \u8CBC\u4E0A\u6574\u4EFD\u8003\u5377"), /*#__PURE__*/React.createElement("button", {
+        className: "exed-paste-btn",
+        disabled: !!explainBusy,
+        title: "\u5E6B\u6709\u6587\u7AE0\u7684\u9078\u64C7\u984C\u5BEB\u300C\u70BA\u4EC0\u9EBC\u662F\u9019\u500B\u7B54\u6848\u300D\uFF0C\u5B78\u751F\u4EA4\u5377\u5F8C\u770B\u5F97\u5230",
+        onClick: async () => {
+          setExplainBusy({
+            msg: '寫解析中…'
+          });
+          try {
+            var r = await window.aiExplainExam({
+              sections: secs
+            }, {
+              onProgress: (d, n) => setExplainBusy({
+                msg: `寫解析中… ${d}/${n}`
+              })
+            });
+            if (r.added) setSecs(r.sections);
+            var warn = r.disputed.map(d => `第 ${d.i + 1} 題：AI 覺得答案是 ${d.think}，不是 ${d.key}`).join('\n');
+            alert(r.parts ? `補上 ${r.added} 題解析。${warn ? '\n\n⚠ 請你看一下：\n' + warn : ''}` : '沒有需要補的題目（要有文章的選擇題才寫得了解析）。');
+          } catch (e) {
+            alert('寫解析失敗：' + (e.message || e));
+          }
+          setExplainBusy(null);
+        }
+      }, explainBusy ? explainBusy.msg : '📚 AI 補上解析'), /*#__PURE__*/React.createElement("span", {
         className: 'exed-total' + (T.total === 100 ? ' ok' : '')
       }, "\u5408\u8A08 ", T.total, " \u5206\uFF08\u81EA\u52D5 ", T.auto, "\uFF0F\u8001\u5E2B\u6539 ", T.manual, "\uFF09")), pastePaper && /*#__PURE__*/React.createElement("div", {
         className: "exed-paste"

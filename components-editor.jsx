@@ -125,6 +125,8 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
   const [moreTypes, setMoreTypes] = useS(false);
   /* v540 📋 貼上整份考卷：null＝沒打開，否則 { text, res } */
   const [pastePaper, setPastePaper] = useS(null);
+  /* v607 📚 AI 補上解析：null＝沒在跑，否則 { msg } */
+  const [explainBusy, setExplainBusy] = useS(null);
   /* v447：沒存到的編輯，下次打開時接回來 */
   const [recover, setRecover] = useS(null);
   useE(() => {
@@ -467,6 +469,19 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
                     <span className="exed-sp"/>
                     <button className="exed-paste-btn" onClick={() => setPastePaper(p => p ? null : { text: '', res: null })}>
                       📋 貼上整份考卷
+                    </button>
+                    <button className="exed-paste-btn" disabled={!!explainBusy} title="幫有文章的選擇題寫「為什麼是這個答案」，學生交卷後看得到"
+                      onClick={async () => {
+                        setExplainBusy({ msg: '寫解析中…' });
+                        try {
+                          const r = await window.aiExplainExam({ sections: secs }, { onProgress: (d, n) => setExplainBusy({ msg: `寫解析中… ${d}/${n}` }) });
+                          if (r.added) setSecs(r.sections);
+                          const warn = r.disputed.map(d => `第 ${d.i + 1} 題：AI 覺得答案是 ${d.think}，不是 ${d.key}`).join('\n');
+                          alert(r.parts ? `補上 ${r.added} 題解析。${warn ? '\n\n⚠ 請你看一下：\n' + warn : ''}` : '沒有需要補的題目（要有文章的選擇題才寫得了解析）。');
+                        } catch (e) { alert('寫解析失敗：' + (e.message || e)); }
+                        setExplainBusy(null);
+                      }}>
+                      {explainBusy ? explainBusy.msg : '📚 AI 補上解析'}
                     </button>
                     <span className={'exed-total' + (T.total === 100 ? ' ok' : '')}>
                       合計 {T.total} 分（自動 {T.auto}／老師改 {T.manual}）
