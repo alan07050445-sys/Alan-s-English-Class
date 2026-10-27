@@ -1901,7 +1901,10 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
       const a = window.computeAutoStars(wk, (d && d.order) || weekOrder, st.items || {}, { cloudShape: true });
       // v362: 每日簽到
       const c = window.computeCheckin ? window.computeCheckin(st.checkin) : { total: 0, entries: [] };
-      m[em] = { total: a.total + c.total, entries: [...a.entries, ...c.entries] };
+      // v612：訂正錯題與 Trick or Treat——學生端早就算進去了，後台以前少了訂正這一塊，兩邊對不起來
+      const f = window.computeFixedStars ? window.computeFixedStars(st.fixed) : { total: 0, entries: [] };
+      const tr = window.computeTreatStars ? window.computeTreatStars(st.treat, st.uid) : { total: 0, entries: [] };
+      m[em] = { total: a.total + c.total + f.total + tr.total, entries: [...a.entries, ...c.entries, ...f.entries, ...tr.entries] };
     });
     return m;
   }, [students, weeksFor, weekOrder, dataFor]);

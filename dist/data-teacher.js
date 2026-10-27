@@ -1075,6 +1075,29 @@ async function aiMakeVocabStories(words, opts = {}) {
   return out;
 }
 
+/* ── v392: AI 呼叫的三個共用小工具 ──────────────────────────────────────
+   為什麼要加：出一套時態題原本要 118 秒，老師在校稿頁前面乾等。
+   量出來的延遲公式是 latency ≈ 1.4s + output_tokens / 176 ——
+   幾乎全部是「吐字時間」，跟 prompt 長短、max_tokens 都無關。
+   所以只有兩條路能快：把請求拆小、以及把請求同時送出去。 */
+
+/* pMap：有上限的平行 map。單一請求失敗只讓那一格變 null，不會拖垮整批
+   （呼叫端本來就要驗證＋補不足，null 就當成「這一發沒中」）。
+   端點是 HTTP/2，實測 30 個請求同時打全部成功、沒有被限流；
+   瀏覽器對 HTTP/2 也沒有「每網域 6 條連線」的限制，所以平行在前端真的會生效。 */
+async function pMap(list, fn, limit = 8) {
+  const out = new Array(list.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < list.length) {
+      const k = i++;
+      try { out[k] = await fn(list[k], k); } catch (e) { out[k] = null; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+  return out;
+}
+
 /* words: [{ term, zh }]（zh 只是給 AI 當語意提示，可省略）
    回傳 [{ word, def, sentence, answer, explain }]，順序與輸入相同。 */
 /* v392: 改成「先切成一堆小請求，再一次平行送出去」。
@@ -1559,6 +1582,9 @@ async function aiMakeLesson({ topic, notes = '', tense = '' } = {}) {
     throw new Error(e && e.timeout ? '教學卡太久沒有回應，請再試一次。' : '教學卡產生失敗，請再試一次。');
   }
 }
+// 看照片用 Sonnet：v428 用同一張作業實測，兩個都讀到 10/10 題、都約 8 秒，
+// 但 Haiku 把「你的書包裡有任何書嗎」讀成「有什麼書」，還自己填上作業沒印的答案；Sonnet 逐字照抄。
+const GN_READ_MODEL = 'claude-sonnet-5';
 
 const GN_READ_SYS = `You read ONE part of a Taiwanese elementary-school English teacher's GRAMMAR homework
 (a photo of one page, or one section of pasted text). It usually has teaching NOTES, then QUESTIONS.
@@ -5172,6 +5198,65 @@ function _examCleanKey(k) {
   return (mc.length || written.length) ? { mc, written, note } : null;
 }
 
+/* ══ v607 ② 交卷後的解析（AI 幫選擇題寫「為什麼是這個答案」）══════════════════════════════════
+   學生考完只知道對錯，不知道**為什麼**——沒有學到東西。
+   ⭐ 每一題要「指得出文章裡的依據」：模型要回 quote（逐字抄文章裡的 3~12 個字），程式驗 quote 真的在文章裡才收；
+     抄不到＝它在憑空解釋，這一題不收（寧可沒有解析，也不要一段看似合理的錯誤說明）。
+   ⭐ 順便當第二道把關：模型如果認為「老師給的答案」不對，會回 disagree——不寫解析，回報給老師看。
+   ⚠ 只做有文章的選擇題（沒有文章就沒有「依據」可以引）。壞掉的呼叫跳過那一題，不擋整份。 */
+const _exNorm = (t) => String(t || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+async function examExplain(secs, { onProgress } = {}) {
+  const jobs = [];
+  (secs || []).forEach((sc, si) => {
+    const fallback = ((sc.parts || []).find(x => x.readText || x.passage) || {});
+    (sc.parts || []).forEach((pt, pi) => {
+      if (pt.kind !== 'quiz') return;
+      const passage = String(pt.readText || pt.passage || fallback.readText || fallback.passage || '').trim();
+      const qs = (pt.questions || []).map((q, i) => ({ q, i })).filter(({ q }) => !q.explain && (q.options || []).length >= 2);
+      if (passage && qs.length) jobs.push({ pt, passage, qs, si, pi });
+    });
+  });
+  const L = 'ABCDEF';
+  const added = [], disputed = [];
+  let done = 0;
+  await pMap(jobs, async (j) => {
+    try {
+      const body = `PASSAGE:\n${j.passage}\n\nQUESTIONS (with the teacher's correct answer):\n` + j.qs.map(({ q, i }) =>
+        `${i + 1}. ${q.q}\n` + q.options.map((o, k) => `   ${L[k]}. ${o}`).join('\n') + `\n   CORRECT: ${L[q.answer]}`).join('\n\n');
+      const got = await _aiAsk({
+        model: GN_READ_MODEL, max_tokens: 1800,
+        system: 'You write answer explanations for Taiwanese 4th-grade English learners after a reading test. For EACH question write ONE or TWO short sentences in Traditional Chinese (at most 70 characters) saying WHY the correct answer is right, pointing at the clue in the passage. ' +
+          'Also give "quote": 3 to 12 words copied EXACTLY (same spelling) from the passage — the words that contain the clue. ' +
+          'If you are sure the teacher\'s CORRECT answer is wrong, set "disagree":true and say which letter you think is right in "think", and write no explanation. ' +
+          'Reply ONLY JSON: {"items":[{"n":1,"explain":"…","quote":"…"},{"n":2,"disagree":true,"think":"B"}]} — "n" is the question number given.',
+        messages: [{ role: 'user', content: body }],
+      }, (data) => {
+        const o = JSON.parse(_aiStripFence((data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.text || ''));   // 這個模型第一個區塊是 thinking，文字在後面
+        return o && Array.isArray(o.items) ? o : null;
+      }, 60000);
+      const hay = _exNorm(j.passage);
+      (got.items || []).forEach(it => {
+        const hit = j.qs.find(({ i }) => i + 1 === Math.round(+it.n));
+        if (!hit) return;
+        if (it.disagree) { disputed.push({ si: j.si, pi: j.pi, i: hit.i, q: hit.q.q, key: L[hit.q.answer], think: String(it.think || '?').toUpperCase().charAt(0) }); return; }
+        const explain = String(it.explain || '').trim(), quote = String(it.quote || '').trim();
+        const grounded = quote && _exNorm(quote).length >= 8 && hay.indexOf(_exNorm(quote)) >= 0;
+        if (!explain || explain.length > 160 || !/[一-鿿]/.test(explain) || !grounded) return;
+        hit.q.explain = explain; hit.q.quote = quote;
+        added.push(hit.q.q);
+      });
+    } catch (e) { /* 這一批壞了就跳過，不擋整份 */ }
+    done++; if (onProgress) onProgress(done, jobs.length);
+  }, 3);
+  return { added: added.length, disputed, parts: jobs.length };
+}
+/* 老師端按鈕用：回傳補好解析的新 sections（不動傳進來的） */
+async function aiExplainExam(item, opts) {
+  const sections = JSON.parse(JSON.stringify((item && item.sections) || []));
+  const r = await examExplain(sections, opts);
+  return { sections, ...r };
+}
+
 /* 🔴 v606 沒有解答頁時，選擇題的答案是「讀考卷的那個模型」邊讀邊猜的——而且會猜錯。
    實測 Alan 的 Taiwan Biographies（學生版，沒附解答）：Yang 那篇第 2 題「Which statement correctly compares Yang and Johnson?」
    文章明明寫 Yang 跑跳強、Johnson 投擲強，它卻選了「Yang 投擲強」。答案錯的考卷最糟：學生答對還被扣分。
@@ -6022,7 +6107,7 @@ async function aiDraftExam({ message, history, draft, mustWords, grade }) {
   return { reply: String(o.reply || '').trim(), ask: String(o.ask || '').trim(), item, notes, words,
            checks: examDraftChecks(item, words, notes), dropped, same: false };
 }
-Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examVerifyQuiz, examCleanKey: _examCleanKey });
+Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDraftExam, examDraftChecks, EXAM_DRAFT_SYS, examApplyKey, examVerifyQuiz, examExplain, aiExplainExam, examCleanKey: _examCleanKey });
 
 /* 一項準則可以給哪些分數：整套有等第就用等第；沒有就是 0 ~ 這一項的滿分 */
 function examBandsOf(R, c) {

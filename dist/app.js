@@ -363,6 +363,7 @@ function App() {
   // v362: 每日簽到
   var [myCheckin, setMyCheckin] = useAppState(null);
   var [myFixed, setMyFixed] = useAppState(null); // v465：訂正錯題的紀錄（星星要用）
+  var [myTreat, setMyTreat] = useAppState(undefined); // v612：Trick or Treat 領取紀錄（undefined＝雲端還沒回來，先不要跳南瓜）
   var [checkinOpen, setCheckinOpen] = useAppState(false);
 
   // ── Access lock (firestore.rules 部署後，未在名單內 → 鎖定頁) ──
@@ -638,9 +639,11 @@ function App() {
     setProgress({});
     setMyProgressItems({});
     setMyCheckin(null);
+    setMyTreat(undefined);
     if (!user) return;
-    var unsub = window.subscribeMyProgress(user.uid, (firestoreItems, checkin, fixed) => {
+    var unsub = window.subscribeMyProgress(user.uid, (firestoreItems, checkin, fixed, treat) => {
       setMyFixed(fixed); // v465
+      setMyTreat(treat || null); // v612
       setMyCheckin(checkin || null); // v362
       // Convert Firestore format { itemId: {done, score?, time?} } → app format { itemId: timestamp }
       var appProgress = {};
@@ -1126,8 +1129,11 @@ function App() {
     var f = window.computeFixedStars ? window.computeFixedStars(myFixed) : {
       total: 0
     }; // v465：訂正錯題
-    return (a.total || 0) + (c.total || 0) + (f.total || 0);
-  }, [user, weeks, viewOrder, qmProgress, myCheckin, myFixed]);
+    var tr = window.computeTreatStars ? window.computeTreatStars(myTreat, user.uid) : {
+      total: 0
+    }; // v612：Trick or Treat
+    return (a.total || 0) + (c.total || 0) + (f.total || 0) + (tr.total || 0);
+  }, [user, weeks, viewOrder, qmProgress, myCheckin, myFixed, myTreat]);
 
   /* v431 ④：買裝扮花掉的星星要扣掉——由「買到哪幾件」反算，不是存一個數字（見 data.js mxSpent）。
      header、集點面板、裝扮室三個地方都用這一個數，不可能對不起來。 */
@@ -4565,7 +4571,12 @@ function App() {
     weekOrder: viewOrder,
     categories: activeCategories,
     fixed: myFixed,
+    treat: myTreat,
     onClose: () => setMistakesOpen(false)
+  }), user && window.TrickOrTreat && /*#__PURE__*/React.createElement(window.TrickOrTreat, {
+    user: user,
+    treat: myTreat,
+    isTeacher: isTeacher
   }), starsOpen && user && /*#__PURE__*/React.createElement(window.StarsPanel, {
     user: user,
     onClose: () => setStarsOpen(false),

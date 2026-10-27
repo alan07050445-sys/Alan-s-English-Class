@@ -1765,7 +1765,7 @@ function CheckinPanel({ user, checkin, onClose, onDone }) {
   );
 }
 
-function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed, mx, onOpenDress }) {
+function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed, treat, mx, onOpenDress }) {
   const [tab, setTab]   = React.useState('me');   // 'me' | 'shop'
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
@@ -1789,8 +1789,9 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
     const c = window.computeCheckin ? window.computeCheckin(checkin) : { total: 0, entries: [] };
     // v465：訂正錯題的星星也算進來（跟 header 右上角那顆 ⭐ 用同一組函式）
     const f = window.computeFixedStars ? window.computeFixedStars(fixed) : { total: 0, entries: [] };
-    return { total: a.total + c.total + f.total, entries: [...a.entries, ...c.entries, ...f.entries] };
-  }, [weeks, weekOrder, progItems, checkin, fixed]);
+    const tr = window.computeTreatStars ? window.computeTreatStars(treat, user && user.uid) : { total: 0, entries: [] };   // v612
+    return { total: a.total + c.total + f.total + tr.total, entries: [...a.entries, ...c.entries, ...f.entries, ...tr.entries] };
+  }, [weeks, weekOrder, progItems, checkin, fixed, treat]);
   /* v431 ④：買吉祥物裝扮花掉的星星要扣掉。花了多少由「買到哪幾件」反算（data.js mxSpent），
      跟 header 右上角那顆 ⭐ 用的是同一個算法，兩邊不可能對不起來。 */
   const spent = window.mxSpent ? window.mxSpent(mx) : 0;
@@ -1979,4 +1980,95 @@ function Footer({ onOpenGuide }) {
   );
 }
 
-Object.assign(window, { Boom, Footer, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+
+/* ───────── v612 🎃 Trick or Treat（倒數歸零之後，點南瓜領 ⭐100~500）─────────
+   ⚠ 獎品不是這裡抽的——是 data.js treatPrize(uid, 活動) 反算的固定數字（重整不會重抽、改雲端的數字也沒用）。
+   ⚠ treat === undefined＝雲端還沒回來；這時候不能跳（領過的孩子會先看到一下南瓜又消失）。
+   ⚠ 老師預覽：自己的瀏覽器主控台  localStorage.setItem('alan-treat-preview','1') 再重新整理，
+     就會在任何日期看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。 */
+function TrickOrTreat({ user, treat, isTeacher }) {
+  const KEY = 'hw2026';
+  const preview = (() => { try { return !!isTeacher && localStorage.getItem('alan-treat-preview') === '1'; } catch (e) { return false; } })();
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 1000); return () => clearInterval(id); }, []);   // 倒數歸零的那一秒要自己冒出來
+  const [phase, setPhase] = React.useState('idle');     // idle → shake → reveal
+  const [closed, setClosed] = React.useState(false);
+  const [mini, setMini] = React.useState(() => { try { return sessionStorage.getItem('alan-treat-mini') === '1'; } catch (e) { return false; } });
+  const [err, setErr] = React.useState('');
+  const [demo] = React.useState(() => { const t = window.TREAT_TABLE || [[100, 1]]; return t[Math.floor(Math.random() * t.length)][0]; });
+  const numRef = React.useRef(null);
+  const confetti = React.useMemo(() => Array.from({ length: 26 }, (_, i) => ({
+    e: ['⭐', '🎃', '🦇', '✨'][i % 4], l: Math.round(Math.random() * 100), d: (Math.random() * 1.2).toFixed(2), t: (2.4 + Math.random() * 2).toFixed(2),
+  })), []);
+  const prize = preview ? demo : (window.treatPrize ? window.treatPrize(user && user.uid, KEY) : 0);
+  const prizeRef = React.useRef(prize); prizeRef.current = prize;
+
+  React.useEffect(() => {
+    if (phase !== 'reveal') return;
+    const el = numRef.current, to = prizeRef.current;
+    if (!el) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = to; return; }
+    const t0 = performance.now(), dur = 1800; let raf;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(to * e);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [phase]);
+
+  if (!window.treatOpenAt || !user || closed) return null;
+  if (!preview && (!window.treatOpenAt(KEY) || treat === undefined)) return null;
+  const at = Number(treat && treat[KEY]);
+  const claimed = at > 1e11 && window.treatOpenAt(KEY, at);
+  if (!preview && claimed && phase === 'idle') return null;
+
+  const crack = () => {
+    if (phase !== 'idle') return;
+    setErr(''); setPhase('shake');
+    const wait = new Promise(r => setTimeout(r, 1400));
+    const save = preview ? Promise.resolve() : window.claimTreat(user.uid, user.displayName, user.email, KEY);
+    Promise.all([save, wait]).then(() => setPhase('reveal'))
+      .catch(() => { setPhase('idle'); setErr('網路不太穩，南瓜沒打開，再點一次試試看'); });
+  };
+  const later = () => { setMini(true); try { sessionStorage.setItem('alan-treat-mini', '1'); } catch (e) {} };
+  const reopen = () => { setMini(false); try { sessionStorage.removeItem('alan-treat-mini'); } catch (e) {} };
+
+  if (mini && phase === 'idle') {
+    return <button className="tot-fab" onClick={reopen} aria-label="Trick or Treat！點我領南瓜獎勵">🎃<span>Trick or Treat</span></button>;
+  }
+  return (
+    <div className={'tot-back tot-' + phase} role="dialog" aria-modal="true" aria-label="Trick or Treat">
+      <div className="tot-stage">
+        {phase === 'reveal' && <div className="tot-rain" aria-hidden="true">
+          {confetti.map((c, i) => <i key={i} style={{ left: c.l + '%', animationDelay: c.d + 's', animationDuration: c.t + 's' }}>{c.e}</i>)}
+        </div>}
+        {phase !== 'reveal' ? (
+          <>
+            <div className="tot-bats" aria-hidden="true"><i>🦇</i><i>🦇</i><i>🦇</i></div>
+            <h2 className="tot-title">Trick or Treat!</h2>
+            <p className="tot-sub">萬聖節快樂！南瓜裡藏了一份禮物，點一下打開它</p>
+            <button className="tot-pumpkin" onClick={crack} disabled={phase !== 'idle'} aria-label="打開南瓜">
+              <span className="tot-glow" aria-hidden="true"/>
+              <b>🎃</b>
+            </button>
+            {err && <p className="tot-err">{err}</p>}
+            {phase === 'idle' && <button className="tot-later" onClick={later}>等一下再開</button>}
+          </>
+        ) : (
+          <div className="tot-win">
+            <div className="tot-burst" aria-hidden="true">🎃</div>
+            <p className="tot-got">你得到了</p>
+            <div className="tot-num"><span ref={numRef}>0</span><em>⭐</em></div>
+            <p className="tot-sub">{prize >= 400 ? '哇！超級大獎！' : prize >= 250 ? '好棒！手氣很好喔！' : '星星已經放進你的口袋了！'}</p>
+            {preview && <p className="tot-err">（預覽：這不會寫入、也不會給星星）</p>}
+            <button className="tot-ok" onClick={() => setClosed(true)}>收下 🎉</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { Boom, Footer, TrickOrTreat, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

@@ -2285,9 +2285,18 @@ function StarsManager({
         total: 0,
         entries: []
       };
+      // v612：訂正錯題與 Trick or Treat——學生端早就算進去了，後台以前少了訂正這一塊，兩邊對不起來
+      var f = window.computeFixedStars ? window.computeFixedStars(st.fixed) : {
+        total: 0,
+        entries: []
+      };
+      var tr = window.computeTreatStars ? window.computeTreatStars(st.treat, st.uid) : {
+        total: 0,
+        entries: []
+      };
       m[em] = {
-        total: a.total + c.total,
-        entries: [...a.entries, ...c.entries]
+        total: a.total + c.total + f.total + tr.total,
+        entries: [...a.entries, ...c.entries, ...f.entries, ...tr.entries]
       };
     });
     return m;

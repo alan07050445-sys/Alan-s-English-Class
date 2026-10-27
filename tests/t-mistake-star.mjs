@@ -43,7 +43,7 @@ ok('⭐ 有寫下原因：星星是從「做過什麼」反算，但訂正是把
    /而「訂正」做完的動作是\*\*把錯題刪掉\*\*——刪掉就沒有東西可以反算了/.test(data));
 ok('存在 progress/{uid}.fixed.days（跟著人走，換年級不會消失）',
    /\[`fixed\.days\.\$\{checkinToday\(\)\}`\]: firebase\.firestore\.FieldValue\.increment\(1\)/.test(data));
-ok('訂閱時把 fixed 一起帶出來', /callback\(d\.items \|\| \{\}, d\.checkin \|\| null, d\.fixed \|\| null\);/.test(data));
+ok('訂閱時把 fixed 一起帶出來', /callback\(d\.items \|\| \{\}, d\.checkin \|\| null, d\.fixed \|\| null/.test(data));
 ok('⚠ 匯出掛在定義之後（const 寫進上面那張表會 TDZ——v451 踩過）',
    /一定要掛在這裡（定義之後）。FIX_STAR \/ FIX_DAILY_CAP 是 const/.test(data)
    && data.indexOf('Object.assign(window, { computeFixedStars') > data.indexOf('const FIX_STAR'));
@@ -51,7 +51,7 @@ ok('⚠ 匯出掛在定義之後（const 寫進上面那張表會 TDZ——v451 
 console.log('\n【3】兩邊的星星數字要一致');
 ok('header 右上角那顆 ⭐ 有加進來', /const f = window\.computeFixedStars \? window\.computeFixedStars\(myFixed\)/.test(app));
 ok('集點面板也有加進來', /const f = window\.computeFixedStars \? window\.computeFixedStars\(fixed\)/.test(shell));
-ok('集點紀錄清單也看得到這一筆', /entries: \[\.\.\.a\.entries, \.\.\.c\.entries, \.\.\.f\.entries\]/.test(shell));
+ok('集點紀錄清單也看得到這一筆', /entries: \[\.\.\.a\.entries, \.\.\.c\.entries, \.\.\.f\.entries/.test(shell));
 ok('StarsPanel 收得到 fixed', /function StarsPanel\(\{[^}]*fixed,/.test(shell));
 
 console.log('\n【4】答對才給，而且只給一次');

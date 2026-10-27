@@ -50,7 +50,7 @@ console.log('\n【3】老師那兩包：只有老師才載，而且學生頁不�
 ok('⭐ app.jsx 只在 isTeacher 才呼叫 loadTeacherBundle，載完 setTbReady 重畫，失敗最多重試 3 次', /if \(!isTeacher \|\| tbReady \|\| !window\.loadTeacherBundle\) return;/.test(noC(app)) && /setTbReady\(true\)/.test(app) && /n < 3/.test(app));
 ok('⭐ 老師專用的視窗一律經過 Lazy（沒載進來就不畫）——不再直接 <window.EditorModal …>', !/<window\.(EditorModal|WeekModal|GrammarGenModal|ReadingGenModal|QuickSetModal|TermSetupModal|ExportModal|TeacherDashboard)\b/.test(noC(app))
   && /function Lazy\(\{ n, \.\.\.p \}\)/.test(app));
-ok('⭐⭐ Footer 是學生頁也會畫的，已經搬到學生一定會載的 components-shell（editor 裡不再有）', /function Footer\(/.test(shell) && !/function Footer\(/.test(editor) && /Boom, Footer, findUnitsIn/.test(shell));
+ok('⭐⭐ Footer 是學生頁也會畫的，已經搬到學生一定會載的 components-shell（editor 裡不再有）', /function Footer\(/.test(shell) && !/function Footer\(/.test(editor) && /Boom, Footer,[\w, ]*findUnitsIn/.test(shell));
 /* 用 Babel 作用域分析：學生那七包有沒有用到「只在老師那兩包定義」的名字 */
 const Babel = require(path.join(ROOT, 'tools/babel.min.js'));
 const files = ['data.js', 'data-g1.js', 'data-g2.js', 'data-g4.js', 'data-g5.js', 'data-g6.js', 'data-summer.js', 'data-grammar.js', 'components-shell.jsx', 'components-quiz.jsx', 'components-flashcard.jsx', 'components-editor.jsx', 'components-quiz-mode.jsx', 'components-dashboard.jsx', 'components-mistakes.jsx', 'app.jsx', 'components-fx.jsx'];

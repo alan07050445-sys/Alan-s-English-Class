@@ -948,7 +948,7 @@ function subscribeMyProgress(uid, callback) {
   return _db.collection('progress').doc(uid).onSnapshot(snap => {
     const d = snap.exists ? (snap.data() || {}) : {};
     // v362: 第二個＝每日簽到；v465: 第三個＝訂正錯題的紀錄（星星要用）
-    callback(d.items || {}, d.checkin || null, d.fixed || null);
+    callback(d.items || {}, d.checkin || null, d.fixed || null, d.treat || null);   // v612：第四個＝Trick or Treat 的領取紀錄
   });
 }
 
@@ -968,6 +968,8 @@ function subscribeAllStudents(callback) {
         streak: d.streak || { count: 0 },
         badges: d.badges || {},
         checkin: d.checkin || null,   // v362
+        fixed: d.fixed || null,       // v612：後台以前沒算訂正錯題的星星，跟學生端對不起來
+        treat: d.treat || null,       // v612：Trick or Treat
         mx: d.mx || {},               // v448：後台要看得到「買過哪些裝扮」才算得出真正的星星數
       });
     });
@@ -11104,6 +11106,66 @@ async function markMistakeFixed(uid, displayName, email) {
 /* ⚠ 一定要掛在這裡（定義之後）。FIX_STAR / FIX_DAILY_CAP 是 const，
    寫進檔案上方那張匯出表會 TDZ 爆掉——v451 踩過同一個坑。 */
 Object.assign(window, { computeFixedStars, markMistakeFixed, FIX_STAR, FIX_DAILY_CAP });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v612 🎃 Trick or Treat（Alan：「倒數歸零的 Trick or Treat 動畫，南瓜的獎品 100~500 顆星星」）
+   ──────────────────────────────────────────────────────────────────────────
+   跟簽到（v362）、訂正（v465）同一套做法：**星星是算出來的，不是存的**。
+   ⭐ 學生自己的 progress/{uid}.treat.<活動> 只存「他按下去的時間」；**獎品是由帳號反算的**
+     （treatPrize：uid＋活動名 → 固定的一個數字）。所以：
+       · 重新整理、換裝置、清快取都不會重抽（抽不到更好的）
+       · 想在主控台自己寫一個「500」進去也沒用——存的數字根本不被讀
+   ⚠ 只認「領取時間落在活動期間」的紀錄；期間之外寫進去的不算。
+   ⚠ 領取期間比倒數歸零（10/31 00:00）多給兩天：週末沒上線的孩子不會白白錯過。
+   ⚠ 獎品權重偏低（平均約 ⭐190 ≒ NT$10；星星＝NT$×20）——這是真的會花掉的錢，
+     想調高調低只要改 TREAT_TABLE，已領的人下次算星星就會跟著變。 */
+const TREATS = {
+  hw2026: { from: '2026-10-31', until: '2026-11-02', zh: '萬聖節 Trick or Treat 🎃' },
+};
+const TREAT_TABLE = [[100, 30], [150, 22], [200, 18], [250, 12], [300, 8], [350, 5], [400, 3], [450, 1.5], [500, 0.5]];   // [星星, 權重]
+function treatPrize(uid, key) {
+  let h = 2166136261;
+  const str = String(uid || '') + '|' + String(key || '');
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  const u = ((h >>> 0) / 4294967296) * TREAT_TABLE.reduce((a, r) => a + r[1], 0);
+  let acc = 0;
+  for (const [stars, w] of TREAT_TABLE) { acc += w; if (u < acc) return stars; }
+  return TREAT_TABLE[0][0];
+}
+function _treatDay(t) { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+/* 現在（或某個時間）這個活動能不能領 */
+function treatOpenAt(key, t) {
+  const c = TREATS[key]; if (!c) return false;
+  const d = _treatDay(t == null ? Date.now() : t);
+  return d >= c.from && d <= c.until;
+}
+function computeTreatStars(treat, uid) {
+  const entries = []; let total = 0;
+  Object.keys(TREATS).forEach(key => {
+    const at = Number(treat && treat[key]);
+    if (!(at > 1e11) || !treatOpenAt(key, at)) return;
+    const n = treatPrize(uid, key);
+    total += n;
+    entries.push({ id: 'treat:' + key, auto: true, date: _treatDay(at), amount: n, note: TREATS[key].zh + ' 南瓜獎勵' });
+  });
+  return { total, entries };
+}
+/* 按下南瓜 → 記一筆（雲端）。已經領過就不蓋掉第一次的時間。 */
+async function claimTreat(uid, displayName, email, key) {
+  if (!uid || !TREATS[key]) throw new Error('bad-claim');
+  const ref = _db.collection('progress').doc(uid);
+  const snap = await ref.get();
+  const had = snap.exists && snap.data() && snap.data().treat && Number(snap.data().treat[key]) > 1e11;
+  if (had) return false;
+  const profile = { updatedAt: Date.now() };
+  if (displayName && displayName.trim()) profile.name  = displayName.trim();
+  if (email      && email.trim())        profile.email = email.trim();
+  await ref.set(profile, { merge: true });
+  await ref.update({ [`treat.${key}`]: Date.now() });
+  return true;
+}
+Object.assign(window, { TREATS, TREAT_TABLE, treatPrize, treatOpenAt, computeTreatStars, claimTreat });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};

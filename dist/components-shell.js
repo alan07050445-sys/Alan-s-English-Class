@@ -2541,6 +2541,7 @@ function StarsPanel({
   progItems,
   checkin,
   fixed,
+  treat,
   mx,
   onOpenDress
 }) {
@@ -2579,11 +2580,15 @@ function StarsPanel({
       total: 0,
       entries: []
     };
+    var tr = window.computeTreatStars ? window.computeTreatStars(treat, user && user.uid) : {
+      total: 0,
+      entries: []
+    }; // v612
     return {
-      total: a.total + c.total + f.total,
-      entries: [...a.entries, ...c.entries, ...f.entries]
+      total: a.total + c.total + f.total + tr.total,
+      entries: [...a.entries, ...c.entries, ...f.entries, ...tr.entries]
     };
-  }, [weeks, weekOrder, progItems, checkin, fixed]);
+  }, [weeks, weekOrder, progItems, checkin, fixed, treat]);
   /* v431 ④：買吉祥物裝扮花掉的星星要扣掉。花了多少由「買到哪幾件」反算（data.js mxSpent），
      跟 header 右上角那顆 ⭐ 用的是同一個算法，兩邊不可能對不起來。 */
   var spent = window.mxSpent ? window.mxSpent(mx) : 0;
@@ -2787,9 +2792,173 @@ function Footer({
     className: "ll-foot2-mini"
   }, "\u5C0D\u9F4A\u5EB7\u6A4B\u570B\u969B\u5B78\u6821\u6BCF\u9031\u9032\u5EA6 \xB7 \u7528\u5FC3\u88FD\u4F5C")));
 }
+
+/* ───────── v612 🎃 Trick or Treat（倒數歸零之後，點南瓜領 ⭐100~500）─────────
+   ⚠ 獎品不是這裡抽的——是 data.js treatPrize(uid, 活動) 反算的固定數字（重整不會重抽、改雲端的數字也沒用）。
+   ⚠ treat === undefined＝雲端還沒回來；這時候不能跳（領過的孩子會先看到一下南瓜又消失）。
+   ⚠ 老師預覽：自己的瀏覽器主控台  localStorage.setItem('alan-treat-preview','1') 再重新整理，
+     就會在任何日期看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。 */
+function TrickOrTreat({
+  user,
+  treat,
+  isTeacher
+}) {
+  var KEY = 'hw2026';
+  var preview = (() => {
+    try {
+      return !!isTeacher && localStorage.getItem('alan-treat-preview') === '1';
+    } catch (e) {
+      return false;
+    }
+  })();
+  var [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    var id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []); // 倒數歸零的那一秒要自己冒出來
+  var [phase, setPhase] = React.useState('idle'); // idle → shake → reveal
+  var [closed, setClosed] = React.useState(false);
+  var [mini, setMini] = React.useState(() => {
+    try {
+      return sessionStorage.getItem('alan-treat-mini') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+  var [err, setErr] = React.useState('');
+  var [demo] = React.useState(() => {
+    var t = window.TREAT_TABLE || [[100, 1]];
+    return t[Math.floor(Math.random() * t.length)][0];
+  });
+  var numRef = React.useRef(null);
+  var confetti = React.useMemo(() => Array.from({
+    length: 26
+  }, (_, i) => ({
+    e: ['⭐', '🎃', '🦇', '✨'][i % 4],
+    l: Math.round(Math.random() * 100),
+    d: (Math.random() * 1.2).toFixed(2),
+    t: (2.4 + Math.random() * 2).toFixed(2)
+  })), []);
+  var prize = preview ? demo : window.treatPrize ? window.treatPrize(user && user.uid, KEY) : 0;
+  var prizeRef = React.useRef(prize);
+  prizeRef.current = prize;
+  React.useEffect(() => {
+    if (phase !== 'reveal') return;
+    var el = numRef.current,
+      to = prizeRef.current;
+    if (!el) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.textContent = to;
+      return;
+    }
+    var t0 = performance.now(),
+      dur = 1800;
+    var raf;
+    var step = now => {
+      var k = Math.min(1, (now - t0) / dur),
+        e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(to * e);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [phase]);
+  if (!window.treatOpenAt || !user || closed) return null;
+  if (!preview && (!window.treatOpenAt(KEY) || treat === undefined)) return null;
+  var at = Number(treat && treat[KEY]);
+  var claimed = at > 1e11 && window.treatOpenAt(KEY, at);
+  if (!preview && claimed && phase === 'idle') return null;
+  var crack = () => {
+    if (phase !== 'idle') return;
+    setErr('');
+    setPhase('shake');
+    var wait = new Promise(r => setTimeout(r, 1400));
+    var save = preview ? Promise.resolve() : window.claimTreat(user.uid, user.displayName, user.email, KEY);
+    Promise.all([save, wait]).then(() => setPhase('reveal')).catch(() => {
+      setPhase('idle');
+      setErr('網路不太穩，南瓜沒打開，再點一次試試看');
+    });
+  };
+  var later = () => {
+    setMini(true);
+    try {
+      sessionStorage.setItem('alan-treat-mini', '1');
+    } catch (e) {}
+  };
+  var reopen = () => {
+    setMini(false);
+    try {
+      sessionStorage.removeItem('alan-treat-mini');
+    } catch (e) {}
+  };
+  if (mini && phase === 'idle') {
+    return /*#__PURE__*/React.createElement("button", {
+      className: "tot-fab",
+      onClick: reopen,
+      "aria-label": "Trick or Treat\uFF01\u9EDE\u6211\u9818\u5357\u74DC\u734E\u52F5"
+    }, "\uD83C\uDF83", /*#__PURE__*/React.createElement("span", null, "Trick or Treat"));
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: 'tot-back tot-' + phase,
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": "Trick or Treat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tot-stage"
+  }, phase === 'reveal' && /*#__PURE__*/React.createElement("div", {
+    className: "tot-rain",
+    "aria-hidden": "true"
+  }, confetti.map((c, i) => /*#__PURE__*/React.createElement("i", {
+    key: i,
+    style: {
+      left: c.l + '%',
+      animationDelay: c.d + 's',
+      animationDuration: c.t + 's'
+    }
+  }, c.e))), phase !== 'reveal' ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "tot-bats",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("i", null, "\uD83E\uDD87"), /*#__PURE__*/React.createElement("i", null, "\uD83E\uDD87"), /*#__PURE__*/React.createElement("i", null, "\uD83E\uDD87")), /*#__PURE__*/React.createElement("h2", {
+    className: "tot-title"
+  }, "Trick or Treat!"), /*#__PURE__*/React.createElement("p", {
+    className: "tot-sub"
+  }, "\u842C\u8056\u7BC0\u5FEB\u6A02\uFF01\u5357\u74DC\u88E1\u85CF\u4E86\u4E00\u4EFD\u79AE\u7269\uFF0C\u9EDE\u4E00\u4E0B\u6253\u958B\u5B83"), /*#__PURE__*/React.createElement("button", {
+    className: "tot-pumpkin",
+    onClick: crack,
+    disabled: phase !== 'idle',
+    "aria-label": "\u6253\u958B\u5357\u74DC"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "tot-glow",
+    "aria-hidden": "true"
+  }), /*#__PURE__*/React.createElement("b", null, "\uD83C\uDF83")), err && /*#__PURE__*/React.createElement("p", {
+    className: "tot-err"
+  }, err), phase === 'idle' && /*#__PURE__*/React.createElement("button", {
+    className: "tot-later",
+    onClick: later
+  }, "\u7B49\u4E00\u4E0B\u518D\u958B")) : /*#__PURE__*/React.createElement("div", {
+    className: "tot-win"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tot-burst",
+    "aria-hidden": "true"
+  }, "\uD83C\uDF83"), /*#__PURE__*/React.createElement("p", {
+    className: "tot-got"
+  }, "\u4F60\u5F97\u5230\u4E86"), /*#__PURE__*/React.createElement("div", {
+    className: "tot-num"
+  }, /*#__PURE__*/React.createElement("span", {
+    ref: numRef
+  }, "0"), /*#__PURE__*/React.createElement("em", null, "\u2B50")), /*#__PURE__*/React.createElement("p", {
+    className: "tot-sub"
+  }, prize >= 400 ? '哇！超級大獎！' : prize >= 250 ? '好棒！手氣很好喔！' : '星星已經放進你的口袋了！'), preview && /*#__PURE__*/React.createElement("p", {
+    className: "tot-err"
+  }, "\uFF08\u9810\u89BD\uFF1A\u9019\u4E0D\u6703\u5BEB\u5165\u3001\u4E5F\u4E0D\u6703\u7D66\u661F\u661F\uFF09"), /*#__PURE__*/React.createElement("button", {
+    className: "tot-ok",
+    onClick: () => setClosed(true)
+  }, "\u6536\u4E0B \uD83C\uDF89"))));
+}
 Object.assign(window, {
   Boom,
   Footer,
+  TrickOrTreat,
   findUnitsIn,
   FullscreenBtn,
   FocusBtn,

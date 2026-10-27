@@ -853,7 +853,7 @@ function subscribeMyProgress(uid, callback) {
   return _db.collection('progress').doc(uid).onSnapshot(snap => {
     const d = snap.exists ? (snap.data() || {}) : {};
     // v362: 第二個＝每日簽到；v465: 第三個＝訂正錯題的紀錄（星星要用）
-    callback(d.items || {}, d.checkin || null, d.fixed || null);
+    callback(d.items || {}, d.checkin || null, d.fixed || null, d.treat || null);   // v612：第四個＝Trick or Treat 的領取紀錄
   });
 }
 
@@ -873,6 +873,8 @@ function subscribeAllStudents(callback) {
         streak: d.streak || { count: 0 },
         badges: d.badges || {},
         checkin: d.checkin || null,   // v362
+        fixed: d.fixed || null,       // v612：後台以前沒算訂正錯題的星星，跟學生端對不起來
+        treat: d.treat || null,       // v612：Trick or Treat
         mx: d.mx || {},               // v448：後台要看得到「買過哪些裝扮」才算得出真正的星星數
       });
     });
@@ -1789,29 +1791,6 @@ function _aiStripFence(t) {
   return (m ? m[1] : s).trim();
 }
 
-/* ── v392: AI 呼叫的三個共用小工具 ──────────────────────────────────────
-   為什麼要加：出一套時態題原本要 118 秒，老師在校稿頁前面乾等。
-   量出來的延遲公式是 latency ≈ 1.4s + output_tokens / 176 ——
-   幾乎全部是「吐字時間」，跟 prompt 長短、max_tokens 都無關。
-   所以只有兩條路能快：把請求拆小、以及把請求同時送出去。 */
-
-/* pMap：有上限的平行 map。單一請求失敗只讓那一格變 null，不會拖垮整批
-   （呼叫端本來就要驗證＋補不足，null 就當成「這一發沒中」）。
-   端點是 HTTP/2，實測 30 個請求同時打全部成功、沒有被限流；
-   瀏覽器對 HTTP/2 也沒有「每網域 6 條連線」的限制，所以平行在前端真的會生效。 */
-async function pMap(list, fn, limit = 8) {
-  const out = new Array(list.length);
-  let i = 0;
-  const worker = async () => {
-    while (i < list.length) {
-      const k = i++;
-      try { out[k] = await fn(list[k], k); } catch (e) { out[k] = null; }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
-  return out;
-}
-
 /* fetchT：帶逾時的 fetch。原本全站的 AI fetch 都沒有 timeout，
    Worker 收下請求卻不回應時 promise 永遠 pending → UI 的 busy 狀態永遠不解除。
    逾時會丟 AbortError，呼叫端據此給「太久沒有回應」的文案。 */
@@ -1966,9 +1945,6 @@ async function _aiAsk(body, pick, timeoutMs) {
    ⚠ 沿用 v382 的教訓：AI 產出一律程式驗，驗不過的丟掉或重出，絕不整批信任。
    ══════════════════════════════════════════════════════════════════════════ */
 const GN_MODEL = 'claude-haiku-4-5';
-// 看照片用 Sonnet：v428 用同一張作業實測，兩個都讀到 10/10 題、都約 8 秒，
-// 但 Haiku 把「你的書包裡有任何書嗎」讀成「有什麼書」，還自己填上作業沒印的答案；Sonnet 逐字照抄。
-const GN_READ_MODEL = 'claude-sonnet-5';
 
 // v430：選項本身就是完整句子（「選出正確的句子」）→ 題目只要一句 Choose the correct answer.
 //       Alan：「應該問題只要顯示Choose the correct answer就好了吧？ 不然太亂了」
@@ -3343,66 +3319,7 @@ function examDraftSave(progressKey, item, { ans, mood } = {}) {
 function examDraftClear(progressKey) { try { localStorage.removeItem(_examDraftKey(progressKey)); } catch (e) {} }
 Object.assign(window, { examDraftSig, examDraftHas, examDraftLoad, examDraftSave, examDraftClear, EXAM_DRAFT_TTL });
 
-/* ══ v607 ② 交卷後的解析（AI 幫選擇題寫「為什麼是這個答案」）══════════════════════════════════
-   學生考完只知道對錯，不知道**為什麼**——沒有學到東西。
-   ⭐ 每一題要「指得出文章裡的依據」：模型要回 quote（逐字抄文章裡的 3~12 個字），程式驗 quote 真的在文章裡才收；
-     抄不到＝它在憑空解釋，這一題不收（寧可沒有解析，也不要一段看似合理的錯誤說明）。
-   ⭐ 順便當第二道把關：模型如果認為「老師給的答案」不對，會回 disagree——不寫解析，回報給老師看。
-   ⚠ 只做有文章的選擇題（沒有文章就沒有「依據」可以引）。壞掉的呼叫跳過那一題，不擋整份。 */
-const _exNorm = (t) => String(t || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
-async function examExplain(secs, { onProgress } = {}) {
-  const jobs = [];
-  (secs || []).forEach((sc, si) => {
-    const fallback = ((sc.parts || []).find(x => x.readText || x.passage) || {});
-    (sc.parts || []).forEach((pt, pi) => {
-      if (pt.kind !== 'quiz') return;
-      const passage = String(pt.readText || pt.passage || fallback.readText || fallback.passage || '').trim();
-      const qs = (pt.questions || []).map((q, i) => ({ q, i })).filter(({ q }) => !q.explain && (q.options || []).length >= 2);
-      if (passage && qs.length) jobs.push({ pt, passage, qs, si, pi });
-    });
-  });
-  const L = 'ABCDEF';
-  const added = [], disputed = [];
-  let done = 0;
-  await pMap(jobs, async (j) => {
-    try {
-      const body = `PASSAGE:\n${j.passage}\n\nQUESTIONS (with the teacher's correct answer):\n` + j.qs.map(({ q, i }) =>
-        `${i + 1}. ${q.q}\n` + q.options.map((o, k) => `   ${L[k]}. ${o}`).join('\n') + `\n   CORRECT: ${L[q.answer]}`).join('\n\n');
-      const got = await _aiAsk({
-        model: GN_READ_MODEL, max_tokens: 1800,
-        system: 'You write answer explanations for Taiwanese 4th-grade English learners after a reading test. For EACH question write ONE or TWO short sentences in Traditional Chinese (at most 70 characters) saying WHY the correct answer is right, pointing at the clue in the passage. ' +
-          'Also give "quote": 3 to 12 words copied EXACTLY (same spelling) from the passage — the words that contain the clue. ' +
-          'If you are sure the teacher\'s CORRECT answer is wrong, set "disagree":true and say which letter you think is right in "think", and write no explanation. ' +
-          'Reply ONLY JSON: {"items":[{"n":1,"explain":"…","quote":"…"},{"n":2,"disagree":true,"think":"B"}]} — "n" is the question number given.',
-        messages: [{ role: 'user', content: body }],
-      }, (data) => {
-        const o = JSON.parse(_aiStripFence((data?.content || []).filter(b => b && b.type === 'text').map(b => b.text).join('') || data?.text || ''));   // 這個模型第一個區塊是 thinking，文字在後面
-        return o && Array.isArray(o.items) ? o : null;
-      }, 60000);
-      const hay = _exNorm(j.passage);
-      (got.items || []).forEach(it => {
-        const hit = j.qs.find(({ i }) => i + 1 === Math.round(+it.n));
-        if (!hit) return;
-        if (it.disagree) { disputed.push({ si: j.si, pi: j.pi, i: hit.i, q: hit.q.q, key: L[hit.q.answer], think: String(it.think || '?').toUpperCase().charAt(0) }); return; }
-        const explain = String(it.explain || '').trim(), quote = String(it.quote || '').trim();
-        const grounded = quote && _exNorm(quote).length >= 8 && hay.indexOf(_exNorm(quote)) >= 0;
-        if (!explain || explain.length > 160 || !/[一-鿿]/.test(explain) || !grounded) return;
-        hit.q.explain = explain; hit.q.quote = quote;
-        added.push(hit.q.q);
-      });
-    } catch (e) { /* 這一批壞了就跳過，不擋整份 */ }
-    done++; if (onProgress) onProgress(done, jobs.length);
-  }, 3);
-  return { added: added.length, disputed, parts: jobs.length };
-}
-/* 老師端按鈕用：回傳補好解析的新 sections（不動傳進來的） */
-async function aiExplainExam(item, opts) {
-  const sections = JSON.parse(JSON.stringify((item && item.sections) || []));
-  const r = await examExplain(sections, opts);
-  return { sections, ...r };
-}
 
-Object.assign(window, { examExplain, aiExplainExam });
 
 /* ══════════════════════════════════════════════════════════════════════════
    v515 📄 模擬考卷（Alan 給了兩張真的 G4 Formative，要做成互動版）
@@ -4421,6 +4338,66 @@ async function markMistakeFixed(uid, displayName, email) {
 /* ⚠ 一定要掛在這裡（定義之後）。FIX_STAR / FIX_DAILY_CAP 是 const，
    寫進檔案上方那張匯出表會 TDZ 爆掉——v451 踩過同一個坑。 */
 Object.assign(window, { computeFixedStars, markMistakeFixed, FIX_STAR, FIX_DAILY_CAP });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v612 🎃 Trick or Treat（Alan：「倒數歸零的 Trick or Treat 動畫，南瓜的獎品 100~500 顆星星」）
+   ──────────────────────────────────────────────────────────────────────────
+   跟簽到（v362）、訂正（v465）同一套做法：**星星是算出來的，不是存的**。
+   ⭐ 學生自己的 progress/{uid}.treat.<活動> 只存「他按下去的時間」；**獎品是由帳號反算的**
+     （treatPrize：uid＋活動名 → 固定的一個數字）。所以：
+       · 重新整理、換裝置、清快取都不會重抽（抽不到更好的）
+       · 想在主控台自己寫一個「500」進去也沒用——存的數字根本不被讀
+   ⚠ 只認「領取時間落在活動期間」的紀錄；期間之外寫進去的不算。
+   ⚠ 領取期間比倒數歸零（10/31 00:00）多給兩天：週末沒上線的孩子不會白白錯過。
+   ⚠ 獎品權重偏低（平均約 ⭐190 ≒ NT$10；星星＝NT$×20）——這是真的會花掉的錢，
+     想調高調低只要改 TREAT_TABLE，已領的人下次算星星就會跟著變。 */
+const TREATS = {
+  hw2026: { from: '2026-10-31', until: '2026-11-02', zh: '萬聖節 Trick or Treat 🎃' },
+};
+const TREAT_TABLE = [[100, 30], [150, 22], [200, 18], [250, 12], [300, 8], [350, 5], [400, 3], [450, 1.5], [500, 0.5]];   // [星星, 權重]
+function treatPrize(uid, key) {
+  let h = 2166136261;
+  const str = String(uid || '') + '|' + String(key || '');
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  const u = ((h >>> 0) / 4294967296) * TREAT_TABLE.reduce((a, r) => a + r[1], 0);
+  let acc = 0;
+  for (const [stars, w] of TREAT_TABLE) { acc += w; if (u < acc) return stars; }
+  return TREAT_TABLE[0][0];
+}
+function _treatDay(t) { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+/* 現在（或某個時間）這個活動能不能領 */
+function treatOpenAt(key, t) {
+  const c = TREATS[key]; if (!c) return false;
+  const d = _treatDay(t == null ? Date.now() : t);
+  return d >= c.from && d <= c.until;
+}
+function computeTreatStars(treat, uid) {
+  const entries = []; let total = 0;
+  Object.keys(TREATS).forEach(key => {
+    const at = Number(treat && treat[key]);
+    if (!(at > 1e11) || !treatOpenAt(key, at)) return;
+    const n = treatPrize(uid, key);
+    total += n;
+    entries.push({ id: 'treat:' + key, auto: true, date: _treatDay(at), amount: n, note: TREATS[key].zh + ' 南瓜獎勵' });
+  });
+  return { total, entries };
+}
+/* 按下南瓜 → 記一筆（雲端）。已經領過就不蓋掉第一次的時間。 */
+async function claimTreat(uid, displayName, email, key) {
+  if (!uid || !TREATS[key]) throw new Error('bad-claim');
+  const ref = _db.collection('progress').doc(uid);
+  const snap = await ref.get();
+  const had = snap.exists && snap.data() && snap.data().treat && Number(snap.data().treat[key]) > 1e11;
+  if (had) return false;
+  const profile = { updatedAt: Date.now() };
+  if (displayName && displayName.trim()) profile.name  = displayName.trim();
+  if (email      && email.trim())        profile.email = email.trim();
+  await ref.set(profile, { merge: true });
+  await ref.update({ [`treat.${key}`]: Date.now() });
+  return true;
+}
+Object.assign(window, { TREATS, TREAT_TABLE, treatPrize, treatOpenAt, computeTreatStars, claimTreat });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};
