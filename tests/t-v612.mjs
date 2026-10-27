@@ -33,7 +33,7 @@ ok('寫 true／字串／負數都不算', [true, 'x', -5, 0, null].every(v => W.
 ok('沒領過 → 0，沒有 treat 欄位也不爆', W.computeTreatStars(null, 'u1').total === 0 && W.computeTreatStars({}, 'u1').total === 0);
 ok('星星明細有一行南瓜獎勵', W.computeTreatStars(good, 'u1').entries[0].note.includes('南瓜'));
 console.log('\n【接線】');
-ok('領取只寫「時間」，不寫獎品數字', /update\(\{ \[`treat\.\$\{key\}`\]: Date\.now\(\) \}\)/.test(data));
+ok('領取只寫「時間」，不寫獎品數字', /const upd = \{ \[`treat\.\$\{key\}`\]: Date\.now\(\) \}/.test(data));
 ok('已領過不會蓋掉第一次的時間', /if \(had\) return false/.test(data));
 ok('雲端讀回的第四個參數是 treat', /d\.treat \|\| null\);/.test(data));
 ok('header 星星、星星面板、老師後台三處都加了', /computeTreatStars\(myTreat, user\.uid\)/.test(app) && /computeTreatStars\(treat, user/.test(shell) && /computeTreatStars\(st\.treat, st\.uid\)/.test(dash));

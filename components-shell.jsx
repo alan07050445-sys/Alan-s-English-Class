@@ -1807,7 +1807,7 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
   const tags  = ['全部', '吉祥物', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
   const shown = filter === '全部' ? items : filter === '吉祥物' ? [] : items.filter(i => i.tag === filter);
   // v431：吉祥物的裝扮是「按了就買到、馬上換上」的虛擬商品，跟實體商品分開一區
-  const cosmetics = (filter === '全部' || filter === '吉祥物') ? (window.MX_SHOP || []).filter(it => !it.free) : [];
+  const cosmetics = (filter === '全部' || filter === '吉祥物') ? (window.mxShopVisible ? window.mxShopVisible(mx) : (window.MX_SHOP || [])).filter(it => !it.free) : [];
   const buyCosmetic = async (it) => {
     if (window.mxHasItem && window.mxHasItem(mx, it.id)) { if (onOpenDress) onOpenDress(); return; }
     if (bal < it.cost) { alert(`還差 ${(it.cost - bal).toLocaleString()} 顆星星才能買「${it.zh}」，繼續加油！⭐`); return; }
@@ -2002,6 +2002,7 @@ function TrickOrTreat({ user, treat, isTeacher }) {
   })), []);
   const prize = preview ? demo : (window.treatPrize ? window.treatPrize(user && user.uid, KEY) : 0);
   const prizeRef = React.useRef(prize); prizeRef.current = prize;
+  const gifts = (window.treatGifts ? window.treatGifts(prize, KEY) : []).map(id => (window.mxItemOf ? window.mxItemOf(id) : null)).filter(Boolean);
 
   React.useEffect(() => {
     if (phase !== 'reveal') return;
@@ -2062,6 +2063,13 @@ function TrickOrTreat({ user, treat, isTeacher }) {
             <p className="tot-got">你得到了</p>
             <div className="tot-num"><span ref={numRef}>0</span><em>⭐</em></div>
             <p className="tot-sub">{prize >= 400 ? '哇！超級大獎！' : prize >= 250 ? '好棒！手氣很好喔！' : '星星已經放進你的口袋了！'}</p>
+            {gifts.length > 0 && (
+              <div className="tot-gift">
+                <span className="tot-gift-h">🎁 還有限定禮物！</span>
+                {gifts.map(g => <span key={g.id} className="tot-gift-i"><b>{g.emoji}</b>{g.zh}</span>)}
+                <span className="tot-gift-s">已放進裝扮室——萬聖節活動結束後（11/1 起）就能戴在吉祥物頭上。只有現在拿得到，過了 11/2 就絕版囉</span>
+              </div>
+            )}
             {preview && <p className="tot-err">（預覽：這不會寫入、也不會給星星）</p>}
             <button className="tot-ok" onClick={() => setClosed(true)}>收下 🎉</button>
           </div>

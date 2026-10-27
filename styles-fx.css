@@ -1147,3 +1147,8 @@
 .tot-fab span { font-size: 14.5px; }
 @media (max-width: 520px) { .tot-fab span { display: none; } .tot-fab { padding: 10px 12px; } }
 @media (prefers-reduced-motion: reduce) { .tot-pumpkin b, .tot-glow, .tot-bats i, .tot-num em, .tot-fab, .tot-burst { animation: none !important; } .tot-rain { display: none; } .tot-shake .tot-pumpkin b { animation: none !important; } }
+.tot-gift { margin: 8px auto 4px; padding: 12px 14px; max-width: 420px; border-radius: 16px; border: 1.5px dashed rgba(255,210,120,.7); background: rgba(255,160,40,.12); animation: totBurst .9s .5s cubic-bezier(.2,1.4,.4,1) both; }
+.tot-gift-h { display: block; font-size: 17px; font-weight: 900; color: #ffd24a; margin-bottom: 6px; }
+.tot-gift-i { display: inline-flex; align-items: center; gap: 6px; margin: 2px 8px; font-size: 18px; font-weight: 800; color: #fff4e0; }
+.tot-gift-i b { font-size: 34px; }
+.tot-gift-s { display: block; margin-top: 6px; font-size: 14px; color: #ffe9c9; }

@@ -207,6 +207,100 @@ var MX_HAT_ART = {
     stroke: OUTLINE,
     strokeWidth: "0.35"
   })),
+  hat_pumpkin:
+  /*#__PURE__*/
+  /* v613 限定南瓜帽：橘色南瓜＋綠蒂＋傑克燈笑臉 */
+  React.createElement("g", {
+    className: "mx-hat"
+  }, /*#__PURE__*/React.createElement("ellipse", {
+    cx: "9",
+    cy: "-2.4",
+    rx: "7.4",
+    ry: "4",
+    fill: OUTLINE
+  }), /*#__PURE__*/React.createElement("ellipse", {
+    cx: "9",
+    cy: "-2.4",
+    rx: "6.6",
+    ry: "3.3",
+    fill: "#F08A24"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M9 -5.7 C6.6 -4.6 6.6 0.9 9 0.9 C11.4 0.9 11.4 -4.6 9 -5.7 Z",
+    fill: "#E0721A"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5.2 -5 C3.4 -3.6 3.4 0.4 5.2 0.9 M12.8 -5 C14.6 -3.6 14.6 0.4 12.8 0.9",
+    stroke: "#C85E10",
+    strokeWidth: "0.5",
+    fill: "none"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8.2",
+    y: "-7.4",
+    width: "1.7",
+    height: "2.2",
+    rx: "0.5",
+    fill: OUTLINE
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8.5",
+    y: "-7.1",
+    width: "1.1",
+    height: "1.9",
+    rx: "0.4",
+    fill: "#4C8A3A"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: "5.6,-3.3 7.4,-3.3 6.5,-4.9",
+    fill: "#2B1B06"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: "10.6,-3.3 12.4,-3.3 11.5,-4.9",
+    fill: "#2B1B06"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5.8 -1.2 L7 -0.2 L8 -1.2 L9 -0.2 L10 -1.2 L11 -0.2 L12.2 -1.2",
+    stroke: "#2B1B06",
+    strokeWidth: "0.7",
+    fill: "none",
+    strokeLinejoin: "round"
+  })),
+  hat_witch:
+  /*#__PURE__*/
+  /* v613 限定女巫帽：黑錐帽＋紫帶＋金扣＋微彎的帽尖 */
+  React.createElement("g", {
+    className: "mx-hat"
+  }, /*#__PURE__*/React.createElement("ellipse", {
+    cx: "9",
+    cy: "0.3",
+    rx: "9",
+    ry: "1.9",
+    fill: OUTLINE
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4.2 0.2 C5.6 -3.2 7.2 -6.4 9.6 -8.2 C11.2 -9.2 13.6 -8.8 14.4 -7.2 C12.2 -7.4 11.6 -4.6 13.8 0.2 Z",
+    fill: OUTLINE
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 0 C6.2 -3 7.6 -5.8 9.8 -7.4 C11 -8.1 12.6 -7.9 13.2 -7 C11.6 -6.9 11 -4.2 13 0 Z",
+    fill: "#3B2A5A"
+  }), /*#__PURE__*/React.createElement("ellipse", {
+    cx: "9",
+    cy: "0.2",
+    rx: "8.2",
+    ry: "1.4",
+    fill: "#4A3470"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5.4 -1.1 Q9 0.4 12.7 -1.1 L12.9 0.1 Q9 1.5 5.2 0.1 Z",
+    fill: "#8A4FD0"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8",
+    y: "-1.4",
+    width: "2.2",
+    height: "1.9",
+    rx: "0.4",
+    fill: "#E8C86A",
+    stroke: OUTLINE,
+    strokeWidth: "0.3"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8.7",
+    y: "-0.9",
+    width: "0.9",
+    height: "0.9",
+    fill: "#3B2A5A"
+  })),
   hat_crown:
   /*#__PURE__*/
   /* 皇冠：三個尖角變高、寶石變大 */
@@ -3732,7 +3826,7 @@ function MascotLayer() {
     onClick: () => setDressTab(k.kind)
   }, k.ico, " ", k.zh))), /*#__PURE__*/React.createElement("div", {
     className: "mx-dress-grid"
-  }, (window.MX_SHOP || []).filter(it => it.kind === dressTab).map(it => {
+  }, (window.MX_SHOP || []).filter(it => it.kind === dressTab && (!it.limited || hasItem(it.id))).map(it => {
     var have = hasItem(it.id);
     var on = have && (it.kind === 'pet' ? it.pet === petId : it.kind === 'dance' ? false : wear[it.kind] === it.id);
     /* v505（Alan：「圖片要是本人的照片啦，比較好看」）：夥伴那一格畫牠本人，

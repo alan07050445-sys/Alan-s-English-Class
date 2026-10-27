@@ -37,12 +37,12 @@ log.push('\n【1】商品表本身要乾淨（賣錯東西比沒得賣更糟）'
      W.mxSpent({ owned: ['hat_cap', 'fx_stars', 'vo_pirate'] }) === 100);
   ok('每一件都有中文名字與圖示', W.MX_SHOP.every(i => i.zh && i.emoji));
   ok('要錢的都 > 0、唯一免費的是 Claudius',
-     W.MX_SHOP.every(i => (i.free ? i.cost === 0 : i.cost > 0)) &&
+     W.MX_SHOP.every(i => (i.free || i.limited ? i.cost === 0 : i.cost > 0)) &&   // v613：限定品也是 0
      W.MX_SHOP.filter(i => i.free).map(i => i.id).sort().join() === 'pet_clay');
   ok('（v436 Alan 定價）裝備／動作 ≤ 300、夥伴 500（小焰 800）',
-     W.MX_SHOP.filter(i => ['hat', 'item', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
+     W.MX_SHOP.filter(i => !i.limited && ['hat', 'item', 'dance'].indexOf(i.kind) >= 0).every(i => i.cost <= 300) &&
      W.MX_SHOP.filter(i => i.kind === 'pet' && !i.free).every(i => [300, 500, 800].indexOf(i.cost) >= 0) &&   // v455：小兔 300
-     Math.min(...W.MX_SHOP.filter(i => !i.free).map(i => i.cost)) === 100);
+     Math.min(...W.MX_SHOP.filter(i => !i.free && !i.limited).map(i => i.cost)) === 100);
   ok('舊的兩頂帽子還在，而且對得回老師扣過點的名字',
      W.mxItemOf('hat_party').legacy === 'party' && W.mxItemOf('hat_crown').legacy === 'crown');
   ok('每一件都畫得出來（頭飾在 MX_HAT_ART、配件在 mxAccArt、動作有對照表）',

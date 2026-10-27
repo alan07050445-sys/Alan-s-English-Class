@@ -1,0 +1,28 @@
+// v613 萬聖節限定吉祥物裝扮：只有 Trick or Treat 領得到、不能買、沒有的人看不到
+import fs from 'fs';
+const data = fs.readFileSync(new URL('../data.js', import.meta.url), 'utf8');
+const fx = fs.readFileSync(new URL('../components-fx.jsx', import.meta.url), 'utf8');
+const shell = fs.readFileSync(new URL('../components-shell.jsx', import.meta.url), 'utf8');
+let pass = 0, fail = 0;
+const ok = (m, c) => { if (c) { pass++; console.log('  ✅', m); } else { fail++; console.log('  ❌', m); } };
+const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
+const W = {};
+new Function('window', 'document', 'firebase', 'localStorage', 'fetch', data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, { getItem: () => null, setItem() {}, removeItem() {} }, fetch);
+console.log('\n【限定品】');
+ok('南瓜帽、女巫帽在商品表，cost 0（不動星星）', ['hat_pumpkin', 'hat_witch'].every(id => W.mxItemOf(id) && W.mxItemOf(id).cost === 0 && W.mxItemOf(id).limited === 'hw2026'));
+ok('不能用 mxBuy 買（就算星星很多）', await W.mxBuy('u', 'hat_pumpkin', 99999, { owned: [] }).then(r => !r.ok && r.reason === 'bad-id'));
+ok('沒有的人看不到那一格', !W.mxShopVisible({ owned: [] }).some(it => it.limited));
+ok('有的人才看得到自己那一件', W.mxShopVisible({ owned: ['hat_pumpkin'] }).filter(it => it.limited).map(it => it.id).join() === 'hat_pumpkin');
+ok('擁有限定品不會多扣星星', W.mxSpent({ owned: ['hat_pumpkin', 'hat_witch'] }) === 0);
+ok('擁有了就能穿（mxWearOf 認得）', W.mxWearOf({ owned: ['hat_pumpkin'], wear: { hat: 'hat_pumpkin' } }).hat === 'hat_pumpkin');
+console.log('\n【誰拿到什麼】');
+ok('每個人都有南瓜帽', [100, 250, 400, 500].every(p => W.treatGifts(p, 'hw2026').includes('hat_pumpkin')));
+ok('女巫帽只有 400 以上', W.treatGifts(350, 'hw2026').join() === 'hat_pumpkin' && W.treatGifts(400, 'hw2026').includes('hat_witch') && W.treatGifts(500, 'hw2026').includes('hat_witch'));
+ok('領取時間與裝扮同一次 update、用 arrayUnion（不會領一半、不蓋掉已買的）', /upd\['mx\.owned'\] = firebase\.firestore\.FieldValue\.arrayUnion\(\.\.\.gifts\)/.test(data) && /await ref\.update\(upd\)/.test(data));
+console.log('\n【畫面】');
+ok('兩頂帽子都有畫（吉祥物 SVG）', /hat_pumpkin: \(/.test(fx) && /hat_witch: \(/.test(fx));
+ok('裝扮室只列有的限定品', /it\.kind === dressTab && \(!it\.limited \|\| hasItem\(it\.id\)\)/.test(fx));
+ok('商店頁也用同一個過濾', /mxShopVisible\(mx\)/.test(shell));
+ok('揭曉畫面會講有限定禮物', /tot-gift/.test(shell));
+console.log(fail ? `\n❌ t-v613：${pass} 過 / ${fail} 失敗` : `\n✅ t-v613：${pass} 過 / 0 失敗`);
+process.exit(fail ? 1 : 0);

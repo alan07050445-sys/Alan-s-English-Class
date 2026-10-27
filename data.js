@@ -7504,6 +7504,11 @@ const MX_SHOP = [
   { id: 'hat_horn',   kind: 'hat',   zh: '小鹿角',   emoji: '🦌', cost: 200 },
   { id: 'hat_star',   kind: 'hat',   zh: '星星髮箍', emoji: '⭐', cost: 250 },
   { id: 'hat_crown',  kind: 'hat',   zh: '皇冠',     emoji: '👑', cost: 250,  legacy: 'crown' },
+  /* v613 🎃 萬聖節限定（Alan：「再做一個萬聖節驚喜」）：只有 10/31～11/2 打開 Trick or Treat 的孩子拿得到，
+     之後不賣、不能買（mxBuy 擋 limited），裝扮室裡也只有「已經有的人」才看得到那一格——絕版才稀有。
+     女巫帽是大獎（南瓜開出 ⭐400 以上）才有的。cost 0＝不影響星星餘額。 */
+  { id: 'hat_pumpkin', kind: 'hat', zh: '限定南瓜帽', emoji: '🎃', cost: 0, limited: 'hw2026' },
+  { id: 'hat_witch',   kind: 'hat', zh: '限定女巫帽', emoji: '🧙', cost: 0, limited: 'hw2026', rare: true },
   /* 配件 */
   { id: 'it_bow',     kind: 'item',  zh: '蝴蝶結',   emoji: '🎀', cost: 100 },
   { id: 'it_scarf',   kind: 'item',  zh: '圍巾',     emoji: '🧣', cost: 100 },
@@ -7540,6 +7545,8 @@ const MX_SHOP = [
 const MX_BY_ID = {};
 MX_SHOP.forEach(it => { MX_BY_ID[it.id] = it; });
 function mxItemOf(id) { return MX_BY_ID[id] || null; }
+/* v613：限定品「已經有的人」才看得到那一格（裝扮室、商店都用這個）。 */
+function mxShopVisible(mx) { return MX_SHOP.filter(it => !it.limited || mxHasItem(mx, it.id)); }
 /* 買到的東西：只認得出來的 id（將來下架某一件，也不會讓畫面壞掉或把星星算錯） */
 function mxOwnedList(mx) {
   const raw = (mx && Array.isArray(mx.owned)) ? mx.owned : [];
@@ -7592,7 +7599,7 @@ function mxWearOf(mx) {
 async function mxBuy(uid, id, balance, mx) {
   const it = MX_BY_ID[id];
   if (!uid) return { ok: false, reason: 'no-user' };
-  if (!it || it.free) return { ok: false, reason: 'bad-id' };
+  if (!it || it.free || it.limited) return { ok: false, reason: 'bad-id' };   // v613：限定品不能買
   if (mxHasItem(mx, id)) return { ok: false, reason: 'owned' };
   if ((balance || 0) < (it.cost || 0)) return { ok: false, reason: 'poor', short: (it.cost || 0) - (balance || 0) };
   const owned = mxOwnedList(mx).concat([id]);
@@ -7714,6 +7721,7 @@ async function mxSetWear(uid, kind, id, mx) {
 Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
+Object.assign(window, { mxShopVisible });   // v613
 
 /* ══════════════════════════════════════════════════════════════════════════
    v517 💬 用講的就好 —— 聽得懂老師在說什麼，去按對的那顆按鈕
@@ -11162,10 +11170,18 @@ async function claimTreat(uid, displayName, email, key) {
   if (displayName && displayName.trim()) profile.name  = displayName.trim();
   if (email      && email.trim())        profile.email = email.trim();
   await ref.set(profile, { merge: true });
-  await ref.update({ [`treat.${key}`]: Date.now() });
+  /* 領取時間＋限定裝扮用同一次 update（不會只領到一半）；arrayUnion 不必先讀 mx，也不會蓋掉他已經買的 */
+  const gifts = treatGifts(treatPrize(uid, key), key);
+  const upd = { [`treat.${key}`]: Date.now() };
+  if (gifts.length) upd['mx.owned'] = firebase.firestore.FieldValue.arrayUnion(...gifts);
+  await ref.update(upd);
   return true;
 }
-Object.assign(window, { TREATS, TREAT_TABLE, treatPrize, treatOpenAt, computeTreatStars, claimTreat });
+/* 這一份獎品順便送哪幾件限定裝扮 */
+function treatGifts(prize, key) {
+  return MX_SHOP.filter(it => it.limited === key && (!it.rare || prize >= 400)).map(it => it.id);
+}
+Object.assign(window, { TREATS, TREAT_TABLE, treatGifts, treatPrize, treatOpenAt, computeTreatStars, claimTreat });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};

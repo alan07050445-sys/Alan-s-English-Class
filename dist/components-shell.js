@@ -2601,7 +2601,7 @@ function StarsPanel({
   var tags = ['全部', '吉祥物', ...Array.from(new Set(items.map(i => i.tag).filter(Boolean)))];
   var shown = filter === '全部' ? items : filter === '吉祥物' ? [] : items.filter(i => i.tag === filter);
   // v431：吉祥物的裝扮是「按了就買到、馬上換上」的虛擬商品，跟實體商品分開一區
-  var cosmetics = filter === '全部' || filter === '吉祥物' ? (window.MX_SHOP || []).filter(it => !it.free) : [];
+  var cosmetics = filter === '全部' || filter === '吉祥物' ? (window.mxShopVisible ? window.mxShopVisible(mx) : window.MX_SHOP || []).filter(it => !it.free) : [];
   var buyCosmetic = async it => {
     if (window.mxHasItem && window.mxHasItem(mx, it.id)) {
       if (onOpenDress) onOpenDress();
@@ -2842,6 +2842,7 @@ function TrickOrTreat({
   var prize = preview ? demo : window.treatPrize ? window.treatPrize(user && user.uid, KEY) : 0;
   var prizeRef = React.useRef(prize);
   prizeRef.current = prize;
+  var gifts = (window.treatGifts ? window.treatGifts(prize, KEY) : []).map(id => window.mxItemOf ? window.mxItemOf(id) : null).filter(Boolean);
   React.useEffect(() => {
     if (phase !== 'reveal') return;
     var el = numRef.current,
@@ -2948,7 +2949,16 @@ function TrickOrTreat({
     ref: numRef
   }, "0"), /*#__PURE__*/React.createElement("em", null, "\u2B50")), /*#__PURE__*/React.createElement("p", {
     className: "tot-sub"
-  }, prize >= 400 ? '哇！超級大獎！' : prize >= 250 ? '好棒！手氣很好喔！' : '星星已經放進你的口袋了！'), preview && /*#__PURE__*/React.createElement("p", {
+  }, prize >= 400 ? '哇！超級大獎！' : prize >= 250 ? '好棒！手氣很好喔！' : '星星已經放進你的口袋了！'), gifts.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "tot-gift"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "tot-gift-h"
+  }, "\uD83C\uDF81 \u9084\u6709\u9650\u5B9A\u79AE\u7269\uFF01"), gifts.map(g => /*#__PURE__*/React.createElement("span", {
+    key: g.id,
+    className: "tot-gift-i"
+  }, /*#__PURE__*/React.createElement("b", null, g.emoji), g.zh)), /*#__PURE__*/React.createElement("span", {
+    className: "tot-gift-s"
+  }, "\u5DF2\u653E\u9032\u88DD\u626E\u5BA4\u2014\u2014\u842C\u8056\u7BC0\u6D3B\u52D5\u7D50\u675F\u5F8C\uFF0811/1 \u8D77\uFF09\u5C31\u80FD\u6234\u5728\u5409\u7965\u7269\u982D\u4E0A\u3002\u53EA\u6709\u73FE\u5728\u62FF\u5F97\u5230\uFF0C\u904E\u4E86 11/2 \u5C31\u7D55\u7248\u56C9")), preview && /*#__PURE__*/React.createElement("p", {
     className: "tot-err"
   }, "\uFF08\u9810\u89BD\uFF1A\u9019\u4E0D\u6703\u5BEB\u5165\u3001\u4E5F\u4E0D\u6703\u7D66\u661F\u661F\uFF09"), /*#__PURE__*/React.createElement("button", {
     className: "tot-ok",
