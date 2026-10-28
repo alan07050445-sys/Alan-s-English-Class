@@ -30,7 +30,7 @@ const MX_HATS = [
    配件則用 eye（眼睛帶）／neck（脖子）／side（側邊）三個位置算出來畫，
    所以墨鏡一定蓋在那一隻的眼睛上、圍巾一定在脖子上，不會有「飄在旁邊」的情況。 */
 const MX_FIT = {
-  clay:   { hat: { x: 9,   y: 0,    s: 1.06 }, eye: { y: 4,   h: 4,   x0: 1, x1: 17 }, neck: { y: 9.5  }, side: { y: 7 } },
+  clay:   { hat: { x: 9,   y: 0,    s: 1.06 }, hats: { hat_pumpkin: { y: 1 } }, eye: { y: 4,   h: 4,   x0: 1, x1: 17 }, neck: { y: 9.5  }, side: { y: 7 } },
   owl:    { hat: { x: 9,   y: 1.4,  s: 1.0  }, eye: { y: 3.2, h: 5.6, x0: 1, x1: 17 }, neck: { y: 10   }, side: { y: 6 } },
   flame:  { hat: { x: 9,   y: 3.4,  s: 0.86 }, eye: { y: 7,   h: 4,   x0: 3, x1: 15 }, neck: { y: 10.6 }, side: { y: 8.5 } },
   rock:   { hat: { x: 9.5, y: -0.2, s: 0.85 }, eye: { y: 5,   h: 4,   x0: 2, x1: 16 }, neck: { y: 10   }, side: { y: 6 } },
@@ -46,6 +46,21 @@ const MX_FIT_DEF = MX_FIT.clay;
 /* 帽子的畫法（標準空間：頭頂 y=0、往上到 y=−4.6、頭寬 18）。
    v435：每一頂都加深色收邊、體積也放大——小小一塊色在 40px 的身體上根本看不出來。 */
 const OUTLINE = '#2B2A26';
+/* v615 像素帽：每個字元一格（'.' 空白），同色連續的合成一條 rect，跟吉祥物本體同一種方塊畫法 */
+function mxPix(rows, ox, oy, pal) {
+  const out = [];
+  rows.forEach((row, y) => {
+    let x = 0;
+    while (x < row.length) {
+      const c = row[x];
+      if (c === '.' || !pal[c]) { x++; continue; }
+      let w = 1; while (row[x + w] === c) w++;
+      out.push(<rect key={x + ',' + y} x={ox + x} y={oy + y} width={w} height="1" fill={pal[c]}/>);
+      x += w;
+    }
+  });
+  return out;
+}
 const MX_HAT_ART = {
   hat_cap: (                                   /* 鴨舌帽：圓頂＋右邊短帽簷 */
     <g className="mx-hat">
@@ -59,29 +74,36 @@ const MX_HAT_ART = {
       <circle cx="9" cy="-5" r="1" fill="#E8C86A" stroke={OUTLINE} strokeWidth="0.35"/>
     </g>
   ),
-  hat_pumpkin: (                               /* v613 限定南瓜帽：橘色南瓜＋綠蒂＋傑克燈笑臉 */
-    <g className="mx-hat">
-      <ellipse cx="9" cy="-2.4" rx="7.4" ry="4" fill={OUTLINE}/>
-      <ellipse cx="9" cy="-2.4" rx="6.6" ry="3.3" fill="#F08A24"/>
-      <path d="M9 -5.7 C6.6 -4.6 6.6 0.9 9 0.9 C11.4 0.9 11.4 -4.6 9 -5.7 Z" fill="#E0721A"/>
-      <path d="M5.2 -5 C3.4 -3.6 3.4 0.4 5.2 0.9 M12.8 -5 C14.6 -3.6 14.6 0.4 12.8 0.9" stroke="#C85E10" strokeWidth="0.5" fill="none"/>
-      <rect x="8.2" y="-7.4" width="1.7" height="2.2" rx="0.5" fill={OUTLINE}/>
-      <rect x="8.5" y="-7.1" width="1.1" height="1.9" rx="0.4" fill="#4C8A3A"/>
-      <polygon points="5.6,-3.3 7.4,-3.3 6.5,-4.9" fill="#2B1B06"/>
-      <polygon points="10.6,-3.3 12.4,-3.3 11.5,-4.9" fill="#2B1B06"/>
-      <path d="M5.8 -1.2 L7 -0.2 L8 -1.2 L9 -0.2 L10 -1.2 L11 -0.2 L12.2 -1.2" stroke="#2B1B06" strokeWidth="0.7" fill="none" strokeLinejoin="round"/>
-    </g>
+  hat_pumpkin: (                               /* v615 限定南瓜帽（重畫成像素風）：16 寬、跟吉祥物同一種方塊畫法 */
+    <g className="mx-hat">{mxPix([
+      '.......gg.......',
+      '....ooooggoo....',
+      '..ooOOOOOOOOoo..',
+      'oOOYYOOOOOOODOOo',
+      'oOOOkOOOOOOkOOOo',
+      'oOOkkkOOOOkkkOOo',
+      'oOOOOOOOOOOOOOOo',
+      'oOOkOOOOOOOOkOOo',
+      '.oOOkkkkkkkkOOo.',
+      '.ooDDDDDDDDDDoo.',
+      '...oooooooooo...',
+    ], 1, -10, { o: OUTLINE, O: '#F08A24', D: '#C85E10', Y: '#FFB65C', g: '#4C8A3A', k: '#2B1B06' })}</g>
   ),
-  hat_witch: (                                 /* v613 限定女巫帽：黑錐帽＋紫帶＋金扣＋微彎的帽尖 */
-    <g className="mx-hat">
-      <ellipse cx="9" cy="0.3" rx="9" ry="1.9" fill={OUTLINE}/>
-      <path d="M4.2 0.2 C5.6 -3.2 7.2 -6.4 9.6 -8.2 C11.2 -9.2 13.6 -8.8 14.4 -7.2 C12.2 -7.4 11.6 -4.6 13.8 0.2 Z" fill={OUTLINE}/>
-      <path d="M5 0 C6.2 -3 7.6 -5.8 9.8 -7.4 C11 -8.1 12.6 -7.9 13.2 -7 C11.6 -6.9 11 -4.2 13 0 Z" fill="#3B2A5A"/>
-      <ellipse cx="9" cy="0.2" rx="8.2" ry="1.4" fill="#4A3470"/>
-      <path d="M5.4 -1.1 Q9 0.4 12.7 -1.1 L12.9 0.1 Q9 1.5 5.2 0.1 Z" fill="#8A4FD0"/>
-      <rect x="8" y="-1.4" width="2.2" height="1.9" rx="0.4" fill="#E8C86A" stroke={OUTLINE} strokeWidth="0.3"/>
-      <rect x="8.7" y="-0.9" width="0.9" height="0.9" fill="#3B2A5A"/>
-    </g>
+  hat_witch: (                                 /* v615 限定女巫帽（重畫成像素風）：帽尖微彎、紫帶金扣、帽簷貼著頭 */
+    <g className="mx-hat">{mxPix([
+      '...........oooo..',
+      '..........oPPPPo.',
+      '.........oPPPPPo.',
+      '........oPPPPPo..',
+      '.......oPPPPPPo..',
+      '.......oPPPPPo...',
+      '......oPPPPPPo...',
+      '......oPQPPPPPo..',
+      '.....oBBBBGGBBBo.',
+      '.....oBBBBGoBBBo.',
+      'ooooooPPPPPPPPoooo',
+      '.oQQQQQQQQQQQQQQo.',
+    ].map(r => r.padEnd(18, '.').slice(0, 18)), 0, -10, { o: OUTLINE, P: '#3B2A5A', Q: '#4A3470', B: '#8A4FD0', G: '#E8C86A' })}</g>
   ),
   hat_crown: (                                 /* 皇冠：三個尖角變高、寶石變大 */
     <g className="mx-hat">
