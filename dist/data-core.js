@@ -3357,7 +3357,9 @@ Object.assign(window, { examDraftSig, examDraftHas, examDraftLoad, examDraftSave
 const EXAM_KINDS = {
   circle: { zh: '圈出符合的字', auto: true },   // Part 2：短文裡圈 N 個 -VCe／vowel team
   cloze:  { zh: 'Word Bank 填空', auto: true }, // Part 3：給詞庫，一句一格
-  quiz:   { zh: '選擇題', auto: true },         // Part 4：閱讀理解
+  quiz:   { zh: '選擇題', auto: true },
+  spell:  { zh: '拼字填寫（輸入答案）', auto: true },   // v619：Suffixes 加字尾／還原／填正確形式——沒有詞庫、自己打字
+         // Part 4：閱讀理解
   /* v522：康橋 Formative 的 Part 1——從字尾表裡挑兩個，造字，再各造一個 5 字以上的句子。
      ⭐ 這一題**程式全部驗得出來**，而且驗的就是考卷自己寫的規則：
        · 造出來的字真的有那個字尾（WS_CHECKS.suffix／prefix）
@@ -3433,7 +3435,7 @@ function examPtsOf(part) {
 function examPartN(part) {
   if (!part) return 0;
   if (part.kind === 'circle') return +part.need || (part.answers || []).length || 0;
-  if (part.kind === 'cloze')  return (part.items || []).length;
+  if (part.kind === 'cloze' || part.kind === 'spell') return (part.items || []).length;
   if (part.kind === 'quiz')   return (part.questions || []).length;
   if (part.kind === 'short')  return (part.questions || []).length;
   if (part.kind === 'affix' || part.kind === 'genq') return +part.need || 2;
@@ -4113,6 +4115,13 @@ function examScorePart(part, ans) {
     picked.forEach(w => { const v = ok(w); if (v === true) right++; else if (v === false) wrong++; });
     out.right = Math.max(0, right - wrong);
     out.detail = picked.map(w => ({ text: w, ok: ok(w) }));
+  } else if (part.kind === 'spell') {
+    (part.items || []).forEach((q, i) => {
+      const got = norm((ans || [])[i]);
+      const good = !!got && [q.answer].concat(q.accept || []).some(a => norm(a) === got);
+      if (good) out.right++;
+      out.detail.push({ text: q.answer, ok: good, got: (ans || [])[i] || '' });
+    });
   } else if (part.kind === 'cloze') {
     (part.items || []).forEach((q, i) => {
       const good = norm((ans || [])[i]) === norm(q.answer);

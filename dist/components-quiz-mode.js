@@ -9204,6 +9204,40 @@ function ExamPlayer({
           })
         }, tk.t);
       })));
+    })(), pt.kind === 'spell' && (() => {
+      var got = Array.isArray(v) ? v : [];
+      return /*#__PURE__*/React.createElement("ol", {
+        className: "ex-spell"
+      }, (pt.items || []).map((q, i) => {
+        var d = sent ? pr.detail[i] || {} : null;
+        var segs = String(q.text || '').split(/_{2,}/);
+        var field = /*#__PURE__*/React.createElement("input", {
+          className: "ex-spin",
+          disabled: sent,
+          value: got[i] || '',
+          "aria-label": '第 ' + (i + 1) + ' 題答案',
+          autoCapitalize: "none",
+          autoCorrect: "off",
+          autoComplete: "off",
+          spellCheck: false,
+          onChange: e => {
+            var t = e.target.value;
+            put(key, prev => {
+              var g = Array.isArray(prev) ? prev.slice() : [];
+              g[i] = t;
+              return g;
+            });
+          }
+        });
+        return /*#__PURE__*/React.createElement("li", {
+          key: i,
+          className: sent ? d.ok ? 'ok' : 'bad' : ''
+        }, segs.length > 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, segs[0], field, segs.slice(1).join('')) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+          className: "ex-sptxt"
+        }, q.text), field), sent && !d.ok && /*#__PURE__*/React.createElement("u", {
+          className: "ex-spfix"
+        }, "\u6B63\u78BA\uFF1A", q.answer));
+      }));
     })(), pt.kind === 'cloze' && (() => {
       var got = Array.isArray(v) ? v : [];
       var used = new Set(got.filter(Boolean).map(x => String(x).toLowerCase()));

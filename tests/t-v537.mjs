@@ -51,6 +51,7 @@ const CASES = {
   order:    { kind:'order', pts:10, events:['A team earned a place.','They traveled abroad.','They won the final.'] },
   table:    { kind:'table', pts:9, rows:3, headers:['Descriptive Word or Phrase','What It Helps Me Imagine'] },
   draw:     { kind:'draw', pts:3, prompt:'Draw the final scene. Include details from the sentences.' },
+  spell:    { kind:'spell', pts:2, items:[{ text:'pretty (-er)', answer:'prettier' }, { text:'tie (-ing)', answer:'tying' }] },
   checkin:  { kind:'checkin', pts:0,
               goals:['Read every question carefully.','Stay calm and do my best.'] },
 };

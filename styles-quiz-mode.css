@@ -4390,3 +4390,13 @@ body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
 /* v610 只重做答錯的題目 */
 .ex-redo { margin: 12px 0 0; }
 .ex-redo button { border: 1.5px solid var(--ink, #15130E); background: transparent; color: var(--ink, #15130E); border-radius: 999px; padding: 9px 16px; font-weight: 800; font-size: 15px; cursor: pointer; }
+
+/* v619 拼字填寫（Suffixes 加字尾／還原…）：兩欄排，手機一欄 */
+.ex-spell { margin: 0; padding-left: 0; list-style: decimal inside; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+.ex-spell li { font-size: 18px; line-height: 2.1; color: var(--ink, #15130E); }
+.ex-spell li.ok { color: var(--moss, #4a5a3e); } .ex-spell li.bad { color: var(--accent, #8b3120); }
+.ex-sptxt { margin-right: 10px; }
+.ex-spin { width: 9.5em; max-width: 100%; margin: 0 6px; padding: 2px 6px; font: inherit; border: 0; border-bottom: 2px solid var(--ink-soft, #3a372e); background: transparent; color: inherit; }
+.ex-spin:focus { outline: none; border-bottom-color: var(--accent, #8b3120); background: var(--bg-paper, #fbf8f1); }
+.ex-spfix { margin-left: 6px; font-size: 14px; text-decoration: none; font-weight: 800; }
+@media (max-width: 620px) { .ex-spell { grid-template-columns: 1fr; } }

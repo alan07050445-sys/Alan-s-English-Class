@@ -7564,6 +7564,30 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           );
         })()}
 
+        {/* ── v619 ⌨️ 拼字填寫：沒有詞庫，自己打字（加字尾／還原／填正確形式）── */}
+        {pt.kind === 'spell' && (() => {
+          const got = Array.isArray(v) ? v : [];
+          return (
+            <ol className="ex-spell">
+              {(pt.items || []).map((q, i) => {
+                const d = sent ? (pr.detail[i] || {}) : null;
+                const segs = String(q.text || '').split(/_{2,}/);
+                const field = (
+                  <input className="ex-spin" disabled={sent} value={got[i] || ''} aria-label={'第 ' + (i + 1) + ' 題答案'}
+                    autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
+                    onChange={e => { const t = e.target.value; put(key, prev => { const g = Array.isArray(prev) ? prev.slice() : []; g[i] = t; return g; }); }}/>
+                );
+                return (
+                  <li key={i} className={sent ? (d.ok ? 'ok' : 'bad') : ''}>
+                    {segs.length > 1 ? <>{segs[0]}{field}{segs.slice(1).join('')}</> : <><span className="ex-sptxt">{q.text}</span>{field}</>}
+                    {sent && !d.ok && <u className="ex-spfix">正確：{q.answer}</u>}
+                  </li>
+                );
+              })}
+            </ol>
+          );
+        })()}
+
         {/* ── Word Bank 填空 ── */}
         {pt.kind === 'cloze' && (() => {
           const got = Array.isArray(v) ? v : [];

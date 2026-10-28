@@ -1,0 +1,27 @@
+// v619 拼字填寫題型（Suffixes 加字尾／還原／填正確形式：沒有詞庫、自己打字）
+import fs from 'fs';
+const data = fs.readFileSync(new URL('../data.js', import.meta.url), 'utf8');
+const qm = fs.readFileSync(new URL('../components-quiz-mode.jsx', import.meta.url), 'utf8');
+let pass = 0, fail = 0;
+const ok = (m, c) => { if (c) { pass++; console.log('  ✅', m); } else { fail++; console.log('  ❌', m); } };
+const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub, construct: () => stub });
+const W = {};
+new Function('window', 'document', 'firebase', 'localStorage', 'fetch', data)(W, { documentElement: { classList: { toggle: () => {} } } }, stub, { getItem: () => null, setItem() {}, removeItem() {} }, fetch);
+const part = { kind: 'spell', title: 'A', pts: 4, items: [{ text: 'pretty (-er)', answer: 'prettier' }, { text: 'tie (-ing)', answer: 'tying' }, { text: 'The bag is the ___. (heavy)', answer: 'heaviest', accept: ['most heavy'] }, { text: 'stop (-ed)', answer: 'stopped' }] };
+ok('題型有登記、自動判分', W.EXAM_KINDS.spell && W.EXAM_KINDS.spell.auto === true);
+ok('題數＝空格數', W.examPartN(part) === 4);
+const r = W.examScorePart(part, ['Prettier ', 'tieing', 'most heavy', '']);
+ok('大小寫與前後空白不影響；拼錯、空白都算錯；accept 算對', r.right === 2 && r.got === 2 && r.max === 4);
+ok('結果頁拿得到正確答案', r.detail[1].text === 'tying' && r.detail[1].got === 'tieing' && r.detail[1].ok === false);
+ok('空白不會被判對', W.examScorePart(part, []).right === 0);
+console.log('\n【貼上／編輯】');
+const t = W.examPartText(part);
+const back = W.examParsePart('spell', t);
+ok('文字來回不失真（含 accept）', back.items.length === 4 && back.items[2].accept[0] === 'most heavy' && back.items[0].answer === 'prettier');
+console.log('\n【讀考卷】');
+ok('提示詞有教模型認 spell，而且說清楚跟 cloze 的差別', /"spell"\s+— the child TYPES/.test(data) && /that is "cloze", not "spell"/.test(data));
+ok('清洗有收 spell（不然讀出來又被丟掉）', /if \(p\.kind === 'spell'\) \{[\s\S]{0,800}return \{ \.\.\.base, items \}/.test(data));
+ok('沒印配分時預設一題一分', /else if \(pt\.kind === 'spell'\) pt\.pts = \(pt\.items \|\| \[\]\)\.length/.test(data));
+ok('學生畫面有打字欄、交卷後顯示正確答案', /pt\.kind === 'spell'/.test(qm) && /ex-spfix/.test(qm));
+console.log(fail ? `\n❌ t-v619：${pass} 過 / ${fail} 失敗` : `\n✅ t-v619：${pass} 過 / 0 失敗`);
+process.exit(fail ? 1 : 0);

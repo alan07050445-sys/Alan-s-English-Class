@@ -8376,6 +8376,15 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               Each item: {"text":"Mark ___ on the test.","answer":"struggled"} — write the blank as ___
               and "answer" = the word from the bank that fits. YOU choose the answer from the bank
               by reading the sentence — do not copy the student's handwriting.
+  "spell"   — the child TYPES one word (or a short answer) into a blank, and there is NO word bank. Examples:
+              "pretty (-er) ______" (add the suffix), "saddest ______" (change it back to the base word),
+              "The baby is ______ happily. (smile)" (write the correct form), "Which word has ... ?" typed answers.
+              Put EVERY blank of the Part in ONE "items" array: {"text":"pretty (-er)","answer":"prettier"}.
+              "text" = the printed prompt exactly as printed (a blank inside a sentence is written ___; a plain
+              word-list line has no blank). 🔴 "answer" = the correct spelling YOU work out — NEVER the student's
+              handwriting. If more than one answer is really correct, add "accept":["...", "..."].
+              🔴 If there IS a word bank / box of words to choose from, that is "cloze", not "spell".
+              "pts" is the printed total for the Part (e.g. "/15"); if only "(2 pts. each)" is printed leave "pts" 0.
   "quiz"    — multiple choice. 🔴 ONE part holds ALL the questions of that Part, in a
               "questions" ARRAY. Do NOT emit one part per question.
               Each entry: {"q":"...","options":[...in printed order...],"answer":<0-based index>}
@@ -8836,6 +8845,14 @@ function _examCleanPart(p) {
     if (!bank.length || !items.length) return null;
     return { ...base, bank, items };
   }
+  if (p.kind === 'spell') {
+    const items = (Array.isArray(p.items) ? p.items : []).map(q => {
+      const accept = (Array.isArray(q && q.accept) ? q.accept : []).map(x => String(x).trim()).filter(Boolean).slice(0, 4);
+      return { text: String((q && (q.text || q.q || q.prompt)) || '').trim(), answer: String((q && (q.answer || q.word)) || '').trim(), ...(accept.length ? { accept } : {}) };
+    }).filter(q => q.text && q.answer).slice(0, 60);
+    if (!items.length) return null;
+    return { ...base, items };
+  }
   if (p.kind === 'order') {
     const events = (Array.isArray(p.events) ? p.events : []).map(x => String(x).trim()).filter(Boolean);
     if (events.length < 2) return null;                    // 一件事沒有「順序」可言
@@ -9222,6 +9239,7 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
   if (scored.length && scored.every(pt => !(+pt.pts > 0)) && !secs.some(sc => +sc.pct > 0)) {
     scored.forEach(pt => {
       if (pt.kind === 'quiz') pt.pts = (pt.questions || []).length;
+      else if (pt.kind === 'spell') pt.pts = (pt.items || []).length;
       else if (pt.kind === 'short') pt.pts = (pt.questions || []).length * 4;
       else if (pt.kind === 'evidence' || pt.kind === 'essay') pt.pts = 4;
     });
@@ -9443,6 +9461,10 @@ function examDraftChecks(item, mustWords, aiNotes) {
       if (unused.length && (pt.items || []).length >= bank.length) push('bad', `詞庫的「${unused.join('、')}」沒有任何一句用到。`);
       push('check', '每一句是不是「只有一個字填得進去」，程式判不出來，請你快速看過。');
     }
+    if (pt.kind === 'spell') {
+      (pt.items || []).forEach((it, i) => { if (!String(it.answer || '').trim()) push('bad', `第 ${i + 1} 題沒有答案。`); });
+      push('check', '打字填寫的答案是 AI 推出來的（變化字尾、y 變 i、重複子音…），請你快速看過每一題的拼字。');
+    }
     if (pt.kind === 'quiz') {
       const qs = pt.questions || [];
       const dist = {}; qs.forEach(q => { dist[q.answer] = (dist[q.answer] || 0) + 1; });
@@ -9519,7 +9541,9 @@ Object.assign(window, { aiReadExamSheet, EXAM_READ_SYS, examPaperFromText, aiDra
 const EXAM_KINDS = {
   circle: { zh: '圈出符合的字', auto: true },   // Part 2：短文裡圈 N 個 -VCe／vowel team
   cloze:  { zh: 'Word Bank 填空', auto: true }, // Part 3：給詞庫，一句一格
-  quiz:   { zh: '選擇題', auto: true },         // Part 4：閱讀理解
+  quiz:   { zh: '選擇題', auto: true },
+  spell:  { zh: '拼字填寫（輸入答案）', auto: true },   // v619：Suffixes 加字尾／還原／填正確形式——沒有詞庫、自己打字
+         // Part 4：閱讀理解
   /* v522：康橋 Formative 的 Part 1——從字尾表裡挑兩個，造字，再各造一個 5 字以上的句子。
      ⭐ 這一題**程式全部驗得出來**，而且驗的就是考卷自己寫的規則：
        · 造出來的字真的有那個字尾（WS_CHECKS.suffix／prefix）
@@ -9595,7 +9619,7 @@ function examPtsOf(part) {
 function examPartN(part) {
   if (!part) return 0;
   if (part.kind === 'circle') return +part.need || (part.answers || []).length || 0;
-  if (part.kind === 'cloze')  return (part.items || []).length;
+  if (part.kind === 'cloze' || part.kind === 'spell') return (part.items || []).length;
   if (part.kind === 'quiz')   return (part.questions || []).length;
   if (part.kind === 'short')  return (part.questions || []).length;
   if (part.kind === 'affix' || part.kind === 'genq') return +part.need || 2;
@@ -10282,6 +10306,13 @@ function examScorePart(part, ans) {
     picked.forEach(w => { const v = ok(w); if (v === true) right++; else if (v === false) wrong++; });
     out.right = Math.max(0, right - wrong);
     out.detail = picked.map(w => ({ text: w, ok: ok(w) }));
+  } else if (part.kind === 'spell') {
+    (part.items || []).forEach((q, i) => {
+      const got = norm((ans || [])[i]);
+      const good = !!got && [q.answer].concat(q.accept || []).some(a => norm(a) === got);
+      if (good) out.right++;
+      out.detail.push({ text: q.answer, ok: good, got: (ans || [])[i] || '' });
+    });
   } else if (part.kind === 'cloze') {
     (part.items || []).forEach((q, i) => {
       const good = norm((ans || [])[i]) === norm(q.answer);
@@ -10443,6 +10474,7 @@ function examPartText(part) {
   if (p.kind === 'circle') return [p.check + (p.checkArg ? ':' + p.checkArg : ''), p.passage || ''].join('\n');
   if (p.kind === 'cloze') return [(p.bank || []).join(', ')]
     .concat((p.items || []).map(q => `${q.text || ''} | ${q.answer || ''}`)).join('\n');
+  if (p.kind === 'spell') return (p.items || []).map(q => [q.text, q.answer].concat(q.accept || []).join(' | ')).join('\n');
   if (p.kind === 'quiz') return (p.questions || [])
     .map(q => [q.q].concat(q.options || []).concat([(+q.answer || 0) + 1]).join(' | ')).join('\n');
   if (p.kind === 'short') return (p.questions || [])
@@ -10477,6 +10509,14 @@ function examParsePart(kind, text) {
       return { text: (c[0] || '').trim(), answer: (c[1] || '').trim() };
     }).filter(q => q.text && q.answer);
     return { bank, items };
+  }
+  if (kind === 'spell') {
+    /* 每行＝ 題目（或「字 (-er)」） | 答案 | 其他也算對的答案（可省略，可多個） */
+    const items = nonEmpty.map(l => {
+      const c = l.split('|').map(x => x.trim());
+      return { text: c[0] || '', answer: c[1] || '', ...(c.slice(2).filter(Boolean).length ? { accept: c.slice(2).filter(Boolean) } : {}) };
+    }).filter(q => q.text && q.answer);
+    return { items };
   }
   if (kind === 'quiz') {
     const questions = nonEmpty.map(l => {
@@ -10613,6 +10653,9 @@ function examWarnings(item) {
     }
     if (pt.kind === 'genq' && !String(pt.passage || '').trim()) {
       w.push(`${where}沒有文章——「自己出問題」要有東西可以讀。`);
+    }
+    if (pt.kind === 'spell') {
+      (pt.items || []).forEach((q, i) => { if (!String(q.answer || '').trim()) w.push(`${where}第 ${i + 1} 題沒有答案。`); });
     }
     if (pt.kind === 'cloze') {
       (pt.items || []).forEach((q, i) => {
