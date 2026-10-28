@@ -58,7 +58,7 @@ ok('有兩顆 .mx-eye（眨眼動畫要用）', (art.match(/className="mx-eye"/g
 ok('有三隻腳 a/b/c（走路動畫要用）', ['mx-leg-a', 'mx-leg-b', 'mx-leg-c'].every(k => art.indexOf(k) > 0));
 ok('⭐ 腳踩在地板上（y=12 高 4 → 底部 16，跟其他夥伴一樣）', (art.match(/y="12" width="\d" height="4"/g) || []).length === 3);
 ok('帽子與配件都接上了（跟其他夥伴同一套）',
-  /<MxHat id=\{hat\} fit=\{MX_FIT\.bun\}\/>/.test(art) &&
+  /<MxHat id=\{(?:mxCosHat\(cos, hat\)|hat)\} fit=\{MX_FIT\.bun\}\/>/.test(art) &&
   /layer="back"/.test(art) && /layer="front"/.test(art));
 ok('參考圖的重點都有：長耳朵、粉內耳、淺藍蝴蝶結、腮紅',
   /mx-ear-l/.test(art) && /mx-ear-r/.test(art) && /INNER/.test(art) && /BOW/.test(art) && /BLUSH/.test(art));

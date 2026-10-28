@@ -80,6 +80,7 @@
 }
 /* ⚠ v441：overflow 一定要 visible——SVG 預設會把 viewBox 外面的東西切掉，
    兔耳朵、星星髮箍、魔法棒本來畫到 y < −4 的部分整段被切掉，難怪看起來小又不清楚。 */
+.mx-svg.has-cos .mx-leg rect { fill: var(--cos-leg); }   /* v615 整身造型：腳換成造型的顏色 */
 .mx-svg { display: block; overflow: visible; transform-origin: 50% 92%; width: var(--mx-w); height: calc(var(--mx-w) * 10 / 9); }
 
 /* 眼睛偶爾眨一下 */

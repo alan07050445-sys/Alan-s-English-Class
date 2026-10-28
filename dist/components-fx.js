@@ -169,6 +169,241 @@ var MX_FIT_DEF = MX_FIT.clay;
 /* 帽子的畫法（標準空間：頭頂 y=0、往上到 y=−4.6、頭寬 18）。
    v435：每一頂都加深色收邊、體積也放大——小小一塊色在 40px 的身體上根本看不出來。 */
 var OUTLINE = '#2B2A26';
+/* ══ v615 整身造型（Alan：「南瓜裝跟女巫裝整身造型，每一隻都要合身」）══
+   造型 = ①頭上那頂（沿用 MX_HAT_ART，貼合照 MX_FIT）＋②身上那一圈（臉下面到 y12）＋③裙襬（蓋住腿的上半）＋④腳換色。
+   ⚠ 每一隻的臉佔滿整個身體，所以「身上那一圈」只畫在眼睛下面：top＝從哪一列開始、x0~x1＝那幾列的寬度。
+     flame 的眼睛一路到 y11，只剩一列；owl／rock 兩側各縮一格。
+   ⚠ body 畫在 .mx-torso 裡面（跟著身體動）；skirt 畫在腿的前面（腿在裙子下面踏步＝像穿裙子走路）。 */
+var MX_COS_FIT = {
+  clay: {
+    top: 9,
+    x0: 0,
+    x1: 18
+  },
+  owl: {
+    top: 10,
+    x0: 1,
+    x1: 17
+  },
+  flame: {
+    top: 11,
+    x0: 1,
+    x1: 17
+  },
+  rock: {
+    top: 10,
+    x0: 1,
+    x1: 17
+  },
+  sprout: {
+    top: 10,
+    x0: 0,
+    x1: 18
+  },
+  bun: {
+    top: 9,
+    x0: 0,
+    x1: 18
+  }
+};
+var MX_COS = {
+  cos_pumpkin: {
+    hat: 'hat_pumpkin',
+    leg: '#4C8A3A',
+    body: (t, a, b) => {
+      var w = b - a,
+        o = [];
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "b",
+        x: a,
+        y: t,
+        width: w,
+        height: 12 - t,
+        fill: "#F08A24"
+      }));
+      [0.25, 0.5, 0.75].forEach((k, i) => o.push(/*#__PURE__*/React.createElement("rect", {
+        key: 'r' + i,
+        x: Math.round(a + w * k),
+        y: t,
+        width: "1",
+        height: 12 - t,
+        fill: "#C85E10"
+      })));
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "l1",
+        x: a,
+        y: t,
+        width: "4",
+        height: "1",
+        fill: "#4C8A3A"
+      })); // 葉子領口
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "l2",
+        x: b - 4,
+        y: t,
+        width: "4",
+        height: "1",
+        fill: "#4C8A3A"
+      }));
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "l3",
+        x: "8",
+        y: t,
+        width: "2",
+        height: "1",
+        fill: "#2E6B25"
+      }));
+      return o;
+    },
+    skirt: (a, b) => {
+      var w = b - a,
+        o = [];
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "s",
+        x: a,
+        y: "12",
+        width: w,
+        height: "2",
+        fill: "#F08A24"
+      }));
+      [0.25, 0.5, 0.75].forEach((k, i) => o.push(/*#__PURE__*/React.createElement("rect", {
+        key: 'q' + i,
+        x: Math.round(a + w * k),
+        y: "12",
+        width: "1",
+        height: "2",
+        fill: "#C85E10"
+      })));
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "h",
+        x: a,
+        y: "13",
+        width: w,
+        height: "1",
+        fill: "#C85E10"
+      }));
+      return o;
+    }
+  },
+  cos_witch: {
+    hat: 'hat_witch',
+    leg: '#5B3A8A',
+    body: (t, a, b) => {
+      var w = b - a,
+        o = [];
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "b",
+        x: a,
+        y: t,
+        width: w,
+        height: 12 - t,
+        fill: "#3B2A5A"
+      }));
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "c",
+        x: a,
+        y: t,
+        width: w,
+        height: "1",
+        fill: "#8A4FD0"
+      })); // 領口帶子
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "k",
+        x: "8",
+        y: t,
+        width: "2",
+        height: "1",
+        fill: "#E8C86A"
+      })); // 金扣
+      if (12 - t >= 3) {
+        o.push(/*#__PURE__*/React.createElement("rect", {
+          key: "s1",
+          x: "8",
+          y: t + 1,
+          width: "2",
+          height: "1",
+          fill: "#E8C86A"
+        }));
+        o.push(/*#__PURE__*/React.createElement("rect", {
+          key: "s2",
+          x: "3",
+          y: t + 2,
+          width: "1",
+          height: "1",
+          fill: "#E8C86A"
+        }));
+        o.push(/*#__PURE__*/React.createElement("rect", {
+          key: "s3",
+          x: "14",
+          y: t + 2,
+          width: "1",
+          height: "1",
+          fill: "#E8C86A"
+        }));
+      }
+      return o;
+    },
+    skirt: (a, b) => {
+      var o = [];
+      o.push(/*#__PURE__*/React.createElement("rect", {
+        key: "s",
+        x: a,
+        y: "12",
+        width: b - a,
+        height: "2",
+        fill: "#3B2A5A"
+      }));
+      for (var x = a; x < b; x += 4) {
+        o.push(/*#__PURE__*/React.createElement("rect", {
+          key: 'p' + x,
+          x: x,
+          y: "12",
+          width: "2",
+          height: "2",
+          fill: "#8A4FD0"
+        }));
+      }
+      for (var _x = a; _x < b; _x += 2) {
+        o.push(/*#__PURE__*/React.createElement("rect", {
+          key: 'z' + _x,
+          x: _x,
+          y: "14",
+          width: "1",
+          height: "1",
+          fill: _x % 4 ? '#3B2A5A' : '#8A4FD0'
+        }));
+      }
+      return o;
+    }
+  }
+};
+function mxCosHat(cos, hat) {
+  return cos && MX_COS[cos] ? MX_COS[cos].hat : hat;
+}
+function mxCosProps(cos) {
+  var c = cos && MX_COS[cos];
+  return c ? {
+    className: 'mx-svg has-cos',
+    style: {
+      '--cos-leg': c.leg
+    }
+  } : {
+    className: 'mx-svg'
+  };
+}
+function MxCos({
+  id,
+  pet,
+  layer
+}) {
+  var c = MX_COS[id];
+  if (!c) return null;
+  var f = MX_COS_FIT[pet] || MX_COS_FIT.clay;
+  return /*#__PURE__*/React.createElement("g", {
+    className: 'mx-cos mx-cos-' + layer
+  }, layer === 'body' ? c.body(f.top, f.x0, f.x1) : c.skirt(f.x0, f.x1));
+}
+
 /* v615 像素帽：每個字元一格（'.' 空白），同色連續的合成一條 rect，跟吉祥物本體同一種方塊畫法 */
 function mxPix(rows, ox, oy, pal) {
   var out = [];
@@ -997,22 +1232,22 @@ function mxSetHat(h) {
 function ClaudeMascot({
   size = 46,
   hat = 'none',
-  acc = ''
+  acc = '',
+  cos = ''
 }) {
   var CLAY = '#C1785A',
     EYE = '#1A1A1A';
-  return /*#__PURE__*/React.createElement("svg", {
-    className: "mx-svg",
+  return /*#__PURE__*/React.createElement("svg", _extends({}, mxCosProps(cos), {
     width: size,
     height: size * 10 / 9,
     viewBox: "0 -4 18 20",
     shapeRendering: "crispEdges",
     "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement(MxHat, {
-    id: hat,
+  }), /*#__PURE__*/React.createElement(MxHat, {
+    id: mxCosHat(cos, hat),
     fit: MX_FIT.clay
   }), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.clay,
     layer: "back"
   }), /*#__PURE__*/React.createElement("g", {
@@ -1049,6 +1284,10 @@ function ClaudeMascot({
     width: "4",
     height: "4",
     fill: EYE
+  }), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "clay",
+    layer: "body"
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-a"
   }, /*#__PURE__*/React.createElement("rect", {
@@ -1073,7 +1312,11 @@ function ClaudeMascot({
     width: "4",
     height: "4",
     fill: CLAY
-  })), /*#__PURE__*/React.createElement("g", {
+  })), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "clay",
+    layer: "skirt"
+  }), /*#__PURE__*/React.createElement("g", {
     className: "mx-prop mx-prop-type"
   }, /*#__PURE__*/React.createElement("rect", {
     x: "2",
@@ -1094,7 +1337,7 @@ function ClaudeMascot({
     height: "2",
     fill: "#6B6355"
   })), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.clay,
     layer: "front"
   }));
@@ -1589,7 +1832,8 @@ function VampireMascot({
 function OwlMascot({
   size = 46,
   hat = 'none',
-  acc = ''
+  acc = '',
+  cos = ''
 }) {
   var BODY = '#A9713F',
     DARK = '#7A4E27',
@@ -1597,18 +1841,17 @@ function OwlMascot({
     BEAK = '#E8A33C',
     BELLY = '#E4C79B',
     EYE = '#1A1A1A';
-  return /*#__PURE__*/React.createElement("svg", {
-    className: "mx-svg",
+  return /*#__PURE__*/React.createElement("svg", _extends({}, mxCosProps(cos), {
     width: size,
     height: size * 10 / 9,
     viewBox: "0 -4 18 20",
     shapeRendering: "crispEdges",
     "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement(MxHat, {
-    id: hat,
+  }), /*#__PURE__*/React.createElement(MxHat, {
+    id: mxCosHat(cos, hat),
     fit: MX_FIT.owl
   }), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.owl,
     layer: "back"
   }), /*#__PURE__*/React.createElement("g", {
@@ -1687,6 +1930,10 @@ function OwlMascot({
     width: "1",
     height: "1",
     fill: BEAK
+  }), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "owl",
+    layer: "body"
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-a"
   }, /*#__PURE__*/React.createElement("rect", {
@@ -1705,7 +1952,11 @@ function OwlMascot({
     width: "4",
     height: "3",
     fill: BEAK
-  })), /*#__PURE__*/React.createElement("g", {
+  })), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "owl",
+    layer: "skirt"
+  }), /*#__PURE__*/React.createElement("g", {
     className: "mx-prop mx-prop-read"
   }, /*#__PURE__*/React.createElement("rect", {
     x: "2",
@@ -1738,7 +1989,7 @@ function OwlMascot({
     height: "1",
     fill: "#D8CBB0"
   })), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.owl,
     layer: "front"
   }));
@@ -1748,24 +1999,24 @@ function OwlMascot({
 function FlameMascot({
   size = 46,
   hat = 'none',
-  acc = ''
+  acc = '',
+  cos = ''
 }) {
   var OUT = '#D6533C',
     MID = '#E8873C',
     IN = '#F2C14E',
     EYE = '#3A1B12';
-  return /*#__PURE__*/React.createElement("svg", {
-    className: "mx-svg",
+  return /*#__PURE__*/React.createElement("svg", _extends({}, mxCosProps(cos), {
     width: size,
     height: size * 10 / 9,
     viewBox: "0 -4 18 20",
     shapeRendering: "crispEdges",
     "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement(MxHat, {
-    id: hat,
+  }), /*#__PURE__*/React.createElement(MxHat, {
+    id: mxCosHat(cos, hat),
     fit: MX_FIT.flame
   }), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.flame,
     layer: "back"
   }), /*#__PURE__*/React.createElement("g", {
@@ -1820,6 +2071,10 @@ function FlameMascot({
     width: "4",
     height: "4",
     fill: EYE
+  }), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "flame",
+    layer: "body"
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-a"
   }, /*#__PURE__*/React.createElement("rect", {
@@ -1844,8 +2099,12 @@ function FlameMascot({
     width: "4",
     height: "3",
     fill: MID
-  })), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+  })), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "flame",
+    layer: "skirt"
+  }), /*#__PURE__*/React.createElement(MxAcc, {
+    id: cos ? '' : acc,
     fit: MX_FIT.flame,
     layer: "front"
   }));
@@ -1855,24 +2114,24 @@ function FlameMascot({
 function RockMascot({
   size = 46,
   hat = 'none',
-  acc = ''
+  acc = '',
+  cos = ''
 }) {
   var ROCK = '#9A9384',
     DARK = '#6E695D',
     LIGHT = '#C4BDAC',
     EYE = '#1A1A1A';
-  return /*#__PURE__*/React.createElement("svg", {
-    className: "mx-svg",
+  return /*#__PURE__*/React.createElement("svg", _extends({}, mxCosProps(cos), {
     width: size,
     height: size * 10 / 9,
     viewBox: "0 -4 18 20",
     shapeRendering: "crispEdges",
     "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement(MxHat, {
-    id: hat,
+  }), /*#__PURE__*/React.createElement(MxHat, {
+    id: mxCosHat(cos, hat),
     fit: MX_FIT.rock
   }), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.rock,
     layer: "back"
   }), /*#__PURE__*/React.createElement("g", {
@@ -1927,6 +2186,10 @@ function RockMascot({
     width: "2",
     height: "1",
     fill: DARK
+  }), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "rock",
+    layer: "body"
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-a"
   }, /*#__PURE__*/React.createElement("rect", {
@@ -1951,8 +2214,12 @@ function RockMascot({
     width: "4",
     height: "3",
     fill: DARK
-  })), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+  })), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "rock",
+    layer: "skirt"
+  }), /*#__PURE__*/React.createElement(MxAcc, {
+    id: cos ? '' : acc,
     fit: MX_FIT.rock,
     layer: "front"
   }));
@@ -1962,25 +2229,25 @@ function RockMascot({
 function SproutMascot({
   size = 46,
   hat = 'none',
-  acc = ''
+  acc = '',
+  cos = ''
 }) {
   var SEED = '#D8C79B',
     DEEP = '#B99F6B',
     LEAF = '#6FA85A',
     STEM = '#4E7A3F',
     EYE = '#3A3222';
-  return /*#__PURE__*/React.createElement("svg", {
-    className: "mx-svg",
+  return /*#__PURE__*/React.createElement("svg", _extends({}, mxCosProps(cos), {
     width: size,
     height: size * 10 / 9,
     viewBox: "0 -4 18 20",
     shapeRendering: "crispEdges",
     "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement(MxHat, {
-    id: hat,
+  }), /*#__PURE__*/React.createElement(MxHat, {
+    id: mxCosHat(cos, hat),
     fit: MX_FIT.sprout
   }), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+    id: cos ? '' : acc,
     fit: MX_FIT.sprout,
     layer: "back"
   }), /*#__PURE__*/React.createElement("g", {
@@ -2057,6 +2324,10 @@ function SproutMascot({
     width: "2",
     height: "1",
     fill: DEEP
+  }), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "sprout",
+    layer: "body"
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-leg mx-leg-a"
   }, /*#__PURE__*/React.createElement("rect", {
@@ -2081,8 +2352,12 @@ function SproutMascot({
     width: "4",
     height: "4",
     fill: DEEP
-  })), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+  })), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "sprout",
+    layer: "skirt"
+  }), /*#__PURE__*/React.createElement(MxAcc, {
+    id: cos ? '' : acc,
     fit: MX_FIT.sprout,
     layer: "front"
   }));
@@ -2097,7 +2372,8 @@ function SproutMascot({
 function BunnyMascot({
   size = 46,
   hat = 'none',
-  acc = ''
+  acc = '',
+  cos = ''
 }) {
   var FUR = '#F7EFE0',
     DEEP = '#E0D2BC',
@@ -2106,15 +2382,14 @@ function BunnyMascot({
     BOW = '#CFE2F3',
     BOW_D = '#A8C6E4',
     BLUSH = '#F2B79A';
-  return /*#__PURE__*/React.createElement("svg", {
-    className: "mx-svg",
+  return /*#__PURE__*/React.createElement("svg", _extends({}, mxCosProps(cos), {
     width: size,
     height: size * 10 / 9,
     viewBox: "0 -4 18 20",
     shapeRendering: "crispEdges",
     "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+  }), /*#__PURE__*/React.createElement(MxAcc, {
+    id: cos ? '' : acc,
     fit: MX_FIT.bun,
     layer: "back"
   }), /*#__PURE__*/React.createElement("g", {
@@ -2146,7 +2421,7 @@ function BunnyMascot({
     height: "4",
     fill: INNER
   })), /*#__PURE__*/React.createElement(MxHat, {
-    id: hat,
+    id: mxCosHat(cos, hat),
     fit: MX_FIT.bun
   }), /*#__PURE__*/React.createElement("g", {
     className: "mx-torso"
@@ -2242,6 +2517,10 @@ function BunnyMascot({
     width: "2",
     height: "4",
     fill: BOW_D
+  }), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "bun",
+    layer: "body"
   })), /*#__PURE__*/React.createElement("g", {
     className: "mx-carrot",
     "aria-hidden": "true"
@@ -2422,8 +2701,12 @@ function BunnyMascot({
     height: "4",
     rx: "1.4",
     fill: FUR
-  })), /*#__PURE__*/React.createElement(MxAcc, {
-    id: acc,
+  })), /*#__PURE__*/React.createElement(MxCos, {
+    id: cos,
+    pet: "bun",
+    layer: "skirt"
+  }), /*#__PURE__*/React.createElement(MxAcc, {
+    id: cos ? '' : acc,
     fit: MX_FIT.bun,
     layer: "front"
   }));
@@ -2818,7 +3101,10 @@ function MascotLayer() {
     if (cur != null && isFinite(cur)) setX(Math.round(cur));
   };
   var pet = mxPetOf(petId);
-  var Art = mxArtOf(pet);
+  var {
+    art: BaseArt
+  } = pet;
+  var Art = wear.costume ? BaseArt : mxArtOf(pet); // v615：穿著整身造型就不變吸血鬼（造型本身就是這一隻的裝扮）
   /* window.mascotCheer 與攔 playSound 的那兩個 effect 不會因為換夥伴而重建
      （deps 沒有 petId），直接引用 pet 會抓到換之前的舊值 → 用 ref 帶著走。 */
   var petRef = useFxR(pet);
@@ -2910,7 +3196,7 @@ function MascotLayer() {
       }
       var pend = wearPendRef.current;
       if (pend) {
-        var same = ['hat', 'item'].every(k => (w[k] || '') === (pend.wear[k] || ''));
+        var same = ['hat', 'item', 'costume'].every(k => (w[k] || '') === (pend.wear[k] || ''));
         if (same || Date.now() - pend.t > 6000) wearPendRef.current = null;else Object.assign(w, pend.wear);
       }
       setWear(prev => prev.hat === w.hat && prev.item === w.item ? prev : w);
@@ -3659,6 +3945,7 @@ function MascotLayer() {
     "aria-label": `吉祥物 ${name || (hwOn ? MX_HW_NAME : pet.zh)}`
   }, /*#__PURE__*/React.createElement(Art, {
     hat: hwOn || bat ? 'none' : wear.hat || 'none',
+    cos: wear.costume || '',
     acc: hwOn || bat ? '' : wear.item,
     bat: bat
   }), /*#__PURE__*/React.createElement("span", {
@@ -3777,12 +4064,13 @@ function MascotLayer() {
   }, /*#__PURE__*/React.createElement(Art, {
     size: 62,
     hat: hwOn ? 'none' : wear.hat || 'none',
-    acc: hwOn ? '' : wear.item
+    acc: hwOn ? '' : wear.item,
+    cos: wear.costume || ''
   })), /*#__PURE__*/React.createElement("span", {
     className: "mx-dress-who"
   }, name || (hwOn ? MX_HW_NAME : pet.zh))), /*#__PURE__*/React.createElement("div", {
     className: "mx-dress-tabs"
-  }, (window.MX_KINDS || []).map(k => /*#__PURE__*/React.createElement("button", {
+  }, (window.MX_KINDS || []).filter(k => !k.limitedOnly || (window.MX_SHOP || []).some(it => it.kind === k.kind && hasItem(it.id))).map(k => /*#__PURE__*/React.createElement("button", {
     key: k.kind,
     className: dressTab === k.kind ? 'on' : '',
     onClick: () => setDressTab(k.kind)

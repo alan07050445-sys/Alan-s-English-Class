@@ -2065,9 +2065,9 @@ function TrickOrTreat({ user, treat, isTeacher }) {
             <p className="tot-sub">{prize >= 400 ? '哇！超級大獎！' : prize >= 250 ? '好棒！手氣很好喔！' : '星星已經放進你的口袋了！'}</p>
             {gifts.length > 0 && (
               <div className="tot-gift">
-                <span className="tot-gift-h">🎁 還有限定禮物！</span>
+                <span className="tot-gift-h">🎁 還有限定整身造型！</span>
                 {gifts.map(g => <span key={g.id} className="tot-gift-i"><b>{g.emoji}</b>{g.zh}</span>)}
-                <span className="tot-gift-s">已放進裝扮室——萬聖節活動結束後（11/1 起）就能戴在吉祥物頭上。只有現在拿得到，過了 11/2 就絕版囉</span>
+                <span className="tot-gift-s">已放進裝扮室（長按吉祥物 → 👕 → 造型），穿上整身造型就會變裝！只有現在拿得到，過了 11/2 就絕版囉</span>
               </div>
             )}
             {preview && <p className="tot-err">（預覽：這不會寫入、也不會給星星）</p>}

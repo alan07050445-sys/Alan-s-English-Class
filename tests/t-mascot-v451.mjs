@@ -28,7 +28,7 @@ ok('   沒有任何呼叫端還在傳語音包進去', !/mxLine\([^()]*,[^()]*,/
 ok('⭐ 答對特效的字元表 FX_CHARS 也拿掉了', !/FX_CHARS/.test(fx));
 ok('   吉祥物還是會講話（退回牠自己的台詞）', /mxPick\(k, pet\)/.test(fx) && /const MX_LINES = \{/.test(fx));
 ok('   答對還是會灑彩帶（只是不能換成星星雨了）', /function ConfettiBurst\(/.test(fx) && /fx-confetti/.test(fx));
-ok('⭐ 身上穿的只剩頭飾與配件', /\['hat', 'item'\]\.forEach/.test(data));
+ok('⭐ 身上穿的只剩頭飾與配件', /\['hat', 'item'(?:, 'costume')?\]\.forEach/.test(data));
 
 console.log('\n【2】免費的只剩走路，把戲要用買的');
 ok('⭐ 共用動作池只剩 walk', /const MX_ACTS = \['walk'\];/.test(fx));

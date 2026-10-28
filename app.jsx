@@ -856,6 +856,7 @@ function App() {
         daysAway: (last && today) ? Math.max(0, dayNum(today) - dayNum(last)) : 0,
       });
     } catch (e) {}
+    window.__mxPreviewLimited = !!isTeacher;   // v615：老師帳號可以試穿限定造型
     window.__mxBuy   = (id) => (user && window.mxBuy
       ? window.mxBuy(user.uid, id, starsTotal, userProfile.mx)
       : Promise.resolve({ ok: false, reason: 'no-user' }));

@@ -3088,6 +3088,7 @@ const MX_KINDS = [
   { kind: 'item',  zh: '配件', ico: '🧣', tip: '穿在身上' },
   { kind: 'dance', zh: '動作', ico: '💃', tip: '按一下就表演' },
   { kind: 'pet',   zh: '夥伴', ico: '🐾', tip: '換一隻陪你' },
+  { kind: 'costume', zh: '造型', ico: '🎃', tip: '整身裝扮（限定）', limitedOnly: true },   // v615：只有擁有限定造型的人才看得到這個分頁
 ];
 const MX_SHOP = [
   /* 頭飾 */
@@ -3102,8 +3103,10 @@ const MX_SHOP = [
   /* v613 🎃 萬聖節限定（Alan：「再做一個萬聖節驚喜」）：只有 10/31～11/2 打開 Trick or Treat 的孩子拿得到，
      之後不賣、不能買（mxBuy 擋 limited），裝扮室裡也只有「已經有的人」才看得到那一格——絕版才稀有。
      女巫帽是大獎（南瓜開出 ⭐400 以上）才有的。cost 0＝不影響星星餘額。 */
-  { id: 'hat_pumpkin', kind: 'hat', zh: '限定南瓜帽', emoji: '🎃', cost: 0, limited: 'hw2026' },
-  { id: 'hat_witch',   kind: 'hat', zh: '限定女巫帽', emoji: '🧙', cost: 0, limited: 'hw2026', rare: true },
+  /* v615（Alan：「做整身造型，每一隻都要合身」）：兩頂限定帽升級成整身造型（帽子＋身上＋腳）。
+     kind 'costume'：穿上以後帽子與配件先收起來（整套就是一個造型），萬聖節吸血鬼期間也照樣穿得到。 */
+  { id: 'cos_pumpkin', kind: 'costume', zh: '限定南瓜裝', emoji: '🎃', cost: 0, limited: 'hw2026' },
+  { id: 'cos_witch',   kind: 'costume', zh: '限定女巫裝', emoji: '🧙', cost: 0, limited: 'hw2026', rare: true },
   /* 配件 */
   { id: 'it_bow',     kind: 'item',  zh: '蝴蝶結',   emoji: '🎀', cost: 100 },
   { id: 'it_scarf',   kind: 'item',  zh: '圍巾',     emoji: '🧣', cost: 100 },
@@ -3154,6 +3157,7 @@ function mxHasItem(mx, id) {
   const it = MX_BY_ID[id];
   if (!it) return false;
   if (it.free) return true;
+  if (it.limited && window.__mxPreviewLimited) return true;   // v615：老師帳號隨時可試穿限定造型（不寫進 owned）
   if (it.legacy && (window.__mxHats || []).indexOf(it.legacy) >= 0) return true;   // 老師以前扣點買的
   return mxOwnedList(mx).indexOf(id) >= 0;
 }
@@ -3182,7 +3186,7 @@ function mxPetItem(petId) {
 function mxWearOf(mx) {
   const w = (mx && mx.wear) || {};
   const out = {};
-  ['hat', 'item'].forEach(k => {       // v505：fx / voice 下架，身上只剩頭飾與配件
+  ['hat', 'item', 'costume'].forEach(k => {       // v615 加 costume；v505：fx / voice 下架，身上只剩頭飾與配件
     const id = w[k];
     const it = id && MX_BY_ID[id];
     out[k] = (it && it.kind === k && mxHasItem(mx, id)) ? id : '';

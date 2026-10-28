@@ -46,6 +46,62 @@ const MX_FIT_DEF = MX_FIT.clay;
 /* 帽子的畫法（標準空間：頭頂 y=0、往上到 y=−4.6、頭寬 18）。
    v435：每一頂都加深色收邊、體積也放大——小小一塊色在 40px 的身體上根本看不出來。 */
 const OUTLINE = '#2B2A26';
+/* ══ v615 整身造型（Alan：「南瓜裝跟女巫裝整身造型，每一隻都要合身」）══
+   造型 = ①頭上那頂（沿用 MX_HAT_ART，貼合照 MX_FIT）＋②身上那一圈（臉下面到 y12）＋③裙襬（蓋住腿的上半）＋④腳換色。
+   ⚠ 每一隻的臉佔滿整個身體，所以「身上那一圈」只畫在眼睛下面：top＝從哪一列開始、x0~x1＝那幾列的寬度。
+     flame 的眼睛一路到 y11，只剩一列；owl／rock 兩側各縮一格。
+   ⚠ body 畫在 .mx-torso 裡面（跟著身體動）；skirt 畫在腿的前面（腿在裙子下面踏步＝像穿裙子走路）。 */
+const MX_COS_FIT = {
+  clay:   { top: 9,  x0: 0, x1: 18 },
+  owl:    { top: 10, x0: 1, x1: 17 },
+  flame:  { top: 11, x0: 1, x1: 17 },
+  rock:   { top: 10, x0: 1, x1: 17 },
+  sprout: { top: 10, x0: 0, x1: 18 },
+  bun:    { top: 9,  x0: 0, x1: 18 },
+};
+const MX_COS = {
+  cos_pumpkin: {
+    hat: 'hat_pumpkin', leg: '#4C8A3A',
+    body: (t, a, b) => { const w = b - a, o = [];
+      o.push(<rect key="b" x={a} y={t} width={w} height={12 - t} fill="#F08A24"/>);
+      [0.25, 0.5, 0.75].forEach((k, i) => o.push(<rect key={'r' + i} x={Math.round(a + w * k)} y={t} width="1" height={12 - t} fill="#C85E10"/>));
+      o.push(<rect key="l1" x={a} y={t} width="4" height="1" fill="#4C8A3A"/>);          // 葉子領口
+      o.push(<rect key="l2" x={b - 4} y={t} width="4" height="1" fill="#4C8A3A"/>);
+      o.push(<rect key="l3" x="8" y={t} width="2" height="1" fill="#2E6B25"/>);
+      return o; },
+    skirt: (a, b) => { const w = b - a, o = [];
+      o.push(<rect key="s" x={a} y="12" width={w} height="2" fill="#F08A24"/>);
+      [0.25, 0.5, 0.75].forEach((k, i) => o.push(<rect key={'q' + i} x={Math.round(a + w * k)} y="12" width="1" height="2" fill="#C85E10"/>));
+      o.push(<rect key="h" x={a} y="13" width={w} height="1" fill="#C85E10"/>);
+      return o; },
+  },
+  cos_witch: {
+    hat: 'hat_witch', leg: '#5B3A8A',
+    body: (t, a, b) => { const w = b - a, o = [];
+      o.push(<rect key="b" x={a} y={t} width={w} height={12 - t} fill="#3B2A5A"/>);
+      o.push(<rect key="c" x={a} y={t} width={w} height="1" fill="#8A4FD0"/>);             // 領口帶子
+      o.push(<rect key="k" x="8" y={t} width="2" height="1" fill="#E8C86A"/>);              // 金扣
+      if (12 - t >= 3) { o.push(<rect key="s1" x="8" y={t + 1} width="2" height="1" fill="#E8C86A"/>); o.push(<rect key="s2" x="3" y={t + 2} width="1" height="1" fill="#E8C86A"/>); o.push(<rect key="s3" x="14" y={t + 2} width="1" height="1" fill="#E8C86A"/>); }
+      return o; },
+    skirt: (a, b) => { const o = [];
+      o.push(<rect key="s" x={a} y="12" width={b - a} height="2" fill="#3B2A5A"/>);
+      for (let x = a; x < b; x += 4) { o.push(<rect key={'p' + x} x={x} y="12" width="2" height="2" fill="#8A4FD0"/>); }
+      for (let x = a; x < b; x += 2) { o.push(<rect key={'z' + x} x={x} y="14" width="1" height="1" fill={x % 4 ? '#3B2A5A' : '#8A4FD0'}/>); }
+      return o; },
+  },
+};
+function mxCosHat(cos, hat) { return (cos && MX_COS[cos]) ? MX_COS[cos].hat : hat; }
+function mxCosProps(cos) {
+  const c = cos && MX_COS[cos];
+  return c ? { className: 'mx-svg has-cos', style: { '--cos-leg': c.leg } } : { className: 'mx-svg' };
+}
+function MxCos({ id, pet, layer }) {
+  const c = MX_COS[id];
+  if (!c) return null;
+  const f = MX_COS_FIT[pet] || MX_COS_FIT.clay;
+  return <g className={'mx-cos mx-cos-' + layer}>{layer === 'body' ? c.body(f.top, f.x0, f.x1) : c.skirt(f.x0, f.x1)}</g>;
+}
+
 /* v615 像素帽：每個字元一格（'.' 空白），同色連續的合成一條 rect，跟吉祥物本體同一種方塊畫法 */
 function mxPix(rows, ox, oy, pal) {
   const out = [];
@@ -368,13 +424,13 @@ function mxSetHat(h) { try { localStorage.setItem(mxKey(MX_HAT_KEY), h || ''); }
      不是把別家產品的角色搬過來——配色也換成本站的紙感色票，跟整體才搭。 */
 
 /* ① Claudius —— 原本那隻，永遠是預設（座標全部 ×2，外觀完全沒變） */
-function ClaudeMascot({ size = 46, hat = 'none', acc = '' }) {
+function ClaudeMascot({ size = 46, hat = 'none', acc = '', cos = '' }) {
   const CLAY = '#C1785A', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+    <svg {...mxCosProps(cos)} width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat} fit={MX_FIT.clay}/>
-      <MxAcc id={acc} fit={MX_FIT.clay} layer="back"/>
+      <MxHat id={mxCosHat(cos, hat)} fit={MX_FIT.clay}/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.clay} layer="back"/>
       <g className="mx-torso">
         {/* 頭上的兩個小角 */}
         <rect x="2" y="0" width="2" height="2" fill={CLAY}/>
@@ -384,17 +440,19 @@ function ClaudeMascot({ size = 46, hat = 'none', acc = '' }) {
         {/* 眼睛（會眨） */}
         <rect className="mx-eye" x="2" y="4" width="4" height="4" fill={EYE}/>
         <rect className="mx-eye" x="12" y="4" width="4" height="4" fill={EYE}/>
+      <MxCos id={cos} pet="clay" layer="body"/>
       </g>
       <g className="mx-leg mx-leg-a"><rect x="0" y="12" width="4" height="4" fill={CLAY}/></g>
       <g className="mx-leg mx-leg-b"><rect x="6" y="12" width="6" height="4" fill={CLAY}/></g>
       <g className="mx-leg mx-leg-c"><rect x="14" y="12" width="4" height="4" fill={CLAY}/></g>
+      <MxCos id={cos} pet="clay" layer="skirt"/>
       {/* 招牌動作：打電腦（Alan 指定）——小筆電擋在腳前面，看起來就像坐在桌子後面 */}
       <g className="mx-prop mx-prop-type">
         <rect x="2" y="9" width="14" height="5" fill="#4A443A"/>
         <rect x="3" y="10" width="12" height="3" fill="#9FD8BC"/>
         <rect x="0" y="14" width="18" height="2" fill="#6B6355"/>
       </g>
-      <MxAcc id={acc} fit={MX_FIT.clay} layer="front"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.clay} layer="front"/>
     </svg>
   );
 }
@@ -550,14 +608,14 @@ function VampireMascot({ size = 46, hat = 'none', acc = '', tone = '#C1785A', fi
 }
 
 /* ② 咕咕（貓頭鷹）—— 眼睛大、愛看書，走得少想得多 */
-function OwlMascot({ size = 46, hat = 'none', acc = '' }) {
+function OwlMascot({ size = 46, hat = 'none', acc = '', cos = '' }) {
   const BODY = '#A9713F', DARK = '#7A4E27', RING = '#FBF6EA', BEAK = '#E8A33C',
         BELLY = '#E4C79B', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+    <svg {...mxCosProps(cos)} width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat} fit={MX_FIT.owl}/>
-      <MxAcc id={acc} fit={MX_FIT.owl} layer="back"/>
+      <MxHat id={mxCosHat(cos, hat)} fit={MX_FIT.owl}/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.owl} layer="back"/>
       <g className="mx-torso">
         {/* 耳羽 */}
         <rect x="2" y="0" width="3" height="2" fill={DARK}/>
@@ -575,10 +633,12 @@ function OwlMascot({ size = 46, hat = 'none', acc = '' }) {
         {/* 喙：舊版只有 1 格（一塊色），現在收成上寬下窄的小三角 */}
         <rect x="8" y="6" width="2" height="2" fill={BEAK}/>
         <rect x="8" y="8" width="1" height="1" fill={BEAK}/>
+      <MxCos id={cos} pet="owl" layer="body"/>
       </g>
       <g className="mx-leg mx-leg-a"><rect x="3" y="12" width="4" height="3" fill={BEAK}/></g>
       <g className="mx-leg mx-leg-b"/>
       <g className="mx-leg mx-leg-c"><rect x="11" y="12" width="4" height="3" fill={BEAK}/></g>
+      <MxCos id={cos} pet="owl" layer="skirt"/>
       {/* 招牌動作：看書 */}
       <g className="mx-prop mx-prop-read">
         <rect x="2" y="10" width="14" height="6" fill="#8B3120"/>
@@ -587,19 +647,19 @@ function OwlMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect x="4" y="11" width="4" height="1" fill="#D8CBB0"/>
         <rect x="11" y="11" width="4" height="1" fill="#D8CBB0"/>
       </g>
-      <MxAcc id={acc} fit={MX_FIT.owl} layer="front"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.owl} layer="front"/>
     </svg>
   );
 }
 
 /* ③ 小焰（火苗）—— 靜不下來，跑超快 */
-function FlameMascot({ size = 46, hat = 'none', acc = '' }) {
+function FlameMascot({ size = 46, hat = 'none', acc = '', cos = '' }) {
   const OUT = '#D6533C', MID = '#E8873C', IN = '#F2C14E', EYE = '#3A1B12';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+    <svg {...mxCosProps(cos)} width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat} fit={MX_FIT.flame}/>
-      <MxAcc id={acc} fit={MX_FIT.flame} layer="back"/>
+      <MxHat id={mxCosHat(cos, hat)} fit={MX_FIT.flame}/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.flame} layer="back"/>
       <g className="mx-torso">
         {/* 2→6→10→14→16 一層一層變寬，收邊才像火不像方塊 */}
         <rect x="8" y="0" width="2" height="2" fill={IN}/>
@@ -610,23 +670,25 @@ function FlameMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect x="6" y="9" width="6" height="3" fill={MID}/>
         <rect className="mx-eye" x="4" y="7" width="4" height="4" fill={EYE}/>
         <rect className="mx-eye" x="10" y="7" width="4" height="4" fill={EYE}/>
+      <MxCos id={cos} pet="flame" layer="body"/>
       </g>
       <g className="mx-leg mx-leg-a"><rect x="1" y="12" width="4" height="3" fill={MID}/></g>
       <g className="mx-leg mx-leg-b"><rect x="6" y="12" width="6" height="4" fill={IN}/></g>
       <g className="mx-leg mx-leg-c"><rect x="13" y="12" width="4" height="3" fill={MID}/></g>
-      <MxAcc id={acc} fit={MX_FIT.flame} layer="front"/>
+      <MxCos id={cos} pet="flame" layer="skirt"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.flame} layer="front"/>
     </svg>
   );
 }
 
 /* ④ 阿石（小石頭）—— 慢吞吞，最愛裝成路邊一顆普通的石頭 */
-function RockMascot({ size = 46, hat = 'none', acc = '' }) {
+function RockMascot({ size = 46, hat = 'none', acc = '', cos = '' }) {
   const ROCK = '#9A9384', DARK = '#6E695D', LIGHT = '#C4BDAC', EYE = '#1A1A1A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+    <svg {...mxCosProps(cos)} width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat} fit={MX_FIT.rock}/>
-      <MxAcc id={acc} fit={MX_FIT.rock} layer="back"/>
+      <MxHat id={mxCosHat(cos, hat)} fit={MX_FIT.rock}/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.rock} layer="back"/>
       <g className="mx-torso">
         {/* 上緣切一角、左右各縮一格＝石頭的不規則感 */}
         <rect x="5" y="0" width="9" height="2" fill={LIGHT}/>
@@ -637,23 +699,25 @@ function RockMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect className="mx-eye" x="3" y="5" width="4" height="4" fill={EYE}/>
         <rect className="mx-eye" x="11" y="5" width="4" height="4" fill={EYE}/>
         <rect x="8" y="10" width="2" height="1" fill={DARK}/>
+      <MxCos id={cos} pet="rock" layer="body"/>
       </g>
       <g className="mx-leg mx-leg-a"><rect x="2" y="12" width="4" height="3" fill={DARK}/></g>
       <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" fill={ROCK}/></g>
       <g className="mx-leg mx-leg-c"><rect x="12" y="12" width="4" height="3" fill={DARK}/></g>
-      <MxAcc id={acc} fit={MX_FIT.rock} layer="front"/>
+      <MxCos id={cos} pet="rock" layer="skirt"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.rock} layer="front"/>
     </svg>
   );
 }
 
 /* ⑤ 小芽（幼苗）—— 好奇寶寶，開心的時候會長高一點點 */
-function SproutMascot({ size = 46, hat = 'none', acc = '' }) {
+function SproutMascot({ size = 46, hat = 'none', acc = '', cos = '' }) {
   const SEED = '#D8C79B', DEEP = '#B99F6B', LEAF = '#6FA85A', STEM = '#4E7A3F', EYE = '#3A3222';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+    <svg {...mxCosProps(cos)} width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxHat id={hat} fit={MX_FIT.sprout}/>
-      <MxAcc id={acc} fit={MX_FIT.sprout} layer="back"/>
+      <MxHat id={mxCosHat(cos, hat)} fit={MX_FIT.sprout}/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.sprout} layer="back"/>
       {/* 葉子從 y0 開始長，帽子（y−4~0）才不會壓在葉子上 */}
       {/* v408：莖獨立成一組。長高的時候葉子會往上移 5 個單位，
           本來沒有東西接住它 → 葉子整片飄在半空、跟身體斷開（實測 --mx-w 120px 時斷了 27px）。
@@ -673,11 +737,13 @@ function SproutMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect className="mx-eye" x="3" y="5" width="4" height="4" fill={EYE}/>
         <rect className="mx-eye" x="11" y="5" width="4" height="4" fill={EYE}/>
         <rect x="8" y="8" width="2" height="1" fill={DEEP}/>
+      <MxCos id={cos} pet="sprout" layer="body"/>
       </g>
       <g className="mx-leg mx-leg-a"><rect x="0" y="12" width="4" height="4" fill={DEEP}/></g>
       <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" fill={DEEP}/></g>
       <g className="mx-leg mx-leg-c"><rect x="14" y="12" width="4" height="4" fill={DEEP}/></g>
-      <MxAcc id={acc} fit={MX_FIT.sprout} layer="front"/>
+      <MxCos id={cos} pet="sprout" layer="skirt"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.sprout} layer="front"/>
     </svg>
   );
 }
@@ -688,13 +754,13 @@ function SproutMascot({ size = 46, hat = 'none', acc = '' }) {
    ⚠ 耳朵畫在 y −4~0 那一段（帽子的地盤），所以 MX_FIT.bun 的帽子要往下壓、縮小一點，
      不然帽子會蓋在耳朵上。耳朵獨立成 .mx-ear-l／.mx-ear-r，跳起來的時候會往後飄。
    ⚠ 紅蘿蔔平常 opacity:0，只有招牌動作（.act-hop）前半段才出現——見 styles-fx.css。 */
-function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
+function BunnyMascot({ size = 46, hat = 'none', acc = '', cos = '' }) {
   const FUR = '#F7EFE0', DEEP = '#E0D2BC', INNER = '#D98E72', EYE = '#2B2A26',
         BOW = '#CFE2F3', BOW_D = '#A8C6E4', BLUSH = '#F2B79A';
   return (
-    <svg className="mx-svg" width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
+    <svg {...mxCosProps(cos)} width={size} height={size * 10 / 9} viewBox="0 -4 18 20"
       shapeRendering="crispEdges" aria-hidden="true">
-      <MxAcc id={acc} fit={MX_FIT.bun} layer="back"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.bun} layer="back"/>
       {/* 耳朵：外圈奶油色、內圈粉紅（參考圖的紅棕內耳） */}
       <g className="mx-ear mx-ear-l">
         <rect x="3" y="-4" width="4" height="6" fill={FUR}/>
@@ -711,7 +777,7 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
           （v455 當時以為是帽子太大，把它縮到 0.82 —— 其實愈縮愈看不到。）
           改成畫在耳朵**前面**、身體後面：帽子正常地蓋在頭上，比帽子高的耳朵（兔耳朵、
           小鹿角、星星髮箍）照樣露在外面。 */}
-      <MxHat id={hat} fit={MX_FIT.bun}/>
+      <MxHat id={mxCosHat(cos, hat)} fit={MX_FIT.bun}/>
       <g className="mx-torso">
         {/* 頭與身體連成一塊（跟其他夥伴一樣的塊狀剪影；地板在 y=16，所以身體畫到 12、腳 12~16） */}
         <rect x="1" y="1" width="16" height="2" fill={FUR}/>
@@ -730,6 +796,7 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
         <rect x="5" y="11" width="3" height="1" fill={BOW_D}/>
         <rect x="10" y="11" width="3" height="1" fill={BOW_D}/>
         <rect x="8" y="8" width="2" height="4" fill={BOW_D}/>
+      <MxCos id={cos} pet="bun" layer="body"/>
       </g>
       {/* v457（Alan：「胡蘿蔔太小」）：整根放大一倍多，橫著拿到嘴邊（尖端對著鼻子）。
           v507（Alan：「吃紅蘿蔔特效再做逼真一點」）：本來是一根長方形，改成真的紅蘿蔔——
@@ -774,7 +841,8 @@ function BunnyMascot({ size = 46, hat = 'none', acc = '' }) {
       <g className="mx-leg mx-leg-a"><rect x="2" y="12" width="4" height="4" rx="1.4" fill={FUR}/></g>
       <g className="mx-leg mx-leg-b"><rect x="7" y="12" width="4" height="4" rx="1.4" fill={DEEP}/></g>
       <g className="mx-leg mx-leg-c"><rect x="12" y="12" width="4" height="4" rx="1.4" fill={FUR}/></g>
-      <MxAcc id={acc} fit={MX_FIT.bun} layer="front"/>
+      <MxCos id={cos} pet="bun" layer="skirt"/>
+      <MxAcc id={cos ? '' : acc} fit={MX_FIT.bun} layer="front"/>
     </svg>
   );
 }
@@ -1057,7 +1125,8 @@ function MascotLayer() {
   };
 
   const pet = mxPetOf(petId);
-  const Art = mxArtOf(pet);
+  const { art: BaseArt } = pet;
+  const Art = wear.costume ? BaseArt : mxArtOf(pet);   // v615：穿著整身造型就不變吸血鬼（造型本身就是這一隻的裝扮）
   /* window.mascotCheer 與攔 playSound 的那兩個 effect 不會因為換夥伴而重建
      （deps 沒有 petId），直接引用 pet 會抓到換之前的舊值 → 用 ref 帶著走。 */
   const petRef = useFxR(pet);
@@ -1136,7 +1205,7 @@ function MascotLayer() {
       }
       const pend = wearPendRef.current;
       if (pend) {
-        const same = ['hat', 'item'].every(k => (w[k] || '') === (pend.wear[k] || ''));
+        const same = ['hat', 'item', 'costume'].every(k => (w[k] || '') === (pend.wear[k] || ''));
         if (same || Date.now() - pend.t > 6000) wearPendRef.current = null;
         else Object.assign(w, pend.wear);
       }
@@ -1700,7 +1769,7 @@ function MascotLayer() {
               萬聖節期間一律不戴帽子也不掛配件。
               ⚠ 只是**畫的時候不畫**——wear 這份資料一個字都沒動，
                 所以 11/01 之後他原本戴的那頂帽子會自己回來。 */}
-          <Art hat={(hwOn || bat) ? 'none' : (wear.hat || 'none')}
+          <Art hat={(hwOn || bat) ? 'none' : (wear.hat || 'none')} cos={wear.costume || ''}
                acc={(hwOn || bat) ? '' : wear.item} bat={bat}/>
           {/* v407：衝刺的速度線。放在 .mx-body 裡面所以會跟著 scaleX(dir) 一起翻面，
               永遠留在「牠的身後」，不用另外算方向。 */}
@@ -1788,12 +1857,12 @@ function MascotLayer() {
             {/* 預覽：現在這一隻穿好的樣子，點一下就表演 */}
             <div className="mx-dress-prev" onClick={() => myDances.length && playDance(myDances[0].id)}>
               <span className="mx-dress-figure">
-                <Art size={62} hat={hwOn ? 'none' : (wear.hat || 'none')} acc={hwOn ? '' : wear.item}/>
+                <Art size={62} hat={hwOn ? 'none' : (wear.hat || 'none')} acc={hwOn ? '' : wear.item} cos={wear.costume || ''}/>
               </span>
               <span className="mx-dress-who">{name || (hwOn ? MX_HW_NAME : pet.zh)}</span>
             </div>
             <div className="mx-dress-tabs">
-              {(window.MX_KINDS || []).map(k => (
+              {(window.MX_KINDS || []).filter(k => !k.limitedOnly || (window.MX_SHOP || []).some(it => it.kind === k.kind && hasItem(it.id))).map(k => (
                 <button key={k.kind} className={dressTab === k.kind ? 'on' : ''}
                   onClick={() => setDressTab(k.kind)}>{k.ico} {k.zh}</button>
               ))}

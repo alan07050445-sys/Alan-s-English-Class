@@ -72,7 +72,7 @@ log.push('\n【3】身上穿什麼');
   ok('沒買到的披風不會穿在身上（資料怪怪的也不會壞掉）', w.item === '');
   ok('買到的帽子照戴', w.hat === 'hat_cap');
   ok('⭐ v505：身上只剩頭飾與配件，舊帳號殘留的 fx / voice 欄位直接不理它',
-     Object.keys(w).sort().join() === 'hat,item');
+     Object.keys(w).sort().join() === 'costume,hat,item');
   ok('把帽子放到配件欄這種亂資料會被擋掉', W.mxWearOf({ owned: ['hat_cap'], wear: { item: 'hat_cap' } }).item === '');
 }
 
@@ -143,8 +143,8 @@ log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻�
 log.push('\n【7c】（v441）配件要跟著吉祥物動、整體要大一點明顯一點');
 {
   ok('⭐ 配件畫在吉祥物同一個 <svg> 裡（翻滾／轉圈才會跟著動）',
-     /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="back"\/>/.test(fx) &&
-     /<MxAcc id=\{acc\} fit=\{MX_FIT\.clay\} layer="front"\/>/.test(fx));
+     /<MxAcc id=\{(?:cos \? '' : )?acc\} fit=\{MX_FIT\.clay\} layer="back"\/>/.test(fx) &&
+     /<MxAcc id=\{(?:cos \? '' : )?acc\} fit=\{MX_FIT\.clay\} layer="front"\/>/.test(fx));
   ok('每一隻都收下 acc、而且都有前後兩層', (() => {
      /* ⚠ 本來是釘「正好 6 個 back ＋ 6 個 front」。那是在數「有幾隻」，
         不是在守「每一隻都收得下配件」——v528 多了吸血鬼版就失敗了，
