@@ -3232,6 +3232,7 @@ function MascotLayer() {
   var hasItem = id => window.mxHasItem ? window.mxHasItem({
     owned
   }, id) : false;
+  var hasCostume = (window.MX_SHOP || []).some(it => it.kind === 'costume' && hasItem(it.id));
   var myDances = (window.MX_SHOP || []).filter(it => it.kind === 'dance' && hasItem(it.id));
   var playDance = id => {
     var d = MX_DANCE_ACT[id] || ['party', 2000];
@@ -4005,12 +4006,13 @@ function MascotLayer() {
       setStars(v => Math.max(0, v - (r.cost || 0)));
       say(r.cost ? `我現在叫 ${nm} 了！（用了 ${r.cost} 顆星星）` : `我叫 ${nm}！`, 3000);
     }
-  }, window.mxRenameCost && window.mxRenameCost(window.__mxData) ? '✏️ 改名字（50⭐）' : '✏️ 取名字'), !hwOn && /*#__PURE__*/React.createElement("button", {
+  }, window.mxRenameCost && window.mxRenameCost(window.__mxData) ? '✏️ 改名字（50⭐）' : '✏️ 取名字'), (!hwOn || hasCostume) && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMenu(false);
+      if (hwOn) setDressTab('costume');
       setDress(true);
     }
-  }, "\uD83D\uDC55 \u88DD\u626E\u5BA4"), !hwOn && myDances.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, "\uD83D\uDC55 \u88DD\u626E\u5BA4"), "   ", !hwOn && myDances.length > 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMenu(false);
       playDance(myDances[Math.floor(Math.random() * myDances.length)].id);
@@ -4070,7 +4072,7 @@ function MascotLayer() {
     className: "mx-dress-who"
   }, name || (hwOn ? MX_HW_NAME : pet.zh))), /*#__PURE__*/React.createElement("div", {
     className: "mx-dress-tabs"
-  }, (window.MX_KINDS || []).filter(k => !k.limitedOnly || (window.MX_SHOP || []).some(it => it.kind === k.kind && hasItem(it.id))).map(k => /*#__PURE__*/React.createElement("button", {
+  }, (window.MX_KINDS || []).filter(k => hwOn ? k.kind === 'costume' : !k.limitedOnly || (window.MX_SHOP || []).some(it => it.kind === k.kind && hasItem(it.id))).map(k => /*#__PURE__*/React.createElement("button", {
     key: k.kind,
     className: dressTab === k.kind ? 'on' : '',
     onClick: () => setDressTab(k.kind)

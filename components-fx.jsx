@@ -1234,6 +1234,7 @@ function MascotLayer() {
      買來的五個動作全部是**新的**動畫，不重用免費的 walk／dash／spin／dance。 */
   const MX_DANCE_ACT = { dc_wave: ['wave', 1600], dc_spin: ['twirl', 1500], dc_dance: ['party', 2800], dc_flip: ['flip', 1100], dc_moon: ['moon', 2800] };
   const hasItem = (id) => (window.mxHasItem ? window.mxHasItem({ owned }, id) : false);
+  const hasCostume = (window.MX_SHOP || []).some(it => it.kind === 'costume' && hasItem(it.id));
   const myDances = (window.MX_SHOP || []).filter(it => it.kind === 'dance' && hasItem(it.id));
   const playDance = (id) => {
     const d = MX_DANCE_ACT[id] || ['party', 2000];
@@ -1821,7 +1822,7 @@ function MascotLayer() {
             {/* v529（Alan：「吉祥物所有功能都關掉，只留下取名字，以及讓他睡覺」）
                 ⚠ 只是在萬聖節期間收起來，不是刪掉——11/01 之後原封不動回來，
                   買過的裝扮與夥伴也都還在（資料一個字都沒動）。 */}
-            {!hwOn && <button onClick={() => { setMenu(false); setDress(true); }}>👕 裝扮室</button>}
+            {(!hwOn || hasCostume) && <button onClick={() => { setMenu(false); if (hwOn) setDressTab('costume'); setDress(true); }}>👕 裝扮室</button>}   {/* v616：萬聖節期間只有拿到限定造型的人進得去，而且只看得到「造型」分頁 */}
             {!hwOn && myDances.length > 0 && (
               <button onClick={() => { setMenu(false); playDance(myDances[Math.floor(Math.random() * myDances.length)].id); }}>
                 💃 表演一個
@@ -1862,7 +1863,7 @@ function MascotLayer() {
               <span className="mx-dress-who">{name || (hwOn ? MX_HW_NAME : pet.zh)}</span>
             </div>
             <div className="mx-dress-tabs">
-              {(window.MX_KINDS || []).filter(k => !k.limitedOnly || (window.MX_SHOP || []).some(it => it.kind === k.kind && hasItem(it.id))).map(k => (
+              {(window.MX_KINDS || []).filter(k => hwOn ? k.kind === 'costume' : (!k.limitedOnly || (window.MX_SHOP || []).some(it => it.kind === k.kind && hasItem(it.id)))).map(k => (
                 <button key={k.kind} className={dressTab === k.kind ? 'on' : ''}
                   onClick={() => setDressTab(k.kind)}>{k.ico} {k.zh}</button>
               ))}

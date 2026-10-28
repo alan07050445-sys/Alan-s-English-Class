@@ -71,7 +71,7 @@ ok('⚠ 那個 effect 不會因為節慶重建 → 要用 ref 帶（跟 petRef �
 
 console.log('\n【3】選單只留取名字與睡覺');
 ['裝扮室', '換夥伴'].forEach(z => {
-  ok(`⭐ ${z} 在萬聖節期間收起來`, new RegExp("\\{!hwOn && [\\s\\S]{0,160}" + z).test(fx));
+  ok(`⭐ ${z} 在萬聖節期間收起來`, new RegExp("\\{(?:!hwOn|\\(!hwOn \\|\\| hasCostume\\)) && [\\s\\S]{0,260}" + z).test(fx));
 });
 ok('⭐ 表演一個也收起來', /\{!hwOn && myDances\.length > 0 &&/.test(fx));
 ok('⭐⭐ 取名字與睡覺**不可以**被收起來（Alan 指名要留）', (() => {
