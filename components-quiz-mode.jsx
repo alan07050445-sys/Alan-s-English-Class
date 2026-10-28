@@ -7860,6 +7860,48 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           );
         })()}
 
+        {/* ── v620 ✍️ VCe：每個長母音自己選兩個字，寫字＋造句 ── */}
+        {pt.kind === 'vcewrite' && (() => {
+          const slots = Array.isArray(v) ? v : [];
+          const per = +pt.per || 2;
+          const setSlot = (i, patch) => put(key, prev => {
+            const g = Array.isArray(prev) ? prev.map(x => ({ ...x })) : [];
+            g[i] = { ...(g[i] || {}), ...patch };
+            return g;
+          });
+          return (
+            <>
+              {(pt.groups || []).map((vow, gi) => (
+                <div className="ex-vw" key={gi}>
+                  <h4>Long {vow}</h4>
+                  {Array.from({ length: per }, (_, j) => {
+                    const i = gi * per + j, sl = slots[i] || {};
+                    const d = sent ? (pr.detail[i] || {}) : null;
+                    return (
+                      <div className={'ex-af' + (sent ? (d.ok ? ' ok' : ' bad') : '')} key={j}>
+                        <div className="ex-af-row">
+                          <label>Word {j + 1}:</label>
+                          <input className="ex-af-w" disabled={sent} value={sl.word || ''} placeholder={'長 ' + vow + ' 的 VCe 字'}
+                            autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                            onChange={e => setSlot(i, { word: e.target.value })}/>
+                        </div>
+                        <div className="ex-af-row">
+                          <label>Sentence:</label>
+                          <input className="ex-af-s" disabled={sent} value={sl.sentence || ''}
+                            placeholder={'用這個字造一個完整的句子（' + (pt.minWords || 3) + ' 個字以上）'}
+                            onChange={e => setSlot(i, { sentence: e.target.value })}/>
+                        </div>
+                        {sent && (d.why || []).length > 0 && <ul className="ex-why">{d.why.map((w, k) => <li key={k}>{w}</li>)}</ul>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+              {!sent && <p className="ex-hint">字要<b>自己想</b>，不可以用 Part A 的字；兩個字不能一樣。</p>}
+            </>
+          );
+        })()}
+
         {/* ── v538 📦 找出錯的字，填進格子 ── */}
         {pt.kind === 'fixbox' && (() => {
           const boxes = Array.isArray(v) ? v : [];

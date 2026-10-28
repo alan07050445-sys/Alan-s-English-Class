@@ -9546,6 +9546,62 @@ function ExamPlayer({
       }), !sent && /*#__PURE__*/React.createElement("p", {
         className: "ex-hint"
       }, "\u6BCF\u500B\u5B57\u53EA\u80FD\u7528", /*#__PURE__*/React.createElement("b", null, "\u4E00\u6B21"), "\uFF1B\u53EF\u4EE5\u52A0 when / because / and / but / so \u8B93\u53E5\u5B50\u9577\u4E00\u9EDE\u3002"));
+    })(), pt.kind === 'vcewrite' && (() => {
+      var slots = Array.isArray(v) ? v : [];
+      var per = +pt.per || 2;
+      var setSlot = (i, patch) => put(key, prev => {
+        var g = Array.isArray(prev) ? prev.map(x => ({
+          ...x
+        })) : [];
+        g[i] = {
+          ...(g[i] || {}),
+          ...patch
+        };
+        return g;
+      });
+      return /*#__PURE__*/React.createElement(React.Fragment, null, (pt.groups || []).map((vow, gi) => /*#__PURE__*/React.createElement("div", {
+        className: "ex-vw",
+        key: gi
+      }, /*#__PURE__*/React.createElement("h4", null, "Long ", vow), Array.from({
+        length: per
+      }, (_, j) => {
+        var i = gi * per + j,
+          sl = slots[i] || {};
+        var d = sent ? pr.detail[i] || {} : null;
+        return /*#__PURE__*/React.createElement("div", {
+          className: 'ex-af' + (sent ? d.ok ? ' ok' : ' bad' : ''),
+          key: j
+        }, /*#__PURE__*/React.createElement("div", {
+          className: "ex-af-row"
+        }, /*#__PURE__*/React.createElement("label", null, "Word ", j + 1, ":"), /*#__PURE__*/React.createElement("input", {
+          className: "ex-af-w",
+          disabled: sent,
+          value: sl.word || '',
+          placeholder: '長 ' + vow + ' 的 VCe 字',
+          autoCapitalize: "none",
+          autoCorrect: "off",
+          spellCheck: false,
+          onChange: e => setSlot(i, {
+            word: e.target.value
+          })
+        })), /*#__PURE__*/React.createElement("div", {
+          className: "ex-af-row"
+        }, /*#__PURE__*/React.createElement("label", null, "Sentence:"), /*#__PURE__*/React.createElement("input", {
+          className: "ex-af-s",
+          disabled: sent,
+          value: sl.sentence || '',
+          placeholder: '用這個字造一個完整的句子（' + (pt.minWords || 3) + ' 個字以上）',
+          onChange: e => setSlot(i, {
+            sentence: e.target.value
+          })
+        })), sent && (d.why || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+          className: "ex-why"
+        }, d.why.map((w, k) => /*#__PURE__*/React.createElement("li", {
+          key: k
+        }, w))));
+      }))), !sent && /*#__PURE__*/React.createElement("p", {
+        className: "ex-hint"
+      }, "\u5B57\u8981", /*#__PURE__*/React.createElement("b", null, "\u81EA\u5DF1\u60F3"), "\uFF0C\u4E0D\u53EF\u4EE5\u7528 Part A \u7684\u5B57\uFF1B\u5169\u500B\u5B57\u4E0D\u80FD\u4E00\u6A23\u3002"));
     })(), pt.kind === 'fixbox' && (() => {
       var boxes = Array.isArray(v) ? v : [];
       return /*#__PURE__*/React.createElement(React.Fragment, null, readBlock(pt.passage, 'ex-read ex-read-fix'), /*#__PURE__*/React.createElement("div", {

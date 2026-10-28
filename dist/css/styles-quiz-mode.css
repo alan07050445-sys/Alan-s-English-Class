@@ -3659,3 +3659,7 @@ body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
 .ex-spin:focus { outline: none; border-bottom-color: var(--accent, #8b3120); background: var(--bg-paper, #fbf8f1); }
 .ex-spfix { margin-left: 6px; font-size: 14px; text-decoration: none; font-weight: 800; }
 @media (max-width: 620px) { .ex-spell { grid-template-columns: 1fr; } }
+
+/* v620 VCe 自己選字造句：每個長母音一個框 */
+.ex-vw { margin: 0 0 14px; padding: 10px 14px 6px; border: 1.5px solid var(--border, #ddd6c4); border-radius: 12px; background: var(--bg-paper, #fbf8f1); }
+.ex-vw h4 { margin: 0 0 6px; font-size: 17px; color: var(--ink, #15130e); }

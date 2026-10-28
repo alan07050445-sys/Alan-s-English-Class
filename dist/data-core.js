@@ -3358,6 +3358,7 @@ const EXAM_KINDS = {
   circle: { zh: '圈出符合的字', auto: true },   // Part 2：短文裡圈 N 個 -VCe／vowel team
   cloze:  { zh: 'Word Bank 填空', auto: true }, // Part 3：給詞庫，一句一格
   quiz:   { zh: '選擇題', auto: true },
+  vcewrite: { zh: 'VCe 自己選字造字＋造句', auto: true },   // v620：Long a/i/o/u 各選兩個 VCe 字並造句
   spell:  { zh: '拼字填寫（輸入答案）', auto: true },   // v619：Suffixes 加字尾／還原／填正確形式——沒有詞庫、自己打字
          // Part 4：閱讀理解
   /* v522：康橋 Formative 的 Part 1——從字尾表裡挑兩個，造字，再各造一個 5 字以上的句子。
@@ -3436,6 +3437,7 @@ function examPartN(part) {
   if (!part) return 0;
   if (part.kind === 'circle') return +part.need || (part.answers || []).length || 0;
   if (part.kind === 'cloze' || part.kind === 'spell') return (part.items || []).length;
+  if (part.kind === 'vcewrite') return (part.groups || []).length * (+part.per || 2);
   if (part.kind === 'quiz')   return (part.questions || []).length;
   if (part.kind === 'short')  return (part.questions || []).length;
   if (part.kind === 'affix' || part.kind === 'genq') return +part.need || 2;
@@ -3942,6 +3944,34 @@ function examStoryOne(text, part) {
 /* ══ v536 ✍️ 用詞庫的字造句 ══════════════════════════════════════
    Alan 的文法卷 C：從 extreme / protect / shelter 裡挑，每句至少 6 個字，
    可以加連接詞。跟 v522 的「造字＋造句」不同——這裡**不用造字**。 */
+/* v620 VCe 自己選字造字＋造句：第 i 格屬於第 floor(i/per) 個母音。
+   字要符合 VCe（WS_CHECKS.vce）、中間那個母音要對（Long a → a_e）、不能用 Part A 的字（exclude）、
+   同一個字不能用兩次；句子要用到那個字（吃變化形）而且夠長。 */
+function examVceWriteOne(slot, part, i, used) {
+  const per = +part.per || 2, minW = +part.minWords || 3;
+  const vow = (part.groups || [])[Math.floor(i / per)] || '';
+  const word = String((slot && slot.word) || '').trim();
+  const sent = String((slot && slot.sentence) || '').trim();
+  const key = word.toLowerCase();
+  const why = [];
+  if (!word) why.push('沒有寫字');
+  else if (!/^[A-Za-z]{3,}$/.test(word)) why.push(`「${word}」看起來不是一個英文字`);
+  else if (!WS_CHECKS.vce(word)) why.push(`「${word}」不是 VCe（母音-子音-e 結尾）`);
+  else if (vow && key.replace(/e$/, '').slice(-2, -1) !== vow) why.push(`「${word}」的長母音不是 ${vow}`);
+  else if ((part.exclude || []).indexOf(key) >= 0) why.push(`「${word}」是 Part A 的字，這題要自己想別的`);
+  else if (used && used.has(key)) why.push(`「${word}」前面已經用過了`);
+  const wordOk = why.length === 0;
+  if (!sent) why.push('沒有造句');
+  else {
+    const n = sent.split(/\s+/).filter(Boolean).length;
+    const re = examWordFormRe(word);
+    if (!(re && re.test(sent))) why.push(`句子裡沒有用到「${word || '那個字'}」`);
+    else if (n < minW) why.push(`句子只有 ${n} 個字，要 ${minW} 個字以上`);
+  }
+  if (wordOk && word && used) used.add(key);
+  return { ok: why.length === 0, why, vow };
+}
+
 function examUseWordOne(slot, part) {
   const minW = +part.minWords || 6;
   const bank = (part.bank || []).map(w => String(w || '').trim()).filter(Boolean);
@@ -4173,6 +4203,16 @@ function examScorePart(part, ans) {
         out.detail.push({ sec: sec.id, ok: r.ok, why: r.why, got: got[i] || '' });
       }
     });
+    out.got = Math.round(max * (out.right / n));
+    return out;
+  } else if (part.kind === 'vcewrite') {
+    const used = new Set();
+    for (let i = 0; i < n; i++) {
+      const slot = (ans || [])[i] || {};
+      const r = examVceWriteOne(slot, part, i, used);
+      if (r.ok) out.right++;
+      out.detail.push({ ok: r.ok, why: r.why, got: [slot.word, slot.sentence].filter(Boolean).join('：') });
+    }
     out.got = Math.round(max * (out.right / n));
     return out;
   } else if (part.kind === 'usewords') {

@@ -5023,7 +5023,17 @@ const EXAM_READ_SYS = `You convert a photo of a printed English exam paper (Kang
 
 Output ONE page's worth. Keep every English word exactly as printed — never translate, never rewrite.
 
-"parts" may ONLY use these kinds. Anything else goes in "skipped".
+"parts" may ONLY use these kinds.
+🔴 NEVER SKIP A QUESTION. Papers come in many shapes and the kinds below are building blocks, not a closed list of
+   layouts: whatever the layout looks like, pick the CLOSEST kind and fit the content into it. Decision guide:
+     · child TYPES one short answer per blank (no word box)            → "spell"
+     · child circles words from a passage OR from a grid/list of words → "circle"
+     · child picks a letter A/B/C/D                                     → "quiz"
+     · child picks words from a box to fill sentences                   → "cloze"
+     · child writes a word AND a sentence of their own                  → "affix" / "usewords" / "vcewrite"
+     · child writes sentences / a paragraph / explains / anything else  → "short" (teacher or AI marks it)
+   If you are not sure, use "short" with the printed task copied exactly into "questions":[{"q":"...","pts":N}].
+   "skipped" is ONLY for things that are not questions (name/date lines, page numbers, decorations).
   "circle"  — "Read and Circle N <pattern> words" over a passage.
               "check" must be one of: vce | team | digraph | suffix | prefix | diphthong
                  "diphthong sounds /aʊ/ /ɔɪ/" (circle the words) -> "check":"diphthong", "checkArg":"ou ow oi oy". It judges by PRONUNCIATION: ou/ow as in shout, brown = /aʊ/ (same sound); snow, know (/oʊ/) are NOT counted unless checkArg is "ow:long".
@@ -5033,12 +5043,21 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
                  "digraph"               -> "check":"digraph"
                  "words ending in -ing"  -> "check":"suffix", "checkArg":"-ing"
               "need" = how many they must circle. "passage" = the whole passage, exactly as printed.
+              🔴 A WORD GRID / LIST counts too: "Circle all the words that have a VCe pattern ... cross out the imposters"
+              over a table of words is a "circle" part. Put EVERY word of the grid into "passage", row by row, left to
+              right, separated by spaces (no table, no numbering). If the paper does not print how many to circle
+              ("circle all the ..."), leave "need" 0 — the website counts them itself.
   "cloze"   — a word bank + sentences with a blank.
               "bank" = every word in the box.
               🔴 The sentences go in a field called "items" (NOT "sentences", NOT "questions").
               Each item: {"text":"Mark ___ on the test.","answer":"struggled"} — write the blank as ___
               and "answer" = the word from the bank that fits. YOU choose the answer from the bank
               by reading the sentence — do not copy the student's handwriting.
+  "vcewrite"— "For each long vowel sound, choose VCe words of your OWN, write the word and a sentence for it"
+              (boxes labelled Long a / Long i / Long o / Long u, each with "Word 1:" "Sentence:" "Word 2:" "Sentence:").
+              "groups" = the vowel letters in printed order, e.g. ["a","i","o","u"]. "per" = how many words per box
+              (2 for Word 1 / Word 2). "minWords" = the printed minimum sentence length, else 0.
+              The child picks the words — you do NOT write any answers.
   "spell"   — the child TYPES one word (or a short answer) into a blank, and there is NO word bank. Examples:
               "pretty (-er) ______" (add the suffix), "saddest ______" (change it back to the base word),
               "The baby is ______ happily. (smile)" (write the correct form), "Which word has ... ?" typed answers.
@@ -5397,6 +5416,19 @@ function _examReadOne(content) {
             if (c) c = { ...c, passage: '', _cont: 'passage' };
           }
           /* ⚠ 讀進來卻被清洗丟掉的，一定要告訴老師——以前是整題消失、什麼都不說 */
+          /* 🔴 v620（Alan：「讓 AI 聰明一點…不要再有做不到的題目」）：型別不認得、或內容湊不成那一題的，
+             不再丟掉——改收成「問答題（老師改）」，把考卷上印的題目原樣放進去，學生照樣能作答、老師照樣能改。 */
+          if (!c && pt && (pt.title || pt.kind || pt.instruction || pt.prompt || pt.question)) {
+            const task = [pt.question, pt.prompt, pt.q, pt.instruction, pt.title].map(x => String(x || '').trim()).filter(Boolean)[0] || '';
+            const items = [].concat(Array.isArray(pt.items) ? pt.items : [], Array.isArray(pt.questions) ? pt.questions : [])
+              .map(x => String((x && (x.text || x.q || x.sentence)) || x || '').trim()).filter(Boolean).slice(0, 20);
+            const qs = items.length ? items.map(t => ({ q: t, pts: 0 })) : (task ? [{ q: task, pts: 0 }] : []);
+            if (qs.length) {
+              c = _examCleanPart({ kind: 'short', title: String(pt.title || '').trim(), instruction: String(pt.instruction || '').trim(),
+                                   pts: +pt.pts || 0, questions: qs, ...(pt.passage ? { passage: pt.passage } : {}) });
+              if (c) dropped.push(`「${String(pt.title || pt.kind || task).slice(0, 40)}」網站還沒有專屬題型，先收成「問答題（老師改）」`);
+            }
+          }
           if (!c && pt && (pt.title || pt.kind)) dropped.push(`「${String(pt.title || pt.kind).slice(0, 40)}」讀到了但內容不完整，沒收進來`);
           return c;
         }).filter(Boolean),
@@ -5449,7 +5481,13 @@ function _examCleanPart(p) {
     if (!WS_CHECKS[check]) return null;                    // 程式判不出來的規則不要收
     const passage = String(p.passage || '').trim();
     if (!passage) return null;
-    return { ...base, check, checkArg: String(p.checkArg || '').trim(), need: +p.need || 0, passage };
+    /* v620：單字表格（"Circle all the words…"）卷子沒印要圈幾個——程式自己數，不要靠模型數 */
+    let need = +p.need || 0;
+    if (!need && window.wsCheck) {
+      const ck = { check, checkArg: String(p.checkArg || '').trim() };
+      need = (passage.match(/[A-Za-z][A-Za-z'-]*/g) || []).filter(w => window.wsCheck(w, examCircleCheck(ck)) === true).length;
+    }
+    return { ...base, check, checkArg: String(p.checkArg || '').trim(), need, passage };
   }
   if (p.kind === 'cloze') {
     const bank = (Array.isArray(p.bank) ? p.bank : []).map(x => String(x).trim()).filter(Boolean);
@@ -5459,6 +5497,12 @@ function _examCleanPart(p) {
     })).filter(q => q.text);
     if (!bank.length || !items.length) return null;
     return { ...base, bank, items };
+  }
+  if (p.kind === 'vcewrite') {
+    const groups = (Array.isArray(p.groups) ? p.groups : []).map(x => (/[aeiou]/i.exec(String(x)) || [''])[0].toLowerCase()).filter(Boolean).slice(0, 5);
+    if (!groups.length) return null;
+    return { ...base, groups, per: Math.max(1, Math.min(4, +p.per || 2)), minWords: +p.minWords || 3,
+             exclude: (Array.isArray(p.exclude) ? p.exclude : []).map(x => String(x).trim().toLowerCase()).filter(Boolean) };
   }
   if (p.kind === 'spell') {
     const items = (Array.isArray(p.items) ? p.items : []).map(q => {
@@ -5829,6 +5873,10 @@ async function aiReadExamSheet({ images = [], onProgress } = {}) {
     });
     sc.parts.forEach(pt => { delete pt._cont; });
   });
+  /* v620：「Do not use words from Part A」——Part A 是 VCe 圈字的單字表格（沒有句號），它的字不能再用在自己選字的那一題；Part B 的短文不算 */
+  const vceWords = [];
+  secs.forEach(sc => sc.parts.forEach(pt => { if (pt.kind === 'circle' && pt.check === 'vce' && !/[.!?]/.test(String(pt.passage || ''))) vceWords.push(...(String(pt.passage || '').match(/[A-Za-z][A-Za-z'-]*/g) || []).map(x => x.toLowerCase())); }));
+  secs.forEach(sc => sc.parts.forEach(pt => { if (pt.kind === 'vcewrite' && !(pt.exclude || []).length && vceWords.length) pt.exclude = Array.from(new Set(vceWords)); }));
   /* v560 ② 配分保險：模型有時只回「(3 pts. each)」沒回總分 → 自己乘出來 */
   secs.forEach(sc => sc.parts.forEach(pt => {
     if (+pt.pts > 0 || (EXAM_KINDS[pt.kind] || {}).noScore) return;
@@ -6155,6 +6203,7 @@ function examPartText(part) {
   if (p.kind === 'circle') return [p.check + (p.checkArg ? ':' + p.checkArg : ''), p.passage || ''].join('\n');
   if (p.kind === 'cloze') return [(p.bank || []).join(', ')]
     .concat((p.items || []).map(q => `${q.text || ''} | ${q.answer || ''}`)).join('\n');
+  if (p.kind === 'vcewrite') return [(p.groups || []).join(' ') + ' | ' + (p.per || 2), 'exclude: ' + (p.exclude || []).join(', ')].join('\n');
   if (p.kind === 'spell') return (p.items || []).map(q => [q.text, q.answer].concat(q.accept || []).join(' | ')).join('\n');
   if (p.kind === 'quiz') return (p.questions || [])
     .map(q => [q.q].concat(q.options || []).concat([(+q.answer || 0) + 1]).join(' | ')).join('\n');
@@ -6190,6 +6239,13 @@ function examParsePart(kind, text) {
       return { text: (c[0] || '').trim(), answer: (c[1] || '').trim() };
     }).filter(q => q.text && q.answer);
     return { bank, items };
+  }
+  if (kind === 'vcewrite') {
+    /* 第一行＝母音們（空白分開） | 每個母音幾個字；第二行（可省略）＝ exclude: 不能用的字（逗號分開） */
+    const head = (nonEmpty[0] || '').split('|');
+    const groups = (head[0] || '').split(/[\s,，]+/).map(x => (/[aeiou]/i.exec(x) || [''])[0].toLowerCase()).filter(Boolean).slice(0, 5);
+    const ex = (nonEmpty[1] || '').replace(/^\s*exclude\s*[:：]/i, '').split(/[,，\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+    return { groups, per: Math.max(1, Math.min(4, parseInt(head[1], 10) || 2)), exclude: ex };
   }
   if (kind === 'spell') {
     /* 每行＝ 題目（或「字 (-er)」） | 答案 | 其他也算對的答案（可省略，可多個） */
@@ -6335,6 +6391,7 @@ function examWarnings(item) {
     if (pt.kind === 'genq' && !String(pt.passage || '').trim()) {
       w.push(`${where}沒有文章——「自己出問題」要有東西可以讀。`);
     }
+    if (pt.kind === 'vcewrite' && !(pt.groups || []).length) w.push(`${where}沒有寫是哪幾個長母音（a i o u）。`);
     if (pt.kind === 'spell') {
       (pt.items || []).forEach((q, i) => { if (!String(q.answer || '').trim()) w.push(`${where}第 ${i + 1} 題沒有答案。`); });
     }
