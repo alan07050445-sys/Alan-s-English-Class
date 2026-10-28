@@ -2079,4 +2079,121 @@ function TrickOrTreat({ user, treat, isTeacher }) {
   );
 }
 
-Object.assign(window, { Boom, Footer, TrickOrTreat, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+
+/* ───────── v618 🗺️ 期中考總複習地圖（學生端）─────────
+   資料與進度邏輯在 data.js（reviewProgress）；這裡只負責畫：
+   · ReviewPathCard：大廳裡一張入口卡（進度條＋下一關是什麼）
+   · ReviewPathMap：整頁地圖——最上面是「考試資訊卡」，下面一關一關往下走，最後是終點。
+   ⚠ 不鎖順序（Alan：每一關都做過就算）；只是用「📍 下一關」提示該從哪裡開始。 */
+function ReviewPathCard({ rp, isTeacher, onOpen, onEdit }) {
+  if (!rp) return isTeacher ? (
+    <div className="rp-card rp-card-empty">
+      <div className="rp-card-ico">🗺️</div>
+      <div className="rp-card-body"><b>期中考總複習地圖</b><span>還沒建立——做一張「Word Study → Vocabulary → Reading」的闖關地圖給學生</span></div>
+      <button className="rp-btn" onClick={onEdit}>建立地圖</button>
+    </div>
+  ) : null;
+  if (!rp.published && !isTeacher) return null;
+  const pct = rp.total ? Math.round(rp.done / rp.total * 100) : 0;
+  const nxt = rp.next >= 0 ? rp.steps[rp.next] : null;
+  const days = window.reviewDaysLeft ? window.reviewDaysLeft(rp.info.date) : null;
+  return (
+    <div className={'rp-card' + (rp.complete ? ' rp-card-done' : '')}>
+      <div className="rp-card-ico">{rp.complete ? '🏆' : '🗺️'}</div>
+      <div className="rp-card-body">
+        <b>{rp.title}{!rp.published && <em className="rp-draft">未公開</em>}</b>
+        <span>
+          {rp.complete ? '全部完成了！你已經準備好了 🎉'
+            : nxt ? `下一關：${nxt.name}（已完成 ${rp.stepsDone}/${rp.steps.length} 關）` : '老師還在放題目'}
+          {days != null && days >= 0 && !rp.complete && <> · 距離考試 {days === 0 ? '就是今天' : days + ' 天'}</>}
+        </span>
+        <div className="rp-bar" aria-hidden="true"><i style={{ width: pct + '%' }}/></div>
+      </div>
+      <div className="rp-card-actions">
+        <button className="rp-btn" onClick={onOpen}>{rp.complete ? '看地圖' : '開始闖關'}</button>
+        {isTeacher && <button className="rp-btn rp-btn-ghost" onClick={onEdit}>編輯</button>}
+      </div>
+    </div>
+  );
+}
+
+function ReviewPathMap({ rp, isTeacher, onClose, onOpenItem, onEdit }) {
+  const [open, setOpen] = React.useState(() => ({ [rp.next >= 0 ? rp.next : 0]: true }));
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, []);
+  const kinds = window.REVIEW_KINDS || {};
+  const info = rp.info || {};
+  const days = window.reviewDaysLeft ? window.reviewDaysLeft(info.date) : null;
+  const rows = [
+    ['📅', '考試日期', info.date ? (info.date.replace(/-/g, '/') + (days == null ? '' : days > 0 ? `（還有 ${days} 天）` : days === 0 ? '（就是今天！）' : '（已經考完了）')) : ''],
+    ['📌', '考試範圍', info.scope], ['📝', '題型與配分', info.format], ['🧭', '考試當天會發生的事', info.flow], ['💡', '小提醒', info.tips],
+  ].filter(r => r[2]);
+  const pct = rp.total ? Math.round(rp.done / rp.total * 100) : 0;
+  return ReactDOM.createPortal(
+    <div className="rp-back" role="dialog" aria-modal="true" aria-label={rp.title} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="rp-sheet">
+        <div className="rp-top">
+          <button className="rp-x" onClick={onClose} aria-label="關閉">✕</button>
+          <h2>🗺️ {rp.title}</h2>
+          <p>照著地圖一關一關走，全部完成就準備好了！</p>
+          <div className="rp-prog"><div className="rp-bar"><i style={{ width: pct + '%' }}/></div><span>{rp.stepsDone} / {rp.steps.length} 關</span></div>
+          {isTeacher && <button className="rp-btn rp-btn-ghost rp-edit" onClick={onEdit}>編輯地圖</button>}
+        </div>
+        {rows.length > 0 && (
+          <div className="rp-info">
+            <h3>📋 考試資訊</h3>
+            {rows.map(([ico, h, t]) => (
+              <div className="rp-info-row" key={h}><span className="rp-info-h">{ico} {h}</span><span className="rp-info-t">{t}</span></div>
+            ))}
+          </div>
+        )}
+        <ol className="rp-path">
+          {rp.steps.map((st, k) => {
+            const state = st.complete ? 'done' : k === rp.next ? 'now' : 'todo';
+            const isOpen = !!open[k];
+            const kd = kinds[st.kind] || { ico: '⭐' };
+            return (
+              <li key={st.id} className={'rp-step rp-' + state + (k % 2 ? ' rp-r' : ' rp-l')}>
+                <div className="rp-node" aria-hidden="true">{st.complete ? '✓' : kd.ico}</div>
+                <div className="rp-body">
+                  <button className="rp-head" aria-expanded={isOpen} onClick={() => setOpen(o => Object.assign({}, o, { [k]: !o[k] }))}>
+                    <b>{st.name}</b>
+                    <span className="rp-count">{st.total ? `${st.done}/${st.total}` : '準備中'}</span>
+                    {state === 'now' && <span className="rp-here">📍 下一關</span>}
+                  </button>
+                  {st.focus && <p className="rp-focus">🎯 {st.focus}</p>}
+                  {isOpen && (
+                    <ul className="rp-items">
+                      {st.items.length === 0 && <li className="rp-none">老師還在準備這一關的題目</li>}
+                      {st.items.map(it => (
+                        <li key={it.w + it.c + it.i}>
+                          <button className={'rp-item' + (it.done ? ' on' : '')} disabled={!it.exists} onClick={() => onOpenItem(it)}>
+                            <span className="rp-chk" aria-hidden="true">{it.done ? '✓' : ''}</span>
+                            <span className="rp-it-t">{it.title}</span>
+                            <span className="rp-go">{!it.exists ? '還沒開放' : it.done ? '再練一次' : '去做 →'}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+          <li className={'rp-step rp-end' + (rp.complete ? ' rp-done' : '')}>
+            <div className="rp-node" aria-hidden="true">{rp.complete ? '🏆' : '🏁'}</div>
+            <div className="rp-body">
+              <div className="rp-head rp-head-end"><b>{rp.complete ? '期中考總複習完成！' : '終點：期中考總複習完成'}</b></div>
+              <p className="rp-focus">{rp.complete ? '每一關都走完了，帶著自信去考試吧 💪' : '把上面每一關的題目都做過，就會在這裡拿到徽章'}</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>, document.body);
+}
+
+Object.assign(window, { ReviewPathCard, ReviewPathMap, Boom, Footer, TrickOrTreat, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

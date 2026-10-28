@@ -8868,5 +8868,123 @@ function TrashModal({ entries, onRestore, onClear, onClose }) {
   );
 }
 
+/* ───────── v618 🗺️ 期中考總複習地圖（老師編輯）─────────
+   每一關只存「指到既有題目」的指標（週次／分類／題目 id），不複製題目。
+   學生端畫面在 components-shell.jsx 的 ReviewPathMap；進度邏輯在 data.js 的 reviewProgress。 */
+function ReviewPathEditor({ gradeKey, path, weeks, weekOrder, categories, onClose }) {
+  const [nudgeCls, nudge] = useModalNudge();
+  const [d, setD] = useS(() => JSON.parse(JSON.stringify(path || window.reviewTemplate())));
+  const [pick, setPick] = useS(null);          // { k: 哪一關, w: 週次, sel: {key:true}, q: 搜尋 }
+  const [busy, setBusy] = useS(false);
+  const [err, setErr] = useS('');
+  const setStep = (k, patch) => setD(x => Object.assign({}, x, { steps: x.steps.map((s, i) => i === k ? Object.assign({}, s, patch) : s) }));
+  const setInfo = (patch) => setD(x => Object.assign({}, x, { info: Object.assign({}, x.info, patch) }));
+  const move = (k, dir) => setD(x => { const a = x.steps.slice(); const j = k + dir; if (j < 0 || j >= a.length) return x; [a[k], a[j]] = [a[j], a[k]]; return Object.assign({}, x, { steps: a }); });
+  const wLabel = (wid) => { const w = weeks && weeks[wid]; return w ? [w.label, w.theme].filter(Boolean).join(' · ') : wid; };
+  const itemsOf = (wid) => {
+    const w = weeks && weeks[wid]; const out = [];
+    (categories || []).forEach(c => ((w && w.items && w.items[c.id]) || []).forEach(it => { if (it && it.id) out.push({ c: c.id, cz: c.titleZh || c.title, id: it.id, title: String(it.title || it.zh || it.id) }); }));
+    return out;
+  };
+  const addPicked = () => {
+    const list = itemsOf(pick.w).filter(it => pick.sel[it.c + '|' + it.id]);
+    setD(x => Object.assign({}, x, { steps: x.steps.map((s, i) => {
+      if (i !== pick.k) return s;
+      const have = new Set(s.items.map(t => t.w + '|' + t.c + '|' + t.i));
+      return Object.assign({}, s, { items: s.items.concat(list.filter(it => !have.has(pick.w + '|' + it.c + '|' + it.id)).map(it => ({ w: pick.w, c: it.c, i: it.id, t: it.title }))) });
+    }) }));
+    setPick(null);
+  };
+  const save = async () => {
+    if (!d.steps.length) { setErr('至少要有一關。'); return; }
+    setBusy(true); setErr('');
+    try { await window.saveReviewPath(gradeKey, d); onClose(); }
+    catch (e) { setErr('存檔失敗，等一下再試一次。'); setBusy(false); }
+  };
+  const input = { width: '100%', padding: '8px 10px', border: '1.5px solid var(--border)', borderRadius: 8, background: 'var(--bg-paper, #fff)', font: 'inherit' };
+  return (
+    <div className="modal-backdrop" onClick={nudge}>
+      <div className={"modal wide" + nudgeCls} onClick={e => e.stopPropagation()}>
+        <div className="modal-head"><h3>🗺️ 期中考總複習地圖</h3><button className="modal-close" onClick={onClose} aria-label="關閉">✕</button></div>
+        <div className="modal-body">
+          <label className="field-help">地圖名稱
+            <input style={input} value={d.title} onChange={e => setD(x => Object.assign({}, x, { title: e.target.value }))} placeholder="例：G4 期中考總複習"/></label>
+          <label className="field-help" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0' }}>
+            <input type="checkbox" checked={!!d.published} onChange={e => setD(x => Object.assign({}, x, { published: e.target.checked }))}/>
+            <span><b>公開給學生看</b>（沒勾＝只有老師看得到，可以先排好再公開）</span></label>
+
+          <h4 style={{ margin: '14px 0 6px' }}>📋 考試資訊卡（學生地圖最上面那張）</h4>
+          <label className="field-help">考試日期<input type="date" style={input} value={d.info.date} onChange={e => setInfo({ date: e.target.value })}/></label>
+          {[['scope', '考試範圍', '例：Unit 1–3、Word Study 1–5、Reading 第 4、5 篇'], ['format', '題型與配分', '例：Word Study 30%、Vocabulary 30%、Reading 40%'],
+            ['flow', '考試當天會發生的事', '例：第一節 Listening、第二節筆試；考完下課'], ['tips', '小提醒', '例：記得帶鉛筆盒、前一晚早點睡']].map(([k, h, ph]) => (
+            <label className="field-help" key={k} style={{ display: 'block', marginTop: 8 }}>{h}
+              <textarea style={Object.assign({ minHeight: 60 }, input)} value={d.info[k]} placeholder={ph} onChange={e => setInfo({ [k]: e.target.value })}/></label>
+          ))}
+
+          <h4 style={{ margin: '18px 0 6px' }}>🧭 關卡（由上到下就是學生要走的順序）</h4>
+          {d.steps.map((s, k) => (
+            <div key={s.id} style={{ border: '1.5px solid var(--border)', borderRadius: 12, padding: 12, margin: '0 0 10px', background: 'var(--bg-card, #fff)' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <b style={{ minWidth: 24 }}>{k + 1}.</b>
+                <input style={input} value={s.name} onChange={e => setStep(k, { name: e.target.value, kind: window.reviewKindOf(e.target.value) })} placeholder="關卡名稱，例：Word Study 1"/>
+                <button className="btn" onClick={() => move(k, -1)} disabled={k === 0} aria-label="上移">↑</button>
+                <button className="btn" onClick={() => move(k, 1)} disabled={k === d.steps.length - 1} aria-label="下移">↓</button>
+                <button className="btn" onClick={() => { if (!s.items.length || window.confirm('刪掉「' + s.name + '」這一關？')) setD(x => Object.assign({}, x, { steps: x.steps.filter((_, i) => i !== k) })); }} aria-label="刪除這一關">🗑</button>
+              </div>
+              <input style={Object.assign({ marginTop: 8 }, input)} value={s.focus} onChange={e => setStep(k, { focus: e.target.value })} placeholder="這一關考什麼（一句話，例：-tion、-sion 結尾的字）"/>
+              <div style={{ marginTop: 8 }}>
+                {s.items.length === 0 && <div className="field-help">還沒選題目</div>}
+                {s.items.map((it, j) => {
+                  const there = !!(weeks && weeks[it.w] && weeks[it.w].items && (weeks[it.w].items[it.c] || []).some(x => x && x.id === it.i));
+                  return (
+                    <div key={it.w + it.c + it.i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', borderTop: j ? '1px dashed var(--border)' : 0 }}>
+                      <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{it.t || it.i} <em style={{ color: 'var(--ink-3)', fontSize: 12 }}>{wLabel(it.w)}{there ? '' : '（找不到這題了）'}</em></span>
+                      <button className="btn" onClick={() => setStep(k, { items: s.items.filter((_, i) => i !== j) })} aria-label="移除">✕</button>
+                    </div>
+                  );
+                })}
+                <button className="btn" style={{ marginTop: 6 }} onClick={() => setPick({ k, w: (weekOrder && weekOrder[0]) || '', sel: {}, q: '' })}>＋ 加入題目</button>
+              </div>
+            </div>
+          ))}
+          <button className="btn" onClick={() => setD(x => Object.assign({}, x, { steps: x.steps.concat([{ id: 's' + Math.random().toString(36).slice(2, 8), name: '', kind: 'other', focus: '', items: [] }]) }))}>＋ 新增一關</button>
+          {err && <div className="field-help" style={{ color: 'var(--accent)', marginTop: 8 }}>{err}</div>}
+        </div>
+        <div className="modal-foot">
+          <button className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" onClick={save} disabled={busy}>{busy ? '存檔中…' : '存檔'}</button>
+        </div>
+      </div>
+      {pick && (
+        <div className="modal-backdrop" style={{ zIndex: 3100 }} onClick={e => { e.stopPropagation(); if (e.target === e.currentTarget) setPick(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><h3>選題目 → {d.steps[pick.k] && d.steps[pick.k].name}</h3><button className="modal-close" onClick={() => setPick(null)} aria-label="關閉">✕</button></div>
+            <div className="modal-body">
+              <select style={input} value={pick.w} onChange={e => setPick(p => Object.assign({}, p, { w: e.target.value, sel: {} }))}>
+                {(weekOrder || []).map(w => <option key={w} value={w}>{wLabel(w)}</option>)}
+              </select>
+              <input style={Object.assign({ marginTop: 8 }, input)} value={pick.q} placeholder="搜尋題目名稱" onChange={e => setPick(p => Object.assign({}, p, { q: e.target.value }))}/>
+              <div style={{ maxHeight: '45vh', overflowY: 'auto', marginTop: 8 }}>
+                {itemsOf(pick.w).filter(it => !pick.q || it.title.toLowerCase().includes(pick.q.toLowerCase())).map(it => (
+                  <label key={it.c + it.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 2px', borderTop: '1px dashed var(--border)' }}>
+                    <input type="checkbox" checked={!!pick.sel[it.c + '|' + it.id]} onChange={e => setPick(p => Object.assign({}, p, { sel: Object.assign({}, p.sel, { [it.c + '|' + it.id]: e.target.checked }) }))}/>
+                    <span style={{ flex: 1, overflowWrap: 'anywhere' }}>{it.title}</span>
+                    <em style={{ color: 'var(--ink-3)', fontSize: 12 }}>{it.cz}</em>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setPick(null)}>取消</button>
+              <button className="btn primary" onClick={addPicked} disabled={!Object.values(pick.sel).some(Boolean)}>加入選取的</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { ReviewPathEditor });   // v618
 Object.assign(window, { TrashModal, QuestionMoveModal, ComposeModal, AskPanel, ExamPrepModal, ExamScanModal, ExamDraftModal, PacingImportModal, GrammarNotesModal, gnBuildItems, ReadingGenModal, rcBuildItems, RsBlockEditor, ReadingSkillEditor, rsBlankBlock, EditorModal, WeekModal, ExportModal, TermSetupModal, termWeekPlan, QuickSetModal, qsBuildItems, qsParseWords, qsBlank, GrammarGenModal, grBuildItems, ReviewGroupModal,
   WordStudyModal, wsBuildItems, WS_KINDS });   // v482：📘 一鍵出 Word Study

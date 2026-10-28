@@ -363,6 +363,11 @@ function App() {
      出題按鈕與視窗才會出現。失敗最多重試 3 次（網路不穩時不要讓老師永遠沒有按鈕）。 */
   const [tbReady, setTbReady] = useAppState(() => !!window.EditorModal);
   useAppEffect(() => {
+    setReviewPath(null);
+    if (!grade || !/^g\d$/.test(grade) || !window.subscribeReviewPath) return;
+    return window.subscribeReviewPath(grade, setReviewPath);
+  }, [grade]);
+  useAppEffect(() => {
     if (!isTeacher || tbReady || !window.loadTeacherBundle) return;
     let dead = false;
     const go = (n) => window.loadTeacherBundle().then(
@@ -404,6 +409,10 @@ function App() {
 
   // ── Category view state (quiz mode navigation) ──────
   const [catView, setCatView] = useAppState(null); // null = main blocks, { cat } = inside a category
+  /* v618 🗺️ 期中考總複習地圖：每個年級一份（class/reviewpath_{年級}），公開可讀、老師才能寫 */
+  const [reviewPath, setReviewPath] = useAppState(null);
+  const [rpOpen, setRpOpen] = useAppState(false);
+  const [rpEdit, setRpEdit] = useAppState(false);
 
   useAppEffect(() => {
     const handler = () => setGridCols(getGridCols());
@@ -881,6 +890,20 @@ function App() {
     if (!quizItems.length) return { total: 0, done: 0 };
     const done = quizItems.reduce((sum, it) => sum + ((progress[it.id] || qmIsDone(it.id)) ? 1 : 0), 0);
     return { total: quizItems.length, done };
+  };
+
+  // v618：期中考總複習地圖的進度（做過＝qmProgress 的 .done，或這一週舊版 progress 有記錄）
+  const rpProg = useAppMemo(() => (reviewPath && window.reviewProgress)
+    ? window.reviewProgress(reviewPath, weeks, (w, i) => { const p = qmProgress[`${w}_${i}`]; return !!(p && p.done) || (w === weekId && !!progress[i]); })
+    : null, [reviewPath, weeks, qmProgress, progress, weekId]);
+  const openReviewItem = (it) => {
+    const idx = viewOrder.indexOf(it.w);
+    const cat = activeCategories.find(c => c.id === it.c);
+    if (idx < 0 || !cat) { showToast('這一題老師還沒開放喔'); return; }
+    setRpOpen(false);
+    if (idx !== weekIdx) { returnWeekRef.current = weekIdx; setWeekIdx(idx); }
+    setCatView({ ...cat, itemId: it.i });
+    scrollPageToTop();
   };
 
   // v313 (#3): 跨週收集學生標星的單字——大廳「複習」卡（catView 變動時重算，離開單元後回大廳就更新）
@@ -3003,6 +3026,9 @@ function App() {
                   </svg>
                 </div>
               )}
+              {!editMode && !isSummerLib && (isTeacher || (rpProg && rpProg.published)) && window.ReviewPathCard && (
+                <window.ReviewPathCard rp={rpProg} isTeacher={isTeacher} onOpen={() => setRpOpen(true)} onEdit={() => setRpEdit(true)}/>
+              )}
               {editMode ? (
                 <window.WeeklyContactBook
                   week={week}
@@ -3171,6 +3197,14 @@ function App() {
               onApply={handleCompose}
               initial={composeOpen === true ? null : composeOpen}
             />
+          )}
+          {rpOpen && rpProg && window.ReviewPathMap && (
+            <window.ReviewPathMap rp={rpProg} isTeacher={isTeacher} onClose={() => setRpOpen(false)} onOpenItem={openReviewItem}
+              onEdit={() => { setRpOpen(false); setRpEdit(true); }}/>
+          )}
+          {rpEdit && isTeacher && window.ReviewPathEditor && (
+            <window.ReviewPathEditor gradeKey={grade} path={reviewPath} weeks={weeks} weekOrder={viewOrder} categories={activeCategories}
+              onClose={() => setRpEdit(false)}/>
           )}
           {trashOpen && window.TrashModal && (
             <window.TrashModal

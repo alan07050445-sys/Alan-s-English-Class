@@ -13975,6 +13975,378 @@ function TrashModal({
     onClick: onClose
   }, "\u95DC\u9589"))));
 }
+
+/* ───────── v618 🗺️ 期中考總複習地圖（老師編輯）─────────
+   每一關只存「指到既有題目」的指標（週次／分類／題目 id），不複製題目。
+   學生端畫面在 components-shell.jsx 的 ReviewPathMap；進度邏輯在 data.js 的 reviewProgress。 */
+function ReviewPathEditor({
+  gradeKey,
+  path,
+  weeks,
+  weekOrder,
+  categories,
+  onClose
+}) {
+  var [nudgeCls, nudge] = useModalNudge();
+  var [d, setD] = useS(() => JSON.parse(JSON.stringify(path || window.reviewTemplate())));
+  var [pick, setPick] = useS(null); // { k: 哪一關, w: 週次, sel: {key:true}, q: 搜尋 }
+  var [busy, setBusy] = useS(false);
+  var [err, setErr] = useS('');
+  var setStep = (k, patch) => setD(x => Object.assign({}, x, {
+    steps: x.steps.map((s, i) => i === k ? Object.assign({}, s, patch) : s)
+  }));
+  var setInfo = patch => setD(x => Object.assign({}, x, {
+    info: Object.assign({}, x.info, patch)
+  }));
+  var move = (k, dir) => setD(x => {
+    var a = x.steps.slice();
+    var j = k + dir;
+    if (j < 0 || j >= a.length) return x;
+    [a[k], a[j]] = [a[j], a[k]];
+    return Object.assign({}, x, {
+      steps: a
+    });
+  });
+  var wLabel = wid => {
+    var w = weeks && weeks[wid];
+    return w ? [w.label, w.theme].filter(Boolean).join(' · ') : wid;
+  };
+  var itemsOf = wid => {
+    var w = weeks && weeks[wid];
+    var out = [];
+    (categories || []).forEach(c => (w && w.items && w.items[c.id] || []).forEach(it => {
+      if (it && it.id) out.push({
+        c: c.id,
+        cz: c.titleZh || c.title,
+        id: it.id,
+        title: String(it.title || it.zh || it.id)
+      });
+    }));
+    return out;
+  };
+  var addPicked = () => {
+    var list = itemsOf(pick.w).filter(it => pick.sel[it.c + '|' + it.id]);
+    setD(x => Object.assign({}, x, {
+      steps: x.steps.map((s, i) => {
+        if (i !== pick.k) return s;
+        var have = new Set(s.items.map(t => t.w + '|' + t.c + '|' + t.i));
+        return Object.assign({}, s, {
+          items: s.items.concat(list.filter(it => !have.has(pick.w + '|' + it.c + '|' + it.id)).map(it => ({
+            w: pick.w,
+            c: it.c,
+            i: it.id,
+            t: it.title
+          })))
+        });
+      })
+    }));
+    setPick(null);
+  };
+  var save = async () => {
+    if (!d.steps.length) {
+      setErr('至少要有一關。');
+      return;
+    }
+    setBusy(true);
+    setErr('');
+    try {
+      await window.saveReviewPath(gradeKey, d);
+      onClose();
+    } catch (e) {
+      setErr('存檔失敗，等一下再試一次。');
+      setBusy(false);
+    }
+  };
+  var input = {
+    width: '100%',
+    padding: '8px 10px',
+    border: '1.5px solid var(--border)',
+    borderRadius: 8,
+    background: 'var(--bg-paper, #fff)',
+    font: 'inherit'
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    onClick: nudge
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal wide" + nudgeCls,
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDDFA\uFE0F \u671F\u4E2D\u8003\u7E3D\u8907\u7FD2\u5730\u5716"), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: onClose,
+    "aria-label": "\u95DC\u9589"
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "modal-body"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-help"
+  }, "\u5730\u5716\u540D\u7A31", /*#__PURE__*/React.createElement("input", {
+    style: input,
+    value: d.title,
+    onChange: e => setD(x => Object.assign({}, x, {
+      title: e.target.value
+    })),
+    placeholder: "\u4F8B\uFF1AG4 \u671F\u4E2D\u8003\u7E3D\u8907\u7FD2"
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "field-help",
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      margin: '10px 0'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!d.published,
+    onChange: e => setD(x => Object.assign({}, x, {
+      published: e.target.checked
+    }))
+  }), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u516C\u958B\u7D66\u5B78\u751F\u770B"), "\uFF08\u6C92\u52FE\uFF1D\u53EA\u6709\u8001\u5E2B\u770B\u5F97\u5230\uFF0C\u53EF\u4EE5\u5148\u6392\u597D\u518D\u516C\u958B\uFF09")), /*#__PURE__*/React.createElement("h4", {
+    style: {
+      margin: '14px 0 6px'
+    }
+  }, "\uD83D\uDCCB \u8003\u8A66\u8CC7\u8A0A\u5361\uFF08\u5B78\u751F\u5730\u5716\u6700\u4E0A\u9762\u90A3\u5F35\uFF09"), /*#__PURE__*/React.createElement("label", {
+    className: "field-help"
+  }, "\u8003\u8A66\u65E5\u671F", /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: input,
+    value: d.info.date,
+    onChange: e => setInfo({
+      date: e.target.value
+    })
+  })), [['scope', '考試範圍', '例：Unit 1–3、Word Study 1–5、Reading 第 4、5 篇'], ['format', '題型與配分', '例：Word Study 30%、Vocabulary 30%、Reading 40%'], ['flow', '考試當天會發生的事', '例：第一節 Listening、第二節筆試；考完下課'], ['tips', '小提醒', '例：記得帶鉛筆盒、前一晚早點睡']].map(([k, h, ph]) => /*#__PURE__*/React.createElement("label", {
+    className: "field-help",
+    key: k,
+    style: {
+      display: 'block',
+      marginTop: 8
+    }
+  }, h, /*#__PURE__*/React.createElement("textarea", {
+    style: Object.assign({
+      minHeight: 60
+    }, input),
+    value: d.info[k],
+    placeholder: ph,
+    onChange: e => setInfo({
+      [k]: e.target.value
+    })
+  }))), /*#__PURE__*/React.createElement("h4", {
+    style: {
+      margin: '18px 0 6px'
+    }
+  }, "\uD83E\uDDED \u95DC\u5361\uFF08\u7531\u4E0A\u5230\u4E0B\u5C31\u662F\u5B78\u751F\u8981\u8D70\u7684\u9806\u5E8F\uFF09"), d.steps.map((s, k) => /*#__PURE__*/React.createElement("div", {
+    key: s.id,
+    style: {
+      border: '1.5px solid var(--border)',
+      borderRadius: 12,
+      padding: 12,
+      margin: '0 0 10px',
+      background: 'var(--bg-card, #fff)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("b", {
+    style: {
+      minWidth: 24
+    }
+  }, k + 1, "."), /*#__PURE__*/React.createElement("input", {
+    style: input,
+    value: s.name,
+    onChange: e => setStep(k, {
+      name: e.target.value,
+      kind: window.reviewKindOf(e.target.value)
+    }),
+    placeholder: "\u95DC\u5361\u540D\u7A31\uFF0C\u4F8B\uFF1AWord Study 1"
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: () => move(k, -1),
+    disabled: k === 0,
+    "aria-label": "\u4E0A\u79FB"
+  }, "\u2191"), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: () => move(k, 1),
+    disabled: k === d.steps.length - 1,
+    "aria-label": "\u4E0B\u79FB"
+  }, "\u2193"), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: () => {
+      if (!s.items.length || window.confirm('刪掉「' + s.name + '」這一關？')) setD(x => Object.assign({}, x, {
+        steps: x.steps.filter((_, i) => i !== k)
+      }));
+    },
+    "aria-label": "\u522A\u9664\u9019\u4E00\u95DC"
+  }, "\uD83D\uDDD1")), /*#__PURE__*/React.createElement("input", {
+    style: Object.assign({
+      marginTop: 8
+    }, input),
+    value: s.focus,
+    onChange: e => setStep(k, {
+      focus: e.target.value
+    }),
+    placeholder: "\u9019\u4E00\u95DC\u8003\u4EC0\u9EBC\uFF08\u4E00\u53E5\u8A71\uFF0C\u4F8B\uFF1A-tion\u3001-sion \u7D50\u5C3E\u7684\u5B57\uFF09"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, s.items.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u9084\u6C92\u9078\u984C\u76EE"), s.items.map((it, j) => {
+    var there = !!(weeks && weeks[it.w] && weeks[it.w].items && (weeks[it.w].items[it.c] || []).some(x => x && x.id === it.i));
+    return /*#__PURE__*/React.createElement("div", {
+      key: it.w + it.c + it.i,
+      style: {
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center',
+        padding: '4px 0',
+        borderTop: j ? '1px dashed var(--border)' : 0
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        minWidth: 0,
+        overflowWrap: 'anywhere'
+      }
+    }, it.t || it.i, " ", /*#__PURE__*/React.createElement("em", {
+      style: {
+        color: 'var(--ink-3)',
+        fontSize: 12
+      }
+    }, wLabel(it.w), there ? '' : '（找不到這題了）')), /*#__PURE__*/React.createElement("button", {
+      className: "btn",
+      onClick: () => setStep(k, {
+        items: s.items.filter((_, i) => i !== j)
+      }),
+      "aria-label": "\u79FB\u9664"
+    }, "\u2715"));
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    style: {
+      marginTop: 6
+    },
+    onClick: () => setPick({
+      k,
+      w: weekOrder && weekOrder[0] || '',
+      sel: {},
+      q: ''
+    })
+  }, "\uFF0B \u52A0\u5165\u984C\u76EE")))), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: () => setD(x => Object.assign({}, x, {
+      steps: x.steps.concat([{
+        id: 's' + Math.random().toString(36).slice(2, 8),
+        name: '',
+        kind: 'other',
+        focus: '',
+        items: []
+      }])
+    }))
+  }, "\uFF0B \u65B0\u589E\u4E00\u95DC"), err && /*#__PURE__*/React.createElement("div", {
+    className: "field-help",
+    style: {
+      color: 'var(--accent)',
+      marginTop: 8
+    }
+  }, err)), /*#__PURE__*/React.createElement("div", {
+    className: "modal-foot"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: onClose
+  }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: save,
+    disabled: busy
+  }, busy ? '存檔中…' : '存檔'))), pick && /*#__PURE__*/React.createElement("div", {
+    className: "modal-backdrop",
+    style: {
+      zIndex: 3100
+    },
+    onClick: e => {
+      e.stopPropagation();
+      if (e.target === e.currentTarget) setPick(null);
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-head"
+  }, /*#__PURE__*/React.createElement("h3", null, "\u9078\u984C\u76EE \u2192 ", d.steps[pick.k] && d.steps[pick.k].name), /*#__PURE__*/React.createElement("button", {
+    className: "modal-close",
+    onClick: () => setPick(null),
+    "aria-label": "\u95DC\u9589"
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "modal-body"
+  }, /*#__PURE__*/React.createElement("select", {
+    style: input,
+    value: pick.w,
+    onChange: e => setPick(p => Object.assign({}, p, {
+      w: e.target.value,
+      sel: {}
+    }))
+  }, (weekOrder || []).map(w => /*#__PURE__*/React.createElement("option", {
+    key: w,
+    value: w
+  }, wLabel(w)))), /*#__PURE__*/React.createElement("input", {
+    style: Object.assign({
+      marginTop: 8
+    }, input),
+    value: pick.q,
+    placeholder: "\u641C\u5C0B\u984C\u76EE\u540D\u7A31",
+    onChange: e => setPick(p => Object.assign({}, p, {
+      q: e.target.value
+    }))
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: '45vh',
+      overflowY: 'auto',
+      marginTop: 8
+    }
+  }, itemsOf(pick.w).filter(it => !pick.q || it.title.toLowerCase().includes(pick.q.toLowerCase())).map(it => /*#__PURE__*/React.createElement("label", {
+    key: it.c + it.id,
+    style: {
+      display: 'flex',
+      gap: 8,
+      alignItems: 'center',
+      padding: '6px 2px',
+      borderTop: '1px dashed var(--border)'
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!pick.sel[it.c + '|' + it.id],
+    onChange: e => setPick(p => Object.assign({}, p, {
+      sel: Object.assign({}, p.sel, {
+        [it.c + '|' + it.id]: e.target.checked
+      })
+    }))
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      overflowWrap: 'anywhere'
+    }
+  }, it.title), /*#__PURE__*/React.createElement("em", {
+    style: {
+      color: 'var(--ink-3)',
+      fontSize: 12
+    }
+  }, it.cz))))), /*#__PURE__*/React.createElement("div", {
+    className: "modal-foot"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: () => setPick(null)
+  }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: addPicked,
+    disabled: !Object.values(pick.sel).some(Boolean)
+  }, "\u52A0\u5165\u9078\u53D6\u7684")))));
+}
+Object.assign(window, {
+  ReviewPathEditor
+}); // v618
 Object.assign(window, {
   TrashModal,
   QuestionMoveModal,

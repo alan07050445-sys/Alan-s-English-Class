@@ -516,6 +516,11 @@ function App() {
      出題按鈕與視窗才會出現。失敗最多重試 3 次（網路不穩時不要讓老師永遠沒有按鈕）。 */
   var [tbReady, setTbReady] = useAppState(() => !!window.EditorModal);
   useAppEffect(() => {
+    setReviewPath(null);
+    if (!grade || !/^g\d$/.test(grade) || !window.subscribeReviewPath) return;
+    return window.subscribeReviewPath(grade, setReviewPath);
+  }, [grade]);
+  useAppEffect(() => {
     if (!isTeacher || tbReady || !window.loadTeacherBundle) return;
     var dead = false;
     var go = n => window.loadTeacherBundle().then(() => {
@@ -559,7 +564,10 @@ function App() {
 
   // ── Category view state (quiz mode navigation) ──────
   var [catView, setCatView] = useAppState(null); // null = main blocks, { cat } = inside a category
-
+  /* v618 🗺️ 期中考總複習地圖：每個年級一份（class/reviewpath_{年級}），公開可讀、老師才能寫 */
+  var [reviewPath, setReviewPath] = useAppState(null);
+  var [rpOpen, setRpOpen] = useAppState(false);
+  var [rpEdit, setRpEdit] = useAppState(false);
   useAppEffect(() => {
     var handler = () => setGridCols(getGridCols());
     window.addEventListener('resize', handler);
@@ -1197,6 +1205,30 @@ function App() {
       total: quizItems.length,
       done
     };
+  };
+
+  // v618：期中考總複習地圖的進度（做過＝qmProgress 的 .done，或這一週舊版 progress 有記錄）
+  var rpProg = useAppMemo(() => reviewPath && window.reviewProgress ? window.reviewProgress(reviewPath, weeks, (w, i) => {
+    var p = qmProgress[`${w}_${i}`];
+    return !!(p && p.done) || w === weekId && !!progress[i];
+  }) : null, [reviewPath, weeks, qmProgress, progress, weekId]);
+  var openReviewItem = it => {
+    var idx = viewOrder.indexOf(it.w);
+    var cat = activeCategories.find(c => c.id === it.c);
+    if (idx < 0 || !cat) {
+      showToast('這一題老師還沒開放喔');
+      return;
+    }
+    setRpOpen(false);
+    if (idx !== weekIdx) {
+      returnWeekRef.current = weekIdx;
+      setWeekIdx(idx);
+    }
+    setCatView({
+      ...cat,
+      itemId: it.i
+    });
+    scrollPageToTop();
   };
 
   // v313 (#3): 跨週收集學生標星的單字——大廳「複習」卡（catView 變動時重算，離開單元後回大廳就更新）
@@ -4050,7 +4082,12 @@ function App() {
     strokeLinejoin: "round"
   }, /*#__PURE__*/React.createElement("path", {
     d: "M5 9l7 7 7-7"
-  }))), editMode ? /*#__PURE__*/React.createElement(window.WeeklyContactBook, {
+  }))), !editMode && !isSummerLib && (isTeacher || rpProg && rpProg.published) && window.ReviewPathCard && /*#__PURE__*/React.createElement(window.ReviewPathCard, {
+    rp: rpProg,
+    isTeacher: isTeacher,
+    onOpen: () => setRpOpen(true),
+    onEdit: () => setRpEdit(true)
+  }), editMode ? /*#__PURE__*/React.createElement(window.WeeklyContactBook, {
     week: week,
     allItems: allItems,
     qmProg: qmProgress,
@@ -4227,6 +4264,22 @@ function App() {
     onClose: () => setComposeOpen(false),
     onApply: handleCompose,
     initial: composeOpen === true ? null : composeOpen
+  }), rpOpen && rpProg && window.ReviewPathMap && /*#__PURE__*/React.createElement(window.ReviewPathMap, {
+    rp: rpProg,
+    isTeacher: isTeacher,
+    onClose: () => setRpOpen(false),
+    onOpenItem: openReviewItem,
+    onEdit: () => {
+      setRpOpen(false);
+      setRpEdit(true);
+    }
+  }), rpEdit && isTeacher && window.ReviewPathEditor && /*#__PURE__*/React.createElement(window.ReviewPathEditor, {
+    gradeKey: grade,
+    path: reviewPath,
+    weeks: weeks,
+    weekOrder: viewOrder,
+    categories: activeCategories,
+    onClose: () => setRpEdit(false)
   }), trashOpen && window.TrashModal && /*#__PURE__*/React.createElement(window.TrashModal, {
     entries: trashList,
     onRestore: restoreFromTrash,

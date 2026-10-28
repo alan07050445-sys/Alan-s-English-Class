@@ -2966,7 +2966,182 @@ function TrickOrTreat({
     onClick: () => setClosed(true)
   }, "\u6536\u4E0B \uD83C\uDF89"))));
 }
+
+/* ───────── v618 🗺️ 期中考總複習地圖（學生端）─────────
+   資料與進度邏輯在 data.js（reviewProgress）；這裡只負責畫：
+   · ReviewPathCard：大廳裡一張入口卡（進度條＋下一關是什麼）
+   · ReviewPathMap：整頁地圖——最上面是「考試資訊卡」，下面一關一關往下走，最後是終點。
+   ⚠ 不鎖順序（Alan：每一關都做過就算）；只是用「📍 下一關」提示該從哪裡開始。 */
+function ReviewPathCard({
+  rp,
+  isTeacher,
+  onOpen,
+  onEdit
+}) {
+  if (!rp) return isTeacher ? /*#__PURE__*/React.createElement("div", {
+    className: "rp-card rp-card-empty"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-card-ico"
+  }, "\uD83D\uDDFA\uFE0F"), /*#__PURE__*/React.createElement("div", {
+    className: "rp-card-body"
+  }, /*#__PURE__*/React.createElement("b", null, "\u671F\u4E2D\u8003\u7E3D\u8907\u7FD2\u5730\u5716"), /*#__PURE__*/React.createElement("span", null, "\u9084\u6C92\u5EFA\u7ACB\u2014\u2014\u505A\u4E00\u5F35\u300CWord Study \u2192 Vocabulary \u2192 Reading\u300D\u7684\u95D6\u95DC\u5730\u5716\u7D66\u5B78\u751F")), /*#__PURE__*/React.createElement("button", {
+    className: "rp-btn",
+    onClick: onEdit
+  }, "\u5EFA\u7ACB\u5730\u5716")) : null;
+  if (!rp.published && !isTeacher) return null;
+  var pct = rp.total ? Math.round(rp.done / rp.total * 100) : 0;
+  var nxt = rp.next >= 0 ? rp.steps[rp.next] : null;
+  var days = window.reviewDaysLeft ? window.reviewDaysLeft(rp.info.date) : null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: 'rp-card' + (rp.complete ? ' rp-card-done' : '')
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-card-ico"
+  }, rp.complete ? '🏆' : '🗺️'), /*#__PURE__*/React.createElement("div", {
+    className: "rp-card-body"
+  }, /*#__PURE__*/React.createElement("b", null, rp.title, !rp.published && /*#__PURE__*/React.createElement("em", {
+    className: "rp-draft"
+  }, "\u672A\u516C\u958B")), /*#__PURE__*/React.createElement("span", null, rp.complete ? '全部完成了！你已經準備好了 🎉' : nxt ? `下一關：${nxt.name}（已完成 ${rp.stepsDone}/${rp.steps.length} 關）` : '老師還在放題目', days != null && days >= 0 && !rp.complete && /*#__PURE__*/React.createElement(React.Fragment, null, " \xB7 \u8DDD\u96E2\u8003\u8A66 ", days === 0 ? '就是今天' : days + ' 天')), /*#__PURE__*/React.createElement("div", {
+    className: "rp-bar",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("i", {
+    style: {
+      width: pct + '%'
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "rp-card-actions"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "rp-btn",
+    onClick: onOpen
+  }, rp.complete ? '看地圖' : '開始闖關'), isTeacher && /*#__PURE__*/React.createElement("button", {
+    className: "rp-btn rp-btn-ghost",
+    onClick: onEdit
+  }, "\u7DE8\u8F2F")));
+}
+function ReviewPathMap({
+  rp,
+  isTeacher,
+  onClose,
+  onOpenItem,
+  onEdit
+}) {
+  var [open, setOpen] = React.useState(() => ({
+    [rp.next >= 0 ? rp.next : 0]: true
+  }));
+  React.useEffect(() => {
+    var onKey = e => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    var prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, []);
+  var kinds = window.REVIEW_KINDS || {};
+  var info = rp.info || {};
+  var days = window.reviewDaysLeft ? window.reviewDaysLeft(info.date) : null;
+  var rows = [['📅', '考試日期', info.date ? info.date.replace(/-/g, '/') + (days == null ? '' : days > 0 ? `（還有 ${days} 天）` : days === 0 ? '（就是今天！）' : '（已經考完了）') : ''], ['📌', '考試範圍', info.scope], ['📝', '題型與配分', info.format], ['🧭', '考試當天會發生的事', info.flow], ['💡', '小提醒', info.tips]].filter(r => r[2]);
+  var pct = rp.total ? Math.round(rp.done / rp.total * 100) : 0;
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "rp-back",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": rp.title,
+    onClick: e => {
+      if (e.target === e.currentTarget) onClose();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-sheet"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-top"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "rp-x",
+    onClick: onClose,
+    "aria-label": "\u95DC\u9589"
+  }, "\u2715"), /*#__PURE__*/React.createElement("h2", null, "\uD83D\uDDFA\uFE0F ", rp.title), /*#__PURE__*/React.createElement("p", null, "\u7167\u8457\u5730\u5716\u4E00\u95DC\u4E00\u95DC\u8D70\uFF0C\u5168\u90E8\u5B8C\u6210\u5C31\u6E96\u5099\u597D\u4E86\uFF01"), /*#__PURE__*/React.createElement("div", {
+    className: "rp-prog"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-bar"
+  }, /*#__PURE__*/React.createElement("i", {
+    style: {
+      width: pct + '%'
+    }
+  })), /*#__PURE__*/React.createElement("span", null, rp.stepsDone, " / ", rp.steps.length, " \u95DC")), isTeacher && /*#__PURE__*/React.createElement("button", {
+    className: "rp-btn rp-btn-ghost rp-edit",
+    onClick: onEdit
+  }, "\u7DE8\u8F2F\u5730\u5716")), rows.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "rp-info"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83D\uDCCB \u8003\u8A66\u8CC7\u8A0A"), rows.map(([ico, h, t]) => /*#__PURE__*/React.createElement("div", {
+    className: "rp-info-row",
+    key: h
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "rp-info-h"
+  }, ico, " ", h), /*#__PURE__*/React.createElement("span", {
+    className: "rp-info-t"
+  }, t)))), /*#__PURE__*/React.createElement("ol", {
+    className: "rp-path"
+  }, rp.steps.map((st, k) => {
+    var state = st.complete ? 'done' : k === rp.next ? 'now' : 'todo';
+    var isOpen = !!open[k];
+    var kd = kinds[st.kind] || {
+      ico: '⭐'
+    };
+    return /*#__PURE__*/React.createElement("li", {
+      key: st.id,
+      className: 'rp-step rp-' + state + (k % 2 ? ' rp-r' : ' rp-l')
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "rp-node",
+      "aria-hidden": "true"
+    }, st.complete ? '✓' : kd.ico), /*#__PURE__*/React.createElement("div", {
+      className: "rp-body"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "rp-head",
+      "aria-expanded": isOpen,
+      onClick: () => setOpen(o => Object.assign({}, o, {
+        [k]: !o[k]
+      }))
+    }, /*#__PURE__*/React.createElement("b", null, st.name), /*#__PURE__*/React.createElement("span", {
+      className: "rp-count"
+    }, st.total ? `${st.done}/${st.total}` : '準備中'), state === 'now' && /*#__PURE__*/React.createElement("span", {
+      className: "rp-here"
+    }, "\uD83D\uDCCD \u4E0B\u4E00\u95DC")), st.focus && /*#__PURE__*/React.createElement("p", {
+      className: "rp-focus"
+    }, "\uD83C\uDFAF ", st.focus), isOpen && /*#__PURE__*/React.createElement("ul", {
+      className: "rp-items"
+    }, st.items.length === 0 && /*#__PURE__*/React.createElement("li", {
+      className: "rp-none"
+    }, "\u8001\u5E2B\u9084\u5728\u6E96\u5099\u9019\u4E00\u95DC\u7684\u984C\u76EE"), st.items.map(it => /*#__PURE__*/React.createElement("li", {
+      key: it.w + it.c + it.i
+    }, /*#__PURE__*/React.createElement("button", {
+      className: 'rp-item' + (it.done ? ' on' : ''),
+      disabled: !it.exists,
+      onClick: () => onOpenItem(it)
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "rp-chk",
+      "aria-hidden": "true"
+    }, it.done ? '✓' : ''), /*#__PURE__*/React.createElement("span", {
+      className: "rp-it-t"
+    }, it.title), /*#__PURE__*/React.createElement("span", {
+      className: "rp-go"
+    }, !it.exists ? '還沒開放' : it.done ? '再練一次' : '去做 →')))))));
+  }), /*#__PURE__*/React.createElement("li", {
+    className: 'rp-step rp-end' + (rp.complete ? ' rp-done' : '')
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-node",
+    "aria-hidden": "true"
+  }, rp.complete ? '🏆' : '🏁'), /*#__PURE__*/React.createElement("div", {
+    className: "rp-body"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rp-head rp-head-end"
+  }, /*#__PURE__*/React.createElement("b", null, rp.complete ? '期中考總複習完成！' : '終點：期中考總複習完成')), /*#__PURE__*/React.createElement("p", {
+    className: "rp-focus"
+  }, rp.complete ? '每一關都走完了，帶著自信去考試吧 💪' : '把上面每一關的題目都做過，就會在這裡拿到徽章')))))), document.body);
+}
 Object.assign(window, {
+  ReviewPathCard,
+  ReviewPathMap,
   Boom,
   Footer,
   TrickOrTreat,

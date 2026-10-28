@@ -4732,6 +4732,105 @@ function subscribePacing(gradeKey, cb) {
   } catch (e) { cb(null); return () => {}; }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   🗺️ v618 期中考總複習地圖（Alan：「做一個 picture，按照步驟：Word Study 1~5 → Vocabulary → Reading，
+   全部完成才算期中考總複習；學生也要知道這次考試的重點、會發生什麼事」）
+   ──────────────────────────────────────────────────────────────────────────
+   · 存在 class/reviewpath_{年級}（跟 pacing 同一個模式：公開可讀、只有老師可寫）。
+   · 每一關只存「指到既有題目」的指標 { w:週次id, c:分類id, i:題目id }，**不複製題目**——
+     題目改了、刪了，地圖自己跟著變；做過沒有看的是學生既有的完成紀錄（qmProgress 的 .done）。
+   · 完成條件＝每一關裡的每一題都做過（Alan 選的；不鎖順序、不設及格分）。
+   ⚠ 不給星星：星星是真的錢（NT$×20），這裡只給徽章與慶祝，要發獎勵由老師決定。 */
+const REVIEW_KEY = 'reviewpath';
+const REVIEW_KINDS = {
+  word:    { ico: '🔤', zh: 'Word Study' },
+  vocab:   { ico: '📚', zh: 'Vocabulary' },
+  reading: { ico: '📖', zh: 'Reading' },
+  grammar: { ico: '✏️', zh: 'Grammar' },
+  exam:    { ico: '📝', zh: '模擬考' },
+  other:   { ico: '⭐', zh: '其他' },
+};
+function reviewKindOf(name) {
+  const t = String(name || '').toLowerCase();
+  if (/word\s*study|字根|字首/.test(t)) return 'word';
+  if (/vocab|單字|字彙/.test(t)) return 'vocab';
+  if (/read|閱讀/.test(t)) return 'reading';
+  if (/gram|文法/.test(t)) return 'grammar';
+  if (/exam|mock|考卷|模擬/.test(t)) return 'exam';
+  return 'other';
+}
+function reviewTemplate() {
+  const mk = (name, focus) => ({ id: 's' + Math.random().toString(36).slice(2, 8), name, kind: reviewKindOf(name), focus, items: [] });
+  return {
+    title: '期中考總複習', published: false,
+    info: { date: '', scope: '', format: '', flow: '', tips: '' },
+    steps: [1, 2, 3, 4, 5].map(n => mk('Word Study ' + n, '')).concat([mk('Vocabulary', ''), mk('Reading', '')]),
+  };
+}
+function reviewClean(path) {
+  if (!path || typeof path !== 'object') return null;
+  const str = (v, n) => String(v == null ? '' : v).slice(0, n || 400);
+  const info = path.info || {};
+  const steps = (Array.isArray(path.steps) ? path.steps : []).slice(0, 30).map((st, k) => ({
+    id: str(st && st.id, 24) || ('s' + k),
+    name: str(st && st.name, 40) || ('第 ' + (k + 1) + ' 關'),
+    kind: REVIEW_KINDS[st && st.kind] ? st.kind : reviewKindOf(st && st.name),
+    focus: str(st && st.focus, 200),
+    items: (Array.isArray(st && st.items) ? st.items : []).slice(0, 60)
+      .filter(it => it && it.w && it.c && it.i)
+      .map(it => ({ w: str(it.w, 60), c: str(it.c, 40), i: str(it.i, 80), t: str(it.t, 80) })),
+  }));
+  return {
+    title: str(path.title, 40) || '期中考總複習',
+    published: !!path.published,
+    info: { date: str(info.date, 10), scope: str(info.scope, 600), format: str(info.format, 600), flow: str(info.flow, 800), tips: str(info.tips, 800) },
+    steps,
+  };
+}
+async function saveReviewPath(gradeKey, path) {
+  const clean = reviewClean(path);
+  await _db.collection('class').doc(REVIEW_KEY + '_' + String(gradeKey)).set({ path: clean, at: Date.now() });
+  return clean;
+}
+function subscribeReviewPath(gradeKey, cb) {
+  try {
+    return _db.collection('class').doc(REVIEW_KEY + '_' + String(gradeKey))
+      .onSnapshot(s => cb(s.exists ? reviewClean(s.data().path) : null), () => cb(null));
+  } catch (e) { cb(null); return () => {}; }
+}
+/* 算進度。isDone(週次id, 題目id) 由呼叫端提供（app.jsx 的 qmProgress／舊版 progress）。 */
+function reviewProgress(path, weeks, isDone) {
+  const p = reviewClean(path);
+  if (!p) return null;
+  const steps = p.steps.map(st => {
+    const items = st.items.map(it => {
+      const list = (weeks && weeks[it.w] && weeks[it.w].items && weeks[it.w].items[it.c]) || [];
+      const found = list.find(x => x && x.id === it.i);
+      return Object.assign({}, it, {
+        exists: !!found,
+        title: found ? String(found.title || found.zh || it.i) : (it.t || it.i),
+        done: !!(found && isDone && isDone(it.w, it.i)),
+      });
+    });
+    const total = items.length, done = items.filter(x => x.done).length;
+    return Object.assign({}, st, { items, total, done, complete: total > 0 && done === total });
+  });
+  const total = steps.reduce((a, s) => a + s.total, 0), done = steps.reduce((a, s) => a + s.done, 0);
+  const firstOpen = steps.findIndex(s => !s.complete);
+  return Object.assign({}, p, { steps, total, done, complete: steps.length > 0 && total > 0 && steps.every(s => s.complete),
+                                stepsDone: steps.filter(s => s.complete).length, next: firstOpen });
+}
+/* 離考試還有幾天（date＝'YYYY-MM-DD'；沒填或格式不對回 null；考完回負數） */
+function reviewDaysLeft(dateISO, now) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateISO || ''));
+  if (!m) return null;
+  const t = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+  const n = now ? new Date(now) : new Date();
+  const d0 = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  return Math.round((t - d0) / 86400000);
+}
+Object.assign(window, { REVIEW_KINDS, reviewKindOf, reviewTemplate, reviewClean, saveReviewPath, subscribeReviewPath, reviewProgress, reviewDaysLeft });
+
 Object.assign(window, { pacingForWeek, pacingWeekNo, pacingClean, pacingBooks, pacingNextFormative, savePacing, loadPacing, subscribePacing });
 
 /* ══════════════════════════════════════════════════════════════════════════
