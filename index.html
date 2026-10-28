@@ -6,7 +6,7 @@
 <title>Alan's English Class — Weekly</title>
 
 <!-- PWA / Home Screen Icon -->
-<link rel="manifest" href="manifest.json?v=613"/>
+<link rel="manifest" href="manifest.json?v=614"/>
 <link rel="icon" type="image/svg+xml" href="icon.svg"/>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
@@ -30,18 +30,18 @@
 <!-- ⚡ v600：樣式表切成「學生一定要載」（dist/css/<名>.css）與「只有老師才用」（<名>.teacher.css，由 loadTeacherBundle
      插在對應那張的正後面，層疊順序不變）。原始 styles-*.css 沒動，build 時由 tools/split-css.js 切出來。
      886KB → 學生那份 560KB（壓縮後 246KB → 178KB）。判斷規則與安全檢查見 tools/split-css.js 與 tests/t-v600.mjs。 -->
-<link rel="stylesheet" href="dist/css/styles.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-part2.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-quiz.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-flashcard.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-auth.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-quiz-mode.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-mistakes.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-home.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-theme.css?v=613"/>
-<link rel="stylesheet" href="dist/css/styles-fx.css?v=613"/>
+<link rel="stylesheet" href="dist/css/styles.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-part2.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-quiz.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-flashcard.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-auth.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-quiz-mode.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-mistakes.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-home.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-theme.css?v=614"/>
+<link rel="stylesheet" href="dist/css/styles-fx.css?v=614"/>
 <!-- styles-tune.css 一定要放最後：手機/平板瘦身＋桌機小字放大，靠載入順序覆蓋前面的規則 -->
-<link rel="stylesheet" href="dist/css/styles-tune.css?v=613"/>
+<link rel="stylesheet" href="dist/css/styles-tune.css?v=614"/>
 <!-- 🎊 節慶限定外觀：整份包在 html.fest-XXXX 底下，class 沒掛上去就完全不作用。
      一定要排在最後——它的工作就是覆寫前面所有樣式。
      v508 起改成「只有節慶那幾天才載」：整張 CSS 全部包在節慶 class 底下，
@@ -69,7 +69,7 @@
       } else if (ov === 'on' && !hit) hit = F[F.length - 1];
       if (hit) {
         var l = document.createElement('link');
-        l.rel = 'stylesheet'; l.href = hit.css + '?v=613';
+        l.rel = 'stylesheet'; l.href = hit.css + '?v=614';
         document.head.appendChild(l);
       }
     } catch (e) {}
@@ -120,14 +120,14 @@
 <!-- ⚡ v599：data.js 切成兩包（tools/split-data.js，build 時自動產生，原始碼 data.js 沒動）。
      這裡只載「學生一定要用」的那一包（約 106KB，原本整份 274KB）；
      老師專用的（AI 出題的提示詞與驗證、考卷草稿、聊天室判讀、報表…約 170KB）在 loadTeacherBundle 裡載。 -->
-<script src="dist/data-core.js?v=613"></script>
-<script src="data-g1.js?v=613"></script>
-<script src="data-g2.js?v=613"></script>
-<script src="data-g4.js?v=613"></script>
-<script src="data-g5.js?v=613"></script>
-<script src="data-g6.js?v=613"></script>
-<script src="data-summer.js?v=613"></script>
-<script src="data-grammar.js?v=613"></script>
+<script src="dist/data-core.js?v=614"></script>
+<script src="data-g1.js?v=614"></script>
+<script src="data-g2.js?v=614"></script>
+<script src="data-g4.js?v=614"></script>
+<script src="data-g5.js?v=614"></script>
+<script src="data-g6.js?v=614"></script>
+<script src="data-summer.js?v=614"></script>
+<script src="data-grammar.js?v=614"></script>
 <!-- ⚡ v508（Alan：「有小朋友反應登入頁面跟到第二頁以及第三頁…轉換畫面還是會卡卡的」）
      這裡本來是 9 個 <script type="text/babel">，由瀏覽器端的 @babel/standalone 即時轉譯。
      實測（線上站台、它自己那份 babel.min.js）：9 個檔 1,290KB，轉譯佔住主執行緒 10.9 秒（Mac）。
@@ -145,13 +145,13 @@
        會丟「Identifier 'useQM' has already been declared」，整個 app 掛掉。
      ⚠ 改完 .jsx 一定要重跑 node tools/build-jsx.js，不然線上跑的是舊程式**而且畫面完全正常**。
        tests/t-dist.mjs 會重算一次逐字比對，忘了重跑就是紅燈。 -->
-<script src="dist/components-shell.js?v=613"></script>
-<script src="dist/components-quiz.js?v=613"></script>
-<script src="dist/components-flashcard.js?v=613"></script>
-<script src="dist/components-quiz-mode.js?v=613"></script>
-<script src="dist/components-mistakes.js?v=613"></script>
-<script src="dist/app.js?v=613"></script>
-<script src="dist/components-fx.js?v=613"></script>
+<script src="dist/components-shell.js?v=614"></script>
+<script src="dist/components-quiz.js?v=614"></script>
+<script src="dist/components-flashcard.js?v=614"></script>
+<script src="dist/components-quiz-mode.js?v=614"></script>
+<script src="dist/components-mistakes.js?v=614"></script>
+<script src="dist/app.js?v=614"></script>
+<script src="dist/components-fx.js?v=614"></script>
 
 <!-- ⚡ v594：老師專用的兩包（出題／編輯視窗 components-editor ＝ 148KB、後台 components-dashboard ＝ 64KB，
      v599 起再加上 data.js 老師專用的那一半約 170KB；壓縮後合計約 380KB，是學生原本要下載的程式的將近一半）**只有老師才載**。
@@ -178,16 +178,16 @@
     var loadCss = function (name) {
       return new Promise(function (ok) {
         var l = document.createElement('link');
-        l.rel = 'stylesheet'; l.href = 'dist/css/' + name + '.teacher.css?v=613';
+        l.rel = 'stylesheet'; l.href = 'dist/css/' + name + '.teacher.css?v=614';
         l.onload = l.onerror = function () { ok(); };      // 樣式失敗不擋老師用（只是醜）
         var core = document.querySelector('link[href^="dist/css/' + name + '.css"]');
         if (core && core.parentNode) core.parentNode.insertBefore(l, core.nextSibling); else document.head.appendChild(l);
       });
     };
     var cssP = Promise.all(T_CSS.map(loadCss));
-    window.__teacherBundle = load('dist/data-teacher.js?v=613')      /* v599：data.js 裡老師專用的那一半，要排在 editor 前面 */
-      .then(function () { return load('dist/components-editor.js?v=613'); })
-      .then(function () { return load('dist/components-dashboard.js?v=613'); })
+    window.__teacherBundle = load('dist/data-teacher.js?v=614')      /* v599：data.js 裡老師專用的那一半，要排在 editor 前面 */
+      .then(function () { return load('dist/components-editor.js?v=614'); })
+      .then(function () { return load('dist/components-dashboard.js?v=614'); })
       .then(function () { return cssP; })
       .catch(function (e) { window.__teacherBundle = null; throw e; });   // 失敗了下次可以再試
     return window.__teacherBundle;
@@ -198,7 +198,7 @@
   // Register Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=613').catch(() => {});
+    navigator.serviceWorker.register('./sw.js?v=614').catch(() => {});
     });
   }
 </script>

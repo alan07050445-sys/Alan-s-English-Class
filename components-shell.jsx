@@ -1984,11 +1984,11 @@ function Footer({ onOpenGuide }) {
 /* ───────── v612 🎃 Trick or Treat（倒數歸零之後，點南瓜領 ⭐100~500）─────────
    ⚠ 獎品不是這裡抽的——是 data.js treatPrize(uid, 活動) 反算的固定數字（重整不會重抽、改雲端的數字也沒用）。
    ⚠ treat === undefined＝雲端還沒回來；這時候不能跳（領過的孩子會先看到一下南瓜又消失）。
-   ⚠ 老師預覽：自己的瀏覽器主控台  localStorage.setItem('alan-treat-preview','1') 再重新整理，
-     就會在任何日期看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。 */
+   ⚠ 老師預覽：活動還沒開始（10/31 前）老師帳號每次載入都會看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。
+     不想看：主控台 localStorage.setItem('alan-treat-preview','0')；活動期間也想預覽：設成 '1'。 */
 function TrickOrTreat({ user, treat, isTeacher }) {
   const KEY = 'hw2026';
-  const preview = (() => { try { return !!isTeacher && localStorage.getItem('alan-treat-preview') === '1'; } catch (e) { return false; } })();
+  const preview = (() => { try { const f = localStorage.getItem('alan-treat-preview'); return !!isTeacher && f !== '0' && (f === '1' || !(window.treatOpenAt && window.treatOpenAt(KEY))); } catch (e) { return false; } })();
   const [, setTick] = React.useState(0);
   React.useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 1000); return () => clearInterval(id); }, []);   // 倒數歸零的那一秒要自己冒出來
   const [phase, setPhase] = React.useState('idle');     // idle → shake → reveal
