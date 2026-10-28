@@ -9187,8 +9187,11 @@ function ExamPlayer({
       return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
         className: "ex-need"
       }, "\u5708\u51FA ", /*#__PURE__*/React.createElement("b", null, pt.need || n), " \u500B\u3000", /*#__PURE__*/React.createElement("i", null, "\u5DF2\u5708 ", picked.length)), /*#__PURE__*/React.createElement("p", {
-        className: "ex-passage"
-      }, toks.map((tk, i) => {
+        className: 'ex-passage' + (pt.cols ? ' ex-gridp' : ''),
+        style: pt.cols ? {
+          gridTemplateColumns: 'repeat(' + pt.cols + ', 1fr)'
+        } : undefined
+      }, toks.filter(tk => !pt.cols || tk.w).map((tk, i) => {
         if (!tk.w) return /*#__PURE__*/React.createElement("span", {
           key: i
         }, tk.t);

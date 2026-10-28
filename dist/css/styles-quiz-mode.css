@@ -3663,3 +3663,7 @@ body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
 /* v620 VCe 自己選字造句：每個長母音一個框 */
 .ex-vw { margin: 0 0 14px; padding: 10px 14px 6px; border: 1.5px solid var(--border, #ddd6c4); border-radius: 12px; background: var(--bg-paper, #fbf8f1); }
 .ex-vw h4 { margin: 0 0 6px; font-size: 17px; color: var(--ink, #15130e); }
+
+/* v620 單字表格（Circle all the words…）：一格一格，跟印出來的考卷一樣 */
+.ex-gridp { display: grid; gap: 0; border: 1.5px solid var(--ink-soft, #3a372e); border-radius: 6px; overflow: hidden; }
+.ex-gridp .ex-w { margin: 0; border-radius: 0; border: 0; border-right: 1px solid var(--ink-soft, #3a372e); border-bottom: 1px solid var(--ink-soft, #3a372e); padding: 14px 8px; text-align: center; font-size: 18px; }

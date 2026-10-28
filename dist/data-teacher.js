@@ -5047,6 +5047,8 @@ Output ONE page's worth. Keep every English word exactly as printed — never tr
               over a table of words is a "circle" part. Put EVERY word of the grid into "passage", row by row, left to
               right, separated by spaces (no table, no numbering). If the paper does not print how many to circle
               ("circle all the ..."), leave "need" 0 — the website counts them itself.
+              🔴 For a printed GRID (boxes/cells), also give "cols" = how many columns the grid has (a 5x4 grid → 4),
+              so the website can draw it as a grid of boxes again. Plain passages have no "cols".
   "cloze"   — a word bank + sentences with a blank.
               "bank" = every word in the box.
               🔴 The sentences go in a field called "items" (NOT "sentences", NOT "questions").
@@ -5487,7 +5489,8 @@ function _examCleanPart(p) {
       const ck = { check, checkArg: String(p.checkArg || '').trim() };
       need = (passage.match(/[A-Za-z][A-Za-z'-]*/g) || []).filter(w => window.wsCheck(w, examCircleCheck(ck)) === true).length;
     }
-    return { ...base, check, checkArg: String(p.checkArg || '').trim(), need, passage };
+    const cols = Math.round(+p.cols || 0);
+    return { ...base, check, checkArg: String(p.checkArg || '').trim(), need, passage, ...(cols >= 2 && cols <= 8 ? { cols } : {}) };
   }
   if (p.kind === 'cloze') {
     const bank = (Array.isArray(p.bank) ? p.bank : []).map(x => String(x).trim()).filter(Boolean);
@@ -6200,7 +6203,7 @@ function examBandsOf(R, c) {
    ⚠ 一律用「|」分欄：康橋的題目裡逗號很多，用逗號分欄一定出事。 */
 function examPartText(part) {
   const p = part || {};
-  if (p.kind === 'circle') return [p.check + (p.checkArg ? ':' + p.checkArg : ''), p.passage || ''].join('\n');
+  if (p.kind === 'circle') return [p.check + (p.checkArg ? ':' + p.checkArg : '') + (p.cols ? ' | ' + p.cols : ''), p.passage || ''].join('\n');
   if (p.kind === 'cloze') return [(p.bank || []).join(', ')]
     .concat((p.items || []).map(q => `${q.text || ''} | ${q.answer || ''}`)).join('\n');
   if (p.kind === 'vcewrite') return [(p.groups || []).join(' ') + ' | ' + (p.per || 2), 'exclude: ' + (p.exclude || []).join(', ')].join('\n');
@@ -6226,10 +6229,14 @@ function examParsePart(kind, text) {
   const lines = String(text || '').split('\n').map(l => l.replace(/\s+$/, ''));
   const nonEmpty = lines.filter(l => l.trim());
   if (kind === 'circle') {
-    const head = (nonEmpty[0] || '').trim();
+    const headAll = (nonEmpty[0] || '').trim();
+    const bar = headAll.split('|');                         // v620：「vce | 4」＝單字表格、每列 4 格
+    const head = (bar[0] || '').trim();
+    const colsN = parseInt(bar[1], 10);
     const i = head.indexOf(':');
     return { check: (i >= 0 ? head.slice(0, i) : head).trim().toLowerCase(),
              checkArg: i >= 0 ? head.slice(i + 1).trim() : '',
+             cols: colsN >= 2 && colsN <= 8 ? colsN : 0,
              passage: lines.slice(lines.indexOf(nonEmpty[0]) + 1).join('\n').trim() };
   }
   if (kind === 'cloze') {

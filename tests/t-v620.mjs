@@ -15,6 +15,7 @@ const circ = { kind: 'circle', check: 'vce', passage: grid, need: 10, pts: 10 };
 const good = W.examScorePart(circ, real);
 ok('圈對 10 個＝滿分', good.right === 10 && good.got === 10);
 ok('圈到冒牌貨要扣分（不能整張全圈）', W.examScorePart(circ, grid.split(' ')).right === 0);
+ok('表格欄數存得住、文字來回不失真', (() => { const b = W.examParsePart('circle', W.examPartText({ kind: 'circle', check: 'vce', passage: 'a b', cols: 4 })); return b.cols === 4 && b.check === 'vce' && b.passage === 'a b'; })());
 console.log('\n【Part C 自己選字造句】');
 const part = { kind: 'vcewrite', groups: ['a', 'i', 'o', 'u'], per: 2, minWords: 3, pts: 8, exclude: grid.toLowerCase().split(' ') };
 ok('題數＝母音數×每個幾個', W.examPartN(part) === 8);

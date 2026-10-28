@@ -7544,8 +7544,8 @@ function ExamPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
           return (
             <>
               <div className="ex-need">圈出 <b>{pt.need || n}</b> 個　<i>已圈 {picked.length}</i></div>
-              <p className="ex-passage">
-                {toks.map((tk, i) => {
+              <p className={'ex-passage' + (pt.cols ? ' ex-gridp' : '')} style={pt.cols ? { gridTemplateColumns: 'repeat(' + pt.cols + ', 1fr)' } : undefined}>
+                {toks.filter(tk => !pt.cols || tk.w).map((tk, i) => {
                   if (!tk.w) return <span key={i}>{tk.t}</span>;
                   const on = picked.indexOf(tk.t) >= 0;
                   const mark = sent && on ? ((pr.detail.find(d => d.text === tk.t) || {}).ok ? ' ok' : ' bad') : '';
