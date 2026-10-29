@@ -7755,6 +7755,22 @@ Object.assign(window, { mxShopVisible });   // v613
    → 改成**打分數**：完全一樣 ＞ 他講的是名字的開頭 ＞ 名字包含他講的 ＞ 他講的包含名字（而且名字愈長愈好），
      整週所有類別一起比，取最高分。同分取字數最接近的。
    ⚠ 純函式，items 傳 week.items，norm 傳比對用的正規化函式——方便單獨測。 */
+/* v626：把一句話拆成「詞」——英文照空白切（太短的丟掉）；中文兩個字一組（「期中複習」→ 期中、中複、複習） */
+function _askTokens(t) {
+  const out = [];
+  String(t || '').split(' ').forEach(w => {
+    if (!w) return;
+    if (/[\u4e00-\u9fff]/.test(w)) { const cs = Array.from(w); if (cs.length === 1) out.push(w); for (let i = 0; i + 1 < cs.length; i++) out.push(cs[i] + cs[i + 1]); }
+    else if (w.length >= 2 || /\d/.test(w)) out.push(w);
+  });
+  return out;
+}
+/* q 的詞有幾成出現在 n 裡（n、q 都是已正規化的字串）。只有一個詞時沒有「幾成」可言，回 0（那種情況前面的「包含」已經處理過） */
+function _askTokenRatio(q, n) {
+  const tk = _askTokens(q);
+  if (tk.length < 2) return 0;
+  return tk.filter(w => n.indexOf(w) >= 0).length / tk.length;
+}
 function askBestGroup(weekItems, name, norm) {
   /* 標點全部當空白（「Part 2」「— Part 2」「- Part 2」是同一個意思；他打字不會記得放破折號） */
   const N0 = norm || ((t) => String(t || '').toLowerCase());
@@ -7767,6 +7783,11 @@ function askBestGroup(weekItems, name, norm) {
     if (n.startsWith(q)) return 800 - (n.length - q.length);        // 他講了前半段：A → A — Part 2 也算，但字愈少愈接近
     if (n.indexOf(q) >= 0) return 600 - (n.length - q.length);
     if (q.indexOf(n) >= 0 && n.length >= 3) return 400 + n.length;  // 他講得比組名長：組名愈長愈像
+    /* v626（Alan：「AI 還是會找不到 一定要完全一樣嗎？」）：不必連著、不必照順序——
+       他講的每個詞（英文單字、或中文兩個字一組）都在組名裡就算中；中的比例太低就不算。 */
+    const r = _askTokenRatio(q, n);
+    if (r >= 1) return 500 - Math.min(90, Math.abs(n.length - q.length));
+    if (r >= 0.6) return 200 + Math.round(r * 100) - Math.min(40, Math.abs(n.length - q.length));
     return 0;
   };
   let best = null, bestScore = 0;
@@ -7801,6 +7822,41 @@ function askBestGroup(weekItems, name, norm) {
   });
   return best;
 }
+
+/* v626：跨週找——先找目前這一週，找不到再找別週（回傳多一個 weekId）。
+   他常說「把 Unit 3 跟上週的 Unit 5 合起來」，組名其實在別週。 */
+function askBestGroupAnyWeek(weeks, order, curId, name, norm) {
+  const cur = askBestGroup(((weeks || {})[curId] || {}).items, name, norm);
+  if (cur) return Object.assign({ weekId: curId }, cur);
+  let best = null;
+  (order || Object.keys(weeks || {})).forEach(id => {
+    if (id === curId || !weeks[id]) return;
+    const f = askBestGroup(weeks[id].items, name, norm);
+    if (f) { best = best || Object.assign({ weekId: id }, f); }
+  });
+  return best;
+}
+/* v626：給聊天室 AI 看的「真實存在的組名清單」——這樣他講「Mary 那一組」，AI 才能對到
+   「Rare Treasure : Mary Anning的單字！」，回傳的 groups 是清單裡逐字的名字，而不是照他講的複述。
+   目前這一週排第一；其他週依序（上限 maxNames 個名字，避免提示詞太長）。 */
+function askCatalog(weeks, order, curId, maxNames) {
+  const cap = maxNames || 120;
+  const ids = [curId].concat((order || Object.keys(weeks || {})).filter(id => id !== curId));
+  const lines = []; let n = 0;
+  ids.forEach(id => {
+    const w = (weeks || {})[id]; if (!w || n >= cap) return;
+    const names = [];
+    Object.keys(w.items || {}).forEach(cid => (w.items[cid] || []).forEach(it => {
+      const g = String((it && it.group) || '').trim();
+      if (g && names.indexOf(g) < 0) names.push(g);
+    }));
+    if (!names.length) return;
+    const room = cap - n, use = names.slice(0, room); n += use.length;
+    const m = /(\d+)/.exec(String(w.label || w.id || id));
+    lines.push((id === curId ? '【他現在看的這一週】' : '') + '第 ' + (m ? m[1] : '?') + ' 週：' + use.join('｜'));
+  });
+  return lines.join('\n');
+}
 /* v570 整組換類別（純函式，直接改傳進來的 week 物件；呼叫端負責先 clone）。
    ⚠ 只動「放在哪一類」：單元 id 不變 → 進度（weekId_itemId）、作業日期（homework[id]）、requires／linked 都不用搬。
    📎 groupRes 的 key 是「類別::組名」，一起換。回傳搬了幾個單元。 */
@@ -7824,7 +7880,7 @@ function moveGroupCatInWeek(wk, fromCat, itemIds, toCat, groupName, resKey) {
   }
   return moving.length;
 }
-Object.assign(window, { askBestGroup, moveGroupCatInWeek });
+Object.assign(window, { askBestGroup, askBestGroupAnyWeek, askCatalog, moveGroupCatInWeek });
 
 /* 它會做的事就這幾件。AI 只能從這裡面挑，挑別的一律當 unknown。 */
 const ASK_JOBS = {
@@ -8044,7 +8100,13 @@ Rules:
 - "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
 - "fromWeek": ONLY for copyweek, the SOURCE week number. If he did not say one, 0
   (the website then uses the week he is looking at).
-- "groups": ONLY for merge. The names of the groups he wants merged, copied exactly, as a list.
+- "groups": ONLY for merge. The names of the groups he wants merged, as a list.
+  🔴 When the message lists the REAL group names that exist, pick from that list and copy the
+  chosen name CHARACTER FOR CHARACTER. He rarely types a name exactly: he gives a few words,
+  just the English title, the Chinese part, a unit number, a typo, or "上週那個". Match by meaning
+  to the closest real name(s); never invent a name that is not in the list. If two names are
+  equally plausible, include both only if he said "和/跟/加"; otherwise pick the closer one.
+  Only when no list is given, copy his words exactly.
   If he said whole weeks instead ("第 5 到第 7 週的單字"), leave groups empty and put the
   week numbers in "weeks" instead.
 - "weeks": ONLY for merge, a list of week NUMBERS when he named weeks rather than groups.
@@ -8260,7 +8322,7 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
 }
 
 /* 聽一句話（可以帶截圖）。回傳驗過的結果。 */
-async function aiRouteCommand({ text = '', images = [], categories = [], roster = [], history = [] } = {}) {
+async function aiRouteCommand({ text = '', images = [], categories = [], roster = [], history = [], catalog = '' } = {}) {
   const imgs = (images || []).slice(0, 4);
   const content = imgs.map(im => ({ type: 'image',
     source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } }));
@@ -8268,6 +8330,7 @@ async function aiRouteCommand({ text = '', images = [], categories = [], roster 
   const hist = (history || []).slice(-4).map(h => `${h.me ? '老師' : '你'}：${h.text}`).join('\n');
   content.push({ type: 'text', text:
     (names ? `（他的學生名單：${names}）\n` : '')
+    + (catalog ? `（這個年級裡真實存在的單元組名，每行一週；講到組名時 "groups"／"group" 請從這裡挑逐字的名字）\n${String(catalog).slice(0, 6000)}\n\n` : '')
     + (hist ? `（前幾句）\n${hist}\n\n` : '')
     + (imgs.length ? `（他附了 ${imgs.length} 張圖，先看圖再讀下面這句話）\n` : '')
     + '老師說：\n' + String(text || '').trim() });

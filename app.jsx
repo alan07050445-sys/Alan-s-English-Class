@@ -1473,6 +1473,10 @@ function App() {
   /* v570：改用打分數的 askBestGroup（完全一樣 ＞ 開頭 ＞ 包含），不再「第一個符合就用」 */
   const askFindGroup = (name) => window.askBestGroup
     ? window.askBestGroup((weeksRef.current[weekId] || {}).items, name, askNorm) : null;
+  /* v626：只有「合併」才跨週找（讀字／讀筆記而已）；改名、搬家、刪除這類會動資料的仍只限目前這一週 */
+  const askFindGroupAny = (name) => window.askBestGroupAnyWeek
+    ? window.askBestGroupAnyWeek(weeksRef.current, weekOrder, weekId, name, askNorm) : askFindGroup(name);
+  const askCatalogText = () => (window.askCatalog ? window.askCatalog(weeksRef.current, weekOrder, weekId) : '');
 
   /* v592（Alan：「打錯一個字 AI 助手就沒辦法了…至少問是不是哪一個」）
      找不到名字時不要只丟一句「找不到」：列出長得像的，點一下就用那個重跑。
@@ -1609,9 +1613,10 @@ function App() {
       /* 🧩 合併單字再出題：把字接起來、去重、（有講的話）裁到他要的題數，
          然後開「一鍵出單字」並把單字表填好。 */
       /* v592：有哪一組名字打錯（找不到）→ 先問「你是說…？」，不要默默少合併一組 */
-      const missG = (plan.groups || []).find(g => !askFindGroup(g));
+      const missG = (plan.groups || []).find(g => !askFindGroupAny(g));
       if (missG) {
-        const opts = window.askSuggest ? window.askSuggest(missG, askGroupNames().concat(askUnitTitles())) : [];
+        let opts = window.askSuggest ? window.askSuggest(missG, askGroupNames().concat(askUnitTitles())) : [];
+        if (!opts.length) opts = askGroupNames();   // v626：一個像的都沒有，就把這週所有組列出來讓他點，不要只說找不到
         if (opts.length) {
           askChoose(`這一週沒有「${missG}」——你是說哪一組？`, opts,
             (o) => runAskPlan({ ...plan, groups: plan.groups.map(g => g === missG ? o : g) }));
@@ -1625,7 +1630,7 @@ function App() {
          ⚠ 文法沒有「單字」可以合併，能合併的是**出題的依據**（srcNotes）。 */
       if (!ws.length) {
         const notes = (plan.groups || []).map(g => {
-          const f = askFindGroup(g);
+          const f = askFindGroupAny(g);
           const gm = f && window.reviewGrammarOf ? window.reviewGrammarOf(f.items) : null;
           return gm && gm.notes ? gm.notes : '';
         }).filter(Boolean);
@@ -2577,7 +2582,7 @@ function App() {
       });
     }
     groups.forEach(gName => {
-      const found = askFindGroup(gName);
+      const found = askFindGroupAny(gName);
       if (found) take(found.items);
     });
     return all;
@@ -3336,6 +3341,7 @@ function App() {
               open={askOpen}
               categories={activeCategories}
               roster={askRoster}
+              catalog={askCatalogText}
               grade={grade}
               onClose={() => setAskOpen(false)}
               onRun={runAskPlan}

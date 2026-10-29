@@ -6301,7 +6301,7 @@ function AskPreview({ items }) {
    確認卡按下去之後**直接在這裡出題**，把題目攤出來給他看，他說「存」才存。
    ⚠ 兩段確認是故意的：第一段確認「要做什麼」，第二段確認「題目對不對」。
      中間真的會花錢跑 AI，但不會動到他的課程——存是最後一步。 */
-function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate, onSave }) {
+function AskPanel({ open, categories, roster, catalog, grade, onClose, onRun, onGenerate, onSave }) {
   const [msgs, setMsgs] = useS([]);          // { me, text, plan?, images? }
   const [text, setText] = useS('');
   const [imgs, setImgs] = useS([]);
@@ -6336,7 +6336,7 @@ function AskPanel({ open, categories, roster, grade, onClose, onRun, onGenerate,
     setText(''); setImgs([]); setBusy(true);
     const plan = await window.aiRouteCommand({
       text: t, images: shots.map(i => ({ media_type: i.media_type, data: i.data })),
-      categories, roster,
+      categories, roster, catalog: catalog ? catalog() : '',
       history: msgs.slice(-4).map(m => ({ me: m.me, text: m.text })),
     });
     setBusy(false);

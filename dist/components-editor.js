@@ -9713,6 +9713,7 @@ function AskPanel({
   open,
   categories,
   roster,
+  catalog,
   grade,
   onClose,
   onRun,
@@ -9785,6 +9786,7 @@ function AskPanel({
       })),
       categories,
       roster,
+      catalog: catalog ? catalog() : '',
       history: msgs.slice(-4).map(m => ({
         me: m.me,
         text: m.text
