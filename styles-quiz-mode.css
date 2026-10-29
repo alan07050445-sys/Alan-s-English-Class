@@ -4408,3 +4408,12 @@ body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
 /* v620 單字表格（Circle all the words…）：一格一格，跟印出來的考卷一樣 */
 .ex-gridp { display: grid; gap: 0; border: 1.5px solid var(--ink-soft, #3a372e); border-radius: 6px; overflow: hidden; }
 .ex-gridp .ex-w { margin: 0; border-radius: 0; border: 0; border-right: 1px solid var(--ink-soft, #3a372e); border-bottom: 1px solid var(--ink-soft, #3a372e); padding: 14px 8px; text-align: center; font-size: 18px; }
+
+/* v622 表格裡被圈起來的字要一眼看得出來：整格填色＋粗框＋粗體＋角落打勾 */
+.ex-gridp .ex-w { position: relative; }
+.ex-gridp .ex-w.on { margin: 0; padding: 14px 8px; border-radius: 0; font-weight: 800; background: #FBE3C2; color: #7A2A14; box-shadow: inset 0 0 0 4px var(--accent, #8B3120); z-index: 1; }
+.ex-gridp .ex-w.on::after { content: '✓'; position: absolute; top: 4px; right: 8px; font-size: 14px; font-weight: 900; color: var(--accent, #8B3120); }
+.ex-gridp .ex-w.on.ok { background: #CFEBD7; color: #1D5A2E; box-shadow: inset 0 0 0 4px #2E7D43; }
+.ex-gridp .ex-w.on.ok::after { color: #2E7D43; }
+.ex-gridp .ex-w.on.bad { background: #F8D2CB; color: #8A2616; box-shadow: inset 0 0 0 4px #A8331F; }
+.ex-gridp .ex-w.on.bad::after { content: '✗'; color: #A8331F; }
