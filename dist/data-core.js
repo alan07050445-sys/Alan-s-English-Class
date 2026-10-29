@@ -3278,8 +3278,137 @@ async function mxSetWear(uid, kind, id, mx) {
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
 Object.assign(window, { mxLogAdd, mxStarRows, MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear, mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
-Object.assign(window, { mxShopVisible });
+Object.assign(window, { mxShopVisible });   // v613
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v517 💬 用講的就好 —— 聽得懂老師在說什麼，去按對的那顆按鈕
+   ──────────────────────────────────────────────────────────────────────────
+   Alan：「我可以給他文字 或是截圖 不需要有任何匯入方式 我用對話的他就可以幫我生成
+          單字 文法 word study reading comprehension 之類的…我都有所有模板了對吧？」
+
+   ⭐ 他說得對：13 個產生器（＝「手」）早就做好了，而且都吃預填參數。
+     缺的只是一個**路由器**。所以這一版刻意**不新寫任何出題邏輯**：
+       AI 只決定「要做哪一件事、參數是什麼」
+       → 程式打開**現成的那個視窗**並且填好
+       → 出題、校稿、存檔走的全是已經驗過上百次的舊路。
+
+   🔴 它不會自己存。中間一定有一張確認卡。
+     週次的內容是整個年級共用一份文件，聽錯一句話就寫進去可能蓋掉別的東西
+     （v447「我做的單元不見了」）。多按一下，換「它絕對不會自己亂動課程」。
+
+   🔴 聽不懂就說聽不懂。寧可回一句「你是要出單字還是 Word Study？」
+     也不要亂猜一個最接近的去做——猜錯的成本是老師花十分鐘校稿完才發現方向就錯了。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══ v570 聊天室「找那一組」要找對（Alan 合併 Barbed Wire Baseball 與 Barbed Wire Baseball — Part 2 沒成功）══
+   🔴 以前是「第一個符合就用」：名字只要**包含**他講的、或他講的包含它，就算中。
+      兩組名字一個是另一個的前半段時（A 與 A — Part 2），找「A — Part 2」會先撞到 A（A 被包含在裡面），
+      於是兩次都指到同一組——合併出來只有一組的字，看起來像「沒合併」。
+      （程式註解還寫「完全一樣最好」，但實際沒有優先選完全一樣的。）
+   → 改成**打分數**：完全一樣 ＞ 他講的是名字的開頭 ＞ 名字包含他講的 ＞ 他講的包含名字（而且名字愈長愈好），
+     整週所有類別一起比，取最高分。同分取字數最接近的。
+   ⚠ 純函式，items 傳 week.items，norm 傳比對用的正規化函式——方便單獨測。 */
+function askBestGroup(weekItems, name, norm) {
+  /* 標點全部當空白（「Part 2」「— Part 2」「- Part 2」是同一個意思；他打字不會記得放破折號） */
+  const N0 = norm || ((t) => String(t || '').toLowerCase());
+  /* v626：「Week1／Part1」跟「Week 1／Part 1」是同一個意思——字母跟數字之間一律隔開，不然 Week1 會配不到 Week 1 */
+  const N = (t) => N0(t).replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/(\p{L})(\p{N})/gu, '$1 $2').replace(/(\p{N})(\p{L})/gu, '$1 $2').trim();
+  const q = N(name);
+  if (!q) return null;
+  /* v626：詞比對（英文照空白切；中文兩個字一組）——寫在函式裡面，測試單獨抽這個函式時才不會缺東西 */
+  const tokens = (t) => {
+    const out = [];
+    String(t || '').split(' ').forEach(w => {
+      if (!w) return;
+      if (/[\u4e00-\u9fff]/.test(w)) { const cs = Array.from(w); if (cs.length === 1) out.push(w); for (let i = 0; i + 1 < cs.length; i++) out.push(cs[i] + cs[i + 1]); }
+      else if (w.length >= 2 || /\d/.test(w)) out.push(w);
+    });
+    return out;
+  };
+  const qTokens = tokens(q);
+  const tokenRatio = (n) => { if (qTokens.length < 2) return 0; const nw = n.split(' '); return qTokens.filter(w => /^\d+$/.test(w) ? nw.indexOf(w) >= 0 : n.indexOf(w) >= 0).length / qTokens.length; };
+  const score = (n) => {
+    if (!n) return 0;
+    if (n === q) return 1000;
+    if (n.startsWith(q)) return 800 - (n.length - q.length);        // 他講了前半段：A → A — Part 2 也算，但字愈少愈接近
+    if (n.indexOf(q) >= 0) return 600 - (n.length - q.length);
+    if (q.indexOf(n) >= 0 && n.length >= 3) return 400 + n.length;  // 他講得比組名長：組名愈長愈像
+    /* v626（Alan：「AI 還是會找不到 一定要完全一樣嗎？」）：不必連著、不必照順序——
+       他講的每個詞（英文單字、或中文兩個字一組）都在組名裡就算中；中的比例太低就不算。 */
+    const r = tokenRatio(n);
+    if (r >= 1) return 500 - Math.min(90, Math.abs(n.length - q.length));
+    if (r >= 0.6) return 200 + Math.round(r * 100) - Math.min(40, Math.abs(n.length - q.length));
+    return 0;
+  };
+  let best = null, bestScore = 0;
+  const items = weekItems || {};
+  Object.keys(items).forEach(cid => {
+    const groups = {};
+    (items[cid] || []).forEach(it => {
+      const g = (it.group || '').trim();
+      if (g) (groups[g] = groups[g] || []).push(it);
+    });
+    Object.keys(groups).forEach(g => {
+      const sc = score(N(g));
+      if (sc > bestScore) { bestScore = sc; best = { catId: cid, name: g, items: groups[g] }; }
+    });
+  });
+  if (best) return best;
+  /* 他常講的是**單元名**不是組名——用單元名找，回傳它所屬的那一組（同樣打分數） */
+  Object.keys(items).forEach(cid => {
+    const groups = {};
+    (items[cid] || []).forEach(it => {
+      const g = (it.group || '').trim();
+      if (g) (groups[g] = groups[g] || []).push(it);
+    });
+    (items[cid] || []).forEach(it => {
+      const sc = score(N(it.title || ''));
+      if (sc > bestScore) {
+        bestScore = sc;
+        const g = (it.group || '').trim();
+        best = g && groups[g] ? { catId: cid, name: g, items: groups[g] } : { catId: cid, name: it.title || '', items: [it] };
+      }
+    });
+  });
+  return best;
+}
+
+/* v626：跨週找——先找目前這一週，找不到再找別週（回傳多一個 weekId）。
+   他常說「把 Unit 3 跟上週的 Unit 5 合起來」，組名其實在別週。 */
+function askBestGroupAnyWeek(weeks, order, curId, name, norm) {
+  const cur = askBestGroup(((weeks || {})[curId] || {}).items, name, norm);
+  if (cur) return Object.assign({ weekId: curId }, cur);
+  let best = null;
+  (order || Object.keys(weeks || {})).forEach(id => {
+    if (id === curId || !weeks[id]) return;
+    const f = askBestGroup(weeks[id].items, name, norm);
+    if (f) { best = best || Object.assign({ weekId: id }, f); }
+  });
+  return best;
+}
+/* v626：給聊天室 AI 看的「真實存在的組名清單」——這樣他講「Mary 那一組」，AI 才能對到
+   「Rare Treasure : Mary Anning的單字！」，回傳的 groups 是清單裡逐字的名字，而不是照他講的複述。
+   目前這一週排第一；其他週依序（上限 maxNames 個名字，避免提示詞太長）。 */
+function askCatalog(weeks, order, curId, maxNames) {
+  const cap = maxNames || 120;
+  const ids = [curId].concat((order || Object.keys(weeks || {})).filter(id => id !== curId));
+  const lines = []; let n = 0;
+  ids.forEach(id => {
+    const w = (weeks || {})[id]; if (!w || n >= cap) return;
+    const names = [];
+    Object.keys(w.items || {}).forEach(cid => (w.items[cid] || []).forEach(it => {
+      const g = String((it && it.group) || '').trim();
+      if (g && names.indexOf(g) < 0) names.push(g);
+    }));
+    if (!names.length) return;
+    const room = cap - n, use = names.slice(0, room); n += use.length;
+    const m = /(\d+)/.exec(String(w.label || w.id || id));
+    lines.push((id === curId ? '【他現在看的這一週】' : '') + '第 ' + (m ? m[1] : '?') + ' 週：' + use.join('｜'));
+  });
+  return lines.join('\n');
+}
+Object.assign(window, { askBestGroup });
+Object.assign(window, { askBestGroupAnyWeek, askCatalog });
 
 
 /* ══ v607 ① 作答自動保存（Alan：「作答中途不小心離開，整份要重寫」）══════════════════════════════
@@ -4814,14 +4943,6 @@ function reviewKindOf(name) {
   if (/exam|mock|考卷|模擬/.test(t)) return 'exam';
   return 'other';
 }
-function reviewTemplate() {
-  const mk = (name, focus) => ({ id: 's' + Math.random().toString(36).slice(2, 8), name, kind: reviewKindOf(name), focus, items: [] });
-  return {
-    title: '期中考總複習', published: false,
-    info: { date: '', scope: '', format: '', flow: '', tips: '' },
-    steps: [1, 2, 3, 4, 5].map(n => mk('Word Study ' + n, '')).concat([mk('Vocabulary', ''), mk('Reading', '')]),
-  };
-}
 function reviewClean(path) {
   if (!path || typeof path !== 'object') return null;
   const str = (v, n) => String(v == null ? '' : v).slice(0, n || 400);
@@ -4842,11 +4963,6 @@ function reviewClean(path) {
     info: { date: str(info.date, 10), scope: str(info.scope, 600), format: str(info.format, 600), flow: str(info.flow, 800), tips: str(info.tips, 800) },
     steps,
   };
-}
-async function saveReviewPath(gradeKey, path) {
-  const clean = reviewClean(path);
-  await _db.collection('class').doc(REVIEW_KEY + '_' + String(gradeKey)).set({ path: clean, at: Date.now() });
-  return clean;
 }
 function subscribeReviewPath(gradeKey, cb) {
   try {
@@ -4889,7 +5005,7 @@ function reviewDaysLeft(dateISO, now) {
   const d0 = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
   return Math.round((t - d0) / 86400000);
 }
-Object.assign(window, { REVIEW_DEFAULT_SINCE, REVIEW_KINDS, reviewKindOf, reviewTemplate, reviewClean, saveReviewPath, subscribeReviewPath, reviewProgress, reviewDaysLeft });
+Object.assign(window, { REVIEW_DEFAULT_SINCE, REVIEW_KINDS, reviewKindOf, reviewClean, subscribeReviewPath, reviewProgress, reviewDaysLeft });
 
 Object.assign(window, { pacingForWeek, pacingWeekNo, pacingClean, pacingBooks, pacingNextFormative, savePacing, loadPacing, subscribePacing });
 

@@ -19,6 +19,15 @@ ok('詞順序反過來：Anning Mary', find('Anning Mary').items[0].id === 'b');
 ok('夾雜中文：Mary Anning 單字', find('Mary Anning 單字').items[0].id === 'b');
 ok('VCe Words（跳過 G4 Word Study）', find('VCe Words').items[0].id === 'c');
 ok('完全不相干 → null', find('Volcano Island') === null);
+console.log('\n【Alan 實測那六組（Week1／Part1 沒空格）】');
+const wk3 = { w3: { label: 'Week 3', items: { vocab: [
+  g('How Raven Brought Light To The World — Week 1', 'r1'), g('How Raven Brought Light To The World — Week 2', 'r2'),
+  g('Cocoliso — Part 1', 'c1'), g('Cocoliso — Part 2', 'c2'),
+  g('Why Sun & Moon Live in the Sky — Part 1', 's1'), g('Why Sun & Moon Live in the Sky — Part 2', 's2')] } } };
+const f3 = (n) => { const r = W.askBestGroupAnyWeek(wk3, ['w3'], 'w3', n, (t) => String(t || '').toLowerCase()); return r && r.items[0].id; };
+ok('六組各找到各自那一組', [['How Raven Brought Light To The World - Week1', 'r1'], ['How Raven Brought Light To The World - Week2', 'r2'], ['Cocoliso - Part 1', 'c1'], ['Cocoliso - Part 2', 'c2'],
+  ['Why Sun & Moon Live in the Sky - Part1', 's1'], ['Why Sun & Moon Live in the Sky - Part2', 's2']].every(([n, id]) => f3(n) === id));
+ok('漏打、亂打也分得出 1 跟 2：Raven wk2 / cocoliso 2', f3('Raven Light World Week2') === 'r2' && f3('cocoliso part2') === 'c2');
 console.log('\n【跨週】');
 ok('這週沒有就找別週，並說明在哪一週', (() => { const f = find('Barbed Wire Baseball', 'w1'); return f && f.weekId === 'w2' && f.items[0].id === 'd'; })());
 ok('這週有的優先用這週的', find('Mary Anning', 'w2').weekId === 'w1' ? true : false);

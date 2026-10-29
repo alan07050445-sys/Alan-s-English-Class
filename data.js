@@ -7755,28 +7755,25 @@ Object.assign(window, { mxShopVisible });   // v613
    → 改成**打分數**：完全一樣 ＞ 他講的是名字的開頭 ＞ 名字包含他講的 ＞ 他講的包含名字（而且名字愈長愈好），
      整週所有類別一起比，取最高分。同分取字數最接近的。
    ⚠ 純函式，items 傳 week.items，norm 傳比對用的正規化函式——方便單獨測。 */
-/* v626：把一句話拆成「詞」——英文照空白切（太短的丟掉）；中文兩個字一組（「期中複習」→ 期中、中複、複習） */
-function _askTokens(t) {
-  const out = [];
-  String(t || '').split(' ').forEach(w => {
-    if (!w) return;
-    if (/[\u4e00-\u9fff]/.test(w)) { const cs = Array.from(w); if (cs.length === 1) out.push(w); for (let i = 0; i + 1 < cs.length; i++) out.push(cs[i] + cs[i + 1]); }
-    else if (w.length >= 2 || /\d/.test(w)) out.push(w);
-  });
-  return out;
-}
-/* q 的詞有幾成出現在 n 裡（n、q 都是已正規化的字串）。只有一個詞時沒有「幾成」可言，回 0（那種情況前面的「包含」已經處理過） */
-function _askTokenRatio(q, n) {
-  const tk = _askTokens(q);
-  if (tk.length < 2) return 0;
-  return tk.filter(w => n.indexOf(w) >= 0).length / tk.length;
-}
 function askBestGroup(weekItems, name, norm) {
   /* 標點全部當空白（「Part 2」「— Part 2」「- Part 2」是同一個意思；他打字不會記得放破折號） */
   const N0 = norm || ((t) => String(t || '').toLowerCase());
-  const N = (t) => N0(t).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  /* v626：「Week1／Part1」跟「Week 1／Part 1」是同一個意思——字母跟數字之間一律隔開，不然 Week1 會配不到 Week 1 */
+  const N = (t) => N0(t).replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/(\p{L})(\p{N})/gu, '$1 $2').replace(/(\p{N})(\p{L})/gu, '$1 $2').trim();
   const q = N(name);
   if (!q) return null;
+  /* v626：詞比對（英文照空白切；中文兩個字一組）——寫在函式裡面，測試單獨抽這個函式時才不會缺東西 */
+  const tokens = (t) => {
+    const out = [];
+    String(t || '').split(' ').forEach(w => {
+      if (!w) return;
+      if (/[\u4e00-\u9fff]/.test(w)) { const cs = Array.from(w); if (cs.length === 1) out.push(w); for (let i = 0; i + 1 < cs.length; i++) out.push(cs[i] + cs[i + 1]); }
+      else if (w.length >= 2 || /\d/.test(w)) out.push(w);
+    });
+    return out;
+  };
+  const qTokens = tokens(q);
+  const tokenRatio = (n) => { if (qTokens.length < 2) return 0; const nw = n.split(' '); return qTokens.filter(w => /^\d+$/.test(w) ? nw.indexOf(w) >= 0 : n.indexOf(w) >= 0).length / qTokens.length; };
   const score = (n) => {
     if (!n) return 0;
     if (n === q) return 1000;
@@ -7785,7 +7782,7 @@ function askBestGroup(weekItems, name, norm) {
     if (q.indexOf(n) >= 0 && n.length >= 3) return 400 + n.length;  // 他講得比組名長：組名愈長愈像
     /* v626（Alan：「AI 還是會找不到 一定要完全一樣嗎？」）：不必連著、不必照順序——
        他講的每個詞（英文單字、或中文兩個字一組）都在組名裡就算中；中的比例太低就不算。 */
-    const r = _askTokenRatio(q, n);
+    const r = tokenRatio(n);
     if (r >= 1) return 500 - Math.min(90, Math.abs(n.length - q.length));
     if (r >= 0.6) return 200 + Math.round(r * 100) - Math.min(40, Math.abs(n.length - q.length));
     return 0;
@@ -7880,7 +7877,8 @@ function moveGroupCatInWeek(wk, fromCat, itemIds, toCat, groupName, resKey) {
   }
   return moving.length;
 }
-Object.assign(window, { askBestGroup, askBestGroupAnyWeek, askCatalog, moveGroupCatInWeek });
+Object.assign(window, { askBestGroup, moveGroupCatInWeek });
+Object.assign(window, { askBestGroupAnyWeek, askCatalog });
 
 /* 它會做的事就這幾件。AI 只能從這裡面挑，挑別的一律當 unknown。 */
 const ASK_JOBS = {

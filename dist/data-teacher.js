@@ -4388,82 +4388,7 @@ async function mxRefund(uid, id, mx) {
   } catch (e) { return { ok: false, reason: 'save', err: e }; }
 }
 Object.assign(window, { mxPurchases, mxRefund });
-   // v613
 
-/* ══════════════════════════════════════════════════════════════════════════
-   v517 💬 用講的就好 —— 聽得懂老師在說什麼，去按對的那顆按鈕
-   ──────────────────────────────────────────────────────────────────────────
-   Alan：「我可以給他文字 或是截圖 不需要有任何匯入方式 我用對話的他就可以幫我生成
-          單字 文法 word study reading comprehension 之類的…我都有所有模板了對吧？」
-
-   ⭐ 他說得對：13 個產生器（＝「手」）早就做好了，而且都吃預填參數。
-     缺的只是一個**路由器**。所以這一版刻意**不新寫任何出題邏輯**：
-       AI 只決定「要做哪一件事、參數是什麼」
-       → 程式打開**現成的那個視窗**並且填好
-       → 出題、校稿、存檔走的全是已經驗過上百次的舊路。
-
-   🔴 它不會自己存。中間一定有一張確認卡。
-     週次的內容是整個年級共用一份文件，聽錯一句話就寫進去可能蓋掉別的東西
-     （v447「我做的單元不見了」）。多按一下，換「它絕對不會自己亂動課程」。
-
-   🔴 聽不懂就說聽不懂。寧可回一句「你是要出單字還是 Word Study？」
-     也不要亂猜一個最接近的去做——猜錯的成本是老師花十分鐘校稿完才發現方向就錯了。
-   ══════════════════════════════════════════════════════════════════════════ */
-
-/* ══ v570 聊天室「找那一組」要找對（Alan 合併 Barbed Wire Baseball 與 Barbed Wire Baseball — Part 2 沒成功）══
-   🔴 以前是「第一個符合就用」：名字只要**包含**他講的、或他講的包含它，就算中。
-      兩組名字一個是另一個的前半段時（A 與 A — Part 2），找「A — Part 2」會先撞到 A（A 被包含在裡面），
-      於是兩次都指到同一組——合併出來只有一組的字，看起來像「沒合併」。
-      （程式註解還寫「完全一樣最好」，但實際沒有優先選完全一樣的。）
-   → 改成**打分數**：完全一樣 ＞ 他講的是名字的開頭 ＞ 名字包含他講的 ＞ 他講的包含名字（而且名字愈長愈好），
-     整週所有類別一起比，取最高分。同分取字數最接近的。
-   ⚠ 純函式，items 傳 week.items，norm 傳比對用的正規化函式——方便單獨測。 */
-function askBestGroup(weekItems, name, norm) {
-  /* 標點全部當空白（「Part 2」「— Part 2」「- Part 2」是同一個意思；他打字不會記得放破折號） */
-  const N0 = norm || ((t) => String(t || '').toLowerCase());
-  const N = (t) => N0(t).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  const q = N(name);
-  if (!q) return null;
-  const score = (n) => {
-    if (!n) return 0;
-    if (n === q) return 1000;
-    if (n.startsWith(q)) return 800 - (n.length - q.length);        // 他講了前半段：A → A — Part 2 也算，但字愈少愈接近
-    if (n.indexOf(q) >= 0) return 600 - (n.length - q.length);
-    if (q.indexOf(n) >= 0 && n.length >= 3) return 400 + n.length;  // 他講得比組名長：組名愈長愈像
-    return 0;
-  };
-  let best = null, bestScore = 0;
-  const items = weekItems || {};
-  Object.keys(items).forEach(cid => {
-    const groups = {};
-    (items[cid] || []).forEach(it => {
-      const g = (it.group || '').trim();
-      if (g) (groups[g] = groups[g] || []).push(it);
-    });
-    Object.keys(groups).forEach(g => {
-      const sc = score(N(g));
-      if (sc > bestScore) { bestScore = sc; best = { catId: cid, name: g, items: groups[g] }; }
-    });
-  });
-  if (best) return best;
-  /* 他常講的是**單元名**不是組名——用單元名找，回傳它所屬的那一組（同樣打分數） */
-  Object.keys(items).forEach(cid => {
-    const groups = {};
-    (items[cid] || []).forEach(it => {
-      const g = (it.group || '').trim();
-      if (g) (groups[g] = groups[g] || []).push(it);
-    });
-    (items[cid] || []).forEach(it => {
-      const sc = score(N(it.title || ''));
-      if (sc > bestScore) {
-        bestScore = sc;
-        const g = (it.group || '').trim();
-        best = g && groups[g] ? { catId: cid, name: g, items: groups[g] } : { catId: cid, name: it.title || '', items: [it] };
-      }
-    });
-  });
-  return best;
-}
 /* v570 整組換類別（純函式，直接改傳進來的 week 物件；呼叫端負責先 clone）。
    ⚠ 只動「放在哪一類」：單元 id 不變 → 進度（weekId_itemId）、作業日期（homework[id]）、requires／linked 都不用搬。
    📎 groupRes 的 key 是「類別::組名」，一起換。回傳搬了幾個單元。 */
@@ -4487,7 +4412,7 @@ function moveGroupCatInWeek(wk, fromCat, itemIds, toCat, groupName, resKey) {
   }
   return moving.length;
 }
-Object.assign(window, { askBestGroup, moveGroupCatInWeek });
+Object.assign(window, { moveGroupCatInWeek });
 
 
 /* 它會做的事就這幾件。AI 只能從這裡面挑，挑別的一律當 unknown。 */
@@ -4708,7 +4633,13 @@ Rules:
 - "toWeek": when he named a target week, the number only ("第 9 週" → 9). Otherwise 0.
 - "fromWeek": ONLY for copyweek, the SOURCE week number. If he did not say one, 0
   (the website then uses the week he is looking at).
-- "groups": ONLY for merge. The names of the groups he wants merged, copied exactly, as a list.
+- "groups": ONLY for merge. The names of the groups he wants merged, as a list.
+  🔴 When the message lists the REAL group names that exist, pick from that list and copy the
+  chosen name CHARACTER FOR CHARACTER. He rarely types a name exactly: he gives a few words,
+  just the English title, the Chinese part, a unit number, a typo, or "上週那個". Match by meaning
+  to the closest real name(s); never invent a name that is not in the list. If two names are
+  equally plausible, include both only if he said "和/跟/加"; otherwise pick the closer one.
+  Only when no list is given, copy his words exactly.
   If he said whole weeks instead ("第 5 到第 7 週的單字"), leave groups empty and put the
   week numbers in "weeks" instead.
 - "weeks": ONLY for merge, a list of week NUMBERS when he named weeks rather than groups.
@@ -4924,7 +4855,7 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
 }
 
 /* 聽一句話（可以帶截圖）。回傳驗過的結果。 */
-async function aiRouteCommand({ text = '', images = [], categories = [], roster = [], history = [] } = {}) {
+async function aiRouteCommand({ text = '', images = [], categories = [], roster = [], history = [], catalog = '' } = {}) {
   const imgs = (images || []).slice(0, 4);
   const content = imgs.map(im => ({ type: 'image',
     source: { type: 'base64', media_type: im.media_type || 'image/jpeg', data: im.data } }));
@@ -4932,6 +4863,7 @@ async function aiRouteCommand({ text = '', images = [], categories = [], roster 
   const hist = (history || []).slice(-4).map(h => `${h.me ? '老師' : '你'}：${h.text}`).join('\n');
   content.push({ type: 'text', text:
     (names ? `（他的學生名單：${names}）\n` : '')
+    + (catalog ? `（這個年級裡真實存在的單元組名，每行一週；講到組名時 "groups"／"group" 請從這裡挑逐字的名字）\n${String(catalog).slice(0, 6000)}\n\n` : '')
     + (hist ? `（前幾句）\n${hist}\n\n` : '')
     + (imgs.length ? `（他附了 ${imgs.length} 張圖，先看圖再讀下面這句話）\n` : '')
     + '老師說：\n' + String(text || '').trim() });
@@ -7068,6 +7000,21 @@ function pacingFill(weeks) {
   });
   return weeks;
 }
+function reviewTemplate() {
+  const mk = (name, focus) => ({ id: 's' + Math.random().toString(36).slice(2, 8), name, kind: reviewKindOf(name), focus, items: [] });
+  return {
+    title: '期中考總複習', published: false,
+    info: { date: '', scope: '', format: '', flow: '', tips: '' },
+    steps: [1, 2, 3, 4, 5].map(n => mk('Word Study ' + n, '')).concat([mk('Vocabulary', ''), mk('Reading', '')]),
+  };
+}
+async function saveReviewPath(gradeKey, path) {
+  const clean = reviewClean(path);
+  await _db.collection('class').doc(REVIEW_KEY + '_' + String(gradeKey)).set({ path: clean, at: Date.now() });
+  return clean;
+}
+Object.assign(window, { reviewTemplate, saveReviewPath });
+
 Object.assign(window, { pacingParse, pacingFill, pacingReadXlsx, pacingFromRows, pacingBoldPages });
 
 
