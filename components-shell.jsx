@@ -1981,7 +1981,7 @@ function Footer({ onOpenGuide }) {
 }
 
 
-/* ───────── v612 🎃 Trick or Treat（倒數歸零之後，點南瓜領 ⭐100~500）─────────
+/* ───────── v612 🎃 Trick or Treat（倒數歸零之後，點南瓜領 ⭐100~1000）─────────
    ⚠ 獎品不是這裡抽的——是 data.js treatPrize(uid, 活動) 反算的固定數字（重整不會重抽、改雲端的數字也沒用）。
    ⚠ treat === undefined＝雲端還沒回來；這時候不能跳（領過的孩子會先看到一下南瓜又消失）。
    ⚠ 老師預覽：活動還沒開始（10/31 前）老師帳號每次載入都會看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。
@@ -2020,7 +2020,10 @@ function TrickOrTreat({ user, treat, isTeacher }) {
   }, [phase]);
 
   if (!window.treatOpenAt || !user || closed) return null;
-  if (!preview && (!window.treatOpenAt(KEY) || treat === undefined)) return null;
+  const msLeft = window.treatMsToOpen ? window.treatMsToOpen(KEY) : 0;
+  const waiting = !preview && msLeft > 0;     // v625：倒數中——南瓜先出來、還不能開
+  if (!preview && !waiting && (!window.treatOpenAt(KEY) || treat === undefined)) return null;
+  if (waiting && (treat === undefined)) return null;
   const at = Number(treat && treat[KEY]);
   const claimed = at > 1e11 && window.treatOpenAt(KEY, at);
   if (!preview && claimed && phase === 'idle') return null;
@@ -2036,6 +2039,26 @@ function TrickOrTreat({ user, treat, isTeacher }) {
   const later = () => { setMini(true); try { sessionStorage.setItem('alan-treat-mini', '1'); } catch (e) {} };
   const reopen = () => { setMini(false); try { sessionStorage.removeItem('alan-treat-mini'); } catch (e) {} };
 
+  const cd = (() => { const t = Math.floor(msLeft / 1000), d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600), m = Math.floor(t % 3600 / 60), sc = t % 60;
+    const p2 = n => String(n).padStart(2, '0'); return (d > 0 ? d + ' 天 ' : '') + p2(h) + ':' + p2(m) + ':' + p2(sc); })();
+  if (waiting && mini) {
+    return <button className="tot-fab tot-fab-wait" onClick={reopen} aria-label={'Trick or Treat 倒數 ' + cd}>🎃<span>倒數 {cd}</span></button>;
+  }
+  if (waiting) {
+    return (
+      <div className="tot-back tot-idle tot-wait" role="dialog" aria-modal="true" aria-label="Trick or Treat 倒數中">
+        <div className="tot-stage">
+          <div className="tot-bats" aria-hidden="true"><i>🦇</i><i>🦇</i><i>🦇</i></div>
+          <h2 className="tot-title">Trick or Treat!</h2>
+          <p className="tot-sub">南瓜裡藏了一份神祕禮物（⭐100 ~ 1000），要等倒數歸零才能打開</p>
+          <div className="tot-pumpkin tot-locked" aria-hidden="true"><span className="tot-glow"/><b>🎃</b></div>
+          <div className="tot-count" aria-live="off"><small>離開啟還有</small><b>{cd}</b></div>
+          <p className="tot-sub">10/31 一到，回來點南瓜！</p>
+          <button className="tot-later" onClick={later}>好，我等</button>
+        </div>
+      </div>
+    );
+  }
   if (mini && phase === 'idle') {
     return <button className="tot-fab" onClick={reopen} aria-label="Trick or Treat！點我領南瓜獎勵">🎃<span>Trick or Treat</span></button>;
   }

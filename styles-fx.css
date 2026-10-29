@@ -1153,3 +1153,10 @@
 .tot-gift-i { display: inline-flex; align-items: center; gap: 6px; margin: 2px 8px; font-size: 18px; font-weight: 800; color: #fff4e0; }
 .tot-gift-i b { font-size: 34px; }
 .tot-gift-s { display: block; margin-top: 6px; font-size: 14px; color: #ffe9c9; }
+
+/* v625 倒數中的南瓜：先出現、還不能開 */
+.tot-locked { cursor: default; filter: saturate(.75) brightness(.9); }
+.tot-count { display: flex; flex-direction: column; align-items: center; margin: 4px 0 2px; color: #ffe2b8; }
+.tot-count small { font-size: 14px; opacity: .85; }
+.tot-count b { font-size: 38px; font-variant-numeric: tabular-nums; letter-spacing: .04em; color: #ffb347; text-shadow: 0 0 18px rgba(255, 122, 24, .6); }
+.tot-fab-wait span { font-variant-numeric: tabular-nums; }

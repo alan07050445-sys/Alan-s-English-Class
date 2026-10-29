@@ -11268,7 +11268,7 @@ Object.assign(window, { computeFixedStars, markMistakeFixed, FIX_STAR, FIX_DAILY
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   v612 🎃 Trick or Treat（Alan：「倒數歸零的 Trick or Treat 動畫，南瓜的獎品 100~500 顆星星」）
+   v612 🎃 Trick or Treat（Alan：「倒數歸零的 Trick or Treat 動畫，南瓜的獎品 100~500 顆星星」（v625 起 100~1000））
    ──────────────────────────────────────────────────────────────────────────
    跟簽到（v362）、訂正（v465）同一套做法：**星星是算出來的，不是存的**。
    ⭐ 學生自己的 progress/{uid}.treat.<活動> 只存「他按下去的時間」；**獎品是由帳號反算的**
@@ -11277,12 +11277,12 @@ Object.assign(window, { computeFixedStars, markMistakeFixed, FIX_STAR, FIX_DAILY
        · 想在主控台自己寫一個「500」進去也沒用——存的數字根本不被讀
    ⚠ 只認「領取時間落在活動期間」的紀錄；期間之外寫進去的不算。
    ⚠ 領取期間比倒數歸零（10/31 00:00）多給兩天：週末沒上線的孩子不會白白錯過。
-   ⚠ 獎品權重偏低（平均約 ⭐190 ≒ NT$10；星星＝NT$×20）——這是真的會花掉的錢，
+   ⚠ 獎品權重偏低（v625 起 100~1000，平均約 ⭐220 ≒ NT$11；星星＝NT$×20）——這是真的會花掉的錢，
      想調高調低只要改 TREAT_TABLE，已領的人下次算星星就會跟著變。 */
 const TREATS = {
   hw2026: { from: '2026-10-31', until: '2026-11-02', zh: '萬聖節 Trick or Treat 🎃' },
 };
-const TREAT_TABLE = [[100, 30], [150, 22], [200, 18], [250, 12], [300, 8], [350, 5], [400, 3], [450, 1.5], [500, 0.5]];   // [星星, 權重]
+const TREAT_TABLE = [[100, 26], [150, 20], [200, 16], [250, 12], [300, 9], [350, 6], [400, 4], [450, 2.5], [500, 1.8], [600, 1.2], [700, 0.8], [800, 0.4], [900, 0.2], [1000, 0.1]];   // [星星, 權重]
 function treatPrize(uid, key) {
   let h = 2166136261;
   const str = String(uid || '') + '|' + String(key || '');
@@ -11294,6 +11294,12 @@ function treatPrize(uid, key) {
 }
 function _treatDay(t) { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 /* 現在（或某個時間）這個活動能不能領 */
+/* 還沒開放時，離開放還有幾毫秒（已開放或過期回 0）——倒數用 */
+function treatMsToOpen(key, now) {
+  const c = TREATS[key]; if (!c) return 0;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(c.from);
+  return Math.max(0, new Date(+m[1], +m[2] - 1, +m[3]).getTime() - (now == null ? Date.now() : now));
+}
 function treatOpenAt(key, t) {
   const c = TREATS[key]; if (!c) return false;
   const d = _treatDay(t == null ? Date.now() : t);
@@ -11332,7 +11338,7 @@ async function claimTreat(uid, displayName, email, key) {
 function treatGifts(prize, key) {
   return MX_SHOP.filter(it => it.limited === key && (!it.rare || prize >= 400)).map(it => it.id);
 }
-Object.assign(window, { TREATS, TREAT_TABLE, treatGifts, treatPrize, treatOpenAt, computeTreatStars, claimTreat });
+Object.assign(window, { TREATS, TREAT_TABLE, treatGifts, treatPrize, treatOpenAt, treatMsToOpen, computeTreatStars, claimTreat });
 
 function computeCheckin(checkin) {
   const map = (checkin && checkin.dates) || {};
