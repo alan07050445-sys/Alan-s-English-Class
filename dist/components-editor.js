@@ -14102,7 +14102,23 @@ function ReviewPathEditor({
     onChange: e => setD(x => Object.assign({}, x, {
       published: e.target.checked
     }))
-  }), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u516C\u958B\u7D66\u5B78\u751F\u770B"), "\uFF08\u6C92\u52FE\uFF1D\u53EA\u6709\u8001\u5E2B\u770B\u5F97\u5230\uFF0C\u53EF\u4EE5\u5148\u6392\u597D\u518D\u516C\u958B\uFF09")), /*#__PURE__*/React.createElement("h4", {
+  }), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u516C\u958B\u7D66\u5B78\u751F\u770B"), "\uFF08\u6C92\u52FE\uFF1D\u53EA\u6709\u8001\u5E2B\u770B\u5F97\u5230\uFF0C\u53EF\u4EE5\u5148\u6392\u597D\u518D\u516C\u958B\uFF09")), /*#__PURE__*/React.createElement("div", {
+    className: "field-help",
+    style: {
+      margin: '0 0 10px'
+    }
+  }, "\uD83D\uDD04 \u9032\u5EA6\u5F9E ", /*#__PURE__*/React.createElement("b", null, new Date(d.since || window.REVIEW_DEFAULT_SINCE).toLocaleDateString('zh-TW')), " \u8D77\u7B97\uFF08\u4E4B\u524D\u505A\u904E\u7684\u4E0D\u7B97\uFF0C\u8981\u91CD\u65B0\u505A\u4E00\u6B21\uFF09\u3002", /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "btn-ghost",
+    style: {
+      marginLeft: 8
+    },
+    onClick: () => {
+      if (confirm('所有學生的闖關進度都會歸零、重新開始，確定嗎？')) setD(x => Object.assign({}, x, {
+        since: Date.now()
+      }));
+    }
+  }, "\u8B93\u5927\u5BB6\u5F9E\u982D\u958B\u59CB")), /*#__PURE__*/React.createElement("h4", {
     style: {
       margin: '14px 0 6px'
     }

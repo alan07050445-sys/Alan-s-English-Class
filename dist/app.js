@@ -1208,9 +1208,11 @@ function App() {
   };
 
   // v618：期中考總複習地圖的進度（做過＝qmProgress 的 .done，或這一週舊版 progress 有記錄）
-  var rpProg = useAppMemo(() => reviewPath && window.reviewProgress ? window.reviewProgress(reviewPath, weeks, (w, i) => {
+  var rpProg = useAppMemo(() => reviewPath && window.reviewProgress ? window.reviewProgress(reviewPath, weeks, (w, i, since) => {
     var p = qmProgress[`${w}_${i}`];
-    return !!(p && p.done) || w === weekId && !!progress[i];
+    if (p && p.done && Number(p.ts) >= since) return true;
+    var lp = w === weekId ? progress[i] : null;
+    return typeof lp === 'number' && lp >= since;
   }) : null, [reviewPath, weeks, qmProgress, progress, weekId]);
   var openReviewItem = it => {
     var idx = viewOrder.indexOf(it.w);

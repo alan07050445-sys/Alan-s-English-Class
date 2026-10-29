@@ -894,7 +894,7 @@ function App() {
 
   // v618：期中考總複習地圖的進度（做過＝qmProgress 的 .done，或這一週舊版 progress 有記錄）
   const rpProg = useAppMemo(() => (reviewPath && window.reviewProgress)
-    ? window.reviewProgress(reviewPath, weeks, (w, i) => { const p = qmProgress[`${w}_${i}`]; return !!(p && p.done) || (w === weekId && !!progress[i]); })
+    ? window.reviewProgress(reviewPath, weeks, (w, i, since) => { const p = qmProgress[`${w}_${i}`]; if (p && p.done && Number(p.ts) >= since) return true; const lp = w === weekId ? progress[i] : null; return typeof lp === 'number' && lp >= since; })
     : null, [reviewPath, weeks, qmProgress, progress, weekId]);
   const openReviewItem = (it) => {
     const idx = viewOrder.indexOf(it.w);

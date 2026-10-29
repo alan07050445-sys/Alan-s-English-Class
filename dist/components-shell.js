@@ -3090,13 +3090,15 @@ function ReviewPathMap({
     };
     return /*#__PURE__*/React.createElement("li", {
       key: st.id,
-      className: 'rp-step rp-' + state + (k % 2 ? ' rp-r' : ' rp-l')
+      className: 'rp-step rp-' + state + ' rp-k-' + st.kind
     }, /*#__PURE__*/React.createElement("div", {
       className: "rp-node",
       "aria-hidden": "true"
     }, st.complete ? '✓' : kd.ico), /*#__PURE__*/React.createElement("div", {
       className: "rp-body"
-    }, /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "rp-num"
+    }, "\u7B2C ", k + 1, " \u95DC \xB7 ", kd.zh), /*#__PURE__*/React.createElement("button", {
       className: "rp-head",
       "aria-expanded": isOpen,
       onClick: () => setOpen(o => Object.assign({}, o, {

@@ -11955,6 +11955,7 @@ function reviewClean(path) {
   return {
     title: str(path.title, 40) || '期中考總複習',
     published: !!path.published,
+    since: Number(path.since) > 1e11 ? Number(path.since) : 0,
     info: { date: str(info.date, 10), scope: str(info.scope, 600), format: str(info.format, 600), flow: str(info.flow, 800), tips: str(info.tips, 800) },
     steps,
   };
@@ -11971,9 +11972,13 @@ function subscribeReviewPath(gradeKey, cb) {
   } catch (e) { cb(null); return () => {}; }
 }
 /* 算進度。isDone(週次id, 題目id) 由呼叫端提供（app.jsx 的 qmProgress／舊版 progress）。 */
+/* v622（Alan：「不管你之前有沒有完成 都要重新再做一次」）：只算 since 之後做的。
+   老師按「讓大家從頭開始」會更新 since；沒設過就從 2026-10-29 起算（地圖上線時舊紀錄一律不算）。 */
+const REVIEW_DEFAULT_SINCE = 1793203200000;
 function reviewProgress(path, weeks, isDone) {
   const p = reviewClean(path);
   if (!p) return null;
+  const since = p.since || REVIEW_DEFAULT_SINCE;
   const steps = p.steps.map(st => {
     const items = st.items.map(it => {
       const list = (weeks && weeks[it.w] && weeks[it.w].items && weeks[it.w].items[it.c]) || [];
@@ -11981,7 +11986,7 @@ function reviewProgress(path, weeks, isDone) {
       return Object.assign({}, it, {
         exists: !!found,
         title: found ? String(found.title || found.zh || it.i) : (it.t || it.i),
-        done: !!(found && isDone && isDone(it.w, it.i)),
+        done: !!(found && isDone && isDone(it.w, it.i, since)),
       });
     });
     const total = items.length, done = items.filter(x => x.done).length;
@@ -12001,7 +12006,7 @@ function reviewDaysLeft(dateISO, now) {
   const d0 = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
   return Math.round((t - d0) / 86400000);
 }
-Object.assign(window, { REVIEW_KINDS, reviewKindOf, reviewTemplate, reviewClean, saveReviewPath, subscribeReviewPath, reviewProgress, reviewDaysLeft });
+Object.assign(window, { REVIEW_DEFAULT_SINCE, REVIEW_KINDS, reviewKindOf, reviewTemplate, reviewClean, saveReviewPath, subscribeReviewPath, reviewProgress, reviewDaysLeft });
 
 Object.assign(window, { pacingParse, pacingFill, pacingForWeek, pacingWeekNo, pacingReadXlsx, pacingFromRows, pacingBoldPages,
                         pacingClean, pacingBooks,

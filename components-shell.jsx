@@ -2157,9 +2157,10 @@ function ReviewPathMap({ rp, isTeacher, onClose, onOpenItem, onEdit }) {
             const isOpen = !!open[k];
             const kd = kinds[st.kind] || { ico: '⭐' };
             return (
-              <li key={st.id} className={'rp-step rp-' + state + (k % 2 ? ' rp-r' : ' rp-l')}>
+              <li key={st.id} className={'rp-step rp-' + state + ' rp-k-' + st.kind}>
                 <div className="rp-node" aria-hidden="true">{st.complete ? '✓' : kd.ico}</div>
                 <div className="rp-body">
+                  <span className="rp-num">第 {k + 1} 關 · {kd.zh}</span>
                   <button className="rp-head" aria-expanded={isOpen} onClick={() => setOpen(o => Object.assign({}, o, { [k]: !o[k] }))}>
                     <b>{st.name}</b>
                     <span className="rp-count">{st.total ? `${st.done}/${st.total}` : '準備中'}</span>

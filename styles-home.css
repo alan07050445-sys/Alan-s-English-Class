@@ -1455,3 +1455,37 @@ button.mk-ans-more:hover { text-decoration: underline; text-underline-offset: 3p
   .rp-sheet { padding: 16px 12px 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .rp-now .rp-node { animation: none; } .rp-bar i { transition: none; } }
+
+/* v622 期中考總複習地圖改版：每一類一個顏色、卡片輕一點、目前這一關一眼看得到 */
+.rp-step { --rp-c: #8b3120; --rp-bg: rgba(139, 49, 32, .10); padding-bottom: 14px; }
+.rp-k-word { --rp-c: #7c5cff; --rp-bg: rgba(124, 92, 255, .14); }
+.rp-k-vocab { --rp-c: #12a594; --rp-bg: rgba(18, 165, 148, .14); }
+.rp-k-reading { --rp-c: #e08a1e; --rp-bg: rgba(224, 138, 30, .15); }
+.rp-k-grammar { --rp-c: #3b82f6; --rp-bg: rgba(59, 130, 246, .14); }
+.rp-k-exam { --rp-c: #e0527a; --rp-bg: rgba(224, 82, 122, .14); }
+.rp-path::before { left: 27px; border-left: 3px solid var(--border, #ddd6c4); }
+.rp-node { flex-basis: 54px; height: 54px; border: 0; background: var(--rp-bg); color: var(--rp-c); box-shadow: inset 0 0 0 2px var(--rp-c); font-size: 24px; }
+.rp-todo .rp-node { filter: saturate(.7); opacity: .85; }
+.rp-done .rp-node { background: var(--rp-c); color: #fff; box-shadow: none; }
+.rp-now .rp-node { background: var(--rp-c); color: #fff; box-shadow: 0 0 0 5px var(--rp-bg); animation: rpPulse 1.8s ease-in-out infinite; }
+.rp-end .rp-node { --rp-c: #e0a81e; }
+.rp-end.rp-done .rp-node { background: #e0a81e; }
+.rp-body { border: 0; border-radius: 16px; padding: 12px 16px 14px; background: var(--bg-card, #fff); box-shadow: 0 1px 0 rgba(0, 0, 0, .04), 0 6px 18px -10px rgba(21, 19, 14, .35); position: relative; overflow: hidden; }
+.rp-body::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--rp-c); opacity: .75; }
+.rp-now .rp-body { background: linear-gradient(135deg, var(--rp-bg), transparent 70%), var(--bg-card, #fff); box-shadow: 0 0 0 2px var(--rp-c), 0 10px 26px -12px var(--rp-c); }
+.rp-done .rp-body { opacity: .78; }
+.rp-done .rp-body::before { background: var(--moss, #4a9a5e); }
+.rp-num { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 800; letter-spacing: .04em; color: var(--rp-c); }
+.rp-end .rp-num { display: none; }
+.rp-head b { font-size: 18px; }
+.rp-count { padding: 2px 10px; border-radius: 999px; background: var(--rp-bg); color: var(--rp-c); }
+.rp-here { background: var(--rp-c); color: #fff; }
+.rp-focus { padding: 6px 10px; border-radius: 8px; background: var(--rp-bg); color: var(--ink-soft); }
+.rp-items { margin-top: 10px; gap: 8px; }
+.rp-item { border: 0; padding: 12px 14px; border-radius: 12px; background: var(--bg, #f4f0e7); box-shadow: inset 0 0 0 1.5px var(--border-soft, #e8e2d0); }
+.rp-item:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--rp-c); }
+.rp-item.on { background: rgba(74, 154, 94, .12); box-shadow: inset 0 0 0 1.5px rgba(74, 154, 94, .5); }
+.rp-chk { border-color: var(--rp-c); }
+.rp-item.on .rp-chk { background: #4a9a5e; border-color: #4a9a5e; }
+.rp-go { padding: 4px 12px; border-radius: 999px; background: var(--rp-c); color: #fff; }
+.rp-item.on .rp-go { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1.5px var(--border); }

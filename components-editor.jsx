@@ -8912,6 +8912,10 @@ function ReviewPathEditor({ gradeKey, path, weeks, weekOrder, categories, onClos
           <label className="field-help" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0' }}>
             <input type="checkbox" checked={!!d.published} onChange={e => setD(x => Object.assign({}, x, { published: e.target.checked }))}/>
             <span><b>公開給學生看</b>（沒勾＝只有老師看得到，可以先排好再公開）</span></label>
+          <div className="field-help" style={{ margin: '0 0 10px' }}>
+            🔄 進度從 <b>{new Date(d.since || window.REVIEW_DEFAULT_SINCE).toLocaleDateString('zh-TW')}</b> 起算（之前做過的不算，要重新做一次）。
+            <button type="button" className="btn-ghost" style={{ marginLeft: 8 }} onClick={() => { if (confirm('所有學生的闖關進度都會歸零、重新開始，確定嗎？')) setD(x => Object.assign({}, x, { since: Date.now() })); }}>讓大家從頭開始</button>
+          </div>
 
           <h4 style={{ margin: '14px 0 6px' }}>📋 考試資訊卡（學生地圖最上面那張）</h4>
           <label className="field-help">考試日期<input type="date" style={input} value={d.info.date} onChange={e => setInfo({ date: e.target.value })}/></label>
