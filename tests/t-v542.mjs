@@ -84,15 +84,15 @@ ok('⭐ aiMakeVocabStories 是「程式切批次、一批生一篇」，不是�
    const i = data.indexOf('async function aiMakeVocabStories');
    const body = data.slice(i, data.indexOf('\nfunction _aiStripFence', i));
    return i > 0 && /qsChunkEven\(list, Math\.max\(3, per\)\)/.test(body)
-     && /await aiMakeVocabStory\(batches\[i\]/.test(body); })());
-ok('⭐⭐ 每一篇都要不一樣：前面寫過的當 avoid 餵下去（只說「要不一樣」沒有用）', (() => {
+     && /aiMakeVocabStory\(batch,/.test(body); })());
+ok('⭐⭐ 每一篇都要不一樣：v628 改同時寫，所以每篇指定不同場景＋老師帶進來的 avoid', (() => {
    const i = data.indexOf('async function aiMakeVocabStories');
    const body = data.slice(i, data.indexOf('\nfunction _aiStripFence', i));
-   return /avoid: seen/.test(body) && /seen\.push\(/.test(body); })());
+   return /avoid: avoid0/.test(body) && /SETTINGS\[bi % SETTINGS\.length\]/.test(body) && /pMap\(batches/.test(body); })());
 ok('⚠ 一篇失敗不可以拖垮其他篇，但要講出來（不可以 .catch(()=>null) 安靜少一篇）', (() => {
    const i = data.indexOf('async function aiMakeVocabStories');
    const body = data.slice(i, data.indexOf('\nfunction _aiStripFence', i));
-   return /out\.push\(\{ error:/.test(body)
+   return /\{ error: \(e && e\.message\)/.test(body)
      && /短文填空有 \$\{/.test(ed.replace(/`/g, '`'))
      || /短文填空有 /.test(ed); })());
 

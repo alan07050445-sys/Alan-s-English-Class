@@ -1053,26 +1053,28 @@ async function aiMakeVocabStories(words, opts = {}) {
   /* 幾篇＝照「一篇挖幾格」去切。⚠ 一篇故事要寫得順，字太少寫不成，
      所以每一批至少 3 個字（跟 canDo.story 的門檻一樣）。 */
   const batches = qsChunkEven(list, Math.max(3, per));
-  const out = [];
-  const seen = (opts.avoid || []).slice();
-  for (let i = 0; i < batches.length; i++) {
+  /* v628（Alan：「短文填空為什麼出那麼久？」）：本來是一篇寫完才寫下一篇（為了把前一篇當 avoid），
+     三篇就是 3 × （寫 15 秒＋驗算 8 秒＋偶爾重寫）≈ 70~200 秒。
+     每一篇的字本來就不一樣，故事不會撞；所以改成**同時送出**，總時間≈最慢的那一篇。
+     （avoid 只留老師帶進來的——複習時「不要跟上次一樣」那一份。）
+     ⚠ 一篇失敗不拖垮其他篇，仍然回報（v473）。 */
+  const avoid0 = (opts.avoid || []).slice();
+  /* 同時寫就看不到前一篇，所以每一篇先指定不同的場景，免得三篇都是「男孩去公園」 */
+  const SETTINGS = ['a school day', 'a farm or a village', 'the sea or a river', 'a forest or mountain trip', 'a busy city', 'a family kitchen at home', 'a trip to another country', 'a sports day'];
+  const out = await pMap(batches, async (batch, bi) => {
     try {
-      const st = await aiMakeVocabStory(batches[i], {
-        ...opts, avoid: seen,
+      const st = await aiMakeVocabStory(batch, {
+        ...opts, avoid: avoid0,
+        hint: (opts.hint ? opts.hint + '. ' : '') + (batches.length > 1 ? 'Set this story in ' + SETTINGS[bi % SETTINGS.length] + ' (so the stories in this set feel different).' : ''),
         bank: list,                    // v603：驗算時 Word Bank 要跟學生看到的一樣（含別篇的字當誘答）
-        /* 這一批有幾個字就挖幾格（最多 per 格）——
-           批次本來就是照 per 切的，所以通常剛好 */
-        blanks: Math.min(per, batches[i].length),
+        blanks: Math.min(per, batch.length),
       });
-      if (st && st.passage) {
-        out.push({ ...st, words: batches[i] });
-        seen.push(String(st.full || st.passage || '').replace(/[\[\]]/g, ''));
-      }
+      return (st && st.passage) ? { ...st, words: batch } : null;
     } catch (e) {
-      out.push({ error: (e && e.message) || '這一篇沒出來', words: batches[i] });
+      return { error: (e && e.message) || '這一篇沒出來', words: batch };
     }
-  }
-  return out;
+  }, 4);
+  return out.filter(Boolean);
 }
 
 /* ── v392: AI 呼叫的三個共用小工具 ──────────────────────────────────────
