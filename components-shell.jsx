@@ -2117,8 +2117,13 @@ function ReviewPathCard({ rp, isTeacher, onOpen, onEdit }) {
   );
 }
 
-function ReviewPathMap({ rp, isTeacher, onClose, onOpenItem, onEdit }) {
-  const [open, setOpen] = React.useState(() => ({ [rp.next >= 0 ? rp.next : 0]: true }));
+function ReviewPathMap({ rp, isTeacher, just, onClose, onOpenItem, onEdit }) {
+  const justStep = just ? rp.steps.findIndex(st => st.items.some(it => (it.w + '|' + it.c + '|' + it.i) === just)) : -1;
+  const [open, setOpen] = React.useState(() => ({ [justStep >= 0 ? justStep : rp.next >= 0 ? rp.next : 0]: true }));
+  React.useEffect(() => {
+    const el = document.querySelector('.rp-pop-item') || document.querySelector('.rp-now');
+    if (el && el.scrollIntoView) setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250);
+  }, []);
   React.useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -2157,8 +2162,8 @@ function ReviewPathMap({ rp, isTeacher, onClose, onOpenItem, onEdit }) {
             const isOpen = !!open[k];
             const kd = kinds[st.kind] || { ico: '⭐' };
             return (
-              <li key={st.id} className={'rp-step rp-' + state + ' rp-k-' + st.kind}>
-                <div className="rp-node" aria-hidden="true">{st.complete ? '✓' : kd.ico}</div>
+              <li key={st.id} className={'rp-step rp-' + state + ' rp-k-' + st.kind + (k === justStep ? ' rp-just' : '')}>
+                <div className="rp-node" aria-hidden="true">{st.complete ? '✓' : kd.ico}{k === justStep && <i className="rp-burst"><u/><u/><u/><u/><u/><u/></i>}</div>
                 <div className="rp-body">
                   <span className="rp-num">第 {k + 1} 關 · {kd.zh}</span>
                   <button className="rp-head" aria-expanded={isOpen} onClick={() => setOpen(o => Object.assign({}, o, { [k]: !o[k] }))}>
@@ -2172,7 +2177,7 @@ function ReviewPathMap({ rp, isTeacher, onClose, onOpenItem, onEdit }) {
                       {st.items.length === 0 && <li className="rp-none">老師還在準備這一關的題目</li>}
                       {st.items.map(it => (
                         <li key={it.w + it.c + it.i}>
-                          <button className={'rp-item' + (it.done ? ' on' : '')} disabled={!it.exists} onClick={() => onOpenItem(it)}>
+                          <button className={'rp-item' + (it.done ? ' on' : '') + (just === (it.w + '|' + it.c + '|' + it.i) ? ' rp-pop-item' : '')} disabled={!it.exists} onClick={() => onOpenItem(it, st)}>
                             <span className="rp-chk" aria-hidden="true">{it.done ? '✓' : ''}</span>
                             <span className="rp-it-t">{it.title}</span>
                             <span className="rp-go">{!it.exists ? '還沒開放' : it.done ? '再練一次' : '去做 →'}</span>

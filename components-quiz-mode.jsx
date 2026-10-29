@@ -844,7 +844,7 @@ function qmGroupByArticle(items) {
    CATEGORY VIEW — left sidebar + right quiz
    editMode=true → show all items (not just quiz-able), add/edit buttons
 ══════════════════════════════════════════════════════ */
-function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onMoveQuestions, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask }) {
+function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onMoveQuestions, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask, reviewRun }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
   const [moveCatFor, setMoveCatFor] = useQM(null);   // v570：正在選「搬到哪一類」的那一組（g.key）
@@ -1222,7 +1222,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   }, [initialItemId]);
 
   return (
-    <div className={`qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}${sidebarHidden ? ' sidebar-hidden' : ''}`}>
+    <div className={`qm-cat-view qm-cat-enter${reviewRun && !editMode ? ' qm-rv-on' : ''}${hasSelection ? ' has-selection' : ''}${sidebarHidden ? ' sidebar-hidden' : ''}`}>
 
       {/* v298: 側欄收合時浮出「展開單元列表」鈕；v301: 改 fixed 跟著捲動、更醒目
           v306+: 手機直向選了單元後也浮出此鈕，點擊回到單元列表（清空 selectedItem） */}
@@ -1239,8 +1239,8 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
       {/* ── Left sidebar ── */}
       <div className="qm-sidebar">
         <div className="qm-sidebar-top">
-          <button className="qm-sidebar-back" onClick={onBack}>
-            <window.Icon name="arrow-left" size={14}/> 返回大廳
+          <button className="qm-sidebar-back" onClick={reviewRun && !editMode ? reviewRun.onMap : onBack}>
+            <window.Icon name="arrow-left" size={14}/> {reviewRun && !editMode ? '回複習地圖' : '返回大廳'}
           </button>
           {!editMode && (
             <button className="qm-sidebar-collapse" onClick={toggleSidebar} title="收合單元列表（專心作答）" aria-label="收合單元列表">
@@ -1249,6 +1249,23 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
           )}
         </div>
 
+        {reviewRun && !editMode && (
+          <div className="qm-rv">
+            <div className="qm-rv-tag">🗺️ {reviewRun.title}</div>
+            <div className="qm-rv-name"><span>第 {reviewRun.no} 關 / 共 {reviewRun.count} 關</span><b>{reviewRun.name}</b></div>
+            <ul className="qm-rv-list">
+              {reviewRun.items.map(it => (
+                <li key={it.w + it.c + it.i}>
+                  <button className={'qm-rv-item' + (it.done ? ' done' : '') + (it.i === reviewRun.currentId ? ' cur' : '')} disabled={!it.exists} onClick={() => reviewRun.onOpen(it)}>
+                    <span className="qm-rv-chk" aria-hidden="true">{it.done ? '✓' : ''}</span>
+                    <span className="qm-rv-t">{it.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="qm-rv-hint">這一關的練習都做完，就能回地圖前往下一關</div>
+          </div>
+        )}
         <div className="qm-sidebar-cat">
           <CatIcon catId={cat.id} className="qm-sidebar-cat-icon"/>
           <div>

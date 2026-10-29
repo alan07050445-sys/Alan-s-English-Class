@@ -3020,13 +3020,22 @@ function ReviewPathCard({
 function ReviewPathMap({
   rp,
   isTeacher,
+  just,
   onClose,
   onOpenItem,
   onEdit
 }) {
+  var justStep = just ? rp.steps.findIndex(st => st.items.some(it => it.w + '|' + it.c + '|' + it.i === just)) : -1;
   var [open, setOpen] = React.useState(() => ({
-    [rp.next >= 0 ? rp.next : 0]: true
+    [justStep >= 0 ? justStep : rp.next >= 0 ? rp.next : 0]: true
   }));
+  React.useEffect(() => {
+    var el = document.querySelector('.rp-pop-item') || document.querySelector('.rp-now');
+    if (el && el.scrollIntoView) setTimeout(() => el.scrollIntoView({
+      block: 'center',
+      behavior: 'smooth'
+    }), 250);
+  }, []);
   React.useEffect(() => {
     var onKey = e => {
       if (e.key === 'Escape') onClose();
@@ -3090,11 +3099,13 @@ function ReviewPathMap({
     };
     return /*#__PURE__*/React.createElement("li", {
       key: st.id,
-      className: 'rp-step rp-' + state + ' rp-k-' + st.kind
+      className: 'rp-step rp-' + state + ' rp-k-' + st.kind + (k === justStep ? ' rp-just' : '')
     }, /*#__PURE__*/React.createElement("div", {
       className: "rp-node",
       "aria-hidden": "true"
-    }, st.complete ? '✓' : kd.ico), /*#__PURE__*/React.createElement("div", {
+    }, st.complete ? '✓' : kd.ico, k === justStep && /*#__PURE__*/React.createElement("i", {
+      className: "rp-burst"
+    }, /*#__PURE__*/React.createElement("u", null), /*#__PURE__*/React.createElement("u", null), /*#__PURE__*/React.createElement("u", null), /*#__PURE__*/React.createElement("u", null), /*#__PURE__*/React.createElement("u", null), /*#__PURE__*/React.createElement("u", null))), /*#__PURE__*/React.createElement("div", {
       className: "rp-body"
     }, /*#__PURE__*/React.createElement("span", {
       className: "rp-num"
@@ -3117,9 +3128,9 @@ function ReviewPathMap({
     }, "\u8001\u5E2B\u9084\u5728\u6E96\u5099\u9019\u4E00\u95DC\u7684\u984C\u76EE"), st.items.map(it => /*#__PURE__*/React.createElement("li", {
       key: it.w + it.c + it.i
     }, /*#__PURE__*/React.createElement("button", {
-      className: 'rp-item' + (it.done ? ' on' : ''),
+      className: 'rp-item' + (it.done ? ' on' : '') + (just === it.w + '|' + it.c + '|' + it.i ? ' rp-pop-item' : ''),
       disabled: !it.exists,
-      onClick: () => onOpenItem(it)
+      onClick: () => onOpenItem(it, st)
     }, /*#__PURE__*/React.createElement("span", {
       className: "rp-chk",
       "aria-hidden": "true"

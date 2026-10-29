@@ -412,6 +412,10 @@ function App() {
   /* v618 🗺️ 期中考總複習地圖：每個年級一份（class/reviewpath_{年級}），公開可讀、老師才能寫 */
   const [reviewPath, setReviewPath] = useAppState(null);
   const [rpOpen, setRpOpen] = useAppState(false);
+  const [rpRun, setRpRun] = useAppState(null);     // v624：從地圖點進去的那一關 { stepId }
+  const [rpJust, setRpJust] = useAppState(null);   // 剛做完的那一題（地圖打開時播完成動畫）
+  const [rpNote, setRpNote] = useAppState(null);   // 做完一題後的「回地圖」提示 { key, title, stepName, stepDone, secs }
+  const rpPrevDone = useAppRef({});
   const [rpEdit, setRpEdit] = useAppState(false);
 
   useAppEffect(() => {
@@ -896,7 +900,9 @@ function App() {
   const rpProg = useAppMemo(() => (reviewPath && window.reviewProgress)
     ? window.reviewProgress(reviewPath, weeks, (w, i, since) => { const p = qmProgress[`${w}_${i}`]; if (p && p.done && Number(p.ts) >= since) return true; const lp = w === weekId ? progress[i] : null; return typeof lp === 'number' && lp >= since; })
     : null, [reviewPath, weeks, qmProgress, progress, weekId]);
-  const openReviewItem = (it) => {
+  const openReviewItem = (it, st) => {
+    setRpRun(st ? { stepId: st.id } : null); setRpNote(null);
+    rpPrevDone.current = {};
     const idx = viewOrder.indexOf(it.w);
     const cat = activeCategories.find(c => c.id === it.c);
     if (idx < 0 || !cat) { showToast('這一題老師還沒開放喔'); return; }
@@ -905,6 +911,27 @@ function App() {
     setCatView({ ...cat, itemId: it.i });
     scrollPageToTop();
   };
+
+  // v624：從地圖進來做題——做完一題就提示、倒數後自動回地圖
+  const rpStep = rpRun && rpProg ? rpProg.steps.find(x => x.id === rpRun.stepId) : null;
+  useAppEffect(() => {
+    if (!rpStep || !catView) { rpPrevDone.current = {}; return; }
+    const prev = rpPrevDone.current, fresh = !Object.keys(prev).length;
+    let hit = null;
+    rpStep.items.forEach(it => { const k = it.w + '|' + it.c + '|' + it.i; if (!fresh && it.done && prev[k] === false) hit = it; prev[k] = !!it.done; });
+    if (hit) setRpNote({ key: hit.w + '|' + hit.c + '|' + hit.i, title: hit.title, stepName: rpStep.name, stepDone: rpStep.complete, allDone: rpProg.complete, secs: 6 });
+  }, [rpProg, rpStep && rpStep.id, !!catView]);
+  useAppEffect(() => { if (!catView) { setRpRun(null); setRpNote(null); } }, [!!catView]);
+  const backToReviewMap = (key) => {
+    if (returnWeekRef.current != null) { setWeekIdx(returnWeekRef.current); returnWeekRef.current = null; }
+    setRpNote(null); setRpRun(null); setCatView(null); setRpJust(key || null); setRpOpen(true); setMainKey(k => k + 1); scrollPageToTop();
+  };
+  useAppEffect(() => {
+    if (!rpNote) return;
+    if (rpNote.secs <= 0) { backToReviewMap(rpNote.key); return; }
+    const t = setTimeout(() => setRpNote(n => n && Object.assign({}, n, { secs: n.secs - 1 })), 1000);
+    return () => clearTimeout(t);
+  }, [rpNote]);
 
   // v313 (#3): 跨週收集學生標星的單字——大廳「複習」卡（catView 變動時重算，離開單元後回大廳就更新）
   const reviewWords = useAppMemo(() => (window.collectStarredWords ? window.collectStarredWords(weeks) : []), [weeks, catView, qmProgressVersion, user?.uid]);
@@ -2921,6 +2948,8 @@ function App() {
               items={(week.items || {})[catView.id] || []}
               weekId={weekId}
               cloudProg={qmProgress}
+              reviewRun={rpStep ? { title: rpProg.title, name: rpStep.name, no: rpProg.steps.indexOf(rpStep) + 1, count: rpProg.steps.length, items: rpStep.items,
+                currentId: catView.itemId || null, onOpen: (it) => openReviewItem(it, rpStep), onMap: () => backToReviewMap(null) } : null}
               onBack={() => {
                 // v341: 剛剛是去補做舊週次的作業 → 返回時回到原本那一週
                 if (returnWeekRef.current != null) { setWeekIdx(returnWeekRef.current); returnWeekRef.current = null; }
@@ -3198,8 +3227,19 @@ function App() {
               initial={composeOpen === true ? null : composeOpen}
             />
           )}
+          {rpNote && catView && (
+            <div className="rp-note" role="status">
+              <div className="rp-note-ico">{rpNote.allDone ? '🏆' : rpNote.stepDone ? '🎉' : '✅'}</div>
+              <div className="rp-note-t">
+                <b>{rpNote.allDone ? '期中考總複習全部完成！' : rpNote.stepDone ? `${rpNote.stepName} 過關了！` : '這個練習完成了！'}</b>
+                <span>{rpNote.secs} 秒後回到地圖看進度</span>
+              </div>
+              <button className="rp-btn" onClick={() => backToReviewMap(rpNote.key)}>馬上回地圖</button>
+              <button className="rp-btn rp-btn-ghost" onClick={() => setRpNote(null)}>留在這裡看答案</button>
+            </div>
+          )}
           {rpOpen && rpProg && window.ReviewPathMap && (
-            <window.ReviewPathMap rp={rpProg} isTeacher={isTeacher} onClose={() => setRpOpen(false)} onOpenItem={openReviewItem}
+            <window.ReviewPathMap rp={rpProg} isTeacher={isTeacher} just={rpJust} onClose={() => { setRpOpen(false); setRpJust(null); }} onOpenItem={openReviewItem}
               onEdit={() => { setRpOpen(false); setRpEdit(true); }}/>
           )}
           {rpEdit && isTeacher && window.ReviewPathEditor && (

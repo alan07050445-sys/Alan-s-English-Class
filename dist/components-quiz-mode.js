@@ -1100,7 +1100,8 @@ function QuizModeCategoryView({
   initialItemId,
   cloudProg,
   getNextTask,
-  onOpenTask
+  onOpenTask,
+  reviewRun
 }) {
   var [selectedItem, setSelectedItem] = useQM(null);
   var [phase, setPhase] = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
@@ -1508,7 +1509,7 @@ function QuizModeCategoryView({
     if (wanted && (!selectedItem || selectedItem.id !== wanted.id)) selectItem(wanted);
   }, [initialItemId]);
   return /*#__PURE__*/React.createElement("div", {
-    className: `qm-cat-view qm-cat-enter${hasSelection ? ' has-selection' : ''}${sidebarHidden ? ' sidebar-hidden' : ''}`
+    className: `qm-cat-view qm-cat-enter${reviewRun && !editMode ? ' qm-rv-on' : ''}${hasSelection ? ' has-selection' : ''}${sidebarHidden ? ' sidebar-hidden' : ''}`
   }, !editMode && (sidebarHidden || isMobileView && hasSelection) && /*#__PURE__*/React.createElement("button", {
     className: "qm-sidebar-reopen",
     onClick: () => {
@@ -1528,11 +1529,11 @@ function QuizModeCategoryView({
     className: "qm-sidebar-top"
   }, /*#__PURE__*/React.createElement("button", {
     className: "qm-sidebar-back",
-    onClick: onBack
+    onClick: reviewRun && !editMode ? reviewRun.onMap : onBack
   }, /*#__PURE__*/React.createElement(window.Icon, {
     name: "arrow-left",
     size: 14
-  }), " \u8FD4\u56DE\u5927\u5EF3"), !editMode && /*#__PURE__*/React.createElement("button", {
+  }), " ", reviewRun && !editMode ? '回複習地圖' : '返回大廳'), !editMode && /*#__PURE__*/React.createElement("button", {
     className: "qm-sidebar-collapse",
     onClick: toggleSidebar,
     title: "\u6536\u5408\u55AE\u5143\u5217\u8868\uFF08\u5C08\u5FC3\u4F5C\u7B54\uFF09",
@@ -1542,7 +1543,28 @@ function QuizModeCategoryView({
     size: 14
   }), /*#__PURE__*/React.createElement("span", {
     className: "qm-collapse-lab"
-  }, "\u6536\u5408"))), /*#__PURE__*/React.createElement("div", {
+  }, "\u6536\u5408"))), reviewRun && !editMode && /*#__PURE__*/React.createElement("div", {
+    className: "qm-rv"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "qm-rv-tag"
+  }, "\uD83D\uDDFA\uFE0F ", reviewRun.title), /*#__PURE__*/React.createElement("div", {
+    className: "qm-rv-name"
+  }, /*#__PURE__*/React.createElement("span", null, "\u7B2C ", reviewRun.no, " \u95DC / \u5171 ", reviewRun.count, " \u95DC"), /*#__PURE__*/React.createElement("b", null, reviewRun.name)), /*#__PURE__*/React.createElement("ul", {
+    className: "qm-rv-list"
+  }, reviewRun.items.map(it => /*#__PURE__*/React.createElement("li", {
+    key: it.w + it.c + it.i
+  }, /*#__PURE__*/React.createElement("button", {
+    className: 'qm-rv-item' + (it.done ? ' done' : '') + (it.i === reviewRun.currentId ? ' cur' : ''),
+    disabled: !it.exists,
+    onClick: () => reviewRun.onOpen(it)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "qm-rv-chk",
+    "aria-hidden": "true"
+  }, it.done ? '✓' : ''), /*#__PURE__*/React.createElement("span", {
+    className: "qm-rv-t"
+  }, it.title))))), /*#__PURE__*/React.createElement("div", {
+    className: "qm-rv-hint"
+  }, "\u9019\u4E00\u95DC\u7684\u7DF4\u7FD2\u90FD\u505A\u5B8C\uFF0C\u5C31\u80FD\u56DE\u5730\u5716\u524D\u5F80\u4E0B\u4E00\u95DC")), /*#__PURE__*/React.createElement("div", {
     className: "qm-sidebar-cat"
   }, /*#__PURE__*/React.createElement(CatIcon, {
     catId: cat.id,
