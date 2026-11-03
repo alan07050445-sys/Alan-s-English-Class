@@ -298,7 +298,9 @@ function App() {
       g3: window.loadWeeks(),
       summer: t => window.summerApi(t).loadWeeks()
     });
-    return bestWeekIdx(ord, wks);
+    /* v629：viewOrder（畫面上真正用的順序）在還不確定是老師時是「只看有內容的週」，
+       所以這裡也要用同一份順序算位置——不然拿完整順序算出來的 idx 會指到別週（空的那一週）。 */
+    return bestWeekIdx(visibleWeekOrder(false, ord, wks), wks);
   });
   var [openCat, setOpenCat] = useAppState("vocab");
   var [editMode, setEditMode] = useAppState(false);
@@ -1019,16 +1021,23 @@ function App() {
   var weekId = viewOrder[weekIdx] || viewOrder[0] || "";
   /* v377: 可見週次清單變動時（例：老師身分確認後從「只看有內容的」變成「全部」、
      或某一週剛被放進內容），用「週次 id」把位置定回去，不要莫名跳到別週。 */
-  var lastWeekIdRef = useAppRef('');
+  /* v629（Alan：「iPad 每次登入都跑到 G4 week8，要重刷新才回到這學期的週」）：
+     登入時老師身分是後來才確認的——viewOrder 從「只有內容的週」變成「全部週」，weekIdx 不變就指到別週。
+     舊寫法在同一輪 effect 裡先把 lastWeekIdRef 更新成「已經指錯的那一週」，再用它去校正＝校正不到。
+     → 改成記住「上一份順序＋上一個位置」，順序變了而位置沒動，就用**舊順序裡的那一週**定位。 */
+  var prevOrderRef = useAppRef(viewOrder);
+  var prevIdxRef = useAppRef(weekIdx);
   useAppEffect(() => {
-    if (weekId) lastWeekIdRef.current = weekId;
-  }, [weekId]);
-  useAppEffect(() => {
-    var id = lastWeekIdRef.current;
-    if (!id || viewOrder.length === 0) return;
+    var prevOrder = prevOrderRef.current,
+      prevIdx = prevIdxRef.current;
+    prevOrderRef.current = viewOrder;
+    prevIdxRef.current = weekIdx;
+    if (prevOrder === viewOrder || viewOrder.length === 0 || prevIdx !== weekIdx) return;
+    var id = prevOrder[prevIdx];
+    if (!id) return;
     var i = viewOrder.indexOf(id);
     if (i >= 0 && i !== weekIdx) setWeekIdx(i);
-  }, [viewOrder]);
+  }, [viewOrder, weekIdx]);
   var week = weeks[weekId] || {
     id: weekId,
     label: weekId || "—",

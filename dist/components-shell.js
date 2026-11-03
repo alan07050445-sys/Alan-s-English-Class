@@ -2796,7 +2796,7 @@ function Footer({
 /* ───────── v612 🎃 Trick or Treat（倒數歸零之後，點南瓜領 ⭐100~1000）─────────
    ⚠ 獎品不是這裡抽的——是 data.js treatPrize(uid, 活動) 反算的固定數字（重整不會重抽、改雲端的數字也沒用）。
    ⚠ treat === undefined＝雲端還沒回來；這時候不能跳（領過的孩子會先看到一下南瓜又消失）。
-   ⚠ 老師預覽：活動還沒開始（10/31 前）老師帳號每次載入都會看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。
+   ⚠ 老師預覽：只在活動開始之前（10/31 前；v629 起活動結束後不再預覽）老師帳號每次載入都會看到南瓜；**預覽不寫雲端、不給星星**，獎品是隨機抽給你看的。
      不想看：主控台 localStorage.setItem('alan-treat-preview','0')；活動期間也想預覽：設成 '1'。 */
 function TrickOrTreat({
   user,
@@ -2807,7 +2807,7 @@ function TrickOrTreat({
   var preview = (() => {
     try {
       var f = localStorage.getItem('alan-treat-preview');
-      return !!isTeacher && f !== '0' && (f === '1' || !(window.treatOpenAt && window.treatOpenAt(KEY)));
+      return !!isTeacher && f !== '0' && (f === '1' || (window.treatMsToOpen ? window.treatMsToOpen(KEY) > 0 : !(window.treatOpenAt && window.treatOpenAt(KEY))));
     } catch (e) {
       return false;
     }
