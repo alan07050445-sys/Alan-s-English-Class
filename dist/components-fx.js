@@ -2726,6 +2726,7 @@ var MX_LINES = {
    「我在散步 🚶」連講兩次會讓人以為壞掉。抽到跟上一句一樣就重抽「一次」——
    只重抽一次，桶裡只有 3 句時才不會變成死迴圈。台詞內容一個字都沒改。 */
 var lastSaid = {};
+var mxOkCount = 0;
 /* v401：第二個參數是「現在是哪一隻夥伴」。牠自己有寫這一類的台詞就用牠的，
    沒寫就退回共用的那組（correct/wrong/win/tap 全部共用，不必每隻都重寫一遍）。 */
 /* 🔴 v505（Alan：「把特效跟語音都刪掉，沒有用的功能」）：語音包整組下架，
@@ -3713,6 +3714,10 @@ function MascotLayer() {
           /* v457：正在表演（點一下觸發的大跳／舞蹈）就不要插隊點頭——
              一換動畫，CSS 動畫整個重來，看起來就是「跳到一半掉下來」。 */
           if (runRef.current % 5 === 0) startAct('nod', 620);
+          /* v632：每答對 3 題（累計，答錯不歸零）說一句自己的「答對」台詞。
+             沒有在表演、沒有正在說話才講，不打斷作答。 */
+          mxOkCount++;
+          if (mxOkCount % 3 === 0 && Date.now() >= busyUntil.current) say(mxLine('correct', petRef.current), 2200);
         } else if (type === 'wrong') {
           runRef.current = 0; // 答錯＝連勝歸零
           wrongRunRef.current++;
