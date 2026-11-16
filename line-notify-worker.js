@@ -906,6 +906,7 @@ function playableItem(it) {
   if (t === 'cloze')            return String(it.passage || '').includes('[');
   if (t === 'circle-answer')    return (it.circleQuestions || []).some((q) => q && q.sentence && (q.answer != null || (q.answers || []).length));
   if (t === 'guided-reading')   return (it.grSegments || []).some((s) => s && (String(s.text || '').trim() || (s.img && s.img.url) || (s.questions || []).length));
+  if (t === 'scale-line')       return (it.scaleWords || []).filter((w) => w && w.word).length >= 2;   // v635
   if (t === 'reading-skill')    return true;   // 判斷要 rsBlocks，這裡放寬＝寧可提醒也不要漏
   return false;                                // 認不得的型別一律不催（不要拿沒把握的事去吵家長）
 }

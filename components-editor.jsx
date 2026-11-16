@@ -24,7 +24,7 @@ const TYPE_ZH = {
   flashcard: '單字卡', fillblank: '填空', quiz: '選擇題', spelling: '聽寫',
   'writing-practice': 'AI 造句批改', 'type-answer': '打答案', 'guided-reading': '分段閱讀',
   upload: '上傳作業', 'short-answer': '閱讀簡答', cloze: '段落填空', 'def-match': '配對連線', lesson: '教學卡',
-  'reading-skill': '閱讀技巧',
+  'reading-skill': '閱讀技巧', 'scale-line': '刻度排序',
   essay: '意見文寫作', 'syllable-div': '切音節', 'word-sort': '分類排序',
   'story-mountain': '故事山脈', 'circle-answer': '圈出答案', 'sentence-order': '排順序',   // v462 ①
   exam: '模擬考卷',   // v515 📄
@@ -49,6 +49,7 @@ const TYPE_OPTIONS = [
   { id: "def-match",        label: "配對連線 🔗",       hint: "🔗 配對連線 — 左邊單字、右邊解釋（自動打亂），學生點一點連起來，系統自動批改" },
   { id: "lesson",           label: "教學卡 📘",        hint: "📘 教學卡 — 單元開頭的「先教再練」：這是什麼／什麼時候用／形式表／常見錯誤／老師示範／小試身手" },
   { id: "reading-skill",    label: "閱讀技巧 🔍",       hint: "🔍 閱讀技巧 — 學校會考的 Cause & Effect／Problem & Solution／Sequencing／Compare & Contrast（Venn 圖）。點一下卡片、再點格子放進去，自動批改。" },
+  { id: "scale-line",       label: "刻度排序 📏",       hint: "📏 刻度排序 — 把頻率副詞（Always 100%／Often 60–80%／Never 0%）這類詞，放到 0%～100% 的線上。點卡片再點線，放得大概對就算對（前後 10%）。" },
   { id: "upload",           label: "上傳作業 📎",       hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數" },
 ];
 
@@ -66,7 +67,7 @@ function edDraftHasContent(form) {
   if (!form) return false;
   if (String(form.title || '').trim()) return true;
   return ['grSegments', 'grFinal', 'cards', 'questions', 'pairs', 'saQuestions', 'spellWords', 'defPairs',
-          'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts', 'orderQuestions',
+          'circleQuestions', 'sortWords', 'sdWords', 'scaleWords', 'steps', 'writingPrompts', 'orderQuestions',
           'sections', 'examMood', 'examKicker']   // v515 📄 模擬考卷
     .some(k => Array.isArray(form[k]) && form[k].length > 0) ||
     !!String(form.passage || form.essayPrompt || form.smPrompt || '').trim();
@@ -117,6 +118,7 @@ function edDraftSummary(form) {
   if (n(form.grFinal)) bits.push(`${n(form.grFinal)} 題總結`);
   if (n(form.circleQuestions)) bits.push(`${n(form.circleQuestions)} 題找出來`);
   if (n(form.sortWords)) bits.push(`${n(form.sortWords)} 個分類`);
+  if (n(form.scaleWords)) bits.push(`${n(form.scaleWords)} 個刻度詞`);
   return bits.join('・') || '還沒有題目';
 }
 
@@ -175,7 +177,7 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
     // v261: 點到編輯器外面「不再」直接關閉——出到一半的題目會全部不見（Alan 踩過）。
     // 要離開請按右上 ✕ 或 Cancel。
     <div className="modal-backdrop">
-      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match" || form.type === "reading-skill") ? "wide" : "")} onClick={e => e.stopPropagation()}>
+      <div className={"modal " + ((form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match" || form.type === "reading-skill" || form.type === "scale-line") ? "wide" : "")} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{isNew ? "Add" : "Edit"} <em>item</em></h3>
           <button className="modal-close" aria-label="關閉" onClick={onClose}><Icon name="close" size={14}/></button>
@@ -394,6 +396,11 @@ function EditorModal({ open, draft, weekId, catItems, weekItems, groupOptions, o
             <SyllableDivEditor
               words={form.sdWords || []}
               onChangeWords={ws => update("sdWords", ws)}
+            />
+          ) : form.type === "scale-line" ? (
+            <ScaleLineEditor
+              words={form.scaleWords || []}
+              onChange={ws => update("scaleWords", ws)}
             />
           ) : form.type === "def-match" ? (
             <DefMatchEditor
@@ -5136,6 +5143,80 @@ function GrCropModal({ url, group, onCancel, onConfirm }) {
 
 /* ── SyllableDivEditor ── */
 /* v365: 配對連線編輯器——一行一組「單字 [Tab] 解釋」，跟聽寫一樣可以從 Excel 直接貼 */
+/* v635：刻度排序的編輯器——一列一個詞，可以直接貼整張表（Tab 或空白隔開都行）：
+     Always	總是	100%
+     Often 經常 60–80%
+   最後面的「數字%」或「數字–數字%」會被當成正確範圍。 */
+function slParseLine(line, i) {
+  const m = line.match(/(\d+(?:\.\d+)?)\s*(?:[-–—~～到至]\s*(\d+(?:\.\d+)?))?\s*%?\s*$/);
+  if (!m) return null;
+  const lo = Math.min(100, +m[1]);
+  const hi = m[2] != null ? Math.min(100, +m[2]) : lo;
+  const rem = line.slice(0, m.index).trim();
+  const w = rem.match(/^([\x20-\x7E]+?)\s*([^\x00-\x7E][\s\S]*)?$/);
+  const word = ((w && w[1]) || rem).trim();
+  if (!word) return null;
+  return { id: 'sl' + Date.now() + i, word, zh: ((w && w[2]) || '').trim(), lo: Math.min(lo, hi), hi: Math.max(lo, hi) };
+}
+function ScaleLineEditor({ words, onChange }) {
+  const [importing, setImporting] = useS(false);
+  const [text, setText] = useS('');
+  const [err, setErr] = useS('');
+  const add = () => onChange([...words, { id: 'sl' + Date.now(), word: '', zh: '', lo: 0, hi: 0 }]);
+  const del = (id) => onChange(words.filter(w => w.id !== id));
+  const upd = (id, f, v) => onChange(words.map(w => w.id === id ? { ...w, [f]: v } : w));
+  const doImport = () => {
+    const parsed = text.split('\n').map(l => l.trim()).filter(Boolean).map(slParseLine).filter(Boolean);
+    if (!parsed.length) { setErr('沒有解析到資料——一行一個詞，最後要有百分比（例：Often 經常 60–80%）'); return; }
+    onChange([...words, ...parsed]);
+    setText(''); setImporting(false); setErr('');
+  };
+  return (
+    <div className="field">
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <label className="field-label" style={{margin:0}}>要放在刻度上的詞（{words.length}）</label>
+        <div style={{display:'flex',gap:6}}>
+          <button className="btn ghost" style={{fontSize:11,padding:'5px 10px'}} onClick={() => { setImporting(v => !v); setErr(''); }}>
+            {importing ? '✕ 取消' : '⬇ 貼上整張表'}
+          </button>
+          <button className="btn primary" style={{fontSize:11,padding:'5px 12px'}} onClick={add}>+ Add</button>
+        </div>
+      </div>
+      {importing && (
+        <div style={{marginBottom:12,padding:'12px 14px',border:'1px solid var(--border)',borderRadius:6,background:'var(--bg-paper,#f9f7f2)'}}>
+          <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--ink-muted)',marginBottom:8}}>
+            一行一個詞：<code>英文 [Tab或空白] 中文 [Tab或空白] 百分比</code>，百分比可以是 <code>100%</code> 或範圍 <code>60–80%</code>
+          </div>
+          <textarea value={text} onChange={e => { setText(e.target.value); setErr(''); }} rows={9}
+            placeholder={'Always\t總是\t100%\nUsually\t通常\t80–90%\nOften\t經常\t60–80%\nNever\t從不\t0%'}
+            style={{width:'100%',padding:'9px 12px',border:'1px solid var(--border)',background:'var(--bg)',color:'var(--ink)',borderRadius:2,fontSize:12,fontFamily:'var(--mono)',resize:'vertical',boxSizing:'border-box',lineHeight:1.6}}/>
+          {err && <div style={{color:'#dc2626',fontSize:12,marginTop:4}}>{err}</div>}
+          <button className="btn primary" style={{marginTop:8,fontSize:12}} onClick={doImport}>加入清單</button>
+        </div>
+      )}
+      {words.length === 0 ? (
+        <div className="field-help">還沒有詞——按「⬇ 貼上整張表」把頻率副詞整張貼進來，或「+ Add」一個一個打。至少要 2 個。</div>
+      ) : (
+        <div className="dme-list">
+          {words.map((w, i) => (
+            <div key={w.id} className="dme-row">
+              <span className="dme-n">{i + 1}</span>
+              <input className="dme-in dme-word" value={w.word} placeholder="英文 word" onChange={e => upd(w.id, 'word', e.target.value)}/>
+              <input className="dme-in" style={{maxWidth:90}} value={w.zh || ''} placeholder="中文" onChange={e => upd(w.id, 'zh', e.target.value)}/>
+              <input className="dme-in" style={{maxWidth:56}} type="number" min="0" max="100" value={w.lo} onChange={e => upd(w.id, 'lo', e.target.value === '' ? '' : +e.target.value)}/>
+              <span className="dme-link">~</span>
+              <input className="dme-in" style={{maxWidth:56}} type="number" min="0" max="100" value={w.hi} onChange={e => upd(w.id, 'hi', e.target.value === '' ? '' : +e.target.value)}/>
+              <span className="dme-link">%</span>
+              <div className="dme-tools"><button className="dme-del" onClick={() => del(w.id)} title="刪除">✕</button></div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="field-help">範圍填「最低 ~ 最高」，單一數字兩格填一樣的（例：Always 100 ~ 100）。學生放在範圍前後 10% 以內都算對；卡片順序會自動打亂。</div>
+    </div>
+  );
+}
+
 function DefMatchEditor({ pairs, onChangePairs }) {
   const [importing, setImporting] = useS(false);
   const [importText, setImportText] = useS('');

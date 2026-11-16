@@ -213,6 +213,7 @@ function getQuizItems(items) {
     (item.type === 'sentence-order'   && (item.orderQuestions || []).some(q => (q.words || []).length >= 3)) ||   // v462 ①
     (item.type === 'def-match'        && (item.defPairs || []).filter(p => p && p.word && p.def).length >= 2) ||
     (item.type === 'reading-skill'    && rsChipTotal(item) >= 2) ||   // v386: 閱讀技巧
+    (item.type === 'scale-line'       && slWords(item).length >= 2) ||   // v635: 刻度排序
     (item.type === 'essay'            && !!(item.essayPrompt || '').trim()) ||
     (item.type === 'story-mountain'   && !!(item.smPrompt || item.smPassage || '')) ||
     (item.type === 'cloze'            && (item.passage || '').includes('[')) ||
@@ -309,14 +310,14 @@ const QM_TYPE_ZH = {
   cloze: '克漏字', 'circle-answer': '圈選', 'syllable-div': '音節切分',
   'word-sort': '單字分類', 'sentence-order': '排順序', essay: '寫作', 'story-mountain': '故事山',
   'writing-practice': '造句', upload: '上傳作業', 'guided-reading': '分段閱讀',
-  'def-match': '配對連線', 'reading-skill': '閱讀技巧', exam: '模擬考卷',
+  'def-match': '配對連線', 'reading-skill': '閱讀技巧', 'scale-line': '刻度排序', exam: '模擬考卷',
 };
 const QM_TYPE_ICO = {
   lesson: '📘', flashcard: '🃏', spelling: '🔊', fillblank: '✏️', quiz: '📝', 'vocab-quiz': '📚',
   'type-answer': '⌨', 'short-answer': '📖', cloze: '📝', 'circle-answer': '⭕',
   'syllable-div': '✂️', 'word-sort': '🗂', 'sentence-order': '🧩', essay: '✍', 'story-mountain': '🏔',
   'writing-practice': '✍', upload: '📎', 'guided-reading': '📖',
-  'def-match': '🔗', 'reading-skill': '🔍', exam: '📄',
+  'def-match': '🔗', 'reading-skill': '🔍', 'scale-line': '📏', exam: '📄',
 };
 /* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
    任務清單與學生側欄都按這個順序排；老師編輯模式維持原始順序 */
@@ -325,7 +326,7 @@ const QM_TYPE_ORDER = {
   flashcard: 0,
   'vocab-quiz': 1, quiz: 1,
   'def-match': 1.5,
-  fillblank: 2, cloze: 3, 'guided-reading': 3, 'reading-skill': 3.5, 'circle-answer': 4,
+  fillblank: 2, cloze: 3, 'guided-reading': 3, 'reading-skill': 3.5, 'scale-line': 1.5, 'circle-answer': 4,
   spelling: 5, 'type-answer': 5, 'syllable-div': 5, 'word-sort': 5, 'sentence-order': 5,
   'short-answer': 6, 'writing-practice': 6,
   essay: 7, 'story-mountain': 7,
@@ -513,6 +514,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'sentence-order') return (item.orderQuestions || []).length;   // v462 ①
   if (item.type === 'def-match')   return (item.defPairs || []).filter(p => p && p.word && p.def).length;
   if (item.type === 'reading-skill') return rsChipTotal(item);   // v386
+  if (item.type === 'scale-line')    return slWords(item).length;   // v635
   if (item.type === 'guided-reading' && grTotalQ(item) === 0) return Math.max(1, grSegs(item).length); // v387: 純閱讀
   /* v515：考卷的「幾題」＝有幾個**自動計分**的大題。
      ⚠ 不要用小題總數——那會讓側欄寫「60 題」，看起來像做不完。 */
@@ -1358,7 +1360,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             const isDefMatch     = item.type === 'def-match'; // v366
             const isLesson       = item.type === 'lesson';       // v386: v383 漏掉這一行 → 教學卡顯示 0 題、整列變灰點不進去
             const isReadSkill    = item.type === 'reading-skill'; // v386
-            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0)) || isSyllableDiv || isWordSort || isSentOrder || isExam || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || (isFlashcard && (item.cards || []).length > 0);
+            const hasQuiz  = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || (isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0)) || isSyllableDiv || isWordSort || isSentOrder || isExam || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || item.type === 'scale-line' || (isFlashcard && (item.cards || []).length > 0);
             const hw       = (homework || {})[item.id]; // { dueDate }
             const isMainMission = !editMode && (
               explicitMainIds.has(item.id) ||
@@ -1397,7 +1399,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
                       </>
                     ) : (
                       <>
-                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs||[]).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs||[]).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs||[]).length} 題句型轉換` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isExam ? `📄 ${(window.examTotals ? window.examTotals(item).total : 0)} 分 · ${(item.sections||[]).length} 大題` : isSentOrder ? `🧩 ${(item.orderQuestions||[]).length} 句排順序` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`}
+                        {isFlashcard ? `🃏 ${(item.cards||[]).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? (grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀`) : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? (item.variant === 'translate' ? `🔤 ${(item.pairs||[]).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs||[]).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs||[]).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs||[]).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs||[]).length} 題句型轉換` : `⌨ ${(item.pairs||[]).length} 個單字`) : isSpelling ? `🔊 ${(item.spellWords||[]).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions||[]).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords||[]).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords||[]).length} 個單字` : isExam ? `📄 ${(window.examTotals ? window.examTotals(item).total : 0)} 分 · ${(item.sections||[]).length} 大題` : isSentOrder ? `🧩 ${(item.orderQuestions||[]).length} 句排順序` : isCloze ? `📝 ${((item.passage||'').match(/\[[^\]]+\]/g)||[]).length} 格` : isCircle ? `⭕ ${(item.circleQuestions||[]).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? (Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check||[]).length} 題小試身手`) : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : item.type === 'scale-line' ? `📏 ${slWords(item).length} 個詞放刻度` : `${totalQ} 題`}
                         {scorePct !== null && !isWriting && <span className="qm-unit-score-badge">{scorePct}%</span>}
                         {scorePct !== null && !isWriting && <StarMastery pct={scorePct}/>}
                       </>
@@ -1885,6 +1887,11 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
             item={selectedItem} progressKey={`${weekId}_${selectedItem.id}`} onBack={() => setPhase('intro')} />
         ) : selectedItem?.type === 'reading-skill' && phase === 'intro' ? (
           <ReadingSkillIntro item={selectedItem} prog={qmProg[`${weekId}_${selectedItem.id}`]} onStart={() => setPhase('quiz')} />
+        ) : selectedItem?.type === 'scale-line' && phase === 'quiz' ? (
+          <ScaleLinePlayer onBackToTasks={onBackToTasksShared} onNextTask={onNextTask} key={playerKey}
+            item={selectedItem} progressKey={`${weekId}_${selectedItem.id}`} onBack={() => setPhase('intro')} />
+        ) : selectedItem?.type === 'scale-line' && phase === 'intro' ? (
+          <ScaleLineIntro item={selectedItem} prog={qmProg[`${weekId}_${selectedItem.id}`]} onStart={() => setPhase('quiz')} />
         ) : selectedItem?.type === 'def-match' && phase === 'quiz' ? (
           <DefMatchPlayer
             onBackToTasks={onBackToTasksShared}
@@ -10270,4 +10277,276 @@ function ReadingSkillPlayer({ item, progressKey, onBack, onBackToTasks, onNextTa
   );
 }
 
-Object.assign(window, { ExamPlayer, TeacherLog, ReadingSkillPlayer, ReadingSkillIntro, rsBlocks, rsChipTotal, QmPassageDrawer, LessonPlayer, GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, qmItemRank, QM_TYPE_ORDER, qmGroupByArticle });
+/* ══════════════════════════════════════════════════════════════════════════
+   v635：刻度排序 scale-line
+   ──────────────────────────────────────────────────────────────────────────
+   頻率副詞（Always 100%／Often 60–80%／Never 0%）這種「放在 0%～100% 的哪裡」的題目。
+   item.scaleWords = [{ id, word, zh, lo, hi }]（lo~hi＝正確範圍，單一數字就 lo=hi）。
+   ⚠ 判分放寬 SL_TOL：手指在 iPad 上點不到那麼準，而且 Often／Frequently 本來就重疊。
+   ⚠ 一律「點卡片、再點橫條」，不用拖曳（理由同閱讀技巧）。
+   ══════════════════════════════════════════════════════════════════════════ */
+const SL_TOL = 10;
+function slWords(item) {
+  const clamp = (n) => Math.max(0, Math.min(100, n));
+  return ((item && item.scaleWords) || [])
+    .map((w, i) => {
+      if (!w) return null;
+      let lo = Number(w.lo), hi = (w.hi === '' || w.hi == null) ? lo : Number(w.hi);
+      if (!isFinite(lo) || !isFinite(hi)) return null;
+      lo = clamp(lo); hi = clamp(hi);
+      if (lo > hi) { const t = lo; lo = hi; hi = t; }
+      const word = String(w.word || '').trim();
+      return word ? { id: w.id || ('sl' + i), word, zh: String(w.zh || '').trim(), lo, hi } : null;
+    })
+    .filter(Boolean);
+}
+const slRange = (w) => (w.lo === w.hi ? `${w.lo}%` : `${w.lo}–${w.hi}%`);
+const slOk = (w, pct) => pct >= w.lo - SL_TOL && pct <= w.hi + SL_TOL;
+
+function ScaleLineIntro({ item, prog, onStart }) {
+  const ws = slWords(item);
+  const done = prog && prog.done;
+  const pct = (prog && prog.score != null && prog.total) ? Math.round(prog.score / prog.total * 100) : null;
+  return (
+    <div className="qm-intro">
+      <div className="qm-intro-icon">📏</div>
+      <div className="qm-intro-title">{item.title}</div>
+      <div className="qm-intro-meta">{ws.length} 個詞 · 放到 0%～100% 的刻度上</div>
+      <div className="qm-intro-rules">
+        <div className="qm-intro-rule-row"><span>👆</span><span>點一張單字卡，再點上面那條線——放在你覺得「大概幾 %」的地方</span></div>
+        <div className="qm-intro-rule-row"><span>🎯</span><span>不用放得很準，<b>大概對就算對</b>；放錯的會退回來重想</span></div>
+        <div className="qm-intro-rule-row"><span>💯</span><span>分數只算<b>第一次檢查</b>放對幾張</span></div>
+      </div>
+      {done && pct != null && <div className="qm-intro-done">✓ 上次 {pct} 分</div>}
+      <div className="qm-intro-btns">
+        <button className="qm-btn primary" onClick={onStart}>開始練習 · Start →</button>
+      </div>
+    </div>
+  );
+}
+
+function ScaleLinePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
+  const words = useQMM(() => slWords(item), [item]);
+  const total = words.length;
+  const [place, setPlace] = useQM({});     // id -> 0~100
+  const [lock, setLock]   = useQM({});
+  const [sel, setSel]     = useQM(null);
+  const [checks, setChecks] = useQM(0);
+  const [bad, setBad]     = useQM([]);
+  const [revealed, setRevealed] = useQM(false);
+  const [say, setSay]     = useQM(false);
+  const [done, setDone]   = useQM(false);
+  const [shake, setShake] = useQM(0);
+  const bankRef = React.useRef({ correct: 0, wrong: [] });
+  const bankedRef = React.useRef(false);
+  const barRef = React.useRef(null);
+  useQME(() => { bankRef.current = { correct: 0, wrong: [] }; bankedRef.current = false; }, [item && item.id]);
+
+  const key = words.map(w => w.id).join('|');
+  const order = useQMM(() => shuffleArr(words.map(w => w.id)), [key]);
+  const wOf = useQMM(() => { const m = {}; words.forEach(w => { m[w.id] = w; }); return m; }, [key, words]);
+
+  const tray = order.filter(id => place[id] == null);
+  const lockedN = order.filter(id => lock[id]).length;
+  const allRight = order.length > 0 && order.every(id => lock[id]);
+
+  const pickChip = (id) => {
+    if (lock[id]) return;
+    if (place[id] != null) {
+      setPlace(p => { const n = { ...p }; delete n[id]; return n; });
+      setSel(id);
+    } else setSel(s => (s === id ? null : id));
+    setBad(b => b.filter(x => x !== id));
+    if (say && wOf[id]) { try { (window.speakTTS || window.speakText)(wOf[id].word, { lang: 'en-US', rate: 0.85 }); } catch (e) {} }
+  };
+
+  const tapBar = (e) => {
+    if (!sel || !barRef.current) return;
+    const r = barRef.current.getBoundingClientRect();
+    if (!r.width) return;
+    const pct = Math.max(0, Math.min(100, Math.round((e.clientX - r.left) / r.width * 100)));
+    setPlace(p => ({ ...p, [sel]: pct }));
+    setSel(null);
+  };
+
+  const check = () => {
+    const right = order.filter(id => place[id] != null && slOk(wOf[id], place[id]));
+    const wrong = order.filter(id => right.indexOf(id) < 0);
+    if (!bankedRef.current) {
+      bankedRef.current = true;
+      bankRef.current = {
+        correct: bankRef.current.correct + right.length,
+        wrong: bankRef.current.wrong.concat(wrong.map(id => ({ q: wOf[id].word, answer: `約 ${slRange(wOf[id])}` }))),
+      };
+    }
+    setChecks(c => c + 1);
+    setLock(l => { const n = { ...l }; right.forEach(id => { n[id] = true; }); return n; });
+    setBad(wrong);
+    setPlace(p => { const n = { ...p }; wrong.forEach(id => { delete n[id]; }); return n; });
+    setSel(null);
+    if (wrong.length) { setShake(s => s + 1); if (window.playSound) window.playSound('wrong'); }
+    else if (window.playSound) window.playSound('correct');
+  };
+
+  const reveal = () => {
+    const n = {}; const l = {};
+    order.forEach(id => { n[id] = Math.round((wOf[id].lo + wOf[id].hi) / 2); l[id] = true; });
+    setPlace(n); setLock(l); setBad([]); setSel(null); setRevealed(true);
+  };
+
+  const finish = () => {
+    const b = bankRef.current;
+    saveQuizModeCompletion(progressKey, item, { doneCount: total, score: b.correct, total: total || 1, wrongQuestions: b.wrong });
+    setDone(true);
+  };
+  const restart = () => {
+    bankRef.current = { correct: 0, wrong: [] }; bankedRef.current = false;
+    setPlace({}); setLock({}); setSel(null); setChecks(0); setBad([]); setRevealed(false); setDone(false); setShake(0);
+  };
+
+  if (!total) {
+    return (
+      <div className="qm-player-shell rs-shell">
+        <div className="qm-player-head">
+          <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        </div>
+        <div className="rs-empty">這個單元還沒有題目，請老師補上。</div>
+      </div>
+    );
+  }
+
+  if (done) {
+    const b = bankRef.current;
+    const pct = Math.round(b.correct / Math.max(1, total) * 100);
+    return (
+      <QmCelebrate pct={pct}>
+        <div className="qm-result">
+          <div className="qm-result-emoji">{pct === 100 ? '🏆' : pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪'}</div>
+          <div className="qm-result-cat-title">{item.title}</div>
+          <div className="qm-result-score">
+            <span className="qm-result-num">{b.correct}</span>
+            <span className="qm-result-denom"> / {total}</span>
+          </div>
+          <div className="qm-result-pct">第一次就放對 {pct}%</div>
+          {b.wrong.length > 0 && (
+            <div className="rs-review">
+              <div className="rs-review-head">✗ 這 {b.wrong.length} 個第一次放錯了——正確位置是：</div>
+              {b.wrong.map((m, i) => (
+                <div key={i} className="rs-review-row"><b>{m.q}</b><span className="rs-review-eq">→</span><span>{m.answer}</span></div>
+              ))}
+            </div>
+          )}
+          <div className="qm-result-btns">
+            <button className="qm-btn secondary" onClick={restart}>再試一次</button>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
+          </div>
+        </div>
+      </QmCelebrate>
+    );
+  }
+
+  /* 已放的卡片：照位置排序，擠在一起的錯開到不同層（避免字疊字） */
+  const placed = order.filter(id => place[id] != null).sort((a, b) => place[a] - place[b]);
+  const laneLast = [];
+  const laneOf = {};
+  placed.forEach(id => {
+    let l = 0;
+    while (laneLast[l] != null && place[id] - laneLast[l] < 17) l++;
+    laneLast[l] = place[id]; laneOf[id] = l;
+  });
+  const lanes = Math.max(1, laneLast.length);
+  const ticks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+  const chipBtn = (id) => (
+    <button key={id} className={'rs-chip' + (sel === id ? ' sel' : '')} onClick={() => pickChip(id)}>
+      <span className="rs-chip-tx">{wOf[id].word}</span>
+    </button>
+  );
+
+  return (
+    <div className="qm-player-shell rs-shell">
+      <div className="qm-player-head">
+        <button className="qm-back-btn" aria-label="返回單元列表" onClick={onBack}><window.Icon name="close" size={16}/></button>
+        <div className="qm-player-bar-wrap">
+          <div className="qm-player-bar"><div className="qm-player-fill" style={{ width: (lockedN / Math.max(1, total) * 100) + '%' }}/></div>
+        </div>
+        <span className="qm-player-counter">{lockedN} / {total}</span>
+      </div>
+
+      <div className="rs-head">
+        <div className="rs-head-main">
+          <div className="rs-head-en">📏 {item.title}</div>
+          <div className="rs-head-zh">點一張卡片，再點線上的位置：左邊 0%（完全沒有）→ 右邊 100%（每一次）</div>
+        </div>
+        <div className="rs-head-btns">
+          <button className={'rs-mini' + (say ? ' on' : '')} onClick={() => setSay(v => !v)} title="選卡片時唸出來">🔊</button>
+        </div>
+      </div>
+
+      <div className={'rs-board sl-board' + (shake ? ' k' + (shake % 2) : '')}>
+        <div className="sl-wrap" style={{ '--sl-lanes': lanes }}>
+          <div className="sl-pins" style={{ height: lanes * 40 + 6 }}>
+            {placed.map(id => {
+              const w = wOf[id];
+              return (
+                <button key={id}
+                  className={'sl-pin' + (lock[id] ? ' locked' : '') + (sel === id ? ' sel' : '')}
+                  style={{ left: place[id] + '%', bottom: laneOf[id] * 40 }}
+                  disabled={!!lock[id]} onClick={() => pickChip(id)}>
+                  <span className="sl-pin-w">{lock[id] ? '✓ ' : ''}{w.word}</span>
+                  {lock[id] && <span className="sl-pin-r">{slRange(w)}</span>}
+                  <i className="sl-pin-stem"/>
+                </button>
+              );
+            })}
+          </div>
+          <div ref={barRef} className={'sl-bar' + (sel ? ' drop' : '')} onClick={tapBar}>
+            {ticks.map(t => <i key={t} className={'sl-tick' + (t % 50 === 0 ? ' big' : '')} style={{ left: t + '%' }}/>)}
+            {!placed.length && <span className="sl-ph">{sel ? '點這條線放進來' : '先點下面一張卡片'}</span>}
+          </div>
+          <div className="sl-labels">
+            {[0, 25, 50, 75, 100].map(t => <span key={t} style={{ left: t + '%' }}>{t}%</span>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="rs-tray-wrap">
+        <div className="rs-tray-lab">
+          {tray.length ? `還有 ${tray.length} 張要放` : (allRight ? '全部放對了！' : '都放完了，按下面檢查答案')}
+        </div>
+        <div className="rs-tray">
+          {tray.map(id => chipBtn(id))}
+          {!tray.length && <span className="rs-tray-empty">✓ 卡片都放完了</span>}
+        </div>
+      </div>
+
+      {checks > 0 && !allRight && (
+        <div className="rs-fb bad">
+          <b>{lockedN} 張放對了</b>，還有 {order.length - lockedN} 張退回來了——再想想看。
+          {bad.length > 0 && (
+            <ul className="rs-fb-hints">
+              {bad.map(id => <li key={id}><b>{wOf[id].word}</b>{wOf[id].zh ? ` — ${wOf[id].zh}` : ''}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+      {allRight && (
+        <div className="rs-fb good">
+          {revealed ? '答案在線上了，看一次再繼續。' : (checks === 1 ? '🎉 一次就全對！' : '✓ 全部放對了！')}
+        </div>
+      )}
+
+      <div className="rs-foot">
+        {!allRight && (
+          <button className="qm-btn primary" disabled={tray.length > 0} onClick={check}>
+            {tray.length > 0 ? `還有 ${tray.length} 張沒放` : '檢查答案'}
+          </button>
+        )}
+        {!allRight && checks >= 2 && <button className="qm-btn secondary" onClick={reveal}>看答案</button>}
+        {allRight && <button className="qm-btn primary" onClick={finish}>完成 · 看成績 →</button>}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { ExamPlayer, TeacherLog, ReadingSkillPlayer, ScaleLinePlayer, ScaleLineIntro, slWords, ReadingSkillIntro, rsBlocks, rsChipTotal, QmPassageDrawer, LessonPlayer, GroupResViewer, GroupResEditor, DefMatchPlayer, DefMatchIntro, SpellingPlayer, SpellingIntro, QuizModeBlocks, QuizModeCategoryView, QuizModePlayer, getItemQuestions, getQuizItems, generateListeningQuestions, loadQMProg, getQuizItemTotal, CAT_ICONS, WritingPracticePlayer, TypeAnswerPlayer, ShortAnswerPlayer, SyllableDivPlayer, WordSortPlayer, EssayPlayer, StoryMountainPlayer, CircleAnswerPlayer, CircleAnswerIntro, ClozePlayer, ClozeIntro, UploadHomeworkPlayer, GuidedReadingPlayer, GuidedReadingIntro, WeeklyContactBook, TodayTasks, GrowthReport, GrowthInlineCard, WeekSummaryTiles, WeekHero, qmTypeRank, qmItemRank, QM_TYPE_ORDER, qmGroupByArticle });

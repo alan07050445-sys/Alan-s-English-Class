@@ -41,6 +41,7 @@ var TYPE_ZH = {
   'def-match': '配對連線',
   lesson: '教學卡',
   'reading-skill': '閱讀技巧',
+  'scale-line': '刻度排序',
   essay: '意見文寫作',
   'syllable-div': '切音節',
   'word-sort': '分類排序',
@@ -127,6 +128,10 @@ var TYPE_OPTIONS = [{
   label: "閱讀技巧 🔍",
   hint: "🔍 閱讀技巧 — 學校會考的 Cause & Effect／Problem & Solution／Sequencing／Compare & Contrast（Venn 圖）。點一下卡片、再點格子放進去，自動批改。"
 }, {
+  id: "scale-line",
+  label: "刻度排序 📏",
+  hint: "📏 刻度排序 — 把頻率副詞（Always 100%／Often 60–80%／Never 0%）這類詞，放到 0%～100% 的線上。點卡片再點線，放得大概對就算對（前後 10%）。"
+}, {
   id: "upload",
   label: "上傳作業 📎",
   hint: "📎 紙本作業拍照上傳 — 學生拍照繳交（可多張），老師在後台看照片打分數"
@@ -145,7 +150,7 @@ var edDraftKey = (weekId, id) => ED_DRAFT_PREFIX + (weekId || '?') + ':' + (id |
 function edDraftHasContent(form) {
   if (!form) return false;
   if (String(form.title || '').trim()) return true;
-  return ['grSegments', 'grFinal', 'cards', 'questions', 'pairs', 'saQuestions', 'spellWords', 'defPairs', 'circleQuestions', 'sortWords', 'sdWords', 'steps', 'writingPrompts', 'orderQuestions', 'sections', 'examMood', 'examKicker'] // v515 📄 模擬考卷
+  return ['grSegments', 'grFinal', 'cards', 'questions', 'pairs', 'saQuestions', 'spellWords', 'defPairs', 'circleQuestions', 'sortWords', 'sdWords', 'scaleWords', 'steps', 'writingPrompts', 'orderQuestions', 'sections', 'examMood', 'examKicker'] // v515 📄 模擬考卷
   .some(k => Array.isArray(form[k]) && form[k].length > 0) || !!String(form.passage || form.essayPrompt || form.smPrompt || '').trim();
 }
 function edDraftSave(weekId, form) {
@@ -215,6 +220,7 @@ function edDraftSummary(form) {
   if (n(form.grFinal)) bits.push(`${n(form.grFinal)} 題總結`);
   if (n(form.circleQuestions)) bits.push(`${n(form.circleQuestions)} 題找出來`);
   if (n(form.sortWords)) bits.push(`${n(form.sortWords)} 個分類`);
+  if (n(form.scaleWords)) bits.push(`${n(form.scaleWords)} 個刻度詞`);
   return bits.join('・') || '還沒有題目';
 }
 function EditorModal({
@@ -289,7 +295,7 @@ function EditorModal({
     React.createElement("div", {
       className: "modal-backdrop"
     }, /*#__PURE__*/React.createElement("div", {
-      className: "modal " + (form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match" || form.type === "reading-skill" ? "wide" : ""),
+      className: "modal " + (form.type === "quiz" || form.type === "flashcard" || form.type === "fillblank" || form.type === "type-answer" || form.type === "spelling" || form.type === "cloze" || form.type === "circle-answer" || form.type === "guided-reading" || form.type === "def-match" || form.type === "reading-skill" || form.type === "scale-line" ? "wide" : ""),
       onClick: e => e.stopPropagation()
     }, /*#__PURE__*/React.createElement("div", {
       className: "modal-head"
@@ -512,6 +518,9 @@ function EditorModal({
     }) : form.type === "syllable-div" ? /*#__PURE__*/React.createElement(SyllableDivEditor, {
       words: form.sdWords || [],
       onChangeWords: ws => update("sdWords", ws)
+    }) : form.type === "scale-line" ? /*#__PURE__*/React.createElement(ScaleLineEditor, {
+      words: form.scaleWords || [],
+      onChange: ws => update("scaleWords", ws)
     }) : form.type === "def-match" ? /*#__PURE__*/React.createElement(DefMatchEditor, {
       pairs: form.defPairs || [],
       onChangePairs: ps => update("defPairs", ps)
@@ -7673,6 +7682,198 @@ function GrCropModal({
 
 /* ── SyllableDivEditor ── */
 /* v365: 配對連線編輯器——一行一組「單字 [Tab] 解釋」，跟聽寫一樣可以從 Excel 直接貼 */
+/* v635：刻度排序的編輯器——一列一個詞，可以直接貼整張表（Tab 或空白隔開都行）：
+     Always	總是	100%
+     Often 經常 60–80%
+   最後面的「數字%」或「數字–數字%」會被當成正確範圍。 */
+function slParseLine(line, i) {
+  var m = line.match(/(\d+(?:\.\d+)?)\s*(?:[-–—~～到至]\s*(\d+(?:\.\d+)?))?\s*%?\s*$/);
+  if (!m) return null;
+  var lo = Math.min(100, +m[1]);
+  var hi = m[2] != null ? Math.min(100, +m[2]) : lo;
+  var rem = line.slice(0, m.index).trim();
+  var w = rem.match(/^([\x20-\x7E]+?)\s*([^\x00-\x7E][\s\S]*)?$/);
+  var word = (w && w[1] || rem).trim();
+  if (!word) return null;
+  return {
+    id: 'sl' + Date.now() + i,
+    word,
+    zh: (w && w[2] || '').trim(),
+    lo: Math.min(lo, hi),
+    hi: Math.max(lo, hi)
+  };
+}
+function ScaleLineEditor({
+  words,
+  onChange
+}) {
+  var [importing, setImporting] = useS(false);
+  var [text, setText] = useS('');
+  var [err, setErr] = useS('');
+  var add = () => onChange([...words, {
+    id: 'sl' + Date.now(),
+    word: '',
+    zh: '',
+    lo: 0,
+    hi: 0
+  }]);
+  var del = id => onChange(words.filter(w => w.id !== id));
+  var upd = (id, f, v) => onChange(words.map(w => w.id === id ? {
+    ...w,
+    [f]: v
+  } : w));
+  var doImport = () => {
+    var parsed = text.split('\n').map(l => l.trim()).filter(Boolean).map(slParseLine).filter(Boolean);
+    if (!parsed.length) {
+      setErr('沒有解析到資料——一行一個詞，最後要有百分比（例：Often 經常 60–80%）');
+      return;
+    }
+    onChange([...words, ...parsed]);
+    setText('');
+    setImporting(false);
+    setErr('');
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "field-label",
+    style: {
+      margin: 0
+    }
+  }, "\u8981\u653E\u5728\u523B\u5EA6\u4E0A\u7684\u8A5E\uFF08", words.length, "\uFF09"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    style: {
+      fontSize: 11,
+      padding: '5px 10px'
+    },
+    onClick: () => {
+      setImporting(v => !v);
+      setErr('');
+    }
+  }, importing ? '✕ 取消' : '⬇ 貼上整張表'), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    style: {
+      fontSize: 11,
+      padding: '5px 12px'
+    },
+    onClick: add
+  }, "+ Add"))), importing && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12,
+      padding: '12px 14px',
+      border: '1px solid var(--border)',
+      borderRadius: 6,
+      background: 'var(--bg-paper,#f9f7f2)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontFamily: 'var(--mono)',
+      color: 'var(--ink-muted)',
+      marginBottom: 8
+    }
+  }, "\u4E00\u884C\u4E00\u500B\u8A5E\uFF1A", /*#__PURE__*/React.createElement("code", null, "\u82F1\u6587 [Tab\u6216\u7A7A\u767D] \u4E2D\u6587 [Tab\u6216\u7A7A\u767D] \u767E\u5206\u6BD4"), "\uFF0C\u767E\u5206\u6BD4\u53EF\u4EE5\u662F ", /*#__PURE__*/React.createElement("code", null, "100%"), " \u6216\u7BC4\u570D ", /*#__PURE__*/React.createElement("code", null, "60\u201380%")), /*#__PURE__*/React.createElement("textarea", {
+    value: text,
+    onChange: e => {
+      setText(e.target.value);
+      setErr('');
+    },
+    rows: 9,
+    placeholder: 'Always\t總是\t100%\nUsually\t通常\t80–90%\nOften\t經常\t60–80%\nNever\t從不\t0%',
+    style: {
+      width: '100%',
+      padding: '9px 12px',
+      border: '1px solid var(--border)',
+      background: 'var(--bg)',
+      color: 'var(--ink)',
+      borderRadius: 2,
+      fontSize: 12,
+      fontFamily: 'var(--mono)',
+      resize: 'vertical',
+      boxSizing: 'border-box',
+      lineHeight: 1.6
+    }
+  }), err && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: '#dc2626',
+      fontSize: 12,
+      marginTop: 4
+    }
+  }, err), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    style: {
+      marginTop: 8,
+      fontSize: 12
+    },
+    onClick: doImport
+  }, "\u52A0\u5165\u6E05\u55AE")), words.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u9084\u6C92\u6709\u8A5E\u2014\u2014\u6309\u300C\u2B07 \u8CBC\u4E0A\u6574\u5F35\u8868\u300D\u628A\u983B\u7387\u526F\u8A5E\u6574\u5F35\u8CBC\u9032\u4F86\uFF0C\u6216\u300C+ Add\u300D\u4E00\u500B\u4E00\u500B\u6253\u3002\u81F3\u5C11\u8981 2 \u500B\u3002") : /*#__PURE__*/React.createElement("div", {
+    className: "dme-list"
+  }, words.map((w, i) => /*#__PURE__*/React.createElement("div", {
+    key: w.id,
+    className: "dme-row"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "dme-n"
+  }, i + 1), /*#__PURE__*/React.createElement("input", {
+    className: "dme-in dme-word",
+    value: w.word,
+    placeholder: "\u82F1\u6587 word",
+    onChange: e => upd(w.id, 'word', e.target.value)
+  }), /*#__PURE__*/React.createElement("input", {
+    className: "dme-in",
+    style: {
+      maxWidth: 90
+    },
+    value: w.zh || '',
+    placeholder: "\u4E2D\u6587",
+    onChange: e => upd(w.id, 'zh', e.target.value)
+  }), /*#__PURE__*/React.createElement("input", {
+    className: "dme-in",
+    style: {
+      maxWidth: 56
+    },
+    type: "number",
+    min: "0",
+    max: "100",
+    value: w.lo,
+    onChange: e => upd(w.id, 'lo', e.target.value === '' ? '' : +e.target.value)
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "dme-link"
+  }, "~"), /*#__PURE__*/React.createElement("input", {
+    className: "dme-in",
+    style: {
+      maxWidth: 56
+    },
+    type: "number",
+    min: "0",
+    max: "100",
+    value: w.hi,
+    onChange: e => upd(w.id, 'hi', e.target.value === '' ? '' : +e.target.value)
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "dme-link"
+  }, "%"), /*#__PURE__*/React.createElement("div", {
+    className: "dme-tools"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "dme-del",
+    onClick: () => del(w.id),
+    title: "\u522A\u9664"
+  }, "\u2715"))))), /*#__PURE__*/React.createElement("div", {
+    className: "field-help"
+  }, "\u7BC4\u570D\u586B\u300C\u6700\u4F4E ~ \u6700\u9AD8\u300D\uFF0C\u55AE\u4E00\u6578\u5B57\u5169\u683C\u586B\u4E00\u6A23\u7684\uFF08\u4F8B\uFF1AAlways 100 ~ 100\uFF09\u3002\u5B78\u751F\u653E\u5728\u7BC4\u570D\u524D\u5F8C 10% \u4EE5\u5167\u90FD\u7B97\u5C0D\uFF1B\u5361\u7247\u9806\u5E8F\u6703\u81EA\u52D5\u6253\u4E82\u3002"));
+}
 function DefMatchEditor({
   pairs,
   onChangePairs

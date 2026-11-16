@@ -256,6 +256,8 @@ function getQuizItems(items) {
   // v462 ①
   item.type === 'def-match' && (item.defPairs || []).filter(p => p && p.word && p.def).length >= 2 || item.type === 'reading-skill' && rsChipTotal(item) >= 2 ||
   // v386: 閱讀技巧
+  item.type === 'scale-line' && slWords(item).length >= 2 ||
+  // v635: 刻度排序
   item.type === 'essay' && !!(item.essayPrompt || '').trim() || item.type === 'story-mountain' && !!(item.smPrompt || item.smPassage || '') || item.type === 'cloze' && (item.passage || '').includes('[') || item.type === 'circle-answer' && (item.circleQuestions || []).some(q => q.sentence && (q.answer || (q.answers || []).length)) || item.type === 'upload' ||
   // v263: 上傳作業——單元本身就是任務，不需要題目
   /* v387（Alan：「分段閱讀不一定一定要有題目 才能新增」）：
@@ -415,6 +417,7 @@ var QM_TYPE_ZH = {
   'guided-reading': '分段閱讀',
   'def-match': '配對連線',
   'reading-skill': '閱讀技巧',
+  'scale-line': '刻度排序',
   exam: '模擬考卷'
 };
 var QM_TYPE_ICO = {
@@ -438,6 +441,7 @@ var QM_TYPE_ICO = {
   'guided-reading': '📖',
   'def-match': '🔗',
   'reading-skill': '🔍',
+  'scale-line': '📏',
   exam: '📄'
 };
 /* v273: 學習順序——先複習（單字卡）、再認讀（選擇/填空）、最後產出（拼寫/手寫）
@@ -453,6 +457,7 @@ var QM_TYPE_ORDER = {
   cloze: 3,
   'guided-reading': 3,
   'reading-skill': 3.5,
+  'scale-line': 1.5,
   'circle-answer': 4,
   spelling: 5,
   'type-answer': 5,
@@ -675,6 +680,7 @@ function getQuizItemTotal(item) {
   if (item.type === 'sentence-order') return (item.orderQuestions || []).length; // v462 ①
   if (item.type === 'def-match') return (item.defPairs || []).filter(p => p && p.word && p.def).length;
   if (item.type === 'reading-skill') return rsChipTotal(item); // v386
+  if (item.type === 'scale-line') return slWords(item).length; // v635
   if (item.type === 'guided-reading' && grTotalQ(item) === 0) return Math.max(1, grSegs(item).length); // v387: 純閱讀
   /* v515：考卷的「幾題」＝有幾個**自動計分**的大題。
      ⚠ 不要用小題總數——那會讓側欄寫「60 題」，看起來像做不完。 */
@@ -1661,7 +1667,7 @@ function QuizModeCategoryView({
       var isDefMatch = item.type === 'def-match'; // v366
       var isLesson = item.type === 'lesson'; // v386: v383 漏掉這一行 → 教學卡顯示 0 題、整列變灰點不進去
       var isReadSkill = item.type === 'reading-skill'; // v386
-      var hasQuiz = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isSentOrder || isExam || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || isFlashcard && (item.cards || []).length > 0;
+      var hasQuiz = totalQ > 0 || isWriting || isTypeAnswer || isSpelling || isShortAnswer || isGuided && (grSegs(item).length > 0 || grTotalQ(item) > 0) || isSyllableDiv || isWordSort || isSentOrder || isExam || isEssay || isStoryMtn || isCloze || isCircle || isUpload || isDefMatch || isLesson || isReadSkill || item.type === 'scale-line' || isFlashcard && (item.cards || []).length > 0;
       var hw = (homework || {})[item.id]; // { dueDate }
       var isMainMission = !editMode && (explicitMainIds.has(item.id) || homeworkMainIds.has(item.id) || item.id === fallbackMainId);
       var dueLabel = hw?.dueDate ? qmDueText(hw.dueDate) === '已結束' ? '已結束' : `📌 ${qmDueText(hw.dueDate)}` // v266
@@ -1694,7 +1700,7 @@ function QuizModeCategoryView({
       })()), getQuizItems([item]).length === 0 && /*#__PURE__*/React.createElement("span", {
         className: "qm-empty-badge",
         title: "\u9019\u500B\u55AE\u5143\u9084\u6C92\u6709\u984C\u76EE\uFF0C\u5B78\u751F\u9801\u4E0D\u6703\u986F\u793A\u3002\u9EDE\u925B\u7B46\u9032\u53BB\u65B0\u589E\u984C\u76EE\u3002"
-      }, "\u26A0 \u6C92\u6709\u984C\u76EE \xB7 \u5B78\u751F\u770B\u4E0D\u5230")) : /*#__PURE__*/React.createElement(React.Fragment, null, isFlashcard ? `🃏 ${(item.cards || []).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? item.variant === 'translate' ? `🔤 ${(item.pairs || []).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs || []).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs || []).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs || []).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs || []).length} 題句型轉換` : `⌨ ${(item.pairs || []).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords || []).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions || []).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords || []).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords || []).length} 個單字` : isExam ? `📄 ${window.examTotals ? window.examTotals(item).total : 0} 分 · ${(item.sections || []).length} 大題` : isSentOrder ? `🧩 ${(item.orderQuestions || []).length} 句排順序` : isCloze ? `📝 ${((item.passage || '').match(/\[[^\]]+\]/g) || []).length} 格` : isCircle ? `⭕ ${(item.circleQuestions || []).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check || []).length} 題小試身手` : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : `${totalQ} 題`, scorePct !== null && !isWriting && /*#__PURE__*/React.createElement("span", {
+      }, "\u26A0 \u6C92\u6709\u984C\u76EE \xB7 \u5B78\u751F\u770B\u4E0D\u5230")) : /*#__PURE__*/React.createElement(React.Fragment, null, isFlashcard ? `🃏 ${(item.cards || []).length} 張單字卡` : isUpload ? '📎 拍照上傳作業' : isGuided ? grTotalQ(item) ? `📖 ${grSegs(item).length} 段 · ${grTotalQ(item)} 題` : `📖 ${grSegs(item).length} 段 · 純閱讀` : isStoryMtn ? '🏔 故事山寫作' : isEssay ? '✍ 意見寫作' : isWriting ? `✍ ${getWritingPracticePrompts(item, items || []).length} 個題目` : isTypeAnswer ? item.variant === 'translate' ? `🔤 ${(item.pairs || []).length} 題中翻英` : item.variant === 'fill' ? `✏️ ${(item.pairs || []).length} 題填空` : item.variant === 'rewrite' ? `✍️ ${(item.pairs || []).length} 題改寫` : item.variant === 'word' ? `🖊 ${(item.pairs || []).length} 題改成正確的` : item.variant === 'transform' ? `🔄 ${(item.pairs || []).length} 題句型轉換` : `⌨ ${(item.pairs || []).length} 個單字` : isSpelling ? `🔊 ${(item.spellWords || []).length} 個聽寫` : isShortAnswer ? `📖 ${(item.saQuestions || []).length} 題` : isSyllableDiv ? `✂️ ${(item.sdWords || []).length} 個單字` : isWordSort ? `🗂 ${(item.sortWords || []).length} 個單字` : isExam ? `📄 ${window.examTotals ? window.examTotals(item).total : 0} 分 · ${(item.sections || []).length} 大題` : isSentOrder ? `🧩 ${(item.orderQuestions || []).length} 句排順序` : isCloze ? `📝 ${((item.passage || '').match(/\[[^\]]+\]/g) || []).length} 格` : isCircle ? `⭕ ${(item.circleQuestions || []).length} 題` : isDefMatch ? `🔗 ${getQuizItemTotal(item)} 組配對` : isLesson ? Array.isArray(item.steps) && item.steps.length ? `📘 互動教學 · ${item.steps.length} 步` : `📘 先教再練 · ${(item.check || []).length} 題小試身手` : isReadSkill ? `🔍 ${rsBlocks(item).length} 種技巧 · ${rsChipTotal(item)} 張卡` : item.type === 'scale-line' ? `📏 ${slWords(item).length} 個詞放刻度` : `${totalQ} 題`, scorePct !== null && !isWriting && /*#__PURE__*/React.createElement("span", {
         className: "qm-unit-score-badge"
       }, scorePct, "%"), scorePct !== null && !isWriting && /*#__PURE__*/React.createElement(StarMastery, {
         pct: scorePct
@@ -2192,6 +2198,17 @@ function QuizModeCategoryView({
     progressKey: `${weekId}_${selectedItem.id}`,
     onBack: () => setPhase('intro')
   }) : selectedItem?.type === 'reading-skill' && phase === 'intro' ? /*#__PURE__*/React.createElement(ReadingSkillIntro, {
+    item: selectedItem,
+    prog: qmProg[`${weekId}_${selectedItem.id}`],
+    onStart: () => setPhase('quiz')
+  }) : selectedItem?.type === 'scale-line' && phase === 'quiz' ? /*#__PURE__*/React.createElement(ScaleLinePlayer, {
+    onBackToTasks: onBackToTasksShared,
+    onNextTask: onNextTask,
+    key: playerKey,
+    item: selectedItem,
+    progressKey: `${weekId}_${selectedItem.id}`,
+    onBack: () => setPhase('intro')
+  }) : selectedItem?.type === 'scale-line' && phase === 'intro' ? /*#__PURE__*/React.createElement(ScaleLineIntro, {
     item: selectedItem,
     prog: qmProg[`${weekId}_${selectedItem.id}`],
     onStart: () => setPhase('quiz')
@@ -12647,10 +12664,425 @@ function ReadingSkillPlayer({
     onClick: nextBlock
   }, bi + 1 >= blocks.length ? '完成 · 看成績 →' : '下一個技巧 →')));
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v635：刻度排序 scale-line
+   ──────────────────────────────────────────────────────────────────────────
+   頻率副詞（Always 100%／Often 60–80%／Never 0%）這種「放在 0%～100% 的哪裡」的題目。
+   item.scaleWords = [{ id, word, zh, lo, hi }]（lo~hi＝正確範圍，單一數字就 lo=hi）。
+   ⚠ 判分放寬 SL_TOL：手指在 iPad 上點不到那麼準，而且 Often／Frequently 本來就重疊。
+   ⚠ 一律「點卡片、再點橫條」，不用拖曳（理由同閱讀技巧）。
+   ══════════════════════════════════════════════════════════════════════════ */
+var SL_TOL = 10;
+function slWords(item) {
+  var clamp = n => Math.max(0, Math.min(100, n));
+  return (item && item.scaleWords || []).map((w, i) => {
+    if (!w) return null;
+    var lo = Number(w.lo),
+      hi = w.hi === '' || w.hi == null ? lo : Number(w.hi);
+    if (!isFinite(lo) || !isFinite(hi)) return null;
+    lo = clamp(lo);
+    hi = clamp(hi);
+    if (lo > hi) {
+      var t = lo;
+      lo = hi;
+      hi = t;
+    }
+    var word = String(w.word || '').trim();
+    return word ? {
+      id: w.id || 'sl' + i,
+      word,
+      zh: String(w.zh || '').trim(),
+      lo,
+      hi
+    } : null;
+  }).filter(Boolean);
+}
+var slRange = w => w.lo === w.hi ? `${w.lo}%` : `${w.lo}–${w.hi}%`;
+var slOk = (w, pct) => pct >= w.lo - SL_TOL && pct <= w.hi + SL_TOL;
+function ScaleLineIntro({
+  item,
+  prog,
+  onStart
+}) {
+  var ws = slWords(item);
+  var done = prog && prog.done;
+  var pct = prog && prog.score != null && prog.total ? Math.round(prog.score / prog.total * 100) : null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-icon"
+  }, "\uD83D\uDCCF"), /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-title"
+  }, item.title), /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-meta"
+  }, ws.length, " \u500B\u8A5E \xB7 \u653E\u5230 0%\uFF5E100% \u7684\u523B\u5EA6\u4E0A"), /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-rules"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-rule-row"
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDC46"), /*#__PURE__*/React.createElement("span", null, "\u9EDE\u4E00\u5F35\u55AE\u5B57\u5361\uFF0C\u518D\u9EDE\u4E0A\u9762\u90A3\u689D\u7DDA\u2014\u2014\u653E\u5728\u4F60\u89BA\u5F97\u300C\u5927\u6982\u5E7E %\u300D\u7684\u5730\u65B9")), /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-rule-row"
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("span", null, "\u4E0D\u7528\u653E\u5F97\u5F88\u6E96\uFF0C", /*#__PURE__*/React.createElement("b", null, "\u5927\u6982\u5C0D\u5C31\u7B97\u5C0D"), "\uFF1B\u653E\u932F\u7684\u6703\u9000\u56DE\u4F86\u91CD\u60F3")), /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-rule-row"
+  }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCAF"), /*#__PURE__*/React.createElement("span", null, "\u5206\u6578\u53EA\u7B97", /*#__PURE__*/React.createElement("b", null, "\u7B2C\u4E00\u6B21\u6AA2\u67E5"), "\u653E\u5C0D\u5E7E\u5F35"))), done && pct != null && /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-done"
+  }, "\u2713 \u4E0A\u6B21 ", pct, " \u5206"), /*#__PURE__*/React.createElement("div", {
+    className: "qm-intro-btns"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "qm-btn primary",
+    onClick: onStart
+  }, "\u958B\u59CB\u7DF4\u7FD2 \xB7 Start \u2192")));
+}
+function ScaleLinePlayer({
+  item,
+  progressKey,
+  onBack,
+  onBackToTasks,
+  onNextTask
+}) {
+  var words = useQMM(() => slWords(item), [item]);
+  var total = words.length;
+  var [place, setPlace] = useQM({}); // id -> 0~100
+  var [lock, setLock] = useQM({});
+  var [sel, setSel] = useQM(null);
+  var [checks, setChecks] = useQM(0);
+  var [bad, setBad] = useQM([]);
+  var [revealed, setRevealed] = useQM(false);
+  var [say, setSay] = useQM(false);
+  var [done, setDone] = useQM(false);
+  var [shake, setShake] = useQM(0);
+  var bankRef = React.useRef({
+    correct: 0,
+    wrong: []
+  });
+  var bankedRef = React.useRef(false);
+  var barRef = React.useRef(null);
+  useQME(() => {
+    bankRef.current = {
+      correct: 0,
+      wrong: []
+    };
+    bankedRef.current = false;
+  }, [item && item.id]);
+  var key = words.map(w => w.id).join('|');
+  var order = useQMM(() => shuffleArr(words.map(w => w.id)), [key]);
+  var wOf = useQMM(() => {
+    var m = {};
+    words.forEach(w => {
+      m[w.id] = w;
+    });
+    return m;
+  }, [key, words]);
+  var tray = order.filter(id => place[id] == null);
+  var lockedN = order.filter(id => lock[id]).length;
+  var allRight = order.length > 0 && order.every(id => lock[id]);
+  var pickChip = id => {
+    if (lock[id]) return;
+    if (place[id] != null) {
+      setPlace(p => {
+        var n = {
+          ...p
+        };
+        delete n[id];
+        return n;
+      });
+      setSel(id);
+    } else setSel(s => s === id ? null : id);
+    setBad(b => b.filter(x => x !== id));
+    if (say && wOf[id]) {
+      try {
+        (window.speakTTS || window.speakText)(wOf[id].word, {
+          lang: 'en-US',
+          rate: 0.85
+        });
+      } catch (e) {}
+    }
+  };
+  var tapBar = e => {
+    if (!sel || !barRef.current) return;
+    var r = barRef.current.getBoundingClientRect();
+    if (!r.width) return;
+    var pct = Math.max(0, Math.min(100, Math.round((e.clientX - r.left) / r.width * 100)));
+    setPlace(p => ({
+      ...p,
+      [sel]: pct
+    }));
+    setSel(null);
+  };
+  var check = () => {
+    var right = order.filter(id => place[id] != null && slOk(wOf[id], place[id]));
+    var wrong = order.filter(id => right.indexOf(id) < 0);
+    if (!bankedRef.current) {
+      bankedRef.current = true;
+      bankRef.current = {
+        correct: bankRef.current.correct + right.length,
+        wrong: bankRef.current.wrong.concat(wrong.map(id => ({
+          q: wOf[id].word,
+          answer: `約 ${slRange(wOf[id])}`
+        })))
+      };
+    }
+    setChecks(c => c + 1);
+    setLock(l => {
+      var n = {
+        ...l
+      };
+      right.forEach(id => {
+        n[id] = true;
+      });
+      return n;
+    });
+    setBad(wrong);
+    setPlace(p => {
+      var n = {
+        ...p
+      };
+      wrong.forEach(id => {
+        delete n[id];
+      });
+      return n;
+    });
+    setSel(null);
+    if (wrong.length) {
+      setShake(s => s + 1);
+      if (window.playSound) window.playSound('wrong');
+    } else if (window.playSound) window.playSound('correct');
+  };
+  var reveal = () => {
+    var n = {};
+    var l = {};
+    order.forEach(id => {
+      n[id] = Math.round((wOf[id].lo + wOf[id].hi) / 2);
+      l[id] = true;
+    });
+    setPlace(n);
+    setLock(l);
+    setBad([]);
+    setSel(null);
+    setRevealed(true);
+  };
+  var finish = () => {
+    var b = bankRef.current;
+    saveQuizModeCompletion(progressKey, item, {
+      doneCount: total,
+      score: b.correct,
+      total: total || 1,
+      wrongQuestions: b.wrong
+    });
+    setDone(true);
+  };
+  var restart = () => {
+    bankRef.current = {
+      correct: 0,
+      wrong: []
+    };
+    bankedRef.current = false;
+    setPlace({});
+    setLock({});
+    setSel(null);
+    setChecks(0);
+    setBad([]);
+    setRevealed(false);
+    setDone(false);
+    setShake(0);
+  };
+  if (!total) {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "qm-player-shell rs-shell"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "qm-player-head"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "qm-back-btn",
+      "aria-label": "\u8FD4\u56DE\u55AE\u5143\u5217\u8868",
+      onClick: onBack
+    }, /*#__PURE__*/React.createElement(window.Icon, {
+      name: "close",
+      size: 16
+    }))), /*#__PURE__*/React.createElement("div", {
+      className: "rs-empty"
+    }, "\u9019\u500B\u55AE\u5143\u9084\u6C92\u6709\u984C\u76EE\uFF0C\u8ACB\u8001\u5E2B\u88DC\u4E0A\u3002"));
+  }
+  if (done) {
+    var b = bankRef.current;
+    var pct = Math.round(b.correct / Math.max(1, total) * 100);
+    return /*#__PURE__*/React.createElement(QmCelebrate, {
+      pct: pct
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "qm-result"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "qm-result-emoji"
+    }, pct === 100 ? '🏆' : pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪'), /*#__PURE__*/React.createElement("div", {
+      className: "qm-result-cat-title"
+    }, item.title), /*#__PURE__*/React.createElement("div", {
+      className: "qm-result-score"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "qm-result-num"
+    }, b.correct), /*#__PURE__*/React.createElement("span", {
+      className: "qm-result-denom"
+    }, " / ", total)), /*#__PURE__*/React.createElement("div", {
+      className: "qm-result-pct"
+    }, "\u7B2C\u4E00\u6B21\u5C31\u653E\u5C0D ", pct, "%"), b.wrong.length > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "rs-review"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "rs-review-head"
+    }, "\u2717 \u9019 ", b.wrong.length, " \u500B\u7B2C\u4E00\u6B21\u653E\u932F\u4E86\u2014\u2014\u6B63\u78BA\u4F4D\u7F6E\u662F\uFF1A"), b.wrong.map((m, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "rs-review-row"
+    }, /*#__PURE__*/React.createElement("b", null, m.q), /*#__PURE__*/React.createElement("span", {
+      className: "rs-review-eq"
+    }, "\u2192"), /*#__PURE__*/React.createElement("span", null, m.answer)))), /*#__PURE__*/React.createElement("div", {
+      className: "qm-result-btns"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "qm-btn secondary",
+      onClick: restart
+    }, "\u518D\u8A66\u4E00\u6B21"), /*#__PURE__*/React.createElement(QmDoneNavBtns, {
+      onBack: onBack,
+      onBackToTasks: onBackToTasks,
+      onNextTask: onNextTask
+    }))));
+  }
+
+  /* 已放的卡片：照位置排序，擠在一起的錯開到不同層（避免字疊字） */
+  var placed = order.filter(id => place[id] != null).sort((a, b) => place[a] - place[b]);
+  var laneLast = [];
+  var laneOf = {};
+  placed.forEach(id => {
+    var l = 0;
+    while (laneLast[l] != null && place[id] - laneLast[l] < 17) l++;
+    laneLast[l] = place[id];
+    laneOf[id] = l;
+  });
+  var lanes = Math.max(1, laneLast.length);
+  var ticks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  var chipBtn = id => /*#__PURE__*/React.createElement("button", {
+    key: id,
+    className: 'rs-chip' + (sel === id ? ' sel' : ''),
+    onClick: () => pickChip(id)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "rs-chip-tx"
+  }, wOf[id].word));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "qm-player-shell rs-shell"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "qm-player-head"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "qm-back-btn",
+    "aria-label": "\u8FD4\u56DE\u55AE\u5143\u5217\u8868",
+    onClick: onBack
+  }, /*#__PURE__*/React.createElement(window.Icon, {
+    name: "close",
+    size: 16
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "qm-player-bar-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "qm-player-bar"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "qm-player-fill",
+    style: {
+      width: lockedN / Math.max(1, total) * 100 + '%'
+    }
+  }))), /*#__PURE__*/React.createElement("span", {
+    className: "qm-player-counter"
+  }, lockedN, " / ", total)), /*#__PURE__*/React.createElement("div", {
+    className: "rs-head"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rs-head-main"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rs-head-en"
+  }, "\uD83D\uDCCF ", item.title), /*#__PURE__*/React.createElement("div", {
+    className: "rs-head-zh"
+  }, "\u9EDE\u4E00\u5F35\u5361\u7247\uFF0C\u518D\u9EDE\u7DDA\u4E0A\u7684\u4F4D\u7F6E\uFF1A\u5DE6\u908A 0%\uFF08\u5B8C\u5168\u6C92\u6709\uFF09\u2192 \u53F3\u908A 100%\uFF08\u6BCF\u4E00\u6B21\uFF09")), /*#__PURE__*/React.createElement("div", {
+    className: "rs-head-btns"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: 'rs-mini' + (say ? ' on' : ''),
+    onClick: () => setSay(v => !v),
+    title: "\u9078\u5361\u7247\u6642\u5538\u51FA\u4F86"
+  }, "\uD83D\uDD0A"))), /*#__PURE__*/React.createElement("div", {
+    className: 'rs-board sl-board' + (shake ? ' k' + shake % 2 : '')
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sl-wrap",
+    style: {
+      '--sl-lanes': lanes
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sl-pins",
+    style: {
+      height: lanes * 40 + 6
+    }
+  }, placed.map(id => {
+    var w = wOf[id];
+    return /*#__PURE__*/React.createElement("button", {
+      key: id,
+      className: 'sl-pin' + (lock[id] ? ' locked' : '') + (sel === id ? ' sel' : ''),
+      style: {
+        left: place[id] + '%',
+        bottom: laneOf[id] * 40
+      },
+      disabled: !!lock[id],
+      onClick: () => pickChip(id)
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sl-pin-w"
+    }, lock[id] ? '✓ ' : '', w.word), lock[id] && /*#__PURE__*/React.createElement("span", {
+      className: "sl-pin-r"
+    }, slRange(w)), /*#__PURE__*/React.createElement("i", {
+      className: "sl-pin-stem"
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
+    ref: barRef,
+    className: 'sl-bar' + (sel ? ' drop' : ''),
+    onClick: tapBar
+  }, ticks.map(t => /*#__PURE__*/React.createElement("i", {
+    key: t,
+    className: 'sl-tick' + (t % 50 === 0 ? ' big' : ''),
+    style: {
+      left: t + '%'
+    }
+  })), !placed.length && /*#__PURE__*/React.createElement("span", {
+    className: "sl-ph"
+  }, sel ? '點這條線放進來' : '先點下面一張卡片')), /*#__PURE__*/React.createElement("div", {
+    className: "sl-labels"
+  }, [0, 25, 50, 75, 100].map(t => /*#__PURE__*/React.createElement("span", {
+    key: t,
+    style: {
+      left: t + '%'
+    }
+  }, t, "%"))))), /*#__PURE__*/React.createElement("div", {
+    className: "rs-tray-wrap"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rs-tray-lab"
+  }, tray.length ? `還有 ${tray.length} 張要放` : allRight ? '全部放對了！' : '都放完了，按下面檢查答案'), /*#__PURE__*/React.createElement("div", {
+    className: "rs-tray"
+  }, tray.map(id => chipBtn(id)), !tray.length && /*#__PURE__*/React.createElement("span", {
+    className: "rs-tray-empty"
+  }, "\u2713 \u5361\u7247\u90FD\u653E\u5B8C\u4E86"))), checks > 0 && !allRight && /*#__PURE__*/React.createElement("div", {
+    className: "rs-fb bad"
+  }, /*#__PURE__*/React.createElement("b", null, lockedN, " \u5F35\u653E\u5C0D\u4E86"), "\uFF0C\u9084\u6709 ", order.length - lockedN, " \u5F35\u9000\u56DE\u4F86\u4E86\u2014\u2014\u518D\u60F3\u60F3\u770B\u3002", bad.length > 0 && /*#__PURE__*/React.createElement("ul", {
+    className: "rs-fb-hints"
+  }, bad.map(id => /*#__PURE__*/React.createElement("li", {
+    key: id
+  }, /*#__PURE__*/React.createElement("b", null, wOf[id].word), wOf[id].zh ? ` — ${wOf[id].zh}` : '')))), allRight && /*#__PURE__*/React.createElement("div", {
+    className: "rs-fb good"
+  }, revealed ? '答案在線上了，看一次再繼續。' : checks === 1 ? '🎉 一次就全對！' : '✓ 全部放對了！'), /*#__PURE__*/React.createElement("div", {
+    className: "rs-foot"
+  }, !allRight && /*#__PURE__*/React.createElement("button", {
+    className: "qm-btn primary",
+    disabled: tray.length > 0,
+    onClick: check
+  }, tray.length > 0 ? `還有 ${tray.length} 張沒放` : '檢查答案'), !allRight && checks >= 2 && /*#__PURE__*/React.createElement("button", {
+    className: "qm-btn secondary",
+    onClick: reveal
+  }, "\u770B\u7B54\u6848"), allRight && /*#__PURE__*/React.createElement("button", {
+    className: "qm-btn primary",
+    onClick: finish
+  }, "\u5B8C\u6210 \xB7 \u770B\u6210\u7E3E \u2192")));
+}
 Object.assign(window, {
   ExamPlayer,
   TeacherLog,
   ReadingSkillPlayer,
+  ScaleLinePlayer,
+  ScaleLineIntro,
+  slWords,
   ReadingSkillIntro,
   rsBlocks,
   rsChipTotal,
