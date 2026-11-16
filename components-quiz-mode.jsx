@@ -6530,10 +6530,10 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
       const wTerm = termKeyOf(wid);                    // v400 ②：不跨學期
       if (curTerm && wTerm && wTerm !== curTerm) continue;
       /* v633（Alan：期中考結束，Week 10 之前的逾期作業都刪掉）：這學期（到 2027-02-01 前）
-         第 1~9 週不再列入「之前還有 N 項」。學期一換（日期過了）就自動失效。 */
+         第 1~10 週不再列入「之前還有 N 項」。學期一換（日期過了）就自動失效。 */
       if (Date.now() < 1801900800000 && curTerm && wTerm === curTerm) {
         const wn = String(wid).match(/-W(\d{1,3})$/i);
-        if (wn && +wn[1] < 10) continue;
+        if (wn && +wn[1] <= 10) continue;
       }
       const whw = w.homework || {};
       if (!Object.keys(whw).length) continue;
