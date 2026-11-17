@@ -6306,7 +6306,10 @@ function WordSortPlayer({
   }, cat, sortHints[cat] ? /*#__PURE__*/React.createElement("span", {
     className: "ws-col-hint"
   }, sortHints[cat]) : null), /*#__PURE__*/React.createElement("div", {
-    className: "ws-col-body"
+    className: 'ws-col-body' + (suffixMode ? '' : ' wrap'),
+    style: {
+      minHeight: Math.max(80, Math.ceil(Math.ceil(total / Math.max(1, categories.length)) / (categories.length >= 3 ? 2 : 3)) * 56 + 24)
+    }
   }, wordsInCat(cat).map(w => /*#__PURE__*/React.createElement("button", {
     key: w.id,
     className: "ws-word-chip placed",

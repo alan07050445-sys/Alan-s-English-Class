@@ -4438,3 +4438,6 @@ body:has(.fc-wrap) .ask-fab .ask-fab-txt { display: none; }
 .sl-labels { position: relative; height: 22px; margin-top: 4px; font-size: 12px; color: var(--ink-muted, #777); }
 .sl-labels span { position: absolute; transform: translateX(-50%); }
 @media (max-width: 520px) { .sl-wrap { padding: 0 36px; } .sl-pin { font-size: 13px; padding: 3px 6px 2px; min-width: 48px; } }
+
+/* v636：單字分類的空格——已放進去的字改成一列多個（原本一欄一個，26 個字會變一長條），空格高度由程式依字數給 */
+.ws-col-body.wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); align-content: start; }

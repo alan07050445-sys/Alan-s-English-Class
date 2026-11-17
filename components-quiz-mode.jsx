@@ -5233,6 +5233,7 @@ function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
       </div>
 
       {/* Category Columns */}
+      {/* v636：空格大小跟著字數走——26 個字、2 欄時每欄要放得下 13 個（本來固定 80px，只夠放一個） */}
       <div className="ws-grid" style={{gridTemplateColumns: `repeat(${Math.min(categories.length, 4)}, 1fr)`}}>
         {categories.map(cat => (
           <div
@@ -5241,7 +5242,7 @@ function WordSortPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
             onClick={() => clickCategory(cat)}
           >
             <div className="ws-col-head">{cat}{sortHints[cat] ? <span className="ws-col-hint">{sortHints[cat]}</span> : null}</div>
-            <div className="ws-col-body">
+            <div className={'ws-col-body' + (suffixMode ? '' : ' wrap')} style={{ minHeight: Math.max(80, Math.ceil(Math.ceil(total / Math.max(1, categories.length)) / (categories.length >= 3 ? 2 : 3)) * 56 + 24) }}>
               {wordsInCat(cat).map(w => (
                 <button
                   key={w.id}
