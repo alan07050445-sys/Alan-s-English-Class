@@ -689,20 +689,91 @@ function App() {
   const paceNextF = useAppMemo(
     () => (pacing && window.pacingNextFormative ? window.pacingNextFormative(pacing, weekId) : null), [pacing, weekId]);
 
-  const saveWeeksSafe = (w) => {
+  /* 🔴 v637（Alan：「animal mimic 的分段閱讀怎麼不見了」——8 張照片上傳了、單元卻沒進雲端）：
+     全面檢查存檔路徑，補了四個洞：
+     ① saveWeeksSafe 說「還沒連上雲端」時，呼叫端一律當成存好了（編輯器關掉、跳「已存檔」）→ 現在回傳 false，呼叫端要停下來。
+     ② 草稿在「按存檔」那一刻就清掉，不等雲端回應 → 現在等雲端真的寫成功（onOk）才清。
+     ③ 'alan-unsaved-weeks' 寫了從來沒人讀 → 下面那個 effect 開機時比對，把沒存到的單元補回來（只加不刪）。
+     ④ 存檔還在送、或編輯器開著時關分頁／重新整理，沒有任何提醒 → beforeunload 攔一下。 */
+  const savePendingRef = useAppRef(0);
+  const saveWeeksSafe = (w, onOk) => {
     if (!cloudReadyRef.current) {
       alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
       return false;
     }
     pruneGhostHomework(w);   // v486：存進去的永遠不帶幽靈作業
+    savePendingRef.current++;
+    const settle = () => { savePendingRef.current = Math.max(0, savePendingRef.current - 1); };
+    const ok = () => {
+      settle();
+      setSaveFail(null);
+      try { localStorage.removeItem('alan-unsaved-weeks'); } catch (x) {}
+      if (onOk) { try { onOk(); } catch (x) {} }
+    };
     try {
       const p = window.saveWeeks(w);
-      if (p && p.then) p.then(() => {
-        setSaveFail(null);
-        try { localStorage.removeItem('alan-unsaved-weeks'); } catch (x) {}
-      }, e => markSaveFail(w, e));
-    } catch (e) { markSaveFail(w, e); }
+      if (p && p.then) p.then(ok, e => { settle(); markSaveFail(w, e); });
+      else ok();
+    } catch (e) { settle(); markSaveFail(w, e); }
     return true;
+  };
+
+  /* v637 ④：存檔還在送、存檔失敗還沒處理、或編輯器開著——這時候關分頁／重新整理，瀏覽器先問一聲。 */
+  const editorOpenRef = useAppRef(false);
+  useAppEffect(() => { editorOpenRef.current = editorOpen; }, [editorOpen]);
+  const saveFailRef = useAppRef(null);
+  useAppEffect(() => { saveFailRef.current = saveFail; }, [saveFail]);
+  useAppEffect(() => {
+    const h = (e) => {
+      if (!isTeacherRef.current) return;
+      if (savePendingRef.current > 0 || saveFailRef.current || editorOpenRef.current) {
+        e.preventDefault(); e.returnValue = '還有內容沒存進雲端，確定要離開嗎？'; return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, []);
+
+  /* v637 ③：開機時（雲端資料回來後）找「上次沒存進雲端的東西」：
+       a. 'alan-unsaved-weeks'（存檔失敗當下的整份內容）裡，雲端現在沒有的單元；
+       b. 編輯器草稿裡，雲端現在沒有的單元。
+     只列出來、讓老師按了才補——補的時候「只加不刪」，不會蓋掉雲端現在的內容。 */
+  const [recoverInfo, setRecoverInfo] = useAppState(null);   // { missing:[{weekId,cat,item}], drafts:[{weekId,form,t}] }
+  const recoverCheckedRef = useAppRef('');
+  useAppEffect(() => {
+    if (!cloudSeen || !grade || !isTeacher) return;
+    if (recoverCheckedRef.current === grade) return;
+    recoverCheckedRef.current = grade;
+    const has = (wid, id) => Object.values(((weeks[wid] || {}).items) || {}).some(arr => (arr || []).some(it => it && it.id === id));
+    const missing = [];
+    try {
+      const raw = JSON.parse(localStorage.getItem('alan-unsaved-weeks') || 'null');
+      if (raw && raw.grade === grade && raw.weeks && Date.now() - (raw.t || 0) < 14 * 86400000) {
+        Object.keys(raw.weeks).forEach(wid => {
+          const items = (raw.weeks[wid] && raw.weeks[wid].items) || {};
+          Object.keys(items).forEach(cat => (items[cat] || []).forEach(it => {
+            if (it && it.id && !has(wid, it.id)) missing.push({ weekId: wid, cat, item: it });
+          }));
+        });
+      }
+    } catch (e) {}
+    const drafts = (window.edDraftAll ? window.edDraftAll() : [])
+      .filter(d => weeks[d.weekId] && !has(d.weekId, d.form.id))
+      .filter(d => !missing.some(m => m.item.id === d.form.id));
+    if (missing.length || drafts.length) setRecoverInfo({ missing, drafts });
+  }, [cloudSeen, grade, isTeacher]);
+  const restoreMissing = () => {
+    if (!recoverInfo || !recoverInfo.missing.length) return;
+    const w = JSON.parse(JSON.stringify(weeksRef.current));
+    recoverInfo.missing.forEach(({ weekId: wid, cat, item }) => {
+      if (!w[wid]) return;
+      w[wid].items = w[wid].items || {};
+      w[wid].items[cat] = (w[wid].items[cat] || []).concat([item]);
+    });
+    if (!saveWeeksSafe(w)) return;
+    setWeeks(w);
+    setRecoverInfo(r => (r && r.drafts.length) ? { missing: [], drafts: r.drafts } : null);
+    showToast(`已補回 ${recoverInfo.missing.length} 個沒存到的單元 ✓`);
   };
 
   const mySummerPlan = (user && user.email && (summerMeta.students || {})[user.email.toLowerCase()]) || null;
@@ -2093,8 +2164,11 @@ function App() {
       .filter(x => !saved.some(it => it.id === x.id))
       .map(x => (cleanForm.owner && !x.owner) ? { ...x, owner: cleanForm.owner } : x);
     w[weekId].items[editorCat] = saved.concat(side);
+    /* v637：雲端還沒準備好就整個停下來——編輯器不關、草稿不清、也不跳「已存檔」。
+       草稿等雲端真的寫成功才清（存失敗了，內容還留在草稿裡）。 */
+    const savedWeekId = weekId, savedFormId = cleanForm.id;
+    if (!saveWeeksSafe(w, () => { try { window.edDraftClear && window.edDraftClear(savedWeekId, savedFormId); } catch (e) {} })) return;
     setWeeks(w);
-    saveWeeksSafe(w);
     setEditorOpen(false);
     // v351: 在某位學生的篩選底下出的新題目 → 直接寫進他的暑假發派清單，
     //       存完就出現在他的篩選（也就是他的任務）底下，不必再勾一次 👤。
@@ -3512,6 +3586,17 @@ function App() {
             <div className="save-fail-bar cloud-slow-bar">
               <span><b>⚠ 還沒連上雲端</b>：現在看到的可能不是最新的週次與作業。</span>
               <button onClick={() => { try { location.reload(); } catch (e) {} }}>重新載入</button>
+            </div>
+          )}
+          {recoverInfo && (
+            <div className="save-fail-bar recover-bar">
+              <span><b>⚠ 上次有內容沒存進雲端</b>
+                {recoverInfo.missing.length > 0 && <>：找到 {recoverInfo.missing.length} 個單元（{recoverInfo.missing.slice(0, 3).map(m => m.item.title || m.item.id).join('、')}{recoverInfo.missing.length > 3 ? '…' : ''}）。</>}
+                {recoverInfo.drafts.length > 0 && <> 編輯到一半的草稿：{recoverInfo.drafts.slice(0, 3).map(d => `${d.form.title || '(沒標題)'}（${(weeks[d.weekId] || {}).label || d.weekId}）`).join('、')}。到那一週按「新增」選同一種題型，就會問你要不要接回來。</>}
+              </span>
+              {recoverInfo.missing.length > 0 && <button onClick={restoreMissing}>補回 {recoverInfo.missing.length} 個單元</button>}
+              {recoverInfo.missing.length === 0 && recoverInfo.drafts.length > 0 && <button onClick={() => goWeekId(recoverInfo.drafts[0].weekId)}>去那一週</button>}
+              <button className="ghost" onClick={() => setRecoverInfo(null)}>先關掉</button>
             </div>
           )}
           {saveFail && (

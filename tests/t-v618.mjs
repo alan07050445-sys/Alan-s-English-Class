@@ -40,6 +40,6 @@ ok('老師才能開編輯器', /rpEdit && isTeacher && window\.ReviewPathEditor/
 ok('點題目會跳到那一週那一題（跟補做舊作業同一條路）', /setWeekIdx\(idx\)/.test(app.slice(app.indexOf('const openReviewItem'), app.indexOf('const openReviewItem') + 700)) && /itemId: it\.i/.test(app));
 ok('存在 class/reviewpath_{年級}，規則是公開讀、老師寫', /REVIEW_KEY = 'reviewpath'/.test(data) && /match \/class\/\{docId\}/.test(rules));
 ok('地圖不發星星（星星是真的錢）', !/addStars|mxLogAdd|computeTreat/.test(shell.slice(shell.indexOf('function ReviewPathMap'), shell.indexOf('Object.assign(window, { ReviewPathCard'))));
-ok('編輯器有匯出', /Object\.assign\(window, \{ ReviewPathEditor \}\)/.test(ed));
+ok('編輯器有匯出', /Object\.assign\(window, \{ ReviewPathEditor, edDraftClear, edDraftAll \}\)/.test(ed));
 console.log(fail ? `\n❌ t-v618：${pass} 過 / ${fail} 失敗` : `\n✅ t-v618：${pass} 過 / 0 失敗`);
 process.exit(fail ? 1 : 0);

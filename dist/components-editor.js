@@ -175,6 +175,26 @@ function edDraftClear(weekId, id) {
   } catch (e) {}
 }
 /* 找「這一週還沒存成功」的草稿：id 已經在這一週的單元裡＝存過了，不要再問。 */
+/* v637：全部草稿（不分週次、題型）——開機時用來提醒「有一份編輯到一半沒存到」。 */
+function edDraftAll() {
+  var out = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf(ED_DRAFT_PREFIX) !== 0) continue;
+      var d = null;
+      try {
+        d = JSON.parse(localStorage.getItem(k));
+      } catch (e) {
+        continue;
+      }
+      if (!d || !d.form || !d.form.id || !d.weekId) continue;
+      if (Date.now() - (d.t || 0) > ED_DRAFT_KEEP_MS) continue;
+      out.push(d);
+    }
+  } catch (e) {}
+  return out.sort((a, b) => (b.t || 0) - (a.t || 0));
+}
 function edDraftFind(weekId, existingIds, type) {
   var out = [];
   try {
@@ -285,7 +305,8 @@ function EditorModal({
     if (form.type !== 'upload' && window.getQuizItems && window.getQuizItems([form]).length === 0) {
       if (!window.confirm('⚠ 這個單元目前是 0 題，儲存後學生頁「不會顯示」它。\n\n（題目清單會標「⚠ 沒有題目」提醒你補題）\n\n仍要儲存嗎？')) return;
     }
-    edDraftClear(weekId, form.id); // v447：存出去了就不用留底了
+    /* v637：草稿不在這裡清了——等雲端真的寫成功才清（app.jsx handleSaveItem 的 onOk）。
+       以前這裡一按存檔就清，雲端寫失敗的話內容就兩邊都沒有了。 */
     onSave(form);
   };
   return (
@@ -14564,8 +14585,10 @@ function ReviewPathEditor({
   }, "\u52A0\u5165\u9078\u53D6\u7684")))));
 }
 Object.assign(window, {
-  ReviewPathEditor
-}); // v618
+  ReviewPathEditor,
+  edDraftClear,
+  edDraftAll
+}); // v618／v637
 Object.assign(window, {
   TrashModal,
   QuestionMoveModal,

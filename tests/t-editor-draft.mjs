@@ -87,7 +87,7 @@ console.log('\n【4】畫面上真的接得回來');
 ok('編輯器一開就找草稿', /edDraftFind\(weekId, ids, draft\.type\)/.test(editor));
 ok('⭐ 不會把「正在編輯的這一份」當成草稿問', /filter\(d => d\.form\.id !== draft\.id\)/.test(editor));
 ok('邊改邊存（700ms 才寫一次）', /setTimeout\(\(\) => edDraftSave\(weekId, form\), 700\)/.test(editor));
-ok('存出去就清掉草稿', /edDraftClear\(weekId, form\.id\);\s*\/\/ v447/.test(editor));
+ok('存出去就清掉草稿（v637：改成雲端寫成功才清——見 t-v637）', /window\.edDraftClear && window\.edDraftClear\(savedWeekId, savedFormId\)/.test(app));
 ok('有「接回來繼續改」的按鈕', /接回來繼續改/.test(editor) && /ed-recover/.test(editor));
 ok('接回來要當成新單元存（原本那個從來沒進雲端）', /setForm\(\{ \.\.\.recover\.form, _isNew: true \}\)/.test(editor));
 ok('CSS 有樣式', /\.ed-recover/.test(css));

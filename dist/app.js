@@ -945,24 +945,123 @@ function App() {
   /* 這一週的進度 ＋ 下一次 Formative（Alan：Summative 不用看）。 */
   var paceWeek = useAppMemo(() => window.pacingForWeek ? window.pacingForWeek(pacing, weekId) : null, [pacing, weekId]);
   var paceNextF = useAppMemo(() => pacing && window.pacingNextFormative ? window.pacingNextFormative(pacing, weekId) : null, [pacing, weekId]);
-  var saveWeeksSafe = w => {
+
+  /* 🔴 v637（Alan：「animal mimic 的分段閱讀怎麼不見了」——8 張照片上傳了、單元卻沒進雲端）：
+     全面檢查存檔路徑，補了四個洞：
+     ① saveWeeksSafe 說「還沒連上雲端」時，呼叫端一律當成存好了（編輯器關掉、跳「已存檔」）→ 現在回傳 false，呼叫端要停下來。
+     ② 草稿在「按存檔」那一刻就清掉，不等雲端回應 → 現在等雲端真的寫成功（onOk）才清。
+     ③ 'alan-unsaved-weeks' 寫了從來沒人讀 → 下面那個 effect 開機時比對，把沒存到的單元補回來（只加不刪）。
+     ④ 存檔還在送、或編輯器開著時關分頁／重新整理，沒有任何提醒 → beforeunload 攔一下。 */
+  var savePendingRef = useAppRef(0);
+  var saveWeeksSafe = (w, onOk) => {
     if (!cloudReadyRef.current) {
       alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
       return false;
     }
     pruneGhostHomework(w); // v486：存進去的永遠不帶幽靈作業
+    savePendingRef.current++;
+    var settle = () => {
+      savePendingRef.current = Math.max(0, savePendingRef.current - 1);
+    };
+    var ok = () => {
+      settle();
+      setSaveFail(null);
+      try {
+        localStorage.removeItem('alan-unsaved-weeks');
+      } catch (x) {}
+      if (onOk) {
+        try {
+          onOk();
+        } catch (x) {}
+      }
+    };
     try {
       var p = window.saveWeeks(w);
-      if (p && p.then) p.then(() => {
-        setSaveFail(null);
-        try {
-          localStorage.removeItem('alan-unsaved-weeks');
-        } catch (x) {}
-      }, e => markSaveFail(w, e));
+      if (p && p.then) p.then(ok, e => {
+        settle();
+        markSaveFail(w, e);
+      });else ok();
     } catch (e) {
+      settle();
       markSaveFail(w, e);
     }
     return true;
+  };
+
+  /* v637 ④：存檔還在送、存檔失敗還沒處理、或編輯器開著——這時候關分頁／重新整理，瀏覽器先問一聲。 */
+  var editorOpenRef = useAppRef(false);
+  useAppEffect(() => {
+    editorOpenRef.current = editorOpen;
+  }, [editorOpen]);
+  var saveFailRef = useAppRef(null);
+  useAppEffect(() => {
+    saveFailRef.current = saveFail;
+  }, [saveFail]);
+  useAppEffect(() => {
+    var h = e => {
+      if (!isTeacherRef.current) return;
+      if (savePendingRef.current > 0 || saveFailRef.current || editorOpenRef.current) {
+        e.preventDefault();
+        e.returnValue = '還有內容沒存進雲端，確定要離開嗎？';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, []);
+
+  /* v637 ③：開機時（雲端資料回來後）找「上次沒存進雲端的東西」：
+       a. 'alan-unsaved-weeks'（存檔失敗當下的整份內容）裡，雲端現在沒有的單元；
+       b. 編輯器草稿裡，雲端現在沒有的單元。
+     只列出來、讓老師按了才補——補的時候「只加不刪」，不會蓋掉雲端現在的內容。 */
+  var [recoverInfo, setRecoverInfo] = useAppState(null); // { missing:[{weekId,cat,item}], drafts:[{weekId,form,t}] }
+  var recoverCheckedRef = useAppRef('');
+  useAppEffect(() => {
+    if (!cloudSeen || !grade || !isTeacher) return;
+    if (recoverCheckedRef.current === grade) return;
+    recoverCheckedRef.current = grade;
+    var has = (wid, id) => Object.values((weeks[wid] || {}).items || {}).some(arr => (arr || []).some(it => it && it.id === id));
+    var missing = [];
+    try {
+      var raw = JSON.parse(localStorage.getItem('alan-unsaved-weeks') || 'null');
+      if (raw && raw.grade === grade && raw.weeks && Date.now() - (raw.t || 0) < 14 * 86400000) {
+        Object.keys(raw.weeks).forEach(wid => {
+          var items = raw.weeks[wid] && raw.weeks[wid].items || {};
+          Object.keys(items).forEach(cat => (items[cat] || []).forEach(it => {
+            if (it && it.id && !has(wid, it.id)) missing.push({
+              weekId: wid,
+              cat,
+              item: it
+            });
+          }));
+        });
+      }
+    } catch (e) {}
+    var drafts = (window.edDraftAll ? window.edDraftAll() : []).filter(d => weeks[d.weekId] && !has(d.weekId, d.form.id)).filter(d => !missing.some(m => m.item.id === d.form.id));
+    if (missing.length || drafts.length) setRecoverInfo({
+      missing,
+      drafts
+    });
+  }, [cloudSeen, grade, isTeacher]);
+  var restoreMissing = () => {
+    if (!recoverInfo || !recoverInfo.missing.length) return;
+    var w = JSON.parse(JSON.stringify(weeksRef.current));
+    recoverInfo.missing.forEach(({
+      weekId: wid,
+      cat,
+      item
+    }) => {
+      if (!w[wid]) return;
+      w[wid].items = w[wid].items || {};
+      w[wid].items[cat] = (w[wid].items[cat] || []).concat([item]);
+    });
+    if (!saveWeeksSafe(w)) return;
+    setWeeks(w);
+    setRecoverInfo(r => r && r.drafts.length ? {
+      missing: [],
+      drafts: r.drafts
+    } : null);
+    showToast(`已補回 ${recoverInfo.missing.length} 個沒存到的單元 ✓`);
   };
   var mySummerPlan = user && user.email && (summerMeta.students || {})[user.email.toLowerCase()] || null;
   var hasSummerPlan = !!(mySummerPlan && Object.values(mySummerPlan.weeks || {}).some(a => a && a.length));
@@ -2902,8 +3001,16 @@ function App() {
       owner: cleanForm.owner
     } : x);
     w[weekId].items[editorCat] = saved.concat(side);
+    /* v637：雲端還沒準備好就整個停下來——編輯器不關、草稿不清、也不跳「已存檔」。
+       草稿等雲端真的寫成功才清（存失敗了，內容還留在草稿裡）。 */
+    var savedWeekId = weekId,
+      savedFormId = cleanForm.id;
+    if (!saveWeeksSafe(w, () => {
+      try {
+        window.edDraftClear && window.edDraftClear(savedWeekId, savedFormId);
+      } catch (e) {}
+    })) return;
     setWeeks(w);
-    saveWeeksSafe(w);
     setEditorOpen(false);
     // v351: 在某位學生的篩選底下出的新題目 → 直接寫進他的暑假發派清單，
     //       存完就出現在他的篩選（也就是他的任務）底下，不必再勾一次 👤。
@@ -4714,7 +4821,16 @@ function App() {
         location.reload();
       } catch (e) {}
     }
-  }, "\u91CD\u65B0\u8F09\u5165")), saveFail && /*#__PURE__*/React.createElement("div", {
+  }, "\u91CD\u65B0\u8F09\u5165")), recoverInfo && /*#__PURE__*/React.createElement("div", {
+    className: "save-fail-bar recover-bar"
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u26A0 \u4E0A\u6B21\u6709\u5167\u5BB9\u6C92\u5B58\u9032\u96F2\u7AEF"), recoverInfo.missing.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, "\uFF1A\u627E\u5230 ", recoverInfo.missing.length, " \u500B\u55AE\u5143\uFF08", recoverInfo.missing.slice(0, 3).map(m => m.item.title || m.item.id).join('、'), recoverInfo.missing.length > 3 ? '…' : '', "\uFF09\u3002"), recoverInfo.drafts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, " \u7DE8\u8F2F\u5230\u4E00\u534A\u7684\u8349\u7A3F\uFF1A", recoverInfo.drafts.slice(0, 3).map(d => `${d.form.title || '(沒標題)'}（${(weeks[d.weekId] || {}).label || d.weekId}）`).join('、'), "\u3002\u5230\u90A3\u4E00\u9031\u6309\u300C\u65B0\u589E\u300D\u9078\u540C\u4E00\u7A2E\u984C\u578B\uFF0C\u5C31\u6703\u554F\u4F60\u8981\u4E0D\u8981\u63A5\u56DE\u4F86\u3002")), recoverInfo.missing.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: restoreMissing
+  }, "\u88DC\u56DE ", recoverInfo.missing.length, " \u500B\u55AE\u5143"), recoverInfo.missing.length === 0 && recoverInfo.drafts.length > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => goWeekId(recoverInfo.drafts[0].weekId)
+  }, "\u53BB\u90A3\u4E00\u9031"), /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => setRecoverInfo(null)
+  }, "\u5148\u95DC\u6389")), saveFail && /*#__PURE__*/React.createElement("div", {
     className: "save-fail-bar"
   }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, "\u26A0 \u525B\u525B\u90A3\u6B21\u8B8A\u66F4\u6C92\u6709\u5B58\u9032\u96F2\u7AEF"), "\uFF1A", saveFail.msg), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
