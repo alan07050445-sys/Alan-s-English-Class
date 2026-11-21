@@ -4037,3 +4037,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .ta-hint-btn { font-size: 15px; min-height: 44px; padding: 8px 18px; }
   .qm-question-hint { font-size: 16px; }
 }
+
+/* ══ v646：單元列表的標題被切掉（「填入正確的 Conjunction …」「判斷 Compound Sentences …」）═══════
+   .qm-unit-row-title 是 nowrap＋ellipsis，標題後面還接著「已結束／2天」徽章——標題一長，徽章（甚至標題後半）就被吃掉，
+   小朋友看不出這份作業已經結束。平板寬度改成可換行，整個標題＋徽章都看得到。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .qm-unit-row-title { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+}
