@@ -4087,3 +4087,28 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-test-qlabel, .fc-test-label { font-size: 14px; }
   .fc-test-foot .btn.primary { font-size: 15px; min-height: 48px; }
 }
+
+/* ══ v651：短文填空交卷後（平板）═══════════════════════════════════════════
+   交卷後整篇文章＋紅綠答案長過一屏，底下那排「只重做錯的／再試一次／接著做：…（倒數）／回今天的任務」被擠在作答區最下緣，
+   只露出半截；而且倒數的數字在那排按鈕上——小朋友根本看不到，6 秒後就被帶走（碰畫面才會取消）。
+   → 底欄釘在作答區底部（sticky），分數一行、按鈕在下面可換行；倒數改 20 秒（JSX）。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .cloze-footer {
+    position: sticky; bottom: 0; z-index: 6;
+    background: var(--bg-paper, #FBF8F1);
+    box-shadow: 0 -10px 22px -14px rgba(58, 43, 20, .28);
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .cloze-result-row { flex-wrap: wrap; gap: 10px; }
+  .cloze-result-text { flex: 1 1 calc(100% - 50px); }
+  .cloze-result-row .qm-btn { flex: 1 1 180px; width: auto; max-width: 320px; }
+}
+/* v651（續）：橫式（高 ≤900）底欄壓扁；交卷後詞庫沒用了，不要再釘在上面佔位 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .cloze-player:has(.cloze-result-row) .cloze-bank { position: static; }
+}
+@media (min-width: 761px) and (max-width: 1400px) and (max-height: 900px) {
+  .cloze-footer { padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .cloze-result-row { gap: 6px; }
+  .cloze-result-row .qm-btn { flex: 1 1 130px; min-height: 42px; padding: 6px 10px; font-size: 14px; }
+}

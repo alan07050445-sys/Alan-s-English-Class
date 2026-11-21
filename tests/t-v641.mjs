@@ -32,4 +32,7 @@ const v9 = t.slice(t.indexOf('v649：直式'));
 ok('打字題答案欄撐滿（span 包裝）＋跳過鈕 44', /\.ta-input-wrap > span \{ width: 100%; max-width: 600px/.test(v9) && /\.sp-skip \{ font-size: 16px; min-height: 44px/.test(v9));
 const v0 = t.slice(t.indexOf('v650：單字卡'));
 ok('測驗設定／學習小字放大', /\.fc-test-setup > \.mono, \.fc-learn-q > \.mono \{ font-size: 13px !important/.test(v0) && /\.fc-test-foot \.btn\.primary/.test(v0));
+const v1 = t.slice(t.indexOf('v651：短文填空交卷後'));
+ok('短文填空底欄釘底＋交卷後詞庫不釘', /\.cloze-footer \{\s*position: sticky; bottom: 0/.test(v1) && /\.cloze-player:has\(\.cloze-result-row\) \.cloze-bank \{ position: static/.test(v1));
+ok('短文填空倒數 20 秒', /seconds=\{20\}/.test(gq) && /useState\(seconds \|\| 6\)/.test(gq));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

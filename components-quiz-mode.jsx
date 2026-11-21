@@ -453,10 +453,11 @@ function qmShortLabel(item, groupName) {
 /* v266: 完成頁導航——各題型共用：「下一個任務 →」＋「回今天的任務」（沒有任務脈絡時退回 onBack）
    v338: 同一組（同篇文章）做完 → 顯示「接著做：XXX」並倒數自動進入，小朋友不用自己點。
          倒數期間碰畫面任何地方就取消，想留在成績頁看的孩子不會被拉走。 */
-function QmDoneNavBtns({ onBack, onBackToTasks, onNextTask, backLabel }) {
+function QmDoneNavBtns({ onBack, onBackToTasks, onNextTask, backLabel, seconds }) {
   const label   = (onNextTask && onNextTask.label) || '下一個任務 →';
   const canAuto = !!(onNextTask && onNextTask.auto);
-  const [left, setLeft]       = React.useState(6);
+  /* v651：預設 6 秒；短文填空交卷後要對照整篇紅綠答案，6 秒讀不完，那一頁傳 20 秒（碰畫面仍會立刻取消倒數） */
+  const [left, setLeft]       = React.useState(seconds || 6);
   const [stopped, setStopped] = React.useState(!canAuto);
 
   React.useEffect(() => {
@@ -6374,7 +6375,7 @@ function ClozePlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
               <button className="qm-btn secondary" onClick={redoWrongOnly}>只重做錯的 {wrongCount} 題</button>
             )}
             <button className="qm-btn secondary" onClick={restart}>再試一次</button>
-            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask}/>
+            <QmDoneNavBtns onBack={onBack} onBackToTasks={onBackToTasks} onNextTask={onNextTask} seconds={20}/>
           </div>
         )}
       </div>

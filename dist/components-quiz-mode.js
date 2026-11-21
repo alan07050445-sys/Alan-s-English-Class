@@ -617,11 +617,13 @@ function QmDoneNavBtns({
   onBack,
   onBackToTasks,
   onNextTask,
-  backLabel
+  backLabel,
+  seconds
 }) {
   var label = onNextTask && onNextTask.label || '下一個任務 →';
   var canAuto = !!(onNextTask && onNextTask.auto);
-  var [left, setLeft] = React.useState(6);
+  /* v651：預設 6 秒；短文填空交卷後要對照整篇紅綠答案，6 秒讀不完，那一頁傳 20 秒（碰畫面仍會立刻取消倒數） */
+  var [left, setLeft] = React.useState(seconds || 6);
   var [stopped, setStopped] = React.useState(!canAuto);
   React.useEffect(() => {
     if (stopped || !canAuto) return;
@@ -7708,7 +7710,8 @@ function ClozePlayer({
   }, "\u518D\u8A66\u4E00\u6B21"), /*#__PURE__*/React.createElement(QmDoneNavBtns, {
     onBack: onBack,
     onBackToTasks: onBackToTasks,
-    onNextTask: onNextTask
+    onNextTask: onNextTask,
+    seconds: 20
   }))));
 }
 
