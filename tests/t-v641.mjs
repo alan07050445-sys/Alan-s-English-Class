@@ -28,4 +28,8 @@ const rr = t.slice(t.indexOf('v647：成績畫面'));
 ok('成績畫面按鈕可換行＋複習題上下排', /\.qm-result-btns \{ flex-wrap: wrap/.test(rr) && /\.qm-wrong-item \{ flex-direction: column/.test(rr));
 const pr = t.slice(t.indexOf('v648：直式'));
 ok('直式成績按鈕上下排同寬', /\.qm-result-btns \{ flex-direction: column; align-items: center/.test(pr) && /max-width: 420px/.test(pr));
+const v9 = t.slice(t.indexOf('v649：直式'));
+ok('打字題答案欄撐滿（span 包裝）＋跳過鈕 44', /\.ta-input-wrap > span \{ width: 100%; max-width: 600px/.test(v9) && /\.sp-skip \{ font-size: 16px; min-height: 44px/.test(v9));
+const v0 = t.slice(t.indexOf('v650：單字卡'));
+ok('測驗設定／學習小字放大', /\.fc-test-setup > \.mono, \.fc-learn-q > \.mono \{ font-size: 13px !important/.test(v0) && /\.fc-test-foot \.btn\.primary/.test(v0));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
