@@ -24,4 +24,6 @@ const n = t.slice(t.indexOf('v645：文法題型'));
 ok('提示鈕 44px／小提示 16px', /\.ta-hint-btn \{ font-size: 15px; min-height: 44px/.test(n) && /\.qm-question-hint \{ font-size: 16px/.test(n));
 const u = t.slice(t.indexOf('v646：單元列表的標題'));
 ok('單元列表標題平板可換行', /\.qm-unit-row-title \{ white-space: normal; overflow: visible/.test(u));
+const rr = t.slice(t.indexOf('v647：成績畫面'));
+ok('成績畫面按鈕可換行＋複習題上下排', /\.qm-result-btns \{ flex-wrap: wrap/.test(rr) && /\.qm-wrong-item \{ flex-direction: column/.test(rr));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

@@ -4044,3 +4044,15 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 641px) and (max-width: 1400px) {
   .qm-unit-row-title { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
 }
+
+/* ══ v647：成績畫面（判斷 Compound Sentences 走到最後）═══════════════════════
+   ① 三顆按鈕各被限制 160px 寬並排——「接著做：填入正確的 Conjunction → (4)」被擠成 5 行、「回今天的任務」折成兩行
+      → 平板寬度改成每顆 ≥220px、放不下就換行
+   ② 「需要複習」每一題左邊是題目、右邊是正解，題目很長（整句）時被擠成窄窄一欄
+      → 平板寬度改成上下排：題目一整行、正解在下面。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .qm-result-btns { flex-wrap: wrap; }
+  .qm-result-btns .qm-btn { flex: 1 1 220px; max-width: 320px; }
+  .qm-wrong-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .qm-wrong-a { flex-shrink: 1; }
+}
