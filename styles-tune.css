@@ -4844,3 +4844,12 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 641px) and (max-width: 1400px) and (min-height: 1000px) {
   .gnl-img { max-height: 340px; max-width: min(640px, 100%); }
 }
+
+/* ══ v645：文法題型（平板橫＋直）══════════════════════════════════════════
+   中翻英的「💡 提示」鈕 31px 高、13px 字；各題型題目上方的小提示（把 ____ 填上正確的字、把句子裡錯的地方改對）14px
+   → 提示鈕 44px 高、15px；小提示 16px。
+   （改寫句子答錯時下面還多一行綠色的「✓ 正解」，與紅色橫幅重複 → JSX 已拿掉。） */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .ta-hint-btn { font-size: 15px; min-height: 44px; padding: 8px 18px; }
+  .qm-question-hint { font-size: 16px; }
+}

@@ -18,4 +18,8 @@ const base = fs.readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 ok('換週動畫結束後不留 transform（否則 position:fixed 的子孫會相對它定位）', !/\.week-slide-(left|right)\s*\{[^}]*\bboth\b/.test(base));
 const m = t.slice(t.indexOf('v644：平板直式'));
 ok('直式補強（填空格／換聲音鈕／教學圖 340）', /\.cloze-input \{ width: 110px/.test(m) && /\.sp-voice-alt/.test(m) && /\.gnl-img \{ max-height: 340px/.test(m));
+const gq = fs.readFileSync(new URL('../components-quiz-mode.jsx', import.meta.url), 'utf8');
+ok('答錯只留紅色橫幅的正解（不再重複綠色「✓ 正解」）', !/className="ta-correct-ans">✓ \{current\.answer\}/.test(gq));
+const n = t.slice(t.indexOf('v645：文法題型'));
+ok('提示鈕 44px／小提示 16px', /\.ta-hint-btn \{ font-size: 15px; min-height: 44px/.test(n) && /\.qm-question-hint \{ font-size: 16px/.test(n));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

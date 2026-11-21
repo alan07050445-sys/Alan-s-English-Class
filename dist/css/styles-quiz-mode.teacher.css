@@ -190,6 +190,10 @@
 .wp-player .wf-card {
   margin: 14px 20px 0;
 }
+.ta-correct-ans {
+  font-size: 18px; font-weight: 600; color: #166534;
+  font-family: var(--mono, monospace);
+}
 
 .sa-toggle {
   font-size: 12px; font-family: var(--mono); letter-spacing: 0.06em;

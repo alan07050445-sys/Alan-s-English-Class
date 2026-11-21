@@ -2915,9 +2915,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
           disabled={result !== null || judging}
           autoComplete="off" autoCapitalize="none" spellCheck={false}
         />
-        {result === 'wrong' && (
-          <div className="ta-correct-ans">✓ {current.answer}</div>
-        )}
+        {/* v645：答錯時下面紅色橫幅已經寫了「✗ 正解：…」，這裡不再多放一行綠色的「✓ 正解」重複同一個答案 */}
       </div>
 
       {/* v392: 讀解說被打斷是最惱人的——碰到回饋區（或在裡面按鍵）就取消倒數，剩下自己按 */}

@@ -3462,9 +3462,7 @@ function TypeAnswerPlayer({
     autoComplete: "off",
     autoCapitalize: "none",
     spellCheck: false
-  }), result === 'wrong' && /*#__PURE__*/React.createElement("div", {
-    className: "ta-correct-ans"
-  }, "\u2713 ", current.answer)), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     className: "qm-feedback",
     role: "status",
     "aria-live": "polite",
