@@ -3964,7 +3964,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .grade-chip, .fs-btn, .signin-btn { min-width: 44px; min-height: 44px; }
   .signin-btn { font-size: 14px; padding-left: 14px; padding-right: 14px; }
 
-  .qm-cat-view:has(.qm-sidebar-reopen) .qm-player-head { margin-top: 48px; }
+  .qm-cat-view:has(.qm-sidebar-reopen) .qm-quiz-area { padding-top: 52px; }   /* 單字卡／教學的標題列也會被浮動鈕蓋到 → 整個作答區讓開，不只 .qm-player-head */
 
   .wh-pill { font-size: 12px; }
   .wh-kick-txt { font-size: 13px; }
@@ -4013,4 +4013,19 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .cloze-bank-w { min-height: 40px; }
   .cloze-input { width: 110px; font-size: 18px; min-height: 36px; padding-bottom: 4px; }
   .sp-voice-alt { font-size: 15px; padding: 10px 16px; min-height: 44px; }
+}
+
+/* ══ v644：平板直式其他題型（834×1194）═══════════════════════════════════════
+   直式一頁很高、內容只用掉上半，所以不用像橫式那樣壓縮；只補「按不準」的：
+   ① 短文填空的填空格 27px 高、80px 寬、詞庫按鈕 → 36px 高、110px 寬、40px 高（同橫式）
+   ② 聽寫「還是聽不到？換一種聲音試試」20px 高 → 44px；答案欄與「確認」之間只隔 10px → 16px
+   ③ 互動教學的圖：直式有空間，190 → 340px（橫式維持 190）。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .cloze-input { width: 110px; font-size: 18px; min-height: 36px; padding-bottom: 4px; }
+  .cloze-bank-w { min-height: 40px; }
+  .sp-voice-alt { font-size: 15px; padding: 10px 16px; min-height: 44px; }
+  .ta-input { margin-bottom: 6px; }
+}
+@media (min-width: 641px) and (max-width: 1400px) and (min-height: 1000px) {
+  .gnl-img { max-height: 340px; max-width: min(640px, 100%); }
 }
