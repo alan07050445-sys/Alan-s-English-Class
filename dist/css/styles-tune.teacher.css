@@ -829,3 +829,4 @@
   font-size: 13px; font-weight: 700; line-height: 1.6;
 }
 .ll2-ai-warn b { font-family: var(--mono); color: #A8331F; }
+.gs-room .gs-mine-text > span { font-size: 14px; }

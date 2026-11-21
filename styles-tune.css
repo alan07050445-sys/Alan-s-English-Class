@@ -4790,3 +4790,22 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .wh-stat i, .wk-tile i { font-size: 13.5px; }
   .progress-pill, .progress-pill span { white-space: nowrap; }   /* 頂欄變大後「0/24 DONE」不要被擠成兩行 */
 }
+
+/* ══ v642：平板橫式配對連線一頁放得下、門口頁小連結放大 ═══════════════════════════
+   ① 配對連線：側欄開著時作答區只剩 ~700px，8 組要往下捲。橫式（寬 761~1400、高 ≤900）把列距、字級、
+      卡片最小高度收緊（單字 23→21、解釋 17.5→16），單字欄與連線之間的空隙縮小 → 8 組一頁放得下。
+      手指點的範圍仍 ≥44px 高（.dm-chip min-height 44）。
+   ② 門口頁「改選其他年級／新手教學／回到主頁」13.5px、點擊範圍約 30px → 16px、至少 44px 高。 */
+@media (min-width: 761px) and (max-width: 1400px) and (max-height: 900px) {
+  .dm-hint { margin: 2px 0 6px; font-size: 14px; }
+  .dm-wrap { row-gap: 3px; column-gap: clamp(56px, 8vw, 110px); padding: 0 6px 6px; }
+  .dm-chip { min-height: 44px; padding: 4px 4px; gap: 12px; }
+  .dm-word .dm-txt { font-size: 22px; }
+  .dm-def .dm-txt { font-size: 17px; line-height: 1.3; }
+  .dm-foot { padding: 6px 12px calc(8px + env(safe-area-inset-bottom, 0px)); gap: 6px; margin-top: 0; }
+  .dm-submit.qm-btn.primary { padding: 11px 36px; font-size: 17px; }
+}
+.grade-selector .gs-switch, .gs-links > .gs-switch {
+  font-size: 16px; padding: 12px 18px; min-height: 44px;
+}
+.gs-room .gs-mine-text > span { font-size: 14px; }
