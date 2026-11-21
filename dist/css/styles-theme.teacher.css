@@ -40,6 +40,13 @@
   transition: color .15s;
 }
 .wh-growth-link:hover { color: var(--g-c, #8B3120); }
+
+/* ── v333: 手機直式題目字級全面縮小（Alan 回報「字太大、換行太多」）──
+   只在 ≤480px 手機生效——題目/選項/短文/單字卡更透氣、少換行。桌機、平板完全不變。 */
+@media (max-width: 480px) {
+
+  /* 單字卡（例句、選項；主字保持大不動）*/
+  .fc-learn-example { font-size: 15px; }}
 .google-btn.ll-start-btn { font-size: 20px; padding: 17px 46px; }
 @media (max-width: 640px) {
   .google-btn.ll-start-btn { font-size: 18.5px; padding: 16px 38px; }}

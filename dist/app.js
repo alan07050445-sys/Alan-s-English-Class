@@ -955,7 +955,18 @@ function App() {
   var savePendingRef = useAppRef(0);
   var saveWeeksSafe = (w, onOk) => {
     if (!cloudReadyRef.current) {
-      alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）');
+      alert('資料還在從雲端載入中，先等兩秒再存一次。\n（這是為了避免把雲端已經有的內容蓋掉）' + (onOk ? '' : '\n剛剛的內容已先備份在這台裝置，重新整理後可以「補回」。'));
+      /* v638：沒有 onOk 的呼叫端（AI 一鍵生成、匯入、批次整理…）不會處理 false，
+         內容已經先顯示在畫面上卻沒進雲端 → 先把整份備份在這台裝置，重新整理後會跳「補回」黃條（只加不刪）。 */
+      if (!onOk) {
+        try {
+          localStorage.setItem('alan-unsaved-weeks', JSON.stringify({
+            t: Date.now(),
+            grade,
+            weeks: w
+          }));
+        } catch (x) {}
+      }
       return false;
     }
     pruneGhostHomework(w); // v486：存進去的永遠不帶幽靈作業

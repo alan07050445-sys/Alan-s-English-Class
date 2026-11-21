@@ -1004,9 +1004,7 @@
   .gr-page-read .gr-seg-text { font-size: 15.5px; }
   .gr-q-text { font-size: 16px; }
   .gr-q .qm-opt-text { font-size: 15px; }
-
-  /* 單字卡（例句、選項；主字保持大不動）*/
-  .fc-example, .fc-learn-example { font-size: 15px; }
+  .fc-example { font-size: 24px; }   /* v638：例句＝主字(.fc-zh 30px)的 80% */
   .fc-choice { font-size: 16.5px; }
   .fc-fill-text { font-size: 20px; }
   .fc-fill-btn { font-size: 16.5px !important; }

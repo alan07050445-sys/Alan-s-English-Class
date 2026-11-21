@@ -8,7 +8,7 @@ const body = (src, start, end) => { const a = src.indexOf(start); const b = src.
 
 console.log('\n【saveWeeksSafe】');
 const sw = body(app, 'const saveWeeksSafe = (w, onOk) =>', 'const mySummerPlan');
-ok('雲端沒準備好回傳 false', /!cloudReadyRef\.current[\s\S]{0,200}return false;/.test(sw));
+ok('雲端沒準備好回傳 false', /!cloudReadyRef\.current[\s\S]{0,900}return false;/.test(sw));
 ok('雲端寫成功才呼叫 onOk（清草稿）', /p\.then\(ok,/.test(sw) && /if \(onOk\)/.test(sw));
 ok('失敗走 markSaveFail（紅條＋localStorage 備份）', /markSaveFail\(w, e\)/.test(sw));
 ok('有計算「還在送的存檔」', /savePendingRef\.current\+\+/.test(sw) && /settle\(\)/.test(sw));
