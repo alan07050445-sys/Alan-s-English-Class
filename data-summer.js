@@ -172,7 +172,8 @@ function _subscribeLib(callback, onError) {
       }
       callback(w, o);
     } else {
-      _libDoc.set({ weeks: _libSeed(), weekOrder: _libOrder() }).catch(() => {});
+      /* 🔴 v639：本來這裡會把種子週整份寫回雲端（沒有 merge＝整份覆蓋；暑假題庫 167 個單元會被換成 9 個空週）。
+         G4 在 2026-11-21 就是被同樣寫法蓋掉。文件早就存在，前端不播種，只在畫面上用種子。 */
       callback(_libSeed(), _libOrder());
     }
   }, err => {

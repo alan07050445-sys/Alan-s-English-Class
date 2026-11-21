@@ -6,4 +6,5 @@ for (const f of ['data-g1.js','data-g2.js','data-g4.js','data-g5.js','data-g6.js
   const s = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
   ok(f + ' 沒有 .set({…SEED_WEEKS…}) 整份覆蓋', !/\.set\(\{[^}]*weeks: *[A-Z0-9_]+SEED_WEEKS/.test(s));
 }
+{ const s = fs.readFileSync(new URL('../data-summer.js', import.meta.url), 'utf8'); ok('data-summer.js 沒有 _libDoc.set({ weeks: _libSeed()… 整份覆蓋', !/_libDoc\.set\(\{ *weeks: *_libSeed/.test(s)); }
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
