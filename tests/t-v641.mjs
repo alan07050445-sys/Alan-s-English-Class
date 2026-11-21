@@ -26,4 +26,6 @@ const u = t.slice(t.indexOf('v646：單元列表的標題'));
 ok('單元列表標題平板可換行', /\.qm-unit-row-title \{ white-space: normal; overflow: visible/.test(u));
 const rr = t.slice(t.indexOf('v647：成績畫面'));
 ok('成績畫面按鈕可換行＋複習題上下排', /\.qm-result-btns \{ flex-wrap: wrap/.test(rr) && /\.qm-wrong-item \{ flex-direction: column/.test(rr));
+const pr = t.slice(t.indexOf('v648：直式'));
+ok('直式成績按鈕上下排同寬', /\.qm-result-btns \{ flex-direction: column; align-items: center/.test(pr) && /max-width: 420px/.test(pr));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

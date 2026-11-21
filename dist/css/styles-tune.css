@@ -4056,3 +4056,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .qm-wrong-item { flex-direction: column; align-items: flex-start; gap: 4px; }
   .qm-wrong-a { flex-shrink: 1; }
 }
+
+/* v648：直式（641~900）成績畫面三顆按鈕——兩顆並排、第三顆單獨一行，寬度不一 → 直式一律上下排、同寬、置中。 */
+@media (min-width: 641px) and (max-width: 900px) {
+  .qm-result-btns { flex-direction: column; align-items: center; }
+  .qm-result-btns .qm-btn { flex: 0 0 auto; width: 100%; max-width: 420px; }
+}
