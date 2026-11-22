@@ -5211,3 +5211,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .focus-btn { top: 74px; right: 12px; width: 44px; height: 44px; }
   html.focus-on .focus-btn { top: 6px; right: 8px; }
 }
+
+/* v675（iPad 直式／橫式）：單字卡「測驗」設定頁的開關 48×28，手指不好點。外觀不動，
+   用 ::before 把可點範圍上下各擴 8px、左右各 6px（≈ 60×44）。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .fc-toggle { position: relative; }
+  .fc-toggle::before { content: ''; position: absolute; inset: -8px -6px; }
+}
