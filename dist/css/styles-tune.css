@@ -4154,3 +4154,30 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .rs-zone-ph, .rs-tray-lab { font-size: 14px; }
   .grd-tword { font-size: 21px; }   /* 分段閱讀的文章字：直式頁面大片留白，文章字太小（18.5px） */
 }
+
+/* v655：刻度排序的小字（平板）：刻度 0%/25%… 12px → 14px、卡片上的範圍 11px → 13px */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .sl-labels { font-size: 14px; height: 26px; }
+  .sl-pin-r { font-size: 13px; }
+}
+
+/* ══ v655：簡答／打字題的答案欄與送出鈕比外框寬 20px（所有裝置）═══════════════════
+   .wp-input／.wp-submit 左右各留 20px 外距，但寬度是 100%（.qm-btn、textarea 都是）→ 整個往右多出 20px：
+   直式 834px 時答案欄 60→814、題目卡 60→774，右邊對不齊、貼近螢幕邊。
+   → 寬度改成 100% 扣掉兩邊外距（手機外距 14px 的版本也一起扣）。 */
+.wp-player .wp-input, .wp-player .wp-submit, .wp-player .wp-next { box-sizing: border-box; width: calc(100% - 40px); }
+@media (max-width: 768px) {
+  .wp-player .wp-input, .wp-player .wp-submit, .wp-player .wp-next { width: calc(100% - 28px); }
+}
+/* v655（續）：作文字數「0 words」在平板被擠成兩行 → 不換行 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .essay-word-count { white-space: nowrap; flex: none; font-size: 14px; }
+}
+
+/* v655（續）：單元列表「組」裡的單元卡比組寬 10px＋右外距——width:100% 再加左外距 10px，整排往右溢出（直式最明顯，貼到右緣）。 */
+.qm-ugroup > .qm-unit-row { box-sizing: border-box; width: calc(100% - 10px); margin-right: 0; }
+
+/* v655（續）：考卷 Part 1「Word:」輸入欄 160px，placeholder「你造的字（不用先加 prefix）」被切 → 平板加寬到 240px、min-height 40 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .ex-af-w { min-width: 240px; min-height: 40px; }
+}

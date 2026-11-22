@@ -41,4 +41,6 @@ const v3 = t.slice(t.indexOf('v653：句子排序'));
 ok('句子排序／圈選題底欄可換行、圈選字 40px', /\.circle-footer \{ flex-wrap: wrap/.test(v3) && /\.circle-word \{ min-height: 40px/.test(v3));
 const v4 = t.slice(t.indexOf('v654：閱讀技巧'));
 ok('分段閱讀返回鈕 44／文章字 21、閱讀技巧卡片 17', /\.wp-back \{ min-width: 44px; min-height: 44px/.test(v4) && /\.grd-tword \{ font-size: 21px/.test(v4) && /\.rs-chip \{ font-size: 17px/.test(v4));
+const v5 = t.slice(t.indexOf('v655：刻度排序的小字'));
+ok('簡答答案欄寬度扣外距／單元卡不溢出', /\.wp-player \.wp-input, \.wp-player \.wp-submit, \.wp-player \.wp-next \{ box-sizing: border-box; width: calc\(100% - 40px\)/.test(v5) && /\.qm-ugroup > \.qm-unit-row \{ box-sizing: border-box; width: calc\(100% - 10px\)/.test(v5));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
