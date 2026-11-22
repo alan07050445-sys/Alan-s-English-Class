@@ -5035,3 +5035,11 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .rs-venn .rs-zone-head { font-size: 16px; }
   .rs-ce-slot .rs-zone-ph, .rs-seq-slot .rs-zone-ph { font-size: 15px; }
 }
+
+/* ══ v659：AI 批改結果（平板）——回饋卡標題 15px、Story Mountain 送出前的檢視頁內文 14px 偏小 ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .wf3-title { font-size: 17px; }
+  .sm-review-title { font-size: 21px; }
+  .sm-review-stage-head { font-size: 17px; }
+  .sm-review-stage-body { font-size: 17px; }
+}

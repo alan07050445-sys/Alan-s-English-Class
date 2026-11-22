@@ -49,4 +49,6 @@ const v7 = t.slice(t.indexOf('v657：平板首頁'));
 ok('首頁上一頁／品牌連結 44px', /\.lobby-back \{ min-height: 44px/.test(v7) && /\.brand-home \{ min-height: 44px/.test(v7));
 const v8 = t.slice(t.indexOf('v658：閱讀技巧'));
 ok('維恩圖標題 16／因果提示 15', /\.rs-venn \.rs-zone-head \{ font-size: 16px/.test(v8) && /\.rs-seq-slot \.rs-zone-ph \{ font-size: 15px/.test(v8));
+const v99 = t.slice(t.indexOf('v659：AI 批改結果'));
+ok('AI 回饋卡標題 17／Story Mountain 檢視頁 17', /\.wf3-title \{ font-size: 17px/.test(v99) && /\.sm-review-stage-body \{ font-size: 17px/.test(v99));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
