@@ -4368,3 +4368,20 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
     background: linear-gradient(to bottom, rgba(244, 240, 231, 0), var(--bg, #F4F0E7) 14px);
   }
 }
+
+/* v674（iPad 直式／橫式通用）：幾個點擊目標比 iPad 建議的 44px 小——
+   切音節縫隙 34px 寬、分類字卡 36px 高、短文填空欄位 36px 高、圈選單字 40px 高、單字測驗「點擊重聽」27px 高。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .sd-gap { width: 44px; }
+  .ws-word-chip { min-height: 44px; }
+  .circle-word { display: inline-flex; align-items: center; min-height: 44px; }
+  .cloze-input { min-height: 44px; font-size: 18px; }
+  .qm-listen-btn { min-height: 44px; }
+}
+/* 直式（641~900）：「專心模式」鈕原本固定在 top:8（34px），剛好壓在標題列右邊的「登入」／頭像上。
+   平常放到標題列下面那條預留的空條（跟左邊「單元列表」鈕同一條，內容本來就不會用到）、並補到 44px；
+   專心模式開著（標題列收起來了）才貼回最上面。 */
+@media (min-width: 641px) and (max-width: 900px) {
+  .focus-btn { top: 74px; right: 12px; width: 44px; height: 44px; }
+  html.focus-on .focus-btn { top: 6px; right: 8px; }
+}

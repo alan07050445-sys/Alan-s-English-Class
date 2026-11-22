@@ -83,4 +83,6 @@ ok('分段閱讀圖片頁橫式 chrome 335', /has\(\.qm-sidebar-reopen\) \.gr-pa
 ok('作文／故事山橫式：山縮小、作文輸入框 220、故事山輸入框 16px', /\.sm-svg \{ max-width: 400px; \}/.test(t) && /\.essay-input \{ height: 220px/.test(t) && /\.sm-textarea \{ font-size: 16px; \}/.test(t));
 ok('上傳作業橫式：縮圖 100×134、拍照與送出並排', /\.uh-thumb \{ width: 100px; height: 134px; \}/.test(t) && /\.uh-btns \{ flex-wrap: nowrap/.test(t));
 ok('上傳作業送出鈕固定在作答區底部（平板）', /\.uh-btns \{\s*position: sticky; bottom: 0/.test(t));
+ok('平板點擊目標補到 44px（切音節縫隙／分類字卡／短文填空／圈選／重聽）', /\.sd-gap \{ width: 44px; \}/.test(t) && /\.ws-word-chip \{ min-height: 44px; \}/.test(t) && /\.circle-word \{ display: inline-flex; align-items: center; min-height: 44px; \}/.test(t) && /\.cloze-input \{ min-height: 44px/.test(t) && /\.qm-listen-btn \{ min-height: 44px; \}/.test(t));
+ok('直式「專心模式」浮動鈕 44px', /\.focus-btn \{ top: 74px; right: 12px; width: 44px; height: 44px; \}/.test(t) && /html\.focus-on \.focus-btn \{ top: 6px; right: 8px; \}/.test(t));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
