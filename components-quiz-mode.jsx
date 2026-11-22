@@ -889,11 +889,13 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
       for (const m of muts) {
         for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue;
-          const fb = (n.matches && n.matches('.qm-feedback')) ? n : (n.querySelector && n.querySelector('.qm-feedback'));
+          /* v670：閱讀技巧的回饋是 .rs-fb（鈕在旁邊的 .rs-foot），不是 .qm-feedback——答對後「下一個技巧 →」在 666–725px（視窗 690）不會自己捲上來。 */
+          const fb = (n.matches && n.matches('.qm-feedback, .rs-fb')) ? n : (n.querySelector && n.querySelector('.qm-feedback, .rs-fb'));
           if (!fb) continue;
           setTimeout(() => {
             try {
-              const b = fb.querySelector('.qm-btn.primary');
+              const b = fb.querySelector('.qm-btn.primary')
+                || (fb.classList.contains('rs-fb') && fb.parentElement && fb.parentElement.querySelector('.rs-foot .qm-btn.primary'));
               (b || fb).scrollIntoView({ block: 'nearest' });   // 不用 smooth：背景分頁/低電量時平滑捲動不會動，實測時有時不捲
             } catch (e) {}
           }, 280);

@@ -1152,11 +1152,12 @@ function QuizModeCategoryView({
       for (var m of muts) {
         var _loop = function () {
             if (n.nodeType !== 1) return 0; // continue
-            var fb = n.matches && n.matches('.qm-feedback') ? n : n.querySelector && n.querySelector('.qm-feedback');
+            /* v670：閱讀技巧的回饋是 .rs-fb（鈕在旁邊的 .rs-foot），不是 .qm-feedback——答對後「下一個技巧 →」在 666–725px（視窗 690）不會自己捲上來。 */
+            var fb = n.matches && n.matches('.qm-feedback, .rs-fb') ? n : n.querySelector && n.querySelector('.qm-feedback, .rs-fb');
             if (!fb) return 0; // continue
             setTimeout(() => {
               try {
-                var b = fb.querySelector('.qm-btn.primary');
+                var b = fb.querySelector('.qm-btn.primary') || fb.classList.contains('rs-fb') && fb.parentElement && fb.parentElement.querySelector('.rs-foot .qm-btn.primary');
                 (b || fb).scrollIntoView({
                   block: 'nearest'
                 }); // 不用 smooth：背景分頁/低電量時平滑捲動不會動，實測時有時不捲
