@@ -45,4 +45,6 @@ const v5 = t.slice(t.indexOf('v655：刻度排序的小字'));
 ok('簡答答案欄寬度扣外距／單元卡不溢出', /\.wp-player \.wp-input, \.wp-player \.wp-submit, \.wp-player \.wp-next \{ box-sizing: border-box; width: calc\(100% - 40px\)/.test(v5) && /\.qm-ugroup > \.qm-unit-row \{ box-sizing: border-box; width: calc\(100% - 10px\)/.test(v5));
 const v6 = t.slice(t.indexOf('v656：寫作練習'));
 ok('寫作回饋卡外距＋下一題釘底＋上傳拍照鈕強調', /\.wp-player > \.wf3-feedback, \.wp-player > \.wf3-raw \{ margin: 14px 20px 0/.test(v6) && /\.wp-player \.wp-next \{ position: sticky; bottom: 12px/.test(v6) && /\.qm-btn\.secondary\.uh-pick \{ min-width: 260px; min-height: 64px/.test(v6));
+const v7 = t.slice(t.indexOf('v657：平板首頁'));
+ok('首頁上一頁／品牌連結 44px', /\.lobby-back \{ min-height: 44px/.test(v7) && /\.brand-home \{ min-height: 44px/.test(v7));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

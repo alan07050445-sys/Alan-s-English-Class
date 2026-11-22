@@ -5023,3 +5023,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .qm-btn.secondary.uh-pick { min-width: 260px; min-height: 64px; font-size: 18px; border: 2px dashed var(--accent, #8B3120); color: var(--accent, #8B3120); background: #fffaf2; }
   .uh-hint { font-size: 14.5px; }
 }
+
+/* ══ v657：平板首頁——「← 上一頁」39px、左上品牌連結 33px 都低於 44px 觸控標準 ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .lobby-back { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+  .brand-home { min-height: 44px; display: inline-flex; align-items: center; }
+}
