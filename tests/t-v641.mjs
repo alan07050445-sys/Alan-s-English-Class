@@ -72,4 +72,8 @@ ok('iPad 橫式練習自動收上方列（學生關掉就不再自動收）', /f
 ok('iPad 橫式側欄預設收合、學生選過就照他的', /window\.fcTabletLandscape && window\.fcTabletLandscape\(\)/.test(qmsrc) && /v === '0'\) return false/.test(qmsrc));
 ok('專心模式卡片高度隨視窗（上限560、下限420）', /html\.focus-on \.fc-player\.fc-p-card,[\s\S]{0,120}max\(420px, min\(560px, calc\(100vh - 205px\)\)\)/.test(t));
 ok('一次一題：沒答完不顯示交卷列、小圖100', /\.fc-test-foot-wait, \.fc-test-paged ~ \.fc-test-foot \{ display: none/.test(t) && /fc-test-foot-wait/.test(fcsrc) && /\.fc-test-paged \.fc-test-img \{ width: 100px/.test(t));
+ok('側欄收合時標題列讓出「單元列表」鈕', /\.qm-cat-view\.sidebar-hidden \.qm-fc-player-bar \{ padding-left: 136px/.test(t));
+ok('專心模式標題列右側讓出 56px', /html\.focus-on \.qm-fc-player-bar \{ padding-right: 56px/.test(t));
+ok('專心模式作答頂列右側讓出 56px', /html\.focus-on \.qm-player-head \{ padding-right: 56px/.test(t));
+ok('橫式平板答完題自動捲到「下一題」鈕', /new MutationObserver/.test(qmsrc) && /querySelector\('\.qm-feedback'\)/.test(qmsrc) && /scrollIntoView\(\{ block: 'nearest' \}\)/.test(qmsrc));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

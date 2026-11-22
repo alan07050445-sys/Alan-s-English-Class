@@ -5124,3 +5124,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-test-paged + .fc-test-pager { margin-top: 6px; }
 }
 .fc-test-pager-submit { min-width: 220px; }
+
+/* v667：橫式 iPad 側欄收合後，左上浮出的「單元列表」鈕（fixed，114×44）蓋住下方「中師額外單字」標題 → 標題列讓出 136px。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .qm-cat-view.sidebar-hidden .qm-fc-player-bar { padding-left: 136px; }
+}
+/* v667（續）：專心模式右上角的 ⛶／⤡ 鈕（fixed）會壓在「完成練習」鈕的右緣（單元列表展開時內容靠上）→ 標題列右側讓出 56px。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  html.focus-on .qm-fc-player-bar { padding-right: 56px; }
+}
+/* v667（續）：題目作答頁（字義選擇、填空…）頂端「還剩 N 題／⭐」被專心模式右上的 ⛶／⤡ 鈕蓋住 → 頂列右側讓出 56px。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  html.focus-on .qm-player-head { padding-right: 56px; }
+}

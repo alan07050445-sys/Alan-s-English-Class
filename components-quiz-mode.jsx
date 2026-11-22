@@ -877,6 +877,33 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
   const dueInputRef = React.useRef(null);
   const [sidebarHidden, setSidebarHidden] = useQM(() => loadSidebarCollapsed()); // v298: 學生自控側欄收合
   const toggleSidebar = () => setSidebarHidden(v => { const n = !v; saveSidebarCollapsed(n); return n; });
+  /* v667（iPad 橫式）：答完題目後出現的回饋卡（對錯＋解說）把「下一題」鈕擠到畫面外（690 高的視窗約在 750px，
+     捲動容器只有 636px）——學生每一題都要自己往下捲才找得到下一題。
+     → 橫式平板：回饋卡一出現就順順地捲到「下一題」鈕可見（block:'nearest'：本來就看得到就不動）。
+     用 MutationObserver 盯著作答區，涵蓋所有題型（回饋卡的 class 都是 .qm-feedback），不用一個個改播放器。 */
+  useQME(() => {
+    const area = document.querySelector('.qm-quiz-area');
+    if (!area || !window.MutationObserver) return;
+    const mo = new MutationObserver((muts) => {
+      if (!(window.fcTabletLandscape && window.fcTabletLandscape())) return;
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          const fb = (n.matches && n.matches('.qm-feedback')) ? n : (n.querySelector && n.querySelector('.qm-feedback'));
+          if (!fb) continue;
+          setTimeout(() => {
+            try {
+              const b = fb.querySelector('.qm-btn.primary');
+              (b || fb).scrollIntoView({ block: 'nearest' });   // 不用 smooth：背景分頁/低電量時平滑捲動不會動，實測時有時不捲
+            } catch (e) {}
+          }, 280);
+          return;
+        }
+      }
+    });
+    mo.observe(area, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [selectedItem]);
 
   const quizItems = useQMM(() => getQuizItems(items), [items]);
   // Edit mode: show ALL items so teacher can see & edit non-quiz types too
