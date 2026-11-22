@@ -5066,9 +5066,20 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 
 /* ══ v662：iPad 橫式單字卡——卡片高度本來是「視窗高度 − 上面的版頭」現算的：
    視窗 834 高 → 433px、Safari 工具列讓視窗剩 690 高 → 只剩 289px，而且每台、每次轉向都不一樣，
-   圖片＋中文＋例句擠成一團。→ 改成固定高度 500px（內容區自己吃剩下的），頁面不夠高就讓頁面捲。
+   圖片＋中文＋例句擠成一團。→ 改成固定高度 560px（內容區自己吃剩下的），頁面不夠高就讓頁面捲。
    例句 40px → 33px（縮小約 1.2 倍），給圖片多一點位置。 ══ */
 @media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
-  .fc-player.fc-p-card { height: 500px !important; min-height: 500px; }
-  .fc-p-card .fc-example { font-size: 33px; }
+  .fc-player.fc-p-card { height: 560px !important; min-height: 560px; }
+  .fc-p-card .fc-example { font-size: 28px; }
+  .fc-p-card .fc-zh { font-size: 42px; }   /* v663：中文 50→42、例句 33→28，讓位給照片 */
+  .fc-p-card .fc-face { padding-top: 12px; padding-bottom: 12px; }
+}
+
+/* ══ v663：iPad 橫式「學習」——① 右上角的 ★ 鈕（44px）壓在進度條最右邊的圓圈上 → 進度條右邊讓出 52px；
+   ② 面板高度跟單字卡一樣是「視窗高度現算」（690 高的視窗只剩 401px）→ 固定 500px。 ══ */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (max-height: 950px) {
+  .fc-player.fc-p-learn > .fc-dual-bar { margin-right: 52px !important; }
+}
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .fc-player.fc-p-learn { height: 560px !important; min-height: 560px; }
 }

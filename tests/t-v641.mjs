@@ -56,5 +56,5 @@ ok('上傳作業評語 17／縮圖完整顯示', /\.uh-comment \{ font-size: 17p
 const v11 = t.slice(t.indexOf('v661：老師後台'));
 ok('老師後台平板按鈕 ≥40～44', /\.tdash-close \{ width: 44px/.test(v11) && /\.tdash-side-btn \{ min-height: 44px/.test(v11) && /\.shopm-tools button, \.roster-del-btn \{ min-width: 40px/.test(v11));
 const v12 = t.slice(t.indexOf('v662：iPad 橫式單字卡'));
-ok('橫式單字卡固定 500／例句 33', /\.fc-player\.fc-p-card \{ height: 500px !important/.test(v12) && /\.fc-p-card \.fc-example \{ font-size: 33px/.test(v12));
+ok('橫式單字卡固定 560／例句 28', /\.fc-player\.fc-p-card \{ height: 560px !important/.test(v12) && /\.fc-p-card \.fc-example \{ font-size: 28px/.test(v12));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
