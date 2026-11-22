@@ -2024,7 +2024,37 @@ function FlashcardPlayer({
           className: "fc-test-written"
         }, /*#__PURE__*/React.createElement("input", {
           className: "fc-written-input",
-          value: typedVal,
+          value: typedVal
+          /* v665（iPad 虛擬鍵盤）：這是「默寫英文單字」的考試——
+             ① 沒關自動校正／拼字檢查：拼錯的字會被標紅底線＝直接洩漏「你拼錯了」，
+                鍵盤上方的候選列還會列出正確拼法＝等於給答案；校正還會把學生打對的冷僻字
+                （keratin、hibernation）自動「改」成別的字而被判錯。
+             ② 第一個字母自動大寫、Enter 沒有去處。
+             → 全部關掉；Enter 跳下一題（最後一題就收鍵盤）；
+               聚焦時把這一格捲到畫面中間，避免被下面浮著的「交卷」列與鍵盤蓋住。 */,
+          autoComplete: "off",
+          autoCapitalize: "none",
+          autoCorrect: "off",
+          spellCheck: false,
+          enterKeyHint: "next",
+          onKeyDown: e => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            var all = Array.from(document.querySelectorAll('.fc-written-input'));
+            var nxt = all[all.indexOf(e.currentTarget) + 1];
+            if (nxt) nxt.focus();else e.currentTarget.blur();
+          },
+          onFocus: e => {
+            var el = e.currentTarget;
+            setTimeout(() => {
+              try {
+                el.scrollIntoView({
+                  block: 'center',
+                  behavior: 'smooth'
+                });
+              } catch (_) {}
+            }, 350);
+          },
           onChange: e => setTypedAnswers(prev => ({
             ...prev,
             [card.id]: e.target.value

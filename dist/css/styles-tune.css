@@ -4262,3 +4262,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 641px) and (max-width: 1400px) {
   .fc-test-img { width: 140px; height: 140px; }
 }
+
+/* ══ v665：手寫測驗輸入欄（平板）——聚焦時瀏覽器把它捲到浮動的「交卷」列下面，留一段安全距離；
+   字 19px→20px、欄高 56px 以上好點。 ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .fc-written-input { font-size: 20px; min-height: 56px; scroll-margin: 120px 0; }
+}

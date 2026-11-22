@@ -61,4 +61,7 @@ const fcsrc = (await import('node:fs')).readFileSync(new URL('../components-flas
 ok('配對格子依「被限定高度的捲動容器」底部算（clampHost）', /useFitHeight\(ref, true, 200, true\)/.test(fcsrc) && /bottomLimit = Math\.min\(vh, hbNatural/.test(fcsrc));
 const v13 = t.slice(t.indexOf('v664：iPad「測驗」模式'));
 ok('測驗題目小圖 140', /\.fc-test-img \{ width: 140px; height: 140px/.test(v13));
+const v14 = t.slice(t.indexOf('v665：手寫測驗輸入欄'));
+ok('手寫輸入欄 20px／56px／scroll-margin', /\.fc-written-input \{ font-size: 20px; min-height: 56px; scroll-margin: 120px 0/.test(v14));
+ok('手寫輸入欄關閉自動校正與拼字檢查', /autoCorrect="off" spellCheck=\{false\}\s+enterKeyHint="next"/.test(fcsrc));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
