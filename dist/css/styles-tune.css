@@ -4392,3 +4392,11 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-toggle { position: relative; }
   .fc-toggle::before { content: ''; position: absolute; inset: -8px -6px; }
 }
+
+/* v676（iPad 直式，手寫測驗）：交卷列 sticky 貼在作答區底部，捲到底時它仍壓住最後一題下緣約 36px——
+   最後一題的輸入框（尤其鍵盤彈出、頁面捲到底時）有一截被交卷列蓋住。題目列表底部多留 60px，最後一題就能捲到交卷列上方。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .fc-test-list:not(.fc-test-paged) { margin-bottom: 60px; }
+  /* 瀏覽器原生「聚焦就捲進畫面」只算到捲動區邊緣、不知道有 sticky 的交卷列——告訴它底部要多留 100px */
+  .qm-quiz-area { scroll-padding-bottom: 100px; }
+}

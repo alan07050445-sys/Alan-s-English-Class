@@ -86,4 +86,5 @@ ok('上傳作業送出鈕固定在作答區底部（平板）', /\.uh-btns \{\s*
 ok('平板點擊目標補到 44px（切音節縫隙／分類字卡／短文填空／圈選／重聽）', /\.sd-gap \{ width: 44px; \}/.test(t) && /\.ws-word-chip \{ min-height: 44px; \}/.test(t) && /\.circle-word \{ display: inline-flex; align-items: center; min-height: 44px; \}/.test(t) && /\.cloze-input \{ min-height: 44px/.test(t) && /\.qm-listen-btn \{ min-height: 44px; \}/.test(t));
 ok('直式「專心模式」浮動鈕 44px', /\.focus-btn \{ top: 74px; right: 12px; width: 44px; height: 44px; \}/.test(t) && /html\.focus-on \.focus-btn \{ top: 6px; right: 8px; \}/.test(t));
 ok('測驗設定開關可點範圍 44px', /\.fc-toggle::before \{ content: ''; position: absolute; inset: -8px -6px; \}/.test(t));
+ok('測驗題目列表底部留白（交卷列不蓋最後一題）', /\.fc-test-list:not\(\.fc-test-paged\) \{ margin-bottom: 60px; \}/.test(t) && /\.qm-quiz-area \{ scroll-padding-bottom: 100px; \}/.test(t));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
