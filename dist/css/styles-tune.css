@@ -4112,3 +4112,19 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .cloze-result-row { gap: 6px; }
   .cloze-result-row .qm-btn { flex: 1 1 130px; min-height: 42px; padding: 6px 10px; font-size: 14px; }
 }
+
+/* ══ v652：分類排序成績頁的按鈕列壞掉（所有裝置）═══════════════════════════════
+   .ws-result-btns 裡「只重做錯的／再試一次」有 .ws-result-btn（flex:1），但接在後面的「回今天的任務／下一個任務」
+   是 QmDoneNavBtns 的 .qm-btn，沒有 flex 設定、又是 width:100% → 整排被它撐滿，前兩顆被擠成一個字寬的直條。
+   → 整排改成可換行，每顆 flex:1 1 200px、寬度自動。 */
+.ws-result-btns { flex-wrap: wrap; }
+.ws-result-btns .qm-btn { flex: 1 1 200px; width: auto; max-width: 360px; justify-content: center; }
+
+/* v652（續）：成績頁的複習小字（分類排序／刻度排序／單字卡測驗共用）平板放大 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .rs-review-head { font-size: 16px; }
+  .rs-review-eq, .rs-review-row, .rs-review-row b { font-size: 16px; }
+  .qm-result-cat-title { font-size: 17px; }
+  .fc-review-correct, .fc-review-wrong { font-size: 16px; }
+  .fc-complete .btn { font-size: 16px; min-height: 48px; }
+}
