@@ -4944,3 +4944,15 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-review-correct, .fc-review-wrong { font-size: 16px; }
   .fc-complete .btn { font-size: 16px; min-height: 48px; }
 }
+
+/* ══ v653：句子排序／圈選題的交卷後底欄（句子排序和圈選題共用 .circle-footer）══════════
+   底欄是 flex 不換行：「只重做錯的 1 題」折成兩行、「Try again」折成兩行、「回今天的任務」卻拉得最寬，分數文字擠在最左。
+   → 平板寬度可換行：分數一整行、三顆按鈕各 ≥180px 同寬。
+   另外：圈選題的字 32px 高 → 40px；「Correct answer: …」「✅ 正解句」14.5px → 16px。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .circle-footer { flex-wrap: wrap; }
+  .circle-result { flex: 1 1 100%; margin-right: 0; }
+  .circle-footer .qm-btn { flex: 1 1 180px; width: auto; max-width: 320px; }
+  .circle-word { min-height: 40px; }
+  .circle-correction, .so-ans { font-size: 16px; }
+}

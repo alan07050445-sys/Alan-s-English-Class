@@ -37,4 +37,6 @@ ok('短文填空底欄釘底＋交卷後詞庫不釘', /\.cloze-footer \{\s*posi
 ok('短文填空倒數 20 秒', /seconds=\{20\}/.test(gq) && /useState\(seconds \|\| 6\)/.test(gq));
 const v2 = t.slice(t.indexOf('v652：分類排序成績頁'));
 ok('分類排序成績頁按鈕列可換行（所有裝置）', /\.ws-result-btns \{ flex-wrap: wrap/.test(v2) && /\.ws-result-btns \.qm-btn \{ flex: 1 1 200px; width: auto/.test(v2));
+const v3 = t.slice(t.indexOf('v653：句子排序'));
+ok('句子排序／圈選題底欄可換行、圈選字 40px', /\.circle-footer \{ flex-wrap: wrap/.test(v3) && /\.circle-word \{ min-height: 40px/.test(v3));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
