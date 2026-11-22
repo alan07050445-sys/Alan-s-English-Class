@@ -4347,3 +4347,12 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .sm-textarea { min-height: 100px; height: 110px; }
   .essay-input { height: 220px; min-height: 160px; }
 }
+
+/* v672（iPad 橫式，上傳作業）：選 4 張照片＝縮圖 140×186 排成兩排，「送出作業」被推到 866px（視窗 690）——
+   學生選完照片根本看不到送出鈕。橫式縮圖縮到 100×134（一排放 5 張）、「拍照」與「送出」並排。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .uh-grid { gap: 10px; }
+  .uh-thumb { width: 100px; height: 134px; }
+  .uh-btns { flex-wrap: nowrap; margin-top: 14px; }
+  .uh-btns .qm-btn.primary { flex: 1; }
+}
