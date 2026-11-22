@@ -572,7 +572,8 @@ function MatchFitGrid({
   children
 }) {
   var ref = React.useRef(null);
-  useFitHeight(ref, true, 200); // v376: 跟單字卡／學習共用同一套（原本沒扣外層 padding，會多出一截）
+  useFitHeight(ref, true, 200, true); // v664：clampHost——iPad 橫式 690 高時，捲動容器只有 550px 高，格子卻按「視窗底」算，最後一排被切掉
+  // v376: 跟單字卡／學習共用同一套（原本沒扣外層 padding，會多出一截）
   return /*#__PURE__*/React.createElement("div", {
     className: "fc-match-grid",
     ref: ref
@@ -593,7 +594,7 @@ function _fcScrollHost(el) {
   }
   return document.documentElement;
 }
-function useFitHeight(ref, enabled, min) {
+function useFitHeight(ref, enabled, min, clampHost) {
   React.useEffect(() => {
     var el = ref.current;
     if (!el) return;
@@ -650,7 +651,21 @@ function useFitHeight(ref, enabled, min) {
       lastTop = top;
       // 手機橫著拿的時候整個視窗才 390px 高——底線也要跟著降，不然照樣要捲
       var floor = Math.min(min || 320, Math.round(vh * 0.55));
-      var h = Math.max(floor, Math.round(vh - top - 10));
+      /* v664（配對，iPad 橫式 1180×690）：外層 .qm-quiz-area 是「高度被限定」的捲動容器（550px、底在 623），
+         而上面是拿「視窗底（690）」當下限算的 → 格子 406px 高、底在 680，最後一排被容器切掉要自己捲。
+         判斷「容器高度是不是被限定」：把這一塊塞成 0 高，容器底沒變＝跟內容無關＝被限定 → 以容器底（扣掉它的下內距）為準。
+         跟內容一起長高的容器（v405 那種）底會跟著變，不會被誤判。只有配對格子開 clampHost。 */
+      var bottomLimit = vh;
+      if (clampHost && host !== document.documentElement) {
+        var hbNatural = host.getBoundingClientRect().bottom;
+        el.style.height = '0px';
+        var hbZero = host.getBoundingClientRect().bottom;
+        el.style.height = '';
+        if (Math.abs(hbNatural - hbZero) < 1) {
+          bottomLimit = Math.min(vh, hbNatural - (parseFloat(getComputedStyle(host).paddingBottom) || 0));
+        }
+      }
+      var h = Math.max(floor, Math.round(bottomLimit - top - 10));
       var curH = parseFloat(el.style.height) || 0;
       /* ⚠⚠ v394：這裡本來設的是 height（固定高度）。
          那正是 Alan 回報「白色框框在捲」的根因：

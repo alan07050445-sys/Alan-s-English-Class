@@ -4256,3 +4256,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
   .fc-player.fc-p-learn { height: 560px !important; min-height: 560px; }
 }
+
+/* ══ v664：iPad「測驗」模式——題目的小圖只有 104px，看不清楚是什麼 → 平板放大到 140px（點圖還是可以放大）。
+   （配對格子被容器切掉最後一排的修法在 components-flashcard.jsx 的 useFitHeight clampHost。） ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .fc-test-img { width: 140px; height: 140px; }
+}

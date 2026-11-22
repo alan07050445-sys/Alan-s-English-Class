@@ -57,4 +57,8 @@ const v11 = t.slice(t.indexOf('v661：老師後台'));
 ok('老師後台平板按鈕 ≥40～44', /\.tdash-close \{ width: 44px/.test(v11) && /\.tdash-side-btn \{ min-height: 44px/.test(v11) && /\.shopm-tools button, \.roster-del-btn \{ min-width: 40px/.test(v11));
 const v12 = t.slice(t.indexOf('v662：iPad 橫式單字卡'));
 ok('橫式單字卡固定 560／例句 28', /\.fc-player\.fc-p-card \{ height: 560px !important/.test(v12) && /\.fc-p-card \.fc-example \{ font-size: 28px/.test(v12));
+const fcsrc = (await import('node:fs')).readFileSync(new URL('../components-flashcard.jsx', import.meta.url), 'utf8');
+ok('配對格子依「被限定高度的捲動容器」底部算（clampHost）', /useFitHeight\(ref, true, 200, true\)/.test(fcsrc) && /bottomLimit = Math\.min\(vh, hbNatural/.test(fcsrc));
+const v13 = t.slice(t.indexOf('v664：iPad「測驗」模式'));
+ok('測驗題目小圖 140', /\.fc-test-img \{ width: 140px; height: 140px/.test(v13));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
