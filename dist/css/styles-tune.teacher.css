@@ -831,3 +831,13 @@
 }
 .ll2-ai-warn b { font-family: var(--mono); color: #A8331F; }
 .gs-room .gs-mine-text > span { font-size: 14px; }
+
+/* ══ v661：老師後台（平板）——關閉 ✕ 34px、右上「教室／暑假／我的學生／全部」33px、左下三顆 35px、
+   商店的 ↑↓🗑 28px、各輸入欄 39px 都低於手指好點的尺寸 → 一律拉到 40～44px。 ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .tdash-close { width: 44px; height: 44px; }
+  .tdash-scope button { min-height: 40px; }
+  .tdash-side-btn { min-height: 44px; }
+  .report-week-select, .cwo-search, .cwo-export, .cwo-notify { min-height: 42px; }
+  .roster-input, .roster-add-btn, .roster-toggle-btn { min-height: 44px; }
+  .shopm-tools button, .roster-del-btn { min-width: 40px; min-height: 40px; }}

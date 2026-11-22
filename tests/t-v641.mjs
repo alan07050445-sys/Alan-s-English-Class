@@ -53,4 +53,6 @@ const v99 = t.slice(t.indexOf('v659：AI 批改結果'));
 ok('AI 回饋卡標題 17／Story Mountain 檢視頁 17', /\.wf3-title \{ font-size: 17px/.test(v99) && /\.sm-review-stage-body \{ font-size: 17px/.test(v99));
 const v10 = t.slice(t.indexOf('v660：上傳作業'));
 ok('上傳作業評語 17／縮圖完整顯示', /\.uh-comment \{ font-size: 17px/.test(v10) && /\.uh-thumb img \{ object-fit: contain/.test(v10));
+const v11 = t.slice(t.indexOf('v661：老師後台'));
+ok('老師後台平板按鈕 ≥40～44', /\.tdash-close \{ width: 44px/.test(v11) && /\.tdash-side-btn \{ min-height: 44px/.test(v11) && /\.shopm-tools button, \.roster-del-btn \{ min-width: 40px/.test(v11));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
