@@ -39,4 +39,6 @@ const v2 = t.slice(t.indexOf('v652：分類排序成績頁'));
 ok('分類排序成績頁按鈕列可換行（所有裝置）', /\.ws-result-btns \{ flex-wrap: wrap/.test(v2) && /\.ws-result-btns \.qm-btn \{ flex: 1 1 200px; width: auto/.test(v2));
 const v3 = t.slice(t.indexOf('v653：句子排序'));
 ok('句子排序／圈選題底欄可換行、圈選字 40px', /\.circle-footer \{ flex-wrap: wrap/.test(v3) && /\.circle-word \{ min-height: 40px/.test(v3));
+const v4 = t.slice(t.indexOf('v654：閱讀技巧'));
+ok('分段閱讀返回鈕 44／文章字 21、閱讀技巧卡片 17', /\.wp-back \{ min-width: 44px; min-height: 44px/.test(v4) && /\.grd-tword \{ font-size: 21px/.test(v4) && /\.rs-chip \{ font-size: 17px/.test(v4));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

@@ -4956,3 +4956,17 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .circle-word { min-height: 40px; }
   .circle-correction, .so-ans { font-size: 16px; }
 }
+
+/* ══ v654：閱讀技巧／分段閱讀（平板）═════════════════════════════════════════════
+   分段閱讀播放器自己的返回「←」只有 16×18 的點擊範圍；上方進度文字 13px、頁碼 13.5px、「聽這一段」37px 高。
+   閱讀技巧的卡片字 15.5px、格子標題 14px、提示 13px。
+   → 返回鈕至少 44×44、聽這一段 44px 高、進度／頁碼 15px；技巧卡片字 17px、格子標題 16px、提示 14px。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .wp-back { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .wp-counter { font-size: 15px; }
+  .gr-peek-btn { min-height: 44px; font-size: 15px; }
+  .gr-nav-pos { font-size: 15px; }
+  .rs-chip { font-size: 17px; min-height: 48px; }
+  .rs-zone-ph, .rs-tray-lab { font-size: 14px; }
+  .grd-tword { font-size: 21px; }   /* 分段閱讀的文章字：直式頁面大片留白，文章字太小（18.5px） */
+}
