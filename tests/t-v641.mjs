@@ -47,4 +47,6 @@ const v6 = t.slice(t.indexOf('v656：寫作練習'));
 ok('寫作回饋卡外距＋下一題釘底＋上傳拍照鈕強調', /\.wp-player > \.wf3-feedback, \.wp-player > \.wf3-raw \{ margin: 14px 20px 0/.test(v6) && /\.wp-player \.wp-next \{ position: sticky; bottom: 12px/.test(v6) && /\.qm-btn\.secondary\.uh-pick \{ min-width: 260px; min-height: 64px/.test(v6));
 const v7 = t.slice(t.indexOf('v657：平板首頁'));
 ok('首頁上一頁／品牌連結 44px', /\.lobby-back \{ min-height: 44px/.test(v7) && /\.brand-home \{ min-height: 44px/.test(v7));
+const v8 = t.slice(t.indexOf('v658：閱讀技巧'));
+ok('維恩圖標題 16／因果提示 15', /\.rs-venn \.rs-zone-head \{ font-size: 16px/.test(v8) && /\.rs-seq-slot \.rs-zone-ph \{ font-size: 15px/.test(v8));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

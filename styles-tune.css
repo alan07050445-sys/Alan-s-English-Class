@@ -5029,3 +5029,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .lobby-back { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
   .brand-home { min-height: 44px; display: inline-flex; align-items: center; }
 }
+
+/* ══ v658：閱讀技巧「比較對照」維恩圖（平板）：左／中／右區塊標題 14px 太小 → 16px；因果的「Effect：放結果」提示字放大 ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .rs-venn .rs-zone-head { font-size: 16px; }
+  .rs-ce-slot .rs-zone-ph, .rs-seq-slot .rs-zone-ph { font-size: 15px; }
+}
