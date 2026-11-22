@@ -423,7 +423,6 @@
 .gn-notes { margin-top: 12px; }
 .gn-notes summary { cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700; }
 .gn-notes pre { white-space: pre-wrap; font-family: var(--sans); font-size: 12.5px; line-height: 1.7; background: var(--surface-2, rgba(0,0,0,.04)); border-radius: 8px; padding: 10px 12px; }
-.ta-input.tr + .ta-correct-ans, .ta-input.tr ~ .ta-correct-ans { font-family: var(--sans, system-ui, sans-serif); }
 /* v429：互動教學沒產生成功時的提示＋重出按鈕 */
 .gn-ls-miss { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: #FFF6E0; border: 1px solid #F0D9A0; font-family: var(--sans); font-size: 14px; line-height: 1.6; }
 .gn-ls-miss b { font-size: 15px; }

@@ -3235,6 +3235,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .ta-ai-tip.ok { background: #E7F4EA; color: #1B5E2E; }
 /* v428：中翻英打的是整句——等寬字體（單字練習用的）讀起來很吃力，改一般字體 */
 .ta-input.tr { font-family: var(--sans, system-ui, sans-serif); letter-spacing: 0; }
+.ta-input.tr + .ta-correct-ans, .ta-input.tr ~ .ta-correct-ans { font-family: var(--sans, system-ui, sans-serif); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    v431 ③：平板直式的圖片上限（Alan：「iPad 直式 我覺得格子和圖片也可以再大一點」）

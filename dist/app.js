@@ -128,6 +128,28 @@ var _CLOUD_CACHE_KEYS = {
   g5: 'alans-english-g5-data-v1',
   g6: 'alans-english-g6-data-v1'
 };
+
+/* 🔴 v669：清掉「被種子污染」的本機快取——整份都是空白的 g?-2026-Wxx 種子週（沒有任何單元）。
+   v668 以前的版本會把種子寫進快取（見訂閱 callback 的 isSeed）；已經中招的 iPad 要在這裡一次清掉，
+   清掉後 cloudNeeded 會是 true＝載入畫面等雲端資料回來，而不是先露出 8 個空白週。 */
+(function purgeSeedCache() {
+  try {
+    Object.keys(_CLOUD_CACHE_KEYS).forEach(g => {
+      var k = _CLOUD_CACHE_KEYS[g];
+      var raw = localStorage.getItem(k);
+      if (!raw) return;
+      var w = JSON.parse(raw);
+      var ids = Object.keys(w || {});
+      if (!ids.length) return;
+      var allSeedIds = ids.every(id => /^g\d-2026-W\d\d$/.test(id));
+      var hasItems = ids.some(id => Object.values(w[id] && w[id].items || {}).some(a => a && a.length));
+      if (allSeedIds && !hasItems) {
+        localStorage.removeItem(k);
+        localStorage.removeItem(k.replace('-data-', '-order-'));
+      }
+    });
+  } catch (e) {}
+})();
 function visibleWeekOrder(isTeacher, order, weeks) {
   if (isTeacher) return order || [];
   return (order || []).filter(id => {
@@ -756,7 +778,7 @@ function App() {
       }
     }, 4000 * (cloudRetry + 1));
     var waitT = setTimeout(() => setCloudWaitedOut(true), 5000);
-    var unsub = subscribeFn((newWeeks, newOrder) => {
+    var unsub = subscribeFn((newWeeks, newOrder, isSeed) => {
       setAccessLocked(false);
       cloudReadyRef.current = true;
       setCloudSeen(true);
@@ -776,7 +798,10 @@ function App() {
           return keep >= 0 ? keep : Math.min(i, Math.max(0, newOrder.length - 1));
         });
       }
-      try {
+      /* 🔴 v669：種子（G4 Week 1~8 空白週）只是「雲端沒東西時畫面上先頂著用」的，不是雲端資料。
+         iPad 在離線／連線卡住時 Firestore 會回「文件不存在（從快取）」→ 走到種子 → 這裡把它寫進本機快取
+         → 之後每次開網站都先看到 8 個空白種子週，直到雲端回來（回不來就一直在）。種子不寫快取。 */
+      if (!isSeed) try {
         localStorage.setItem(storageKey, JSON.stringify(newWeeks));
         localStorage.setItem(orderKey, JSON.stringify(newOrder));
         // v359: 每個年級也留一份「有題目」的備份。萬一雲端again被寫空，

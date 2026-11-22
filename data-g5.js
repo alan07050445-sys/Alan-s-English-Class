@@ -103,7 +103,7 @@ function subscribeToClassDataG5(callback, onError) {
       /* 🔴 v639：這裡本來會把「種子資料」整份寫回雲端（沒有 merge＝整份覆蓋）。
          2026-11-21 14:33 G4 的 20 週 317 個單元就是被這行換成 8 個空白種子週：老師的瀏覽器收到一次「文件不存在」（快取/斷線時會發生）就整份蓋掉。
          文件早就存在，不需要由前端播種；真的是新年級由老師第一次存檔時自然建立。只在畫面上用種子，不寫雲端。 */
-      callback(G5_SEED_WEEKS, G5_DEFAULT_WEEK_ORDER.slice());
+      callback(G5_SEED_WEEKS, G5_DEFAULT_WEEK_ORDER.slice(), true);   // v669：第三個參數＝這是畫面用的種子、不是雲端資料（app 不可把它寫進本機快取）
     }
   }, err => {
     console.warn('subscribeToClassDataG5:', err?.code);
