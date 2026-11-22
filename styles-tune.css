@@ -5043,3 +5043,12 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .sm-review-stage-head { font-size: 17px; }
   .sm-review-stage-body { font-size: 17px; }
 }
+
+/* ══ v660：上傳作業（平板）——老師評語 14px 太小（這是學生最想看的）、縮圖裁成正方形看不到整張作業、指示字偏小 ══ */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .uh-comment { font-size: 17px; line-height: 1.6; }
+  .uh-instruction { font-size: 17px; }
+  .uh-thumb { width: 140px; height: 186px; background: #fff; }
+  .uh-thumb img { object-fit: contain; background: #fff; }
+  .uh-graded, .uh-waiting { font-size: 17px; }
+}
