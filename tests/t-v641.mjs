@@ -82,4 +82,5 @@ ok('專心模式「單元列表」鈕縮成 44 圖示', /html\.focus-on \.qm-sid
 ok('分段閱讀圖片頁橫式 chrome 335', /has\(\.qm-sidebar-reopen\) \.gr-page-read \.grd-fit \{ --gr-chrome: 335px/.test(t));
 ok('作文／故事山橫式：山縮小、作文輸入框 220、故事山輸入框 16px', /\.sm-svg \{ max-width: 400px; \}/.test(t) && /\.essay-input \{ height: 220px/.test(t) && /\.sm-textarea \{ font-size: 16px; \}/.test(t));
 ok('上傳作業橫式：縮圖 100×134、拍照與送出並排', /\.uh-thumb \{ width: 100px; height: 134px; \}/.test(t) && /\.uh-btns \{ flex-wrap: nowrap/.test(t));
+ok('上傳作業送出鈕固定在作答區底部（平板）', /\.uh-btns \{\s*position: sticky; bottom: 0/.test(t));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

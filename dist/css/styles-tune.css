@@ -4356,3 +4356,15 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .uh-btns { flex-wrap: nowrap; margin-top: 14px; }
   .uh-btns .qm-btn.primary { flex: 1; }
 }
+
+/* v673（Alan：「把送出鈕固定在畫面下方」）上傳作業——選很多張照片時，「拍照／送出」那一排固定貼在作答區底部，
+   不用捲到最下面才找得到送出鈕。⚠ 只在 641~1400（平板）：.page-mission .qm-quiz-area 在這個寬度是獨立捲動區
+   （有 max-height），sticky 才有東西可以貼；≤640 是整頁在捲、sticky 貼不到，維持原樣。
+   底色用 --bg（頁面底色）做漸層，捲過去的縮圖才不會從按鈕後面透出來。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .uh-btns {
+    position: sticky; bottom: 0; z-index: 5;
+    margin-top: 12px; padding: 16px 0 8px;
+    background: linear-gradient(to bottom, rgba(244, 240, 231, 0), var(--bg, #F4F0E7) 14px);
+  }
+}
