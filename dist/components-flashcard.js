@@ -1053,6 +1053,31 @@ function FlashcardPlayer({
   var [testAnswers, setTestAnswers] = useFC({}); // cardId → chosen card id
   var [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
   var [testDone, setTestDone] = useFC(false);
+  /* v666（iPad 橫式）：測驗原本是 11 題排成一長串往下捲，視窗又只剩 550px，一次只看得到一題多一點、
+     還有浮動的交卷列壓在選項上。平板橫式改成「一次一題」：只顯示目前這一題（其他題照樣掛著、作答不會掉），
+     選好答案自動換下一題，另有上一題／下一題。電腦與直式維持原本的長清單。 */
+  var TEST_PAGED_MQ = '(min-width: 901px) and (max-width: 1400px) and (orientation: landscape)';
+  var [testPage, setTestPage] = useFC(0);
+  var [testPaged, setTestPaged] = useFC(() => {
+    try {
+      return !!(window.matchMedia && window.matchMedia(TEST_PAGED_MQ).matches);
+    } catch (e) {
+      return false;
+    }
+  });
+  useFC_E(() => {
+    var mq;
+    try {
+      mq = window.matchMedia(TEST_PAGED_MQ);
+    } catch (e) {
+      return;
+    }
+    var f = () => setTestPaged(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', f);else if (mq.addListener) mq.addListener(f);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', f);else if (mq.removeListener) mq.removeListener(f);
+    };
+  }, []);
   /* v394: 只是「現在放大顯示哪張圖」的畫面狀態（{src, alt}｜null）——
      不進任何作答資料、不影響 answeredCards／交卷條件。 */
   var [zoomImg, setZoomImg] = useFC(null);
@@ -1938,6 +1963,18 @@ function FlashcardPlayer({
       if (qType === "choice") return !!testAnswers[card.id];
       return !!(typedAnswers[card.id] || "").trim();
     }).map(c => c.id));
+    var submitTest = () => {
+      setTestDone(true);
+      // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
+      //           手寫題不列入完成條件，但全部答完可以另外加分
+      // v405: 同上——用「這一輪實際考了幾張」判斷，不看會殘留的 scopeStar
+      if (fullRound(tCards.length) && onModeDone) {
+        onModeDone('test');
+        var written = tCards.filter(c => (questionTypes[c.id] || 'choice') === 'written');
+        if (written.length && written.every(c => (typedAnswers[c.id] || '').trim())) onModeDone('written');
+      }
+      if (onComplete) onComplete();
+    };
     return /*#__PURE__*/React.createElement("div", {
       className: "fc-wrap"
     }, /*#__PURE__*/React.createElement(ModeTabs, {
@@ -1956,7 +1993,7 @@ function FlashcardPlayer({
         width: `${answeredCards.size / tCards.length * 100}%`
       }
     }))), /*#__PURE__*/React.createElement("div", {
-      className: "fc-test-list"
+      className: "fc-test-list" + (testPaged ? " fc-test-paged" : "")
     }, tCards.map((card, qi) => {
       var qType = questionTypes[card.id] || "choice";
       var choices = testChoices[card.id] || [];
@@ -1968,7 +2005,7 @@ function FlashcardPlayer({
            定義在上、圖片靠右、選項是 2×2 的大方框 */
         React.createElement("div", {
           key: card.id,
-          className: "fc-test-q"
+          className: "fc-test-q" + (testPaged && qi !== Math.min(testPage, tCards.length - 1) ? " fc-test-hidden" : "")
         }, /*#__PURE__*/React.createElement("div", {
           className: "fc-test-qhead"
         }, /*#__PURE__*/React.createElement("span", {
@@ -2014,10 +2051,17 @@ function FlashcardPlayer({
         }, choices.map((ch, ci) => /*#__PURE__*/React.createElement("button", {
           key: ci,
           className: "fc-test-choice" + (selectedId === ch.id ? " selected" : ""),
-          onClick: () => setTestAnswers(prev => ({
-            ...prev,
-            [card.id]: ch.id
-          }))
+          onClick: () => {
+            var first = !testAnswers[card.id];
+            setTestAnswers(prev => ({
+              ...prev,
+              [card.id]: ch.id
+            }));
+            // v666：平板一次一題——第一次答這題就自動換下一題（回頭改答案不會亂跳）
+            if (testPaged && first && qi === Math.min(testPage, tCards.length - 1) && qi < tCards.length - 1) {
+              setTimeout(() => setTestPage(p => Math.min(p + 1, tCards.length - 1)), 380);
+            }
+          }
         }, ch.term)))), qType === "written" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
           className: "fc-test-label"
         }, "\u6253\u51FA\u82F1\u6587\u55AE\u5B57"), /*#__PURE__*/React.createElement("div", {
@@ -2040,6 +2084,17 @@ function FlashcardPlayer({
           onKeyDown: e => {
             if (e.key !== 'Enter') return;
             e.preventDefault();
+            if (testPaged) {
+              // v666：一次一題——換到下一題，等畫面換好再聚焦它的輸入欄
+              if (qi < tCards.length - 1) {
+                setTestPage(qi + 1);
+                setTimeout(() => {
+                  var v = document.querySelector('.fc-test-q:not(.fc-test-hidden) .fc-written-input');
+                  if (v) v.focus();
+                }, 80);
+              } else e.currentTarget.blur();
+              return;
+            }
             var all = Array.from(document.querySelectorAll('.fc-written-input'));
             var nxt = all[all.indexOf(e.currentTarget) + 1];
             if (nxt) nxt.focus();else e.currentTarget.blur();
@@ -2062,23 +2117,32 @@ function FlashcardPlayer({
           placeholder: "Type the English word \xB7 \u5728\u6B64\u8F38\u5165\u82F1\u6587\u55AE\u5B57"
         }))))
       );
-    })), /*#__PURE__*/React.createElement("div", {
-      className: "fc-test-foot"
+    })), testPaged && tCards.length > 1 && /*#__PURE__*/React.createElement("div", {
+      className: "fc-test-pager"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "btn",
+      disabled: testPage <= 0,
+      onClick: () => setTestPage(p => Math.max(0, p - 1))
+    }, "\u2190 \u4E0A\u4E00\u984C"), answeredCards.size >= tCards.length ? /*#__PURE__*/React.createElement("button", {
+      className: "btn primary fc-test-pager-submit",
+      onClick: submitTest
+    }, "Submit \xB7 \u4EA4\u5377 (", answeredCards.size, "/", tCards.length, ")") : /*#__PURE__*/React.createElement("span", {
+      className: "fc-test-pager-dots",
+      "aria-hidden": "true"
+    }, tCards.map((c, i) => /*#__PURE__*/React.createElement("i", {
+      key: c.id,
+      className: (i === Math.min(testPage, tCards.length - 1) ? 'on ' : '') + (answeredCards.has(c.id) ? 'done' : ''),
+      onClick: () => setTestPage(i)
+    }))), /*#__PURE__*/React.createElement("button", {
+      className: "btn",
+      disabled: testPage >= tCards.length - 1,
+      onClick: () => setTestPage(p => Math.min(tCards.length - 1, p + 1))
+    }, "\u4E0B\u4E00\u984C \u2192")), /*#__PURE__*/React.createElement("div", {
+      className: "fc-test-foot" + (testPaged && answeredCards.size < tCards.length ? " fc-test-foot-wait" : "")
     }, /*#__PURE__*/React.createElement("button", {
       className: "btn primary",
       disabled: answeredCards.size < tCards.length,
-      onClick: () => {
-        setTestDone(true);
-        // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
-        //           手寫題不列入完成條件，但全部答完可以另外加分
-        // v405: 同上——用「這一輪實際考了幾張」判斷，不看會殘留的 scopeStar
-        if (fullRound(tCards.length) && onModeDone) {
-          onModeDone('test');
-          var written = tCards.filter(c => (questionTypes[c.id] || 'choice') === 'written');
-          if (written.length && written.every(c => (typedAnswers[c.id] || '').trim())) onModeDone('written');
-        }
-        if (onComplete) onComplete();
-      }
+      onClick: submitTest
     }, "Submit \xB7 \u4EA4\u5377 (", answeredCards.size, "/", tCards.length, ")"))), zoomImg && /*#__PURE__*/React.createElement(FcImageZoom, {
       src: zoomImg.src,
       alt: zoomImg.alt,

@@ -820,6 +820,18 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const [testAnswers, setTestAnswers] = useFC({}); // cardId → chosen card id
   const [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
   const [testDone, setTestDone] = useFC(false);
+  /* v666（iPad 橫式）：測驗原本是 11 題排成一長串往下捲，視窗又只剩 550px，一次只看得到一題多一點、
+     還有浮動的交卷列壓在選項上。平板橫式改成「一次一題」：只顯示目前這一題（其他題照樣掛著、作答不會掉），
+     選好答案自動換下一題，另有上一題／下一題。電腦與直式維持原本的長清單。 */
+  const TEST_PAGED_MQ = '(min-width: 901px) and (max-width: 1400px) and (orientation: landscape)';
+  const [testPage, setTestPage] = useFC(0);
+  const [testPaged, setTestPaged] = useFC(() => { try { return !!(window.matchMedia && window.matchMedia(TEST_PAGED_MQ).matches); } catch (e) { return false; } });
+  useFC_E(() => {
+    let mq; try { mq = window.matchMedia(TEST_PAGED_MQ); } catch (e) { return; }
+    const f = () => setTestPaged(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', f); else if (mq.addListener) mq.addListener(f);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', f); else if (mq.removeListener) mq.removeListener(f); };
+  }, []);
   /* v394: 只是「現在放大顯示哪張圖」的畫面狀態（{src, alt}｜null）——
      不進任何作答資料、不影響 answeredCards／交卷條件。 */
   const [zoomImg, setZoomImg] = useFC(null);
@@ -1493,6 +1505,19 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       }).map(c => c.id)
     );
 
+    const submitTest = () => {
+                setTestDone(true);
+                // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
+                //           手寫題不列入完成條件，但全部答完可以另外加分
+                // v405: 同上——用「這一輪實際考了幾張」判斷，不看會殘留的 scopeStar
+                if (fullRound(tCards.length) && onModeDone) {
+                  onModeDone('test');
+                  const written = tCards.filter(c => (questionTypes[c.id] || 'choice') === 'written');
+                  if (written.length && written.every(c => (typedAnswers[c.id] || '').trim())) onModeDone('written');
+                }
+                if (onComplete) onComplete();
+    };
+
     return (
       <div className="fc-wrap">
         <ModeTabs active="test"/>
@@ -1504,7 +1529,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             </div>
           </div>
 
-          <div className="fc-test-list">
+          <div className={"fc-test-list" + (testPaged ? " fc-test-paged" : "")}>
             {tCards.map((card, qi) => {
               const qType     = questionTypes[card.id] || "choice";
               const choices   = testChoices[card.id] || [];
@@ -1514,7 +1539,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
               return (
                 /* v373: 一題一張大卡片（Alan 指定「照參考圖的大小」）——
                    定義在上、圖片靠右、選項是 2×2 的大方框 */
-                <div key={card.id} className="fc-test-q">
+                <div key={card.id} className={"fc-test-q" + (testPaged && qi !== Math.min(testPage, tCards.length - 1) ? " fc-test-hidden" : "")}>
                   <div className="fc-test-qhead">
                     {/* v374: 這裡不能放發音鍵——唸出來就是答案了（Alan 回報） */}
                     <span className="fc-test-qlabel">{qType === "choice" ? "定義" : "定義 · 手寫"}</span>
@@ -1546,7 +1571,14 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                         {choices.map((ch, ci) => (
                           <button key={ci}
                             className={"fc-test-choice" + (selectedId === ch.id ? " selected" : "")}
-                            onClick={() => setTestAnswers(prev => ({...prev, [card.id]: ch.id}))}
+                            onClick={() => {
+                              const first = !testAnswers[card.id];
+                              setTestAnswers(prev => ({...prev, [card.id]: ch.id}));
+                              // v666：平板一次一題——第一次答這題就自動換下一題（回頭改答案不會亂跳）
+                              if (testPaged && first && qi === Math.min(testPage, tCards.length - 1) && qi < tCards.length - 1) {
+                                setTimeout(() => setTestPage(p => Math.min(p + 1, tCards.length - 1)), 380);
+                              }
+                            }}
                           >{ch.term}</button>
                         ))}
                       </div>
@@ -1571,6 +1603,13 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                           onKeyDown={e => {
                             if (e.key !== 'Enter') return;
                             e.preventDefault();
+                            if (testPaged) {   // v666：一次一題——換到下一題，等畫面換好再聚焦它的輸入欄
+                              if (qi < tCards.length - 1) {
+                                setTestPage(qi + 1);
+                                setTimeout(() => { const v = document.querySelector('.fc-test-q:not(.fc-test-hidden) .fc-written-input'); if (v) v.focus(); }, 80);
+                              } else e.currentTarget.blur();
+                              return;
+                            }
                             const all = Array.from(document.querySelectorAll('.fc-written-input'));
                             const nxt = all[all.indexOf(e.currentTarget) + 1];
                             if (nxt) nxt.focus(); else e.currentTarget.blur();
@@ -1590,22 +1629,24 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
             })}
           </div>
 
-          <div className="fc-test-foot">
+          {testPaged && tCards.length > 1 && (
+            <div className="fc-test-pager">
+              <button className="btn" disabled={testPage <= 0} onClick={() => setTestPage(p => Math.max(0, p - 1))}>← 上一題</button>
+              {answeredCards.size >= tCards.length ? (
+                <button className="btn primary fc-test-pager-submit" onClick={submitTest}>Submit · 交卷 ({answeredCards.size}/{tCards.length})</button>
+              ) : (
+              <span className="fc-test-pager-dots" aria-hidden="true">
+                {tCards.map((c, i) => <i key={c.id} className={(i === Math.min(testPage, tCards.length - 1) ? 'on ' : '') + (answeredCards.has(c.id) ? 'done' : '')} onClick={() => setTestPage(i)}/>)}
+              </span>
+              )}
+              <button className="btn" disabled={testPage >= tCards.length - 1} onClick={() => setTestPage(p => Math.min(tCards.length - 1, p + 1))}>下一題 →</button>
+            </div>
+          )}
+          <div className={"fc-test-foot" + (testPaged && answeredCards.size < tCards.length ? " fc-test-foot-wait" : "")}>
             <button
               className="btn primary"
               disabled={answeredCards.size < tCards.length}
-              onClick={() => {
-                setTestDone(true);
-                // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
-                //           手寫題不列入完成條件，但全部答完可以另外加分
-                // v405: 同上——用「這一輪實際考了幾張」判斷，不看會殘留的 scopeStar
-                if (fullRound(tCards.length) && onModeDone) {
-                  onModeDone('test');
-                  const written = tCards.filter(c => (questionTypes[c.id] || 'choice') === 'written');
-                  if (written.length && written.every(c => (typedAnswers[c.id] || '').trim())) onModeDone('written');
-                }
-                if (onComplete) onComplete();
-              }}
+              onClick={submitTest}
             >
               {/* v405: 分母本來寫死 cards.length，但這一輪可能只考星號的幾張，
                   會出現「3/8」卻已經可以交卷的矛盾。改成這一輪真正的張數。 */}

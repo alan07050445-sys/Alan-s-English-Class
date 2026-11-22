@@ -64,4 +64,12 @@ ok('測驗題目小圖 140', /\.fc-test-img \{ width: 140px; height: 140px/.test
 const v14 = t.slice(t.indexOf('v665：手寫測驗輸入欄'));
 ok('手寫輸入欄 20px／56px／scroll-margin', /\.fc-written-input \{ font-size: 20px; min-height: 56px; scroll-margin: 120px 0/.test(v14));
 ok('手寫輸入欄關閉自動校正與拼字檢查', /autoCorrect="off" spellCheck=\{false\}\s+enterKeyHint="next"/.test(fcsrc));
+const fs2 = (await import('node:fs'));
+const shsrc = fs2.readFileSync(new URL('../components-shell.jsx', import.meta.url), 'utf8');
+const qmsrc = fs2.readFileSync(new URL('../components-quiz-mode.jsx', import.meta.url), 'utf8');
+ok('測驗平板橫式一次一題（testPaged／pager／自動換題）', /testPaged/.test(fcsrc) && /fc-test-pager/.test(fcsrc) && /fc-test-hidden/.test(t) && /setTestPage\(p => Math\.min\(p \+ 1/.test(fcsrc));
+ok('iPad 橫式練習自動收上方列（學生關掉就不再自動收）', /function fcTabletLandscape/.test(shsrc) && /__focusUserOff/.test(shsrc) && /pointer: coarse/.test(shsrc));
+ok('iPad 橫式側欄預設收合、學生選過就照他的', /window\.fcTabletLandscape && window\.fcTabletLandscape\(\)/.test(qmsrc) && /v === '0'\) return false/.test(qmsrc));
+ok('專心模式卡片高度隨視窗（上限560、下限420）', /html\.focus-on \.fc-player\.fc-p-card,[\s\S]{0,120}max\(420px, min\(560px, calc\(100vh - 205px\)\)\)/.test(t));
+ok('一次一題：沒答完不顯示交卷列、小圖100', /\.fc-test-foot-wait, \.fc-test-paged ~ \.fc-test-foot \{ display: none/.test(t) && /fc-test-foot-wait/.test(fcsrc) && /\.fc-test-paged \.fc-test-img \{ width: 100px/.test(t));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

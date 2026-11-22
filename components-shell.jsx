@@ -99,8 +99,21 @@ function FullscreenBtn() {
    順便試一次全螢幕（成功更好，失敗也無所謂——收起上方列本身就有效果）。
    ⚠ 收起／展開不會改變視窗大小，useFitHeight 不會自己重算 →
       一定要補一個 resize 事件，卡片才會用新的可用高度重新量。 */
+/* v666（iPad 橫式）：版頭＋分頁列＋進度列約佔 270px，視窗只剩 690 高時題目只剩一半。
+   真的 iPad（粗指標、橫式、901~1400 寬）開始練習時自動收起上方列（不要求全螢幕——那需要手勢）；
+   學生自己按 ⛶ 關掉之後，這個工作階段內不再自動收（不跟學生搶）。電腦／筆電不受影響。 */
+function fcTabletLandscape() {
+  try { return !!(window.matchMedia && window.matchMedia('(min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (pointer: coarse)').matches); } catch (e) { return false; }
+}
 function FocusBtn() {
   const [on, setOn] = React.useState(false);
+
+  React.useEffect(() => {
+    if (window.__focusUserOff || !fcTabletLandscape()) return;
+    document.documentElement.classList.add('focus-on');
+    setOn(true);
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+  }, []);
 
   // 離開練習（元件卸載）一定要還原，不然回到清單頁會沒有 header
   React.useEffect(() => () => {
@@ -110,6 +123,7 @@ function FocusBtn() {
 
   const toggle = () => {
     const next = !on;
+    if (!next) window.__focusUserOff = true;   // v666：學生自己關掉了，別再自動收
     setOn(next);
     document.documentElement.classList.toggle('focus-on', next);
     try {
@@ -2225,4 +2239,4 @@ function ReviewPathMap({ rp, isTeacher, just, onClose, onOpenItem, onEdit }) {
     </div>, document.body);
 }
 
-Object.assign(window, { ReviewPathCard, ReviewPathMap, Boom, Footer, TrickOrTreat, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });
+Object.assign(window, { fcTabletLandscape, ReviewPathCard, ReviewPathMap, Boom, Footer, TrickOrTreat, findUnitsIn, FullscreenBtn, FocusBtn, Icon, Header, Hero, LoginScreen, LockScreen, EditableText, GradeSelector, StarBurst, MobileNav, LoadingScreen, WelcomeGuide, SpotlightTour, spawnPageWave, StarsPanel, CheckinPanel, SHOP_ITEMS });

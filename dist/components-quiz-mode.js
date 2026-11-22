@@ -312,9 +312,14 @@ function saveQMProg(p) {
 }
 // v298: 側欄收合——學生自己控制、記住選擇（per-uid），不自動收
 var QM_SIDEBAR_KEY = 'alans-qm-sidebar-collapsed-v1';
+/* v666（iPad 橫式）：左邊單元列表佔掉約三分之一寬度——真的 iPad 橫式「還沒自己選過」時預設收合，
+   題目才有地方放大。學生按過展開／收合之後一律以他自己的選擇為準（記在 localStorage）。 */
 function loadSidebarCollapsed() {
   try {
-    return localStorage.getItem(QM_SIDEBAR_KEY + qmScope()) === '1';
+    var v = localStorage.getItem(QM_SIDEBAR_KEY + qmScope());
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return !!(window.fcTabletLandscape && window.fcTabletLandscape());
   } catch (e) {
     return false;
   }

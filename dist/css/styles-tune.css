@@ -4268,3 +4268,32 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 641px) and (max-width: 1400px) {
   .fc-written-input { font-size: 20px; min-height: 56px; scroll-margin: 120px 0; }
 }
+
+/* ══ v666：測驗「一次一題」（平板橫式，見 components-flashcard.jsx 的 testPaged）══ */
+.fc-test-hidden { display: none !important; }
+.fc-test-pager { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0 4px; }
+.fc-test-pager .btn { min-height: 48px; padding: 0 22px; font-size: 16px; }
+.fc-test-pager-dots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.fc-test-pager-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--border, #DDD6C4); display: inline-block; cursor: pointer; }
+.fc-test-pager-dots i.done { background: #8FB08A; }
+.fc-test-pager-dots i.on { outline: 2px solid var(--ink, #15130E); outline-offset: 2px; }
+.fc-test-paged { margin-bottom: 8px; }
+
+/* v666（續）：專心模式（上方列收起）下，卡片高度＝視窗高度扣掉剩下的版面（約 205px），上限 560、下限 420，
+   這樣 690 高的視窗「上一張／下一張」不用再捲；834 高以上維持 560。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  html.focus-on .fc-player.fc-p-card,
+  html.focus-on .fc-player.fc-p-learn { height: max(420px, min(560px, calc(100vh - 205px))) !important; min-height: 420px; }
+}
+
+/* v666（續）：一次一題時，沒答完之前不顯示浮動的「交卷」列（上面已有 x / 11 answered），
+   而且題目小圖縮回 100px——否則 690 高的視窗放不下「題目＋選項＋上一題／下一題」。 */
+.fc-test-foot-wait, .fc-test-paged ~ .fc-test-foot { display: none; }
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .fc-test-paged .fc-test-img { width: 100px; height: 100px; }
+  .fc-test-paged .fc-test-q { margin-bottom: 0; padding-top: 12px; padding-bottom: 14px; }
+  .fc-test-paged .fc-test-choice { min-height: 62px; padding-top: 10px; padding-bottom: 10px; }
+  .fc-test-paged .fc-test-choices { gap: 10px; }
+  .fc-test-paged + .fc-test-pager { margin-top: 6px; }
+}
+.fc-test-pager-submit { min-width: 220px; }
