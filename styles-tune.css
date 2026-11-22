@@ -5155,3 +5155,21 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
   .qm-cat-view:has(.qm-sidebar-reopen) .gr-page-read .grd-fit { --gr-chrome: 335px; }
 }
+
+/* v671（iPad 橫式，作文／故事山）：
+   · 故事山的山形圖 344px 高，輸入框從 599px 才開始、「Next」鈕在 848px——690 高的視窗一進來全是山。
+     橫式把山縮到 400px 寬（約 196px 高）、卡片間距收小，輸入框＋上一步／下一步都在第一屏。
+   · 作文輸入框 12 行＝382px，「送出批改」在 715px 以下；橫式改 220px 高（還是可以拉）。
+   · 故事山輸入框字體 15px：iOS Safari 對焦時字體 < 16px 會自動放大整個畫面 → 平板一律 16px。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .sm-textarea { font-size: 16px; }
+}
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .sm-svg { max-width: 400px; }
+  .sm-player { gap: 10px; padding-bottom: 16px; }
+  .sm-stage-card { padding: 14px 18px; }
+  .sm-stage-head { margin-bottom: 8px; }
+  .sm-stage-hint { margin-bottom: 8px; }
+  .sm-textarea { min-height: 100px; height: 110px; }
+  .essay-input { height: 220px; min-height: 160px; }
+}

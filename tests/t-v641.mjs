@@ -80,4 +80,5 @@ ok('專心模式「單元列表」鈕貼頂（不蓋 Back）', /html\.focus-on \
 ok('閱讀技巧答對後也自動捲到「下一個技巧」', /matches\('\.qm-feedback, \.rs-fb'\)/.test(qmsrc) && /\.rs-foot \.qm-btn\.primary/.test(qmsrc));
 ok('專心模式「單元列表」鈕縮成 44 圖示', /html\.focus-on \.qm-sidebar-reopen \{ left: 4px; width: 44px; height: 44px/.test(t) && /aria-label="展開單元列表"/.test(qmsrc));
 ok('分段閱讀圖片頁橫式 chrome 335', /has\(\.qm-sidebar-reopen\) \.gr-page-read \.grd-fit \{ --gr-chrome: 335px/.test(t));
+ok('作文／故事山橫式：山縮小、作文輸入框 220、故事山輸入框 16px', /\.sm-svg \{ max-width: 400px; \}/.test(t) && /\.essay-input \{ height: 220px/.test(t) && /\.sm-textarea \{ font-size: 16px; \}/.test(t));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
