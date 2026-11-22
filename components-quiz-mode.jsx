@@ -1269,7 +1269,7 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         <button
           className="qm-sidebar-reopen"
           onClick={() => { if (sidebarHidden) { toggleSidebar(); } else { setSelectedItem(null); } }}
-          title="展開單元列表"
+          title="展開單元列表" aria-label="展開單元列表"
         >
           <window.Icon name="list" size={15}/> 單元列表
         </button>

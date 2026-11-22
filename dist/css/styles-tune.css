@@ -4310,3 +4310,21 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
   html.focus-on .qm-player-head { padding-right: 56px; }
 }
+
+/* v668：專心模式（上方列收起）時，「單元列表」浮動鈕還停在 top:74px（原本是為了避開 72px 的版頭）——
+   版頭沒了、作答區往上提，結果鈕正好蓋在短文填空等題型左上角的「← Back」上。→ 貼到最上面（內容區已有 52px 讓位）。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  html.focus-on .qm-sidebar-reopen { top: 8px; }
+}
+/* v668（續）：專心模式下「單元列表」鈕縮成 44×44 的圖示鈕貼在左上角（文字隱藏，aria-label 保留）——
+   分段閱讀的「←」在 x48~92，原本 114 寬的膠囊鈕會整個蓋住它。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  html.focus-on .qm-sidebar-reopen { left: 4px; width: 44px; height: 44px; padding: 0; justify-content: center; gap: 0; font-size: 0; border-radius: 50%; }
+}
+
+/* v668（續）：分段閱讀「讀文章」頁（圖片版）：圖片寬度上限是「視窗高 − --gr-chrome（圖片以外佔多高，275px）」反推的，
+   但單元列表收合時作答區上方多了 52px 讓位給浮動鈕 → 實際「圖片以外」是 327px，翻頁鈕被擠到 644~698（視窗 690）。
+   → 平板橫式＋有浮動鈕時 --gr-chrome 加到 335px。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .qm-cat-view:has(.qm-sidebar-reopen) .gr-page-read .grd-fit { --gr-chrome: 335px; }
+}

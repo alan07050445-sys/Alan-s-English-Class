@@ -1572,7 +1572,8 @@ function QuizModeCategoryView({
         setSelectedItem(null);
       }
     },
-    title: "\u5C55\u958B\u55AE\u5143\u5217\u8868"
+    title: "\u5C55\u958B\u55AE\u5143\u5217\u8868",
+    "aria-label": "\u5C55\u958B\u55AE\u5143\u5217\u8868"
   }, /*#__PURE__*/React.createElement(window.Icon, {
     name: "list",
     size: 15
