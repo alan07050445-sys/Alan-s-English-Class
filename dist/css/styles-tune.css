@@ -4181,3 +4181,29 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 641px) and (max-width: 1400px) {
   .ex-af-w { min-width: 240px; min-height: 40px; }
 }
+
+/* ══ v656：寫作練習（造句）══════════════════════════════════════════════════
+   ① AI 回饋卡（分數／Good Job／To Improve／Better Version）沒有左右外距：比上面的題目卡寬 25px、
+      緊貼輸入框下緣（所有裝置；手機外距 14px）
+   ② 平板：輸入欄只有 85px 高（兩行）→ 至少 150px、字 20px；題目上方小字 13px → 14px；
+   ③ 平板：回饋四張卡很長，「下一題」被擠到畫面外要自己捲 → 釘在畫面底部。 */
+.wp-player > .wf3-feedback, .wp-player > .wf3-raw { margin: 14px 20px 0; }
+@media (max-width: 768px) { .wp-player > .wf3-feedback, .wp-player > .wf3-raw { margin: 14px 14px 0; } }
+@media (min-width: 641px) and (max-width: 1400px) {
+  .wp-player .wp-input { min-height: 150px; font-size: 20px; }
+  .wp-instruction { font-size: 14px; }
+  .wp-player .wp-next { position: sticky; bottom: 12px; z-index: 4; }
+}
+
+/* ══ v656（續）：上傳作業（平板）══════════════════════════════════════════════
+   最重要的動作「📷 拍照或選照片」是一顆淡淡的小按鈕（192×61），反而下面灰掉的「送出作業」最顯眼；
+   縮圖只有 96px、刪除 ✕ 32px，老師的作業要看得出是哪一張很難。
+   → 拍照鈕加大（至少 260×64、虛線強調框）、縮圖 140px、刪除 ✕ 40px、標題與提示字放大。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .uh-block { max-width: 620px; }
+  .uh-block-title { font-size: 16px; }
+  .uh-thumb { width: 140px; height: 140px; }
+  .uh-thumb-del { width: 40px; height: 40px; font-size: 16px; }
+  .qm-btn.secondary.uh-pick { min-width: 260px; min-height: 64px; font-size: 18px; border: 2px dashed var(--accent, #8B3120); color: var(--accent, #8B3120); background: #fffaf2; }
+  .uh-hint { font-size: 14.5px; }
+}
