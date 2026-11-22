@@ -5063,3 +5063,12 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .roster-input, .roster-add-btn, .roster-toggle-btn { min-height: 44px; }
   .shopm-tools button, .roster-del-btn { min-width: 40px; min-height: 40px; }
 }
+
+/* ══ v662：iPad 橫式單字卡——卡片高度本來是「視窗高度 − 上面的版頭」現算的：
+   視窗 834 高 → 433px、Safari 工具列讓視窗剩 690 高 → 只剩 289px，而且每台、每次轉向都不一樣，
+   圖片＋中文＋例句擠成一團。→ 改成固定高度 500px（內容區自己吃剩下的），頁面不夠高就讓頁面捲。
+   例句 40px → 33px（縮小約 1.2 倍），給圖片多一點位置。 ══ */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .fc-player.fc-p-card { height: 500px !important; min-height: 500px; }
+  .fc-p-card .fc-example { font-size: 33px; }
+}
