@@ -4898,6 +4898,7 @@ function App() {
     progItems: qmProgress,
     checkin: myCheckin,
     fixed: myFixed,
+    treat: myTreat,
     mx: userProfile.mx,
     onOpenDress: () => {
       setStarsOpen(false);

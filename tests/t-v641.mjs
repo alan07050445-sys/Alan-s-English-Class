@@ -88,4 +88,5 @@ ok('直式「專心模式」浮動鈕 44px', /\.focus-btn \{ top: 74px; right: 1
 ok('測驗設定開關可點範圍 44px', /\.fc-toggle::before \{ content: ''; position: absolute; inset: -8px -6px; \}/.test(t));
 ok('測驗題目列表底部留白（交卷列不蓋最後一題）', /\.fc-test-list:not\(\.fc-test-paged\) \{ margin-bottom: 60px; \}/.test(t) && /\.qm-quiz-area \{ scroll-padding-bottom: 100px; \}/.test(t));
 ok('故事山輸入框聚焦時卡片捲到上方（鍵盤擋住才捲）', /closest\('\.sm-stage-card'\)/.test(qmsrc) && /visualViewport/.test(qmsrc) && /\.sm-stage-card \{ scroll-margin-top: 12px; \}/.test(t));
+ok('星星面板跟 header 同一組算法（面板也要拿到 treat，不然少算萬聖節星星）', /<window\.StarsPanel[\s\S]{0,400}treat=\{myTreat\}/.test(fs.readFileSync(new URL('../app.jsx', import.meta.url), 'utf8')));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

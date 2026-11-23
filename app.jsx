@@ -3655,7 +3655,7 @@ function App() {
           )}
           {starsOpen && user && (
             <window.StarsPanel user={user} onClose={() => setStarsOpen(false)}
-              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin} fixed={myFixed}
+              weeks={weeks} weekOrder={viewOrder} progItems={qmProgress} checkin={myCheckin} fixed={myFixed} treat={myTreat}
               mx={userProfile.mx} onOpenDress={() => { setStarsOpen(false); if (window.mxOpenDress) window.mxOpenDress(); }}/>
           )}
           {checkinOpen && window.CheckinPanel && (
