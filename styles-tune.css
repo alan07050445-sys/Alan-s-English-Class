@@ -5226,3 +5226,6 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   /* 瀏覽器原生「聚焦就捲進畫面」只算到捲動區邊緣、不知道有 sticky 的交卷列——告訴它底部要多留 100px */
   .qm-quiz-area { scroll-padding-bottom: 100px; }
 }
+
+/* v677：故事山輸入框點進去時卡片捲到上方（見 StoryMountainPlayer onFocus）——上方留 12px，不貼著邊 */
+.sm-stage-card { scroll-margin-top: 12px; }

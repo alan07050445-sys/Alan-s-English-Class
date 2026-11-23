@@ -5717,6 +5717,20 @@ function StoryMountainPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           placeholder={`Write your ${current.label} here…`}
           rows={6}
           autoFocus
+          onFocus={e => {
+            /* v677（iPad 直式）：山形圖 344px 在輸入框上面，鍵盤一彈出輸入框只剩一小截。
+               點進輸入框時，若整張關卡卡片（提示＋輸入框＋字數）會被鍵盤擋住，就把卡片捲到作答區上方；
+               看得到就不動（桌機、橫式不受影響）。 */
+            const el = e.currentTarget;
+            setTimeout(() => {
+              try {
+                const card = el.closest('.sm-stage-card');
+                if (!card) return;
+                const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+                if (card.getBoundingClientRect().bottom > vh - 8) card.scrollIntoView({ block: 'start' });
+              } catch (_) {}
+            }, 350);
+          }}
         />
         <div className="sm-word-count">{wordCount} words</div>
       </div>
