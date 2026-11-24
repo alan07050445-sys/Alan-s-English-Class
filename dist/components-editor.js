@@ -10113,7 +10113,7 @@ function AskPanel({
     onClick: () => onRefreshBriefing && onRefreshBriefing()
   }, briefBusy ? '讀取中…' : '↻ 重讀')), briefBusy && !briefing && /*#__PURE__*/React.createElement("div", {
     className: "ask-brief-empty"
-  }, "\u6211\u770B\u4E00\u4E0B\u5168\u73ED\u7684\u8CC7\u6599\u2026"), briefing && briefing.lines.filter(l => l.key !== 'redeems').length === 0 && !(redeemReqs || []).length && /*#__PURE__*/React.createElement("div", {
+  }, "\u6211\u770B\u4E00\u4E0B\u5168\u73ED\u7684\u8CC7\u6599\u2026"), briefing && briefing.todo === 0 && !(redeemReqs || []).length && /*#__PURE__*/React.createElement("div", {
     className: "ask-brief-empty"
   }, "\u4ECA\u5929\u6C92\u6709\u8981\u4F60\u8655\u7406\u7684\u4E8B \uD83C\uDF89"), briefing && briefing.lines.filter(l => l.key !== 'redeems').map(l => /*#__PURE__*/React.createElement("details", {
     key: l.key,
@@ -10124,7 +10124,7 @@ function AskPanel({
   }, /*#__PURE__*/React.createElement("b", null, r.name), "\u3000", r.text)), l.rows.length > 8 && /*#__PURE__*/React.createElement("li", null, "\u2026\u9084\u6709 ", l.rows.length - 8, " \u7B46")), l.go && onBriefGo && /*#__PURE__*/React.createElement("button", {
     className: "ask-redeem-go",
     onClick: () => onBriefGo(l.go)
-  }, "\u53BB\u8655\u7406 \u2192"))))), (redeemReqs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, l.key === 'yesterday' ? '看總覽 →' : '去處理 →'))))), (redeemReqs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "ask-row"
   }, /*#__PURE__*/React.createElement("div", {
     className: "ask-bub ask-redeem"

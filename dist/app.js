@@ -4631,7 +4631,7 @@ function App() {
     "aria-label": "\u95DC\u6389"
   }, "\u2715"), /*#__PURE__*/React.createElement("div", {
     className: "ask-brief-hd"
-  }, "\uD83D\uDCCB \u4ECA\u5929\u6709 ", briefing.total, " \u4EF6\u4E8B"), /*#__PURE__*/React.createElement("ul", null, briefing.lines.slice(0, 4).map(l => /*#__PURE__*/React.createElement("li", {
+  }, briefing.todo > 0 ? `📋 今天有 ${briefing.todo} 件事` : '📋 今日簡報'), /*#__PURE__*/React.createElement("ul", null, briefing.lines.slice(0, 5).map(l => /*#__PURE__*/React.createElement("li", {
     key: l.key
   }, l.ico, " ", l.text))), /*#__PURE__*/React.createElement("div", {
     className: "ask-brief-ft"

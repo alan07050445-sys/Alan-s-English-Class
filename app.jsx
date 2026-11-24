@@ -3419,8 +3419,8 @@ function App() {
             {briefBubble && briefing && briefing.total > 0 && (
               <div className={'ask-brief-bubble' + ((catView || editMode) ? ' with-nav' : '')} role="status">
                 <button className="ask-brief-x" onClick={() => setBriefBubble(false)} aria-label="關掉">✕</button>
-                <div className="ask-brief-hd">📋 今天有 {briefing.total} 件事</div>
-                <ul>{briefing.lines.slice(0, 4).map(l => <li key={l.key}>{l.ico} {l.text}</li>)}</ul>
+                <div className="ask-brief-hd">{briefing.todo > 0 ? `📋 今天有 ${briefing.todo} 件事` : '📋 今日簡報'}</div>
+                <ul>{briefing.lines.slice(0, 5).map(l => <li key={l.key}>{l.ico} {l.text}</li>)}</ul>
                 <div className="ask-brief-ft">
                   <button onClick={() => { setBriefBubble(false); setAskOpen(true); }}>看詳細</button>
                   <button className="ask-brief-mute" onClick={toggleBriefMute}>🔕 不要再主動講</button>

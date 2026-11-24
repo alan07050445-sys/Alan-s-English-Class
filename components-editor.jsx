@@ -6501,7 +6501,7 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, briefi
                 <button className="ask-brief-refresh" disabled={briefBusy} onClick={() => onRefreshBriefing && onRefreshBriefing()}>{briefBusy ? '讀取中…' : '↻ 重讀'}</button>
               </div>
               {briefBusy && !briefing && <div className="ask-brief-empty">我看一下全班的資料…</div>}
-              {briefing && briefing.lines.filter(l => l.key !== 'redeems').length === 0 && !(redeemReqs || []).length && (
+              {briefing && briefing.todo === 0 && !(redeemReqs || []).length && (
                 <div className="ask-brief-empty">今天沒有要你處理的事 🎉</div>
               )}
               {briefing && briefing.lines.filter(l => l.key !== 'redeems').map(l => (
@@ -6511,7 +6511,7 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, briefi
                     {l.rows.slice(0, 8).map((r, i) => <li key={i} className={r.tone || ''}><b>{r.name}</b>　{r.text}</li>)}
                     {l.rows.length > 8 && <li>…還有 {l.rows.length - 8} 筆</li>}
                   </ul>
-                  {l.go && onBriefGo && <button className="ask-redeem-go" onClick={() => onBriefGo(l.go)}>去處理 →</button>}
+                  {l.go && onBriefGo && <button className="ask-redeem-go" onClick={() => onBriefGo(l.go)}>{l.key === 'yesterday' ? '看總覽 →' : '去處理 →'}</button>}
                 </details>
               ))}
             </div>

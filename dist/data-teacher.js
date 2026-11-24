@@ -7459,7 +7459,33 @@ async function askBriefing(roster, currentWeekId) {
   const ina = askQueryAnswer({ qtype: 'inactive', days: 3, gradeId: '' }, ctx);
   if (ina.rows.length) lines.push({ key: 'inactive', ico: '💤', text: `${ina.rows.length} 位超過 3 天沒練習`, rows: ina.rows, go: 'roster' });
 
-  return { lines, total: lines.length, at: Date.now() };
+  /* v687（Alan：「簡報加上昨天誰剛完成」）：昨天（本地時間 00:00～24:00）完成了練習的人。
+     ⚠ 看的是每一個單元的完成時間（progress 裡 done 存的毫秒時間），不是只看這週——
+       他昨天補做了上週的作業也要算。舊資料 done 只是 true（沒時間）就沒辦法算，不會亂猜。
+     ⚠ 這是好消息，排最後；沒有人完成就不出現（不要用「昨天沒人完成」去嚇自己）。 */
+  try {
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const endMs = t0.getTime(), startMs = endMs - 86400000;
+    const byEmail2 = new Map((data.students || []).map(x => [String(x.email || '').toLowerCase(), x]));
+    const rows = [];
+    let nItems = 0;
+    active.forEach(r => {
+      const st = byEmail2.get(String(r.email).toLowerCase());
+      if (!st || !st.items) return;
+      const hits = Object.keys(st.items).map(k => st.items[k]).filter(p => p && typeof p.done === 'number' && p.done >= startMs && p.done < endMs);
+      if (!hits.length) return;
+      nItems += hits.length;
+      const scores = hits.map(p => p.score).filter(x => typeof x === 'number');
+      const best = scores.length ? Math.round(Math.max(...scores)) : null;
+      rows.push({ name: r.name || r.email, email: r.email, n: hits.length, tone: 'ok',
+        text: `完成 ${hits.length} 項${best != null ? `（最高 ${best} 分）` : ''}` });
+    });
+    rows.sort((a, b) => b.n - a.n || String(a.name).localeCompare(String(b.name)));
+    if (rows.length) lines.push({ key: 'yesterday', ico: '🎉', text: `昨天有 ${rows.length} 位同學完成了練習（共 ${nItems} 項）`, rows, go: 'overview' });
+  } catch (e) {}
+
+  /* todo＝要你處理的事（不含昨天的好消息）——泡泡標題「今天有 N 件事」用這個數 */
+  return { lines, total: lines.length, todo: lines.filter(l => l.key !== 'yesterday').length, at: Date.now() };
 }
 Object.assign(window, { askBriefing });
 
