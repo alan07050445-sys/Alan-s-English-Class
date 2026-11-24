@@ -859,6 +859,13 @@ function qmGroupByArticle(items) {
 function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem, onEditItem, onDeleteItem, onMoveItem, onReorderItems, openAssignFor, onAssignOpened, weekAllItems, onAutoLinkFlashcards, groupRes, onSaveGroupRes, weekChoices, onCopyToWeeks, onMoveQuestions, onCopyGroupToWeeks, homework, onSetHomework, onSetHomeworkMany, onRegenGroup, onReviewGroup, onDeleteGroup, onRenameGroup, onMoveGroupCat, allCategories, weekQuizItems, initialItemId, cloudProg, getNextTask, onOpenTask, reviewRun }) {
   const [selectedItem, setSelectedItem] = useQM(null);
   const [phase,        setPhase]        = useQM('intro'); // 'intro' | 'flashcards' | 'quiz'
+  /* v694：打開一個單元就多一筆歷史；「上一頁」／邊緣滑動返回＝回單元列表（不是離開網站，也不是直接回大廳）。 */
+  const inUnit = !!selectedItem;
+  useQME(() => {
+    if (!inUnit || !window.alanNav) return;
+    const e = window.alanNav.push(() => { setSelectedItem(null); });
+    return () => window.alanNav.release(e);
+  }, [inUnit]);
   const [moveCatFor, setMoveCatFor] = useQM(null);   // v570：正在選「搬到哪一類」的那一組（g.key）
   const [flashItem,    setFlashItem]    = useQM(null);   // flashcard item to review
   const [playerKey,    setPlayerKey]    = useQM(0);
@@ -890,7 +897,11 @@ function QuizModeCategoryView({ cat, items, weekId, onBack, editMode, onAddItem,
         for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue;
           /* v670：閱讀技巧的回饋是 .rs-fb（鈕在旁邊的 .rs-foot），不是 .qm-feedback——答對後「下一個技巧 →」在 666–725px（視窗 690）不會自己捲上來。 */
-          const fb = (n.matches && n.matches('.qm-feedback, .rs-fb')) ? n : (n.querySelector && n.querySelector('.qm-feedback, .rs-fb'));
+          /* v695（iPad QA）：有些題型（字義選擇、填空、聽寫…）的 .qm-feedback 外框一開始就在，答完只是「裡面」多出解說與「下一題」鈕——
+             新增的節點是它的子孫，不是它本身，也不包含它，以前就這樣被漏掉（下一題／查看成績留在畫面外，也不自己捲上來）。
+             → 再往上找：新增的節點如果在 .qm-feedback／.rs-fb 裡面，就用那個外框。 */
+          const fb = (n.matches && n.matches('.qm-feedback, .rs-fb')) ? n
+            : ((n.querySelector && n.querySelector('.qm-feedback, .rs-fb')) || (n.closest && n.closest('.qm-feedback, .rs-fb')));
           if (!fb) continue;
           setTimeout(() => {
             try {

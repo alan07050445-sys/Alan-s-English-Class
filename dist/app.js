@@ -150,6 +150,75 @@ var _CLOUD_CACHE_KEYS = {
     });
   } catch (e) {}
 })();
+
+/* ══ v694（iPad QA）：瀏覽器「上一頁」／邊緣滑動返回 ═══════════════════════════════
+   以前整個 App 沒有任何 history 紀錄——大廳→類別→單元之間換頁都不會多一筆，
+   所以學生在單元裡用邊緣滑動返回，會**直接離開網站**（實測跳到上一個網站）。
+   做法：每進一層（類別、單元）就 pushState 一筆；上一頁 → 只關掉最上面那一層。
+   ⚠ 用 UI 自己的返回鈕關掉那一層時，要把多出來的那筆歷史也退掉（navRelease），不然「上一頁」會停在同一個畫面。
+   ⚠ 同一個瞬間關好幾層（返回大廳＝單元＋類別一起收）只退一次 history.go(-n)，不然會多退。 */
+var alanNav = (() => {
+  var stack = [];
+  var ignore = 0,
+    pending = 0,
+    scheduled = false;
+  var flush = () => {
+    scheduled = false;
+    var n = pending;
+    pending = 0;
+    if (n > 0) {
+      ignore++;
+      try {
+        history.go(-n);
+      } catch (e) {
+        ignore--;
+      }
+    }
+  };
+  return {
+    push(onPop) {
+      var e = {
+        onPop
+      };
+      try {
+        history.pushState({
+          alanNav: stack.length + 1
+        }, '');
+      } catch (err) {
+        return e;
+      }
+      stack.push(e);
+      return e;
+    },
+    release(e) {
+      var i = stack.indexOf(e);
+      if (i < 0) return; // 已經被「上一頁」彈掉了
+      pending += stack.length - i;
+      stack.splice(i);
+      if (!scheduled) {
+        scheduled = true;
+        Promise.resolve().then(flush);
+      }
+    },
+    onPopState() {
+      if (ignore > 0) {
+        ignore--;
+        return;
+      } // 我們自己退的，不要再當成使用者按上一頁
+      var e = stack.pop();
+      if (e) {
+        try {
+          e.onPop();
+        } catch (err) {}
+      }
+    },
+    depth: () => stack.length
+  };
+})();
+try {
+  window.addEventListener('popstate', () => alanNav.onPopState());
+  window.alanNav = alanNav;
+} catch (e) {}
 function visibleWeekOrder(isTeacher, order, weeks) {
   if (isTeacher) return order || [];
   return (order || []).filter(id => {
@@ -596,6 +665,13 @@ function App() {
 
   // ── Category view state (quiz mode navigation) ──────
   var [catView, setCatView] = useAppState(null); // null = main blocks, { cat } = inside a category
+  /* v694：進到類別就多一筆歷史；「上一頁」＝回大廳（不是離開網站）。換類別不重推（只看有沒有在類別裡）。 */
+  var inCat = !!catView;
+  useAppEffect(() => {
+    if (!inCat) return;
+    var e = alanNav.push(() => setCatView(null));
+    return () => alanNav.release(e);
+  }, [inCat]);
   /* v618 🗺️ 期中考總複習地圖：每個年級一份（class/reviewpath_{年級}），公開可讀、老師才能寫 */
   var [reviewPath, setReviewPath] = useAppState(null);
   var [rpOpen, setRpOpen] = useAppState(false);

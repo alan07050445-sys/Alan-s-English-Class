@@ -4423,3 +4423,38 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .ask-brief-ft button, .ask-head-mute { min-height: 44px; }
   .ask-brief-x { width: 44px; height: 44px; }
 }
+
+/* ══ v695（iPad QA 第一批）═══════════════════════════════════════════════
+   ① 考卷／長內容：左上「單元列表」膠囊（fixed top:74）捲動時一直蓋住題目開頭、右上浮動鈕蓋住分數。
+      以前只在作答區裡面加 padding-top:52——第一屏讓開了，可是一捲動，內容就從膠囊底下穿過去。
+      → 改成作答區「整個往下讓 52px」（margin-top），內容捲動時永遠在膠囊底下那條線之下，不會被蓋到。
+      （專心模式開著＝上方列收起、膠囊縮成 44px 圖示貼在最上面，維持原本的 padding 做法。）
+   ② 專心模式鈕（橫式）38 → 44，跟直式一致。
+   ③ 小於 44px 的點擊目標一批補齊（商店分類、複習地圖、簽到、吉祥物小選單、查字彈窗、導覽略過、頁尾連結、短文填空詞塊、學習模式下一題、考卷選項）。 */
+@media (min-width: 641px) and (max-width: 1400px) {
+  html:not(.focus-on) .qm-cat-view:has(.qm-sidebar-reopen) .qm-quiz-area {
+    padding-top: 0; margin-top: 52px;
+    min-height: calc(100dvh - 192px); max-height: calc(100dvh - 192px);
+  }
+  .sp-filter button { min-height: 44px; }
+  .rp-head { min-height: 44px; }
+  .rp-x { width: 44px; height: 44px; }
+  .ci-x { width: 44px; height: 44px; }
+  .ci-cell-n, .ci-cell-amt { font-size: 12px; }
+  .mx-menu button { min-height: 44px; }
+  .gr-word-x { min-width: 44px; min-height: 44px; }
+  .st-skip { min-height: 44px; padding: 10px 18px; }
+  .ll-foot2-col button { min-height: 44px; }
+  .cloze-bank-w { min-height: 44px; }
+  .fc-learn-next-row .btn { min-height: 44px; }
+  .ex-opt { min-height: 44px; align-items: center; }
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  html:not(.focus-on) .qm-cat-view:has(.qm-sidebar-reopen) .qm-quiz-area {
+    min-height: calc(100dvh - 213px); max-height: calc(100dvh - 213px);
+  }
+}
+@media (min-width: 901px) and (max-width: 1400px) {
+  .focus-btn { width: 44px; height: 44px; }
+  html.focus-on .focus-btn { top: 6px; right: 8px; }
+}
