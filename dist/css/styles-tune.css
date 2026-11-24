@@ -4242,7 +4242,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
    視窗 834 高 → 433px、Safari 工具列讓視窗剩 690 高 → 只剩 289px，而且每台、每次轉向都不一樣，
    圖片＋中文＋例句擠成一團。→ 改成固定高度 560px（內容區自己吃剩下的），頁面不夠高就讓頁面捲。
    例句 40px → 33px（縮小約 1.2 倍），給圖片多一點位置。 ══ */
-@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (min-height: 761px) {   /* v699：只有畫面夠高才固定 560；矮的（Safari 工具列在、~696）交給 JS 照作答區剩多少算 */
   .fc-player.fc-p-card { height: 560px !important; min-height: 560px; }
   .fc-p-card .fc-example { font-size: 28px; }
   .fc-p-card .fc-zh { font-size: 42px; }   /* v663：中文 50→42、例句 33→28，讓位給照片 */
@@ -4254,7 +4254,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (max-height: 950px) {
   .fc-player.fc-p-learn > .fc-dual-bar { margin-right: 52px !important; }
 }
-@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (min-height: 761px) {
   .fc-player.fc-p-learn { height: 560px !important; min-height: 560px; }
 }
 
@@ -4469,4 +4469,23 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .cloze-player:has(.cloze-input:focus) .cloze-bank { position: static; }
   .cloze-player:has(.cloze-input:focus) .cloze-bank-hint { display: none; }
   .cloze-player:has(.cloze-input:focus) .cloze-footer { position: static; box-shadow: none; }
+}
+
+/* ══ v699（Alan 的 iPad 橫式截圖：「下一張／上一張會消失」）══════════════════════════════
+   原因：v662 把單字卡／學習面板寫死成 560px 高（「頁面不夠高就讓頁面捲」）。iPad 橫式 Safari 有工具列時，
+   可視高度只有 ~696px，作答區只剩 556px，而它上面還有「還要完成…／單字卡 學習 配對 測驗」那兩條（~139px）——
+   560px 的面板根本塞不進去，最底下的「← 上一張／下一張 →」（還有學習模式的選項）掉到作答區外面、要自己往下捲才看得到；
+   卡片背面有大圖時，圖＋中文＋例句又比卡片高，例句被切一半。
+   → ① 560px 只在畫面夠高（≥761px）才固定；矮的交給 JS（useFitHeight 開 clampHost）照作答區剩多少算，導覽列永遠在畫面內。
+     ② 矮畫面的卡片背面有圖時改成「左圖右字」兩欄——橫式寬度很夠、高度才是稀缺的，這樣 ~300px 高的卡片就裝得下。 */
+@media (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (max-height: 760px) {
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto;
+    align-content: center; align-items: center; justify-items: stretch; column-gap: 26px; text-align: left;
+    padding: 12px 28px;
+  }
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) .fc-back-img-wrap { grid-column: 1; grid-row: 1 / span 2; margin: 0; align-self: center; max-height: none; }
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) .fc-back-img-wrap img { max-height: min(250px, 36vh); }
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) .fc-zh { grid-column: 2; grid-row: 1; align-self: end; text-align: left; font-size: 28px; margin-bottom: 8px; }
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) .fc-example { grid-column: 2; grid-row: 2; align-self: start; text-align: left; font-size: 20px; line-height: 1.45; max-width: none; -webkit-line-clamp: 4; }   /* 兩欄之後文字欄有空間：本來矮畫面只留 1～2 行（見 v4xx 的 line-clamp），放寬到 4 行，句子不再被切 */
 }

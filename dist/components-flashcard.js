@@ -970,7 +970,7 @@ function FlashcardPlayer({
   // v376: 單字卡／學習兩個模式撐滿一畫面就好（見 useFitHeight）
   var cardFitRef = React.useRef(null);
   var learnFitRef = React.useRef(null);
-  useFitHeight(cardFitRef, mode === 'card', 360);
+  useFitHeight(cardFitRef, mode === 'card', 360, true); // v699：clampHost——作答區高度被限定時（iPad 橫式 696），面板高度要照作答區剩多少算，不是照視窗底
 
   // v274: 星號標記＋「只練星號」
   var [stars, setStars] = useFC(() => fcLoadStars(item.id));
@@ -1040,7 +1040,7 @@ function FlashcardPlayer({
   var [learnQueue, setLearnQueue] = useFC([]); // [{card, isRetry}]
   /* v376: 「作答中」才量高度——按「再練一次」會重新掛一個 .fc-player，
      只看 mode 的話 enabled 沒變、效果不會重跑，新的那個就會沒有高度。 */
-  useFitHeight(learnFitRef, mode === 'learn' && learnQueue.length > 0, 340);
+  useFitHeight(learnFitRef, mode === 'learn' && learnQueue.length > 0, 340, true);
   var [correctIds, setCorrectIds] = useFC(new Set());
   var [learnChoice, setLearnChoice] = useFC(null); // chosen card id
   var [learnChoices, setLearnChoices] = useFC([]);
