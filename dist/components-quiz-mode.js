@@ -11740,6 +11740,20 @@ function DefMatchPlayer({
   useQME(() => {
     measure();
   }, [conn, order, graded, tick]);
+  /* v697（iPad QA）：交卷後解釋會從「截斷成一行」變成完整換行，列變高、整張超過一屏——連錯的紅色那幾列常常在畫面下面，
+     學生按「查看成績」之前根本沒看到自己錯在哪。→ 交卷後把第一個連錯的列捲到畫面中間（全對就不動）。 */
+  useQME(() => {
+    if (!graded || !(graded.wrongList && graded.wrongList.length)) return; // 全對就不動
+    var t = setTimeout(() => {
+      try {
+        var bad = document.querySelector('.dm-wrap.graded .dm-chip.bad');
+        if (bad) bad.scrollIntoView({
+          block: 'center'
+        });
+      } catch (e) {}
+    }, 380);
+    return () => clearTimeout(t);
+  }, [graded]);
   useQME(() => {
     var on = () => setTick(t => t + 1);
     window.addEventListener('resize', on);

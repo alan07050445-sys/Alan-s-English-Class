@@ -5322,3 +5322,15 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .focus-btn { width: 44px; height: 44px; }
   html.focus-on .focus-btn { top: 6px; right: 8px; }
 }
+
+/* ══ v697（iPad QA 第二批）：橫式短文填空——鍵盤彈出時詞庫＋交卷列把短文擠沒了 ══════════════════
+   量測（1194×500，鍵盤高度）：作答區 360px，釘在上面的詞庫 136px＋釘在下面的交卷列 76px，剩 25~100px 看短文——
+   正在填的那一格根本看不到。
+   iPad 的鍵盤是「蓋在畫面上」（不會縮小版面視窗），所以不能靠 max-height 的 media query——改看「有沒有輸入框正在輸入」。
+   → 有格子被點進去時，詞庫與交卷列都放開釘子（回到原本在文章前、後的位置）：不會位移（sticky 本來就佔原位），
+     短文拿回整個作答區；點到詞庫的字（輸入框失焦）又自動釘回去。 */
+@media (min-width: 761px) and (max-width: 1400px) and (max-height: 900px) {
+  .cloze-player:has(.cloze-input:focus) .cloze-bank { position: static; }
+  .cloze-player:has(.cloze-input:focus) .cloze-bank-hint { display: none; }
+  .cloze-player:has(.cloze-input:focus) .cloze-footer { position: static; box-shadow: none; }
+}
