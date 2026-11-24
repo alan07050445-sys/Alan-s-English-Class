@@ -3767,6 +3767,8 @@ function ShortAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTas
         placeholder="Write your answer here…"
         disabled={!!feedback}
         rows={4}
+        /* v680：簡答題也關掉自動校正 */
+        autoCorrect="off" autoCapitalize="none" autoComplete="off" spellCheck={false}
       />
 
       {!feedback ? (
@@ -4581,6 +4583,8 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               placeholder="Write your answer here…"
               disabled={!!feedback}
               rows={4}
+              /* v680：分段閱讀的簡答題也關掉自動校正 */
+              autoCorrect="off" autoCapitalize="none" autoComplete="off" spellCheck={false}
             />
             {!feedback ? (
               <>
@@ -5720,6 +5724,8 @@ function StoryMountainPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
           onChange={e => setAnswers(prev => ({...prev, [current.key]: e.target.value}))}
           placeholder={`Write your ${current.label} here…`}
           rows={6}
+          /* v680：故事山也關掉自動校正 */
+          autoCorrect="off" autoCapitalize="none" autoComplete="off" spellCheck={false}
           autoFocus
           onFocus={e => {
             /* v677（iPad 直式）：山形圖 344px 在輸入框上面，鍵盤一彈出輸入框只剩一小截。

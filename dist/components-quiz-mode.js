@@ -4492,6 +4492,11 @@ function ShortAnswerPlayer({
     placeholder: "Write your answer here\u2026",
     disabled: !!feedback,
     rows: 4
+    /* v680：簡答題也關掉自動校正 */,
+    autoCorrect: "off",
+    autoCapitalize: "none",
+    autoComplete: "off",
+    spellCheck: false
   }), !feedback ? /*#__PURE__*/React.createElement(React.Fragment, null, gradeErr && /*#__PURE__*/React.createElement("div", {
     className: "qm-grade-err"
   }, "\u26A0 ", gradeErr), /*#__PURE__*/React.createElement("button", {
@@ -5588,6 +5593,11 @@ function GuidedReadingPlayer({
       placeholder: "Write your answer here\u2026",
       disabled: !!feedback,
       rows: 4
+      /* v680：分段閱讀的簡答題也關掉自動校正 */,
+      autoCorrect: "off",
+      autoCapitalize: "none",
+      autoComplete: "off",
+      spellCheck: false
     }), !feedback ? /*#__PURE__*/React.createElement(React.Fragment, null, grErr && /*#__PURE__*/React.createElement("div", {
       className: "qm-grade-err"
     }, "\u26A0 ", grErr), /*#__PURE__*/React.createElement("button", {
@@ -6950,7 +6960,12 @@ function StoryMountainPlayer({
       [current.key]: e.target.value
     })),
     placeholder: `Write your ${current.label} here…`,
-    rows: 6,
+    rows: 6
+    /* v680：故事山也關掉自動校正 */,
+    autoCorrect: "off",
+    autoCapitalize: "none",
+    autoComplete: "off",
+    spellCheck: false,
     autoFocus: true,
     onFocus: e => {
       /* v677（iPad 直式）：山形圖 344px 在輸入框上面，鍵盤一彈出輸入框只剩一小截。
