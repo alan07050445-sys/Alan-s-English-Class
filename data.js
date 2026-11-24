@@ -8090,6 +8090,10 @@ The tools:
                 notstarted（誰這週完全沒開始）
                 student   （某一位學生這週做得怎麼樣——needs "student"）
                 mistakes  （某一位學生目前錯題最多的是哪些——needs "student"）
+                balance   （某一位學生現在有幾顆星星／星星多少——needs "student"）
+                classmistakes（全班錯最多的是哪些題／哪個單元；沒指定學生）
+                redeems   （有誰在等我兌換商品／待兌換／有人想換東西）
+                inactive  （誰好幾天沒練習／很久沒上線／最近都沒做）
               🔴 You do NOT answer. You only pick the qtype; the website computes the numbers.
               If he wants you to MAKE practice from the mistakes ("針對 Nick 的弱點出練習"),
               that is "weak", not "query". Asking WHAT / WHO / HOW MANY ＝ query.
@@ -8268,7 +8272,7 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     gradeId: /^g[1-6]$/.test(String(o.gradeId || '').trim().toLowerCase())
       ? String(o.gradeId).trim().toLowerCase() : '',
     /* v547：全部夾回受控值——模型亂填一個 qtype 或 25:99，程式照做就會算錯、存錯。 */
-    qtype: ['unfinished', 'notstarted', 'student', 'mistakes'].indexOf(String(o.qtype || '').trim()) >= 0
+    qtype: ['unfinished', 'notstarted', 'student', 'mistakes', 'balance', 'classmistakes', 'redeems', 'inactive'].indexOf(String(o.qtype || '').trim()) >= 0
       ? String(o.qtype).trim() : '',
     fromDay: (() => { const n = Math.round(+o.fromDay); return (n >= 0 && n <= 6) ? n : -1; })(),
     toDay:   (() => { const n = Math.round(+o.toDay);   return (n >= 0 && n <= 6) ? n : -1; })(),
@@ -8318,8 +8322,8 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
   if (out.intent === 'query') {
     if (!out.qtype) {
       out.intent = 'unknown';
-      out.ask = out.ask || '想查什麼？「這週誰還沒做完」、「Nick 這週做得怎麼樣」、「Nick 錯最多的是哪些」我都查得到。';
-    } else if ((out.qtype === 'student' || out.qtype === 'mistakes') && !out.student) {
+      out.ask = out.ask || '想查什麼？「這週誰還沒做完」、「Nick 這週做得怎麼樣」、「Nick 錯最多的是哪些」、「Nick 有幾顆星星」、「全班錯最多的是哪題」、「誰好幾天沒練習」、「有誰在等我兌換」我都查得到。';
+    } else if ((out.qtype === 'student' || out.qtype === 'mistakes' || out.qtype === 'balance') && !out.student) {
       out.intent = 'unknown';
       out.ask = '要查哪一位學生？';
     }
@@ -12436,7 +12440,72 @@ function askQueryAnswer(plan, ctx) {
     return { head, rows, foot };
   }
 
-  /* 以下兩種都要先找到那位學生 */
+  /* v683（Alan：「我要把小助手變成像 Jarvis 一樣」）：不用指定學生的三種查詢 ──────── */
+  const DAY = 86400000;
+  const fmtMD = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  if (plan.qtype === 'redeems') {
+    const pend = (c.redeems || []).filter(x => x && x.status === 'pending');
+    if (!pend.length) return { head: '目前沒有人在等你兌換 👍', rows: [], foot: '' };
+    return {
+      head: `有 ${pend.length} 筆兌換在等你`,
+      rows: pend.map(x => ({ name: x.name || x.email, email: x.email,
+        text: `${x.emoji ? x.emoji + ' ' : ''}${x.itemName}（${Number(x.cost).toLocaleString()}🌟）· ${x.at ? fmtMD(x.at) : ''}`, tone: 'warn' })),
+      foot: '給他東西之後，到後台「集點」按「已給他，扣點」才會扣星星（我不會替你扣）。',
+    };
+  }
+  if (plan.qtype === 'inactive') {
+    const days = Math.max(1, Math.min(60, Math.round(+plan.days) || 3));
+    const now = Date.now(), rows = [];
+    let n = 0;
+    roster.forEach(r => {
+      const g = gradeOf(r);
+      if (plan.gradeId && g !== plan.gradeId) return;
+      n++;
+      const st = stuOf(r);
+      if (st._noDoc) { rows.push({ name: r.name || r.email, email: r.email, grade: g, days: 999, text: '還沒登入過', tone: 'bad' }); return; }
+      const last = Number(st.updatedAt) || 0;
+      if (!last) return;
+      const d = Math.floor((now - last) / DAY);
+      if (d >= days) rows.push({ name: r.name || r.email, email: r.email, grade: g, days: d, text: `${d} 天沒練習（上次 ${fmtMD(last)}）`, tone: d >= 7 ? 'bad' : 'warn' });
+    });
+    rows.sort((a, b) => b.days - a.days);
+    return {
+      head: rows.length ? `有 ${rows.length} 位超過 ${days} 天沒練習（共 ${n} 位）` : `每位 ${days} 天內都有練習 🎉`,
+      rows,
+      foot: '「上次」是他最後一次存進度的時間；只在網站上看、沒做題不算。',
+    };
+  }
+  if (plan.qtype === 'classmistakes') {
+    const agg = new Map();
+    let withData = 0;
+    roster.forEach(r => {
+      const g = gradeOf(r);
+      if (plan.gradeId && g !== plan.gradeId) return;
+      const d = gdOf(g), st = stuOf(r);
+      if (!d || st._noDoc || typeof collectWrongQuestions !== 'function') return;
+      withData++;
+      const list = collectWrongQuestions(st.items, d.weeks, d.order, typeof CATEGORIES !== 'undefined' ? CATEGORIES : []);
+      const seen = new Set();
+      list.forEach(q => {
+        const k = `${g}｜${q.weekLabel}｜${q.itemTitle}｜${String(q.q || '').slice(0, 80)}`;
+        if (!agg.has(k)) agg.set(k, { weekLabel: q.weekLabel, title: q.itemTitle, q: String(q.q || ''), grade: g, who: new Set(), n: 0 });
+        const e = agg.get(k);
+        e.n++;
+        if (!seen.has(k)) { seen.add(k); e.who.add(r.name || r.email); }
+      });
+    });
+    const top = [...agg.values()].filter(x => x.who.size >= 2).sort((a, b) => b.who.size - a.who.size || b.n - a.n).slice(0, 5);
+    if (!top.length) return { head: withData ? '沒有哪一題是兩位以上同學都還沒訂正的 👍' : '還沒有學生的錯題資料。', rows: [],
+      foot: '只算「還沒訂正」的錯題，而且要至少兩位同學錯同一題才算「全班都錯」。' };
+    return {
+      head: `全班（${withData} 位有資料）還沒訂正、最多人錯的題：`,
+      rows: top.map(x => ({ name: `${x.who.size} 位`, tone: x.who.size >= 3 ? 'bad' : 'warn',
+        text: `${x.grade.toUpperCase()} ${x.weekLabel} · ${x.title}：${x.q.length > 46 ? x.q.slice(0, 46) + '…' : x.q}（${[...x.who].slice(0, 4).join('、')}）` })),
+      foot: '這是「還沒訂正」的累積，不是某段時間內的。想針對某位同學出練習，跟我說「針對 ○○ 的弱點出練習」。',
+    };
+  }
+
+  /* 以下幾種都要先找到那位學生 */
   const who = askFindStudent(plan.student, roster);
   if (!who || !who.email) {
     return { head: who && who.many ? `名單裡有兩個「${plan.student}」，說全名我才知道是誰。`
@@ -12445,6 +12514,29 @@ function askQueryAnswer(plan, ctx) {
   const r = roster.find(x => String(x.email).toLowerCase() === String(who.email).toLowerCase());
   const g = gradeOf(r), wk = weekOf(g), stu = stuOf(r);
   const twin = (who.twins || []).length ? `⚠ 名單裡有長得很像的名字（${who.twins.join('、')}），確認一下是不是 ${who.name}。\n` : '';
+
+  if (plan.qtype === 'balance') {
+    /* 星星＝「老師手動記的」＋完成練習自動給的＋簽到＋訂正＋Trick or Treat −買裝扮——
+       跟學生右上角那顆 ⭐、後台集點頁用同一組函式，三邊一定對得上。 */
+    const W = (typeof window !== 'undefined') ? window : {};
+    const d = gdOf(g);
+    const manual = Number(((c.stars || {})[String(who.email).toLowerCase()] || {}).balance) || 0;
+    const a = (W.computeAutoStars && d) ? W.computeAutoStars(d.weeks, d.order, stu.items || {}, { cloudShape: true }).total : 0;
+    const ck = W.computeCheckin ? (W.computeCheckin(stu.checkin).total || 0) : 0;
+    const fx = W.computeFixedStars ? (W.computeFixedStars(stu.fixed).total || 0) : 0;
+    const tr = W.computeTreatStars ? (W.computeTreatStars(stu.treat, stu.uid).total || 0) : 0;
+    const spent = W.mxSpent ? (W.mxSpent(stu.mx || {}) || 0) : 0;
+    const total = Math.max(0, manual + a + ck + fx + tr - spent);
+    const pend = (c.redeems || []).filter(x => x && x.status === 'pending' && String(x.email).toLowerCase() === String(who.email).toLowerCase());
+    const rows = [
+      { name: '手動（老師給／扣）', text: `${manual.toLocaleString()}` },
+      { name: '完成練習自動給', text: `${(a + ck + fx + tr).toLocaleString()}` },
+    ];
+    if (spent) rows.push({ name: '買吉祥物裝扮花掉', text: `−${spent.toLocaleString()}` });
+    if (pend.length) rows.push({ name: '申請兌換中（還沒扣）', text: pend.map(x => `${x.itemName} ${Number(x.cost).toLocaleString()}🌟`).join('、'), tone: 'warn' });
+    if (stu._noDoc) rows.push({ name: '注意', text: '這位還沒登入過，自動集點算不到', tone: 'bad' });
+    return { head: `${who.name} 現在有 ${total.toLocaleString()}🌟`, rows, foot: twin + '要給或扣星星，跟我說「' + who.name + ' 加 10 顆星」，我會先跟你確認。' };
+  }
 
   if (plan.qtype === 'student') {
     if (!wk || !wk.wid) return { head: `找不到 ${who.name} 這個年級的作業資料。`, rows: [], foot: twin };
@@ -12494,15 +12586,71 @@ function askLoadQueryData() {
               g4: 'subscribeToClassDataG4', g5: 'subscribeToClassDataG5', g6: 'subscribeToClassDataG6' };
   return Promise.all([
     once(cb => subscribeAllStudents(cb)),
+    /* v683：星星與兌換申請也一起讀（查「Nick 有幾顆星星」「誰在等我兌換」要用）。讀不到就是空的，不影響其他查詢。 */
+    once(cb => (typeof subscribeAllStars === 'function' ? subscribeAllStars(cb, () => cb(null)) : (cb(null), null))),
+    once(cb => (typeof subscribeAllRedeems === 'function' ? subscribeAllRedeems(cb, () => cb(null)) : (cb(null), null))),
     ...Object.keys(G).map(g => once(cb => (window[G[g]] ? window[G[g]]((w, o) => cb({ weeks: w || {}, order: (o || []).slice() }), () => cb(null)) : (cb(null), null)))),
-  ]).then(([students, ...grades]) => {
+  ]).then(([students, stars, redeems, ...grades]) => {
     const gradeData = {};
     Object.keys(G).forEach((g, i) => { if (grades[i]) gradeData[g] = grades[i]; });
-    const v = { students: students || [], gradeData };
+    const v = { students: students || [], stars: stars || {}, redeems: Array.isArray(redeems) ? redeems : [], gradeData };
     _askQueryCache = { at: Date.now(), v };
     return v;
   });
 }
+
+/* ══ v683 📋 今日簡報（Alan：「它開機就說今天有 2 個兌換、3 位同學作業快到期、小明連續 5 天沒練習」）══
+   ⚠ 只讀資料、不改任何東西。數字一律由程式算（跟聊天室查詢同一套 askQueryAnswer），AI 不參與。
+   ⚠ 每一行都帶 rows（誰、多少），面板點開就看得到名單，不是只有一個數字。
+   ⚠ 「作業快到期」＝這週有設截止日、截止日在今天～2 天內、而且他還沒做完。 */
+async function askBriefing(roster, currentWeekId) {
+  const data = await askLoadQueryData();
+  const ctx = { roster, students: data.students, gradeData: data.gradeData, stars: data.stars, redeems: data.redeems, currentWeekId };
+  const active = (roster || []).filter(r => r && r.email && r.active !== false);
+  const lines = [];
+
+  const red = askQueryAnswer({ qtype: 'redeems' }, ctx);
+  if (red.rows.length) lines.push({ key: 'redeems', ico: '📬', text: `${red.rows.length} 筆兌換在等你`, rows: red.rows, go: 'stars' });
+
+  /* 作業快到期 */
+  try {
+    const byEmail = new Map((data.students || []).map(x => [String(x.email || '').toLowerCase(), x]));
+    const gOf = (r) => (r.grade || (window.gradeFromEmail ? window.gradeFromEmail(r.email) : '') || '').toString().toLowerCase();
+    const ymd = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const today = ymd(Date.now()), soon = ymd(Date.now() + 2 * 86400000);
+    const rows = [];
+    active.forEach(r => {
+      const gd = (data.gradeData || {})[gOf(r)];
+      if (!gd || !gd.order || !gd.order.length) return;
+      const wid = currentWeekId ? currentWeekId(gd.weeks, gd.order) : null;
+      const wk = wid && gd.weeks[wid];
+      if (!wk) return;
+      const hw = wk.homework || {};
+      const dueIds = Object.keys(hw).filter(id => hw[id] && hw[id].dueDate && hw[id].dueDate >= today && hw[id].dueDate <= soon);
+      if (!dueIds.length) return;
+      const titles = new Map();
+      Object.values(wk.items || {}).forEach(arr => (arr || []).forEach(it => { if (it && it.id) titles.set(it.id, it.title || it.zh || it.id); }));
+      const stu = byEmail.get(String(r.email).toLowerCase()) || { email: r.email, name: r.name, items: {}, _noDoc: true };
+      const rep = buildWeeklyReport(stu, gd.weeks, gd.order, { weekId: wid });
+      const pendTitles = new Set(rep.pending.map(p => p.title));
+      const left = dueIds.filter(id => pendTitles.has(titles.get(id)));
+      if (left.length) {
+        const first = hw[left[0]].dueDate;
+        rows.push({ name: r.name || r.email, email: r.email, text: `${left.length} 項快到期（最早 ${first.slice(5).replace('-', '/')}）`, tone: first === today ? 'bad' : 'warn' });
+      }
+    });
+    if (rows.length) lines.push({ key: 'due', ico: '⏰', text: `${rows.length} 位同學的作業快到期（2 天內）`, rows, go: 'hwremind' });
+  } catch (e) {}
+
+  const un = askQueryAnswer({ qtype: 'unfinished', gradeId: '', student: '' }, ctx);
+  if (un.rows.length) lines.push({ key: 'unfinished', ico: '📝', text: `這週還有 ${un.rows.length} 位沒做完`, rows: un.rows, go: 'hwremind' });
+
+  const ina = askQueryAnswer({ qtype: 'inactive', days: 3, gradeId: '' }, ctx);
+  if (ina.rows.length) lines.push({ key: 'inactive', ico: '💤', text: `${ina.rows.length} 位超過 3 天沒練習`, rows: ina.rows, go: 'roster' });
+
+  return { lines, total: lines.length, at: Date.now() };
+}
+Object.assign(window, { askBriefing });
 
 /* ══ v548 在這一週裡找「單一個單元」（「測驗（2/4）」「Unit 1 字義選擇」）══════════
    ⚠ 比對一律要**唯一**才動手：同一週常常有「測驗（1/4）」「測驗（2/4）」…，

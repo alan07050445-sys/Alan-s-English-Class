@@ -28,7 +28,7 @@ const LIST = path.join(__dirname, 'teacher-data.json');
 /* app.jsx 裡「只有老師操作才會走到」的處理函式（鏈上有這些名字之一的引用，算老師專用）。
    ⚠ 新增老師功能的處理函式要來這裡加；加錯（學生也會走到）會被 t-v599 的「學生流程」檢查擋下。 */
 const GATED_APP = [
-  'askGenerate', 'runAskPlan', 'askFindGroup', 'askMergeWords', 'askResolveUnit', 'askStudentMiss',
+  'askGenerate', 'runAskPlan', 'runAskBriefing', 'askFindGroup', 'askMergeWords', 'askResolveUnit', 'askStudentMiss',
   'handleCompose', 'handleQuestionMove', 'handleRenameGroup', 'handleMoveGroupCat', 'handleDeleteItems',
   'handleDeleteWeek', 'keepInTrash', 'restoreFromTrash', 'openTrash', 'handleAddWeek', 'handleCreateTerm',
   'handleEditWeekSave', 'handleCreateReview', 'handleCopyGroupToWeeks', 'handleCopyWholeWeek',

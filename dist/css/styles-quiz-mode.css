@@ -3474,6 +3474,18 @@
 /* v681：小助手（右下角 💬）——有學生申請兌換時掛紅點；打開後第一句的提醒卡 */
 .ask-fab-badge { position: absolute; top: -6px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #E5484D; color: #fff; border: 2px solid #fff; font-size: 12.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.25); animation: askBadgePop .5s cubic-bezier(.34,1.56,.64,1) both; }
 @keyframes askBadgePop { from { transform: scale(.3); opacity: 0; } }
+.ask-mute-btn { position: fixed; right: 24px; bottom: 74px; z-index: 900; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: #fff; font-size: 16px; line-height: 1; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.14); display: inline-flex; align-items: center; justify-content: center; opacity: .85; }
+.ask-mute-btn.with-nav { bottom: 138px; }
+.ask-mute-btn.muted { background: #F1EEF8; }
+.ask-brief-bubble { position: fixed; right: 20px; bottom: 120px; z-index: 901; width: min(320px, calc(100vw - 40px)); background: #fff; border: 1.5px solid #C9C0F0; border-radius: 16px; padding: 14px 16px 12px; box-shadow: 0 16px 36px -12px rgba(109,91,208,.5); font-family: var(--sans); animation: askBadgePop .4s cubic-bezier(.34,1.56,.64,1) both; }
+.ask-brief-bubble.with-nav { bottom: 184px; }
+.ask-brief-bubble ul { margin: 6px 0 8px; padding-left: 18px; font-size: 14px; list-style: none; padding-left: 0; }
+.ask-brief-bubble li { margin: 3px 0; }
+.ask-brief-hd { font-weight: 800; font-size: 15px; padding-right: 22px; }
+.ask-brief-x { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; font-size: 14px; }
+.ask-brief-ft { display: flex; gap: 8px; flex-wrap: wrap; }
+.ask-brief-ft button { border: 0; background: #6D5BD0; color: #fff; border-radius: 999px; padding: 8px 14px; min-height: 36px; font-weight: 700; cursor: pointer; font-size: 13px; }
+.ask-brief-ft button.ask-brief-mute { background: #F1EEF8; color: #6D5BD0; }
 @media (min-width: 861px) { .ask-fab.with-nav { bottom: 20px; } }
 /* 手機上只留圖示，不佔畫面 */
 @media (max-width: 520px) {

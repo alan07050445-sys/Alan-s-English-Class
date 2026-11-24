@@ -6399,7 +6399,7 @@ function AskPreview({ items }) {
    確認卡按下去之後**直接在這裡出題**，把題目攤出來給他看，他說「存」才存。
    ⚠ 兩段確認是故意的：第一段確認「要做什麼」，第二段確認「題目對不對」。
      中間真的會花錢跑 AI，但不會動到他的課程——存是最後一步。 */
-function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, onOpenRedeems, onClose, onRun, onGenerate, onSave }) {
+function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, briefing, briefBusy, onRefreshBriefing, briefMuted, onToggleBriefMute, onBriefGo, onOpenRedeems, onClose, onRun, onGenerate, onSave }) {
   const [msgs, setMsgs] = useS([]);          // { me, text, plan?, images? }
   const [text, setText] = useS('');
   const [imgs, setImgs] = useS([]);
@@ -6411,6 +6411,8 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, onOpen
   const fileRef = React.useRef(null);
   const endRef = React.useRef(null);
   useE(() => { if (endRef.current) try { endRef.current.scrollIntoView({ block: 'end' }); } catch (e) {} }, [msgs, busy]);
+  /* v683：打開面板時，還沒有簡報（例如靜音沒自動講）就現在算一份——他自己打開就是想看，不算打擾。 */
+  useE(() => { if (open && !briefing && !briefBusy && onRefreshBriefing) onRefreshBriefing(); }, [open]);
   if (!open) return null;
 
   const addFiles = async (files) => {
@@ -6456,6 +6458,7 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, onOpen
       try {
         const data = await window.askLoadQueryData();
         ans = window.askQueryAnswer(plan, { roster, students: data.students, gradeData: data.gradeData,
+                                            stars: data.stars, redeems: data.redeems,
                                             currentWeekId: window.dashCurrentWeekId });
       } catch (e) { ans = { head: '查詢失敗，等一下再問一次。', rows: [], foot: '' }; }
       /* ⚠ 他一句話裡常常「查＋做」一起講（「誰沒做完，順便提醒他們」）。
@@ -6475,12 +6478,45 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, onOpen
     <div className="ask-wrap">
       <div className="ask-head">
         <b>💬 跟我說一句話</b>
-        <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        <span className="ask-head-r">
+          {onToggleBriefMute && (
+            <button className={'ask-head-mute' + (briefMuted ? ' muted' : '')} onClick={onToggleBriefMute}
+              title={briefMuted ? '靜音中：不會自己講話。點一下恢復開機簡報' : '會在開機時簡報。點一下靜音（在外面不想被打擾）'}>
+              {briefMuted ? '🔕 靜音中' : '🔔 會主動講'}
+            </button>
+          )}
+          <button className="modal-close" onClick={onClose}><Icon name="close" size={14}/></button>
+        </span>
       </div>
 
       <div className="ask-body">
         {/* v681（Alan：「我覺得可以提醒到我的小助手」）：學生按「兌換」→ 小助手第一句就先跟你講。
             不算聊天紀錄（msgs），所以不會被「清掉對話」帶走，處理完自己就消失。 */}
+        {/* v683（Alan：「像 Jarvis 一樣」）：今日簡報——每一行點開看是誰、多少。只讀資料，不會動任何東西。 */}
+        {(briefing || briefBusy) && (
+          <div className="ask-row">
+            <div className="ask-bub ask-brief">
+              <div className="ask-brief-top">
+                <b>📋 今日簡報</b>
+                <button className="ask-brief-refresh" disabled={briefBusy} onClick={() => onRefreshBriefing && onRefreshBriefing()}>{briefBusy ? '讀取中…' : '↻ 重讀'}</button>
+              </div>
+              {briefBusy && !briefing && <div className="ask-brief-empty">我看一下全班的資料…</div>}
+              {briefing && briefing.lines.filter(l => l.key !== 'redeems').length === 0 && !(redeemReqs || []).length && (
+                <div className="ask-brief-empty">今天沒有要你處理的事 🎉</div>
+              )}
+              {briefing && briefing.lines.filter(l => l.key !== 'redeems').map(l => (
+                <details key={l.key} className="ask-brief-line">
+                  <summary>{l.ico} {l.text}</summary>
+                  <ul>
+                    {l.rows.slice(0, 8).map((r, i) => <li key={i} className={r.tone || ''}><b>{r.name}</b>　{r.text}</li>)}
+                    {l.rows.length > 8 && <li>…還有 {l.rows.length - 8} 筆</li>}
+                  </ul>
+                  {l.go && onBriefGo && <button className="ask-redeem-go" onClick={() => onBriefGo(l.go)}>去處理 →</button>}
+                </details>
+              ))}
+            </div>
+          </div>
+        )}
         {(redeemReqs || []).length > 0 && (
           <div className="ask-row">
             <div className="ask-bub ask-redeem">

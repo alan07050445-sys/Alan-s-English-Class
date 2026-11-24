@@ -3,6 +3,7 @@
  "gated": [
   "askGenerate",
   "runAskPlan",
+  "runAskBriefing",
   "askFindGroup",
   "askMergeWords",
   "askResolveUnit",
@@ -207,6 +208,7 @@
   "aiReadExamSheet",
   "aiReadGrammarSheet",
   "aiRouteCommand",
+  "askBriefing",
   "askDueDate",
   "askDueDefault",
   "askFindStudent",

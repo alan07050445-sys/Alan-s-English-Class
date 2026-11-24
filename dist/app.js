@@ -958,6 +958,19 @@ function App() {
   var [examScanOpen, setExamScanOpen] = useAppState(false); // v516：拍考卷
   var [examDraft, setExamDraft] = useAppState(null); // v561：跟 AI 出大考考卷（{ brief } 或 null）
   var [askOpen, setAskOpen] = useAppState(false); // v517：💬 用講的就好
+  /* v683（Alan：「我要把小助手變成像 Jarvis 一樣」）：今日簡報——開機講一次今天有哪些事。
+     briefMuted＝靜音（在外面不想被它講話）：只存在這一台裝置上；靜音時不會自己彈出、也不會自己去讀全班資料，
+     只有紅點（兌換申請）還在，因為那是安靜的。 */
+  var [briefing, setBriefing] = useAppState(null); // { lines, total, at } | null
+  var [briefBusy, setBriefBusy] = useAppState(false);
+  var [briefBubble, setBriefBubble] = useAppState(false);
+  var [briefMuted, setBriefMuted] = useAppState(() => {
+    try {
+      return localStorage.getItem('alan-ask-mute') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
   var [redeemReqs, setRedeemReqs] = useAppState([]); // v681：學生按「兌換」送來、還沒處理的申請（只有老師會訂閱）
   var [askRoster, setAskRoster] = useAppState([]); // 認名字用（「幫 Eric 寫紀錄」）
   var [askTopic, setAskTopic] = useAppState(''); // 💬 帶進 Word Study 的主題
@@ -2046,6 +2059,90 @@ function App() {
     if (!isTeacher || !window.subscribeAllRedeems) return;
     return window.subscribeAllRedeems(rows => setRedeemReqs(rows.filter(r => r.status === 'pending')), () => {});
   }, [isTeacher]);
+
+  /* 讀一次名單（小助手面板沒打開時 askRoster 是空的）→ 算今日簡報。
+     ⚠ 只讀、不改任何東西。數字由程式算（window.askBriefing，跟聊天室查詢同一套）。 */
+  var runAskBriefing = async () => {
+    if (!window.askBriefing || !window.subscribeRoster || !window.dashCurrentWeekId) return 'wait'; // 老師那包程式還沒載好
+    if (briefBusy) return null;
+    setBriefBusy(true);
+    try {
+      var roster = await new Promise(res => {
+        var un = null,
+          done = false;
+        var fin = v => {
+          if (done) return;
+          done = true;
+          try {
+            un && un();
+          } catch (e) {}
+          res(v || []);
+        };
+        try {
+          un = window.subscribeRoster(rows => fin(rows), () => fin([]));
+          if (done) {
+            try {
+              un && un();
+            } catch (e) {}
+          }
+        } catch (e) {
+          fin([]);
+        }
+        setTimeout(() => fin([]), 8000);
+      });
+      var b = await window.askBriefing(roster, window.dashCurrentWeekId);
+      setBriefing(b);
+      return b;
+    } catch (e) {
+      return null;
+    } finally {
+      setBriefBusy(false);
+    }
+  };
+  var toggleBriefMute = () => {
+    var next = !briefMuted;
+    setBriefMuted(next);
+    try {
+      localStorage.setItem('alan-ask-mute', next ? '1' : '0');
+    } catch (e) {}
+    if (next) setBriefBubble(false);
+  };
+  /* 開機講一次：老師登入後等老師那包程式載好（最多 30 秒），每個瀏覽分頁只講一次。靜音就完全不做。 */
+  useAppEffect(() => {
+    if (!isTeacher || briefMuted) return;
+    var alive = true,
+      tries = 0,
+      t = null;
+    var go = async () => {
+      if (!alive) return;
+      try {
+        if (sessionStorage.getItem('alan-brief-done') === '1') return;
+      } catch (e) {}
+      try {
+        sessionStorage.setItem('alan-brief-done', '1');
+      } catch (e) {}
+      var b = await runAskBriefing();
+      if (b === 'wait') {
+        // 還沒載好——放掉「已講過」的記號，2 秒後再試（最多 30 秒）
+        try {
+          sessionStorage.removeItem('alan-brief-done');
+        } catch (e) {}
+        if (++tries < 15) t = setTimeout(go, 2000);
+        return;
+      }
+      if (alive && b && b.total > 0) {
+        setBriefBubble(true);
+        setTimeout(() => {
+          if (alive) setBriefBubble(false);
+        }, 15000);
+      }
+    };
+    t = setTimeout(go, 3500);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [isTeacher, briefMuted]);
 
   /* 💬 v518（Alan：「他要先回答我檢查沒問題，確定這些題目沒問題，我就會說幫我直接出出來」）
      在聊天室裡直接出題。⭐ 一樣**不新寫出題邏輯**——呼叫的是視窗裡本來就在用的那幾支，
@@ -4431,7 +4528,7 @@ function App() {
     streak: localStreak.count || (user && userProfile.streak ? userProfile.streak.count : 0)
   })))), (!catView || editMode) && /*#__PURE__*/React.createElement(window.Footer, {
     onOpenGuide: () => setTourOpen(true)
-  }), isTeacher && window.AskPanel && !askOpen && /*#__PURE__*/React.createElement("button", {
+  }), isTeacher && window.AskPanel && !askOpen && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
     className: 'ask-fab' + (catView || editMode ? ' with-nav' : ''),
     onClick: () => setAskOpen(true),
     title: "\u8DDF\u5C0F\u52A9\u624B\u8AAA\u4E00\u53E5\u8A71",
@@ -4444,7 +4541,34 @@ function App() {
   }, "\u5C0F\u52A9\u624B"), redeemReqs.length > 0 && /*#__PURE__*/React.createElement("span", {
     className: "ask-fab-badge",
     "aria-label": `有 ${redeemReqs.length} 筆兌換申請`
-  }, redeemReqs.length)), (catView || editMode) && /*#__PURE__*/React.createElement(window.MobileNav, {
+  }, redeemReqs.length)), briefBubble && briefing && briefing.total > 0 && /*#__PURE__*/React.createElement("div", {
+    className: 'ask-brief-bubble' + (catView || editMode ? ' with-nav' : ''),
+    role: "status"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ask-brief-x",
+    onClick: () => setBriefBubble(false),
+    "aria-label": "\u95DC\u6389"
+  }, "\u2715"), /*#__PURE__*/React.createElement("div", {
+    className: "ask-brief-hd"
+  }, "\uD83D\uDCCB \u4ECA\u5929\u6709 ", briefing.total, " \u4EF6\u4E8B"), /*#__PURE__*/React.createElement("ul", null, briefing.lines.slice(0, 4).map(l => /*#__PURE__*/React.createElement("li", {
+    key: l.key
+  }, l.ico, " ", l.text))), /*#__PURE__*/React.createElement("div", {
+    className: "ask-brief-ft"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setBriefBubble(false);
+      setAskOpen(true);
+    }
+  }, "\u770B\u8A73\u7D30"), /*#__PURE__*/React.createElement("button", {
+    className: "ask-brief-mute",
+    onClick: toggleBriefMute
+  }, "\uD83D\uDD15 \u4E0D\u8981\u518D\u4E3B\u52D5\u8B1B"))), /*#__PURE__*/React.createElement("button", {
+    className: 'ask-mute-btn' + (catView || editMode ? ' with-nav' : '') + (briefMuted ? ' muted' : ''),
+    onClick: toggleBriefMute,
+    title: briefMuted ? '小助手現在是靜音（不會自己講話）——點一下恢復' : '小助手會開機簡報——點一下靜音（在外面不想被打擾時）',
+    "aria-label": briefMuted ? '恢復小助手主動簡報' : '小助手靜音',
+    "aria-pressed": briefMuted
+  }, briefMuted ? '🔕' : '🔔')), (catView || editMode) && /*#__PURE__*/React.createElement(window.MobileNav, {
     week: week,
     weekIdx: weekIdx,
     weekOrder: viewOrder,
@@ -4656,6 +4780,20 @@ function App() {
     catalog: askCatalogText,
     grade: grade,
     redeemReqs: redeemReqs,
+    briefing: briefing,
+    briefBusy: briefBusy,
+    onRefreshBriefing: runAskBriefing,
+    briefMuted: briefMuted,
+    onToggleBriefMute: toggleBriefMute,
+    onBriefGo: tab => {
+      try {
+        window.__dashGoto = {
+          tab
+        };
+      } catch (e) {}
+      setAskOpen(false);
+      setDashOpen(true);
+    },
     onOpenRedeems: () => {
       try {
         window.__dashGoto = {

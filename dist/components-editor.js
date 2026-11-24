@@ -9938,6 +9938,12 @@ function AskPanel({
   catalog,
   grade,
   redeemReqs,
+  briefing,
+  briefBusy,
+  onRefreshBriefing,
+  briefMuted,
+  onToggleBriefMute,
+  onBriefGo,
   onOpenRedeems,
   onClose,
   onRun,
@@ -9968,6 +9974,10 @@ function AskPanel({
       });
     } catch (e) {}
   }, [msgs, busy]);
+  /* v683：打開面板時，還沒有簡報（例如靜音沒自動講）就現在算一份——他自己打開就是想看，不算打擾。 */
+  useE(() => {
+    if (open && !briefing && !briefBusy && onRefreshBriefing) onRefreshBriefing();
+  }, [open]);
   if (!open) return null;
   var addFiles = async files => {
     var room = 4 - imgs.length;
@@ -10042,6 +10052,8 @@ function AskPanel({
           roster,
           students: data.students,
           gradeData: data.gradeData,
+          stars: data.stars,
+          redeems: data.redeems,
           currentWeekId: window.dashCurrentWeekId
         });
       } catch (e) {
@@ -10075,15 +10087,44 @@ function AskPanel({
     className: "ask-wrap"
   }, /*#__PURE__*/React.createElement("div", {
     className: "ask-head"
-  }, /*#__PURE__*/React.createElement("b", null, "\uD83D\uDCAC \u8DDF\u6211\u8AAA\u4E00\u53E5\u8A71"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("b", null, "\uD83D\uDCAC \u8DDF\u6211\u8AAA\u4E00\u53E5\u8A71"), /*#__PURE__*/React.createElement("span", {
+    className: "ask-head-r"
+  }, onToggleBriefMute && /*#__PURE__*/React.createElement("button", {
+    className: 'ask-head-mute' + (briefMuted ? ' muted' : ''),
+    onClick: onToggleBriefMute,
+    title: briefMuted ? '靜音中：不會自己講話。點一下恢復開機簡報' : '會在開機時簡報。點一下靜音（在外面不想被打擾）'
+  }, briefMuted ? '🔕 靜音中' : '🔔 會主動講'), /*#__PURE__*/React.createElement("button", {
     className: "modal-close",
     onClick: onClose
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "close",
     size: 14
-  }))), /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "ask-body"
-  }, (redeemReqs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, (briefing || briefBusy) && /*#__PURE__*/React.createElement("div", {
+    className: "ask-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-bub ask-brief"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-brief-top"
+  }, /*#__PURE__*/React.createElement("b", null, "\uD83D\uDCCB \u4ECA\u65E5\u7C21\u5831"), /*#__PURE__*/React.createElement("button", {
+    className: "ask-brief-refresh",
+    disabled: briefBusy,
+    onClick: () => onRefreshBriefing && onRefreshBriefing()
+  }, briefBusy ? '讀取中…' : '↻ 重讀')), briefBusy && !briefing && /*#__PURE__*/React.createElement("div", {
+    className: "ask-brief-empty"
+  }, "\u6211\u770B\u4E00\u4E0B\u5168\u73ED\u7684\u8CC7\u6599\u2026"), briefing && briefing.lines.filter(l => l.key !== 'redeems').length === 0 && !(redeemReqs || []).length && /*#__PURE__*/React.createElement("div", {
+    className: "ask-brief-empty"
+  }, "\u4ECA\u5929\u6C92\u6709\u8981\u4F60\u8655\u7406\u7684\u4E8B \uD83C\uDF89"), briefing && briefing.lines.filter(l => l.key !== 'redeems').map(l => /*#__PURE__*/React.createElement("details", {
+    key: l.key,
+    className: "ask-brief-line"
+  }, /*#__PURE__*/React.createElement("summary", null, l.ico, " ", l.text), /*#__PURE__*/React.createElement("ul", null, l.rows.slice(0, 8).map((r, i) => /*#__PURE__*/React.createElement("li", {
+    key: i,
+    className: r.tone || ''
+  }, /*#__PURE__*/React.createElement("b", null, r.name), "\u3000", r.text)), l.rows.length > 8 && /*#__PURE__*/React.createElement("li", null, "\u2026\u9084\u6709 ", l.rows.length - 8, " \u7B46")), l.go && onBriefGo && /*#__PURE__*/React.createElement("button", {
+    className: "ask-redeem-go",
+    onClick: () => onBriefGo(l.go)
+  }, "\u53BB\u8655\u7406 \u2192"))))), (redeemReqs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "ask-row"
   }, /*#__PURE__*/React.createElement("div", {
     className: "ask-bub ask-redeem"

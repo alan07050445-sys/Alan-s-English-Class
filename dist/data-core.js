@@ -5149,6 +5149,7 @@ async function backfillLessonsPublic(email) {
 }
 
 Object.assign(window, { LESSON_KINDS, REVIEW_STATES, subscribeLessonsPublic, backfillLessonsPublic, lessonRows, lessonAvgPct, lessonDateParts });
+
 /* 這一堂跟誰一起上（只有標記 together 的才算）。 */
 function timetableBuddies(tt, email, slotId) {
   const id = String(email || '').toLowerCase();

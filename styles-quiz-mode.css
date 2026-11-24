@@ -4061,6 +4061,32 @@
 .ask-redeem ul { margin: 6px 0 10px; padding-left: 18px; }
 .ask-redeem li { margin: 3px 0; }
 .ask-redeem-go { border: 0; background: #6D5BD0; color: #fff; border-radius: 999px; padding: 9px 18px; min-height: 40px; font-weight: 800; cursor: pointer; }
+/* v683：今日簡報（泡泡、面板卡、靜音鈕） */
+.ask-head-r { display: inline-flex; align-items: center; gap: 8px; }
+.ask-head-mute { border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 999px; padding: 6px 12px; min-height: 34px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.ask-head-mute.muted { background: #F1EEF8; color: #6D5BD0; border-color: #C9C0F0; }
+.ask-brief-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.ask-brief-refresh { border: 0; background: transparent; color: #6D5BD0; font-weight: 700; cursor: pointer; padding: 6px 8px; min-height: 36px; }
+.ask-brief-refresh:disabled { opacity: .5; cursor: default; }
+.ask-brief-empty { color: var(--ink-muted); font-size: 13.5px; padding: 4px 0; }
+.ask-brief-line { border-top: 1px solid rgba(0,0,0,.07); padding: 6px 0; }
+.ask-brief-line > summary { cursor: pointer; font-weight: 700; padding: 4px 0; list-style: none; }
+.ask-brief-line > summary::-webkit-details-marker { display: none; }
+.ask-brief-line ul { margin: 4px 0 8px; padding-left: 18px; font-size: 13.5px; }
+.ask-brief-line li.bad { color: #B3261E; }
+.ask-brief-line li.warn { color: #8a6d1c; }
+.ask-mute-btn { position: fixed; right: 24px; bottom: 74px; z-index: 900; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: #fff; font-size: 16px; line-height: 1; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.14); display: inline-flex; align-items: center; justify-content: center; opacity: .85; }
+.ask-mute-btn.with-nav { bottom: 138px; }
+.ask-mute-btn.muted { background: #F1EEF8; }
+.ask-brief-bubble { position: fixed; right: 20px; bottom: 120px; z-index: 901; width: min(320px, calc(100vw - 40px)); background: #fff; border: 1.5px solid #C9C0F0; border-radius: 16px; padding: 14px 16px 12px; box-shadow: 0 16px 36px -12px rgba(109,91,208,.5); font-family: var(--sans); animation: askBadgePop .4s cubic-bezier(.34,1.56,.64,1) both; }
+.ask-brief-bubble.with-nav { bottom: 184px; }
+.ask-brief-bubble ul { margin: 6px 0 8px; padding-left: 18px; font-size: 14px; list-style: none; padding-left: 0; }
+.ask-brief-bubble li { margin: 3px 0; }
+.ask-brief-hd { font-weight: 800; font-size: 15px; padding-right: 22px; }
+.ask-brief-x { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; font-size: 14px; }
+.ask-brief-ft { display: flex; gap: 8px; flex-wrap: wrap; }
+.ask-brief-ft button { border: 0; background: #6D5BD0; color: #fff; border-radius: 999px; padding: 8px 14px; min-height: 36px; font-weight: 700; cursor: pointer; font-size: 13px; }
+.ask-brief-ft button.ask-brief-mute { background: #F1EEF8; color: #6D5BD0; }
 @media (min-width: 861px) { .ask-fab.with-nav { bottom: 20px; } }
 /* 手機上只留圖示，不佔畫面 */
 @media (max-width: 520px) {

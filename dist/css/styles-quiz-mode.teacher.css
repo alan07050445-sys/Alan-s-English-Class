@@ -587,6 +587,20 @@
 .ask-redeem ul { margin: 6px 0 10px; padding-left: 18px; }
 .ask-redeem li { margin: 3px 0; }
 .ask-redeem-go { border: 0; background: #6D5BD0; color: #fff; border-radius: 999px; padding: 9px 18px; min-height: 40px; font-weight: 800; cursor: pointer; }
+/* v683：今日簡報（泡泡、面板卡、靜音鈕） */
+.ask-head-r { display: inline-flex; align-items: center; gap: 8px; }
+.ask-head-mute { border: 1px solid var(--border); background: #fff; color: var(--ink); border-radius: 999px; padding: 6px 12px; min-height: 34px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.ask-head-mute.muted { background: #F1EEF8; color: #6D5BD0; border-color: #C9C0F0; }
+.ask-brief-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.ask-brief-refresh { border: 0; background: transparent; color: #6D5BD0; font-weight: 700; cursor: pointer; padding: 6px 8px; min-height: 36px; }
+.ask-brief-refresh:disabled { opacity: .5; cursor: default; }
+.ask-brief-empty { color: var(--ink-muted); font-size: 13.5px; padding: 4px 0; }
+.ask-brief-line { border-top: 1px solid rgba(0,0,0,.07); padding: 6px 0; }
+.ask-brief-line > summary { cursor: pointer; font-weight: 700; padding: 4px 0; list-style: none; }
+.ask-brief-line > summary::-webkit-details-marker { display: none; }
+.ask-brief-line ul { margin: 4px 0 8px; padding-left: 18px; font-size: 13.5px; }
+.ask-brief-line li.bad { color: #B3261E; }
+.ask-brief-line li.warn { color: #8a6d1c; }
 
 /* ══ v540 📋 貼上整份考卷 ════════════════════════════════════════════ */
 .exed-sp { flex: 1; }

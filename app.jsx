@@ -700,6 +700,13 @@ function App() {
   const [examScanOpen, setExamScanOpen] = useAppState(false);   // v516：拍考卷
   const [examDraft, setExamDraft] = useAppState(null);            // v561：跟 AI 出大考考卷（{ brief } 或 null）
   const [askOpen, setAskOpen] = useAppState(false);             // v517：💬 用講的就好
+  /* v683（Alan：「我要把小助手變成像 Jarvis 一樣」）：今日簡報——開機講一次今天有哪些事。
+     briefMuted＝靜音（在外面不想被它講話）：只存在這一台裝置上；靜音時不會自己彈出、也不會自己去讀全班資料，
+     只有紅點（兌換申請）還在，因為那是安靜的。 */
+  const [briefing, setBriefing] = useAppState(null);                 // { lines, total, at } | null
+  const [briefBusy, setBriefBusy] = useAppState(false);
+  const [briefBubble, setBriefBubble] = useAppState(false);
+  const [briefMuted, setBriefMuted] = useAppState(() => { try { return localStorage.getItem('alan-ask-mute') === '1'; } catch (e) { return false; } });
   const [redeemReqs, setRedeemReqs] = useAppState([]);            // v681：學生按「兌換」送來、還沒處理的申請（只有老師會訂閱）
   const [askRoster, setAskRoster] = useAppState([]);            // 認名字用（「幫 Eric 寫紀錄」）
   const [askTopic, setAskTopic] = useAppState('');              // 💬 帶進 Word Study 的主題
@@ -1471,6 +1478,54 @@ function App() {
     if (!isTeacher || !window.subscribeAllRedeems) return;
     return window.subscribeAllRedeems(rows => setRedeemReqs(rows.filter(r => r.status === 'pending')), () => {});
   }, [isTeacher]);
+
+  /* 讀一次名單（小助手面板沒打開時 askRoster 是空的）→ 算今日簡報。
+     ⚠ 只讀、不改任何東西。數字由程式算（window.askBriefing，跟聊天室查詢同一套）。 */
+  const runAskBriefing = async () => {
+    if (!window.askBriefing || !window.subscribeRoster || !window.dashCurrentWeekId) return 'wait';   // 老師那包程式還沒載好
+    if (briefBusy) return null;
+    setBriefBusy(true);
+    try {
+      const roster = await new Promise(res => {
+        let un = null, done = false;
+        const fin = (v) => { if (done) return; done = true; try { un && un(); } catch (e) {} res(v || []); };
+        try { un = window.subscribeRoster(rows => fin(rows), () => fin([])); if (done) { try { un && un(); } catch (e) {} } } catch (e) { fin([]); }
+        setTimeout(() => fin([]), 8000);
+      });
+      const b = await window.askBriefing(roster, window.dashCurrentWeekId);
+      setBriefing(b);
+      return b;
+    } catch (e) { return null; }
+    finally { setBriefBusy(false); }
+  };
+  const toggleBriefMute = () => {
+    const next = !briefMuted;
+    setBriefMuted(next);
+    try { localStorage.setItem('alan-ask-mute', next ? '1' : '0'); } catch (e) {}
+    if (next) setBriefBubble(false);
+  };
+  /* 開機講一次：老師登入後等老師那包程式載好（最多 30 秒），每個瀏覽分頁只講一次。靜音就完全不做。 */
+  useAppEffect(() => {
+    if (!isTeacher || briefMuted) return;
+    let alive = true, tries = 0, t = null;
+    const go = async () => {
+      if (!alive) return;
+      try { if (sessionStorage.getItem('alan-brief-done') === '1') return; } catch (e) {}
+      try { sessionStorage.setItem('alan-brief-done', '1'); } catch (e) {}
+      const b = await runAskBriefing();
+      if (b === 'wait') {   // 還沒載好——放掉「已講過」的記號，2 秒後再試（最多 30 秒）
+        try { sessionStorage.removeItem('alan-brief-done'); } catch (e) {}
+        if (++tries < 15) t = setTimeout(go, 2000);
+        return;
+      }
+      if (alive && b && b.total > 0) {
+        setBriefBubble(true);
+        setTimeout(() => { if (alive) setBriefBubble(false); }, 15000);
+      }
+    };
+    t = setTimeout(go, 3500);
+    return () => { alive = false; clearTimeout(t); };
+  }, [isTeacher, briefMuted]);
 
   /* 💬 v518（Alan：「他要先回答我檢查沒問題，確定這些題目沒問題，我就會說幫我直接出出來」）
      在聊天室裡直接出題。⭐ 一樣**不新寫出題邏輯**——呼叫的是視窗裡本來就在用的那幾支，
@@ -3288,6 +3343,7 @@ function App() {
               ⭐ 13 個生成視窗本來就各自獨立 render（靠自己的 open 控制），
                 所以從這裡叫得動，不用先進編輯模式。 */}
           {isTeacher && window.AskPanel && !askOpen && (
+            <>
             <button className={'ask-fab' + ((catView || editMode) ? ' with-nav' : '')}
               onClick={() => setAskOpen(true)}
               title="跟小助手說一句話" aria-label="跟小助手說一句話">
@@ -3295,6 +3351,24 @@ function App() {
               <span className="ask-fab-txt">小助手</span>
               {redeemReqs.length > 0 && <span className="ask-fab-badge" aria-label={`有 ${redeemReqs.length} 筆兌換申請`}>{redeemReqs.length}</span>}
             </button>
+            {briefBubble && briefing && briefing.total > 0 && (
+              <div className={'ask-brief-bubble' + ((catView || editMode) ? ' with-nav' : '')} role="status">
+                <button className="ask-brief-x" onClick={() => setBriefBubble(false)} aria-label="關掉">✕</button>
+                <div className="ask-brief-hd">📋 今天有 {briefing.total} 件事</div>
+                <ul>{briefing.lines.slice(0, 4).map(l => <li key={l.key}>{l.ico} {l.text}</li>)}</ul>
+                <div className="ask-brief-ft">
+                  <button onClick={() => { setBriefBubble(false); setAskOpen(true); }}>看詳細</button>
+                  <button className="ask-brief-mute" onClick={toggleBriefMute}>🔕 不要再主動講</button>
+                </div>
+              </div>
+            )}
+            <button className={'ask-mute-btn' + ((catView || editMode) ? ' with-nav' : '') + (briefMuted ? ' muted' : '')}
+              onClick={toggleBriefMute}
+              title={briefMuted ? '小助手現在是靜音（不會自己講話）——點一下恢復' : '小助手會開機簡報——點一下靜音（在外面不想被打擾時）'}
+              aria-label={briefMuted ? '恢復小助手主動簡報' : '小助手靜音'} aria-pressed={briefMuted}>
+              {briefMuted ? '🔕' : '🔔'}
+            </button>
+            </>
           )}
 
           {(catView || editMode) && (
@@ -3465,6 +3539,9 @@ function App() {
               catalog={askCatalogText}
               grade={grade}
               redeemReqs={redeemReqs}
+              briefing={briefing} briefBusy={briefBusy} onRefreshBriefing={runAskBriefing}
+              briefMuted={briefMuted} onToggleBriefMute={toggleBriefMute}
+              onBriefGo={(tab) => { try { window.__dashGoto = { tab }; } catch (e) {} setAskOpen(false); setDashOpen(true); }}
               onOpenRedeems={() => { try { window.__dashGoto = { tab: 'stars' }; } catch (e) {} setAskOpen(false); setDashOpen(true); }}
               onClose={() => setAskOpen(false)}
               onRun={runAskPlan}
