@@ -229,7 +229,8 @@ const WEEK_ORDER_KEY = "alans-english-week-order-v1";
 // callback(weeks, weekOrder) fires immediately and on every change.
 // progress is intentionally excluded — it stays per-device in localStorage.
 function subscribeToClassData(callback, onError) {
-  return _classDoc.onSnapshot(snap => {
+  let _off = false;
+  const _un = _classDoc.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
       const savedWeeks = d.weeks || SEED_WEEKS;
@@ -239,12 +240,19 @@ function subscribeToClassData(callback, onError) {
       noteCloudWeeks('g3', cleanWeeks(savedWeeks));   // v359
       callback(cleanWeeks(savedWeeks), order);
     } else {
-      callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice());
+      /* v692（Alan：「iPad 上面還是有種子」）：同 G1/G2/G4/G5/G6——離線／連線卡住時 Firestore 先回「文件不存在（來自本機快取）」，
+         那不是雲端說的。來自快取的不算數；向伺服器問一次，伺服器真的說沒有才用種子（第三個參數 true＝畫面用種子、不寫本機快取）。 */
+      if (snap.metadata && snap.metadata.fromCache) {
+        _classDoc.get({ source: 'server' }).then(s2 => { if (!_off && !s2.exists) callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice(), true); }).catch(() => {});
+        return;
+      }
+      callback(SEED_WEEKS, DEFAULT_WEEK_ORDER.slice(), true);
     }
   }, err => {
     console.warn('subscribeToClassData:', err?.code);
     if (onError) onError(err);
   });
+  return () => { _off = true; try { _un(); } catch (e) {} };
 }
 
 // ── 學生名單（roster）— 老師專用 ──────────────────────────

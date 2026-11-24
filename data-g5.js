@@ -82,7 +82,8 @@ const G5_SEED_WEEKS = {
 
 /* ─── Firestore subscribe ────────────────────────────────────────────────── */
 function subscribeToClassDataG5(callback, onError) {
-  return _classDocG5.onSnapshot(snap => {
+  let _off = false;
+  const _un = _classDocG5.onSnapshot(snap => {
     if (snap.exists) {
       const d = snap.data();
       if (!d._version || d._version < G5_DATA_VERSION) {
@@ -103,12 +104,21 @@ function subscribeToClassDataG5(callback, onError) {
       /* 🔴 v639：這裡本來會把「種子資料」整份寫回雲端（沒有 merge＝整份覆蓋）。
          2026-11-21 14:33 G4 的 20 週 317 個單元就是被這行換成 8 個空白種子週：老師的瀏覽器收到一次「文件不存在」（快取/斷線時會發生）就整份蓋掉。
          文件早就存在，不需要由前端播種；真的是新年級由老師第一次存檔時自然建立。只在畫面上用種子，不寫雲端。 */
+      /* 🔴 v692（Alan：「iPad 上面還是有種子」）：離線／連線卡住時，Firestore 會先回一個「文件不存在（來自本機快取）」的答案——
+         那不是雲端說的，只是本機沒有。以前這裡直接當成「雲端回來了」：畫面換成 8 個空白種子週、而且「還沒連上雲端」的警告也被收掉，
+         看起來就像雲端資料真的只剩種子。現在：來自快取的「不存在」不算數，另外向伺服器問一次，
+         伺服器真的說沒有（新年級）才用種子；問不到（離線）就什麼都不做，警告繼續掛著、等連上再說。 */
+      if (snap.metadata && snap.metadata.fromCache) {
+        _classDocG5.get({ source: 'server' }).then(s2 => { if (!_off && !s2.exists) callback(G5_SEED_WEEKS, G5_DEFAULT_WEEK_ORDER.slice(), true); }).catch(() => {});
+        return;
+      }
       callback(G5_SEED_WEEKS, G5_DEFAULT_WEEK_ORDER.slice(), true);   // v669：第三個參數＝這是畫面用的種子、不是雲端資料（app 不可把它寫進本機快取）
     }
   }, err => {
     console.warn('subscribeToClassDataG5:', err?.code);
     if (onError) onError(err);
   });
+  return () => { _off = true; try { _un(); } catch (e) {} };
 }
 
 /* ─── Smart merge (preserve teacher edits, fill empty items from seed) ───── */

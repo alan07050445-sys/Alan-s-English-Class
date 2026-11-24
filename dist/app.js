@@ -584,7 +584,15 @@ function App() {
      資料照樣留在 Firestore（隨時可以按「取消封存」放回來），只是學生端看不到。
      ⚠ 刻意不用「刪除這一週」來達成：刪除是把 weeks[id] 整包移除，救不回來。 */
   var weekArchived = w => !!(w && w.archived);
-  var viewOrder = useAppMemo(() => visibleWeekOrder(isTeacher, weekOrder, weeks), [weekOrder, weeks, isTeacher]);
+  var viewOrder = useAppMemo(() => {
+    var v = visibleWeekOrder(isTeacher, weekOrder, weeks);
+    /* v692（Alan：「iPad 上面還是有種子」）：雲端還沒回來、本機也沒有快取時，畫面上頂著用的是「空白種子週」（G4 的 Week 1~8）。
+       學生那邊本來就會把空的週濾掉；老師看得到所有週，所以會看到 8 個空白週、像是真的資料。
+       → 雲端還沒確認之前，全部都是空白種子週就當作「還沒有週」（上面的「還沒連上雲端」警告會講原因）。
+       ⚠ 雲端確認過（cloudSeen）就不管——真的是新年級時老師要看得到種子週開始用。 */
+    if (isTeacher && !cloudSeen && v.length && v.every(id => /^g\d-2026-W\d\d$/.test(id) && !Object.values(weeks[id] && weeks[id].items || {}).some(a => a && a.length))) return [];
+    return v;
+  }, [weekOrder, weeks, isTeacher, cloudSeen]);
 
   // ── Category view state (quiz mode navigation) ──────
   var [catView, setCatView] = useAppState(null); // null = main blocks, { cat } = inside a category
