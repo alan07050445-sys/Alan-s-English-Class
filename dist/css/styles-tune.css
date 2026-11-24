@@ -4414,3 +4414,12 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .sp-req-st { font-size: 13px; color: var(--ink-muted); }
 .sp-req-cancel { border: 1px solid #C88; background: #fff; color: #A33; border-radius: 999px; padding: 6px 14px; min-height: 36px; font-size: 13px; cursor: pointer; }
 .sp-item-btn:disabled { opacity: .6; cursor: default; }
+
+/* v688：iPad——兌換申請／商店／小助手新按鈕的點擊目標補到 44px（取消 36、兌換 34、關閉 32、鈴鐺 36 都不夠） */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .sp-req-cancel, .sp-item-btn, .sp-panel .modal-close { min-height: 44px; }
+  .sp-panel .modal-close { min-width: 44px; }
+  .ask-mute-btn { width: 44px; height: 44px; }
+  .ask-brief-ft button, .ask-head-mute { min-height: 44px; }
+  .ask-brief-x { width: 44px; height: 44px; }
+}
