@@ -4240,6 +4240,11 @@ function WritingPracticePlayer({
     onKeyDown: handleSentenceKeyDown,
     placeholder: `Write a sentence for "${current.word}"…`,
     disabled: !!feedback
+    /* v679：關掉 iPad 自動校正／拼字修正／自動大寫——孩子拼錯的字會被悄悄改對，AI 就批改不到真正的錯誤 */,
+    autoCorrect: "off",
+    autoCapitalize: "none",
+    autoComplete: "off",
+    spellCheck: false
   }), !feedback ? /*#__PURE__*/React.createElement(React.Fragment, null, gradeErr && /*#__PURE__*/React.createElement("div", {
     className: "qm-grade-err"
   }, "\u26A0 ", gradeErr), /*#__PURE__*/React.createElement("button", {
@@ -6499,6 +6504,11 @@ function EssayPlayer({
     placeholder: "Start writing your opinion essay here\u2026 Begin with your Claim (\u7ACB\u5834), then give Reasons with Examples, and finish with a Conclusion.",
     rows: 12,
     disabled: checking
+    /* v679：同上——作文也關掉自動校正，AI 才看得到孩子真正的拼字 */,
+    autoCorrect: "off",
+    autoCapitalize: "none",
+    autoComplete: "off",
+    spellCheck: false
   }), /*#__PURE__*/React.createElement("div", {
     className: "essay-meta-row"
   }, /*#__PURE__*/React.createElement("span", {

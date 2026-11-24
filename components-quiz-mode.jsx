@@ -3563,6 +3563,8 @@ function WritingPracticePlayer({ item, catItems, progressKey, onBack, onBackToTa
         onKeyDown={handleSentenceKeyDown}
         placeholder={`Write a sentence for "${current.word}"…`}
         disabled={!!feedback}
+        /* v679：關掉 iPad 自動校正／拼字修正／自動大寫——孩子拼錯的字會被悄悄改對，AI 就批改不到真正的錯誤 */
+        autoCorrect="off" autoCapitalize="none" autoComplete="off" spellCheck={false}
       />
       {!feedback ? (
         <>
@@ -5414,6 +5416,8 @@ function EssayPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }) {
             placeholder="Start writing your opinion essay here…&#10;&#10;Begin with your Claim (立場), then give Reasons with Examples, and finish with a Conclusion."
             rows={12}
             disabled={checking}
+            /* v679：同上——作文也關掉自動校正，AI 才看得到孩子真正的拼字 */
+            autoCorrect="off" autoCapitalize="none" autoComplete="off" spellCheck={false}
           />
           <div className="essay-meta-row">
             <span className="essay-word-count">{wordCount} words</span>

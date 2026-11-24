@@ -89,4 +89,5 @@ ok('測驗設定開關可點範圍 44px', /\.fc-toggle::before \{ content: ''; p
 ok('測驗題目列表底部留白（交卷列不蓋最後一題）', /\.fc-test-list:not\(\.fc-test-paged\) \{ margin-bottom: 60px; \}/.test(t) && /\.qm-quiz-area \{ scroll-padding-bottom: 100px; \}/.test(t));
 ok('故事山輸入框聚焦時卡片捲到上方（鍵盤擋住才捲）', /closest\('\.sm-stage-card'\)/.test(qmsrc) && /visualViewport/.test(qmsrc) && /\.sm-stage-card \{ scroll-margin-top: 12px; \}/.test(t));
 ok('星星面板跟 header 同一組算法（面板也要拿到 treat，不然少算萬聖節星星）', /<window\.StarsPanel[\s\S]{0,400}treat=\{myTreat\}/.test(fs.readFileSync(new URL('../app.jsx', import.meta.url), 'utf8')));
+ok('寫作練習與作文輸入框關掉自動校正', (() => { const q = fs.readFileSync(new URL('../components-quiz-mode.jsx', import.meta.url), 'utf8'); const f = (cls) => { const i = q.indexOf(cls); return q.slice(i, i + 900); }; return /autoCorrect="off"[^>]*spellCheck=\{false\}/.test(f('className="qm-writing-input wp-input"')) && /autoCorrect="off"[^>]*spellCheck=\{false\}/.test(f('className="essay-input"')); })());
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);
