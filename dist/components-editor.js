@@ -10188,7 +10188,7 @@ function AskPanel({
       className: "ask-plan"
     }, /*#__PURE__*/React.createElement("div", {
       className: "ask-plan-h"
-    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && (m.plan.intent === 'lesson' ? /*#__PURE__*/React.createElement("li", null, "\u9019\u6B21\u4E0A\u4E86\u4EC0\u9EBC\uFF1A", /*#__PURE__*/React.createElement("b", {
+    }, /*#__PURE__*/React.createElement("i", null, J.ico), /*#__PURE__*/React.createElement("b", null, J.zh)), /*#__PURE__*/React.createElement("ul", null, m.plan.title && /*#__PURE__*/React.createElement("li", null, "\u6A19\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.title)), m.plan.topic && /*#__PURE__*/React.createElement("li", null, "\u4E3B\u984C\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.topic)), m.plan.student && /*#__PURE__*/React.createElement("li", null, "\u5B78\u751F\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.student)), m.plan.intent === 'redeem' && /*#__PURE__*/React.createElement("li", null, "\u8655\u7406\uFF1A", /*#__PURE__*/React.createElement("b", null, m.plan.all ? '全部待兌換' : [m.plan.student, m.plan.item].filter(Boolean).join(' 的 ') || '等你確認的那一筆')), m.plan.words.length > 0 && /*#__PURE__*/React.createElement("li", null, "\u55AE\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.words.length), " \u500B\uFF1A", m.plan.words.slice(0, 10).map(w => w.term).join('、'), m.plan.words.length > 10 ? '…' : ''), m.plan.text && (m.plan.intent === 'lesson' ? /*#__PURE__*/React.createElement("li", null, "\u9019\u6B21\u4E0A\u4E86\u4EC0\u9EBC\uFF1A", /*#__PURE__*/React.createElement("b", {
       className: "ask-plan-did"
     }, m.plan.text)) : /*#__PURE__*/React.createElement("li", null, "\u6587\u5B57 ", /*#__PURE__*/React.createElement("b", null, m.plan.text.length), " \u5B57"))), (() => {
       var g = gen[i] || {};
@@ -10301,7 +10301,7 @@ function AskPanel({
           } : y));
           onRun(m.plan);
         }
-      }, canHere ? '我自己開視窗調' : '就這樣做'), /*#__PURE__*/React.createElement("span", null, canHere ? '出完給你看過，你說存才存' : '它不會自己存，打開之後你還能改'));
+      }, canHere ? '我自己開視窗調' : '就這樣做'), /*#__PURE__*/React.createElement("span", null, canHere ? '出完給你看過，你說存才存' : m.plan.intent === 'redeem' ? '按下去只會先列出要做的事（誰、什麼、扣多少），你再按「確定」才會扣點' : '它不會自己存，打開之後你還能改'));
     })());
   })()))), busy && /*#__PURE__*/React.createElement("div", {
     className: "ask-row"

@@ -4456,6 +4456,9 @@ const ASK_JOBS = {
      stars ＝給／扣一位孩子的星星　roster＝停用／恢復／新增學生　unit＝改／刪**單一個**單元 */
   remind:    { zh: '提醒沒做完的家長', ico: '🔔', need: '', where: 'dash' },
   stars:     { zh: '給／扣星星', ico: '⭐', need: 'student', where: 'chat' },
+  /* v685（Alan：「一句話處理兌換，先問我再執行」）：學生在商店送來的兌換申請，標成「已給他」並扣點。
+     ⚠ 只做「已經存在的待兌換」，不會憑空扣星星；先列出要做的事、他按確定才執行。 */
+  redeem:    { zh: '處理兌換（已給他、扣點）', ico: '🎁', need: '', where: 'chat' },
   roster:    { zh: '學生名單', ico: '👥', need: '', where: 'chat' },
   unit:      { zh: '改／刪單一個單元', ico: '✏️', need: 'group', where: 'editor' },
   /* ══ v592：v591 做的兩個工具也叫得動（一樣只開畫面、填好，按下去還是他按）══ */
@@ -4589,6 +4592,14 @@ The tools:
   stars     — give or take away stars for ONE student ("Nick 加 10 顆星星" / "扣 Eric 5 顆").
               "student" = who; "amount" = a signed whole number (+10, -5); "note" = the reason
               he gave ("上課表現好"), else "". Never invent an amount he did not say.
+  redeem    — he has HANDED a student a prize that the student asked for in the shop, and wants it
+              marked as given (the stars get deducted when he confirms)
+              ("小明的魔擦筆給他了" / "Nick 的兌換處理掉" / "兌換的東西都給了" / "把美美換的娃娃扣點").
+              "student" = who ("" if he did not name one); "item" = the prize as he named it
+              ("魔擦筆"), else ""; "all": true ONLY if he said all of them ("全部" / "都").
+              🔴 You never deduct anything and never mark anything. The website lists exactly what
+              it will do and HE confirms first. This is NOT "stars" — "stars" is giving or taking
+              away stars freely; "redeem" is closing a request a student made in the shop.
   roster    — change the student list. "rop" is exactly one of: deactivate（停用）activate（恢復）
               add（新增）. For add, "student" = the child's name, "newEmail" = the Google account
               he gave, "gradeId" = the grade if he said. Never invent an email.
@@ -4623,7 +4634,7 @@ The tools:
 
 Rules:
 - "intent" MUST be exactly one of: vocab wordstudy grammar reading exam lesson weak
-  guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars roster unit compose qmove unknown
+  guided exampaper examdraft tense review group marking copyweek merge assign notify query timetable remind stars redeem roster unit compose qmove unknown
 - "side": for exampaper, and for vocab / merge when he says whose vocabulary it is. "it" if he said 外師/IT,
   "lt" if he said 中師/LT. If he did not say, "". (中師單字 is its own category on the website.)
 - "group": the name of the existing group he is talking about, copied exactly
@@ -4761,6 +4772,9 @@ function askVerify(got, { categories = [], roster = [], nImages = 0 } = {}) {
     start: (() => { const t = String(o.start || '').trim(); return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
     end:   (() => { const t = String(o.end || '').trim();   return /^([01]?\d|2[0-3]):[0-5]\d$/.test(t) ? t.padStart(5, '0') : ''; })(),
     once: o.once === true,
+    /* v685：處理兌換——商品名只當「比對關鍵字」用（程式去比對待兌換清單），all 只有講「全部」才是 true */
+    item: String(o.item || '').trim().slice(0, 80),
+    all: o.all === true,
     /* v592：搬題目／組合複習的參數——全部夾回受控值 */
     toGroup: String(o.toGroup || '').trim().slice(0, 120),
     qnums: (Array.isArray(o.qnums) ? o.qnums : []).map(n => Math.round(+n || 0)).filter(n => n >= 1 && n <= 200).slice(0, 40),

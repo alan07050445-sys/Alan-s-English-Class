@@ -6589,6 +6589,9 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, briefi
                       {m.plan.title && <li>標題：<b>{m.plan.title}</b></li>}
                       {m.plan.topic && <li>主題：<b>{m.plan.topic}</b></li>}
                       {m.plan.student && <li>學生：<b>{m.plan.student}</b></li>}
+                      {m.plan.intent === 'redeem' && (
+                        <li>處理：<b>{m.plan.all ? '全部待兌換' : [m.plan.student, m.plan.item].filter(Boolean).join(' 的 ') || '等你確認的那一筆'}</b></li>
+                      )}
                       {m.plan.words.length > 0 && (
                         <li>單字 <b>{m.plan.words.length}</b> 個：{m.plan.words.slice(0, 10).map(w => w.term).join('、')}
                           {m.plan.words.length > 10 ? '…' : ''}</li>
@@ -6663,7 +6666,9 @@ function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, briefi
                             setMsgs(x => x.map((y, k) => k === i ? { ...y, done: true } : y));
                             onRun(m.plan);
                           }}>{canHere ? '我自己開視窗調' : '就這樣做'}</button>
-                          <span>{canHere ? '出完給你看過，你說存才存' : '它不會自己存，打開之後你還能改'}</span>
+                          <span>{canHere ? '出完給你看過，你說存才存'
+                            : m.plan.intent === 'redeem' ? '按下去只會先列出要做的事（誰、什麼、扣多少），你再按「確定」才會扣點'
+                            : '它不會自己存，打開之後你還能改'}</span>
                         </div>
                       );
                     })()}

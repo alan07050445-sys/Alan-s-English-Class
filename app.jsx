@@ -1892,6 +1892,71 @@ function App() {
       }
       setAskOpen(false);
 
+    } else if (plan.intent === 'redeem') {
+      /* 🎁 v685（Alan：「一句話處理兌換，先問我再執行」）：把學生在商店送來的「待兌換」標成已給他並扣點。
+         ⚠ 只處理「已經存在的待兌換」——不會憑空扣星星。
+         ⚠ 先把要做的事一條一條列出來（誰、什麼、扣多少、他現在有多少），他按確定才動；取消就什麼都不改。
+         ⚠ 一句話指到好幾筆又沒說「全部」→ 不猜，請他說清楚。
+         ⚠ 先扣點、再標已給（跟後台按鈕同一個順序）：萬一第二步失敗，頂多「扣了但還顯示待兌換」，不會「標已給卻沒扣」。 */
+      setAskOpen(false);
+      (async () => {
+        const lc = (x) => String(x || '').trim().toLowerCase();
+        let email = '';
+        if (plan.student) {
+          const f = plan.email ? { email: plan.email, name: plan.student }
+            : (window.askFindStudent && window.askFindStudent(plan.student, askRoster));
+          if (!f || !f.email) { askStudentMiss(f, plan); return; }
+          email = lc(f.email);
+        }
+        const cands = (redeemReqs || []).filter(r => r && r.status === 'pending'
+          && (!email || lc(r.email) === email)
+          && (!plan.item || lc(r.itemName).indexOf(lc(plan.item)) >= 0));
+        if (!cands.length) {
+          showToast(redeemReqs.length
+            ? `沒有符合的待兌換（現在在等的是：${redeemReqs.slice(0, 4).map(r => `${r.name || r.email} 的 ${r.itemName}`).join('、')}）`
+            : '目前沒有人在等你兌換 👍');
+          return;
+        }
+        if (!plan.student && !plan.item && !plan.all && cands.length > 1) {
+          showToast(`有 ${cands.length} 筆在等你（${cands.slice(0, 4).map(r => r.name || r.email).join('、')}）——說是誰的，或說「全部」`);
+          return;
+        }
+        /* 查每個人現在有多少星星（只是提醒用；查不到就老實寫「沒查到」，不擋） */
+        const balOf = {};
+        try {
+          const d = await window.askLoadQueryData();
+          cands.forEach(r => {
+            const nm = ((askRoster || []).find(x => lc(x.email) === lc(r.email)) || {}).name || r.name || '';
+            if (!nm) return;
+            const ans = window.askQueryAnswer({ qtype: 'balance', student: nm, gradeId: '' },
+              { roster: askRoster, students: d.students, gradeData: d.gradeData, stars: d.stars, redeems: d.redeems, currentWeekId: window.dashCurrentWeekId });
+            const m = /現在有 ([\d,]+)/.exec((ans && ans.head) || '');
+            if (m) balOf[lc(r.email)] = Number(m[1].replace(/,/g, ''));
+          });
+        } catch (e) {}
+        const lines = cands.map(r => {
+          const b = balOf[lc(r.email)];
+          const short = b != null && b < r.cost;
+          return `・${r.name || r.email}：${r.itemName}　扣 ${Number(r.cost).toLocaleString()}🌟`
+            + (b != null ? `（他現在有 ${b.toLocaleString()}🌟${short ? '，⚠ 不夠' : ''}）` : '（沒查到他的星星）');
+        });
+        const msg = `要把這 ${cands.length} 筆標成「已給他」，並扣掉星星嗎？\n\n${lines.join('\n')}\n\n`
+          + '會各寫一筆「兌換：商品名」的扣點到他的集點紀錄。\n（按「取消」就什麼都不會改。）';
+        if (!window.confirm(msg)) { showToast('好，沒有動任何東西。'); return; }
+        let okN = 0; const failed = [];
+        for (const r of cands) {
+          try {
+            await window.addStarEntry(r.email, { amount: -Math.abs(Number(r.cost)), note: `兌換：${r.itemName}`,
+              date: new Date().toISOString().slice(0, 10), name: r.name || '' });
+            await window.setRedeemStatus(r.id, 'done');
+            okN++;
+          } catch (e) { failed.push(`${r.name || r.email} 的 ${r.itemName}`); }
+        }
+        showToast(failed.length
+          ? `${okN} 筆完成；這幾筆沒成功，請到後台「集點」檢查（可能已經扣了星星，不要重複扣）：${failed.join('、')}`
+          : `✅ ${okN} 筆兌換處理好了（已扣點、標成已給他）`);
+      })();
+
     } else if (plan.intent === 'roster') {
       /* 👥 v548 學生名單。三種都先確認；⚠ 停用不是刪除（資料與進度都留著，隨時能恢復）。 */
       const me = String((window._currentUser && window._currentUser.email) || '').toLowerCase();
