@@ -4288,6 +4288,12 @@ async function deleteStarEntry(email, entryId) {
 async function saveShopItems(items) {
   await _shopDoc.set({ items: items || [], updatedAt: Date.now() }, { merge: true });
 }
+// 老師端：全部申請
+function subscribeAllRedeems(callback, onError) {
+  return _redeemCol().onSnapshot(snap => callback(_redeemRows(snap)), onError || (() => {}));
+}
+Object.assign(window, { subscribeAllRedeems });
+
 
 // ── LINE 通知（老師發公告）─────────────────────────────
 // 走「獨立」的 LINE Worker（跟 AI Worker 分開）。管理密碼由老師在後台輸入、

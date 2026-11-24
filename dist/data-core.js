@@ -2682,6 +2682,55 @@ function subscribeShop(callback, onError) {
   }, onError || (() => {}));
 }
 
+// ── v681: 兌換申請（學生按「兌換」→ 老師後台收得到）────────────────
+// 以前學生按「兌換」只跳 alert、沒有寫任何東西，老師完全收不到（Alan 發現）。
+// redeems/{自動編號} = { email, uid, name, itemId, itemName, cost, emoji, img, status, at, doneAt?, note? }
+//   status: 'pending'（申請中）→ 'done'（老師已給、已扣點）／'cancelled'（取消）
+// ⚠ 申請本身「不扣星星」——老師按「已給他，扣點」才會寫一筆負數到 stars/{email}。
+//   這樣學生亂申請也不會害自己的星星少掉，老師也能在給之前再確認。
+// 權限見 firestore.rules 的 redeems（學生只能新增自己的申請、只能把自己「申請中」的取消；老師全權）。
+const _redeemCol = () => _db.collection('redeems');
+async function submitRedeem(user, item) {
+  const email = _lc(user && user.email);
+  if (!email || !item) throw new Error('invalid');
+  const cost = Math.round(Number(item.cost) || 0);
+  if (cost <= 0) throw new Error('invalid-cost');
+  const doc = {
+    email,
+    uid: user.uid || '',
+    name: user.displayName || '',
+    itemId: String(item.id || ''),
+    itemName: String(item.name || '').slice(0, 120),
+    cost,
+    emoji: String(item.emoji || ''),
+    img: String(item.img || '').slice(0, 500),
+    status: 'pending',
+    at: Date.now(),
+  };
+  const ref = await _redeemCol().add(doc);
+  return { id: ref.id, ...doc };
+}
+function _redeemRows(snap) {
+  const rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...(d.data() || {}) }));
+  return rows.sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+// 學生端：自己的申請（只能用 email 條件查，規則才讓過）
+function subscribeMyRedeems(email, callback, onError) {
+  const id = _lc(email);
+  if (!id) { callback([]); return () => {}; }
+  return _redeemCol().where('email', '==', id).onSnapshot(snap => callback(_redeemRows(snap)), onError || (() => {}));
+}
+// status: 'done' | 'cancelled'（老師）；學生只能把自己的 pending 改成 cancelled
+async function setRedeemStatus(id, status) {
+  const patch = { status };
+  if (status === 'done') patch.doneAt = Date.now();
+  if (status === 'cancelled') patch.cancelledAt = Date.now();
+  await _redeemCol().doc(id).update(patch);
+}
+async function deleteRedeem(id) { await _redeemCol().doc(id).delete(); }
+Object.assign(window, { submitRedeem, subscribeMyRedeems, setRedeemStatus, deleteRedeem });
+
 Object.assign(window, { aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidStep, gnIsTeachStep, GN_TEACH_KINDS, gnCleanStem, CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS, subscribeMyStars, subscribeShop, loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed, loadWeekOrder, saveWeekOrder, subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadFlashcardImage, compressImageBlob, loadCompanion, subscribeRoster, setRosterStudentTeacher, addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard, signInWithGoogle, signInWithGoogleRedirect, signOutUser, subscribeAuth, isAdminUser, OWNER_EMAILS, isOwnerUser, subscribeAdminStatus, saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes, BADGES, updateStreak, unlockBadge, subscribeUserProfile, getLevel, COMPANION_LINES, pickLine, dictHas, prefetchDict, readWorthyWords, playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, AUTO_NEXT_SPEED, autoNextMs, qsStripPart, storyHint: _storyHint, fetchReadingWords, lookupWord, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom, grWordsText, grSayNumber, grWordsBefore, checkWriting, checkShortAnswer, checkEssay, checkStoryMountain, collectWrongQuestions, removeWrongQuestion, reviewWordsOf, reviewGrammarOf, qsKindsInGroup, mxSmartLine, wsCheck, WS_CHECKS });
 
 /* ── 學校帳號自動分年級（v237）──

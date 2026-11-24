@@ -2569,7 +2569,12 @@ function StarsPanel({
   });
   var [filter, setFilter] = React.useState('全部');
   var [shopItems, setShopItems] = React.useState(null); // null＝還沒載到／老師沒設定 → 用內建範例
-
+  var [redeems, setRedeems] = React.useState([]); // v681：我送出的兌換申請（pending／done／cancelled）
+  var [sending, setSending] = React.useState(false);
+  React.useEffect(() => {
+    if (!user || !user.email || !window.subscribeMyRedeems) return;
+    return window.subscribeMyRedeems(user.email, setRedeems, () => {});
+  }, [user && user.email]);
   React.useEffect(() => {
     if (!user || !user.email || !window.subscribeMyStars) return;
     return window.subscribeMyStars(user.email, setData, () => {});
@@ -2640,17 +2645,55 @@ function StarsPanel({
     if (window.__mxWear && it.kind !== 'dance') window.__mxWear(it.kind, it.id);
     alert(`買到「${it.zh}」了！🎉\n長按吉祥物 → 👕 裝扮室，隨時可以換。`);
   };
-  var redeem = it => {
-    if (bal < it.cost) {
-      alert(`還差 ${(it.cost - bal).toLocaleString()} 顆星星才能換「${it.name}」，繼續加油！⭐`);
+
+  /* v681（Alan：「學生按兌換我都收不到」）：以前這裡只跳 alert，沒有寫任何東西。
+     現在會真的送出一筆申請到 redeems（老師後台「⭐集點」最上面的「待兌換」看得到）。
+     ⚠ 申請不扣星星——老師按「已給他，扣點」才扣。所以這裡要確認「還沒被別的申請佔走」：
+        申請中的總和算進去，免得同一份星星同時申請兩樣東西。 */
+  var pending = redeems.filter(r => r.status === 'pending');
+  var pendingTotal = pending.reduce((n, r) => n + (Number(r.cost) || 0), 0);
+  var redeem = async it => {
+    if (sending) return;
+    var cost = Number(it.cost) || 0;
+    if (bal < cost) {
+      alert(`還差 ${(cost - bal).toLocaleString()} 顆星星才能換「${it.name}」，繼續加油！⭐`);
       return;
     }
-    // v392: 文案改成誠實的說法。這個函式從頭到尾只跳 alert，沒有任何 Firestore 寫入，
-    //       老師端 ShopManager 也看不到任何待兌換清單——原本開頭寫「已記下你想換…」，
-    //       學生按完會以為申請已經送出去、老師那邊看得到，其實沒有，只能靠學生自己去講。
-    //       所以改成不會誤導的問句，後面「跟 Alan 老師說一聲」才是真正生效的那一步。
-    //       （要真的送出申請是新功能，需要 data.js 的儲存函式＋老師端清單，另外議。）
-    alert(it.virtual ? `想換「${it.name}」（${it.cost.toLocaleString()}🌟）嗎？\n\n跟 Alan 老師說一聲，老師扣點之後，你的吉祥物就會戴上它 🎩\n（長按吉祥物可以換帽子）` : `想換「${it.name}」（${it.cost.toLocaleString()}🌟）嗎？\n\n下次上課跟 Alan 老師說一聲，老師確認後就會幫你扣點、把東西給你 🎁`);
+    if (pending.some(r => r.itemId === String(it.id))) {
+      alert(`你已經申請過「${it.name}」了，等老師確認就好 🎁`);
+      return;
+    }
+    if (bal - pendingTotal < cost) {
+      alert(`你已經有 ${pendingTotal.toLocaleString()} 顆星星在「申請中」了，剩下的星星不夠再換「${it.name}」。\n等老師處理完，或到「集點紀錄」取消不想換的申請。`);
+      return;
+    }
+    if (!window.submitRedeem) {
+      alert('現在沒辦法送出申請，等一下再試一次。');
+      return;
+    }
+    if (!window.confirm(`要申請兌換「${it.name}」（${cost.toLocaleString()}🌟）嗎？\n\n送出後老師會看到，確認後才會幫你扣點、把東西給你 🎁\n（送出時不會先扣星星）`)) return;
+    setSending(true);
+    try {
+      await window.submitRedeem(user, it);
+      alert(`已經送出「${it.name}」的兌換申請了！🎉\n老師確認後會幫你扣點，下次上課就會拿到。\n（可以到「集點紀錄」看申請的狀態）`);
+      setTab('me');
+    } catch (e) {
+      alert('申請沒有送出去，請檢查網路後再試一次。' + (e && e.code === 'permission-denied' ? '\n（老師還沒開通兌換申請的權限，請告訴老師。）' : ''));
+    }
+    setSending(false);
+  };
+  var cancelRedeem = async r => {
+    if (!window.confirm(`取消「${r.itemName}」的兌換申請嗎？`)) return;
+    try {
+      await window.setRedeemStatus(r.id, 'cancelled');
+    } catch (e) {
+      alert('取消失敗，請再試一次。');
+    }
+  };
+  var REDEEM_ST = {
+    pending: '⏳ 申請中',
+    done: '✅ 老師已給你',
+    cancelled: '✖ 已取消'
   };
   return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
     className: "sp-overlay",
@@ -2683,7 +2726,23 @@ function StarsPanel({
     onClick: () => setTab('shop')
   }, "\uD83D\uDECD\uFE0F \u5546\u5E97")), tab === 'me' ? /*#__PURE__*/React.createElement("div", {
     className: "sp-body"
-  }, allRows.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, redeems.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "sp-req"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sp-shop-head"
+  }, "\uD83D\uDCEC \u6211\u7684\u514C\u63DB\u7533\u8ACB"), redeems.slice(0, 12).map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    className: 'sp-req-row ' + r.status
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sp-req-name"
+  }, r.emoji ? r.emoji + ' ' : '', r.itemName), /*#__PURE__*/React.createElement("span", {
+    className: "sp-req-cost"
+  }, Number(r.cost).toLocaleString(), "\u2B50"), /*#__PURE__*/React.createElement("span", {
+    className: "sp-req-st"
+  }, REDEEM_ST[r.status] || r.status), r.status === 'pending' && /*#__PURE__*/React.createElement("button", {
+    className: "sp-req-cancel",
+    onClick: () => cancelRedeem(r)
+  }, "\u53D6\u6D88")))), allRows.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "sp-empty"
   }, "\u9084\u6C92\u6709\u96C6\u9EDE\u7D00\u9304\u2014\u2014\u4E0A\u8AB2\u8A8D\u771F\u8868\u73FE\u3001\u628A\u7DF4\u7FD2\u505A\u5B8C\u5C31\u6703\u62FF\u5230\u661F\u661F\u5594\uFF01\u2B50") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sp-sum"
@@ -2737,6 +2796,7 @@ function StarsPanel({
     className: "sp-shop"
   }, shown.map(it => {
     var ok = bal >= (it.cost || 0);
+    var asked = pending.some(r => r.itemId === String(it.id)); // v681：這樣東西已經申請中
     return /*#__PURE__*/React.createElement("div", {
       key: it.id,
       className: 'sp-item' + (ok ? '' : ' locked')
@@ -2759,11 +2819,12 @@ function StarsPanel({
       onClick: e => e.stopPropagation()
     }, "\u770B\u5546\u54C1 \u2197"), /*#__PURE__*/React.createElement("button", {
       className: "sp-item-btn",
-      onClick: () => redeem(it)
-    }, ok ? '兌換' : `還差 ${((it.cost || 0) - bal).toLocaleString()}`));
+      onClick: () => redeem(it),
+      disabled: sending
+    }, asked ? '申請中 ⏳' : ok ? '兌換' : `還差 ${((it.cost || 0) - bal).toLocaleString()}`));
   })), /*#__PURE__*/React.createElement("p", {
     className: "sp-shop-note"
-  }, "\u5546\u54C1\u6703\u4E0D\u5B9A\u671F\u66F4\u65B0\u3002\u60F3\u63DB\u7684\u8A71\u6309\u300C\u514C\u63DB\u300D\uFF0C\u4E0B\u6B21\u4E0A\u8AB2\u8DDF\u8001\u5E2B\u8AAA\u4E00\u8072\u5C31\u53EF\u4EE5\u56C9 \uD83C\uDF81")))), document.body);
+  }, "\u5546\u54C1\u6703\u4E0D\u5B9A\u671F\u66F4\u65B0\u3002\u60F3\u63DB\u7684\u8A71\u6309\u300C\u514C\u63DB\u300D\u9001\u51FA\u7533\u8ACB\uFF0C\u8001\u5E2B\u78BA\u8A8D\u5F8C\u6703\u5E6B\u4F60\u6263\u9EDE\u3001\u4E0B\u6B21\u4E0A\u8AB2\u7D66\u4F60 \uD83C\uDF81")))), document.body);
 }
 
 // v392: 舊版行銷長頁的元件已從這份匯出名單移除（函式本體同時刪除，見檔案上方 v392 註解）

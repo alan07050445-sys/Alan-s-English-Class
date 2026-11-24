@@ -4403,3 +4403,14 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 
 /* v677：故事山輸入框點進去時卡片捲到上方（見 StoryMountainPlayer onFocus）——上方留 12px，不貼著邊 */
 .sm-stage-card { scroll-margin-top: 12px; }
+
+/* v681：兌換申請——學生端「我的兌換申請」＋老師端「待兌換」 */
+.sp-req { margin-bottom: 14px; }
+.sp-req-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 13px; margin-top: 6px; font-family: var(--sans); font-size: 14px; }
+.sp-req-row.pending { border-color: #E0B84A; background: rgba(245,200,76,.10); }
+.sp-req-row.cancelled { opacity: .6; }
+.sp-req-name { flex: 1; min-width: 120px; font-weight: 700; color: var(--ink); }
+.sp-req-cost { font-weight: 800; color: #8a6d1c; }
+.sp-req-st { font-size: 13px; color: var(--ink-muted); }
+.sp-req-cancel { border: 1px solid #C88; background: #fff; color: #A33; border-radius: 999px; padding: 6px 14px; min-height: 36px; font-size: 13px; cursor: pointer; }
+.sp-item-btn:disabled { opacity: .6; cursor: default; }

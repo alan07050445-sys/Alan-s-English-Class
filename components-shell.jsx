@@ -1784,6 +1784,13 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
   const [data, setData] = React.useState({ balance: 0, entries: [] });
   const [filter, setFilter] = React.useState('全部');
   const [shopItems, setShopItems] = React.useState(null); // null＝還沒載到／老師沒設定 → 用內建範例
+  const [redeems, setRedeems] = React.useState([]);        // v681：我送出的兌換申請（pending／done／cancelled）
+  const [sending, setSending] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!user || !user.email || !window.subscribeMyRedeems) return;
+    return window.subscribeMyRedeems(user.email, setRedeems, () => {});
+  }, [user && user.email]);
 
   React.useEffect(() => {
     if (!user || !user.email || !window.subscribeMyStars) return;
@@ -1832,20 +1839,45 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
     alert(`買到「${it.zh}」了！🎉\n長按吉祥物 → 👕 裝扮室，隨時可以換。`);
   };
 
-  const redeem = (it) => {
-    if (bal < it.cost) {
-      alert(`還差 ${(it.cost - bal).toLocaleString()} 顆星星才能換「${it.name}」，繼續加油！⭐`);
+  /* v681（Alan：「學生按兌換我都收不到」）：以前這裡只跳 alert，沒有寫任何東西。
+     現在會真的送出一筆申請到 redeems（老師後台「⭐集點」最上面的「待兌換」看得到）。
+     ⚠ 申請不扣星星——老師按「已給他，扣點」才扣。所以這裡要確認「還沒被別的申請佔走」：
+        申請中的總和算進去，免得同一份星星同時申請兩樣東西。 */
+  const pending      = redeems.filter(r => r.status === 'pending');
+  const pendingTotal = pending.reduce((n, r) => n + (Number(r.cost) || 0), 0);
+  const redeem = async (it) => {
+    if (sending) return;
+    const cost = Number(it.cost) || 0;
+    if (bal < cost) {
+      alert(`還差 ${(cost - bal).toLocaleString()} 顆星星才能換「${it.name}」，繼續加油！⭐`);
       return;
     }
-    // v392: 文案改成誠實的說法。這個函式從頭到尾只跳 alert，沒有任何 Firestore 寫入，
-    //       老師端 ShopManager 也看不到任何待兌換清單——原本開頭寫「已記下你想換…」，
-    //       學生按完會以為申請已經送出去、老師那邊看得到，其實沒有，只能靠學生自己去講。
-    //       所以改成不會誤導的問句，後面「跟 Alan 老師說一聲」才是真正生效的那一步。
-    //       （要真的送出申請是新功能，需要 data.js 的儲存函式＋老師端清單，另外議。）
-    alert(it.virtual
-      ? `想換「${it.name}」（${it.cost.toLocaleString()}🌟）嗎？\n\n跟 Alan 老師說一聲，老師扣點之後，你的吉祥物就會戴上它 🎩\n（長按吉祥物可以換帽子）`
-      : `想換「${it.name}」（${it.cost.toLocaleString()}🌟）嗎？\n\n下次上課跟 Alan 老師說一聲，老師確認後就會幫你扣點、把東西給你 🎁`);
+    if (pending.some(r => r.itemId === String(it.id))) {
+      alert(`你已經申請過「${it.name}」了，等老師確認就好 🎁`);
+      return;
+    }
+    if (bal - pendingTotal < cost) {
+      alert(`你已經有 ${pendingTotal.toLocaleString()} 顆星星在「申請中」了，剩下的星星不夠再換「${it.name}」。\n等老師處理完，或到「集點紀錄」取消不想換的申請。`);
+      return;
+    }
+    if (!window.submitRedeem) { alert('現在沒辦法送出申請，等一下再試一次。'); return; }
+    if (!window.confirm(`要申請兌換「${it.name}」（${cost.toLocaleString()}🌟）嗎？\n\n送出後老師會看到，確認後才會幫你扣點、把東西給你 🎁\n（送出時不會先扣星星）`)) return;
+    setSending(true);
+    try {
+      await window.submitRedeem(user, it);
+      alert(`已經送出「${it.name}」的兌換申請了！🎉\n老師確認後會幫你扣點，下次上課就會拿到。\n（可以到「集點紀錄」看申請的狀態）`);
+      setTab('me');
+    } catch (e) {
+      alert('申請沒有送出去，請檢查網路後再試一次。' + (e && (e.code === 'permission-denied') ? '\n（老師還沒開通兌換申請的權限，請告訴老師。）' : ''));
+    }
+    setSending(false);
   };
+  const cancelRedeem = async (r) => {
+    if (!window.confirm(`取消「${r.itemName}」的兌換申請嗎？`)) return;
+    try { await window.setRedeemStatus(r.id, 'cancelled'); }
+    catch (e) { alert('取消失敗，請再試一次。'); }
+  };
+  const REDEEM_ST = { pending: '⏳ 申請中', done: '✅ 老師已給你', cancelled: '✖ 已取消' };
 
   return ReactDOM.createPortal(
     <div className="sp-overlay" onClick={onClose}>
@@ -1865,6 +1897,19 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
 
         {tab === 'me' ? (
           <div className="sp-body">
+            {redeems.length > 0 && (
+              <div className="sp-req">
+                <div className="sp-shop-head">📬 我的兌換申請</div>
+                {redeems.slice(0, 12).map(r => (
+                  <div key={r.id} className={'sp-req-row ' + r.status}>
+                    <span className="sp-req-name">{r.emoji ? r.emoji + ' ' : ''}{r.itemName}</span>
+                    <span className="sp-req-cost">{Number(r.cost).toLocaleString()}⭐</span>
+                    <span className="sp-req-st">{REDEEM_ST[r.status] || r.status}</span>
+                    {r.status === 'pending' && <button className="sp-req-cancel" onClick={() => cancelRedeem(r)}>取消</button>}
+                  </div>
+                ))}
+              </div>
+            )}
             {allRows.length === 0 ? (
               <div className="sp-empty">還沒有集點紀錄——上課認真表現、把練習做完就會拿到星星喔！⭐</div>
             ) : (
@@ -1922,6 +1967,7 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
             <div className="sp-shop">
               {shown.map(it => {
                 const ok = bal >= (it.cost || 0);
+                const asked = pending.some(r => r.itemId === String(it.id));   // v681：這樣東西已經申請中
                 return (
                   <div key={it.id} className={'sp-item' + (ok ? '' : ' locked')}>
                     {/* v343: 有上傳圖片就用真實商品照，沒有才退回 emoji */}
@@ -1936,14 +1982,14 @@ function StarsPanel({ user, onClose, weeks, weekOrder, progItems, checkin, fixed
                       <a className="sp-item-link" href={it.url} target="_blank" rel="noopener noreferrer"
                          onClick={e => e.stopPropagation()}>看商品 ↗</a>
                     )}
-                    <button className="sp-item-btn" onClick={() => redeem(it)}>
-                      {ok ? '兌換' : `還差 ${((it.cost || 0) - bal).toLocaleString()}`}
+                    <button className="sp-item-btn" onClick={() => redeem(it)} disabled={sending}>
+                      {asked ? '申請中 ⏳' : ok ? '兌換' : `還差 ${((it.cost || 0) - bal).toLocaleString()}`}
                     </button>
                   </div>
                 );
               })}
             </div>
-            <p className="sp-shop-note">商品會不定期更新。想換的話按「兌換」，下次上課跟老師說一聲就可以囉 🎁</p>
+            <p className="sp-shop-note">商品會不定期更新。想換的話按「兌換」送出申請，老師確認後會幫你扣點、下次上課給你 🎁</p>
           </div>
         )}
       </div>

@@ -1880,6 +1880,13 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
   const [busy, setBusy]     = useDash(false);
 
   useDashE(() => window.subscribeAllStars(setStars, () => setErr('讀取失敗 — 請先在 Firebase Console 發布新版 firestore.rules')), []);
+  /* v681（Alan：「學生按兌換我都收不到」）：學生的兌換申請（redeems）。申請不扣星星，
+     老師按「已給他，扣點」才寫一筆負數到 stars。 */
+  const [redeems, setRedeems] = useDash([]);
+  const [redeemErr, setRedeemErr] = useDash(null);
+  useDashE(() => (window.subscribeAllRedeems
+    ? window.subscribeAllRedeems(setRedeems, () => setRedeemErr('讀不到兌換申請 — 請先在 Firebase Console 發布新版 firestore.rules（v681 新增 redeems）'))
+    : undefined), []);
 
   // 只列自己帶的學生（跟後台其他分頁一致）
   const teacherOf = (s) => String(s.teacher || ownerEmail).toLowerCase();
@@ -1976,6 +1983,28 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
     setBusy(false);
   };
 
+  /* v681：把申請標成「已給他」並扣點。先扣點、再改狀態：萬一第二步失敗，頂多是「扣了但還顯示待兌換」，
+     不會變成「標成已給卻沒扣」；而且扣點的備註含商品名稱，吉祥物帽子（虛擬商品）才認得出來。 */
+  const fulfillRedeem = async (r) => {
+    const em = String(r.email || '').toLowerCase();
+    const bal = balanceOf(em);
+    const stuName = r.name || (list.find(s => String(s.email).toLowerCase() === em) || {}).name || r.email;
+    if (bal < r.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${Number(r.cost).toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
+    if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${Number(r.cost).toLocaleString()}🌟，並把這筆申請標成「已給他」。`)) return;
+    setBusy(true); setErr(null);
+    try {
+      await window.addStarEntry(em, { amount: -Math.abs(Number(r.cost)), note: `兌換：${r.itemName}`, date: new Date().toISOString().slice(0, 10), name: stuName });
+      await window.setRedeemStatus(r.id, 'done');
+    } catch (e) { setErr('處理失敗：' + (e.code || e.message) + '（如果星星已經被扣了，請到下面的流水帳確認，不要重複扣）'); }
+    setBusy(false);
+  };
+  const cancelRedeemT = async (r) => {
+    if (!confirm(`取消「${r.itemName}」這筆申請嗎？不會扣星星。`)) return;
+    try { await window.setRedeemStatus(r.id, 'cancelled'); } catch (e) { setErr('取消失敗：' + (e.code || e.message)); }
+  };
+  const pendingReq = redeems.filter(r => r.status === 'pending');
+  const doneReq    = redeems.filter(r => r.status !== 'pending').slice(0, 15);
+
   const del = async (entry) => {
     if (!confirm(`確定刪除這筆嗎？\n${entry.date}　${entry.amount > 0 ? '+' : ''}${entry.amount}🌟　${entry.note || ''}`)) return;
     try { await window.deleteStarEntry(sel, entry.id); }
@@ -1983,6 +2012,43 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
   };
 
   return (
+    <>
+    {/* v681：學生按「兌換」送來的申請——最上面，一進來就看得到 */}
+    <div className={'stars-req' + (pendingReq.length ? ' has' : '')}>
+      <div className="stars-req-head">
+        📬 待兌換 {pendingReq.length > 0 ? <b>{pendingReq.length}</b> : null}
+        <span>學生在商店按「兌換」會出現在這裡；你把東西給他之後按「已給他，扣點」才會扣星星。</span>
+      </div>
+      {redeemErr && <div className="stars-req-err">⚠ {redeemErr}</div>}
+      {pendingReq.length === 0 && !redeemErr && <div className="stars-req-empty">目前沒有人在等你兌換 👍</div>}
+      {pendingReq.map(r => {
+        const em = String(r.email || '').toLowerCase();
+        const bal = balanceOf(em);
+        const stuName = r.name || (list.find(s => String(s.email).toLowerCase() === em) || {}).name || r.email;
+        return (
+          <div key={r.id} className="stars-req-row">
+            <span className="stars-req-who"><b>{stuName}</b><i>{r.at ? new Date(r.at).toLocaleDateString('zh-TW') : ''}</i></span>
+            <span className="stars-req-item">{r.emoji ? r.emoji + ' ' : ''}{r.itemName}</span>
+            <span className="stars-req-cost">{Number(r.cost).toLocaleString()}🌟<i className={bal < r.cost ? 'short' : ''}>（他現在有 {bal.toLocaleString()}）</i></span>
+            <button className="stars-req-ok" disabled={busy} onClick={() => fulfillRedeem(r)}>已給他，扣點</button>
+            <button className="stars-req-no" disabled={busy} onClick={() => cancelRedeemT(r)}>取消</button>
+          </div>
+        );
+      })}
+      {doneReq.length > 0 && (
+        <details className="stars-req-done">
+          <summary>已處理的申請（{doneReq.length}）</summary>
+          {doneReq.map(r => (
+            <div key={r.id} className="stars-req-row done">
+              <span className="stars-req-who"><b>{r.name || r.email}</b><i>{r.at ? new Date(r.at).toLocaleDateString('zh-TW') : ''}</i></span>
+              <span className="stars-req-item">{r.itemName}</span>
+              <span className="stars-req-cost">{Number(r.cost).toLocaleString()}🌟</span>
+              <span className="stars-req-st">{r.status === 'done' ? '✅ 已給他' : '✖ 已取消'}</span>
+            </div>
+          ))}
+        </details>
+      )}
+    </div>
     <div className="stars-wrap">
       {/* 左：學生清單（含目前星星數） */}
       <div className="stars-side">
@@ -2107,6 +2173,7 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -3081,13 +3148,18 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
   // 總覽＝紅黃綠燈＋全班常錯題；個人成績細節在學生詳情、家長版在週報。
   /* v377（Alan：「太多沒什麼用的功能、也很亂」）：一個都不刪，只分成
      「每天會用的」和「偶爾設定一次的」兩區——8 個平起平坐的分頁很難掃。 */
+  /* v681：有學生按「兌換」就在側欄「集點」旁邊掛紅點數字——老師不用點進去才知道有人在等 */
+  const [redeemPending, setRedeemPending] = useDash(0);
+  useDashE(() => (window.subscribeAllRedeems
+    ? window.subscribeAllRedeems(rows => setRedeemPending(rows.filter(r => r.status === 'pending').length), () => {})
+    : undefined), []);
   const NAV = [
     { id: 'overview', ico: '🚦', label: '總覽', sub: '完成度與常錯題', sec: '每天用' },
     { id: 'roster',   ico: '👥', label: '學生名單', sub: '帳號管理',     sec: '每天用' },
     /* v496（Alan：「我是一對一…要寫這次上課這位小朋友掌握度幾 percentage、
        以及有什麼功課、以及下次上課進度」）*/
     { id: 'lessons',  ico: '📒', label: '上課紀錄', sub: '掌握度／功課／下次進度', sec: '每天用' },
-    { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點', sec: '每天用' },
+    { id: 'stars',    ico: '⭐', label: '集點', sub: '給星星／兌換扣點', sec: '每天用', badge: redeemPending },
     /* v530（Alan：「Rubri's 加上去吧」）——康橋 Formative 的申論題照 rubric 三項手改 */
     { id: 'marking',  ico: '📋', label: '申論批改', sub: '三項評分（AI 先給建議）', sec: '每天用' },
     { id: 'notify',   ico: '📢', label: 'LINE 通知', sub: '發送公告',    sec: '每天用' },
@@ -3126,6 +3198,7 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
               >
                 <span className="tdash-nav-ico">{n.ico}</span>
                 <span className="tdash-nav-txt">{n.label}<em>{n.sub}</em></span>
+                {n.badge > 0 && <span className="tdash-nav-badge" title="有學生在等你兌換">{n.badge}</span>}
               </button>
               </React.Fragment>
             ))}

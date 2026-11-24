@@ -34,6 +34,30 @@ service cloud.firestore {
                        || request.resource.data.entries.size() <= 1000);
     }
 
+    // ── v681: 兌換申請（學生按「兌換」→ 老師後台收得到）────────
+    // 申請本身不扣星星；老師在後台按「已給他，扣點」才會寫一筆負數到 stars。
+    //   學生：只能「新增」自己的申請（status 一定是 pending、email 一定是自己）、
+    //         讀自己的、把自己「申請中」的取消。不能改成 done、不能改價錢／商品。
+    //   老師：讀全部、改狀態、刪除。
+    match /redeems/{redeemId} {
+      allow read: if isTeacher()
+                  || (request.auth != null && request.auth.token.email.lower() == resource.data.email);
+      allow create: if request.auth != null
+                    && request.resource.data.email == request.auth.token.email.lower()
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.cost is number
+                    && request.resource.data.cost > 0
+                    && request.resource.data.cost <= 1000000
+                    && request.resource.data.keys().hasOnly(['email', 'uid', 'name', 'itemId', 'itemName', 'cost', 'emoji', 'img', 'status', 'at']);
+      allow update: if isTeacher()
+                    || (request.auth != null
+                        && resource.data.email == request.auth.token.email.lower()
+                        && resource.data.status == 'pending'
+                        && request.resource.data.status == 'cancelled'
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']));
+      allow delete: if isTeacher();
+    }
+
     // ── 課程內容（G3/G4/G5/G6 都在 class 集合，G2 在 class-g2）──
     // 公開可讀（維持現狀，避免鎖住學生）；只有老師可寫。
     //

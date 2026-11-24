@@ -2261,6 +2261,11 @@ function StarsManager({
   var [err, setErr] = useDash(null);
   var [busy, setBusy] = useDash(false);
   useDashE(() => window.subscribeAllStars(setStars, () => setErr('讀取失敗 — 請先在 Firebase Console 發布新版 firestore.rules')), []);
+  /* v681（Alan：「學生按兌換我都收不到」）：學生的兌換申請（redeems）。申請不扣星星，
+     老師按「已給他，扣點」才寫一筆負數到 stars。 */
+  var [redeems, setRedeems] = useDash([]);
+  var [redeemErr, setRedeemErr] = useDash(null);
+  useDashE(() => window.subscribeAllRedeems ? window.subscribeAllRedeems(setRedeems, () => setRedeemErr('讀不到兌換申請 — 請先在 Firebase Console 發布新版 firestore.rules（v681 新增 redeems）')) : undefined, []);
 
   // 只列自己帶的學生（跟後台其他分頁一致）
   var teacherOf = s => String(s.teacher || ownerEmail).toLowerCase();
@@ -2403,6 +2408,40 @@ function StarsManager({
     }
     setBusy(false);
   };
+
+  /* v681：把申請標成「已給他」並扣點。先扣點、再改狀態：萬一第二步失敗，頂多是「扣了但還顯示待兌換」，
+     不會變成「標成已給卻沒扣」；而且扣點的備註含商品名稱，吉祥物帽子（虛擬商品）才認得出來。 */
+  var fulfillRedeem = async r => {
+    var em = String(r.email || '').toLowerCase();
+    var bal = balanceOf(em);
+    var stuName = r.name || (list.find(s => String(s.email).toLowerCase() === em) || {}).name || r.email;
+    if (bal < r.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${Number(r.cost).toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
+    if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${Number(r.cost).toLocaleString()}🌟，並把這筆申請標成「已給他」。`)) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await window.addStarEntry(em, {
+        amount: -Math.abs(Number(r.cost)),
+        note: `兌換：${r.itemName}`,
+        date: new Date().toISOString().slice(0, 10),
+        name: stuName
+      });
+      await window.setRedeemStatus(r.id, 'done');
+    } catch (e) {
+      setErr('處理失敗：' + (e.code || e.message) + '（如果星星已經被扣了，請到下面的流水帳確認，不要重複扣）');
+    }
+    setBusy(false);
+  };
+  var cancelRedeemT = async r => {
+    if (!confirm(`取消「${r.itemName}」這筆申請嗎？不會扣星星。`)) return;
+    try {
+      await window.setRedeemStatus(r.id, 'cancelled');
+    } catch (e) {
+      setErr('取消失敗：' + (e.code || e.message));
+    }
+  };
+  var pendingReq = redeems.filter(r => r.status === 'pending');
+  var doneReq = redeems.filter(r => r.status !== 'pending').slice(0, 15);
   var del = async entry => {
     if (!confirm(`確定刪除這筆嗎？\n${entry.date}　${entry.amount > 0 ? '+' : ''}${entry.amount}🌟　${entry.note || ''}`)) return;
     try {
@@ -2411,7 +2450,52 @@ function StarsManager({
       setErr('刪除失敗：' + (e.code || e.message));
     }
   };
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: 'stars-req' + (pendingReq.length ? ' has' : '')
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "stars-req-head"
+  }, "\uD83D\uDCEC \u5F85\u514C\u63DB ", pendingReq.length > 0 ? /*#__PURE__*/React.createElement("b", null, pendingReq.length) : null, /*#__PURE__*/React.createElement("span", null, "\u5B78\u751F\u5728\u5546\u5E97\u6309\u300C\u514C\u63DB\u300D\u6703\u51FA\u73FE\u5728\u9019\u88E1\uFF1B\u4F60\u628A\u6771\u897F\u7D66\u4ED6\u4E4B\u5F8C\u6309\u300C\u5DF2\u7D66\u4ED6\uFF0C\u6263\u9EDE\u300D\u624D\u6703\u6263\u661F\u661F\u3002")), redeemErr && /*#__PURE__*/React.createElement("div", {
+    className: "stars-req-err"
+  }, "\u26A0 ", redeemErr), pendingReq.length === 0 && !redeemErr && /*#__PURE__*/React.createElement("div", {
+    className: "stars-req-empty"
+  }, "\u76EE\u524D\u6C92\u6709\u4EBA\u5728\u7B49\u4F60\u514C\u63DB \uD83D\uDC4D"), pendingReq.map(r => {
+    var em = String(r.email || '').toLowerCase();
+    var bal = balanceOf(em);
+    var stuName = r.name || (list.find(s => String(s.email).toLowerCase() === em) || {}).name || r.email;
+    return /*#__PURE__*/React.createElement("div", {
+      key: r.id,
+      className: "stars-req-row"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "stars-req-who"
+    }, /*#__PURE__*/React.createElement("b", null, stuName), /*#__PURE__*/React.createElement("i", null, r.at ? new Date(r.at).toLocaleDateString('zh-TW') : '')), /*#__PURE__*/React.createElement("span", {
+      className: "stars-req-item"
+    }, r.emoji ? r.emoji + ' ' : '', r.itemName), /*#__PURE__*/React.createElement("span", {
+      className: "stars-req-cost"
+    }, Number(r.cost).toLocaleString(), "\uD83C\uDF1F", /*#__PURE__*/React.createElement("i", {
+      className: bal < r.cost ? 'short' : ''
+    }, "\uFF08\u4ED6\u73FE\u5728\u6709 ", bal.toLocaleString(), "\uFF09")), /*#__PURE__*/React.createElement("button", {
+      className: "stars-req-ok",
+      disabled: busy,
+      onClick: () => fulfillRedeem(r)
+    }, "\u5DF2\u7D66\u4ED6\uFF0C\u6263\u9EDE"), /*#__PURE__*/React.createElement("button", {
+      className: "stars-req-no",
+      disabled: busy,
+      onClick: () => cancelRedeemT(r)
+    }, "\u53D6\u6D88"));
+  }), doneReq.length > 0 && /*#__PURE__*/React.createElement("details", {
+    className: "stars-req-done"
+  }, /*#__PURE__*/React.createElement("summary", null, "\u5DF2\u8655\u7406\u7684\u7533\u8ACB\uFF08", doneReq.length, "\uFF09"), doneReq.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    className: "stars-req-row done"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "stars-req-who"
+  }, /*#__PURE__*/React.createElement("b", null, r.name || r.email), /*#__PURE__*/React.createElement("i", null, r.at ? new Date(r.at).toLocaleDateString('zh-TW') : '')), /*#__PURE__*/React.createElement("span", {
+    className: "stars-req-item"
+  }, r.itemName), /*#__PURE__*/React.createElement("span", {
+    className: "stars-req-cost"
+  }, Number(r.cost).toLocaleString(), "\uD83C\uDF1F"), /*#__PURE__*/React.createElement("span", {
+    className: "stars-req-st"
+  }, r.status === 'done' ? '✅ 已給他' : '✖ 已取消'))))), /*#__PURE__*/React.createElement("div", {
     className: "stars-wrap"
   }, /*#__PURE__*/React.createElement("div", {
     className: "stars-side"
@@ -2543,7 +2627,7 @@ function StarsManager({
       name: "trash",
       size: 13
     })))));
-  })())));
+  })()))));
 }
 
 /* ── v346: 建議商品清單（一鍵載入）────────────────────────
@@ -3784,6 +3868,9 @@ function TeacherDashboard({
   // 總覽＝紅黃綠燈＋全班常錯題；個人成績細節在學生詳情、家長版在週報。
   /* v377（Alan：「太多沒什麼用的功能、也很亂」）：一個都不刪，只分成
      「每天會用的」和「偶爾設定一次的」兩區——8 個平起平坐的分頁很難掃。 */
+  /* v681：有學生按「兌換」就在側欄「集點」旁邊掛紅點數字——老師不用點進去才知道有人在等 */
+  var [redeemPending, setRedeemPending] = useDash(0);
+  useDashE(() => window.subscribeAllRedeems ? window.subscribeAllRedeems(rows => setRedeemPending(rows.filter(r => r.status === 'pending').length), () => {}) : undefined, []);
   var NAV = [{
     id: 'overview',
     ico: '🚦',
@@ -3810,7 +3897,8 @@ function TeacherDashboard({
     ico: '⭐',
     label: '集點',
     sub: '給星星／兌換扣點',
-    sec: '每天用'
+    sec: '每天用',
+    badge: redeemPending
   }, /* v530（Alan：「Rubri's 加上去吧」）——康橋 Formative 的申論題照 rubric 三項手改 */
   {
     id: 'marking',
@@ -3896,7 +3984,10 @@ function TeacherDashboard({
     className: "tdash-nav-ico"
   }, n.ico), /*#__PURE__*/React.createElement("span", {
     className: "tdash-nav-txt"
-  }, n.label, /*#__PURE__*/React.createElement("em", null, n.sub)))))), /*#__PURE__*/React.createElement("div", {
+  }, n.label, /*#__PURE__*/React.createElement("em", null, n.sub)), n.badge > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "tdash-nav-badge",
+    title: "\u6709\u5B78\u751F\u5728\u7B49\u4F60\u514C\u63DB"
+  }, n.badge))))), /*#__PURE__*/React.createElement("div", {
     className: "tdash-side-foot"
   }, /*#__PURE__*/React.createElement("button", {
     className: "tdash-side-btn",
