@@ -9937,6 +9937,8 @@ function AskPanel({
   roster,
   catalog,
   grade,
+  redeemReqs,
+  onOpenRedeems,
   onClose,
   onRun,
   onGenerate,
@@ -10081,7 +10083,16 @@ function AskPanel({
     size: 14
   }))), /*#__PURE__*/React.createElement("div", {
     className: "ask-body"
-  }, !msgs.length && /*#__PURE__*/React.createElement("div", {
+  }, (redeemReqs || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "ask-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "ask-bub ask-redeem"
+  }, /*#__PURE__*/React.createElement("b", null, "\uD83D\uDCEC \u6709 ", redeemReqs.length, " \u4F4D\u540C\u5B78\u5728\u7B49\u4F60\u514C\u63DB\uFF1A"), /*#__PURE__*/React.createElement("ul", null, redeemReqs.slice(0, 5).map(r => /*#__PURE__*/React.createElement("li", {
+    key: r.id
+  }, r.name || r.email, " \u2192 ", r.emoji ? r.emoji + ' ' : '', r.itemName, "\uFF08", Number(r.cost).toLocaleString(), "\uD83C\uDF1F\uFF09")), redeemReqs.length > 5 && /*#__PURE__*/React.createElement("li", null, "\u2026\u9084\u6709 ", redeemReqs.length - 5, " \u7B46")), /*#__PURE__*/React.createElement("button", {
+    className: "ask-redeem-go",
+    onClick: onOpenRedeems
+  }, "\u53BB\u8655\u7406 \u2192"))), !msgs.length && /*#__PURE__*/React.createElement("div", {
     className: "ask-hello"
   }, /*#__PURE__*/React.createElement("p", null, "\u76F4\u63A5\u8AAA\u4F60\u60F3\u505A\u4EC0\u9EBC\uFF0C\u6216\u628A\u55AE\u5B57\u8868\uFF0F\u6587\u7AE0\uFF0F\u4F5C\u696D\u7167\u7247\u4E1F\u9032\u4F86\u3002"), /*#__PURE__*/React.createElement("details", {
     className: "ask-can"

@@ -958,6 +958,7 @@ function App() {
   var [examScanOpen, setExamScanOpen] = useAppState(false); // v516：拍考卷
   var [examDraft, setExamDraft] = useAppState(null); // v561：跟 AI 出大考考卷（{ brief } 或 null）
   var [askOpen, setAskOpen] = useAppState(false); // v517：💬 用講的就好
+  var [redeemReqs, setRedeemReqs] = useAppState([]); // v681：學生按「兌換」送來、還沒處理的申請（只有老師會訂閱）
   var [askRoster, setAskRoster] = useAppState([]); // 認名字用（「幫 Eric 寫紀錄」）
   var [askTopic, setAskTopic] = useAppState(''); // 💬 帶進 Word Study 的主題
   var [askText, setAskText] = useAppState(null); // 💬 帶進文法／閱讀的文字
@@ -2038,6 +2039,13 @@ function App() {
     if (!askOpen || !window.subscribeRoster) return;
     return window.subscribeRoster(setAskRoster, () => {});
   }, [askOpen]);
+
+  /* v681（Alan：「我覺得可以提醒到我的小助手」）：學生在商店按「兌換」→ 右下角的 💬 小助手掛紅點，
+     打開第一句就告訴你是誰、想換什麼。只有老師才訂閱（學生沒有權限讀別人的申請）。 */
+  useAppEffect(() => {
+    if (!isTeacher || !window.subscribeAllRedeems) return;
+    return window.subscribeAllRedeems(rows => setRedeemReqs(rows.filter(r => r.status === 'pending')), () => {});
+  }, [isTeacher]);
 
   /* 💬 v518（Alan：「他要先回答我檢查沒問題，確定這些題目沒問題，我就會說幫我直接出出來」）
      在聊天室裡直接出題。⭐ 一樣**不新寫出題邏輯**——呼叫的是視窗裡本來就在用的那幾支，
@@ -4433,7 +4441,10 @@ function App() {
     "aria-hidden": "true"
   }, "\uD83D\uDCAC"), /*#__PURE__*/React.createElement("span", {
     className: "ask-fab-txt"
-  }, "\u5C0F\u52A9\u624B")), (catView || editMode) && /*#__PURE__*/React.createElement(window.MobileNav, {
+  }, "\u5C0F\u52A9\u624B"), redeemReqs.length > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "ask-fab-badge",
+    "aria-label": `有 ${redeemReqs.length} 筆兌換申請`
+  }, redeemReqs.length)), (catView || editMode) && /*#__PURE__*/React.createElement(window.MobileNav, {
     week: week,
     weekIdx: weekIdx,
     weekOrder: viewOrder,
@@ -4644,6 +4655,16 @@ function App() {
     roster: askRoster,
     catalog: askCatalogText,
     grade: grade,
+    redeemReqs: redeemReqs,
+    onOpenRedeems: () => {
+      try {
+        window.__dashGoto = {
+          tab: 'stars'
+        };
+      } catch (e) {}
+      setAskOpen(false);
+      setDashOpen(true);
+    },
     onClose: () => setAskOpen(false),
     onRun: runAskPlan,
     onGenerate: askGenerate,

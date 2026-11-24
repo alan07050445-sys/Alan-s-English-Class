@@ -2721,6 +2721,10 @@ function subscribeMyRedeems(email, callback, onError) {
   if (!id) { callback([]); return () => {}; }
   return _redeemCol().where('email', '==', id).onSnapshot(snap => callback(_redeemRows(snap)), onError || (() => {}));
 }
+// 老師端：全部申請
+function subscribeAllRedeems(callback, onError) {
+  return _redeemCol().onSnapshot(snap => callback(_redeemRows(snap)), onError || (() => {}));
+}
 // status: 'done' | 'cancelled'（老師）；學生只能把自己的 pending 改成 cancelled
 async function setRedeemStatus(id, status) {
   const patch = { status };
@@ -2729,7 +2733,7 @@ async function setRedeemStatus(id, status) {
   await _redeemCol().doc(id).update(patch);
 }
 async function deleteRedeem(id) { await _redeemCol().doc(id).delete(); }
-Object.assign(window, { submitRedeem, subscribeMyRedeems, setRedeemStatus, deleteRedeem });
+Object.assign(window, { submitRedeem, subscribeMyRedeems, subscribeAllRedeems, setRedeemStatus, deleteRedeem });
 
 Object.assign(window, { aiJudgeTranslation, gnAnswerOk, gnNorm, gnValidStep, gnIsTeachStep, GN_TEACH_KINDS, gnCleanStem, CATEGORIES, SEED_WEEKS, DEFAULT_WEEK_ORDER, TYPE_META, ADMIN_EMAILS, subscribeMyStars, subscribeShop, loadWeeks, saveWeeks, loadProgress, saveProgress, toYouTubeEmbed, loadWeekOrder, saveWeekOrder, subscribeToClassData, uploadPdfToStorage, uploadSubmissionPhoto, uploadFlashcardImage, compressImageBlob, loadCompanion, subscribeRoster, setRosterStudentTeacher, addLeaderboardEntry, deleteLeaderboardEntry, subscribeLeaderboard, signInWithGoogle, signInWithGoogleRedirect, signOutUser, subscribeAuth, isAdminUser, OWNER_EMAILS, isOwnerUser, subscribeAdminStatus, saveProgressItem, subscribeMyProgress, subscribeAllStudents, saveQuizMistakes, BADGES, updateStreak, unlockBadge, subscribeUserProfile, getLevel, COMPANION_LINES, pickLine, dictHas, prefetchDict, readWorthyWords, playSound, speakText, speakTTS, ttsIsSpeaking, speakSentences, prefetchTts, unlockTtsAudio, getTtsMode, setTtsMode, grSpeechChunks, AUTO_NEXT_SPEED, autoNextMs, qsStripPart, storyHint: _storyHint, fetchReadingWords, lookupWord, generateTtsAudio, grJoinReadLines, grReadTextFrom, grReadWordsFrom, grWordsText, grSayNumber, grWordsBefore, checkWriting, checkShortAnswer, checkEssay, checkStoryMountain, collectWrongQuestions, removeWrongQuestion, reviewWordsOf, reviewGrammarOf, qsKindsInGroup, mxSmartLine, wsCheck, WS_CHECKS });
 

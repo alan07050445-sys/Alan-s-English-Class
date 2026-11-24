@@ -6399,7 +6399,7 @@ function AskPreview({ items }) {
    確認卡按下去之後**直接在這裡出題**，把題目攤出來給他看，他說「存」才存。
    ⚠ 兩段確認是故意的：第一段確認「要做什麼」，第二段確認「題目對不對」。
      中間真的會花錢跑 AI，但不會動到他的課程——存是最後一步。 */
-function AskPanel({ open, categories, roster, catalog, grade, onClose, onRun, onGenerate, onSave }) {
+function AskPanel({ open, categories, roster, catalog, grade, redeemReqs, onOpenRedeems, onClose, onRun, onGenerate, onSave }) {
   const [msgs, setMsgs] = useS([]);          // { me, text, plan?, images? }
   const [text, setText] = useS('');
   const [imgs, setImgs] = useS([]);
@@ -6479,6 +6479,22 @@ function AskPanel({ open, categories, roster, catalog, grade, onClose, onRun, on
       </div>
 
       <div className="ask-body">
+        {/* v681（Alan：「我覺得可以提醒到我的小助手」）：學生按「兌換」→ 小助手第一句就先跟你講。
+            不算聊天紀錄（msgs），所以不會被「清掉對話」帶走，處理完自己就消失。 */}
+        {(redeemReqs || []).length > 0 && (
+          <div className="ask-row">
+            <div className="ask-bub ask-redeem">
+              <b>📬 有 {redeemReqs.length} 位同學在等你兌換：</b>
+              <ul>
+                {redeemReqs.slice(0, 5).map(r => (
+                  <li key={r.id}>{r.name || r.email} → {r.emoji ? r.emoji + ' ' : ''}{r.itemName}（{Number(r.cost).toLocaleString()}🌟）</li>
+                ))}
+                {redeemReqs.length > 5 && <li>…還有 {redeemReqs.length - 5} 筆</li>}
+              </ul>
+              <button className="ask-redeem-go" onClick={onOpenRedeems}>去處理 →</button>
+            </div>
+          </div>
+        )}
         {!msgs.length && (
           <div className="ask-hello">
             <p>直接說你想做什麼，或把單字表／文章／作業照片丟進來。</p>

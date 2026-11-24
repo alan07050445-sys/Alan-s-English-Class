@@ -584,6 +584,9 @@
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
 .ask-can li { color: var(--ink-2); }
 @media (max-width: 460px) { .ask-can ul { grid-template-columns: 1fr; }}
+.ask-redeem ul { margin: 6px 0 10px; padding-left: 18px; }
+.ask-redeem li { margin: 3px 0; }
+.ask-redeem-go { border: 0; background: #6D5BD0; color: #fff; border-radius: 999px; padding: 9px 18px; min-height: 40px; font-weight: 800; cursor: pointer; }
 
 /* ══ v540 📋 貼上整份考卷 ════════════════════════════════════════════ */
 .exed-sp { flex: 1; }

@@ -3470,6 +3470,10 @@
 .ask-fab-ico { font-size: 18px; line-height: 1; }
 /* 有底部導覽列的時候往上讓位，不然會疊在上面 */
 .ask-fab.with-nav { bottom: 84px; }
+
+/* v681：小助手（右下角 💬）——有學生申請兌換時掛紅點；打開後第一句的提醒卡 */
+.ask-fab-badge { position: absolute; top: -6px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #E5484D; color: #fff; border: 2px solid #fff; font-size: 12.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.25); animation: askBadgePop .5s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes askBadgePop { from { transform: scale(.3); opacity: 0; } }
 @media (min-width: 861px) { .ask-fab.with-nav { bottom: 20px; } }
 /* 手機上只留圖示，不佔畫面 */
 @media (max-width: 520px) {
