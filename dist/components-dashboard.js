@@ -2265,6 +2265,18 @@ function StarsManager({
      老師按「已給他，扣點」才寫一筆負數到 stars。 */
   var [redeems, setRedeems] = useDash([]);
   var [redeemErr, setRedeemErr] = useDash(null);
+  /* v690：兌換申請裡的星星數是學生那邊送來的（可以被改），扣點一律以「商店現價」為準。 */
+  var [shopNow, setShopNow] = useDash(null);
+  useDashE(() => window.subscribeShop ? window.subscribeShop(setShopNow, () => {}) : undefined, []);
+  var priceOf = r => {
+    var it = (shopNow || []).find(x => x && String(x.id) === String(r.itemId));
+    var shop = it ? Math.round(Number(it.cost) || 0) : 0;
+    return {
+      cost: shop > 0 ? shop : Number(r.cost),
+      shop: shop > 0 ? shop : null,
+      asked: Number(r.cost)
+    };
+  };
   useDashE(() => window.subscribeAllRedeems ? window.subscribeAllRedeems(setRedeems, () => setRedeemErr('讀不到兌換申請 — 請先在 Firebase Console 發布新版 firestore.rules（v681 新增 redeems）')) : undefined, []);
 
   // 只列自己帶的學生（跟後台其他分頁一致）
@@ -2415,13 +2427,15 @@ function StarsManager({
     var em = String(r.email || '').toLowerCase();
     var bal = balanceOf(em);
     var stuName = r.name || (list.find(s => String(s.email).toLowerCase() === em) || {}).name || r.email;
-    if (bal < r.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${Number(r.cost).toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
-    if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${Number(r.cost).toLocaleString()}🌟，並把這筆申請標成「已給他」。`)) return;
+    var pr = priceOf(r);
+    var diff = pr.shop != null && pr.asked !== pr.shop ? `\n⚠ 申請上寫 ${pr.asked.toLocaleString()}🌟，但商店現價是 ${pr.shop.toLocaleString()}🌟——我會照商店現價扣。` : '';
+    if (bal < pr.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${pr.cost.toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
+    if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${pr.cost.toLocaleString()}🌟，並把這筆申請標成「已給他」。${diff}`)) return;
     setBusy(true);
     setErr(null);
     try {
       await window.addStarEntry(em, {
-        amount: -Math.abs(Number(r.cost)),
+        amount: -Math.abs(pr.cost),
         note: `兌換：${r.itemName}`,
         date: new Date().toISOString().slice(0, 10),
         name: stuName
@@ -2471,9 +2485,12 @@ function StarsManager({
       className: "stars-req-item"
     }, r.emoji ? r.emoji + ' ' : '', r.itemName), /*#__PURE__*/React.createElement("span", {
       className: "stars-req-cost"
-    }, Number(r.cost).toLocaleString(), "\uD83C\uDF1F", /*#__PURE__*/React.createElement("i", {
-      className: bal < r.cost ? 'short' : ''
-    }, "\uFF08\u4ED6\u73FE\u5728\u6709 ", bal.toLocaleString(), "\uFF09")), /*#__PURE__*/React.createElement("button", {
+    }, priceOf(r).cost.toLocaleString(), "\uD83C\uDF1F", /*#__PURE__*/React.createElement("i", {
+      className: bal < priceOf(r).cost ? 'short' : ''
+    }, "\uFF08\u4ED6\u73FE\u5728\u6709 ", bal.toLocaleString(), "\uFF09"), priceOf(r).shop != null && priceOf(r).asked !== priceOf(r).shop && /*#__PURE__*/React.createElement("i", {
+      className: "short",
+      title: "\u7533\u8ACB\u4E0A\u7684\u661F\u661F\u6578\u8DDF\u5546\u5E97\u73FE\u50F9\u4E0D\u540C\uFF0C\u6263\u9EDE\u6703\u7167\u5546\u5E97\u73FE\u50F9"
+    }, "\u26A0 \u7533\u8ACB\u5BEB ", priceOf(r).asked.toLocaleString())), /*#__PURE__*/React.createElement("button", {
       className: "stars-req-ok",
       disabled: busy,
       onClick: () => fulfillRedeem(r)

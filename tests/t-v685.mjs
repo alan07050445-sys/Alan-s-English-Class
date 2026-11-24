@@ -35,6 +35,7 @@ const make = () => {
     askLoadQueryData: async () => ({ students: [], gradeData: {}, stars: {}, redeems: [] }),
     askQueryAnswer: (p) => ({ head: p.student === 'Nick' ? 'Nick 現在有 3,500🌟' : 'Eric 現在有 100🌟' }),
     dashCurrentWeekId: () => null,
+    subscribeShop: (cb) => { cb(log.shop || []); return () => {}; },
   };
   const reqs = [
     { id: 'r1', email: 'g4nick@t', name: 'Nick', itemName: 'Pilot 魔擦筆', cost: 1200, status: 'pending' },
@@ -84,5 +85,18 @@ const make = () => {
 { const t = make(); t.log.failStar = true; await t.run({ intent: 'redeem', student: 'Nick', email: 'g4nick@t' });
   ok('扣點就失敗 → 沒有標已給（不會「標了卻沒扣」）', t.log.status.length === 0); }
 
+
+console.log('\n【3】⭐ 申請上的星星數是學生送來的（可以被改）——扣點以商店現價為準');
+{ const t = make(); t.log.shop = [{ id: 's1', name: 'Pilot 魔擦筆', cost: 1200 }];
+  t.reqs[0].itemId = 's1'; t.reqs[0].cost = 1;                 // 學生偷改成 1 顆
+  await t.run({ intent: 'redeem', student: 'Nick', email: 'g4nick@t' });
+  ok('⭐⭐ 申請寫 1 顆、商店現價 1200 → 扣 1200，不是 1', t.log.star.length === 1 && t.log.star[0][1] === -1200);
+  ok('確認視窗講清楚「申請上寫 1，照商店現價扣」', /申請上寫 1/.test(t.log.confirm[0]) && /1,200/.test(t.log.confirm[0]));
+  ok('不會改到原本的申請資料（state）', t.reqs[0].cost === 1); }
+{ const t = make(); t.log.shop = [];                            // 商店沒有這個商品（或還沒設定）
+  await t.run({ intent: 'redeem', student: 'Nick', email: 'g4nick@t' });
+  ok('商店對不到這個商品 → 才用申請上的價錢（1200）', t.log.star.length === 1 && t.log.star[0][1] === -1200); }
+const da = fs.readFileSync(new URL('components-dashboard.jsx', ROOT), 'utf8');
+ok('後台按鈕也以商店現價扣（priceOf），並標出價錢不一致', /const priceOf = \(r\)/.test(da) && /amount: -Math\.abs\(pr\.cost\)/.test(da) && /申請寫 \{priceOf\(r\)\.asked/.test(da));
 ok('卡片寫清楚「先列出、再按確定才扣點」，不是「不會自己存」', /m\.plan\.intent === 'redeem' \? '按下去只會先列出要做的事/.test(fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8')));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

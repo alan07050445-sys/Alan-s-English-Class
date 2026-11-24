@@ -2676,7 +2676,9 @@ function App() {
           }
           email = lc(_f.email);
         }
-        var cands = (redeemReqs || []).filter(r => r && r.status === 'pending' && (!email || lc(r.email) === email) && (!plan.item || lc(r.itemName).indexOf(lc(plan.item)) >= 0));
+        var cands = (redeemReqs || []).filter(r => r && r.status === 'pending' && (!email || lc(r.email) === email) && (!plan.item || lc(r.itemName).indexOf(lc(plan.item)) >= 0)).map(r => ({
+          ...r
+        })); // 複製一份：下面會改價錢，不能動到 state
         if (!cands.length) {
           showToast(redeemReqs.length ? `沒有符合的待兌換（現在在等的是：${redeemReqs.slice(0, 4).map(r => `${r.name || r.email} 的 ${r.itemName}`).join('、')}）` : '目前沒有人在等你兌換 👍');
           return;
@@ -2685,6 +2687,36 @@ function App() {
           showToast(`有 ${cands.length} 筆在等你（${cands.slice(0, 4).map(r => r.name || r.email).join('、')}）——說是誰的，或說「全部」`);
           return;
         }
+        /* v690：申請上的星星數是學生那邊送來的，扣點以「商店現價」為準（對得到同一個商品才換；對不到就用申請上的）。 */
+        var shop = await new Promise(res => {
+          var un = null,
+            done = false;
+          var fin = v => {
+            if (done) return;
+            done = true;
+            try {
+              un && un();
+            } catch (e) {}
+            res(v || []);
+          };
+          try {
+            un = window.subscribeShop ? window.subscribeShop(rows => fin(rows), () => fin([])) : (fin([]), null);
+            if (done) {
+              try {
+                un && un();
+              } catch (e) {}
+            }
+          } catch (e) {
+            fin([]);
+          }
+          setTimeout(() => fin([]), 5000);
+        });
+        cands.forEach(r => {
+          var it = shop.find(x => x && String(x.id) === String(r.itemId));
+          var sp = it ? Math.round(Number(it.cost) || 0) : 0;
+          r.asked = Number(r.cost);
+          if (sp > 0) r.cost = sp;
+        });
         /* 查每個人現在有多少星星（只是提醒用；查不到就老實寫「沒查到」，不擋） */
         var balOf = {};
         try {
@@ -2711,7 +2743,7 @@ function App() {
         var lines = cands.map(r => {
           var b = balOf[lc(r.email)];
           var short = b != null && b < r.cost;
-          return `・${r.name || r.email}：${r.itemName}　扣 ${Number(r.cost).toLocaleString()}🌟` + (b != null ? `（他現在有 ${b.toLocaleString()}🌟${short ? '，⚠ 不夠' : ''}）` : '（沒查到他的星星）');
+          return `・${r.name || r.email}：${r.itemName}　扣 ${Number(r.cost).toLocaleString()}🌟` + (r.asked != null && r.asked !== Number(r.cost) ? `（⚠ 申請上寫 ${r.asked.toLocaleString()}，照商店現價扣）` : '') + (b != null ? `（他現在有 ${b.toLocaleString()}🌟${short ? '，⚠ 不夠' : ''}）` : '（沒查到他的星星）');
         });
         var msg = `要把這 ${cands.length} 筆標成「已給他」，並扣掉星星嗎？\n\n${lines.join('\n')}\n\n` + '會各寫一筆「兌換：商品名」的扣點到他的集點紀錄。\n（按「取消」就什麼都不會改。）';
         if (!window.confirm(msg)) {

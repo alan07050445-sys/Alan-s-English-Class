@@ -1884,6 +1884,14 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
      老師按「已給他，扣點」才寫一筆負數到 stars。 */
   const [redeems, setRedeems] = useDash([]);
   const [redeemErr, setRedeemErr] = useDash(null);
+  /* v690：兌換申請裡的星星數是學生那邊送來的（可以被改），扣點一律以「商店現價」為準。 */
+  const [shopNow, setShopNow] = useDash(null);
+  useDashE(() => (window.subscribeShop ? window.subscribeShop(setShopNow, () => {}) : undefined), []);
+  const priceOf = (r) => {
+    const it = (shopNow || []).find(x => x && String(x.id) === String(r.itemId));
+    const shop = it ? Math.round(Number(it.cost) || 0) : 0;
+    return { cost: shop > 0 ? shop : Number(r.cost), shop: shop > 0 ? shop : null, asked: Number(r.cost) };
+  };
   useDashE(() => (window.subscribeAllRedeems
     ? window.subscribeAllRedeems(setRedeems, () => setRedeemErr('讀不到兌換申請 — 請先在 Firebase Console 發布新版 firestore.rules（v681 新增 redeems）'))
     : undefined), []);
@@ -1989,11 +1997,13 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
     const em = String(r.email || '').toLowerCase();
     const bal = balanceOf(em);
     const stuName = r.name || (list.find(s => String(s.email).toLowerCase() === em) || {}).name || r.email;
-    if (bal < r.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${Number(r.cost).toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
-    if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${Number(r.cost).toLocaleString()}🌟，並把這筆申請標成「已給他」。`)) return;
+    const pr = priceOf(r);
+    const diff = pr.shop != null && pr.asked !== pr.shop ? `\n⚠ 申請上寫 ${pr.asked.toLocaleString()}🌟，但商店現價是 ${pr.shop.toLocaleString()}🌟——我會照商店現價扣。` : '';
+    if (bal < pr.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${pr.cost.toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
+    if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${pr.cost.toLocaleString()}🌟，並把這筆申請標成「已給他」。${diff}`)) return;
     setBusy(true); setErr(null);
     try {
-      await window.addStarEntry(em, { amount: -Math.abs(Number(r.cost)), note: `兌換：${r.itemName}`, date: new Date().toISOString().slice(0, 10), name: stuName });
+      await window.addStarEntry(em, { amount: -Math.abs(pr.cost), note: `兌換：${r.itemName}`, date: new Date().toISOString().slice(0, 10), name: stuName });
       await window.setRedeemStatus(r.id, 'done');
     } catch (e) { setErr('處理失敗：' + (e.code || e.message) + '（如果星星已經被扣了，請到下面的流水帳確認，不要重複扣）'); }
     setBusy(false);
@@ -2029,7 +2039,8 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
           <div key={r.id} className="stars-req-row">
             <span className="stars-req-who"><b>{stuName}</b><i>{r.at ? new Date(r.at).toLocaleDateString('zh-TW') : ''}</i></span>
             <span className="stars-req-item">{r.emoji ? r.emoji + ' ' : ''}{r.itemName}</span>
-            <span className="stars-req-cost">{Number(r.cost).toLocaleString()}🌟<i className={bal < r.cost ? 'short' : ''}>（他現在有 {bal.toLocaleString()}）</i></span>
+            <span className="stars-req-cost">{priceOf(r).cost.toLocaleString()}🌟<i className={bal < priceOf(r).cost ? 'short' : ''}>（他現在有 {bal.toLocaleString()}）</i>
+              {priceOf(r).shop != null && priceOf(r).asked !== priceOf(r).shop && <i className="short" title="申請上的星星數跟商店現價不同，扣點會照商店現價">⚠ 申請寫 {priceOf(r).asked.toLocaleString()}</i>}</span>
             <button className="stars-req-ok" disabled={busy} onClick={() => fulfillRedeem(r)}>已給他，扣點</button>
             <button className="stars-req-no" disabled={busy} onClick={() => cancelRedeemT(r)}>取消</button>
           </div>
