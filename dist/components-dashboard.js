@@ -2243,6 +2243,128 @@ var MX_KIND_ZH = {
   pet: '夥伴'
 }; // rename 不標（名字本身就是「改名卡」）
 
+/* ══ v693 🧹 清理「看不到的種子週」══════════════════════════════════════
+   舊版把種子週寫進雲端 G2／G5／G6／G3 的課程文件：留在 weeks 裡、不在週次順序裡——畫面看不到，只是垃圾。
+   流程：① 掃描（只讀）列出名單上、雲端真的有的週 → ② 你確認 → ③ 先把這幾週的完整內容備份（存在這台裝置＋下載一份檔案）
+         → ④ 交易裡再驗一次（不在週次順序、0 題）才刪。
+   ⚠ 名單寫死在 data.js 的 SEED_CLEANUP_LIST（Alan 逐筆確認過），不是「掃到什麼刪什麼」；有內容的週永遠不會被勾選或刪除。 */
+function SeedCleanup() {
+  var [scan, setScan] = useDash(null); // { g: [{ id, label, dateRange, items, inOrder, ok, why, week }] }
+  var [sel, setSel] = useDash({}); // 'g|id' → true
+  var [busy, setBusy] = useDash(false);
+  var [msg, setMsg] = useDash(null);
+  var [err, setErr] = useDash(null);
+  var GN = {
+    g2: 'G2',
+    g3: 'G3',
+    g5: 'G5',
+    g6: 'G6'
+  };
+  var doScan = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      var r = await window.scanHiddenSeedWeeks();
+      setScan(r);
+      var s = {};
+      Object.keys(r).forEach(g => r[g].forEach(x => {
+        if (x.ok) s[g + '|' + x.id] = true;
+      }));
+      setSel(s);
+    } catch (e) {
+      setErr('掃描失敗：' + (e.code || e.message));
+    }
+    setBusy(false);
+  };
+  useDashE(() => {
+    doScan();
+  }, []);
+  var chosen = scan ? Object.keys(scan).flatMap(g => scan[g].filter(x => x.ok && sel[g + '|' + x.id]).map(x => ({
+    g,
+    ...x
+  }))) : [];
+  var total = scan ? Object.keys(scan).reduce((n, g) => n + scan[g].length, 0) : 0;
+  var doDelete = async () => {
+    if (!chosen.length) return;
+    var list = chosen.map(x => `${GN[x.g]}　${x.id}`).join('\n');
+    if (!window.confirm(`要刪掉這 ${chosen.length} 個「看不到的空白種子週」嗎？\n\n${list}\n\n刪除前會先備份到這台裝置並下載一份檔案。\n這些週不在週次順序裡、也沒有任何題目。`)) return;
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      /* ① 先備份——存在這台裝置＋下載成檔案。備份寫不進去（滿了／被擋）就不刪。 */
+      var backup = {
+        at: Date.now(),
+        note: 'v693 清理看不到的種子週前的備份（每個年級 → 週次 id → 整週內容）',
+        removed: {}
+      };
+      chosen.forEach(x => {
+        (backup.removed[x.g] = backup.removed[x.g] || {})[x.id] = x.week;
+      });
+      var json = JSON.stringify(backup, null, 1);
+      localStorage.setItem('alans-english-seedclean-backup-' + backup.at, json);
+      try {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], {
+          type: 'application/json'
+        }));
+        a.download = `seed-weeks-backup-${new Date(backup.at).toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) {}
+      /* ② 真的刪（交易裡再驗一次） */
+      var sel2 = {};
+      chosen.forEach(x => {
+        (sel2[x.g] = sel2[x.g] || []).push(x.id);
+      });
+      var r = await window.purgeHiddenSeedWeeks(sel2);
+      var n = Object.keys(r.deleted).reduce((k, g) => k + r.deleted[g].length, 0);
+      setMsg(`✅ 已刪掉 ${n} 個種子週。` + (r.skipped.length ? `　另外 ${r.skipped.length} 個沒刪（${r.skipped.map(x => `${GN[x.g]} ${x.id}：${x.why}`).join('；')}）。` : ''));
+      await doScan();
+    } catch (e) {
+      setErr('刪除失敗：' + (e.code || e.message) + '——沒有刪到的部分原樣保留。');
+    }
+    setBusy(false);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "seedc"
+  }, /*#__PURE__*/React.createElement("h3", null, "\uD83E\uDDF9 \u6E05\u7406\u770B\u4E0D\u5230\u7684\u7A2E\u5B50\u9031"), /*#__PURE__*/React.createElement("p", {
+    className: "seedc-hint"
+  }, "\u9019\u4E9B\u662F\u820A\u7248\u7559\u5728\u96F2\u7AEF\u7684\u7A7A\u767D\u7A2E\u5B50\u9031\uFF1A", /*#__PURE__*/React.createElement("b", null, "\u4E0D\u5728\u9031\u6B21\u9806\u5E8F\u88E1\u3001\u4E00\u984C\u90FD\u6C92\u6709"), "\uFF0C\u6240\u4EE5\u756B\u9762\u548C\u5B78\u751F\u90FD\u770B\u4E0D\u5230\uFF0C\u53EA\u662F\u5783\u573E\u3002\u540D\u55AE\u662F\u4F60\u78BA\u8A8D\u904E\u7684\uFF08G2 6 \u7B46\u3001G5 8 \u7B46\u3001G6 8 \u7B46\u3001G3 \u7684 2025-W13 \u8207 2025-W17\uFF09\u3002"), err && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-err"
+  }, "\u26A0 ", err), msg && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-ok"
+  }, msg), busy && !scan && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-hint"
+  }, "\u8B80\u53D6\u96F2\u7AEF\u4E2D\u2026"), scan && total === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-ok"
+  }, "\u2728 \u540D\u55AE\u4E0A\u7684\u7A2E\u5B50\u9031\u96F2\u7AEF\u90FD\u5DF2\u7D93\u6C92\u6709\u4E86\uFF0C\u6C92\u6709\u9700\u8981\u6E05\u7406\u7684\u3002"), scan && Object.keys(scan).map(g => scan[g].length > 0 && /*#__PURE__*/React.createElement("div", {
+    key: g,
+    className: "seedc-grade"
+  }, /*#__PURE__*/React.createElement("b", null, GN[g], "\uFF08", scan[g].length, "\uFF09"), scan[g].map(x => /*#__PURE__*/React.createElement("label", {
+    key: x.id,
+    className: 'seedc-row' + (x.ok ? '' : ' no')
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    disabled: !x.ok || busy,
+    checked: !!sel[g + '|' + x.id],
+    onChange: e => setSel(s => ({
+      ...s,
+      [g + '|' + x.id]: e.target.checked
+    }))
+  }), /*#__PURE__*/React.createElement("code", null, x.id), /*#__PURE__*/React.createElement("span", null, x.label || '—', "\u3000", x.dateRange || ''), /*#__PURE__*/React.createElement("em", null, x.ok ? '空白、不在週次順序 → 可以刪' : '⛔ 不會刪：' + x.why))))), /*#__PURE__*/React.createElement("div", {
+    className: "seedc-btns"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: doScan,
+    disabled: busy
+  }, "\u21BB \u91CD\u65B0\u6383\u63CF"), /*#__PURE__*/React.createElement("button", {
+    className: "btn danger",
+    onClick: doDelete,
+    disabled: busy || !chosen.length
+  }, "\u522A\u9664\u9078\u53D6\u7684 ", chosen.length, " \u500B")));
+}
 function StarsManager({
   roster,
   myEmail,
@@ -3966,6 +4088,12 @@ function TeacherDashboard({
     label: '管理者',
     sub: '老師帳號權限',
     sec: '設定一次'
+  }, {
+    id: 'seedclean',
+    ico: '🧹',
+    label: '清理種子週',
+    sub: '看不到的空白週',
+    sec: '設定一次'
   }] : [])];
   var cur = NAV.find(n => n.id === tab) || NAV[0];
 
@@ -4086,7 +4214,7 @@ function TeacherDashboard({
     weeksFor: weeksForStudent,
     weekOrder: dOrder,
     dataFor: dataForStudent
-  }) : tab === 'shop' ? /*#__PURE__*/React.createElement(ShopManager, null) : tab === 'hwremind' ? /*#__PURE__*/React.createElement(HwRemind, null) : tab === 'admins' ? /*#__PURE__*/React.createElement(AdminManager, null) : tab === 'summer' ? /*#__PURE__*/React.createElement(SummerAdmin, null) : selected ?
+  }) : tab === 'shop' ? /*#__PURE__*/React.createElement(ShopManager, null) : tab === 'hwremind' ? /*#__PURE__*/React.createElement(HwRemind, null) : tab === 'admins' ? /*#__PURE__*/React.createElement(AdminManager, null) : tab === 'seedclean' ? /*#__PURE__*/React.createElement(SeedCleanup, null) : tab === 'summer' ? /*#__PURE__*/React.createElement(SummerAdmin, null) : selected ?
   /*#__PURE__*/
   /* ── Individual student detail ── */
   React.createElement(StudentDetail, {

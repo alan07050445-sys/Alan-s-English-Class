@@ -1870,6 +1870,90 @@ function LineLink() {
 /* ── 集點（星星）v342 ──────────────────────────────────── */
 const MX_KIND_ZH = { hat: '頭飾', item: '配件', fx: '特效', voice: '聲音', dance: '動作', pet: '夥伴' };   // rename 不標（名字本身就是「改名卡」）
 
+/* ══ v693 🧹 清理「看不到的種子週」══════════════════════════════════════
+   舊版把種子週寫進雲端 G2／G5／G6／G3 的課程文件：留在 weeks 裡、不在週次順序裡——畫面看不到，只是垃圾。
+   流程：① 掃描（只讀）列出名單上、雲端真的有的週 → ② 你確認 → ③ 先把這幾週的完整內容備份（存在這台裝置＋下載一份檔案）
+         → ④ 交易裡再驗一次（不在週次順序、0 題）才刪。
+   ⚠ 名單寫死在 data.js 的 SEED_CLEANUP_LIST（Alan 逐筆確認過），不是「掃到什麼刪什麼」；有內容的週永遠不會被勾選或刪除。 */
+function SeedCleanup() {
+  const [scan, setScan]   = useDash(null);     // { g: [{ id, label, dateRange, items, inOrder, ok, why, week }] }
+  const [sel, setSel]     = useDash({});       // 'g|id' → true
+  const [busy, setBusy]   = useDash(false);
+  const [msg, setMsg]     = useDash(null);
+  const [err, setErr]     = useDash(null);
+  const GN = { g2: 'G2', g3: 'G3', g5: 'G5', g6: 'G6' };
+
+  const doScan = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await window.scanHiddenSeedWeeks();
+      setScan(r);
+      const s = {}; Object.keys(r).forEach(g => r[g].forEach(x => { if (x.ok) s[g + '|' + x.id] = true; })); setSel(s);
+    } catch (e) { setErr('掃描失敗：' + (e.code || e.message)); }
+    setBusy(false);
+  };
+  useDashE(() => { doScan(); }, []);
+
+  const chosen = scan ? Object.keys(scan).flatMap(g => scan[g].filter(x => x.ok && sel[g + '|' + x.id]).map(x => ({ g, ...x }))) : [];
+  const total = scan ? Object.keys(scan).reduce((n, g) => n + scan[g].length, 0) : 0;
+
+  const doDelete = async () => {
+    if (!chosen.length) return;
+    const list = chosen.map(x => `${GN[x.g]}　${x.id}`).join('\n');
+    if (!window.confirm(`要刪掉這 ${chosen.length} 個「看不到的空白種子週」嗎？\n\n${list}\n\n刪除前會先備份到這台裝置並下載一份檔案。\n這些週不在週次順序裡、也沒有任何題目。`)) return;
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      /* ① 先備份——存在這台裝置＋下載成檔案。備份寫不進去（滿了／被擋）就不刪。 */
+      const backup = { at: Date.now(), note: 'v693 清理看不到的種子週前的備份（每個年級 → 週次 id → 整週內容）', removed: {} };
+      chosen.forEach(x => { (backup.removed[x.g] = backup.removed[x.g] || {})[x.id] = x.week; });
+      const json = JSON.stringify(backup, null, 1);
+      localStorage.setItem('alans-english-seedclean-backup-' + backup.at, json);
+      try {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+        a.download = `seed-weeks-backup-${new Date(backup.at).toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+      } catch (e) {}
+      /* ② 真的刪（交易裡再驗一次） */
+      const sel2 = {}; chosen.forEach(x => { (sel2[x.g] = sel2[x.g] || []).push(x.id); });
+      const r = await window.purgeHiddenSeedWeeks(sel2);
+      const n = Object.keys(r.deleted).reduce((k, g) => k + r.deleted[g].length, 0);
+      setMsg(`✅ 已刪掉 ${n} 個種子週。` + (r.skipped.length ? `　另外 ${r.skipped.length} 個沒刪（${r.skipped.map(x => `${GN[x.g]} ${x.id}：${x.why}`).join('；')}）。` : ''));
+      await doScan();
+    } catch (e) { setErr('刪除失敗：' + (e.code || e.message) + '——沒有刪到的部分原樣保留。'); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="seedc">
+      <h3>🧹 清理看不到的種子週</h3>
+      <p className="seedc-hint">這些是舊版留在雲端的空白種子週：<b>不在週次順序裡、一題都沒有</b>，所以畫面和學生都看不到，只是垃圾。名單是你確認過的（G2 6 筆、G5 8 筆、G6 8 筆、G3 的 2025-W13 與 2025-W17）。</p>
+      {err && <div className="seedc-err">⚠ {err}</div>}
+      {msg && <div className="seedc-ok">{msg}</div>}
+      {busy && !scan && <div className="seedc-hint">讀取雲端中…</div>}
+      {scan && total === 0 && <div className="seedc-ok">✨ 名單上的種子週雲端都已經沒有了，沒有需要清理的。</div>}
+      {scan && Object.keys(scan).map(g => scan[g].length > 0 && (
+        <div key={g} className="seedc-grade">
+          <b>{GN[g]}（{scan[g].length}）</b>
+          {scan[g].map(x => (
+            <label key={x.id} className={'seedc-row' + (x.ok ? '' : ' no')}>
+              <input type="checkbox" disabled={!x.ok || busy} checked={!!sel[g + '|' + x.id]}
+                onChange={e => setSel(s => ({ ...s, [g + '|' + x.id]: e.target.checked }))}/>
+              <code>{x.id}</code>
+              <span>{x.label || '—'}　{x.dateRange || ''}</span>
+              <em>{x.ok ? '空白、不在週次順序 → 可以刪' : '⛔ 不會刪：' + x.why}</em>
+            </label>
+          ))}
+        </div>
+      ))}
+      <div className="seedc-btns">
+        <button className="btn ghost" onClick={doScan} disabled={busy}>↻ 重新掃描</button>
+        <button className="btn danger" onClick={doDelete} disabled={busy || !chosen.length}>刪除選取的 {chosen.length} 個</button>
+      </div>
+    </div>
+  );
+}
+
 function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFor, weekOrder, dataFor }) {
   const [stars, setStars] = useDash({});
   const [sel, setSel]     = useDash(null);     // 選中的學生 email
@@ -3184,7 +3268,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     { id: 'summer',   ico: '☀️', label: '暑假發派', sub: '每人任務清單', sec: '設定一次' },
     // v337: 只有「擁有者」看得到管理者維護（規則同樣只允許擁有者寫）
     ...(window.isOwnerUser && window.isOwnerUser(window._currentUser)
-      ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限', sec: '設定一次' }] : []),
+      ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限', sec: '設定一次' },
+         { id: 'seedclean', ico: '🧹', label: '清理種子週', sub: '看不到的空白週', sec: '設定一次' }] : []),
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
 
@@ -3278,6 +3363,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <HwRemind/>
           ) : tab === 'admins' ? (
             <AdminManager/>
+          ) : tab === 'seedclean' ? (
+            <SeedCleanup/>
           ) : tab === 'summer' ? (
             <SummerAdmin/>
           ) : selected ? (

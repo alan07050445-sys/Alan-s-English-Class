@@ -868,3 +868,16 @@
   .stars-req-ok, .stars-req-no { min-height: 44px; }
   .ask-redeem-go, .ask-brief-refresh { min-height: 44px; }
   .ask-brief-line > summary { min-height: 44px; display: flex; align-items: center; }}
+
+/* v693：清理看不到的種子週 */
+.seedc { max-width: 760px; font-family: var(--sans); }
+.seedc h3 { margin: 0 0 8px; }
+.seedc-hint { color: var(--ink-muted); font-size: 13.5px; line-height: 1.7; }
+.seedc-ok { margin: 10px 0; padding: 10px 14px; border-radius: 10px; background: rgba(47,125,79,.1); color: #2f7d4f; font-weight: 700; }
+.seedc-err { margin: 10px 0; padding: 10px 14px; border-radius: 10px; background: #FBEAEA; color: #A33; }
+.seedc-grade { margin-top: 14px; }
+.seedc-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font-size: 13.5px; }
+.seedc-row.no { background: #F7F2F2; }
+.seedc-row code { font-size: 12.5px; }
+.seedc-row em { margin-left: auto; font-style: normal; color: var(--ink-muted); font-size: 12.5px; }
+.seedc-btns { display: flex; gap: 10px; margin-top: 16px; }

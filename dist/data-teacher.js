@@ -4288,6 +4288,68 @@ async function deleteStarEntry(email, entryId) {
 async function saveShopItems(items) {
   await _shopDoc.set({ items: items || [], updatedAt: Date.now() }, { merge: true });
 }
+
+// ── v693: 清理「看不到的種子週」（Alan 親自確認過這份名單）─────────────────
+// 舊版把種子週寫進了雲端 G2／G5／G6／G3 的課程文件，留在 weeks 裡但不在 weekOrder——畫面看不到，只是垃圾。
+// ⚠ 名單是寫死的（Alan 在對話裡逐筆確認過），不是「掃到什麼刪什麼」。
+// ⚠ 刪除前（交易裡）會再驗一次：這週真的不在 weekOrder、而且一題都沒有——有內容的一律不動。
+const SEED_CLEANUP_LIST = {
+  g2: ['g2-2026-W10', 'g2-2026-W11', 'g2-2026-W12', 'g2-2026-W13', 'g2-2026-W14', 'g2-2026-W15'],
+  g3: ['2025-W13', '2025-W17'],
+  g5: ['g5-2026-W01', 'g5-2026-W02', 'g5-2026-W03', 'g5-2026-W04', 'g5-2026-W05', 'g5-2026-W06', 'g5-2026-W07', 'g5-2026-W08'],
+  g6: ['g6-2026-W01', 'g6-2026-W02', 'g6-2026-W03', 'g6-2026-W04', 'g6-2026-W05', 'g6-2026-W06', 'g6-2026-W07', 'g6-2026-W08'],
+};
+const _SEED_CLEANUP_DOCS = { g2: 'data_g2', g3: 'data', g5: 'data_g5', g6: 'data_g6' };
+function _weekItemCount(w) {
+  return Object.values((w && w.items) || {}).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0);
+}
+// 掃描（只讀）：回傳每個年級裡「名單上有、雲端也真的有」的週，並標出能不能刪、為什麼不能
+async function scanHiddenSeedWeeks() {
+  const out = {};
+  for (const g of Object.keys(SEED_CLEANUP_LIST)) {
+    const snap = await _db.collection('class').doc(_SEED_CLEANUP_DOCS[g]).get({ source: 'server' });
+    const d = snap.exists ? (snap.data() || {}) : {};
+    const weeks = d.weeks || {}, order = Array.isArray(d.weekOrder) ? d.weekOrder : [];
+    out[g] = SEED_CLEANUP_LIST[g].filter(id => weeks[id]).map(id => {
+      const w = weeks[id], n = _weekItemCount(w), inOrder = order.indexOf(id) >= 0;
+      return { id, label: w.label || '', dateRange: w.dateRange || '', items: n, inOrder,
+               ok: n === 0 && !inOrder, why: inOrder ? '在週次順序裡（畫面看得到）' : n > 0 ? `有 ${n} 題` : '', week: w };
+    });
+  }
+  return out;
+}
+// 刪除：只刪 selection 裡、且在名單上的週；交易裡再驗一次（不在順序、0 題）。回傳 { deleted, skipped }
+async function purgeHiddenSeedWeeks(selection) {
+  const deleted = {}, skipped = [];
+  for (const g of Object.keys(SEED_CLEANUP_LIST)) {
+    const ids = ((selection || {})[g] || []).filter(id => SEED_CLEANUP_LIST[g].indexOf(id) >= 0);
+    if (!ids.length) continue;
+    const ref = _db.collection('class').doc(_SEED_CLEANUP_DOCS[g]);
+    const done = await _db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const d = snap.exists ? (snap.data() || {}) : {};
+      const weeks = d.weeks || {}, order = Array.isArray(d.weekOrder) ? d.weekOrder : [];
+      const okIds = [];
+      ids.forEach(id => {
+        if (!weeks[id]) { skipped.push({ g, id, why: '雲端已經沒有這一週' }); return; }
+        if (order.indexOf(id) >= 0) { skipped.push({ g, id, why: '在週次順序裡' }); return; }
+        const n = _weekItemCount(weeks[id]);
+        if (n > 0) { skipped.push({ g, id, why: `有 ${n} 題` }); return; }
+        okIds.push(id);
+      });
+      if (okIds.length) {
+        const args = [];
+        okIds.forEach(id => { args.push(new firebase.firestore.FieldPath('weeks', id), firebase.firestore.FieldValue.delete()); });
+        tx.update(ref, ...args);
+      }
+      return okIds;
+    });
+    deleted[g] = done;
+  }
+  return { deleted, skipped };
+}
+Object.assign(window, { SEED_CLEANUP_LIST, scanHiddenSeedWeeks, purgeHiddenSeedWeeks });
+
 /* v691：扣點之前再讀一次這筆「現在還是不是申請中」——兩位老師（或兩台裝置）同時按「已給他」，
    或學生剛好在你按之前取消了，不能再扣一次／扣一個已經取消的。讀不到就當作「還是申請中」（不擋，後面照原本流程）。 */
 async function isRedeemPending(id) {
