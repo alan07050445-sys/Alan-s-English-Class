@@ -1957,8 +1957,10 @@ function App() {
         const msg = `要把這 ${cands.length} 筆標成「已給他」，並扣掉星星嗎？\n\n${lines.join('\n')}\n\n`
           + '會各寫一筆「兌換：商品名」的扣點到他的集點紀錄。\n（按「取消」就什麼都不會改。）';
         if (!window.confirm(msg)) { showToast('好，沒有動任何東西。'); return; }
-        let okN = 0; const failed = [];
+        let okN = 0; const failed = [], skipped = [];
         for (const r of cands) {
+          /* v691：確認的當下到真的動手之間，這筆可能已經被處理或被學生取消——再讀一次，不是申請中就不扣 */
+          if (window.isRedeemPending && !(await window.isRedeemPending(r.id))) { skipped.push(`${r.name || r.email} 的 ${r.itemName}`); continue; }
           try {
             await window.addStarEntry(r.email, { amount: -Math.abs(Number(r.cost)), note: `兌換：${r.itemName}`,
               date: new Date().toISOString().slice(0, 10), name: r.name || '' });
@@ -1966,9 +1968,10 @@ function App() {
             okN++;
           } catch (e) { failed.push(`${r.name || r.email} 的 ${r.itemName}`); }
         }
-        showToast(failed.length
+        showToast((failed.length
           ? `${okN} 筆完成；這幾筆沒成功，請到後台「集點」檢查（可能已經扣了星星，不要重複扣）：${failed.join('、')}`
-          : `✅ ${okN} 筆兌換處理好了（已扣點、標成已給他）`);
+          : `✅ ${okN} 筆兌換處理好了（已扣點、標成已給他）`)
+          + (skipped.length ? `。這幾筆已經被處理或取消了，所以沒扣：${skipped.join('、')}` : ''));
       })();
 
     } else if (plan.intent === 'roster') {

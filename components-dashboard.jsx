@@ -2002,6 +2002,10 @@ function StarsManager({ roster, myEmail, ownerEmail, stuScope, students, weeksFo
     if (bal < pr.cost && !confirm(`${stuName} 現在只有 ${bal.toLocaleString()}🌟，不夠 ${pr.cost.toLocaleString()}🌟。\n還是要扣嗎？（餘額會變成負的，系統顯示會停在 0）`)) return;
     if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${pr.cost.toLocaleString()}🌟，並把這筆申請標成「已給他」。${diff}`)) return;
     setBusy(true); setErr(null);
+    if (window.isRedeemPending && !(await window.isRedeemPending(r.id))) {
+      setErr('這筆申請已經被處理或取消了（可能是別的裝置、別位老師、或學生自己取消），所以我沒有扣點。');
+      setBusy(false); return;
+    }
     try {
       await window.addStarEntry(em, { amount: -Math.abs(pr.cost), note: `兌換：${r.itemName}`, date: new Date().toISOString().slice(0, 10), name: stuName });
       await window.setRedeemStatus(r.id, 'done');

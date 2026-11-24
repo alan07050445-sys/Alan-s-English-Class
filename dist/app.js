@@ -2751,8 +2751,14 @@ function App() {
           return;
         }
         var okN = 0;
-        var failed = [];
+        var failed = [],
+          skipped = [];
         for (var r of cands) {
+          /* v691：確認的當下到真的動手之間，這筆可能已經被處理或被學生取消——再讀一次，不是申請中就不扣 */
+          if (window.isRedeemPending && !(await window.isRedeemPending(r.id))) {
+            skipped.push(`${r.name || r.email} 的 ${r.itemName}`);
+            continue;
+          }
           try {
             await window.addStarEntry(r.email, {
               amount: -Math.abs(Number(r.cost)),
@@ -2766,7 +2772,7 @@ function App() {
             failed.push(`${r.name || r.email} 的 ${r.itemName}`);
           }
         }
-        showToast(failed.length ? `${okN} 筆完成；這幾筆沒成功，請到後台「集點」檢查（可能已經扣了星星，不要重複扣）：${failed.join('、')}` : `✅ ${okN} 筆兌換處理好了（已扣點、標成已給他）`);
+        showToast((failed.length ? `${okN} 筆完成；這幾筆沒成功，請到後台「集點」檢查（可能已經扣了星星，不要重複扣）：${failed.join('、')}` : `✅ ${okN} 筆兌換處理好了（已扣點、標成已給他）`) + (skipped.length ? `。這幾筆已經被處理或取消了，所以沒扣：${skipped.join('、')}` : ''));
       })();
     } else if (plan.intent === 'roster') {
       /* 👥 v548 學生名單。三種都先確認；⚠ 停用不是刪除（資料與進度都留著，隨時能恢復）。 */

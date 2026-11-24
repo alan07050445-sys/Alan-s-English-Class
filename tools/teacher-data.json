@@ -258,6 +258,7 @@
   "grFixPassage",
   "grValidA",
   "grValidB",
+  "isRedeemPending",
   "lessonDraftBadPages",
   "lessonISO",
   "lessonNextDate",

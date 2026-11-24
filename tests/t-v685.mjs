@@ -35,6 +35,7 @@ const make = () => {
     askLoadQueryData: async () => ({ students: [], gradeData: {}, stars: {}, redeems: [] }),
     askQueryAnswer: (p) => ({ head: p.student === 'Nick' ? 'Nick 現在有 3,500🌟' : 'Eric 現在有 100🌟' }),
     dashCurrentWeekId: () => null,
+    isRedeemPending: async (id) => !(log.notPending || []).includes(id),
     subscribeShop: (cb) => { cb(log.shop || []); return () => {}; },
   };
   const reqs = [
@@ -98,5 +99,14 @@ console.log('\n【3】⭐ 申請上的星星數是學生送來的（可以被改
   ok('商店對不到這個商品 → 才用申請上的價錢（1200）', t.log.star.length === 1 && t.log.star[0][1] === -1200); }
 const da = fs.readFileSync(new URL('components-dashboard.jsx', ROOT), 'utf8');
 ok('後台按鈕也以商店現價扣（priceOf），並標出價錢不一致', /const priceOf = \(r\)/.test(da) && /amount: -Math\.abs\(pr\.cost\)/.test(da) && /申請寫 \{priceOf\(r\)\.asked/.test(da));
+
+console.log('\n【4】⭐ 確認之後、動手之前，這筆被別人處理或取消了 → 不重複扣');
+{ const t = make(); t.log.notPending = ['r1'];
+  await t.run({ intent: 'redeem', student: 'Nick', email: 'g4nick@t' });
+  ok('⭐⭐ 已經不是申請中 → 不扣、不標，並說明', t.log.star.length === 0 && t.log.status.length === 0 && t.log.toast.some(x => /已經被處理或取消/.test(x))); }
+{ const t = make(); t.log.notPending = ['r1'];
+  await t.run({ intent: 'redeem', all: true });
+  ok('全部處理時只跳過那一筆，另一筆照做', t.log.star.length === 1 && t.log.star[0][0] === 'g4eric@t'); }
+ok('後台按鈕也先確認還是申請中', /window\.isRedeemPending && !\(await window\.isRedeemPending\(r\.id\)\)/.test(da));
 ok('卡片寫清楚「先列出、再按確定才扣點」，不是「不會自己存」', /m\.plan\.intent === 'redeem' \? '按下去只會先列出要做的事/.test(fs.readFileSync(new URL('components-editor.jsx', ROOT), 'utf8')));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

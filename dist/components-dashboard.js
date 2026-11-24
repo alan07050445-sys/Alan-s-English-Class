@@ -2433,6 +2433,11 @@ function StarsManager({
     if (!confirm(`確定已經把「${r.itemName}」給 ${stuName} 了嗎？\n會扣 ${pr.cost.toLocaleString()}🌟，並把這筆申請標成「已給他」。${diff}`)) return;
     setBusy(true);
     setErr(null);
+    if (window.isRedeemPending && !(await window.isRedeemPending(r.id))) {
+      setErr('這筆申請已經被處理或取消了（可能是別的裝置、別位老師、或學生自己取消），所以我沒有扣點。');
+      setBusy(false);
+      return;
+    }
     try {
       await window.addStarEntry(em, {
         amount: -Math.abs(pr.cost),

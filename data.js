@@ -7022,7 +7022,15 @@ async function setRedeemStatus(id, status) {
   await _redeemCol().doc(id).update(patch);
 }
 async function deleteRedeem(id) { await _redeemCol().doc(id).delete(); }
-Object.assign(window, { submitRedeem, subscribeMyRedeems, subscribeAllRedeems, setRedeemStatus, deleteRedeem });
+/* v691：扣點之前再讀一次這筆「現在還是不是申請中」——兩位老師（或兩台裝置）同時按「已給他」，
+   或學生剛好在你按之前取消了，不能再扣一次／扣一個已經取消的。讀不到就當作「還是申請中」（不擋，後面照原本流程）。 */
+async function isRedeemPending(id) {
+  try {
+    const snap = await _redeemCol().doc(id).get();
+    return !snap.exists ? false : (snap.data() || {}).status === 'pending';
+  } catch (e) { return true; }
+}
+Object.assign(window, { submitRedeem, subscribeMyRedeems, subscribeAllRedeems, setRedeemStatus, deleteRedeem, isRedeemPending });
 
 // ── LINE 通知（老師發公告）─────────────────────────────
 // 走「獨立」的 LINE Worker（跟 AI Worker 分開）。管理密碼由老師在後台輸入、
