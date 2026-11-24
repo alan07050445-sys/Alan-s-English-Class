@@ -2243,6 +2243,162 @@ var MX_KIND_ZH = {
   pet: '夥伴'
 }; // rename 不標（名字本身就是「改名卡」）
 
+/* ══ v698 ✏️ 修正單字卡資料錯誤 ═════════════════════════════════════════════
+   例句殘留底線／錯字、多餘空白、中文尾巴的「；」、缺句號——規則寫死在 data.js 的 CARD_FIX_RULES（Alan 逐組確認過 A~F）。
+   流程：掃描（只讀）→ 每一組列出「改之前 → 改之後」→ 你勾選 → 先備份（這台裝置＋下載檔案）→ 套用（交易裡重新驗舊文字）。 */
+var CARDFIX_GROUPS = {
+  A: 'A　例句殘留底線／錯字',
+  B: 'B　壞掉的整句（用新寫的句子）',
+  C: 'C　多餘空白（頭尾、連續）',
+  D: 'D　中文結尾多了「；」',
+  E: 'E　中文改寫',
+  F: 'F　例句缺結尾句號'
+};
+function CardFix() {
+  var [scan, setScan] = useDash(null);
+  var [sel, setSel] = useDash({
+    A: true,
+    B: true,
+    C: true,
+    D: true,
+    E: true,
+    F: true
+  });
+  var [busy, setBusy] = useDash(false);
+  var [msg, setMsg] = useDash(null);
+  var [err, setErr] = useDash(null);
+  var GN = {
+    g1: 'G1',
+    g2: 'G2',
+    g3: 'G3',
+    g4: 'G4',
+    g5: 'G5',
+    g6: 'G6'
+  };
+  var ALL = Object.keys(CARDFIX_GROUPS);
+  var doScan = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      setScan(await window.scanCardFixes(ALL));
+    } catch (e) {
+      setErr('掃描失敗：' + (e.code || e.message));
+    }
+    setBusy(false);
+  };
+  useDashE(() => {
+    doScan();
+  }, []);
+  var rows = scan ? Object.keys(scan).flatMap(g => scan[g].map(c => ({
+    g,
+    ...c
+  }))) : [];
+  var byGrp = {};
+  rows.forEach(r => {
+    (byGrp[r.grp] = byGrp[r.grp] || []).push(r);
+  });
+  var chosenGroups = ALL.filter(k => sel[k] && (byGrp[k] || []).length);
+  var nChosen = chosenGroups.reduce((n, k) => n + byGrp[k].length, 0);
+  var doApply = async () => {
+    if (!nChosen) return;
+    if (!window.confirm(`要修正這 ${nChosen} 處單字卡文字嗎？\n\n${chosenGroups.map(k => CARDFIX_GROUPS[k] + '：' + byGrp[k].length + ' 處').join('\n')}\n\n改之前會先備份到這台裝置並下載一份檔案。`)) return;
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      var backup = {
+        at: Date.now(),
+        note: 'v698 修正單字卡前的備份（每一處：年級／週次／類別／單元／第幾張卡／欄位／改之前／改之後）',
+        changes: rows.filter(r => chosenGroups.indexOf(r.grp) >= 0).map(({
+          g,
+          wid,
+          cat,
+          itemId,
+          itemTitle,
+          cardIdx,
+          term,
+          field,
+          before,
+          after,
+          grp
+        }) => ({
+          g,
+          wid,
+          cat,
+          itemId,
+          itemTitle,
+          cardIdx,
+          term,
+          field,
+          before,
+          after,
+          grp
+        }))
+      };
+      var json = JSON.stringify(backup, null, 1);
+      localStorage.setItem('alans-english-cardfix-backup-' + backup.at, json); // 備份寫不進去就不改
+      try {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], {
+          type: 'application/json'
+        }));
+        a.download = `cardfix-backup-${new Date(backup.at).toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) {}
+      var r = await window.applyCardFixes(chosenGroups);
+      var n = Object.keys(r).reduce((k, g) => k + r[g], 0);
+      setMsg(`✅ 已修正 ${n} 處。`);
+      await doScan();
+    } catch (e) {
+      setErr('修正失敗：' + (e.code || e.message) + '——沒改到的部分原樣保留。');
+    }
+    setBusy(false);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "seedc cardfix"
+  }, /*#__PURE__*/React.createElement("h3", null, "\u270F\uFE0F \u4FEE\u6B63\u55AE\u5B57\u5361\u8CC7\u6599"), /*#__PURE__*/React.createElement("p", {
+    className: "seedc-hint"
+  }, "\u898F\u5247\u662F\u4F60\u78BA\u8A8D\u904E\u7684\uFF08A\uFF5EF\uFF09\u3002\u53EA\u5728\u300C\u73FE\u5728\u7684\u6587\u5B57\u525B\u597D\u7B49\u65BC\u820A\u6587\u5B57\u300D\u6642\u624D\u6539\u2014\u2014\u4F60\u4E4B\u5F8C\u81EA\u5DF1\u6539\u904E\u7684\u5361\u4E0D\u6703\u88AB\u84CB\u6389\u3002\u53EA\u52D5\u55AE\u5B57\u5361\u7684\u55AE\u5B57\u3001\u4E2D\u6587\u3001\u4F8B\u53E5\u4E09\u500B\u6B04\u4F4D\u3002"), err && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-err"
+  }, "\u26A0 ", err), msg && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-ok"
+  }, msg), busy && !scan && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-hint"
+  }, "\u8B80\u53D6\u96F2\u7AEF\u4E2D\u2026"), scan && rows.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "seedc-ok"
+  }, "\u2728 \u6C92\u6709\u9700\u8981\u4FEE\u6B63\u7684\u4E86\u3002"), ALL.map(k => (byGrp[k] || []).length > 0 && /*#__PURE__*/React.createElement("div", {
+    key: k,
+    className: "seedc-grade"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "cardfix-hd"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    disabled: busy,
+    checked: !!sel[k],
+    onChange: e => setSel(s => ({
+      ...s,
+      [k]: e.target.checked
+    }))
+  }), /*#__PURE__*/React.createElement("b", null, CARDFIX_GROUPS[k]), /*#__PURE__*/React.createElement("em", null, byGrp[k].length, " \u8655")), /*#__PURE__*/React.createElement("details", null, /*#__PURE__*/React.createElement("summary", null, "\u770B\u6BCF\u4E00\u8655\uFF08\u6539\u4E4B\u524D \u2192 \u6539\u4E4B\u5F8C\uFF09"), byGrp[k].map((r, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "seedc-row"
+  }, /*#__PURE__*/React.createElement("code", null, GN[r.g], " ", r.wid), /*#__PURE__*/React.createElement("span", null, r.itemTitle, " \xB7 ", r.term, "\uFF08", r.field, "\uFF09"), /*#__PURE__*/React.createElement("div", {
+    className: "cardfix-diff"
+  }, /*#__PURE__*/React.createElement("s", null, JSON.stringify(r.before)), /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("b", null, JSON.stringify(r.after)))))))), /*#__PURE__*/React.createElement("div", {
+    className: "seedc-btns"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn ghost",
+    onClick: doScan,
+    disabled: busy
+  }, "\u21BB \u91CD\u65B0\u6383\u63CF"), /*#__PURE__*/React.createElement("button", {
+    className: "btn danger",
+    onClick: doApply,
+    disabled: busy || !nChosen
+  }, "\u4FEE\u6B63\u9078\u53D6\u7684 ", nChosen, " \u8655")));
+}
+
 /* ══ v693 🧹 清理「看不到的種子週」══════════════════════════════════════
    舊版把種子週寫進雲端 G2／G5／G6／G3 的課程文件：留在 weeks 裡、不在週次順序裡——畫面看不到，只是垃圾。
    流程：① 掃描（只讀）列出名單上、雲端真的有的週 → ② 你確認 → ③ 先把這幾週的完整內容備份（存在這台裝置＋下載一份檔案）
@@ -4094,6 +4250,12 @@ function TeacherDashboard({
     label: '清理種子週',
     sub: '看不到的空白週',
     sec: '設定一次'
+  }, {
+    id: 'cardfix',
+    ico: '✏️',
+    label: '修正單字卡',
+    sub: '例句／中文錯誤',
+    sec: '設定一次'
   }] : [])];
   var cur = NAV.find(n => n.id === tab) || NAV[0];
 
@@ -4214,7 +4376,7 @@ function TeacherDashboard({
     weeksFor: weeksForStudent,
     weekOrder: dOrder,
     dataFor: dataForStudent
-  }) : tab === 'shop' ? /*#__PURE__*/React.createElement(ShopManager, null) : tab === 'hwremind' ? /*#__PURE__*/React.createElement(HwRemind, null) : tab === 'admins' ? /*#__PURE__*/React.createElement(AdminManager, null) : tab === 'seedclean' ? /*#__PURE__*/React.createElement(SeedCleanup, null) : tab === 'summer' ? /*#__PURE__*/React.createElement(SummerAdmin, null) : selected ?
+  }) : tab === 'shop' ? /*#__PURE__*/React.createElement(ShopManager, null) : tab === 'hwremind' ? /*#__PURE__*/React.createElement(HwRemind, null) : tab === 'admins' ? /*#__PURE__*/React.createElement(AdminManager, null) : tab === 'seedclean' ? /*#__PURE__*/React.createElement(SeedCleanup, null) : tab === 'cardfix' ? /*#__PURE__*/React.createElement(CardFix, null) : tab === 'summer' ? /*#__PURE__*/React.createElement(SummerAdmin, null) : selected ?
   /*#__PURE__*/
   /* ── Individual student detail ── */
   React.createElement(StudentDetail, {

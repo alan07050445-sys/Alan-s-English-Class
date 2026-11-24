@@ -881,3 +881,10 @@
 .seedc-row code { font-size: 12.5px; }
 .seedc-row em { margin-left: auto; font-style: normal; color: var(--ink-muted); font-size: 12.5px; }
 .seedc-btns { display: flex; gap: 10px; margin-top: 16px; }
+
+/* v698：修正單字卡 */
+.cardfix-hd { display: flex; align-items: center; gap: 10px; font-size: 14.5px; }
+.cardfix-hd em { margin-left: auto; font-style: normal; color: var(--ink-muted); font-size: 12.5px; }
+.cardfix details summary { cursor: pointer; font-size: 13px; color: var(--ink-muted); margin: 6px 0 0 26px; }
+.cardfix-diff { flex-basis: 100%; font-size: 12.5px; line-height: 1.6; word-break: break-word; }
+.cardfix-diff s { color: #A33; } .cardfix-diff b { color: #2f7d4f; font-weight: 600; }

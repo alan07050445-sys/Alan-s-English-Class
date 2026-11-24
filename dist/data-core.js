@@ -2691,6 +2691,7 @@ function subscribeShop(callback, onError) {
 }
 
 
+
 // ── v681: 兌換申請（學生按「兌換」→ 老師後台收得到）────────────────
 // 以前學生按「兌換」只跳 alert、沒有寫任何東西，老師完全收不到（Alan 發現）。
 // redeems/{自動編號} = { email, uid, name, itemId, itemName, cost, emoji, img, status, at, doneAt?, note? }

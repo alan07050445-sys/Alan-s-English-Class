@@ -1870,6 +1870,90 @@ function LineLink() {
 /* ── 集點（星星）v342 ──────────────────────────────────── */
 const MX_KIND_ZH = { hat: '頭飾', item: '配件', fx: '特效', voice: '聲音', dance: '動作', pet: '夥伴' };   // rename 不標（名字本身就是「改名卡」）
 
+/* ══ v698 ✏️ 修正單字卡資料錯誤 ═════════════════════════════════════════════
+   例句殘留底線／錯字、多餘空白、中文尾巴的「；」、缺句號——規則寫死在 data.js 的 CARD_FIX_RULES（Alan 逐組確認過 A~F）。
+   流程：掃描（只讀）→ 每一組列出「改之前 → 改之後」→ 你勾選 → 先備份（這台裝置＋下載檔案）→ 套用（交易裡重新驗舊文字）。 */
+const CARDFIX_GROUPS = {
+  A: 'A　例句殘留底線／錯字', B: 'B　壞掉的整句（用新寫的句子）', C: 'C　多餘空白（頭尾、連續）',
+  D: 'D　中文結尾多了「；」', E: 'E　中文改寫', F: 'F　例句缺結尾句號',
+};
+function CardFix() {
+  const [scan, setScan] = useDash(null);
+  const [sel, setSel]   = useDash({ A: true, B: true, C: true, D: true, E: true, F: true });
+  const [busy, setBusy] = useDash(false);
+  const [msg, setMsg]   = useDash(null);
+  const [err, setErr]   = useDash(null);
+  const GN = { g1: 'G1', g2: 'G2', g3: 'G3', g4: 'G4', g5: 'G5', g6: 'G6' };
+  const ALL = Object.keys(CARDFIX_GROUPS);
+
+  const doScan = async () => {
+    setBusy(true); setErr(null);
+    try { setScan(await window.scanCardFixes(ALL)); } catch (e) { setErr('掃描失敗：' + (e.code || e.message)); }
+    setBusy(false);
+  };
+  useDashE(() => { doScan(); }, []);
+
+  const rows = scan ? Object.keys(scan).flatMap(g => scan[g].map(c => ({ g, ...c }))) : [];
+  const byGrp = {}; rows.forEach(r => { (byGrp[r.grp] = byGrp[r.grp] || []).push(r); });
+  const chosenGroups = ALL.filter(k => sel[k] && (byGrp[k] || []).length);
+  const nChosen = chosenGroups.reduce((n, k) => n + byGrp[k].length, 0);
+
+  const doApply = async () => {
+    if (!nChosen) return;
+    if (!window.confirm(`要修正這 ${nChosen} 處單字卡文字嗎？\n\n${chosenGroups.map(k => CARDFIX_GROUPS[k] + '：' + byGrp[k].length + ' 處').join('\n')}\n\n改之前會先備份到這台裝置並下載一份檔案。`)) return;
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const backup = { at: Date.now(), note: 'v698 修正單字卡前的備份（每一處：年級／週次／類別／單元／第幾張卡／欄位／改之前／改之後）',
+        changes: rows.filter(r => chosenGroups.indexOf(r.grp) >= 0).map(({ g, wid, cat, itemId, itemTitle, cardIdx, term, field, before, after, grp }) => ({ g, wid, cat, itemId, itemTitle, cardIdx, term, field, before, after, grp })) };
+      const json = JSON.stringify(backup, null, 1);
+      localStorage.setItem('alans-english-cardfix-backup-' + backup.at, json);   // 備份寫不進去就不改
+      try {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+        a.download = `cardfix-backup-${new Date(backup.at).toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+      } catch (e) {}
+      const r = await window.applyCardFixes(chosenGroups);
+      const n = Object.keys(r).reduce((k, g) => k + r[g], 0);
+      setMsg(`✅ 已修正 ${n} 處。`);
+      await doScan();
+    } catch (e) { setErr('修正失敗：' + (e.code || e.message) + '——沒改到的部分原樣保留。'); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="seedc cardfix">
+      <h3>✏️ 修正單字卡資料</h3>
+      <p className="seedc-hint">規則是你確認過的（A～F）。只在「現在的文字剛好等於舊文字」時才改——你之後自己改過的卡不會被蓋掉。只動單字卡的單字、中文、例句三個欄位。</p>
+      {err && <div className="seedc-err">⚠ {err}</div>}
+      {msg && <div className="seedc-ok">{msg}</div>}
+      {busy && !scan && <div className="seedc-hint">讀取雲端中…</div>}
+      {scan && rows.length === 0 && <div className="seedc-ok">✨ 沒有需要修正的了。</div>}
+      {ALL.map(k => (byGrp[k] || []).length > 0 && (
+        <div key={k} className="seedc-grade">
+          <label className="cardfix-hd">
+            <input type="checkbox" disabled={busy} checked={!!sel[k]} onChange={e => setSel(s => ({ ...s, [k]: e.target.checked }))}/>
+            <b>{CARDFIX_GROUPS[k]}</b><em>{byGrp[k].length} 處</em>
+          </label>
+          <details>
+            <summary>看每一處（改之前 → 改之後）</summary>
+            {byGrp[k].map((r, i) => (
+              <div key={i} className="seedc-row">
+                <code>{GN[r.g]} {r.wid}</code><span>{r.itemTitle} · {r.term}（{r.field}）</span>
+                <div className="cardfix-diff"><s>{JSON.stringify(r.before)}</s><br/><b>{JSON.stringify(r.after)}</b></div>
+              </div>
+            ))}
+          </details>
+        </div>
+      ))}
+      <div className="seedc-btns">
+        <button className="btn ghost" onClick={doScan} disabled={busy}>↻ 重新掃描</button>
+        <button className="btn danger" onClick={doApply} disabled={busy || !nChosen}>修正選取的 {nChosen} 處</button>
+      </div>
+    </div>
+  );
+}
+
 /* ══ v693 🧹 清理「看不到的種子週」══════════════════════════════════════
    舊版把種子週寫進雲端 G2／G5／G6／G3 的課程文件：留在 weeks 裡、不在週次順序裡——畫面看不到，只是垃圾。
    流程：① 掃描（只讀）列出名單上、雲端真的有的週 → ② 你確認 → ③ 先把這幾週的完整內容備份（存在這台裝置＋下載一份檔案）
@@ -3269,7 +3353,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
     // v337: 只有「擁有者」看得到管理者維護（規則同樣只允許擁有者寫）
     ...(window.isOwnerUser && window.isOwnerUser(window._currentUser)
       ? [{ id: 'admins', ico: '👑', label: '管理者', sub: '老師帳號權限', sec: '設定一次' },
-         { id: 'seedclean', ico: '🧹', label: '清理種子週', sub: '看不到的空白週', sec: '設定一次' }] : []),
+         { id: 'seedclean', ico: '🧹', label: '清理種子週', sub: '看不到的空白週', sec: '設定一次' },
+         { id: 'cardfix', ico: '✏️', label: '修正單字卡', sub: '例句／中文錯誤', sec: '設定一次' }] : []),
   ];
   const cur = NAV.find(n => n.id === tab) || NAV[0];
 
@@ -3365,6 +3450,8 @@ function TeacherDashboard({ onClose, weeks, weekOrder, grade }) {
             <AdminManager/>
           ) : tab === 'seedclean' ? (
             <SeedCleanup/>
+          ) : tab === 'cardfix' ? (
+            <CardFix/>
           ) : tab === 'summer' ? (
             <SummerAdmin/>
           ) : selected ? (

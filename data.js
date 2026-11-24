@@ -7040,6 +7040,116 @@ async function purgeHiddenSeedWeeks(selection) {
 }
 Object.assign(window, { SEED_CLEANUP_LIST, scanHiddenSeedWeeks, purgeHiddenSeedWeeks });
 
+// ── v698: 修正單字卡資料錯誤（Alan 逐組確認過 A/B/C/D/E/F）─────────────────────────
+// 例句裡殘留的底線、錯字、多餘空白、中文尾巴的「；」、缺句號……全部是「寫死的規則」，不是亂改：
+//   · 每條規則只動指定單字（term）的指定欄位（example／zh），而且舊文字要剛好對得上才改
+//     ——你在這之間自己改過的卡，舊文字對不上，就不會被蓋掉。
+//   · C（多餘空白）只做「去頭尾空白／tab、連續空白縮成一個」，不動中間的單一空白。
+//   · 只改卡片的 term／zh／example 三個欄位，單元的其他東西一個字都不動。
+const CARD_FIX_RULES = [
+  // A：一定是錯的（底線殘留、重複字尾）——子字串取代
+  { grp: 'A', term: 'desolate',    field: 'example', find: 'desolate__',    to: 'desolate' },
+  { grp: 'A', term: 'sagebrush',   field: 'example', find: 'sagebrush__',   to: 'sagebrush' },
+  { grp: 'A', term: 'clotted',     field: 'example', find: 'clotteded',     to: 'clotted' },
+  { grp: 'A', term: 'circumspect', field: 'example', find: 'circumspect__', to: 'circumspect' },
+  { grp: 'A', term: 'disrespect',  field: 'example', find: 'disrespect__',  to: 'disrespect' },
+  // B：整句壞掉，用 Claude 寫的新句子（Alan 同意用這個）——整句要完全一樣才換
+  { grp: 'B', term: 'adaptation', field: 'example', eq: true,
+    find: "The echidna's long adaptation is an ___ that helps it dig for food in the ground.",
+    to:   "The echidna's long claws are an adaptation that helps it dig for food in the ground." },
+  // D：中文結尾多了「；」
+  { grp: 'D', term: 'strand',     field: 'zh', eq: true, find: 'v. 受困；',                 to: 'v. 受困' },
+  { grp: 'D', term: 'plesiosaur', field: 'zh', eq: true, find: 'n. 蛇頸龍；',               to: 'n. 蛇頸龍' },
+  { grp: 'D', term: 'brittle',    field: 'zh', eq: true, find: 'adj. 脆脆的 容易碎的；',     to: 'adj. 脆脆的；容易碎的' },
+  // E：中文改寫（Alan 同意照 Claude 寫的）
+  { grp: 'E', term: 'rendezvous', field: 'zh', eq: true, find: 'n. 會合；（朋友會合） (飛船會合)', to: 'n. 會合；（朋友會合）（飛船會合）' },
+  { grp: 'E', term: 'managed',    field: 'zh', eq: true, find: 'v. 管理球隊 管理員工',        to: 'v. 管理球隊；管理員工' },
+  { grp: 'E', term: 'internment', field: 'zh', eq: true, find: 'n. 因為戰爭 所以困住犯人的營區', to: 'n. 因戰爭而拘禁人的營區' },
+  // F：例句缺結尾句號
+  ...[
+    'We can see many beautiful things in nature, like trees, flowers, and animals outside',
+    'The stripes on a zebra are black and white patterns that repeat over and over on its body',
+    'The butterfly has colorful wings and flies from flower to flower in the garden',
+    'Each snowflake is unique with its own special pattern when it falls in winter',
+    'Wearing a helmet gives us safety when we ride our bikes',
+    'Math problems are easy for Tom, but they are a difficulty for me',
+  ].map((s, i) => ({ grp: 'F', term: ['nature', 'patterns', 'butterfly', 'snowflake', 'safety', 'difficulty'][i], field: 'example', eq: true, find: s, to: s + '.' })),
+];
+const CARD_FIX_DOCS = { g1: 'data_g1', g2: 'data_g2', g3: 'data', g4: 'data_g4', g5: 'data_g5', g6: 'data_g6' };
+const _cardWs = (v) => String(v).replace(/^\s+|\s+$/g, '').replace(/[ \t]{2,}/g, ' ');
+// 純函式：算出要改什麼。weeks＝整份 weeks；groups＝要做的組別陣列。回傳 { changes, arrays }（arrays：'wid|cat' → 改好的整個單元陣列）
+function cardFixCompute(weeks, groups) {
+  const want = new Set(groups || []);
+  const changes = [], arrays = {};
+  Object.keys(weeks || {}).forEach(wid => {
+    const items = (weeks[wid] && weeks[wid].items) || {};
+    Object.keys(items).forEach(cat => {
+      const arr = items[cat];
+      if (!Array.isArray(arr)) return;
+      let touched = false;
+      const out = arr.map((it, ii) => {
+        if (!it || !Array.isArray(it.cards)) return it;
+        let itTouched = false;
+        const cards = it.cards.map((c, ci) => {
+          if (!c) return c;
+          const nc = { ...c };
+          ['term', 'zh', 'example'].forEach(field => {
+            if (typeof c[field] !== 'string') return;
+            let v = c[field], grp = null;
+            const termTrim = String(c.term || '').trim();
+            for (const r of CARD_FIX_RULES) {
+              if (!want.has(r.grp) || r.field !== field || r.term !== termTrim) continue;
+              const hit = r.eq ? v === r.find : v.indexOf(r.find) >= 0;
+              if (hit) { v = r.eq ? r.to : v.split(r.find).join(r.to); grp = r.grp; break; }
+            }
+            if (want.has('C')) { const n = _cardWs(v); if (n !== v) { v = n; if (!grp) grp = 'C'; } }
+            if (v !== c[field]) {
+              nc[field] = v; itTouched = true;
+              changes.push({ wid, cat, itemId: it.id || '', itemTitle: it.title || '', cardIdx: ci, term: termTrim, field, before: c[field], after: v, grp });
+            }
+          });
+          return nc;
+        });
+        if (!itTouched) return it;
+        touched = true;
+        return { ...it, cards };
+      });
+      if (touched) arrays[wid + '|' + cat] = out;
+    });
+  });
+  return { changes, arrays };
+}
+// 掃描（只讀）：回傳每個年級要改的東西
+async function scanCardFixes(groups) {
+  const out = {};
+  for (const g of Object.keys(CARD_FIX_DOCS)) {
+    const snap = await _db.collection('class').doc(CARD_FIX_DOCS[g]).get({ source: 'server' });
+    const d = snap.exists ? (snap.data() || {}) : {};
+    out[g] = cardFixCompute(d.weeks || {}, groups).changes;
+  }
+  return out;
+}
+// 套用：每個文件一次交易（交易裡重新讀、重新算，所以「舊文字要對得上」是在最新資料上驗的）
+async function applyCardFixes(groups) {
+  const applied = {};
+  for (const g of Object.keys(CARD_FIX_DOCS)) {
+    const ref = _db.collection('class').doc(CARD_FIX_DOCS[g]);
+    applied[g] = await _db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const { changes, arrays } = cardFixCompute((snap.data() || {}).weeks || {}, groups);
+      const keys = Object.keys(arrays);
+      if (!keys.length) return 0;
+      const args = [];
+      keys.forEach(k => { const [wid, cat] = k.split('|'); args.push(new firebase.firestore.FieldPath('weeks', wid, 'items', cat), arrays[k]); });
+      tx.update(ref, ...args);
+      return changes.length;
+    });
+  }
+  return applied;
+}
+Object.assign(window, { CARD_FIX_RULES, cardFixCompute, scanCardFixes, applyCardFixes });
+
 // ── v681: 兌換申請（學生按「兌換」→ 老師後台收得到）────────────────
 // 以前學生按「兌換」只跳 alert、沒有寫任何東西，老師完全收不到（Alan 發現）。
 // redeems/{自動編號} = { email, uid, name, itemId, itemName, cost, emoji, img, status, at, doneAt?, note? }
