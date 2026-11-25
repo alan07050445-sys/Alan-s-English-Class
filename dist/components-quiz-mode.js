@@ -8098,9 +8098,11 @@ function TodayTasks({
       var groups = qmGroupByArticle(wk.rows.map(t => t.it)).map(g => g.single ? {
         name: null,
         rows: [byKey[g.single.id]].filter(Boolean)
-      } : {
+      }
+      /* v703：同一課裡照「學習順序」排（單字卡→選擇題→填空→短文→聽寫…），跟側欄／今天的任務同一套 qmItemRank。
+         以前照資料裡的順序（字義選擇排在單字卡前面），「補做 →」直接開第一個＝會跳過單字卡。 */ : {
         name: g.name,
-        rows: g.items.map(it => byKey[it.id]).filter(Boolean)
+        rows: g.items.map(it => byKey[it.id]).filter(Boolean).sort((a, b) => qmItemRank(a.it) - qmItemRank(b.it))
       }).filter(g => g.rows.length);
       return {
         ...wk,
