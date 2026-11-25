@@ -5444,3 +5444,19 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
 .dash-overlay.tdash .tdash-side { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-behavior: none; }
+
+/* v716：iPad 老師後台各分頁——手指好按、輸入不被 Safari 自動放大
+   ① 輸入框／下拉／文字區字級 <16px 時，iOS 點進去會整頁放大，退出後版面跑掉 → 一律 16px
+   ② 後台所有按鈕、勾選、分頁至少 44px 高（只對觸控） */
+@media (pointer: coarse) {
+  .dash-overlay.tdash input:not([type=checkbox]):not([type=radio]):not([type=range]),
+  .dash-overlay.tdash select,
+  .dash-overlay.tdash textarea { font-size: 16px; min-height: 44px; }
+  .dash-overlay.tdash .tdash-content button,
+  .dash-overlay.tdash .tdash-side button,
+  .dash-overlay.tdash .tdash-top button { min-height: 44px; min-width: 44px; }
+  .dash-overlay.tdash input[type=checkbox], .dash-overlay.tdash input[type=radio] { width: 22px; height: 22px; }
+  .dash-overlay.tdash .tdash-nav-item { min-height: 48px; }
+  /* 表格／清單的高度用 dvh，避免 iPad 網址列伸縮時被切掉 */
+  .sa-mx-wrap { max-height: calc(100dvh - 260px); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+}
