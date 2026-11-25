@@ -8308,22 +8308,7 @@ function TodayTasks({
       }, "\u958B\u59CB \u2192")))
     );
   };
-
-  /* v720（Alan：「不要這麼窄，跟之前一樣長，只是上下縮短」）：收起來的提醒條放在 .tt 外面，
-     橫式分欄時才能橫跨整列（放在左欄裡面就只剩 2/5 寬）。展開的清單仍在 .tt 裡。 */
-  var pastHeadBtn = /*#__PURE__*/React.createElement("button", {
-    className: "tt-past-head",
-    onClick: () => setPastOpen(o => !o),
-    "aria-expanded": pastOpen
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "tt-past-chev",
-    "aria-hidden": "true"
-  }, pastOpen ? '▾' : '▸'), /*#__PURE__*/React.createElement("span", {
-    className: "tt-past-headtext"
-  }, /*#__PURE__*/React.createElement("b", null, "\u26A0\uFE0F \u4E4B\u524D\u6709\u4F5C\u696D\u9084\u6C92\u5B8C\u6210"), /*#__PURE__*/React.createElement("span", null, pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項')));
-  return /*#__PURE__*/React.createElement(React.Fragment, null, pastDue.length > 0 && !pastOpen && /*#__PURE__*/React.createElement("div", {
-    className: "tt-past closed tt-past-out"
-  }, pastHeadBtn), /*#__PURE__*/React.createElement("section", {
+  return /*#__PURE__*/React.createElement("section", {
     className: "tt",
     "aria-label": "\u4ECA\u5929\u7684\u4EFB\u52D9"
   }, /*#__PURE__*/React.createElement("div", {
@@ -8334,9 +8319,18 @@ function TodayTasks({
     className: "tt-count"
   }, "\u5B8C\u6210 ", doneN, " / ", tasks.length)), note && /*#__PURE__*/React.createElement("div", {
     className: "tt-note"
-  }, "\uD83D\uDCAC \u8001\u5E2B\u7684\u8A71\uFF1A", note), pastDue.length > 0 && pastOpen && /*#__PURE__*/React.createElement("div", {
-    className: "tt-past"
-  }, pastHeadBtn, pastOpen && /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCAC \u8001\u5E2B\u7684\u8A71\uFF1A", note), pastDue.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: 'tt-past' + (pastOpen ? '' : ' closed')
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "tt-past-head",
+    onClick: () => setPastOpen(o => !o),
+    "aria-expanded": pastOpen
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "tt-past-chev",
+    "aria-hidden": "true"
+  }, pastOpen ? '▾' : '▸'), /*#__PURE__*/React.createElement("span", {
+    className: "tt-past-headtext"
+  }, /*#__PURE__*/React.createElement("b", null, "\u26A0\uFE0F \u4E4B\u524D\u6709\u4F5C\u696D\u9084\u6C92\u5B8C\u6210"), /*#__PURE__*/React.createElement("span", null, pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'))), pastOpen && /*#__PURE__*/React.createElement("div", {
     className: "tt-past-list"
   }, pastByWeek.map((wk, wi) => {
     var open = pastWk[wk.wid] !== undefined ? pastWk[wk.wid] : wi === 0; // 預設只開最近的那一週
@@ -8467,7 +8461,7 @@ function TodayTasks({
   }, "\u5B8C\u6210 ", tasks.length, " \u9805", celeAvg != null ? ` · 平均 ${celeAvg} 分` : '', "\uFF0C\u660E\u5929\u898B\uFF01"), /*#__PURE__*/React.createElement("button", {
     className: "qm-btn primary",
     onClick: () => setCele(false)
-  }, "\u592A\u68D2\u4E86 \u2713")))));
+  }, "\u592A\u68D2\u4E86 \u2713"))));
 }
 function WeeklyContactBook({
   week,

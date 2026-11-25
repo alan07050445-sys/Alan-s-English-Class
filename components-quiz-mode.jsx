@@ -6827,27 +6827,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
     );
   };
 
-  /* v720（Alan：「不要這麼窄，跟之前一樣長，只是上下縮短」）：收起來的提醒條放在 .tt 外面，
-     橫式分欄時才能橫跨整列（放在左欄裡面就只剩 2/5 寬）。展開的清單仍在 .tt 裡。 */
-  const pastHeadBtn = (
-    <button
-      className="tt-past-head"
-      onClick={() => setPastOpen(o => !o)}
-      aria-expanded={pastOpen}
-    >
-      <span className="tt-past-chev" aria-hidden="true">{pastOpen ? '▾' : '▸'}</span>
-      <span className="tt-past-headtext">
-        <b>⚠️ 之前有作業還沒完成</b>
-        <span>{pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'}</span>
-      </span>
-    </button>
-  );
-
   return (
-    <>
-    {pastDue.length > 0 && !pastOpen && (
-      <div className="tt-past closed tt-past-out">{pastHeadBtn}</div>
-    )}
     <section className="tt" aria-label="今天的任務">
       <div className="tt-head">
         <span className="tt-title">📌 今天的任務</span>
@@ -6856,10 +6836,20 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
       {note && <div className="tt-note">💬 老師的話：{note}</div>}
 
       {/* v340: 之前沒完成的作業——週次往前推也不會「作業不見了」，點一下就回去補做 */}
-      {pastDue.length > 0 && pastOpen && (
-        <div className="tt-past">
+      {pastDue.length > 0 && (
+        <div className={'tt-past' + (pastOpen ? '' : ' closed')}>
           {/* v341: 點標題就完全收合／展開（收起來時整張清單都不見，只留一行提醒） */}
-          {pastHeadBtn}
+          <button
+            className="tt-past-head"
+            onClick={() => setPastOpen(o => !o)}
+            aria-expanded={pastOpen}
+          >
+            <span className="tt-past-chev" aria-hidden="true">{pastOpen ? '▾' : '▸'}</span>
+            <span className="tt-past-headtext">
+              <b>⚠️ 之前有作業還沒完成</b>
+              <span>{pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'}</span>
+            </span>
+          </button>
           {/* v463（b）：照「週次 → 一課一組」排，列上寫清楚是哪一種題型。
               以前是 42 列平鋪、同一個課名重複 5 次又沒有題型，學生分不出誰是誰。 */}
           {pastOpen && (
@@ -6982,7 +6972,6 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
         </div>
       )}
     </section>
-    </>
   );
 }
 

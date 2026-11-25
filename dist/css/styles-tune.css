@@ -4603,8 +4603,13 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-fill-btn:hover:not(.correct):not(.wrong):not(.dimmed) { transform: none; box-shadow: none; }
 }
 
-/* v720：收起來的「之前有作業還沒完成」放在 .tt 外面（見 components-quiz-mode.jsx），
-   橫式兩欄時橫跨整列、跟之前一樣長；只把上下縮短成一行。 */
-.tt-past-out.closed { margin: 10px 0 0; padding: 6px 14px; }
-.tt-past-out.closed .tt-past-head { min-height: 0; padding: 0; }
-@media (pointer: coarse) { .tt-past-out.closed .tt-past-head { min-height: 36px; } }
+/* v721（Alan：「只有電腦版要改，iPad 維持原本；電腦版要放回今天的任務裡面」）
+   電腦版（滑鼠）：收起來的提醒條在「今天的任務」裡面橫跨整列、跟之前一樣長，只把上下縮短成一行。
+   iPad（觸控）完全不動，沿用上面 v709 的規則。 */
+@media (hover: hover) and (pointer: fine) {
+  .tt-past.closed { display: block; width: 100%; box-sizing: border-box; padding: 5px 14px; margin: 4px 0 8px; }
+  .tt-past.closed .tt-past-head { align-items: center; width: 100%; }
+  .tt-past.closed .tt-past-headtext { flex-direction: row; align-items: baseline; flex-wrap: nowrap; gap: 10px; }
+  .tt-past.closed .tt-past-headtext b { font-size: 14.5px; white-space: nowrap; }
+  .tt-past.closed .tt-past-headtext span { font-size: 12.5px; }
+}
