@@ -5421,3 +5421,11 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 }
 .tt-past-grp.fold > .tt-past-grpname > em { grid-column: 3; grid-row: 2; margin-left: 0; justify-self: start; }
 .tt-past-grp.fold > .tt-past-grpname > .tt-past-grpgo { grid-column: 4; grid-row: 1 / span 2; }
+
+/* v713（iPad QA：考卷上三個小輸入）：手指點得到——造句輸入框、字尾／母音選項 chip、排序數字框、句中填空 ≥44px（外觀只多一點留白）。 */
+@media (pointer: coarse) {
+  .ex-af-w, .ex-af-s { min-height: 44px; box-sizing: border-box; padding-top: 6px; padding-bottom: 6px; }
+  .ex-af-p { min-height: 44px; padding: 6px 15px; }
+  .ex-ord-n { width: 52px; height: 44px; }
+  .ex-spin { min-height: 44px; box-sizing: border-box; }
+}
