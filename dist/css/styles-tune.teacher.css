@@ -918,3 +918,9 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .dash-overlay.tdash .tdash-nav-item { min-height: 48px; }
   /* 表格／清單的高度用 dvh，避免 iPad 網址列伸縮時被切掉 */
   .sa-mx-wrap { max-height: calc(100dvh - 260px); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }}
+
+/* v722：iPad 錯題本
+   ① 面板寬一點、高度用 dvh（網址列伸縮不被切）；② 關閉、練習、下一題、科目 chip 至少 44px；
+   ③ 選項連點不放大＋點過的選項不黏 hover；④ 清單捲動順滑 */
+@media (pointer: coarse) {
+  .mk-header-btn { min-width: 44px; min-height: 44px; }}

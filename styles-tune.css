@@ -5515,3 +5515,22 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .tt-past.closed .tt-past-headtext b { font-size: 14.5px; white-space: nowrap; }
   .tt-past.closed .tt-past-headtext span { font-size: 12.5px; }
 }
+
+/* v722：iPad 錯題本
+   ① 面板寬一點、高度用 dvh（網址列伸縮不被切）；② 關閉、練習、下一題、科目 chip 至少 44px；
+   ③ 選項連點不放大＋點過的選項不黏 hover；④ 清單捲動順滑 */
+@media (pointer: coarse) {
+  .mk-panel { max-width: 640px; max-height: 92vh; max-height: 92dvh; }
+  .mk-head .icon-btn { min-width: 44px; min-height: 44px; }
+  .mk-header-btn { min-width: 44px; min-height: 44px; }
+  .mk-drill-btn { min-height: 48px; }
+  .mk-next-btn { min-height: 44px; padding: 10px 22px; }
+  .mk-subj-chip, .mk-fix-card, .mk-ans-more { min-height: 44px; }
+  .mk-drill-option { min-height: 52px; }
+  .mk-drill-btn, .mk-next-btn, .mk-drill-option, .mk-subj-chip, .mk-fix-card, .mk-header-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .mk-list { -webkit-overflow-scrolling: touch; }
+}
+@media (hover: none) {
+  .mk-drill-option:not(:disabled):hover { border-color: var(--border); background: var(--bg-card); }
+  .mk-drill-btn:hover, .mk-next-btn:hover { background: var(--ink); }
+}
