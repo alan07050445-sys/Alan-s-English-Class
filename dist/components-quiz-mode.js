@@ -8619,6 +8619,12 @@ function TeacherLog({
   }, [email]);
   var rows = window.lessonRows ? window.lessonRows(doc) : [];
   if (!rows.length) return null; // 老師還沒記就不要佔版面
+  /* v712（Alan：「超過兩週沒有更新就不要再出現在學生上面，過太久也不用追蹤了」）：
+     最新一筆上課紀錄的日期距今超過 14 天 → 整張卡不顯示（資料還在，老師再記一筆就會回來）。 */
+  {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(rows[0].date || ''));
+    if (m && (Date.now() - new Date(+m[1], +m[2] - 1, +m[3]).getTime()) / 86400000 > 14) return null;
+  }
   var show = open ? rows : rows.slice(0, 2);
   var avg = window.lessonAvgPct ? window.lessonAvgPct(doc, 5) : null;
   var kindOf = k => (window.LESSON_KINDS || []).find(x => x.id === k) || null;
