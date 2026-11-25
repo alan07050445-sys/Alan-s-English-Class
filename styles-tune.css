@@ -5473,3 +5473,21 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .modal .modal-close { width: 44px; height: 44px; }
   .modal input[type=checkbox], .modal input[type=radio] { width: 22px; height: 22px; }
 }
+
+/* v718：iPad 學生練習頁／全站——字級 <16px 的輸入框，觸控時一律 16px
+   （iOS 點進去會自動放大整頁，退出後版面跑掉；之前只修了考卷的小輸入框）。
+   清單是 grep 全部 CSS 找出「input／textarea／select 且字級 <16px」的選擇器。 */
+@media (pointer: coarse) {
+  .ex-story-row textarea, .ex-fixbox input, .ex-ev textarea, textarea.ex-essay,
+  .edr-input textarea, .ask-input textarea, .cb-note-input, .qm-due-input,
+  .qs-ta, .qs-proof-f textarea, .qs-proof-f input, .qs-due input, .qs-story input, .qs-story textarea,
+  .gq-row-f textarea, .gq-row-f input, .gr-passage, .gr-num-row select, .gr-ai-grid select,
+  .rc-lab input, .rc-lab select, .rc-ta, .rc-in, .rc-addblock select,
+  .field textarea, .fc-import-ta, .qe-option-row input, .qe-import-textarea,
+  .report-week-select, .report-note-input, .roster-input, .notify-textarea, .sa-apply select,
+  .sdetail-grade-input, .sdetail-comment-input, .dme-in, .rv-hw input[type=date], .ask-hw input[type=date],
+  .qs-sense-opt input[type=text], .qs-sense-opt input:not([type=radio]), .ai-note-in, .find-unit-in,
+  .qm-copy-due input, .pace-in, .ll2-slot select, .ll2-slot input, .ll2-form-h input[type=date],
+  .ll2-f textarea, .tt-slot-t input, .tt-slot-t select, .tt-slot-s select, .tt-paste textarea,
+  .exed-paste textarea { font-size: 16px !important; }
+}
