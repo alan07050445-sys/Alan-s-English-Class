@@ -1583,8 +1583,9 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
   const enterMode = loggedIn && onBack;   // 已登入且在封面 → 顯示「進入課程」
   const handleLogin = async () => {
     setLoading(true);
+    try { window.__alanLog && window.__alanLog('login-tap', ''); } catch (e) {}
     setTimeout(() => { setSlow(true); setLoading(false); }, 12000); // 卡住的備援（unmount 換頁即消失）
-    try { await onLogin(); } catch (e) { console.error(e); setLoading(false); }
+    try { await onLogin(); try { window.__alanLog && window.__alanLog('login-ok', ''); } catch (e2) {} } catch (e) { console.error(e); try { window.__alanLog && window.__alanLog('login-error', (e && (e.code || e.message)) || e); } catch (e2) {} setLoading(false); }
   };
   return (
     <div className="login-screen lc-cover lc-hero">

@@ -774,7 +774,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                 ) : editMode ? (
                   <div className="qm-block-count">{allCatItems.length} items · no quiz yet</div>
                 ) : (
-                  <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'}</div>
+                  <div className="qm-block-empty">{/^sl-/.test(weekId) ? '這週沒有安排這類練習' : '目前無練習題目'}</div>
                 )}
               </div>
               {editMode ? (

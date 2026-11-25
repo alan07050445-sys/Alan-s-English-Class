@@ -31,8 +31,8 @@ ok('⭐ QuizModeBlocks 不再收 weeks / weekOrder / onOpenWeekCat 這三個只�
    /function QuizModeBlocks\(\{([^}]*)\}\)/.exec(qm)[1].match(/weeks|weekOrder|onOpenWeekCat/) === null);
 
 console.log('\n【3】空分類維持誠實且點不進去');
-ok('⭐ 沒安排就寫「即將開放」，不要自作主張把學生帶走',
-   /<div className="qm-block-empty">\{\/\^sl-\/\.test\(weekId\) \? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容'\}<\/div>/.test(qm));
+ok('⭐ 沒安排就寫「目前無練習題目」，不要自作主張把學生帶走',
+   /<div className="qm-block-empty">\{\/\^sl-\/\.test\(weekId\) \? '這週沒有安排這類練習' : '目前無練習題目'\}<\/div>/.test(qm));
 ok('⭐ 只有真的有內容（或老師編輯中）才點得進去', /const clickable = total > 0 \|\| editMode;/.test(qm));
 ok('   點下去就是進本週，沒有第二條路', /onClick=\{\(\) => \{ if \(clickable\) onEnterCat\(cat\); \}\}/.test(qm));
 ok('   箭頭只在有內容時出現', /\) : total > 0 \? \(\s*\n\s*<div className="qm-block-arrow">/.test(qm));

@@ -991,7 +991,7 @@ function QuizModeBlocks({
       className: "qm-block-count"
     }, allCatItems.length, " items \xB7 no quiz yet") : /*#__PURE__*/React.createElement("div", {
       className: "qm-block-empty"
-    }, /^sl-/.test(weekId) ? '這週沒有安排這類練習' : '即將開放 · 老師正在準備本週內容')), editMode ? /*#__PURE__*/React.createElement("button", {
+    }, /^sl-/.test(weekId) ? '這週沒有安排這類練習' : '目前無練習題目')), editMode ? /*#__PURE__*/React.createElement("button", {
       className: "qm-edit-add-btn",
       onClick: e => {
         e.stopPropagation();
