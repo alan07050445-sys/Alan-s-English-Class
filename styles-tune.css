@@ -5460,3 +5460,16 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   /* 表格／清單的高度用 dvh，避免 iPad 網址列伸縮時被切掉 */
   .sa-mx-wrap { max-height: calc(100dvh - 260px); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 }
+
+/* v717：iPad 老師編輯模式——彈窗輸入 16px 防放大、44px 按鈕、彈窗高度用 dvh、裁切線好抓 */
+@media (pointer: coarse) {
+  .modal-backdrop { padding: 16px; }
+  .modal { max-height: 94vh; max-height: 94dvh; -webkit-overflow-scrolling: touch; }
+  .modal input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  .modal select, .modal textarea { font-size: 16px; }
+  .modal input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  .modal select { min-height: 44px; }
+  .modal button, .modal .btn { min-height: 44px; }
+  .modal .modal-close { width: 44px; height: 44px; }
+  .modal input[type=checkbox], .modal input[type=radio] { width: 22px; height: 22px; }
+}

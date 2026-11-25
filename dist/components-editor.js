@@ -7284,6 +7284,7 @@ function GrRegionModal({
     style: {
       position: 'relative',
       cursor: 'crosshair',
+      touchAction: 'none',
       height: 0,
       overflow: 'hidden',
       paddingBottom: (img.ar || 1.3) * band * 100 + '%'
@@ -7622,7 +7623,8 @@ function GrCropModal({
     ref: wrapRef,
     style: {
       position: 'relative',
-      cursor: 'crosshair'
+      cursor: 'crosshair',
+      touchAction: 'pan-y'
     },
     onClick: addLineAt
   }, /*#__PURE__*/React.createElement("img", {
@@ -7643,6 +7645,7 @@ function GrCropModal({
       top: `${y * 100}%`,
       borderTop: '2px dashed #B85A45',
       cursor: 'ns-resize',
+      touchAction: 'none',
       height: 14,
       marginTop: -7,
       paddingTop: 7,

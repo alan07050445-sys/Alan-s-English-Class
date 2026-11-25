@@ -4963,7 +4963,7 @@ function GrRegionModal({ seg, onCancel, onConfirm }) {
         </div>
         <div style={{overflow:'auto',flex:1,minHeight:0,border:'1px solid var(--border)',borderRadius:6}}>
           <div ref={wrapRef}
-            style={{position:'relative',cursor:'crosshair',height:0,overflow:'hidden',paddingBottom:((img.ar || 1.3) * band * 100) + '%'}}
+            style={{position:'relative',cursor:'crosshair',touchAction:'none',height:0,overflow:'hidden',paddingBottom:((img.ar || 1.3) * band * 100) + '%'}}
             onMouseDown={down} onTouchStart={down}>
             <img src={img.url} alt="" draggable={false}
               style={{position:'absolute',top:0,left:0,width:'100%',display:'block',userSelect:'none',pointerEvents:'none',transform:`translateY(-${zy0 * 100}%)`}}/>
@@ -5133,11 +5133,11 @@ function GrCropModal({ url, group, onCancel, onConfirm }) {
         </div>
         {err && <div style={{fontSize:12,color:'#dc2626',marginBottom:6}}>{err}</div>}
         <div style={{overflow:'auto',flex:1,minHeight:0,border:'1px solid var(--border)',borderRadius:6}}>
-          <div ref={wrapRef} style={{position:'relative',cursor:'crosshair'}} onClick={addLineAt}>
+          <div ref={wrapRef} style={{position:'relative',cursor:'crosshair',touchAction:'pan-y'}} onClick={addLineAt}>
             <img src={url} alt="" style={{width:'100%',display:'block',userSelect:'none',pointerEvents:'none'}}/>
             {lines.map((y, i) => (
               <div key={i}
-                style={{position:'absolute',left:0,right:0,top:`${y * 100}%`,borderTop:'2px dashed #B85A45',cursor:'ns-resize',height:14,marginTop:-7,paddingTop:7,boxSizing:'border-box'}}
+                style={{position:'absolute',left:0,right:0,top:`${y * 100}%`,borderTop:'2px dashed #B85A45',cursor:'ns-resize',touchAction:'none',height:14,marginTop:-7,paddingTop:7,boxSizing:'border-box'}}
                 onMouseDown={startDrag(i)} onTouchStart={startDrag(i)} onClick={e => e.stopPropagation()}>
                 <span style={{position:'absolute',left:6,top:-9,background:'#B85A45',color:'#fff',fontSize:10,borderRadius:3,padding:'0 5px',pointerEvents:'none'}}>✂ {i + 1}</span>
                 <button

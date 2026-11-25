@@ -4558,3 +4558,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .ex-ord-n { width: 52px; height: 44px; }
   .ex-spin { min-height: 44px; box-sizing: border-box; }
 }
+
+/* v717：iPad 老師編輯模式——彈窗輸入 16px 防放大、44px 按鈕、彈窗高度用 dvh、裁切線好抓 */
+@media (pointer: coarse) {
+  .modal-backdrop { padding: 16px; }
+  .modal { max-height: 94vh; max-height: 94dvh; -webkit-overflow-scrolling: touch; }
+  .modal input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  .modal select, .modal textarea { font-size: 16px; }
+  .modal input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  .modal select { min-height: 44px; }
+  .modal button, .modal .btn { min-height: 44px; }
+  .modal .modal-close { width: 44px; height: 44px; }
+  .modal input[type=checkbox], .modal input[type=radio] { width: 22px; height: 22px; }
+}
