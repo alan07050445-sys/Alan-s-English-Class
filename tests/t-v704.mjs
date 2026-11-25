@@ -1,0 +1,10 @@
+import fs from 'fs';
+const R = new URL('..', import.meta.url);
+const fx = fs.readFileSync(new URL('components-fx.jsx', R), 'utf8');
+const core = fs.readFileSync(new URL('dist/data-core.js', R), 'utf8') + fs.readFileSync(new URL('dist/data-teacher.js', R), 'utf8');
+let f = 0; const ok = (m, c) => { console.log((c ? '  ✅ ' : '  ❌ ') + m); if (!c) f++; };
+ok('休息設定改了會寫雲端 mx.off', /mxSaveField\(u, 'off'/.test(fx) && /async function mxSaveField/.test(core));
+ok('夥伴改了會寫雲端 mx.pet', /mxSaveField\(u, 'pet'/.test(fx));
+ok('雲端值回來時套用到這台（6 秒保護）', /mx\.off !== mxGetOff\(\)/.test(fx) && /mxPetLocalAt > 6000/.test(fx));
+ok('只允許 off／pet 兩個欄位', /field !== 'off' && field !== 'pet'/.test(core));
+process.exit(f ? 1 : 0);

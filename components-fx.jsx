@@ -895,7 +895,11 @@ function mxDay(plus) {              // 跟 app.jsx 同一套算法：new Date().
   catch (e) { return ''; }
 }
 function mxGetOff() { try { return localStorage.getItem(mxKey(MX_OFF_KEY)) || ''; } catch (e) { return ''; } }
-function mxSetOff(d) { try { if (d) localStorage.setItem(mxKey(MX_OFF_KEY), d); else localStorage.removeItem(mxKey(MX_OFF_KEY)); } catch (e) {} }
+let mxOffLocalAt = 0;   // v704：剛在這台改過，6 秒內不要被雲端的舊值蓋回去
+function mxSetOff(d, noCloud) {
+  try { if (d) localStorage.setItem(mxKey(MX_OFF_KEY), d); else localStorage.removeItem(mxKey(MX_OFF_KEY)); } catch (e) {}
+  if (!noCloud) { mxOffLocalAt = Date.now(); try { const u = mxUid(); if (u && window.mxSaveField) window.mxSaveField(u, 'off', d || ''); } catch (e) {} }
+}
 
 
 /* 純走位／搞笑的動作（不含答題反應）——所有夥伴共用的底牌 */
@@ -1012,7 +1016,11 @@ function mxGetPet() {
     return MX_PETS.some(p => p.id === id) ? id : MX_PETS[0].id;   // 認不得就回預設，不會變成空白
   } catch (e) { return MX_PETS[0].id; }
 }
-function mxSetPet(id) { try { localStorage.setItem(mxKey(MX_PET_KEY), id || ''); } catch (e) {} }
+let mxPetLocalAt = 0;   // v704：夥伴也跟著帳號走（以前只存這台裝置）
+function mxSetPet(id, noCloud) {
+  try { localStorage.setItem(mxKey(MX_PET_KEY), id || ''); } catch (e) {}
+  if (!noCloud) { mxPetLocalAt = Date.now(); try { const u = mxUid(); if (u && window.mxSaveField) window.mxSaveField(u, 'pet', id || ''); } catch (e) {} }
+}
 function mxPetOf(id) { return MX_PETS.find(p => p.id === id) || MX_PETS[0]; }
 
 /* ── v528 🧛 節慶換裝：畫誰，由這裡決定 ───────────────────────
@@ -1231,6 +1239,14 @@ function MascotLayer() {
       pendRef.current = pendRef.current.filter(id => srv.indexOf(id) < 0);
       const own = srv.concat(pendRef.current);
       setOwned(prev => (prev.join() === own.join() ? prev : own));
+      /* v704：休息設定跟著帳號——雲端有值（含空字串＝醒著）就以雲端為準 */
+      if (typeof mx.off === 'string' && Date.now() - mxOffLocalAt > 6000 && mx.off !== mxGetOff()) {
+        mxSetOff(mx.off, true); setHidden(mx.off >= mxDay(0) && !!mx.off);
+      }
+      if (typeof mx.pet === 'string' && mx.pet && Date.now() - mxPetLocalAt > 6000 && mx.pet !== mxGetPet()
+          && MX_PETS.some(x => x.id === mx.pet) && (window.mxOwnedPets ? window.mxOwnedPets(mx) : ['clay']).indexOf(mx.pet) >= 0) {
+        mxSetPet(mx.pet, true); setPetId(mx.pet);
+      }
       const w = window.mxWearOf ? window.mxWearOf(mx) : { hat: '', item: '' };
       /* v385 買過帽子、但還沒進過裝扮室的人：照舊自動幫他戴上（不然會覺得帽子不見了） */
       if (!w.hat) {
@@ -1254,7 +1270,7 @@ function MascotLayer() {
       const pets = window.mxOwnedPets ? window.mxOwnedPets(mx) : ['clay'];
       setPetId(prev => {
         if (pets.indexOf(prev) >= 0) return prev;
-        mxSetPet('clay');
+        mxSetPet('clay', true);
         return 'clay';
       });
     };

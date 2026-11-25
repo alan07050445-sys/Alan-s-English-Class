@@ -127,7 +127,7 @@ log.push('\n【7b】（v435）夥伴要用星星請、裝扮要貼合每一隻�
   ok('沒買任何東西時，只有 Claudius 是你的', W.mxOwnedPets({}).join() === 'clay');
   ok('買了咕咕就多一隻', W.mxOwnedPets({ owned: ['pet_owl'] }).sort().join() === 'clay,owl');
   ok('用 petId 找得回商品（圖鑑要顯示價錢）', W.mxPetItem('flame').cost === 800 && W.mxPetItem('clay').free === true);
-  ok('⭐ 選到沒買的夥伴會退回 Claudius（不然等於免費送）', /pets\.indexOf\(prev\) >= 0/.test(fx) && /mxSetPet\('clay'\)/.test(fx));
+  ok('⭐ 選到沒買的夥伴會退回 Claudius（不然等於免費送）', /pets\.indexOf\(prev\) >= 0/.test(fx) && /mxSetPet\('clay'/.test(fx));
   ok('⭐ 每一隻都有自己的裝扮錨點（頭頂／眼睛／脖子／側邊）',
      ['clay', 'owl', 'flame', 'rock', 'sprout'].every(k => new RegExp(k + ':\\s*\\{ hat: \\{').test(fx)) &&
      /MxHat\({ id, fit }\)/.test(fx) && /translate\(\$\{f\.x - 9 \* f\.s\}/.test(fx));

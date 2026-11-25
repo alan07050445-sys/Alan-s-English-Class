@@ -7964,6 +7964,14 @@ async function mxSetWear(uid, kind, id, mx) {
     return { ok: true, wear };
   } catch (e) { return { ok: false, reason: 'save' }; }
 }
+/* v704：吉祥物「休息到哪天」跟著帳號走（以前只存這台裝置，電腦關了 iPad 還在）。
+   存在 progress/{uid}.mx.off（YYYY-MM-DD；空字串＝醒著）。merge 只動這一個欄位。 */
+async function mxSaveField(uid, field, val) {
+  if (!uid || (field !== 'off' && field !== 'pet')) return { ok: false };
+  try { await _db.collection('progress').doc(uid).set({ mx: { [field]: val || '' } }, { merge: true }); return { ok: true }; }
+  catch (e) { return { ok: false }; }
+}
+window.mxSaveField = mxSaveField;
 Object.assign(window, { mxPurchases, mxRefund, mxLogAdd, mxStarRows,
   MX_SHOP, MX_KINDS, mxItemOf, mxOwnedList, mxHasItem, mxSpent, mxWearOf, mxBuy, mxSetWear,
   mxOwnedPets, mxPetItem, mxRename, mxRenameCost, MX_RENAME_COST });
