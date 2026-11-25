@@ -4498,3 +4498,11 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .mx-dress-tabs button { min-height: 44px; }
   .mx-dress-x { width: 44px; height: 44px; }
 }
+
+/* v706（Alan：「iPad 會很靠近使用，主頁面整體等比例縮小 20%，更節省空間」）：
+   只縮主頁面（.page-lobby＝大廳）；點進單元／練習之後（.page-mission）完全不動。
+   用 zoom：版面會照「放大 1.25 倍的寬度」重新排，所以整體等比例、不會有東西被切掉。
+   只給觸控的 iPad 用（電腦視窗不縮），頂端列在 .page 外面所以不受影響。 */
+@media (pointer: coarse) and (min-width: 641px) and (max-width: 1400px) {
+  .page.page-lobby { zoom: 0.8; }
+}
