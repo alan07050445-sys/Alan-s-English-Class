@@ -5575,3 +5575,19 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .grade-selector .gs-card:hover .gs-card-cta { transform: none; }
   .gs-stash-bar:hover { border-color: var(--border, #ddd3b8); background: transparent; }
 }
+
+/* v726：iPad 老師大廳——頂端編輯／報表鈕 44px、小助手（Jarvis）面板與按鈕觸控化 */
+@media (pointer: coarse) {
+  .header .icon-btn { width: 44px; height: 44px; }
+  .dashboard-btn { min-height: 44px; }
+  .ask-fab { min-height: 48px; padding: 12px 20px 12px 16px; touch-action: manipulation; }
+  .ask-wrap { max-height: min(86vh, 720px); max-height: min(86dvh, 720px); }
+  .ask-eg button { min-height: 44px; font-size: 14.5px; }
+  .ask-head-mute, .ask-brief-refresh { min-height: 44px; padding-left: 12px; padding-right: 12px; }
+  .ask-brief-x { width: 44px; height: 44px; }
+  .ask-brief-ft button { min-height: 44px; padding-left: 16px; padding-right: 16px; }
+  .ask-brief-line > summary { min-height: 44px; display: flex; align-items: center; }
+  .ask-body { -webkit-overflow-scrolling: touch; }
+  .ask-head .modal-close { width: 44px; height: 44px; }
+}
+@media (hover: none) { .ask-fab:hover { transform: none; } .ask-eg button:hover { border-color: var(--border, #DDD6C4); } }
