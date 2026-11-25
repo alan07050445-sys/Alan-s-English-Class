@@ -870,7 +870,9 @@ function QuizModeBlocks({
      如果我要他們複習，我會再設置作業」）：v464 的「可以先複習 Week N」整組拿掉。
      空分類就老實寫「這週還沒有安排」，不要自作主張把學生帶回舊的一週。 */
 
-  return /*#__PURE__*/React.createElement(React.Fragment, null, editMode && /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "qm-blocks-wrap"
+  }, editMode && /*#__PURE__*/React.createElement("div", {
     className: "qm-week-banner"
   }, /*#__PURE__*/React.createElement("div", {
     className: "qm-week-eyebrow"

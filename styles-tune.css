@@ -5386,10 +5386,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
    iPad 橫式把大廳分成兩欄——左＝今天的任務，右＝自由練習的類別卡；週標題、成長摘要仍橫跨整列。
    用 :has(> .tt) 限定「真的有今天的任務」才分欄（暑假題庫等沒有任務區的就維持原樣）。 */
 @media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
-  .page-lobby .shell.main-enter:has(> .tt) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 22px; align-items: start; }
+  .page-lobby .shell.main-enter:has(> .tt) { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); column-gap: 20px; align-items: stretch; }
   .page-lobby .shell.main-enter:has(> .tt) > * { grid-column: 1 / -1; }
-  .page-lobby .shell.main-enter:has(> .tt) > .tt { grid-column: 1; grid-row: span 2; }
-  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks-head,
-  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks { grid-column: 2; }
-  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page-lobby .shell.main-enter:has(> .tt) > .wh-task-cue { display: none; }   /* 任務就在旁邊，指向下方的箭頭沒意義了 */
+  /* 兩個面板同樣的白底圓角、頂端對齊、一樣高 */
+  .page-lobby .shell.main-enter:has(> .tt) > .tt { grid-column: 1; margin: 14px 0 0; }
+  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks-wrap {
+    grid-column: 2; margin: 14px 0 0; padding: 16px 18px 18px;
+    background: #fff; border: 1.5px solid var(--border, #e5dfc8); border-radius: 18px; box-shadow: 0 8px 22px rgba(21, 19, 14, 0.05);
+  }
+  .page-lobby .shell.main-enter:has(> .tt) .qm-blocks-head { margin: 0 0 12px; padding: 0 4px; }
+  .page-lobby .shell.main-enter:has(> .tt) .qm-blocks-head-view .qm-blocks-title { font-size: 18px; font-weight: 800; color: #5a2418; }
+  .page-lobby .shell.main-enter:has(> .tt) .qm-blocks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0; }
 }
