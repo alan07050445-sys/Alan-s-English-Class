@@ -8331,7 +8331,7 @@ function TodayTasks({
     "aria-hidden": "true"
   }, pastOpen ? '▾' : '▸'), /*#__PURE__*/React.createElement("span", {
     className: "tt-past-headtext"
-  }, /*#__PURE__*/React.createElement("b", null, "\u26A0\uFE0F \u4E4B\u524D\u9084\u6709 ", pastDue.length, " \u9805\u4F5C\u696D\u6C92\u5B8C\u6210"), /*#__PURE__*/React.createElement("span", null, pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'))), pastOpen && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("b", null, "\u26A0\uFE0F \u4E4B\u524D\u6709\u4F5C\u696D\u9084\u6C92\u5B8C\u6210"), /*#__PURE__*/React.createElement("span", null, pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'))), pastOpen && /*#__PURE__*/React.createElement("div", {
     className: "tt-past-list"
   }, pastByWeek.map((wk, wi) => {
     var open = pastWk[wk.wid] !== undefined ? pastWk[wk.wid] : wi === 0; // 預設只開最近的那一週

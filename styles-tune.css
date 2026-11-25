@@ -5377,3 +5377,19 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 @media (pointer: coarse) and (min-width: 641px) and (max-width: 1400px) {
   .page.page-lobby { zoom: 0.8; }
 }
+
+/* v707（Alan：「有幾樣作業沒完成不用特別寫有幾項，而且不能那麼寬」）：收起來時的提醒條只佔內容的寬度，不再橫跨整列。 */
+.tt-past.closed { width: fit-content; max-width: 100%; }
+.tt-past.closed .tt-past-head { width: auto; }
+
+/* v707（Alan：「橫式的時候，今天的任務跟單字卡（練習類別）各站左右」）：
+   iPad 橫式把大廳分成兩欄——左＝今天的任務，右＝自由練習的類別卡；週標題、成長摘要仍橫跨整列。
+   用 :has(> .tt) 限定「真的有今天的任務」才分欄（暑假題庫等沒有任務區的就維持原樣）。 */
+@media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+  .page-lobby .shell.main-enter:has(> .tt) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 22px; align-items: start; }
+  .page-lobby .shell.main-enter:has(> .tt) > * { grid-column: 1 / -1; }
+  .page-lobby .shell.main-enter:has(> .tt) > .tt { grid-column: 1; grid-row: span 2; }
+  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks-head,
+  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks { grid-column: 2; }
+  .page-lobby .shell.main-enter:has(> .tt) > .qm-blocks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -18,7 +18,7 @@ const ok = (m, c) => { if (c) { pass++; console.log('  ✅ ' + m); } else { fail
 console.log('\n【a】預設收起來');
 ok('⭐ pastOpen 預設 false', /const \[pastOpen, setPastOpen\] = useQM\(false\);/.test(qm));
 ok('⭐ 但標題那一行永遠在（不會變成「作業不見了」——v340 當初要修的就是這個）',
-   /之前還有 \{pastDue\.length\} 項作業沒完成/.test(qm) && /點一下看是哪幾項/.test(qm));
+   /之前有作業還沒完成/.test(qm) && /點一下看是哪幾項/.test(qm));
 ok('有寫下量過的數字，以後不會有人手滑改回 true', /整頁 4\.1 個畫面。收起來之後整頁剩 2\.1 個/.test(qm));
 
 console.log('\n【b】照「週次 → 一課一組 → 題型」排');

@@ -6847,7 +6847,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
           >
             <span className="tt-past-chev" aria-hidden="true">{pastOpen ? '▾' : '▸'}</span>
             <span className="tt-past-headtext">
-              <b>⚠️ 之前還有 {pastDue.length} 項作業沒完成</b>
+              <b>⚠️ 之前有作業還沒完成</b>
               <span>{pastOpen ? '補做完才算完成喔！' : '點一下看是哪幾項'}</span>
             </span>
           </button>
