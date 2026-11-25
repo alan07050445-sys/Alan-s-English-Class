@@ -2176,9 +2176,11 @@ function LoginScreen({
 }) {
   var [loading, setLoading] = React.useState(false);
   var [slow, setSlow] = React.useState(false);
+  var [loginMsg, setLoginMsg] = React.useState(''); // v714（分支）：登入失敗時說人話
   var enterMode = loggedIn && onBack; // 已登入且在封面 → 顯示「進入課程」
   var handleLogin = async () => {
     setLoading(true);
+    setLoginMsg('');
     try {
       window.__alanLog && window.__alanLog('login-tap', '');
     } catch (e) {}
@@ -2197,6 +2199,8 @@ function LoginScreen({
         window.__alanLog && window.__alanLog('login-error', e && (e.code || e.message) || e);
       } catch (e2) {}
       setLoading(false);
+      var c = e && e.code;
+      setLoginMsg(c === 'auth/popup-blocked-ios' ? '登入視窗被 Safari 擋住了——請再按一次「使用 Google 登入」。' : c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request' ? '登入視窗關掉了，請再按一次。' : '');
     }
   };
   return /*#__PURE__*/React.createElement("div", {
@@ -2334,7 +2338,13 @@ function LoginScreen({
     disabled: loading
   }, /*#__PURE__*/React.createElement("span", {
     className: "lc-gg"
-  }, "G"), " ", loading ? '登入中…' : '使用 Google 登入'), slow && /*#__PURE__*/React.createElement("button", {
+  }, "G"), " ", loading ? '登入中…' : '使用 Google 登入'), loginMsg && /*#__PURE__*/React.createElement("p", {
+    className: "lc-slow",
+    role: "alert",
+    style: {
+      margin: '10px 0 0'
+    }
+  }, loginMsg), slow && /*#__PURE__*/React.createElement("button", {
     className: "lc-slow",
     onClick: () => {
       try {

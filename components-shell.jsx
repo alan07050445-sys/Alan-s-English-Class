@@ -1580,12 +1580,13 @@ try { installFestStars(); } catch (e) {}
 function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) {
   const [loading, setLoading] = React.useState(false);
   const [slow, setSlow] = React.useState(false);
+  const [loginMsg, setLoginMsg] = React.useState('');   // v714（分支）：登入失敗時說人話
   const enterMode = loggedIn && onBack;   // 已登入且在封面 → 顯示「進入課程」
   const handleLogin = async () => {
-    setLoading(true);
+    setLoading(true); setLoginMsg('');
     try { window.__alanLog && window.__alanLog('login-tap', ''); } catch (e) {}
     setTimeout(() => { setSlow(true); setLoading(false); }, 12000); // 卡住的備援（unmount 換頁即消失）
-    try { await onLogin(); try { window.__alanLog && window.__alanLog('login-ok', ''); } catch (e2) {} } catch (e) { console.error(e); try { window.__alanLog && window.__alanLog('login-error', (e && (e.code || e.message)) || e); } catch (e2) {} setLoading(false); }
+    try { await onLogin(); try { window.__alanLog && window.__alanLog('login-ok', ''); } catch (e2) {} } catch (e) { console.error(e); try { window.__alanLog && window.__alanLog('login-error', (e && (e.code || e.message)) || e); } catch (e2) {} setLoading(false); const c = e && e.code; setLoginMsg(c === 'auth/popup-blocked-ios' ? '登入視窗被 Safari 擋住了——請再按一次「使用 Google 登入」。' : (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') ? '登入視窗關掉了，請再按一次。' : ''); }
   };
   return (
     <div className="login-screen lc-cover lc-hero">
@@ -1648,6 +1649,7 @@ function LoginScreen({ onLogin, onSkip, onBack, loggedIn, userName, onLogout }) 
           <button className="lc-cta" onClick={handleLogin} disabled={loading}>
             <span className="lc-gg">G</span> {loading ? '登入中…' : '使用 Google 登入'}
           </button>
+          {loginMsg && <p className="lc-slow" role="alert" style={{ margin: '10px 0 0' }}>{loginMsg}</p>}
           {slow && (
             <button className="lc-slow" onClick={() => { try { window.signInWithGoogleRedirect && window.signInWithGoogleRedirect(); } catch (e) {} }}>
               登入卡住了？改用這個方式 →

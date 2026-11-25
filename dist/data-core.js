@@ -776,7 +776,14 @@ function _googleProvider() {
 function signInWithGoogle() {
   // 彈窗登入；被瀏覽器擋下時自動改用整頁跳轉（Chrome COOP 政策有時會卡住彈窗流程）
   return _auth.signInWithPopup(_googleProvider()).catch(err => {
-    if (err && err.code === 'auth/popup-blocked') return _auth.signInWithRedirect(_googleProvider());
+    if (err && err.code === 'auth/popup-blocked') {
+      /* v714（分支 ipad-login-fix，尚未上線）：iOS Safari（16.1 起）擋第三方儲存空間，網站在 github.io、
+         登入網域在 firebaseapp.com，整頁跳轉登入回來後拿不到登入結果＝「要第二次才可以」。
+         iPad／iPhone 上不要自動改走跳轉，改成請使用者再按一次（第二次按的彈窗不會被擋）。 */
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (ios) { const e2 = new Error('popup-blocked-ios'); e2.code = 'auth/popup-blocked-ios'; throw e2; }
+      return _auth.signInWithRedirect(_googleProvider());
+    }
     throw err;
   });
 }
