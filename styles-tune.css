@@ -5534,3 +5534,15 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .mk-drill-option:not(:disabled):hover { border-color: var(--border); background: var(--bg-card); }
   .mk-drill-btn:hover, .mk-next-btn:hover { background: var(--ink); }
 }
+
+/* v723：iPad 學習成長（成長報告）——關閉鈕 44px、高度用 dvh、圖表座標字加大、面板放寬 */
+@media (pointer: coarse) {
+  .growth-sheet { max-width: 720px; max-height: 92vh; max-height: 92dvh; }
+  .growth-x { width: 44px; height: 44px; font-size: 30px; }
+  .growth-done { min-height: 44px; padding: 10px 26px; touch-action: manipulation; }
+  .growth-axis-y, .growth-axis-x { font-size: 12px; }
+  .growth-wrow-bar { height: 8px; }
+  .growth-wrow-meta, .growth-wrow-date { font-size: 14px; }
+  .growth-stat-label { font-size: 14px; }
+}
+@media (hover: none) { .growth-x:hover { background: none; } .growth-done:hover { filter: none; } }
