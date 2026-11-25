@@ -1705,7 +1705,6 @@ input, textarea, select{ border-color: var(--border-em); }
   }
 
   /* 上一張／下一張：hover 是「墨色實心」，停住的話看起來像被按住 */
-  .fc-nav-btn:hover:not(:disabled) { background: transparent; color: inherit; }
 
   /* 「開始練習」鈕：基底是白底墨字（styles-quiz-mode.css:903），
      hover 會翻成墨底紙字 —— 原稿寫 background: transparent 是錯的，會變透明。 */
@@ -5490,4 +5489,18 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .qm-copy-due input, .pace-in, .ll2-slot select, .ll2-slot input, .ll2-form-h input[type=date],
   .ll2-f textarea, .tt-slot-t input, .tt-slot-t select, .tt-slot-s select, .tt-paste textarea,
   .exed-paste textarea { font-size: 16px !important; }
+}
+
+/* v719：iPad 單字卡練習
+   ① 連點選項／配對方塊時，iPad 會把「快速點兩下」當成放大（也會延遲反應）→ 白名單加 touch-action: manipulation
+   ② iPad 沒有真正的 hover：點過的選項會「黏」著 hover 狀態，下一題同位置的選項看起來像被選中 →
+      觸控裝置把 hover 的位移／變色收掉（正確／錯誤的狀態不受影響） */
+.fc-choice, .fc-test-choice, .fc-match-tile, .fc-fill-btn, .fc-nav-btn, .fc-tab,
+.fc-card-star, .fc-speaker-btn, .fc-flip-card { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+@media (hover: none) {
+  .fc-choice:hover:not(.correct):not(.wrong):not(.dimmed) { border-color: var(--border); background: var(--bg-card); }
+  .fc-test-choice:hover:not(.selected) { transform: none; border-color: var(--border); }
+  .fc-card-star:hover { transform: none; }
+  .fc-match-tile:hover:not(.matched):not(.selected):not(.wrong),
+  .fc-fill-btn:hover:not(.correct):not(.wrong):not(.dimmed) { transform: none; box-shadow: none; }
 }
