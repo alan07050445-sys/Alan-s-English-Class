@@ -7991,6 +7991,10 @@ function TodayTasks({
      42 列全攤開會變成 3.2 個畫面，比改之前還長。
      預設只開「最近的那一週」（最該補的），其他週收成一行，點了才展開。 */
   var [pastWk, setPastWk] = useQM({});
+  /* v702（Alan：「這個太多了」「直接開第一個沒做的單元」）：補做清單裡「一課有好幾個單元」的，預設收成一行——
+     一課 5～7 行 × 好幾課＝一整屏都是列，小朋友看不出該先做什麼。
+     收起來之後那一行有「補做 →」，直接開這一課第一個沒做的單元；做完用現有的「下一個任務」接著做。 */
+  var [pastGrp, setPastGrp] = useQM({});
 
   // v340: 之前週次還沒完成的作業——週次一往前推，舊作業就從畫面消失，
   // 小朋友會說「作業不見了」。這裡一律列出來，可以直接點回去補做。
@@ -8342,33 +8346,66 @@ function TodayTasks({
     }, /*#__PURE__*/React.createElement("span", {
       className: "tt-past-chev",
       "aria-hidden": "true"
-    }, open ? '▾' : '▸'), /*#__PURE__*/React.createElement("b", null, wk.label), /*#__PURE__*/React.createElement("span", null, "\u9084\u6709 ", wk.n, " \u9805")), open && wk.groups.map((g, gi) => /*#__PURE__*/React.createElement("div", {
-      className: 'tt-past-grp' + (g.name ? '' : ' solo'),
-      key: g.name || gi
-    }, g.name && /*#__PURE__*/React.createElement("div", {
-      className: "tt-past-grpname"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "tt-past-grpdoc",
-      "aria-hidden": "true"
-    }, "\uD83D\uDCC4"), g.name, /*#__PURE__*/React.createElement("em", null, g.rows.length, " \u9805")), g.rows.map(t => /*#__PURE__*/React.createElement("button", {
-      key: t.key,
-      className: 'tt-past-row' + (g.name ? ' in-group' : ''),
-      onClick: () => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)
-    }, t.it.type === 'upload' ? /*#__PURE__*/React.createElement("span", {
-      className: "tt-ic tt-ic-upload",
-      "aria-hidden": "true"
-    }, "\uD83D\uDCCE") : /*#__PURE__*/React.createElement(CatIcon, {
-      catId: t.cat ? t.cat.id : 'vocab',
-      className: "tt-ic"
-    }), /*#__PURE__*/React.createElement("span", {
-      className: "tt-past-name"
-    }, /*#__PURE__*/React.createElement("b", null, g.name ? qmShortLabel(t.it, g.name) : t.it.title || t.id), /*#__PURE__*/React.createElement("span", {
-      className: "tt-past-meta"
-    }, t.cat ? t.cat.titleZh || t.cat.title : '', t.lastPct != null && /*#__PURE__*/React.createElement("em", {
-      className: "tt-past-tried"
-    }, " \xB7 \u4E0A\u6B21 ", t.lastPct, " \u5206\uFF0C\u8981 80 \u5206\u624D\u7B97\u5B8C\u6210"))), /*#__PURE__*/React.createElement("span", {
-      className: "tt-past-go"
-    }, "\u88DC\u505A \u2192"))))));
+    }, open ? '▾' : '▸'), /*#__PURE__*/React.createElement("b", null, wk.label), /*#__PURE__*/React.createElement("span", null, "\u9084\u6709 ", wk.n, " \u9805", (() => {
+      /* v702：這一週還欠哪幾類——「單字 12・文法 3」，一眼知道 */
+      var c = {};
+      wk.rows.forEach(t => {
+        var n = t.cat ? t.cat.titleZh || t.cat.title : '';
+        if (n) c[n] = (c[n] || 0) + 1;
+      });
+      var parts = Object.keys(c).map(k => `${k} ${c[k]}`);
+      return parts.length ? ' · ' + parts.join('・') : '';
+    })())), open && wk.groups.map((g, gi) => {
+      var gk = wk.wid + '|' + (g.name || gi);
+      var fold = !!g.name && g.rows.length > 1; // 一課有好幾個單元才收合
+      var gOpen = !fold || !!pastGrp[gk];
+      var first = g.rows[0];
+      var cats = [...new Set(g.rows.map(t => t.cat ? t.cat.titleZh || t.cat.title : '').filter(Boolean))].join('・');
+      return /*#__PURE__*/React.createElement("div", {
+        className: 'tt-past-grp' + (g.name ? '' : ' solo') + (fold ? ' fold' : ''),
+        key: g.name || gi
+      }, g.name && /*#__PURE__*/React.createElement("div", {
+        className: "tt-past-grpname"
+      }, fold && /*#__PURE__*/React.createElement("button", {
+        className: "tt-past-grpchev",
+        "aria-expanded": gOpen,
+        "aria-label": gOpen ? '收起這一課' : '展開這一課',
+        onClick: () => setPastGrp(m => ({
+          ...m,
+          [gk]: !gOpen
+        }))
+      }, gOpen ? '▾' : '▸'), /*#__PURE__*/React.createElement("span", {
+        className: "tt-past-grpdoc",
+        "aria-hidden": "true"
+      }, "\uD83D\uDCC4"), /*#__PURE__*/React.createElement("span", {
+        className: "tt-past-grptxt",
+        onClick: fold ? () => setPastGrp(m => ({
+          ...m,
+          [gk]: !gOpen
+        })) : undefined
+      }, g.name), /*#__PURE__*/React.createElement("em", null, g.rows.length, " \u9805", cats ? ' · ' + cats : ''), fold && /*#__PURE__*/React.createElement("button", {
+        className: "tt-past-grpgo",
+        onClick: () => onOpenPastTask && onOpenPastTask(first.wid, first.cat, first.id)
+      }, "\u88DC\u505A \u2192")), gOpen && g.rows.map(t => /*#__PURE__*/React.createElement("button", {
+        key: t.key,
+        className: 'tt-past-row' + (g.name ? ' in-group' : ''),
+        onClick: () => onOpenPastTask && onOpenPastTask(t.wid, t.cat, t.id)
+      }, t.it.type === 'upload' ? /*#__PURE__*/React.createElement("span", {
+        className: "tt-ic tt-ic-upload",
+        "aria-hidden": "true"
+      }, "\uD83D\uDCCE") : /*#__PURE__*/React.createElement(CatIcon, {
+        catId: t.cat ? t.cat.id : 'vocab',
+        className: "tt-ic"
+      }), /*#__PURE__*/React.createElement("span", {
+        className: "tt-past-name"
+      }, /*#__PURE__*/React.createElement("b", null, g.name ? qmShortLabel(t.it, g.name) : t.it.title || t.id), /*#__PURE__*/React.createElement("span", {
+        className: "tt-past-meta"
+      }, t.cat ? t.cat.titleZh || t.cat.title : '', t.lastPct != null && /*#__PURE__*/React.createElement("em", {
+        className: "tt-past-tried"
+      }, " \xB7 \u4E0A\u6B21 ", t.lastPct, " \u5206\uFF0C\u8981 80 \u5206\u624D\u7B97\u5B8C\u6210"))), /*#__PURE__*/React.createElement("span", {
+        className: "tt-past-go"
+      }, "\u88DC\u505A \u2192"))));
+    }));
   }))), tasks.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "tt-empty"
   }, "\u9019\u9031\u8001\u5E2B\u6C92\u6709\u6307\u5B9A\u4F5C\u696D\u2014\u2014\u5F9E\u4E0B\u9762\u6311\u4E00\u500B\u81EA\u7531\u7DF4\u7FD2\u5427\uFF01") : /*#__PURE__*/React.createElement("div", {

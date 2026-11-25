@@ -815,3 +815,16 @@ button.mk-ans-more:hover { text-decoration: underline; text-underline-offset: 3p
 .rp-burst u:nth-child(1) { --a: 0deg; }
 @keyframes rpBurst { 0% { opacity: 1; transform: rotate(var(--a)) translateY(0); } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-48px) scale(.4); } }
 @media (prefers-reduced-motion: reduce) { .rp-note, .rp-note-ico, .rp-pop-item, .rp-pop-item .rp-chk, .rp-just.rp-done .rp-node, .rp-burst u { animation: none; } }
+
+/* v702：補做清單「一課一行」（預設收起）——左邊小箭頭展開、右邊「補做 →」直接開第一個沒做的單元 */
+.tt-past-grpname { align-items: center; gap: 8px; }
+.tt-past-grpname em { margin-left: auto; }
+.tt-past-grpchev { flex: none; width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink-2, #5c554a); font-size: 14px; cursor: pointer; border-radius: 8px; }
+.tt-past-grpchev:hover { background: rgba(230,180,40,.14); }
+.tt-past-grptxt { flex: 1 1 auto; min-width: 0; font-size: 14px; }
+.tt-past-grp.fold .tt-past-grptxt { cursor: pointer; }
+.tt-past-grp.fold > .tt-past-grpname { background: #fff; border: 1px solid var(--border, #e7dfc8); border-radius: 12px; padding: 6px 8px; min-height: 48px; }
+.tt-past-grp.fold > .tt-past-grpname em { margin-left: 8px; font-size: 12px; white-space: nowrap; }
+.tt-past-grpgo { flex: none; border: 0; border-radius: 999px; background: var(--accent, #8B3120); color: #fff; font-weight: 800; font-size: 14px; padding: 8px 16px; min-height: 40px; cursor: pointer; }
+.tt-past-grp.fold .tt-past-row { margin-top: 4px; }
+@media (min-width: 641px) and (max-width: 1400px) { .tt-past-grpchev { width: 44px; height: 44px; } .tt-past-grpgo { min-height: 44px; } }

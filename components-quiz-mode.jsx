@@ -6581,6 +6581,10 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
      42 列全攤開會變成 3.2 個畫面，比改之前還長。
      預設只開「最近的那一週」（最該補的），其他週收成一行，點了才展開。 */
   const [pastWk, setPastWk] = useQM({});
+  /* v702（Alan：「這個太多了」「直接開第一個沒做的單元」）：補做清單裡「一課有好幾個單元」的，預設收成一行——
+     一課 5～7 行 × 好幾課＝一整屏都是列，小朋友看不出該先做什麼。
+     收起來之後那一行有「補做 →」，直接開這一課第一個沒做的單元；做完用現有的「下一個任務」接著做。 */
+  const [pastGrp, setPastGrp] = useQM({});
 
   // v340: 之前週次還沒完成的作業——週次一往前推，舊作業就從畫面消失，
   // 小朋友會說「作業不見了」。這裡一律列出來，可以直接點回去補做。
@@ -6855,17 +6859,37 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
                 <div className="tt-past-wkblock" key={wk.wid}>
                   <button className="tt-past-wkhead" onClick={() => setPastWk(m => ({ ...m, [wk.wid]: !open }))} aria-expanded={open}>
                     <span className="tt-past-chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
-                    <b>{wk.label}</b><span>還有 {wk.n} 項</span>
+                    <b>{wk.label}</b>
+                    <span>還有 {wk.n} 項{(() => {
+                      /* v702：這一週還欠哪幾類——「單字 12・文法 3」，一眼知道 */
+                      const c = {}; wk.rows.forEach(t => { const n = t.cat ? (t.cat.titleZh || t.cat.title) : ''; if (n) c[n] = (c[n] || 0) + 1; });
+                      const parts = Object.keys(c).map(k => `${k} ${c[k]}`);
+                      return parts.length ? ' · ' + parts.join('・') : '';
+                    })()}</span>
                   </button>
-                  {open && wk.groups.map((g, gi) => (
-                    <div className={'tt-past-grp' + (g.name ? '' : ' solo')} key={g.name || gi}>
+                  {open && wk.groups.map((g, gi) => {
+                    const gk = wk.wid + '|' + (g.name || gi);
+                    const fold = !!g.name && g.rows.length > 1;        // 一課有好幾個單元才收合
+                    const gOpen = !fold || !!pastGrp[gk];
+                    const first = g.rows[0];
+                    const cats = [...new Set(g.rows.map(t => t.cat ? (t.cat.titleZh || t.cat.title) : '').filter(Boolean))].join('・');
+                    return (
+                    <div className={'tt-past-grp' + (g.name ? '' : ' solo') + (fold ? ' fold' : '')} key={g.name || gi}>
                       {g.name && (
                         <div className="tt-past-grpname">
-                          <span className="tt-past-grpdoc" aria-hidden="true">📄</span>{g.name}
-                          <em>{g.rows.length} 項</em>
+                          {fold && (
+                            <button className="tt-past-grpchev" aria-expanded={gOpen} aria-label={gOpen ? '收起這一課' : '展開這一課'}
+                              onClick={() => setPastGrp(m => ({ ...m, [gk]: !gOpen }))}>{gOpen ? '▾' : '▸'}</button>
+                          )}
+                          <span className="tt-past-grpdoc" aria-hidden="true">📄</span>
+                          <span className="tt-past-grptxt" onClick={fold ? () => setPastGrp(m => ({ ...m, [gk]: !gOpen })) : undefined}>{g.name}</span>
+                          <em>{g.rows.length} 項{cats ? ' · ' + cats : ''}</em>
+                          {fold && (
+                            <button className="tt-past-grpgo" onClick={() => onOpenPastTask && onOpenPastTask(first.wid, first.cat, first.id)}>補做 →</button>
+                          )}
                         </div>
                       )}
-                      {g.rows.map(t => (
+                      {gOpen && g.rows.map(t => (
                         <button
                           key={t.key}
                           className={'tt-past-row' + (g.name ? ' in-group' : '')}
@@ -6886,7 +6910,8 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
                         </button>
                       ))}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 );
               })}
