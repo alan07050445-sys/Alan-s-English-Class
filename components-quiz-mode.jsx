@@ -746,16 +746,16 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                 {cat.titleZh && <div className="qm-block-title-zh">{cat.title}</div>}
                 {total > 0 ? (
                   <>
-                    <div className="qm-block-count">{(() => {
-                      // v311 (#21): 達 80 才算完成——看 .done，不看紀錄是否存在
-                      const doneUnits = quizItems.filter(it => { const p = qmProg[`${weekId}_${it.id}`]; return p && p.done; }).length;
-                      return doneUnits >= quizItems.length ? '本週練習完成 ✓' : `完成 ${doneUnits} / ${quizItems.length}`;
-                    })()}</div>
+                    {/* v710（Alan：「圖2 裡面文字太多，失去美感」）：「完成 N / M」併進進度條右邊（0/8），不再單獨佔一行 */}
                     <div className="qm-block-progress">
                       <div className="qm-progress-bar">
                         <div className="qm-progress-fill" style={{ width: pct + '%' }}/>
                       </div>
-                      <span className="qm-pct">{pct}%</span>
+                      <span className="qm-pct">{(() => {
+                        // v311 (#21): 達 80 才算完成——看 .done，不看紀錄是否存在
+                        const doneUnits = quizItems.filter(it => { const p = qmProg[`${weekId}_${it.id}`]; return p && p.done; }).length;
+                        return doneUnits >= quizItems.length ? '✓ 完成' : `${doneUnits}/${quizItems.length}`;
+                      })()}</span>
                     </div>
                     {!editMode && (() => {
                       // 接下來要練的單元＋已練平均分（有才顯示）
@@ -767,7 +767,6 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
                         ? Math.round(scored.reduce((s, p) => s + p.score / p.total * 100, 0) / scored.length)
                         : null;
                       const parts = [];
-                      if (nextItem) parts.push(`接下來：${nextItem.title}`);
                       if (avg != null) parts.push(`已練平均 ${avg} 分`);
                       return parts.length ? <div className="qm-block-meta">{parts.join(' · ')}</div> : null;
                     })()}

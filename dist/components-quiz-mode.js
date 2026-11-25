@@ -957,15 +957,6 @@ function QuizModeBlocks({
     }, cat.titleZh || cat.title), cat.titleZh && /*#__PURE__*/React.createElement("div", {
       className: "qm-block-title-zh"
     }, cat.title), total > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-      className: "qm-block-count"
-    }, (() => {
-      // v311 (#21): 達 80 才算完成——看 .done，不看紀錄是否存在
-      var doneUnits = quizItems.filter(it => {
-        var p = qmProg[`${weekId}_${it.id}`];
-        return p && p.done;
-      }).length;
-      return doneUnits >= quizItems.length ? '本週練習完成 ✓' : `完成 ${doneUnits} / ${quizItems.length}`;
-    })()), /*#__PURE__*/React.createElement("div", {
       className: "qm-block-progress"
     }, /*#__PURE__*/React.createElement("div", {
       className: "qm-progress-bar"
@@ -976,7 +967,14 @@ function QuizModeBlocks({
       }
     })), /*#__PURE__*/React.createElement("span", {
       className: "qm-pct"
-    }, pct, "%")), !editMode && (() => {
+    }, (() => {
+      // v311 (#21): 達 80 才算完成——看 .done，不看紀錄是否存在
+      var doneUnits = quizItems.filter(it => {
+        var p = qmProg[`${weekId}_${it.id}`];
+        return p && p.done;
+      }).length;
+      return doneUnits >= quizItems.length ? '✓ 完成' : `${doneUnits}/${quizItems.length}`;
+    })())), !editMode && (() => {
       // 接下來要練的單元＋已練平均分（有才顯示）
       var nextItem = quizItems.find(it => {
         var p = qmProg[`${weekId}_${it.id}`];
@@ -985,7 +983,6 @@ function QuizModeBlocks({
       var scored = quizItems.map(it => qmProg[`${weekId}_${it.id}`]).filter(p => p && p.score != null && p.total > 0); // v270: 無分數不列入
       var avg = scored.length ? Math.round(scored.reduce((s, p) => s + p.score / p.total * 100, 0) / scored.length) : null;
       var parts = [];
-      if (nextItem) parts.push(`接下來：${nextItem.title}`);
       if (avg != null) parts.push(`已練平均 ${avg} 分`);
       return parts.length ? /*#__PURE__*/React.createElement("div", {
         className: "qm-block-meta"

@@ -5408,3 +5408,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .page-lobby .shell.main-enter:has(> .tt) { row-gap: 20px; }
   .page-lobby .shell.main-enter:has(> .tt) > .growth-summary-row { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 20px; margin: 0; align-items: stretch; }
 }
+
+/* v710（Alan：圖1「題目取名比較長就換很多行」）：補做清單的「一課」那一列——
+   課名最多兩行、超過就刪節號；「N 項 · 類別」放到課名正下方，不再跟課名搶橫向空間；「補做 →」固定在右邊。 */
+.tt-past-grp.fold > .tt-past-grpname {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; row-gap: 2px;
+}
+.tt-past-grp.fold > .tt-past-grpname > .tt-past-grpchev { grid-column: 1; grid-row: 1 / span 2; }
+.tt-past-grp.fold > .tt-past-grpname > .tt-past-grpdoc  { grid-column: 2; grid-row: 1 / span 2; }
+.tt-past-grp.fold > .tt-past-grpname > .tt-past-grptxt  {
+  grid-column: 3; grid-row: 1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: break-word; line-height: 1.3;
+}
+.tt-past-grp.fold > .tt-past-grpname > em { grid-column: 3; grid-row: 2; margin-left: 0; justify-self: start; }
+.tt-past-grp.fold > .tt-past-grpname > .tt-past-grpgo { grid-column: 4; grid-row: 1 / span 2; }
