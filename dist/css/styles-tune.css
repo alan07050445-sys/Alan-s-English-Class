@@ -4643,3 +4643,19 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .growth-stat-label { font-size: 14px; }
 }
 @media (hover: none) { .growth-x:hover { background: none; } .growth-done:hover { filter: none; } }
+
+/* v724：iPad 星星／商店——買的按鈕、分頁、篩選 chip 至少 44px；面板 dvh；點過的商品不黏 hover */
+@media (pointer: coarse) {
+  .sp-panel { max-height: 92vh; max-height: 92dvh; width: min(760px, 96vw); }
+  .sp-head .modal-close { width: 44px; height: 44px; }
+  .sp-tabs button { min-height: 48px; font-size: 15.5px; }
+  .sp-filter button { min-height: 44px; padding: 8px 16px; font-size: 14px; }
+  .sp-item-btn { min-height: 44px; font-size: 14px; padding: 10px 8px; }
+  .sp-item-name { font-size: 14.5px; }
+  .sp-item-cost { font-size: 14px; }
+  .sp-shop { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .sp-speak { min-height: 44px; }
+  .sp-tabs button, .sp-filter button, .sp-item-btn, .sp-speak { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .sp-body { -webkit-overflow-scrolling: touch; }
+}
+@media (hover: none) { .sp-speak:hover { transform: none; } }
