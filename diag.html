@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Alan's English Class — 診斷</title>
+<style>
+  body { font-family: -apple-system, "PingFang TC", sans-serif; margin: 0; padding: 20px; background: #F4F0E7; color: #15130E; line-height: 1.6; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 22px 0 6px; }
+  p.sub { color: #6b6455; margin: 0 0 14px; }
+  .box { background: #fff; border: 1px solid #ddd6c4; border-radius: 12px; padding: 12px 14px; margin: 8px 0; font-size: 15px; word-break: break-all; }
+  .ok { color: #1f7a4d; font-weight: 700; } .bad { color: #b3261e; font-weight: 700; } .warn { color: #8a6d1c; font-weight: 700; }
+  button { font-size: 17px; padding: 14px 20px; min-height: 48px; border-radius: 12px; border: 0; background: #8B3120; color: #fff; font-weight: 700; margin: 8px 8px 0 0; }
+  button.ghost { background: #fff; color: #8B3120; border: 1.5px solid #8B3120; }
+  code { font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>🩺 診斷（這台裝置）</h1>
+<p class="sub">這一頁只讀取這台裝置的狀態，不會改任何課程資料。看完把整個畫面截圖給 Claude。</p>
+
+<h2>1. 網站版本</h2>
+<div class="box" id="ver">讀取中…</div>
+
+<h2>2. 這台裝置存的課程快取</h2>
+<div class="box" id="cache">讀取中…</div>
+
+<h2>3. 能不能連到雲端課程資料（G4）</h2>
+<div class="box" id="cloud">讀取中…</div>
+
+<h2>4. 一鍵清掉這台裝置的舊快取</h2>
+<div class="box">按下去只會清掉「這台裝置」存的課程快取、服務程式和網頁快取，然後回到首頁重新載入。<b>不會動雲端資料、不會登出、不會影響星星和成績</b>（那些都在雲端）。</div>
+<button id="fix">清掉舊快取並重新載入</button>
+<button class="ghost" id="home">先回首頁</button>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const BASE = location.pathname.replace(/[^/]*$/, '');
+  const KEYS = { g1: 'alans-english-g1-data-v1', g2: 'alans-english-g2-data-v1', g3: 'alans-english-data-v3',
+                 g4: 'alans-english-g4-data-v1', g5: 'alans-english-g5-data-v1', g6: 'alans-english-g6-data-v1' };
+
+  /* 1. 版本：抓一次線上的 index.html，找 ?v=N；再看 service worker 與快取名稱 */
+  (async function () {
+    const lines = [];
+    lines.push('時間：' + new Date().toLocaleString('zh-TW') + '　網路：' + (navigator.onLine ? '<span class="ok">在線</span>' : '<span class="bad">離線</span>'));
+    try {
+      const r = await fetch(BASE + 'index.html', { cache: 'no-store' });
+      const t = await r.text();
+      const m = t.match(/\?v=(\d+)/);
+      lines.push('線上最新版本：<b>v' + (m ? m[1] : '?') + '</b>');
+    } catch (e) { lines.push('線上最新版本：<span class="bad">讀不到（' + esc(e.message) + '）</span>'); }
+    try {
+      const regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : [];
+      lines.push('服務程式（service worker）：' + (regs.length ? regs.map(r => esc((r.active && r.active.scriptURL || '').split('/').pop())).join('、') : '沒有'));
+      const names = window.caches ? await caches.keys() : [];
+      lines.push('網頁快取：' + (names.length ? names.map(esc).join('、') : '沒有'));
+      const cur = names.filter(n => /^alans-english-v/.test(n)).map(n => n.replace(/^alans-english-v/, ''));
+      if (cur.length) lines.push('這台裝置目前抓的版本：<b>v' + cur.join('、v') + '</b>');
+    } catch (e) { lines.push('快取資訊讀不到：' + esc(e.message)); }
+    $('ver').innerHTML = lines.join('<br>');
+  })();
+
+  /* 2. 本機課程快取：只列「有幾週、有沒有種子週、有幾題」，不列內容 */
+  (function () {
+    const lines = [];
+    try {
+      lines.push('目前選的年級：<b>' + esc(localStorage.getItem('alan-grade') || '（沒有）') + '</b>');
+      Object.keys(KEYS).forEach(g => {
+        const raw = localStorage.getItem(KEYS[g]);
+        if (raw == null) { lines.push(g.toUpperCase() + '：沒有快取'); return; }
+        let w; try { w = JSON.parse(raw); } catch (e) { lines.push(g.toUpperCase() + '：<span class="bad">快取壞了</span>'); return; }
+        const ids = Object.keys(w || {});
+        const items = ids.reduce((n, id) => n + Object.values((w[id] && w[id].items) || {}).reduce((m, a) => m + (Array.isArray(a) ? a.length : 0), 0), 0);
+        const seed = ids.filter(id => /^g\d-2026-W\d\d$/.test(id));
+        const cls = (seed.length === ids.length && ids.length) ? 'bad' : (seed.length ? 'warn' : 'ok');
+        lines.push(g.toUpperCase() + '：<span class="' + cls + '">' + ids.length + ' 週、共 ' + items + ' 題' + (seed.length ? '、其中 ' + seed.length + ' 週是種子週' : '') + '</span>'
+          + '<br><code>' + esc(ids.slice(0, 4).join('、')) + (ids.length > 4 ? '…' : '') + '</code>');
+      });
+    } catch (e) { lines.push('讀不到：' + esc(e.message)); }
+    $('cache').innerHTML = lines.join('<br>');
+  })();
+
+  /* 3. 直接問雲端（Firestore 的公開 REST，跟網站讀的是同一份文件） */
+  (async function () {
+    const t0 = Date.now();
+    try {
+      const u = 'https://firestore.googleapis.com/v1/projects/alan-s-english-class/databases/(default)/documents/class/data_g4?key=AIzaSyD1fQDneiwkGhbMOUxpOzVxZi8EIkourAs';
+      const r = await fetch(u, { cache: 'no-store' });
+      if (!r.ok) { $('cloud').innerHTML = '<span class="bad">雲端回應 ' + r.status + '</span>'; return; }
+      const d = await r.json();
+      const f = d.fields || {};
+      const wk = (((f.weeks || {}).mapValue || {}).fields) || {};
+      const order = ((((f.weekOrder || {}).arrayValue || {}).values) || []).map(v => v.stringValue);
+      const seed = Object.keys(wk).filter(id => /^g\d-2026-W\d\d$/.test(id));
+      $('cloud').innerHTML = '<span class="ok">連得到</span>（' + (Date.now() - t0) + ' 毫秒）<br>雲端 G4：<b>' + Object.keys(wk).length + ' 週</b>、週次順序 ' + order.length + ' 週、種子週 '
+        + (seed.length ? '<span class="bad">' + seed.length + '</span>' : '<span class="ok">0</span>') + '<br>最後更新：' + esc(d.updateTime || '');
+    } catch (e) { $('cloud').innerHTML = '<span class="bad">連不到雲端：' + esc(e.message) + '</span><br>這台裝置的網路可能擋住了 Google 的服務（內容過濾、VPN、省電模式、學校或公司網路）。換一個網路再試。'; }
+  })();
+
+  /* 4. 清除並重新載入 */
+  $('fix').onclick = async function () {
+    this.disabled = true; this.textContent = '清除中…';
+    try { Object.keys(KEYS).forEach(g => { localStorage.removeItem(KEYS[g]); localStorage.removeItem(KEYS[g].replace('-data-', '-order-')); localStorage.removeItem(KEYS[g] + ':bak'); }); } catch (e) {}
+    try { if (navigator.serviceWorker) (await navigator.serviceWorker.getRegistrations()).forEach(r => r.unregister()); } catch (e) {}
+    try { if (window.caches) (await caches.keys()).filter(n => /^alans-english-/.test(n)).forEach(n => caches.delete(n)); } catch (e) {}
+    setTimeout(() => { location.href = BASE; }, 600);
+  };
+  $('home').onclick = function () { location.href = BASE; };
+})();
+</script>
+</body>
+</html>
