@@ -4659,3 +4659,16 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .sp-body { -webkit-overflow-scrolling: touch; }
 }
 @media (hover: none) { .sp-speak:hover { transform: none; } }
+
+/* v725：iPad 老師登入後的門口頁（選年級／老師後台大卡／暫存區／暑假卡）
+   ① 收起的「暫存」條、暑假卡至少 44px；② 連點不放大；③ 點過的卡片不黏著 hover 上浮 */
+@media (pointer: coarse) {
+  .gs-stash-bar { min-height: 48px; }
+  .gs-summer-card, .gs-mine, .grade-selector .gs-admin, .grade-selector .gs-card { min-height: 44px; }
+  .grade-selector .gs-card, .grade-selector .gs-admin, .gs-mine, .gs-summer-card, .gs-stash-bar, .gs-switch { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+}
+@media (hover: none) {
+  .grade-selector .gs-card:hover, .grade-selector .gs-admin:hover, .gs-mine:hover, .gs-summer-card:hover { transform: none; }
+  .grade-selector .gs-card:hover .gs-card-cta { transform: none; }
+  .gs-stash-bar:hover { border-color: var(--border, #ddd3b8); background: transparent; }
+}
