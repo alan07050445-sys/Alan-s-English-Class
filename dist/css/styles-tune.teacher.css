@@ -888,3 +888,18 @@
 .cardfix details summary { cursor: pointer; font-size: 13px; color: var(--ink-muted); margin: 6px 0 0 26px; }
 .cardfix-diff { flex-basis: 100%; font-size: 12.5px; line-height: 1.6; word-break: break-word; }
 .cardfix-diff s { color: #A33; } .cardfix-diff b { color: #2f7d4f; font-weight: 600; }
+
+/* v715（Alan：「iPad 老師後台點進去無法滑動，一滑就滑到背景」）
+   原因：.tdash-main 是 flex 直欄但沒有 min-height:0，內容一長就把自己撐高、超出畫面，
+   裡面的 .tdash-content 根本沒有「固定高度」所以不會捲；手指滑動就傳給後面的頁面。
+   修法：整條高度鏈（overlay → shell → main → content）都釘死，捲動只發生在 .tdash-content；
+   開著的時候把背後的頁面鎖住（html.tdash-lock）。 */
+.dash-overlay.tdash { overflow: hidden; height: 100vh; height: 100dvh; }
+.dash-overlay.tdash .tdash-shell { height: 100%; min-height: 0; }
+.dash-overlay.tdash .tdash-main { min-height: 0; height: 100%; overflow: hidden; }
+.dash-overlay.tdash .tdash-content {
+  min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; touch-action: pan-y pan-x;
+}
+.dash-overlay.tdash .tdash-side { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-behavior: none; }

@@ -4261,6 +4261,11 @@ function TeacherDashboard({
 
   // v352: 手機的分頁列是一條可左右滑的膠囊列——換分頁後把目前這顆捲進畫面，
   //       不然切到後面幾個分頁時看不到自己站在哪裡。
+  // v715: 後台開著時鎖住背後的頁面（iPad 滑動會外溢到背景）
+  useDashE(() => {
+    document.documentElement.classList.add('tdash-lock');
+    return () => document.documentElement.classList.remove('tdash-lock');
+  }, []);
   useDashE(() => {
     var el = document.querySelector('.tdash-nav-item.on');
     if (el && el.scrollIntoView) el.scrollIntoView({
