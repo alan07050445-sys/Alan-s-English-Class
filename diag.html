@@ -28,7 +28,10 @@
 <h2>3. 能不能連到雲端課程資料（G4）</h2>
 <div class="box" id="cloud">讀取中…</div>
 
-<h2>4. 一鍵清掉這台裝置的舊快取</h2>
+<h2>4. 閃退／異常紀錄（這台裝置）</h2>
+<div class="box" id="crash">讀取中…</div>
+
+<h2>5. 一鍵清掉這台裝置的舊快取</h2>
 <div class="box">按下去只會清掉「這台裝置」存的課程快取、服務程式和網頁快取，然後回到首頁重新載入。<b>不會動雲端資料、不會登出、不會影響星星和成績</b>（那些都在雲端）。</div>
 <button id="fix">清掉舊快取並重新載入</button>
 <button class="ghost" id="home">先回首頁</button>
@@ -99,7 +102,15 @@
     } catch (e) { $('cloud').innerHTML = '<span class="bad">連不到雲端：' + esc(e.message) + '</span><br>這台裝置的網路可能擋住了 Google 的服務（內容過濾、VPN、省電模式、學校或公司網路）。換一個網路再試。'; }
   })();
 
-  /* 4. 清除並重新載入 */
+  /* 4. 閃退紀錄（index.html 裡的 alan-crashlog） */
+  (function () {
+    try {
+      const log = JSON.parse(localStorage.getItem('alan-crashlog') || '[]');
+      $('crash').innerHTML = log.length ? log.slice().reverse().map(r => '<div><code>' + esc(r.t) + ' v' + esc(r.v) + '</code> <b class="' + (r.k === 'dirty-reload' ? 'bad' : 'warn') + '">' + esc(r.k) + '</b> ' + esc(r.m) + '</div>').join('') : '<span class="ok">沒有紀錄</span>（還沒閃退過，或是 v709 之前的事）';
+    } catch (e) { $('crash').textContent = '讀不到：' + e.message; }
+  })();
+
+  /* 5. 清除並重新載入 */
   $('fix').onclick = async function () {
     this.disabled = true; this.textContent = '清除中…';
     try { Object.keys(KEYS).forEach(g => { localStorage.removeItem(KEYS[g]); localStorage.removeItem(KEYS[g].replace('-data-', '-order-')); localStorage.removeItem(KEYS[g] + ':bak'); }); } catch (e) {}
