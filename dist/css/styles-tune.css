@@ -2194,7 +2194,7 @@ input, textarea, select{ border-color: var(--border-em); }
   display: inline-flex; align-items: center; justify-content: center;
   box-sizing: border-box;
 }
-.brand-home { padding-top: 8px; padding-bottom: 8px; }
+.brand-home { padding-top: 14px; padding-bottom: 14px; }
 
 /* ══ v390 補：單元列改成 <button> 之後要把瀏覽器預設的置中拿掉 ══
    v390 把學生端的 .qm-unit-row 從 <div> 換成 <button>（為了鍵盤可以走到），
@@ -4728,4 +4728,13 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-p-card .fc-back-img-wrap,
   .fc-p-card .fc-back-img-wrap img { max-height: 468px; }
   .fc-p-learn .fc-learn-img { max-height: 480px; }
+}
+
+/* v729b：圖片真正長大 20% 的關鍵是「讓出垂直空間」——卡片高度被視窗限制（1440×900 時背面只有 480px），
+   圖片是吃剩下的空間。例句縮小之後再把上下內距、行高收一點，圖片才有地方變大（實測 248→約 300px）。 */
+@media (hover: hover) and (pointer: fine) and (min-width: 1025px) {
+  .fc-p-card .fc-face.fc-back { padding-top: 14px; padding-bottom: 14px; }
+  .fc-p-card .fc-back-img-wrap { margin-bottom: 8px; }
+  .fc-p-card .fc-back .fc-zh { line-height: 1.15; margin-bottom: 8px; }
+  .fc-p-card .fc-example { line-height: 1.5; }
 }
