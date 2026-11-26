@@ -5388,7 +5388,9 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 /* v707（Alan：「橫式的時候，今天的任務跟單字卡（練習類別）各站左右」）：
    iPad 橫式把大廳分成兩欄——左＝今天的任務，右＝自由練習的類別卡；週標題、成長摘要仍橫跨整列。
    用 :has(> .tt) 限定「真的有今天的任務」才分欄（暑假題庫等沒有任務區的就維持原樣）。 */
-@media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) {
+/* v733（Alan：「電腦版跟 iPad 一樣改成左右兩邊」）：滑鼠裝置、寬 1100px 以上也走同一套兩欄（再窄類別卡會擠到拆行）。 */
+@media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape),
+       (hover: hover) and (pointer: fine) and (min-width: 1100px) {
   .page-lobby .shell.main-enter:has(> .tt) { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); column-gap: 20px; align-items: stretch; }
   .page-lobby .shell.main-enter:has(> .tt) > * { grid-column: 1 / -1; }
   .page-lobby .shell.main-enter:has(> .tt) > .wh-task-cue { display: none; }   /* 任務就在旁邊，指向下方的箭頭沒意義了 */

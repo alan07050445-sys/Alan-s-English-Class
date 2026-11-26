@@ -701,7 +701,7 @@ function QuizModeBlocks({ week, weekId, onEnterCat, editMode, onUpdateWeek, onAd
         </div>
       ) : (
         <div className="qm-blocks-head qm-blocks-head-view">
-          <h2 className="qm-blocks-title">{/^sl-/.test(weekId) ? '我的暑假練習' : '自由練習'}</h2>
+          <h2 className="qm-blocks-title">{/^sl-/.test(weekId) ? '我的暑假練習' : '六大分類'}</h2>
         </div>
       )}
       <div className="qm-blocks">
@@ -6922,7 +6922,7 @@ function TodayTasks({ week, allItems, qmProg, weekId, categories, onOpenTask, we
       )}
 
       {tasks.length === 0 ? (
-        <div className="tt-empty">這週老師沒有指定作業——從下面挑一個自由練習吧！</div>
+        <div className="tt-empty">這週老師沒有指定作業——從下面的六大分類挑一個練習吧！</div>
       ) : (
         <div className="tt-list">
           {flat.map((e, i) => {

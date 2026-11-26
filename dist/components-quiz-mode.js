@@ -914,7 +914,7 @@ function QuizModeBlocks({
     className: "qm-blocks-head qm-blocks-head-view"
   }, /*#__PURE__*/React.createElement("h2", {
     className: "qm-blocks-title"
-  }, /^sl-/.test(weekId) ? '我的暑假練習' : '自由練習')), /*#__PURE__*/React.createElement("div", {
+  }, /^sl-/.test(weekId) ? '我的暑假練習' : '六大分類')), /*#__PURE__*/React.createElement("div", {
     className: "qm-blocks"
   }, activeCats.map(cat => {
     var allCatItems = (week.items || {})[cat.id] || [];
@@ -8409,7 +8409,7 @@ function TodayTasks({
     }));
   }))), tasks.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "tt-empty"
-  }, "\u9019\u9031\u8001\u5E2B\u6C92\u6709\u6307\u5B9A\u4F5C\u696D\u2014\u2014\u5F9E\u4E0B\u9762\u6311\u4E00\u500B\u81EA\u7531\u7DF4\u7FD2\u5427\uFF01") : /*#__PURE__*/React.createElement("div", {
+  }, "\u9019\u9031\u8001\u5E2B\u6C92\u6709\u6307\u5B9A\u4F5C\u696D\u2014\u2014\u5F9E\u4E0B\u9762\u7684\u516D\u5927\u5206\u985E\u6311\u4E00\u500B\u7DF4\u7FD2\u5427\uFF01") : /*#__PURE__*/React.createElement("div", {
     className: "tt-list"
   }, flat.map((e, i) => {
     if (!e.group) return renderRow(e.tasks[0], null);
