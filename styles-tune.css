@@ -5671,3 +5671,7 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
 /* v734（iPad 模擬實測）：測驗成績頁比畫面長時，播放器還被固定高度（useFitHeight 寫的 inline height）卡著，
    底色只畫到一半、下面的題目掉在外面 → 成績頁讓它照內容長高。 */
 .fc-player:has(> .fc-complete) { height: auto !important; }
+
+/* v735（iPad 模擬實測）：分段閱讀的簡答框與「送出答案」寬 100% 又左右各 20px 外距 → 整塊往右凸出卡片。
+   在題目卡裡面左右外距歸零，跟題目文字左右對齊。 */
+.gr-q .qm-writing-input, .gr-q .wp-submit { margin-left: 0; margin-right: 0; width: 100%; box-sizing: border-box; }
