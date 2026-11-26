@@ -5715,3 +5715,9 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
 .uh-status { margin: 14px auto 0; max-width: 480px; font-size: 14px; font-weight: 700; color: #7a5a00; background: #fdf6e0; border: 1px solid #ecd999; border-radius: 10px; padding: 10px 14px; }
 .uh-thumb-del:disabled { display: none; }
 @media (pointer: coarse) { .uh-thumb { width: 112px; height: 112px; } .uh-thumb-del { width: 44px; height: 44px; top: 2px; right: 2px; touch-action: manipulation; } }
+
+/* v740（iPad 模擬實測：老師看學生作業）：直式時單元名稱被「…」截掉，後面的「📎 待批改」「✗ 錯 N 題」一起不見
+   → 名稱可以換行，按鈕永遠看得到。分數欄放寬，提示字不被切。 */
+.sdetail-iname { white-space: normal; overflow: visible; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.sdetail-filesbtn, .sdetail-wrongbtn, .sdetail-late { white-space: nowrap; display: inline-block; }
+@media (pointer: coarse) { .sdetail-grade-input { width: 136px; } .sdetail-files { margin-left: 8px; } }

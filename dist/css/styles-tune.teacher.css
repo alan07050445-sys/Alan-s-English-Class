@@ -933,3 +933,9 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .ask-body { -webkit-overflow-scrolling: touch; }
   .ask-head .modal-close { width: 44px; height: 44px; }}
 @media (hover: none) { .ask-eg button:hover { border-color: var(--border, #DDD6C4); }}
+
+/* v740（iPad 模擬實測：老師看學生作業）：直式時單元名稱被「…」截掉，後面的「📎 待批改」「✗ 錯 N 題」一起不見
+   → 名稱可以換行，按鈕永遠看得到。分數欄放寬，提示字不被切。 */
+.sdetail-iname { white-space: normal; overflow: visible; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.sdetail-filesbtn, .sdetail-wrongbtn, .sdetail-late { white-space: nowrap; display: inline-block; }
+@media (pointer: coarse) { .sdetail-grade-input { width: 136px; } .sdetail-files { margin-left: 8px; }}

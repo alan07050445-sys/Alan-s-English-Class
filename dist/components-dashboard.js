@@ -5207,6 +5207,7 @@ function StudentDetail({
         type: "number",
         min: "0",
         max: "100",
+        inputMode: "numeric",
         className: "sdetail-grade-input",
         placeholder: "\u5206\u6578 0\u2013100",
         value: gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score != null ? prog.score : '',

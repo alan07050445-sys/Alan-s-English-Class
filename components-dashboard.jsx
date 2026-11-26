@@ -4157,7 +4157,7 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
                       </div>
                       <div className="sdetail-grade-row">
                         <input
-                          type="number" min="0" max="100"
+                          type="number" min="0" max="100" inputMode="numeric"
                           className="sdetail-grade-input"
                           placeholder="分數 0–100"
                           value={gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : (prog.score != null ? prog.score : '')}
