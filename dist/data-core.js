@@ -1352,8 +1352,25 @@ function speakSentences(text, { rate = 0.82, lang = 'en-US', onDone, onProgress,
 // ── Sound Effects ──────────────────────────────────────────────────────
 let _audioCtx = null;
 function _getAudio() {
-  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  /* v743（Alan：iPad 沒有答對／答錯音效）：iOS 的 AudioContext 如果不是在「手指點下去」那一刻建立／喚醒，
+     會一直停在 suspended（登入時的連勝音效、切到別的 App 再回來的 interrupted 也一樣），之後全部沒聲音。
+     這裡每次播放前叫醒一次，下面再掛一個「任何一次點擊就解鎖」。 */
+  if (_audioCtx.state !== 'running' && _audioCtx.resume) { const p = _audioCtx.resume(); if (p && p.catch) p.catch(() => {}); }
   return _audioCtx;
+}
+function _unlockAudio() {
+  try {
+    if (_audioCtx && _audioCtx.state === 'running') return;
+    const ctx = _getAudio();
+    const src = ctx.createBufferSource();          // iOS 要在手勢裡真的放一下（無聲）才算解鎖
+    src.buffer = ctx.createBuffer(1, 1, 22050);
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch (e) {}
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  ['touchend', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, _unlockAudio, { capture: true, passive: true }));
 }
 function playSound(type) {
   try {
