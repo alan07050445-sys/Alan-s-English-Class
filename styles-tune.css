@@ -5603,3 +5603,18 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
 @media (hover: none) {
   .week-nav button:not(:disabled):hover { transform: none; box-shadow: none; border-color: var(--border); background: var(--bg-card); }
 }
+
+/* v728：模擬 iPad 實測發現——大廳整頁 zoom:.8（v705）會把 44px 的觸控目標也縮成 35px。
+   在縮放範圍內，頁首與週次切換這幾個最常按的鈕寫成 55px（×0.8＝實際 44px）。 */
+@media (pointer: coarse) and (min-width: 641px) and (max-width: 1400px) {
+  .page-lobby .week-nav button,
+  .page-lobby .header .icon-btn,
+  .page-lobby .header .mistakes-btn,
+  .page-lobby .header .stars-btn,
+  .page-lobby .header .checkin-btn,
+  .page-lobby .header .user-chip,
+  .page-lobby .header .dashboard-btn,
+  .page-lobby .header .fs-btn,
+  .page-lobby .header .signin-btn { min-width: 55px; min-height: 55px; }
+  .page-lobby .week-nav button, .page-lobby .header .icon-btn { width: 55px; height: 55px; }
+}
