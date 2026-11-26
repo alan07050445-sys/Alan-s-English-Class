@@ -1,0 +1,12 @@
+import fs from 'fs';
+const R = new URL('..', import.meta.url);
+const s = fs.readFileSync(new URL('components-quiz-mode.jsx', R), 'utf8');
+let f = 0; const ok = (m, c) => { console.log((c ? '  ✅ ' : '  ❌ ') + m); if (!c) f++; };
+const m = s.match(/const hintZh = \(c\) => \{[\s\S]*?\n  \};/);
+ok('找得到 hintZh', !!m);
+const hintZh = new Function(m[0] + ' return hintZh;')();
+ok('例句裡的答案被遮掉', hintZh({ word: 'lately', zh: 'adv. 最近 I have been very busy Lately.' }) === 'adv. 最近 I have been very busy ＿＿＿.');
+ok('一般中文不動', hintZh({ word: 'near', zh: 'adv. 在附近' }) === 'adv. 在附近');
+ok('沒有單字時不當掉', hintZh({ zh: '中文' }) === '中文');
+ok('聽寫輸入框關掉自動更正', /autoCorrect="off" autoCapitalize="none" spellCheck=\{false\}/.test(s));
+process.exit(f ? 1 : 0);

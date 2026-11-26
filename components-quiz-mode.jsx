@@ -2558,6 +2558,12 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
   const current = words[idx];
   const pct     = Math.round(idx / total * 100);
   const showZh  = item.spellShowZh !== false;
+  /* v737（iPad 模擬實測）：中文欄裡如果夾著例句（「最近 I have been very busy lately.」），
+     提示就把答案寫出來了——顯示前把這個單字遮掉。 */
+  const hintZh = (c) => {
+    const z = String((c && c.zh) || ''), wd = String((c && c.word) || '').trim();
+    return wd ? z.replace(new RegExp(wd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '＿＿＿') : z;
+  };
   const isLast  = idx + 1 >= total;
 
   const speak = () => {
@@ -2608,7 +2614,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
          （原本 650ms 就閃到結果頁，等於「答對了」沒看到，彩帶還會跟答對音效撞在一起）。 */
       if (!isLast) scheduleAuto(() => next(nextScore), QM_AUTO_MS_PLAIN);
     } else {
-      wrongsRef.current.push({ q: '🔊 聽寫' + (current.zh ? '：' + current.zh : ''), answer: current.word });
+      wrongsRef.current.push({ q: '🔊 聽寫' + (current.zh ? '：' + hintZh(current) : ''), answer: current.word });
       if (window.playSound) window.playSound('wrong');
       setRedo(true);
       setInput('');
@@ -2684,7 +2690,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
         <button type="button" className="sp-voice-alt" onClick={switchVoice}>
           {ttsMode === 'browser' ? '目前用裝置內建語音 · 換回原本的聲音' : '還是聽不到？換一種聲音試試'}
         </button>
-        {showZh && current?.zh && <div className="sp-zh">{current.zh}</div>}
+        {showZh && current?.zh && <div className="sp-zh">{hintZh(current)}</div>}
       </div>
 
       <div className="ta-input-wrap">
@@ -2697,7 +2703,7 @@ function SpellingPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask }
             onKeyDown={handleKey}
             placeholder={redo ? '看著上面的音節，照著拼一次…' : '把聽到的單字拼出來…'}
             disabled={result !== null && !redo}
-            autoComplete="off" autoCapitalize="none" spellCheck={false}
+            autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
           />
         </span>
       </div>
@@ -2962,7 +2968,7 @@ function TypeAnswerPlayer({ item, progressKey, onBack, onBackToTasks, onNextTask
           onKeyDown={handleKey}
           placeholder={isTr ? 'Type the English sentence…' : isRw ? 'Rewrite the sentence…' : isTf ? 'Type the new sentence…' : isWd ? '只寫改好的那幾個字…' : 'Type your answer…'}
           disabled={result !== null || judging}
-          autoComplete="off" autoCapitalize="none" spellCheck={false}
+          autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
         />
         {/* v645：答錯時下面紅色橫幅已經寫了「✗ 正解：…」，這裡不再多放一行綠色的「✓ 正解」重複同一個答案 */}
       </div>
