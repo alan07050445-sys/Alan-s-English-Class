@@ -5591,3 +5591,15 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .ask-head .modal-close { width: 44px; height: 44px; }
 }
 @media (hover: none) { .ask-fab:hover { transform: none; } .ask-eg button:hover { border-color: var(--border, #DDD6C4); } }
+
+/* v727：iPad 週次切換列——前後週箭頭 30px→44px、老師的 ✎ 改週次鈕也好按；
+   連點不放大（連按好幾次換週是常態）、按過不黏 hover */
+@media (pointer: coarse) {
+  .week-nav { gap: 12px; }
+  .week-nav button { width: 44px; height: 44px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .week-nav .label button { width: auto; height: 36px; min-width: 44px; padding: 4px 10px !important; font-size: 14px !important; }
+  .wh-weeknav button { width: 44px; height: 44px; touch-action: manipulation; }
+}
+@media (hover: none) {
+  .week-nav button:not(:disabled):hover { transform: none; box-shadow: none; border-color: var(--border); background: var(--bg-card); }
+}
