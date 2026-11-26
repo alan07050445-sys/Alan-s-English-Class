@@ -4759,3 +4759,7 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-test-foot { background: linear-gradient(to top, rgb(244, 240, 231) 85%, rgba(247, 243, 234, 0)); padding-top: 14px; }
   .fc-test-foot .btn.primary:disabled { opacity: 1 !important; background: #E4DDCB !important; color: #6f6753 !important; border-color: #E4DDCB !important; }
 }
+
+/* v734（iPad 模擬實測）：測驗成績頁比畫面長時，播放器還被固定高度（useFitHeight 寫的 inline height）卡著，
+   底色只畫到一半、下面的題目掉在外面 → 成績頁讓它照內容長高。 */
+.fc-player:has(> .fc-complete) { height: auto !important; }
