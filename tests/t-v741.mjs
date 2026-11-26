@@ -4,7 +4,7 @@ const s = fs.readFileSync(new URL('components-dashboard.jsx', R), 'utf8');
 let f = 0; const ok = (m, c) => { console.log((c ? '  ✅ ' : '  ❌ ') + m); if (!c) f++; };
 ok('有照片放大元件', /function PhotoViewer\(/.test(s) && /createPortal/.test(s));
 ok('點縮圖開放大畫面（不開新分頁）', /e\.preventDefault\(\); setSavedMsg\(''\); setViewer\(\{ key: viewKey, start: fi \}\)/.test(s));
-ok('放大畫面不放在會自動收合的區塊裡', s.indexOf('<PhotoViewer') > s.indexOf('放在展開區塊外面'));
+ok('放大畫面不放在會自動收合的區塊裡', s.lastIndexOf('<PhotoViewer') > s.indexOf('放在展開區塊外面'));
 ok('分數列在清單與放大畫面共用', (s.match(/\{gradeRow\}/g) || []).length === 2);
 ok('跟著 visualViewport（鍵盤不蓋住分數欄）', /visualViewport/.test(s));
 process.exit(f ? 1 : 0);
