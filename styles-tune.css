@@ -5618,3 +5618,22 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .page-lobby .header .signin-btn { min-width: 55px; min-height: 55px; }
   .page-lobby .week-nav button, .page-lobby .header .icon-btn { width: 55px; height: 55px; }
 }
+
+/* v729（Alan，電腦版）：① 單字卡背面的例句縮小 20%（40px→32px）② 單字卡圖片放大 20%
+   （練習 420→504、1100 高以下 390→468、專心模式 460→552；學習模式 430→516／400→480／470→564）。
+   只給滑鼠的桌機（≥1025px）；iPad 不動。圖片仍是 flex:1 1 auto＋min-height:0，空間不夠時自己讓步，不會把例句擠掉。 */
+@media (hover: hover) and (pointer: fine) and (min-width: 1025px) {
+  .fc-example, .fc-p-card .fc-example { font-size: 32px; }
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 504px; }
+  .fc-back-img-wrap, .fc-back-img-wrap img { max-height: 600px; }
+  .fc-p-learn .fc-learn-img { max-height: 516px; }
+  html.focus-on .fc-p-card .fc-back-img-wrap,
+  html.focus-on .fc-p-card .fc-back-img-wrap img { max-height: 552px; }
+  html.focus-on .fc-p-learn .fc-learn-img { max-height: 564px; }
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 1025px) and (max-height: 1100px) {
+  .fc-p-card .fc-back-img-wrap,
+  .fc-p-card .fc-back-img-wrap img { max-height: 468px; }
+  .fc-p-learn .fc-learn-img { max-height: 480px; }
+}
