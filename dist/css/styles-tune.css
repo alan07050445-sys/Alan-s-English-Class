@@ -4783,3 +4783,22 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
     box-shadow: 0 28px 0 var(--bg, #f4f0e7);   /* 黏住的列下面還有一截捲動區內距，照片會從那裡透出來 → 用陰影蓋掉 */
   }
 }
+
+/* ══ v738（Alan：「iPad 橫式單字卡的中文和例句都太小了，都放大 30%」）══
+   高畫面（上下排）：中文 42→55、例句 28→36；矮畫面（Safari 工具列在、左圖右字）：中文 28→36、例句 20→26。
+   高度夠（≥800）時面板 560→600，照片才不會被字擠小。只對觸控的橫式平板，電腦版不動。 */
+@media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (min-height: 761px) {
+  .fc-p-card .fc-back .fc-zh { font-size: 55px; line-height: 1.15; margin-bottom: 6px; }
+  .fc-p-card .fc-back .fc-example { font-size: 36px; line-height: 1.38; max-width: 900px; }
+}
+@media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (min-height: 800px) {
+  .fc-player.fc-p-card { height: 600px !important; min-height: 600px; }
+  /* 專注模式另有一條 max(420px, min(560px, 100vh-205px))，要一起放寬 */
+  html.focus-on .fc-player.fc-p-card { height: min(600px, calc(100dvh - 205px)) !important; min-height: 560px; }
+}
+@media (pointer: coarse) and (min-width: 901px) and (max-width: 1400px) and (orientation: landscape) and (max-height: 760px) {
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) .fc-zh { font-size: 36px; line-height: 1.2; }
+  .fc-p-card .fc-back:has(.fc-back-img-wrap) .fc-example { font-size: 26px; line-height: 1.38; }
+  .fc-p-card .fc-back:not(:has(.fc-back-img-wrap)) .fc-zh { font-size: 46px; }
+  .fc-p-card .fc-back:not(:has(.fc-back-img-wrap)) .fc-example { font-size: 28px; }
+}
