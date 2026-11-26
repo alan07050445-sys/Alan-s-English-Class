@@ -4859,6 +4859,21 @@ function GuidedReadingPlayer({
   var [grErr, setGrErr] = useQM(''); // v306: 分段閱讀簡答批改失敗（不計分、可重送）
   var [checking, setChecking] = useQM(false);
   var [peek, setPeek] = useQM(false); // 答題頁展開「回頭看文章」
+  /* v736（Alan：「加放大看按鈕」）：橫式時照片要塞進一個畫面，字太小——放大成卡片寬往下滑著讀。
+     記在這台裝置上，翻頁後維持，再按一次縮回整頁。 */
+  var [readZoom, setReadZoom] = useQM(() => {
+    try {
+      return localStorage.getItem('alan-read-zoom') === '1';
+    } catch (e) {
+      return false;
+    }
+  });
+  var toggleReadZoom = () => setReadZoom(z => {
+    try {
+      localStorage.setItem('alan-read-zoom', z ? '0' : '1');
+    } catch (e) {}
+    return !z;
+  });
   var maxSegRef = React.useRef(0); // v411: 讀到最遠的那一段（往回讀時圓點不倒退）
   var [done, setDone] = useQM(false);
   var [dict, setDict] = useQM(null); // v287: 點字查義 {word, text|null}
@@ -5719,15 +5734,21 @@ function GuidedReadingPlayer({
     key: i,
     className: i === segIdx ? 'cur' : i <= maxSegRef.current ? 'past' : ''
   }))), /*#__PURE__*/React.createElement("div", {
-    className: "gr-seg cur"
+    className: 'gr-seg cur' + (readZoom && segs[segIdx].img ? ' zoom' : '')
   }, /*#__PURE__*/React.createElement("div", {
     className: "gr-read-head"
   }, segs.length > 1 ? /*#__PURE__*/React.createElement("div", {
     className: "gr-seg-label"
-  }, "\u7B2C ", segIdx + 1, " \u6BB5") : /*#__PURE__*/React.createElement("span", null), ttsText && !item.grAudioUrl && !segs[segIdx].audioUrl ? /*#__PURE__*/React.createElement("button", {
+  }, "\u7B2C ", segIdx + 1, " \u6BB5") : /*#__PURE__*/React.createElement("span", null), /*#__PURE__*/React.createElement("span", {
+    className: "gr-read-tools"
+  }, segs[segIdx].img ? /*#__PURE__*/React.createElement("button", {
+    className: 'gr-peek-btn gr-zoom-btn' + (readZoom ? ' on' : ''),
+    onClick: toggleReadZoom,
+    "aria-pressed": readZoom
+  }, readZoom ? '🔍 縮回整頁' : '🔍 放大看') : null, ttsText && !item.grAudioUrl && !segs[segIdx].audioUrl ? /*#__PURE__*/React.createElement("button", {
     className: 'gr-peek-btn gr-tts-btn' + (speaking ? ' on' : ''),
     onClick: speakSeg
-  }, speaking ? '⏹ 停止朗讀' : '🔊 聽這一段') : null), renderSegContent(segs[segIdx], activeWord), (segs[segIdx].text || '').trim() || segs[segIdx].img && (segs[segIdx].img.wordsId || segs[segIdx].img.wordsUrl) ? /*#__PURE__*/React.createElement("div", {
+  }, speaking ? '⏹ 停止朗讀' : '🔊 聽這一段') : null)), renderSegContent(segs[segIdx], activeWord), (segs[segIdx].text || '').trim() || segs[segIdx].img && (segs[segIdx].img.wordsId || segs[segIdx].img.wordsUrl) ? /*#__PURE__*/React.createElement("div", {
     className: "gr-tap-hint"
   }, "\uD83D\uDCA1 \u4E0D\u6703\u7684\u55AE\u5B57\u9EDE\u4E00\u4E0B\uFF0C\u807D\u767C\u97F3\u3001\u770B\u610F\u601D") : null), /*#__PURE__*/React.createElement("div", {
     className: "gr-continue gr-nav"

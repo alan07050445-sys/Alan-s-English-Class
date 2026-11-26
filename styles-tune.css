@@ -5675,3 +5675,19 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
 /* v735（iPad 模擬實測）：分段閱讀的簡答框與「送出答案」寬 100% 又左右各 20px 外距 → 整塊往右凸出卡片。
    在題目卡裡面左右外距歸零，跟題目文字左右對齊。 */
 .gr-q .qm-writing-input, .gr-q .wp-submit { margin-left: 0; margin-right: 0; width: 100%; box-sizing: border-box; }
+
+/* ══ v736：分段閱讀「🔍 放大看」——只在橫式出現（直式照片本來就吃滿寬度）。
+   放大＝照片最寬 860px、往下滑著讀；翻頁列黏在底部，不用滑到最後才能按「下一頁」。 */
+.gr-read-tools { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.gr-zoom-btn { display: none; }
+@media (orientation: landscape) { .gr-zoom-btn { display: inline-flex; align-items: center; } }
+@media (pointer: coarse) { .gr-zoom-btn, .gr-tts-btn { min-height: 44px; touch-action: manipulation; } }
+.gr-zoom-btn.on { color: #fff; background: var(--accent, #8B3120); border-color: var(--accent, #8B3120); }
+@media (orientation: landscape) {
+  .gr-page-read .gr-seg.zoom .grd-fit { max-width: 860px; }
+  .gr-page-read .gr-seg.zoom + .gr-nav {
+    position: sticky; bottom: 0; z-index: 6; max-width: none; padding: 10px 14px;
+    background: var(--bg, #f4f0e7); border-top: 1px solid var(--border, #e5dfc8);
+    box-shadow: 0 28px 0 var(--bg, #f4f0e7);   /* 黏住的列下面還有一截捲動區內距，照片會從那裡透出來 → 用陰影蓋掉 */
+  }
+}

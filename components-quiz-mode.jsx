@@ -4029,6 +4029,10 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
   const [grErr,    setGrErr]    = useQM(''); // v306: 分段閱讀簡答批改失敗（不計分、可重送）
   const [checking, setChecking] = useQM(false);
   const [peek, setPeek]         = useQM(false);   // 答題頁展開「回頭看文章」
+  /* v736（Alan：「加放大看按鈕」）：橫式時照片要塞進一個畫面，字太小——放大成卡片寬往下滑著讀。
+     記在這台裝置上，翻頁後維持，再按一次縮回整頁。 */
+  const [readZoom, setReadZoom] = useQM(() => { try { return localStorage.getItem('alan-read-zoom') === '1'; } catch (e) { return false; } });
+  const toggleReadZoom = () => setReadZoom(z => { try { localStorage.setItem('alan-read-zoom', z ? '0' : '1'); } catch (e) {} return !z; });
   const maxSegRef = React.useRef(0);              // v411: 讀到最遠的那一段（往回讀時圓點不倒退）
   const [done, setDone]         = useQM(false);
   const [dict, setDict]         = useQM(null);    // v287: 點字查義 {word, text|null}
@@ -4703,14 +4707,21 @@ function GuidedReadingPlayer({ item, progressKey, onBack, onBackToTasks, onNextT
               ))}
             </div>
           )}
-          <div className="gr-seg cur">
+          <div className={'gr-seg cur' + (readZoom && segs[segIdx].img ? ' zoom' : '')}>
             <div className="gr-read-head">
               {segs.length > 1 ? <div className="gr-seg-label">第 {segIdx + 1} 段</div> : <span/>}
-              {ttsText && !item.grAudioUrl && !segs[segIdx].audioUrl ? (
-                <button className={'gr-peek-btn gr-tts-btn' + (speaking ? ' on' : '')} onClick={speakSeg}>
-                  {speaking ? '⏹ 停止朗讀' : '🔊 聽這一段'}
-                </button>
-              ) : null}
+              <span className="gr-read-tools">
+                {segs[segIdx].img ? (
+                  <button className={'gr-peek-btn gr-zoom-btn' + (readZoom ? ' on' : '')} onClick={toggleReadZoom} aria-pressed={readZoom}>
+                    {readZoom ? '🔍 縮回整頁' : '🔍 放大看'}
+                  </button>
+                ) : null}
+                {ttsText && !item.grAudioUrl && !segs[segIdx].audioUrl ? (
+                  <button className={'gr-peek-btn gr-tts-btn' + (speaking ? ' on' : '')} onClick={speakSeg}>
+                    {speaking ? '⏹ 停止朗讀' : '🔊 聽這一段'}
+                  </button>
+                ) : null}
+              </span>
             </div>
             {renderSegContent(segs[segIdx], activeWord)}
             {((segs[segIdx].text || '').trim() || (segs[segIdx].img && (segs[segIdx].img.wordsId || segs[segIdx].img.wordsUrl))) ? (
