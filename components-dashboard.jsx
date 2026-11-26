@@ -3948,12 +3948,93 @@ function WeakSpotModal({ student, weeks, weekOrder, onClose }) {
     </div>, document.body);
 }
 
+/* v741（Alan：「照片放大看要做」）：在後台原畫面放大看學生交的作業——左右換張、旋轉（只影響這次觀看）、
+   點照片放大兩倍可拖著看；分數／評語欄（children）放在照片下方，邊看邊打分。
+   ⚠ 高度跟著 visualViewport 走：iPad 鍵盤跳出來時，下面的分數欄才不會被蓋住。 */
+function PhotoViewer({ files, start, title, onClose, children }) {
+  const [idx, setIdx] = useDash(start || 0);
+  const [rot, setRot] = useDash({});       // 每一張各自記角度
+  const [zoom, setZoom] = useDash(false);
+  const [nat, setNat] = useDash(null);     // { url, w, h }
+  const [box, setBox] = useDash({ w: 0, h: 0 });
+  const [vv, setVv] = useDash(null);
+  const stageRef = React.useRef(null);
+  const i = Math.min(idx, files.length - 1);
+  const url = files[i];
+  const go = (d) => { setIdx((i + d + files.length) % files.length); setZoom(false); };
+
+  useDashE(() => {
+    const measure = () => { const el = stageRef.current; if (el) setBox({ w: el.clientWidth, h: el.clientHeight }); };
+    const view = window.visualViewport;
+    const onView = () => { if (view) setVv({ h: view.height, top: view.offsetTop }); measure(); };
+    onView();
+    const ro = window.ResizeObserver ? new ResizeObserver(measure) : null;
+    if (ro && stageRef.current) ro.observe(stageRef.current);
+    if (view) { view.addEventListener('resize', onView); view.addEventListener('scroll', onView); }
+    window.addEventListener('resize', onView);
+    return () => {
+      if (ro) ro.disconnect();
+      if (view) { view.removeEventListener('resize', onView); view.removeEventListener('scroll', onView); }
+      window.removeEventListener('resize', onView);
+    };
+  }, []);
+  useDashE(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (/INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '')) return;
+      if (e.key === 'ArrowLeft') go(-1);
+      if (e.key === 'ArrowRight') go(1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const deg = rot[url] || 0;
+  const side = deg % 180 !== 0;
+  let wrap = null, pic = null;
+  if (nat && nat.url === url && box.w && box.h) {
+    const rw = side ? nat.h : nat.w, rh = side ? nat.w : nat.h;
+    const fit = Math.min(box.w / rw, box.h / rh);
+    const k = zoom ? Math.max(box.w / rw, fit * 2) : fit;
+    wrap = { width: Math.floor(rw * k), height: Math.floor(rh * k) };
+    pic = { width: Math.floor(nat.w * k), height: Math.floor(nat.h * k), transform: `translate(-50%, -50%) rotate(${deg}deg)` };
+  }
+
+  return ReactDOM.createPortal(
+    <div className="pv" role="dialog" aria-modal="true" aria-label="看作業照片" style={vv ? { height: vv.h, top: vv.top } : undefined}>
+      <div className="pv-bar">
+        <span className="pv-title">{title}</span>
+        <span className="pv-count">{i + 1} / {files.length}</span>
+        <button type="button" onClick={() => setRot(r => ({ ...r, [url]: ((r[url] || 0) + 90) % 360 }))}>↻ 旋轉</button>
+        <button type="button" onClick={() => setZoom(z => !z)} aria-pressed={zoom}>{zoom ? '🔍 縮小' : '🔍 放大'}</button>
+        <a href={url} target="_blank" rel="noreferrer">原圖 ↗</a>
+        <button type="button" className="pv-x" onClick={onClose} aria-label="關閉">✕</button>
+      </div>
+      <div className="pv-mid">
+        {files.length > 1 && <button type="button" className="pv-nav prev" onClick={() => go(-1)} aria-label="上一張">‹</button>}
+        <div className="pv-stage" ref={stageRef}>
+          <div className="pv-wrap" style={wrap || { width: 0, height: 0 }} onClick={() => setZoom(z => !z)}>
+            <img key={url} src={url} alt={`作業照片 ${i + 1}`} style={pic || { visibility: 'hidden' }}
+              onLoad={(e) => setNat({ url, w: e.target.naturalWidth || 1, h: e.target.naturalHeight || 1 })}/>
+          </div>
+          {!wrap && <span className="pv-loading">照片載入中…</span>}
+        </div>
+        {files.length > 1 && <button type="button" className="pv-nav next" onClick={() => go(1)} aria-label="下一張">›</button>}
+      </div>
+      {children && <div className="pv-foot">{children}</div>}
+    </div>,
+    document.body
+  );
+}
+
 function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack }) {
   const [reportOpen, setReportOpen] = useDash(false);
   const [wrongOpen, setWrongOpen] = useDash(null); // v251: 展開中的錯題單元 id
   const [filesOpen, setFilesOpen] = useDash(null); // v263: 展開中的作業照片單元 id
   const [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
   const [commentDraft, setCommentDraft] = useDash({}); // v266: 評語草稿
+  const [viewer, setViewer] = useDash(null);           // v741: 放大看中的照片 { key, start }
+  const [savedMsg, setSavedMsg] = useDash('');         // v741: 放大畫面裡按完「給分」的回饋
   const [growthOpen, setGrowthOpen] = useDash(false);  // v307 (F7): 成長曲線 modal
   const [weakOpen, setWeakOpen] = useDash(false);      // v511: 弱點分析 → 針對性練習
 
@@ -4090,6 +4171,46 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
               const doneDay = isDone && typeof prog.done === 'number'
                 ? new Date(prog.done).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
                 : null;
+              const viewKey = wid + '|' + it.id;
+              const gradeRow = files.length > 0 ? (
+                      <div className="sdetail-grade-row">
+                        <input
+                          type="number" min="0" max="100" inputMode="numeric"
+                          className="sdetail-grade-input"
+                          placeholder="分數 0–100"
+                          value={gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : (prog.score != null ? prog.score : '')}
+                          onChange={e => setGradeDraft(d => ({ ...d, [it.id]: e.target.value }))}
+                        />
+                        {/* v266: 選填評語——學生上傳頁看得到 */}
+                        <input
+                          type="text"
+                          className="sdetail-comment-input"
+                          placeholder="評語（選填）：例：字再工整一點"
+                          maxLength={120}
+                          value={commentDraft[it.id] !== undefined ? commentDraft[it.id] : (prog.comment || '')}
+                          onChange={e => setCommentDraft(d => ({ ...d, [it.id]: e.target.value }))}
+                        />
+                        <button
+                          className="sdetail-grade-btn"
+                          type="button"
+                          onClick={() => {
+                            setSavedMsg('');
+                            const raw = gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score;
+                            const n = Math.round(Number(raw));
+                            if (raw === '' || raw == null || Number.isNaN(n) || n < 0 || n > 100) { alert('請輸入 0–100 的分數'); return; }
+                            const comment = String(commentDraft[it.id] !== undefined ? commentDraft[it.id] : (prog.comment || '')).trim();
+                            window.saveProgressItem(student.uid, '', '', progKeys[0], { ...prog, score: n, comment, graded: true, gradedAt: Date.now() });
+                            setSavedMsg(`✓ 已給 ${n} 分`);
+                          }}
+                        >✓ 給分</button>
+                        {prog.graded && prog.score != null && <span className="sdetail-graded-note">已批改 · 學生會看到 {prog.score} 分{prog.comment ? '＋評語' : ''}</span>}
+                        {prog.submittedAt && (
+                          <span className="sdetail-submitted-at">
+                            交於 {new Date(prog.submittedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+              ) : null;
               return (
                 <React.Fragment key={it.id}>
                   <div className={`sdetail-item${isDone ? ' done' : ''}`}>
@@ -4150,47 +4271,22 @@ function StudentDetail({ student, allItems, weeks, weekOrder, selWeekId, onBack 
                     <div className={`sdetail-files${needsGrading && !fOpen ? ' sdetail-files-auto' : ''}`}>
                       <div className="sdetail-files-grid">
                         {files.map((url, fi) => (
-                          <a key={fi} href={url} target="_blank" rel="noreferrer" title="點開看大圖">
+                          <a key={fi} href={url} target="_blank" rel="noreferrer" title="點開看大圖"
+                            onClick={(e) => { e.preventDefault(); setSavedMsg(''); setViewer({ key: viewKey, start: fi }); }}>
                             <img src={url} alt={`作業照片 ${fi + 1}`} loading="lazy"/>
                           </a>
                         ))}
                       </div>
-                      <div className="sdetail-grade-row">
-                        <input
-                          type="number" min="0" max="100" inputMode="numeric"
-                          className="sdetail-grade-input"
-                          placeholder="分數 0–100"
-                          value={gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : (prog.score != null ? prog.score : '')}
-                          onChange={e => setGradeDraft(d => ({ ...d, [it.id]: e.target.value }))}
-                        />
-                        {/* v266: 選填評語——學生上傳頁看得到 */}
-                        <input
-                          type="text"
-                          className="sdetail-comment-input"
-                          placeholder="評語（選填）：例：字再工整一點"
-                          maxLength={120}
-                          value={commentDraft[it.id] !== undefined ? commentDraft[it.id] : (prog.comment || '')}
-                          onChange={e => setCommentDraft(d => ({ ...d, [it.id]: e.target.value }))}
-                        />
-                        <button
-                          className="sdetail-grade-btn"
-                          onClick={() => {
-                            const raw = gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score;
-                            const n = Math.round(Number(raw));
-                            if (raw === '' || raw == null || Number.isNaN(n) || n < 0 || n > 100) { alert('請輸入 0–100 的分數'); return; }
-                            const comment = String(commentDraft[it.id] !== undefined ? commentDraft[it.id] : (prog.comment || '')).trim();
-                            window.saveProgressItem(student.uid, '', '', progKeys[0], { ...prog, score: n, comment, graded: true, gradedAt: Date.now() });
-                          }}
-                        >✓ 給分</button>
-                        {prog.graded && prog.score != null && <span className="sdetail-graded-note">已批改 · 學生會看到 {prog.score} 分{prog.comment ? '＋評語' : ''}</span>}
-                        {prog.submittedAt && (
-                          <span className="sdetail-submitted-at">
-                            交於 {new Date(prog.submittedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                          </span>
-                        )}
-                      </div>
+                      {gradeRow}
                     </div>
                   )}
+                  {/* 放在展開區塊外面：給完分那一區會自動收合，放大畫面不能跟著關掉 */}
+                      {viewer && viewer.key === viewKey && files.length > 0 && (
+                        <PhotoViewer files={files} start={viewer.start} title={`${friendlyName(student)} · ${it.title}`} onClose={() => setViewer(null)}>
+                          {gradeRow}
+                          {savedMsg && <div className="pv-saved" role="status">{savedMsg}</div>}
+                        </PhotoViewer>
+                      )}
                 </React.Fragment>
               );
             })}

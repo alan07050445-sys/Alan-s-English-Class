@@ -4974,6 +4974,169 @@ function WeakSpotModal({
     className: "ws-note"
   }, "AI \u53EA\u8CA0\u8CAC\u300C\u770B\u51FA\u4ED6\u932F\u5728\u54EA\u300D\u8207\u300C\u60F3\u984C\u6750\u300D\uFF1B\u7B54\u6848\u662F\u7A0B\u5F0F\u9A57\u7684\uFF0C\u800C\u4E14\u53E6\u4E00\u500B AI \u6703\u91CD\u8B80\u4E00\u6B21\u78BA\u8A8D\u53EA\u6709\u4E00\u500B\u9078\u9805\u5C0D\u3002"))), document.body);
 }
+
+/* v741（Alan：「照片放大看要做」）：在後台原畫面放大看學生交的作業——左右換張、旋轉（只影響這次觀看）、
+   點照片放大兩倍可拖著看；分數／評語欄（children）放在照片下方，邊看邊打分。
+   ⚠ 高度跟著 visualViewport 走：iPad 鍵盤跳出來時，下面的分數欄才不會被蓋住。 */
+function PhotoViewer({
+  files,
+  start,
+  title,
+  onClose,
+  children
+}) {
+  var [idx, setIdx] = useDash(start || 0);
+  var [rot, setRot] = useDash({}); // 每一張各自記角度
+  var [zoom, setZoom] = useDash(false);
+  var [nat, setNat] = useDash(null); // { url, w, h }
+  var [box, setBox] = useDash({
+    w: 0,
+    h: 0
+  });
+  var [vv, setVv] = useDash(null);
+  var stageRef = React.useRef(null);
+  var i = Math.min(idx, files.length - 1);
+  var url = files[i];
+  var go = d => {
+    setIdx((i + d + files.length) % files.length);
+    setZoom(false);
+  };
+  useDashE(() => {
+    var measure = () => {
+      var el = stageRef.current;
+      if (el) setBox({
+        w: el.clientWidth,
+        h: el.clientHeight
+      });
+    };
+    var view = window.visualViewport;
+    var onView = () => {
+      if (view) setVv({
+        h: view.height,
+        top: view.offsetTop
+      });
+      measure();
+    };
+    onView();
+    var ro = window.ResizeObserver ? new ResizeObserver(measure) : null;
+    if (ro && stageRef.current) ro.observe(stageRef.current);
+    if (view) {
+      view.addEventListener('resize', onView);
+      view.addEventListener('scroll', onView);
+    }
+    window.addEventListener('resize', onView);
+    return () => {
+      if (ro) ro.disconnect();
+      if (view) {
+        view.removeEventListener('resize', onView);
+        view.removeEventListener('scroll', onView);
+      }
+      window.removeEventListener('resize', onView);
+    };
+  }, []);
+  useDashE(() => {
+    var onKey = e => {
+      if (e.key === 'Escape') onClose();
+      if (/INPUT|TEXTAREA/.test(e.target && e.target.tagName || '')) return;
+      if (e.key === 'ArrowLeft') go(-1);
+      if (e.key === 'ArrowRight') go(1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  var deg = rot[url] || 0;
+  var side = deg % 180 !== 0;
+  var wrap = null,
+    pic = null;
+  if (nat && nat.url === url && box.w && box.h) {
+    var rw = side ? nat.h : nat.w,
+      rh = side ? nat.w : nat.h;
+    var fit = Math.min(box.w / rw, box.h / rh);
+    var k = zoom ? Math.max(box.w / rw, fit * 2) : fit;
+    wrap = {
+      width: Math.floor(rw * k),
+      height: Math.floor(rh * k)
+    };
+    pic = {
+      width: Math.floor(nat.w * k),
+      height: Math.floor(nat.h * k),
+      transform: `translate(-50%, -50%) rotate(${deg}deg)`
+    };
+  }
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
+    className: "pv",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": "\u770B\u4F5C\u696D\u7167\u7247",
+    style: vv ? {
+      height: vv.h,
+      top: vv.top
+    } : undefined
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "pv-bar"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "pv-title"
+  }, title), /*#__PURE__*/React.createElement("span", {
+    className: "pv-count"
+  }, i + 1, " / ", files.length), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setRot(r => ({
+      ...r,
+      [url]: ((r[url] || 0) + 90) % 360
+    }))
+  }, "\u21BB \u65CB\u8F49"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setZoom(z => !z),
+    "aria-pressed": zoom
+  }, zoom ? '🔍 縮小' : '🔍 放大'), /*#__PURE__*/React.createElement("a", {
+    href: url,
+    target: "_blank",
+    rel: "noreferrer"
+  }, "\u539F\u5716 \u2197"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pv-x",
+    onClick: onClose,
+    "aria-label": "\u95DC\u9589"
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "pv-mid"
+  }, files.length > 1 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pv-nav prev",
+    onClick: () => go(-1),
+    "aria-label": "\u4E0A\u4E00\u5F35"
+  }, "\u2039"), /*#__PURE__*/React.createElement("div", {
+    className: "pv-stage",
+    ref: stageRef
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "pv-wrap",
+    style: wrap || {
+      width: 0,
+      height: 0
+    },
+    onClick: () => setZoom(z => !z)
+  }, /*#__PURE__*/React.createElement("img", {
+    key: url,
+    src: url,
+    alt: `作業照片 ${i + 1}`,
+    style: pic || {
+      visibility: 'hidden'
+    },
+    onLoad: e => setNat({
+      url,
+      w: e.target.naturalWidth || 1,
+      h: e.target.naturalHeight || 1
+    })
+  })), !wrap && /*#__PURE__*/React.createElement("span", {
+    className: "pv-loading"
+  }, "\u7167\u7247\u8F09\u5165\u4E2D\u2026")), files.length > 1 && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "pv-nav next",
+    onClick: () => go(1),
+    "aria-label": "\u4E0B\u4E00\u5F35"
+  }, "\u203A")), children && /*#__PURE__*/React.createElement("div", {
+    className: "pv-foot"
+  }, children)), document.body);
+}
 function StudentDetail({
   student,
   allItems,
@@ -4987,6 +5150,8 @@ function StudentDetail({
   var [filesOpen, setFilesOpen] = useDash(null); // v263: 展開中的作業照片單元 id
   var [gradeDraft, setGradeDraft] = useDash({}); // v263: 打分數的輸入框草稿 { itemId: '85' }
   var [commentDraft, setCommentDraft] = useDash({}); // v266: 評語草稿
+  var [viewer, setViewer] = useDash(null); // v741: 放大看中的照片 { key, start }
+  var [savedMsg, setSavedMsg] = useDash(''); // v741: 放大畫面裡按完「給分」的回饋
   var [growthOpen, setGrowthOpen] = useDash(false); // v307 (F7): 成長曲線 modal
   var [weakOpen, setWeakOpen] = useDash(false); // v511: 弱點分析 → 針對性練習
 
@@ -5144,6 +5309,60 @@ function StudentDetail({
         month: 'numeric',
         day: 'numeric'
       }) : null;
+      var viewKey = wid + '|' + it.id;
+      var gradeRow = files.length > 0 ? /*#__PURE__*/React.createElement("div", {
+        className: "sdetail-grade-row"
+      }, /*#__PURE__*/React.createElement("input", {
+        type: "number",
+        min: "0",
+        max: "100",
+        inputMode: "numeric",
+        className: "sdetail-grade-input",
+        placeholder: "\u5206\u6578 0\u2013100",
+        value: gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score != null ? prog.score : '',
+        onChange: e => setGradeDraft(d => ({
+          ...d,
+          [it.id]: e.target.value
+        }))
+      }), /*#__PURE__*/React.createElement("input", {
+        type: "text",
+        className: "sdetail-comment-input",
+        placeholder: "\u8A55\u8A9E\uFF08\u9078\u586B\uFF09\uFF1A\u4F8B\uFF1A\u5B57\u518D\u5DE5\u6574\u4E00\u9EDE",
+        maxLength: 120,
+        value: commentDraft[it.id] !== undefined ? commentDraft[it.id] : prog.comment || '',
+        onChange: e => setCommentDraft(d => ({
+          ...d,
+          [it.id]: e.target.value
+        }))
+      }), /*#__PURE__*/React.createElement("button", {
+        className: "sdetail-grade-btn",
+        type: "button",
+        onClick: () => {
+          setSavedMsg('');
+          var raw = gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score;
+          var n = Math.round(Number(raw));
+          if (raw === '' || raw == null || Number.isNaN(n) || n < 0 || n > 100) {
+            alert('請輸入 0–100 的分數');
+            return;
+          }
+          var comment = String(commentDraft[it.id] !== undefined ? commentDraft[it.id] : prog.comment || '').trim();
+          window.saveProgressItem(student.uid, '', '', progKeys[0], {
+            ...prog,
+            score: n,
+            comment,
+            graded: true,
+            gradedAt: Date.now()
+          });
+          setSavedMsg(`✓ 已給 ${n} 分`);
+        }
+      }, "\u2713 \u7D66\u5206"), prog.graded && prog.score != null && /*#__PURE__*/React.createElement("span", {
+        className: "sdetail-graded-note"
+      }, "\u5DF2\u6279\u6539 \xB7 \u5B78\u751F\u6703\u770B\u5230 ", prog.score, " \u5206", prog.comment ? '＋評語' : ''), prog.submittedAt && /*#__PURE__*/React.createElement("span", {
+        className: "sdetail-submitted-at"
+      }, "\u4EA4\u65BC ", new Date(prog.submittedAt).toLocaleDateString('zh-TW', {
+        month: 'numeric',
+        day: 'numeric'
+      }))) : null;
       return /*#__PURE__*/React.createElement(React.Fragment, {
         key: it.id
       }, /*#__PURE__*/React.createElement("div", {
@@ -5196,61 +5415,28 @@ function StudentDetail({
         href: url,
         target: "_blank",
         rel: "noreferrer",
-        title: "\u9EDE\u958B\u770B\u5927\u5716"
+        title: "\u9EDE\u958B\u770B\u5927\u5716",
+        onClick: e => {
+          e.preventDefault();
+          setSavedMsg('');
+          setViewer({
+            key: viewKey,
+            start: fi
+          });
+        }
       }, /*#__PURE__*/React.createElement("img", {
         src: url,
         alt: `作業照片 ${fi + 1}`,
         loading: "lazy"
-      })))), /*#__PURE__*/React.createElement("div", {
-        className: "sdetail-grade-row"
-      }, /*#__PURE__*/React.createElement("input", {
-        type: "number",
-        min: "0",
-        max: "100",
-        inputMode: "numeric",
-        className: "sdetail-grade-input",
-        placeholder: "\u5206\u6578 0\u2013100",
-        value: gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score != null ? prog.score : '',
-        onChange: e => setGradeDraft(d => ({
-          ...d,
-          [it.id]: e.target.value
-        }))
-      }), /*#__PURE__*/React.createElement("input", {
-        type: "text",
-        className: "sdetail-comment-input",
-        placeholder: "\u8A55\u8A9E\uFF08\u9078\u586B\uFF09\uFF1A\u4F8B\uFF1A\u5B57\u518D\u5DE5\u6574\u4E00\u9EDE",
-        maxLength: 120,
-        value: commentDraft[it.id] !== undefined ? commentDraft[it.id] : prog.comment || '',
-        onChange: e => setCommentDraft(d => ({
-          ...d,
-          [it.id]: e.target.value
-        }))
-      }), /*#__PURE__*/React.createElement("button", {
-        className: "sdetail-grade-btn",
-        onClick: () => {
-          var raw = gradeDraft[it.id] !== undefined ? gradeDraft[it.id] : prog.score;
-          var n = Math.round(Number(raw));
-          if (raw === '' || raw == null || Number.isNaN(n) || n < 0 || n > 100) {
-            alert('請輸入 0–100 的分數');
-            return;
-          }
-          var comment = String(commentDraft[it.id] !== undefined ? commentDraft[it.id] : prog.comment || '').trim();
-          window.saveProgressItem(student.uid, '', '', progKeys[0], {
-            ...prog,
-            score: n,
-            comment,
-            graded: true,
-            gradedAt: Date.now()
-          });
-        }
-      }, "\u2713 \u7D66\u5206"), prog.graded && prog.score != null && /*#__PURE__*/React.createElement("span", {
-        className: "sdetail-graded-note"
-      }, "\u5DF2\u6279\u6539 \xB7 \u5B78\u751F\u6703\u770B\u5230 ", prog.score, " \u5206", prog.comment ? '＋評語' : ''), prog.submittedAt && /*#__PURE__*/React.createElement("span", {
-        className: "sdetail-submitted-at"
-      }, "\u4EA4\u65BC ", new Date(prog.submittedAt).toLocaleDateString('zh-TW', {
-        month: 'numeric',
-        day: 'numeric'
-      })))));
+      })))), gradeRow), viewer && viewer.key === viewKey && files.length > 0 && /*#__PURE__*/React.createElement(PhotoViewer, {
+        files: files,
+        start: viewer.start,
+        title: `${friendlyName(student)} · ${it.title}`,
+        onClose: () => setViewer(null)
+      }, gradeRow, savedMsg && /*#__PURE__*/React.createElement("div", {
+        className: "pv-saved",
+        role: "status"
+      }, savedMsg)));
     })));
   }));
 }
