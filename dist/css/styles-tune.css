@@ -4750,3 +4750,10 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
   .fc-p-learn .fc-choice { font-size: 19px; padding-left: 8px; padding-right: 8px; }
   .fc-p-learn .fc-learn-img { flex: 0 1 auto; width: 100%; }   /* 中文緊接在圖片下面，不要被推到最底 */
 }
+
+/* v732（iPad 模擬實測）：手寫／選擇測驗底部黏住的「交卷」鈕，停用時是半透明的，後面的題目文字會透出來疊在一起
+   → 底色鋪滿、停用鈕改成實色灰底（看得出還不能按，但不透字） */
+@media (pointer: coarse) {
+  .fc-test-foot { background: linear-gradient(to top, rgb(244, 240, 231) 85%, rgba(247, 243, 234, 0)); padding-top: 14px; }
+  .fc-test-foot .btn.primary:disabled { opacity: 1 !important; background: #E4DDCB !important; color: #6f6753 !important; border-color: #E4DDCB !important; }
+}
