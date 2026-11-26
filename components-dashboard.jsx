@@ -3603,6 +3603,7 @@ function ExamMarking({ students }) {
   const [busy, setBusy] = useDash('');
   const [msg,  setMsg]  = useDash('');
   const [saved, setSaved] = useDash({});
+  const [pic, setPic] = useDash(null);       // v742: 放大看中的學生畫作 { url, title }
 
   /* 哪些孩子有申論等著改——從他們的 progress 撈 examWritten */
   const pending = useDashM(() => {
@@ -3753,7 +3754,8 @@ function ExamMarking({ students }) {
                       <div className="mk-q" key={i}>
                         <p className="mk-qt">{i + 1}. {q.q}</p>
                         <div className="mk-ans">{q.a || <i>（空白）</i>}</div>
-                        {q.img && <a href={q.img} target="_blank" rel="noopener" className="mk-img"><img src={q.img} alt="學生畫的圖"/></a>}
+                        {q.img && <a href={q.img} target="_blank" rel="noopener" className="mk-img"
+                          onClick={(e) => { e.preventDefault(); setPic({ url: q.img, title: `${cur.name} · 第 ${i + 1} 題` }); }}><img src={q.img} alt="學生畫的圖"/></a>}
                         <div className="mk-rub">
                           {RB.criteria.map(cr => (
                             <label className="mk-cr" key={cr.id}>
@@ -3772,7 +3774,7 @@ function ExamMarking({ students }) {
                         {/* v565：拼字文法的小錯——每 3 個才扣 1 分（有上限），個數可以自己改 */}
                         <div className="mk-err">
                           <label>小錯
-                            <input type="number" min="0" max="30" value={c._errN == null ? '' : c._errN} placeholder="0"
+                            <input type="number" min="0" max="30" inputMode="numeric" value={c._errN == null ? '' : c._errN} placeholder="0"
                               onChange={e => setCell(pk, i, { _errN: Math.max(0, parseInt(e.target.value, 10) || 0), _ai: false })}/>
                             個
                           </label>
@@ -3797,7 +3799,8 @@ function ExamMarking({ students }) {
                 </div>
               );
             })}
-            {msg && <p className="mk-msg">{msg}</p>}
+            {msg && <p className="mk-msg" role="status">{msg}</p>}
+            {pic && <PhotoViewer files={[pic.url]} title={pic.title} onClose={() => setPic(null)}/>}
             <div className="mk-foot">
               <span className="mk-foot-hint">學生交卷時 AI 已先改好，學生會先看到 AI 的分數（標明「老師還會再看過」）；你確認或調整後按存檔，就換成老師的分數。</span>
               <button className="btn primary" onClick={save} disabled={busy === 'save'}>

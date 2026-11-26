@@ -5721,3 +5721,7 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
 .sdetail-iname { white-space: normal; overflow: visible; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
 .sdetail-filesbtn, .sdetail-wrongbtn, .sdetail-late { white-space: nowrap; display: inline-block; }
 @media (pointer: coarse) { .sdetail-grade-input { width: 136px; } .sdetail-files { margin-left: 8px; } }
+
+/* v742（iPad 模擬實測：申論批改）：AI／存檔的訊息原本寫在整份最底下，按上面的「AI 先改」看起來像沒反應 → 黏在畫面下緣。 */
+.dash-overlay.tdash .mk-msg { position: sticky; bottom: 0; z-index: 5; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--accent, #8B3120); background: #fdf6f2; font-weight: 700; box-shadow: 0 8px 20px rgba(21,19,14,.16); }
+@media (pointer: coarse) { .dash-overlay.tdash .mk-err input { width: 64px; } }

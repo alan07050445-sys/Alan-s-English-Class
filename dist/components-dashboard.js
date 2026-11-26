@@ -4537,6 +4537,7 @@ function ExamMarking({
   var [busy, setBusy] = useDash('');
   var [msg, setMsg] = useDash('');
   var [saved, setSaved] = useDash({});
+  var [pic, setPic] = useDash(null); // v742: 放大看中的學生畫作 { url, title }
 
   /* 哪些孩子有申論等著改——從他們的 progress 撈 examWritten */
   var pending = useDashM(() => {
@@ -4750,7 +4751,14 @@ function ExamMarking({
         href: q.img,
         target: "_blank",
         rel: "noopener",
-        className: "mk-img"
+        className: "mk-img",
+        onClick: e => {
+          e.preventDefault();
+          setPic({
+            url: q.img,
+            title: `${cur.name} · 第 ${i + 1} 題`
+          });
+        }
       }, /*#__PURE__*/React.createElement("img", {
         src: q.img,
         alt: "\u5B78\u751F\u756B\u7684\u5716"
@@ -4779,6 +4787,7 @@ function ExamMarking({
         type: "number",
         min: "0",
         max: "30",
+        inputMode: "numeric",
         value: c._errN == null ? '' : c._errN,
         placeholder: "0",
         onChange: e => setCell(pk, i, {
@@ -4806,8 +4815,13 @@ function ExamMarking({
       }, busy === pk + i ? '看一下…' : '🤖 AI 先改')));
     }));
   }), msg && /*#__PURE__*/React.createElement("p", {
-    className: "mk-msg"
-  }, msg), /*#__PURE__*/React.createElement("div", {
+    className: "mk-msg",
+    role: "status"
+  }, msg), pic && /*#__PURE__*/React.createElement(PhotoViewer, {
+    files: [pic.url],
+    title: pic.title,
+    onClose: () => setPic(null)
+  }), /*#__PURE__*/React.createElement("div", {
     className: "mk-foot"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mk-foot-hint"
