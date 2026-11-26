@@ -8628,6 +8628,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
   const [pending,   setPending]   = useQM([]);   // [{ uid, file, url, outBlob }] 待送出
   const [busy,      setBusy]      = useQM(false);
   const [upMsg,     setUpMsg]     = useQM('');   // v266: 上傳進度「2/3」
+  const [prep,      setPrep]      = useQM(0);    // v739: 還在縮圖的張數（iPad 大照片要好幾秒，畫面不能沒反應）
   const [err,       setErr]       = useQM('');
   const [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   const u = window._currentUser;
@@ -8661,22 +8662,25 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
 
   // v340: 單純上傳——選好圖就縮圖收下，沒有掃描、不會卡（Alan 決定拿掉掃描功能）
   const pickFiles = async (e) => {
-    const files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
+    const all = Array.from(e.target.files || []);
+    const files = all.filter(f => /^image\//.test(f.type));
     e.target.value = ''; // 同一張可以再選
+    // v739: 選到 PDF 之類的檔案以前是「按了沒反應」，現在講清楚
+    setErr(all.length > files.length ? '只能交照片喔！PDF 或其他檔案請改用「拍照」。' : '');
     if (!files.length) return;
-    setErr('');
-    const added = [];
+    setPrep(n => n + files.length);
     for (const f of files) {
       let b; try { b = await shrink(f); } catch (_) { b = f; }
-      added.push({ uid: ++seqRef.current, file: f, outBlob: b, url: URL.createObjectURL(b) });
+      const one = { uid: ++seqRef.current, file: f, outBlob: b, url: URL.createObjectURL(b) };
+      setPending(prev => [...prev, one]);   // 一張好了就先出現一張
+      setPrep(n => n - 1);
     }
-    setPending(prev => [...prev, ...added]);
   };
   const removePending = (i) => setPending(prev => { try { URL.revokeObjectURL(prev[i].url); } catch (e) {} return prev.filter((_, j) => j !== i); });
 
   const submit = async () => {
     if (!u) { setErr('要先登入才能交作業喔！'); return; }
-    if (!pending.length || busy) return;
+    if (!pending.length || busy || prep > 0) return;
     setBusy(true); setErr('');
     try {
       const urls = [];
@@ -8723,7 +8727,7 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
     }
   };
 
-  const canSubmit = !busy && pending.length > 0;
+  const canSubmit = !busy && prep === 0 && pending.length > 0;
 
   return (
     <div className="qm-intro uh">
@@ -8768,13 +8772,15 @@ function UploadHomeworkPlayer({ item, progressKey, onBack }) {
             {pending.map((p, i) => (
               <span key={p.uid != null ? p.uid : i} className="uh-thumb uh-thumb-pending">
                 <img src={p.url} alt={`預覽 ${i + 1}`}/>
-                <button className="uh-thumb-del" onClick={() => removePending(i)} aria-label="移除這張">✕</button>
+                <button className="uh-thumb-del" onClick={() => removePending(i)} disabled={busy} aria-label="移除這張">✕</button>
               </span>
             ))}
           </div>
         </div>
       )}
 
+      {prep > 0 && <div className="uh-status" role="status">⏳ 照片處理中，還有 {prep} 張…</div>}
+      {busy && <div className="uh-status" role="status">⬆️ 上傳中，先不要離開這一頁</div>}
       {err && <div className="uh-err">⚠ {err}</div>}
 
       <div className="uh-btns">

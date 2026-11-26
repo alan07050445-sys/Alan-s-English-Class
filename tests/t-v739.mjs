@@ -1,0 +1,10 @@
+import fs from 'fs';
+const R = new URL('..', import.meta.url);
+const s = fs.readFileSync(new URL('components-quiz-mode.jsx', R), 'utf8');
+const up = s.slice(s.indexOf('function UploadHomeworkPlayer'), s.indexOf('const DM_HUES'));
+let f = 0; const ok = (m, c) => { console.log((c ? '  ✅ ' : '  ❌ ') + m); if (!c) f++; };
+ok('照片處理中不能送出', /prep === 0 && pending\.length > 0/.test(up) && /busy \|\| prep > 0\) return/.test(up));
+ok('有處理中與上傳中的提示', /照片處理中/.test(up) && /先不要離開/.test(up));
+ok('選到非照片會說明', /只能交照片喔/.test(up));
+ok('上傳中不能刪照片', /removePending\(i\)\} disabled=\{busy\}/.test(up));
+process.exit(f ? 1 : 0);

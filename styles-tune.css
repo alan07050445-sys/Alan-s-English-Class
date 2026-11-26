@@ -5710,3 +5710,8 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
   .fc-p-card .fc-back:not(:has(.fc-back-img-wrap)) .fc-zh { font-size: 46px; }
   .fc-p-card .fc-back:not(:has(.fc-back-img-wrap)) .fc-example { font-size: 28px; }
 }
+
+/* v739（iPad 模擬實測）：交作業——處理中／上傳中的提示、上傳時 ✕ 不能按、✕ 手指好點 */
+.uh-status { margin: 14px auto 0; max-width: 480px; font-size: 14px; font-weight: 700; color: #7a5a00; background: #fdf6e0; border: 1px solid #ecd999; border-radius: 10px; padding: 10px 14px; }
+.uh-thumb-del:disabled { display: none; }
+@media (pointer: coarse) { .uh-thumb { width: 112px; height: 112px; } .uh-thumb-del { width: 44px; height: 44px; top: 2px; right: 2px; touch-action: manipulation; } }

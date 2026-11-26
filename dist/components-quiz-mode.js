@@ -10482,6 +10482,7 @@ function UploadHomeworkPlayer({
   var [pending, setPending] = useQM([]); // [{ uid, file, url, outBlob }] 待送出
   var [busy, setBusy] = useQM(false);
   var [upMsg, setUpMsg] = useQM(''); // v266: 上傳進度「2/3」
+  var [prep, setPrep] = useQM(0); // v739: 還在縮圖的張數（iPad 大照片要好幾秒，畫面不能沒反應）
   var [err, setErr] = useQM('');
   var [cloudProg, setCloudProg] = useQM(null); // 雲端這一筆（已交照片/分數）
   var u = window._currentUser;
@@ -10517,26 +10518,32 @@ function UploadHomeworkPlayer({
 
   // v340: 單純上傳——選好圖就縮圖收下，沒有掃描、不會卡（Alan 決定拿掉掃描功能）
   var pickFiles = async e => {
-    var files = Array.from(e.target.files || []).filter(f => /^image\//.test(f.type));
+    var all = Array.from(e.target.files || []);
+    var files = all.filter(f => /^image\//.test(f.type));
     e.target.value = ''; // 同一張可以再選
+    // v739: 選到 PDF 之類的檔案以前是「按了沒反應」，現在講清楚
+    setErr(all.length > files.length ? '只能交照片喔！PDF 或其他檔案請改用「拍照」。' : '');
     if (!files.length) return;
-    setErr('');
-    var added = [];
-    for (var f of files) {
-      var b = void 0;
+    setPrep(n => n + files.length);
+    var _loop3 = async function () {
+      var b;
       try {
         b = await shrink(f);
       } catch (_) {
         b = f;
       }
-      added.push({
+      var one = {
         uid: ++seqRef.current,
         file: f,
         outBlob: b,
         url: URL.createObjectURL(b)
-      });
+      };
+      setPending(prev => [...prev, one]); // 一張好了就先出現一張
+      setPrep(n => n - 1);
+    };
+    for (var f of files) {
+      await _loop3();
     }
-    setPending(prev => [...prev, ...added]);
   };
   var removePending = i => setPending(prev => {
     try {
@@ -10549,7 +10556,7 @@ function UploadHomeworkPlayer({
       setErr('要先登入才能交作業喔！');
       return;
     }
-    if (!pending.length || busy) return;
+    if (!pending.length || busy || prep > 0) return;
     setBusy(true);
     setErr('');
     try {
@@ -10613,7 +10620,7 @@ function UploadHomeworkPlayer({
       } catch (e) {}
     }
   };
-  var canSubmit = !busy && pending.length > 0;
+  var canSubmit = !busy && prep === 0 && pending.length > 0;
   return /*#__PURE__*/React.createElement("div", {
     className: "qm-intro uh"
   }, /*#__PURE__*/React.createElement("div", {
@@ -10666,8 +10673,15 @@ function UploadHomeworkPlayer({
   }), /*#__PURE__*/React.createElement("button", {
     className: "uh-thumb-del",
     onClick: () => removePending(i),
+    disabled: busy,
     "aria-label": "\u79FB\u9664\u9019\u5F35"
-  }, "\u2715"))))), err && /*#__PURE__*/React.createElement("div", {
+  }, "\u2715"))))), prep > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "uh-status",
+    role: "status"
+  }, "\u23F3 \u7167\u7247\u8655\u7406\u4E2D\uFF0C\u9084\u6709 ", prep, " \u5F35\u2026"), busy && /*#__PURE__*/React.createElement("div", {
+    className: "uh-status",
+    role: "status"
+  }, "\u2B06\uFE0F \u4E0A\u50B3\u4E2D\uFF0C\u5148\u4E0D\u8981\u96E2\u958B\u9019\u4E00\u9801"), err && /*#__PURE__*/React.createElement("div", {
     className: "uh-err"
   }, "\u26A0 ", err), /*#__PURE__*/React.createElement("div", {
     className: "uh-btns"
