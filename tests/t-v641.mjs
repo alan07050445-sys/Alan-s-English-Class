@@ -67,7 +67,7 @@ ok('手寫輸入欄關閉自動校正與拼字檢查', /autoCorrect="off" spellC
 const fs2 = (await import('node:fs'));
 const shsrc = fs2.readFileSync(new URL('../components-shell.jsx', import.meta.url), 'utf8');
 const qmsrc = fs2.readFileSync(new URL('../components-quiz-mode.jsx', import.meta.url), 'utf8');
-ok('測驗平板橫式一次一題（testPaged／pager／自動換題）', /testPaged/.test(fcsrc) && /fc-test-pager/.test(fcsrc) && /fc-test-hidden/.test(t) && /setTestPage\(p => Math\.min\(p \+ 1/.test(fcsrc));
+ok('測驗平板橫式一次一題（testPaged／pager／自動換題）', /testPaged/.test(fcsrc) && /fc-test-pager/.test(fcsrc) && /fc-test-hidden/.test(t) && /const afterAnswer = \(qi, ok/.test(fcsrc) && /=== qi \? qi \+ 1 : p/.test(fcsrc));
 ok('iPad 橫式練習自動收上方列（學生關掉就不再自動收）', /function fcTabletLandscape/.test(shsrc) && /__focusUserOff/.test(shsrc) && /pointer: coarse/.test(shsrc));
 ok('iPad 橫式側欄預設收合、學生選過就照他的', /window\.fcTabletLandscape && window\.fcTabletLandscape\(\)/.test(qmsrc) && /v === '0'\) return false/.test(qmsrc));
 ok('專心模式卡片高度隨視窗（上限560、下限420）', /html\.focus-on \.fc-player\.fc-p-card,[\s\S]{0,120}max\(420px, min\(560px, calc\(100vh - 205px\)\)\)/.test(t));
@@ -100,4 +100,5 @@ ok('iPad QA 第二批：短文填空輸入中詞庫與交卷列放開釘子；�
 ok('iPad 橫式單字卡／學習：560px 只在畫面夠高才固定；矮的交給 JS（clampHost）＋有圖時左圖右字兩欄（Alan 的截圖）', /\(orientation: landscape\) and \(min-height: 761px\) \{[^}]*\.fc-player\.fc-p-card \{ height: 560px !important/.test(t) && /\.fc-p-card \.fc-back:has\(\.fc-back-img-wrap\) \.fc-back-img-wrap \{ grid-column: 1; grid-row: 1 \/ span 2/.test(t) && /useFitHeight\(cardFitRef,\s+mode === 'card',\s+360, true\)/.test(fcsrc));
 ok('補做清單：一課有多個單元就預設收成一行、「補做 →」直接開第一個沒做的單元、週標題寫各類數量', /const fold = !!g\.name && g\.rows\.length > 1;/.test(qmsrc) && /onOpenPastTask\(first\.wid, first\.cat, first\.id\)/.test(qmsrc) && /const gOpen = !fold \|\| !!pastGrp\[gk\];/.test(qmsrc) && /parts\.join\('・'\)/.test(qmsrc));
 ok('補做清單：一課裡的單元照學習順序排（單字卡先），「補做 →」開的第一個才不會跳過單字卡', /rows: g\.items\.map\(it => byKey\[it\.id\]\)\.filter\(Boolean\)\.sort\(\(a, b\) => qmItemRank\(a\.it\) - qmItemRank\(b\.it\)\)/.test(qmsrc));
+ok('v744 測驗逐題播對錯音效並鎖定', /if \(testAnswers\[card\.id\]\) return;/.test(fcsrc) && /playSound\(ok \? 'correct' : 'wrong'\)/.test(fcsrc) && /readOnly=\{!!writtenLocked\[card\.id\]\}/.test(fcsrc));
 console.log(`\n${pass} pass, ${fail} fail`); process.exit(fail ? 1 : 0);

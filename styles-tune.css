@@ -5725,3 +5725,18 @@ html.tdash-lock, html.tdash-lock body { overflow: hidden !important; overscroll-
 /* v742（iPad 模擬實測：申論批改）：AI／存檔的訊息原本寫在整份最底下，按上面的「AI 先改」看起來像沒反應 → 黏在畫面下緣。 */
 .dash-overlay.tdash .mk-msg { position: sticky; bottom: 0; z-index: 5; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--accent, #8B3120); background: #fdf6f2; font-weight: 700; box-shadow: 0 8px 20px rgba(21,19,14,.16); }
 @media (pointer: coarse) { .dash-overlay.tdash .mk-err input { width: 64px; } }
+
+/* v744：測驗逐題對答案——答過的題目標出正解（綠）與答錯的選項（紅），其他淡掉、不能再改 */
+.fc-test-choice.correct, .fc-test-choice.correct:hover { background: var(--ok-bg, #e7f3ea) !important; border-color: var(--ok, #2f7d4f) !important; color: var(--ok-ink, #1f5c38) !important; font-weight: 800; transform: none; }
+.fc-test-choice.wrong, .fc-test-choice.wrong:hover { background: var(--no-bg, #fdecea) !important; border-color: var(--no, #c0392b) !important; color: var(--no-ink, #96281b) !important; font-weight: 800; transform: none; }
+.fc-test-choice.dimmed, .fc-test-choice.dimmed:hover { opacity: .5; transform: none; }
+.fc-test-choice[aria-disabled="true"] { cursor: default; }
+.fc-test-written { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.fc-test-written .fc-written-input { flex: 1 1 240px; min-width: 0; }
+.fc-written-ok { flex: none; min-height: 48px; padding-left: 24px; padding-right: 24px; }
+.fc-written-input.correct { background: var(--ok-bg, #e7f3ea); border-color: var(--ok, #2f7d4f); color: var(--ok-ink, #1f5c38); }
+.fc-written-input.wrong { background: var(--no-bg, #fdecea); border-color: var(--no, #c0392b); color: var(--no-ink, #96281b); }
+.fc-written-fb { flex: 1 1 100%; font-size: 16px; font-weight: 800; }
+.fc-written-fb.ok { color: var(--ok-ink, #1f5c38); }
+.fc-written-fb.no { color: var(--no-ink, #96281b); }
+.fc-written-fb b { font-size: 19px; }

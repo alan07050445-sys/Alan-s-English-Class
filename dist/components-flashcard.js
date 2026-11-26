@@ -1052,6 +1052,7 @@ function FlashcardPlayer({
   var [questionTypes, setQuestionTypes] = useFC({}); // cardId → "choice" | "written"
   var [testAnswers, setTestAnswers] = useFC({}); // cardId → chosen card id
   var [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
+  var [writtenLocked, setWrittenLocked] = useFC({}); // v744: 手寫題按過「確認」就鎖住 cardId → true
   var [testDone, setTestDone] = useFC(false);
   /* v666（iPad 橫式）：測驗原本是 11 題排成一長串往下捲，視窗又只剩 550px，一次只看得到一題多一點、
      還有浮動的交卷列壓在選項上。平板橫式改成「一次一題」：只顯示目前這一題（其他題照樣掛著、作答不會掉），
@@ -1169,6 +1170,7 @@ function FlashcardPlayer({
     setTestSetup(true);
     setTestAnswers({});
     setTypedAnswers({});
+    setWrittenLocked({});
     setTestDone(false);
     setMode("test");
   };
@@ -1948,6 +1950,7 @@ function FlashcardPlayer({
           setTestSetup(true);
           setTestAnswers({});
           setTypedAnswers({});
+          setWrittenLocked({});
           setQuestionTypes({});
           setTestDone(false);
         }
@@ -1961,8 +1964,33 @@ function FlashcardPlayer({
     var answeredCards = new Set(tCards.filter(card => {
       var qType = questionTypes[card.id] || "choice";
       if (qType === "choice") return !!testAnswers[card.id];
-      return !!(typedAnswers[card.id] || "").trim();
+      return !!writtenLocked[card.id]; // v744: 手寫題要按過「確認」才算答完
     }).map(c => c.id));
+
+    /* v744（Alan：「選了就播，並鎖定該題」）：測驗每一題作答當下就播對／錯音效、標出正解，之後不能改。
+       分數算法跟交卷時一樣。 */
+    var spokenOk = (card, typed) => String(typed || '').trim().toLowerCase() === String(card.term || '').toLowerCase();
+    var afterAnswer = (qi, ok, focusNext) => {
+      if (window.playSound) window.playSound(ok ? 'correct' : 'wrong');
+      if (!testPaged || qi >= tCards.length - 1) return;
+      // 一次一題：答對快點換；答錯多停一下讓學生看到正解
+      setTimeout(() => {
+        setTestPage(p => Math.min(p, tCards.length - 1) === qi ? qi + 1 : p); // 學生自己先翻走了就不要再動
+        if (focusNext) setTimeout(() => {
+          var v = document.querySelector('.fc-test-q:not(.fc-test-hidden) .fc-written-input');
+          if (v) v.focus();
+        }, 80);
+      }, ok ? 900 : 1800);
+    };
+    var lockWritten = (card, qi, focusNext) => {
+      if (writtenLocked[card.id] || !(typedAnswers[card.id] || '').trim()) return false;
+      setWrittenLocked(prev => ({
+        ...prev,
+        [card.id]: true
+      }));
+      afterAnswer(qi, spokenOk(card, typedAnswers[card.id]), focusNext);
+      return true;
+    };
     var submitTest = () => {
       setTestDone(true);
       // v374(#4): 只練星號不算完成；選擇題交卷就算「測驗完成」，
@@ -2048,27 +2076,30 @@ function FlashcardPlayer({
           className: "fc-test-label"
         }, "\u9078\u64C7\u7B54\u6848"), /*#__PURE__*/React.createElement("div", {
           className: "fc-test-choices"
-        }, choices.map((ch, ci) => /*#__PURE__*/React.createElement("button", {
-          key: ci,
-          className: "fc-test-choice" + (selectedId === ch.id ? " selected" : ""),
-          onClick: () => {
-            var first = !testAnswers[card.id];
-            setTestAnswers(prev => ({
-              ...prev,
-              [card.id]: ch.id
-            }));
-            // v666：平板一次一題——第一次答這題就自動換下一題（回頭改答案不會亂跳）
-            if (testPaged && first && qi === Math.min(testPage, tCards.length - 1) && qi < tCards.length - 1) {
-              setTimeout(() => setTestPage(p => Math.min(p + 1, tCards.length - 1)), 380);
+        }, choices.map((ch, ci) => {
+          var locked = !!selectedId;
+          var mark = !locked ? "" : ch.id === card.id ? " correct" : ch.id === selectedId ? " wrong" : " dimmed";
+          return /*#__PURE__*/React.createElement("button", {
+            key: ci,
+            className: "fc-test-choice" + (selectedId === ch.id ? " selected" : "") + mark,
+            "aria-disabled": locked,
+            onClick: () => {
+              if (testAnswers[card.id]) return; // v744: 答過就鎖住
+              setTestAnswers(prev => ({
+                ...prev,
+                [card.id]: ch.id
+              }));
+              afterAnswer(qi, ch.id === card.id, false);
             }
-          }
-        }, ch.term)))), qType === "written" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+          }, ch.term, mark === " correct" ? " ✓" : mark === " wrong" ? " ✗" : "");
+        }))), qType === "written" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
           className: "fc-test-label"
         }, "\u6253\u51FA\u82F1\u6587\u55AE\u5B57"), /*#__PURE__*/React.createElement("div", {
           className: "fc-test-written"
         }, /*#__PURE__*/React.createElement("input", {
-          className: "fc-written-input",
-          value: typedVal
+          className: "fc-written-input" + (writtenLocked[card.id] ? spokenOk(card, typedVal) ? " correct" : " wrong" : ""),
+          value: typedVal,
+          readOnly: !!writtenLocked[card.id]
           /* v665（iPad 虛擬鍵盤）：這是「默寫英文單字」的考試——
              ① 沒關自動校正／拼字檢查：拼錯的字會被標紅底線＝直接洩漏「你拼錯了」，
                 鍵盤上方的候選列還會列出正確拼法＝等於給答案；校正還會把學生打對的冷僻字
@@ -2084,17 +2115,13 @@ function FlashcardPlayer({
           onKeyDown: e => {
             if (e.key !== 'Enter') return;
             e.preventDefault();
+            // v744: Enter＝確認這一題（播音效、鎖住）
             if (testPaged) {
-              // v666：一次一題——換到下一題，等畫面換好再聚焦它的輸入欄
-              if (qi < tCards.length - 1) {
-                setTestPage(qi + 1);
-                setTimeout(() => {
-                  var v = document.querySelector('.fc-test-q:not(.fc-test-hidden) .fc-written-input');
-                  if (v) v.focus();
-                }, 80);
-              } else e.currentTarget.blur();
+              if (!lockWritten(card, qi, true) && writtenLocked[card.id] && qi < tCards.length - 1) setTestPage(qi + 1);
+              if (qi >= tCards.length - 1) e.currentTarget.blur();
               return;
             }
+            lockWritten(card, qi, false);
             var all = Array.from(document.querySelectorAll('.fc-written-input'));
             var nxt = all[all.indexOf(e.currentTarget) + 1];
             if (nxt) nxt.focus();else e.currentTarget.blur();
@@ -2110,12 +2137,22 @@ function FlashcardPlayer({
               } catch (_) {}
             }, 350);
           },
-          onChange: e => setTypedAnswers(prev => ({
-            ...prev,
-            [card.id]: e.target.value
-          })),
+          onChange: e => {
+            if (!writtenLocked[card.id]) setTypedAnswers(prev => ({
+              ...prev,
+              [card.id]: e.target.value
+            }));
+          },
           placeholder: "Type the English word \xB7 \u5728\u6B64\u8F38\u5165\u82F1\u6587\u55AE\u5B57"
-        }))))
+        }), !writtenLocked[card.id] ? /*#__PURE__*/React.createElement("button", {
+          type: "button",
+          className: "btn primary fc-written-ok",
+          disabled: !typedVal.trim(),
+          onClick: () => lockWritten(card, qi, true)
+        }, "\u78BA\u8A8D") : /*#__PURE__*/React.createElement("div", {
+          className: "fc-written-fb " + (spokenOk(card, typedVal) ? "ok" : "no"),
+          role: "status"
+        }, spokenOk(card, typedVal) ? "✓ 答對了" : /*#__PURE__*/React.createElement(React.Fragment, null, "\u2717 \u6B63\u78BA\u7B54\u6848\uFF1A", /*#__PURE__*/React.createElement("b", null, card.term))))))
       );
     })), testPaged && tCards.length > 1 && /*#__PURE__*/React.createElement("div", {
       className: "fc-test-pager"

@@ -4807,3 +4807,18 @@ html.focus-on .fc-p-learn .fc-learn-img { max-height: 470px; }
 .uh-status { margin: 14px auto 0; max-width: 480px; font-size: 14px; font-weight: 700; color: #7a5a00; background: #fdf6e0; border: 1px solid #ecd999; border-radius: 10px; padding: 10px 14px; }
 .uh-thumb-del:disabled { display: none; }
 @media (pointer: coarse) { .uh-thumb { width: 112px; height: 112px; } .uh-thumb-del { width: 44px; height: 44px; top: 2px; right: 2px; touch-action: manipulation; } }
+
+/* v744：測驗逐題對答案——答過的題目標出正解（綠）與答錯的選項（紅），其他淡掉、不能再改 */
+.fc-test-choice.correct, .fc-test-choice.correct:hover { background: var(--ok-bg, #e7f3ea) !important; border-color: var(--ok, #2f7d4f) !important; color: var(--ok-ink, #1f5c38) !important; font-weight: 800; transform: none; }
+.fc-test-choice.wrong, .fc-test-choice.wrong:hover { background: var(--no-bg, #fdecea) !important; border-color: var(--no, #c0392b) !important; color: var(--no-ink, #96281b) !important; font-weight: 800; transform: none; }
+.fc-test-choice.dimmed, .fc-test-choice.dimmed:hover { opacity: .5; transform: none; }
+.fc-test-choice[aria-disabled="true"] { cursor: default; }
+.fc-test-written { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.fc-test-written .fc-written-input { flex: 1 1 240px; min-width: 0; }
+.fc-written-ok { flex: none; min-height: 48px; padding-left: 24px; padding-right: 24px; }
+.fc-written-input.correct { background: var(--ok-bg, #e7f3ea); border-color: var(--ok, #2f7d4f); color: var(--ok-ink, #1f5c38); }
+.fc-written-input.wrong { background: var(--no-bg, #fdecea); border-color: var(--no, #c0392b); color: var(--no-ink, #96281b); }
+.fc-written-fb { flex: 1 1 100%; font-size: 16px; font-weight: 800; }
+.fc-written-fb.ok { color: var(--ok-ink, #1f5c38); }
+.fc-written-fb.no { color: var(--no-ink, #96281b); }
+.fc-written-fb b { font-size: 19px; }

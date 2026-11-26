@@ -819,6 +819,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
   const [questionTypes, setQuestionTypes] = useFC({}); // cardId → "choice" | "written"
   const [testAnswers, setTestAnswers] = useFC({}); // cardId → chosen card id
   const [typedAnswers, setTypedAnswers] = useFC({}); // cardId → string
+  const [writtenLocked, setWrittenLocked] = useFC({}); // v744: 手寫題按過「確認」就鎖住 cardId → true
   const [testDone, setTestDone] = useFC(false);
   /* v666（iPad 橫式）：測驗原本是 11 題排成一長串往下捲，視窗又只剩 550px，一次只看得到一題多一點、
      還有浮動的交卷列壓在選項上。平板橫式改成「一次一題」：只顯示目前這一題（其他題照樣掛著、作答不會掉），
@@ -901,6 +902,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
     setTestSetup(true);
     setTestAnswers({});
     setTypedAnswers({});
+    setWrittenLocked({});
     setTestDone(false);
     setMode("test");
   };
@@ -1487,7 +1489,7 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                 ))}
               </div>
               <div style={{display: "flex", gap: 12, marginTop: 20}}>
-                <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setQuestionTypes({}); setTestDone(false); }}>再試一次</button>
+                <button className="btn ghost" onClick={() => { setTestSetup(true); setTestAnswers({}); setTypedAnswers({}); setWrittenLocked({}); setQuestionTypes({}); setTestDone(false); }}>再試一次</button>
                 <button className="btn primary" onClick={() => enterLearn()}>再多練一點 →</button>
               </div>
             </div>
@@ -1501,9 +1503,28 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
       tCards.filter(card => {
         const qType = questionTypes[card.id] || "choice";
         if (qType === "choice") return !!testAnswers[card.id];
-        return !!(typedAnswers[card.id] || "").trim();
+        return !!writtenLocked[card.id];   // v744: 手寫題要按過「確認」才算答完
       }).map(c => c.id)
     );
+
+    /* v744（Alan：「選了就播，並鎖定該題」）：測驗每一題作答當下就播對／錯音效、標出正解，之後不能改。
+       分數算法跟交卷時一樣。 */
+    const spokenOk = (card, typed) => String(typed || '').trim().toLowerCase() === String(card.term || '').toLowerCase();
+    const afterAnswer = (qi, ok, focusNext) => {
+      if (window.playSound) window.playSound(ok ? 'correct' : 'wrong');
+      if (!testPaged || qi >= tCards.length - 1) return;
+      // 一次一題：答對快點換；答錯多停一下讓學生看到正解
+      setTimeout(() => {
+        setTestPage(p => (Math.min(p, tCards.length - 1) === qi ? qi + 1 : p));   // 學生自己先翻走了就不要再動
+        if (focusNext) setTimeout(() => { const v = document.querySelector('.fc-test-q:not(.fc-test-hidden) .fc-written-input'); if (v) v.focus(); }, 80);
+      }, ok ? 900 : 1800);
+    };
+    const lockWritten = (card, qi, focusNext) => {
+      if (writtenLocked[card.id] || !(typedAnswers[card.id] || '').trim()) return false;
+      setWrittenLocked(prev => ({ ...prev, [card.id]: true }));
+      afterAnswer(qi, spokenOk(card, typedAnswers[card.id]), focusNext);
+      return true;
+    };
 
     const submitTest = () => {
                 setTestDone(true);
@@ -1568,19 +1589,22 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                     <>
                       <div className="fc-test-label">選擇答案</div>
                       <div className="fc-test-choices">
-                        {choices.map((ch, ci) => (
+                        {choices.map((ch, ci) => {
+                          const locked = !!selectedId;
+                          const mark = !locked ? ""
+                            : ch.id === card.id ? " correct" : ch.id === selectedId ? " wrong" : " dimmed";
+                          return (
                           <button key={ci}
-                            className={"fc-test-choice" + (selectedId === ch.id ? " selected" : "")}
+                            className={"fc-test-choice" + (selectedId === ch.id ? " selected" : "") + mark}
+                            aria-disabled={locked}
                             onClick={() => {
-                              const first = !testAnswers[card.id];
+                              if (testAnswers[card.id]) return;   // v744: 答過就鎖住
                               setTestAnswers(prev => ({...prev, [card.id]: ch.id}));
-                              // v666：平板一次一題——第一次答這題就自動換下一題（回頭改答案不會亂跳）
-                              if (testPaged && first && qi === Math.min(testPage, tCards.length - 1) && qi < tCards.length - 1) {
-                                setTimeout(() => setTestPage(p => Math.min(p + 1, tCards.length - 1)), 380);
-                              }
+                              afterAnswer(qi, ch.id === card.id, false);
                             }}
-                          >{ch.term}</button>
-                        ))}
+                          >{ch.term}{mark === " correct" ? " ✓" : mark === " wrong" ? " ✗" : ""}</button>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -1589,8 +1613,9 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                       <div className="fc-test-label">打出英文單字</div>
                       <div className="fc-test-written">
                         <input
-                          className="fc-written-input"
+                          className={"fc-written-input" + (writtenLocked[card.id] ? (spokenOk(card, typedVal) ? " correct" : " wrong") : "")}
                           value={typedVal}
+                          readOnly={!!writtenLocked[card.id]}
                           /* v665（iPad 虛擬鍵盤）：這是「默寫英文單字」的考試——
                              ① 沒關自動校正／拼字檢查：拼錯的字會被標紅底線＝直接洩漏「你拼錯了」，
                                 鍵盤上方的候選列還會列出正確拼法＝等於給答案；校正還會把學生打對的冷僻字
@@ -1603,13 +1628,13 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                           onKeyDown={e => {
                             if (e.key !== 'Enter') return;
                             e.preventDefault();
-                            if (testPaged) {   // v666：一次一題——換到下一題，等畫面換好再聚焦它的輸入欄
-                              if (qi < tCards.length - 1) {
-                                setTestPage(qi + 1);
-                                setTimeout(() => { const v = document.querySelector('.fc-test-q:not(.fc-test-hidden) .fc-written-input'); if (v) v.focus(); }, 80);
-                              } else e.currentTarget.blur();
+                            // v744: Enter＝確認這一題（播音效、鎖住）
+                            if (testPaged) {
+                              if (!lockWritten(card, qi, true) && writtenLocked[card.id] && qi < tCards.length - 1) setTestPage(qi + 1);
+                              if (qi >= tCards.length - 1) e.currentTarget.blur();
                               return;
                             }
+                            lockWritten(card, qi, false);
                             const all = Array.from(document.querySelectorAll('.fc-written-input'));
                             const nxt = all[all.indexOf(e.currentTarget) + 1];
                             if (nxt) nxt.focus(); else e.currentTarget.blur();
@@ -1618,9 +1643,17 @@ function FlashcardPlayer({ item, onComplete, onModeDone }) {
                             const el = e.currentTarget;
                             setTimeout(() => { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} }, 350);
                           }}
-                          onChange={e => setTypedAnswers(prev => ({...prev, [card.id]: e.target.value}))}
+                          onChange={e => { if (!writtenLocked[card.id]) setTypedAnswers(prev => ({...prev, [card.id]: e.target.value})); }}
                           placeholder="Type the English word · 在此輸入英文單字"
                         />
+                        {!writtenLocked[card.id] ? (
+                          <button type="button" className="btn primary fc-written-ok" disabled={!typedVal.trim()}
+                            onClick={() => lockWritten(card, qi, true)}>確認</button>
+                        ) : (
+                          <div className={"fc-written-fb " + (spokenOk(card, typedVal) ? "ok" : "no")} role="status">
+                            {spokenOk(card, typedVal) ? "✓ 答對了" : <>✗ 正確答案：<b>{card.term}</b></>}
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
